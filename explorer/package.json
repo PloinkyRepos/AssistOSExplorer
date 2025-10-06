@@ -1,0 +1,11 @@
+{
+  "name": "assistos-explorer",
+  "version": "1.0.0",
+  "description": "AssistOS MCP file explorer agent",
+  "type": "module",
+  "main": "index.js",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/server-filesystem": "^2025.8.21"
+  }
+}
