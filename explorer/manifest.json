@@ -1,6 +1,6 @@
 {
   "container": "node:20-alpine",
-  "install": "npm install",
+  "install": "npm install --omit=dev && mkdir -p /node_modules && cp -R node_modules/. /node_modules/",
   "update": "",
   "cli": "/bin/sh",
   "agent": "node /code/filesystem-http-server.mjs",
