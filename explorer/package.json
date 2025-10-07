@@ -7,6 +7,6 @@
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/server-filesystem": "^2025.8.21",
-    "@modelcontextprotocol/sdk": "^0.2.0"
+    "@modelcontextprotocol/sdk": "^1.19.1"
   }
 }
