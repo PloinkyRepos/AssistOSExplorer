@@ -1,6 +1,6 @@
 {
   "container": "node:20-alpine",
-  "install": "tmpdir=$(mktemp -d) && cp /code/package.json \"$tmpdir\"/ && [ ! -f /code/package-lock.json ] || cp /code/package-lock.json \"$tmpdir\"/ && cd \"$tmpdir\" && npm install --omit=dev && mkdir -p /node_modules && cp -R node_modules/. /node_modules/ && rm -rf \"$tmpdir\"",
+  "install": "tmpdir=$(mktemp -d) && cp /code/package.json $tmpdir/ && [ ! -f /code/package-lock.json ] || cp /code/package-lock.json $tmpdir/ && cd $tmpdir && npm install --omit=dev && mkdir -p /node_modules && cp -R node_modules/. /node_modules/ && rm -rf $tmpdir",
   "update": "",
   "cli": "/bin/sh",
   "agent": "node /code/filesystem-http-server.mjs",
