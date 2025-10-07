@@ -6,5 +6,6 @@
   "agent": "node /code/filesystem-http-server.mjs",
   "about": "AssistOS Explorer agent running the official MCP filesystem server over HTTP.",
   "enable": [],
+  "env": ["ASSISTOS_FS_ROOT"],
   "repos": {}
 }
