@@ -1,0 +1,17 @@
+{
+    "webComponentsRootDir": "web-components",
+    "rootDir": "/web-components",
+    "components": [
+        {
+            "name": "main-page",
+            "type": "pages",
+            "presenterClassName": "MainPage"
+        },
+        {
+            "name": "file-editor",
+            "type": "components",
+            "presenterClassName": "FileEditor"
+        }
+    ],
+    "services": []
+}

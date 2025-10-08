@@ -7,7 +7,7 @@ AssistOS Explorer is a lightweight MCP-capable agent that exposes the official M
 - `explorer/manifest.json` – container definition for the agent (Node 20, installs npm deps, runs the filesystem MCP server).
 - `explorer/filesystem-http-server.mjs` – HTTP wrapper that adapts the official `@modelcontextprotocol/server-filesystem` to the Streamable HTTP transport used by Ploinky.
 - `explorer/index.html`, `styles.css`, `app.js` – explorer UI served as static assets.
-- `explorer/package.json` – declares the MCP filesystem dependency.
+- `explorer/package.json` – declares the MCP filesystem dependency.   
 
 ## Prerequisites
 - Node.js 20+

@@ -84,16 +84,30 @@ main {
     padding: 8px 14px;
     cursor: pointer;
     transition: transform 0.15s ease, box-shadow 0.15s ease;
+    display: flex;
+    align-items: center;
+    gap: 5px;
 }
-.toolbar button.secondary {
-    background: transparent;
+.toolbar button.secondary,
+#editingActions button.secondary {
+    background-color: var(--bg);
     color: var(--text);
     border: 1px solid var(--border);
 }
-.toolbar button:hover {
+
+.toolbar button:hover,
+#editorActions button:hover,
+#editingActions button:hover {
     transform: translateY(-1px);
     box-shadow: 0 10px 18px rgba(37, 99, 235, 0.28);
 }
+
+.toolbar button.secondary:hover,
+#editingActions button.secondary:hover {
+    background-color: var(--border);
+    box-shadow: none;
+}
+
 .toolbar button:disabled {
     opacity: 0.6;
     cursor: not-allowed;
@@ -130,7 +144,6 @@ main {
 .workspace {
     display: grid;
     grid-template-columns: minmax(260px, 1.1fr) minmax(300px, 1.4fr);
-    gap: clamp(16px, 3vw, 32px);
     margin-top: clamp(16px, 3vw, 28px);
     flex: 1;
 }
@@ -143,6 +156,46 @@ main {
     padding: 16px clamp(16px, 3vw, 24px);
     border-bottom: 1px solid var(--border);
 }
+
+.preview-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#editorActions button {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 14px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+#editorActions button,
+#editingActions button {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 14px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+#editorActions.hidden,
+#editingActions.hidden {
+    display: none;
+}
+
+.preview-content file-editor {
+    height: 100%;
+    display: block;
+}
+
 .entries {
     flex: 1;
     overflow: auto;
@@ -250,4 +303,22 @@ pre {
     .workspace {
         grid-template-columns: 1fr;
     }
+}
+
+.toolbar button svg {
+    width: 16px;
+    height: 16px;
+}
+
+.entries .icon svg {
+    width: 16px;
+    height: 16px;
+    vertical-align: middle;
+}
+
+td button.secondary {
+    padding: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }

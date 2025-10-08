@@ -77,30 +77,30 @@ setAllowedDirectories(allowedDirectories);
 
 const workspaceRoot = allowedDirectories.length > 0 ? allowedDirectories[0] : path.resolve(process.cwd());
 if (allowedDirectories.length > 1) {
-    console.warn(`[filesystem-http] Multiple allowed directories found, using the first one as workspace root: ${workspaceRoot}`);
+  console.warn(`[filesystem-http] Multiple allowed directories found, using the first one as workspace root: ${workspaceRoot}`);
 }
 
 function resolvePathsInArgs(args) {
-    const newArgs = { ...args };
-    if (!workspaceRoot) throw new Error("Workspace root not configured.");
+  const newArgs = { ...args };
+  if (!workspaceRoot) throw new Error("Workspace root not configured.");
 
-    const resolve = (p) => {
-        // Treat paths starting with / as relative to the workspace root
-        const safePart = p.startsWith('/') ? p.substring(1) : p;
-        const result = path.join(workspaceRoot, safePart);
-        // Security check to prevent path traversal
-        if (!path.resolve(result).startsWith(path.resolve(workspaceRoot))) {
-            throw new Error(`Access denied: path traversal attempt for "${p}"`);
-        }
-        return result;
-    };
+  const resolve = (p) => {
+    // Treat paths starting with / as relative to the workspace root
+    const safePart = p.startsWith('/') ? p.substring(1) : p;
+    const result = path.join(workspaceRoot, safePart);
+    // Security check to prevent path traversal
+    if (!path.resolve(result).startsWith(path.resolve(workspaceRoot))) {
+      throw new Error(`Access denied: path traversal attempt for "${p}"`);
+    }
+    return result;
+  };
 
-    if (typeof newArgs.path === 'string') newArgs.path = resolve(newArgs.path);
-    if (typeof newArgs.source === 'string') newArgs.source = resolve(newArgs.source);
-    if (typeof newArgs.destination === 'string') newArgs.destination = resolve(newArgs.destination);
-    if (Array.isArray(newArgs.paths)) newArgs.paths = newArgs.paths.map(resolve);
+  if (typeof newArgs.path === 'string') newArgs.path = resolve(newArgs.path);
+  if (typeof newArgs.source === 'string') newArgs.source = resolve(newArgs.source);
+  if (typeof newArgs.destination === 'string') newArgs.destination = resolve(newArgs.destination);
+  if (Array.isArray(newArgs.paths)) newArgs.paths = newArgs.paths.map(resolve);
 
-    return newArgs;
+  return newArgs;
 }
 
 // The library's validatePath function seems to hang when passed a resolved absolute path.
@@ -120,6 +120,8 @@ const WriteFileArgsSchema = z.object({ path: z.string(), content: z.string() });
 const EditOperation = z.object({ oldText: z.string(), newText: z.string() });
 const EditFileArgsSchema = z.object({ path: z.string(), edits: z.array(EditOperation), dryRun: z.boolean().default(false) });
 const CreateDirectoryArgsSchema = z.object({ path: z.string() });
+const DeleteFileArgsSchema = z.object({ path: z.string() });
+const DeleteDirectoryArgsSchema = z.object({ path: z.string() });
 const ListDirectoryArgsSchema = z.object({ path: z.string() });
 const ListDirectoryWithSizesArgsSchema = z.object({ path: z.string(), sortBy: z.enum(['name', 'size']).optional().default('name') });
 const DirectoryTreeArgsSchema = z.object({ path: z.string() });
@@ -184,6 +186,16 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       name: 'create_directory',
       description: 'Ensure a directory exists by creating it recursively.',
       inputSchema: zodToJsonSchema(CreateDirectoryArgsSchema)
+    },
+    {
+      name: 'delete_file',
+      description: 'Delete a file.',
+      inputSchema: zodToJsonSchema(DeleteFileArgsSchema)
+    },
+    {
+      name: 'delete_directory',
+      description: 'Delete a directory.',
+      inputSchema: zodToJsonSchema(DeleteDirectoryArgsSchema)
     },
     {
       name: 'list_directory',
@@ -258,6 +270,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           '.webp': 'image/webp',
           '.bmp': 'image/bmp',
           '.svg': 'image/svg+xml',
+          '.mjs': 'application/javascript',
           '.mp3': 'audio/mpeg',
           '.wav': 'audio/wav',
           '.ogg': 'audio/ogg',
@@ -302,6 +315,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const validPath = await validatePath(parsed.data.path);
         await fs.mkdir(validPath, { recursive: true });
         return { content: [{ type: 'text', text: `Successfully created directory ${parsed.data.path}` }] };
+      }
+      case 'delete_file': {
+        const parsed = DeleteFileArgsSchema.safeParse(args);
+        if (!parsed.success) throw new Error(`Invalid arguments for delete_file: ${parsed.error}`);
+        const validPath = await validatePath(parsed.data.path);
+        await fs.unlink(validPath);
+        return { content: [{ type: 'text', text: `Successfully deleted file ${parsed.data.path}` }] };
+      }
+      case 'delete_directory': {
+        const parsed = DeleteDirectoryArgsSchema.safeParse(args);
+        if (!parsed.success) throw new Error(`Invalid arguments for delete_directory: ${parsed.error}`);
+        const validPath = await validatePath(parsed.data.path);
+        await fs.rm(validPath, { recursive: true, force: true });
+        return { content: [{ type: 'text', text: `Successfully deleted directory ${parsed.data.path}` }] };
       }
       case 'list_directory': {
         const parsed = ListDirectoryArgsSchema.safeParse(args);

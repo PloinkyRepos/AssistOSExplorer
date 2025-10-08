@@ -7,56 +7,12 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <header>
-        <h1>AssistOS Explorer</h1>
-        <p>Browse workspace files powered by the official MCP File Server.</p>
-    </header>
-    <main>
-        <section class="panel" id="directoryPanel">
-            <div class="toolbar">
-                <button id="upButton" class="secondary" title="Go to parent directory">⬆︎ Up</button>
-                <button id="refreshButton" class="secondary" title="Reload directory">⟳ Refresh</button>
-                <button id="newDirButton" title="Create a new directory">➕ New Folder</button>
-                <label>
-                    <input type="checkbox" id="hiddenToggle" /> Show hidden files
-                </label>
-                <div class="path-info">
-                    <span>Path:</span>
-                    <div class="breadcrumbs" id="breadcrumbs"></div>
-                </div>
-            </div>
-            <div class="workspace">
-                <div class="panel list">
-                    <div class="list-header">Directory Contents</div>
-                    <div class="entries">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Name</th>
-                                    <th>Type</th>
-                                    <th>Size</th>
-                                    <th>Modified</th>
-                                </tr>
-                            </thead>
-                            <tbody id="entriesBody"></tbody>
-                        </table>
-                    </div>
-                </div>
-                <div class="panel preview">
-                    <div class="preview-header">File Preview</div>
-                    <div class="preview-body">
-                        <div class="meta" id="previewMeta">
-                            Select a file to see its contents.
-                        </div>
-                        <div class="preview-content">
-                            <pre id="filePreview"></pre>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-        <div class="status" id="statusBanner"></div>
-    </main>
-    <script src="app.js" defer></script>
+<div id="page_content"></div>
+<dialog id="before_webskel_loader" class="spinner">
+    <div class="spinner-container">
+        <div class="spin"></div>
+    </div>
+</dialog>
+<script type="module" src="main.js" defer></script>
 </body>
 </html>
