@@ -107,7 +107,7 @@ export class FileExp {
 
         const previewContent = this.element.querySelector('.preview-content');
         if (this.state.isEditing) {
-            previewContent.innerHTML = `<file-editor data-presenter="file-editor" data-title="${this.state.selectedPath}" data-content="${this.state.fileContent}"></file-editor>`;
+            previewContent.innerHTML = `<file-editor data-presenter="file-editor" data-path="${this.state.selectedPath}"></file-editor>`;
         } else {
             previewContent.innerHTML = `<pre id="filePreview"></pre>`;
             const filePreview = this.element.querySelector("#filePreview");
