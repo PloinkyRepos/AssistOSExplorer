@@ -51,14 +51,39 @@ main {
 }
 
 .path-info {
-    display: flex;
-    align-items: center;
-    margin-left: auto;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    margin-left: 0;
+    flex-wrap: wrap;
+}
+
+.path-info > span {
+    display: none;
 }
 
 .breadcrumbs {
     display: flex;
-    margin-left: 0.5rem;
+    align-items: center;
+    gap: 4px;
+}
+
+.breadcrumbs button {
+    background: transparent;
+    border: none;
+    color: var(--accent);
+    padding: 0;
+    font-size: 0.95rem;
+    cursor: pointer;
+}
+
+.breadcrumbs button:hover {
+    text-decoration: underline;
+}
+
+.breadcrumbs .separator {
+    margin: 0 2px;
+    color: var(--text-soft);
 }
 
 .workspace {

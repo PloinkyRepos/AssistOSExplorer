@@ -359,9 +359,9 @@ export class FileExp {
         let current = '';
         segments.forEach(segment => {
             current += `/${segment}`;
-            breadcrumbsEl.appendChild(document.createTextNode('/'));
+          //  breadcrumbsEl.appendChild(document.createTextNode('/'));
             const btn = document.createElement('button');
-            btn.textContent = segment;
+            btn.textContent = `${segment} \/`;
             const path = current;
             btn.addEventListener('click', () => this.loadDirectory(path));
             breadcrumbsEl.appendChild(btn);

@@ -4,6 +4,10 @@
 </header>
 <main>
     <section class="panel" id="directoryPanel">
+        <div class="path-info">
+            <span>Path:</span>
+            <div class="breadcrumbs" id="breadcrumbs"></div>
+        </div>
         <div class="toolbar">
             <button id="upButton" class="secondary" title="Go to parent directory" data-local-action="goUp">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
@@ -39,10 +43,6 @@
             <label>
                 <input type="checkbox" id="hiddenToggle" data-local-action="toggleHiddenFiles"/> Show hidden files
             </label>
-            <div class="path-info">
-                <span>Path:</span>
-                <div class="breadcrumbs" id="breadcrumbs"></div>
-            </div>
         </div>
         <div class="workspace">
             <div class="panel list">
