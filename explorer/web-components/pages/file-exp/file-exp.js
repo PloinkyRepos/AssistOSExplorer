@@ -1,7 +1,8 @@
-export class MainPage {
+export class FileExp {
     constructor(element, invalidate) {
         this.element = element;
         this.invalidate = invalidate;
+
         this.state = {
             path: '/',
             includeHidden: false,
@@ -11,7 +12,41 @@ export class MainPage {
             isEditing: false,
             isResizing: false
         };
-        this.invalidate(this.loadDirectory.bind(this));
+
+        this.boundLoadStateFromURL = this.loadStateFromURL.bind(this);
+        window.addEventListener('popstate', this.boundLoadStateFromURL);
+        this.invalidate(this.boundLoadStateFromURL);
+    }
+
+    beforeUnload() {
+        window.removeEventListener('popstate', this.boundLoadStateFromURL);
+    }
+
+    async loadStateFromURL() {
+        const path = window.location.hash.split('#file-exp')[1] || '/';
+
+        if (path === '/') {
+            await this.loadDirectory('/');
+            return;
+        }
+
+        try {
+            const contentResult = await window.webSkel.appServices.callTool('explorer', 'read_text_file', {path: path});
+
+            if (contentResult.text.startsWith('Error:')) {
+                throw new Error(contentResult.text);
+            }
+
+            this.state.fileContent = contentResult.text;
+            this.state.selectedPath = path;
+            const parentDir = this.parentPath(path) || '/';
+            this.state.path = parentDir;
+            this.state.entries = await this.loadDirectoryContent(parentDir);
+            this.invalidate();
+        } catch (e) {
+            // If it fails, it's a directory
+            await this.loadDirectory(path);
+        }
     }
 
     beforeRender() {
@@ -31,12 +66,12 @@ export class MainPage {
             filtered.forEach(entry => {
                 const icon = entry.type === 'directory' ? folderIcon : fileIcon;
                 this.entriesHTML += `
-                    <tr data-path="${this.joinPath(this.state.path, entry.name)}" data-type="${entry.type}">
-                        <td data-path="${this.joinPath(this.state.path, entry.name)}" data-type="${entry.type}" data-local-action="selectEntry"><span class="icon">${icon}</span> ${entry.name}</td>
-                        <td data-path="${this.joinPath(this.state.path, entry.name)}" data-type="${entry.type}" data-local-action="selectEntry">${entry.type}</td>
-                        <td data-path="${this.joinPath(this.state.path, entry.name)}" data-type="${entry.type}" data-local-action="selectEntry">${entry.type === 'directory' ? '—' : this.formatBytes(entry.size)}</td>
-                        <td data-path="${this.joinPath(this.state.path, entry.name)}" data-type="${entry.type}"  data-local-action="selectEntry">${entry.modified ? this.formatDate(entry.modified) : '—'}</td>
-                        <td><button class="secondary" data-local-action="deleteEntry" data-path="${this.joinPath(this.state.path, entry.name)}" data-type="${entry.type}" title="Delete">
+                    <tr data-entry-path="${this.joinPath(this.state.path, entry.name)}" data-type="${entry.type}">
+                        <td data-entry-path="${this.joinPath(this.state.path, entry.name)}" data-type="${entry.type}" data-local-action="selectEntry"><span class="icon">${icon}</span> ${entry.name}</td>
+                        <td data-entry-path="${this.joinPath(this.state.path, entry.name)}" data-type="${entry.type}" data-local-action="selectEntry">${entry.type}</td>
+                        <td data-entry-path="${this.joinPath(this.state.path, entry.name)}" data-type="${entry.type}" data-local-action="selectEntry">${entry.type === 'directory' ? '—' : this.formatBytes(entry.size)}</td>
+                        <td data-entry-path="${this.joinPath(this.state.path, entry.name)}" data-type="${entry.type}"  data-local-action="selectEntry">${entry.modified ? this.formatDate(entry.modified) : '—'}</td>
+                        <td><button class="secondary" data-local-action="deleteEntry" data-entry-path="${this.joinPath(this.state.path, entry.name)}" data-type="${entry.type}" title="Delete">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-trash-fill" viewBox="0 0 16 16">
                                 <path d="M2.5 1a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1H3v9a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V4h.5a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H10a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1H2.5zm3 4a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-1 0v-7a.5.5 0 0 1 .5-.5zM8 5a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-1 0v-7A.5.5 0 0 1 8 5zm3 .5v7a.5.5 0 0 1-1 0v-7a.5.5 0 0 1 1 0z"/>
                             </svg>
@@ -49,7 +84,7 @@ export class MainPage {
     async afterRender() {
         this.renderBreadcrumbs();
         if (this.state.selectedPath) {
-            const row = this.element.querySelector(`[data-path="${this.state.selectedPath}"]`);
+            const row = this.element.querySelector(`[data-entry-path="${this.state.selectedPath}"]`);
             if (row) {
                 row.classList.add('active');
             }
@@ -135,29 +170,31 @@ export class MainPage {
         }
     }
 
+    async loadDirectoryContent(path) {
+        try {
+            const result = await window.webSkel.appServices.callTool('explorer', 'list_directory', {path: path});
+            return this.parseDirectoryListing(result.text).map(entry => ({
+                ...entry,
+                path: this.joinPath(path, entry.name)
+            }));
+        } catch (err) {
+            console.error(err);
+            this.showStatus(err.message || 'Failed to load directory.', true);
+            return [];
+        }
+    }
+
     async loadDirectory(path = this.state.path) {
         this.state.path = this.normalizePath(path);
         this.state.selectedPath = null;
         this.state.fileContent = "";
         this.state.isEditing = false;
-
-        try {
-            const result = await this.callTool('list_directory', {path: this.state.path});
-            const parsedEntries = this.parseDirectoryListing(result.text).map(entry => ({
-                ...entry,
-                path: this.joinPath(this.state.path, entry.name)
-            }));
-            this.state.entries = parsedEntries;
-        } catch (err) {
-            console.error(err);
-            this.showStatus(err.message || 'Failed to load directory.', true);
-            this.state.entries = [];
-        }
+        this.state.entries = await this.loadDirectoryContent(this.state.path);
         this.invalidate();
     }
 
     async selectEntry(element) {
-        const path = element.dataset.path;
+        const path = element.dataset.entryPath;
         const type = element.dataset.type;
 
         if (this.state.isEditing) {
@@ -165,6 +202,9 @@ export class MainPage {
                 return;
             }
         }
+
+        const newUrl = `#file-exp${path}`;
+        history.pushState(null, '', newUrl);
 
         if (type === 'directory') {
             await this.loadDirectory(path);
@@ -177,7 +217,7 @@ export class MainPage {
 
     async openFile(filePath) {
         try {
-            const contentResult = await this.callTool('read_text_file', {path: filePath});
+            const contentResult = await window.webSkel.appServices.callTool('explorer', 'read_text_file', {path: filePath});
             this.state.fileContent = contentResult.text;
             this.invalidate();
         } catch (err) {
@@ -197,7 +237,7 @@ export class MainPage {
         if (this.textarea) {
             const newContent = this.textarea.value
             try {
-                await this.callTool('write_file', {path: this.state.selectedPath, content: newContent});
+                await window.webSkel.appServices.callTool('explorer', 'write_file', {path: this.state.selectedPath, content: newContent});
                 this.showStatus(`Successfully saved ${this.state.selectedPath}`, false);
                 this.state.fileContent = newContent;
                 this.state.isEditing = false;
@@ -217,7 +257,7 @@ export class MainPage {
     }
 
     async deleteEntry(element) {
-        const path = element.dataset.path;
+        const path = element.dataset.entryPath;
         const type = element.dataset.type;
 
         if (!confirm(`Are you sure you want to delete ${path}?`)) {
@@ -226,7 +266,7 @@ export class MainPage {
 
         try {
             const tool = type === 'directory' ? 'delete_directory' : 'delete_file';
-            await this.callTool(tool, {path: path});
+            await window.webSkel.appServices.callTool('explorer', tool, {path: path});
             this.showStatus(`Successfully deleted ${path}`);
 
             if (this.state.selectedPath === path) {
@@ -341,32 +381,6 @@ export class MainPage {
         setTimeout(() => this.showStatus(null), 3000);
     }
 
-    async callTool(tool, args = {}) {
-        const response = await fetch('/mcps/explorer', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream'},
-            body: JSON.stringify({
-                jsonrpc: '2.0',
-                id: Date.now().toString(),
-                method: 'tools/call',
-                params: {name: tool, arguments: args}
-            })
-        });
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const data = await response.json();
-        if (data.error) {
-            throw new Error(data.error.message);
-        }
-        const blocks = Array.isArray(data.result?.content) ? data.result.content : [];
-        const firstText = blocks.find(block => block?.type === 'text')?.text;
-        if (typeof firstText !== 'string') {
-            throw new Error('Agent response did not include text content.');
-        }
-        return {text: firstText, blocks, raw: data.result};
-    }
-
     async newFile() {
         const fileName = prompt('Enter name for the new file:');
         if (!fileName || !fileName.trim()) {
@@ -374,7 +388,7 @@ export class MainPage {
         }
         const newFilePath = this.joinPath(this.state.path, fileName.trim());
         try {
-            await this.callTool('write_file', {path: newFilePath, content: ''});
+            await window.webSkel.appServices.callTool('explorer', 'write_file', {path: newFilePath, content: ''});
             this.showStatus(`Successfully created file.`);
             await this.loadDirectory(this.state.path);
         } catch (err) {
@@ -386,6 +400,8 @@ export class MainPage {
     async goUp() {
         const parent = this.parentPath(this.state.path);
         if (parent !== null) {
+            const newUrl = `#file-exp${parent}`;
+            history.pushState(null, '', newUrl);
             await this.loadDirectory(parent);
         }
     }
@@ -401,7 +417,7 @@ export class MainPage {
         }
         const newDirPath = this.joinPath(this.state.path, dirName.trim());
         try {
-            await this.callTool('create_directory', {path: newDirPath});
+            await window.webSkel.appServices.callTool('explorer', 'create_directory', {path: newDirPath});
             this.showStatus(`Successfully created directory.`);
             await this.loadDirectory(this.state.path);
         } catch (err) {

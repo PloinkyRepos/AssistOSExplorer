@@ -3,9 +3,9 @@
     "rootDir": "/web-components",
     "components": [
         {
-            "name": "main-page",
+            "name": "file-exp",
             "type": "pages",
-            "presenterClassName": "MainPage"
+            "presenterClassName": "FileExp"
         },
         {
             "name": "file-editor",
