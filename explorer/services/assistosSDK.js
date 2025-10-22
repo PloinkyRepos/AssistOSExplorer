@@ -1,41 +1,33 @@
+import { createAgentClient } from '/MCPBrowserClient.js';
+
 class AssistosSDK {
     constructor() {
+        this.clients = new Map();
+    }
+
+    getClient(agentId) {
+        if (!agentId || typeof agentId !== 'string') {
+            throw new Error('Agent id must be a non-empty string.');
+        }
+        if (!this.clients.has(agentId)) {
+            const baseUrl = `/mcps/${agentId}/mcp`;
+            this.clients.set(agentId, createAgentClient(baseUrl));
+        }
+        return this.clients.get(agentId);
     }
 
     async callTool(agentId, tool, args = {}) {
-        const url = `/mcps/${agentId}`;
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream'},
-            body: JSON.stringify({
-                jsonrpc: '2.0',
-                id: Date.now().toString(),
-                method: 'tools/call',
-                params: {name: tool, arguments: args}
-            })
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error(`HTTP error! status: ${response.status}`, errorText);
-            throw new Error(`HTTP error! status: ${response.status}`);
+        const client = this.getClient(agentId);
+        try {
+            const result = await client.callTool(tool, args);
+            const blocks = Array.isArray(result?.content) ? result.content : [];
+            const firstText = blocks.find(block => block?.type === 'text' && typeof block.text === 'string');
+            const text = firstText ? firstText.text : JSON.stringify(result, null, 2);
+            return { text, blocks, raw: result };
+        } catch (error) {
+            console.error(`Agent call failed (${agentId}:${tool})`, error);
+            throw error;
         }
-
-        const data = await response.json();
-        if (data.error) {
-            console.error("Agent Error:", data.error);
-            throw new Error(data.error.message);
-        }
-
-        const blocks = Array.isArray(data.result?.content) ? data.result.content : [];
-        const firstText = blocks.find(block => block?.type === 'text')?.text;
-
-        if (typeof firstText !== 'string') {
-            console.warn('Agent response did not include text content.');
-            return { text: JSON.stringify(data.result, null, 2), blocks, raw: data.result };
-        }
-
-        return {text: firstText, blocks, raw: data.result};
     }
 }
 

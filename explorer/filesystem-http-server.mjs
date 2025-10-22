@@ -124,6 +124,7 @@ const DeleteFileArgsSchema = z.object({ path: z.string() });
 const DeleteDirectoryArgsSchema = z.object({ path: z.string() });
 const ListDirectoryArgsSchema = z.object({ path: z.string() });
 const ListDirectoryWithSizesArgsSchema = z.object({ path: z.string(), sortBy: z.enum(['name', 'size']).optional().default('name') });
+const ListDirectoryDetailedArgsSchema = z.object({ path: z.string() });
 const DirectoryTreeArgsSchema = z.object({ path: z.string() });
 const MoveFileArgsSchema = z.object({ source: z.string(), destination: z.string() });
 const SearchFilesArgsSchema = z.object({ path: z.string(), pattern: z.string(), excludePatterns: z.array(z.string()).optional().default([]) });
@@ -206,6 +207,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       name: 'list_directory_with_sizes',
       description: 'List directory contents with sizes and summary.',
       inputSchema: zodToJsonSchema(ListDirectoryWithSizesArgsSchema)
+    },
+    {
+      name: 'list_directory_detailed',
+      description: 'List directory contents with metadata as JSON.',
+      inputSchema: zodToJsonSchema(ListDirectoryDetailedArgsSchema)
     },
     {
       name: 'directory_tree',
@@ -359,6 +365,38 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const totalSize = detailed.reduce((sum, entry) => sum + (entry.isDirectory ? 0 : entry.size), 0);
         const summary = ['', `Total: ${totalFiles} files, ${totalDirs} directories`, `Combined size: ${formatSize(totalSize)}`];
         return { content: [{ type: 'text', text: [...lines, ...summary].join('\n') }] };
+      }
+      case 'list_directory_detailed': {
+        const parsed = ListDirectoryDetailedArgsSchema.safeParse(args);
+        if (!parsed.success) throw new Error(`Invalid arguments for list_directory_detailed: ${parsed.error}`);
+        const validPath = await validatePath(parsed.data.path);
+        const entries = await fs.readdir(validPath, { withFileTypes: true });
+        const detailed = await Promise.all(entries.map(async entry => {
+          const entryPath = path.join(validPath, entry.name);
+          try {
+            const stats = await fs.stat(entryPath);
+            return {
+              name: entry.name,
+              type: entry.isDirectory() ? 'directory' : entry.isFile() ? 'file' : 'other',
+              size: stats.size,
+              modified: stats.mtime.toISOString()
+            };
+          } catch {
+            return {
+              name: entry.name,
+              type: entry.isDirectory() ? 'directory' : entry.isFile() ? 'file' : 'other',
+              size: null,
+              modified: null
+            };
+          }
+        }));
+        const ordered = detailed.sort((a, b) => {
+          const typeOrder = { directory: 0, file: 1, other: 2 };
+          const diff = (typeOrder[a.type] ?? 3) - (typeOrder[b.type] ?? 3);
+          if (diff !== 0) return diff;
+          return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+        });
+        return { content: [{ type: 'text', text: JSON.stringify(ordered) }] };
       }
       case 'directory_tree': {
         const parsed = DirectoryTreeArgsSchema.safeParse(args);

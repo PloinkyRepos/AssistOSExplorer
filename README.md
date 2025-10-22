@@ -1,12 +1,12 @@
 # AssistOS Explorer
 
-AssistOS Explorer is a lightweight MCP-capable agent that exposes the official Model Context Protocol filesystem server together with an explorer-style web interface. You can run it inside Ploinky or launch it stand-alone while developing locally.
+AssistOS Explorer is a lightweight MCP-capable agent that exposes the official Model Context Protocol filesystem server together with an explorer-style web interface. It is intended to run inside Ploinky. The UI is powered by the embedded WebSkel framework and reuses the router-served `MCPBrowserClient` for all MCP calls.
 
 ## Repository Layout
-- `tstServer.mjs` – A simple Node.js server for local testing. It serves the static UI files and proxies requests to the MCP filesystem server.
 - `explorer/manifest.json` – container definition for the agent (Node 20, installs npm deps, runs the filesystem MCP server).
 - `explorer/filesystem-http-server.mjs` – HTTP wrapper that adapts the official `@modelcontextprotocol/server-filesystem` to the Streamable HTTP transport used by Ploinky.
-- `explorer/index.html`, `styles.css`, `app.js` – explorer UI served as static assets.
+- `explorer/index.html`, `styles.css`, `main.js` – WebSkel bootstrap and UI assets.
+- `explorer/services/assistosSDK.js` – small wrapper around the router-served MCP browser client; cached per-agent sessions.
 - `explorer/package.json` – declares the MCP filesystem dependency.   
 
 ## Prerequisites
@@ -14,9 +14,10 @@ AssistOS Explorer is a lightweight MCP-capable agent that exposes the official M
 - npm
 
 ## Running with Ploinky
-1. From the `ploinky` workspace, enable the agent:
+1. From the `ploinky` workspace, enable the repo (if not already present) and the agent in **global** mode so static assets point at your checkout:
    ```bash
-   p-cli enable agent explorer
+   p-cli enable repo fileExplorer
+   p-cli enable agent fileExplorer/explorer global
    ```
 2. Start the workspace (first run installs dependencies inside the container):
    ```bash
@@ -24,47 +25,21 @@ AssistOS Explorer is a lightweight MCP-capable agent that exposes the official M
    ```
 3. Open the explorer UI via the router (replace the port if different):
    - `http://127.0.0.1:8080/explorer/index.html`
-   - MCP requests are proxied at `http://127.0.0.1:8080/mcps/explorer`
+   - MCP requests are proxied at `http://127.0.0.1:8080/mcps/explorer/mcp`
 
-## Running Locally (without Ploinky)
+4. Optional: to rebuild container state after UI changes run `p-cli refresh agent explorer` then `start`.
 
-This project includes a dedicated test server (`tstServer.mjs`) that simplifies local development.
-
-1.  **Install dependencies:**
-    Navigate to the `explorer` directory and install the required npm packages.
-    ```bash
-    cd explorer
-    npm install
-    cd ..
-    ```
-
-2.  **Start the MCP Filesystem Server:**
-    In a terminal, from the root of the `AssistOS` project, run the following command. This server will handle the file operations.
-    ```bash
-    # Run from the AssistOS project root
-    PORT=7101 node explorer/filesystem-http-server.mjs .
-    ```
-    This configures the server to manage the entire `AssistOS` project directory as its workspace.
-
-3.  **Start the UI & Proxy Server:**
-    In a second terminal, also from the root of the `AssistOS` project, start the test server. This will serve the web interface and proxy requests to the MCP server.
-    ```bash
-    # Run from the AssistOS project root
-    node tstServer.mjs
-    ```
-
-4.  **Open the Explorer:**
-    Open your web browser and navigate to `http://127.0.0.1:8080`. You should now be able to browse the files in your `AssistOS` project.
-
+## Local Development Notes
+Development happens against the Ploinky router; no standalone proxy is required.
 
 ## MCP Endpoints
-All filesystem features are exposed through MCP tools on `/mcp`. Sample calls while the proxy is running:
+All filesystem features are exposed through MCP tools on `/mcps/explorer/mcp`. Sample calls while the proxy is running:
 ```bash
-curl -s -X POST http://127.0.0.1:8080/mcps/explorer \
+curl -s -X POST http://127.0.0.1:8080/mcps/explorer/mcp \
   -H 'Content-Type: application/json' \
   -d '{ "tool": "list_directory", "path": "/" }'
 
-curl -s -X POST http://127.0.0.1:8080/mcps/explorer \
+curl -s -X POST http://127.0.0.1:8080/mcps/explorer/mcp \
   -H 'Content-Type: application/json' \
   -d '{ "tool": "get_file_info", "path": "/package.json" }'
 ```
@@ -72,4 +47,5 @@ curl -s -X POST http://127.0.0.1:8080/mcps/explorer \
 ## Troubleshooting
 - **Port already in use:** stop any process bound to the port (`lsof -ti tcp:8080 | xargs kill`).
 - **Permission errors:** ensure the working directory exists and Node has read access.
-- **Empty responses:** verify the MCP server is running (check `PORT=7101 node filesystem-http-server.mjs .` log output) and that the proxy points to the same port.
+- **Empty responses:** verify the MCP server container is running inside Ploinky and reachable at the configured port.
+- **Hidden files missing:** toggle the “Show hidden files” checkbox in the UI; the preference is stored in `localStorage`.

@@ -5,7 +5,7 @@ export class FileExp {
 
         this.state = {
             path: '/',
-            includeHidden: false,
+            includeHidden: this.loadHiddenPreference(),
             entries: [],
             selectedPath: null,
             fileContent: "",
@@ -90,6 +90,11 @@ export class FileExp {
             }
         }
 
+        const hiddenToggle = this.element.querySelector('#hiddenToggle');
+        if (hiddenToggle) {
+            hiddenToggle.checked = this.state.includeHidden;
+        }
+
         const editorActions = this.element.querySelector("#editorActions");
         const editingActions = this.element.querySelector("#editingActions");
 
@@ -172,8 +177,9 @@ export class FileExp {
 
     async loadDirectoryContent(path) {
         try {
-            const result = await window.webSkel.appServices.callTool('explorer', 'list_directory', {path: path});
-            return this.parseDirectoryListing(result.text).map(entry => ({
+            const result = await window.webSkel.appServices.callTool('explorer', 'list_directory_detailed', {path});
+            const entries = this.parseDetailedDirectoryListing(result.text);
+            return entries.map(entry => ({
                 ...entry,
                 path: this.joinPath(path, entry.name)
             }));
@@ -345,6 +351,25 @@ export class FileExp {
         return entries;
     }
 
+    parseDetailedDirectoryListing(text) {
+        if (!text) return [];
+        try {
+            const parsed = JSON.parse(text);
+            if (!Array.isArray(parsed)) return [];
+            return parsed
+                .filter(entry => entry && typeof entry.name === 'string')
+                .map(entry => ({
+                    name: entry.name,
+                    type: entry.type === 'directory' || entry.type === 'file' ? entry.type : 'other',
+                    size: Number.isFinite(entry.size) ? entry.size : null,
+                    modified: typeof entry.modified === 'string' ? entry.modified : null
+                }));
+        } catch (error) {
+            console.warn('Falling back to plain directory listing parsing.', error);
+            return this.parseDirectoryListing(text);
+        }
+    }
+
     renderBreadcrumbs() {
         const breadcrumbsEl = this.element.querySelector('#breadcrumbs');
         breadcrumbsEl.innerHTML = '';
@@ -428,6 +453,24 @@ export class FileExp {
 
     toggleHiddenFiles(element) {
         this.state.includeHidden = element.checked;
+        this.saveHiddenPreference(this.state.includeHidden);
         this.invalidate();
+    }
+
+    loadHiddenPreference() {
+        try {
+            const stored = window.localStorage.getItem('assistosExplorerShowHidden');
+            return stored === null ? false : stored === 'true';
+        } catch (_) {
+            return false;
+        }
+    }
+
+    saveHiddenPreference(value) {
+        try {
+            window.localStorage.setItem('assistosExplorerShowHidden', value ? 'true' : 'false');
+        } catch (_) {
+            // ignore
+        }
     }
 }
