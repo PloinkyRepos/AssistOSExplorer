@@ -1,6 +1,5 @@
 {
-    "webComponentsRootDir": "web-components",
-    "rootDir": "/web-components",
+    "rootDir": "/explorer/web-components",
     "components": [
         {
             "name": "file-exp",
