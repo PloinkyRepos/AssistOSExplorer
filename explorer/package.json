@@ -7,6 +7,6 @@
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/server-filesystem": "^2025.8.21",
-    "@modelcontextprotocol/sdk": "^1.19.1"
+    "zod-to-json-schema": "3.24.6"
   }
 }

@@ -5,34 +5,102 @@ import fs from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import path from 'node:path';
 
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import {
+import { server as mcpServer, streamHttp as mcpStreamHttp, types as mcpTypes, zod as mcpZod } from 'mcp-sdk';
+
+const { Server } = mcpServer;
+const { StreamableHTTPServerTransport } = mcpStreamHttp;
+const {
   CallToolRequestSchema,
   ListToolsRequestSchema,
   ToolSchema,
   RootsListChangedNotificationSchema
-} from '@modelcontextprotocol/sdk/types.js';
-import { z } from 'zod';
-import { zodToJsonSchema } from 'zod-to-json-schema';
+} = mcpTypes;
+const { z } = mcpZod;
 
-import {
-  normalizePath,
-  expandHome
-} from '@modelcontextprotocol/server-filesystem/dist/path-utils.js';
-import { getValidRootDirectories } from '@modelcontextprotocol/server-filesystem/dist/roots-utils.js';
-import {
-  formatSize,
-  validatePath as libraryValidatePath,
-  getFileStats,
-  readFileContent,
-  writeFileContent,
-  searchFilesWithValidation,
-  applyFileEdits,
-  tailFile,
-  headFile,
-  setAllowedDirectories
-} from '@modelcontextprotocol/server-filesystem/dist/lib.js';
+let fatalErrorState = null;
+
+function recordFatalError(source, error) {
+  if (fatalErrorState) return;
+  const err = error instanceof Error ? error : new Error(String(error));
+  fatalErrorState = {
+    source,
+    error: err,
+    timestamp: new Date().toISOString(),
+      cwd: process.cwd()
+  };
+  console.error(`[filesystem-http] fatal ${source}:`, err);
+}
+
+process.on('uncaughtException', (error) => {
+  recordFatalError('uncaughtException', error);
+});
+
+process.on('unhandledRejection', (reason) => {
+  recordFatalError('unhandledRejection', reason);
+});
+
+let zodToJsonSchema;
+try {
+  ({ zodToJsonSchema } = await import('zod-to-json-schema'));
+} catch (error) {
+  const moduleError = error instanceof Error ? error : new Error(String(error));
+  recordFatalError('module-import:zod-to-json-schema', moduleError);
+  zodToJsonSchema = () => {
+    throw moduleError;
+  };
+}
+
+let normalizePath;
+let expandHome;
+let getValidRootDirectories;
+let formatSize;
+let libraryValidatePath;
+let getFileStats;
+let readFileContent;
+let writeFileContent;
+let searchFilesWithValidation;
+let applyFileEdits;
+let tailFile;
+let headFile;
+let setAllowedDirectories;
+
+try {
+  const pathUtils = await import('@modelcontextprotocol/server-filesystem/dist/path-utils.js');
+  ({ normalizePath, expandHome } = pathUtils);
+  const rootsUtils = await import('@modelcontextprotocol/server-filesystem/dist/roots-utils.js');
+  ({ getValidRootDirectories } = rootsUtils);
+  const lib = await import('@modelcontextprotocol/server-filesystem/dist/lib.js');
+  ({
+    formatSize,
+    validatePath: libraryValidatePath,
+    getFileStats,
+    readFileContent,
+    writeFileContent,
+    searchFilesWithValidation,
+    applyFileEdits,
+    tailFile,
+    headFile,
+    setAllowedDirectories
+  } = lib);
+} catch (error) {
+  const moduleError = error instanceof Error ? error : new Error(String(error));
+  recordFatalError('module-import:@modelcontextprotocol/server-filesystem', moduleError);
+  const syncThrow = () => { throw moduleError; };
+  const asyncThrow = async () => { throw moduleError; };
+  normalizePath = syncThrow;
+  expandHome = syncThrow;
+  getValidRootDirectories = asyncThrow;
+  formatSize = syncThrow;
+  libraryValidatePath = asyncThrow;
+  getFileStats = asyncThrow;
+  readFileContent = asyncThrow;
+  writeFileContent = asyncThrow;
+  searchFilesWithValidation = asyncThrow;
+  applyFileEdits = asyncThrow;
+  tailFile = asyncThrow;
+  headFile = asyncThrow;
+  setAllowedDirectories = syncThrow;
+}
 
 const args = process.argv.slice(2);
 const envRoots = (process.env.ASSISTOS_FS_ROOT || process.env.MCP_FS_ROOT || '').split(',').map(p => p.trim()).filter(Boolean);
@@ -72,8 +140,14 @@ async function resolveAllowedDirectories(inputDirs) {
   return validated;
 }
 
-let allowedDirectories = await resolveAllowedDirectories(args);
-setAllowedDirectories(allowedDirectories);
+let allowedDirectories = [];
+try {
+  allowedDirectories = await resolveAllowedDirectories(args);
+  setAllowedDirectories(allowedDirectories);
+} catch (error) {
+  recordFatalError('init:allowed-directories', error);
+  allowedDirectories = [];
+}
 
 const workspaceRoot = allowedDirectories.length > 0 ? allowedDirectories[0] : path.resolve(process.cwd());
 if (allowedDirectories.length > 1) {
@@ -504,6 +578,18 @@ async function main() {
   await server.connect(transport);
 
   const httpServer = http.createServer((req, res) => {
+    if (fatalErrorState) {
+      const payload = JSON.stringify({
+        ok: false,
+        error: 'Server entered fatal error state',
+        source: fatalErrorState.source,
+        message: fatalErrorState.error?.message || 'Internal server error',
+          cwd: process.cwd()
+      });
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(payload);
+      return;
+    }
     const urlString = req.url || '/';
     const parsedUrl = new URL(urlString, 'http://localhost');
     if (req.method === 'GET' && parsedUrl.pathname === '/health') {

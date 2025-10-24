@@ -1,8 +1,8 @@
 {
   "container": "node:20-alpine",
-  "install": "/code/install.sh",
+    "preinstall": "npm install",
   "update": "",
-  "cli": "/bin/sh",
+  "cli": "/bin/bash",
   "agent": "node /code/filesystem-http-server.mjs",
   "about": "AssistOS Explorer agent running the official MCP filesystem server over HTTP.",
   "enable": [],
