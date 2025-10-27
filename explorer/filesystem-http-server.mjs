@@ -104,8 +104,6 @@ try {
 
 const args = process.argv.slice(2);
 const envRoots = (process.env.ASSISTOS_FS_ROOT || process.env.MCP_FS_ROOT || '').split(',').map(p => p.trim()).filter(Boolean);
-if (!args.length) args.push(...envRoots);
-if (!args.length) args.push('/code');
 if (!args.length) args.push(process.cwd());
 
 async function resolveAllowedDirectories(inputDirs) {
