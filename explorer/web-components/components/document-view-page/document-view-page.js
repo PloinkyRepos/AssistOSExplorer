@@ -194,8 +194,8 @@ export class DocumentViewPage {
     }
 
     renderDocumentTitle() {
-        let documentTitle = this.element.querySelector(".document-title");
-        documentTitle.value = unescapeHtmlEntities(this._document.title);
+   /*     let documentTitle = this.element.querySelector(".document-title");
+        documentTitle.value = unescapeHtmlEntities(this._document.title);*/
     }
 
     renderInfoText() {
