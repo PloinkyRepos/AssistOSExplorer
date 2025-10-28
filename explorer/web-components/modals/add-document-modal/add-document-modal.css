@@ -1,0 +1,101 @@
+add-document-modal {
+    display: block;
+    width: 860px;
+}
+add-document-modal .form-item{
+    margin-bottom: 20px;
+}
+.tabs {
+    display: flex;
+    gap: 16px;
+    padding: 20px;
+    justify-content: center;
+}
+
+.source-toggle {
+    padding: 15px 25px 10px 25px;
+    background: inherit;
+    color: var(--default-font-color);
+}
+
+.file-limits{
+    margin-top: 10px;
+    font-size: 8px;
+    color: var(--header-font-color);
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 20px;
+}
+.create-button,
+.upload-button{
+    width: fit-content;
+}
+
+.add-document-footer{
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    margin-top: 55px;
+}
+
+.file-input {
+    border-radius: 5px;
+    border: 1px dashed rgba(74, 74, 75, 0.90);
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    height: 100px;
+    align-items: center;
+    cursor: pointer;
+    padding: 20px;
+}
+#fileUpload{
+    display: none;
+}
+.upload-icon-container{
+    margin-bottom: 10px;
+    width: 25px;
+    height: 25px;
+    border-radius: 50%;
+    background: var(--gray-button-text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.file-input-label{
+    color: var(--header-font-color);
+    font-size: 13px;
+}
+.uploaded-files{
+    border-radius: 5px;
+    min-height: 75px;
+    border: 1px solid var(--form-input-border);
+    padding: 10px;
+    margin-bottom: 10px;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    row-gap: 10px;
+    column-gap: 10px;
+}
+.no-files{
+    color: var(--form-input);
+    font-size: 14px;
+    font-weight: 500;
+}
+.file-item{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    color: var(--form-input);
+    height: 16px;
+}
+.file-name{
+    width: 300px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.remove-file{
+    width: 11px;
+}

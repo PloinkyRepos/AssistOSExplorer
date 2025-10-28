@@ -1,0 +1,6 @@
+print-document-modal{
+    display:flex;
+    flex-direction:column;
+    width: 600px;
+    height: 240px;
+}

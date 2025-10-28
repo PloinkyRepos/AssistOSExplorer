@@ -8,6 +8,42 @@
     --accent: #2563eb;
     --accent-muted: #93c5fd;
     --border: #e5e7eb;
+    --default-font: "Inter", sans-serif;
+    --black: black;
+    --white: white;
+    --white-text: white;
+    --form-input-border: #BDBDBD;
+    --light-gray: #BDBDBD;
+    --very-light-gray: #c2c2c299;
+    --error-modal-border: #E5E5E5;
+    --left-sidebar-background: #2C2C2C;
+    --header-font-color: #222222;
+    --strong-blue: #08C;
+    --inactive-element: #F9F9F9;
+    --action-button-background: #E9E9E9;
+    --red: #C80001;
+    --light-gray-border: #EFEFEF;
+    --plugin-focus: #919191;
+    --document-font-color: #646464;
+    --default-font-color: #646464;
+    --form-input: #8B8B8B;
+    --option-hover: #F2F2F2;
+    --application-marketplace-background: #F8F8F8;
+    --application-marketplace-border: #DDDDDD;
+    --gray-button-background: #EDEDED;
+    --gray-button-text: #454545;
+    --gray-button-border: #CCCCCC;
+    --menu-backgroud: #F5F5F5;
+    --button-padding: 10px 20px;
+    --page-padding: 20px 40px;
+    --page-header-font-size: 28px;
+}
+@supports (font-variation-settings: normal) {
+    :root {
+        --default-font: "InterVariable", sans-serif;
+        font-family: var(--default-font), sans-serif;
+        font-optical-sizing: auto;
+    }
 }
 @media (prefers-color-scheme: dark) {
     :root {
@@ -16,6 +52,7 @@
         --surface-dark: #111927dd;
         --text: #f9fafb;
         --text-soft: #cbd5f5;
+        --light-gray: #9ca3af;
         --accent: #60a5fa;
         --accent-muted: #3b82f6;
         --border: #1f2937;
@@ -26,12 +63,16 @@
 }
 body {
     margin: 0;
-    font-family: "Segoe UI", Inter, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+    font-family: var(--default-font), "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
     background: var(--bg);
     color: var(--text);
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+}
+
+.rotate {
+    transform: rotate(-90deg);
 }
 header {
     padding: 20px clamp(16px, 4vw, 48px);
@@ -267,9 +308,7 @@ tbody tr.active {
 }
 .preview-content {
     flex: 1;
-    padding: clamp(16px, 3vw, 24px);
     overflow: auto;
-    background: rgba(15, 23, 42, 0.05);
 }
 pre {
     margin: 0;

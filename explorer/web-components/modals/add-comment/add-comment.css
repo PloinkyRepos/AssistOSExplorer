@@ -1,0 +1,11 @@
+add-comment {
+    display: block;
+    width: 860px;
+}
+
+#comment{
+    resize: none;
+    outline: none;
+    height: 250px;
+    margin-bottom: 55px;
+}

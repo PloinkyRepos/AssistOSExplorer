@@ -1,0 +1,108 @@
+.plugin-header{
+    display: flex;
+    justify-content: space-between;
+}
+.header-left-section{
+    display: flex;
+}
+.plugin-title{
+    font-weight: bold;
+    font-size: 16px;
+    margin-right: 10px;
+}
+.table-labels{
+    font-size: 16px;
+    display: grid;
+    grid-template-columns: 1fr 2fr 6fr 6fr 2fr;
+    padding-top: 10px;
+}
+.empty-table{
+    grid-template-columns: repeat(2, 1fr);
+}
+.no-variables{
+    padding: 6px 13px;
+    border-bottom: 3px solid var(--light-gray-border);
+}
+.table-actions{
+    display: flex;
+    justify-content: end;
+    align-items: center;
+}
+.right-margin{
+    margin-right: 10px;
+}
+.variables-table-container{
+
+}
+
+.variables-table{
+    display: grid;
+    grid-template-columns: 1fr 2fr 6fr 6fr 2fr;
+    overflow: auto;
+    max-height: calc(100vh - 450px);
+}
+.open-editor{
+    margin-right: 13px;
+}
+.cell {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 5px;
+    padding-top: 11px;
+    border-bottom: 1px solid var(--light-gray-border);
+    height: 41px;
+}
+.table-label{
+    font-size: 16px;
+    color: var(--plugin-focus);
+    border-bottom: 3px solid var(--light-gray-border);
+}
+.actions-cell{
+    display: flex;
+    align-items: center;
+    justify-content: end;
+}
+edit-variables .focused-field{
+    background-color: var(--white);
+}
+.actions-cell{
+    position: relative;
+}
+.var-value{
+    position: absolute;
+    left: 0;
+}
+.action-button-container{
+    border-radius: 5px;
+    background-color: var(--action-button-background);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    margin-right: 68px;
+}
+.delete-button-container{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.variable-icon{
+    width: 20px;
+}
+.right-margin{
+    margin-right: 5px;
+}
+edit-variables .close{
+    margin-right: 4px;
+}
+.add-buton{
+    width: 13px;
+}
+.editable{
+    cursor: pointer;
+}
+.editable:hover{
+    background-color: var(--light-gray-border);
+}

@@ -1,0 +1,210 @@
+chapter-item {
+    width: 100%;
+    cursor: default;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    position: relative;
+    /*background-color: var(--inactive-element);*/
+    margin-bottom: 15px;
+    outline: 2px var(--light-gray-border) solid;
+}
+.chapter-title-container {
+    height: 43px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    font-weight: 600;
+    padding: 0 0 0 8px;
+    line-height: normal;
+    overflow: visible;
+}
+
+.highlighted-chapter{
+    background-color: var(--white);
+    border: none;
+    box-shadow: none;
+    outline: none;
+}
+
+.chapter-container{
+    border-radius: 5px;
+}
+.chapter-container.highlighted-chapter{
+    padding: 10px;
+}
+.chapter-header-container {
+    position: relative;
+    padding: 10px;
+    width: 100%;
+    background-color: var(--inactive-element);
+    /*margin-bottom: 5px;*/
+}
+.chapter-plugin-container{
+    background-color: var(--white);
+}
+
+.toolbar-left-section{
+    display: flex;
+    align-items: center;
+}
+.toolbar-right-section{
+    display: flex;
+    align-items: center;
+}
+.toolbar-menu {
+    position: absolute;
+    z-index: 10;
+    left: 0;
+    font-size: 14px;
+    top: 35px;
+    flex-direction: column;
+    align-items: center;
+    box-shadow: 0px 1px 5.5px 0px #65666754;
+    border-radius: 5px;
+    background-color: white;
+}
+
+.chapter-actions{
+    display: flex;
+    align-items: center;
+    gap:5px;
+}
+.chapter-comment{
+    display:flex;
+    align-items:center;
+}
+.arrow {
+    margin-right: 5px;
+    cursor: pointer;
+    transition-duration: 0.3s;
+}
+.chapter-title-container.highlighted-chapter{
+    padding: 10px;
+}
+
+.chapter-toolbar{
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px;
+    width: 30%;
+    border-top-left-radius: 5px;
+    border-top-right-radius: 5px;
+}
+.chapter-left-section{
+    display: flex;
+    align-items: center;
+}
+.chapter-right-section{
+    display: flex;
+    align-items: center;
+}
+.chapter-margin{
+    margin-right: 20px;
+}
+
+
+.arrow:focus{
+    outline: none;
+}
+
+html[theme="dark"] .arrow svg {
+    filter: brightness(0) invert(1);
+}
+
+.action-box-chapter{
+    margin-right: 10px;
+}
+.ten-px-margin-left {
+    margin-left: 10px;
+}
+
+.chapter-content {
+    min-width: 0;
+    justify-content: start;
+    display: flex;
+    flex-direction: row-reverse;
+    align-items: center;
+}
+
+.chapter-arrows {
+    display: flex;
+    width: 42px;
+    min-width: 42px;
+    justify-content: space-between;
+    margin-left: 10px;
+    cursor: pointer;
+}
+
+
+.chapter-arrows {
+    display: none;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.chapter-title {
+    outline: none;
+    border-radius: 5px;
+    border: none;
+    width: 65%;
+    padding: 5px 5px 5px 5px;
+    margin-left: 3px;
+    display: inline-block;
+    font-weight: 700;
+    font-size: 20px;
+    margin-right: 10px;
+    background-color: var(--inactive-element);
+}
+
+.chapter-paragraphs {
+    display:flex;
+    flex-direction: column;
+    width: 100%;
+}
+.chapter-visibility-arrow{
+    margin-right: 10px;
+}
+.chapter-content {
+    width: 100%;
+}
+
+.data-chapter-number {
+    width: 25px;
+}
+.flex{
+    display: flex;
+}
+.chapter-icons{
+    visibility: hidden;
+    display: flex;
+    align-items: center;
+}
+html[theme="dark"] input.chapter-title{
+    background: var(--white)
+}
+
+.chapter-plugins-icons{
+    display: flex;
+}
+.rotate-down{
+    transform: rotate(180deg);
+}
+
+.right-margin{
+    margin-right: 5px;
+}
+.delete-chapter{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.add-elements{
+    position: relative;
+}
+.highlighted-header{
+    box-shadow: inset 6px 0 0 -3px var(--strong-blue)
+}

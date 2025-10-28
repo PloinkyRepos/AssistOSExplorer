@@ -1,0 +1,79 @@
+document-tasks-modal{
+    display: block;
+    width: 680px;
+    height: fit-content;
+}
+dialog{
+    overflow: visible;
+}
+.tasks-list-container {
+    cursor: initial;
+    min-width: 150px;
+    min-height: 35px;
+    font-size: 14px;
+    align-items: flex-start;
+    max-height: 500px;
+    flex-direction: column;
+    box-shadow: 0px 1px 5.5px 0px #65666754;
+    padding: 5px 0;
+    z-index: 1;
+}
+.tasks-header{
+    width: 100%;
+    display: flex;
+    align-items: center;
+    padding: 10px 10px 0 10px;
+    font-weight: 700;
+}
+.run-all-tasks,
+.cancel-all-tasks{
+    font-size: 14px;
+    margin-top: 5px;
+    margin-left: 10px;
+    padding: 5px;
+    height: initial;
+    line-height: normal;
+}
+.agent-header{
+    width: 24%;
+}
+.name-header{
+    width: 30%;
+}
+.status-header{
+    width: 15%;
+}
+.link-header{
+    width: 20%;
+}
+.action-header{
+    width: 10%;
+}
+.tasks-list{
+    scrollbar-width: initial;
+    overflow-y: auto;
+    max-height: 400px;
+}
+.tasks-list::-webkit-scrollbar {
+    display: block;
+}
+.tasks-list::-webkit-scrollbar-thumb {
+    background-color: #888;
+    border-radius: 10px;
+}
+.tasks-list::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+}
+.no-tasks{
+    padding-left: 10px;
+}
+
+.disabled{
+    pointer-events: none;
+    cursor: initial;
+    background-color: var(--very-light-gray);
+}
+.tasks-buttons{
+    display: flex;
+}

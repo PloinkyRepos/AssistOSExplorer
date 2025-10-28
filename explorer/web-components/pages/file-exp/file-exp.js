@@ -1,3 +1,6 @@
+import { unescapeHtmlEntities } from "../../../imports.js";
+import { stripAchilesComments as stripDocumentComments } from "../../../services/document/markdownDocumentParser.js";
+
 export class FileExp {
     constructor(element, invalidate) {
         this.element = element;
@@ -9,6 +12,10 @@ export class FileExp {
             entries: [],
             selectedPath: null,
             fileContent: "",
+            previewContent: "",
+            selectedIsMarkdown: false,
+            markdownTextView: false,
+            documentId: null,
             isEditing: false,
             isResizing: false
         };
@@ -30,6 +37,10 @@ export class FileExp {
             return;
         }
 
+        if (this.state.isEditing) {
+            await this.cancelEdit();
+        }
+
         try {
             const contentResult = await window.webSkel.appServices.callTool('explorer', 'read_text_file', {path: path});
 
@@ -37,12 +48,12 @@ export class FileExp {
                 throw new Error(contentResult.text);
             }
 
-            this.state.fileContent = contentResult.text;
-            this.state.selectedPath = path;
             const parentDir = this.parentPath(path) || '/';
             this.state.path = parentDir;
             this.state.entries = await this.loadDirectoryContent(parentDir);
-            this.invalidate();
+            this.state.selectedPath = path;
+            this.state.isEditing = false;
+            await this.openFile(path);
         } catch (e) {
             // If it fails, it's a directory
             await this.loadDirectory(path);
@@ -112,12 +123,34 @@ export class FileExp {
 
         const previewContent = this.element.querySelector('.preview-content');
         if (this.state.isEditing) {
-            previewContent.innerHTML = `<file-editor data-presenter="file-editor" data-path="${this.state.selectedPath}"></file-editor>`;
+            if (this.state.selectedIsMarkdown && this.state.documentId) {
+                previewContent.innerHTML = `<document-view-page data-presenter="document-view-page" data-path="${this.state.selectedPath}" documentId="${this.state.documentId}"></document-view-page>`;
+            } else {
+                previewContent.innerHTML = `<file-editor data-presenter="file-editor" data-path="${this.state.selectedPath}"></file-editor>`;
+            }
+        } else if (this.state.selectedIsMarkdown) {
+            if (this.state.markdownTextView) {
+                previewContent.innerHTML = `<pre id="filePreview" class="markdown-raw-view"></pre>`;
+                const filePreview = this.element.querySelector("#filePreview");
+                if (this.state.selectedPath) {
+                    filePreview.textContent = this.state.fileContent;
+                } else {
+                    filePreview.textContent = "Select a file to see its contents.";
+                }
+            } else {
+                previewContent.innerHTML = `<div id="filePreview" class="markdown-preview"></div>`;
+                const filePreview = this.element.querySelector("#filePreview");
+                if (this.state.selectedPath) {
+                    filePreview.innerHTML = this.state.previewContent;
+                } else {
+                    filePreview.textContent = "Select a file to see its contents.";
+                }
+            }
         } else {
             previewContent.innerHTML = `<pre id="filePreview"></pre>`;
             const filePreview = this.element.querySelector("#filePreview");
             if (this.state.selectedPath) {
-                filePreview.textContent = this.state.fileContent;
+                filePreview.textContent = this.state.previewContent;
             } else {
                 filePreview.textContent = "Select a file to see its contents.";
             }
@@ -173,6 +206,37 @@ export class FileExp {
             resizer.addEventListener('mousedown', handleMouseDown);
             resizer.dataset.bound = 'true';
         }
+
+        const saveButton = this.element.querySelector('#saveButton');
+        if (saveButton) {
+            if (this.state.selectedIsMarkdown) {
+                saveButton.classList.add('hidden');
+            } else {
+                saveButton.classList.remove('hidden');
+            }
+        }
+
+        const cancelButton = this.element.querySelector('#cancelButton');
+        if (cancelButton) {
+            cancelButton.textContent = this.state.selectedIsMarkdown ? 'Close' : 'Cancel';
+        }
+
+        const markdownViewActions = this.element.querySelector('#markdownViewActions');
+        const toggleMarkdownViewButton = this.element.querySelector('#toggleMarkdownViewButton');
+        if (markdownViewActions && toggleMarkdownViewButton) {
+            if (!this.state.isEditing && this.state.selectedIsMarkdown && this.state.selectedPath) {
+                markdownViewActions.classList.remove('hidden');
+                toggleMarkdownViewButton.textContent = this.state.markdownTextView ? 'View as preview' : 'View as text';
+            } else {
+                markdownViewActions.classList.add('hidden');
+            }
+        }
+
+        const fileNameLabel = this.element.querySelector('#editorFileName');
+        if (fileNameLabel) {
+            const fallbackName = this.state.selectedPath ? this.state.selectedPath.split('/').pop() : '';
+            fileNameLabel.textContent = fallbackName;
+        }
     }
 
     async loadDirectoryContent(path) {
@@ -191,9 +255,16 @@ export class FileExp {
     }
 
     async loadDirectory(path = this.state.path) {
+        if (this.state.isEditing) {
+            await this.cancelEdit();
+        }
         this.state.path = this.normalizePath(path);
         this.state.selectedPath = null;
         this.state.fileContent = "";
+        this.state.previewContent = "";
+        this.state.selectedIsMarkdown = false;
+        this.state.markdownTextView = false;
+        this.state.documentId = null;
         this.state.isEditing = false;
         this.state.entries = await this.loadDirectoryContent(this.state.path);
         this.invalidate();
@@ -207,6 +278,7 @@ export class FileExp {
             if (!confirm("You have unsaved changes. Are you sure you want to navigate away?")) {
                 return;
             }
+            await this.cancelEdit();
         }
 
         const newUrl = `#file-exp${path}`;
@@ -216,7 +288,6 @@ export class FileExp {
             await this.loadDirectory(path);
         } else if (type === 'file') {
             this.state.selectedPath = path;
-            this.state.isEditing = false;
             await this.openFile(path);
         }
     }
@@ -225,6 +296,31 @@ export class FileExp {
         try {
             const contentResult = await window.webSkel.appServices.callTool('explorer', 'read_text_file', {path: filePath});
             this.state.fileContent = contentResult.text;
+            this.state.selectedIsMarkdown = this.isMarkdownFile(filePath);
+            this.state.markdownTextView = false;
+            this.state.documentId = null;
+            if (this.state.selectedIsMarkdown) {
+                const previewSource = this.prepareMarkdownPreviewContent(this.state.fileContent);
+                this.state.previewContent = this.renderMarkdownPreview(previewSource);
+                this.state.markdownTextView = false;
+                try {
+                    const documentModule = window.assistOS?.loadModule?.('document');
+                    if (documentModule) {
+                        const doc = await documentModule.loadDocument(window.assistOS.space.id, filePath);
+                        this.state.documentId = doc?.id ?? null;
+                        if (doc?.id) {
+                            window.assistOS.space.currentDocumentId = doc.id;
+                            window.assistOS.space.currentDocumentPath = filePath;
+                        }
+                    }
+                } catch (docError) {
+                    console.warn('Failed to load document module for', filePath, docError);
+                    this.state.documentId = null;
+                }
+            } else {
+                this.state.previewContent = this.state.fileContent;
+                this.state.markdownTextView = false;
+            }
             this.invalidate();
         } catch (err) {
             console.error(err);
@@ -234,31 +330,72 @@ export class FileExp {
 
     async editFile() {
         if (!this.state.selectedPath) return;
+        if (this.state.selectedIsMarkdown && !this.state.documentId) {
+            try {
+                const documentModule = window.assistOS?.loadModule?.('document');
+                if (documentModule) {
+                    const doc = await documentModule.loadDocument(window.assistOS.space.id, this.state.selectedPath);
+                    this.state.documentId = doc?.id ?? null;
+                }
+            } catch (error) {
+                console.warn('Failed to prepare document editor', error);
+            }
+        }
+        this.state.markdownTextView = false;
         this.state.isEditing = true;
         this.invalidate();
     }
 
     async saveFile() {
         this.textarea = this.element.querySelector('.code-input');
-        if (this.textarea) {
-            const newContent = this.textarea.value
-            try {
-                await window.webSkel.appServices.callTool('explorer', 'write_file', {path: this.state.selectedPath, content: newContent});
-                this.showStatus(`Successfully saved ${this.state.selectedPath}`, false);
-                this.state.fileContent = newContent;
-                this.state.isEditing = false;
-                this.editorPresenter = null;
-                this.invalidate();
-            } catch (err) {
-                console.error(err);
-                this.showStatus(err.message || 'Failed to save file.', true);
+        if (!this.textarea) {
+            return;
+        }
+
+        const newContent = this.textarea.value;
+        try {
+            await window.webSkel.appServices.callTool('explorer', 'write_file', {path: this.state.selectedPath, content: newContent});
+            this.showStatus(`Successfully saved ${this.state.selectedPath}`, false);
+            this.state.fileContent = newContent;
+
+            if (this.state.selectedIsMarkdown) {
+                const previewSource = this.prepareMarkdownPreviewContent(newContent);
+                this.state.previewContent = this.renderMarkdownPreview(previewSource);
+                this.state.markdownTextView = false;
+                try {
+                    const documentModule = window.assistOS?.loadModule?.('document');
+                    if (documentModule) {
+                        const doc = await documentModule.loadDocument(window.assistOS.space.id, this.state.selectedPath);
+                        this.state.documentId = doc?.id ?? null;
+                        if (doc?.id) {
+                            window.assistOS.space.currentDocumentId = doc.id;
+                            window.assistOS.space.currentDocumentPath = this.state.selectedPath;
+                        }
+                    }
+                } catch (docError) {
+                    console.warn('Failed to refresh document after save', docError);
+                }
+            } else {
+                this.state.previewContent = newContent;
             }
+
+            this.state.isEditing = false;
+            this.editorPresenter = null;
+            this.invalidate();
+        } catch (err) {
+            console.error(err);
+            this.showStatus(err.message || 'Failed to save file.', true);
         }
     }
 
     async cancelEdit() {
         this.state.isEditing = false;
+        this.state.markdownTextView = false;
         this.editorPresenter = null;
+        if (this.state.selectedIsMarkdown && this.state.selectedPath) {
+            await this.openFile(this.state.selectedPath);
+            return;
+        }
         this.invalidate();
     }
 
@@ -451,6 +588,130 @@ export class FileExp {
         }
     }
 
+    isMarkdownFile(path) {
+        return typeof path === 'string' && /\.md$/i.test(path);
+    }
+
+    stripAchilesComments(text) {
+        return stripDocumentComments(text);
+    }
+
+    prepareMarkdownPreviewContent(rawText) {
+        if (!rawText) {
+            return '';
+        }
+        const unescaped = unescapeHtmlEntities(rawText);
+        const cleaned = this.stripAchilesComments(unescaped);
+        return cleaned.replace(/\u00A0/g, ' ');
+    }
+
+    renderMarkdownPreview(markdown) {
+        if (!markdown) {
+            return '';
+        }
+
+        const escapeHtml = (value) => value
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+
+        const renderInline = (value) => {
+            let result = value;
+            result = result.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+            result = result.replace(/(\*|_)([^*_]+?)\1/g, '<em>$2</em>');
+            result = result.replace(/`([^`]+?)`/g, '<code>$1</code>');
+            result = result.replace(/\[([^\]]+)]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+            return result;
+        };
+
+        const lines = markdown.replace(/\r\n/g, '\n').split('\n');
+        const html = [];
+        let inList = false;
+        let inCodeBlock = false;
+        let codeLanguage = '';
+        let paragraphBuffer = [];
+
+        const flushParagraph = () => {
+            if (paragraphBuffer.length === 0) return;
+            const text = paragraphBuffer.join(' ');
+            html.push(`<p>${renderInline(text)}</p>`);
+            paragraphBuffer = [];
+        };
+
+        lines.forEach((rawLine) => {
+            const line = rawLine.trimEnd();
+
+            if (line.trim().startsWith('```')) {
+                if (inCodeBlock) {
+                    html.push('</code></pre>');
+                    inCodeBlock = false;
+                    codeLanguage = '';
+                } else {
+                    flushParagraph();
+                    if (inList) {
+                        html.push('</ul>');
+                        inList = false;
+                    }
+                    inCodeBlock = true;
+                    codeLanguage = line.trim().slice(3).trim();
+                    const langClass = codeLanguage ? ` class="language-${escapeHtml(codeLanguage)}"` : '';
+                    html.push(`<pre><code${langClass}>`);
+                }
+                return;
+            }
+
+            if (inCodeBlock) {
+                html.push(`${escapeHtml(rawLine)}\n`);
+                return;
+            }
+
+            if (/^\s*$/.test(line)) {
+                flushParagraph();
+                if (inList) {
+                    html.push('</ul>');
+                    inList = false;
+                }
+                return;
+            }
+
+            const headingMatch = line.match(/^(#{1,6})\s+(.*)$/);
+            if (headingMatch) {
+                flushParagraph();
+                if (inList) {
+                    html.push('</ul>');
+                    inList = false;
+                }
+                const level = headingMatch[1].length;
+                const content = renderInline(escapeHtml(headingMatch[2].trim()));
+                html.push(`<h${level}>${content}</h${level}>`);
+                return;
+            }
+
+            const listMatch = line.match(/^[-*+]\s+(.*)$/);
+            if (listMatch) {
+                flushParagraph();
+                if (!inList) {
+                    html.push('<ul>');
+                    inList = true;
+                }
+                html.push(`<li>${renderInline(escapeHtml(listMatch[1]))}</li>`);
+                return;
+            }
+
+            paragraphBuffer.push(escapeHtml(line.trim()));
+        });
+
+        if (inCodeBlock) {
+            html.push('</code></pre>');
+        }
+        if (inList) {
+            html.push('</ul>');
+        }
+        flushParagraph();
+
+        return html.join('\n');
+    }
+
     toggleHiddenFiles(element) {
         this.state.includeHidden = element.checked;
         this.saveHiddenPreference(this.state.includeHidden);
@@ -473,4 +734,14 @@ export class FileExp {
             // ignore
         }
     }
+
+    toggleMarkdownView() {
+        if (!this.state.selectedIsMarkdown || this.state.isEditing) {
+            return;
+        }
+        this.state.markdownTextView = !this.state.markdownTextView;
+        this.invalidate();
+    }
+
+
 }

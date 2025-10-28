@@ -1,0 +1,26 @@
+
+action-box-documents {
+    padding: 5px;
+    z-index: 1;
+    position: absolute;
+    right: 20px;
+    top: -10px;
+    border: 1px solid var(--action-button-background);
+    border-radius: 10px;
+    background-color: var(--menu-backgroud);
+    width: max-content;
+}
+
+
+.action {
+    padding: 10px;
+    cursor: pointer;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.action:hover {
+    background-color: var(--action-button-background);
+}

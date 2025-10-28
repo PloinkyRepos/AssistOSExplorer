@@ -1,0 +1,246 @@
+paragraph-item {
+    position: relative;
+    background-color: var(--inactive-element);
+    /*margin-bottom: 5px;*/
+    margin-top: 5px;
+    margin-left: 1px;
+    margin-right: 1px;
+}
+
+.paragraph-header {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    color: black;
+    font-size: 11px;
+}
+
+.highlighted-paragraph{
+    background-color: var(--white);
+    box-shadow: inset 6px 0 0 -3px var(--strong-blue)
+}
+.paragraph-container{
+    padding: 0 5px;
+}
+.icon-container.delete-paragraph{
+    width: initial;
+}
+.paragraph-header-container {
+    width: 100%;
+}
+.paragraph-toolbar{
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px;
+    width: 100%;
+    /*border-bottom: 3px solid var(--very-light-gray);*/
+    /*border-top: 3px solid var(--very-light-gray);*/
+}
+.toolbar-left-section{
+    display: flex;
+    align-items: center;
+}
+.toolbar-right-section{
+    display: flex;
+    align-items: center;
+}
+
+.rotate-down{
+    transform: rotate(180deg);
+}
+.commands-icon-text{
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.highlight-attachment{
+    background-color: var(--white);
+}
+.paragraph-text-container {
+    position: relative;
+    cursor: default;
+    display: flex;
+    width: 100%;
+    align-items: center;
+}
+
+.header-section{
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: auto;
+}
+textarea.paragraph-commands{
+    line-height: 1.5;
+    overflow: hidden;
+    resize: none;
+    border: none;
+    outline: none;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    background:inherit;
+}
+.task-line{
+    display: flex;
+}
+.task-result{
+    margin-left: 3px;
+}
+.paragraph-commands a{
+ width: fit-content;
+}
+
+.eight-px-vertical-space {
+    height: 8px;
+    width: 100%;
+    min-width: 100%;
+    min-height: 8px;
+}
+
+.paragraph-text:focus {
+    outline: none;
+}
+
+.arrow-vertical-spacing-div {
+    width: 100%;
+    height: 12px;
+}
+
+.paragraph-text {
+    letter-spacing: 0.02em;
+    line-height: 1.2;
+    resize: none;
+    border: none;
+    cursor: text;
+    padding: 5px;
+    min-height: 38px;
+    height: fit-content;
+    width: 100%;
+    word-break: break-all;
+    hyphens: auto;
+    background-color: inherit;
+    font-weight: 500;
+    font-size: 16px;
+}
+
+.paragraph-text:empty {
+    height: 45px;
+}
+
+.audio-icon {
+    margin-left: 5px;
+}
+
+.warning-icon {
+    margin-left: 5px;
+}
+
+#hide .optional {
+    display: none;
+}
+.plugin-circle.comment-menu{
+    margin-right: 0;
+}
+.comment-menu{
+    position: relative;
+    display: flex;
+    justify-content: center;
+}
+.insert-document-element{
+    display: flex;
+    align-items: center;
+    position: relative;
+}
+.toolbar-menu {
+    position: absolute;
+    z-index: 10;
+    left: 0;
+    font-size: 14px;
+    top: 35px;
+    flex-direction: column;
+    align-items: center;
+    box-shadow: 0px 1px 5.5px 0px #65666754;
+    border-radius: 5px;
+    background-color: white;
+}
+
+.top-margin{
+    margin-top: 5px;
+}
+
+.disabled-pointer-events{
+    pointer-events: none;
+}
+
+.command-line{
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    font-size: 14px;
+}
+.command-icon{
+    margin-right: 5px;
+    width: 20px;
+}
+.personality-icon{
+    width: 30px;
+    object-fit: cover;
+    height: 30px;
+    border-radius: 50%;
+}
+.personality-name{
+    margin-right: 5px;
+}
+.silence-duration{
+    margin-left: 5px;
+}
+.command-link{
+    display: block;
+}
+
+.img-tag{
+    padding: 10px;
+}
+
+.info-text,
+.warning-text{
+    margin-left: 5px;
+}
+.paragraph-info,
+.paragraph-warning{
+    display: flex;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 10px;
+}
+.fix-warning{
+    font-size: 12px;
+    margin-left: 5px;
+    cursor: pointer;
+    text-decoration: underline;
+    color: var(--strong-blue);
+}
+.fix-warning:hover{
+    color: var(--strong-blue);
+}
+
+.menu-container.locked-item{
+    background-color: var(--very-light-gray);
+    /*pointer-events: none;*/
+}
+.status-icon{
+
+}
+
+html[theme="dark"] textarea.paragraph-text{
+    background: var(--white)
+}
+.paragraph-plugins-icons{
+    display: flex;
+}
+.plugin-open{
+    margin-bottom: 20px;
+}

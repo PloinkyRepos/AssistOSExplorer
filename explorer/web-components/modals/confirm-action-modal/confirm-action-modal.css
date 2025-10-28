@@ -1,0 +1,11 @@
+.modal-body{
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+confirm-action-modal .bottom-modal-section{
+    margin-top: 10px;
+    display: flex;
+    gap: 10px;
+}

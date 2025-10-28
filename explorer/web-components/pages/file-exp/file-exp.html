@@ -73,7 +73,13 @@
             <div class="resizer" id="resizer"></div>
             <div class="panel preview">
                 <div class="preview-header">
-                    <span id="editorTitle">File Preview</span>
+                    <div class="preview-title">
+                        <span id="editorTitle">File Preview</span>
+                        <span id="editorFileName" class="preview-filename"></span>
+                    </div>
+                    <div id="markdownViewActions" class="hidden">
+                        <button id="toggleMarkdownViewButton" class="secondary" data-local-action="toggleMarkdownView">View as text</button>
+                    </div>
                     <div id="editorActions" class="hidden">
                         <button id="editButton" data-local-action="editFile">Edit</button>
                     </div>
