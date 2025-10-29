@@ -152,8 +152,154 @@ if (allowedDirectories.length > 1) {
   console.warn(`[filesystem-http] Multiple allowed directories found, using the first one as workspace root: ${workspaceRoot}`);
 }
 
+const SKIP_DIRECTORY_NAMES = new Set([
+  '.git',
+  '.hg',
+  '.svn',
+  '.idea',
+  '.vscode',
+  'node_modules',
+  'dist',
+  'build',
+  'out',
+  '.turbo',
+  '.parcel-cache',
+  '.cache',
+  '.mcp-cache',
+  'coverage',
+  'tmp'
+]);
+
+const DEFAULT_PLUGIN_LOCATIONS = ['document', 'chapter', 'paragraph', 'infoText'];
+
+async function aggregateIdePlugins(rootDir) {
+  if (!rootDir) throw new Error('Workspace root not configured.');
+
+  const aggregated = Object.create(null);
+  const visitedAgents = new Set();
+  let pluginCount = 0;
+
+  const ensureBucket = (location) => {
+    if (!aggregated[location]) {
+      aggregated[location] = [];
+    }
+    return aggregated[location];
+  };
+
+  for (const location of DEFAULT_PLUGIN_LOCATIONS) {
+    ensureBucket(location);
+  }
+
+  const scanAgentDirectories = async (baseDir) => {
+    let entries;
+    try {
+      entries = await fs.readdir(baseDir, { withFileTypes: true });
+    } catch (error) {
+      console.warn(`[filesystem-http] Unable to read agent base directory ${baseDir}:`, error instanceof Error ? error.message : String(error));
+      return;
+    }
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      if (SKIP_DIRECTORY_NAMES.has(entry.name)) continue;
+
+      const agentName = entry.name;
+      if (visitedAgents.has(agentName)) continue;
+
+      const agentDir = path.join(baseDir, agentName);
+      const idePluginsDir = path.join(agentDir, 'IDE-plugins');
+
+      let ideStat;
+      try {
+        ideStat = await fs.stat(idePluginsDir);
+      } catch {
+        continue;
+      }
+
+      if (!ideStat.isDirectory()) continue;
+
+      visitedAgents.add(agentName);
+
+      let pluginEntries;
+      try {
+        pluginEntries = await fs.readdir(idePluginsDir, { withFileTypes: true });
+      } catch (error) {
+        console.warn(`[filesystem-http] Unable to read IDE-plugins directory ${idePluginsDir}:`, error instanceof Error ? error.message : String(error));
+        continue;
+      }
+
+      for (const pluginEntry of pluginEntries) {
+        if (!pluginEntry.isDirectory()) continue;
+        const pluginDir = path.join(idePluginsDir, pluginEntry.name);
+        const configPath = path.join(pluginDir, 'config.json');
+
+        let rawConfig;
+        try {
+          rawConfig = await fs.readFile(configPath, 'utf8');
+        } catch (error) {
+          console.warn(`[filesystem-http] Skipping plugin ${pluginDir}: unable to read config.json (${error instanceof Error ? error.message : String(error)})`);
+          continue;
+        }
+
+        let parsedConfig;
+        try {
+          parsedConfig = JSON.parse(rawConfig);
+        } catch (error) {
+          console.warn(`[filesystem-http] Invalid JSON in ${configPath}:`, error instanceof Error ? error.message : String(error));
+          continue;
+        }
+
+        const locationsRaw = parsedConfig.location;
+        const locations = Array.isArray(locationsRaw)
+          ? locationsRaw.map((loc) => (typeof loc === 'string' ? loc.trim() : '')).filter(Boolean)
+          : typeof locationsRaw === 'string' && locationsRaw.trim()
+            ? [locationsRaw.trim()]
+            : [];
+
+        if (!locations.length) {
+          console.warn(`[filesystem-http] Plugin ${pluginDir} does not specify a valid location; skipping.`);
+          continue;
+        }
+
+        const { location, ...pluginConfig } = parsedConfig;
+        if (!pluginConfig.component) {
+          pluginConfig.component = pluginEntry.name;
+        }
+        pluginConfig.agent = agentName;
+
+        for (const loc of new Set(locations)) {
+          if (!loc) continue;
+          const bucket = ensureBucket(loc);
+          bucket.push({ ...pluginConfig });
+          pluginCount += 1;
+        }
+      }
+    }
+  };
+
+  await scanAgentDirectories(rootDir);
+
+  if (pluginCount === 0) {
+    const parentDir = path.dirname(rootDir);
+    if (parentDir && parentDir !== rootDir) {
+      await scanAgentDirectories(parentDir);
+    }
+  }
+
+  for (const [location, plugins] of Object.entries(aggregated)) {
+    plugins.sort((a, b) => {
+      const aKey = (a?.component || '').toLowerCase();
+      const bKey = (b?.component || '').toLowerCase();
+      return aKey.localeCompare(bKey);
+    });
+  }
+
+  return aggregated;
+}
+
 function resolvePathsInArgs(args) {
-  const newArgs = { ...args };
+  const originalArgs = args ?? {};
+  const newArgs = { ...originalArgs };
   if (!workspaceRoot) throw new Error("Workspace root not configured.");
 
   const resolve = (p) => {
@@ -201,6 +347,7 @@ const DirectoryTreeArgsSchema = z.object({ path: z.string() });
 const MoveFileArgsSchema = z.object({ source: z.string(), destination: z.string() });
 const SearchFilesArgsSchema = z.object({ path: z.string(), pattern: z.string(), excludePatterns: z.array(z.string()).optional().default([]) });
 const GetFileInfoArgsSchema = z.object({ path: z.string() });
+const CollectIDEPluginsArgsSchema = z.object({});
 const ToolInputSchema = ToolSchema.shape.inputSchema;
 
 async function readFileAsBase64Stream(filePath) {
@@ -304,6 +451,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       name: 'get_file_info',
       description: 'Retrieve metadata about a file or directory.',
       inputSchema: zodToJsonSchema(GetFileInfoArgsSchema)
+    },
+    {
+      name: 'collect_ide_plugins',
+      description: 'Aggregate IDE plugin configurations grouped by location based on config.json files.',
+      inputSchema: zodToJsonSchema(CollectIDEPluginsArgsSchema)
     },
     {
       name: 'list_allowed_directories',
@@ -511,6 +663,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const info = await getFileStats(validPath);
         const text = Object.entries(info).map(([key, value]) => `${key}: ${value}`).join('\n');
         return { content: [{ type: 'text', text }] };
+      }
+      case 'collect_ide_plugins': {
+        const parsed = CollectIDEPluginsArgsSchema.safeParse(args);
+        if (!parsed.success) throw new Error(`Invalid arguments for collect_ide_plugins: ${parsed.error}`);
+        const pluginsByLocation = await aggregateIdePlugins(workspaceRoot);
+        return { content: [{ type: 'text', text: JSON.stringify(pluginsByLocation) }] };
       }
       case 'list_allowed_directories': {
         return { content: [{ type: 'text', text: `Allowed directories:\n${allowedDirectories.join('\n')}` }] };

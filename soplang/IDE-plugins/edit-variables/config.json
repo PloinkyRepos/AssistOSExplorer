@@ -1,0 +1,13 @@
+{
+    "component": "edit-variables",
+    "location": ["document", "chapter", "paragraph"],
+    "tooltip": "Edit Variables",
+    "icon": "./variable.svg",
+    "presenter": "EditVariables",
+    "type": "embedded",
+    "autoPin": true,
+    "dependencies": [{
+        "name": "add-variable",
+        "presenter": "AddVariable"
+    }]
+}

@@ -1,0 +1,10 @@
+{
+    "component": "run-script",
+    "location": ["document"],
+    "tooltip": "Run Script",
+    "icon": "./variable.svg",
+    "presenter": "RunScript",
+    "type": "embedded",
+    "autoPin": true,
+    "dependencies": []
+}

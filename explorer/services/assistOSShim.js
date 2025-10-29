@@ -1,5 +1,4 @@
 import documentModule from './document/localDocumentModule.js';
-import defaultPlugins from '../core/plugins/defaultPlugins.js';
 
 const DEFAULT_EMAIL = 'local@example.com';
 const DEFAULT_IMAGE = './assets/images/default-personality.png';
@@ -415,11 +414,11 @@ const buildLlmModule = () => ({
 });
 
 const createAssistOS = (options = {}) => {
-    const { ui: providedUI, modules: moduleOverrides } = options;
+    const { ui: providedUI, modules: moduleOverrides, runtimePlugins } = options;
     const ui = providedUI ?? buildUIHelpers();
     const spaceState = {
         id: 'local-space',
-        plugins: JSON.parse(JSON.stringify(defaultPlugins)),
+        plugins: JSON.parse(JSON.stringify(runtimePlugins)),
         currentChapterId: null,
         currentParagraphId: null,
         loadingDocuments: []
