@@ -6,6 +6,8 @@ export class FileExp {
         this.element = element;
         this.invalidate = invalidate;
 
+        this.boundPreviewAnchorHandler = this.handlePreviewAnchorClick.bind(this);
+
         this.state = {
             path: '/',
             includeHidden: this.loadHiddenPreference(),
@@ -27,6 +29,7 @@ export class FileExp {
 
     beforeUnload() {
         window.removeEventListener('popstate', this.boundLoadStateFromURL);
+        this.detachPreviewAnchorHandler();
     }
 
     async loadStateFromURL() {
@@ -123,6 +126,7 @@ export class FileExp {
 
         const previewContent = this.element.querySelector('.preview-content');
         if (this.state.isEditing) {
+            this.detachPreviewAnchorHandler();
             if (this.state.selectedIsMarkdown && this.state.documentId) {
                 previewContent.innerHTML = `<document-view-page data-presenter="document-view-page" data-path="${this.state.selectedPath}" documentId="${this.state.documentId}"></document-view-page>`;
             } else {
@@ -137,6 +141,7 @@ export class FileExp {
                 } else {
                     filePreview.textContent = "Select a file to see its contents.";
                 }
+                this.detachPreviewAnchorHandler();
             } else {
                 previewContent.innerHTML = `<div id="filePreview" class="markdown-preview"></div>`;
                 const filePreview = this.element.querySelector("#filePreview");
@@ -145,6 +150,7 @@ export class FileExp {
                 } else {
                     filePreview.textContent = "Select a file to see its contents.";
                 }
+                this.attachPreviewAnchorHandler();
             }
         } else {
             previewContent.innerHTML = `<pre id="filePreview"></pre>`;
@@ -154,6 +160,7 @@ export class FileExp {
             } else {
                 filePreview.textContent = "Select a file to see its contents.";
             }
+            this.detachPreviewAnchorHandler();
         }
 
         const toggleListButton = this.element.querySelector('#toggleListButton');
@@ -620,13 +627,20 @@ export class FileExp {
             result = result.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
             result = result.replace(/(\*|_)([^*_]+?)\1/g, '<em>$2</em>');
             result = result.replace(/`([^`]+?)`/g, '<code>$1</code>');
-            result = result.replace(/\[([^\]]+)]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+            result = result.replace(/\[([^\]]+)]\(([^)]+)\)/g, (match, text, href) => {
+                const isInternal = /^#/.test(href);
+                const safeHref = escapeHtml(href);
+                const safeText = escapeHtml(text);
+                return isInternal
+                    ? `<a href="${safeHref}">${safeText}</a>`
+                    : `<a href="${safeHref}" target="_blank" rel="noopener">${safeText}</a>`;
+            });
             return result;
         };
 
         const lines = markdown.replace(/\r\n/g, '\n').split('\n');
         const html = [];
-        let inList = false;
+        let activeList = null;
         let inCodeBlock = false;
         let codeLanguage = '';
         let paragraphBuffer = [];
@@ -636,6 +650,28 @@ export class FileExp {
             const text = paragraphBuffer.join(' ');
             html.push(`<p>${renderInline(text)}</p>`);
             paragraphBuffer = [];
+        };
+
+        const closeActiveList = () => {
+            if (!activeList) {
+                return;
+            }
+            html.push(activeList.type === 'ol' ? '</ol>' : '</ul>');
+            activeList = null;
+        };
+
+        const ensureList = (type, startNumber = 1) => {
+            if (activeList?.type === type) {
+                return;
+            }
+            closeActiveList();
+            if (type === 'ol') {
+                const startAttr = startNumber > 1 ? ` start="${startNumber}"` : '';
+                html.push(`<ol${startAttr}>`);
+            } else {
+                html.push('<ul>');
+            }
+            activeList = { type };
         };
 
         lines.forEach((rawLine) => {
@@ -648,10 +684,7 @@ export class FileExp {
                     codeLanguage = '';
                 } else {
                     flushParagraph();
-                    if (inList) {
-                        html.push('</ul>');
-                        inList = false;
-                    }
+                    closeActiveList();
                     inCodeBlock = true;
                     codeLanguage = line.trim().slice(3).trim();
                     const langClass = codeLanguage ? ` class="language-${escapeHtml(codeLanguage)}"` : '';
@@ -667,34 +700,41 @@ export class FileExp {
 
             if (/^\s*$/.test(line)) {
                 flushParagraph();
-                if (inList) {
-                    html.push('</ul>');
-                    inList = false;
-                }
+                closeActiveList();
                 return;
             }
 
             const headingMatch = line.match(/^(#{1,6})\s+(.*)$/);
             if (headingMatch) {
                 flushParagraph();
-                if (inList) {
-                    html.push('</ul>');
-                    inList = false;
-                }
+                closeActiveList();
                 const level = headingMatch[1].length;
-                const content = renderInline(escapeHtml(headingMatch[2].trim()));
-                html.push(`<h${level}>${content}</h${level}>`);
+                let headingContent = headingMatch[2].trim();
+                const anchorMatch = headingContent.match(/\{#([^}]+)\}\s*$/);
+                const anchorId = anchorMatch ? anchorMatch[1] : null;
+                if (anchorMatch) {
+                    headingContent = headingContent.replace(/\s*\{#[^}]+\}\s*$/, '').trim();
+                }
+                const rendered = renderInline(escapeHtml(headingContent));
+                const anchorHtml = anchorId ? `<a id="${escapeHtml(anchorId)}"></a>` : '';
+                html.push(`${anchorHtml}<h${level}>${rendered}</h${level}>`);
                 return;
             }
 
             const listMatch = line.match(/^[-*+]\s+(.*)$/);
             if (listMatch) {
                 flushParagraph();
-                if (!inList) {
-                    html.push('<ul>');
-                    inList = true;
-                }
+                ensureList('ul');
                 html.push(`<li>${renderInline(escapeHtml(listMatch[1]))}</li>`);
+                return;
+            }
+
+            const orderedMatch = line.match(/^\s*(\d+)\.\s+(.*)$/);
+            if (orderedMatch) {
+                flushParagraph();
+                const startNumber = parseInt(orderedMatch[1], 10) || 1;
+                ensureList('ol', startNumber);
+                html.push(`<li>${renderInline(escapeHtml(orderedMatch[2]))}</li>`);
                 return;
             }
 
@@ -704,9 +744,7 @@ export class FileExp {
         if (inCodeBlock) {
             html.push('</code></pre>');
         }
-        if (inList) {
-            html.push('</ul>');
-        }
+        closeActiveList();
         flushParagraph();
 
         return html.join('\n');
@@ -741,6 +779,65 @@ export class FileExp {
         }
         this.state.markdownTextView = !this.state.markdownTextView;
         this.invalidate();
+    }
+
+    escapeCssId(value) {
+        if (!value) {
+            return '';
+        }
+        if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
+            return CSS.escape(value);
+        }
+        return value.replace(/([ !"#$%&'()*+,./:;<=>?@[\]^`{|}~])/g, '\\$1');
+    }
+
+    attachPreviewAnchorHandler() {
+        const previewRoot = this.element.querySelector('#filePreview');
+        if (!previewRoot) {
+            return;
+        }
+        previewRoot.removeEventListener('click', this.boundPreviewAnchorHandler);
+        previewRoot.addEventListener('click', this.boundPreviewAnchorHandler);
+    }
+
+    detachPreviewAnchorHandler() {
+        const previewRoot = this.element.querySelector('#filePreview');
+        if (!previewRoot) {
+            return;
+        }
+        previewRoot.removeEventListener('click', this.boundPreviewAnchorHandler);
+    }
+
+    handlePreviewAnchorClick(event) {
+        const anchor = event.target?.closest?.('a[href^="#"]');
+        if (!anchor) {
+            return;
+        }
+        const href = anchor.getAttribute('href');
+        if (!href || href.length <= 1) {
+            return;
+        }
+        const targetId = href.slice(1);
+        if (!targetId) {
+            return;
+        }
+        const previewRoot = this.element.querySelector('#filePreview');
+        if (!previewRoot) {
+            return;
+        }
+        const selector = this.escapeCssId(targetId);
+        const target = selector ? previewRoot.querySelector(`#${selector}`) : null;
+        if (!target) {
+            return;
+        }
+        event.preventDefault();
+        if (typeof target.scrollIntoView === 'function') {
+            target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } else {
+            const container = previewRoot.parentElement || previewRoot;
+            const offset = target.getBoundingClientRect().top - previewRoot.getBoundingClientRect().top;
+            container.scrollTop += offset;
+        }
     }
 
 

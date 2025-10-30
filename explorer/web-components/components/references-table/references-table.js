@@ -24,6 +24,7 @@ export class ReferencesTable {
 
     }
     afterRender() {
+        this.element.setAttribute('id', 'references-section');
         if (this.tor?.collapsed) {
             const torContent = this.element.querySelector('.tor-content');
             const visibilityArrow = this.element.querySelector('.tor-visibility-arrow');

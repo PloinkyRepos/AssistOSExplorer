@@ -1,10 +1,12 @@
-import {CustomAudio, videoUtils} from "../../imports.js";
-const spaceModule = assistOS.loadModule("space");
+import CustomAudio from './CustomAudio.js';
+
+const spaceModule = assistOS.loadModule('space');
+
 async function playEffects(effectsCopy, mediaPlayer, self) {
-    if(effectsCopy.length === 0){
-        return;
+    if (effectsCopy.length === 0) {
+        return effectsCopy;
     }
-    for(let effect of effectsCopy){
+    for (const effect of effectsCopy) {
         const { playAt, audioInstance, id } = effect;
         if (mediaPlayer.currentTime >= (playAt - 2) && !audioInstance.audio.sourceLoaded) {
             audioInstance.audio.sourceLoaded = true;
@@ -12,14 +14,12 @@ async function playEffects(effectsCopy, mediaPlayer, self) {
             effect.audioInstance.audio.load();
         }
 
-        // Check if the audio instance is ready to play
         if (!audioInstance.audio.isSetUp && mediaPlayer.currentTime >= playAt && audioInstance.audio.sourceLoaded) {
             audioInstance.audio.isSetUp = true;
-            audioInstance.audio.addEventListener("ended", () => {
+            audioInstance.audio.addEventListener('ended', () => {
                 effect.markedForDeletion = true;
             }, { once: true });
 
-            // If the audio isn't fully buffered, pause and show loader
             if (audioInstance.audio.readyState < 4) {
                 audioInstance.audio.playWhenReady = true;
                 self.pauseVideoPreview();
@@ -29,22 +29,22 @@ async function playEffects(effectsCopy, mediaPlayer, self) {
             await audioInstance.audio.play();
         }
     }
-    effectsCopy = effectsCopy.filter(effect => !effect.markedForDeletion);
+    return effectsCopy.filter((effect) => !effect.markedForDeletion);
 }
 
-function setupEffects(mediaPlayer, effects, self){
-    if(mediaPlayer.timeUpdateController){
+function setupEffects(mediaPlayer, effects, self) {
+    if (mediaPlayer.timeUpdateController) {
         mediaPlayer.timeUpdateController.abort();
         mediaPlayer.pauseController.abort();
         mediaPlayer.playController.abort();
     }
     let effectsCopy = JSON.parse(JSON.stringify(effects));
     effectsCopy.sort((a, b) => a.playAt - b.playAt);
-    let timeUpdateController = new AbortController();
-    for(let effect of effectsCopy){
+    const timeUpdateController = new AbortController();
+    for (const effect of effectsCopy) {
         effect.audioInstance = new CustomAudio(effect.start, effect.end);
         effect.audioInstance.audio.volume = effect.volume / 100;
-        effect.audioInstance.audio.addEventListener("canplaythrough", async () => {
+        effect.audioInstance.audio.addEventListener('canplaythrough', async () => {
             if (effect.audioInstance.audio.playWhenReady) {
                 self.hideLoader();
                 await self.resumeVideo();
@@ -52,37 +52,40 @@ function setupEffects(mediaPlayer, effects, self){
             }
         }, { once: true });
     }
-    mediaPlayer.addEventListener("timeupdate", async () => {
-        await videoUtils.playEffects(effectsCopy, mediaPlayer, self);
-    }, {signal: timeUpdateController.signal});
 
+    mediaPlayer.addEventListener('timeupdate', async () => {
+        effectsCopy = await playEffects(effectsCopy, mediaPlayer, self);
+    }, { signal: timeUpdateController.signal });
 
-    let pauseController = new AbortController();
-    mediaPlayer.addEventListener("pause", () => {
-        for(let effect of effectsCopy){
-            if(effect.audioInstance){
+    const pauseController = new AbortController();
+    mediaPlayer.addEventListener('pause', () => {
+        for (const effect of effectsCopy) {
+            if (effect.audioInstance) {
                 effect.audioInstance.audio.pause();
             }
         }
-    }, {signal: pauseController.signal});
-    let playController = new AbortController();
-    mediaPlayer.addEventListener("play", () => {
-        for(let effect of effectsCopy){
-            if(effect.audioInstance && mediaPlayer.currentTime >= effect.playAt){
+    }, { signal: pauseController.signal });
+
+    const playController = new AbortController();
+    mediaPlayer.addEventListener('play', () => {
+        for (const effect of effectsCopy) {
+            if (effect.audioInstance && mediaPlayer.currentTime >= effect.playAt) {
                 effect.audioInstance.audio.play();
             }
         }
-    }, {signal: pauseController.signal});
-    mediaPlayer.addEventListener("ended", () => {
+    }, { signal: pauseController.signal });
+
+    mediaPlayer.addEventListener('ended', () => {
         timeUpdateController.abort();
         pauseController.abort();
         playController.abort();
-    }, {once: true});
+    }, { once: true });
+
     mediaPlayer.timeUpdateController = timeUpdateController;
     mediaPlayer.pauseController = pauseController;
     mediaPlayer.playController = playController;
-
 }
+
 function formatTime(seconds) {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
@@ -94,11 +97,12 @@ function formatTime(seconds) {
     }
     return `${minutes}:${remainingSeconds}`;
 }
+
 function uploadVideoThumbnail(url, videoElement) {
     return new Promise((resolve, reject) => {
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
-        videoElement.addEventListener("loadedmetadata", async () => {
+        videoElement.addEventListener('loadedmetadata', async () => {
             videoElement.currentTime = 0;
         });
         videoElement.addEventListener('seeked', async () => {
@@ -106,19 +110,19 @@ function uploadVideoThumbnail(url, videoElement) {
             canvas.height = videoElement.videoHeight;
             context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
             try {
-                let blob = await canvasToBlobAsync(canvas);
+                const blob = await canvasToBlobAsync(canvas);
                 canvas.remove();
-                let arrayBuffer = await blob.arrayBuffer();
-                let thumbnailId = await spaceModule.putImage(arrayBuffer);
+                const arrayBuffer = await blob.arrayBuffer();
+                const thumbnailId = await spaceModule.putImage(arrayBuffer);
                 resolve(thumbnailId);
-            } catch (e) {
-                reject(e);
+            } catch (error) {
+                reject(error);
             }
-
-        }, {once: true});
+        }, { once: true });
         videoElement.src = url;
     });
 }
+
 function canvasToBlobAsync(canvas) {
     return new Promise((resolve, reject) => {
         canvas.toBlob((blob) => {
@@ -130,10 +134,11 @@ function canvasToBlobAsync(canvas) {
         });
     });
 }
+
 function getParagraphVideoDuration(commands) {
     if (commands.video || commands.audio) {
-        let audioDuration = commands.audio ? commands.audio.duration : 0;
-        let videoDuration = commands.video ? commands.video.end - commands.video.start : 0;
+        const audioDuration = commands.audio ? commands.audio.duration : 0;
+        const videoDuration = commands.video ? commands.video.end - commands.video.start : 0;
         return Math.max(audioDuration, videoDuration);
     } else if (commands.silence) {
         return commands.silence.duration;
@@ -142,10 +147,11 @@ function getParagraphVideoDuration(commands) {
     }
     return 0;
 }
+
 export default {
     playEffects,
     setupEffects,
     formatTime,
     uploadVideoThumbnail,
     getParagraphVideoDuration
-}
+};

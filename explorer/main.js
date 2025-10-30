@@ -1,6 +1,14 @@
 import WebSkel from './WebSkel/webskel.mjs';
-import assistosSDK from './services/assistosSDK.js';
-import initialiseAssistOS from './services/assistOSShim.js';
+import assistosSDK, { initialiseAssistOS } from './services/assistosSDK.js';
+import {
+    computeComponentBaseUrl,
+    normalizeRuntimePlugins,
+    mergeRuntimePluginsIntoAssistOS,
+    fetchTextOrThrow,
+    fetchOptionalText,
+    registerRuntimeComponent,
+    scopeCssToComponent
+} from './utils/pluginUtils.js';
 
 const EXPLORER_AGENT_ID = 'explorer';
 const RUNTIME_PLUGIN_TOOL = 'collect_ide_plugins';
@@ -8,74 +16,34 @@ const RUNTIME_PLUGIN_TOOL = 'collect_ide_plugins';
 const isNonEmptyString = (value) => typeof value === 'string' && value.trim().length > 0;
 
 async function fetchRuntimePlugins() {
-    try {
-        const result = await assistosSDK.callTool(EXPLORER_AGENT_ID, RUNTIME_PLUGIN_TOOL);
-        if (result?.json && typeof result.json === 'object') {
-            return result.json;
-        }
-        if (typeof result?.text === 'string') {
-            try {
-                return JSON.parse(result.text);
-            } catch (parseError) {
-                console.error('[runtime-plugins] Failed to collect IDE plugins: invalid JSON');
-            }
-        }
-    } catch (error) {
-        console.error('[runtime-plugins] Failed to collect IDE plugins:', error);
-    }
-    return null;
-}
-
-async function fetchTextOrThrow(url, description) {
-    const response = await fetch(url, { cache: 'no-cache' });
-    if (!response.ok) {
-        throw new Error(`${description} (${response.status})`);
-    }
-    return response.text();
-}
-
-async function fetchOptionalText(url) {
-    const response = await fetch(url, { cache: 'no-cache' });
-    if (!response.ok) {
-        return '';
-    }
-    return response.text();
-}
-
-function buildBasePath(agent, componentName, ownerComponent, isDependency, customPath) {
-    const normalizedAgent = agent.trim();
-    if (isNonEmptyString(customPath)) {
-        const cleaned = customPath.replace(/^\/+/, '');
-        return `/${normalizedAgent}/IDE-plugins/${cleaned}`;
-    }
-    const normalizedComponent = componentName.trim();
-    const normalizedOwner = isNonEmptyString(ownerComponent) ? ownerComponent.trim() : undefined;
-    if (isDependency && normalizedOwner && normalizedOwner !== normalizedComponent) {
-        return `/${normalizedAgent}/IDE-plugins/${normalizedOwner}/components/${normalizedComponent}/${normalizedComponent}`;
-    }
-    return `/${normalizedAgent}/IDE-plugins/${normalizedComponent}/${normalizedComponent}`;
+    return await assistosSDK.fetchRuntimePlugins(EXPLORER_AGENT_ID, RUNTIME_PLUGIN_TOOL);
 }
 
 async function loadComponentFromAgent(webSkel, meta) {
-    const { componentName, presenterName, agent, ownerComponent, isDependency, customPath } = meta;
+    const { componentName, presenterName, agent, ownerComponent, isDependency, customPath, baseUrl } = meta;
     if (!isNonEmptyString(componentName) || !isNonEmptyString(agent)) {
         return;
     }
 
     const normalizedComponent = componentName.trim();
     const normalizedAgent = agent.trim();
-    const basePath = buildBasePath(normalizedAgent, normalizedComponent, ownerComponent, isDependency, customPath);
+    const componentBase = baseUrl && isNonEmptyString(baseUrl)
+        ? baseUrl.trim()
+        : computeComponentBaseUrl(normalizedAgent, normalizedComponent, { ownerComponent, isDependency, customPath });
+    const safeBase = componentBase.replace(/\/+/g, '/');
 
-    const [loadedTemplate, loadedCSS, presenterSource] = await Promise.all([
-        fetchTextOrThrow(`${basePath}.html`, `[runtime-plugins] Failed to load template for ${normalizedComponent}`),
-        fetchTextOrThrow(`${basePath}.css`, `[runtime-plugins] Failed to load stylesheet for ${normalizedComponent}`),
-        isNonEmptyString(presenterName) ? fetchOptionalText(`${basePath}.js`) : Promise.resolve('')
+    const [loadedTemplate, rawCss, presenterSource] = await Promise.all([
+        fetchTextOrThrow(`${safeBase}.html`, `[runtime-plugins] Failed to load template for ${normalizedComponent}`),
+        fetchTextOrThrow(`${safeBase}.css`, `[runtime-plugins] Failed to load stylesheet for ${normalizedComponent}`),
+        isNonEmptyString(presenterName) ? fetchOptionalText(`${safeBase}.js`) : Promise.resolve('')
     ]);
+
+    const scopedCss = scopeCssToComponent(rawCss, normalizedComponent);
 
     let presenterModuleInstance;
     if (isNonEmptyString(presenterName) && presenterSource.trim()) {
         try {
-            presenterModuleInstance = await import(/* webpackIgnore: true */ `${basePath}.js?cacheBust=${Date.now()}`);
+            presenterModuleInstance = await import(/* webpackIgnore: true */ `${safeBase}.js?cacheBust=${Date.now()}`);
         } catch (error) {
             console.error(`[runtime-plugins] Failed to import presenter for ${normalizedComponent}:`, error);
         }
@@ -84,23 +52,18 @@ async function loadComponentFromAgent(webSkel, meta) {
     const fullComponent = {
         name: normalizedComponent,
         loadedTemplate,
-        loadedCSS,
+        loadedCSS: scopedCss,
         presenterClassName: isNonEmptyString(presenterName) ? presenterName.trim() : undefined,
         presenterModule: presenterSource,
         agent: normalizedAgent
     };
 
-    const componentForRegistration = {
-        ...fullComponent,
-        loadedCSSs: [loadedCSS]
-    };
-    delete componentForRegistration.presenterModule;
-
-    if (presenterModuleInstance && fullComponent.presenterClassName) {
+    const componentForRegistration = { ...fullComponent, loadedCSSs: [scopedCss] };
+    if (presenterModuleInstance && fullComponent.presenterClassName && presenterModuleInstance[fullComponent.presenterClassName]) {
         componentForRegistration.presenterModule = presenterModuleInstance;
     }
 
-    await webSkel.defineComponent(componentForRegistration);
+    await registerRuntimeComponent(webSkel, componentForRegistration);
     return fullComponent;
 }
 
@@ -124,7 +87,8 @@ async function loadRuntimePluginComponents(webSkel, runtimePlugins) {
                 agent: agent.trim(),
                 ownerComponent: isNonEmptyString(meta.ownerComponent) ? meta.ownerComponent.trim() : undefined,
                 isDependency: Boolean(meta.isDependency),
-                customPath: isNonEmptyString(meta.customPath) ? meta.customPath.trim() : undefined
+                customPath: isNonEmptyString(meta.customPath) ? meta.customPath.trim() : undefined,
+                baseUrl: isNonEmptyString(meta.baseUrl) ? meta.baseUrl.trim() : undefined
             });
         }
     };
@@ -142,7 +106,8 @@ async function loadRuntimePluginComponents(webSkel, runtimePlugins) {
                 presenterName: plugin.presenter,
                 agent: plugin.agent,
                 ownerComponent: plugin.component,
-                isDependency: false
+                isDependency: false,
+                baseUrl: plugin.componentBaseUrl
             });
 
             if (Array.isArray(plugin.dependencies)) {
@@ -160,7 +125,8 @@ async function loadRuntimePluginComponents(webSkel, runtimePlugins) {
                         agent: dependencyAgent,
                         ownerComponent: dependency.ownerComponent || plugin.component,
                         isDependency: true,
-                        customPath: dependencyPath
+                        customPath: dependencyPath,
+                        baseUrl: dependency.baseUrl
                     });
                 }
             }
@@ -186,14 +152,15 @@ async function start() {
     const webSkel = await WebSkel.initialise('webskel.json');
     webSkel.appServices = assistosSDK;
 
-    const runtimePlugins = await fetchRuntimePlugins();
-    const loadedRuntimeComponents = await loadRuntimePluginComponents(webSkel, runtimePlugins);
+    const rawRuntimePlugins = await fetchRuntimePlugins();
+    const runtimePlugins = normalizeRuntimePlugins(rawRuntimePlugins);
 
-    const assistOS = initialiseAssistOS({ ui: webSkel, runtimePlugins: runtimePlugins ?? undefined });
+    const assistOS = initialiseAssistOS({ ui: webSkel, runtimePlugins: Object.keys(runtimePlugins).length ? runtimePlugins : undefined });
     assistOS.webSkel = webSkel;
     assistOS.appServices = assistosSDK;
-    assistOS.runtimePlugins = runtimePlugins ?? {};
-    assistOS.runtimePluginComponents = loadedRuntimeComponents;
+    assistOS.runtimePlugins = runtimePlugins;
+    assistOS.rawRuntimePlugins = rawRuntimePlugins || {};
+    mergeRuntimePluginsIntoAssistOS(assistOS, runtimePlugins);
     if (typeof window !== 'undefined') {
         window.UI = webSkel;
     }
@@ -243,6 +210,9 @@ async function start() {
         pageName = 'file-exp';
         url = 'file-exp';
     }
+
+    const loadedRuntimeComponents = await loadRuntimePluginComponents(webSkel, runtimePlugins);
+    assistOS.runtimePluginComponents = loadedRuntimeComponents;
 
     await webSkel.changeToDynamicPage(pageName || 'file-exp', url || 'file-exp');
     window.webSkel = webSkel;

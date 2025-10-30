@@ -190,7 +190,93 @@ async function aggregateIdePlugins(rootDir) {
     ensureBucket(location);
   }
 
+  const candidateDirsProcessed = new Set();
+
+  const processAgentDirectory = async (agentName, agentDir) => {
+    if (!agentName || SKIP_DIRECTORY_NAMES.has(agentName)) {
+      return;
+    }
+
+    const idePluginsDir = path.join(agentDir, 'IDE-plugins');
+
+    let ideStat;
+    try {
+      ideStat = await fs.stat(idePluginsDir);
+    } catch {
+      return;
+    }
+
+    if (!ideStat.isDirectory()) {
+      return;
+    }
+
+    if (visitedAgents.has(agentName)) {
+      return;
+    }
+    visitedAgents.add(agentName);
+
+    let pluginEntries;
+    try {
+      pluginEntries = await fs.readdir(idePluginsDir, { withFileTypes: true });
+    } catch (error) {
+      console.warn(`[filesystem-http] Unable to read IDE-plugins directory ${idePluginsDir}:`, error instanceof Error ? error.message : String(error));
+      return;
+    }
+
+    for (const pluginEntry of pluginEntries) {
+      if (!pluginEntry.isDirectory()) continue;
+      const pluginDir = path.join(idePluginsDir, pluginEntry.name);
+      const configPath = path.join(pluginDir, 'config.json');
+
+      let rawConfig;
+      try {
+        rawConfig = await fs.readFile(configPath, 'utf8');
+      } catch (error) {
+        console.warn(`[filesystem-http] Skipping plugin ${pluginDir}: unable to read config.json (${error instanceof Error ? error.message : String(error)})`);
+        continue;
+      }
+
+      let parsedConfig;
+      try {
+        parsedConfig = JSON.parse(rawConfig);
+      } catch (error) {
+        console.warn(`[filesystem-http] Invalid JSON in ${configPath}:`, error instanceof Error ? error.message : String(error));
+        continue;
+      }
+
+      const locationsRaw = parsedConfig.location;
+      const locations = Array.isArray(locationsRaw)
+        ? locationsRaw.map((loc) => (typeof loc === 'string' ? loc.trim() : '')).filter(Boolean)
+        : typeof locationsRaw === 'string' && locationsRaw.trim()
+          ? [locationsRaw.trim()]
+          : [];
+
+      if (!locations.length) {
+        console.warn(`[filesystem-http] Plugin ${pluginDir} does not specify a valid location; skipping.`);
+        continue;
+      }
+
+      const { location, ...pluginConfig } = parsedConfig;
+      if (!pluginConfig.component) {
+        pluginConfig.component = pluginEntry.name;
+      }
+      pluginConfig.agent = agentName;
+
+      for (const loc of new Set(locations)) {
+        if (!loc) continue;
+        const bucket = ensureBucket(loc);
+        bucket.push({ ...pluginConfig });
+        pluginCount += 1;
+      }
+    }
+  };
+
   const scanAgentDirectories = async (baseDir) => {
+    if (!baseDir || candidateDirsProcessed.has(baseDir)) {
+      return;
+    }
+    candidateDirsProcessed.add(baseDir);
+
     let entries;
     try {
       entries = await fs.readdir(baseDir, { withFileTypes: true });
@@ -199,90 +285,45 @@ async function aggregateIdePlugins(rootDir) {
       return;
     }
 
+    await processAgentDirectory(path.basename(baseDir), baseDir);
+
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
       if (SKIP_DIRECTORY_NAMES.has(entry.name)) continue;
+      await processAgentDirectory(entry.name, path.join(baseDir, entry.name));
+    }
+  };
 
-      const agentName = entry.name;
-      if (visitedAgents.has(agentName)) continue;
+  const addRepoCollections = async (baseDir) => {
+    if (!baseDir) return;
 
-      const agentDir = path.join(baseDir, agentName);
-      const idePluginsDir = path.join(agentDir, 'IDE-plugins');
-
-      let ideStat;
-      try {
-        ideStat = await fs.stat(idePluginsDir);
-      } catch {
-        continue;
+    const repoRoot = path.join(baseDir, '.ploinky', 'repos');
+    let repoEntries;
+    try {
+      const repoStat = await fs.stat(repoRoot);
+      if (!repoStat.isDirectory()) {
+        return;
       }
+      repoEntries = await fs.readdir(repoRoot, { withFileTypes: true });
+    } catch {
+      return;
+    }
 
-      if (!ideStat.isDirectory()) continue;
-
-      visitedAgents.add(agentName);
-
-      let pluginEntries;
-      try {
-        pluginEntries = await fs.readdir(idePluginsDir, { withFileTypes: true });
-      } catch (error) {
-        console.warn(`[filesystem-http] Unable to read IDE-plugins directory ${idePluginsDir}:`, error instanceof Error ? error.message : String(error));
-        continue;
-      }
-
-      for (const pluginEntry of pluginEntries) {
-        if (!pluginEntry.isDirectory()) continue;
-        const pluginDir = path.join(idePluginsDir, pluginEntry.name);
-        const configPath = path.join(pluginDir, 'config.json');
-
-        let rawConfig;
-        try {
-          rawConfig = await fs.readFile(configPath, 'utf8');
-        } catch (error) {
-          console.warn(`[filesystem-http] Skipping plugin ${pluginDir}: unable to read config.json (${error instanceof Error ? error.message : String(error)})`);
-          continue;
-        }
-
-        let parsedConfig;
-        try {
-          parsedConfig = JSON.parse(rawConfig);
-        } catch (error) {
-          console.warn(`[filesystem-http] Invalid JSON in ${configPath}:`, error instanceof Error ? error.message : String(error));
-          continue;
-        }
-
-        const locationsRaw = parsedConfig.location;
-        const locations = Array.isArray(locationsRaw)
-          ? locationsRaw.map((loc) => (typeof loc === 'string' ? loc.trim() : '')).filter(Boolean)
-          : typeof locationsRaw === 'string' && locationsRaw.trim()
-            ? [locationsRaw.trim()]
-            : [];
-
-        if (!locations.length) {
-          console.warn(`[filesystem-http] Plugin ${pluginDir} does not specify a valid location; skipping.`);
-          continue;
-        }
-
-        const { location, ...pluginConfig } = parsedConfig;
-        if (!pluginConfig.component) {
-          pluginConfig.component = pluginEntry.name;
-        }
-        pluginConfig.agent = agentName;
-
-        for (const loc of new Set(locations)) {
-          if (!loc) continue;
-          const bucket = ensureBucket(loc);
-          bucket.push({ ...pluginConfig });
-          pluginCount += 1;
-        }
-      }
+    for (const entry of repoEntries) {
+      if (!entry.isDirectory()) continue;
+      if (SKIP_DIRECTORY_NAMES.has(entry.name)) continue;
+      await scanAgentDirectories(path.join(repoRoot, entry.name));
     }
   };
 
   await scanAgentDirectories(rootDir);
+  await addRepoCollections(rootDir);
 
   if (pluginCount === 0) {
     const parentDir = path.dirname(rootDir);
     if (parentDir && parentDir !== rootDir) {
       await scanAgentDirectories(parentDir);
+      await addRepoCollections(parentDir);
     }
   }
 

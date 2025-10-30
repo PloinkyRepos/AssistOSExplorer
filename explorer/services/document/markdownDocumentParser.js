@@ -2,7 +2,9 @@ const COMMENT_KEY_PREFIX = 'achiles-ide-';
 const COMMENT_KEYS = {
     DOCUMENT: `${COMMENT_KEY_PREFIX}document`,
     CHAPTER: `${COMMENT_KEY_PREFIX}chapter`,
-    PARAGRAPH: `${COMMENT_KEY_PREFIX}paragraph`
+    PARAGRAPH: `${COMMENT_KEY_PREFIX}paragraph`,
+    TOC: `${COMMENT_KEY_PREFIX}toc`,
+    REFERENCES: `${COMMENT_KEY_PREFIX}references`
 };
 const ALLOWED_METADATA_FIELDS = {
     [COMMENT_KEYS.DOCUMENT]: [
@@ -30,7 +32,8 @@ const ALLOWED_METADATA_FIELDS = {
         'attachments',
         'snapshots',
         'tasks',
-        'variables'
+        'variables',
+        'anchorId'
     ],
     [COMMENT_KEYS.PARAGRAPH]: [
         'id',
@@ -44,9 +47,18 @@ const ALLOWED_METADATA_FIELDS = {
         'tasks',
         'variables',
         'title'
+    ],
+    [COMMENT_KEYS.TOC]: [
+        'collapsed'
+    ],
+    [COMMENT_KEYS.REFERENCES]: [
+        'collapsed',
+        'references'
     ]
 };
 const DEFAULT_HEADING_LEVEL = 2;
+const TABLE_OF_CONTENTS_HEADING_RE = /^#{1,6}\s+Table of Contents$/i;
+const REFERENCES_HEADING_RE = /^#{1,6}\s+References$/i;
 
 const normalizeLineEndings = (value = '') => value.replace(/\r\n/g, '\n');
 
@@ -302,7 +314,23 @@ const parseChapterBlock = (chapterComment, block) => {
     }
 
     const normalized = normalizeLineEndings(block);
-    const lines = normalized.split('\n');
+    const rawLines = normalized.split('\n');
+    const lines = [];
+    let anchorId = metadata.anchorId ?? null;
+
+    rawLines.forEach((line) => {
+        const trimmed = line.trim();
+        const anchorMatch = trimmed.match(/^<a\s+id="([^"']+)"><\/a>$/i);
+        if (anchorMatch) {
+            anchorId = anchorMatch[1];
+            return;
+        }
+        lines.push(line);
+    });
+
+    if (anchorId) {
+        metadata.anchorId = anchorId;
+    }
 
     let headingLineIndex = -1;
     for (let idx = 0; idx < lines.length; idx += 1) {
@@ -315,15 +343,24 @@ const parseChapterBlock = (chapterComment, block) => {
             const headingMatch = trimmed.match(/^(#{1,6})\s+(.*)$/);
             if (headingMatch) {
                 chapter.heading.level = headingMatch[1].length;
-                chapter.heading.text = decodeHtmlEntities(headingMatch[2].trim());
+                let headingContent = headingMatch[2].trim();
+                const anchorMatchInHeading = headingContent.match(/\{#([^}]+)\}\s*$/);
+                if (anchorMatchInHeading) {
+                    metadata.anchorId = metadata.anchorId ?? anchorMatchInHeading[1];
+                    headingContent = headingContent.replace(/\s*\{#[^}]+\}\s*$/, '').trim();
+                }
+                chapter.heading.text = decodeHtmlEntities(headingContent);
                 chapter.heading.raw = lines[idx];
+                if (!chapter.metadata.title) {
+                    chapter.metadata.title = chapter.heading.text;
+                }
             }
             break;
         }
     }
 
     if (headingLineIndex === -1) {
-        chapter.paragraphs = parseParagraphBlocks(normalized);
+        chapter.paragraphs = parseParagraphBlocks(lines.join('\n'));
         if (!chapter.heading.text) {
             chapter.heading.text = 'Chapter';
         }
@@ -345,6 +382,8 @@ const parseChapterBlock = (chapterComment, block) => {
     }
     if (chapter.heading.text && !chapter.metadata.title) {
         chapter.metadata.title = chapter.heading.text;
+    } else if (chapter.metadata?.title) {
+        chapter.metadata.title = chapter.metadata.title.replace(/\s*\{#[^}]+\}\s*$/, '').trim();
     }
 
     return chapter;
@@ -355,15 +394,35 @@ const parseMarkdownDocument = (markdown) => {
     const metadataComments = getMetadataComments(text);
 
     const documentComment = metadataComments.find((comment) => comment.key === COMMENT_KEYS.DOCUMENT);
+    const tocComment = metadataComments.find((comment) => comment.key === COMMENT_KEYS.TOC);
+    const referencesComment = metadataComments.find((comment) => comment.key === COMMENT_KEYS.REFERENCES);
     const chapterComments = metadataComments.filter((comment) => comment.key === COMMENT_KEYS.CHAPTER);
 
     const documentMetadata = documentComment ? filterMetadataFields(COMMENT_KEYS.DOCUMENT, { ...(documentComment.value ?? {}) }) : {};
     const documentId = documentMetadata.id ?? null;
 
+    if (tocComment) {
+        documentMetadata.comments = documentMetadata.comments ?? {};
+        documentMetadata.comments.toc = filterMetadataFields(COMMENT_KEYS.TOC, tocComment.value ?? {});
+    }
+    if (referencesComment) {
+        documentMetadata.comments = documentMetadata.comments ?? {};
+        documentMetadata.comments.tor = filterMetadataFields(COMMENT_KEYS.REFERENCES, referencesComment.value ?? {});
+    }
+
     const prefaceStart = documentComment ? documentComment.end : 0;
     const firstChapterStart = chapterComments[0]?.start ?? text.length;
     const prefaceSegment = text.slice(prefaceStart, firstChapterStart);
-    const preface = decodeHtmlEntities(stripMetadataCommentBlocks(prefaceSegment).trim());
+    let preface = decodeHtmlEntities(stripMetadataCommentBlocks(prefaceSegment).trim());
+
+    if (documentMetadata.comments?.toc) {
+        const { remaining } = stripSectionByHeading(preface, TABLE_OF_CONTENTS_HEADING_RE);
+        preface = remaining;
+    }
+    if (documentMetadata.comments?.tor) {
+        const { remaining } = stripSectionByHeading(preface, REFERENCES_HEADING_RE);
+        preface = remaining;
+    }
 
     const chapters = chapterComments.map((chapterComment, index) => {
         const nextChapterStart = chapterComments[index + 1]?.start ?? text.length;
@@ -386,6 +445,105 @@ const composeParagraph = (paragraph) => {
     const trailing = decodeHtmlEntities(paragraph.trailing ?? '');
     const content = `${leading}${text}${trailing}`;
     return content.endsWith('\n') ? content : `${content}\n`;
+};
+
+const formatReferenceCitation = (reference = {}) => {
+    const {
+        type,
+        authors,
+        year,
+        title,
+        journal,
+        volume,
+        pages,
+        publisher,
+        location,
+        website,
+        access_date,
+        url
+    } = reference;
+
+    if (!authors || !year || !title) {
+        return title || '';
+    }
+
+    let citation = `${authors} (${year}). `;
+
+    switch (type) {
+        case 'journal':
+            citation += `${title}. `;
+            if (journal) {
+                citation += `*${journal}*`;
+                if (volume) citation += `, ${volume}`;
+                if (pages) citation += `, ${pages}`;
+                citation += '. ';
+            }
+            break;
+        case 'book':
+            citation += `*${title}*. `;
+            if (publisher) {
+                if (location) citation += `${location}: `;
+                citation += `${publisher}. `;
+            }
+            break;
+        case 'website':
+            citation += `${title}. `;
+            if (website) citation += `*${website}*. `;
+            if (access_date) {
+                const date = new Date(access_date);
+                citation += `Retrieved ${date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}. `;
+            }
+            break;
+        case 'report':
+            citation += `*${title}*`;
+            if (publisher) citation += ` (Report). ${publisher}`;
+            citation += '. ';
+            break;
+        default:
+            citation += `*${title}*. `;
+    }
+
+    if (url) {
+        if (url.startsWith('doi:')) {
+            citation += `https://doi.org/${url.substring(4)}`;
+        } else {
+            citation += url;
+        }
+    }
+
+    return citation.trim();
+};
+
+const stripSectionByHeading = (text, headingRegex) => {
+    if (!text) {
+        return { remaining: '', section: [] };
+    }
+    const lines = text.split('\n');
+    let startIndex = -1;
+    for (let i = 0; i < lines.length; i += 1) {
+        if (headingRegex.test(lines[i].trim())) {
+            startIndex = i;
+            break;
+        }
+    }
+    if (startIndex === -1) {
+        return { remaining: text, section: [] };
+    }
+
+    let endIndex = lines.length;
+    for (let j = startIndex + 1; j < lines.length; j += 1) {
+        if (/^#{1,6}\s+/.test(lines[j].trim())) {
+            endIndex = j;
+            break;
+        }
+    }
+
+    const sectionLines = lines.slice(startIndex, endIndex);
+    const remainingLines = [...lines.slice(0, startIndex), ...lines.slice(endIndex)];
+    return {
+        remaining: remainingLines.join('\n').trim(),
+        section: sectionLines
+    };
 };
 
 const serializeMarkdownDocument = (document) => {
@@ -411,6 +569,43 @@ const serializeMarkdownDocument = (document) => {
         }
     }
 
+    const documentComments = document.metadata?.comments ?? document.comments ?? {};
+
+    if (documentComments.toc) {
+        const tocMetadata = filterMetadataFields(COMMENT_KEYS.TOC, documentComments.toc);
+        const tocComment = createMetadataComment(COMMENT_KEYS.TOC, tocMetadata);
+        if (tocComment) {
+            parts.push(tocComment);
+        }
+        parts.push('## Table of Contents\n');
+        const tocLines = (document.chapters ?? []).map((chapter, index) => {
+            const headingTextRaw = decodeHtmlEntities(chapter.heading?.text ?? chapter.metadata?.title ?? `Chapter ${index + 1}`);
+            const headingText = headingTextRaw.replace(/\s*\{#[^}]+\}\s*$/, '');
+            const anchorId = chapter.id ? `chapter-${chapter.id}` : `chapter-${index + 1}`;
+            return `- [Chapter ${index + 1}: ${headingText}](#${anchorId})`;
+        });
+        if (tocLines.length > 0) {
+            parts.push(`${tocLines.join('\n')}\n\n`);
+        } else {
+            parts.push('- No chapters available\n\n');
+        }
+    }
+
+    let referencesParts = [];
+    if (documentComments.tor && Array.isArray(documentComments.tor.references) && documentComments.tor.references.length > 0) {
+        const referencesMetadata = filterMetadataFields(COMMENT_KEYS.REFERENCES, documentComments.tor);
+        const referencesComment = createMetadataComment(COMMENT_KEYS.REFERENCES, referencesMetadata);
+        if (referencesComment) {
+            referencesParts.push(referencesComment);
+        }
+        referencesParts.push('<a id="references-section"></a>\n');
+        referencesParts.push('## References\n');
+        documentComments.tor.references.forEach((reference, index) => {
+            referencesParts.push(`${index + 1}. ${formatReferenceCitation(reference)}\n`);
+        });
+        referencesParts.push('\n');
+    }
+
     (document.chapters ?? []).forEach((chapter, index) => {
         if (index > 0) {
             parts.push('\n');
@@ -420,13 +615,20 @@ const serializeMarkdownDocument = (document) => {
             filterMetadataFields(COMMENT_KEYS.CHAPTER, chapter.metadata ?? {}),
             chapter.id
         );
+        const anchorId = chapterMetadata.anchorId
+            || (chapter.id ? `chapter-${chapter.id}` : `chapter-${index + 1}`);
+        chapterMetadata.anchorId = anchorId;
         const chapterComment = createMetadataComment(COMMENT_KEYS.CHAPTER, chapterMetadata);
         if (chapterComment) {
             parts.push(chapterComment);
         }
 
         const headingLevel = Math.max(1, Math.min(6, chapter.heading?.level ?? DEFAULT_HEADING_LEVEL));
-        const headingText = decodeHtmlEntities(chapter.heading?.text ?? chapter.metadata?.title ?? `Chapter ${index + 1}`);
+        const headingTextRaw = decodeHtmlEntities(chapter.heading?.text ?? chapter.metadata?.title ?? `Chapter ${index + 1}`);
+        const headingText = headingTextRaw.replace(/\s*\{#[^}]+\}\s*$/, '');
+        if (anchorId) {
+            parts.push(`<a id="${anchorId}"></a>\n`);
+        }
         parts.push(`${'#'.repeat(headingLevel)} ${headingText}\n`);
 
         const leadingTrimmed = decodeHtmlEntities(chapter.leading ?? '').trim();
@@ -447,6 +649,17 @@ const serializeMarkdownDocument = (document) => {
         });
     });
 
+    if (referencesParts.length > 0) {
+        if (parts.length > 0) {
+            const lastIndex = parts.length - 1;
+            if (!/\n$/.test(parts[lastIndex])) {
+                parts[lastIndex] = `${parts[lastIndex]}\n`;
+            }
+            parts.push('\n');
+        }
+        parts.push(...referencesParts);
+    }
+
     return parts.join('').replace(/\n{4,}/g, '\n\n\n');
 };
 
@@ -454,8 +667,93 @@ const stripAchilesComments = (text) => {
     if (!text) {
         return '';
     }
-    const withoutComments = stripMetadataCommentBlocks(text);
-    return decodeHtmlEntities(normalizeLineEndings(withoutComments)).trim();
+
+    const normalized = normalizeLineEndings(text);
+    const lines = normalized.split('\n');
+    const sanitized = [];
+    let pendingAnchorId = null;
+
+    const parseMetadataComment = (raw) => {
+        if (!raw) {
+            return null;
+        }
+        const payload = raw.replace(/^<!--\s*/, '').replace(/\s*-->$/, '').trim();
+        if (!payload) {
+            return null;
+        }
+        try {
+            const parsed = JSON.parse(payload);
+            const keys = Object.keys(parsed).filter(
+                (key) => typeof key === 'string' && key.startsWith(COMMENT_KEY_PREFIX)
+            );
+            if (keys.length === 1) {
+                return {
+                    key: keys[0],
+                    metadata: parsed[keys[0]] ?? {}
+                };
+            }
+        } catch (_) {
+            return null;
+        }
+        return null;
+    };
+
+    for (let idx = 0; idx < lines.length; idx += 1) {
+        const line = lines[idx];
+        const trimmed = line.trim();
+
+        if (trimmed.startsWith('<!--')) {
+            let commentText = trimmed;
+            while (!commentText.includes('-->') && idx < lines.length - 1) {
+                idx += 1;
+                commentText += `\n${lines[idx].trim()}`;
+            }
+            const parsedComment = parseMetadataComment(commentText);
+            if (parsedComment?.key === COMMENT_KEYS.CHAPTER) {
+                const anchorFromMetadata = parsedComment.metadata?.anchorId;
+                if (typeof anchorFromMetadata === 'string' && anchorFromMetadata.trim().length > 0) {
+                    pendingAnchorId = anchorFromMetadata.trim();
+                }
+            }
+            continue;
+        }
+
+        const anchorTagMatch = trimmed.match(/^<a\s+id="([^"']+)"><\/a>$/i);
+        if (anchorTagMatch) {
+            pendingAnchorId = anchorTagMatch[1].trim();
+            continue;
+        }
+
+        const headingMatch = line.match(/^(\s*)(#{1,6})(\s+)(.*)$/);
+        if (headingMatch) {
+            const leading = headingMatch[1] ?? '';
+            const hashes = headingMatch[2];
+            const spacer = headingMatch[3];
+            let headingContent = headingMatch[4];
+
+            const inlineAnchorMatch = headingContent.match(/\s*\{#([^}]+)\}\s*$/);
+            if (inlineAnchorMatch) {
+                const inlineAnchorId = inlineAnchorMatch[1].trim();
+                if (!pendingAnchorId && inlineAnchorId) {
+                    pendingAnchorId = inlineAnchorId;
+                }
+                headingContent = headingContent.replace(/\s*\{#[^}]+\}\s*$/, '').trimEnd();
+            }
+
+            const finalAnchorId = pendingAnchorId;
+            pendingAnchorId = null;
+            const cleanedHeading = headingContent.trimEnd();
+            const rebuilt = finalAnchorId
+                ? `${leading}${hashes}${spacer}${cleanedHeading} {#${finalAnchorId}}`
+                : `${leading}${hashes}${spacer}${cleanedHeading}`;
+            sanitized.push(rebuilt);
+            continue;
+        }
+
+        sanitized.push(line);
+    }
+
+    return decodeHtmlEntities(sanitized.join('\n')).trim();
 };
 
 export default {

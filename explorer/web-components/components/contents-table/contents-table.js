@@ -33,15 +33,17 @@ export class ContentsTable{
                 const chapterItem = document.createElement('a');
                 chapterItem.className = 'toc-item toc-chapter';
                 chapterItem.href = `#chapter-${chapter.id}`;
-                chapterItem.textContent = `Chapter ${index + 1}: ${assistOS.UI.unsanitize(chapter.title)}`;
+                const rawTitle = assistOS.UI.unsanitize(chapter.title);
+                const displayTitle = rawTitle.replace(/\s*\{#[^\}]+\}\s*$/, '');
+                chapterItem.textContent = `Chapter ${index + 1}: ${displayTitle}`;
                 chapterItem.addEventListener('click', (e) => {
                     e.preventDefault();
-                    const chapterElement = this.element.querySelector(`chapter-item[data-chapter-id="${chapter.id}"]`);
-                    if (chapterElement) {
-                        chapterElement.scrollIntoView({
-                            behavior: 'smooth',
-                            block: 'start'
-                        });
+                    const target = document.getElementById(`chapter-${chapter.id}`);
+                    if (target) {
+                        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        history.replaceState(null, '', `#chapter-${chapter.id}`);
+                    } else {
+                        history.replaceState(null, '', `#chapter-${chapter.id}`);
                     }
                 });
                 tocContent.appendChild(chapterItem);

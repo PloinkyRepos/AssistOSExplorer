@@ -1,6 +1,6 @@
 const documentModule = assistOS.loadModule("document");
 import UIUtils from "../document-view-page/UIUtils.js";
-import pluginUtils from "../../../core/plugins/pluginUtils.js";
+import pluginUtils from "../../../utils/pluginUtils.js";
 export class ParagraphItem {
     constructor(element, invalidate) {
         this.element = element;
@@ -35,6 +35,7 @@ export class ParagraphItem {
     }
 
     async afterRender() {
+        this.element.setAttribute('id', `paragraph-${this.paragraph.id}`);
         let paragraphPluginsIcons = this.element.querySelector(".paragraph-plugins-icons");
         await pluginUtils.renderPluginIcons(paragraphPluginsIcons, "paragraph");
         if(this.currentPlugin){

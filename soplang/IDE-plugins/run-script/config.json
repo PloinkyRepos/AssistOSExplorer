@@ -2,9 +2,9 @@
     "component": "run-script",
     "location": ["document"],
     "tooltip": "Run Script",
-    "icon": "./variable.svg",
+    "icon": "./script.svg",
     "presenter": "RunScript",
-    "type": "embedded",
+    "type": "modal",
     "autoPin": true,
     "dependencies": []
 }

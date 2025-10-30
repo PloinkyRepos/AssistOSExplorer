@@ -1,5 +1,5 @@
 import {unescapeHtmlEntities} from "../../../imports.js";
-import pluginUtils from "../../../core/plugins/pluginUtils.js";
+import pluginUtils from "../../../utils/pluginUtils.js";
 import UIUtils from "../document-view-page/UIUtils.js";
 const documentModule = assistOS.loadModule("document");
 
@@ -197,6 +197,7 @@ export class ChapterItem {
             this.element.removeAttribute("data-create-paragraph");
             await this.addParagraph("", "below");
         }
+        this.element.setAttribute('id', `chapter-${this.chapter.id}`);
         let chapterPluginsIcons = this.element.querySelector(".chapter-plugins-icons");
         await pluginUtils.renderPluginIcons(chapterPluginsIcons,"chapter");
 

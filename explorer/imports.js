@@ -6,12 +6,9 @@ import {
     unescapeHtmlEntities,
     generateId
 } from "./utils/utils.js";
-import CustomAudio from "./core/media/CustomAudio.js";
-import videoUtils from "./core/media/videoUtils.js";
-import {
-    decodePercentCustom,
-    isEditableValue
-} from "./core/soplang/utils.js";
+import CustomAudio from "./utils/CustomAudio.js";
+import videoUtils from "./utils/videoUtils.js";
+
 import {generateAvatar} from "./utils/uiutils.js";
 
 export {
@@ -22,7 +19,5 @@ export {
     generateId,
     CustomAudio,
     videoUtils,
-    decodePercentCustom,
-    isEditableValue,
     generateAvatar
 };

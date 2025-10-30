@@ -3,7 +3,7 @@ const agentModule = assistOS.loadModule("agent");
 const spaceModule = assistOS.loadModule("space");
 import {executorTimer, unescapeHtmlEntities} from "../../../imports.js";
 import UIUtils from "./UIUtils.js";
-import pluginUtils from "../../../core/plugins/pluginUtils.js";
+import pluginUtils from "../../../utils/pluginUtils.js";
 
 export class DocumentViewPage {
     constructor(element, invalidate) {
@@ -256,7 +256,7 @@ export class DocumentViewPage {
         //this.attachTooltip(snapshotsButton, "Snapshots");
         this.attachTooltip(this.tableOfContents, "Table of Contents");
         this.attachTooltip(this.tableOfReferences, "References");
-        this.attachTooltip(scriptArgs, "Run Script");
+        //this.attachTooltip(scriptArgs, "Run Script");
         this.attachTooltip(commentsIcon, "Add Comment");
         this.attachTooltip(buildIcon, "Build Document");
         if (this.viewMode === "demo") {
