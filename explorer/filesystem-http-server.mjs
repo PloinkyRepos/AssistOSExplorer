@@ -102,6 +102,44 @@ try {
   setAllowedDirectories = syncThrow;
 }
 
+const pathExists = async (targetPath) => {
+  try {
+    await fs.access(targetPath);
+    return true;
+  } catch (_) {
+    return false;
+  }
+};
+
+const copyRecursive = async (sourcePath, destinationPath, overwrite = false) => {
+  const stats = await fs.lstat(sourcePath);
+
+  if (stats.isDirectory()) {
+    if (await pathExists(destinationPath)) {
+      if (!overwrite) {
+        throw new Error(`Destination ${destinationPath} already exists.`);
+      }
+      await fs.rm(destinationPath, { recursive: true, force: true });
+    }
+    await fs.mkdir(destinationPath, { recursive: true });
+    const entries = await fs.readdir(sourcePath);
+    for (const entry of entries) {
+      const sourceChild = path.join(sourcePath, entry);
+      const destinationChild = path.join(destinationPath, entry);
+      await copyRecursive(sourceChild, destinationChild, true);
+    }
+    return;
+  }
+
+  if (!overwrite && await pathExists(destinationPath)) {
+    throw new Error(`Destination ${destinationPath} already exists.`);
+  }
+
+  const destinationDir = path.dirname(destinationPath);
+  await fs.mkdir(destinationDir, { recursive: true });
+  await fs.copyFile(sourcePath, destinationPath);
+};
+
 const args = process.argv.slice(2);
 const envRoots = (process.env.ASSISTOS_FS_ROOT || process.env.MCP_FS_ROOT || '').split(',').map(p => p.trim()).filter(Boolean);
 if (!args.length) args.push(process.cwd());
@@ -386,6 +424,11 @@ const ListDirectoryWithSizesArgsSchema = z.object({ path: z.string(), sortBy: z.
 const ListDirectoryDetailedArgsSchema = z.object({ path: z.string() });
 const DirectoryTreeArgsSchema = z.object({ path: z.string() });
 const MoveFileArgsSchema = z.object({ source: z.string(), destination: z.string() });
+const CopyFileArgsSchema = z.object({
+  source: z.string(),
+  destination: z.string(),
+  overwrite: z.boolean().optional().default(false)
+});
 const SearchFilesArgsSchema = z.object({ path: z.string(), pattern: z.string(), excludePatterns: z.array(z.string()).optional().default([]) });
 const GetFileInfoArgsSchema = z.object({ path: z.string() });
 const CollectIDEPluginsArgsSchema = z.object({});
@@ -482,6 +525,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       name: 'move_file',
       description: 'Move or rename files or directories.',
       inputSchema: zodToJsonSchema(MoveFileArgsSchema)
+    },
+    {
+      name: 'copy_file',
+      description: 'Copy files or directories. Supports recursive copies.',
+      inputSchema: zodToJsonSchema(CopyFileArgsSchema)
     },
     {
       name: 'search_files',
@@ -689,6 +737,31 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const validDestination = await validatePath(parsed.data.destination);
         await fs.rename(validSource, validDestination);
         return { content: [{ type: 'text', text: `Successfully moved ${parsed.data.source} to ${parsed.data.destination}` }] };
+      }
+      case 'copy_file': {
+        const parsed = CopyFileArgsSchema.safeParse(args);
+        if (!parsed.success) throw new Error(`Invalid arguments for copy_file: ${parsed.error}`);
+        const validSource = await validatePath(parsed.data.source);
+        const validDestination = await validatePath(parsed.data.destination);
+        if (validSource === validDestination) {
+          throw new Error('Source and destination must be different.');
+        }
+        const sourceStat = await fs.lstat(validSource);
+        if (sourceStat.isDirectory()) {
+          const normalizedSource = path.resolve(validSource);
+          const normalizedDestination = path.resolve(validDestination);
+          if (normalizedDestination === normalizedSource || normalizedDestination.startsWith(`${normalizedSource}${path.sep}`)) {
+            throw new Error('Cannot copy a directory into itself or one of its subdirectories.');
+          }
+        }
+        const overwrite = Boolean(parsed.data.overwrite);
+        await copyRecursive(validSource, validDestination, overwrite);
+        return {
+          content: [{
+            type: 'text',
+            text: `Successfully copied ${parsed.data.source} to ${parsed.data.destination}${overwrite ? ' (overwritten)' : ''}`
+          }]
+        };
       }
       case 'search_files': {
         const parsed = SearchFilesArgsSchema.safeParse(args);

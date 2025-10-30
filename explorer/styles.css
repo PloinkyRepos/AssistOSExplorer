@@ -361,3 +361,153 @@ td button.secondary {
     align-items: center;
     justify-content: center;
 }
+
+td.actions-cell {
+    white-space: nowrap;
+    position: relative;
+    text-align: right;
+}
+
+.clipboard-group {
+    display: none;
+    align-items: center;
+    gap: 8px;
+}
+
+.clipboard-group.visible {
+    display: inline-flex;
+}
+
+.action-menu-container {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.action-menu-trigger {
+    width: 32px;
+    height: 32px;
+    padding: 4px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.12s ease;
+}
+
+.action-menu-trigger:hover,
+.action-menu-trigger:focus-visible {
+    background: rgba(37, 99, 235, 0.14);
+    outline: none;
+}
+
+.action-menu-trigger-icon {
+    width: 16px;
+    height: 16px;
+    pointer-events: none;
+}
+
+.action-menu-container.open .action-menu-trigger {
+    background: rgba(37, 99, 235, 0.18);
+}
+
+.action-menu-dropdown {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    min-width: 168px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 16px 32px rgba(15, 23, 42, 0.16);
+    padding: 6px 0;
+    display: none;
+    flex-direction: column;
+    z-index: 20;
+}
+
+.action-menu-container.open .action-menu-dropdown {
+    display: flex;
+}
+
+.action-menu-item {
+    background: transparent;
+    border: none;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 14px;
+    font-size: 0.9rem;
+    color: var(--text);
+    cursor: pointer;
+    transition: background 0.12s ease;
+}
+
+.action-menu-item:hover,
+.action-menu-item:focus-visible {
+    background: rgba(37, 99, 235, 0.12);
+    outline: none;
+}
+
+.action-menu-item-icon {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    pointer-events: none;
+}
+
+.action-menu-item-label {
+    flex: 1;
+}
+
+.action-menu-item.destructive {
+    color: #dc2626;
+}
+
+.action-menu-item.destructive:hover,
+.action-menu-item.destructive:focus-visible {
+    background: rgba(220, 38, 38, 0.12);
+    color: #b91c1c;
+}
+
+.action-menu-item.disabled,
+.action-menu-item:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.action-menu-item:disabled:hover,
+.action-menu-item:disabled:focus-visible {
+    background: transparent;
+}
+
+.clipboard-info {
+    margin-left: clamp(8px, 1.8vw, 16px);
+    font-size: 0.9rem;
+    color: rgba(55, 65, 81, 0.85);
+    display: none;
+}
+
+.clipboard-info.visible {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+tr.clipboard-row.clipboard-cut {
+    opacity: 0.55;
+}
+
+tr.clipboard-row.clipboard-copy {
+    background: rgba(37, 99, 235, 0.08);
+}
+
+tr.clipboard-row {
+    outline: 1px dashed rgba(37, 99, 235, 0.45);
+}
+
+tr.clipboard-row.clipboard-copy.active {
+    background: rgba(37, 99, 235, 0.18);
+}

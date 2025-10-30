@@ -19,17 +19,33 @@ export class FileExp {
             markdownTextView: false,
             documentId: null,
             isEditing: false,
-            isResizing: false
+            isResizing: false,
+            clipboard: null,
+            openMenuPath: null
         };
+        this.pendingMenuFocusPath = null;
 
         this.boundLoadStateFromURL = this.loadStateFromURL.bind(this);
         window.addEventListener('popstate', this.boundLoadStateFromURL);
         this.invalidate(this.boundLoadStateFromURL);
+
+        this.boundOutsideMenuClick = this.handleOutsideMenuClick.bind(this);
+        this.boundMenuKeydown = this.handleMenuKeydown.bind(this);
+        this.outsideMenuListenerAttached = false;
+        this.menuKeydownListenerAttached = false;
     }
 
     beforeUnload() {
         window.removeEventListener('popstate', this.boundLoadStateFromURL);
         this.detachPreviewAnchorHandler();
+        if (this.outsideMenuListenerAttached) {
+            document.removeEventListener('click', this.boundOutsideMenuClick);
+            this.outsideMenuListenerAttached = false;
+        }
+        if (this.menuKeydownListenerAttached) {
+            document.removeEventListener('keydown', this.boundMenuKeydown);
+            this.menuKeydownListenerAttached = false;
+        }
     }
 
     async loadStateFromURL() {
@@ -77,19 +93,68 @@ export class FileExp {
         if (filtered.length === 0) {
             this.entriesHTML = `<tr><td colspan="5">Empty directory.</td></tr>`;
         } else {
-            filtered.forEach(entry => {
+            const clipboard = this.state.clipboard;
+            filtered.forEach((entry, index) => {
+                const entryPath = this.joinPath(this.state.path, entry.name);
                 const icon = entry.type === 'directory' ? folderIcon : fileIcon;
+                const entryAttributes = `data-entry-path="${entryPath}" data-type="${entry.type}"`;
+                const isClipboardSource = clipboard?.path === entryPath;
+                const clipboardAttr = isClipboardSource ? ` data-clipboard="${clipboard.mode}"` : '';
+                const rowClasses = [];
+                if (this.state.selectedPath === entryPath) {
+                    rowClasses.push('active');
+                }
+                const classAttr = rowClasses.length ? ` class="${rowClasses.join(' ')}"` : '';
+                const isMenuOpen = this.state.openMenuPath === entryPath;
+                const actionMenuClass = `action-menu-container${isMenuOpen ? ' open' : ''}`;
+                const menuId = `action-menu-${index}`;
+                const canPasteInto = Boolean(clipboard) && entry.type === 'directory';
+                const pasteMenuItem = entry.type === 'directory' ? `
+                                    <button type="button" class="action-menu-item${canPasteInto ? '' : ' disabled'}" data-local-action="pasteClipboard" ${entryAttributes}
+                                            data-target-path="${entryPath}" role="menuitem" ${canPasteInto ? '' : 'disabled'}>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="action-menu-item-icon" viewBox="0 0 16 16" aria-hidden="true">
+                                            <path d="M4 1.5A1.5 1.5 0 0 1 5.5 0h5A1.5 1.5 0 0 1 12 1.5V3h1.5A1.5 1.5 0 0 1 15 4.5v9A1.5 1.5 0 0 1 13.5 15h-7A1.5 1.5 0 0 1 5 13.5V12h3.5A1.5 1.5 0 0 0 10 10.5v-7A1.5 1.5 0 0 0 8.5 2H7V1.5A.5.5 0 0 0 6.5 1h-1a.5.5 0 0 0-.5.5V2H4v-.5z"/>
+                                            <path d="M6.5 13a.5.5 0 0 1-.5-.5V5A1.5 1.5 0 0 1 7.5 3.5h1A1.5 1.5 0 0 1 10 5v5.5a.5.5 0 0 1-.5.5H6v1a.5.5 0 0 1-.5.5z"/>
+                                        </svg>
+                                        <span class="action-menu-item-label">Paste into</span>
+                                    </button>
+                ` : '';
                 this.entriesHTML += `
-                    <tr data-entry-path="${this.joinPath(this.state.path, entry.name)}" data-type="${entry.type}">
-                        <td data-entry-path="${this.joinPath(this.state.path, entry.name)}" data-type="${entry.type}" data-local-action="selectEntry"><span class="icon">${icon}</span> ${entry.name}</td>
-                        <td data-entry-path="${this.joinPath(this.state.path, entry.name)}" data-type="${entry.type}" data-local-action="selectEntry">${entry.type}</td>
-                        <td data-entry-path="${this.joinPath(this.state.path, entry.name)}" data-type="${entry.type}" data-local-action="selectEntry">${entry.type === 'directory' ? '—' : this.formatBytes(entry.size)}</td>
-                        <td data-entry-path="${this.joinPath(this.state.path, entry.name)}" data-type="${entry.type}"  data-local-action="selectEntry">${entry.modified ? this.formatDate(entry.modified) : '—'}</td>
-                        <td><button class="secondary" data-local-action="deleteEntry" data-entry-path="${this.joinPath(this.state.path, entry.name)}" data-type="${entry.type}" title="Delete">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-trash-fill" viewBox="0 0 16 16">
-                                <path d="M2.5 1a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1H3v9a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V4h.5a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H10a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1H2.5zm3 4a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-1 0v-7a.5.5 0 0 1 .5-.5zM8 5a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-1 0v-7A.5.5 0 0 1 8 5zm3 .5v7a.5.5 0 0 1-1 0v-7a.5.5 0 0 1 1 0z"/>
-                            </svg>
-                        </button></td>
+                    <tr${classAttr}${clipboardAttr} data-entry-path="${entryPath}" data-type="${entry.type}">
+                        <td ${entryAttributes} data-local-action="selectEntry"><span class="icon">${icon}</span> ${entry.name}</td>
+                        <td ${entryAttributes} data-local-action="selectEntry">${entry.type}</td>
+                        <td ${entryAttributes} data-local-action="selectEntry">${entry.type === 'directory' ? '—' : this.formatBytes(entry.size)}</td>
+                        <td ${entryAttributes} data-local-action="selectEntry">${entry.modified ? this.formatDate(entry.modified) : '—'}</td>
+                        <td class="actions-cell">
+                            <div class="${actionMenuClass}" data-action-menu="true" data-entry-path="${entryPath}">
+                                <button type="button" class="secondary action-menu-trigger" data-local-action="toggleActionMenu" ${entryAttributes}
+                                        aria-haspopup="true" aria-expanded="${isMenuOpen ? 'true' : 'false'}" aria-controls="${menuId}" title="More actions">
+                                    <img class="action-menu-trigger-icon" loading="lazy" src="./assets/icons/action-dots.svg" alt="More actions">
+                                </button>
+                                <div class="action-menu-dropdown" id="${menuId}" role="menu">
+                                    <button type="button" class="action-menu-item" data-local-action="renameEntry" ${entryAttributes} role="menuitem">
+                                        <img class="action-menu-item-icon" loading="lazy" src="./assets/icons/edit.svg" alt="">
+                                        <span class="action-menu-item-label">Rename</span>
+                                    </button>
+                                    <button type="button" class="action-menu-item" data-local-action="copyEntry" ${entryAttributes} role="menuitem">
+                                        <img class="action-menu-item-icon" loading="lazy" src="./assets/icons/copy.svg" alt="">
+                                        <span class="action-menu-item-label">Copy</span>
+                                    </button>
+                                    <button type="button" class="action-menu-item" data-local-action="cutEntry" ${entryAttributes} role="menuitem">
+                                        <img class="action-menu-item-icon" loading="lazy" src="./assets/icons/cut.svg" alt="">
+                                        <span class="action-menu-item-label">Cut</span>
+                                    </button>
+                                    ${pasteMenuItem}
+                                    <button type="button" class="action-menu-item destructive" data-local-action="deleteEntry" ${entryAttributes} role="menuitem">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="action-menu-item-icon" viewBox="0 0 16 16" aria-hidden="true">
+                                            <path d="M5.5 5.5a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0v-6a.5.5 0 0 1 .5-.5zm2.5.5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0v-6zm3-.5a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0v-6a.5.5 0 0 1 .5-.5z"/>
+                                            <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1h-1v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-1a1 1 0 0 1 0-2h4.5l1-1h3l1 1H14a1 1 0 0 1 1 1zm-3 1H4v9a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1V4z"/>
+                                        </svg>
+                                        <span class="action-menu-item-label">Delete</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </td>
                     </tr>`;
             });
         }
@@ -244,6 +309,70 @@ export class FileExp {
             const fallbackName = this.state.selectedPath ? this.state.selectedPath.split('/').pop() : '';
             fileNameLabel.textContent = fallbackName;
         }
+
+        const clipboard = this.state.clipboard;
+        const clearClipboardButton = this.element.querySelector('#clearClipboardButton');
+        if (clearClipboardButton) {
+            if (clipboard) {
+                clearClipboardButton.removeAttribute('disabled');
+            } else {
+                clearClipboardButton.setAttribute('disabled', 'true');
+            }
+        }
+
+        const clipboardGroup = this.element.querySelector('.clipboard-group');
+        const clipboardInfo = this.element.querySelector('#clipboardInfo');
+        if (clipboardInfo && clipboardGroup) {
+            if (clipboard) {
+                clipboardInfo.textContent = `${clipboard.mode === 'cut' ? 'Cut' : 'Copy'}: ${clipboard.name}`;
+                clipboardInfo.classList.add('visible');
+                clipboardGroup.classList.add('visible');
+            } else {
+                clipboardInfo.textContent = '';
+                clipboardInfo.classList.remove('visible');
+                clipboardGroup.classList.remove('visible');
+            }
+        }
+
+        if (clipboard?.path) {
+            const clipboardRow = this.element.querySelector(`tr[data-entry-path="${clipboard.path}"]`);
+            if (clipboardRow) {
+                clipboardRow.classList.add('clipboard-row');
+                clipboardRow.classList.toggle('clipboard-cut', clipboard.mode === 'cut');
+                clipboardRow.classList.toggle('clipboard-copy', clipboard.mode === 'copy');
+            }
+        }
+
+        if (this.state.openMenuPath) {
+            if (!this.outsideMenuListenerAttached) {
+                document.addEventListener('click', this.boundOutsideMenuClick);
+                this.outsideMenuListenerAttached = true;
+            }
+            if (!this.menuKeydownListenerAttached) {
+                document.addEventListener('keydown', this.boundMenuKeydown);
+                this.menuKeydownListenerAttached = true;
+            }
+        } else {
+            if (this.outsideMenuListenerAttached) {
+                document.removeEventListener('click', this.boundOutsideMenuClick);
+                this.outsideMenuListenerAttached = false;
+            }
+            if (this.menuKeydownListenerAttached) {
+                document.removeEventListener('keydown', this.boundMenuKeydown);
+                this.menuKeydownListenerAttached = false;
+            }
+        }
+
+        if (this.pendingMenuFocusPath && this.state.openMenuPath === this.pendingMenuFocusPath) {
+            const menuContainer = this.element.querySelector(`[data-action-menu="true"][data-entry-path="${this.state.openMenuPath}"]`);
+            const firstItem = menuContainer?.querySelector('.action-menu-item');
+            if (firstItem) {
+                firstItem.focus();
+            }
+            this.pendingMenuFocusPath = null;
+        } else if (!this.state.openMenuPath) {
+            this.pendingMenuFocusPath = null;
+        }
     }
 
     async loadDirectoryContent(path) {
@@ -273,6 +402,8 @@ export class FileExp {
         this.state.markdownTextView = false;
         this.state.documentId = null;
         this.state.isEditing = false;
+        this.state.openMenuPath = null;
+        this.pendingMenuFocusPath = null;
         this.state.entries = await this.loadDirectoryContent(this.state.path);
         this.invalidate();
     }
@@ -280,6 +411,11 @@ export class FileExp {
     async selectEntry(element) {
         const path = element.dataset.entryPath;
         const type = element.dataset.type;
+
+        if (this.state.openMenuPath) {
+            this.state.openMenuPath = null;
+            this.pendingMenuFocusPath = null;
+        }
 
         if (this.state.isEditing) {
             if (!confirm("You have unsaved changes. Are you sure you want to navigate away?")) {
@@ -410,6 +546,8 @@ export class FileExp {
         const path = element.dataset.entryPath;
         const type = element.dataset.type;
 
+        this.closeActionMenu();
+
         if (!confirm(`Are you sure you want to delete ${path}?`)) {
             return;
         }
@@ -423,12 +561,307 @@ export class FileExp {
                 this.state.selectedPath = null;
                 this.state.fileContent = "";
             }
+            if (this.state.clipboard?.path === path) {
+                this.state.clipboard = null;
+            }
 
             await this.loadDirectory(this.state.path);
         } catch (err) {
             console.error(err);
             this.showStatus(err.message || 'Failed to delete.', true);
         }
+    }
+
+    async renameEntry(element) {
+        const source = element?.dataset?.entryPath;
+        if (!source) {
+            return;
+        }
+        this.closeActionMenu();
+        const itemType = element.dataset.type;
+        const currentName = source.split('/').pop();
+        const input = prompt(`Enter a new name for "${currentName}":`, currentName);
+        if (input === null) {
+            return;
+        }
+        const newName = this.sanitizeEntryName(input);
+        if (!newName) {
+            this.showStatus('Please enter a valid name.', true);
+            return;
+        }
+        if (newName === currentName) {
+            return;
+        }
+        const parent = this.parentPath(source) || '/';
+        const destination = this.joinPath(parent, newName);
+        if (destination === source) {
+            return;
+        }
+        try {
+            await window.webSkel.appServices.callTool('explorer', 'move_file', { source, destination });
+            const wasSelected = this.state.selectedPath === source;
+            if (this.state.clipboard?.path === source) {
+                this.state.clipboard = { ...this.state.clipboard, path: destination, name: newName };
+            }
+            this.state.entries = await this.loadDirectoryContent(this.state.path);
+            this.showStatus(`Renamed "${currentName}" to "${newName}".`);
+            if (wasSelected) {
+                this.state.selectedPath = destination;
+                history.replaceState(null, '', `#file-exp${destination}`);
+                if (itemType === 'file') {
+                    await this.openFile(destination);
+                    return;
+                }
+            }
+            this.invalidate();
+        } catch (err) {
+            console.error(err);
+            this.showStatus(err.message || 'Failed to rename entry.', true);
+        }
+    }
+
+    copyEntry(element) {
+        const path = element?.dataset?.entryPath;
+        if (!path) {
+            return;
+        }
+        this.closeActionMenu(false);
+        const name = path.split('/').pop();
+        this.state.clipboard = {
+            mode: 'copy',
+            path,
+            name,
+            type: element.dataset.type
+        };
+        this.showStatus(`Copied "${name}" to clipboard.`);
+        this.invalidate();
+    }
+
+    cutEntry(element) {
+        const path = element?.dataset?.entryPath;
+        if (!path) {
+            return;
+        }
+        this.closeActionMenu(false);
+        const name = path.split('/').pop();
+        this.state.clipboard = {
+            mode: 'cut',
+            path,
+            name,
+            type: element.dataset.type
+        };
+        this.showStatus(`Ready to move "${name}".`);
+        this.invalidate();
+    }
+
+    toggleActionMenu(element, maybeEvent) {
+        if (maybeEvent?.stopPropagation) {
+            maybeEvent.stopPropagation();
+        }
+        if (maybeEvent?.preventDefault) {
+            maybeEvent.preventDefault();
+        }
+        const path = element?.dataset?.entryPath;
+        if (!path) {
+            return;
+        }
+        const previous = this.state.openMenuPath;
+        const next = previous === path ? null : path;
+        this.state.openMenuPath = next;
+        this.pendingMenuFocusPath = next;
+        this.invalidate();
+    }
+
+    handleOutsideMenuClick(event) {
+        if (!this.state.openMenuPath) {
+            return;
+        }
+        const target = event?.target;
+        if (target && this.element.contains(target)) {
+            const menu = target.closest('[data-action-menu="true"]');
+            if (menu && menu.dataset.entryPath === this.state.openMenuPath) {
+                return;
+            }
+        }
+        this.closeActionMenu();
+    }
+
+    handleMenuKeydown(event) {
+        if (event?.key === 'Escape' && this.state.openMenuPath) {
+            this.closeActionMenu();
+        }
+    }
+
+    closeActionMenu(shouldInvalidate = true) {
+        if (!this.state.openMenuPath) {
+            return false;
+        }
+        this.pendingMenuFocusPath = null;
+        this.state.openMenuPath = null;
+        if (shouldInvalidate) {
+            this.invalidate();
+        }
+        return true;
+    }
+
+    clearClipboard() {
+        if (!this.state.clipboard) {
+            return;
+        }
+        const previous = this.state.clipboard.name;
+        this.state.clipboard = null;
+        this.showStatus(previous ? `Cleared clipboard (was "${previous}").` : 'Clipboard cleared.');
+        this.invalidate();
+    }
+
+    async pasteClipboard(element) {
+        const clipboard = this.state.clipboard;
+        if (!clipboard) {
+            this.showStatus('Clipboard is empty.', true);
+            return;
+        }
+
+        const targetPathRaw = element?.dataset?.targetPath || this.state.path;
+        const targetDir = this.normalizePath(targetPathRaw);
+        const targetIsCurrentDirectory = targetDir === this.state.path;
+        const sourceParent = this.parentPath(clipboard.path) || '/';
+
+        this.closeActionMenu(false);
+
+        let targetEntries = [];
+        if (targetIsCurrentDirectory) {
+            targetEntries = this.state.entries;
+        } else {
+            targetEntries = await this.loadDirectoryContent(targetDir);
+        }
+        const existingNames = new Set(targetEntries.map((entry) => entry.name));
+
+        const defaultName = clipboard.mode === 'copy'
+            ? this.generateCopyName(clipboard.name, existingNames)
+            : clipboard.name;
+        const promptLabel = clipboard.mode === 'copy'
+            ? `Enter a name for the copied ${clipboard.type === 'directory' ? 'folder' : 'file'}:`
+            : `Enter a name for the moved ${clipboard.type === 'directory' ? 'folder' : 'file'}:`;
+        const input = prompt(promptLabel, defaultName);
+        if (input === null) {
+            return;
+        }
+        const desiredName = this.sanitizeEntryName(input);
+        if (!desiredName) {
+            this.showStatus('Please enter a valid name.', true);
+            return;
+        }
+
+        const destination = this.joinPath(targetDir, desiredName);
+        const wasSelectedFile = this.state.selectedPath === clipboard.path && clipboard.type === 'file';
+        const existsInTarget = existingNames.has(desiredName);
+        const normalizedSource = this.normalizePath(clipboard.path);
+        const normalizedDestination = this.normalizePath(destination);
+
+        if (normalizedDestination === normalizedSource) {
+            this.showStatus('Destination matches the source.', true);
+            return;
+        }
+
+        if (clipboard.type === 'directory' && normalizedDestination.startsWith(`${normalizedSource}/`)) {
+            this.showStatus('Cannot paste a folder into itself or one of its subfolders.', true);
+            return;
+        }
+
+        if (clipboard.mode === 'cut' && existsInTarget) {
+            this.showStatus(`"${desiredName}" already exists in the target directory.`, true);
+            return;
+        }
+
+        try {
+            if (clipboard.mode === 'cut') {
+                await window.webSkel.appServices.callTool('explorer', 'move_file', {
+                    source: clipboard.path,
+                    destination
+                });
+                this.state.clipboard = null;
+                this.showStatus(`Moved to ${destination}.`);
+            } else {
+                let overwrite = false;
+                if (existsInTarget) {
+                    const shouldOverwrite = confirm(`"${desiredName}" already exists here. Overwrite it?`);
+                    if (!shouldOverwrite) {
+                        return;
+                    }
+                    overwrite = true;
+                }
+                await window.webSkel.appServices.callTool('explorer', 'copy_file', {
+                    source: clipboard.path,
+                    destination,
+                    overwrite
+                });
+                this.showStatus(`Copied to ${destination}${overwrite ? ' (overwritten)' : ''}.`);
+            }
+
+            const targetMatchesCurrentView = targetIsCurrentDirectory;
+            const sourceMatchesCurrentView = sourceParent === this.state.path;
+
+            if (targetMatchesCurrentView || sourceMatchesCurrentView) {
+                this.state.entries = await this.loadDirectoryContent(this.state.path);
+            }
+
+            if (wasSelectedFile) {
+                this.state.selectedPath = destination;
+                const historyMethod = clipboard.mode === 'cut' ? 'replaceState' : 'pushState';
+                history[historyMethod](null, '', `#file-exp${destination}`);
+                await this.openFile(destination);
+                return;
+            }
+
+            this.invalidate();
+        } catch (err) {
+            console.error(err);
+            this.showStatus(err.message || 'Failed to paste item.', true);
+        }
+    }
+
+    sanitizeEntryName(value) {
+        if (typeof value !== 'string') {
+            return null;
+        }
+        const trimmed = value.trim();
+        if (!trimmed || trimmed === '.' || trimmed === '..' || /[\\/]/.test(trimmed)) {
+            return null;
+        }
+        return trimmed;
+    }
+
+    splitFileName(fileName) {
+        if (!fileName || typeof fileName !== 'string') {
+            return { stem: '', ext: '' };
+        }
+        const lastDot = fileName.lastIndexOf('.');
+        if (lastDot <= 0) {
+            return { stem: fileName, ext: '' };
+        }
+        return {
+            stem: fileName.slice(0, lastDot),
+            ext: fileName.slice(lastDot)
+        };
+    }
+
+    generateCopyName(baseName, existingNames = null) {
+        const safeBase = this.sanitizeEntryName(baseName) ?? baseName;
+        const names = existingNames instanceof Set
+            ? new Set(existingNames)
+            : new Set(this.state.entries.map(entry => entry.name));
+        if (!names.has(safeBase)) {
+            return safeBase;
+        }
+        const { stem, ext } = this.splitFileName(safeBase);
+        let index = 1;
+        let candidate = '';
+        do {
+            const suffix = index === 1 ? ' copy' : ` copy ${index}`;
+            candidate = `${stem}${suffix}${ext}`;
+            index += 1;
+        } while (names.has(candidate));
+        return candidate;
     }
 
 
