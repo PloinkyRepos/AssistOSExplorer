@@ -166,6 +166,112 @@ const stripMetadataCommentBlocks = (text) => {
     return result;
 };
 
+const REFERENCES_MARKER_COMMENT_RE = /<!--\s*<achiles-ide-references>\s*-->/i;
+const REFERENCES_ANCHOR_LINE_RE = /^<a\s+id="references-section"><\/a>\s*$/i;
+const MARKDOWN_HEADING_RE = /^#{1,6}\s+/;
+const NUMBERED_LIST_LINE_RE = /^\d+\.\s+/;
+const BULLETED_LIST_LINE_RE = /^[*-]\s+/;
+const FOOTNOTE_DEFINITION_RE = /^\[[^\]]+]:/;
+
+const stripGeneratedReferencesFromLines = (lines = []) => {
+    const filtered = [];
+    let skippingReferences = false;
+    let removed = false;
+
+    for (let i = 0; i < lines.length; i += 1) {
+        const line = lines[i];
+        const trimmed = line.trim();
+
+        if (!trimmed) {
+            if (!skippingReferences) {
+                filtered.push(line);
+            } else {
+                removed = true;
+            }
+            continue;
+        }
+
+        if (REFERENCES_MARKER_COMMENT_RE.test(trimmed)) {
+            removed = true;
+            continue;
+        }
+
+        if (REFERENCES_ANCHOR_LINE_RE.test(trimmed)) {
+            removed = true;
+            continue;
+        }
+
+        if (REFERENCES_HEADING_RE.test(trimmed)) {
+            skippingReferences = true;
+            removed = true;
+            continue;
+        }
+
+        if (skippingReferences) {
+            if (REFERENCES_HEADING_RE.test(trimmed)) {
+                removed = true;
+                continue;
+            }
+            if (MARKDOWN_HEADING_RE.test(trimmed)) {
+                skippingReferences = false;
+                filtered.push(line);
+                continue;
+            }
+            if (
+                NUMBERED_LIST_LINE_RE.test(trimmed)
+                || BULLETED_LIST_LINE_RE.test(trimmed)
+                || FOOTNOTE_DEFINITION_RE.test(trimmed)
+                || trimmed.startsWith('<a ')
+                || trimmed.startsWith('<!--')
+            ) {
+                removed = true;
+                continue;
+            }
+
+            // Encountered non-reference content; stop skipping and keep the line.
+            skippingReferences = false;
+        }
+
+        if (!skippingReferences) {
+            filtered.push(line);
+        }
+    }
+
+    // Trim trailing blank lines introduced after stripping references.
+    while (filtered.length > 0 && filtered[filtered.length - 1].trim() === '') {
+        filtered.pop();
+        removed = true;
+    }
+
+    return {
+        lines: filtered,
+        removed
+    };
+};
+
+const stripGeneratedReferencesFromText = (text, { trim = false } = {}) => {
+    if (!text) {
+        return {
+            text: trim ? '' : text,
+            removed: false
+        };
+    }
+    const normalized = normalizeLineEndings(text);
+    const lines = normalized.split('\n');
+    const { lines: filteredLines, removed } = stripGeneratedReferencesFromLines(lines);
+    let cleaned = filteredLines.join('\n');
+    if (removed) {
+        cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
+    }
+    if (trim) {
+        cleaned = cleaned.trim();
+    }
+    return {
+        text: cleaned,
+        removed
+    };
+};
+
 const pruneMetadataValue = (value) => {
     if (value === null || value === undefined) {
         return undefined;
@@ -294,7 +400,7 @@ const parseParagraphBlocks = (content) => {
     return paragraphs;
 };
 
-const parseChapterBlock = (chapterComment, block) => {
+const parseChapterBlock = (chapterComment, block, { hasStructuredReferences = false } = {}) => {
     const metadata = filterMetadataFields(COMMENT_KEYS.CHAPTER, { ...(chapterComment.value ?? {}) });
     const chapterId = metadata.id ?? null;
     const chapter = {
@@ -374,7 +480,11 @@ const parseChapterBlock = (chapterComment, block) => {
     chapter.leading = decodeHtmlEntities(leadingLines.join('\n'));
 
     const remainderLines = lines.slice(headingLineIndex + 1);
-    const remainder = remainderLines.join('\n');
+    let remainder = remainderLines.join('\n');
+    if (hasStructuredReferences) {
+        const { text: cleanedRemainder } = stripGeneratedReferencesFromText(remainder);
+        remainder = cleanedRemainder;
+    }
     chapter.paragraphs = parseParagraphBlocks(remainder);
 
     if (!chapter.heading.text) {
@@ -413,21 +523,28 @@ const parseMarkdownDocument = (markdown) => {
     const prefaceStart = documentComment ? documentComment.end : 0;
     const firstChapterStart = chapterComments[0]?.start ?? text.length;
     const prefaceSegment = text.slice(prefaceStart, firstChapterStart);
-    let preface = decodeHtmlEntities(stripMetadataCommentBlocks(prefaceSegment).trim());
+    let preface = decodeHtmlEntities(stripMetadataCommentBlocks(prefaceSegment));
 
     if (documentMetadata.comments?.toc) {
         const { remaining } = stripSectionByHeading(preface, TABLE_OF_CONTENTS_HEADING_RE);
         preface = remaining;
     }
     if (documentMetadata.comments?.tor) {
-        const { remaining } = stripSectionByHeading(preface, REFERENCES_HEADING_RE);
-        preface = remaining;
+        const { text: sanitizedPreface } = stripGeneratedReferencesFromText(preface);
+        preface = sanitizedPreface;
     }
+    preface = preface.trim();
+
+    const hasStructuredReferences = Boolean(
+        documentMetadata.comments?.tor
+        && Array.isArray(documentMetadata.comments.tor.references)
+        && documentMetadata.comments.tor.references.length > 0
+    );
 
     const chapters = chapterComments.map((chapterComment, index) => {
         const nextChapterStart = chapterComments[index + 1]?.start ?? text.length;
         const chapterBlock = text.slice(chapterComment.end, nextChapterStart);
-        return parseChapterBlock(chapterComment, chapterBlock);
+        return parseChapterBlock(chapterComment, chapterBlock, { hasStructuredReferences });
     });
 
     return {
@@ -598,6 +715,7 @@ const serializeMarkdownDocument = (document) => {
         if (referencesComment) {
             referencesParts.push(referencesComment);
         }
+        referencesParts.push('<!-- <achiles-ide-references> -->\n');
         referencesParts.push('<a id="references-section"></a>\n');
         referencesParts.push('## References\n');
         documentComments.tor.references.forEach((reference, index) => {

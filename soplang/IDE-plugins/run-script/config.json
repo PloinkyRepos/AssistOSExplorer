@@ -1,6 +1,6 @@
 {
     "component": "run-script",
-    "location": ["document"],
+    "location": ["infoText"],
     "tooltip": "Run Script",
     "icon": "./script.svg",
     "presenter": "RunScript",
