@@ -5,54 +5,128 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Plugins - Explorer Agent</title>
     <link rel="stylesheet" href="style.css">
+    <style>
+        .plugin-lightbox-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+        .plugin-lightbox-overlay img {
+            max-width: 90vw;
+            max-height: 90vh;
+            border-radius: 12px;
+            border: 1px solid var(--border-primary);
+            box-shadow: var(--shadow-lg);
+            background: var(--bg-secondary);
+        }
+        .plugin-lightbox-overlay .close {
+            position: absolute;
+            top: 1.5rem;
+            right: 2rem;
+            font-size: 2rem;
+            color: #fff;
+            cursor: pointer;
+        }
+    </style>
 </head>
 <body>
-    <header>
-        <div class="container">
-            <div class="header-content">
-                <div class="header-top">
-                    <a href="index.html" class="logo">
-                        <div class="logo-icon">🚀</div>
-                        <span>Explorer Agent</span>
-                    </a>
-                    <button class="theme-toggle" id="themeToggle">🌙</button>
-                </div>
-                <nav>
-                    <ul>
-                        <li><a href="index.html">Home</a></li>
-                        <li><a href="architecture.html">Architecture</a></li>
-                        <li><a href="documents.html">Document Model &amp; Editing</a></li>
-                        <li><a href="plugins.html" class="active">Plugins</a></li>
-                        <li><a href="mcp-tools.html">MCP Tools</a></li>
-                        <li><a href="build.html">SOPLang Build</a></li>
-                        <li><a href="screenshots.html">Screenshots</a></li>
-                        <li><a href="development.html">Development</a></li>
-                    </ul>
-                </nav>
+<header>
+    <div class="container">
+        <div class="header-content">
+            <div class="header-top">
+                <a href="index.html" class="logo">
+                    <div class="logo-icon">🚀</div>
+                    <span>Explorer Agent</span>
+                </a>
+                <button class="theme-toggle" id="themeToggle">🌙</button>
             </div>
-        </div>
-    </header>
-
-    <main>
-        <div class="doc-layout">
-            <aside class="sidebar">
-                <h3>Plugins</h3>
+            <nav>
                 <ul>
-                    <li><a href="#discovery">Discovery</a></li>
-                    <li><a href="#manifest">Manifest</a></li>
-                    <li><a href="#example">Example Plugin</a></li>
+                    <li><a href="index.html">Home</a></li>
+                    <li><a href="architecture.html">Architecture</a></li>
+                    <li><a href="backend.html">Backend</a></li>
+                    <li><a href="documents.html">Document Model &amp; Editing</a></li>
+                    <li><a href="plugins.html" class="active">Plugins</a></li>
+                    <li><a href="development.html">Development</a></li>
                 </ul>
-            </aside>
-            <div class="content-wrapper">
-                <div class="doc-section" id="discovery">
-                    <h1>The Plugin System</h1>
-                    <p>The <code>aggregateIdePlugins</code> function in <code>filesystem-http-server.mjs</code> discovers plugins when the <code>collect_ide_plugins</code> MCP tool is called (e.g., by the UI on load). Each invocation scans enabled repositories for <code>IDE-plugins/*/config.json</code> files, then merges the manifests into a plugin catalog grouped by <code>location</code> and returns it to the client.</p>
-                </div>
+            </nav>
+        </div>
+    </div>
+</header>
 
-                <div class="doc-section" id="manifest">
-                    <h2>Plugin Manifest (<code>config.json</code>)</h2>
-                    <p>The <code>config.json</code> file is the heart of a plugin. Here is an example from the <code>video-creator</code> plugin:</p>
-                    <pre><code>{
+<main>
+    <div class="doc-layout">
+        <aside class="sidebar">
+            <h3>Plugins</h3>
+            <ul>
+                <li><a href="#discovery">Discovery</a></li>
+                <li><a href="#available">Available plugins</a></li>
+                <li><a href="#manifest">Manifest</a></li>
+                <li><a href="#example">Example Plugin</a></li>
+            </ul>
+        </aside>
+        <div class="content-wrapper">
+            <div class="doc-section" id="discovery">
+                <h1>The Plugin System</h1>
+                <p><strong>What is a plugin in Explorer?</strong> A plugin is a WebSkel UI bundle (HTML/JS/CSS +
+                    manifest) that the Explorer frontend loads dynamically to add actions or modals in context
+                    (document, paragraph, etc.). Plugins run in the browser, can call MCP tools, and ship their assets
+                    inside the repo under <code>IDE-plugins/&lt;name&gt;</code>. Each plugin declares where it appears
+                    via <code>location</code> (e.g., document/paragraph) and which component/presenter to load.
+                    Discovery is driven by manifests, not by hardcoding in the UI.</p>
+                <p>The <code>aggregateIdePlugins</code> function in <code>filesystem-http-server.mjs</code> discovers
+                    plugins when the <code>collect_ide_plugins</code> MCP tool is called (e.g., by the UI on load). Each
+                    invocation scans enabled repositories for <code>IDE-plugins/*/config.json</code> files, then merges
+                    the manifests into a plugin catalog grouped by <code>location</code> and returns it to the client.
+                </p>
+            </div>
+
+            <div class="doc-section" id="available">
+                <h2>Available plugins (in-repo)</h2>
+                <p>Discovered from <code>IDE-plugins/*/config.json</code> across the repo:</p>
+                <ul>
+                    <li><strong>video-plugin</strong> (modal, chapter/paragraph) — attach or configure video content.
+                    </li>
+                    <li><strong>audio-plugin</strong> (modal, chapter/paragraph) — attach or configure audio content.
+                    </li>
+                    <li><strong>image-plugin</strong> (modal, chapter/paragraph) — attach or configure images.</li>
+                    <li><strong>ffmpeg-image-to-video</strong> (modal, chapter/paragraph) — build videos from images via
+                        ffmpeg.
+                    </li>
+                    <li><strong>edit-variables</strong> (embedded, document/chapter/paragraph) — manage SOPLang
+                        variables; auto-pinned with <code>add-variable</code> dependency.
+                    </li>
+                </ul>
+                <div class="screenshot-gallery" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:1rem;margin-top:1rem;">
+                    <figure style="background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:12px;padding:0.75rem;">
+                        <img class="plugin-shot" data-full="./assets/plugin_image.png" src="./assets/plugin_image.png" alt="Plugin listing with icons" style="width:100%;border-radius:8px;border:1px solid var(--border-secondary);background:var(--bg-secondary);cursor:pointer;">
+                        <figcaption style="margin-top:0.5rem;font-size:0.9rem;color:var(--text-secondary);">Modal plugin empty data</figcaption>
+                    </figure>
+                    <figure style="background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:12px;padding:0.75rem;">
+                        <img class="plugin-shot" data-full="./assets/plugin_image_1.png" src="./assets/plugin_image_1.png" alt="Plugin modal selection" style="width:100%;border-radius:8px;border:1px solid var(--border-secondary);background:var(--bg-secondary);cursor:pointer;">
+                        <figcaption style="margin-top:0.5rem;font-size:0.9rem;color:var(--text-secondary);">Modal plugin selection/preview.</figcaption>
+                    </figure>
+                    <figure style="background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:12px;padding:0.75rem;">
+                        <img class="plugin-shot" data-full="./assets/plugin_tooltip.png" src="./assets/plugin_tooltip.png" alt="Plugin tooltip placement" style="width:100%;border-radius:8px;border:1px solid var(--border-secondary);background:var(--bg-secondary);cursor:pointer;">
+                        <figcaption style="margin-top:0.5rem;font-size:0.9rem;color:var(--text-secondary);">Tooltip and placement in UI.</figcaption>
+                    </figure>
+                    <figure style="background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:12px;padding:0.75rem;">
+                        <img class="plugin-shot" data-full="./assets/plugin_embeded.png" src="./assets/plugin_embeded.png" alt="Embedded plugin block" style="width:100%;border-radius:8px;border:1px solid var(--border-secondary);background:var(--bg-secondary);cursor:pointer;">
+                        <figcaption style="margin-top:0.5rem;font-size:0.9rem;color:var(--text-secondary);">Embedded plugin rendered inline.</figcaption>
+                    </figure>
+                </div>
+            </div>
+
+            <div class="doc-section" id="manifest">
+                <h2>Plugin Manifest (<code>config.json</code>)</h2>
+                <p>The <code>config.json</code> file is the heart of a plugin. Here is an example from the <code>video-creator</code>
+                    plugin:</p>
+                <pre><code>{
   "component": "video-creator",
   "presenter": "VideoCreator",
   "type": "modal",
@@ -62,18 +136,20 @@
   "tooltip": "Create a video from a script",
   "icon": "./assets/icons/video.svg"
 }</code></pre>
-                    <p>This manifest tells the Explorer to load the <code>video-creator</code> component as a modal, make it available at the "document" level, and use the specified tooltip and icon.</p>
-                </div>
+                <p>This manifest tells the Explorer to load the <code>video-creator</code> component as a modal, make it
+                    available at the "document" level, and use the specified tooltip and icon.</p>
+            </div>
 
-                <div class="doc-section" id="example">
-                    <h2>Example: "Uppercase Paragraph" Plugin</h2>
-                    <p>This example demonstrates the correct structure of a WebSkel presenter, including the mandatory <code>beforeRender</code> and <code>afterRender</code> lifecycle methods.</p>
-                    
-                    <h3>1. Create Folder</h3>
-                    <p>Create a new folder for the plugin: <code>IDE-plugins/uppercase/</code></p>
-                    
-                    <h3>2. <code>config.json</code></h3>
-                    <pre><code>{
+            <div class="doc-section" id="example">
+                <h2>Example: "Uppercase Paragraph" Plugin</h2>
+                <p>This example demonstrates the correct structure of a WebSkel presenter, including the mandatory
+                    <code>beforeRender</code> and <code>afterRender</code> lifecycle methods.</p>
+
+                <h3>1. Create Folder</h3>
+                <p>Create a new folder for the plugin: <code>IDE-plugins/uppercase/</code></p>
+
+                <h3>2. <code>config.json</code></h3>
+                <pre><code>{
   "component": "uppercase-plugin",
   "presenter": "UppercasePlugin",
   "type": "modal",
@@ -82,8 +158,8 @@
   "icon": "./icon.svg"
 }</code></pre>
 
-                    <h3>3. <code>uppercase-plugin.html</code></h3>
-                    <pre><code>&lt;div class="modal-header"&gt;
+                <h3>3. <code>uppercase-plugin.html</code></h3>
+                <pre><code>&lt;div class="modal-header"&gt;
   &lt;div&gt;Uppercase Paragraph&lt;/div&gt;
   &lt;div class="close" data-local-action="closeModal"&gt;&times;&lt;/div&gt;
 &lt;/div&gt;
@@ -92,8 +168,8 @@
   &lt;button class="general-button" data-local-action="apply"&gt;Apply&lt;/button&gt;
 &lt;/div&gt;</code></pre>
 
-                    <h3>4. <code>uppercase-plugin.js</code></h3>
-                    <pre><code>import { getContextualElement } from "../utils/pluginUtils.js";
+                <h3>4. <code>uppercase-plugin.js</code></h3>
+                <pre><code>import { getContextualElement } from "../utils/pluginUtils.js";
 const documentModule = assistOS.loadModule("document");
 
 export class UppercasePlugin {
@@ -125,44 +201,65 @@ export class UppercasePlugin {
     assistOS.UI.closeModal(this.element);
   }
 }</code></pre>
-                </div>
             </div>
         </div>
-    </main>
+    </div>
+</main>
 
-    <footer>
-        <div class="container">
-            <p>&copy; 2025 Ploinky Project. All rights reserved.</p>
-        </div>
-    </footer>
+<footer>
+    <div class="container">
+        <p>&copy; 2025 <a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md" target="_blank" rel="noopener noreferrer">Ploinky Project</a>. All rights reserved.</p>
+    </div>
+</footer>
 
-    <script>
-        // Theme toggle
-        const themeToggle = document.getElementById('themeToggle');
-        const body = document.body;
-        const themes = ['light', 'dark', 'blue'];
-        const themeIcons = {
-            light: '🌙', // Icon to show for switching to dark
-            dark: '🔵',  // Icon to show for switching to blue
-            blue: '☀️'   // Icon to show for switching to light
-        };
+<div id="pluginLightbox" class="plugin-lightbox-overlay">
+    <span class="close" data-close>&times;</span>
+    <img id="pluginLightboxImage" alt="Plugin preview">
+</div>
 
-        const applyTheme = (theme) => {
-            body.setAttribute('data-theme', theme);
-            localStorage.setItem('theme', theme);
-            themeToggle.textContent = themeIcons[theme];
-        };
-        
-        const savedTheme = localStorage.getItem('theme') || 'light';
-        applyTheme(savedTheme);
-        
-        themeToggle.addEventListener('click', () => {
-            const currentTheme = body.getAttribute('data-theme');
-            const currentIndex = themes.indexOf(currentTheme);
-            const nextIndex = (currentIndex + 1) % themes.length;
-            const newTheme = themes[nextIndex];
-            applyTheme(newTheme);
+<script>
+    // Theme toggle
+    const themeToggle = document.getElementById('themeToggle');
+    const body = document.body;
+    const themes = ['light', 'dark', 'blue'];
+    const themeIcons = {
+        light: '🌙', // Icon to show for switching to dark
+        dark: '🔵',  // Icon to show for switching to blue
+        blue: '☀️'   // Icon to show for switching to light
+    };
+
+    const applyTheme = (theme) => {
+        body.setAttribute('data-theme', theme);
+        localStorage.setItem('theme', theme);
+        themeToggle.textContent = themeIcons[theme];
+    };
+
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    applyTheme(savedTheme);
+
+    themeToggle.addEventListener('click', () => {
+        const currentTheme = body.getAttribute('data-theme');
+        const currentIndex = themes.indexOf(currentTheme);
+        const nextIndex = (currentIndex + 1) % themes.length;
+        const newTheme = themes[nextIndex];
+        applyTheme(newTheme);
+    });
+
+    // Lightbox for plugin screenshots
+    const lightbox = document.getElementById('pluginLightbox');
+    const lightboxImg = document.getElementById('pluginLightboxImage');
+    document.querySelectorAll('.plugin-shot').forEach(img => {
+        img.addEventListener('click', () => {
+            lightboxImg.src = img.dataset.full || img.src;
+            lightbox.style.display = 'flex';
         });
-    </script>
+    });
+    lightbox.addEventListener('click', (e) => {
+        if (e.target === lightbox || e.target.hasAttribute('data-close')) {
+            lightbox.style.display = 'none';
+            lightboxImg.src = '';
+        }
+    });
+</script>
 </body>
 </html>

@@ -21,11 +21,9 @@
                     <ul>
                         <li><a href="index.html">Home</a></li>
                         <li><a href="architecture.html" class="active">Architecture</a></li>
+                        <li><a href="backend.html">Backend</a></li>
                         <li><a href="documents.html">Document Model &amp; Editing</a></li>
                         <li><a href="plugins.html">Plugins</a></li>
-                        <li><a href="mcp-tools.html">MCP Tools</a></li>
-                        <li><a href="build.html">SOPLang Build</a></li>
-                        <li><a href="screenshots.html">Screenshots</a></li>
                         <li><a href="development.html">Development</a></li>
                     </ul>
                 </nav>
@@ -47,6 +45,7 @@
                 <div class="doc-section" id="runtime">
                     <h1>Architecture</h1>
                     <p>This section provides a detailed look at the technical architecture of the Explorer agent, from the containerized runtime to the frontend application.</p>
+                    <p>Explorer agent runs inside <strong><a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md" target="_blank" rel="noopener noreferrer">Ploinky</a></strong>, the workspace runtime that routes traffic to agents, serves static bundles, and manages enabled repos/agents.</p>
                     <p>The backend also acts as the MCP tools provider: it exposes filesystem-safe operations (read/write/list/move/copy, tree, media read, allowed roots) under the Explorer agent, enforcing whitelisted roots and path resolution. Optional integrations (e.g. SOPLang plugins) consume these tools rather than touching the filesystem directly.</p>
                     <figure class="architecture-diagram" aria-label="Explorer architecture diagram">
                         <svg viewBox="0 0 1320 460" role="img" aria-labelledby="architecture-diagram-title">
@@ -128,7 +127,7 @@
                     <p class="muted">Note: Current <code>filesystem-http-server.mjs</code> only exposes MCP over <code>/mcp</code> (plus <code>/health</code>); it does not implement the previously documented <code>/blobs</code> upload/download HTTP endpoints.</p>
 
                     <h2>Runtime and Routing</h2>
-                    <p>The Explorer agent's container configuration is defined in <code>manifest.json</code>. This file specifies how the container runs, including mounting the workspace and the agent library. When started with Ploinky, the router exposes Explorer on the chosen port (e.g. <code>8080</code> after <code>p-cli start explorer 8080</code>), serving static assets and proxying API requests to the Explorer container.</p>
+                    <p>The Explorer agent's container configuration is defined in <code>manifest.json</code>. This file specifies how the container runs, including mounting the workspace and the agent library. When started with <a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md" target="_blank" rel="noopener noreferrer">Ploinky</a>, the router exposes Explorer on the chosen port (e.g. <code>8080</code> after <code>p-cli start explorer 8080</code>), serving static assets and proxying API requests to the Explorer container.</p>
                     <p><strong>Note:</strong> <code>soplangAgent</code> is a separate container (repo <code>SOPLangBuilder</code>) that receives MCP requests (e.g. <code>soplang-tool</code> with <code>SoplangBuilder.buildFromMarkdown</code>) from clients such as Explorer UI or other agents. It does not rely on the Explorer backend for data access; it runs in the same workspace and can read files directly according to its own configuration.</p>
                 </div>
 
@@ -205,7 +204,7 @@
 
     <footer>
         <div class="container">
-            <p>&copy; 2025 Ploinky Project. All rights reserved.</p>
+        <p>&copy; 2025 <a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md" target="_blank" rel="noopener noreferrer">Ploinky Project</a>. All rights reserved.</p>
         </div>
     </footer>
 

@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Backend (MCP &amp; SOPLang) - Explorer Agent</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .screenshot-gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.25rem;
+        }
+
+        .screenshot-card {
+            background-color: var(--bg-primary);
+            border-radius: 12px;
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--border-primary);
+            padding: 1rem;
+        }
+
+        .thumbnail-list {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .thumbnail {
+            width: 140px;
+            height: 140px;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 1px solid var(--border-secondary);
+            background: var(--bg-secondary);
+        }
+
+        .bullets {
+            padding-left: 2em;
+        }
+
+        .backend-lightbox {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+
+        .backend-lightbox img {
+            max-width: 90vw;
+            max-height: 90vh;
+            border-radius: 12px;
+            border: 1px solid var(--border-primary);
+            box-shadow: var(--shadow-lg);
+            background: var(--bg-secondary);
+        }
+
+        .backend-lightbox .close {
+            position: absolute;
+            top: 1.5rem;
+            right: 2rem;
+            font-size: 2rem;
+            color: #fff;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+<header>
+    <div class="container">
+        <div class="header-content">
+            <div class="header-top">
+                <a href="index.html" class="logo">
+                    <div class="logo-icon">🚀</div>
+                    <span>Explorer Agent</span>
+                </a>
+                <button class="theme-toggle" id="themeToggle">🌙</button>
+            </div>
+            <nav>
+                <ul>
+                    <li><a href="index.html">Home</a></li>
+                    <li><a href="architecture.html">Architecture</a></li>
+                    <li><a href="backend.html" class="active">Backend</a></li>
+                    <li><a href="documents.html">Document Model &amp; Editing</a></li>
+                    <li><a href="plugins.html">Plugins</a></li>
+                    <li><a href="development.html">Development</a></li>
+                </ul>
+            </nav>
+        </div>
+    </div>
+</header>
+
+<main>
+    <div class="doc-layout">
+        <aside class="sidebar">
+            <h3>Backend</h3>
+            <ul>
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#mcp">MCP (Explorer)</a></li>
+                <li><a href="#mcp-functionalities">What MCP Can Do</a></li>
+                <li><a href="#mcp-example">MCP Example Call</a></li>
+                <li><a href="#soplang">What is SOPLang</a></li>
+                <li><a href="#soplang-embedding">Embedding SOPLang</a></li>
+                <li><a href="#soplang-comments">Achilles comments</a></li>
+                <li><a href="#soplang-variables">Variables &amp; Commands</a></li>
+                <li><a href="#soplang-execution">Execution</a></li>
+                <li><a href="#soplang-build">SOPLang Build</a></li>
+                <li><a href="#troubleshooting">Troubleshooting</a></li>
+            </ul>
+        </aside>
+
+        <div class="content-wrapper">
+            <div class="doc-section" id="overview">
+                <h1>Backend (MCP Explorer + SOPLang)</h1>
+                <p>The Explorer backend has two pillars: the MCP filesystem server (in the Explorer container) and the
+                    SOPLang automation engine (in the separate <code>soplangAgent</code> container). Both mount the same
+                    workspace volume but serve different roles.</p>
+                <ul>
+                    <li><strong>MCP (Explorer):</strong> Serves filesystem-safe tools over <code>/mcp</code>. Enforces
+                        <code>allowedDirectories</code> derived from
+                        <code>ASSISTOS_FS_ROOT</code>/<code>MCP_FS_ROOT</code>.
+                    </li>
+                    <li><strong>SOPLang (soplangAgent):</strong> Executes SOPLang scripts, owns
+                        <code>soplang-tool</code>, and runs <code>SoplangBuilder.buildFromMarkdown</code> for document
+                        sync.
+                    </li>
+                    <li><strong>Shared workspace:</strong> Both containers see the same files; neither proxies to the
+                        other.
+                    </li>
+                </ul>
+            </div>
+
+            <div class="doc-section" id="mcp">
+                <h2>MCP (Explorer)</h2>
+                <p><strong>MCP</strong> stands for Model Context Protocol, a standard way for AI agents to call tools over structured JSON schemas; here it is used to expose filesystem-safe operations to clients like IDE integrations.</p>
+                <p>The MCP server lives in <code>filesystem-http-server.mjs</code> and exposes tools over the
+                    <code>/mcp</code> endpoint. Every call is guarded by an allowed-roots whitelist; path arguments are
+                    resolved and normalized before execution.</p>
+                <ul>
+                    <li><strong>Endpoint:</strong> <code>/mcp</code> (plus <code>/health</code>); no <code>/blobs</code>
+                        HTTP uploads/downloads.
+                    </li>
+                    <li><strong>Allowed roots:</strong> From <code>ASSISTOS_FS_ROOT</code> / <code>MCP_FS_ROOT</code>
+                        (comma-separated). Missing ⇒ falls back to <code>process.cwd()</code>.
+                    </li>
+                    <li><strong>Path resolution:</strong> Relative inputs are resolved inside the first allowed root;
+                        traversal outside is rejected.
+                    </li>
+                    <li><strong>Error surface:</strong> Violations return MCP errors (e.g., “path outside allowed
+                        roots”); the server does not perform implicit directory creation except where documented (e.g.,
+                        write with parents).
+                    </li>
+                </ul>
+                <p><strong>Implementation highlights:</strong>
+                <ul class="bullets">
+                    <li><strong>MCP core:</strong> Wraps <code>@modelcontextprotocol/server-filesystem</code>, an
+                        implementation of a Filesystem Server for the Model Context Protocol (MCP). Its purpose is to
+                        give AI models, such as those integrated into IDEs or desktop apps (like VS Code or Claude
+                        Desktop), secure and controlled access to a user's local file system. The library provides the
+                        reference tool set (read/write/list/move/copy/search) with path guardrails built in.
+                    </li>
+                    <li><strong>Static hosting:</strong> Serves WebSkel UI files and plugin assets straight from the
+                        repo tree; manifests can reference icons/assets without another server.
+                    </li>
+                    <li><strong>Plugin discovery:</strong> <code>aggregateIdePlugins</code> runs on startup and on
+                        <code>collect_ide_plugins</code>, walking enabled repos for
+                        <code>IDE-plugins/*/config.json</code>, reading manifests, resolving asset paths, grouping
+                        plugins by <code>location</code>, and returning a merged catalog to the client.
+                    </li>
+                    <li><strong>Path enforcement:</strong> <code>resolvePathsInArgs</code> normalizes inputs and blocks
+                        anything outside <code>allowedDirectories</code> before delegating to the MCP server, so both
+                        plugin scans and filesystem tools stay inside whitelisted roots.
+                    </li>
+                </ul>
+                </p>
+
+            </div>
+
+            <div class="doc-section" id="mcp-functionalities">
+                <h3>What MCP Can Do</h3>
+                <p>Tooling is grouped by capability rather than memorizing each handler name:</p>
+                <ul>
+                    <li><strong>Read:</strong> Text files, media blobs, and small batches of files; supports head/tail
+                        for quick peeks.
+                    </li>
+                    <li><strong>Write &amp; edit:</strong> Create/overwrite text, write binary, or patch existing files
+                        with atomic edits.
+                    </li>
+                    <li><strong>Directory ops:</strong> List (simple/detailed/with sizes), tree views, create folders
+                        recursively.
+                    </li>
+                    <li><strong>Move/copy/delete:</strong> Relocate or duplicate files/directories (optionally
+                        overwrite), delete safely within roots.
+                    </li>
+                    <li><strong>Metadata &amp; search:</strong> Stat/info lookups and filename/content searches
+                        constrained to allowed roots.
+                    </li>
+                    <li><strong>Plugin discovery:</strong> Aggregate <code>IDE-plugins/*/config.json</code> across
+                        enabled repos for the UI.
+                    </li>
+                    <li><strong>Introspection:</strong> Enumerate allowed directories for debugging path issues.</li>
+                </ul>
+                <p>Calls are stateless; the client sends absolute or relative paths, and the server validates them
+                    against the whitelist before touching disk.</p>
+            </div>
+
+            <div class="doc-section" id="mcp-example">
+                <h3>MCP Example Call</h3>
+                <pre><code>// Request (read a file head)
+{
+  "method": "read_text_file",
+  "params": { "path": "README.md", "head": 20 }
+}
+
+// Response (success)
+{
+  "content": "# Explorer Agent...",
+  "truncated": true
+}
+
+// Response (error outside roots)
+{
+  "error": "Path is outside allowed directories"
+}</code></pre>
+                <p>Tip: prefer relative paths rooted in the first allowed directory to avoid ambiguity when multiple
+                    roots are configured.</p>
+            </div>
+
+            <div class="doc-section" id="soplang">
+                <h2>What is SOPLang</h2>
+                <p>SOPLang (Standard Operating Procedure Language) is the IDE’s automation/runtime layer. It runs in
+                    <strong>soplangAgent</strong> (own container) and is invoked via the <code>soplang-tool</code> MCP
+                    tool.</p>
+                <ul>
+                    <li><strong>Role:</strong> Executes scripted flows, updates variables, and persists structured
+                        document data via plugins.
+                    </li>
+                    <li><strong>Execution context:</strong> Shares the workspace volume; does not proxy through
+                        Explorer.
+                    </li>
+                    <li><strong>Embedding:</strong> SOPLang commands live in Markdown comments/blocks and are preserved
+                        on save so hydration and execution stay aligned.
+                    </li>
+                </ul>
+            </div>
+
+            <div class="doc-section" id="soplang-embedding">
+                <h3>Embedding SOPLang</h3>
+                <p>Use fenced code blocks in Markdown to keep scripts alongside content:</p>
+<pre><code>```soplang
+# This is a SOPLang script
+agent "MyAgent" do
+  action "do_something"
+end
+```</code></pre>
+                <p>Blocks are preserved verbatim; execution happens via <code>soplang-tool</code> in <strong>soplangAgent</strong>.</p>
+            </div>
+
+            <div class="doc-section" id="soplang-comments">
+                <h3>Achilles comment markers</h3>
+                <p>HTML comments map Markdown to the document model and keep SOPLang commands attached to structure:</p>
+<pre><code>&lt;!--{"achiles-ide-document": {"id": "doc-1", "title": "My Doc"}}--&gt;
+&lt;!--{"achiles-ide-chapter": {"title": "Intro", "commands": "@set title \"Intro\""}}--&gt;
+&lt;!--{"achiles-ide-paragraph": {"title": "P1", "commands": "@media_image_123 attach id \"blob-id\""}}--&gt;</code></pre>
+                <ul>
+                    <li><strong>Document:</strong> ids/titles and doc-level metadata.</li>
+                    <li><strong>Chapter:</strong> headings plus commands before a heading.</li>
+                    <li><strong>Paragraph:</strong> commands/metadata sitting above the paragraph text.</li>
+                </ul>
+            </div>
+
+            <div class="doc-section" id="soplang-variables">
+                <h3>Variables &amp; Commands</h3>
+                <p>SOPLang keeps state as key/value variables and inlined commands. Common patterns:</p>
+<pre><code>@set releaseVersion "1.4.0"
+@set doc_owner "alice@example.com"
+@media_image_hero attach id "blob-id-123" name "hero.png"</code></pre>
+                <ul>
+                    <li><strong>Variables:</strong> Stored with the document model; after execution, reload/hydrate to
+                        see updates in the Variables panel.
+                    </li>
+                    <li><strong>Media commands:</strong> Store blob IDs (not URLs); UI builds URLs at runtime.</li>
+                    <li><strong>Scopes:</strong> Commands can sit at document, chapter, or paragraph level via <code>achiles-ide-*</code>
+                        comments.
+                    </li>
+                </ul>
+                <p class="muted">Screenshots below show the variables panel: initial state with no variables, the list
+                    after running a script, and the details for a single entry (keys/values and metadata) as rendered in
+                    the UI.</p>
+                <div class="screenshot-gallery">
+                    <div class="screenshot-card">
+                        <h4>Variables UI</h4>
+                        <div class="thumbnail-list">
+                            <img class="thumbnail backend-shot" data-full="./assets/soplang_no_vars.png" src="./assets/soplang_no_vars.png" alt="SOPLang - No variables">
+                            <img class="thumbnail backend-shot" data-full="./assets/soplang_variables.png" src="./assets/soplang_variables.png" alt="SOPLang - Variables list">
+                            <img class="thumbnail backend-shot" data-full="./assets/soplang_var_details.png"
+                                 src="./assets/soplang_var_details.png"
+                                 alt="SOPLang - Variable details">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="doc-section" id="soplang-execution">
+                <h3>Execution from the UI</h3>
+                <p>When a Markdown file contains SOPLang blocks/commands, Explorer surfaces run controls via <code>soplangAgent</code>.</p>
+                <ul>
+                    <li>Use document toolbar actions to execute the current SOPLang block or script.</li>
+                    <li>Outputs surface in the IDE console; variable updates flow back into the document model (reload to re-hydrate).</li>
+                    <li>If you add new comment markers or commands, reload the document so hydration picks them up.</li>
+                </ul>
+            </div>
+
+            <div class="doc-section" id="soplang-build">
+                <h3>SOPLang Build (Markdown → Documents)</h3>
+                <p><code>SoplangBuilder.buildFromMarkdown</code> runs inside <strong>soplangAgent</strong> to sync
+                    Markdown into the document store.</p>
+                <ol>
+                    <li><strong>Pick workspace root:</strong> <code>pickRoot()</code> checks <code>SOPLANG_WORKSPACE_ROOT</code>
+                        or parent folders.
+                    </li>
+                    <li><strong>Discover Markdown:</strong> <code>walkMarkdown(root)</code> finds <code>.md</code>
+                        files, skipping build/dev dirs.
+                    </li>
+                    <li><strong>Parse structure:</strong> <code>parseDocsFromMarkdown</code> reads <code>achiles-ide-document/chapter/paragraph</code>
+                        comments and SOPLang commands into templates.
+                    </li>
+                    <li><strong>Apply templates:</strong> Existing docs are cleared/synced; metadata, chapters,
+                        paragraphs, references, and commands are applied.
+                    </li>
+                    <li><strong>Persist:</strong> <code>workspace.forceSave()</code> then
+                        <code>workspace.buildAll()</code> write data to storage.
+                    </li>
+                </ol>
+                <p>Invoke via MCP: <code>methodName: "buildFromMarkdown"</code>, <code>pluginName:
+                    "SoplangBuilder"</code>. Logs: <code>SOPLangBuilder/last-tool.log</code>.</p>
+            </div>
+
+            <div class="doc-section" id="troubleshooting">
+                <h3>Troubleshooting</h3>
+                <ul>
+                    <li><strong>MCP errors:</strong> “Path outside allowed roots” ⇒ fix
+                        <code>ASSISTOS_FS_ROOT</code>/<code>MCP_FS_ROOT</code> or use relative paths inside the first
+                        root.
+                    </li>
+                    <li><strong>SOPLang build fails:</strong> Check <code>SOPLangBuilder/last-tool.log</code>; ensure
+                        soplangAgent is enabled and running.
+                    </li>
+                    <li><strong>No Markdown picked up:</strong> Confirm <code>achiles-ide-*</code> comments exist and
+                        files are not in skipped build dirs.
+                    </li>
+                    <li><strong>Variables not updated:</strong> After executing SOPLang blocks, reload to re-hydrate
+                        document state into the UI.
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</main>
+
+<footer>
+    <div class="container">
+        <p>&copy; 2025 <a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md" target="_blank" rel="noopener noreferrer">Ploinky Project</a>. All rights reserved.</p>
+        </div>
+    </footer>
+
+<div id="backendLightbox" class="backend-lightbox">
+    <span class="close" data-close>&times;</span>
+    <img id="backendLightboxImage" alt="Screenshot preview">
+</div>
+
+<script>
+    // Theme toggle
+    const themeToggle = document.getElementById('themeToggle');
+    const body = document.body;
+    const themes = ['light', 'dark', 'blue'];
+    const themeIcons = {
+        light: '🌙',
+        dark: '🔵',
+        blue: '☀️'
+    };
+
+    const applyTheme = (theme) => {
+        body.setAttribute('data-theme', theme);
+        localStorage.setItem('theme', theme);
+        themeToggle.textContent = themeIcons[theme];
+    };
+
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    applyTheme(savedTheme);
+
+    themeToggle.addEventListener('click', () => {
+        const currentTheme = body.getAttribute('data-theme');
+        const currentIndex = themes.indexOf(currentTheme);
+        const nextIndex = (currentIndex + 1) % themes.length;
+        const newTheme = themes[nextIndex];
+        applyTheme(newTheme);
+    });
+
+    // Lightbox for backend screenshots
+    const backendLightbox = document.getElementById('backendLightbox');
+    const backendLightboxImg = document.getElementById('backendLightboxImage');
+    document.querySelectorAll('.backend-shot').forEach(img => {
+        img.addEventListener('click', () => {
+            backendLightboxImg.src = img.dataset.full || img.src;
+            backendLightbox.style.display = 'flex';
+        });
+    });
+    backendLightbox.addEventListener('click', (e) => {
+        if (e.target === backendLightbox || e.target.hasAttribute('data-close')) {
+            backendLightbox.style.display = 'none';
+            backendLightboxImg.src = '';
+        }
+    });
+</script>
+</body>
+</html>

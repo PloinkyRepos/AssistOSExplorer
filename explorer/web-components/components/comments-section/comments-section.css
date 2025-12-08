@@ -1,7 +1,7 @@
 comments-section{
     position: absolute;
-    top: 0;
-    left: 30px;
+    top: 25px;
+    left: -430px;
     z-index: 2;
     display: block;
     width: 500px;

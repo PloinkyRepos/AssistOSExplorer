@@ -21,11 +21,9 @@
                     <ul>
                         <li><a href="index.html">Home</a></li>
                         <li><a href="architecture.html">Architecture</a></li>
+                        <li><a href="backend.html">Backend</a></li>
                         <li><a href="documents.html" class="active">Document Model &amp; Editing</a></li>
                         <li><a href="plugins.html">Plugins</a></li>
-                        <li><a href="mcp-tools.html">MCP Tools</a></li>
-                        <li><a href="build.html">SOPLang Build</a></li>
-                        <li><a href="screenshots.html">Screenshots</a></li>
                         <li><a href="development.html">Development</a></li>
                     </ul>
                 </nav>
@@ -53,12 +51,78 @@
                 <div class="doc-section" id="overview">
                     <h1>Managing and Editing .md Documents</h1>
                     <p>A core feature of the Explorer agent is its specialized handling of Markdown (<code>.md</code>) files. Instead of treating them as plain text, Explorer parses them into a structured <strong>Document Object Model</strong> (DOM), turning them into interactive, extensible documents with a rich set of features. Any file, however, can be opened in view or edit mode: Markdown gets the structured document experience; all other text/code files use the general editor.</p>
+                    <p><strong>Editor capabilities (Markdown documents):</strong></p>
+                    <ul>
+                        <li><strong>Add/reorder chapters:</strong> Insert new chapters and reorder them; anchors/IDs are kept in sync.</li>
+                        <li><strong>Add/reorder paragraphs:</strong> Insert paragraphs within chapters and reorder them; paragraph IDs/commands stay aligned.</li>
+                        <li><strong>Edit titles & metadata:</strong> Update document title/info text, chapter titles, paragraph titles and commands.</li>
+                        <li><strong>Delete content safely:</strong> Remove chapters or paragraphs; related metadata/comments are updated on save.</li>
+                        <li><strong>Comments & references:</strong> Add comments at document/chapter/paragraph level and manage references inline.</li>
+                    </ul>
                 </div>
 
                 <div class="doc-section" id="data-model">
                     <h2>The Document Data Model</h2>
                     <p>When a Markdown file is loaded, it is transformed into a rich, in-memory representation. This process, known as <strong>hydration</strong>, is handled by the <code>DocumentStore</code> service. The <code>hydrateDocumentModel</code> function enriches the document with metadata, comments, references, and other structured data, creating a hierarchical model that the UI components can interact with.</p>
                     <p><strong>Example:</strong> A file with <code>&lt;!--{"achiles-ide-document": {"id": "guide", "title": "My Guide"}}--&gt;</code> and chapter/paragraph comments is hydrated into a document with <code>docId = "guide"</code>, chapters built from comments or headings, and paragraph records carrying <code>text</code> and <code>commands</code>.</p>
+                    <h3>Full document example</h3>
+<pre><code>&lt;!-- {"achiles-ide-document":{"id":"L2RvY3VtZW50cy9kb2MubWQ=","title":"doc","infoText":"this is example document","comments":{"toc":{"collapsed":false},"tor":{"collapsed":false,"references":[{"id":"1765191283759","type":"journal","authors":"Smith, J. R., & Doe, A. B.","year":2024,"title":"The Evolving Role of Machine Learning in Predictive Modeling.","pages":"112-135","url":"International Journal of Technological Research,"},{"id":"1765191353867","type":"book","authors":"Johnson, K. T.","year":2022,"title":"Principles of Modern Data Structures and Algorithms.","publisher":"Technical Press Inc.","location":"New York, NY."}]}},"version":1,"updatedAt":"2025-12-08T11:02:37.023Z"}} --&gt;
+# Demo Document
+
+This is a demonstration of a structured Markdown document in the Achilles IDE.
+
+## Table of Contents
+- [Chapter 1: Introduction](#chapter-chapter-7ee41719-ab70-4cf2-9286-2a65534c9512)
+- [Chapter 2: Advanced Features](#chapter-chapter-2)
+
+&lt;!-- {"achiles-ide-chapter":{"id":"chapter-7ee41719-ab70-4cf2-9286-2a65534c9512","title":"Introduction","commands":"@media_image_dcfb80 attach id 512e672bd91e9861eb0f21e2dedd943d6257c123afde52c3 name trevi.jpg width 669 height 446 size 92987\n","comments":{"status":"ok","plugin":"edit-variables","pluginLastOpened":"edit-variables","collapsed":false},"anchorId":"chapter-chapter-7ee41719-ab70-4cf2-9286-2a65534c9512"}} --&gt;
+&lt;a id="chapter-chapter-7ee41719-ab70-4cf2-9286-2a65534c9512"&gt;&lt;/a&gt;
+## Introduction
+&lt;!-- {"achiles-ide-paragraph":{"id":"paragraph-e696c9a7-8db8-4722-a693-1ba44ea64ebd","type":"markdown","commands":"@media_image_50a8ed attach id cea79d6a5e6b48dd4130f85d04c4476fda6655514bba082e name trevi.jpg width 669 height 446 size 92987\n","comments":{"status":"ok","plugin":"edit-variables","pluginLastOpened":"edit-variables"},"title":"Paragraph 1"}} --&gt;
+This is the first paragraph of the introduction. It explains the purpose of this document. The structured nature of this file allows for context-aware plugins and actions.
+
+&lt;!-- {"achiles-ide-paragraph":{"id":"paragraph-2","type":"markdown","commands":"@test_var := test_value\n","comments":{"status":"ok","plugin":"edit-variables","pluginLastOpened":"edit-variables"},"title":"Paragraph 2"}} --&gt;
+This second paragraph can have its own set of comments, references, and embedded commands.
+
+
+&lt;!-- {"achiles-ide-chapter":{"id":"chapter-2","title":"Advanced Features","comments":{"collapsed":true},"anchorId":"references-section"}} --&gt;
+&lt;a id="references-section"&gt;&lt;/a&gt;
+## Advanced Features
+&lt;!-- {"achiles-ide-paragraph":{"id":"paragraph-3","type":"markdown","title":"SOPLang Commands"}} --&gt;
+This paragraph demonstrates an embedded SOPLang command for media. While it appears as a command here, the IDE will render it as a rich media element.
+
+&lt;!-- {"achiles-ide-paragraph":{"id":"paragraph-4","type":"markdown","comments":{"status":"ok","plugin":"edit-variables","pluginLastOpened":"edit-variables"},"title":"Another Paragraph"}} --&gt;
+This paragraph contains a command that will be parsed by the system.
+
+
+&lt;!-- &lt;achiles-ide-references&gt; --&gt;
+&lt;a id="references-section"&gt;&lt;/a&gt;
+## References
+1. Smith, J. R., & Doe, A. B. (2024). The Evolving Role of Machine Learning in Predictive Modeling.. International Journal of Technological Research,
+2. Johnson, K. T. (2022). *Principles of Modern Data Structures and Algorithms.*. New York, NY.: Technical Press Inc..
+</code></pre>
+                    <div class="doc-section">
+                        <h3>Document editing views (screens)</h3>
+                        <p>Visual examples of the structured Markdown editor and general editor modes.</p>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;">
+                        <figure style="background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:12px;padding:0.75rem;">
+                            <img class="doc-shot" data-full="./assets/edit_md_add_item.png" src="./assets/edit_md_add_item.png" alt="Add item in Markdown editor" style="width:100%;border-radius:8px;border:1px solid var(--border-secondary);background:var(--bg-secondary);cursor:pointer;">
+                            <figcaption style="margin-top:0.5rem;font-size:0.9rem;color:var(--text-secondary);">Add chapter/paragraph in Markdown mode.</figcaption>
+                        </figure>
+                        <figure style="background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:12px;padding:0.75rem;">
+                            <img class="doc-shot" data-full="./assets/edit_md_c.png" src="./assets/edit_md_c.png" alt="Chapter edit UI" style="width:100%;border-radius:8px;border:1px solid var(--border-secondary);background:var(--bg-secondary);cursor:pointer;">
+                            <figcaption style="margin-top:0.5rem;font-size:0.9rem;color:var(--text-secondary);">Editing a chapter’s metadata.</figcaption>
+                        </figure>
+                        <figure style="background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:12px;padding:0.75rem;">
+                            <img class="doc-shot" data-full="./assets/edit_md_p.png" src="./assets/edit_md_p.png" alt="Paragraph edit UI" style="width:100%;border-radius:8px;border:1px solid var(--border-secondary);background:var(--bg-secondary);cursor:pointer;">
+                            <figcaption style="margin-top:0.5rem;font-size:0.9rem;color:var(--text-secondary);">Editing a paragraph and commands.</figcaption>
+                        </figure>
+                        <figure style="background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:12px;padding:0.75rem;">
+                            <img class="doc-shot" data-full="./assets/document_edit_1.png" src="./assets/document_edit_1.png" alt="Document edit layout" style="width:100%;border-radius:8px;border:1px solid var(--border-secondary);background:var(--bg-secondary);cursor:pointer;">
+                            <figcaption style="margin-top:0.5rem;font-size:0.9rem;color:var(--text-secondary);">Document edit layout with toolbar.</figcaption>
+                        </figure>
+                    </div>
+                </div>
                 </div>
 
                 <div class="doc-section" id="persistence">
@@ -70,7 +134,9 @@
                 <div class="doc-section" id="doc-info">
                     <h2>Document Info</h2>
                     <p>Each document contains a set of metadata that provides essential information about it. This includes the document's <strong>Title</strong> and a summary or abstract in the <strong>Info Text</strong> field. This data is managed within the document's metadata and can be edited through the UI to provide context for the document's content.</p>
-                    <p><strong>Example:</strong> In the info pane, set <em>Title</em> to "Release Notes" and <em>Info Text</em> to "Changelog for v1.2"; these values are saved back into the document metadata.</p>
+                    <p><strong>Example (metadata block):</strong></p>
+<pre><code>&lt;!-- {"achiles-ide-document":{"id":"L2RvY3VtZW50cy9kb2MubWQ=","title":"doc","infoText":"this is example document", ... }} --&gt;</code></pre>
+                    <p><strong>Example (UI):</strong> In the info pane, set Title to "Release Notes" and Info Text to "Changelog for v1.2"; these values are saved back into the document metadata.</p>
                 </div>
 
                 <div class="doc-section" id="toc">
@@ -81,7 +147,10 @@
                         <li>Each chapter's <code>headingText</code> and <code>headingLevel</code> are used to create a hierarchical and interactive outline.</li>
                         <li>Clicking an item in the Table of Contents will scroll the corresponding chapter into view.</li>
                     </ul>
-                    <p><strong>Example:</strong> Chapters declared via comments (or headings) appear in the left TOC; selecting "Deployment" scrolls to that chapter in the document view.</p>
+                    <p><strong>Example:</strong></p>
+<pre><code>## Table of Contents
+- [Chapter 1: Introduction](#chapter-chapter-7ee41719-ab70-4cf2-9286-2a65534c9512)
+- [Chapter 2: Advanced Features](#chapter-chapter-2)</code></pre>
                 </div>
                 
                 <div class="doc-section" id="comments">
@@ -91,7 +160,13 @@
                         <li>Comments are stored in the <code>comments</code> array within the metadata of the corresponding document, chapter, or paragraph.</li>
                         <li>This feature enables collaborative review and discussion directly within the context of the document.</li>
                     </ul>
-                    <p><strong>Example:</strong> Add a paragraph-level comment like "Clarify API version" on the introduction; it is stored with that paragraph and shown inline in the comments panel.</p>
+                    <p><strong>Example:</strong></p>
+<pre><code>"comments": {
+  "messages": [
+    { "id": "CUZbVGCN", "userEmail": "local@example.com", "message": "demo comment" }
+  ]
+}</code></pre>
+                    <p>Add a paragraph-level comment like "Clarify API version" on the introduction; it is stored with that paragraph and shown inline in the comments panel.</p>
                 </div>
 
                 <div class="doc-section" id="references">
@@ -101,9 +176,12 @@
                         <li>References are stored in a <code>references</code> array within the document's metadata.</li>
                         <li>This allows for centralized management of all sources cited within a document, making it ideal for research and technical papers.</li>
                     </ul>
-                    <p><strong>Example:</strong> Add a reference with title "RFC 9110" and URL "https://www.rfc-editor.org/rfc/rfc9110"; it appears in the references table and can be cited across the document.</p>
+                    <p><strong>Example snippet:</strong></p>
+<pre><code>## References
+1. Smith, J. R., &amp; Doe, A. B. (2024). The Evolving Role of Machine Learning in Predictive Modeling.. International Journal of Technological Research,
+2. Johnson, K. T. (2022). *Principles of Modern Data Structures and Algorithms.*. New York, NY.: Technical Press Inc..</code></pre>
                 </div>
-                
+
                 <div class="doc-section" id="advanced-features">
                     <h2>Advanced Features: Snapshots, Tasks, and Variables</h2>
                     <p>The document model also supports several advanced features for automation and version control:</p>
@@ -138,6 +216,16 @@
                     <h3>Syntax Highlighting</h3>
                     <p>While these files are treated as plain text from a structural point of view, the editor provides a crucial presentation-layer feature: <strong>syntax highlighting</strong>. When you open a code file (e.g., <code>.js</code>, <code>.html</code>, <code>.css</code>), the editor automatically detects the language and applies color coding to keywords, strings, comments, and other language constructs.</p>
                     <p>This feature significantly improves readability and makes it easier to work with code, but it's important to remember that this is a client-side rendering enhancement. It does not change the fact that the underlying file is treated as a simple block of text, unlike the deep structural parsing applied to <code>.md</code> files.</p>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin-top:1rem;">
+                        <figure style="background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:12px;padding:0.75rem;">
+                            <img class="doc-shot" data-full="./assets/edit_js.png" src="./assets/edit_js.png" alt="Code file in general editor" style="width:100%;border-radius:8px;border:1px solid var(--border-secondary);background:var(--bg-secondary);cursor:pointer;">
+                            <figcaption style="margin-top:0.5rem;font-size:0.9rem;color:var(--text-secondary);">General editor rendering a JS file.</figcaption>
+                        </figure>
+                        <figure style="background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:12px;padding:0.75rem;">
+                            <img class="doc-shot" data-full="./assets/edit_txt.png" src="./assets/edit_txt.png" alt="Text file in general editor" style="width:100%;border-radius:8px;border:1px solid var(--border-secondary);background:var(--bg-secondary);cursor:pointer;">
+                            <figcaption style="margin-top:0.5rem;font-size:0.9rem;color:var(--text-secondary);">Plain text editing mode.</figcaption>
+                        </figure>
+                    </div>
                 </div>
             </div>
         </div>
@@ -145,15 +233,20 @@
 
     <footer>
         <div class="container">
-            <p>&copy; 2025 Ploinky Project. All rights reserved.</p>
-        </div>
-    </footer>
+        <p>&copy; 2025 <a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md" target="_blank" rel="noopener noreferrer">Ploinky Project</a>. All rights reserved.</p>
+    </div>
+</footer>
 
-    <script>
-        // Theme toggle
-        const themeToggle = document.getElementById('themeToggle');
-        const body = document.body;
-        const themes = ['light', 'dark', 'blue'];
+<div id="docLightbox" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:2000;align-items:center;justify-content:center;padding:2rem;">
+    <span data-close style="position:absolute;top:1.5rem;right:2rem;font-size:2rem;color:#fff;cursor:pointer;">&times;</span>
+    <img id="docLightboxImage" alt="Document screenshot" style="max-width:90vw;max-height:90vh;border-radius:12px;border:1px solid var(--border-primary);box-shadow:var(--shadow-lg);background:var(--bg-secondary);">
+</div>
+
+<script>
+    // Theme toggle
+    const themeToggle = document.getElementById('themeToggle');
+    const body = document.body;
+    const themes = ['light', 'dark', 'blue'];
         const themeIcons = {
             light: '🌙', // Icon to show for switching to dark
             dark: '🔵',  // Icon to show for switching to blue
@@ -172,10 +265,26 @@
         themeToggle.addEventListener('click', () => {
             const currentTheme = body.getAttribute('data-theme');
             const currentIndex = themes.indexOf(currentTheme);
-            const nextIndex = (currentIndex + 1) % themes.length;
-            const newTheme = themes[nextIndex];
-            applyTheme(newTheme);
+        const nextIndex = (currentIndex + 1) % themes.length;
+        const newTheme = themes[nextIndex];
+        applyTheme(newTheme);
+    });
+
+    // Lightbox for document screenshots
+    const docLightbox = document.getElementById('docLightbox');
+    const docLightboxImg = document.getElementById('docLightboxImage');
+    document.querySelectorAll('.doc-shot').forEach(img => {
+        img.addEventListener('click', () => {
+            docLightboxImg.src = img.dataset.full || img.src;
+            docLightbox.style.display = 'flex';
         });
-    </script>
+    });
+    docLightbox.addEventListener('click', (e) => {
+        if (e.target === docLightbox || e.target.hasAttribute('data-close')) {
+            docLightbox.style.display = 'none';
+            docLightboxImg.src = '';
+        }
+    });
+</script>
 </body>
 </html>

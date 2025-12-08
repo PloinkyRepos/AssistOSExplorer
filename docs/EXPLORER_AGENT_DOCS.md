@@ -19,7 +19,7 @@ This guide consolidates all Explorer documentation (architecture, document model
 
 - **Manifest**: `explorer/manifest.json` – `container: node:20-alpine`, `agent: node /code/filesystem-http-server.mjs`, `env: ["ASSISTOS_FS_ROOT"]`, `enable: ["soplang","multimedia"]`.
 - **Global mode**: `p-cli enable agent fileExplorer/explorer global` runs in the current workspace folder. First `p-cli start explorer <port>` also pins the router/static port.
-- **Router**: Ploinky router serves static UI and proxies MCP on the chosen port (e.g., 8080 → `/explorer/index.html`).
+- **Router**: <a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md">Ploinky</a> router serves static UI and proxies MCP on the chosen port (e.g., 8080 → `/explorer/index.html`).
 - **Allowed directories**: Derived from `ASSISTOS_FS_ROOT`/`MCP_FS_ROOT` (comma-separated). If missing, falls back to `process.cwd()`. Multiple roots → first is workspace root.
 - **Containers & workspace**: Explorer and soplangAgent containers mount the same host workspace volume; each has its own MCP endpoints.
 
@@ -27,7 +27,7 @@ This guide consolidates all Explorer documentation (architecture, document model
 
 ## 3) Architecture (textual)
 
-- **Browser (WebSkel UI)** → **Ploinky Router** (static/proxy) → **Explorer container** (MCP filesystem tools) → **Workspace FS (allowed roots)**.
+- **Browser (WebSkel UI)** → **<a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md">Ploinky</a> Router** (static/proxy) → **Explorer container** (MCP filesystem tools) → **Workspace FS (allowed roots)**.
 - **MCP clients** (UI/other agents) call Explorer MCP directly for filesystem tools.
 - **soplangAgent container** (node:20-alpine, `soplang-tool`) receives MCP calls separately; it reads files directly from the mounted workspace.
 - Both containers run independently; there is no hop Explorer → soplangAgent.
@@ -82,40 +82,19 @@ This guide consolidates all Explorer documentation (architecture, document model
 
 ---
 
-## 7) MCP Tools (Explorer)
+## 7) Backend: MCP + SOPLang
 
-Key tools exposed by `filesystem-http-server.mjs` (all enforce allowed directories): `read_text_file`, `read_media_file`, `read_multiple_files`, `write_file`, `write_binary_file`, `edit_file`, `create_directory`, `delete_file`, `delete_directory`, `list_directory`, `list_directory_with_sizes`, `list_directory_detailed`, `directory_tree`, `move_file`, `copy_file`, `search_files`, `get_file_info`, `collect_ide_plugins`, `list_allowed_directories`.
-
-Endpoints: `/mcp` (MCP), `/health`. No `/blobs` HTTP upload/download in current code.
-
----
-
-## 8) SOPLang Build (Markdown → Documents)
-
-`SoplangBuilder.buildFromMarkdown` runs inside **soplangAgent** (repo `SOPLangBuilder`).
-
-**Setup (from workspace root):**
-- `p-cli enable repo SOPLangBuilder`
-- `p-cli enable agent SOPLangBuilder/soplangAgent global`
-- Start the agent (e.g., `p-cli start soplangAgent` if not running).
-
-**Invoke:**
-- MCP tool: `soplang-tool` (`soplangAgent/mcp-config.json`).
-- Payload: `pluginName: "SoplangBuilder"`, `methodName: "buildFromMarkdown"`, optional `params: []`.
-- Logs: `SOPLangBuilder/last-tool.log`; storage paths set in `soplangAgent/soplang-tool.sh` (`/persistoStorage`, `/persistoLogs`, `/persistoAudit`).
-
-**Workflow (code-level):**
-1. `pickRoot()` selects workspace root (`SOPLANG_WORKSPACE_ROOT` or cwd parents).
-2. `walkMarkdown(root)` recursively finds `.md`, skipping common build/dev dirs.
-3. `parseDocsFromMarkdown(content, filePath)` reads `achiles-ide-*` comments to build doc/chapter/paragraph templates.
-4. For each doc: fetch/create via `Documents` plugin; clear chapters/paragraphs if existing; update metadata; `applyTemplate` to sync content.
-5. `workspace.forceSave()` then `workspace.buildAll()` finalize persistence. Result includes counts, warnings, duration, errors.
+- **MCP (Explorer):** Serves filesystem tools over `/mcp` (plus `/health`), enforcing `allowedDirectories` from `ASSISTOS_FS_ROOT`/`MCP_FS_ROOT`. Path args are resolved/normalized; anything outside whitelisted roots is rejected. No `/blobs` HTTP endpoint.
+- **MCP capabilities (by function):** Read text/media/small batches; write/edit text or binary; list/tree directories (simple/detailed/sized); move/copy/delete; metadata/info and search; list allowed directories; aggregate `IDE-plugins/*/config.json` for the UI.
+- **SOPLang (soplangAgent):** Separate container and MCP tool (`soplang-tool`). Runs SOPLang scripts, manages variables, and hosts plugins such as `SoplangBuilder`. Commands and variables are embedded in Markdown comments/blocks and preserved on save.
+- **Variables & commands:** `@set releaseVersion "1.4.0"`, `@media_image_hero attach id "blob-id" name "hero.png"`. Variables live in the document model; media commands store blob IDs only.
+- **SOPLang build (Markdown → Documents):** `SoplangBuilder.buildFromMarkdown` scans `.md` files, reads `achiles-ide-document/chapter/paragraph` comments, applies templates to the document store, then `workspace.forceSave()` + `workspace.buildAll()`. Invoke via MCP with `pluginName: "SoplangBuilder"`, `methodName: "buildFromMarkdown"`; logs at `SOPLangBuilder/last-tool.log`.
 
 ---
 
-## 9) Development & Setup
+## 8) Development & Setup
 
-- **Prereqs**: Node 20+, npm, active Ploinky workspace.
+- **Prereqs**: Node 20+, npm, active <a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md">Ploinky</a> workspace.
 - **Global run**: `p-cli enable repo fileExplorer` then `p-cli enable agent fileExplorer/explorer global`; start with `p-cli start explorer 8080` (router/UI on that port).
 - **Filesystem root**: Set `ASSISTOS_FS_ROOT` (or `MCP_FS_ROOT`) to the workspace path(s); fallback is cwd. First root is workspace root.
 - **Auto-enabled agents**: `soplang`, `multimedia` (from Explorer manifest).
@@ -135,7 +114,7 @@ Endpoints: `/mcp` (MCP), `/health`. No `/blobs` HTTP upload/download in current 
 
 ---
 
-## 10) SOPLang Agent (overview)
+## 9) SOPLang Agent (overview)
 
 - **Manifest**: `soplangAgent/manifest.json` – `container: node:20-alpine`, `postinstall: apk add ffmpeg`.
 - **MCP tool**: `soplang-tool` (`soplangAgent/mcp-config.json`) with `pluginName`, `methodName`, `params`.
@@ -144,7 +123,7 @@ Endpoints: `/mcp` (MCP), `/health`. No `/blobs` HTTP upload/download in current 
 
 ---
 
-## 11) General Notes
+## 10) General Notes
 
 - Blob uploads: UI utilities target `/blobs/<agent>`, but the current Explorer server does not implement this HTTP endpoint. Plan workflows accordingly (or add server support if needed).
 - MCP isolation: Call Explorer and soplangAgent independently; do not route soplang-tool through Explorer.
