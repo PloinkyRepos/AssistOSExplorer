@@ -5,6 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Document Management - Explorer Agent</title>
     <link rel="stylesheet" href="style.css">
+    <style>
+        .subsection {
+            margin-left: 1rem;
+            margin-top: 0.4rem;
+        }
+        .subsection h3 {
+            margin-bottom: 0.25rem;
+        }
+    </style>
 </head>
 <body>
     <header>
@@ -20,11 +29,11 @@
                 <nav>
                     <ul>
                         <li><a href="index.html">Home</a></li>
+                        <li><a href="documents.html" class="active">Document Model &amp; Editing</a></li>
                         <li><a href="architecture.html">Architecture</a></li>
                         <li><a href="backend.html">Backend</a></li>
-                        <li><a href="documents.html" class="active">Document Model &amp; Editing</a></li>
                         <li><a href="plugins.html">Plugins</a></li>
-                        <li><a href="development.html">Development</a></li>
+                        <li><a href="architecture.html#development">Development</a></li>
                     </ul>
                 </nav>
             </div>
@@ -52,13 +61,13 @@
                     <h1>Managing and Editing .md Documents</h1>
                     <p>A core feature of the Explorer agent is its specialized handling of Markdown (<code>.md</code>) files. Instead of treating them as plain text, Explorer parses them into a structured <strong>Document Object Model</strong> (DOM), turning them into interactive, extensible documents with a rich set of features. Any file, however, can be opened in view or edit mode: Markdown gets the structured document experience; all other text/code files use the general editor.</p>
                     <p><strong>Editor capabilities (Markdown documents):</strong></p>
-                    <ul>
-                        <li><strong>Add/reorder chapters:</strong> Insert new chapters and reorder them; anchors/IDs are kept in sync.</li>
-                        <li><strong>Add/reorder paragraphs:</strong> Insert paragraphs within chapters and reorder them; paragraph IDs/commands stay aligned.</li>
-                        <li><strong>Edit titles & metadata:</strong> Update document title/info text, chapter titles, paragraph titles and commands.</li>
-                        <li><strong>Delete content safely:</strong> Remove chapters or paragraphs; related metadata/comments are updated on save.</li>
-                        <li><strong>Comments & references:</strong> Add comments at document/chapter/paragraph level and manage references inline.</li>
-                    </ul>
+                    <div class="subsection">
+                        <p><strong>Add/reorder chapters:</strong> Insert new chapters and rearrange them to reorder; anchors and IDs stay in sync.</p>
+                        <p><strong>Add/reorder paragraphs:</strong> Insert paragraphs within chapters and rearrange them while keeping paragraph IDs and commands aligned.</p>
+                        <p><strong>Edit titles & metadata:</strong> Update the document title/info text, chapter titles, and paragraph titles/commands without losing structure.</p>
+                        <p><strong>Delete content safely:</strong> Remove chapters or paragraphs while related metadata and comments are updated on save.</p>
+                        <p><strong>Comments & references:</strong> Add comments at document, chapter, or paragraph level and manage references inline.</p>
+                    </div>
                 </div>
 
                 <div class="doc-section" id="data-model">
@@ -142,11 +151,10 @@ This paragraph contains a command that will be parsed by the system.
                 <div class="doc-section" id="toc">
                     <h2>Table of Contents</h2>
                     <p>The Explorer automatically generates a navigable <strong>Table of Contents</strong> for each document. This is handled by the <code>contents-table</code> component, which reads the document's structure from the hydrated data model.</p>
-                    <ul>
-                        <li>The table is built from the <code>chapters</code> array within the document model.</li>
-                        <li>Each chapter's <code>headingText</code> and <code>headingLevel</code> are used to create a hierarchical and interactive outline.</li>
-                        <li>Clicking an item in the Table of Contents will scroll the corresponding chapter into view.</li>
-                    </ul>
+                    <div class="subsection">
+                        <p>The table is generated from the <code>chapters</code> array in the document model and uses each chapter's <code>headingText</code> and <code>headingLevel</code> to build an interactive outline.</p>
+                        <p>Selecting an item in the Table of Contents scrolls the corresponding chapter into view.</p>
+                    </div>
                     <p><strong>Example:</strong></p>
 <pre><code>## Table of Contents
 - [Chapter 1: Introduction](#chapter-chapter-7ee41719-ab70-4cf2-9286-2a65534c9512)
@@ -156,10 +164,9 @@ This paragraph contains a command that will be parsed by the system.
                 <div class="doc-section" id="comments">
                     <h2>Comments</h2>
                     <p>The IDE supports a commenting system that allows users to attach feedback to the document as a whole, or to specific chapters and paragraphs. The <code>comments-section</code> component is responsible for displaying and managing these comments.</p>
-                    <ul>
-                        <li>Comments are stored in the <code>comments</code> array within the metadata of the corresponding document, chapter, or paragraph.</li>
-                        <li>This feature enables collaborative review and discussion directly within the context of the document.</li>
-                    </ul>
+                    <div class="subsection">
+                        <p>Comments live in the <code>comments</code> array within the metadata of the document, chapter, or paragraph they belong to, enabling collaborative review in context.</p>
+                    </div>
                     <p><strong>Example:</strong></p>
 <pre><code>"comments": {
   "messages": [
@@ -172,10 +179,9 @@ This paragraph contains a command that will be parsed by the system.
                 <div class="doc-section" id="references">
                     <h2>References</h2>
                     <p>A built-in reference management system allows you to cite sources and manage bibliographic information. The <code>references-table</code> component provides the interface for this feature.</p>
-                     <ul>
-                        <li>References are stored in a <code>references</code> array within the document's metadata.</li>
-                        <li>This allows for centralized management of all sources cited within a document, making it ideal for research and technical papers.</li>
-                    </ul>
+                    <div class="subsection">
+                        <p>References are stored in a <code>references</code> array within the document metadata, so citations remain centralized and reusable across the document.</p>
+                    </div>
                     <p><strong>Example snippet:</strong></p>
 <pre><code>## References
 1. Smith, J. R., &amp; Doe, A. B. (2024). The Evolving Role of Machine Learning in Predictive Modeling.. International Journal of Technological Research,
@@ -185,33 +191,30 @@ This paragraph contains a command that will be parsed by the system.
                 <div class="doc-section" id="advanced-features">
                     <h2>Advanced Features: Snapshots, Tasks, and Variables</h2>
                     <p>The document model also supports several advanced features for automation and version control:</p>
-                    <ul>
-                        <li><strong>Snapshots & Versioning:</strong> The <code>version</code> and <code>snapshots</code> properties in the document model provide a simple version control system. The <code>document-snapshots-modal</code> component allows users to view and potentially revert to previous states of the document.</li>
-                        <li><strong>Tasks:</strong> The <code>tasks</code> property allows for the creation and management of to-do items or other tasks associated with a document, managed through the <code>document-tasks-modal</code>.</li>
-                        <li><strong>Variables:</strong> The <code>variables</code> property provides a way to define and manage dynamic data within a document, which can be used by SOPLang scripts and other automations. The <code>document-variable-details</code> component is used to interact with these variables.</li>
-                    </ul>
+                    <div class="subsection">
+                        <p><strong>Snapshots & Versioning:</strong> The <code>version</code> and <code>snapshots</code> properties provide lightweight versioning; the snapshots modal lets you view or revert states.</p>
+                        <p><strong>Tasks:</strong> The <code>tasks</code> property tracks to-dos associated with a document, surfaced through the tasks modal.</p>
+                        <p><strong>Variables:</strong> The <code>variables</code> property holds dynamic data consumed by SOPLang scripts and other automations; the variable details component lets you inspect and edit them.</p>
+                    </div>
                     <p><strong>Example:</strong> Capture a snapshot before major edits, add a task "Update diagrams" in the tasks modal, and define a variable <code>releaseVersion=1.2.0</code> for SOPLang-driven templates.</p>
                 </div>
 
                 <div class="doc-section" id="other-files">
                     <h2>Editing Other File Types (Text, Code, etc.)</h2>
                     <p>In addition to its specialized Markdown editor, the Explorer Agent includes a general-purpose text editor for handling other file types. This allows you to view and edit a wide range of text-based files directly within the IDE.</p>
-                    
+
                     <h3>Supported Files:</h3>
-                    <ul>
-                        <li>Plain text files (<code>.txt</code>)</li>
-                        <li>Code files (<code>.js</code>, <code>.html</code>, <code>.css</code>, <code>.py</code>, etc.)</li>
-                        <li>Configuration files (<code>.json</code>, <code>.xml</code>, <code>.yml</code>, etc.)</li>
-                    </ul>
+                    <div class="subsection">
+                        <p>Plain text files (<code>.txt</code>), code files (<code>.js</code>, <code>.html</code>, <code>.css</code>, <code>.py</code>, etc.), and configuration files (<code>.json</code>, <code>.xml</code>, <code>.yml</code>, etc.) all open in the general editor.</p>
+                    </div>
                     <p><strong>Example:</strong> Open <code>config/app.json</code> to view or edit JSON; open <code>src/main.js</code> to edit code with syntax highlighting; both use the general editor (no document DOM).</p>
 
                     <h3>The Key Difference: Plain Text vs. Structured Data</h3>
-                    <p>The most important distinction is how these files are treated compared to Markdown (<code>.md</code>) files:</p>
-                    <ul>
-                        <li><strong>Plain Text Handling:</strong> When you open a <code>.js</code> or <code>.txt</code> file, it is treated as a single block of plain text. The editor does not parse it into a structured model of chapters and paragraphs.</li>
-                        <li><strong>No DOM or Plugin Context:</strong> Because these files are not parsed into a structured DOM, the context-aware features available for Markdown are not applicable. You cannot attach plugins to specific "paragraphs" or "chapters" of a code file, nor can you embed and execute SOPLang commands within them in the same way.</li>
-                        <li><strong>Underlying MCP Tools:</strong> All interactions with these files are handled by the fundamental filesystem MCP tools, such as <code>read_text_file</code> and <code>write_file</code>. This provides a raw, direct way to manage the content of any text-based file in your workspace.</li>
-                    </ul>
+                    <div class="subsection">
+                        <p><strong>Plain Text Handling:</strong> When you open a <code>.js</code> or <code>.txt</code> file, it is treated as a single block of text; no chapters or paragraphs are parsed.</p>
+                        <p><strong>No DOM or Plugin Context:</strong> Non-Markdown files do not expose the structured DOM, so paragraph-level plugins or SOPLang commands do not apply the same way.</p>
+                        <p><strong>Underlying MCP Tools:</strong> Interactions rely on filesystem MCP tools such as <code>read_text_file</code> and <code>write_file</code>, providing raw, direct file access within allowed roots.</p>
+                    </div>
 
                     <h3>Syntax Highlighting</h3>
                     <p>While these files are treated as plain text from a structural point of view, the editor provides a crucial presentation-layer feature: <strong>syntax highlighting</strong>. When you open a code file (e.g., <code>.js</code>, <code>.html</code>, <code>.css</code>), the editor automatically detects the language and applies color coding to keywords, strings, comments, and other language constructs.</p>

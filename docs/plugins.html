@@ -32,6 +32,13 @@
             color: #fff;
             cursor: pointer;
         }
+        .subsection {
+            margin-left: 1rem;
+            margin-top: 0.4rem;
+        }
+        .subsection h3 {
+            margin-bottom: 0.25rem;
+        }
     </style>
 </head>
 <body>
@@ -46,13 +53,12 @@
                 <button class="theme-toggle" id="themeToggle">🌙</button>
             </div>
             <nav>
-                <ul>
-                    <li><a href="index.html">Home</a></li>
+                    <ul>
+                        <li><a href="index.html">Home</a></li>
+                    <li><a href="documents.html">Document Model &amp; Editing</a></li>
                     <li><a href="architecture.html">Architecture</a></li>
                     <li><a href="backend.html">Backend</a></li>
-                    <li><a href="documents.html">Document Model &amp; Editing</a></li>
                     <li><a href="plugins.html" class="active">Plugins</a></li>
-                    <li><a href="development.html">Development</a></li>
                 </ul>
             </nav>
         </div>
@@ -73,12 +79,7 @@
         <div class="content-wrapper">
             <div class="doc-section" id="discovery">
                 <h1>The Plugin System</h1>
-                <p><strong>What is a plugin in Explorer?</strong> A plugin is a WebSkel UI bundle (HTML/JS/CSS +
-                    manifest) that the Explorer frontend loads dynamically to add actions or modals in context
-                    (document, paragraph, etc.). Plugins run in the browser, can call MCP tools, and ship their assets
-                    inside the repo under <code>IDE-plugins/&lt;name&gt;</code>. Each plugin declares where it appears
-                    via <code>location</code> (e.g., document/paragraph) and which component/presenter to load.
-                    Discovery is driven by manifests, not by hardcoding in the UI.</p>
+                <p><strong>What is a plugin in Explorer?</strong> A plugin is a <a href="https://github.com/OutfinityResearch/WebSkel/blob/master/README.md" target="_blank" rel="noopener noreferrer">WebSkel</a> UI bundle (HTML/JS/CSS + manifest) that the Explorer frontend loads dynamically to add actions or modals in context (document, paragraph, etc.). Plugins run in the browser, can call MCP tools, and ship their assets inside the repo under <code>IDE-plugins/&lt;name&gt;</code>. Each plugin declares where it appears via <code>location</code> (e.g., document/paragraph) and which component/presenter to load. Discovery is driven by manifests, not by hardcoding in the UI.</p>
                 <p>The <code>aggregateIdePlugins</code> function in <code>filesystem-http-server.mjs</code> discovers
                     plugins when the <code>collect_ide_plugins</code> MCP tool is called (e.g., by the UI on load). Each
                     invocation scans enabled repositories for <code>IDE-plugins/*/config.json</code> files, then merges
@@ -89,19 +90,13 @@
             <div class="doc-section" id="available">
                 <h2>Available plugins (in-repo)</h2>
                 <p>Discovered from <code>IDE-plugins/*/config.json</code> across the repo:</p>
-                <ul>
-                    <li><strong>video-plugin</strong> (modal, chapter/paragraph) — attach or configure video content.
-                    </li>
-                    <li><strong>audio-plugin</strong> (modal, chapter/paragraph) — attach or configure audio content.
-                    </li>
-                    <li><strong>image-plugin</strong> (modal, chapter/paragraph) — attach or configure images.</li>
-                    <li><strong>ffmpeg-image-to-video</strong> (modal, chapter/paragraph) — build videos from images via
-                        ffmpeg.
-                    </li>
-                    <li><strong>edit-variables</strong> (embedded, document/chapter/paragraph) — manage SOPLang
-                        variables; auto-pinned with <code>add-variable</code> dependency.
-                    </li>
-                </ul>
+                <div class="subsection">
+                    <p><strong>video-plugin</strong> (modal, chapter/paragraph) — attach and configure video content.</p>
+                    <p><strong>audio-plugin</strong> (modal, chapter/paragraph) — attach and configure audio content.</p>
+                    <p><strong>image-plugin</strong> (modal, chapter/paragraph) — attach and configure images.</p>
+                    <p><strong>ffmpeg-image-to-video</strong> (modal, chapter/paragraph) — build videos from images via ffmpeg.</p>
+                    <p><strong>edit-variables</strong> (embedded, document/chapter/paragraph) — manage SOPLang variables; auto-pinned with <code>add-variable</code> dependency.</p>
+                </div>
                 <div class="screenshot-gallery" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:1rem;margin-top:1rem;">
                     <figure style="background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:12px;padding:0.75rem;">
                         <img class="plugin-shot" data-full="./assets/plugin_image.png" src="./assets/plugin_image.png" alt="Plugin listing with icons" style="width:100%;border-radius:8px;border:1px solid var(--border-secondary);background:var(--bg-secondary);cursor:pointer;">

@@ -5,6 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Explorer Agent - Ploinky Docs</title>
     <link rel="stylesheet" href="style.css">
+    <style>
+        .subsection {
+            margin-left: 1rem;
+            margin-top: 0.4rem;
+        }
+        .subsection h3 {
+            margin-bottom: 0.25rem;
+        }
+    </style>
 </head>
 <body>
     <header>
@@ -20,11 +29,11 @@
                 <nav>
                     <ul>
                         <li><a href="index.html" class="active">Home</a></li>
+                        <li><a href="documents.html">Document Model &amp; Editing</a></li>
                         <li><a href="architecture.html">Architecture</a></li>
                         <li><a href="backend.html">Backend</a></li>
-                        <li><a href="documents.html">Document Model &amp; Editing</a></li>
                         <li><a href="plugins.html">Plugins</a></li>
-                        <li><a href="development.html">Development</a></li>
+                        <li><a href="architecture.html#development">Development</a></li>
                     </ul>
                 </nav>
             </div>
@@ -41,36 +50,63 @@
             <div class="content-wrapper">
                 <div class="doc-section">
                     <h2>What is the Explorer?</h2>
-                    <p>The Explorer is a multi-faceted agent that serves as the primary user interface and file management hub within the <a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md" target="_blank" rel="noopener noreferrer">Ploinky</a> workspace. It is a containerized Node.js application that provides a web-based UI and exposes a set of secure filesystem MCP (Model Context Protocol) tools.</p>
-                    <p>It is composed of several key components:</p>
-                    <div class="features" style="padding-top: 1rem;">
-                        <div class="feature-card">
-                            <div class="feature-icon">🏛️</div>
-                            <h3>Architecture</h3>
-                            <p>Explore the technical architecture, from the containerized runtime to the frontend application.</p>
-                            <a href="architecture.html" class="btn btn-secondary">Learn More</a>
-                        </div>
-                        <div class="feature-card">
-                            <div class="feature-icon">📄</div>
-                            <h3>Document Management</h3>
-                            <p>Learn how Markdown files are parsed and managed as structured documents.</p>
-                            <a href="documents.html" class="btn btn-secondary">Learn More</a>
-                        </div>
-                        <div class="feature-card">
-                            <div class="feature-icon">🧩</div>
-                            <h3>Plugins</h3>
-                            <p>Discover the plugin system, from discovery to creating your own extensions.</p>
-                            <a href="plugins.html" class="btn btn-secondary">Learn More</a>
-                        </div>
-                        <div class="feature-card">
-                            <div class="feature-icon">🛠️</div>
-                            <h3>Backend</h3>
-                            <p>Learn how MCP enforcement works and how SOPLang runs in its own agent.</p>
-                            <a href="backend.html" class="btn btn-secondary">Explore Backend</a>
-                        </div>
+                    <p>The Explorer is a multi-faceted, containerized Node.js agent that serves as the primary UI and file management hub within the <a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md" target="_blank" rel="noopener noreferrer">Ploinky</a> workspace.</p>
+                    <div class="subsection">
+                        <h3>UI and editors</h3>
+                        <p>The <a href="https://github.com/OutfinityResearch/WebSkel/blob/master/README.md" target="_blank" rel="noopener noreferrer">WebSkel</a> interface delivers a structured Markdown editor plus a general-purpose file editor. Documents keep chapters, paragraphs, SOPLang commands, and references together, while code and config files open with syntax highlighting. Toolbars and plugin entry points adapt to what you select.</p>
+                    </div>
+                    <div class="subsection">
+                        <h3>Filesystem MCP</h3>
+                        <p>An MCP server inside Explorer enforces allowed roots and offers secure read, write, move, copy, search, and info operations against the workspace. Clients (including the UI) call it over <code>/mcp</code> so file access stays constrained.</p>
+                    </div>
+                    <div class="subsection">
+                        <h3>Plugins and extensibility</h3>
+                        <p>Explorer loads extensions dynamically from <code>IDE-plugins/</code> manifests. Each plugin ships HTML/JS/CSS assets, declares where it appears, and can call MCP tools or SOPLang actions to add new document or paragraph-level capabilities without hardcoding.</p>
                     </div>
                 </div>
 
+                <div class="doc-section">
+                    <h2>Prerequisites</h2>
+                    <p>Have Node.js 20+ and npm installed, and make sure a <a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md" target="_blank" rel="noopener noreferrer">Ploinky</a> workspace is running. Set <code>ASSISTOS_FS_ROOT</code> or <code>MCP_FS_ROOT</code> to your workspace path (you can provide multiple, comma-separated). Keep the <a href="https://ploinky.com/cli-reference.html" target="_blank" rel="noopener noreferrer">Ploinky CLI</a> handy to enable repos and start agents.</p>
+                </div>
+
+                <div class="doc-section">
+                    <h2>Quick Start</h2>
+                    <p>Enable the repo and agent, point the filesystem root, then start Explorer on your port of choice:</p>
+<pre><code>p-cli enable repo fileExplorer
+p-cli enable agent fileExplorer/explorer global
+export ASSISTOS_FS_ROOT=&lt;path-to-workspace&gt;
+p-cli start explorer 8080
+# open http://127.0.0.1:8080/explorer/index.html via the Ploinky router
+</code></pre>
+                </div>
+
+                <div class="features" style="padding-top: 1rem;">
+                    <div class="feature-card">
+                        <div class="feature-icon">🏛️</div>
+                        <h3>Architecture</h3>
+                        <p>Explore the technical architecture, from the containerized runtime to the frontend application.</p>
+                        <a href="architecture.html" class="btn btn-secondary">Learn More</a>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">📄</div>
+                        <h3>Document Management</h3>
+                        <p>Learn how Markdown files are parsed and managed as structured documents.</p>
+                        <a href="documents.html" class="btn btn-secondary">Learn More</a>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">🧩</div>
+                        <h3>Plugins</h3>
+                        <p>Discover the plugin system, from discovery to creating your own extensions.</p>
+                        <a href="plugins.html" class="btn btn-secondary">Learn More</a>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">🛠️</div>
+                        <h3>Backend</h3>
+                        <p>Learn how MCP enforcement works and how SOPLang runs in its own agent.</p>
+                        <a href="backend.html" class="btn btn-secondary">Explore Backend</a>
+                    </div>
+                </div>
                 <div class="doc-section">
                     <h2>High-Level Flow</h2>
                     <p>The following diagram illustrates the high-level data flow of the Explorer agent:</p>
@@ -82,11 +118,18 @@
                 <div class="doc-section">
                     <h2>Interface at a Glance</h2>
                     <p>Explorer blends a structured Markdown editor with a general-purpose file editor so you can manage documents, media, and code in one workspace.</p>
-                    <ul>
-                        <li><strong>Structured Markdown:</strong> Chapters/paragraphs with SOPLang commands, comments, references.</li>
-                        <li><strong>File editor:</strong> Syntax highlighting for non-Markdown files (JS, JSON, text, etc.).</li>
-                        <li><strong>Contextual actions:</strong> Toolbars and plugin entry points adjust to the current selection.</li>
-                    </ul>
+                    <div class="subsection">
+                        <h3>Structured Markdown</h3>
+                        <p>Chapters, paragraphs, SOPLang commands, comments, and references stay together in one view so document structure remains clear while you edit.</p>
+                    </div>
+                    <div class="subsection">
+                        <h3>File editor</h3>
+                        <p>Non-Markdown files (JS, JSON, text, etc.) open with syntax highlighting and a lightweight editing experience for quick code or config changes.</p>
+                    </div>
+                    <div class="subsection">
+                        <h3>Contextual actions</h3>
+                        <p>Toolbars and plugin entry points adapt to what you have selected, surfacing actions for documents, chapters, or paragraphs as needed.</p>
+                    </div>
                     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem;margin-top:1rem;">
                         <figure style="background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:12px;padding:0.75rem;">
                             <img class="home-shot" data-full="./assets/preview_md.png" src="./assets/preview_md.png" alt="Markdown preview" style="width:100%;border-radius:8px;border:1px solid var(--border-secondary);background:var(--bg-secondary);cursor:pointer;">

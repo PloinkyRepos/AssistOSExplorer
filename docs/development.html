@@ -20,11 +20,10 @@
                 <nav>
                     <ul>
                         <li><a href="index.html">Home</a></li>
+                        <li><a href="documents.html">Document Model &amp; Editing</a></li>
                         <li><a href="architecture.html">Architecture</a></li>
                         <li><a href="backend.html">Backend</a></li>
-                        <li><a href="documents.html">Document Model &amp; Editing</a></li>
                         <li><a href="plugins.html">Plugins</a></li>
-                        <li><a href="development.html" class="active">Development</a></li>
                     </ul>
                 </nav>
             </div>
@@ -32,66 +31,10 @@
     </header>
 
     <main>
-        <div class="doc-layout">
-            <aside class="sidebar">
-                <h3>Development</h3>
-                <ul>
-                    <li><a href="#setup">Setup & run</a></li>
-                    <li><a href="#tips">Development Tips</a></li>
-                    <li><a href="#cheatsheet">Repo Layout</a></li>
-                    <li><a href="#plugins-link">Plugins</a></li>
-                </ul>
-            </aside>
-            <div class="content-wrapper">
-                <div class="doc-section" id="setup">
-                    <h1>Local setup & run</h1>
-                    <ul>
-                        <li><strong>Prereqs:</strong> Node.js 20+, npm, and a running <a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md" target="_blank" rel="noopener noreferrer">Ploinky</a> workspace.</li>
-                        <li><strong>Global mode context:</strong> <code>global</code> runs the agent in the current workspace folder (see <a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md" target="_blank" rel="noopener noreferrer">Ploinky</a> CLI reference). The first <code>p-cli start &lt;agent&gt; &lt;port&gt;</code> also pins the static agent and router port.</li>
-                        <li><strong>Enable repo & agent (global):</strong> From the <a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md" target="_blank" rel="noopener noreferrer">Ploinky</a> workspace root run:
-<pre><code>p-cli enable repo fileExplorer
-p-cli enable agent fileExplorer/explorer global
-</code></pre>
-                        </li>
-                        <li><strong>Start Explorer:</strong> Start the agent on your chosen port (e.g. 8080):
-<pre><code>p-cli start explorer 8080</code></pre>
-                        This sets the router on that port; UI via router: <code>http://127.0.0.1:8080/explorer/index.html</code>.</li>
-                        <li><strong>Filesystem root (required):</strong> set <code>ASSISTOS_FS_ROOT</code> (or <code>MCP_FS_ROOT</code>) to the workspace directory you want whitelisted by the filesystem server (comma-separated allowed). If unset, the server falls back to the current working directory.</li>
-                        <li><strong>Auto-enabled agents:</strong> Explorer’s manifest auto-enables <code>soplang</code> and <code>multimedia</code> from this repo; avoid enabling duplicates manually.</li>
-                        <li><strong>Dependencies (optional local):</strong> If you want to run npm scripts from the checkout, run <code>npm install</code> at repo root (and in <code>explorer/</code> if dependencies live there).</li>
-                        <li><strong>Hot reload:</strong> UI/JS/CSS refresh in the browser; changes to plugin <code>config.json</code> or new plugins require restarting the Explorer service so discovery reruns.</li>
-                        <li><strong>More context:</strong> See <a href="build.html">the SOPLang Build guide</a> for the Markdown-to-documents pipeline.</li>
-                    </ul>
-                </div>
-
-                <div class="doc-section" id="tips">
-                    <h2>Development Tips</h2>
-                    <ul>
-                        <li><strong>Restart on Change:</strong> Restart the Explorer agent after adding, removing, or modifying a plugin's <code>config.json</code> so the catalog is rebuilt.</li>
-                        <li><strong>Use Blob IDs:</strong> Store blob IDs, not full URLs, in document commands or plugin state. URLs can change and should be constructed on-demand using helpers like <code>blobUrl.buildBlobUrl</code>.</li>
-                        <li><strong>Use the Document Module:</strong> Modify document content via <code>assistOS.loadModule("document")</code> (e.g., <code>updateParagraph</code>) to keep metadata and UI in sync.</li>
-                        <li><strong>Media Formats:</strong> For plugins involving media processing (e.g., with ffmpeg), prefer standard formats like PNG, JPG, MP4, and MP3. SVG is often not supported in those pipelines.</li>
-                    </ul>
-                </div>
-
-                <div class="doc-section" id="cheatsheet">
-                    <h2>Visual Cheatsheet (Repo Layout)</h2>
-                    <pre><code>.../fileExplorer/explorer/
-├─ filesystem-http-server.mjs   # Backend: MCP, Blob Service, Plugin Discovery
-├─ index.html / main.js         # SPA entry point
-├─ webskel.json                 # Defines the core UI components
-├─ web-components/              # Implementation of core UI components
-├─ IDE-plugins/                 # Location for plugins (discovered recursively)
-│   └─ &lt;plugin&gt;/config.json
-├─ services/                    # Frontend services, including document parsing
-└─ utils/                       # Shared utilities for the frontend
-</code></pre>
-                </div>
-
-                <div class="doc-section" id="plugins-link">
-                    <h2>Plugins</h2>
-                    <p>Find discovery flow, manifest format, and the step-by-step plugin tutorials (Uppercase paragraph, UI scaffold) in the <a href="plugins.html">Plugins guide</a>. This page keeps only environment/setup notes to avoid duplication.</p>
-                </div>
+        <div class="container">
+            <div class="doc-section">
+                <h1>Development content moved</h1>
+                <p>Setup, tips, and repo layout now live under <a href="architecture.html#development">architecture.html#development</a>. This page is kept only as a pointer.</p>
             </div>
         </div>
     </main>

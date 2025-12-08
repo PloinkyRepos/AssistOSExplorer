@@ -6,7 +6,7 @@ This guide consolidates all Explorer documentation (architecture, document model
 
 ## 1) What Explorer Is
 
-- **Containerized UI + FS MCP server**: Runs `filesystem-http-server.mjs` (Node 20-alpine) serving the WebSkel UI and filesystem MCP tools. Allowed roots come from `ASSISTOS_FS_ROOT`/`MCP_FS_ROOT` or CLI args.
+- **Containerized UI + FS MCP server**: Runs `filesystem-http-server.mjs` (Node 20-alpine) serving the <a href="https://github.com/OutfinityResearch/WebSkel/blob/master/README.md">WebSkel UI</a> and filesystem MCP tools. Allowed roots come from `ASSISTOS_FS_ROOT`/`MCP_FS_ROOT` or CLI args.
 - **Plugin host**: Discovers `IDE-plugins/*/config.json` across enabled repos; tools are exposed to the UI grouped by `location`.
 - **Document manager**: Markdown is parsed into chapters/paragraphs with metadata and SOPLang commands.
 - **No HTTP blob endpoint in current server**: UI helpers expect `/blobs/<agent>`, but `filesystem-http-server.mjs` only exposes MCP on `/mcp` and a `/health` check.
@@ -27,7 +27,7 @@ This guide consolidates all Explorer documentation (architecture, document model
 
 ## 3) Architecture (textual)
 
-- **Browser (WebSkel UI)** → **<a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md">Ploinky</a> Router** (static/proxy) → **Explorer container** (MCP filesystem tools) → **Workspace FS (allowed roots)**.
+- **Browser (<a href="https://github.com/OutfinityResearch/WebSkel/blob/master/README.md">WebSkel UI</a>)** → **<a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md">Ploinky</a> Router** (static/proxy) → **Explorer container** (MCP filesystem tools) → **Workspace FS (allowed roots)**.
 - **MCP clients** (UI/other agents) call Explorer MCP directly for filesystem tools.
 - **soplangAgent container** (node:20-alpine, `soplang-tool`) receives MCP calls separately; it reads files directly from the mounted workspace.
 - Both containers run independently; there is no hop Explorer → soplangAgent.

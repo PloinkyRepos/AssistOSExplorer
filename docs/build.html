@@ -20,11 +20,10 @@
                 <nav>
                     <ul>
                         <li><a href="index.html">Home</a></li>
+                        <li><a href="documents.html">Document Model &amp; Editing</a></li>
                         <li><a href="architecture.html">Architecture</a></li>
                         <li><a href="backend.html">Backend</a></li>
-                        <li><a href="documents.html">Document Model &amp; Editing</a></li>
                         <li><a href="plugins.html">Plugins</a></li>
-                        <li><a href="development.html">Development</a></li>
                     </ul>
                 </nav>
             </div>
@@ -93,7 +92,7 @@ This paragraph might have embedded commands.
                     <ol>
                         <li><code>p-cli enable repo SOPLangBuilder</code></li>
                         <li><code>p-cli enable agent SOPLangBuilder/soplangAgent global</code></li>
-                        <li>Start the agent per <a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md" target="_blank" rel="noopener noreferrer">Ploinky</a> CLI (e.g., <code>p-cli start soplangAgent</code> if not already running).</li>
+                        <li>Start the agent per <a href="https://ploinky.com/cli-reference.html" target="_blank" rel="noopener noreferrer">Ploinky</a> CLI (e.g., <code>p-cli start soplangAgent</code> if not already running).</li>
                         <li>Call MCP tool <code>soplang-tool</code> with <code>pluginName: "SoplangBuilder"</code> and <code>methodName: "buildFromMarkdown"</code> (add <code>params</code> array if needed). Results and plugin console output are written to <code>SOPLangBuilder/last-tool.log</code>; persistence/log/audit paths are set in <code>soplangAgent/soplang-tool.sh</code>.</li>
                     </ol>
                 </div>

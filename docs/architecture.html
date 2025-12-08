@@ -5,6 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Architecture - Explorer Agent</title>
     <link rel="stylesheet" href="style.css">
+    <style>
+        .subsection {
+            margin-left: 1rem;
+            margin-top: 0.4rem;
+        }
+        .subsection h3 {
+            margin-bottom: 0.25rem;
+        }
+    </style>
 </head>
 <body>
     <header>
@@ -20,148 +29,81 @@
                 <nav>
                     <ul>
                         <li><a href="index.html">Home</a></li>
-                        <li><a href="architecture.html" class="active">Architecture</a></li>
-                        <li><a href="backend.html">Backend</a></li>
-                        <li><a href="documents.html">Document Model &amp; Editing</a></li>
-                        <li><a href="plugins.html">Plugins</a></li>
-                        <li><a href="development.html">Development</a></li>
-                    </ul>
-                </nav>
-            </div>
+                    <li><a href="documents.html">Document Model &amp; Editing</a></li>
+                    <li><a href="architecture.html" class="active">Architecture</a></li>
+                    <li><a href="backend.html">Backend</a></li>
+                    <li><a href="plugins.html">Plugins</a></li>
+                </ul>
+            </nav>
         </div>
-    </header>
+    </div>
+</header>
 
     <main>
         <div class="doc-layout">
-            <aside class="sidebar">
-                <h3>Architecture</h3>
-                <ul>
-                    <li><a href="#runtime">Runtime & Routing</a></li>
-                    <li><a href="#backend">Backend</a></li>
-                    <li><a href="#frontend">Frontend</a></li>
-                </ul>
-            </aside>
+                <aside class="sidebar">
+                    <h3>Architecture</h3>
+                    <ul>
+                        <li><a href="#runtime">Runtime & Routing</a></li>
+                        <li><a href="#backend">Backend</a></li>
+                        <li><a href="#frontend">Frontend</a></li>
+                        <li><a href="#development">Development &amp; Setup</a></li>
+                    </ul>
+                </aside>
             <div class="content-wrapper">
                 <div class="doc-section" id="runtime">
                     <h1>Architecture</h1>
                     <p>This section provides a detailed look at the technical architecture of the Explorer agent, from the containerized runtime to the frontend application.</p>
                     <p>Explorer agent runs inside <strong><a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md" target="_blank" rel="noopener noreferrer">Ploinky</a></strong>, the workspace runtime that routes traffic to agents, serves static bundles, and manages enabled repos/agents.</p>
-                    <p>The backend also acts as the MCP tools provider: it exposes filesystem-safe operations (read/write/list/move/copy, tree, media read, allowed roots) under the Explorer agent, enforcing whitelisted roots and path resolution. Optional integrations (e.g. SOPLang plugins) consume these tools rather than touching the filesystem directly.</p>
-                    <figure class="architecture-diagram" aria-label="Explorer architecture diagram">
-                        <svg viewBox="0 0 1320 460" role="img" aria-labelledby="architecture-diagram-title">
-                            <title id="architecture-diagram-title">Explorer architecture</title>
-                            <style>
-                                .node { fill: #0f172a; stroke: #38bdf8; stroke-width: 2; rx: 8; ry: 8; }
-                                .label { fill: #e2e8f0; font-size: 14px; font-family: Arial, sans-serif; }
-                                .muted { fill: #94a3b8; font-size: 12px; }
-                                .arrow { stroke: #38bdf8; stroke-width: 2; marker-end: url(#arrowhead); fill: none; }
-                                .dashed { stroke-dasharray: 6 4; }
-                            </style>
-                            <defs>
-                                <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
-                                    <polygon points="0 0, 10 3.5, 0 7" fill="#38bdf8"></polygon>
-                                </marker>
-                            </defs>
-                            <rect x="40" y="50" width="1240" height="360" fill="none" stroke="#334155" stroke-width="1" stroke-dasharray="10 6"></rect>
-                            <text class="muted" x="60" y="46">Shared host workspace (mounted into containers)</text>
-
-                            <rect class="node" x="60" y="90" width="200" height="100"></rect>
-                            <text class="label" x="160" y="120" text-anchor="middle">Browser</text>
-                            <text class="muted" x="160" y="142" text-anchor="middle">WebSkel UI</text>
-
-                            <rect class="node" x="320" y="90" width="230" height="100"></rect>
-                            <text class="label" x="435" y="120" text-anchor="middle">Ploinky Router</text>
-                            <text class="muted" x="435" y="142" text-anchor="middle">
-                                <tspan x="435" dy="0">Static + proxy</tspan>
-                                <tspan x="435" dy="14">(port from start)</tspan>
-                            </text>
-
-                            <rect x="600" y="80" width="260" height="120" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="8 6"></rect>
-                            <text class="muted" x="730" y="74" text-anchor="middle">Container (Podman/Docker)</text>
-                            <rect class="node" x="610" y="90" width="240" height="100"></rect>
-                            <text class="label" x="730" y="136" text-anchor="middle">Explorer Agent</text>
-                            <text class="muted" x="730" y="158" text-anchor="middle">
-                                <tspan x="730" dy="0">Container: node:20-alpine</tspan>
-                                <tspan x="730" dy="14">agent: filesystem-http-server.mjs</tspan>
-                            </text>
-
-                            <rect class="node" x="920" y="90" width="220" height="100"></rect>
-                            <text class="label" x="1030" y="136" text-anchor="middle">Workspace FS</text>
-                            <text class="muted" x="1030" y="158" text-anchor="middle">
-                                <tspan x="1030" dy="0">Allowed roots</tspan>
-                                <tspan x="1030" dy="14">(ASSISTOS_FS_ROOT)</tspan>
-                            </text>
-
-                            <rect class="node" x="610" y="290" width="240" height="100"></rect>
-                            <text class="label" x="730" y="336" text-anchor="middle">MCP Clients</text>
-                            <text class="muted" x="730" y="358" text-anchor="middle">Agents/Explorer UI</text>
-
-                            <rect x="900" y="260" width="260" height="120" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="8 6"></rect>
-                            <text class="muted" x="1030" y="254" text-anchor="middle">Container (Podman/Docker)</text>
-                            <rect class="node" x="910" y="270" width="240" height="100"></rect>
-                            <text class="label" x="1030" y="316" text-anchor="middle">soplangAgent</text>
-                            <text class="muted" x="1030" y="338" text-anchor="middle">
-                                <tspan x="1030" dy="0">Container: node:20-alpine</tspan>
-                                <tspan x="1030" dy="14">soplang-tool (SoplangBuilder)</tspan>
-                            </text>
-
-                            <text class="muted" x="300" y="74">HTTP (assets/UI)</text>
-                            <line class="arrow" x1="260" y1="170" x2="320" y2="170"></line>
-
-                            <text class="muted" x="580" y="74">Static/proxy</text>
-                            <line class="arrow" x1="550" y1="170" x2="610" y2="170"></line>
-
-                            <text class="muted" x="900" y="74">Volume mount (allowed roots)</text>
-                            <line class="arrow" x1="850" y1="170" x2="920" y2="170"></line>
-
-                            <text class="muted" x="620" y="266">MCP → Explorer FS tools</text>
-                            <line class="arrow dashed" x1="730" y1="290" x2="730" y2="190"></line>
-
-                            <text class="muted" x="925" y="266">MCP → soplang-tool</text>
-                            <line class="arrow dashed" x1="730" y1="290" x2="910" y2="290"></line>
-
-                            <text class="muted" x="1040" y="236">FS read (container)</text>
-                            <line class="arrow" x1="1030" y1="270" x2="1030" y2="190"></line>
-                        </svg>
-                    </figure>
-                    <p class="muted">Note: Current <code>filesystem-http-server.mjs</code> only exposes MCP over <code>/mcp</code> (plus <code>/health</code>); it does not implement the previously documented <code>/blobs</code> upload/download HTTP endpoints.</p>
+                    <p>The backend also acts as the MCP tools provider: it exposes filesystem-safe operations (read/write/list/move/copy, tree, media read, allowed roots) under the Explorer agent, enforcing whitelisted roots and path resolution.</p>
+                    <div class="architecture-diagram">
+                        <img src="assets/architecture-diagram.svg" alt="Explorer high-level flow diagram">
+                    </div>
 
                     <h2>Runtime and Routing</h2>
-                    <p>The Explorer agent's container configuration is defined in <code>manifest.json</code>. This file specifies how the container runs, including mounting the workspace and the agent library. When started with <a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md" target="_blank" rel="noopener noreferrer">Ploinky</a>, the router exposes Explorer on the chosen port (e.g. <code>8080</code> after <code>p-cli start explorer 8080</code>), serving static assets and proxying API requests to the Explorer container.</p>
+                    <p>The Explorer agent's container configuration is defined in <a href="https://ploinky.com/spec-agent.html" target="_blank" rel="noopener noreferrer">manifest.json</a>. This file specifies how the container runs, including mounting the workspace and the agent library. When started with <a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md" target="_blank" rel="noopener noreferrer">Ploinky</a>, the router exposes Explorer on the chosen port (e.g. <code>8080</code> after <code>p-cli start explorer 8080</code>), serving static assets and proxying API requests to the Explorer container (see <a href="https://ploinky.com/architecture.html" target="_blank" rel="noopener noreferrer">Ploinky architecture</a> for routing details).</p>
+
                     <p><strong>Note:</strong> <code>soplangAgent</code> is a separate container (repo <code>SOPLangBuilder</code>) that receives MCP requests (e.g. <code>soplang-tool</code> with <code>SoplangBuilder.buildFromMarkdown</code>) from clients such as Explorer UI or other agents. It does not rely on the Explorer backend for data access; it runs in the same workspace and can read files directly according to its own configuration.</p>
                 </div>
 
                 <div class="doc-section" id="backend">
                     <h2>Backend (<code>filesystem-http-server.mjs</code>)</h2>
-                    <p>The backend is a Node.js server that leverages the <code>@modelcontextprotocol/server-filesystem</code> library for its core filesystem logic. It has several key responsibilities:</p>
-                    <ul>
-                        <li><strong>Static File Server:</strong> Serves all static assets for the frontend application (HTML, JS, CSS) and discovered plugins.</li>
-                        <li><strong>MCP Tool Provider:</strong> Exposes a suite of MCP tools for secure filesystem operations. This is the primary interface for other agents to interact with the workspace.</li>
-                        <li><strong>Security Layer:</strong> Enforces a strict path-whitelisting policy defined by <code>allowedDirectories</code>. This prevents unauthorized file access and path traversal attacks by validating all incoming requests. The <code>resolvePathsInArgs</code> function is a key part of this security model.</li>
-                        <li><strong>Plugin Discovery:</strong> On startup, the server's <code>aggregateIdePlugins</code> function recursively scans all enabled repositories for <code>IDE-plugins/*/config.json</code> manifests. It aggregates these configurations into a single plugin catalog that is then sent to the frontend.</li>
-                        <li><strong>Blob uploads:</strong> Not implemented in <code>filesystem-http-server.mjs</code>; UI utilities expect <code>/blobs/&lt;agent&gt;</code> but the endpoint is absent in current server code.</li>
-                    </ul>
+                    <p>The backend is a Node.js server that leverages the <code>@modelcontextprotocol/server-filesystem</code> library for its core filesystem logic. Its responsibilities are summarized below.</p>
+                    <div class="subsection">
+                        <h3>Static file server</h3>
+                        <p>Serves frontend assets (HTML, JS, CSS) and discovered plugin bundles directly from the repo tree.</p>
+                    </div>
+                    <div class="subsection">
+                        <h3>MCP tool provider</h3>
+                        <p>Exposes filesystem-safe MCP operations; other agents and the UI rely on these tools to interact with the workspace.</p>
+                    </div>
+                    <div class="subsection">
+                        <h3>Security layer</h3>
+                        <p>Enforces an allowed-directory whitelist and normalizes incoming paths via <code>resolvePathsInArgs</code> to block traversal and unauthorized access.</p>
+                    </div>
+                    <div class="subsection">
+                        <h3>Plugin discovery</h3>
+                        <p><code>aggregateIdePlugins</code> scans enabled repos for <code>IDE-plugins/*/config.json</code>, resolves assets, and returns a merged catalog to the UI.</p>
+                    </div>
+                    <div class="subsection">
+                        <h3>Blob uploads</h3>
+                        <p>In the <a href="https://ploinky.com/architecture.html" target="_blank" rel="noopener noreferrer">Ploinky architecture</a>, the router proxies <code>/blobs/&lt;agent&gt;</code> to the agent that implements blob handlers. Explorer and <code>soplangAgent</code> follow this pattern: UI helpers post to <code>/blobs/&lt;agent&gt;</code>, the router forwards to the agent, and the agent returns JSON (<code>id</code>, <code>localPath</code>, optional <code>downloadUrl</code>) for the stored payload. The shipped <code>filesystem-http-server.mjs</code> itself does not implement that endpoint, so blob-capable behavior comes from wiring the router to an agent that does.</p>
+                    </div>
                 </div>
 
                 <div class="doc-section" id="frontend">
                     <h2>Frontend (WebSkel SPA)</h2>
                     <p>The frontend is a Single-Page Application (SPA) located in the <code>explorer/</code> directory, built using <strong>WebSkel</strong>, a lightweight, component-based framework for building reactive web applications. More on WebSkel <a href="https://github.com/OutfinityResearch/WebSkel/blob/master/README.md" target="_blank" rel="noopener noreferrer">here</a>.</p>
-                    
-                    <p>The Explorer's user interface is beautifully structured around a clear separation of concerns, typically comprising two main areas:</p>
-                    <ol>
-                        <li>
-                            <strong>Navigation Area:</strong> This section allows users to browse and select files, documents, or other resources. Components like <code>files-menu</code> (which can be inferred from the overall structure and common IDE patterns) would typically reside here, providing a hierarchical view of the workspace.
-                        </li>
-                        <li>
-                            <strong>Content/Editor Area:</strong> This is the primary interactive space where users view, edit, or preview selected content. Depending on the file type, this area dynamically loads components such as:
-                            <ul>
-                                <li><code>document-view-page</code>: For rendering and interacting with structured Markdown documents.</li>
-                                <li><code>file-editor</code>: A versatile text editor for viewing and modifying plain text files, code files (e.g., JavaScript, HTML, CSS), and configuration files.</li>
-                            </ul>
-                        </li>
-                    </ol>
+                    <div class="subsection">
+                        <h3>Navigation area</h3>
+                        <p>Users browse and select files or documents here. Components such as <code>files-menu</code> provide a hierarchical view of the workspace.</p>
+                    </div>
+                    <div class="subsection">
+                        <h3>Content / editor area</h3>
+                        <p>This is the main interactive space for viewing or editing the selected item. Structured Markdown flows through <code>document-view-page</code>; other text/code uses <code>file-editor</code> with syntax highlighting.</p>
+                    </div>
 
-                    <p>The application's overall component structure is defined in <code>webskel.json</code>, which lists all components, pages, and modals. Here are some of the key components mentioned:</p>
+                    <p>The application structure lives in <code>webskel.json</code>, which lists components, pages, and modals. Key components include:</p>
                     <table class="command-table">
                         <thead>
                             <tr>
@@ -197,6 +139,42 @@
                         </tbody>
                     </table>
                     <p>Each component is driven by a JavaScript presenter class that manages its state and lifecycle. Presenters use an <code>invalidate()</code> method to trigger re-renders, making the UI reactive to data changes.</p>
+                </div>
+
+                <div class="doc-section" id="development">
+                    <h2>Development & Setup</h2>
+                    <p>Explorer runs inside the Ploinky workspace. Install Node.js 20+ and npm, enable the repo and agent, and point the filesystem root before starting the service.</p>
+                    <div style="margin-left:1rem;margin-top:0.4rem;">
+                        <h3>Enable & start</h3>
+                        <p>From the Ploinky workspace root, enable the repo and global agent, set the allowed root, then start on your chosen port:</p>
+<pre><code>p-cli enable repo fileExplorer
+p-cli enable agent fileExplorer/explorer global
+export ASSISTOS_FS_ROOT=&lt;path-to-workspace&gt;
+p-cli start explorer 8080
+# UI via router: http://127.0.0.1:8080/explorer/index.html
+</code></pre>
+                    </div>
+                    <div style="margin-left:1rem;margin-top:0.4rem;">
+                        <h3>Context & tips</h3>
+                        <p>Global mode runs the agent in the current workspace folder (see <a href="https://ploinky.com/cli-reference.html" target="_blank" rel="noopener noreferrer">Ploinky CLI reference</a>). Explorer auto-enables the <code>soplang</code> and <code>multimedia</code> agents from this repo; avoid enabling duplicates. Restart Explorer after adding or changing plugin <code>config.json</code> so discovery reruns. If you hack locally, run <code>npm install</code> at repo root (and <code>explorer/</code> if needed); most UI/JS/CSS changes hot-reload in the browser.</p>
+                    </div>
+                    <div style="margin-left:1rem;margin-top:0.4rem;">
+                        <h3>Repo layout (visual)</h3>
+<pre><code>.../fileExplorer/explorer/
+├─ filesystem-http-server.mjs   # Backend: MCP, blob service, plugin discovery
+├─ index.html / main.js         # SPA entry point
+├─ webskel.json                 # Core UI components
+├─ web-components/              # Component implementations
+├─ IDE-plugins/                 # Plugins (discovered recursively)
+│   └─ &lt;plugin&gt;/config.json
+├─ services/                    # Frontend services, parsing, document store
+└─ utils/                       # Shared utilities
+</code></pre>
+                    </div>
+                    <div style="margin-left:1rem;margin-top:0.4rem;">
+                        <h3>Plugin notes</h3>
+                        <p>Discovery, manifest format, and tutorials (Uppercase paragraph, UI scaffold) live in the <a href="plugins.html">Plugins guide</a>; this section keeps setup context only.</p>
+                    </div>
                 </div>
             </div>
         </div>

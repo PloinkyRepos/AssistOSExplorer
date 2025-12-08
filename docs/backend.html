@@ -39,6 +39,15 @@
             padding-left: 2em;
         }
 
+        .subsection {
+            margin-left: 1rem;
+            margin-top: 0.4rem;
+        }
+
+        .subsection h3 {
+            margin-bottom: 0.25rem;
+        }
+
         .backend-lightbox {
             display: none;
             position: fixed;
@@ -81,13 +90,12 @@
                 <button class="theme-toggle" id="themeToggle">🌙</button>
             </div>
             <nav>
-                <ul>
-                    <li><a href="index.html">Home</a></li>
+                    <ul>
+                        <li><a href="index.html">Home</a></li>
+                    <li><a href="documents.html">Document Model &amp; Editing</a></li>
                     <li><a href="architecture.html">Architecture</a></li>
                     <li><a href="backend.html" class="active">Backend</a></li>
-                    <li><a href="documents.html">Document Model &amp; Editing</a></li>
                     <li><a href="plugins.html">Plugins</a></li>
-                    <li><a href="development.html">Development</a></li>
                 </ul>
             </nav>
         </div>
@@ -140,70 +148,39 @@
                 <p>The MCP server lives in <code>filesystem-http-server.mjs</code> and exposes tools over the
                     <code>/mcp</code> endpoint. Every call is guarded by an allowed-roots whitelist; path arguments are
                     resolved and normalized before execution.</p>
-                <ul>
-                    <li><strong>Endpoint:</strong> <code>/mcp</code> (plus <code>/health</code>); no <code>/blobs</code>
-                        HTTP uploads/downloads.
-                    </li>
-                    <li><strong>Allowed roots:</strong> From <code>ASSISTOS_FS_ROOT</code> / <code>MCP_FS_ROOT</code>
-                        (comma-separated). Missing ⇒ falls back to <code>process.cwd()</code>.
-                    </li>
-                    <li><strong>Path resolution:</strong> Relative inputs are resolved inside the first allowed root;
-                        traversal outside is rejected.
-                    </li>
-                    <li><strong>Error surface:</strong> Violations return MCP errors (e.g., “path outside allowed
-                        roots”); the server does not perform implicit directory creation except where documented (e.g.,
-                        write with parents).
-                    </li>
-                </ul>
+                <div class="subsection">
+                    <p><strong>Endpoint:</strong> <code>/mcp</code> (plus <code>/health</code>);</p>
+                    <p><strong>Allowed roots:</strong> Derived from <code>ASSISTOS_FS_ROOT</code> / <code>MCP_FS_ROOT</code> (comma-separated). If missing, the server falls back to the root of the workspace -<code>process.cwd()</code> </p>
+                    <p><strong>Path resolution:</strong> Relative inputs are resolved inside the first allowed root; any traversal outside is rejected.</p>
+                    <p><strong>Error surface:</strong> Violations return MCP errors (e.g., “path outside allowed roots”); no implicit directory creation occurs beyond documented behavior.</p>
+                </div>
                 <p><strong>Implementation highlights:</strong>
-                <ul class="bullets">
-                    <li><strong>MCP core:</strong> Wraps <code>@modelcontextprotocol/server-filesystem</code>, an
-                        implementation of a Filesystem Server for the Model Context Protocol (MCP). Its purpose is to
-                        give AI models, such as those integrated into IDEs or desktop apps (like VS Code or Claude
-                        Desktop), secure and controlled access to a user's local file system. The library provides the
-                        reference tool set (read/write/list/move/copy/search) with path guardrails built in.
-                    </li>
-                    <li><strong>Static hosting:</strong> Serves WebSkel UI files and plugin assets straight from the
-                        repo tree; manifests can reference icons/assets without another server.
-                    </li>
-                    <li><strong>Plugin discovery:</strong> <code>aggregateIdePlugins</code> runs on startup and on
-                        <code>collect_ide_plugins</code>, walking enabled repos for
-                        <code>IDE-plugins/*/config.json</code>, reading manifests, resolving asset paths, grouping
-                        plugins by <code>location</code>, and returning a merged catalog to the client.
-                    </li>
-                    <li><strong>Path enforcement:</strong> <code>resolvePathsInArgs</code> normalizes inputs and blocks
-                        anything outside <code>allowedDirectories</code> before delegating to the MCP server, so both
-                        plugin scans and filesystem tools stay inside whitelisted roots.
-                    </li>
-                </ul>
+                <div class="subsection">
+                    <p><strong>MCP core:</strong> Wraps <code>@modelcontextprotocol/server-filesystem</code>, the reference MCP filesystem server with read/write/list/move/copy/search tools and built-in path guardrails for IDE/desktop agents.</p>
+                    <p><strong>Static hosting:</strong> Serves <a href="https://github.com/OutfinityResearch/WebSkel/blob/master/README.md" target="_blank" rel="noopener noreferrer">WebSkel</a> UI files and plugin assets straight from the repo; manifests can reference icons/assets without another server.</p>
+                    <p><strong>Plugin discovery:</strong> <code>aggregateIdePlugins</code> runs at startup and on <code>collect_ide_plugins</code>, scanning enabled repos for <code>IDE-plugins/*/config.json</code>, resolving assets, grouping by <code>location</code>, and returning a merged catalog.</p>
+                    <p><strong>Path enforcement:</strong> <code>resolvePathsInArgs</code> normalizes inputs and blocks anything outside <code>allowedDirectories</code> before delegating to the MCP server, keeping scans and filesystem tools inside whitelisted roots.</p>
+                </div>
                 </p>
+                <div class="doc-section">
+                    <h3>Blob uploads</h3>
+                    <p>Blob uploads follow the Ploinky router model (<a href="https://ploinky.com/architecture.html" target="_blank" rel="noopener noreferrer">docs</a>): UI helpers post to <code>/blobs/&lt;agent&gt;</code>, the router proxies that path to the agent, and the agent responds with JSON (<code>id</code>, <code>localPath</code>, optional <code>downloadUrl</code>). Explorer and <code>soplangAgent</code> use this convention; when wired through the router, uploads stream to the agent implementation without extra client changes.</p>
+                </div>
 
             </div>
 
             <div class="doc-section" id="mcp-functionalities">
                 <h3>What MCP Can Do</h3>
-                <p>Tooling is grouped by capability rather than memorizing each handler name:</p>
-                <ul>
-                    <li><strong>Read:</strong> Text files, media blobs, and small batches of files; supports head/tail
-                        for quick peeks.
-                    </li>
-                    <li><strong>Write &amp; edit:</strong> Create/overwrite text, write binary, or patch existing files
-                        with atomic edits.
-                    </li>
-                    <li><strong>Directory ops:</strong> List (simple/detailed/with sizes), tree views, create folders
-                        recursively.
-                    </li>
-                    <li><strong>Move/copy/delete:</strong> Relocate or duplicate files/directories (optionally
-                        overwrite), delete safely within roots.
-                    </li>
-                    <li><strong>Metadata &amp; search:</strong> Stat/info lookups and filename/content searches
-                        constrained to allowed roots.
-                    </li>
-                    <li><strong>Plugin discovery:</strong> Aggregate <code>IDE-plugins/*/config.json</code> across
-                        enabled repos for the UI.
-                    </li>
-                    <li><strong>Introspection:</strong> Enumerate allowed directories for debugging path issues.</li>
-                </ul>
+                <p>Tooling is grouped by capability rather than memorizing each handler name.</p>
+                <div class="subsection">
+                    <p><strong>Read:</strong> Text files, media blobs, and small batches of files, with head/tail support.</p>
+                    <p><strong>Write &amp; edit:</strong> Create or overwrite text/binary files, or patch existing files atomically.</p>
+                    <p><strong>Directory ops:</strong> List (simple, detailed, with sizes), traverse trees, and create folders recursively.</p>
+                    <p><strong>Move/copy/delete:</strong> Relocate or duplicate files/directories (optional overwrite) and delete safely within allowed roots.</p>
+                    <p><strong>Metadata &amp; search:</strong> Stat/info lookups plus filename/content searches constrained to allowed roots.</p>
+                    <p><strong>Plugin discovery:</strong> Aggregate <code>IDE-plugins/*/config.json</code> across enabled repos for the UI catalog.</p>
+                    <p><strong>Introspection:</strong> List allowed directories to debug path issues.</p>
+                </div>
                 <p>Calls are stateless; the client sends absolute or relative paths, and the server validates them
                     against the whitelist before touching disk.</p>
             </div>
@@ -235,17 +212,36 @@
                 <p>SOPLang (Standard Operating Procedure Language) is the IDE’s automation/runtime layer. It runs in
                     <strong>soplangAgent</strong> (own container) and is invoked via the <code>soplang-tool</code> MCP
                     tool.</p>
-                <ul>
-                    <li><strong>Role:</strong> Executes scripted flows, updates variables, and persists structured
-                        document data via plugins.
-                    </li>
-                    <li><strong>Execution context:</strong> Shares the workspace volume; does not proxy through
-                        Explorer.
-                    </li>
-                    <li><strong>Embedding:</strong> SOPLang commands live in Markdown comments/blocks and are preserved
-                        on save so hydration and execution stay aligned.
-                    </li>
-                </ul>
+                <div class="subsection">
+                    <h3>Role and execution</h3>
+                    <p>SOPLang executes scripted flows, maintains a dependency graph of variables, and persists structured document data. It shares the workspace volume with Explorer and is called directly (not proxied) by the UI over MCP. Commands can orchestrate other agents and mutate variables that the UI re-hydrates.</p>
+                </div>
+                <div class="subsection">
+                    <h3>Embedding and state</h3>
+                    <p>Commands live inside Markdown comments or fenced blocks and are preserved on save. Variables you set in SOPLang (e.g., <code>@set releaseVersion "1.4.0"</code>) become part of the document model; execution can mutate them, and a reload re-hydrates the updated state into the UI.</p>
+                </div>
+                <div class="subsection">
+                    <h3>What happens on build</h3>
+                    <p>During <code>buildFromMarkdown</code>, <code>parseDocsFromMarkdown</code> reads <code>achiles-ide-*</code> comments and SOPLang commands (including variable assignments), builds templates, clears and reapplies chapters/paragraphs/metadata, then <code>workspace.forceSave()</code> and <code>workspace.buildAll()</code> persist the document store. Variables and commands parsed from Markdown are stored with the document; subsequent SOPLang runs can update them, and hydration will reflect the latest values.</p>
+                    <p>Persisted variables and commands ground AI flows: prompts or templates can inject these values, workflows can mutate them between runs, and the dependency graph keeps state consistent across LLM calls. When AI-driven plugins or scripts run, they read the same graph and feed results back so the next step (human or AI) sees updated context.</p>
+                   <br>
+                    <p class="muted">Screenshots below show the variables panel: initial state with no variables, the list
+                        after running a script, and the details for a single entry (keys/values and metadata) as rendered in
+                        the UI.</p>
+                    <div class="screenshot-gallery">
+                        <div class="screenshot-card">
+                            <h4>Variables UI</h4>
+                            <div class="thumbnail-list">
+                                <img class="thumbnail backend-shot" data-full="./assets/soplang_no_vars.png" src="./assets/soplang_no_vars.png" alt="SOPLang - No variables">
+                                <img class="thumbnail backend-shot" data-full="./assets/soplang_variables.png" src="./assets/soplang_variables.png" alt="SOPLang - Variables list">
+                                <img class="thumbnail backend-shot" data-full="./assets/soplang_var_details.png"
+                                     src="./assets/soplang_var_details.png"
+                                     alt="SOPLang - Variable details">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
 
             <div class="doc-section" id="soplang-embedding">
@@ -266,11 +262,11 @@ end
 <pre><code>&lt;!--{"achiles-ide-document": {"id": "doc-1", "title": "My Doc"}}--&gt;
 &lt;!--{"achiles-ide-chapter": {"title": "Intro", "commands": "@set title \"Intro\""}}--&gt;
 &lt;!--{"achiles-ide-paragraph": {"title": "P1", "commands": "@media_image_123 attach id \"blob-id\""}}--&gt;</code></pre>
-                <ul>
-                    <li><strong>Document:</strong> ids/titles and doc-level metadata.</li>
-                    <li><strong>Chapter:</strong> headings plus commands before a heading.</li>
-                    <li><strong>Paragraph:</strong> commands/metadata sitting above the paragraph text.</li>
-                </ul>
+                <div class="subsection">
+                    <p><strong>Document:</strong> ids/titles and doc-level metadata.</p>
+                    <p><strong>Chapter:</strong> headings plus commands before a heading.</p>
+                    <p><strong>Paragraph:</strong> commands/metadata sitting above the paragraph text.</p>
+                </div>
             </div>
 
             <div class="doc-section" id="soplang-variables">
@@ -279,84 +275,46 @@ end
 <pre><code>@set releaseVersion "1.4.0"
 @set doc_owner "alice@example.com"
 @media_image_hero attach id "blob-id-123" name "hero.png"</code></pre>
-                <ul>
-                    <li><strong>Variables:</strong> Stored with the document model; after execution, reload/hydrate to
-                        see updates in the Variables panel.
-                    </li>
-                    <li><strong>Media commands:</strong> Store blob IDs (not URLs); UI builds URLs at runtime.</li>
-                    <li><strong>Scopes:</strong> Commands can sit at document, chapter, or paragraph level via <code>achiles-ide-*</code>
-                        comments.
-                    </li>
-                </ul>
-                <p class="muted">Screenshots below show the variables panel: initial state with no variables, the list
-                    after running a script, and the details for a single entry (keys/values and metadata) as rendered in
-                    the UI.</p>
-                <div class="screenshot-gallery">
-                    <div class="screenshot-card">
-                        <h4>Variables UI</h4>
-                        <div class="thumbnail-list">
-                            <img class="thumbnail backend-shot" data-full="./assets/soplang_no_vars.png" src="./assets/soplang_no_vars.png" alt="SOPLang - No variables">
-                            <img class="thumbnail backend-shot" data-full="./assets/soplang_variables.png" src="./assets/soplang_variables.png" alt="SOPLang - Variables list">
-                            <img class="thumbnail backend-shot" data-full="./assets/soplang_var_details.png"
-                                 src="./assets/soplang_var_details.png"
-                                 alt="SOPLang - Variable details">
-                        </div>
+                    <div class="subsection">
+                        <p><strong>Variables:</strong> Stored with the document model; after execution, reload/hydrate to see updates in the Variables panel.</p>
+                        <p><strong>Media commands:</strong> Store blob IDs (not URLs); the UI builds URLs at runtime.</p>
+                        <p><strong>Scopes:</strong> Commands can sit at document, chapter, or paragraph level via <code>achiles-ide-*</code> comments.</p>
                     </div>
-                </div>
             </div>
 
             <div class="doc-section" id="soplang-execution">
                 <h3>Execution from the UI</h3>
                 <p>When a Markdown file contains SOPLang blocks/commands, Explorer surfaces run controls via <code>soplangAgent</code>.</p>
-                <ul>
-                    <li>Use document toolbar actions to execute the current SOPLang block or script.</li>
-                    <li>Outputs surface in the IDE console; variable updates flow back into the document model (reload to re-hydrate).</li>
-                    <li>If you add new comment markers or commands, reload the document so hydration picks them up.</li>
-                </ul>
+                <div class="subsection">
+                    <p>Use document toolbar actions to execute the current SOPLang block or script.</p>
+                    <p>Outputs appear in the IDE console; variable updates flow back into the document model—reload to re-hydrate.</p>
+                    <p>After adding comment markers or commands, reload the document so hydration picks them up.</p>
+                </div>
             </div>
 
             <div class="doc-section" id="soplang-build">
                 <h3>SOPLang Build (Markdown → Documents)</h3>
                 <p><code>SoplangBuilder.buildFromMarkdown</code> runs inside <strong>soplangAgent</strong> to sync
                     Markdown into the document store.</p>
-                <ol>
-                    <li><strong>Pick workspace root:</strong> <code>pickRoot()</code> checks <code>SOPLANG_WORKSPACE_ROOT</code>
-                        or parent folders.
-                    </li>
-                    <li><strong>Discover Markdown:</strong> <code>walkMarkdown(root)</code> finds <code>.md</code>
-                        files, skipping build/dev dirs.
-                    </li>
-                    <li><strong>Parse structure:</strong> <code>parseDocsFromMarkdown</code> reads <code>achiles-ide-document/chapter/paragraph</code>
-                        comments and SOPLang commands into templates.
-                    </li>
-                    <li><strong>Apply templates:</strong> Existing docs are cleared/synced; metadata, chapters,
-                        paragraphs, references, and commands are applied.
-                    </li>
-                    <li><strong>Persist:</strong> <code>workspace.forceSave()</code> then
-                        <code>workspace.buildAll()</code> write data to storage.
-                    </li>
-                </ol>
+                <div class="subsection">
+                    <p><strong>Pick workspace root:</strong> <code>pickRoot()</code> checks <code>SOPLANG_WORKSPACE_ROOT</code> or parent folders.</p>
+                    <p><strong>Discover Markdown:</strong> <code>walkMarkdown(root)</code> finds <code>.md</code> files, skipping build/dev dirs.</p>
+                    <p><strong>Parse structure:</strong> <code>parseDocsFromMarkdown</code> reads <code>achiles-ide-document/chapter/paragraph</code> comments and SOPLang commands into templates; commands are also parsed into the SOPLang variable graph.</p>
+                    <p><strong>Apply templates:</strong> Existing docs are cleared/synced; metadata, chapters, paragraphs, references, commands, and variables are applied, updating the graph definitions.</p>
+                    <p><strong>Persist:</strong> <code>workspace.forceSave()</code> then <code>workspace.buildAll()</code> write data to storage.</p>
+                </div>
                 <p>Invoke via MCP: <code>methodName: "buildFromMarkdown"</code>, <code>pluginName:
                     "SoplangBuilder"</code>. Logs: <code>SOPLangBuilder/last-tool.log</code>.</p>
             </div>
 
             <div class="doc-section" id="troubleshooting">
                 <h3>Troubleshooting</h3>
-                <ul>
-                    <li><strong>MCP errors:</strong> “Path outside allowed roots” ⇒ fix
-                        <code>ASSISTOS_FS_ROOT</code>/<code>MCP_FS_ROOT</code> or use relative paths inside the first
-                        root.
-                    </li>
-                    <li><strong>SOPLang build fails:</strong> Check <code>SOPLangBuilder/last-tool.log</code>; ensure
-                        soplangAgent is enabled and running.
-                    </li>
-                    <li><strong>No Markdown picked up:</strong> Confirm <code>achiles-ide-*</code> comments exist and
-                        files are not in skipped build dirs.
-                    </li>
-                    <li><strong>Variables not updated:</strong> After executing SOPLang blocks, reload to re-hydrate
-                        document state into the UI.
-                    </li>
-                </ul>
+                    <div class="subsection">
+                        <p><strong>MCP errors:</strong> “Path outside allowed roots” means <code>ASSISTOS_FS_ROOT</code>/<code>MCP_FS_ROOT</code> is wrong or the path is outside the first allowed root.</p>
+                        <p><strong>SOPLang build fails:</strong> Check <code>SOPLangBuilder/last-tool.log</code> and ensure <code>soplangAgent</code> is enabled and running.</p>
+                        <p><strong>No Markdown picked up:</strong> Make sure <code>achiles-ide-*</code> comments exist and files aren’t inside skipped build dirs.</p>
+                        <p><strong>Variables not updated:</strong> After executing SOPLang blocks, reload to re-hydrate document state into the UI.</p>
+                    </div>
             </div>
         </div>
     </div>

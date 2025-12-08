@@ -27,6 +27,8 @@
     <tspan x="435" dy="14">(port from start)</tspan>
   </text>
 
+  <line class="arrow" x1="520" y1="190" x2="650" y2="270"></line>
+
   <rect x="600" y="80" width="260" height="120" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="8 6"></rect>
   <text class="muted" x="730" y="74" text-anchor="middle">Container (Podman/Docker)</text>
   <rect class="node" x="610" y="90" width="240" height="100"></rect>
@@ -43,33 +45,29 @@
     <tspan x="1030" dy="14">(ASSISTOS_FS_ROOT)</tspan>
   </text>
 
-  <text class="muted" x="300" y="74">HTTP (assets/UI)</text>
-  <line class="arrow" x1="260" y1="170" x2="320" y2="170"></line>
+  <text class="muted" x="230" y="74">HTTP (assets/UI)</text>
+  <line class="arrow" x1="240" y1="170" x2="320" y2="170"></line>
 
-  <text class="muted" x="580" y="74">Static/proxy</text>
-  <line class="arrow" x1="550" y1="170" x2="610" y2="170"></line>
+  <text class="muted" x="520" y="62" text-anchor="middle">
+    <tspan x="430" dy="0">Static/proxy</tspan>
+    <tspan x="430" dy="14">(/mcp, /blobs/&lt;agent&gt; via router)</tspan>
+  </text>
+  <line class="arrow" x1="520" y1="170" x2="610" y2="170"></line>
 
   <text class="muted" x="900" y="74">Volume mount (allowed roots)</text>
   <line class="arrow" x1="850" y1="170" x2="920" y2="170"></line>
 
-  <rect class="node" x="610" y="290" width="240" height="100"></rect>
-  <text class="label" x="730" y="336" text-anchor="middle">MCP Clients</text>
-  <text class="muted" x="730" y="358" text-anchor="middle">Agents/Explorer UI</text>
 
-  <rect x="900" y="260" width="260" height="120" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="8 6"></rect>
-  <text class="muted" x="1030" y="254" text-anchor="middle">Container (Podman/Docker)</text>
-  <rect class="node" x="910" y="270" width="240" height="100"></rect>
-  <text class="label" x="1030" y="316" text-anchor="middle">soplangAgent</text>
-  <text class="muted" x="1030" y="338" text-anchor="middle">
-    <tspan x="1030" dy="0">Container: node:20-alpine</tspan>
-    <tspan x="1030" dy="14">soplang-tool (SoplangBuilder)</tspan>
+  <rect x="600" y="260" width="260" height="120" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="8 6"></rect>
+  <text class="muted" x="730" y="254" text-anchor="middle">Container (Podman/Docker)</text>
+  <rect class="node" x="610" y="270" width="240" height="100"></rect>
+  <text class="label" x="730" y="316" text-anchor="middle">soplangAgent</text>
+  <text class="muted" x="730" y="338" text-anchor="middle">
+    <tspan x="730" dy="0">Container: node:20-alpine</tspan>
+    <tspan x="730" dy="14">soplang-tool (SoplangBuilder)</tspan>
   </text>
 
-  <text class="muted" x="620" y="266">MCP → Explorer FS tools</text>
-  <line class="arrow dashed" x1="730" y1="290" x2="730" y2="190"></line>
-
   <text class="muted" x="1030" y="236" text-anchor="middle">MCP → soplang-tool</text>
-  <line class="arrow dashed" x1="730" y1="290" x2="910" y2="290"></line>
 
-  <line class="arrow" x1="1030" y1="270" x2="1030" y2="190"></line>
+  <line class="arrow" x1="830" y1="270" x2="1030" y2="190"></line>
 </svg>
