@@ -142,7 +142,13 @@ const copyRecursive = async (sourcePath, destinationPath, overwrite = false) => 
 
 const args = process.argv.slice(2);
 const envRoots = (process.env.ASSISTOS_FS_ROOT || process.env.MCP_FS_ROOT || '').split(',').map(p => p.trim()).filter(Boolean);
-if (!args.length) args.push(process.cwd());
+// Use envRoots if set, otherwise fall back to args or cwd
+if (envRoots.length) {
+  args.length = 0;
+  args.push(...envRoots);
+} else if (!args.length) {
+  args.push(process.cwd());
+}
 
 async function resolveAllowedDirectories(inputDirs) {
   const results = await Promise.all(inputDirs.map(async (dir) => {
