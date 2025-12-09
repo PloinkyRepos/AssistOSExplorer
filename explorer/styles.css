@@ -1,8 +1,8 @@
 :root {
     color-scheme: light dark;
     --bg: #f4f5f7;
-    --surface: #ffffffee;
-    --surface-dark: #1f2933ee;
+    --surface: #ffffff;
+    --surface-dark: #1f2933;
     --text: #1f2933;
     --text-soft: #4b5563;
     --accent: #2563eb;
@@ -48,8 +48,8 @@
 @media (prefers-color-scheme: dark) {
     :root {
         --bg: #0f172a;
-        --surface: #111927dd;
-        --surface-dark: #111927dd;
+        --surface: #111927;
+        --surface-dark: #111927;
         --text: #f9fafb;
         --text-soft: #cbd5f5;
         --light-gray: #9ca3af;
