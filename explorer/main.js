@@ -11,6 +11,23 @@ if (typeof window !== 'undefined') {
     window.ASSISTOS_AGENT_ID = window.ASSISTOS_AGENT_ID || EXPLORER_AGENT_ID;
 }
 
+function applyExplorerThemeFromWebchat() {
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+        return;
+    }
+    let theme = null;
+    try {
+        theme = window.localStorage.getItem('webchat_theme');
+    } catch (_) {
+        theme = null;
+    }
+    const normalized = typeof theme === 'string' ? theme.toLowerCase() : '';
+    const isDark = normalized === 'dark' || normalized === 'obsidian';
+    const root = document.documentElement;
+    root.classList.toggle('theme-dark', isDark);
+    root.classList.toggle('theme-light', !isDark);
+}
+
 const hasRuntimePlugins = (runtimePlugins) => {
     if (!runtimePlugins) {
         return false;
@@ -19,6 +36,7 @@ const hasRuntimePlugins = (runtimePlugins) => {
 };
 
 async function start() {
+    applyExplorerThemeFromWebchat();
     const webSkel = await WebSkel.initialise('webskel.json');
     webSkel.appServices = assistosSDK;
 

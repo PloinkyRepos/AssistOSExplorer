@@ -4,10 +4,11 @@ export class FileEditor {
         this.invalidate = invalidate;
         this.path = this.element.dataset.path;
         const extension = this.path.split('.').pop();
+        const root = document.documentElement;
         this.state = {
             editorContent: "Loading...",
             fileType: extension || "js",
-            theme: "light"
+            theme: root.classList.contains("theme-dark") ? "dark" : "light"
         };
         this.invalidate();
         this.boundAdjustForScrollbar = this.adjustForScrollbar.bind(this);
@@ -19,13 +20,17 @@ export class FileEditor {
 
     toggleTheme() {
         this.state.theme = this.state.theme === "dark" ? "light" : "dark";
+        this.applyTheme();
+    }
+
+    applyTheme() {
         this.element.querySelector(".file-editor-container").setAttribute("data-theme", this.state.theme);
     }
 
     async beforeRender() {
         if (this.state.editorContent === "Loading...") {
             try {
-                const contentResult = await window.webSkel.appServices.callTool('explorer', 'read_text_file', { path: this.path });
+                const contentResult = await window.webSkel.appServices.callTool('explorer', 'read_text_file', {path: this.path});
                 if (contentResult.text.startsWith('Error:')) {
                     this.state.editorContent = `Error loading file: ${contentResult.text}`
                 } else {
@@ -41,7 +46,7 @@ export class FileEditor {
     }
 
     afterRender() {
-        this.element.querySelector(".file-editor-container").setAttribute("data-theme", this.state.theme);
+        this.applyTheme();
         this.textarea = this.element.querySelector('.code-input');
         this.codeBlock = this.element.querySelector('.code-output code');
         this.lineNumbers = this.element.querySelector('.line-numbers');
@@ -180,7 +185,7 @@ export class FileEditor {
     updateLineNumbers() {
         if (!this.textarea || !this.lineNumbers) return;
         const lineCount = this.textarea.value.split('\n').length;
-        this.lineNumbers.innerHTML = Array.from({ length: lineCount }, (_, i) => `<span>${i + 1}</span>`).join('');
+        this.lineNumbers.innerHTML = Array.from({length: lineCount}, (_, i) => `<span>${i + 1}</span>`).join('');
     }
 
     syncScroll(source, ...targets) {

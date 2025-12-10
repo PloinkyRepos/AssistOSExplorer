@@ -25,6 +25,18 @@ file-exp {
     }
 }
 
+:root.theme-dark file-exp {
+    --file-exp-subtle-surface: rgba(255, 255, 255, 0.08);
+    --file-exp-inline-code-bg: rgba(255, 255, 255, 0.08);
+    --file-exp-code-bg: #0c1424;
+}
+
+:root.theme-light file-exp {
+    --file-exp-subtle-surface: rgba(148, 163, 184, 0.12);
+    --file-exp-inline-code-bg: #f5f5f5;
+    --file-exp-code-bg: #f5f5f5;
+}
+
 header {
     background: linear-gradient(135deg, var(--accent) 0%, var(--accent-muted) 100%);
     color: var(--white-text);
@@ -134,7 +146,7 @@ main {
     font-size: 1rem;
     line-height: 1;
     position: relative;
-    color: #111;
+    color: var(--text);
     border-radius: 10px;
     transition: background-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, color 0.15s ease;
 }
@@ -179,6 +191,16 @@ main {
     background: var(--light-gray);
     box-shadow: 0 10px 18px rgba(37, 99, 235, 0.28);
     transform: translateY(-1px);
+}
+
+.theme-dark #toggleListButton {
+    color: #f3f4f6;
+}
+
+.theme-dark #toggleListButton:hover {
+    background: rgba(96, 165, 250, 0.2);
+    color: #f8fafc;
+    box-shadow: 0 10px 18px rgba(0, 0, 0, 0.35);
 }
 
 .entries {
