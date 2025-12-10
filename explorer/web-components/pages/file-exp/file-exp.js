@@ -11,6 +11,7 @@ export class FileExp {
         this.state = {
             path: '/',
             entries: [],
+            allEntries: [],
             selectedPath: null,
             fileContent: "",
             previewContent: "",
@@ -18,9 +19,11 @@ export class FileExp {
             markdownTextView: false,
             documentId: null,
             isEditing: false,
+            hasUnsavedChanges: false,
             isResizing: false,
             clipboard: null,
-            openMenuPath: null
+            openMenuPath: null,
+            filterSpecs: this.loadFilterSpecsPreference()
         };
         this.pendingMenuFocusPath = null;
 
@@ -81,7 +84,8 @@ export class FileExp {
 
             const parentDir = this.parentPath(path) || '/';
             this.state.path = parentDir;
-            this.state.entries = await this.loadDirectoryContent(parentDir);
+            const entries = await this.loadDirectoryContent(parentDir);
+            await this.setEntries(entries);
             this.state.selectedPath = path;
             this.state.isEditing = false;
             await this.openFile(path);
@@ -295,6 +299,22 @@ export class FileExp {
             }
         }
 
+        if (this.state.isEditing && !this.state.selectedIsMarkdown) {
+            const textarea = this.element.querySelector('.code-input');
+            if (textarea) {
+                const updateDirtyFlag = () => {
+                    this.state.hasUnsavedChanges = textarea.value !== this.state.fileContent;
+                };
+                if (!textarea.dataset.dirtyBound) {
+                    textarea.addEventListener('input', updateDirtyFlag);
+                    textarea.dataset.dirtyBound = 'true';
+                }
+                updateDirtyFlag();
+            }
+        } else {
+            this.state.hasUnsavedChanges = false;
+        }
+
         const cancelButton = this.element.querySelector('#cancelButton');
         if (cancelButton) {
             cancelButton.textContent = this.state.selectedIsMarkdown ? 'Close' : 'Cancel';
@@ -380,6 +400,11 @@ export class FileExp {
         } else if (!this.state.openMenuPath) {
             this.pendingMenuFocusPath = null;
         }
+
+        const filterToggle = this.element.querySelector('#filterSpecsToggle');
+        if (filterToggle) {
+            filterToggle.checked = Boolean(this.state.filterSpecs);
+        }
     }
 
     async loadDirectoryContent(path) {
@@ -394,6 +419,21 @@ export class FileExp {
             console.error(err);
             this.showStatus(err.message || 'Failed to load directory.', true);
             return [];
+        }
+    }
+
+    async setEntries(entries) {
+        this.state.allEntries = entries || [];
+        try {
+            if (this.state.filterSpecs) {
+                this.state.entries = await this.filterEntriesForSpecs(this.state.allEntries);
+            } else {
+                this.state.entries = this.state.allEntries;
+            }
+        } catch (err) {
+            console.warn('Failed to apply specs filter', err);
+            this.state.entries = this.state.allEntries;
+            this.showStatus('Could not apply filter. Showing all files.', true);
         }
     }
 
@@ -412,7 +452,8 @@ export class FileExp {
             this.state.isEditing = false;
             this.state.openMenuPath = null;
             this.pendingMenuFocusPath = null;
-            this.state.entries = await this.loadDirectoryContent(this.state.path);
+            const entries = await this.loadDirectoryContent(this.state.path);
+            await this.setEntries(entries);
             this.invalidate();
         });
     }
@@ -426,10 +467,12 @@ export class FileExp {
             this.pendingMenuFocusPath = null;
         }
 
-        if (this.state.isEditing) {
+        if (this.state.isEditing && this.state.hasUnsavedChanges) {
             if (!confirm("You have unsaved changes. Are you sure you want to navigate away?")) {
                 return;
             }
+            await this.cancelEdit();
+        } else if (this.state.isEditing) {
             await this.cancelEdit();
         }
 
@@ -451,6 +494,7 @@ export class FileExp {
             this.state.selectedIsMarkdown = this.isMarkdownFile(filePath);
             this.state.markdownTextView = false;
             this.state.documentId = null;
+            this.state.hasUnsavedChanges = false;
             if (this.state.selectedIsMarkdown) {
                 const previewSource = this.prepareMarkdownPreviewContent(this.state.fileContent);
                 this.state.previewContent = this.renderMarkdownPreview(previewSource);
@@ -494,6 +538,7 @@ export class FileExp {
             }
         }
         this.state.markdownTextView = false;
+        this.state.hasUnsavedChanges = false;
         this.state.isEditing = true;
         this.invalidate();
     }
@@ -509,6 +554,7 @@ export class FileExp {
             await window.webSkel.appServices.callTool('explorer', 'write_file', {path: this.state.selectedPath, content: newContent});
             this.showStatus(`Successfully saved ${this.state.selectedPath}`, false);
             this.state.fileContent = newContent;
+            this.state.hasUnsavedChanges = false;
 
             if (this.state.selectedIsMarkdown) {
                 const previewSource = this.prepareMarkdownPreviewContent(newContent);
@@ -543,6 +589,7 @@ export class FileExp {
     async cancelEdit() {
         this.state.isEditing = false;
         this.state.markdownTextView = false;
+        this.state.hasUnsavedChanges = false;
         this.editorPresenter = null;
         if (this.state.selectedIsMarkdown && this.state.selectedPath) {
             await this.openFile(this.state.selectedPath);
@@ -615,7 +662,8 @@ export class FileExp {
                 if (this.state.clipboard?.path === source) {
                     this.state.clipboard = { ...this.state.clipboard, path: destination, name: newName };
                 }
-                this.state.entries = await this.loadDirectoryContent(this.state.path);
+                const entries = await this.loadDirectoryContent(this.state.path);
+                await this.setEntries(entries);
                 this.showStatus(`Renamed "${currentName}" to "${newName}".`);
                 if (wasSelected) {
                     this.state.selectedPath = destination;
@@ -816,7 +864,8 @@ export class FileExp {
                 const sourceMatchesCurrentView = sourceParent === this.state.path;
 
                 if (targetMatchesCurrentView || sourceMatchesCurrentView) {
-                    this.state.entries = await this.loadDirectoryContent(this.state.path);
+                    const entries = await this.loadDirectoryContent(this.state.path);
+                    await this.setEntries(entries);
                 }
 
                 if (wasSelectedFile) {
@@ -1202,12 +1251,84 @@ export class FileExp {
         return html.join('\n');
     }
 
+    async filterEntriesForSpecs(entries = []) {
+        const result = [];
+        for (const entry of entries) {
+            if (!entry) continue;
+            if (entry.type === 'file' && this.isMarkdownFile(entry.name)) {
+                result.push(entry);
+                continue;
+            }
+            if (entry.type === 'directory') {
+                const hasMd = await this.hasMarkdownInTree(entry.path);
+                if (hasMd) {
+                    result.push(entry);
+                }
+            }
+        }
+        return result;
+    }
+
+    async hasMarkdownInTree(dirPath) {
+        if (!dirPath) return false;
+        const stack = [dirPath];
+        while (stack.length) {
+            const current = stack.pop();
+            try {
+                const result = await window.webSkel.appServices.callTool('explorer', 'list_directory_detailed', { path: current });
+                const listingText = result?.text ?? '';
+                if (typeof listingText === 'string' && listingText.startsWith('Error:')) {
+                    console.warn('Skipping directory scan due to error response:', listingText);
+                    continue;
+                }
+                const items = this.parseDetailedDirectoryListing(listingText);
+                for (const item of items) {
+                    if (!item?.name) continue;
+                    if (item.type === 'file' && this.isMarkdownFile(item.name)) {
+                        return true;
+                    }
+                    if (item.type === 'directory') {
+                        stack.push(this.joinPath(current, item.name));
+                    }
+                }
+            } catch (err) {
+                console.warn('Failed to scan directory for specs', current, err);
+                return false;
+            }
+        }
+        return false;
+    }
+
     toggleMarkdownView() {
         if (!this.state.selectedIsMarkdown || this.state.isEditing) {
             return;
         }
         this.state.markdownTextView = !this.state.markdownTextView;
         this.invalidate();
+    }
+
+    async toggleFilterSpecs(element) {
+        this.state.filterSpecs = Boolean(element?.checked);
+        this.saveFilterSpecsPreference(this.state.filterSpecs);
+        await this.setEntries(this.state.allEntries?.length ? this.state.allEntries : this.state.entries);
+        this.invalidate();
+    }
+
+    loadFilterSpecsPreference() {
+        try {
+            const stored = window.localStorage.getItem('assistosExplorerFilterSpecs');
+            return stored === 'true';
+        } catch (_) {
+            return false;
+        }
+    }
+
+    saveFilterSpecsPreference(value) {
+        try {
+            window.localStorage.setItem('assistosExplorerFilterSpecs', value ? 'true' : 'false');
+        } catch (_) {
+            // ignore
+        }
     }
 
     escapeCssId(value) {
