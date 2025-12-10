@@ -92,7 +92,7 @@ header p {
 }
 main {
     flex: 1;
-    padding: clamp(16px, 4vw, 48px);
+    padding: clamp(5px, 0.5%, 10px);
     display: flex;
     flex-direction: column;
 }
@@ -394,11 +394,12 @@ td.actions-cell {
     align-items: center;
     justify-content: center;
     transition: background 0.12s ease;
+    background: none;
+    border: none;
 }
 
 .action-menu-trigger:hover,
 .action-menu-trigger:focus-visible {
-    background: rgba(37, 99, 235, 0.14);
     outline: none;
 }
 
