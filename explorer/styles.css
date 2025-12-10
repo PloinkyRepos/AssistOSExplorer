@@ -393,7 +393,7 @@ td.actions-cell {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    transition: background 0.12s ease;
+    transition: background 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease;
     background: none;
     border: none;
 }
@@ -401,12 +401,22 @@ td.actions-cell {
 .action-menu-trigger:hover,
 .action-menu-trigger:focus-visible {
     outline: none;
+    background: rgba(37, 99, 235, 0.12);
+    box-shadow: 0 10px 18px rgba(37, 99, 235, 0.28);
+    transform: translateY(-1px);
 }
 
 .action-menu-trigger-icon {
     width: 16px;
     height: 16px;
     pointer-events: none;
+    transition: transform 0.12s ease, filter 0.12s ease;
+}
+
+.action-menu-trigger:hover .action-menu-trigger-icon,
+.action-menu-trigger:focus-visible .action-menu-trigger-icon {
+    transform: scale(1.05);
+    filter: drop-shadow(0 0 4px rgba(37, 99, 235, 0.35));
 }
 
 .action-menu-container.open .action-menu-trigger {
