@@ -10,7 +10,6 @@ export class FileExp {
 
         this.state = {
             path: '/',
-            includeHidden: this.loadHiddenPreference(),
             entries: [],
             selectedPath: null,
             fileContent: "",
@@ -102,7 +101,7 @@ export class FileExp {
 </svg>`;
 
         this.entriesHTML = "";
-        const filtered = this.state.entries.filter(entry => this.state.includeHidden || !entry.name.startsWith('.'));
+        const filtered = this.state.entries;
         if (filtered.length === 0) {
             this.entriesHTML = `<tr><td colspan="5">Empty directory.</td></tr>`;
         } else {
@@ -180,11 +179,6 @@ export class FileExp {
             if (row) {
                 row.classList.add('active');
             }
-        }
-
-        const hiddenToggle = this.element.querySelector('#hiddenToggle');
-        if (hiddenToggle) {
-            hiddenToggle.checked = this.state.includeHidden;
         }
 
         const editorActions = this.element.querySelector("#editorActions");
@@ -1206,29 +1200,6 @@ export class FileExp {
         flushParagraph();
 
         return html.join('\n');
-    }
-
-    toggleHiddenFiles(element) {
-        this.state.includeHidden = element.checked;
-        this.saveHiddenPreference(this.state.includeHidden);
-        this.invalidate();
-    }
-
-    loadHiddenPreference() {
-        try {
-            const stored = window.localStorage.getItem('assistosExplorerShowHidden');
-            return stored === null ? false : stored === 'true';
-        } catch (_) {
-            return false;
-        }
-    }
-
-    saveHiddenPreference(value) {
-        try {
-            window.localStorage.setItem('assistosExplorerShowHidden', value ? 'true' : 'false');
-        } catch (_) {
-            // ignore
-        }
     }
 
     toggleMarkdownView() {
