@@ -1,4 +1,5 @@
 import { unescapeHtmlEntities } from "../../../imports.js";
+import { highlightCode } from "../../../utils/highlight.js";
 import { stripAchilesComments as stripDocumentComments } from "../../../services/document/markdownDocumentParser.js";
 
 export class FileExp {
@@ -1340,85 +1341,13 @@ export class FileExp {
 
     renderCodePreview(content, filePath) {
         const type = this.getFileTypeFromPath(filePath);
-        const highlighted = this.highlightCode(content || '', type);
+        const highlighted = highlightCode(content || '', type);
         const lines = (content || '').split('\n').length || 1;
         const lineNumbers = Array.from({ length: lines }, (_, idx) => `<span>${idx + 1}</span>`).join('');
         return `
             <div class="code-preview-lines">${lineNumbers}</div>
             <pre class="code-preview-code"><code class="language-${type}">${highlighted}</code></pre>
         `;
-    }
-
-    highlightCode(text, type) {
-        if (!text) return '';
-        const escapeHTML = str => str
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;');
-
-        let result = escapeHTML(text);
-
-        if (['js', 'mjs', 'json'].includes(type)) {
-            result = this.highlightJavaScript(result);
-        } else if (['html', 'htm'].includes(type)) {
-            result = this.highlightHTML(result);
-        } else if (type === 'css') {
-            result = this.highlightCSS(result);
-        }
-
-        return result;
-    }
-
-    highlightJavaScript(code) {
-        const parts = [];
-        let lastIndex = 0;
-        const regex = /([`"'])(?:\\.|(?!\1).)*?\1|(\/\*[\s\S]*?\*\/|\/\/.*)/g;
-
-        code.replace(regex, (match, stringDelimiter, comment, offset) => {
-            if (offset > lastIndex) {
-                parts.push(code.substring(lastIndex, offset));
-            }
-            if (stringDelimiter) {
-                parts.push(`<span class="string">${match}</span>`);
-            } else if (comment) {
-                parts.push(`<span class="comment">${comment}</span>`);
-            }
-            lastIndex = offset + match.length;
-            return match;
-        });
-
-        if (lastIndex < code.length) {
-            parts.push(code.substring(lastIndex));
-        }
-
-        let result = parts.join('');
-        result = result.replace(/\b(const|let|var|function|return|if|else|for|while|class|new|this|async|await|try|catch|finally|import|export|default)\b/g, '<span class="keyword">$1</span>');
-        result = result.replace(/\b(true|false|null|undefined)\b/g, '<span class="number">$1</span>');
-        result = result.replace(/\b\d+(\.\d+)?\b/g, '<span class="number">$&</span>');
-        return result;
-    }
-
-    highlightHTML(code) {
-        let result = code;
-        result = result.replace(/(&lt;!--[\s\S]*?--&gt;)/g, '<span class="comment">$1</span>');
-        result = result.replace(/(&lt;\/?[a-zA-Z0-9-]+)([^&]*?)(\/?&gt;)/g, (match, tagStart, attrs, tagEnd) => {
-            const highlightedAttrs = attrs.replace(/([a-zA-Z-:]+)=(&quot;[^&]*?&quot;|&#39;[^&]*?&#39;)/g, '<span class="attribute">$1</span>=<span class="attribute-value">$2</span>');
-            return `<span class="tag">${tagStart}</span>${highlightedAttrs}<span class="tag">${tagEnd}</span>`;
-        });
-        return result;
-    }
-
-    highlightCSS(code) {
-        let result = code;
-        result = result.replace(/(\/\*[\s\S]*?\*\/)/g, '<span class="comment">$1</span>');
-        result = result.replace(/([.#]?[a-zA-Z0-9_-]+\s*\{)/g, '<span class="selector">$1</span>');
-        result = result.replace(/([a-z-]+)(\s*:\s*)([^;]+)(;?)/g, (match, prop, sep, value, end) => {
-            const coloredValue = value
-                .replace(/#[0-9a-fA-F]{3,6}\b/g, '<span class="color">$&</span>')
-                .replace(/\b\d+(\.\d+)?(px|em|rem|%)\b/g, '<span class="unit">$&</span>');
-            return `<span class="property">${prop}</span>${sep}<span class="value">${coloredValue}</span>${end}`;
-        });
-        return result;
     }
 
     escapeCssId(value) {
