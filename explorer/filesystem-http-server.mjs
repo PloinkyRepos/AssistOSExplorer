@@ -6,6 +6,8 @@ import { createReadStream } from 'node:fs';
 import path from 'node:path';
 
 import { server as mcpServer, streamHttp as mcpStreamHttp, types as mcpTypes, zod as mcpZod } from 'mcp-sdk';
+import { copyRecursive, createCacheHelpers } from './utils/filesystem-utils.mjs';
+import { aggregateIdePlugins } from './utils/ide-plugins.mjs';
 
 const { Server } = mcpServer;
 const { StreamableHTTPServerTransport } = mcpStreamHttp;
@@ -102,44 +104,6 @@ try {
   setAllowedDirectories = syncThrow;
 }
 
-const pathExists = async (targetPath) => {
-  try {
-    await fs.access(targetPath);
-    return true;
-  } catch (_) {
-    return false;
-  }
-};
-
-const copyRecursive = async (sourcePath, destinationPath, overwrite = false) => {
-  const stats = await fs.lstat(sourcePath);
-
-  if (stats.isDirectory()) {
-    if (await pathExists(destinationPath)) {
-      if (!overwrite) {
-        throw new Error(`Destination ${destinationPath} already exists.`);
-      }
-      await fs.rm(destinationPath, { recursive: true, force: true });
-    }
-    await fs.mkdir(destinationPath, { recursive: true });
-    const entries = await fs.readdir(sourcePath);
-    for (const entry of entries) {
-      const sourceChild = path.join(sourcePath, entry);
-      const destinationChild = path.join(destinationPath, entry);
-      await copyRecursive(sourceChild, destinationChild, true);
-    }
-    return;
-  }
-
-  if (!overwrite && await pathExists(destinationPath)) {
-    throw new Error(`Destination ${destinationPath} already exists.`);
-  }
-
-  const destinationDir = path.dirname(destinationPath);
-  await fs.mkdir(destinationDir, { recursive: true });
-  await fs.copyFile(sourcePath, destinationPath);
-};
-
 const args = process.argv.slice(2);
 const envRoots = (process.env.ASSISTOS_FS_ROOT || process.env.MCP_FS_ROOT || '').split(',').map(p => p.trim()).filter(Boolean);
 // Use envRoots if set, otherwise fall back to args or cwd
@@ -196,190 +160,52 @@ if (allowedDirectories.length > 1) {
   console.warn(`[filesystem-http] Multiple allowed directories found, using the first one as workspace root: ${workspaceRoot}`);
 }
 
-const SKIP_DIRECTORY_NAMES = new Set([
-  '.git',
-  '.hg',
-  '.svn',
-  '.idea',
-  '.vscode',
-  'node_modules',
-  'dist',
-  'build',
-  'out',
-  '.turbo',
-  '.parcel-cache',
-  '.cache',
-  '.mcp-cache',
-  'coverage',
-  'tmp'
-]);
+let cacheConfig = {
+  maxFileSizeBytes: 2 * 1024 * 1024,
+  maxFiles: 200,
+  maxDirs: 200,
+  ttlMs: Number.parseInt(process.env.FS_CACHE_TTL_MS || '5000', 10)
+};
 
-const DEFAULT_PLUGIN_LOCATIONS = ['document', 'chapter', 'paragraph', 'infoText'];
-
-async function aggregateIdePlugins(rootDir) {
-  if (!rootDir) throw new Error('Workspace root not configured.');
-
-  const aggregated = Object.create(null);
-  const visitedAgents = new Set();
-  let pluginCount = 0;
-
-  const ensureBucket = (location) => {
-    if (!aggregated[location]) {
-      aggregated[location] = [];
-    }
-    return aggregated[location];
-  };
-
-  for (const location of DEFAULT_PLUGIN_LOCATIONS) {
-    ensureBucket(location);
+let readFileWithCache = async (validPath, { skipReadForLarge = false } = {}) => {
+  const stats = await fs.stat(validPath);
+  if (stats.size > cacheConfig.maxFileSizeBytes && skipReadForLarge) {
+    return { content: null, stats };
   }
+  const content = await readFileContent(validPath);
+  return { content, stats };
+};
 
-  const candidateDirsProcessed = new Set();
-
-  const processAgentDirectory = async (agentName, agentDir) => {
-    if (!agentName || SKIP_DIRECTORY_NAMES.has(agentName)) {
-      return;
-    }
-
-    const idePluginsDir = path.join(agentDir, 'IDE-plugins');
-
-    let ideStat;
+let listDirectoryDetailedWithCache = async (validPath) => {
+  const entries = await fs.readdir(validPath, { withFileTypes: true });
+  return Promise.all(entries.map(async entry => {
+    const entryPath = path.join(validPath, entry.name);
     try {
-      ideStat = await fs.stat(idePluginsDir);
+      const stats = await fs.stat(entryPath);
+      return {
+        name: entry.name,
+        type: entry.isDirectory() ? 'directory' : entry.isFile() ? 'file' : 'other',
+        size: stats.size,
+        modified: stats.mtime.toISOString()
+      };
     } catch {
-      return;
+      return {
+        name: entry.name,
+        type: entry.isDirectory() ? 'directory' : entry.isFile() ? 'file' : 'other',
+        size: null,
+        modified: null
+      };
     }
+  }));
+};
 
-    if (!ideStat.isDirectory()) {
-      return;
-    }
+let invalidateCachesForPath = () => {};
 
-    if (visitedAgents.has(agentName)) {
-      return;
-    }
-    visitedAgents.add(agentName);
-
-    let pluginEntries;
-    try {
-      pluginEntries = await fs.readdir(idePluginsDir, { withFileTypes: true });
-    } catch (error) {
-      console.warn(`[filesystem-http] Unable to read IDE-plugins directory ${idePluginsDir}:`, error instanceof Error ? error.message : String(error));
-      return;
-    }
-
-    for (const pluginEntry of pluginEntries) {
-      if (!pluginEntry.isDirectory()) continue;
-      const pluginDir = path.join(idePluginsDir, pluginEntry.name);
-      const configPath = path.join(pluginDir, 'config.json');
-
-      let rawConfig;
-      try {
-        rawConfig = await fs.readFile(configPath, 'utf8');
-      } catch (error) {
-        console.warn(`[filesystem-http] Skipping plugin ${pluginDir}: unable to read config.json (${error instanceof Error ? error.message : String(error)})`);
-        continue;
-      }
-
-      let parsedConfig;
-      try {
-        parsedConfig = JSON.parse(rawConfig);
-      } catch (error) {
-        console.warn(`[filesystem-http] Invalid JSON in ${configPath}:`, error instanceof Error ? error.message : String(error));
-        continue;
-      }
-
-      const locationsRaw = parsedConfig.location;
-      const locations = Array.isArray(locationsRaw)
-        ? locationsRaw.map((loc) => (typeof loc === 'string' ? loc.trim() : '')).filter(Boolean)
-        : typeof locationsRaw === 'string' && locationsRaw.trim()
-          ? [locationsRaw.trim()]
-          : [];
-
-      if (!locations.length) {
-        console.warn(`[filesystem-http] Plugin ${pluginDir} does not specify a valid location; skipping.`);
-        continue;
-      }
-
-      const { location, ...pluginConfig } = parsedConfig;
-      if (!pluginConfig.component) {
-        pluginConfig.component = pluginEntry.name;
-      }
-      pluginConfig.agent = agentName;
-
-      for (const loc of new Set(locations)) {
-        if (!loc) continue;
-        const bucket = ensureBucket(loc);
-        bucket.push({ ...pluginConfig });
-        pluginCount += 1;
-      }
-    }
-  };
-
-  const scanAgentDirectories = async (baseDir) => {
-    if (!baseDir || candidateDirsProcessed.has(baseDir)) {
-      return;
-    }
-    candidateDirsProcessed.add(baseDir);
-
-    let entries;
-    try {
-      entries = await fs.readdir(baseDir, { withFileTypes: true });
-    } catch (error) {
-      console.warn(`[filesystem-http] Unable to read agent base directory ${baseDir}:`, error instanceof Error ? error.message : String(error));
-      return;
-    }
-
-    await processAgentDirectory(path.basename(baseDir), baseDir);
-
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-      if (SKIP_DIRECTORY_NAMES.has(entry.name)) continue;
-      await processAgentDirectory(entry.name, path.join(baseDir, entry.name));
-    }
-  };
-
-  const addRepoCollections = async (baseDir) => {
-    if (!baseDir) return;
-
-    const repoRoot = path.join(baseDir, '.ploinky', 'repos');
-    let repoEntries;
-    try {
-      const repoStat = await fs.stat(repoRoot);
-      if (!repoStat.isDirectory()) {
-        return;
-      }
-      repoEntries = await fs.readdir(repoRoot, { withFileTypes: true });
-    } catch {
-      return;
-    }
-
-    for (const entry of repoEntries) {
-      if (!entry.isDirectory()) continue;
-      if (SKIP_DIRECTORY_NAMES.has(entry.name)) continue;
-      await scanAgentDirectories(path.join(repoRoot, entry.name));
-    }
-  };
-
-  await scanAgentDirectories(rootDir);
-  await addRepoCollections(rootDir);
-
-  if (pluginCount === 0) {
-    const parentDir = path.dirname(rootDir);
-    if (parentDir && parentDir !== rootDir) {
-      await scanAgentDirectories(parentDir);
-      await addRepoCollections(parentDir);
-    }
-  }
-
-  for (const [location, plugins] of Object.entries(aggregated)) {
-    plugins.sort((a, b) => {
-      const aKey = (a?.component || '').toLowerCase();
-      const bKey = (b?.component || '').toLowerCase();
-      return aKey.localeCompare(bKey);
-    });
-  }
-
-  return aggregated;
+try {
+  const cacheHelpers = createCacheHelpers({ readFileContent, config: cacheConfig });
+  ({ readFileWithCache, listDirectoryDetailedWithCache, invalidateCachesForPath, cacheConfig } = cacheHelpers);
+} catch (error) {
+  recordFatalError('init:cache-helpers', error);
 }
 
 function resolvePathsInArgs(args) {
@@ -582,14 +408,26 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const validPath = await validatePath(parsed.data.path);
         if (parsed.data.head && parsed.data.tail) throw new Error('Cannot specify both head and tail parameters simultaneously');
         if (parsed.data.tail) {
+          const { content, stats } = await readFileWithCache(validPath, { skipReadForLarge: true });
+          if (content !== null && stats.size <= cacheConfig.maxFileSizeBytes) {
+            const lines = content.split(/\r?\n/);
+            const sliced = lines.slice(-parsed.data.tail).join('\n');
+            return { content: [{ type: 'text', text: sliced }] };
+          }
           const tailContent = await tailFile(validPath, parsed.data.tail);
           return { content: [{ type: 'text', text: tailContent }] };
         }
         if (parsed.data.head) {
+          const { content, stats } = await readFileWithCache(validPath, { skipReadForLarge: true });
+          if (content !== null && stats.size <= cacheConfig.maxFileSizeBytes) {
+            const lines = content.split(/\r?\n/);
+            const sliced = lines.slice(0, parsed.data.head).join('\n');
+            return { content: [{ type: 'text', text: sliced }] };
+          }
           const headContent = await headFile(validPath, parsed.data.head);
           return { content: [{ type: 'text', text: headContent }] };
         }
-        const content = await readFileContent(validPath);
+        const { content } = await readFileWithCache(validPath);
         return { content: [{ type: 'text', text: content }] };
       }
       case 'read_media_file': {
@@ -622,7 +460,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const results = await Promise.all(parsed.data.paths.map(async (filePath) => {
           try {
             const validPath = await validatePath(filePath);
-            const content = await readFileContent(validPath);
+            const { content } = await readFileWithCache(validPath, { skipReadForLarge: true });
+            if (content === null) {
+              return `${filePath}: Error - File too large to cache for batch read`;
+            }
             return `${filePath}:\n${content}\n`;
           } catch (error) {
             return `${filePath}: Error - ${error instanceof Error ? error.message : String(error)}`;
@@ -635,6 +476,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) throw new Error(`Invalid arguments for write_file: ${parsed.error}`);
         const validPath = await validatePath(parsed.data.path);
         await writeFileContent(validPath, parsed.data.content);
+        invalidateCachesForPath(validPath);
         return { content: [{ type: 'text', text: `Successfully wrote to ${parsed.data.path}` }] };
       }
       case 'write_binary_file': {
@@ -646,6 +488,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const encoding = parsed.data.encoding ?? 'base64';
         const buffer = Buffer.from(parsed.data.content, encoding);
         await fs.writeFile(validPath, buffer);
+        invalidateCachesForPath(validPath);
         return { content: [{ type: 'text', text: `Successfully wrote binary data to ${parsed.data.path}` }] };
       }
       case 'edit_file': {
@@ -653,6 +496,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) throw new Error(`Invalid arguments for edit_file: ${parsed.error}`);
         const validPath = await validatePath(parsed.data.path);
         const result = await applyFileEdits(validPath, parsed.data.edits, parsed.data.dryRun);
+        invalidateCachesForPath(validPath);
         return { content: [{ type: 'text', text: result }] };
       }
       case 'create_directory': {
@@ -660,6 +504,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) throw new Error(`Invalid arguments for create_directory: ${parsed.error}`);
         const validPath = await validatePath(parsed.data.path);
         await fs.mkdir(validPath, { recursive: true });
+        invalidateCachesForPath(validPath);
         return { content: [{ type: 'text', text: `Successfully created directory ${parsed.data.path}` }] };
       }
       case 'delete_file': {
@@ -667,6 +512,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) throw new Error(`Invalid arguments for delete_file: ${parsed.error}`);
         const validPath = await validatePath(parsed.data.path);
         await fs.unlink(validPath);
+        invalidateCachesForPath(validPath);
         return { content: [{ type: 'text', text: `Successfully deleted file ${parsed.data.path}` }] };
       }
       case 'delete_directory': {
@@ -674,35 +520,33 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) throw new Error(`Invalid arguments for delete_directory: ${parsed.error}`);
         const validPath = await validatePath(parsed.data.path);
         await fs.rm(validPath, { recursive: true, force: true });
+        invalidateCachesForPath(validPath);
         return { content: [{ type: 'text', text: `Successfully deleted directory ${parsed.data.path}` }] };
       }
       case 'list_directory': {
         const parsed = ListDirectoryArgsSchema.safeParse(args);
         if (!parsed.success) throw new Error(`Invalid arguments for list_directory: ${parsed.error}`);
         const validPath = await validatePath(parsed.data.path);
-        const entries = await fs.readdir(validPath, { withFileTypes: true });
-        const formatted = entries.map(entry => `${entry.isDirectory() ? '[DIR]' : '[FILE]'} ${entry.name}`).join('\n');
+        const detailed = await listDirectoryDetailedWithCache(validPath);
+        const formatted = detailed.map(entry => `${entry.type === 'directory' ? '[DIR]' : '[FILE]'} ${entry.name}`).join('\n');
         return { content: [{ type: 'text', text: formatted }] };
       }
       case 'list_directory_with_sizes': {
         const parsed = ListDirectoryWithSizesArgsSchema.safeParse(args);
         if (!parsed.success) throw new Error(`Invalid arguments for list_directory_with_sizes: ${parsed.error}`);
         const validPath = await validatePath(parsed.data.path);
-        const entries = await fs.readdir(validPath, { withFileTypes: true });
-        const detailed = await Promise.all(entries.map(async entry => {
-          const entryPath = path.join(validPath, entry.name);
-          try {
-            const stats = await fs.stat(entryPath);
-            return { name: entry.name, isDirectory: entry.isDirectory(), size: stats.size, mtime: stats.mtime };
-          } catch {
-            return { name: entry.name, isDirectory: entry.isDirectory(), size: 0, mtime: new Date(0) };
-          }
+        const detailed = await listDirectoryDetailedWithCache(validPath);
+        const enriched = detailed.map(entry => ({
+          name: entry.name,
+          isDirectory: entry.type === 'directory',
+          size: entry.size || 0,
+          mtime: entry.modified ? new Date(entry.modified) : new Date(0)
         }));
-        const sorted = [...detailed].sort((a, b) => parsed.data.sortBy === 'size' ? b.size - a.size : a.name.localeCompare(b.name));
+        const sorted = [...enriched].sort((a, b) => parsed.data.sortBy === 'size' ? b.size - a.size : a.name.localeCompare(b.name));
         const lines = sorted.map(entry => `${entry.isDirectory ? '[DIR]' : '[FILE]'} ${entry.name.padEnd(30)} ${entry.isDirectory ? '' : formatSize(entry.size).padStart(10)}`);
-        const totalFiles = detailed.filter(e => !e.isDirectory).length;
-        const totalDirs = detailed.filter(e => e.isDirectory).length;
-        const totalSize = detailed.reduce((sum, entry) => sum + (entry.isDirectory ? 0 : entry.size), 0);
+        const totalFiles = enriched.filter(e => !e.isDirectory).length;
+        const totalDirs = enriched.filter(e => e.isDirectory).length;
+        const totalSize = enriched.reduce((sum, entry) => sum + (entry.isDirectory ? 0 : entry.size), 0);
         const summary = ['', `Total: ${totalFiles} files, ${totalDirs} directories`, `Combined size: ${formatSize(totalSize)}`];
         return { content: [{ type: 'text', text: [...lines, ...summary].join('\n') }] };
       }
@@ -710,27 +554,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const parsed = ListDirectoryDetailedArgsSchema.safeParse(args);
         if (!parsed.success) throw new Error(`Invalid arguments for list_directory_detailed: ${parsed.error}`);
         const validPath = await validatePath(parsed.data.path);
-        const entries = await fs.readdir(validPath, { withFileTypes: true });
-        const detailed = await Promise.all(entries.map(async entry => {
-          const entryPath = path.join(validPath, entry.name);
-          try {
-            const stats = await fs.stat(entryPath);
-            return {
-              name: entry.name,
-              type: entry.isDirectory() ? 'directory' : entry.isFile() ? 'file' : 'other',
-              size: stats.size,
-              modified: stats.mtime.toISOString()
-            };
-          } catch {
-            return {
-              name: entry.name,
-              type: entry.isDirectory() ? 'directory' : entry.isFile() ? 'file' : 'other',
-              size: null,
-              modified: null
-            };
-          }
-        }));
-        const ordered = detailed.sort((a, b) => {
+        const detailed = await listDirectoryDetailedWithCache(validPath);
+        const ordered = [...detailed].sort((a, b) => {
           const typeOrder = { directory: 0, file: 1, other: 2 };
           const diff = (typeOrder[a.type] ?? 3) - (typeOrder[b.type] ?? 3);
           if (diff !== 0) return diff;
@@ -763,6 +588,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const validSource = await validatePath(parsed.data.source);
         const validDestination = await validatePath(parsed.data.destination);
         await fs.rename(validSource, validDestination);
+        invalidateCachesForPath(validSource);
+        invalidateCachesForPath(validDestination);
         return { content: [{ type: 'text', text: `Successfully moved ${parsed.data.source} to ${parsed.data.destination}` }] };
       }
       case 'copy_file': {
@@ -783,6 +610,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
         const overwrite = Boolean(parsed.data.overwrite);
         await copyRecursive(validSource, validDestination, overwrite);
+        invalidateCachesForPath(validDestination);
         return {
           content: [{
             type: 'text',
