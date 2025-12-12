@@ -74,32 +74,49 @@
             <div class="panel list">
                 <div class="list-header">
                     <span>Directory Contents</span>
-                    <button id="toggleListButton" class="toggle-list" title="Toggle directory view"
-                            aria-label="Hide directory panel">
-                        <svg class="toggle-icon" xmlns="http://www.w3.org/2000/svg" width="22" height="22"
-                             viewBox="0 0 22 22" aria-hidden="true">
-                            <path class="toggle-folder"
-                                  d="M2.5 18.5h17a1.5 1.5 0 0 0 1.5-1.5V9A1.5 1.5 0 0 0 19.5 7.5h-8.6l-1.8-2H4.5A1.5 1.5 0 0 0 3 7v10a1.5 1.5 0 0 0 1.5 1.5Z"/>
-                            <g class="icon-inward">
-                                <path d="M5.5 12.5 H9.5 M7.8 10 L9.5 12.5 L7.8 15"/>
-                                <path d="M16.5 12.5 H12.5 M14.2 10 L12.5 12.5 L14.2 15"/>
-                            </g>
-                            <g class="icon-outward">
-                                <path d="M11 12.5 H6 M8 10 L6 12.5 L8 15"/>
-                                <path d="M11 12.5 H16 M13 10 L16 12.5 L13 15"/>
-                            </g>
-                        </svg>
-                    </button>
+                    <div class="list-header-actions">
+                        <div class="column-visibility">
+                            <button id="columnVisibilityButton" class="toggle-list view-button" title="Choose columns" aria-haspopup="true" aria-expanded="false">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                                    <circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+                                    <circle cx="4.5" cy="8" r="1" fill="currentColor"/>
+                                    <circle cx="8" cy="8" r="1" fill="currentColor"/>
+                                    <circle cx="11.5" cy="8" r="1" fill="currentColor"/>
+                                </svg>
+                            </button>
+                            <div class="column-visibility-menu" id="columnVisibilityMenu" role="menu">
+                                <label><input type="checkbox" data-column="type" checked> Type</label>
+                                <label><input type="checkbox" data-column="size" checked> Size</label>
+                                <label><input type="checkbox" data-column="modified" checked> Modified</label>
+                            </div>
+                        </div>
+                        <button id="toggleListButton" class="toggle-list" title="Toggle directory view"
+                                aria-label="Hide directory panel">
+                            <svg class="toggle-icon" xmlns="http://www.w3.org/2000/svg" width="22" height="22"
+                                 viewBox="0 0 22 22" aria-hidden="true">
+                                <path class="toggle-folder"
+                                      d="M2.5 18.5h17a1.5 1.5 0 0 0 1.5-1.5V9A1.5 1.5 0 0 0 19.5 7.5h-8.6l-1.8-2H4.5A1.5 1.5 0 0 0 3 7v10a1.5 1.5 0 0 0 1.5 1.5Z"/>
+                                <g class="icon-inward">
+                                    <path d="M5.5 12.5 H9.5 M7.8 10 L9.5 12.5 L7.8 15"/>
+                                    <path d="M16.5 12.5 H12.5 M14.2 10 L12.5 12.5 L14.2 15"/>
+                                </g>
+                                <g class="icon-outward">
+                                    <path d="M11 12.5 H6 M8 10 L6 12.5 L8 15"/>
+                                    <path d="M11 12.5 H16 M13 10 L16 12.5 L13 15"/>
+                                </g>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
                 <div class="entries">
                     <table>
                         <thead>
                         <tr>
                             <th>Name</th>
-                            <th>Type</th>
-                            <th>Size</th>
-                            <th>Modified</th>
-                            <th>Actions</th>
+                            <th class="col-type">Type</th>
+                            <th class="col-size">Size</th>
+                            <th class="col-modified">Modified</th>
+                            <th class="col-actions"></th>
                         </tr>
                         </thead>
                         <tbody id="entriesBody">$$entriesHTML</tbody>

@@ -375,11 +375,11 @@ export function buildEntriesHTML(state, helpers) {
             ` : '';
         rows.push(`
             <tr${classAttr}${clipboardAttr} data-entry-path="${entryPath}" data-type="${entry.type}">
-                <td ${entryAttributes} data-local-action="selectEntry"><span class="icon">${icon}</span> ${entry.name}</td>
-                <td ${entryAttributes} data-local-action="selectEntry">${entry.type}</td>
-                <td ${entryAttributes} data-local-action="selectEntry">${entry.type === 'directory' ? '—' : formatBytes(entry.size)}</td>
-                <td ${entryAttributes} data-local-action="selectEntry">${entry.modified ? formatDate(entry.modified) : '—'}</td>
-                <td class="actions-cell">
+                <td class="col-name" ${entryAttributes} data-local-action="selectEntry"><span class="icon">${icon}</span> ${entry.name}</td>
+                <td class="col-type" ${entryAttributes} data-local-action="selectEntry">${entry.type}</td>
+                <td class="col-size" ${entryAttributes} data-local-action="selectEntry">${entry.type === 'directory' ? '—' : formatBytes(entry.size)}</td>
+                <td class="col-modified" ${entryAttributes} data-local-action="selectEntry">${entry.modified ? formatDate(entry.modified) : '—'}</td>
+                <td class="actions-cell col-actions">
                     <div class="${actionMenuClass}" data-action-menu="true" data-entry-path="${entryPath}">
                         <button type="button" class="secondary action-menu-trigger" data-local-action="toggleActionMenu" ${entryAttributes}
                                 aria-haspopup="true" aria-expanded="${isMenuOpen ? 'true' : 'false'}" aria-controls="${menuId}" title="More actions">

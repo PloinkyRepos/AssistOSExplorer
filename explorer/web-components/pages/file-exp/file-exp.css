@@ -228,6 +228,64 @@ main {
     color: var(--text);
 }
 
+.list-header-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.column-visibility {
+    position: relative;
+}
+
+.column-visibility-menu {
+    position: absolute;
+    top: 110%;
+    right: 0;
+    background: var(--file-exp-panel);
+    border: 1px solid var(--file-exp-border);
+    border-radius: 8px;
+    box-shadow: 0 12px 24px rgba(15, 23, 42, 0.18);
+    padding: 8px 10px;
+    display: none;
+    min-width: 180px;
+    z-index: 10;
+}
+
+.column-visibility-menu.open {
+    display: block;
+}
+
+.view-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    cursor: pointer;
+    color: inherit;
+    transition: background 0.12s ease, box-shadow 0.12s ease;
+    border: none;
+    background: none;
+}
+
+.view-button:hover {
+    background: var(--file-exp-subtle-surface);
+    box-shadow: 0 6px 12px rgba(15, 23, 42, 0.12);
+}
+
+.column-visibility-menu label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+    font-size: 0.95rem;
+    cursor: pointer;
+}
+
+.column-hidden {
+    display: none;
+}
+
 #toggleListButton {
     cursor: pointer;
     border: none;

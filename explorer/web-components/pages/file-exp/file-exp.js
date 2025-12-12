@@ -52,6 +52,7 @@ export class FileExp {
             clipboard: null,
             openMenuPath: null,
             filterSpecs: this.loadFilterSpecsPreference(),
+            columnVisibility: this.loadColumnVisibilityPreference(),
             searchMenuOpen: false,
             searchOverlay: null,
             searchByNameQuery: '',
@@ -240,6 +241,48 @@ export class FileExp {
             toggleListButton.dataset.bound = 'true';
         }
         updateToggleState();
+
+        const columnMenuButton = this.element.querySelector('#columnVisibilityButton');
+        const columnMenu = this.element.querySelector('#columnVisibilityMenu');
+        if (columnMenuButton && columnMenu && !columnMenuButton.dataset.bound) {
+            const toggleMenu = () => {
+                const isOpen = columnMenu.classList.toggle('open');
+                columnMenuButton.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+            };
+            columnMenuButton.addEventListener('click', (e) => {
+                e.stopPropagation();
+                toggleMenu();
+            });
+            document.addEventListener('click', (e) => {
+                if (!columnMenu.contains(e.target) && e.target !== columnMenuButton) {
+                    columnMenu.classList.remove('open');
+                    columnMenuButton.setAttribute('aria-expanded', 'false');
+                }
+            });
+            columnMenuButton.dataset.bound = 'true';
+        }
+
+        const columnCheckboxes = this.element.querySelectorAll('#columnVisibilityMenu input[type="checkbox"]');
+        if (columnCheckboxes && columnCheckboxes.length) {
+            columnCheckboxes.forEach((checkbox) => {
+                const column = checkbox.dataset.column;
+                if (column && this.state.columnVisibility[column] !== undefined) {
+                    checkbox.checked = Boolean(this.state.columnVisibility[column]);
+                }
+                if (!checkbox.dataset.bound) {
+                    checkbox.addEventListener('change', (event) => {
+                        const col = event.target.dataset.column;
+                        if (!col) return;
+                        this.state.columnVisibility[col] = Boolean(event.target.checked);
+                        this.saveColumnVisibilityPreference(this.state.columnVisibility);
+                        this.applyColumnVisibility();
+                    });
+                    checkbox.dataset.bound = 'true';
+                }
+            });
+        }
+
+        this.applyColumnVisibility();
 
         const resizer = this.element.querySelector('#resizer');
         let startX = 0;
@@ -714,6 +757,46 @@ export class FileExp {
         } catch (_) {
             // ignore
         }
+    }
+
+    loadColumnVisibilityPreference() {
+        const defaults = { type: true, size: true, modified: true };
+        try {
+            const raw = window.localStorage.getItem('assistosExplorerColumnVisibility');
+            if (!raw) return defaults;
+            const parsed = JSON.parse(raw);
+            return {
+                type: parsed.type !== false,
+                size: parsed.size !== false,
+                modified: parsed.modified !== false
+            };
+        } catch (_) {
+            return defaults;
+        }
+    }
+
+    saveColumnVisibilityPreference(value) {
+        try {
+            const payload = {
+                type: Boolean(value?.type),
+                size: Boolean(value?.size),
+                modified: Boolean(value?.modified)
+            };
+            window.localStorage.setItem('assistosExplorerColumnVisibility', JSON.stringify(payload));
+        } catch (_) {
+            // ignore
+        }
+    }
+
+    applyColumnVisibility() {
+        const columns = ['type', 'size', 'modified'];
+        columns.forEach((col) => {
+            const visible = this.state.columnVisibility?.[col] !== false;
+            const cells = this.element.querySelectorAll(`.col-${col}`);
+            cells.forEach((cell) => {
+                cell.classList.toggle('column-hidden', !visible);
+            });
+        });
     }
 
     escapeCssId(value) {
