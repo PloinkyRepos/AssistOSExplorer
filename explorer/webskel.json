@@ -167,6 +167,11 @@
       "presenterClassName": "InsertImageModal"
     },
     {
+      "name": "file-search-modal",
+      "type": "modals",
+      "presenterClassName": "FileSearchModal"
+    },
+    {
       "name": "variable-values-tab",
       "type": "modals",
       "presenterClassName": "VariableValuesTab"

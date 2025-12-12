@@ -1,0 +1,68 @@
+<div class="search-modal">
+    <div class="search-modal-header">
+        <div class="search-modal-title-group">
+            <div class="search-modal-title">Search</div>
+            <div class="search-modal-subtitle">Find files or text in the workspace</div>
+        </div>
+        <button type="button" class="icon-button" id="searchModalClose" data-local-action="closeModal" action=""
+                aria-label="Close search">✕
+        </button>
+    </div>
+    <div class="search-modal-body">
+        <div class="search-overlay" id="searchByNameOverlay" aria-hidden="true">
+            <div class="search-overlay-card">
+                <div class="search-overlay-header">
+                    <div>
+                        <div class="search-overlay-title">Search file</div>
+                        <div class="search-overlay-subtitle">Jump to a file by name (Cmd/Ctrl+P)</div>
+                    </div>
+                    <div class="search-exclude-wrapper">
+                        <label>Excluded files:</label>
+                        <input type="text" id="searchByNameExclude" class="search-exclude"
+                               placeholder="Exclude (comma separated globs)" autocomplete="off">
+
+                    </div>
+                </div>
+                <div class="search-overlay-body">
+                    <div class="search-row">
+                        <input type="text" id="searchByNameInput" placeholder="Type a file or folder name..."
+                               autocomplete="off">
+                    </div>
+                    <div class="search-status" id="searchByNameStatus"></div>
+                    <div class="search-results" id="searchByNameResults"></div>
+                </div>
+            </div>
+        </div>
+        <div class="search-overlay" id="searchInFilesOverlay" aria-hidden="true">
+            <div class="search-overlay-card">
+                <div class="search-overlay-header">
+                    <div>
+                        <div class="search-overlay-title">Search in files</div>
+                        <div class="search-overlay-subtitle">Find text across workspace (Cmd/Ctrl+Shift+F)</div>
+                    </div>
+                    <div class="search-exclude-wrapper">
+                        <label>Excluded files:</label>
+                        <input type="text" id="searchInFilesExclude" class="search-exclude"
+                               placeholder="Exclude (comma separated globs)" autocomplete="off">
+                    </div>
+                </div>
+                <div class="search-overlay-body">
+                    <div class="search-row search-row-primary">
+                        <div class="search-query-group">
+                            <input type="text" id="searchInFilesQuery" placeholder="Search text..." autocomplete="off">
+                            <button type="button" class="search-run-button" id="searchInFilesRun">Search</button>
+                        </div>
+                    </div>
+                    <div class="search-row search-row-secondary">
+                        <label class="search-toggle">
+                            <input type="checkbox" id="searchInFilesCase">
+                            Case sensitive
+                        </label>
+                    </div>
+                    <div class="search-status" id="searchInFilesStatus"></div>
+                    <div class="search-results" id="searchInFilesResults"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
