@@ -4,6 +4,32 @@ import { parsePatterns, groupMatchesByFile } from "./file-exp-utils.js";
 export function attachSearchController(fileExp) {
     const getState = () => fileExp.state;
     const getEl = (selector) => fileExp.element?.querySelector(selector);
+    const defaultExclude = 'node_modules,.git';
+
+    function resetSearchByNameForm() {
+        const state = getState();
+        state.searchByNameQuery = '';
+        state.searchByNameExclude = defaultExclude;
+        state.searchByNameResults = [];
+        state.searchByNameLoading = false;
+        state.searchByNameError = null;
+        if (fileExp.searchByNameTimer) {
+            clearTimeout(fileExp.searchByNameTimer);
+            fileExp.searchByNameTimer = null;
+        }
+    }
+
+    function resetSearchInFilesForm() {
+        const state = getState();
+        state.searchInFilesQuery = '';
+        state.searchInFilesExclude = defaultExclude;
+        state.searchInFilesCaseSensitive = false;
+        state.searchInFilesResults = [];
+        state.searchInFilesFileResults = [];
+        state.searchInFilesLoading = false;
+        state.searchInFilesError = null;
+        state.searchInFilesTruncated = false;
+    }
 
     function updateSearchUI() {
         const state = getState();
@@ -122,6 +148,7 @@ export function attachSearchController(fileExp) {
 
     function openSearchByName() {
         const state = getState();
+        resetSearchByNameForm();
         state.searchOverlay = 'name';
         state.searchMenuOpen = false;
         updateSearchUI();
@@ -130,6 +157,7 @@ export function attachSearchController(fileExp) {
 
     function openSearchInFiles() {
         const state = getState();
+        resetSearchInFilesForm();
         state.searchOverlay = 'in-files';
         state.searchMenuOpen = false;
         updateSearchUI();
@@ -262,7 +290,7 @@ export function attachSearchController(fileExp) {
             row.type = 'button';
             row.className = 'search-result-item';
             row.setAttribute('data-local-action', 'openSearchResult');
-            row.dataset.path = item.path;
+            row.dataset.filePath = item.path;
             const name = document.createElement('div');
             name.className = 'search-result-path';
             name.textContent = item.name;
@@ -364,7 +392,7 @@ export function attachSearchController(fileExp) {
             row.type = 'button';
             row.className = 'search-result-item';
             row.setAttribute('data-local-action', 'openSearchResult');
-            row.dataset.path = item.path;
+            row.dataset.filePath = item.path;
             if (item.firstLine) {
                 row.dataset.line = item.firstLine;
             }
@@ -385,7 +413,7 @@ export function attachSearchController(fileExp) {
     }
 
     async function openSearchResult(element) {
-        const path = element?.dataset?.path;
+        const path = element?.dataset?.filePath;
         if (!path) return;
         const line = element.dataset.line ? Number.parseInt(element.dataset.line, 10) : null;
         const state = getState();

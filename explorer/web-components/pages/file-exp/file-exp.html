@@ -37,21 +37,28 @@
                 New File
             </button>
             <div class="search-dropdown">
-                <button id="searchMenuButton" class="secondary search-menu-trigger" title="Search options" data-local-action="toggleSearchMenu" aria-haspopup="true" aria-expanded="false">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-search" viewBox="0 0 16 16" aria-hidden="true">
+                <button id="searchMenuButton" class="secondary search-menu-trigger" title="Search options"
+                        data-local-action="toggleSearchMenu" aria-haspopup="true" aria-expanded="false">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
+                         class="bi bi-search" viewBox="0 0 16 16" aria-hidden="true">
                         <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.415l-3.85-3.85zm-5.242.656a5 5 0 1 1 0-10 5 5 0 0 1 0 10z"/>
                     </svg>
                     Search
                     <span class="chevron">▾</span>
                 </button>
                 <div class="search-dropdown-menu" id="searchMenuDropdown" role="menu">
-                    <div  class="search-dropdown-item" data-local-action="openSearchByName" role="menuitem">Search file (name)</div>
-                    <div class="search-dropdown-item" data-local-action="openSearchInFiles" role="menuitem">Search in files (content)</div>
+                    <div class="search-dropdown-item" data-local-action="openSearchByName" role="menuitem">Search file
+                        (name)
+                    </div>
+                    <div class="search-dropdown-item" data-local-action="openSearchInFiles" role="menuitem">Search in
+                        files (content)
+                    </div>
                 </div>
             </div>
             <div class="clipboard-group">
                 <span id="clipboardInfo" class="clipboard-info"></span>
-                <button id="clearClipboardButton" class="secondary" title="Clear the current clipboard selection" data-local-action="clearClipboard" disabled>
+                <button id="clearClipboardButton" class="secondary" title="Clear the current clipboard selection"
+                        data-local-action="clearClipboard" disabled>
                     Clear
                 </button>
             </div>
@@ -60,15 +67,19 @@
                 Filter specs (.md)
             </label>
             <span class="toolbar-spacer"></span>
-            <a class="primary-button" href="/soplangAgent/web/build-status.html" target="_blank" rel="noopener">Open Builder</a>
+            <a class="primary-button" href="/soplangAgent/web/build-status.html" target="_blank" rel="noopener">Open
+                Builder</a>
         </div>
         <div class="workspace">
             <div class="panel list">
                 <div class="list-header">
                     <span>Directory Contents</span>
-                    <button id="toggleListButton" class="toggle-list" title="Toggle directory view" aria-label="Hide directory panel">
-                        <svg class="toggle-icon" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
-                            <path class="toggle-folder" d="M2.5 18.5h17a1.5 1.5 0 0 0 1.5-1.5V9A1.5 1.5 0 0 0 19.5 7.5h-8.6l-1.8-2H4.5A1.5 1.5 0 0 0 3 7v10a1.5 1.5 0 0 0 1.5 1.5Z"/>
+                    <button id="toggleListButton" class="toggle-list" title="Toggle directory view"
+                            aria-label="Hide directory panel">
+                        <svg class="toggle-icon" xmlns="http://www.w3.org/2000/svg" width="22" height="22"
+                             viewBox="0 0 22 22" aria-hidden="true">
+                            <path class="toggle-folder"
+                                  d="M2.5 18.5h17a1.5 1.5 0 0 0 1.5-1.5V9A1.5 1.5 0 0 0 19.5 7.5h-8.6l-1.8-2H4.5A1.5 1.5 0 0 0 3 7v10a1.5 1.5 0 0 0 1.5 1.5Z"/>
                             <g class="icon-inward">
                                 <path d="M5.5 12.5 H9.5 M7.8 10 L9.5 12.5 L7.8 15"/>
                                 <path d="M16.5 12.5 H12.5 M14.2 10 L12.5 12.5 L14.2 15"/>
@@ -103,7 +114,9 @@
                         <span id="editorFileName" class="preview-filename"></span>
                     </div>
                     <div id="markdownViewActions" class="hidden">
-                        <button id="toggleMarkdownViewButton" class="secondary" data-local-action="toggleMarkdownView">View as text</button>
+                        <button id="toggleMarkdownViewButton" class="secondary" data-local-action="toggleMarkdownView">
+                            View as text
+                        </button>
                     </div>
                     <div id="editorActions" class="hidden">
                         <button id="editButton" data-local-action="editFile">Edit</button>
@@ -129,12 +142,16 @@
                     <div class="search-overlay-title">Search file</div>
                     <div class="search-overlay-subtitle">Jump to a file by name (Cmd/Ctrl+P)</div>
                 </div>
-                <button type="button" class="icon-button" data-local-action="closeSearchOverlays" aria-label="Close search">✕</button>
+                <button type="button" class="icon-button" data-local-action="closeSearchOverlays"
+                        aria-label="Close search">✕
+                </button>
             </div>
             <div class="search-overlay-body">
                 <div class="search-row">
-                    <input type="text" id="searchByNameInput" placeholder="Type a file or folder name..." autocomplete="off">
-                    <input type="text" id="searchByNameExclude" class="search-exclude" placeholder="Exclude (comma separated globs)" autocomplete="off">
+                    <input type="text" id="searchByNameInput" placeholder="Type a file or folder name..."
+                           autocomplete="off">
+                    <input type="text" id="searchByNameExclude" class="search-exclude"
+                           placeholder="Exclude (comma separated globs)" autocomplete="off">
                 </div>
                 <div class="search-status" id="searchByNameStatus"></div>
                 <div class="search-results" id="searchByNameResults"></div>
@@ -148,19 +165,33 @@
                     <div class="search-overlay-title">Search in files</div>
                     <div class="search-overlay-subtitle">Find text across workspace (Cmd/Ctrl+Shift+F)</div>
                 </div>
-                <button type="button" class="icon-button" data-local-action="closeSearchOverlays" aria-label="Close search">✕</button>
+                <button type="button" class="icon-button" data-local-action="closeSearchOverlays"
+                        aria-label="Close search">✕
+                </button>
             </div>
             <div class="search-overlay-body">
-                <div class="search-row">
-                    <input type="text" id="searchInFilesQuery" placeholder="Search text..." autocomplete="off">
-                    <input type="text" id="searchInFilesExclude" class="search-exclude" placeholder="Exclude (comma separated globs)" autocomplete="off">
+                <section class="search-restrictions">
+
+                    <div class="search-row search-exclude-wrapper">
+                        <label class="search-toggle">Exclude files</label>
+                        <input type="text" id="searchInFilesExclude" class="search-exclude"
+                               placeholder="Exclude (comma separated globs)" autocomplete="off">
+                    </div>
+                </section>
+
+                <div class="search-row search-row-primary">
+                    <div class="search-query-group">
+                        <input type="text" id="searchInFilesQuery" placeholder="Search text..." autocomplete="off">
+                        <button type="button" class="search-run-button" data-local-action="runSearchInFiles">Search
+                        </button>
+                    </div>
+
                 </div>
                 <div class="search-row search-row-secondary">
                     <label class="search-toggle">
                         <input type="checkbox" id="searchInFilesCase">
                         Case sensitive
                     </label>
-                    <button type="button" class="primary" data-local-action="runSearchInFiles">Search</button>
                 </div>
                 <div class="search-status" id="searchInFilesStatus"></div>
                 <div class="search-results" id="searchInFilesResults"></div>
