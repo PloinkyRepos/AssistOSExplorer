@@ -4,6 +4,8 @@ import { URL } from 'node:url';
 import fs from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import path from 'node:path';
+import readline from 'node:readline';
+import { minimatch } from 'minimatch';
 
 import { server as mcpServer, streamHttp as mcpStreamHttp, types as mcpTypes, zod as mcpZod } from 'mcp-sdk';
 import { copyRecursive, createCacheHelpers } from './utils/filesystem-utils.mjs';
@@ -237,6 +239,131 @@ function resolvePathsInArgs(args) {
 // so we can bypass the library's validation by replacing it with a passthrough function.
 const validatePath = async (p) => p;
 
+const MAX_TEXT_SEARCH_FILE_BYTES = Number.parseInt(process.env.SEARCH_TEXT_MAX_BYTES || '2097152', 10);
+const DEFAULT_TEXT_SEARCH_EXCLUDES = ['**/node_modules/**', '**/.git/**', '**/dist/**', '**/build/**', '**/.DS_Store'];
+
+function isPathWithinAllowedDirectories(targetPath) {
+  const normalized = path.resolve(targetPath);
+  return allowedDirectories.some((dir) => normalized.startsWith(path.resolve(dir)));
+}
+
+async function isLikelyBinaryFile(filePath) {
+  let handle;
+  try {
+    handle = await fs.open(filePath, 'r');
+    const buffer = Buffer.alloc(1024);
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+    const slice = buffer.subarray(0, bytesRead);
+    return slice.includes(0);
+  } catch {
+    return false;
+  } finally {
+    if (handle) {
+      await handle.close();
+    }
+  }
+}
+
+async function searchTextWithinWorkspace(rootPath, options, config = {}) {
+  const maxBytesPerFile = config.maxBytesPerFile || MAX_TEXT_SEARCH_FILE_BYTES;
+  const mergedExclude = [...DEFAULT_TEXT_SEARCH_EXCLUDES, ...(options.excludePatterns || [])];
+  const caseSensitive = Boolean(options.caseSensitive);
+  const normalizedQuery = caseSensitive ? options.query : options.query.toLowerCase();
+  const maxResults = options.maxResults || 200;
+  const results = [];
+  let truncated = false;
+  let stop = false;
+
+  if (!isPathWithinAllowedDirectories(rootPath)) {
+    throw new Error('Access denied: path is outside allowed directories.');
+  }
+
+  const shouldExclude = (relativePath) => mergedExclude.some((pattern) => {
+    let glob = pattern;
+    if (!pattern.includes('*')) {
+      glob = pattern.includes('.')
+        ? `**/${pattern}`
+        : `**/${pattern}/**`;
+    }
+    return minimatch(relativePath, glob, { dot: true, nocase: !caseSensitive });
+  });
+
+  const searchFileForQuery = async (filePath, relativePath) => {
+    let handle;
+    try {
+      const stats = await fs.stat(filePath);
+      if (stats.size > maxBytesPerFile) {
+        return;
+      }
+      if (await isLikelyBinaryFile(filePath)) {
+        return;
+      }
+      handle = await fs.open(filePath, 'r');
+      const stream = handle.createReadStream({ encoding: 'utf8' });
+      const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+      let lineNumber = 0;
+      for await (const line of rl) {
+        lineNumber++;
+        const haystack = caseSensitive ? line : line.toLowerCase();
+        if (haystack.includes(normalizedQuery)) {
+          results.push({
+            path: relativePath ? `/${relativePath}` : '/',
+            line: lineNumber,
+            preview: line.trim().slice(0, 200)
+          });
+          if (results.length >= maxResults) {
+            truncated = true;
+            stop = true;
+            rl.close();
+            stream.destroy();
+            break;
+          }
+        }
+        if (stop) {
+          break;
+        }
+      }
+    } catch {
+      // swallow individual file errors to keep search running
+    } finally {
+      if (handle) {
+        await handle.close();
+      }
+    }
+  };
+
+  const walk = async (currentPath) => {
+    if (stop) return;
+    let entries;
+    try {
+      entries = await fs.readdir(currentPath, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (stop) break;
+      const fullPath = path.join(currentPath, entry.name);
+      try {
+        await validatePath(fullPath);
+      } catch {
+        continue;
+      }
+      const relativePath = path.relative(workspaceRoot, fullPath);
+      if (shouldExclude(relativePath || entry.name)) {
+        continue;
+      }
+      if (entry.isDirectory()) {
+        await walk(fullPath);
+      } else if (entry.isFile()) {
+        await searchFileForQuery(fullPath, relativePath);
+      }
+    }
+  };
+
+  await walk(rootPath);
+  return { results, truncated };
+}
+
 
 const ReadTextFileArgsSchema = z.object({
   path: z.string(),
@@ -267,6 +394,13 @@ const CopyFileArgsSchema = z.object({
   overwrite: z.boolean().optional().default(false)
 });
 const SearchFilesArgsSchema = z.object({ path: z.string(), pattern: z.string(), excludePatterns: z.array(z.string()).optional().default([]) });
+const SearchTextArgsSchema = z.object({
+  path: z.string(),
+  query: z.string(),
+  caseSensitive: z.boolean().optional().default(false),
+  maxResults: z.number().int().positive().max(5000).optional().default(200),
+  excludePatterns: z.array(z.string()).optional().default([])
+});
 const GetFileInfoArgsSchema = z.object({ path: z.string() });
 const CollectIDEPluginsArgsSchema = z.object({});
 const ToolInputSchema = ToolSchema.shape.inputSchema;
@@ -377,6 +511,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       name: 'search_files',
       description: 'Recursive search for files and directories matching a pattern.',
       inputSchema: zodToJsonSchema(SearchFilesArgsSchema)
+    },
+    {
+      name: 'search_text',
+      description: 'Search for text matches inside files under a path.',
+      inputSchema: zodToJsonSchema(SearchTextArgsSchema)
     },
     {
       name: 'get_file_info',
@@ -623,7 +762,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) throw new Error(`Invalid arguments for search_files: ${parsed.error}`);
         const validPath = await validatePath(parsed.data.path);
         const results = await searchFilesWithValidation(validPath, parsed.data.pattern, allowedDirectories, { excludePatterns: parsed.data.excludePatterns });
-        return { content: [{ type: 'text', text: results.length > 0 ? results.join('\n') : 'No matches found' }] };
+        const relativeResults = results.map(p => {
+          const rel = path.relative(workspaceRoot, p);
+          return rel ? `/${rel}` : '/';
+        });
+        return {
+          content: [{
+            type: 'text',
+            text: relativeResults.length > 0 ? relativeResults.join('\n') : 'No matches found'
+          }]
+        };
+      }
+      case 'search_text': {
+        const parsed = SearchTextArgsSchema.safeParse(args);
+        if (!parsed.success) throw new Error(`Invalid arguments for search_text: ${parsed.error}`);
+        const validPath = await validatePath(parsed.data.path);
+        const { results, truncated } = await searchTextWithinWorkspace(validPath, parsed.data, { maxBytesPerFile: MAX_TEXT_SEARCH_FILE_BYTES });
+        const payload = { results, truncated };
+        const text = JSON.stringify(payload);
+        return { content: [{ type: 'text', text }] };
       }
       case 'get_file_info': {
         const parsed = GetFileInfoArgsSchema.safeParse(args);

@@ -266,7 +266,6 @@ main {
 .workspace {
     display: grid;
     grid-template-columns: minmax(260px, 1.1fr) minmax(300px, 1.4fr);
-    margin-top: clamp(16px, 3vw, 28px);
     flex: 1;
 }
 .list-header,
