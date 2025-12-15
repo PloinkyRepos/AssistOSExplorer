@@ -586,12 +586,39 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           '.mp3': 'audio/mpeg',
           '.wav': 'audio/wav',
           '.ogg': 'audio/ogg',
-          '.flac': 'audio/flac'
+          '.flac': 'audio/flac',
+          '.aac': 'audio/aac',
+          '.m4a': 'audio/mp4',
+          '.mp4': 'video/mp4',
+          '.m4v': 'video/mp4',
+          '.webm': 'video/webm',
+          '.ogv': 'video/ogg',
+          '.mov': 'video/quicktime',
+          '.avi': 'video/x-msvideo',
+          '.mkv': 'video/x-matroska'
         };
         const mimeType = mimeTypes[extension] || 'application/octet-stream';
         const data = await readFileAsBase64Stream(validPath);
-        const type = mimeType.startsWith('image/') ? 'image' : mimeType.startsWith('audio/') ? 'audio' : 'blob';
-        return { content: [{ type, data, mimeType }] };
+        const name = path.basename(validPath);
+        if (mimeType.startsWith('image/')) {
+          return { content: [{ type: 'image', data, mimeType }] };
+        }
+        if (mimeType.startsWith('audio/')) {
+          return { content: [{ type: 'audio', data, mimeType }] };
+        }
+        // For video or other binary formats, return as a resource with a data URI
+        const dataUrl = `data:${mimeType};base64,${data}`;
+        return {
+          content: [{
+            type: 'resource',
+            resource: {
+              uri: dataUrl,
+              name,
+              mimeType,
+              text: dataUrl
+            }
+          }]
+        };
       }
       case 'read_multiple_files': {
         const parsed = ReadMultipleFilesArgsSchema.safeParse(args);

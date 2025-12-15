@@ -122,15 +122,22 @@ const buildUIHelpers = () => {
             toast.classList.add('timeout-toast', type);
             toast.innerHTML = `
                 <div class="toast-left">
+                    <img src="./assets/icons/${type}.svg" alt="${type} icon" class="toast-icon">
                     <span class="message-type">${type.charAt(0).toUpperCase() + type.slice(1)}:</span>
                     <span class="toast-message">${message}</span>
                 </div>
-                <button class="close" aria-label="Close">&times;</button>
+                <button class="close" aria-label="Close">
+                    <img class="close-icon" src="./assets/icons/x-mark.svg" alt="close">
+                </button>
             `;
 
             const removeToast = () => {
                 toast.remove();
+                if (!container.hasChildNodes()) {
+                    container.remove();
+                }
             };
+
             const closeButton = toast.querySelector('.close');
             closeButton.addEventListener('click', removeToast);
             container.appendChild(toast);
@@ -344,6 +351,7 @@ const buildLlmModule = () => ({
 const createAssistOS = (options = {}) => {
     const { ui: providedUI, modules: moduleOverrides, runtimePlugins } = options;
     const ui = providedUI ?? buildUIHelpers();
+    const fallbackUI = buildUIHelpers();
     const workspaceState = {
         plugins: JSON.parse(JSON.stringify(runtimePlugins || {})),
         currentDocumentId: null,
@@ -387,9 +395,7 @@ const createAssistOS = (options = {}) => {
             if (typeof ui.showToast === 'function') {
                 return ui.showToast(...args);
             }
-            const [message, type = 'info'] = args;
-            console.log(`[${type}] ${message}`);
-            return undefined;
+            return fallbackUI.showToast(...args);
         },
         workspace: workspaceState,
         user: {

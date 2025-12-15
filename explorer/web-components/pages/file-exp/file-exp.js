@@ -9,6 +9,9 @@ import {
     parseDetailedDirectoryListing,
     buildEntriesHTML,
     isMarkdownFile,
+    isImageFile,
+    isAudioFile,
+    isVideoFile,
     prepareMarkdownPreviewContent,
     renderMarkdownPreview,
     renderCodePreview,
@@ -68,7 +71,9 @@ export class FileExp {
             searchInFilesLoading: false,
             searchInFilesError: null,
             searchInFilesTruncated: false,
-            pendingHighlight: null
+            pendingHighlight: null,
+            previewMode: 'none',
+            mediaType: null
         };
         this.pendingMenuFocusPath = null;
         this.searchByNameTimer = null;
@@ -177,7 +182,7 @@ export class FileExp {
             editingActions.classList.remove('hidden');
         } else {
             editingActions.classList.add('hidden');
-            if (this.state.selectedPath) {
+            if (this.state.selectedPath && this.state.previewMode !== 'media') {
                 editorActions.classList.remove('hidden');
             } else {
                 editorActions.classList.add('hidden');
@@ -192,6 +197,10 @@ export class FileExp {
             } else {
                 previewContent.innerHTML = `<file-editor data-presenter="file-editor" data-path="${this.state.selectedPath}"></file-editor>`;
             }
+        } else if (this.state.previewMode === 'media') {
+            this.detachPreviewAnchorHandler();
+            const content = this.state.previewContent || '<div class="preview-placeholder">Unable to preview file.</div>';
+            previewContent.innerHTML = `<div class="media-preview">${content}</div>`;
         } else if (this.state.selectedIsMarkdown) {
             if (this.state.markdownTextView) {
                 previewContent.innerHTML = `<pre id="filePreview" class="markdown-raw-view"></pre>`;
@@ -476,6 +485,8 @@ export class FileExp {
             this.state.fileContent = "";
             this.state.previewContent = "";
             this.state.selectedIsMarkdown = false;
+            this.state.previewMode = 'none';
+            this.state.mediaType = null;
             this.state.markdownTextView = false;
             this.state.documentId = null;
             this.state.isEditing = false;
@@ -516,48 +527,115 @@ export class FileExp {
         }
     }
 
-    async openFile(filePath) {
+    async tryLoadMediaPreview(filePath) {
+        const isMedia = isImageFile(filePath) || isAudioFile(filePath) || isVideoFile(filePath);
+        if (!isMedia) {
+            return false;
+        }
         try {
-            const contentResult = await window.webSkel.appServices.callTool('explorer', 'read_text_file', {path: filePath});
-            this.state.fileContent = contentResult.text;
-            this.state.selectedIsMarkdown = this.isMarkdownFile(filePath);
+            const result = await window.webSkel.appServices.callTool('explorer', 'read_media_file', { path: filePath });
+            const blocks = Array.isArray(result?.blocks) ? result.blocks : [];
+            const content = Array.isArray(result?.content) ? result.content : [];
+            const block = [...blocks, ...content].find((item) => item?.data || item?.resource?.uri);
+            if (!block) {
+                throw new Error('No media data returned.');
+            }
+
+            const mimeType = block.mimeType || block.resource?.mimeType || 'application/octet-stream';
+            const src = block.resource?.uri
+                ? block.resource.uri
+                : `data:${mimeType};base64,${block.data}`;
+
+            const type = block.type === 'image' || mimeType.startsWith('image/')
+                ? 'image'
+                : block.type === 'audio' || mimeType.startsWith('audio/')
+                    ? 'audio'
+                    : block.type === 'video' || mimeType.startsWith('video/')
+                        ? 'video'
+                        : 'resource';
+
+            let markup = '';
+            if (type === 'audio') {
+                markup = `<audio controls class="media-audio" preload="metadata" src="${src}"></audio>`;
+            } else if (type === 'video') {
+                markup = `<video controls class="media-video" preload="metadata" src="${src}"></video>`;
+            } else if (type === 'image') {
+                markup = `<img src="${src}" alt="Preview of ${filePath.split('/').pop()}" class="media-image">`;
+            } else {
+                markup = `<a href="${src}" target="_blank" rel="noopener">Open media</a>`;
+            }
+
+            this.state.previewMode = 'media';
+            this.state.mediaType = type;
+            this.state.previewContent = markup;
+            this.state.selectedIsMarkdown = false;
+            this.state.fileContent = '';
             this.state.markdownTextView = false;
             this.state.documentId = null;
             this.state.hasUnsavedChanges = false;
-            if (this.state.selectedIsMarkdown) {
-                const previewSource = this.prepareMarkdownPreviewContent(this.state.fileContent);
-                this.state.previewContent = renderMarkdownPreview(previewSource);
-                this.state.markdownTextView = false;
-                try {
-                    const documentModule = window.assistOS?.loadModule?.('document');
-                    if (documentModule) {
-                        const doc = await documentModule.loadDocument(filePath);
-                        this.state.documentId = doc?.id ?? null;
-                        if (doc?.id) {
-                            window.assistOS.workspace.currentDocumentId = doc.id;
-                            window.assistOS.workspace.currentDocumentPath = filePath;
-                        }
-                    }
-                } catch (docError) {
-                    console.warn('Failed to load document module for', filePath, docError);
-                    this.state.documentId = null;
-                }
-            } else {
-                this.state.previewContent = renderCodePreview(this.state.fileContent, filePath);
-                this.state.markdownTextView = false;
-            }
-            if (this.state.pendingHighlight && this.state.pendingHighlight.path === this.normalizePath(filePath)) {
-                const lineNumber = this.state.pendingHighlight.line;
-                this.state.pendingHighlight = null;
-                setTimeout(() => scrollToLine(this.element, lineNumber), 0);
-            } else {
-                this.state.pendingHighlight = null;
-            }
-            this.invalidate();
+            return true;
         } catch (err) {
-            console.error(err);
-            this.showStatus(err.message || 'Failed to read file.', true);
+            console.warn('Media preview failed', err);
+            this.showStatus(err.message || 'Could not preview media file.', true);
+            this.state.previewMode = 'code';
+            this.state.mediaType = null;
+            return false;
         }
+    }
+
+    async openFile(filePath) {
+        await this.withLoader(async () => {
+            try {
+                this.state.previewMode = 'code';
+                this.state.mediaType = null;
+                if (await this.tryLoadMediaPreview(filePath)) {
+                    this.invalidate();
+                    return;
+                }
+
+                const contentResult = await window.webSkel.appServices.callTool('explorer', 'read_text_file', {path: filePath});
+                this.state.fileContent = contentResult.text;
+                this.state.selectedIsMarkdown = this.isMarkdownFile(filePath);
+                this.state.markdownTextView = false;
+                this.state.documentId = null;
+                this.state.hasUnsavedChanges = false;
+                if (this.state.selectedIsMarkdown) {
+                    const previewSource = this.prepareMarkdownPreviewContent(this.state.fileContent);
+                    this.state.previewContent = renderMarkdownPreview(previewSource);
+                    this.state.markdownTextView = false;
+                    this.state.previewMode = 'markdown';
+                    try {
+                        const documentModule = window.assistOS?.loadModule?.('document');
+                        if (documentModule) {
+                            const doc = await documentModule.loadDocument(filePath);
+                            this.state.documentId = doc?.id ?? null;
+                            if (doc?.id) {
+                                window.assistOS.workspace.currentDocumentId = doc.id;
+                                window.assistOS.workspace.currentDocumentPath = filePath;
+                            }
+                        }
+                    } catch (docError) {
+                        console.warn('Failed to load document module for', filePath, docError);
+                        this.state.documentId = null;
+                    }
+                } else {
+                    this.state.previewContent = renderCodePreview(this.state.fileContent, filePath);
+                    this.state.markdownTextView = false;
+                    this.state.previewMode = 'code';
+                }
+                if (this.state.pendingHighlight && this.state.pendingHighlight.path === this.normalizePath(filePath)) {
+                    const lineNumber = this.state.pendingHighlight.line;
+                    this.state.pendingHighlight = null;
+                    setTimeout(() => scrollToLine(this.element, lineNumber), 0);
+                } else {
+                    this.state.pendingHighlight = null;
+                }
+                this.invalidate();
+            } catch (err) {
+                console.error(err);
+                this.showStatus(err.message || 'Failed to read file.', true);
+            }
+        });
     }
 
     async editFile() {

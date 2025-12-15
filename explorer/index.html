@@ -9,9 +9,15 @@
 </head>
 <body>
 <div id="page_content"></div>
-<dialog id="before_webskel_loader" class="spinner">
+<dialog id="before_webskel_loader" class="spinner" open>
     <div class="spinner-container">
-        <div class="spin"></div>
+        <div class="spinner-shell">
+            <div class="spinner-orbit">
+                <span></span><span></span><span></span>
+            </div>
+            <div class="spinner-caption">
+            </div>
+        </div>
     </div>
 </dialog>
 <script type="module" src="main.js" defer></script>

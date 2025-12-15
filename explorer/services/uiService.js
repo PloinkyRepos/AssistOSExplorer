@@ -36,20 +36,30 @@ class UIService {
         }
 
         const toast = document.createElement("div");
-        toast.className = `toast toast-${type}`;
-        toast.textContent = message;
-        this.toastContainer.appendChild(toast);
+        toast.classList.add("timeout-toast", type);
+        toast.innerHTML = `
+            <div class="toast-left">
+                <img src="./assets/icons/${type}.svg" alt="${type} icon" class="toast-icon">
+                <span class="message-type">${type.charAt(0).toUpperCase() + type.slice(1)}:</span>
+                <span class="toast-message">${message}</span>
+            </div>
+            <button class="close" aria-label="Close">
+                <img class="close-icon" src="./assets/icons/x-mark.svg" alt="close">
+            </button>
+        `;
 
-        window.setTimeout(() => {
-            toast.classList.add("toast-hide");
-            toast.addEventListener("transitionend", () => {
-                toast.remove();
-                if (!this.toastContainer.children.length) {
-                    this.toastContainer.remove();
-                    this.toastContainer = null;
-                }
-            });
-        }, duration);
+        const removeToast = () => {
+            toast.remove();
+            if (!this.toastContainer?.children.length) {
+                this.toastContainer?.remove();
+                this.toastContainer = null;
+            }
+        };
+
+        const closeButton = toast.querySelector(".close");
+        closeButton?.addEventListener("click", removeToast);
+        this.toastContainer.appendChild(toast);
+        window.setTimeout(removeToast, duration);
     }
 }
 

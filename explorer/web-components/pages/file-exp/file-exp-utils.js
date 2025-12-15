@@ -162,6 +162,32 @@ export function isMarkdownFile(path) {
     return typeof path === 'string' && /\.md$/i.test(path);
 }
 
+export function getFileTypeFromPath(path) {
+    if (!path || typeof path !== 'string') return '';
+    const parts = path.split('.');
+    if (parts.length < 2) return '';
+    return parts.pop().toLowerCase();
+}
+
+const imageExtensions = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'tiff', 'tif'];
+const audioExtensions = ['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a'];
+const videoExtensions = ['mp4', 'webm', 'ogv', 'mov', 'm4v', 'avi', 'mkv'];
+
+export function isImageFile(path) {
+    const ext = getFileTypeFromPath(path);
+    return imageExtensions.includes(ext);
+}
+
+export function isAudioFile(path) {
+    const ext = getFileTypeFromPath(path);
+    return audioExtensions.includes(ext);
+}
+
+export function isVideoFile(path) {
+    const ext = getFileTypeFromPath(path);
+    return videoExtensions.includes(ext);
+}
+
 export function prepareMarkdownPreviewContent(rawText) {
     if (!rawText) return '';
     const unescaped = unescapeHtmlEntities(rawText);
@@ -413,11 +439,4 @@ export function buildEntriesHTML(state, helpers) {
     });
 
     return rows.join('');
-}
-
-function getFileTypeFromPath(path) {
-    if (!path || typeof path !== 'string') return '';
-    const parts = path.split('.');
-    if (parts.length < 2) return '';
-    return parts.pop().toLowerCase();
 }

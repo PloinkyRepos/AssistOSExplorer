@@ -65,7 +65,17 @@ async function start() {
 
     attachUiFallbacks(webSkel);
 
-    webSkel.setLoading(`<div class="spinner-container"><div class="spin"></div></div>`);
+    webSkel.setLoading(`
+        <div class="spinner-container">
+            <div class="spinner-shell">
+                <div class="spinner-orbit">
+                    <span></span><span></span><span></span>
+                </div>
+                <div class="spinner-caption">
+                </div>
+            </div>
+        </div>
+    `);
     webSkel.setDomElementForPages(document.querySelector("#page_content"));
     const loader = document.querySelector("#before_webskel_loader");
     loader.close();
