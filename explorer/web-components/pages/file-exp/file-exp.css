@@ -116,6 +116,40 @@ main {
     display: inline-block;
 }
 
+.clipboard-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.clipboard-inline button {
+    padding: 6px 10px;
+}
+
+.context-paste-menu {
+    z-index: 9999;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 14px 28px rgba(15, 23, 42, 0.18);
+    padding: 8px;
+}
+
+.context-paste-menu button {
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    padding: 8px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.context-paste-menu button:hover {
+    box-shadow: 0 10px 18px rgba(37, 99, 235, 0.28);
+    transform: translateY(-1px);
+}
+
 .search-menu-trigger {
     display: inline-flex;
     align-items: center;
@@ -499,7 +533,7 @@ th {
 }
 
 .hidden {
-    display: none;
+    display: none !important;
 }
 
 .markdown-preview {

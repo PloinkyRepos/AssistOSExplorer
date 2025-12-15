@@ -15,7 +15,9 @@ import {
     prepareMarkdownPreviewContent,
     renderMarkdownPreview,
     renderCodePreview,
-    scrollToLine
+    scrollToLine,
+    scrollPreviewToAnchor,
+    showContextPasteMenu
 } from "./file-exp-utils.js";
 import { attachSearchController } from "./file-exp-search.js";
 import { attachFsActions } from "./file-exp-fs-actions.js";
@@ -91,6 +93,7 @@ export class FileExp {
         this.boundMenuKeydown = this.handleMenuKeydown.bind(this);
         this.outsideMenuListenerAttached = false;
         this.menuKeydownListenerAttached = false;
+        this.boundContextMenu = this.handleContextMenu.bind(this);
     }
 
     async withLoader(fn) {
@@ -122,6 +125,10 @@ export class FileExp {
         }
         if (this.boundOutsideSearchMenuClick) {
             document.removeEventListener('click', this.boundOutsideSearchMenuClick, true);
+        }
+        const entriesContainer = this.element?.querySelector('.entries');
+        if (entriesContainer) {
+            entriesContainer.removeEventListener('contextmenu', this.boundContextMenu, true);
         }
     }
 
@@ -374,11 +381,19 @@ export class FileExp {
 
         const clipboard = this.state.clipboard;
         const clearClipboardButton = this.element.querySelector('#clearClipboardButton');
+        const pasteHereButton = this.element.querySelector('#pasteHereButton');
         if (clearClipboardButton) {
             if (clipboard) {
                 clearClipboardButton.removeAttribute('disabled');
             } else {
                 clearClipboardButton.setAttribute('disabled', 'true');
+            }
+        }
+        if (pasteHereButton) {
+            if (clipboard) {
+                pasteHereButton.classList.remove('hidden');
+            } else {
+                pasteHereButton.classList.add('hidden');
             }
         }
 
@@ -443,6 +458,12 @@ export class FileExp {
 
         this.setupSearchBindings();
         this.updateSearchUI();
+
+        const entriesContainer = this.element.querySelector('.entries');
+        if (entriesContainer && !entriesContainer.dataset.contextBound) {
+            entriesContainer.addEventListener('contextmenu', this.boundContextMenu, true);
+            entriesContainer.dataset.contextBound = 'true';
+        }
     }
 
     async loadDirectoryContent(path) {
@@ -877,16 +898,6 @@ export class FileExp {
         });
     }
 
-    escapeCssId(value) {
-        if (!value) {
-            return '';
-        }
-        if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
-            return CSS.escape(value);
-        }
-        return value.replace(/([ !"#$%&'()*+,./:;<=>?@[\]^`{|}~])/g, '\\$1');
-    }
-
     attachPreviewAnchorHandler() {
         const previewRoot = this.element.querySelector('#filePreview');
         if (!previewRoot) {
@@ -923,19 +934,35 @@ export class FileExp {
         if (!previewRoot) {
             return;
         }
-        const selector = this.escapeCssId(targetId);
-        const target = selector
-            ? previewRoot.querySelector(`[id="${selector}"], a[href="#${selector}"]`)
-            : null;
-        if (!target) {
+        scrollPreviewToAnchor(previewRoot, targetId);
+    }
+
+    handleContextMenu(event) {
+        const row = event.target?.closest?.('tr[data-entry-path]');
+        if (row) {
+            event.preventDefault();
+            event.stopPropagation();
+            const path = row.dataset.entryPath;
+            const type = row.dataset.type;
+            if (!path || this.state.isEditing) {
+                return;
+            }
+            this.state.selectedPath = path;
+            this.state.selectedIsMarkdown = this.isMarkdownFile(path) && type === 'file';
+            this.closeActionMenu(false);
+            this.state.openMenuPath = path;
+            this.pendingMenuFocusPath = path;
+            this.invalidate();
             return;
         }
-        if (typeof target.scrollIntoView === 'function') {
-            target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        } else {
-            const container = previewRoot.parentElement || previewRoot;
-            const offset = target.getBoundingClientRect().top - previewRoot.getBoundingClientRect().top;
-            container.scrollTop += offset;
+        if (this.state.clipboard) {
+            event.preventDefault();
+            event.stopPropagation();
+            showContextPasteMenu({
+                x: event.clientX,
+                y: event.clientY,
+                onPaste: () => this.pasteClipboard({ dataset: { targetPath: this.state.path } })
+            });
         }
     }
 

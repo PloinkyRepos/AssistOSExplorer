@@ -162,6 +162,30 @@ export function isMarkdownFile(path) {
     return typeof path === 'string' && /\.md$/i.test(path);
 }
 
+export function escapeCssId(value) {
+    if (!value) return '';
+    if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
+        return CSS.escape(value);
+    }
+    return value.replace(/([ !"#$%&'()*+,./:;<=>?@[\]^`{|}~])/g, '\\$1');
+}
+
+export function scrollPreviewToAnchor(previewRoot, targetId) {
+    if (!previewRoot || !targetId) return;
+    const selector = escapeCssId(targetId);
+    const target = selector
+        ? previewRoot.querySelector(`[id="${selector}"], a[name="${selector}"], a[href="#${selector}"]`)
+        : null;
+    if (!target) return;
+    if (typeof target.scrollIntoView === 'function') {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+        const container = previewRoot.parentElement || previewRoot;
+        const offset = target.getBoundingClientRect().top - previewRoot.getBoundingClientRect().top;
+        container.scrollTop += offset;
+    }
+}
+
 export function getFileTypeFromPath(path) {
     if (!path || typeof path !== 'string') return '';
     const parts = path.split('.');
@@ -355,6 +379,31 @@ export function scrollToLine(rootElement, lineNumber) {
     if (codeParent) {
         codeParent.scrollTop = offsetTop - 20;
     }
+}
+
+export function showContextPasteMenu({ x, y, onPaste }) {
+    const menu = document.createElement('div');
+    menu.className = 'context-paste-menu';
+    menu.style.position = 'absolute';
+    menu.style.top = `${y}px`;
+    menu.style.left = `${x}px`;
+    menu.innerHTML = `<button type="button" class="context-paste-action">Paste here</button>`;
+    document.body.appendChild(menu);
+    const cleanup = () => {
+        menu.remove();
+        document.removeEventListener('click', onOutside, true);
+    };
+    const onOutside = (e) => {
+        if (!menu.contains(e.target)) {
+            cleanup();
+        }
+    };
+    menu.querySelector('button')?.addEventListener('click', () => {
+        cleanup();
+        onPaste?.();
+    });
+    document.addEventListener('click', onOutside, true);
+    return cleanup;
 }
 
 export function buildEntriesHTML(state, helpers) {

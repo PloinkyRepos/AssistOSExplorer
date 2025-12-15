@@ -312,6 +312,10 @@ main {
     display: none;
 }
 
+.hidden {
+    display: none !important;
+}
+
 .preview-content file-editor {
     height: 100%;
     display: block;

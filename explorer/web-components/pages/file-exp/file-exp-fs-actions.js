@@ -89,6 +89,10 @@ export function attachFsActions(fileExp) {
             this.invalidate();
         },
 
+        pasteHere() {
+            return this.pasteClipboard({ dataset: { targetPath: this.state.path } });
+        },
+
         toggleActionMenu(element, maybeEvent) {
             if (maybeEvent?.stopPropagation) maybeEvent.stopPropagation();
             if (maybeEvent?.preventDefault) maybeEvent.preventDefault();
@@ -193,7 +197,6 @@ export function attachFsActions(fileExp) {
                             source: clipboard.path,
                             destination
                         });
-                        this.state.clipboard = null;
                         this.showStatus(`Moved to ${destination}.`);
                     } else {
                         let overwrite = false;
@@ -232,6 +235,8 @@ export function attachFsActions(fileExp) {
                 console.error(err);
                 this.showStatus(err.message || 'Failed to paste item.', true);
             }
+            this.state.clipboard = null;
+            this.invalidate();
         },
 
         async newFile() {
