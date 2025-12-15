@@ -47,7 +47,8 @@ export function attachSearchController(fileExp) {
             searchByNameExclude: state.searchByNameExclude || defaultExclude,
             searchInFilesQuery: state.searchInFilesQuery || '',
             searchInFilesExclude: state.searchInFilesExclude || defaultExclude,
-            searchInFilesCase: Boolean(state.searchInFilesCaseSensitive)
+            searchInFilesCase: Boolean(state.searchInFilesCaseSensitive),
+            basePath: fileExp.normalizePath(state.path || '/')
         }, true);
 
         if (result && result.path) {

@@ -8,6 +8,7 @@ export class FileSearchModal {
         this.defaultExclude = 'node_modules,.git';
         this.state = {
             mode: props.mode || 'name',
+            basePath: props.basePath || '/',
             searchByNameQuery: props.searchByNameQuery || '',
             searchByNameExclude: props.searchByNameExclude || this.defaultExclude,
             searchByNameResults: [],
@@ -206,7 +207,7 @@ export class FileSearchModal {
         try {
             const excludePatterns = parsePatterns(this.state.searchByNameExclude);
             const result = await window.webSkel.appServices.callTool('explorer', 'search_files', {
-                path: '/',
+                path: this.state.basePath || '/',
                 pattern: query,
                 excludePatterns
             });
@@ -250,7 +251,7 @@ export class FileSearchModal {
         try {
             const excludePatterns = parsePatterns(this.state.searchInFilesExclude);
             const result = await window.webSkel.appServices.callTool('explorer', 'search_text', {
-                path: '/',
+                path: this.state.basePath || '/',
                 query,
                 caseSensitive: this.state.searchInFilesCase,
                 excludePatterns
