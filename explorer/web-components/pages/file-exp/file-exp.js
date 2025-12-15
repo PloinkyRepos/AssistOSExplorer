@@ -913,6 +913,8 @@ export class FileExp {
         if (!href || href.length <= 1) {
             return;
         }
+        event.preventDefault();
+        event.stopPropagation();
         const targetId = href.slice(1);
         if (!targetId) {
             return;
@@ -922,11 +924,12 @@ export class FileExp {
             return;
         }
         const selector = this.escapeCssId(targetId);
-        const target = selector ? previewRoot.querySelector(`#${selector}`) : null;
+        const target = selector
+            ? previewRoot.querySelector(`[id="${selector}"], a[href="#${selector}"]`)
+            : null;
         if (!target) {
             return;
         }
-        event.preventDefault();
         if (typeof target.scrollIntoView === 'function') {
             target.scrollIntoView({ behavior: 'smooth', block: 'start' });
         } else {
