@@ -273,7 +273,29 @@ export function renderMarkdownPreview(markdown) {
         activeList = { type };
     };
 
-    lines.forEach((rawLine) => {
+    const isTableRow = (line) => {
+        const trimmed = (line || '').trim();
+        if (!trimmed.includes('|')) return false;
+        const pipes = (trimmed.match(/\|/g) || []).length;
+        if (pipes < 2) return false;
+        return /^\|?.*\|.*$/.test(trimmed);
+    };
+    const isTableDivider = (line) => {
+        const trimmed = (line || '').trim();
+        if (!trimmed.includes('|')) return false;
+        const cells = trimmed.replace(/^\||\|$/g, '').split('|').map(cell => cell.trim());
+        return cells.length >= 2 && cells.every(cell => /^:?-{3,}:?$/.test(cell));
+    };
+    const parseTableRow = (line) => {
+        const trimmed = (line || '').trim();
+        return trimmed
+            .replace(/^\||\|$/g, '')
+            .split('|')
+            .map(cell => renderInline(escapeHtml(cell.trim())));
+    };
+
+    for (let idx = 0; idx < lines.length; idx += 1) {
+        const rawLine = lines[idx];
         const line = rawLine.trimEnd();
 
         if (line.trim().startsWith('```')) {
@@ -289,18 +311,39 @@ export function renderMarkdownPreview(markdown) {
                 const langClass = codeLanguage ? ` class="language-${escapeHtml(codeLanguage)}"` : '';
                 html.push(`<pre><code${langClass}>`);
             }
-            return;
+            continue;
         }
 
         if (inCodeBlock) {
             html.push(`${escapeHtml(rawLine)}\n`);
-            return;
+            continue;
         }
 
         if (/^\s*$/.test(line)) {
             flushParagraph();
             closeActiveList();
-            return;
+            continue;
+        }
+
+        if (isTableRow(line) && isTableDivider(lines[idx + 1] || '')) {
+            flushParagraph();
+            closeActiveList();
+            const headerCells = parseTableRow(line);
+            const bodyRows = [];
+            idx += 2; // skip divider line as well
+            while (idx < lines.length && isTableRow(lines[idx])) {
+                bodyRows.push(parseTableRow(lines[idx]));
+                idx += 1;
+            }
+            idx -= 1; // compensate for loop increment
+
+            const headerHtml = headerCells.map(cell => `<th>${cell}</th>`).join('');
+            const bodyHtml = bodyRows
+                .map(row => `<tr>${row.map(cell => `<td>${cell}</td>`).join('')}</tr>`)
+                .join('');
+
+            html.push(`<table class="markdown-table"><thead><tr>${headerHtml}</tr></thead>${bodyRows.length ? `<tbody>${bodyHtml}</tbody>` : ''}</table>`);
+            continue;
         }
 
         const headingMatch = line.match(/^(#{1,6})\s+(.*)$/);
@@ -317,7 +360,7 @@ export function renderMarkdownPreview(markdown) {
             const rendered = renderInline(escapeHtml(headingContent));
             const anchorHtml = anchorId ? `<a id="${escapeHtml(anchorId)}"></a>` : '';
             html.push(`${anchorHtml}<h${level}>${rendered}</h${level}>`);
-            return;
+            continue;
         }
 
         const listMatch = line.match(/^[-*+]\s+(.*)$/);
@@ -325,7 +368,7 @@ export function renderMarkdownPreview(markdown) {
             flushParagraph();
             ensureList('ul');
             html.push(`<li>${renderInline(escapeHtml(listMatch[1]))}</li>`);
-            return;
+            continue;
         }
 
         const orderedMatch = line.match(/^\s*(\d+)\.\s+(.*)$/);
@@ -334,11 +377,11 @@ export function renderMarkdownPreview(markdown) {
             const startNumber = parseInt(orderedMatch[1], 10) || 1;
             ensureList('ol', startNumber);
             html.push(`<li>${renderInline(escapeHtml(orderedMatch[2]))}</li>`);
-            return;
+            continue;
         }
 
         paragraphBuffer.push(escapeHtml(line.trim()));
-    });
+    }
 
     if (inCodeBlock) {
         html.push('</code></pre>');

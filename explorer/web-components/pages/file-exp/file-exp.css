@@ -745,6 +745,29 @@ th {
     padding: 0;
 }
 
+.markdown-preview table.markdown-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.95rem;
+}
+
+.markdown-preview table.markdown-table th,
+.markdown-preview table.markdown-table td {
+    border: 1px solid var(--file-exp-border);
+    padding: 8px 10px;
+    text-align: left;
+}
+
+.markdown-preview table.markdown-table thead {
+    background: var(--file-exp-subtle-surface);
+    font-weight: 600;
+}
+
+:root.theme-dark .markdown-preview table.markdown-table thead {
+    background: rgba(255, 255, 255, 0.06);
+}
+
 .markdown-preview a {
     color: var(--accent);
     text-decoration: none;

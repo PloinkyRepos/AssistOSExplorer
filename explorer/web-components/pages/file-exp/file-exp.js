@@ -230,7 +230,8 @@ export class FileExp {
                 previewContent.innerHTML = `<div id="filePreview" class="markdown-preview"></div>`;
                 const filePreview = this.element.querySelector("#filePreview");
                 if (this.state.selectedPath) {
-                    filePreview.innerHTML = this.state.previewContent;
+                    const content = typeof this.state.previewContent === 'string' ? this.state.previewContent : '';
+                    filePreview.innerHTML = content;
                 } else {
                     filePreview.textContent = "Select a file to see its contents.";
                 }
@@ -249,6 +250,7 @@ export class FileExp {
 
         const toggleListButton = this.element.querySelector('#toggleListButton');
         const listPanel = this.element.querySelector('.list');
+        const previewPanel = this.element.querySelector('.preview');
 
         const updateToggleState = () => {
             const collapsed = listPanel.classList.contains('collapsed');
@@ -256,6 +258,25 @@ export class FileExp {
             toggleListButton.setAttribute('title', collapsed ? 'Expand directory panel' : 'Collapse directory panel');
             toggleListButton.setAttribute('aria-label', collapsed ? 'Expand directory panel' : 'Collapse directory panel');
         };
+
+        const applySavedWidth = () => {
+            if (listPanel && !listPanel.classList.contains('collapsed')) {
+                if (!this.state.listWidth && listPanel.offsetWidth) {
+                    this.state.listWidth = listPanel.offsetWidth;
+                }
+                if (this.state.listWidth) {
+                    const widthPx = `${this.state.listWidth}px`;
+                    listPanel.style.width = widthPx;
+                    listPanel.style.flex = '0 0 auto';
+                    listPanel.style.flexBasis = widthPx;
+                    if (previewPanel) {
+                        previewPanel.style.flex = '1 1 auto';
+                    }
+                }
+            }
+        };
+
+        applySavedWidth();
 
         if (listPanel && !listPanel.classList.contains('collapsed')) {
             if (!this.state.listWidth && listPanel.offsetWidth) {
@@ -277,6 +298,9 @@ export class FileExp {
                     listPanel.style.width = `${this.state.listWidth}px`;
                 }
                 updateToggleState();
+                if (!listPanel.classList.contains('collapsed')) {
+                    applySavedWidth();
+                }
             });
             toggleListButton.dataset.bound = 'true';
         }
@@ -330,9 +354,14 @@ export class FileExp {
 
         const handleMouseMove = (e) => {
             if (!this.state.isResizing) return;
-            const newWidth = startWidth + (e.clientX - startX);
-            if (newWidth > 200) {
-                listPanel.style.width = `${newWidth}px`;
+            const delta = e.clientX - startX;
+            const newWidth = Math.max(200, startWidth + delta);
+            const widthPx = `${newWidth}px`;
+            listPanel.style.width = widthPx;
+            listPanel.style.flex = '0 0 auto';
+            listPanel.style.flexBasis = widthPx;
+            if (previewPanel) {
+                previewPanel.style.flex = '1 1 auto';
             }
         };
 
@@ -349,8 +378,13 @@ export class FileExp {
         const handleMouseDown = (e) => {
             e.preventDefault();
             startX = e.clientX;
-            startWidth = listPanel.offsetWidth;
+            startWidth = listPanel.getBoundingClientRect().width || this.state.listWidth || listPanel.offsetWidth;
             this.state.isResizing = true;
+            listPanel.style.flex = '0 0 auto';
+            listPanel.style.flexBasis = `${startWidth}px`;
+            if (previewPanel) {
+                previewPanel.style.flex = '1 1 auto';
+            }
             document.addEventListener('mousemove', handleMouseMove);
             document.addEventListener('mouseup', handleMouseUp);
         };
@@ -737,7 +771,7 @@ export class FileExp {
                 this.state.hasUnsavedChanges = false;
                 if (this.state.selectedIsMarkdown) {
                     const previewSource = this.prepareMarkdownPreviewContent(this.state.fileContent);
-                    this.state.previewContent = renderMarkdownPreview(previewSource);
+                    this.state.previewContent = renderMarkdownPreview(previewSource || '') || '';
                     this.state.markdownTextView = false;
                     this.state.previewMode = 'markdown';
                     if (!this.state.fileLoadInfo?.truncated) {
