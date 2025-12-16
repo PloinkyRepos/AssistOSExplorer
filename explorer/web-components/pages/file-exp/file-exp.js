@@ -893,7 +893,10 @@ export class FileExp {
         breadcrumbsEl.innerHTML = '';
         const rootButton = document.createElement('button');
         rootButton.textContent = '/';
-        rootButton.addEventListener('click', () => this.loadDirectory('/'));
+        rootButton.addEventListener('click', () => {
+            history.pushState(null, '', '#file-exp/');
+            this.loadDirectory('/');
+        });
         breadcrumbsEl.appendChild(rootButton);
 
         if (!this.state.path || this.state.path === '/') return;
@@ -906,7 +909,10 @@ export class FileExp {
             const btn = document.createElement('button');
             btn.textContent = `${segment} \/`;
             const path = current;
-            btn.addEventListener('click', () => this.loadDirectory(path));
+            btn.addEventListener('click', () => {
+                history.pushState(null, '', `#file-exp${path}`);
+                this.loadDirectory(path);
+            });
             breadcrumbsEl.appendChild(btn);
         });
     }
