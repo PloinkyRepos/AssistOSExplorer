@@ -381,7 +381,14 @@ export function scrollToLine(rootElement, lineNumber) {
     }
 }
 
+let activeContextPasteCleanup = null;
+
 export function showContextPasteMenu({ x, y, onPaste }) {
+    // Ensure only one paste context menu is visible at a time
+    if (typeof activeContextPasteCleanup === 'function') {
+        activeContextPasteCleanup();
+    }
+
     const menu = document.createElement('div');
     menu.className = 'context-paste-menu';
     menu.style.position = 'absolute';
@@ -392,6 +399,9 @@ export function showContextPasteMenu({ x, y, onPaste }) {
     const cleanup = () => {
         menu.remove();
         document.removeEventListener('click', onOutside, true);
+        if (activeContextPasteCleanup === cleanup) {
+            activeContextPasteCleanup = null;
+        }
     };
     const onOutside = (e) => {
         if (!menu.contains(e.target)) {
@@ -403,6 +413,7 @@ export function showContextPasteMenu({ x, y, onPaste }) {
         onPaste?.();
     });
     document.addEventListener('click', onOutside, true);
+    activeContextPasteCleanup = cleanup;
     return cleanup;
 }
 

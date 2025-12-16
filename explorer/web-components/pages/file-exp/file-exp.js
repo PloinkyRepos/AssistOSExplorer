@@ -22,6 +22,9 @@ import {
 import { attachSearchController } from "./file-exp-search.js";
 import { attachFsActions } from "./file-exp-fs-actions.js";
 
+const LARGE_FILE_PREVIEW_LIMIT_BYTES = 1.5 * 1024 * 1024; // ~1.5MB safety window before transport limits
+const LARGE_FILE_PREVIEW_LINES = 400;
+
 export class FileExp {
     constructor(element, invalidate) {
         this.element = element;
@@ -75,7 +78,11 @@ export class FileExp {
             searchInFilesTruncated: false,
             pendingHighlight: null,
             previewMode: 'none',
-            mediaType: null
+            mediaType: null,
+            fileLoadInfo: null,
+            sortBy: 'name',
+            sortDir: 'asc',
+            listWidth: null
         };
         this.pendingMenuFocusPath = null;
         this.searchByNameTimer = null;
@@ -183,13 +190,14 @@ export class FileExp {
 
         const editorActions = this.element.querySelector("#editorActions");
         const editingActions = this.element.querySelector("#editingActions");
+        const isTruncatedPreview = Boolean(this.state.fileLoadInfo?.truncated);
 
         if (this.state.isEditing) {
             editorActions.classList.add('hidden');
             editingActions.classList.remove('hidden');
         } else {
             editingActions.classList.add('hidden');
-            if (this.state.selectedPath && this.state.previewMode !== 'media') {
+            if (this.state.selectedPath && this.state.previewMode !== 'media' && !isTruncatedPreview) {
                 editorActions.classList.remove('hidden');
             } else {
                 editorActions.classList.add('hidden');
@@ -249,9 +257,25 @@ export class FileExp {
             toggleListButton.setAttribute('aria-label', collapsed ? 'Expand directory panel' : 'Collapse directory panel');
         };
 
+        if (listPanel && !listPanel.classList.contains('collapsed')) {
+            if (!this.state.listWidth && listPanel.offsetWidth) {
+                this.state.listWidth = listPanel.offsetWidth;
+            }
+            if (this.state.listWidth) {
+                listPanel.style.width = `${this.state.listWidth}px`;
+            }
+        }
+
         if (!toggleListButton.dataset.bound) {
             toggleListButton.addEventListener('click', () => {
+                const willCollapse = !listPanel.classList.contains('collapsed');
+                if (willCollapse && !this.state.listWidth && listPanel.offsetWidth) {
+                    this.state.listWidth = listPanel.offsetWidth;
+                }
                 listPanel.classList.toggle('collapsed');
+                if (!listPanel.classList.contains('collapsed') && this.state.listWidth) {
+                    listPanel.style.width = `${this.state.listWidth}px`;
+                }
                 updateToggleState();
             });
             toggleListButton.dataset.bound = 'true';
@@ -314,6 +338,10 @@ export class FileExp {
 
         const handleMouseUp = () => {
             this.state.isResizing = false;
+            const currentWidth = listPanel.offsetWidth;
+            if (currentWidth > 0) {
+                this.state.listWidth = currentWidth;
+            }
             document.removeEventListener('mousemove', handleMouseMove);
             document.removeEventListener('mouseup', handleMouseUp);
         };
@@ -379,9 +407,23 @@ export class FileExp {
             fileNameLabel.textContent = fallbackName;
         }
 
+        const previewNotice = this.element.querySelector('#previewNotice');
+        if (previewNotice) {
+            if (this.state.fileLoadInfo?.truncated) {
+                const info = this.state.fileLoadInfo;
+                const previewLines = info.previewLines || LARGE_FILE_PREVIEW_LINES;
+                const sizeText = Number.isFinite(info.size) ? this.formatBytes(info.size) : 'large';
+                previewNotice.textContent = info.message
+                    || `File is ${sizeText}; showing first ${previewLines} lines only. Editing is disabled for this view.`;
+                previewNotice.classList.remove('hidden');
+            } else {
+                previewNotice.textContent = '';
+                previewNotice.classList.add('hidden');
+            }
+        }
+
         const clipboard = this.state.clipboard;
         const clearClipboardButton = this.element.querySelector('#clearClipboardButton');
-        const pasteHereButton = this.element.querySelector('#pasteHereButton');
         if (clearClipboardButton) {
             if (clipboard) {
                 clearClipboardButton.removeAttribute('disabled');
@@ -389,37 +431,20 @@ export class FileExp {
                 clearClipboardButton.setAttribute('disabled', 'true');
             }
         }
-        if (pasteHereButton) {
-            if (clipboard) {
-                pasteHereButton.classList.remove('hidden');
-            } else {
-                pasteHereButton.classList.add('hidden');
-            }
-        }
-
         const clipboardGroup = this.element.querySelector('.clipboard-group');
         const clipboardInfo = this.element.querySelector('#clipboardInfo');
-        if (clipboardInfo && clipboardGroup) {
-            if (clipboard) {
-                clipboardInfo.textContent = `${clipboard.mode === 'cut' ? 'Cut' : 'Copy'}: ${clipboard.name}`;
-                clipboardInfo.classList.add('visible');
-                clipboardGroup.classList.add('visible');
-            } else {
-                clipboardInfo.textContent = '';
-                clipboardInfo.classList.remove('visible');
-                clipboardGroup.classList.remove('visible');
+        const sortButtons = this.element.querySelectorAll('[data-sort-key]');
+        sortButtons.forEach((btn) => {
+            if (!btn.dataset.sortBound) {
+                btn.addEventListener('click', (event) => this.handleSortClick(event));
+                btn.dataset.sortBound = 'true';
             }
-        }
-
-        if (clipboard?.path) {
-            const clipboardRow = this.element.querySelector(`tr[data-entry-path="${clipboard.path}"]`);
-            if (clipboardRow) {
-                clipboardRow.classList.add('clipboard-row');
-                clipboardRow.classList.toggle('clipboard-cut', clipboard.mode === 'cut');
-                clipboardRow.classList.toggle('clipboard-copy', clipboard.mode === 'copy');
-            }
-        }
-
+            const key = btn.dataset.sortKey;
+            const isActive = this.state.sortBy === key;
+            btn.classList.toggle('active', isActive);
+            btn.dataset.direction = isActive ? this.state.sortDir : '';
+            btn.setAttribute('aria-sort', isActive ? (this.state.sortDir === 'asc' ? 'ascending' : 'descending') : 'none');
+        });
         if (this.state.openMenuPath) {
             if (!this.outsideMenuListenerAttached) {
                 document.addEventListener('click', this.boundOutsideMenuClick);
@@ -449,6 +474,10 @@ export class FileExp {
             this.pendingMenuFocusPath = null;
         } else if (!this.state.openMenuPath) {
             this.pendingMenuFocusPath = null;
+        }
+
+        if (this.state.openMenuPath) {
+            this.positionOpenActionMenu();
         }
 
         const filterToggle = this.element.querySelector('#filterSpecsToggle');
@@ -485,15 +514,58 @@ export class FileExp {
         this.state.allEntries = entries || [];
         try {
             if (this.state.filterSpecs) {
-                this.state.entries = await this.filterEntriesForSpecs(this.state.allEntries);
+                const filtered = await this.filterEntriesForSpecs(this.state.allEntries);
+                this.state.entries = this.sortEntries(filtered);
             } else {
-                this.state.entries = this.state.allEntries;
+                this.state.entries = this.sortEntries(this.state.allEntries);
             }
         } catch (err) {
             console.warn('Failed to apply specs filter', err);
-            this.state.entries = this.state.allEntries;
+            this.state.entries = this.sortEntries(this.state.allEntries);
             this.showStatus('Could not apply filter. Showing all files.', true);
         }
+    }
+
+    sortEntries(entries = []) {
+        if (!Array.isArray(entries)) return [];
+        const { sortBy, sortDir } = this.state;
+        const direction = sortDir === 'desc' ? -1 : 1;
+        const toLower = (value) => (typeof value === 'string' ? value.toLowerCase() : '');
+        const getValue = (entry, key) => {
+            switch (key) {
+                case 'size':
+                    return Number.isFinite(entry.size) ? entry.size : -1;
+                case 'modified': {
+                    const ts = Date.parse(entry.modified);
+                    return Number.isFinite(ts) ? ts : 0;
+                }
+                case 'name':
+                default:
+                    return toLower(entry.name || '');
+            }
+        };
+        const copy = [...entries];
+        copy.sort((a, b) => {
+            // Keep directories before files for consistency
+            const typeOrderA = a.type === 'directory' ? 0 : 1;
+            const typeOrderB = b.type === 'directory' ? 0 : 1;
+            if (typeOrderA !== typeOrderB) {
+                return typeOrderA - typeOrderB;
+            }
+            const aVal = getValue(a, sortBy);
+            const bVal = getValue(b, sortBy);
+            let result = 0;
+            if (typeof aVal === 'string' || typeof bVal === 'string') {
+                result = String(aVal).localeCompare(String(bVal), undefined, { sensitivity: 'base' });
+            } else {
+                result = aVal === bVal ? 0 : (aVal < bVal ? -1 : 1);
+            }
+            if (result === 0 && sortBy !== 'name') {
+                result = toLower(a.name || '').localeCompare(toLower(b.name || ''), undefined, { sensitivity: 'base' });
+            }
+            return result * direction;
+        });
+        return copy;
     }
 
     async loadDirectory(path = this.state.path) {
@@ -508,6 +580,7 @@ export class FileExp {
             this.state.selectedIsMarkdown = false;
             this.state.previewMode = 'none';
             this.state.mediaType = null;
+            this.state.fileLoadInfo = null;
             this.state.markdownTextView = false;
             this.state.documentId = null;
             this.state.isEditing = false;
@@ -609,12 +682,54 @@ export class FileExp {
             try {
                 this.state.previewMode = 'code';
                 this.state.mediaType = null;
+                this.state.fileLoadInfo = null;
                 if (await this.tryLoadMediaPreview(filePath)) {
                     this.invalidate();
                     return;
                 }
 
-                const contentResult = await window.webSkel.appServices.callTool('explorer', 'read_text_file', {path: filePath});
+                const entry = (this.state.allEntries || []).find((item) => item?.path === filePath);
+                const entrySize = Number.isFinite(entry?.size) ? entry.size : null;
+                const shouldPreviewPartial = entrySize !== null && entrySize > LARGE_FILE_PREVIEW_LIMIT_BYTES;
+
+                const isPayloadTooLargeError = (error) => {
+                    const message = error?.message || '';
+                    return /payloadtoo?large/i.test(message) || /entity too large/i.test(message) || error?.status === 413;
+                };
+
+                const readText = async (usePartial = false) => {
+                    const args = { path: filePath };
+                    if (usePartial) {
+                        args.head = LARGE_FILE_PREVIEW_LINES;
+                    }
+                    return window.webSkel.appServices.callTool('explorer', 'read_text_file', args);
+                };
+
+                let contentResult;
+                let truncated = false;
+                try {
+                    contentResult = await readText(shouldPreviewPartial);
+                    truncated = shouldPreviewPartial;
+                } catch (error) {
+                    if (!shouldPreviewPartial && isPayloadTooLargeError(error)) {
+                        contentResult = await readText(true);
+                        truncated = true;
+                    } else {
+                        throw error;
+                    }
+                }
+
+                if (truncated) {
+                    this.state.fileLoadInfo = {
+                        truncated: true,
+                        size: entrySize,
+                        previewLines: LARGE_FILE_PREVIEW_LINES,
+                        message: `File is ${entrySize ? this.formatBytes(entrySize) : 'large'}; showing first ${LARGE_FILE_PREVIEW_LINES} lines. Editing is disabled in this view.`
+                    };
+                } else {
+                    this.state.fileLoadInfo = null;
+                }
+
                 this.state.fileContent = contentResult.text;
                 this.state.selectedIsMarkdown = this.isMarkdownFile(filePath);
                 this.state.markdownTextView = false;
@@ -625,19 +740,21 @@ export class FileExp {
                     this.state.previewContent = renderMarkdownPreview(previewSource);
                     this.state.markdownTextView = false;
                     this.state.previewMode = 'markdown';
-                    try {
-                        const documentModule = window.assistOS?.loadModule?.('document');
-                        if (documentModule) {
-                            const doc = await documentModule.loadDocument(filePath);
-                            this.state.documentId = doc?.id ?? null;
-                            if (doc?.id) {
-                                window.assistOS.workspace.currentDocumentId = doc.id;
-                                window.assistOS.workspace.currentDocumentPath = filePath;
+                    if (!this.state.fileLoadInfo?.truncated) {
+                        try {
+                            const documentModule = window.assistOS?.loadModule?.('document');
+                            if (documentModule) {
+                                const doc = await documentModule.loadDocument(filePath);
+                                this.state.documentId = doc?.id ?? null;
+                                if (doc?.id) {
+                                    window.assistOS.workspace.currentDocumentId = doc.id;
+                                    window.assistOS.workspace.currentDocumentPath = filePath;
+                                }
                             }
+                        } catch (docError) {
+                            console.warn('Failed to load document module for', filePath, docError);
+                            this.state.documentId = null;
                         }
-                    } catch (docError) {
-                        console.warn('Failed to load document module for', filePath, docError);
-                        this.state.documentId = null;
                     }
                 } else {
                     this.state.previewContent = renderCodePreview(this.state.fileContent, filePath);
@@ -661,6 +778,10 @@ export class FileExp {
 
     async editFile() {
         if (!this.state.selectedPath) return;
+        if (this.state.fileLoadInfo?.truncated) {
+            this.showStatus('Editing is disabled for large files. Please open it locally to modify.', true);
+            return;
+        }
         if (this.state.selectedIsMarkdown && !this.state.documentId) {
             try {
                 const documentModule = window.assistOS?.loadModule?.('document');
@@ -935,6 +1056,62 @@ export class FileExp {
             return;
         }
         scrollPreviewToAnchor(previewRoot, targetId);
+    }
+
+    positionOpenActionMenu() {
+        const openPath = this.state.openMenuPath;
+        if (!openPath) return;
+        const container = this.element.querySelector(`[data-action-menu="true"][data-entry-path="${openPath}"]`);
+        const dropdown = container?.querySelector('.action-menu-dropdown');
+        const trigger = container?.querySelector('.action-menu-trigger');
+        if (!dropdown || !trigger) {
+            return;
+        }
+
+        dropdown.removeAttribute('data-positioned');
+        dropdown.classList.remove('drop-up');
+        dropdown.style.left = '';
+        dropdown.style.top = '';
+        dropdown.style.right = '';
+        dropdown.style.bottom = '';
+
+        const triggerRect = trigger.getBoundingClientRect();
+        const menuRect = dropdown.getBoundingClientRect();
+        const spacing = 8;
+        const margin = 8;
+
+        let left = triggerRect.right - menuRect.width;
+        const maxLeft = window.innerWidth - menuRect.width - margin;
+        left = Math.min(Math.max(left, margin), maxLeft);
+
+        let top = triggerRect.bottom + spacing;
+        let dropUp = false;
+        if (top + menuRect.height > window.innerHeight - margin) {
+            const aboveTop = triggerRect.top - menuRect.height - spacing;
+            if (aboveTop >= margin) {
+                top = aboveTop;
+                dropUp = true;
+            } else {
+                top = Math.max(margin, window.innerHeight - menuRect.height - margin);
+            }
+        }
+
+        dropdown.style.left = `${left}px`;
+        dropdown.style.top = `${top}px`;
+        dropdown.style.right = 'auto';
+        dropdown.style.bottom = 'auto';
+        dropdown.dataset.positioned = 'true';
+        dropdown.classList.toggle('drop-up', dropUp);
+    }
+
+    handleSortClick(event) {
+        const key = event.currentTarget?.dataset?.sortKey;
+        if (!key) return;
+        const nextDir = this.state.sortBy === key && this.state.sortDir === 'asc' ? 'desc' : 'asc';
+        this.state.sortBy = key;
+        this.state.sortDir = nextDir;
+        this.state.entries = this.sortEntries(this.state.entries);
+        this.invalidate();
     }
 
     handleContextMenu(event) {

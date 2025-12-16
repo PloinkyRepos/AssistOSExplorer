@@ -36,9 +36,6 @@
                 </svg>
                 New File
             </button>
-            <button id="pasteHereButton" class="secondary hidden" title="Paste into current folder" data-local-action="pasteHere">
-                Paste here
-            </button>
             <div class="search-dropdown">
                 <button id="searchMenuButton" class="secondary search-menu-trigger" title="Search options"
                         data-local-action="toggleSearchMenu" aria-haspopup="true" aria-expanded="false">
@@ -115,10 +112,25 @@
                     <table>
                         <thead>
                         <tr>
-                            <th>Name</th>
+                            <th>
+                                <button type="button" class="sort-button" data-sort-key="name" aria-sort="none">
+                                    Name
+                                    <span class="sort-indicator" aria-hidden="true"></span>
+                                </button>
+                            </th>
                             <th class="col-type">Type</th>
-                            <th class="col-size">Size</th>
-                            <th class="col-modified">Modified</th>
+                            <th class="col-size">
+                                <button type="button" class="sort-button" data-sort-key="size" aria-sort="none">
+                                    Size
+                                    <span class="sort-indicator" aria-hidden="true"></span>
+                                </button>
+                            </th>
+                            <th class="col-modified">
+                                <button type="button" class="sort-button" data-sort-key="modified" aria-sort="none">
+                                    Modified
+                                    <span class="sort-indicator" aria-hidden="true"></span>
+                                </button>
+                            </th>
                             <th class="col-actions"></th>
                         </tr>
                         </thead>
@@ -146,6 +158,7 @@
                         <button id="cancelButton" data-local-action="cancelEdit" class="secondary">Cancel</button>
                     </div>
                 </div>
+                <div id="previewNotice" class="preview-notice hidden" role="status"></div>
                 <div class="preview-body">
                     <div class="preview-content">
                         <pre id="filePreview"></pre>

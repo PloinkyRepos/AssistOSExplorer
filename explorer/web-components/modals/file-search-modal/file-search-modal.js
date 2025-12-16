@@ -130,6 +130,17 @@ export class FileSearchModal {
             inFilesResults.dataset.boundClick = 'true';
         }
 
+        if (!this.element.dataset.boundEscape) {
+            this.element.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape') {
+                    event.stopPropagation();
+                    event.preventDefault();
+                    this.closeModal();
+                }
+            });
+            this.element.dataset.boundEscape = 'true';
+        }
+
         // Ensure correct overlay is visible based on initial mode
         this.setMode(mode);
     }

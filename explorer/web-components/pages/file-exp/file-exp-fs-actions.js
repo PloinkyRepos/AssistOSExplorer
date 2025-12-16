@@ -9,7 +9,7 @@ export function attachFsActions(fileExp) {
             try {
                 await this.withLoader(async () => {
                     const tool = type === 'directory' ? 'delete_directory' : 'delete_file';
-                    await window.webSkel.appServices.callTool('explorer', tool, { path });
+                    await window.webSkel.appServices.callTool('explorer', tool, {path});
                     this.showStatus(`Successfully deleted ${path}`);
                     if (this.state.selectedPath === path) {
                         this.state.selectedPath = null;
@@ -45,10 +45,10 @@ export function attachFsActions(fileExp) {
             if (destination === source) return;
             try {
                 await this.withLoader(async () => {
-                    await window.webSkel.appServices.callTool('explorer', 'move_file', { source, destination });
+                    await window.webSkel.appServices.callTool('explorer', 'move_file', {source, destination});
                     const wasSelected = this.state.selectedPath === source;
                     if (this.state.clipboard?.path === source) {
-                        this.state.clipboard = { ...this.state.clipboard, path: destination, name: newName };
+                        this.state.clipboard = {...this.state.clipboard, path: destination, name: newName};
                     }
                     const entries = await this.loadDirectoryContent(this.state.path);
                     await this.setEntries(entries);
@@ -74,9 +74,9 @@ export function attachFsActions(fileExp) {
             if (!path) return;
             this.closeActionMenu(false);
             const name = path.split('/').pop();
-            this.state.clipboard = { mode: 'copy', path, name, type: element.dataset.type };
+            this.state.clipboard = {mode: 'copy', path, name, type: element.dataset.type};
             this.showStatus(`Copied "${name}" to clipboard.`);
-            this.invalidate();
+            this.updateClipboardUI();
         },
 
         cutEntry(element) {
@@ -84,13 +84,13 @@ export function attachFsActions(fileExp) {
             if (!path) return;
             this.closeActionMenu(false);
             const name = path.split('/').pop();
-            this.state.clipboard = { mode: 'cut', path, name, type: element.dataset.type };
+            this.state.clipboard = {mode: 'cut', path, name, type: element.dataset.type};
             this.showStatus(`Ready to move "${name}".`);
-            this.invalidate();
+            this.updateClipboardUI();
         },
 
         pasteHere() {
-            return this.pasteClipboard({ dataset: { targetPath: this.state.path } });
+            return this.pasteClipboard({dataset: {targetPath: this.state.path}});
         },
 
         toggleActionMenu(element, maybeEvent) {
@@ -100,9 +100,11 @@ export function attachFsActions(fileExp) {
             if (!path) return;
             const previous = this.state.openMenuPath;
             const next = previous === path ? null : path;
-            this.state.openMenuPath = next;
-            this.pendingMenuFocusPath = next;
-            this.invalidate();
+            if (!next) {
+                this.closeActionMenu(false);
+                return;
+            }
+            this.openActionMenu(next);
         },
 
         handleOutsideMenuClick(event) {
@@ -123,10 +125,81 @@ export function attachFsActions(fileExp) {
 
         closeActionMenu(shouldInvalidate = true) {
             if (!this.state.openMenuPath) return false;
+            const openPath = this.state.openMenuPath;
+            const container = this.element?.querySelector(`[data-action-menu="true"][data-entry-path="${openPath}"]`);
+            container?.classList.remove('open');
+            const trigger = container?.querySelector('.action-menu-trigger');
+            trigger?.setAttribute('aria-expanded', 'false');
+            const dropdown = container?.querySelector('.action-menu-dropdown');
+            if (dropdown) {
+                dropdown.removeAttribute('data-positioned');
+                dropdown.classList.remove('drop-up');
+                dropdown.style.left = '';
+                dropdown.style.top = '';
+                dropdown.style.right = '';
+                dropdown.style.bottom = '';
+            }
             this.pendingMenuFocusPath = null;
             this.state.openMenuPath = null;
             if (shouldInvalidate) this.invalidate();
             return true;
+        },
+
+        openActionMenu(path) {
+            if (this.state.openMenuPath && this.state.openMenuPath !== path) {
+                this.closeActionMenu(false);
+            }
+            this.state.openMenuPath = path;
+            const container = this.element?.querySelector(`[data-action-menu="true"][data-entry-path="${path}"]`);
+            if (!container) return;
+            container.classList.add('open');
+            const trigger = container.querySelector('.action-menu-trigger');
+            trigger?.setAttribute('aria-expanded', 'true');
+            this.positionOpenActionMenu?.();
+            const firstItem = container.querySelector('.action-menu-item');
+            if (firstItem) {
+                firstItem.focus({ preventScroll: true });
+            }
+        },
+
+        updateClipboardUI() {
+            // Update toolbar clipboard info and paste button
+            const clipboard = this.state.clipboard;
+            const clearClipboardButton = this.element.querySelector('#clearClipboardButton');
+            if (clearClipboardButton) {
+                if (clipboard) {
+                    clearClipboardButton.removeAttribute('disabled');
+                } else {
+                    clearClipboardButton.setAttribute('disabled', 'true');
+                }
+            }
+
+            const clipboardGroup = this.element.querySelector('.clipboard-group');
+            const clipboardInfo = this.element.querySelector('#clipboardInfo');
+            if (clipboardInfo && clipboardGroup) {
+                if (clipboard) {
+                    clipboardInfo.textContent = `${clipboard.mode === 'cut' ? 'Cut' : 'Copy'}: ${clipboard.name}`;
+                    clipboardInfo.classList.add('visible');
+                    clipboardGroup.classList.add('visible');
+                } else {
+                    clipboardInfo.textContent = '';
+                    clipboardInfo.classList.remove('visible');
+                    clipboardGroup.classList.remove('visible');
+                }
+            }
+
+            // Update row highlight for clipboard source without re-rendering
+            const previousRow = this.element.querySelector('tr.clipboard-row');
+            previousRow?.classList.remove('clipboard-row', 'clipboard-cut', 'clipboard-copy');
+
+            if (clipboard?.path) {
+                const row = this.element.querySelector(`tr[data-entry-path="${clipboard.path}"]`);
+                if (row) {
+                    row.classList.add('clipboard-row');
+                    row.classList.toggle('clipboard-cut', clipboard.mode === 'cut');
+                    row.classList.toggle('clipboard-copy', clipboard.mode === 'copy');
+                }
+            }
         },
 
         clearClipboard() {
@@ -134,7 +207,10 @@ export function attachFsActions(fileExp) {
             const previous = this.state.clipboard.name;
             this.state.clipboard = null;
             this.showStatus(previous ? `Cleared clipboard (was "${previous}").` : 'Clipboard cleared.');
-            this.invalidate();
+            this.updateClipboardUI();
+            // Remove any clipboard marker when clearing
+            const previousRow = this.element.querySelector('tr.clipboard-row');
+            previousRow?.classList.remove('clipboard-row', 'clipboard-cut', 'clipboard-copy');
         },
 
         async pasteClipboard(element) {
@@ -165,15 +241,22 @@ export function attachFsActions(fileExp) {
                 : `Enter a name for the moved ${clipboard.type === 'directory' ? 'folder' : 'file'}:`;
             const input = prompt(promptLabel, defaultName);
             if (input === null) return;
-            const desiredName = this.sanitizeEntryName(input);
+            let desiredName = this.sanitizeEntryName(input);
             if (!desiredName) {
                 this.showStatus('Please enter a valid name.', true);
                 return;
             }
 
+            let existsInTarget = existingNames.has(desiredName);
+            if (clipboard.mode === 'cut' && existsInTarget) {
+                const fallbackName = this.generateCopyName(desiredName, existingNames);
+                desiredName = fallbackName;
+                existsInTarget = existingNames.has(desiredName);
+                this.showStatus(`"${input}" already exists. Moving as "${desiredName}".`);
+            }
+
             const destination = this.joinPath(targetDir, desiredName);
             const wasSelectedFile = this.state.selectedPath === clipboard.path && clipboard.type === 'file';
-            const existsInTarget = existingNames.has(desiredName);
             const normalizedSource = this.normalizePath(clipboard.path);
             const normalizedDestination = this.normalizePath(destination);
 
@@ -185,11 +268,7 @@ export function attachFsActions(fileExp) {
                 this.showStatus('Cannot paste a folder into itself or one of its subfolders.', true);
                 return;
             }
-            if (clipboard.mode === 'cut' && existsInTarget) {
-                this.showStatus(`"${desiredName}" already exists in the target directory.`, true);
-                return;
-            }
-
+            let pasteCompleted = false;
             try {
                 await this.withLoader(async () => {
                     if (clipboard.mode === 'cut') {
@@ -226,16 +305,20 @@ export function attachFsActions(fileExp) {
                         const historyMethod = clipboard.mode === 'cut' ? 'replaceState' : 'pushState';
                         history[historyMethod](null, '', `#file-exp${destination}`);
                         await this.openFile(destination);
+                        pasteCompleted = true;
                         return;
                     }
 
+                    pasteCompleted = true;
                     this.invalidate();
                 });
             } catch (err) {
                 console.error(err);
                 this.showStatus(err.message || 'Failed to paste item.', true);
             }
-            this.state.clipboard = null;
+            if (pasteCompleted && clipboard.mode === 'cut') {
+                this.state.clipboard = null;
+            }
             this.invalidate();
         },
 
@@ -245,7 +328,10 @@ export function attachFsActions(fileExp) {
             const newFilePath = this.joinPath(this.state.path, fileName.trim());
             try {
                 await this.withLoader(async () => {
-                    await window.webSkel.appServices.callTool('explorer', 'write_file', { path: newFilePath, content: '' });
+                    await window.webSkel.appServices.callTool('explorer', 'write_file', {
+                        path: newFilePath,
+                        content: ''
+                    });
                     this.showStatus(`Created file: ${newFilePath}`);
                     await this.loadDirectory(this.state.path);
                 });
@@ -261,7 +347,7 @@ export function attachFsActions(fileExp) {
             const newDirPath = this.joinPath(this.state.path, dirName.trim());
             try {
                 await this.withLoader(async () => {
-                    await window.webSkel.appServices.callTool('explorer', 'create_directory', { path: newDirPath });
+                    await window.webSkel.appServices.callTool('explorer', 'create_directory', {path: newDirPath});
                     this.showStatus(`Successfully created directory.`);
                     await this.loadDirectory(this.state.path);
                 });

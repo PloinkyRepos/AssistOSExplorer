@@ -404,6 +404,44 @@ th {
     background-color: var(--file-exp-subtle-surface);
 }
 
+.sort-button {
+    border: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    padding: 0;
+}
+
+.sort-button .sort-indicator {
+    display: inline-flex;
+    width: 10px;
+    height: 10px;
+    align-items: center;
+    justify-content: center;
+}
+
+.sort-button .sort-indicator::before {
+    content: '↕';
+    font-size: 10px;
+    opacity: 0.35;
+    line-height: 1;
+}
+
+.sort-button.active[data-direction="asc"] .sort-indicator::before {
+    content: '↑';
+    opacity: 0.9;
+}
+
+.sort-button.active[data-direction="desc"] .sort-indicator::before {
+    content: '↓';
+    opacity: 0.9;
+}
+
 .resizer {
     width: 5px;
     cursor: col-resize;
@@ -468,6 +506,20 @@ th {
 .preview-filename {
     font-size: 0.85rem;
     color: var(--text-soft);
+}
+
+.preview-notice {
+    margin: 0.25rem 1rem;
+    padding: 8px 10px;
+    border: 1px dashed var(--file-exp-border);
+    border-radius: 8px;
+    background: var(--file-exp-subtle-surface);
+    color: var(--text);
+    font-size: 0.9rem;
+}
+
+.preview-notice.hidden {
+    display: none;
 }
 
 #markdownViewActions {
