@@ -6,6 +6,9 @@ export class FileSearchModal {
         this.invalidate = invalidate;
         this.props = props || {};
         this.defaultExclude = 'node_modules,.git';
+        this.searchInFilesCache = new Map();
+        this.searchInFilesCacheTtlMs = 5000;
+        this.searchInFilesRequestId = 0;
         this.state = {
             mode: props.mode || 'name',
             basePath: props.basePath || '/',
@@ -22,7 +25,8 @@ export class FileSearchModal {
             searchInFilesLoading: false,
             searchInFilesError: null,
             searchInFilesTruncated: false,
-            searchByNameTimer: null
+            searchByNameTimer: null,
+            searchInFilesTimer: null
         };
         this.invalidate();
     }
@@ -68,6 +72,7 @@ export class FileSearchModal {
         if (searchInFilesQuery && !searchInFilesQuery.dataset.bound) {
             searchInFilesQuery.addEventListener('input', (e) => {
                 this.state.searchInFilesQuery = e.target.value;
+                this.scheduleSearchInFiles();
             });
             searchInFilesQuery.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') {
@@ -82,6 +87,7 @@ export class FileSearchModal {
         if (searchInFilesExclude && !searchInFilesExclude.dataset.bound) {
             searchInFilesExclude.addEventListener('change', (e) => {
                 this.state.searchInFilesExclude = e.target.value || this.defaultExclude;
+                this.scheduleSearchInFiles();
             });
             searchInFilesExclude.dataset.bound = 'true';
         }
@@ -90,14 +96,9 @@ export class FileSearchModal {
         if (searchInFilesCase && !searchInFilesCase.dataset.bound) {
             searchInFilesCase.addEventListener('change', (e) => {
                 this.state.searchInFilesCase = Boolean(e.target.checked);
+                this.scheduleSearchInFiles();
             });
             searchInFilesCase.dataset.bound = 'true';
-        }
-
-        const searchRunButton = this.element.querySelector('#searchInFilesRun');
-        if (searchRunButton && !searchRunButton.dataset.bound) {
-            searchRunButton.addEventListener('click', () => this.runSearchInFiles());
-            searchRunButton.dataset.bound = 'true';
         }
 
         const closeButton = this.element.querySelector('#searchModalClose');
@@ -198,6 +199,51 @@ export class FileSearchModal {
         this.state.searchByNameTimer = setTimeout(() => this.runSearchByName(), 200);
     }
 
+    scheduleSearchInFiles() {
+        if (this.state.searchInFilesTimer) {
+            clearTimeout(this.state.searchInFilesTimer);
+        }
+        const query = (this.state.searchInFilesQuery || '').trim();
+        if (!query) {
+            this.searchInFilesRequestId += 1;
+            this.state.searchInFilesLoading = false;
+            this.state.searchInFilesError = 'Enter text to search for.';
+            this.state.searchInFilesResults = [];
+            this.state.searchInFilesFileResults = [];
+            this.state.searchInFilesTruncated = false;
+            this.renderSearchInFilesResults();
+            return;
+        }
+        this.state.searchInFilesTimer = setTimeout(() => this.runSearchInFiles(), 200);
+    }
+
+    buildSearchInFilesCacheKey() {
+        const basePath = this.state.basePath || '/';
+        const query = (this.state.searchInFilesQuery || '').trim();
+        const exclude = this.state.searchInFilesExclude || this.defaultExclude;
+        const caseSensitive = Boolean(this.state.searchInFilesCase);
+        return JSON.stringify({ basePath, query, exclude, caseSensitive });
+    }
+
+    getCachedSearchInFilesResult(key) {
+        const entry = this.searchInFilesCache.get(key);
+        if (!entry) return null;
+        if ((Date.now() - entry.cachedAt) > this.searchInFilesCacheTtlMs) {
+            this.searchInFilesCache.delete(key);
+            return null;
+        }
+        return entry.value;
+    }
+
+    setCachedSearchInFilesResult(key, value) {
+        this.searchInFilesCache.set(key, { cachedAt: Date.now(), value });
+        // keep cache small
+        if (this.searchInFilesCache.size > 50) {
+            const firstKey = this.searchInFilesCache.keys().next().value;
+            this.searchInFilesCache.delete(firstKey);
+        }
+    }
+
     async runSearchByName() {
         const query = (this.state.searchByNameQuery || '').trim();
         if (!query) {
@@ -255,11 +301,21 @@ export class FileSearchModal {
             this.renderSearchInFilesResults();
             return;
         }
+        const requestId = ++this.searchInFilesRequestId;
         this.state.searchInFilesLoading = true;
         this.state.searchInFilesError = null;
         this.state.searchInFilesTruncated = false;
         this.renderSearchInFilesResults();
         try {
+            const cacheKey = this.buildSearchInFilesCacheKey();
+            const cached = this.getCachedSearchInFilesResult(cacheKey);
+            if (cached) {
+                this.state.searchInFilesResults = cached.matches || [];
+                this.state.searchInFilesFileResults = groupMatchesByFile(this.state.searchInFilesResults);
+                this.state.searchInFilesTruncated = Boolean(cached.truncated);
+                return;
+            }
+
             const excludePatterns = parsePatterns(this.state.searchInFilesExclude);
             const result = await window.webSkel.appServices.callTool('explorer', 'search_text', {
                 path: this.state.basePath || '/',
@@ -267,6 +323,9 @@ export class FileSearchModal {
                 caseSensitive: this.state.searchInFilesCase,
                 excludePatterns
             });
+            if (requestId !== this.searchInFilesRequestId) {
+                return;
+            }
             let payload = result.json;
             if (!payload) {
                 try {
@@ -283,13 +342,23 @@ export class FileSearchModal {
             }));
             this.state.searchInFilesFileResults = groupMatchesByFile(this.state.searchInFilesResults);
             this.state.searchInFilesTruncated = Boolean(payload?.truncated);
+            this.setCachedSearchInFilesResult(this.buildSearchInFilesCacheKey(), {
+                matches: this.state.searchInFilesResults,
+                truncated: this.state.searchInFilesTruncated
+            });
         } catch (error) {
+            if (requestId !== this.searchInFilesRequestId) {
+                return;
+            }
             console.error('search_text failed', error);
             this.state.searchInFilesError = error?.message || 'Search failed.';
             this.state.searchInFilesResults = [];
             this.state.searchInFilesFileResults = [];
             this.state.searchInFilesTruncated = false;
         } finally {
+            if (requestId !== this.searchInFilesRequestId) {
+                return;
+            }
             this.state.searchInFilesLoading = false;
             this.renderSearchInFilesResults();
         }

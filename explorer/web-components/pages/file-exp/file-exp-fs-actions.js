@@ -1,4 +1,6 @@
 // File system related UI actions for FileExp, attached to the presenter to keep it lean.
+import { showContextPasteMenu } from "./file-exp-utils.js";
+
 export function attachFsActions(fileExp) {
     Object.assign(fileExp, {
         async deleteEntry(element) {
@@ -120,6 +122,35 @@ export function attachFsActions(fileExp) {
         handleMenuKeydown(event) {
             if (event?.key === 'Escape' && this.state.openMenuPath) {
                 this.closeActionMenu();
+            }
+        },
+
+        handleContextMenu(event) {
+            const row = event.target?.closest?.('tr[data-entry-path]');
+            if (row) {
+                event.preventDefault();
+                event.stopPropagation();
+                const path = row.dataset.entryPath;
+                const type = row.dataset.type;
+                if (!path || this.state.isEditing) {
+                    return;
+                }
+                this.state.selectedPath = path;
+                this.state.selectedIsMarkdown = this.isMarkdownFile(path) && type === 'file';
+                this.closeActionMenu(false);
+                this.state.openMenuPath = path;
+                this.pendingMenuFocusPath = path;
+                this.invalidate();
+                return;
+            }
+            if (this.state.clipboard) {
+                event.preventDefault();
+                event.stopPropagation();
+                showContextPasteMenu({
+                    x: event.clientX,
+                    y: event.clientY,
+                    onPaste: () => this.pasteClipboard({ dataset: { targetPath: this.state.path } })
+                });
             }
         },
 

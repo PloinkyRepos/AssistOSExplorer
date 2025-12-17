@@ -36,25 +36,14 @@
                 </svg>
                 New File
             </button>
-            <div class="search-dropdown">
-                <button id="searchMenuButton" class="secondary search-menu-trigger" title="Search options"
-                        data-local-action="toggleSearchMenu" aria-haspopup="true" aria-expanded="false">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
-                         class="bi bi-search" viewBox="0 0 16 16" aria-hidden="true">
-                        <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.415l-3.85-3.85zm-5.242.656a5 5 0 1 1 0-10 5 5 0 0 1 0 10z"/>
-                    </svg>
-                    Search
-                    <span class="chevron">▾</span>
-                </button>
-                <div class="search-dropdown-menu" id="searchMenuDropdown" role="menu">
-                    <div class="search-dropdown-item" data-local-action="openSearchByName" role="menuitem">Search file
-                        (name)
-                    </div>
-                    <div class="search-dropdown-item" data-local-action="openSearchInFiles" role="menuitem">Search in
-                        files (content)
-                    </div>
-                </div>
-            </div>
+            <button id="searchInFilesButton" class="secondary" title="Search in files (content)"
+                    data-local-action="openSearchInFiles">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
+                     class="bi bi-search" viewBox="0 0 16 16" aria-hidden="true">
+                    <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.415l-3.85-3.85zm-5.242.656a5 5 0 1 1 0-10 5 5 0 0 1 0 10z"/>
+                </svg>
+                Search in files
+            </button>
             <div class="clipboard-group">
                 <span id="clipboardInfo" class="clipboard-info"></span>
                 <button id="clearClipboardButton" class="secondary" title="Clear the current clipboard selection"
@@ -73,7 +62,14 @@
         <div class="workspace">
             <div class="panel list">
                 <div class="list-header">
-                    <span>Directory Contents</span>
+                    <div class="directory-filter" role="search" aria-label="Filter directory contents">
+                        <input id="directoryFilterInput" type="search" placeholder="Search file…" autocomplete="off"
+                               spellcheck="false"/>
+                        <button id="directoryFilterClear" type="button" class="secondary" title="Clear filter"
+                                aria-label="Clear filter">
+                            Clear
+                        </button>
+                    </div>
                     <div class="list-header-actions">
                         <div class="column-visibility">
                             <button id="columnVisibilityButton" class="toggle-list view-button" title="Choose columns" aria-haspopup="true" aria-expanded="false">
@@ -83,13 +79,13 @@
                                     <circle cx="8" cy="8" r="1" fill="currentColor"/>
                                     <circle cx="11.5" cy="8" r="1" fill="currentColor"/>
                                 </svg>
-                            </button>
-                            <div class="column-visibility-menu" id="columnVisibilityMenu" role="menu">
-                                <label><input type="checkbox" data-column="type" checked> Type</label>
-                                <label><input type="checkbox" data-column="size" checked> Size</label>
-                                <label><input type="checkbox" data-column="modified" checked> Modified</label>
-                            </div>
-                        </div>
+	                            </button>
+	                            <div class="column-visibility-menu" id="columnVisibilityMenu" role="menu">
+	                                <label><input type="checkbox" data-column="type"> Type</label>
+	                                <label><input type="checkbox" data-column="size"> Size</label>
+	                                <label><input type="checkbox" data-column="modified"> Modified</label>
+	                            </div>
+	                        </div>
                         <button id="toggleListButton" class="toggle-list" title="Toggle directory view"
                                 aria-label="Hide directory panel">
                             <svg class="toggle-icon" xmlns="http://www.w3.org/2000/svg" width="22" height="22"

@@ -118,27 +118,29 @@ export function attachSearchController(fileExp) {
     async function navigateToPath(targetPath) {
         const normalized = fileExp.normalizePath(targetPath);
         const state = getState();
-        if (state.isEditing && state.hasUnsavedChanges) {
-            if (!confirm("You have unsaved changes. Navigate away?")) {
-                return;
+        return fileExp.withLoader(async () => {
+            if (state.isEditing && state.hasUnsavedChanges) {
+                if (!confirm("You have unsaved changes. Navigate away?")) {
+                    return;
+                }
+                await fileExp.cancelEdit();
             }
-            await fileExp.cancelEdit();
-        }
-        try {
-            await window.webSkel.appServices.callTool('explorer', 'read_text_file', { path: normalized });
-            const parentDir = fileExp.parentPath(normalized) || '/';
-            state.path = parentDir;
-            const entries = await fileExp.loadDirectoryContent(parentDir);
-            await fileExp.setEntries(entries);
-            state.selectedPath = normalized;
-            state.isEditing = false;
-            await fileExp.openFile(normalized);
-            history.replaceState(null, '', `#file-exp${normalized}`);
-        } catch (error) {
-            state.pendingHighlight = null;
-            await fileExp.loadDirectory(normalized);
-            history.replaceState(null, '', `#file-exp${normalized}`);
-        }
+            try {
+                await window.webSkel.appServices.callTool('explorer', 'read_text_file', { path: normalized });
+                const parentDir = fileExp.parentPath(normalized) || '/';
+                state.path = parentDir;
+                const entries = await fileExp.loadDirectoryContent(parentDir);
+                await fileExp.setEntries(entries);
+                state.selectedPath = normalized;
+                state.isEditing = false;
+                await fileExp.openFile(normalized);
+                history.replaceState(null, '', `#file-exp${normalized}`);
+            } catch (error) {
+                state.pendingHighlight = null;
+                await fileExp.loadDirectory(normalized);
+                history.replaceState(null, '', `#file-exp${normalized}`);
+            }
+        });
     }
 
     Object.assign(fileExp, {

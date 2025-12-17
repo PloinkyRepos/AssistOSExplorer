@@ -91,7 +91,7 @@ dialog {
 
 .search-row.search-row-primary {
     display: grid;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: 1fr;
     align-items: start;
     gap: 12px;
 }
@@ -198,31 +198,6 @@ dialog {
 .search-result-meta {
     color: var(--text-soft);
     font-size: 0.9rem;
-}
-
-.search-run-button {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 10px 16px;
-    border: none;
-    border-radius: 8px;
-    background: var(--accent);
-    color: #fff;
-    font-weight: 600;
-    cursor: pointer;
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
-    box-shadow: 0 10px 18px rgba(37, 99, 235, 0.28);
-}
-
-.search-run-button:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 12px 22px rgba(37, 99, 235, 0.32);
-}
-
-.search-run-button:active {
-    transform: translateY(0);
-    box-shadow: none;
 }
 
 .search-overlay-card .search-row-primary input[type="text"] {

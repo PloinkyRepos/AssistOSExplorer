@@ -478,7 +478,7 @@ export function buildEntriesHTML(state, helpers) {
     }
 
     entries.forEach((entry, index) => {
-        const entryPath = joinPath(state.path, entry.name);
+        const entryPath = entry?.path ? normalizePath(entry.path) : joinPath(state.path, entry.name);
         const icon = entry.type === 'directory' ? folderIcon : fileIcon;
         const entryAttributes = `data-entry-path="${entryPath}" data-type="${entry.type}"`;
         const isClipboardSource = clipboard?.path === entryPath;

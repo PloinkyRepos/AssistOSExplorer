@@ -10,6 +10,10 @@ import { minimatch } from 'minimatch';
 import { server as mcpServer, streamHttp as mcpStreamHttp, types as mcpTypes, zod as mcpZod } from 'mcp-sdk';
 import { copyRecursive, createCacheHelpers } from './utils/filesystem-utils.mjs';
 import { aggregateIdePlugins } from './utils/ide-plugins.mjs';
+import { createTimedCache, buildCacheKey } from './utils/server/timed-cache.mjs';
+import { createStructureIndex } from './utils/server/structure-index.mjs';
+import { createWorkspaceSearch } from './utils/server/workspace-search.mjs';
+import { buildDirectoryTree } from './utils/server/directory-tree.mjs';
 
 const { Server } = mcpServer;
 const { StreamableHTTPServerTransport } = mcpStreamHttp;
@@ -202,6 +206,16 @@ let listDirectoryDetailedWithCache = async (validPath) => {
 };
 
 let invalidateCachesForPath = () => {};
+let indexDirectory = async (validDirPath) => listDirectoryDetailedWithCache(validDirPath);
+let structureIndex = new Map();
+let invalidateStructureIndexForPathAndParents = () => {};
+let invalidateStructureIndexSubtree = () => {};
+
+const SEARCH_CACHE_TTL_MS = Number.parseInt(process.env.SEARCH_CACHE_TTL_MS || '5000', 10);
+const SEARCH_CACHE_MAX_ENTRIES = Number.parseInt(process.env.SEARCH_CACHE_MAX_ENTRIES || '100', 10);
+const searchFilesCache = createTimedCache({ ttlMs: SEARCH_CACHE_TTL_MS, maxEntries: SEARCH_CACHE_MAX_ENTRIES });
+const searchTextCache = createTimedCache({ ttlMs: SEARCH_CACHE_TTL_MS, maxEntries: SEARCH_CACHE_MAX_ENTRIES });
+const directoryTreeCache = createTimedCache({ ttlMs: SEARCH_CACHE_TTL_MS, maxEntries: SEARCH_CACHE_MAX_ENTRIES });
 
 try {
   const cacheHelpers = createCacheHelpers({ readFileContent, config: cacheConfig });
@@ -209,6 +223,30 @@ try {
 } catch (error) {
   recordFatalError('init:cache-helpers', error);
 }
+
+try {
+  const structure = createStructureIndex({ fs, path, listDirectoryDetailedWithCache });
+  ({ structureIndex, indexDirectory } = structure);
+  invalidateStructureIndexForPathAndParents = structure.invalidateForPathAndParents;
+  invalidateStructureIndexSubtree = structure.invalidateSubtree;
+} catch (error) {
+  recordFatalError('init:structure-index', error);
+}
+
+const baseInvalidateCachesForPath = invalidateCachesForPath;
+invalidateCachesForPath = (targetPath) => {
+  baseInvalidateCachesForPath(targetPath);
+  if (!targetPath) {
+    return;
+  }
+
+  invalidateStructureIndexForPathAndParents(targetPath);
+
+  // Search caches are cheap to rebuild; clear on mutations for safety.
+  searchFilesCache.clear();
+  searchTextCache.clear();
+  directoryTreeCache.clear();
+};
 
 function resolvePathsInArgs(args) {
   const originalArgs = args ?? {};
@@ -241,128 +279,25 @@ const validatePath = async (p) => p;
 
 const MAX_TEXT_SEARCH_FILE_BYTES = Number.parseInt(process.env.SEARCH_TEXT_MAX_BYTES || '2097152', 10);
 const DEFAULT_TEXT_SEARCH_EXCLUDES = ['**/node_modules/**', '**/.git/**', '**/dist/**', '**/build/**', '**/.DS_Store'];
+const DEFAULT_DIRECTORY_TREE_MAX_DEPTH = Number.parseInt(process.env.DIRECTORY_TREE_MAX_DEPTH || '10', 10);
+const DEFAULT_DIRECTORY_TREE_MAX_NODES = Number.parseInt(process.env.DIRECTORY_TREE_MAX_NODES || '4000', 10);
 
-function isPathWithinAllowedDirectories(targetPath) {
-  const normalized = path.resolve(targetPath);
-  return allowedDirectories.some((dir) => normalized.startsWith(path.resolve(dir)));
-}
-
-async function isLikelyBinaryFile(filePath) {
-  let handle;
-  try {
-    handle = await fs.open(filePath, 'r');
-    const buffer = Buffer.alloc(1024);
-    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
-    const slice = buffer.subarray(0, bytesRead);
-    return slice.includes(0);
-  } catch {
-    return false;
-  } finally {
-    if (handle) {
-      await handle.close();
-    }
-  }
-}
-
-async function searchTextWithinWorkspace(rootPath, options, config = {}) {
-  const maxBytesPerFile = config.maxBytesPerFile || MAX_TEXT_SEARCH_FILE_BYTES;
-  const mergedExclude = [...DEFAULT_TEXT_SEARCH_EXCLUDES, ...(options.excludePatterns || [])];
-  const caseSensitive = Boolean(options.caseSensitive);
-  const normalizedQuery = caseSensitive ? options.query : options.query.toLowerCase();
-  const maxResults = options.maxResults || 200;
-  const results = [];
-  let truncated = false;
-  let stop = false;
-
-  if (!isPathWithinAllowedDirectories(rootPath)) {
-    throw new Error('Access denied: path is outside allowed directories.');
-  }
-
-  const shouldExclude = (relativePath) => mergedExclude.some((pattern) => {
-    let glob = pattern;
-    if (!pattern.includes('*')) {
-      glob = pattern.includes('.')
-        ? `**/${pattern}`
-        : `**/${pattern}/**`;
-    }
-    return minimatch(relativePath, glob, { dot: true, nocase: !caseSensitive });
-  });
-
-  const searchFileForQuery = async (filePath, relativePath) => {
-    let handle;
-    try {
-      const stats = await fs.stat(filePath);
-      if (stats.size > maxBytesPerFile) {
-        return;
-      }
-      if (await isLikelyBinaryFile(filePath)) {
-        return;
-      }
-      handle = await fs.open(filePath, 'r');
-      const stream = handle.createReadStream({ encoding: 'utf8' });
-      const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
-      let lineNumber = 0;
-      for await (const line of rl) {
-        lineNumber++;
-        const haystack = caseSensitive ? line : line.toLowerCase();
-        if (haystack.includes(normalizedQuery)) {
-          results.push({
-            path: relativePath ? `/${relativePath}` : '/',
-            line: lineNumber,
-            preview: line.trim().slice(0, 200)
-          });
-          if (results.length >= maxResults) {
-            truncated = true;
-            stop = true;
-            rl.close();
-            stream.destroy();
-            break;
-          }
-        }
-        if (stop) {
-          break;
-        }
-      }
-    } catch {
-      // swallow individual file errors to keep search running
-    } finally {
-      if (handle) {
-        await handle.close();
-      }
-    }
-  };
-
-  const walk = async (currentPath) => {
-    if (stop) return;
-    let entries;
-    try {
-      entries = await fs.readdir(currentPath, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const entry of entries) {
-      if (stop) break;
-      const fullPath = path.join(currentPath, entry.name);
-      try {
-        await validatePath(fullPath);
-      } catch {
-        continue;
-      }
-      const relativePath = path.relative(workspaceRoot, fullPath);
-      if (shouldExclude(relativePath || entry.name)) {
-        continue;
-      }
-      if (entry.isDirectory()) {
-        await walk(fullPath);
-      } else if (entry.isFile()) {
-        await searchFileForQuery(fullPath, relativePath);
-      }
-    }
-  };
-
-  await walk(rootPath);
-  return { results, truncated };
-}
+const { searchTextWithinWorkspace, searchFilesWithinWorkspace } = createWorkspaceSearch({
+  fs,
+  path,
+  readline,
+  minimatch,
+  workspaceRoot,
+  validatePath,
+  getAllowedDirectories: () => allowedDirectories,
+  readFileWithCache,
+  cacheConfig,
+  indexDirectory,
+  structureIndex,
+  dirIndexTtlMs: cacheConfig.ttlMs,
+  defaultExcludes: DEFAULT_TEXT_SEARCH_EXCLUDES,
+  maxTextSearchFileBytes: MAX_TEXT_SEARCH_FILE_BYTES
+});
 
 
 const ReadTextFileArgsSchema = z.object({
@@ -386,14 +321,23 @@ const DeleteDirectoryArgsSchema = z.object({ path: z.string() });
 const ListDirectoryArgsSchema = z.object({ path: z.string() });
 const ListDirectoryWithSizesArgsSchema = z.object({ path: z.string(), sortBy: z.enum(['name', 'size']).optional().default('name') });
 const ListDirectoryDetailedArgsSchema = z.object({ path: z.string() });
-const DirectoryTreeArgsSchema = z.object({ path: z.string() });
+const DirectoryTreeArgsSchema = z.object({
+  path: z.string(),
+  maxDepth: z.number().int().positive().max(100).optional(),
+  maxNodes: z.number().int().positive().max(20000).optional()
+});
 const MoveFileArgsSchema = z.object({ source: z.string(), destination: z.string() });
 const CopyFileArgsSchema = z.object({
   source: z.string(),
   destination: z.string(),
   overwrite: z.boolean().optional().default(false)
 });
-const SearchFilesArgsSchema = z.object({ path: z.string(), pattern: z.string(), excludePatterns: z.array(z.string()).optional().default([]) });
+const SearchFilesArgsSchema = z.object({
+  path: z.string(),
+  pattern: z.string(),
+  excludePatterns: z.array(z.string()).optional().default([]),
+  maxResults: z.number().int().positive().max(20000).optional().default(5000)
+});
 const SearchTextArgsSchema = z.object({
   path: z.string(),
   query: z.string(),
@@ -701,7 +645,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const parsed = ListDirectoryWithSizesArgsSchema.safeParse(args);
         if (!parsed.success) throw new Error(`Invalid arguments for list_directory_with_sizes: ${parsed.error}`);
         const validPath = await validatePath(parsed.data.path);
-        const detailed = await listDirectoryDetailedWithCache(validPath);
+        const detailed = await indexDirectory(validPath);
         const enriched = detailed.map(entry => ({
           name: entry.name,
           isDirectory: entry.type === 'directory',
@@ -720,7 +664,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const parsed = ListDirectoryDetailedArgsSchema.safeParse(args);
         if (!parsed.success) throw new Error(`Invalid arguments for list_directory_detailed: ${parsed.error}`);
         const validPath = await validatePath(parsed.data.path);
-        const detailed = await listDirectoryDetailedWithCache(validPath);
+        const detailed = await indexDirectory(validPath);
         const ordered = [...detailed].sort((a, b) => {
           const typeOrder = { directory: 0, file: 1, other: 2 };
           const diff = (typeOrder[a.type] ?? 3) - (typeOrder[b.type] ?? 3);
@@ -732,28 +676,37 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'directory_tree': {
         const parsed = DirectoryTreeArgsSchema.safeParse(args);
         if (!parsed.success) throw new Error(`Invalid arguments for directory_tree: ${parsed.error}`);
-        async function buildTree(currentPath) {
-          const validPath = await validatePath(currentPath);
-          const entries = await fs.readdir(validPath, { withFileTypes: true });
-          const result = [];
-          for (const entry of entries) {
-            const entryData = { name: entry.name, type: entry.isDirectory() ? 'directory' : 'file' };
-            if (entry.isDirectory()) {
-              entryData.children = await buildTree(path.join(currentPath, entry.name));
-            }
-            result.push(entryData);
-          }
-          return result;
+        const validPath = await validatePath(parsed.data.path);
+        const maxDepth = parsed.data.maxDepth ?? DEFAULT_DIRECTORY_TREE_MAX_DEPTH;
+        const maxNodes = parsed.data.maxNodes ?? DEFAULT_DIRECTORY_TREE_MAX_NODES;
+
+        const cacheKey = buildCacheKey('directory_tree', { path: validPath, maxDepth, maxNodes });
+        const cached = directoryTreeCache.get(cacheKey);
+        if (cached) {
+          return { content: [{ type: 'text', text: cached }] };
         }
-        const treeData = await buildTree(parsed.data.path);
-        return { content: [{ type: 'text', text: JSON.stringify(treeData, null, 2) }] };
+        const treeData = await buildDirectoryTree({
+          rootPath: validPath,
+          indexDirectory,
+          path,
+          maxDepth,
+          maxNodes
+        });
+        const text = JSON.stringify(treeData, null, 2);
+        directoryTreeCache.set(cacheKey, text);
+        return { content: [{ type: 'text', text }] };
       }
       case 'move_file': {
         const parsed = MoveFileArgsSchema.safeParse(args);
         if (!parsed.success) throw new Error(`Invalid arguments for move_file: ${parsed.error}`);
         const validSource = await validatePath(parsed.data.source);
         const validDestination = await validatePath(parsed.data.destination);
+        const sourceStat = await fs.lstat(validSource);
         await fs.rename(validSource, validDestination);
+        if (sourceStat.isDirectory()) {
+          invalidateStructureIndexSubtree(validSource);
+          invalidateStructureIndexSubtree(validDestination);
+        }
         invalidateCachesForPath(validSource);
         invalidateCachesForPath(validDestination);
         return { content: [{ type: 'text', text: `Successfully moved ${parsed.data.source} to ${parsed.data.destination}` }] };
@@ -776,6 +729,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
         const overwrite = Boolean(parsed.data.overwrite);
         await copyRecursive(validSource, validDestination, overwrite);
+        invalidateStructureIndexSubtree(validDestination);
         invalidateCachesForPath(validDestination);
         return {
           content: [{
@@ -788,15 +742,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const parsed = SearchFilesArgsSchema.safeParse(args);
         if (!parsed.success) throw new Error(`Invalid arguments for search_files: ${parsed.error}`);
         const validPath = await validatePath(parsed.data.path);
-        const results = await searchFilesWithValidation(validPath, parsed.data.pattern, allowedDirectories, { excludePatterns: parsed.data.excludePatterns });
-        const relativeResults = results.map(p => {
-          const rel = path.relative(workspaceRoot, p);
-          return rel ? `/${rel}` : '/';
+        const cacheKey = buildCacheKey('search_files', {
+          path: validPath,
+          pattern: parsed.data.pattern,
+          excludePatterns: parsed.data.excludePatterns,
+          maxResults: parsed.data.maxResults
         });
+        const cached = searchFilesCache.get(cacheKey);
+        if (cached) {
+          return { content: [{ type: 'text', text: cached }] };
+        }
+
+        const { results: relativeResults } = await searchFilesWithinWorkspace(validPath, parsed.data);
+        const text = relativeResults.length > 0 ? relativeResults.join('\n') : 'No matches found';
+        searchFilesCache.set(cacheKey, text);
         return {
           content: [{
             type: 'text',
-            text: relativeResults.length > 0 ? relativeResults.join('\n') : 'No matches found'
+            text
           }]
         };
       }
@@ -804,9 +767,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const parsed = SearchTextArgsSchema.safeParse(args);
         if (!parsed.success) throw new Error(`Invalid arguments for search_text: ${parsed.error}`);
         const validPath = await validatePath(parsed.data.path);
+        const cacheKey = buildCacheKey('search_text', {
+          path: validPath,
+          query: parsed.data.query,
+          caseSensitive: parsed.data.caseSensitive,
+          maxResults: parsed.data.maxResults,
+          excludePatterns: parsed.data.excludePatterns
+        });
+        const cached = searchTextCache.get(cacheKey);
+        if (cached) {
+          return { content: [{ type: 'text', text: cached }] };
+        }
+
         const { results, truncated } = await searchTextWithinWorkspace(validPath, parsed.data, { maxBytesPerFile: MAX_TEXT_SEARCH_FILE_BYTES });
         const payload = { results, truncated };
         const text = JSON.stringify(payload);
+        searchTextCache.set(cacheKey, text);
         return { content: [{ type: 'text', text }] };
       }
       case 'get_file_info': {

@@ -9,18 +9,18 @@ import {
     parseDetailedDirectoryListing,
     buildEntriesHTML,
     isMarkdownFile,
-    isImageFile,
-    isAudioFile,
-    isVideoFile,
     prepareMarkdownPreviewContent,
     renderMarkdownPreview,
     renderCodePreview,
-    scrollToLine,
-    scrollPreviewToAnchor,
-    showContextPasteMenu
 } from "./file-exp-utils.js";
 import { attachSearchController } from "./file-exp-search.js";
 import { attachFsActions } from "./file-exp-fs-actions.js";
+import { withGlobalLoader } from "../../../utils/globalLoader.js";
+import { createFileExpCaches } from "./file-exp-caches.js";
+import { createDirectoryFilterController } from "./file-exp-directory-filter.js";
+import { openFile as openFileImpl, tryLoadMediaPreview as tryLoadMediaPreviewImpl, attachPreviewAnchorHandler as attachPreviewAnchorHandlerImpl, detachPreviewAnchorHandler as detachPreviewAnchorHandlerImpl, handlePreviewAnchorClick as handlePreviewAnchorClickImpl } from "./file-exp-preview.js";
+import { filterEntriesForSpecs as filterEntriesForSpecsImpl, hasMarkdownInTree as hasMarkdownInTreeImpl } from "./file-exp-specs.js";
+import { positionOpenActionMenu as positionOpenActionMenuImpl } from "./file-exp-action-menu.js";
 
 const LARGE_FILE_PREVIEW_LIMIT_BYTES = 1.5 * 1024 * 1024; // ~1.5MB safety window before transport limits
 const LARGE_FILE_PREVIEW_LINES = 400;
@@ -63,6 +63,7 @@ export class FileExp {
             columnVisibility: this.loadColumnVisibilityPreference(),
             searchMenuOpen: false,
             searchOverlay: null,
+            directoryFilterQuery: '',
             searchByNameQuery: '',
             searchByNameExclude: 'node_modules,.git',
             searchByNameResults: [],
@@ -101,19 +102,13 @@ export class FileExp {
         this.outsideMenuListenerAttached = false;
         this.menuKeydownListenerAttached = false;
         this.boundContextMenu = this.handleContextMenu.bind(this);
+
+        this.caches = createFileExpCaches();
+        this.directoryFilterController = createDirectoryFilterController(this);
     }
 
     async withLoader(fn) {
-        const webSkel = window.webSkel;
-        const hasLoader = Boolean(webSkel?.showLoading) && Boolean(webSkel?.hideLoading);
-        const loaderId = hasLoader ? webSkel.showLoading() : null;
-        try {
-            return await fn();
-        } finally {
-            if (hasLoader) {
-                webSkel.hideLoading(loaderId);
-            }
-        }
+        return withGlobalLoader(fn);
     }
 
     beforeUnload() {
@@ -177,6 +172,18 @@ export class FileExp {
             formatBytes: this.formatBytes,
             formatDate: this.formatDate
         });
+    }
+
+    renderEntriesBody() {
+        this.entriesHTML = buildEntriesHTML(this.state, {
+            joinPath: this.joinPath,
+            formatBytes: this.formatBytes,
+            formatDate: this.formatDate
+        });
+        const entriesBody = this.element?.querySelector?.('#entriesBody');
+        if (entriesBody) {
+            entriesBody.innerHTML = this.entriesHTML;
+        }
     }
 
     async afterRender() {
@@ -287,24 +294,30 @@ export class FileExp {
             }
         }
 
-        if (!toggleListButton.dataset.bound) {
-            toggleListButton.addEventListener('click', () => {
-                const willCollapse = !listPanel.classList.contains('collapsed');
-                if (willCollapse && !this.state.listWidth && listPanel.offsetWidth) {
-                    this.state.listWidth = listPanel.offsetWidth;
-                }
-                listPanel.classList.toggle('collapsed');
-                if (!listPanel.classList.contains('collapsed') && this.state.listWidth) {
-                    listPanel.style.width = `${this.state.listWidth}px`;
-                }
-                updateToggleState();
-                if (!listPanel.classList.contains('collapsed')) {
-                    applySavedWidth();
-                }
-            });
-            toggleListButton.dataset.bound = 'true';
-        }
-        updateToggleState();
+	        if (!toggleListButton.dataset.bound) {
+	            toggleListButton.addEventListener('click', () => {
+	                const isCollapsed = listPanel.classList.contains('collapsed');
+	                if (!isCollapsed) {
+	                    const currentWidth = Math.round(listPanel.getBoundingClientRect().width || listPanel.offsetWidth);
+	                    if (currentWidth > 0) {
+	                        this.state.listWidth = currentWidth;
+	                    }
+	                    listPanel.classList.add('collapsed');
+	                    listPanel.style.width = '';
+	                    listPanel.style.flex = '';
+	                    listPanel.style.flexBasis = '';
+	                    if (previewPanel) {
+	                        previewPanel.style.flex = '1 1 auto';
+	                    }
+	                } else {
+	                    listPanel.classList.remove('collapsed');
+	                    applySavedWidth();
+	                }
+	                updateToggleState();
+	            });
+	            toggleListButton.dataset.bound = 'true';
+	        }
+	        updateToggleState();
 
         const columnMenuButton = this.element.querySelector('#columnVisibilityButton');
         const columnMenu = this.element.querySelector('#columnVisibilityMenu');
@@ -352,35 +365,39 @@ export class FileExp {
         let startX = 0;
         let startWidth = 0;
 
-        const handleMouseMove = (e) => {
-            if (!this.state.isResizing) return;
-            const delta = e.clientX - startX;
-            const newWidth = Math.max(200, startWidth + delta);
-            const widthPx = `${newWidth}px`;
-            listPanel.style.width = widthPx;
-            listPanel.style.flex = '0 0 auto';
+	        const handleMouseMove = (e) => {
+	            if (!this.state.isResizing) return;
+	            if (listPanel.classList.contains('collapsed')) return;
+	            const delta = e.clientX - startX;
+	            const newWidth = Math.max(200, startWidth + delta);
+	            const widthPx = `${newWidth}px`;
+	            listPanel.style.width = widthPx;
+	            listPanel.style.flex = '0 0 auto';
             listPanel.style.flexBasis = widthPx;
             if (previewPanel) {
                 previewPanel.style.flex = '1 1 auto';
             }
         };
 
-        const handleMouseUp = () => {
-            this.state.isResizing = false;
-            const currentWidth = listPanel.offsetWidth;
-            if (currentWidth > 0) {
-                this.state.listWidth = currentWidth;
-            }
-            document.removeEventListener('mousemove', handleMouseMove);
-            document.removeEventListener('mouseup', handleMouseUp);
-        };
+	        const handleMouseUp = () => {
+	            this.state.isResizing = false;
+	            if (!listPanel.classList.contains('collapsed')) {
+	                const currentWidth = listPanel.offsetWidth;
+	                if (currentWidth > 0) {
+	                    this.state.listWidth = currentWidth;
+	                }
+	            }
+	            document.removeEventListener('mousemove', handleMouseMove);
+	            document.removeEventListener('mouseup', handleMouseUp);
+	        };
 
-        const handleMouseDown = (e) => {
-            e.preventDefault();
-            startX = e.clientX;
-            startWidth = listPanel.getBoundingClientRect().width || this.state.listWidth || listPanel.offsetWidth;
-            this.state.isResizing = true;
-            listPanel.style.flex = '0 0 auto';
+	        const handleMouseDown = (e) => {
+	            e.preventDefault();
+	            if (listPanel.classList.contains('collapsed')) return;
+	            startX = e.clientX;
+	            startWidth = listPanel.getBoundingClientRect().width || this.state.listWidth || listPanel.offsetWidth;
+	            this.state.isResizing = true;
+	            listPanel.style.flex = '0 0 auto';
             listPanel.style.flexBasis = `${startWidth}px`;
             if (previewPanel) {
                 previewPanel.style.flex = '1 1 auto';
@@ -522,6 +539,8 @@ export class FileExp {
         this.setupSearchBindings();
         this.updateSearchUI();
 
+        this.directoryFilterController.bindControls();
+
         const entriesContainer = this.element.querySelector('.entries');
         if (entriesContainer && !entriesContainer.dataset.contextBound) {
             entriesContainer.addEventListener('contextmenu', this.boundContextMenu, true);
@@ -531,12 +550,18 @@ export class FileExp {
 
     async loadDirectoryContent(path) {
         try {
+            const cached = this.caches.dirListing.get(this, path);
+            if (cached) {
+                return cached;
+            }
             const result = await window.webSkel.appServices.callTool('explorer', 'list_directory_detailed', {path});
             const entries = parseDetailedDirectoryListing(result.text);
-            return entries.map(entry => ({
+            const resolved = entries.map(entry => ({
                 ...entry,
                 path: this.joinPath(path, entry.name)
             }));
+            this.caches.dirListing.set(this, path, resolved);
+            return resolved;
         } catch (err) {
             console.error(err);
             this.showStatus(err.message || 'Failed to load directory.', true);
@@ -547,11 +572,21 @@ export class FileExp {
     async setEntries(entries) {
         this.state.allEntries = entries || [];
         try {
+            const filterQuery = String(this.state.directoryFilterQuery || '').trim().toLowerCase();
+            const applyDirectoryFilter = (items) => {
+                if (!filterQuery) return items || [];
+                return (items || []).filter((entry) => {
+                    const name = String(entry?.name || '').toLowerCase();
+                    const entryPath = String(entry?.path || '').toLowerCase();
+                    return name.includes(filterQuery) || entryPath.includes(filterQuery);
+                });
+            };
+
             if (this.state.filterSpecs) {
                 const filtered = await this.filterEntriesForSpecs(this.state.allEntries);
-                this.state.entries = this.sortEntries(filtered);
+                this.state.entries = this.sortEntries(applyDirectoryFilter(filtered));
             } else {
-                this.state.entries = this.sortEntries(this.state.allEntries);
+                this.state.entries = this.sortEntries(applyDirectoryFilter(this.state.allEntries));
             }
         } catch (err) {
             console.warn('Failed to apply specs filter', err);
@@ -624,6 +659,10 @@ export class FileExp {
             await this.setEntries(entries);
             this.invalidate();
         });
+
+        if (String(this.state.directoryFilterQuery || '').trim().length >= 2) {
+            await this.directoryFilterController.rerunIfActive();
+        }
     }
 
     async selectEntry(element) {
@@ -652,161 +691,35 @@ export class FileExp {
         } else if (type === 'file') {
             this.state.selectedPath = path;
             await this.openFile(path);
+        } else {
+            if (typeof this.navigateToPath === 'function') {
+                await this.navigateToPath(path);
+                return;
+            }
+            await this.withLoader(async () => {
+                try {
+                    await window.webSkel.appServices.callTool('explorer', 'read_text_file', { path });
+                    const parentDir = this.parentPath(path) || '/';
+                    this.state.path = parentDir;
+                    const entries = await this.loadDirectoryContent(parentDir);
+                    await this.setEntries(entries);
+                    this.state.selectedPath = path;
+                    await this.openFile(path);
+                } catch (_) {
+                    await this.loadDirectory(path);
+                }
+            });
         }
     }
 
     async tryLoadMediaPreview(filePath) {
-        const isMedia = isImageFile(filePath) || isAudioFile(filePath) || isVideoFile(filePath);
-        if (!isMedia) {
-            return false;
-        }
-        try {
-            const result = await window.webSkel.appServices.callTool('explorer', 'read_media_file', { path: filePath });
-            const blocks = Array.isArray(result?.blocks) ? result.blocks : [];
-            const content = Array.isArray(result?.content) ? result.content : [];
-            const block = [...blocks, ...content].find((item) => item?.data || item?.resource?.uri);
-            if (!block) {
-                throw new Error('No media data returned.');
-            }
-
-            const mimeType = block.mimeType || block.resource?.mimeType || 'application/octet-stream';
-            const src = block.resource?.uri
-                ? block.resource.uri
-                : `data:${mimeType};base64,${block.data}`;
-
-            const type = block.type === 'image' || mimeType.startsWith('image/')
-                ? 'image'
-                : block.type === 'audio' || mimeType.startsWith('audio/')
-                    ? 'audio'
-                    : block.type === 'video' || mimeType.startsWith('video/')
-                        ? 'video'
-                        : 'resource';
-
-            let markup = '';
-            if (type === 'audio') {
-                markup = `<audio controls class="media-audio" preload="metadata" src="${src}"></audio>`;
-            } else if (type === 'video') {
-                markup = `<video controls class="media-video" preload="metadata" src="${src}"></video>`;
-            } else if (type === 'image') {
-                markup = `<img src="${src}" alt="Preview of ${filePath.split('/').pop()}" class="media-image">`;
-            } else {
-                markup = `<a href="${src}" target="_blank" rel="noopener">Open media</a>`;
-            }
-
-            this.state.previewMode = 'media';
-            this.state.mediaType = type;
-            this.state.previewContent = markup;
-            this.state.selectedIsMarkdown = false;
-            this.state.fileContent = '';
-            this.state.markdownTextView = false;
-            this.state.documentId = null;
-            this.state.hasUnsavedChanges = false;
-            return true;
-        } catch (err) {
-            console.warn('Media preview failed', err);
-            this.showStatus(err.message || 'Could not preview media file.', true);
-            this.state.previewMode = 'code';
-            this.state.mediaType = null;
-            return false;
-        }
+        return tryLoadMediaPreviewImpl(this, filePath);
     }
 
     async openFile(filePath) {
-        await this.withLoader(async () => {
-            try {
-                this.state.previewMode = 'code';
-                this.state.mediaType = null;
-                this.state.fileLoadInfo = null;
-                if (await this.tryLoadMediaPreview(filePath)) {
-                    this.invalidate();
-                    return;
-                }
-
-                const entry = (this.state.allEntries || []).find((item) => item?.path === filePath);
-                const entrySize = Number.isFinite(entry?.size) ? entry.size : null;
-                const shouldPreviewPartial = entrySize !== null && entrySize > LARGE_FILE_PREVIEW_LIMIT_BYTES;
-
-                const isPayloadTooLargeError = (error) => {
-                    const message = error?.message || '';
-                    return /payloadtoo?large/i.test(message) || /entity too large/i.test(message) || error?.status === 413;
-                };
-
-                const readText = async (usePartial = false) => {
-                    const args = { path: filePath };
-                    if (usePartial) {
-                        args.head = LARGE_FILE_PREVIEW_LINES;
-                    }
-                    return window.webSkel.appServices.callTool('explorer', 'read_text_file', args);
-                };
-
-                let contentResult;
-                let truncated = false;
-                try {
-                    contentResult = await readText(shouldPreviewPartial);
-                    truncated = shouldPreviewPartial;
-                } catch (error) {
-                    if (!shouldPreviewPartial && isPayloadTooLargeError(error)) {
-                        contentResult = await readText(true);
-                        truncated = true;
-                    } else {
-                        throw error;
-                    }
-                }
-
-                if (truncated) {
-                    this.state.fileLoadInfo = {
-                        truncated: true,
-                        size: entrySize,
-                        previewLines: LARGE_FILE_PREVIEW_LINES,
-                        message: `File is ${entrySize ? this.formatBytes(entrySize) : 'large'}; showing first ${LARGE_FILE_PREVIEW_LINES} lines. Editing is disabled in this view.`
-                    };
-                } else {
-                    this.state.fileLoadInfo = null;
-                }
-
-                this.state.fileContent = contentResult.text;
-                this.state.selectedIsMarkdown = this.isMarkdownFile(filePath);
-                this.state.markdownTextView = false;
-                this.state.documentId = null;
-                this.state.hasUnsavedChanges = false;
-                if (this.state.selectedIsMarkdown) {
-                    const previewSource = this.prepareMarkdownPreviewContent(this.state.fileContent);
-                    this.state.previewContent = renderMarkdownPreview(previewSource || '') || '';
-                    this.state.markdownTextView = false;
-                    this.state.previewMode = 'markdown';
-                    if (!this.state.fileLoadInfo?.truncated) {
-                        try {
-                            const documentModule = window.assistOS?.loadModule?.('document');
-                            if (documentModule) {
-                                const doc = await documentModule.loadDocument(filePath);
-                                this.state.documentId = doc?.id ?? null;
-                                if (doc?.id) {
-                                    window.assistOS.workspace.currentDocumentId = doc.id;
-                                    window.assistOS.workspace.currentDocumentPath = filePath;
-                                }
-                            }
-                        } catch (docError) {
-                            console.warn('Failed to load document module for', filePath, docError);
-                            this.state.documentId = null;
-                        }
-                    }
-                } else {
-                    this.state.previewContent = renderCodePreview(this.state.fileContent, filePath);
-                    this.state.markdownTextView = false;
-                    this.state.previewMode = 'code';
-                }
-                if (this.state.pendingHighlight && this.state.pendingHighlight.path === this.normalizePath(filePath)) {
-                    const lineNumber = this.state.pendingHighlight.line;
-                    this.state.pendingHighlight = null;
-                    setTimeout(() => scrollToLine(this.element, lineNumber), 0);
-                } else {
-                    this.state.pendingHighlight = null;
-                }
-                this.invalidate();
-            } catch (err) {
-                console.error(err);
-                this.showStatus(err.message || 'Failed to read file.', true);
-            }
+        return openFileImpl(this, filePath, {
+            largeFilePreviewLimitBytes: LARGE_FILE_PREVIEW_LIMIT_BYTES,
+            largeFilePreviewLines: LARGE_FILE_PREVIEW_LINES
         });
     }
 
@@ -822,6 +735,10 @@ export class FileExp {
                 if (documentModule) {
                     const doc = await documentModule.loadDocument(this.state.selectedPath);
                     this.state.documentId = doc?.id ?? null;
+                    if (doc?.id && window.assistOS?.workspace) {
+                        window.assistOS.workspace.currentDocumentId = doc.id;
+                        window.assistOS.workspace.currentDocumentPath = this.state.selectedPath;
+                    }
                 }
             } catch (error) {
                 console.warn('Failed to prepare document editor', error);
@@ -845,6 +762,8 @@ export class FileExp {
             this.showStatus(`Successfully saved ${this.state.selectedPath}`, false);
             this.state.fileContent = newContent;
             this.state.hasUnsavedChanges = false;
+            this.caches.filePreview.invalidateForPath(this.state.selectedPath);
+            this.caches.dirListing.invalidate(this, this.state.path);
 
             if (this.state.selectedIsMarkdown) {
                 const previewSource = this.prepareMarkdownPreviewContent(newContent);
@@ -940,51 +859,11 @@ export class FileExp {
     }
 
     async filterEntriesForSpecs(entries = []) {
-        const result = [];
-        for (const entry of entries) {
-            if (!entry) continue;
-            if (entry.type === 'file' && this.isMarkdownFile(entry.name)) {
-                result.push(entry);
-                continue;
-            }
-            if (entry.type === 'directory') {
-                const hasMd = await this.hasMarkdownInTree(entry.path);
-                if (hasMd) {
-                    result.push(entry);
-                }
-            }
-        }
-        return result;
+        return filterEntriesForSpecsImpl(this, entries);
     }
 
     async hasMarkdownInTree(dirPath) {
-        if (!dirPath) return false;
-        const stack = [dirPath];
-        while (stack.length) {
-            const current = stack.pop();
-            try {
-                const result = await window.webSkel.appServices.callTool('explorer', 'list_directory_detailed', { path: current });
-                const listingText = result?.text ?? '';
-                if (typeof listingText === 'string' && listingText.startsWith('Error:')) {
-                    console.warn('Skipping directory scan due to error response:', listingText);
-                    continue;
-                }
-                const items = parseDetailedDirectoryListing(listingText);
-                for (const item of items) {
-                    if (!item?.name) continue;
-                    if (item.type === 'file' && this.isMarkdownFile(item.name)) {
-                        return true;
-                    }
-                    if (item.type === 'directory') {
-                        stack.push(this.joinPath(current, item.name));
-                    }
-                }
-            } catch (err) {
-                console.warn('Failed to scan directory for specs', current, err);
-                return false;
-            }
-        }
-        return false;
+        return hasMarkdownInTreeImpl(this, dirPath);
     }
 
     toggleMarkdownView() {
@@ -996,10 +875,12 @@ export class FileExp {
     }
 
     async toggleFilterSpecs(element) {
-        this.state.filterSpecs = Boolean(element?.checked);
-        this.saveFilterSpecsPreference(this.state.filterSpecs);
-        await this.setEntries(this.state.allEntries?.length ? this.state.allEntries : this.state.entries);
-        this.invalidate();
+        await this.withLoader(async () => {
+            this.state.filterSpecs = Boolean(element?.checked);
+            this.saveFilterSpecsPreference(this.state.filterSpecs);
+            await this.setEntries(this.state.allEntries?.length ? this.state.allEntries : this.state.entries);
+            this.invalidate();
+        });
     }
 
     loadFilterSpecsPreference() {
@@ -1020,7 +901,7 @@ export class FileExp {
     }
 
     loadColumnVisibilityPreference() {
-        const defaults = { type: true, size: true, modified: true };
+        const defaults = { type: false, size: false, modified: false };
         try {
             const raw = window.localStorage.getItem('assistosExplorerColumnVisibility');
             if (!raw) return defaults;
@@ -1060,88 +941,19 @@ export class FileExp {
     }
 
     attachPreviewAnchorHandler() {
-        const previewRoot = this.element.querySelector('#filePreview');
-        if (!previewRoot) {
-            return;
-        }
-        previewRoot.removeEventListener('click', this.boundPreviewAnchorHandler);
-        previewRoot.addEventListener('click', this.boundPreviewAnchorHandler);
+        return attachPreviewAnchorHandlerImpl(this);
     }
 
     detachPreviewAnchorHandler() {
-        const previewRoot = this.element.querySelector('#filePreview');
-        if (!previewRoot) {
-            return;
-        }
-        previewRoot.removeEventListener('click', this.boundPreviewAnchorHandler);
+        return detachPreviewAnchorHandlerImpl(this);
     }
 
     handlePreviewAnchorClick(event) {
-        const anchor = event.target?.closest?.('a[href^="#"]');
-        if (!anchor) {
-            return;
-        }
-        const href = anchor.getAttribute('href');
-        if (!href || href.length <= 1) {
-            return;
-        }
-        event.preventDefault();
-        event.stopPropagation();
-        const targetId = href.slice(1);
-        if (!targetId) {
-            return;
-        }
-        const previewRoot = this.element.querySelector('#filePreview');
-        if (!previewRoot) {
-            return;
-        }
-        scrollPreviewToAnchor(previewRoot, targetId);
+        return handlePreviewAnchorClickImpl(this, event);
     }
 
     positionOpenActionMenu() {
-        const openPath = this.state.openMenuPath;
-        if (!openPath) return;
-        const container = this.element.querySelector(`[data-action-menu="true"][data-entry-path="${openPath}"]`);
-        const dropdown = container?.querySelector('.action-menu-dropdown');
-        const trigger = container?.querySelector('.action-menu-trigger');
-        if (!dropdown || !trigger) {
-            return;
-        }
-
-        dropdown.removeAttribute('data-positioned');
-        dropdown.classList.remove('drop-up');
-        dropdown.style.left = '';
-        dropdown.style.top = '';
-        dropdown.style.right = '';
-        dropdown.style.bottom = '';
-
-        const triggerRect = trigger.getBoundingClientRect();
-        const menuRect = dropdown.getBoundingClientRect();
-        const spacing = 8;
-        const margin = 8;
-
-        let left = triggerRect.right - menuRect.width;
-        const maxLeft = window.innerWidth - menuRect.width - margin;
-        left = Math.min(Math.max(left, margin), maxLeft);
-
-        let top = triggerRect.bottom + spacing;
-        let dropUp = false;
-        if (top + menuRect.height > window.innerHeight - margin) {
-            const aboveTop = triggerRect.top - menuRect.height - spacing;
-            if (aboveTop >= margin) {
-                top = aboveTop;
-                dropUp = true;
-            } else {
-                top = Math.max(margin, window.innerHeight - menuRect.height - margin);
-            }
-        }
-
-        dropdown.style.left = `${left}px`;
-        dropdown.style.top = `${top}px`;
-        dropdown.style.right = 'auto';
-        dropdown.style.bottom = 'auto';
-        dropdown.dataset.positioned = 'true';
-        dropdown.classList.toggle('drop-up', dropUp);
+        return positionOpenActionMenuImpl(this);
     }
 
     handleSortClick(event) {
@@ -1153,35 +965,5 @@ export class FileExp {
         this.state.entries = this.sortEntries(this.state.entries);
         this.invalidate();
     }
-
-    handleContextMenu(event) {
-        const row = event.target?.closest?.('tr[data-entry-path]');
-        if (row) {
-            event.preventDefault();
-            event.stopPropagation();
-            const path = row.dataset.entryPath;
-            const type = row.dataset.type;
-            if (!path || this.state.isEditing) {
-                return;
-            }
-            this.state.selectedPath = path;
-            this.state.selectedIsMarkdown = this.isMarkdownFile(path) && type === 'file';
-            this.closeActionMenu(false);
-            this.state.openMenuPath = path;
-            this.pendingMenuFocusPath = path;
-            this.invalidate();
-            return;
-        }
-        if (this.state.clipboard) {
-            event.preventDefault();
-            event.stopPropagation();
-            showContextPasteMenu({
-                x: event.clientX,
-                y: event.clientY,
-                onPaste: () => this.pasteClipboard({ dataset: { targetPath: this.state.path } })
-            });
-        }
-    }
-
 
 }

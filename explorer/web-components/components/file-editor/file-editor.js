@@ -1,4 +1,5 @@
 import { highlightCode } from "../../../utils/highlight.js";
+import { withGlobalLoader } from "../../../utils/globalLoader.js";
 
 export class FileEditor {
     constructor(element, invalidate) {
@@ -32,7 +33,7 @@ export class FileEditor {
     async beforeRender() {
         if (this.state.editorContent === "Loading...") {
             try {
-                const contentResult = await window.webSkel.appServices.callTool('explorer', 'read_text_file', {path: this.path});
+                const contentResult = await withGlobalLoader(() => window.webSkel.appServices.callTool('explorer', 'read_text_file', {path: this.path}));
                 if (contentResult.text.startsWith('Error:')) {
                     this.state.editorContent = `Error loading file: ${contentResult.text}`
                 } else {
