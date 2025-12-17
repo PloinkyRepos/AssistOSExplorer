@@ -509,7 +509,7 @@ th {
 }
 
 .preview-notice {
-    margin: 0.25rem 1rem;
+    margin: 0.25rem 0;
     padding: 8px 10px;
     border: 1px dashed var(--file-exp-border);
     border-radius: 8px;
