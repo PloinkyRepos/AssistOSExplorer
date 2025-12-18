@@ -10,6 +10,7 @@ import {
     togglePrefixSelection as togglePrefixSelectionOnEntry
 } from "./git-commit-modal-selection.js";
 import { formatRepoSummary, renderRepoChangesTree } from "./git-commit-modal-tree.js";
+import { unifiedToSplitHtml, stripUnifiedDiffHeaders, summarizeUnifiedDiffMeta } from "./git-commit-modal-diff.js";
 
 export class GitCommitModal {
     constructor(element, invalidate, props = {}) {
@@ -19,6 +20,7 @@ export class GitCommitModal {
         this.statusCache = { at: 0, payload: null };
         this.diffCache = new Map();
         this.repoOverviewCache = { at: 0, list: [] };
+        this.dialogState = { isFullscreen: false, prev: null };
         this.state = {
             // Default to the multi-repo root so opening the modal immediately loads all repos under it.
             repoPath: props.repoPath || '/.ploinky/repos',
@@ -31,6 +33,8 @@ export class GitCommitModal {
             repoOverviewsLoading: false,
             selectedRepoPaths: [],
             repoTreeExpanded: {},
+            repoChangesExpanded: {},
+            treeExpandedByRepo: {},
             showCleanRepos: false,
             selectedFilesByRepo: {},
             selectedRepoPath: null,
@@ -44,11 +48,19 @@ export class GitCommitModal {
             selectedSection: null, // 'staged' | 'unstaged' | 'untracked' | 'conflicted'
             diffText: '',
             diffLoading: false,
+            diffMode: 'split',
             busy: false,
             commitMessage: '',
             amend: false,
             signoff: false,
             pushAfterCommit: false,
+            identityPrompt: {
+                visible: false,
+                repoPath: null,
+                pendingAction: null,
+                name: '',
+                email: ''
+            },
             lastStatusLine: ''
         };
         this.invalidate();
@@ -63,11 +75,169 @@ export class GitCommitModal {
     afterRender() {
         this.bindEvents();
         this.syncStaticUI();
+        this.renderDiff(this.state.diffText || '', { filePath: this.state.selectedPath, section: this.state.selectedSection });
+        this.ensureDialogResizable();
         // On open: force-load repos overview so the user immediately sees changes across all repos.
         this.refreshAll({ force: true });
     }
 
+    getDialogElement() {
+        return this.element?.closest?.('dialog') || null;
+    }
+
+    ensureDialogPositioning() {
+        const dialog = this.getDialogElement();
+        if (!dialog) return null;
+        if (dialog.dataset.gitPositioned === 'true') return dialog;
+        const rect = dialog.getBoundingClientRect();
+        dialog.style.left = `${rect.left}px`;
+        dialog.style.top = `${rect.top}px`;
+        dialog.style.width = `${rect.width}px`;
+        dialog.style.height = `${rect.height}px`;
+        dialog.classList.add('git-positioned');
+        dialog.dataset.gitPositioned = 'true';
+        return dialog;
+    }
+
+    ensureDialogResizable() {
+        const dialog = this.getDialogElement();
+        if (!dialog) return;
+        if (dialog.dataset.gitResizable === 'true') return;
+
+        const host = this.element.querySelector('.git-modal') || this.element;
+        const handles = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
+        for (const dir of handles) {
+            const h = document.createElement('div');
+            h.className = `git-resize-handle ${dir}`;
+            h.dataset.dir = dir;
+            h.addEventListener('pointerdown', (event) => this.startResize(event, dir));
+            host.appendChild(h);
+        }
+        dialog.dataset.gitResizable = 'true';
+    }
+
+    startResize(event, dir) {
+        const dialog = this.ensureDialogPositioning();
+        if (!dialog) return;
+        if (dialog.classList.contains('is-fullscreen')) return;
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        const startRect = dialog.getBoundingClientRect();
+        const startX = event.clientX;
+        const startY = event.clientY;
+        const minW = 760;
+        const minH = 520;
+
+        const onMove = (e) => {
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+
+            let left = startRect.left;
+            let top = startRect.top;
+            let width = startRect.width;
+            let height = startRect.height;
+
+            if (dir.includes('e')) width = startRect.width + dx;
+            if (dir.includes('s')) height = startRect.height + dy;
+            if (dir.includes('w')) {
+                width = startRect.width - dx;
+                left = startRect.left + dx;
+            }
+            if (dir.includes('n')) {
+                height = startRect.height - dy;
+                top = startRect.top + dy;
+            }
+
+            width = Math.max(minW, width);
+            height = Math.max(minH, height);
+
+            // Clamp left/top so resizing from west/north doesn't "drift" after hitting min sizes.
+            if (dir.includes('w') && width === minW) {
+                left = startRect.right - minW;
+            }
+            if (dir.includes('n') && height === minH) {
+                top = startRect.bottom - minH;
+            }
+
+            dialog.style.left = `${left}px`;
+            dialog.style.top = `${top}px`;
+            dialog.style.width = `${width}px`;
+            dialog.style.height = `${height}px`;
+        };
+
+        const onUp = () => {
+            window.removeEventListener('pointermove', onMove, true);
+            window.removeEventListener('pointerup', onUp, true);
+        };
+
+        window.addEventListener('pointermove', onMove, true);
+        window.addEventListener('pointerup', onUp, true);
+    }
+
+    toggleFullscreen() {
+        const dialog = this.ensureDialogPositioning();
+        if (!dialog) return;
+
+        const isNowFullscreen = !dialog.classList.contains('is-fullscreen');
+        if (isNowFullscreen) {
+            const rect = dialog.getBoundingClientRect();
+            this.dialogState.prev = { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+            dialog.classList.add('is-fullscreen');
+            this.dialogState.isFullscreen = true;
+            return;
+        }
+
+        dialog.classList.remove('is-fullscreen');
+        const prev = this.dialogState.prev;
+        if (prev) {
+            dialog.style.left = `${prev.left}px`;
+            dialog.style.top = `${prev.top}px`;
+            dialog.style.width = `${prev.width}px`;
+            dialog.style.height = `${prev.height}px`;
+        }
+        this.dialogState.isFullscreen = false;
+    }
+
     bindEvents() {
+        const left = this.element.querySelector('#gitDiffLeft');
+        const right = this.element.querySelector('#gitDiffRight');
+        if (left && right && !this.element.dataset.boundDiffScroll) {
+            let syncing = false;
+            const sync = (source, target) => {
+                if (syncing) return;
+                syncing = true;
+                target.scrollTop = source.scrollTop;
+                target.scrollLeft = source.scrollLeft;
+                syncing = false;
+            };
+            left.addEventListener('scroll', () => sync(left, right), { passive: true });
+            right.addEventListener('scroll', () => sync(right, left), { passive: true });
+            this.element.dataset.boundDiffScroll = 'true';
+        }
+
+        if (!this.element.dataset.boundDiffKeys) {
+            this.element.addEventListener('keydown', (event) => {
+                const key = event.key;
+                if (key !== 'Enter' && key !== ' ') return;
+                const target = event.target?.closest?.(
+                    '.git-tree-file[data-local-action="openDiff"], ' +
+                    '.git-change-button[data-local-action="openDiff"], ' +
+                    '.git-change-button[data-local-action="openRepo"]'
+                );
+                if (!target) return;
+                event.preventDefault();
+                const action = target.getAttribute('data-local-action') || '';
+                if (action === 'openRepo') {
+                    this.openRepo(target);
+                } else {
+                    this.openDiff(target);
+                }
+            });
+            this.element.dataset.boundDiffKeys = 'true';
+        }
+
         const repoPathInput = this.element.querySelector('#gitRepoPathInput');
         if (repoPathInput && !repoPathInput.dataset.bound) {
             repoPathInput.addEventListener('keydown', (event) => {
@@ -203,6 +373,28 @@ export class GitCommitModal {
         this.stageFiles([filePath]);
     }
 
+    async stageFileFromTree(element) {
+        const repoPath = element?.dataset?.repoPath;
+        const filePath = element?.dataset?.filePath;
+        if (!repoPath || !filePath) return;
+        this.setBusy(true);
+        this.setStatusLine('Staging…');
+        try {
+            await this.callTool('git_stage', { path: repoPath, files: [filePath] });
+            this.diffCache.clear();
+            await this.loadRepoOverviews({ force: true });
+            if (this.state.repoPath === repoPath) {
+                await this.loadStatus({ force: true });
+                this.renderStatusLists();
+            }
+            this.setStatusLine('Staged.');
+        } catch (error) {
+            this.setStatusLine(normalizeErrorMessage(error), true);
+        } finally {
+            this.setBusy(false);
+        }
+    }
+
     unstageEntry(element) {
         const filePath = element?.dataset?.filePath;
         if (!filePath) return;
@@ -228,6 +420,18 @@ export class GitCommitModal {
         if (showCleanToggle) {
             showCleanToggle.checked = Boolean(this.state.showCleanRepos);
         }
+
+        const identityBox = this.element.querySelector('#gitIdentityPrompt');
+        if (identityBox) {
+            identityBox.style.display = this.state.identityPrompt?.visible ? '' : 'none';
+        }
+    }
+
+    setDiffMode(element, mode) {
+        const next = (mode || element?.dataset?.mode || '').trim();
+        if (next !== 'split' && next !== 'unified') return;
+        this.state.diffMode = next;
+        this.renderDiff(this.state.diffText || '', { filePath: this.state.selectedPath, section: this.state.selectedSection });
     }
 
     async applyRepoPathFromInput() {
@@ -243,6 +447,7 @@ export class GitCommitModal {
         this.diffCache.clear();
         this.state.selectedPath = null;
         this.state.selectedSection = null;
+        this.state.identityPrompt = { visible: false, repoPath: null, pendingAction: null, name: '', email: '' };
         this.syncStaticUI();
         await this.refreshAll({ force: true });
     }
@@ -417,6 +622,41 @@ export class GitCommitModal {
         expanded[folderId] = expanded[folderId] === true ? false : true;
         this.state.repoTreeExpanded = expanded;
         this.renderRepoOverviews(this.state.repoOverviews);
+    }
+
+    toggleRepoChanges(element) {
+        const repoPath = element?.dataset?.repoPath;
+        if (!repoPath) return;
+        const expanded = { ...(this.state.repoChangesExpanded || {}) };
+        const current = expanded[repoPath];
+        expanded[repoPath] = current === undefined ? false : !current;
+        this.state.repoChangesExpanded = expanded;
+        this.renderRepoOverviews(this.state.repoOverviews);
+    }
+
+    isRepoChangesExpanded(repoPath) {
+        if (!repoPath) return true;
+        const current = this.state.repoChangesExpanded?.[repoPath];
+        return current === undefined ? true : Boolean(current);
+    }
+
+    toggleTreeFolder(element) {
+        const repoPath = element?.dataset?.repoPath;
+        const prefix = element?.dataset?.prefix;
+        if (!repoPath || !prefix) return;
+        const key = `${repoPath}::${prefix}`;
+        const expanded = { ...(this.state.treeExpandedByRepo || {}) };
+        const current = expanded[key];
+        expanded[key] = current === undefined ? false : !current;
+        this.state.treeExpandedByRepo = expanded;
+        this.renderRepoOverviews(this.state.repoOverviews);
+    }
+
+    isTreeFolderExpanded(repoPath, prefix) {
+        if (!repoPath || !prefix) return true;
+        const key = `${repoPath}::${prefix}`;
+        const current = this.state.treeExpandedByRepo?.[key];
+        return current === undefined ? true : Boolean(current);
     }
 
     toggleFolderSelection(folderId, isSelected) {
@@ -673,11 +913,20 @@ export class GitCommitModal {
                 repoCheckbox.dataset.repoPath = repo.path;
                 repoCheckbox.checked = selected.has(repo.path);
 
-                const open = document.createElement('button');
-                open.type = 'button';
+                const changesToggle = document.createElement('button');
+                changesToggle.type = 'button';
+                changesToggle.className = 'secondary git-tree-collapse';
+                changesToggle.dataset.repoPath = repo.path;
+                changesToggle.setAttribute('data-local-action', 'toggleRepoChanges');
+                const isExpanded = this.isRepoChangesExpanded(repo.path);
+                changesToggle.textContent = isExpanded ? '▾' : '▸';
+
+                const open = document.createElement('div');
                 open.className = 'git-change-button';
                 open.dataset.repoPath = repo.path;
                 open.setAttribute('data-local-action', 'openRepo');
+                open.setAttribute('role', 'button');
+                open.setAttribute('tabindex', '0');
                 const counts = repo.counts || { staged: 0, unstaged: 0, untracked: 0, conflicted: 0 };
                 const repoBadge = repo.ok
                     ? `S:${counts.staged} U:${counts.unstaged} N:${counts.untracked}${counts.conflicted ? ` C:${counts.conflicted}` : ''}`
@@ -685,6 +934,7 @@ export class GitCommitModal {
                 open.textContent = `${repo.name} · ${repoBadge}${repo.branch ? ` · ${repo.branch}` : ''}`;
 
                 repoLeft.appendChild(repoCheckbox);
+                repoLeft.appendChild(changesToggle);
                 repoLeft.appendChild(open);
 
                 const openBtn = document.createElement('button');
@@ -703,12 +953,12 @@ export class GitCommitModal {
                 details.textContent = this.formatRepoSummary(repo);
                 repoWrapper.appendChild(details);
 
-	                const hasChanges = Boolean(repo?.dirty || counts.staged || counts.unstaged || counts.untracked || counts.conflicted);
-	                if (hasChanges) {
-	                    const changesTree = this.renderRepoChangesTree(repo);
-	                    if (changesTree) {
-	                        repoWrapper.appendChild(changesTree);
-	                    }
+                const hasChanges = Boolean(repo?.dirty || counts.staged || counts.unstaged || counts.untracked || counts.conflicted);
+                if (hasChanges && this.isRepoChangesExpanded(repo.path)) {
+                    const changesTree = this.renderRepoChangesTree(repo);
+                    if (changesTree) {
+                        repoWrapper.appendChild(changesTree);
+                    }
                 }
 
                 wrapper.appendChild(repoWrapper);
@@ -733,7 +983,8 @@ export class GitCommitModal {
         return renderRepoChangesTree(repo, {
             isFileSelected: (repoPath, filePath) => this.isFileSelected(repoPath, filePath),
             getAncestorCoveringPrefix: (repoPath, prefix) => this.getAncestorCoveringPrefix(repoPath, prefix),
-            getCoveringPrefix: (repoPath, prefix) => this.getCoveringPrefix(repoPath, prefix)
+            getCoveringPrefix: (repoPath, prefix) => this.getCoveringPrefix(repoPath, prefix),
+            isFolderExpanded: (repoPath, prefix) => this.isTreeFolderExpanded(repoPath, prefix)
         });
     }
 
@@ -786,13 +1037,14 @@ export class GitCommitModal {
             const row = document.createElement('div');
             row.className = 'git-change-row';
 
-            const button = document.createElement('button');
-            button.type = 'button';
+            const button = document.createElement('div');
             button.className = 'git-change-button';
             button.setAttribute('data-local-action', 'openDiff');
             button.dataset.repoPath = this.state.repoPath;
             button.dataset.filePath = entry.path;
             button.dataset.section = section;
+            button.setAttribute('role', 'button');
+            button.setAttribute('tabindex', '0');
             button.textContent = entry.path;
 
             const action = document.createElement('button');
@@ -842,20 +1094,89 @@ export class GitCommitModal {
         ]));
         const selectedCount = selectedRepos.length;
         const repoOk = this.state.repoInfoOk !== false;
+        const identityBlocking = Boolean(this.state.identityPrompt?.visible);
         if (commitButton) {
-            commitButton.disabled = this.state.busy || !repoOk || !hasStaged || !messageOk;
+            commitButton.disabled = this.state.busy || identityBlocking || !repoOk || !hasStaged || !messageOk;
             commitButton.textContent = this.state.pushAfterCommit ? 'Commit & Push' : 'Commit';
         }
         if (pushButton) {
-            pushButton.disabled = this.state.busy || !repoOk;
+            pushButton.disabled = this.state.busy || identityBlocking || !repoOk;
         }
         if (commitSelectedButton) {
             commitSelectedButton.style.display = selectedCount ? '' : 'none';
-            commitSelectedButton.disabled = this.state.busy || !messageOk;
+            commitSelectedButton.disabled = this.state.busy || identityBlocking || !messageOk;
         }
         if (pushSelectedButton) {
             pushSelectedButton.style.display = selectedCount ? '' : 'none';
-            pushSelectedButton.disabled = this.state.busy;
+            pushSelectedButton.disabled = this.state.busy || identityBlocking;
+        }
+    }
+
+    async ensureGitIdentityOrPrompt(repoPath, pendingAction) {
+        if (!repoPath) return false;
+        try {
+            const payload = parseJsonToolResult(await this.callTool('git_identity', { path: repoPath })) || {};
+            if (payload.ok) return true;
+        } catch (_) {
+            // ignore and prompt
+        }
+
+        const nameInput = this.element.querySelector('#gitIdentityName');
+        const emailInput = this.element.querySelector('#gitIdentityEmail');
+        if (nameInput) nameInput.value = '';
+        if (emailInput) emailInput.value = '';
+        this.state.identityPrompt = {
+            visible: true,
+            repoPath,
+            pendingAction: pendingAction || null,
+            name: '',
+            email: ''
+        };
+        this.syncStaticUI();
+        this.updateCommitButtons();
+        this.setStatusLine('Set git user.name and user.email to continue.', true);
+        setTimeout(() => nameInput?.focus?.(), 0);
+        return false;
+    }
+
+    async saveGitIdentity(element, scope) {
+        const repoPath = this.state.identityPrompt?.repoPath;
+        if (!repoPath) return;
+        const nameInput = this.element.querySelector('#gitIdentityName');
+        const emailInput = this.element.querySelector('#gitIdentityEmail');
+        const name = (nameInput?.value || '').trim();
+        const email = (emailInput?.value || '').trim();
+        if (!name || !email) {
+            this.setStatusLine('Enter name and email.', true);
+            return;
+        }
+
+        const nextScope = String(scope || '').trim() || 'local';
+        this.setBusy(true);
+        try {
+            await this.callTool('git_set_identity', {
+                path: repoPath,
+                scope: nextScope === 'global' ? 'global' : 'local',
+                name,
+                email
+            });
+            const pending = this.state.identityPrompt?.pendingAction;
+            this.state.identityPrompt = { visible: false, repoPath: null, pendingAction: null, name: '', email: '' };
+            this.syncStaticUI();
+            this.updateCommitButtons();
+            this.setStatusLine('Git identity saved.');
+
+            if (pending?.type === 'commit') {
+                if (pending.mode === 'batch') await this.commitSelectedRepos();
+                else await this.commit();
+            } else if (pending?.type === 'push') {
+                if (pending.mode === 'batch') await this.pushSelectedRepos();
+                else await this.push({ silent: false });
+            }
+        } catch (error) {
+            this.setStatusLine(normalizeErrorMessage(error), true);
+        } finally {
+            this.setBusy(false);
         }
     }
 
@@ -876,6 +1197,8 @@ export class GitCommitModal {
             return;
         }
         if (!selected.length) return;
+        const identityOk = await this.ensureGitIdentityOrPrompt(selected[0], { type: 'commit', mode: 'batch' });
+        if (!identityOk) return;
         this.setBusy(true);
         this.setStatusLine(`Committing ${selected.length} repo(s)…`);
         try {
@@ -928,6 +1251,8 @@ export class GitCommitModal {
     async pushSelectedRepos() {
         const selected = this.getSelectedReposForBatch();
         if (!selected.length) return;
+        const identityOk = await this.ensureGitIdentityOrPrompt(selected[0], { type: 'push', mode: 'batch' });
+        if (!identityOk) return;
         this.setBusy(true);
         this.setStatusLine(`Pushing ${selected.length} repo(s)…`);
         try {
@@ -975,8 +1300,7 @@ export class GitCommitModal {
 
         this.renderDiff('Loading diff…', { filePath, section, loading: true });
         try {
-            const cached = section === 'staged';
-            const text = await this.callTool('git_diff', { path: repoPath, file: filePath, cached });
+            const text = await this.callTool('git_diff', { path: repoPath, file: filePath, cached: false, ref: 'HEAD' });
             const diffText = text || '(no diff)';
             this.diffCache.set(cachedKey, diffText);
             this.renderDiff(diffText, { filePath, section });
@@ -990,18 +1314,38 @@ export class GitCommitModal {
         const title = this.element.querySelector('#gitDiffTitle');
         const meta = this.element.querySelector('#gitDiffMeta');
         const body = this.element.querySelector('#gitDiffBody');
+        const split = this.element.querySelector('#gitDiffSplit');
+        const left = this.element.querySelector('#gitDiffLeft');
+        const right = this.element.querySelector('#gitDiffRight');
         if (title) title.textContent = 'Diff';
-        if (meta) {
-            const parts = [];
-            if (filePath) parts.push(filePath);
-            if (section === 'staged') parts.push('staged');
-            if (section === 'unstaged') parts.push('unstaged');
-            if (section === 'untracked') parts.push('untracked');
-            if (loading) parts.push('loading…');
-            meta.textContent = parts.join(' · ');
-        }
-        if (body) {
-            body.textContent = text || '';
+        this.state.diffText = text || '';
+
+        const mode = this.state.diffMode || 'split';
+        if (split) split.style.display = mode === 'split' ? '' : 'none';
+        if (body) body.style.display = mode === 'unified' ? '' : 'none';
+
+        if (mode === 'split') {
+            const { leftHtml, rightHtml, meta: diffMeta } = unifiedToSplitHtml(this.state.diffText);
+            if (meta) {
+                const parts = [];
+                if (filePath) parts.push(filePath);
+                const summary = summarizeUnifiedDiffMeta(diffMeta);
+                if (summary) parts.push(summary);
+                if (loading) parts.push('loading…');
+                meta.textContent = parts.join(' · ');
+            }
+            if (left) left.innerHTML = leftHtml;
+            if (right) right.innerHTML = rightHtml;
+            left?.classList.toggle('error', Boolean(isError));
+            right?.classList.toggle('error', Boolean(isError));
+        } else if (body) {
+            body.textContent = stripUnifiedDiffHeaders(this.state.diffText);
+            if (meta) {
+                const parts = [];
+                if (filePath) parts.push(filePath);
+                if (loading) parts.push('loading…');
+                meta.textContent = parts.join(' · ');
+            }
             body.classList.toggle('error', Boolean(isError));
         }
     }
@@ -1052,6 +1396,8 @@ export class GitCommitModal {
             this.setStatusLine('Enter a commit message.', true);
             return;
         }
+        const identityOk = await this.ensureGitIdentityOrPrompt(this.state.repoPath, { type: 'commit', mode: 'single' });
+        if (!identityOk) return;
         this.setBusy(true);
         this.setStatusLine(this.state.pushAfterCommit ? 'Committing & pushing…' : 'Committing…');
         try {
@@ -1084,6 +1430,11 @@ export class GitCommitModal {
         const alreadyBusy = this.state.busy;
         if (!alreadyBusy) {
             this.setBusy(true);
+        }
+        const identityOk = await this.ensureGitIdentityOrPrompt(this.state.repoPath, { type: 'push', mode: 'single' });
+        if (!identityOk) {
+            if (!alreadyBusy) this.setBusy(false);
+            return;
         }
         if (!silent) {
             this.setStatusLine('Pushing…');

@@ -123,6 +123,18 @@ function categorizeStatusEntries(entries) {
   return { staged, unstaged, untracked, conflicted };
 }
 
+function normalizeGitConfigValue(value) {
+  if (value === undefined || value === null) return '';
+  const v = String(value).trim();
+  if (v.includes('\0') || v.includes('\n') || v.includes('\r')) {
+    throw new Error('Invalid git config value (contains control characters).');
+  }
+  if (v.length > 200) {
+    throw new Error('Invalid git config value (too long).');
+  }
+  return v;
+}
+
 export function createGitService({ validatePath }) {
   let gitBinaryPromise = null;
   let gitBinaryCwd = null;
@@ -233,15 +245,31 @@ export function createGitService({ validatePath }) {
     return { ok: true, status };
   }
 
-  async function gitDiff({ path: repoPathArg, file, cached = false }) {
+  async function gitDiff({ path: repoPathArg, file, cached = false, ref = null }) {
     const repoPath = await resolveRepoPath(repoPathArg);
     if (!isGitRepoRelativePath(file)) {
       throw new Error(`Invalid file path for git_diff: ${file}`);
     }
     const gitBinary = await getGitBinary(repoPath);
-    const args = cached ? [gitBinary, 'diff', '--cached', '--', file] : [gitBinary, 'diff', '--', file];
-    const { stdout } = await runGit(repoPath, args, { timeoutMs: 25000 });
-    return stdout;
+    const baseRef = ref && typeof ref === 'string' && ref.trim() ? ref.trim() : null;
+
+    // Default behavior (backwards compatible).
+    if (!baseRef) {
+      const args = cached ? [gitBinary, 'diff', '--cached', '--', file] : [gitBinary, 'diff', '--', file];
+      const { stdout } = await runGit(repoPath, args, { timeoutMs: 25000 });
+      return stdout;
+    }
+
+    // Working tree vs baseRef (ex: HEAD). For untracked files git diff <ref> -- <file> returns empty,
+    // so we fall back to `--no-index` to generate an "added file" diff.
+    const { stdout } = await runGit(repoPath, [gitBinary, 'diff', baseRef, '--', file], { timeoutMs: 25000 });
+    if (stdout && stdout.trim()) return stdout;
+    try {
+      const { stdout: noIndex } = await runGit(repoPath, [gitBinary, 'diff', '--no-index', '--', '/dev/null', file], { timeoutMs: 25000 });
+      return noIndex;
+    } catch {
+      return '';
+    }
   }
 
   async function gitStage({ path: repoPathArg, files = [] }) {
@@ -348,6 +376,55 @@ export function createGitService({ validatePath }) {
       selectedError,
       candidates: results
     };
+  }
+
+  async function gitIdentity({ path: repoPathArg }) {
+    const repoPath = await resolveRepoPath(repoPathArg);
+    const gitBinary = await getGitBinary(repoPath);
+
+    const getValue = async (args) => {
+      try {
+        const { stdout } = await runGit(repoPath, [gitBinary, 'config', '--get', ...args], { timeoutMs: 5000 });
+        return (stdout || '').trim();
+      } catch {
+        return '';
+      }
+    };
+
+    const localName = await getValue(['user.name']);
+    const localEmail = await getValue(['user.email']);
+    const globalName = await getValue(['--global', 'user.name']);
+    const globalEmail = await getValue(['--global', 'user.email']);
+
+    const effectiveName = localName || globalName || '';
+    const effectiveEmail = localEmail || globalEmail || '';
+
+    return {
+      ok: Boolean(effectiveName && effectiveEmail),
+      repoPath,
+      effective: {
+        name: effectiveName || null,
+        email: effectiveEmail || null,
+        source: localName || localEmail ? 'local' : globalName || globalEmail ? 'global' : 'none'
+      },
+      local: { name: localName || null, email: localEmail || null },
+      global: { name: globalName || null, email: globalEmail || null }
+    };
+  }
+
+  async function gitSetIdentity({ path: repoPathArg, scope = 'local', name, email }) {
+    const repoPath = await resolveRepoPath(repoPathArg);
+    const gitBinary = await getGitBinary(repoPath);
+    const cleanName = normalizeGitConfigValue(name);
+    const cleanEmail = normalizeGitConfigValue(email);
+    if (!cleanName) throw new Error('Missing user.name');
+    if (!cleanEmail) throw new Error('Missing user.email');
+
+    const isGlobal = scope === 'global';
+    const argsPrefix = isGlobal ? [gitBinary, 'config', '--global'] : [gitBinary, 'config'];
+    await runGit(repoPath, [...argsPrefix, 'user.name', cleanName], { timeoutMs: 5000 });
+    await runGit(repoPath, [...argsPrefix, 'user.email', cleanEmail], { timeoutMs: 5000 });
+    return { ok: true, scope: isGlobal ? 'global' : 'local', repoPath };
   }
 
   async function gitReposOverview({ path: reposRootArg, maxRepos = 200 }) {
@@ -464,6 +541,39 @@ export function createGitService({ validatePath }) {
           const fullUntracked = Array.isArray(fullStatus.untracked) ? fullStatus.untracked : [];
           const fullConflicted = Array.isArray(fullStatus.conflicted) ? fullStatus.conflicted : conflicted;
           const toPaths = (items, limit = 250) => items.slice(0, limit).map((e) => e?.path).filter(Boolean);
+          const toChangeRows = (status, limit = 800) => {
+            const map = new Map();
+            const touch = (entry, flag) => {
+              if (!entry?.path) return;
+              const key = entry.path;
+              const existing = map.get(key) || {
+                path: key,
+                flags: { staged: false, unstaged: false, untracked: false, conflicted: false },
+                origPath: null
+              };
+              existing.flags[flag] = true;
+              if (entry.origPath && !existing.origPath) existing.origPath = entry.origPath;
+              map.set(key, existing);
+            };
+
+            for (const entry of (status.conflicted || []).slice(0, limit)) touch(entry, 'conflicted');
+            for (const entry of (status.untracked || []).slice(0, limit)) touch(entry, 'untracked');
+            for (const entry of (status.unstaged || []).slice(0, limit)) touch(entry, 'unstaged');
+            for (const entry of (status.staged || []).slice(0, limit)) touch(entry, 'staged');
+
+            const rows = Array.from(map.values());
+            for (const row of rows) {
+              const f = row.flags || {};
+              row.kind = f.conflicted ? 'conflicted'
+                : f.untracked ? 'untracked'
+                  : (f.staged && f.unstaged) ? 'staged+unstaged'
+                    : f.staged ? 'staged'
+                      : f.unstaged ? 'unstaged'
+                        : 'unknown';
+            }
+            rows.sort((a, b) => a.path.localeCompare(b.path));
+            return rows;
+          };
 
           results.push({
             ...current,
@@ -476,6 +586,12 @@ export function createGitService({ validatePath }) {
               untracked: fullUntracked.length,
               conflicted: fullConflicted.length
             },
+            changesAll: toChangeRows({
+              staged: fullStaged,
+              unstaged: fullUnstaged,
+              untracked: fullUntracked,
+              conflicted: fullConflicted
+            }),
             changes: {
               staged: toPaths(fullStaged),
               unstaged: toPaths(fullUnstaged),
@@ -516,6 +632,8 @@ export function createGitService({ validatePath }) {
     gitCommit,
     gitPush,
     gitDiagnose,
+    gitIdentity,
+    gitSetIdentity,
     gitReposOverview,
     normalizeErrorMessage
   };

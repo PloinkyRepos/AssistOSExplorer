@@ -1,5 +1,3 @@
-import { normalizeRepoRelativePrefix } from './git-commit-modal-selection.js';
-
 export function formatRepoSummary(repo) {
     if (!repo || !repo.ok) {
         return 'Not a git repository.';
@@ -32,28 +30,31 @@ export function formatRepoSummary(repo) {
     return parts.join(' | ');
 }
 
+import { normalizeRepoRelativePrefix } from './git-commit-modal-selection.js';
+
 export function renderRepoChangesTree(repo, {
     isFileSelected,
     getAncestorCoveringPrefix,
-    getCoveringPrefix
+    getCoveringPrefix,
+    isFolderExpanded
 } = {}) {
-    const changes = repo?.changes || repo?.sample || {};
-    const groups = [
-        { key: 'staged', label: 'Staged', items: changes.staged || [] },
-        { key: 'unstaged', label: 'Unstaged', items: changes.unstaged || [] },
-        { key: 'untracked', label: 'Untracked', items: changes.untracked || [] },
-        { key: 'conflicted', label: 'Conflicts', items: changes.conflicted || [] }
-    ].filter((g) => Array.isArray(g.items) && g.items.length);
-
-    if (!groups.length) return null;
+    const changesAll = Array.isArray(repo?.changesAll) ? repo.changesAll : null;
+    const fallbackPaths = repo?.changes ? [
+        ...(repo.changes.staged || []),
+        ...(repo.changes.unstaged || []),
+        ...(repo.changes.untracked || []),
+        ...(repo.changes.conflicted || [])
+    ].map((p) => ({ path: p, kind: 'unknown', x: null, y: null })) : [];
+    const rows = (changesAll && changesAll.length) ? changesAll : fallbackPaths;
+    if (!rows.length) return null;
 
     const root = document.createElement('div');
     root.className = 'git-tree';
 
-    const buildTree = (paths) => {
+    const buildTree = (items) => {
         const tree = { files: [], children: new Map() };
-        for (const p of paths) {
-            const rel = String(p || '').replace(/^\/+/, '');
+        for (const item of items) {
+            const rel = String(item?.path || '').replace(/^\/+/, '');
             if (!rel) continue;
             const parts = rel.split('/').filter(Boolean);
             let node = tree;
@@ -61,7 +62,14 @@ export function renderRepoChangesTree(repo, {
                 const part = parts[i];
                 const isLast = i === parts.length - 1;
                 if (isLast) {
-                    node.files.push({ name: part, path: rel });
+                    node.files.push({
+                        name: part,
+                        path: rel,
+                        kind: item.kind,
+                        flags: item.flags || null,
+                        x: item.x,
+                        y: item.y
+                    });
                 } else {
                     if (!node.children.has(part)) {
                         node.children.set(part, { files: [], children: new Map() });
@@ -92,7 +100,7 @@ export function renderRepoChangesTree(repo, {
         return paths;
     };
 
-    const renderNode = (node, depth, section, prefix) => {
+    const renderNode = (node, depth, prefix) => {
         const out = document.createElement('div');
         out.className = 'git-tree-children';
         const indentStep = 12;
@@ -102,6 +110,8 @@ export function renderRepoChangesTree(repo, {
         for (const folder of folderNames) {
             const childNode = node.children.get(folder);
             const nextPrefix = prefix ? `${prefix}${folder}/` : `${folder}/`;
+            const normalizedPrefix = normalizeRepoRelativePrefix(nextPrefix);
+            const expanded = isFolderExpanded ? Boolean(isFolderExpanded(repo.path, normalizedPrefix)) : true;
 
             const folderWrapper = document.createElement('div');
             folderWrapper.className = 'git-tree-folder-node';
@@ -110,11 +120,18 @@ export function renderRepoChangesTree(repo, {
             row.className = 'git-tree-item';
             row.style.paddingLeft = indent(depth);
 
+            const toggle = document.createElement('button');
+            toggle.type = 'button';
+            toggle.className = 'secondary git-tree-folder-toggle';
+            toggle.setAttribute('data-local-action', 'toggleTreeFolder');
+            toggle.dataset.repoPath = repo.path;
+            toggle.dataset.prefix = normalizedPrefix;
+            toggle.textContent = expanded ? '▾' : '▸';
+
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
             checkbox.dataset.fileFolderSelect = 'true';
             checkbox.dataset.repoPath = repo.path;
-            const normalizedPrefix = normalizeRepoRelativePrefix(nextPrefix);
             checkbox.dataset.prefix = normalizedPrefix;
 
             const subtreeFiles = collectSubtreeFilePaths(childNode);
@@ -134,53 +151,77 @@ export function renderRepoChangesTree(repo, {
 
             const label = document.createElement('div');
             label.className = 'git-tree-folder';
-            label.textContent = folder;
+            const icon = document.createElement('span');
+            icon.className = 'git-tree-folder-icon';
+            icon.setAttribute('aria-hidden', 'true');
+            icon.innerHTML = `
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3.5 6.5h6l2 2H20.5v10a2 2 0 0 1-2 2H5.5a2 2 0 0 1-2-2v-12a2 2 0 0 1 2-2Z"></path>
+                </svg>
+            `.trim();
+            const text = document.createElement('span');
+            text.className = 'git-tree-folder-name';
+            text.textContent = folder;
+            label.appendChild(icon);
+            label.appendChild(text);
 
+            row.appendChild(toggle);
             row.appendChild(checkbox);
             row.appendChild(label);
             folderWrapper.appendChild(row);
-            folderWrapper.appendChild(renderNode(childNode, depth + 1, section, nextPrefix));
+            if (expanded) {
+                folderWrapper.appendChild(renderNode(childNode, depth + 1, nextPrefix));
+            }
             out.appendChild(folderWrapper);
         }
 
         const files = (node.files || []).slice().sort((a, b) => a.name.localeCompare(b.name));
         for (const file of files) {
             const row = document.createElement('div');
-            row.className = 'git-tree-item';
+            row.className = 'git-tree-item git-tree-file-row';
             row.style.paddingLeft = indent(depth);
+            const kind = String(file.kind || 'unknown');
+            if (kind) row.classList.add(`is-${kind.replaceAll('+', '-')}`);
 
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
             checkbox.dataset.fileSelect = 'true';
             checkbox.dataset.repoPath = repo.path;
             checkbox.dataset.filePath = file.path;
-            checkbox.dataset.section = section;
             checkbox.checked = Boolean(isFileSelected?.(repo.path, file.path));
             checkbox.disabled = Boolean(getCoveringPrefix?.(repo.path, file.path));
 
-            const button = document.createElement('button');
-            button.type = 'button';
+            const shouldShowStage = Boolean(file?.flags?.unstaged) || kind === 'unstaged' || kind === 'staged+unstaged';
+            let stageBtn = null;
+            if (shouldShowStage) {
+                stageBtn = document.createElement('button');
+                stageBtn.type = 'button';
+                stageBtn.className = 'secondary git-tree-stage-btn';
+                stageBtn.setAttribute('data-local-action', 'stageFileFromTree');
+                stageBtn.dataset.repoPath = repo.path;
+                stageBtn.dataset.filePath = file.path;
+                stageBtn.setAttribute('title', 'Stage (git add)');
+                stageBtn.textContent = '+';
+            }
+
+            const button = document.createElement('div');
             button.className = 'git-tree-file';
+            button.setAttribute('role', 'button');
+            button.setAttribute('tabindex', '0');
             button.setAttribute('data-local-action', 'openDiff');
             button.dataset.repoPath = repo.path;
             button.dataset.filePath = file.path;
-            button.dataset.section = section;
             button.textContent = file.name;
 
             row.appendChild(checkbox);
+            if (stageBtn) row.appendChild(stageBtn);
             row.appendChild(button);
             out.appendChild(row);
         }
         return out;
     };
 
-    for (const group of groups) {
-        const header = document.createElement('div');
-        header.className = 'git-tree-item git-tree-meta';
-        header.textContent = group.label;
-        root.appendChild(header);
-        const tree = buildTree(group.items);
-        root.appendChild(renderNode(tree, 1, group.key, ''));
-    }
+    const tree = buildTree(rows);
+    root.appendChild(renderNode(tree, 1, ''));
     return root;
 }

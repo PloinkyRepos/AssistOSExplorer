@@ -376,7 +376,8 @@ const GitStatusArgsSchema = z.object({ path: z.string() });
 const GitDiffArgsSchema = z.object({
   path: z.string(),
   file: z.string(),
-  cached: z.boolean().optional().default(false)
+  cached: z.boolean().optional().default(false),
+  ref: z.string().optional().nullable().default(null).describe('Optional base ref for diff (e.g. "HEAD"). When set, diff is working tree vs ref.')
 });
 const GitStageArgsSchema = z.object({
   path: z.string(),
@@ -399,6 +400,13 @@ const GitPushArgsSchema = z.object({
   setUpstream: z.boolean().optional().default(false)
 });
 const GitDiagnoseArgsSchema = z.object({ path: z.string() });
+const GitIdentityArgsSchema = z.object({ path: z.string() });
+const GitSetIdentityArgsSchema = z.object({
+  path: z.string(),
+  scope: z.enum(['local', 'global']).optional().default('local'),
+  name: z.string(),
+  email: z.string()
+});
 const GitReposOverviewArgsSchema = z.object({
   path: z.string(),
   maxRepos: z.number().int().positive().max(500).optional().default(200)
@@ -571,6 +579,16 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 	      name: 'git_repos_overview',
 	      description: 'Return git status summaries for repositories under a repos root directory.',
 	      inputSchema: zodToJsonSchema(GitReposOverviewArgsSchema)
+	    },
+	    {
+	      name: 'git_identity',
+	      description: 'Return effective git user.name and user.email (local/global).',
+	      inputSchema: zodToJsonSchema(GitIdentityArgsSchema)
+	    },
+	    {
+	      name: 'git_set_identity',
+	      description: 'Configure git user.name and user.email (local or global).',
+	      inputSchema: zodToJsonSchema(GitSetIdentityArgsSchema)
 	    },
 	    {
 	      name: 'list_allowed_directories',
@@ -952,6 +970,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const parsed = GitReposOverviewArgsSchema.safeParse(args);
         if (!parsed.success) throw new Error(`Invalid arguments for git_repos_overview: ${parsed.error}`);
         const result = await gitService.gitReposOverview(parsed.data);
+        return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+      }
+      case 'git_identity': {
+        const parsed = GitIdentityArgsSchema.safeParse(args);
+        if (!parsed.success) throw new Error(`Invalid arguments for git_identity: ${parsed.error}`);
+        const result = await gitService.gitIdentity(parsed.data);
+        return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+      }
+      case 'git_set_identity': {
+        const parsed = GitSetIdentityArgsSchema.safeParse(args);
+        if (!parsed.success) throw new Error(`Invalid arguments for git_set_identity: ${parsed.error}`);
+        const result = await gitService.gitSetIdentity(parsed.data);
         return { content: [{ type: 'text', text: JSON.stringify(result) }] };
       }
       case 'list_allowed_directories': {
