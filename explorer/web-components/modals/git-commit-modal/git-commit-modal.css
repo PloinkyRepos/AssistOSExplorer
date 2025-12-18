@@ -266,9 +266,10 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
 }
 
 .git-folder-toggle {
-    width: 34px;
-    padding: 6px 0;
     font-weight: 800;
+    background: none !important;
+    padding: 0 !important;
+    border: unset !important;
 }
 
 .git-folder-label {
@@ -358,18 +359,19 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
 }
 
 .git-tree-folder-toggle {
-    padding: 4px 8px;
-    min-width: 30px;
     height: 26px;
     border-radius: 8px;
     font-weight: 800;
+    padding: 0 !important;
+    background: none !important;
+    border: unset !important;
 }
 
 .git-tree-collapse {
-    padding: 4px 8px;
-    min-width: 30px;
+    background: none !important;
+    border: unset !important;
+    padding: 0 !important;
     height: 26px;
-    border-radius: 8px;
     font-weight: 800;
 }
 
