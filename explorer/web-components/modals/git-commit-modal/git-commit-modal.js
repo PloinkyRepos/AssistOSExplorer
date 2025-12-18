@@ -1,5 +1,12 @@
 import { parseDetailedDirectoryListing, joinPath } from "../../pages/file-exp/file-exp-utils.js";
-import { normalizeErrorMessage, parseJsonToolResult, isReposRootPath } from "./git-commit-modal-utils.js";
+import {
+    normalizeErrorMessage,
+    parseJsonToolResult,
+    isReposRootPath,
+    isGitAuthError,
+    getRememberedGitPat,
+    setRememberedGitPat
+} from "./git-commit-modal-utils.js";
 import {
     ensureSelectionEntry,
     peekSelectionEntry,
@@ -60,6 +67,13 @@ export class GitCommitModal {
                 pendingAction: null,
                 name: '',
                 email: ''
+            },
+            authPrompt: {
+                visible: false,
+                repoPath: null,
+                pendingAction: null,
+                token: '',
+                remember: false
             },
             lastStatusLine: ''
         };
@@ -293,6 +307,17 @@ export class GitCommitModal {
             pushAfterCommitInput.dataset.bound = 'true';
         }
 
+        const tokenInput = this.element.querySelector('#gitAuthToken');
+        if (tokenInput && !tokenInput.dataset.bound) {
+            tokenInput.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    this.saveGitToken();
+                }
+            });
+            tokenInput.dataset.bound = 'true';
+        }
+
         const changesRoot = this.element.querySelector('.git-changes');
         if (changesRoot && !changesRoot.dataset.bound) {
             changesRoot.addEventListener('click', (event) => {
@@ -425,6 +450,19 @@ export class GitCommitModal {
         if (identityBox) {
             identityBox.style.display = this.state.identityPrompt?.visible ? '' : 'none';
         }
+
+        const authBox = this.element.querySelector('#gitAuthPrompt');
+        if (authBox) {
+            authBox.style.display = this.state.authPrompt?.visible ? '' : 'none';
+        }
+        const tokenInput = this.element.querySelector('#gitAuthToken');
+        if (tokenInput && tokenInput.value !== (this.state.authPrompt?.token || '')) {
+            tokenInput.value = this.state.authPrompt?.token || '';
+        }
+        const rememberInput = this.element.querySelector('#gitAuthRemember');
+        if (rememberInput) {
+            rememberInput.checked = Boolean(this.state.authPrompt?.remember);
+        }
     }
 
     setDiffMode(element, mode) {
@@ -448,6 +486,7 @@ export class GitCommitModal {
         this.state.selectedPath = null;
         this.state.selectedSection = null;
         this.state.identityPrompt = { visible: false, repoPath: null, pendingAction: null, name: '', email: '' };
+        this.state.authPrompt = { visible: false, repoPath: null, pendingAction: null, token: '', remember: false };
         this.syncStaticUI();
         await this.refreshAll({ force: true });
     }
@@ -1095,21 +1134,105 @@ export class GitCommitModal {
         const selectedCount = selectedRepos.length;
         const repoOk = this.state.repoInfoOk !== false;
         const identityBlocking = Boolean(this.state.identityPrompt?.visible);
+        const authBlocking = Boolean(this.state.authPrompt?.visible);
         if (commitButton) {
-            commitButton.disabled = this.state.busy || identityBlocking || !repoOk || !hasStaged || !messageOk;
+            commitButton.disabled = this.state.busy || identityBlocking || authBlocking || !repoOk || !hasStaged || !messageOk;
             commitButton.textContent = this.state.pushAfterCommit ? 'Commit & Push' : 'Commit';
         }
         if (pushButton) {
-            pushButton.disabled = this.state.busy || identityBlocking || !repoOk;
+            pushButton.disabled = this.state.busy || identityBlocking || authBlocking || !repoOk;
         }
         if (commitSelectedButton) {
             commitSelectedButton.style.display = selectedCount ? '' : 'none';
-            commitSelectedButton.disabled = this.state.busy || identityBlocking || !messageOk;
+            commitSelectedButton.disabled = this.state.busy || identityBlocking || authBlocking || !messageOk;
         }
         if (pushSelectedButton) {
             pushSelectedButton.style.display = selectedCount ? '' : 'none';
-            pushSelectedButton.disabled = this.state.busy || identityBlocking;
+            pushSelectedButton.disabled = this.state.busy || identityBlocking || authBlocking;
         }
+    }
+
+    showGitAuthPrompt(repoPath, pendingAction, { message = '' } = {}) {
+        const remembered = getRememberedGitPat();
+        this.state.authPrompt = {
+            visible: true,
+            repoPath,
+            pendingAction: pendingAction || null,
+            token: remembered || '',
+            remember: Boolean(remembered)
+        };
+        this.syncStaticUI();
+        this.updateCommitButtons();
+        this.setStatusLine(message || 'Authentication required to push.', true);
+        setTimeout(() => this.element.querySelector('#gitAuthToken')?.focus?.(), 0);
+    }
+
+    cancelGitToken() {
+        this.state.authPrompt = { visible: false, repoPath: null, pendingAction: null, token: '', remember: false };
+        const tokenInput = this.element.querySelector('#gitAuthToken');
+        if (tokenInput) tokenInput.value = '';
+        this.syncStaticUI();
+        this.updateCommitButtons();
+        this.setStatusLine('Cancelled.', true);
+    }
+
+    async saveGitToken() {
+        const repoPath = this.state.authPrompt?.repoPath;
+        const pending = this.state.authPrompt?.pendingAction;
+        const tokenInput = this.element.querySelector('#gitAuthToken');
+        const rememberInput = this.element.querySelector('#gitAuthRemember');
+        const token = String(tokenInput?.value || '').trim();
+        const remember = Boolean(rememberInput?.checked);
+        if (!token) {
+            this.setStatusLine('Enter a token to continue.', true);
+            tokenInput?.focus?.();
+            return;
+        }
+        if (remember) setRememberedGitPat(token);
+        else setRememberedGitPat('');
+
+        this.state.authPrompt = { visible: false, repoPath: null, pendingAction: null, token: '', remember: false };
+        this.syncStaticUI();
+        this.updateCommitButtons();
+        this.setBusy(true);
+        this.setStatusLine('Retrying push…');
+        try {
+            if (pending?.type === 'push') {
+                if (pending.mode === 'batch') {
+                    const list = Array.isArray(pending.repoPaths) ? pending.repoPaths : [];
+                    await this.pushRepos(list, { token });
+                } else {
+                    await this.push({ silent: false, token });
+                }
+            }
+        } finally {
+            this.setBusy(false);
+        }
+    }
+
+    async gitPushWithToken(repoPath, token) {
+        const payload = { path: repoPath };
+        const cleanToken = String(token || '').trim();
+        if (cleanToken) payload.token = cleanToken;
+        await this.callTool('git_push', payload);
+    }
+
+    async pushRepos(repoPaths, { token = null } = {}) {
+        const list = Array.isArray(repoPaths) ? repoPaths.filter(Boolean) : [];
+        const effectiveToken = String(token || '').trim() || getRememberedGitPat();
+        for (const repoPath of list) {
+            try {
+                await this.gitPushWithToken(repoPath, effectiveToken);
+            } catch (error) {
+                const msg = normalizeErrorMessage(error);
+                if (isGitAuthError(msg)) {
+                    this.showGitAuthPrompt(repoPath, { type: 'push', mode: 'batch', repoPaths: list }, { message: msg });
+                    return false;
+                }
+                throw error;
+            }
+        }
+        return true;
     }
 
     async ensureGitIdentityOrPrompt(repoPath, pendingAction) {
@@ -1229,7 +1352,17 @@ export class GitCommitModal {
                     signoff: Boolean(this.state.signoff)
                 });
                 if (this.state.pushAfterCommit) {
-                    await this.callTool('git_push', { path: repoPath });
+                    const token = getRememberedGitPat();
+                    try {
+                        await this.gitPushWithToken(repoPath, token);
+                    } catch (error) {
+                        const msg = normalizeErrorMessage(error);
+                        if (isGitAuthError(msg)) {
+                            this.showGitAuthPrompt(repoPath, { type: 'push', mode: 'batch', repoPaths: [repoPath] }, { message: msg });
+                            return;
+                        }
+                        throw error;
+                    }
                 }
             }
             this.state.selectedRepoPaths = [];
@@ -1256,9 +1389,8 @@ export class GitCommitModal {
         this.setBusy(true);
         this.setStatusLine(`Pushing ${selected.length} repo(s)…`);
         try {
-            for (const repoPath of selected) {
-                await this.callTool('git_push', { path: repoPath });
-            }
+            const ok = await this.pushRepos(selected);
+            if (!ok) return;
             this.state.selectedRepoPaths = [];
             this.state.selectedFilesByRepo = {};
             await this.loadRepoOverviews({ force: true });
@@ -1426,7 +1558,7 @@ export class GitCommitModal {
         }
     }
 
-    async push({ silent = false } = {}) {
+    async push({ silent = false, token = null } = {}) {
         const alreadyBusy = this.state.busy;
         if (!alreadyBusy) {
             this.setBusy(true);
@@ -1440,12 +1572,18 @@ export class GitCommitModal {
             this.setStatusLine('Pushing…');
         }
         try {
-            await this.callTool('git_push', { path: this.state.repoPath });
+            const effectiveToken = String(token || '').trim() || getRememberedGitPat();
+            await this.gitPushWithToken(this.state.repoPath, effectiveToken);
             if (!silent) {
                 this.setStatusLine('Pushed.');
             }
         } catch (error) {
-            this.setStatusLine(normalizeErrorMessage(error), true);
+            const msg = normalizeErrorMessage(error);
+            if (isGitAuthError(msg)) {
+                this.showGitAuthPrompt(this.state.repoPath, { type: 'push', mode: 'batch', repoPaths: [this.state.repoPath] }, { message: msg });
+            } else {
+                this.setStatusLine(msg, true);
+            }
         } finally {
             if (!alreadyBusy) {
                 this.setBusy(false);

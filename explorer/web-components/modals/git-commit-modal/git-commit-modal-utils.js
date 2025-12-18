@@ -27,3 +27,38 @@ export function isReposRootPath(candidate, reposRoot) {
     return normalizedCandidate.endsWith(normalizedRoot);
 }
 
+export function isGitAuthError(message) {
+    const text = String(message || '');
+    const lower = text.toLowerCase();
+    if (lower.includes('terminal prompts disabled')) return true;
+    if (lower.includes('could not read username')) return true;
+    if (lower.includes('could not read password')) return true;
+    if (lower.includes('authentication failed')) return true;
+    if (lower.includes('fatal: authentication')) return true;
+    if (lower.includes('http basic: access denied')) return true;
+    if (lower.includes('permission denied')) return true;
+    return false;
+}
+
+const GIT_PAT_STORAGE_KEY = 'webskel.git.pat';
+
+export function getRememberedGitPat() {
+    try {
+        return String(localStorage.getItem(GIT_PAT_STORAGE_KEY) || '');
+    } catch {
+        return '';
+    }
+}
+
+export function setRememberedGitPat(token) {
+    try {
+        const value = String(token || '').trim();
+        if (!value) {
+            localStorage.removeItem(GIT_PAT_STORAGE_KEY);
+            return;
+        }
+        localStorage.setItem(GIT_PAT_STORAGE_KEY, value);
+    } catch {
+        // ignore
+    }
+}

@@ -128,6 +128,7 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
 }
 
 .git-modal input[type="text"],
+.git-modal input[type="password"],
 .git-modal textarea {
     padding: 6px 10px;
     border-radius: 8px;
@@ -142,12 +143,14 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
 }
 
 .git-modal input[type="text"]::placeholder,
+.git-modal input[type="password"]::placeholder,
 .git-modal textarea::placeholder {
     color: var(--text-soft, rgba(15, 23, 42, 0.7));
     font-weight: 500;
 }
 
 .git-modal input[type="text"]:focus,
+.git-modal input[type="password"]:focus,
 .git-modal textarea:focus {
     outline: 2px solid rgba(37, 99, 235, 0.35);
     outline-offset: 1px;
@@ -676,6 +679,56 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
     display: flex;
     gap: 8px;
     justify-content: flex-end;
+}
+
+.git-auth {
+    border: 1px dashed var(--file-exp-border, rgba(148, 163, 184, 0.35));
+    border-radius: 10px;
+    padding: 10px 12px;
+    background: var(--file-exp-subtle-surface, rgba(148, 163, 184, 0.08));
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.git-auth-title {
+    font-weight: 800;
+    color: var(--text, #0f172a);
+}
+
+.git-auth-hint {
+    color: var(--text-soft, rgba(15, 23, 42, 0.7));
+    font-size: 0.9rem;
+}
+
+.git-auth-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.git-auth-label {
+    min-width: 60px;
+    color: var(--text-soft, rgba(15, 23, 42, 0.7));
+    font-size: 0.85rem;
+    font-weight: 700;
+}
+
+.git-auth-row input {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.git-auth-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.git-auth-buttons {
+    display: inline-flex;
+    gap: 8px;
 }
 
 .git-commit-row {

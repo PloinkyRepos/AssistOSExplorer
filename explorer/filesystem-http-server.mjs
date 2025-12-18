@@ -397,7 +397,8 @@ const GitPushArgsSchema = z.object({
   path: z.string(),
   remote: z.string().optional().nullable().default(null),
   branch: z.string().optional().nullable().default(null),
-  setUpstream: z.boolean().optional().default(false)
+  setUpstream: z.boolean().optional().default(false),
+  token: z.string().optional().nullable().default(null).describe('Optional HTTPS Personal Access Token used for pushing non-interactively.')
 });
 const GitDiagnoseArgsSchema = z.object({ path: z.string() });
 const GitIdentityArgsSchema = z.object({ path: z.string() });
