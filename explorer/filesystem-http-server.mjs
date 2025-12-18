@@ -14,6 +14,7 @@ import { createTimedCache, buildCacheKey } from './utils/server/timed-cache.mjs'
 import { createStructureIndex } from './utils/server/structure-index.mjs';
 import { createWorkspaceSearch } from './utils/server/workspace-search.mjs';
 import { buildDirectoryTree } from './utils/server/directory-tree.mjs';
+import { createGitService } from './utils/server/git-service.mjs';
 
 const { Server } = mcpServer;
 const { StreamableHTTPServerTransport } = mcpStreamHttp;
@@ -254,14 +255,35 @@ function resolvePathsInArgs(args) {
   if (!workspaceRoot) throw new Error("Workspace root not configured.");
 
   const resolve = (p) => {
-    // Treat paths starting with / as relative to the workspace root
-    const safePart = p.startsWith('/') ? p.substring(1) : p;
-    const result = path.join(workspaceRoot, safePart);
-    // Security check to prevent path traversal
-    if (!path.resolve(result).startsWith(path.resolve(workspaceRoot))) {
+    if (typeof p !== 'string') return p;
+    if (p.includes('\0')) throw new Error(`Invalid path: ${p}`);
+
+    const candidate = p.trim();
+    const rootResolved = path.resolve(workspaceRoot);
+    const allowedResolved = (allowedDirectories || []).map((d) => path.resolve(d));
+
+    const isWithinAllowedRoots = (absPath) => {
+      const resolved = path.resolve(absPath);
+      if (resolved === rootResolved || resolved.startsWith(rootResolved + path.sep)) return true;
+      return allowedResolved.some((dir) => resolved === dir || resolved.startsWith(dir + path.sep));
+    };
+
+    // If caller provided an absolute path inside allowed roots, keep it as-is.
+    // Otherwise, keep supporting the existing convention: "/x/y" means "workspace-relative x/y".
+    let resolvedPath;
+    if (path.isAbsolute(candidate) && isWithinAllowedRoots(candidate)) {
+      resolvedPath = candidate;
+    } else {
+      const safePart = candidate.startsWith('/') ? candidate.substring(1) : candidate;
+      resolvedPath = path.join(workspaceRoot, safePart);
+    }
+
+    // Security check to prevent path traversal outside workspaceRoot.
+    const normalized = path.resolve(resolvedPath);
+    if (!normalized.startsWith(rootResolved)) {
       throw new Error(`Access denied: path traversal attempt for "${p}"`);
     }
-    return result;
+    return resolvedPath;
   };
 
   if (typeof newArgs.path === 'string') newArgs.path = resolve(newArgs.path);
@@ -276,6 +298,8 @@ function resolvePathsInArgs(args) {
 // Path resolution and security checks are now handled in `resolvePathsInArgs`,
 // so we can bypass the library's validation by replacing it with a passthrough function.
 const validatePath = async (p) => p;
+
+const gitService = createGitService({ validatePath });
 
 const MAX_TEXT_SEARCH_FILE_BYTES = Number.parseInt(process.env.SEARCH_TEXT_MAX_BYTES || '2097152', 10);
 const DEFAULT_TEXT_SEARCH_EXCLUDES = ['**/node_modules/**', '**/.git/**', '**/dist/**', '**/build/**', '**/.DS_Store'];
@@ -347,6 +371,38 @@ const SearchTextArgsSchema = z.object({
 });
 const GetFileInfoArgsSchema = z.object({ path: z.string() });
 const CollectIDEPluginsArgsSchema = z.object({});
+const GitInfoArgsSchema = z.object({ path: z.string() });
+const GitStatusArgsSchema = z.object({ path: z.string() });
+const GitDiffArgsSchema = z.object({
+  path: z.string(),
+  file: z.string(),
+  cached: z.boolean().optional().default(false)
+});
+const GitStageArgsSchema = z.object({
+  path: z.string(),
+  files: z.array(z.string()).optional().default([])
+});
+const GitUnstageArgsSchema = z.object({
+  path: z.string(),
+  files: z.array(z.string()).optional().default([])
+});
+const GitCommitArgsSchema = z.object({
+  path: z.string(),
+  message: z.string().optional().default(''),
+  amend: z.boolean().optional().default(false),
+  signoff: z.boolean().optional().default(false)
+});
+const GitPushArgsSchema = z.object({
+  path: z.string(),
+  remote: z.string().optional().nullable().default(null),
+  branch: z.string().optional().nullable().default(null),
+  setUpstream: z.boolean().optional().default(false)
+});
+const GitDiagnoseArgsSchema = z.object({ path: z.string() });
+const GitReposOverviewArgsSchema = z.object({
+  path: z.string(),
+  maxRepos: z.number().int().positive().max(500).optional().default(200)
+});
 const ToolInputSchema = ToolSchema.shape.inputSchema;
 
 async function readFileAsBase64Stream(filePath) {
@@ -466,16 +522,61 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       description: 'Retrieve metadata about a file or directory.',
       inputSchema: zodToJsonSchema(GetFileInfoArgsSchema)
     },
-    {
-      name: 'collect_ide_plugins',
-      description: 'Aggregate IDE plugin configurations grouped by location based on config.json files.',
-      inputSchema: zodToJsonSchema(CollectIDEPluginsArgsSchema)
-    },
-    {
-      name: 'list_allowed_directories',
-      description: 'Return the directories that the server is permitted to access.',
-      inputSchema: { type: 'object', properties: {}, required: [] }
-    }
+	    {
+	      name: 'collect_ide_plugins',
+	      description: 'Aggregate IDE plugin configurations grouped by location based on config.json files.',
+	      inputSchema: zodToJsonSchema(CollectIDEPluginsArgsSchema)
+	    },
+	    {
+	      name: 'git_info',
+	      description: 'Return git repository info for a path (branch, upstream, remotes).',
+	      inputSchema: zodToJsonSchema(GitInfoArgsSchema)
+	    },
+	    {
+	      name: 'git_status',
+	      description: 'Return git status (staged/unstaged/untracked/conflicted) for a repository path.',
+	      inputSchema: zodToJsonSchema(GitStatusArgsSchema)
+	    },
+	    {
+	      name: 'git_diff',
+	      description: 'Return a unified diff for a file (unstaged by default, staged when cached=true).',
+	      inputSchema: zodToJsonSchema(GitDiffArgsSchema)
+	    },
+	    {
+	      name: 'git_stage',
+	      description: 'Stage files in a repository (or stage all when files is empty).',
+	      inputSchema: zodToJsonSchema(GitStageArgsSchema)
+	    },
+	    {
+	      name: 'git_unstage',
+	      description: 'Unstage files in a repository (or unstage all when files is empty).',
+	      inputSchema: zodToJsonSchema(GitUnstageArgsSchema)
+	    },
+	    {
+	      name: 'git_commit',
+	      description: 'Create a commit from staged changes.',
+	      inputSchema: zodToJsonSchema(GitCommitArgsSchema)
+	    },
+	    {
+	      name: 'git_push',
+	      description: 'Push the current branch to a remote.',
+	      inputSchema: zodToJsonSchema(GitPushArgsSchema)
+	    },
+	    {
+	      name: 'git_diagnose',
+	      description: 'Return diagnostic information about git availability in the server process.',
+	      inputSchema: zodToJsonSchema(GitDiagnoseArgsSchema)
+	    },
+	    {
+	      name: 'git_repos_overview',
+	      description: 'Return git status summaries for repositories under a repos root directory.',
+	      inputSchema: zodToJsonSchema(GitReposOverviewArgsSchema)
+	    },
+	    {
+	      name: 'list_allowed_directories',
+	      description: 'Return the directories that the server is permitted to access.',
+	      inputSchema: { type: 'object', properties: {}, required: [] }
+	    }
   ]
 }));
 
@@ -798,6 +899,60 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) throw new Error(`Invalid arguments for collect_ide_plugins: ${parsed.error}`);
         const pluginsByLocation = await aggregateIdePlugins(workspaceRoot);
         return { content: [{ type: 'text', text: JSON.stringify(pluginsByLocation) }] };
+      }
+      case 'git_info': {
+        const parsed = GitInfoArgsSchema.safeParse(args);
+        if (!parsed.success) throw new Error(`Invalid arguments for git_info: ${parsed.error}`);
+        const info = await gitService.gitInfo(parsed.data);
+        return { content: [{ type: 'text', text: JSON.stringify(info) }] };
+      }
+      case 'git_status': {
+        const parsed = GitStatusArgsSchema.safeParse(args);
+        if (!parsed.success) throw new Error(`Invalid arguments for git_status: ${parsed.error}`);
+        const status = await gitService.gitStatus(parsed.data);
+        return { content: [{ type: 'text', text: JSON.stringify(status) }] };
+      }
+      case 'git_diff': {
+        const parsed = GitDiffArgsSchema.safeParse(args);
+        if (!parsed.success) throw new Error(`Invalid arguments for git_diff: ${parsed.error}`);
+        const diff = await gitService.gitDiff(parsed.data);
+        return { content: [{ type: 'text', text: diff || '' }] };
+      }
+      case 'git_stage': {
+        const parsed = GitStageArgsSchema.safeParse(args);
+        if (!parsed.success) throw new Error(`Invalid arguments for git_stage: ${parsed.error}`);
+        const result = await gitService.gitStage(parsed.data);
+        return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+      }
+      case 'git_unstage': {
+        const parsed = GitUnstageArgsSchema.safeParse(args);
+        if (!parsed.success) throw new Error(`Invalid arguments for git_unstage: ${parsed.error}`);
+        const result = await gitService.gitUnstage(parsed.data);
+        return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+      }
+      case 'git_commit': {
+        const parsed = GitCommitArgsSchema.safeParse(args);
+        if (!parsed.success) throw new Error(`Invalid arguments for git_commit: ${parsed.error}`);
+        const result = await gitService.gitCommit(parsed.data);
+        return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+      }
+      case 'git_push': {
+        const parsed = GitPushArgsSchema.safeParse(args);
+        if (!parsed.success) throw new Error(`Invalid arguments for git_push: ${parsed.error}`);
+        const result = await gitService.gitPush(parsed.data);
+        return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+      }
+      case 'git_diagnose': {
+        const parsed = GitDiagnoseArgsSchema.safeParse(args);
+        if (!parsed.success) throw new Error(`Invalid arguments for git_diagnose: ${parsed.error}`);
+        const result = await gitService.gitDiagnose(parsed.data);
+        return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+      }
+      case 'git_repos_overview': {
+        const parsed = GitReposOverviewArgsSchema.safeParse(args);
+        if (!parsed.success) throw new Error(`Invalid arguments for git_repos_overview: ${parsed.error}`);
+        const result = await gitService.gitReposOverview(parsed.data);
+        return { content: [{ type: 'text', text: JSON.stringify(result) }] };
       }
       case 'list_allowed_directories': {
         return { content: [{ type: 'text', text: `Allowed directories:\n${allowedDirectories.join('\n')}` }] };

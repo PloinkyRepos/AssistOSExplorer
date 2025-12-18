@@ -1,0 +1,522 @@
+import { spawn } from 'node:child_process';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+
+function normalizeErrorMessage(error) {
+  if (!error) return 'Unknown error';
+  if (typeof error === 'string') return error;
+  if (error instanceof Error) return error.message || 'Unknown error';
+  return String(error);
+}
+
+function isGitRepoRelativePath(candidate) {
+  if (typeof candidate !== 'string') return false;
+  if (!candidate.trim()) return false;
+  if (candidate.includes('\0')) return false;
+  if (path.isAbsolute(candidate)) return false;
+  const normalized = candidate.replaceAll('\\', '/');
+  if (normalized.startsWith('../') || normalized === '..') return false;
+  if (normalized.includes('/../')) return false;
+  return true;
+}
+
+async function runGit(cwd, args, { timeoutMs = 20000 } = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(args[0], args.slice(1), {
+      cwd,
+      env: {
+        ...process.env,
+        GIT_TERMINAL_PROMPT: process.env.GIT_TERMINAL_PROMPT || '0',
+        GIT_OPTIONAL_LOCKS: process.env.GIT_OPTIONAL_LOCKS || '0',
+        GIT_DISCOVERY_ACROSS_FILESYSTEM: process.env.GIT_DISCOVERY_ACROSS_FILESYSTEM || '1'
+      },
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+
+    let stdout = '';
+    let stderr = '';
+    const abortTimer = setTimeout(() => {
+      child.kill('SIGKILL');
+      reject(new Error(`git timeout after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+
+    child.on('error', (err) => {
+      clearTimeout(abortTimer);
+      if (err && typeof err === 'object' && err.code === 'ENOENT') {
+        reject(new Error('Git executable not found (spawn ENOENT). Install git or set ASSISTOS_GIT_BINARY to the full path of the git binary.'));
+        return;
+      }
+      reject(err);
+    });
+
+    child.on('close', (code) => {
+      clearTimeout(abortTimer);
+      if (code === 0) {
+        resolve({ stdout, stderr });
+        return;
+      }
+      const msg = stderr.trim() || stdout.trim() || `git exited with code ${code}`;
+      if (msg.includes('not a git repository')) {
+        reject(new Error('Not a git repository. Set the repo path to a folder inside a git repo (or the repo root).'));
+        return;
+      }
+      reject(new Error(msg));
+    });
+  });
+}
+
+function parseStatusPorcelainV1Z(output) {
+  const entries = [];
+  const tokens = output.split('\0').filter(Boolean);
+  for (let i = 0; i < tokens.length; i += 1) {
+    const token = tokens[i];
+    if (token.length < 3) continue;
+    const x = token[0];
+    const y = token[1];
+    const rawPath = token.slice(3);
+    const isRenameOrCopy = x === 'R' || x === 'C' || y === 'R' || y === 'C';
+
+    if (isRenameOrCopy) {
+      const oldPath = rawPath;
+      const newPath = tokens[i + 1];
+      i += 1;
+      if (newPath) {
+        entries.push({ path: newPath, x, y, origPath: oldPath });
+      }
+      continue;
+    }
+    entries.push({ path: rawPath, x, y });
+  }
+  return entries;
+}
+
+function categorizeStatusEntries(entries) {
+  const staged = [];
+  const unstaged = [];
+  const untracked = [];
+  const conflicted = [];
+
+  for (const entry of entries) {
+    const xy = `${entry.x}${entry.y}`;
+    if (xy === '??') {
+      untracked.push(entry);
+      continue;
+    }
+    if (xy.includes('U') || xy === 'AA' || xy === 'DD') {
+      conflicted.push(entry);
+      continue;
+    }
+    if (entry.x && entry.x !== ' ') staged.push(entry);
+    if (entry.y && entry.y !== ' ') unstaged.push(entry);
+  }
+
+  const sortByPath = (a, b) => String(a.path).localeCompare(String(b.path));
+  staged.sort(sortByPath);
+  unstaged.sort(sortByPath);
+  untracked.sort(sortByPath);
+  conflicted.sort(sortByPath);
+  return { staged, unstaged, untracked, conflicted };
+}
+
+export function createGitService({ validatePath }) {
+  let gitBinaryPromise = null;
+  let gitBinaryCwd = null;
+
+  async function detectGitBinary(cwd) {
+    const configured = process.env.ASSISTOS_GIT_BINARY || process.env.GIT_BINARY;
+    if (configured) {
+      await runGit(cwd, [configured, '--version'], { timeoutMs: 5000 });
+      return configured;
+    }
+
+    const candidates = [
+      'git',
+      '/usr/bin/git',
+      '/bin/git',
+      '/usr/local/bin/git',
+      '/opt/homebrew/bin/git'
+    ];
+
+    for (const candidate of candidates) {
+      try {
+        await runGit(cwd, [candidate, '--version'], { timeoutMs: 5000 });
+        return candidate;
+      } catch {
+        continue;
+      }
+    }
+
+    throw new Error('Git executable not found. Install git or set ASSISTOS_GIT_BINARY to the full path of the git binary.');
+  }
+
+  async function getGitBinary(cwd) {
+    if (!gitBinaryPromise || (gitBinaryCwd && gitBinaryCwd !== cwd)) {
+      gitBinaryCwd = cwd;
+      gitBinaryPromise = detectGitBinary(cwd);
+    }
+    return gitBinaryPromise;
+  }
+
+  async function resolveRepoPath(repoPathArg) {
+    const repoPath = await validatePath(repoPathArg || '/');
+    return repoPath;
+  }
+
+  async function gitInfo({ path: repoPathArg }) {
+    const repoPath = await resolveRepoPath(repoPathArg);
+    try {
+      const gitBinary = await getGitBinary(repoPath);
+      const inside = await runGit(repoPath, [gitBinary, 'rev-parse', '--is-inside-work-tree']);
+      if (!inside.stdout.trim().startsWith('true')) {
+        return { ok: false, branch: null, upstream: null, remotes: [] };
+      }
+    } catch {
+      return { ok: false, branch: null, upstream: null, remotes: [] };
+    }
+
+    let branch = null;
+    let upstream = null;
+    let remotes = [];
+    try {
+      const gitBinary = await getGitBinary(repoPath);
+      const res = await runGit(repoPath, [gitBinary, 'rev-parse', '--abbrev-ref', 'HEAD']);
+      branch = res.stdout.trim() || null;
+    } catch {
+      branch = null;
+    }
+    try {
+      const gitBinary = await getGitBinary(repoPath);
+      const res = await runGit(repoPath, [gitBinary, 'rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']);
+      upstream = res.stdout.trim() || null;
+    } catch {
+      upstream = null;
+    }
+    try {
+      const gitBinary = await getGitBinary(repoPath);
+      const res = await runGit(repoPath, [gitBinary, 'remote']);
+      remotes = res.stdout.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    } catch {
+      remotes = [];
+    }
+    return { ok: true, branch, upstream, remotes };
+  }
+
+  async function gitStatus({ path: repoPathArg }) {
+    const repoPath = await resolveRepoPath(repoPathArg);
+    const gitBinary = await getGitBinary(repoPath);
+    const { stdout } = await runGit(repoPath, [gitBinary, 'status', '--porcelain=v1', '-z', '-uall']);
+    const entries = parseStatusPorcelainV1Z(stdout);
+    const status = categorizeStatusEntries(entries);
+    return { ok: true, status };
+  }
+
+  async function gitStatusOverview({ path: repoPathArg, includeUntracked = false }) {
+    const repoPath = await resolveRepoPath(repoPathArg);
+    const gitBinary = await getGitBinary(repoPath);
+    const untrackedFlag = includeUntracked ? '-uall' : '-uno';
+    const { stdout } = await runGit(
+      repoPath,
+      // `--no-optional-locks` is a global git option (must be before the subcommand).
+      [gitBinary, '--no-optional-locks', 'status', '--porcelain=v1', '-z', untrackedFlag],
+      { timeoutMs: 5000 }
+    );
+    const entries = parseStatusPorcelainV1Z(stdout);
+    const status = categorizeStatusEntries(entries);
+    if (!includeUntracked) {
+      status.untracked = [];
+    }
+    return { ok: true, status };
+  }
+
+  async function gitDiff({ path: repoPathArg, file, cached = false }) {
+    const repoPath = await resolveRepoPath(repoPathArg);
+    if (!isGitRepoRelativePath(file)) {
+      throw new Error(`Invalid file path for git_diff: ${file}`);
+    }
+    const gitBinary = await getGitBinary(repoPath);
+    const args = cached ? [gitBinary, 'diff', '--cached', '--', file] : [gitBinary, 'diff', '--', file];
+    const { stdout } = await runGit(repoPath, args, { timeoutMs: 25000 });
+    return stdout;
+  }
+
+  async function gitStage({ path: repoPathArg, files = [] }) {
+    const repoPath = await resolveRepoPath(repoPathArg);
+    const gitBinary = await getGitBinary(repoPath);
+    const list = Array.isArray(files) ? files : [];
+    if (!list.length) {
+      await runGit(repoPath, [gitBinary, 'add', '-A']);
+      return { ok: true };
+    }
+    for (const file of list) {
+      if (!isGitRepoRelativePath(file)) throw new Error(`Invalid file path for git_stage: ${file}`);
+    }
+    await runGit(repoPath, [gitBinary, 'add', '--', ...list]);
+    return { ok: true };
+  }
+
+  async function gitUnstage({ path: repoPathArg, files = [] }) {
+    const repoPath = await resolveRepoPath(repoPathArg);
+    const gitBinary = await getGitBinary(repoPath);
+    const list = Array.isArray(files) ? files : [];
+    if (!list.length) {
+      try {
+        await runGit(repoPath, [gitBinary, 'restore', '--staged', '--', '.']);
+        return { ok: true };
+      } catch {
+        await runGit(repoPath, [gitBinary, 'reset', '-q', 'HEAD', '--', '.']);
+        return { ok: true };
+      }
+    }
+    for (const file of list) {
+      if (!isGitRepoRelativePath(file)) throw new Error(`Invalid file path for git_unstage: ${file}`);
+    }
+    try {
+      await runGit(repoPath, [gitBinary, 'restore', '--staged', '--', ...list]);
+    } catch {
+      await runGit(repoPath, [gitBinary, 'reset', '-q', 'HEAD', '--', ...list]);
+    }
+    return { ok: true };
+  }
+
+  async function gitCommit({ path: repoPathArg, message, amend = false, signoff = false }) {
+    const repoPath = await resolveRepoPath(repoPathArg);
+    const gitBinary = await getGitBinary(repoPath);
+    const args = [gitBinary, 'commit'];
+    if (amend) args.push('--amend');
+    if (signoff) args.push('--signoff');
+    if (message && message.trim()) {
+      args.push('-m', message.trim());
+    }
+    const { stdout, stderr } = await runGit(repoPath, args, { timeoutMs: 60000 });
+    return { ok: true, stdout, stderr };
+  }
+
+  async function gitPush({ path: repoPathArg, remote = null, branch = null, setUpstream = false }) {
+    const repoPath = await resolveRepoPath(repoPathArg);
+    const gitBinary = await getGitBinary(repoPath);
+    const args = [gitBinary, 'push'];
+    if (setUpstream) args.push('--set-upstream');
+    if (remote) args.push(remote);
+    if (branch) args.push(branch);
+    const { stdout, stderr } = await runGit(repoPath, args, { timeoutMs: 120000 });
+    return { ok: true, stdout, stderr };
+  }
+
+  async function gitDiagnose({ path: repoPathArg }) {
+    const repoPath = await resolveRepoPath(repoPathArg);
+    const configured = process.env.ASSISTOS_GIT_BINARY || process.env.GIT_BINARY || null;
+    const envPath = process.env.PATH || null;
+    const candidates = [
+      'git',
+      '/usr/bin/git',
+      '/bin/git',
+      '/usr/local/bin/git',
+      '/opt/homebrew/bin/git'
+    ];
+    const results = [];
+    for (const candidate of candidates) {
+      const row = { candidate, version: null, error: null };
+      try {
+        const { stdout } = await runGit(repoPath, [candidate, '--version'], { timeoutMs: 5000 });
+        row.version = stdout.trim() || null;
+      } catch (error) {
+        row.error = normalizeErrorMessage(error);
+      }
+      results.push(row);
+    }
+
+    let selected = null;
+    let selectedError = null;
+    try {
+      selected = await getGitBinary(repoPath);
+    } catch (error) {
+      selectedError = normalizeErrorMessage(error);
+    }
+
+    return {
+      ok: Boolean(selected),
+      repoPath,
+      cwd: process.cwd(),
+      configured,
+      envPath,
+      selected,
+      selectedError,
+      candidates: results
+    };
+  }
+
+  async function gitReposOverview({ path: reposRootArg, maxRepos = 200 }) {
+    const reposRoot = await resolveRepoPath(reposRootArg);
+    const limit = Number.isFinite(maxRepos) ? Math.max(1, Math.min(500, Math.floor(maxRepos))) : 200;
+
+    async function existsGitMarker(dirPath) {
+      try {
+        const stat = await fs.stat(path.join(dirPath, '.git'));
+        return stat.isDirectory() || stat.isFile();
+      } catch {
+        return false;
+      }
+    }
+
+    async function scanGitRepos(rootDir, { maxDepth = 4, maxRepos = limit } = {}) {
+      const queue = [{ dir: rootDir, depth: 0 }];
+      const repos = [];
+      const seen = new Set();
+
+      while (queue.length && repos.length < maxRepos) {
+        const { dir, depth } = queue.shift();
+        const resolved = path.resolve(dir);
+        if (seen.has(resolved)) continue;
+        seen.add(resolved);
+
+        if (depth > maxDepth) continue;
+        const baseName = path.basename(dir);
+        if (baseName === '.git') continue;
+
+        if (dir !== rootDir && await existsGitMarker(dir)) {
+          repos.push({
+            path: dir,
+            relativePath: path.posix.normalize(path.relative(rootDir, dir).split(path.sep).join('/')),
+            name: path.basename(dir)
+          });
+          continue;
+        }
+
+        let children;
+        try {
+          children = await fs.readdir(dir, { withFileTypes: true });
+        } catch {
+          continue;
+        }
+        for (const entry of children) {
+          if (!entry?.isDirectory?.()) continue;
+          if (entry.name.startsWith('.')) continue;
+          queue.push({ dir: path.join(dir, entry.name), depth: depth + 1 });
+        }
+      }
+      return repos;
+    }
+
+    const candidates = await scanGitRepos(reposRoot, { maxDepth: 4, maxRepos: limit });
+
+    const results = [];
+    const concurrency = 4;
+    let index = 0;
+
+    const worker = async () => {
+      while (index < candidates.length) {
+        const current = candidates[index];
+        index += 1;
+        let info;
+        try {
+          info = await gitInfo({ path: current.path });
+        } catch {
+          info = { ok: false };
+        }
+        if (!info || info.ok === false) {
+          results.push({
+            ...current,
+            ok: false,
+            branch: null,
+            dirty: false,
+            counts: { staged: 0, unstaged: 0, untracked: 0, conflicted: 0 },
+            sample: { staged: [], unstaged: [], untracked: [], conflicted: [] }
+          });
+          continue;
+        }
+        try {
+          // Include untracked so repos with only new files still show up as "dirty" (WebStorm-like).
+          const statusPayload = await gitStatusOverview({ path: current.path, includeUntracked: true });
+          const status = statusPayload?.status || {};
+          const staged = Array.isArray(status.staged) ? status.staged : [];
+          const unstaged = Array.isArray(status.unstaged) ? status.unstaged : [];
+          const untracked = Array.isArray(status.untracked) ? status.untracked : [];
+          const conflicted = Array.isArray(status.conflicted) ? status.conflicted : [];
+          const dirty = staged.length > 0 || unstaged.length > 0 || untracked.length > 0 || conflicted.length > 0;
+
+          if (!dirty) {
+            results.push({
+              ...current,
+              ok: true,
+              branch: info.branch || null,
+              dirty: false,
+              counts: { staged: 0, unstaged: 0, untracked: 0, conflicted: 0 },
+              sample: { staged: [], unstaged: [], untracked: [], conflicted: [] }
+            });
+            continue;
+          }
+
+          // For dirty repos, fetch full status incl. untracked to build the WebStorm-like changes tree.
+          let fullStatus = status;
+          try {
+            const full = await gitStatus({ path: current.path });
+            fullStatus = full?.status || fullStatus;
+          } catch {
+            // keep overview-only status
+          }
+          const fullStaged = Array.isArray(fullStatus.staged) ? fullStatus.staged : staged;
+          const fullUnstaged = Array.isArray(fullStatus.unstaged) ? fullStatus.unstaged : unstaged;
+          const fullUntracked = Array.isArray(fullStatus.untracked) ? fullStatus.untracked : [];
+          const fullConflicted = Array.isArray(fullStatus.conflicted) ? fullStatus.conflicted : conflicted;
+          const toPaths = (items, limit = 250) => items.slice(0, limit).map((e) => e?.path).filter(Boolean);
+
+          results.push({
+            ...current,
+            ok: true,
+            branch: info.branch || null,
+            dirty: true,
+            counts: {
+              staged: fullStaged.length,
+              unstaged: fullUnstaged.length,
+              untracked: fullUntracked.length,
+              conflicted: fullConflicted.length
+            },
+            changes: {
+              staged: toPaths(fullStaged),
+              unstaged: toPaths(fullUnstaged),
+              untracked: toPaths(fullUntracked),
+              conflicted: toPaths(fullConflicted)
+            },
+            sample: {
+              staged: fullStaged.slice(0, 8).map((e) => e?.path).filter(Boolean),
+              unstaged: fullUnstaged.slice(0, 8).map((e) => e?.path).filter(Boolean),
+              untracked: fullUntracked.slice(0, 8).map((e) => e?.path).filter(Boolean),
+              conflicted: fullConflicted.slice(0, 8).map((e) => e?.path).filter(Boolean)
+            }
+          });
+        } catch {
+          results.push({
+            ...current,
+            ok: true,
+            branch: info.branch || null,
+            dirty: false,
+            counts: { staged: 0, unstaged: 0, untracked: 0, conflicted: 0 },
+            sample: { staged: [], unstaged: [], untracked: [], conflicted: [] }
+          });
+        }
+      }
+    };
+
+    await Promise.all(Array.from({ length: Math.min(concurrency, candidates.length) }, () => worker()));
+    results.sort((a, b) => (a.relativePath || a.name).localeCompare(b.relativePath || b.name));
+    return { ok: true, reposRoot, repos: results };
+  }
+
+  return {
+    gitInfo,
+    gitStatus,
+    gitDiff,
+    gitStage,
+    gitUnstage,
+    gitCommit,
+    gitPush,
+    gitDiagnose,
+    gitReposOverview,
+    normalizeErrorMessage
+  };
+}

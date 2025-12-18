@@ -1,0 +1,94 @@
+<div class="git-modal" role="dialog" aria-label="Git commit and push">
+    <div class="git-modal-header">
+        <div class="git-modal-title-group">
+            <div class="git-modal-title">Git</div>
+            <div class="git-modal-subtitle" id="gitRepoSubtitle"></div>
+        </div>
+        <button type="button" class="icon-button" id="gitModalClose" aria-label="Close" data-local-action="closeModalAction">✕</button>
+    </div>
+
+    <div class="git-modal-body">
+        <div class="git-topbar">
+            <div class="git-repo">
+                <label class="git-repo-label" for="gitRepoPathInput">Repo</label>
+                <input id="gitRepoPathInput" type="text" autocomplete="off" spellcheck="false" />
+                <button type="button" class="secondary" id="gitRepoPathApply" data-local-action="applyRepoPathFromInput">Open</button>
+            </div>
+            <div class="git-branch" id="gitBranchInfo"></div>
+            <div class="git-topbar-actions">
+                <button type="button" class="secondary" id="gitRefreshButton" data-local-action="refreshAction">Refresh</button>
+                <button type="button" class="secondary" id="gitStageAllButton" data-local-action="stageAll">Stage all</button>
+                <button type="button" class="secondary" id="gitUnstageAllButton" data-local-action="unstageAll">Unstage all</button>
+            </div>
+        </div>
+
+        <div class="git-main">
+            <div class="git-changes">
+                <div class="git-section git-section-repos" id="gitRepoCandidatesSection">
+                    <div class="git-section-header git-repos-header">
+                        <span>Repositories</span>
+                        <label class="git-toggle git-toggle-small">
+                            <input type="checkbox" id="gitShowCleanRepos">
+                            Show clean
+                        </label>
+                    </div>
+                    <div class="git-section-body" id="gitRepoCandidatesList"></div>
+                </div>
+                <div class="git-section">
+                    <div class="git-section-header">Unstaged</div>
+                    <div class="git-section-body" id="gitUnstagedList"></div>
+                </div>
+                <div class="git-section">
+                    <div class="git-section-header">Staged</div>
+                    <div class="git-section-body" id="gitStagedList"></div>
+                </div>
+                <div class="git-section">
+                    <div class="git-section-header">Untracked</div>
+                    <div class="git-section-body" id="gitUntrackedList"></div>
+                </div>
+                <div class="git-section git-section-conflicts" id="gitConflictsSection">
+                    <div class="git-section-header">Conflicts</div>
+                    <div class="git-section-body" id="gitConflictedList"></div>
+                </div>
+            </div>
+
+            <div class="git-diff">
+                <div class="git-diff-header">
+                    <div class="git-diff-title" id="gitDiffTitle">Diff</div>
+                    <div class="git-diff-meta" id="gitDiffMeta"></div>
+                </div>
+                <pre class="git-diff-body" id="gitDiffBody"></pre>
+            </div>
+        </div>
+
+        <div class="git-commit">
+            <div class="git-commit-row">
+                <label class="git-commit-label" for="gitCommitMessage">Commit message</label>
+                <textarea id="gitCommitMessage" rows="3" placeholder="Describe your changes..." autocomplete="off"></textarea>
+            </div>
+            <div class="git-commit-row git-commit-options">
+                <label class="git-toggle">
+                    <input type="checkbox" id="gitCommitAmend">
+                    Amend
+                </label>
+                <label class="git-toggle">
+                    <input type="checkbox" id="gitCommitSignoff">
+                    Sign-off
+                </label>
+                <label class="git-toggle">
+                    <input type="checkbox" id="gitPushAfterCommit">
+                    Push after commit
+                </label>
+            </div>
+            <div class="git-commit-row git-commit-actions">
+                <div class="git-status" id="gitStatusLine" role="status"></div>
+                <div class="git-action-buttons">
+                    <button type="button" class="secondary" id="gitPushSelectedButton" data-local-action="pushSelectedRepos">Push selected</button>
+                    <button type="button" class="secondary" id="gitCommitSelectedButton" data-local-action="commitSelectedRepos">Commit selected</button>
+                    <button type="button" class="secondary" id="gitPushButton" data-local-action="pushAction">Push</button>
+                    <button type="button" id="gitCommitButton" data-local-action="commit">Commit</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

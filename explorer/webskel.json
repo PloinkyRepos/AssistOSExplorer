@@ -172,6 +172,11 @@
       "presenterClassName": "FileSearchModal"
     },
     {
+      "name": "git-commit-modal",
+      "type": "modals",
+      "presenterClassName": "GitCommitModal"
+    },
+    {
       "name": "variable-values-tab",
       "type": "modals",
       "presenterClassName": "VariableValuesTab"

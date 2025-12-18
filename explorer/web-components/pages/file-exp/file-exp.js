@@ -15,6 +15,7 @@ import {
 } from "./file-exp-utils.js";
 import { attachSearchController } from "./file-exp-search.js";
 import { attachFsActions } from "./file-exp-fs-actions.js";
+import { attachGitController } from "./file-exp-git.js";
 import { withGlobalLoader } from "../../../utils/globalLoader.js";
 import { createFileExpCaches } from "./file-exp-caches.js";
 import { createDirectoryFilterController } from "./file-exp-directory-filter.js";
@@ -92,6 +93,7 @@ export class FileExp {
 
         attachSearchController(this);
         attachFsActions(this);
+        attachGitController(this);
 
         this.boundLoadStateFromURL = this.loadStateFromURL.bind(this);
         window.addEventListener('popstate', this.boundLoadStateFromURL);
