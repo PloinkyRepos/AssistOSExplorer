@@ -1159,35 +1159,24 @@ export class GitCommitModal {
     updateCommitButtons() {
         const commitButton = this.element.querySelector('#gitCommitButton');
         const pushButton = this.element.querySelector('#gitPushButton');
-        const commitSelectedButton = this.element.querySelector('#gitCommitSelectedButton');
-        const pushSelectedButton = this.element.querySelector('#gitPushSelectedButton');
         const messageOk = Boolean((this.state.commitMessage || '').trim()) || this.state.amend;
         const selectedRepos = Array.from(new Set([
             ...Object.entries(this.state.selectedFilesByRepo || {})
                 .filter(([, entry]) => (entry?.files && entry.files.size > 0) || (entry?.prefixes && entry.prefixes.size > 0))
                 .map(([repoPath]) => repoPath)
         ]));
-        const selectedCount = selectedRepos.length;
         const repoOk = this.state.repoInfoOk !== false;
         const identityBlocking = Boolean(this.state.identityPrompt?.visible);
         const authBlocking = Boolean(this.state.authPrompt?.visible);
         const mode = this.state.commitMode || 'commit';
-        const hasSelectionInCurrentRepo = this.hasCommitSelectionForRepo(this.state.repoPath);
+        const hasSelection = selectedRepos.length > 0;
         if (commitButton) {
-            commitButton.disabled = this.state.busy || identityBlocking || authBlocking || !repoOk || !hasSelectionInCurrentRepo || !messageOk;
+            // Commit can run in multi-repo view (repoOk may be false for repos root).
+            commitButton.disabled = this.state.busy || identityBlocking || authBlocking || !hasSelection || !messageOk;
             commitButton.textContent = mode === 'commitPush' ? 'Commit & Push' : 'Commit';
         }
         if (pushButton) {
             pushButton.disabled = this.state.busy || identityBlocking || authBlocking || !repoOk;
-        }
-        if (commitSelectedButton) {
-            commitSelectedButton.style.display = selectedCount ? '' : 'none';
-            commitSelectedButton.disabled = this.state.busy || identityBlocking || authBlocking || !messageOk;
-            commitSelectedButton.textContent = mode === 'commitPush' ? 'Commit & Push selected' : 'Commit selected';
-        }
-        if (pushSelectedButton) {
-            pushSelectedButton.style.display = selectedCount ? '' : 'none';
-            pushSelectedButton.disabled = this.state.busy || identityBlocking || authBlocking;
         }
     }
 
@@ -1390,10 +1379,9 @@ export class GitCommitModal {
 
             if (pending?.type === 'commit') {
                 if (pending.mode === 'batch') await this.commitSelectedRepos();
-                else await this.commit();
+                else await this.commitSelectedRepos();
             } else if (pending?.type === 'push') {
-                if (pending.mode === 'batch') await this.pushSelectedRepos();
-                else await this.push({ silent: false });
+                await this.push({ silent: false });
             }
         } catch (error) {
             this.setStatusLine(normalizeErrorMessage(error), true);
@@ -1461,27 +1449,6 @@ export class GitCommitModal {
             await this.loadRepoOverviews({ force: true });
             await this.refreshAll({ force: true });
             this.setStatusLine('Done.');
-        } catch (error) {
-            this.setStatusLine(normalizeErrorMessage(error), true);
-        } finally {
-            this.setBusy(false);
-        }
-    }
-
-    async pushSelectedRepos() {
-        const selected = this.getSelectedReposForBatch();
-        if (!selected.length) return;
-        const identityOk = await this.ensureGitIdentityOrPrompt(selected[0], { type: 'push', mode: 'batch' });
-        if (!identityOk) return;
-        this.setBusy(true);
-        this.setStatusLine(`Pushing ${selected.length} repo(s)…`);
-        try {
-            const ok = await this.pushRepos(selected);
-            if (!ok) return;
-            this.state.selectedFilesByRepo = {};
-            await this.loadRepoOverviews({ force: true });
-            await this.refreshAll({ force: true });
-            this.setStatusLine('Pushed.');
         } catch (error) {
             this.setStatusLine(normalizeErrorMessage(error), true);
         } finally {
@@ -1570,46 +1537,7 @@ export class GitCommitModal {
     }
 
     async commit() {
-        const message = (this.state.commitMessage || '').trim();
-        if (!this.state.amend && !message) {
-            this.setStatusLine('Enter a commit message.', true);
-            return;
-        }
-        const identityOk = await this.ensureGitIdentityOrPrompt(this.state.repoPath, { type: 'commit', mode: 'single' });
-        if (!identityOk) return;
-        this.setBusy(true);
-        const shouldPush = (this.state.commitMode || 'commit') === 'commitPush';
-        this.setStatusLine(shouldPush ? 'Committing & pushing…' : 'Committing…');
-        try {
-            const list = this.getPathsForCommitInRepo(this.state.repoPath);
-            if (!list.length) {
-                this.setStatusLine('Select at least one file to commit.', true);
-                return;
-            }
-            await this.callTool('git_stage', { path: this.state.repoPath, files: list });
-            await this.callTool('git_commit', {
-                path: this.state.repoPath,
-                message,
-                amend: Boolean(this.state.amend),
-                signoff: Boolean(this.state.signoff)
-            });
-            this.state.commitMessage = '';
-            const commitMessage = this.element.querySelector('#gitCommitMessage');
-            if (commitMessage) commitMessage.value = '';
-            this.diffCache.clear();
-            if (shouldPush) {
-                await this.push({ silent: true });
-                this.setStatusLine('Committed & pushed.');
-            } else {
-                this.setStatusLine('Committed.');
-            }
-            this.clearRepoSelection(this.state.repoPath);
-            await this.refreshAll({ force: true });
-        } catch (error) {
-            this.setStatusLine(normalizeErrorMessage(error), true);
-        } finally {
-            this.setBusy(false);
-        }
+        await this.commitSelectedRepos();
     }
 
     async push({ silent = false, token = null } = {}) {
