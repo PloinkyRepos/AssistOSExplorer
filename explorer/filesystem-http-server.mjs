@@ -400,6 +400,14 @@ const GitPushArgsSchema = z.object({
   setUpstream: z.boolean().optional().default(false),
   token: z.string().optional().nullable().default(null).describe('Optional HTTPS Personal Access Token used for pushing non-interactively.')
 });
+const GitPullArgsSchema = z.object({
+  path: z.string(),
+  remote: z.string().optional().nullable().default(null),
+  branch: z.string().optional().nullable().default(null),
+  rebase: z.boolean().optional().default(false),
+  ffOnly: z.boolean().optional().default(true),
+  token: z.string().optional().nullable().default(null).describe('Optional HTTPS Personal Access Token used for pulling non-interactively.')
+});
 const GitDiagnoseArgsSchema = z.object({ path: z.string() });
 const GitIdentityArgsSchema = z.object({ path: z.string() });
 const GitSetIdentityArgsSchema = z.object({
@@ -570,6 +578,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 	      name: 'git_push',
 	      description: 'Push the current branch to a remote.',
 	      inputSchema: zodToJsonSchema(GitPushArgsSchema)
+	    },
+	    {
+	      name: 'git_pull',
+	      description: 'Pull from remote (fast-forward only by default).',
+	      inputSchema: zodToJsonSchema(GitPullArgsSchema)
 	    },
 	    {
 	      name: 'git_diagnose',
@@ -959,6 +972,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const parsed = GitPushArgsSchema.safeParse(args);
         if (!parsed.success) throw new Error(`Invalid arguments for git_push: ${parsed.error}`);
         const result = await gitService.gitPush(parsed.data);
+        return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+      }
+      case 'git_pull': {
+        const parsed = GitPullArgsSchema.safeParse(args);
+        if (!parsed.success) throw new Error(`Invalid arguments for git_pull: ${parsed.error}`);
+        const result = await gitService.gitPull(parsed.data);
         return { content: [{ type: 'text', text: JSON.stringify(result) }] };
       }
       case 'git_diagnose': {

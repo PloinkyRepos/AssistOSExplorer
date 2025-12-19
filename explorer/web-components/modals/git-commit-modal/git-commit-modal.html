@@ -28,10 +28,6 @@
                 <div class="git-section git-section-repos" id="gitRepoCandidatesSection">
                     <div class="git-section-header git-repos-header">
                         <span>Repositories</span>
-                        <label class="git-toggle git-toggle-small">
-                            <input type="checkbox" id="gitShowCleanRepos" data-local-action="toggleShowCleanRepos">
-                            Show clean
-                        </label>
                     </div>
                     <div class="git-section-body" id="gitRepoCandidatesList"></div>
                 </div>
@@ -115,6 +111,15 @@
                 <div class="git-status" id="gitStatusLine" role="status"></div>
                 <div class="git-action-buttons">
                     <button type="button" class="secondary" id="gitTokenButton" title="Set/update Personal Access Token (PAT)" data-local-action="openGitTokenPrompt">Token</button>
+                    <div class="git-commit-split" id="gitPullSplit">
+                        <button type="button" class="secondary" id="gitPullButton" data-local-action="pullAction">Pull</button>
+                        <button type="button" class="secondary git-commit-split-toggle" aria-label="Pull options" data-local-action="togglePullMenu">▾</button>
+                        <div class="git-commit-menu" id="gitPullMenu" role="menu" style="display: none;">
+                            <div class="git-menu-item" role="menuitem" tabindex="0" data-local-action="setPullMode ffOnly">Fast-forward only</div>
+                            <div class="git-menu-item" role="menuitem" tabindex="0" data-local-action="setPullMode rebase">Rebase</div>
+                            <div class="git-menu-item" role="menuitem" tabindex="0" data-local-action="setPullMode merge">Merge</div>
+                        </div>
+                    </div>
                     <button type="button" class="secondary" id="gitPushButton" data-local-action="pushAction">Push</button>
                     <div class="git-commit-split" id="gitCommitSplit">
                         <button type="button" id="gitCommitButton" data-local-action="commit">Commit</button>

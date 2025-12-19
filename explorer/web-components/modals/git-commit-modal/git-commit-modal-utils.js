@@ -5,6 +5,30 @@ export function normalizeErrorMessage(error) {
     return String(error);
 }
 
+export function humanizeGitError(message, { action = null } = {}) {
+    const raw = String(message || '').trim();
+    if (!raw) return 'Unknown error';
+
+    const cleaned = raw
+        .split(/\r?\n/)
+        .filter((line) => !line.trim().toLowerCase().startsWith('hint:'))
+        .join('\n')
+        .trim();
+
+    const lower = cleaned.toLowerCase();
+    if (action === 'pull' && (
+        lower.includes('not possible to fast-forward')
+        || lower.includes("can't be fast-forwarded")
+        || lower.includes('diverging branches')
+        || lower.includes('need to specify how to reconcile divergent branches')
+        || lower.includes('specify how to reconcile them')
+    )) {
+        return 'Pull failed: branches diverged. Use Pull ▾ → Rebase or Merge.';
+    }
+
+    return cleaned || raw;
+}
+
 export function parseJsonToolResult(toolResultText) {
     if (!toolResultText) return null;
     if (typeof toolResultText !== 'string') return toolResultText;
@@ -37,6 +61,16 @@ export function isGitAuthError(message) {
     if (lower.includes('fatal: authentication')) return true;
     if (lower.includes('http basic: access denied')) return true;
     if (lower.includes('permission denied')) return true;
+    return false;
+}
+
+export function isGitIdentityError(message) {
+    const text = String(message || '');
+    const lower = text.toLowerCase();
+    if (lower.includes('author identity unknown')) return true;
+    if (lower.includes('committer identity unknown')) return true;
+    if (lower.includes('unable to auto-detect email address')) return true;
+    if (lower.includes('please tell me who you are')) return true;
     return false;
 }
 

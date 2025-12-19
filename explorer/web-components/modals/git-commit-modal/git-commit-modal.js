@@ -1,9 +1,11 @@
 import { parseDetailedDirectoryListing, joinPath } from "../../pages/file-exp/file-exp-utils.js";
 import {
     normalizeErrorMessage,
+    humanizeGitError,
     parseJsonToolResult,
     isReposRootPath,
     isGitAuthError,
+    isGitIdentityError,
     getRememberedGitPat,
     setRememberedGitPat
 } from "./git-commit-modal-utils.js";
@@ -41,7 +43,6 @@ export class GitCommitModal {
             repoTreeExpanded: {},
             repoChangesExpanded: {},
             treeExpandedByRepo: {},
-            showCleanRepos: false,
             selectedFilesByRepo: {},
             selectedRepoPath: null,
             selectedPath: null,
@@ -53,6 +54,8 @@ export class GitCommitModal {
             commitMessage: '',
             commitMode: 'commit', // 'commit' | 'commitPush'
             commitMenuOpen: false,
+            pullMode: 'ffOnly', // 'ffOnly' | 'rebase' | 'merge'
+            pullMenuOpen: false,
             amend: false,
             signoff: false,
             identityPrompt: {
@@ -257,12 +260,6 @@ export class GitCommitModal {
             repoPathInput.dataset.bound = 'true';
         }
 
-        const showCleanToggle = this.element.querySelector('#gitShowCleanRepos');
-        if (showCleanToggle && !showCleanToggle.dataset.bound) {
-            // WebSkel handles via `data-local-action="toggleShowCleanRepos"`.
-            showCleanToggle.dataset.bound = 'true';
-        }
-
         const commitMessage = this.element.querySelector('#gitCommitMessage');
         if (commitMessage && !commitMessage.dataset.bound) {
             commitMessage.addEventListener('input', (event) => {
@@ -285,12 +282,14 @@ export class GitCommitModal {
 
         if (!this.element.dataset.boundCommitMenu) {
             const closeIfOutside = (event) => {
-                if (!this.state.commitMenuOpen) return;
-                const split = this.element.querySelector('#gitCommitSplit');
-                const inside = split && (event.target === split || split.contains(event.target));
-                if (!inside) {
-                    this.closeCommitMenu();
-                }
+                const closeMenuIfOutside = (isOpen, rootSelector, closeFn) => {
+                    if (!isOpen) return;
+                    const root = this.element.querySelector(rootSelector);
+                    const inside = root && (event.target === root || root.contains(event.target));
+                    if (!inside) closeFn();
+                };
+                closeMenuIfOutside(this.state.commitMenuOpen, '#gitCommitSplit', () => this.closeCommitMenu());
+                closeMenuIfOutside(this.state.pullMenuOpen, '#gitPullSplit', () => this.closePullMenu());
             };
             document.addEventListener('pointerdown', closeIfOutside, true);
             this.element.dataset.boundCommitMenu = 'true';
@@ -333,11 +332,6 @@ export class GitCommitModal {
         this.refreshAll({ force: true });
     }
 
-    toggleShowCleanRepos(element) {
-        this.state.showCleanRepos = Boolean(element?.checked);
-        this.renderRepoOverviews(this.state.repoOverviews);
-    }
-
     updateCommitMessage(element) {
         this.state.commitMessage = element?.value || '';
         this.updateCommitButtons();
@@ -354,6 +348,10 @@ export class GitCommitModal {
 
     pushAction() {
         this.push({ silent: false });
+    }
+
+    pullAction() {
+        this.pullSelectedRepos();
     }
 
     openRepo(element) {
@@ -415,10 +413,6 @@ export class GitCommitModal {
         if (repoPathInput && repoPathInput.value !== this.state.repoPath) {
             repoPathInput.value = this.state.repoPath;
         }
-        const showCleanToggle = this.element.querySelector('#gitShowCleanRepos');
-        if (showCleanToggle) {
-            showCleanToggle.checked = Boolean(this.state.showCleanRepos);
-        }
 
         const identityBox = this.element.querySelector('#gitIdentityPrompt');
         if (identityBox) {
@@ -434,6 +428,18 @@ export class GitCommitModal {
                 const parts = action.split(/\s+/);
                 const mode = parts[0] === 'setCommitMode' ? parts[1] : null;
                 el.classList.toggle('active', Boolean(mode && mode === this.state.commitMode));
+            });
+        }
+
+        const pullMenu = this.element.querySelector('#gitPullMenu');
+        if (pullMenu) {
+            pullMenu.style.display = this.state.pullMenuOpen ? '' : 'none';
+            const items = pullMenu.querySelectorAll('.git-menu-item');
+            items.forEach((el) => {
+                const action = el.getAttribute('data-local-action') || '';
+                const parts = action.split(/\s+/);
+                const mode = parts[0] === 'setPullMode' ? parts[1] : null;
+                el.classList.toggle('active', Boolean(mode && mode === this.state.pullMode));
             });
         }
 
@@ -485,6 +491,7 @@ export class GitCommitModal {
             root.classList.toggle('busy', this.state.busy);
         }
         if (this.state.busy) this.closeCommitMenu();
+        if (this.state.busy) this.closePullMenu();
         this.updateCommitButtons();
     }
 
@@ -502,6 +509,20 @@ export class GitCommitModal {
         this.syncStaticUI();
     }
 
+    togglePullMenu() {
+        this.state.pullMenuOpen = !this.state.pullMenuOpen;
+        this.syncStaticUI();
+        if (this.state.pullMenuOpen) {
+            setTimeout(() => this.element.querySelector('#gitPullMenu .git-menu-item.active')?.focus?.(), 0);
+        }
+    }
+
+    closePullMenu() {
+        if (!this.state.pullMenuOpen) return;
+        this.state.pullMenuOpen = false;
+        this.syncStaticUI();
+    }
+
     setCommitMode(element, mode) {
         const next = (mode || element?.dataset?.mode || '').trim();
         if (next !== 'commit' && next !== 'commitPush') return;
@@ -512,6 +533,18 @@ export class GitCommitModal {
         if (this.state.identityPrompt?.visible) return;
         if (this.state.authPrompt?.visible) return;
         this.commit();
+    }
+
+    setPullMode(element, mode) {
+        const next = (mode || element?.dataset?.mode || '').trim();
+        if (next !== 'ffOnly' && next !== 'rebase' && next !== 'merge') return;
+        this.state.pullMode = next;
+        this.closePullMenu();
+        this.syncStaticUI();
+        if (this.state.busy) return;
+        if (this.state.identityPrompt?.visible) return;
+        if (this.state.authPrompt?.visible) return;
+        this.pullSelectedRepos();
     }
 
     setStatusLine(text, isError = false) {
@@ -874,7 +907,6 @@ export class GitCommitModal {
 
     getDisplayedRepoOverviews() {
         const repos = Array.isArray(this.state.repoOverviews) ? this.state.repoOverviews : [];
-        if (this.state.showCleanRepos) return repos;
         return repos.filter((repo) => {
             if (!repo) return false;
             const counts = repo.counts || {};
@@ -1006,15 +1038,13 @@ export class GitCommitModal {
             return;
         }
 
-        if (!this.state.showCleanRepos) {
-            const dirty = this.getDisplayedRepoOverviews();
-            if (dirty.length === 0 && !this.state.repoOverviewsLoading) {
-                const empty = document.createElement('div');
-                empty.className = 'git-empty';
-                empty.textContent = 'No repositories with changes.';
-                container.appendChild(empty);
-                return;
-            }
+        const dirty = this.getDisplayedRepoOverviews();
+        if (dirty.length === 0 && !this.state.repoOverviewsLoading) {
+            const empty = document.createElement('div');
+            empty.className = 'git-empty';
+            empty.textContent = 'No repositories with changes.';
+            container.appendChild(empty);
+            return;
         }
 
         const tree = this.buildRepoTree();
@@ -1291,7 +1321,7 @@ export class GitCommitModal {
         this.syncStaticUI();
         this.updateCommitButtons();
         this.setBusy(true);
-        this.setStatusLine('Retrying push…');
+        this.setStatusLine(pending?.type === 'pull' ? 'Retrying pull…' : 'Retrying push…');
         try {
             if (pending?.type === 'push') {
                 if (pending.mode === 'batch') {
@@ -1300,6 +1330,9 @@ export class GitCommitModal {
                 } else {
                     await this.push({ silent: false, token });
                 }
+            } else if (pending?.type === 'pull') {
+                const list = Array.isArray(pending.repoPaths) ? pending.repoPaths : [];
+                await this.pullRepos(list, { token });
             }
         } finally {
             this.setBusy(false);
@@ -1313,6 +1346,24 @@ export class GitCommitModal {
         await this.callTool('git_push', payload);
     }
 
+    async gitPullWithToken(repoPath, token) {
+        const mode = this.state.pullMode || 'ffOnly';
+        const payload = { path: repoPath };
+        if (mode === 'rebase') {
+            payload.rebase = true;
+            payload.ffOnly = false;
+        } else if (mode === 'merge') {
+            payload.rebase = false;
+            payload.ffOnly = false;
+        } else {
+            payload.rebase = false;
+            payload.ffOnly = true;
+        }
+        const cleanToken = String(token || '').trim();
+        if (cleanToken) payload.token = cleanToken;
+        await this.callTool('git_pull', payload);
+    }
+
     async pushRepos(repoPaths, { token = null } = {}) {
         const list = Array.isArray(repoPaths) ? repoPaths.filter(Boolean) : [];
         const effectiveToken = String(token || '').trim() || getRememberedGitPat();
@@ -1324,6 +1375,32 @@ export class GitCommitModal {
                 if (isGitAuthError(msg)) {
                     if (!effectiveToken) {
                         this.showGitAuthPrompt(repoPath, { type: 'push', mode: 'batch', repoPaths: list }, { message: msg });
+                        return false;
+                    }
+                    this.setStatusLine(`${msg} (A token is already saved. Use “Token” to update it.)`, true);
+                    return false;
+                }
+                throw error;
+            }
+        }
+        return true;
+    }
+
+    async pullRepos(repoPaths, { token = null } = {}) {
+        const list = Array.isArray(repoPaths) ? repoPaths.filter(Boolean) : [];
+        const effectiveToken = String(token || '').trim() || getRememberedGitPat();
+        for (const repoPath of list) {
+            try {
+                await this.gitPullWithToken(repoPath, effectiveToken);
+            } catch (error) {
+                const msg = humanizeGitError(normalizeErrorMessage(error), { action: 'pull' });
+                if (isGitIdentityError(msg)) {
+                    await this.ensureGitIdentityOrPrompt(repoPath, { type: 'pull', mode: 'batch', repoPaths: list });
+                    return false;
+                }
+                if (isGitAuthError(msg)) {
+                    if (!effectiveToken) {
+                        this.showGitAuthPrompt(repoPath, { type: 'pull', mode: 'batch', repoPaths: list }, { message: msg });
                         return false;
                     }
                     this.setStatusLine(`${msg} (A token is already saved. Use “Token” to update it.)`, true);
@@ -1394,6 +1471,8 @@ export class GitCommitModal {
                 else await this.commitSelectedRepos();
             } else if (pending?.type === 'push') {
                 await this.push({ silent: false });
+            } else if (pending?.type === 'pull') {
+                await this.pullSelectedRepos();
             }
         } catch (error) {
             this.setStatusLine(normalizeErrorMessage(error), true);
@@ -1418,13 +1497,13 @@ export class GitCommitModal {
             return;
         }
         if (!selected.length) return;
-        const identityOk = await this.ensureGitIdentityOrPrompt(selected[0], { type: 'commit', mode: 'batch' });
-        if (!identityOk) return;
         this.setBusy(true);
         const shouldPush = (this.state.commitMode || 'commit') === 'commitPush';
         this.setStatusLine(shouldPush ? `Committing & pushing ${selected.length} repo(s)…` : `Committing ${selected.length} repo(s)…`);
         try {
             for (const repoPath of selected) {
+                const identityOk = await this.ensureGitIdentityOrPrompt(repoPath, { type: 'commit', mode: 'batch', repoPaths: selected });
+                if (!identityOk) return;
                 const list = this.getPathsForCommitInRepo(repoPath);
                 if (!list.length) continue;
                 await this.callTool('git_stage', { path: repoPath, files: list });
@@ -1591,6 +1670,36 @@ export class GitCommitModal {
             if (!alreadyBusy) {
                 this.setBusy(false);
             }
+        }
+    }
+
+    async pullSelectedRepos() {
+        const selected = this.getSelectedReposForBatch();
+        if (!selected.length) {
+            this.setStatusLine('Select at least one file/repo to pull.', true);
+            return;
+        }
+        const mode = this.state.pullMode || 'ffOnly';
+        // Merge/rebase can create commits (merge commit or rewritten commits), so identity must be set.
+        if (mode !== 'ffOnly') {
+            for (const repoPath of selected) {
+                const ok = await this.ensureGitIdentityOrPrompt(repoPath, { type: 'pull', mode: 'batch', repoPaths: selected });
+                if (!ok) return;
+            }
+        }
+        this.setBusy(true);
+        this.setStatusLine(`Pulling ${selected.length} repo(s)…`);
+        try {
+            const ok = await this.pullRepos(selected);
+            if (!ok) return;
+            this.diffCache.clear();
+            await this.loadRepoOverviews({ force: true });
+            await this.refreshAll({ force: true });
+            this.setStatusLine('Pulled.');
+        } catch (error) {
+            this.setStatusLine(humanizeGitError(normalizeErrorMessage(error), { action: 'pull' }), true);
+        } finally {
+            this.setBusy(false);
         }
     }
 

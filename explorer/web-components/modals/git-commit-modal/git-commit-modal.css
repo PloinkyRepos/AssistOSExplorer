@@ -792,14 +792,13 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
 
 .git-commit-actions {
     justify-content: space-between;
+    flex-direction: column;
 }
 
 .git-status {
     font-size: 0.9rem;
     color: var(--text-soft, rgba(15, 23, 42, 0.7));
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 
 .git-status.error {

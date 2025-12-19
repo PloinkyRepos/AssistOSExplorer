@@ -403,6 +403,66 @@ export function createGitService({ validatePath }) {
     return { ok: true, stdout, stderr };
   }
 
+  async function gitPull({ path: repoPathArg, remote = null, branch = null, rebase = false, ffOnly = true, token = null }) {
+    const repoPath = await resolveRepoPath(repoPathArg);
+    const gitBinary = await getGitBinary(repoPath);
+
+    const cleanToken = token ? String(token).trim() : '';
+    let extraHeader = null;
+    if (cleanToken) {
+      const guessRemoteForPull = async () => {
+        try {
+          const { stdout } = await runGit(repoPath, [gitBinary, 'rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'], { timeoutMs: 5000 });
+          const upstream = (stdout || '').trim();
+          if (upstream && upstream.includes('/')) return upstream.split('/')[0];
+        } catch {}
+        try {
+          const { stdout } = await runGit(repoPath, [gitBinary, 'config', '--get', 'remote.pushDefault'], { timeoutMs: 5000 });
+          const v = (stdout || '').trim();
+          if (v) return v;
+        } catch {}
+        return null;
+      };
+
+      const remoteForAuth = remote || (await guessRemoteForPull()) || 'origin';
+      let remoteUrl = '';
+      try {
+        const { stdout } = await runGit(repoPath, [gitBinary, 'remote', 'get-url', remoteForAuth], { timeoutMs: 5000 });
+        remoteUrl = (stdout || '').trim();
+      } catch {
+        remoteUrl = '';
+      }
+
+      const isHttp = remoteUrl.startsWith('http://') || remoteUrl.startsWith('https://');
+      if (!isHttp) {
+        throw new Error('Remote is not HTTPS; token auth is only supported for HTTPS remotes. Configure an HTTPS remote or pull via SSH.');
+      }
+      extraHeader = toBasicAuthHeader({ username: 'x-access-token', token: cleanToken });
+    }
+
+    const args = [gitBinary];
+    if (extraHeader) {
+      args.push('-c', `http.extraHeader=${extraHeader}`);
+    }
+    args.push('pull');
+    // Newer git versions may require explicitly choosing the reconcile strategy when branches diverge.
+    // Keep defaults safe: ff-only unless user explicitly chose merge/rebase.
+    if (ffOnly) {
+      args.push('--ff-only');
+    } else if (rebase) {
+      args.push('--rebase=true');
+      args.push('--ff');
+    } else {
+      // Explicit merge strategy.
+      args.push('--rebase=false');
+      args.push('--ff');
+    }
+    if (remote) args.push(remote);
+    if (branch) args.push(branch);
+    const { stdout, stderr } = await runGit(repoPath, args, { timeoutMs: 180000 });
+    return { ok: true, stdout, stderr };
+  }
+
   async function gitDiagnose({ path: repoPathArg }) {
     const repoPath = await resolveRepoPath(repoPathArg);
     const configured = process.env.ASSISTOS_GIT_BINARY || process.env.GIT_BINARY || null;
@@ -710,6 +770,7 @@ export function createGitService({ validatePath }) {
     gitStage,
     gitUnstage,
     gitCommit,
+    gitPull,
     gitPush,
     gitDiagnose,
     gitIdentity,
