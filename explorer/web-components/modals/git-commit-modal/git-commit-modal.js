@@ -508,6 +508,10 @@ export class GitCommitModal {
         this.state.commitMode = next;
         this.closeCommitMenu();
         this.updateCommitButtons();
+        if (this.state.busy) return;
+        if (this.state.identityPrompt?.visible) return;
+        if (this.state.authPrompt?.visible) return;
+        this.commit();
     }
 
     setStatusLine(text, isError = false) {
@@ -1246,13 +1250,17 @@ export class GitCommitModal {
             visible: true,
             repoPath,
             pendingAction: pendingAction || null,
-            token: remembered || '',
+            token: '',
             remember: Boolean(remembered)
         };
         this.syncStaticUI();
         this.updateCommitButtons();
-        this.setStatusLine(message || 'Authentication required to push.', true);
+        this.setStatusLine(message || (remembered ? 'A token is already saved. Paste a new token to replace it.' : 'Authentication required to push.'), true);
         setTimeout(() => this.element.querySelector('#gitAuthToken')?.focus?.(), 0);
+    }
+
+    openGitTokenPrompt() {
+        this.showGitAuthPrompt(this.state.repoPath, null, { message: '' });
     }
 
     cancelGitToken() {
@@ -1314,7 +1322,11 @@ export class GitCommitModal {
             } catch (error) {
                 const msg = normalizeErrorMessage(error);
                 if (isGitAuthError(msg)) {
-                    this.showGitAuthPrompt(repoPath, { type: 'push', mode: 'batch', repoPaths: list }, { message: msg });
+                    if (!effectiveToken) {
+                        this.showGitAuthPrompt(repoPath, { type: 'push', mode: 'batch', repoPaths: list }, { message: msg });
+                        return false;
+                    }
+                    this.setStatusLine(`${msg} (A token is already saved. Use “Token” to update it.)`, true);
                     return false;
                 }
                 throw error;
@@ -1434,7 +1446,11 @@ export class GitCommitModal {
                     } catch (error) {
                         const msg = normalizeErrorMessage(error);
                         if (isGitAuthError(msg)) {
-                            this.showGitAuthPrompt(repoPath, { type: 'push', mode: 'batch', repoPaths: [repoPath] }, { message: msg });
+                            if (!token) {
+                                this.showGitAuthPrompt(repoPath, { type: 'push', mode: 'batch', repoPaths: [repoPath] }, { message: msg });
+                                return;
+                            }
+                            this.setStatusLine(`${msg} (A token is already saved. Use “Token” to update it.)`, true);
                             return;
                         }
                         throw error;
@@ -1562,7 +1578,12 @@ export class GitCommitModal {
         } catch (error) {
             const msg = normalizeErrorMessage(error);
             if (isGitAuthError(msg)) {
-                this.showGitAuthPrompt(this.state.repoPath, { type: 'push', mode: 'batch', repoPaths: [this.state.repoPath] }, { message: msg });
+                const effectiveToken = String(token || '').trim() || getRememberedGitPat();
+                if (!effectiveToken) {
+                    this.showGitAuthPrompt(this.state.repoPath, { type: 'push', mode: 'batch', repoPaths: [this.state.repoPath] }, { message: msg });
+                } else {
+                    this.setStatusLine(`${msg} (A token is already saved. Use “Token” to update it.)`, true);
+                }
             } else {
                 this.setStatusLine(msg, true);
             }
