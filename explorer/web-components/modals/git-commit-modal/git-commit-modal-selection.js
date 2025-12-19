@@ -1,4 +1,7 @@
+const ALL_PREFIX = '*';
+
 export function normalizeRepoRelativePrefix(prefix) {
+    if (prefix === ALL_PREFIX) return ALL_PREFIX;
     const normalized = String(prefix || '').replace(/^\/+/, '');
     if (!normalized) return '';
     return normalized.endsWith('/') ? normalized : `${normalized}/`;
@@ -28,6 +31,7 @@ export function ensureSelectionEntry(selectedFilesByRepo, repoPath) {
 
 export function getCoveringPrefix(entry, relativePath) {
     if (!entry?.prefixes) return null;
+    if (entry.prefixes.has(ALL_PREFIX)) return ALL_PREFIX;
     const rel = String(relativePath || '');
     for (const prefix of entry.prefixes.values()) {
         if (prefix && rel.startsWith(prefix)) return prefix;
@@ -37,8 +41,9 @@ export function getCoveringPrefix(entry, relativePath) {
 
 export function getAncestorCoveringPrefix(entry, prefix) {
     const normalizedPrefix = normalizeRepoRelativePrefix(prefix);
-    if (!normalizedPrefix) return null;
     if (!entry?.prefixes) return null;
+    if (entry.prefixes.has(ALL_PREFIX)) return ALL_PREFIX;
+    if (!normalizedPrefix) return null;
     for (const candidate of entry.prefixes.values()) {
         if (!candidate) continue;
         if (candidate !== normalizedPrefix && normalizedPrefix.startsWith(candidate)) return candidate;
@@ -67,6 +72,17 @@ export function toggleFileSelection(entry, filePath, section, isSelected) {
 
 export function togglePrefixSelection(entry, prefix, isSelected) {
     if (!entry) return;
+    if (prefix === ALL_PREFIX) {
+        if (isSelected) {
+            entry.files?.clear?.();
+            entry.sectionsByFile?.clear?.();
+            entry.prefixes?.clear?.();
+            entry.prefixes?.add?.(ALL_PREFIX);
+            return;
+        }
+        entry.prefixes?.delete?.(ALL_PREFIX);
+        return;
+    }
     const normalizedPrefix = normalizeRepoRelativePrefix(prefix);
     if (!normalizedPrefix) return;
     if (getAncestorCoveringPrefix(entry, normalizedPrefix)) return;
@@ -93,4 +109,3 @@ export function togglePrefixSelection(entry, prefix, isSelected) {
         clearSubtree();
     }
 }
-

@@ -103,7 +103,7 @@ export function renderRepoChangesTree(repo, {
     const renderNode = (node, depth, prefix) => {
         const out = document.createElement('div');
         out.className = 'git-tree-children';
-        const indentStep = 12;
+        const indentStep = 18;
         const indent = (level) => `${level * indentStep}px`;
 
         const folderNames = Array.from(node.children.keys()).sort((a, b) => a.localeCompare(b));
@@ -133,6 +133,7 @@ export function renderRepoChangesTree(repo, {
             checkbox.dataset.fileFolderSelect = 'true';
             checkbox.dataset.repoPath = repo.path;
             checkbox.dataset.prefix = normalizedPrefix;
+            checkbox.setAttribute('data-local-action', 'toggleTreePrefixSelectionCheckbox');
 
             const subtreeFiles = collectSubtreeFilePaths(childNode);
             const ancestorPrefix = getAncestorCoveringPrefix?.(repo.path, normalizedPrefix) || null;
@@ -180,29 +181,28 @@ export function renderRepoChangesTree(repo, {
             const row = document.createElement('div');
             row.className = 'git-tree-item git-tree-file-row';
             row.style.paddingLeft = indent(depth);
-            const kind = String(file.kind || 'unknown');
-            if (kind) row.classList.add(`is-${kind.replaceAll('+', '-')}`);
+            const x = file.x || ' ';
+            const y = file.y || ' ';
+            const flags = file.flags || {};
+            const kind = String(file.kind || '');
+            const isUntracked = Boolean(flags.untracked) || kind === 'untracked' || (x === '?' && y === '?');
+            const isNewTracked = !isUntracked && (x === 'A' || y === 'A');
+            const isModified = !isUntracked && !isNewTracked && (
+                x === 'M' || y === 'M' || x === 'R' || y === 'R' || x === 'C' || y === 'C'
+                || kind === 'staged' || kind === 'unstaged' || kind === 'staged+unstaged' || kind === 'conflicted'
+            );
+            row.classList.toggle('is-untracked', isUntracked);
+            row.classList.toggle('is-new', isNewTracked);
+            row.classList.toggle('is-modified', isModified);
 
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
             checkbox.dataset.fileSelect = 'true';
             checkbox.dataset.repoPath = repo.path;
             checkbox.dataset.filePath = file.path;
+            checkbox.setAttribute('data-local-action', 'toggleTreeFileSelectionCheckbox');
             checkbox.checked = Boolean(isFileSelected?.(repo.path, file.path));
             checkbox.disabled = Boolean(getCoveringPrefix?.(repo.path, file.path));
-
-            const shouldShowStage = Boolean(file?.flags?.unstaged) || kind === 'unstaged' || kind === 'staged+unstaged';
-            let stageBtn = null;
-            if (shouldShowStage) {
-                stageBtn = document.createElement('button');
-                stageBtn.type = 'button';
-                stageBtn.className = 'secondary git-tree-stage-btn';
-                stageBtn.setAttribute('data-local-action', 'stageFileFromTree');
-                stageBtn.dataset.repoPath = repo.path;
-                stageBtn.dataset.filePath = file.path;
-                stageBtn.setAttribute('title', 'Stage (git add)');
-                stageBtn.textContent = '+';
-            }
 
             const button = document.createElement('div');
             button.className = 'git-tree-file';
@@ -214,7 +214,6 @@ export function renderRepoChangesTree(repo, {
             button.textContent = file.name;
 
             row.appendChild(checkbox);
-            if (stageBtn) row.appendChild(stageBtn);
             row.appendChild(button);
             out.appendChild(row);
         }

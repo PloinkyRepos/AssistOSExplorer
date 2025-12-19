@@ -185,7 +185,7 @@ export function unifiedToSplitHtml(diffText) {
     return { leftHtml: left.join('\n'), rightHtml: right.join('\n'), meta };
 }
 
-export function stripUnifiedDiffHeaders(diffText) {
+export function stripUnifiedDiffFileHeaders(diffText) {
     const out = [];
     const lines = String(diffText || '').split('\n');
     for (const raw of lines) {
@@ -194,6 +194,17 @@ export function stripUnifiedDiffHeaders(diffText) {
         if (raw.startsWith('index ')) continue;
         if (raw.startsWith('--- ')) continue;
         if (raw.startsWith('+++ ')) continue;
+        out.push(raw);
+    }
+    return out.join('\n');
+}
+
+export function stripUnifiedDiffHeaders(diffText) {
+    const out = [];
+    const lines = stripUnifiedDiffFileHeaders(diffText).split('\n');
+    for (const raw of lines) {
+        if (!raw) continue;
+        // Also drop hunk headers (WebStorm-like compact view).
         if (/^@@\s+\-/.test(raw)) continue;
         out.push(raw);
     }

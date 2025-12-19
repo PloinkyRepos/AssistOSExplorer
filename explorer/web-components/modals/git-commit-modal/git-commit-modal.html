@@ -20,8 +20,6 @@
             <div class="git-branch" id="gitBranchInfo"></div>
             <div class="git-topbar-actions">
                 <button type="button" class="secondary" id="gitRefreshButton" data-local-action="refreshAction">Refresh</button>
-                <button type="button" class="secondary" id="gitStageAllButton" data-local-action="stageAll">Stage all</button>
-                <button type="button" class="secondary" id="gitUnstageAllButton" data-local-action="unstageAll">Unstage all</button>
             </div>
         </div>
 
@@ -31,27 +29,11 @@
                     <div class="git-section-header git-repos-header">
                         <span>Repositories</span>
                         <label class="git-toggle git-toggle-small">
-                            <input type="checkbox" id="gitShowCleanRepos">
+                            <input type="checkbox" id="gitShowCleanRepos" data-local-action="toggleShowCleanRepos">
                             Show clean
                         </label>
                     </div>
                     <div class="git-section-body" id="gitRepoCandidatesList"></div>
-                </div>
-                <div class="git-section">
-                    <div class="git-section-header">Unstaged</div>
-                    <div class="git-section-body" id="gitUnstagedList"></div>
-                </div>
-                <div class="git-section">
-                    <div class="git-section-header">Staged</div>
-                    <div class="git-section-body" id="gitStagedList"></div>
-                </div>
-                <div class="git-section">
-                    <div class="git-section-header">Untracked</div>
-                    <div class="git-section-body" id="gitUntrackedList"></div>
-                </div>
-                <div class="git-section git-section-conflicts" id="gitConflictsSection">
-                    <div class="git-section-header">Conflicts</div>
-                    <div class="git-section-body" id="gitConflictedList"></div>
                 </div>
             </div>
 
@@ -75,7 +57,16 @@
         <div class="git-commit">
             <div class="git-commit-row">
                 <label class="git-commit-label" for="gitCommitMessage">Commit message</label>
-                <textarea id="gitCommitMessage" rows="3" placeholder="Describe your changes..." autocomplete="off"></textarea>
+                <textarea id="gitCommitMessage" rows="3" placeholder="Describe your changes..." autocomplete="off" data-local-action="updateCommitMessage"></textarea>
+                <button
+                    type="button"
+                    class="icon-button git-ai-generate"
+                    aria-label="Generate commit message with AI"
+                    title="Generate message with AI"
+                    data-local-action="generateCommitMessage"
+                >
+                    <span aria-hidden="true">✦</span>
+                </button>
             </div>
             <div class="git-identity" id="gitIdentityPrompt" style="display: none;">
                 <div class="git-identity-title">Git identity required</div>
@@ -112,16 +103,12 @@
             </div>
             <div class="git-commit-row git-commit-options">
                 <label class="git-toggle">
-                    <input type="checkbox" id="gitCommitAmend">
+                    <input type="checkbox" id="gitCommitAmend" data-local-action="toggleAmend">
                     Amend
                 </label>
                 <label class="git-toggle">
-                    <input type="checkbox" id="gitCommitSignoff">
+                    <input type="checkbox" id="gitCommitSignoff" data-local-action="toggleSignoff">
                     Sign-off
-                </label>
-                <label class="git-toggle">
-                    <input type="checkbox" id="gitPushAfterCommit">
-                    Push after commit
                 </label>
             </div>
             <div class="git-commit-row git-commit-actions">
@@ -130,7 +117,14 @@
                     <button type="button" class="secondary" id="gitPushSelectedButton" data-local-action="pushSelectedRepos">Push selected</button>
                     <button type="button" class="secondary" id="gitCommitSelectedButton" data-local-action="commitSelectedRepos">Commit selected</button>
                     <button type="button" class="secondary" id="gitPushButton" data-local-action="pushAction">Push</button>
-                    <button type="button" id="gitCommitButton" data-local-action="commit">Commit</button>
+                    <div class="git-commit-split" id="gitCommitSplit">
+                        <button type="button" id="gitCommitButton" data-local-action="commit">Commit</button>
+                        <button type="button" class="secondary git-commit-split-toggle" aria-label="Commit options" data-local-action="toggleCommitMenu">▾</button>
+                        <div class="git-commit-menu" id="gitCommitMenu" role="menu" style="display: none;">
+                            <div class="git-menu-item" role="menuitem" tabindex="0" data-local-action="setCommitMode commit">Commit</div>
+                            <div class="git-menu-item" role="menuitem" tabindex="0" data-local-action="setCommitMode commitPush">Commit &amp; Push</div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

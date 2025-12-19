@@ -21,7 +21,7 @@ function isGitRepoRelativePath(candidate) {
   return true;
 }
 
-async function runGit(cwd, args, { timeoutMs = 20000 } = {}) {
+async function runGit(cwd, args, { timeoutMs = 20000, okCodes = [0] } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(args[0], args.slice(1), {
       cwd,
@@ -57,7 +57,7 @@ async function runGit(cwd, args, { timeoutMs = 20000 } = {}) {
 
     child.on('close', (code) => {
       clearTimeout(abortTimer);
-      if (code === 0) {
+      if ((okCodes || [0]).includes(code)) {
         resolve({ stdout, stderr });
         return;
       }
@@ -268,12 +268,29 @@ export function createGitService({ validatePath }) {
       return stdout;
     }
 
-    // Working tree vs baseRef (ex: HEAD). For untracked files git diff <ref> -- <file> returns empty,
-    // so we fall back to `--no-index` to generate an "added file" diff.
+    // WebStorm-like behavior: show a diff against baseRef (ex: HEAD) even if the change is staged-only.
+    // 1) working tree vs baseRef
+    // 2) index vs baseRef (staged-only)
+    // 3) untracked fallback via `--no-index` ("added file" diff)
     const { stdout } = await runGit(repoPath, [gitBinary, 'diff', baseRef, '--', file], { timeoutMs: 25000 });
     if (stdout && stdout.trim()) return stdout;
     try {
-      const { stdout: noIndex } = await runGit(repoPath, [gitBinary, 'diff', '--no-index', '--', '/dev/null', file], { timeoutMs: 25000 });
+      const { stdout: cachedStdout } = await runGit(
+        repoPath,
+        [gitBinary, 'diff', '--cached', baseRef, '--', file],
+        { timeoutMs: 25000 }
+      );
+      if (cachedStdout && cachedStdout.trim()) return cachedStdout;
+    } catch {
+      // ignore
+    }
+    try {
+      const { stdout: noIndex } = await runGit(
+        repoPath,
+        [gitBinary, 'diff', '--no-index', '--', '/dev/null', file],
+        // `git diff --no-index` returns exit code 1 when differences are found (expected for new files).
+        { timeoutMs: 25000, okCodes: [0, 1] }
+      );
       return noIndex;
     } catch {
       return '';
@@ -600,10 +617,22 @@ export function createGitService({ validatePath }) {
               const existing = map.get(key) || {
                 path: key,
                 flags: { staged: false, unstaged: false, untracked: false, conflicted: false },
-                origPath: null
+                origPath: null,
+                x: ' ',
+                y: ' '
               };
               existing.flags[flag] = true;
               if (entry.origPath && !existing.origPath) existing.origPath = entry.origPath;
+              if (typeof entry.x === 'string' && entry.x.length) {
+                if (existing.x === ' ' || existing.x === '?' || entry.x !== ' ') {
+                  existing.x = entry.x;
+                }
+              }
+              if (typeof entry.y === 'string' && entry.y.length) {
+                if (existing.y === ' ' || existing.y === '?' || entry.y !== ' ') {
+                  existing.y = entry.y;
+                }
+              }
               map.set(key, existing);
             };
 
