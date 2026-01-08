@@ -563,77 +563,88 @@ export class GitCommitModal {
         return result?.text ?? '';
     }
 
-    async callToolOnAgent(agentId, name, args) {
-        const result = await window.webSkel.appServices.callTool(agentId, name, args);
-        if (result?.text?.startsWith?.('Error:')) throw new Error(result.text);
-        return result?.text ?? '';
-    }
-
-    getAgentClient(agentId) {
-        const client = window.webSkel?.appServices?.getClient?.(agentId);
-        if (!client) throw new Error(`Agent client not available: ${agentId}`);
-        return client;
-    }
-
-    async listAgentTools(agentId) {
-        const client = this.getAgentClient(agentId);
-        if (typeof client.listTools !== 'function') return [];
-        const result = await client.listTools();
-        return Array.isArray(result?.tools)
-            ? result.tools
-            : Array.isArray(result?.result?.tools)
-                ? result.result.tools
-                : [];
-    }
-
-    pickLlmTool(tools) {
-        const list = Array.isArray(tools) ? tools : [];
-        const byName = (name) => list.find((t) => t?.name === name);
-        for (const name of ['llm_generate', 'generate', 'chat', 'complete', 'ask']) {
-            const t = byName(name);
-            if (t) return t;
+    async callAgentTool(agentName, name, args) {
+        const client = window.webSkel?.appServices?.getClient?.(agentName);
+        if (!client || typeof client.callTool !== 'function') {
+            throw new Error(`Agent client not available: ${agentName}`);
         }
-        const acceptsPrompt = (tool) => {
-            const props = tool?.inputSchema?.properties || {};
-            return Boolean(props.prompt || props.messages || props.input || props.text);
-        };
-        return list.find(acceptsPrompt) || list[0] || null;
-    }
+        const result = await client.callTool(name, args || {});
+        const blocks = Array.isArray(result?.content) ? result.content : [];
+        const firstText = blocks.find((block) => block?.type === 'text' && typeof block.text === 'string');
+        let text = firstText ? firstText.text : JSON.stringify(result, null, 2);
 
-    buildLlmArgsForTool(tool, prompt) {
-        const schemaProps = tool?.inputSchema?.properties || {};
-        if (schemaProps.prompt) return { prompt };
-        if (schemaProps.input) return { input: prompt };
-        if (schemaProps.text) return { text: prompt };
-        if (schemaProps.messages) return { messages: [{ role: 'user', content: prompt }] };
-        return { prompt };
+        if (typeof text === 'string') {
+            const trimmed = text.trim();
+            if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+                try {
+                    const parsed = JSON.parse(trimmed);
+                    if (Array.isArray(parsed?.content)) {
+                        const inner = parsed.content.find((block) => block?.type === 'text' && typeof block.text === 'string');
+                        if (inner?.text) text = inner.text;
+                    } else if (typeof parsed?.text === 'string') {
+                        text = parsed.text;
+                    }
+                } catch {
+                    // keep original text
+                }
+            }
+        }
+
+        if (text?.startsWith?.('Error:')) throw new Error(text);
+        return text || '';
     }
 
     async generateCommitMessage() {
         const messageBox = this.element.querySelector('#gitCommitMessage');
-        const targets = this.getCommitMessageTargets();
-        if (!targets.length) {
-            this.setStatusLine('Select at least one repository or file to generate a message.', true);
+        const selectedRepos = this.getSelectedReposForBatch();
+        if (!selectedRepos.length) {
+            this.setStatusLine('Select at least one file to generate a message.', true);
             return;
         }
 
         this.setBusy(true);
         this.setStatusLine('Generating commit message…');
         try {
-            const diffs = await this.collectDiffSamples(targets, { maxFiles: 20, maxCharsPerFile: 4000 });
-            const prompt = this.buildCommitMessagePrompt(diffs);
+            const selections = selectedRepos.map((repoPath) => ({
+                repoPath,
+                files: this.getPathsForCommitInRepo(repoPath)
+            })).filter((s) => s.repoPath && Array.isArray(s.files) && s.files.length > 0);
+            if (!selections.length) {
+                this.setStatusLine('Select at least one file to generate a message.', true);
+                return;
+            }
 
-            const agentId = 'LLMAgent';
-            const tools = await this.listAgentTools(agentId);
-            const tool = this.pickLlmTool(tools);
-            if (!tool?.name) throw new Error('LLMAgent is not available (no tools found).');
+            const diffs = [];
+            const maxFilesPerRepo = 80;
+            const maxFilesTotal = 20;
 
-            const raw = await this.callToolOnAgent(agentId, tool.name, this.buildLlmArgsForTool(tool, prompt));
-            const next = String(raw || '')
-                .trim()
-                .replace(/^\s*```[\s\S]*?\n/, '')
-                .replace(/\n```[\s\S]*$/m, '')
-                .trim();
+            for (const selection of selections) {
+                const repoPath = selection.repoPath;
+                const files = Array.isArray(selection.files) ? selection.files.slice(0, maxFilesPerRepo) : [];
+                for (const filePath of files) {
+                    if (diffs.length >= maxFilesTotal) break;
+                    const diff = await this.callTool('git_diff', {
+                        path: repoPath,
+                        file: filePath,
+                        cached: false,
+                        ref: 'HEAD'
+                    });
+                    diffs.push({ repoPath, filePath, diff: diff || '' });
+                }
+                if (diffs.length >= maxFilesTotal) break;
+            }
+
+            if (!diffs.length) {
+                this.setStatusLine('Select at least one file to generate a message.', true);
+                return;
+            }
+
+            const payloadText = await this.callAgentTool('explorerSkillsAgent', 'git_commit_message', { diffs });
+            const payload = parseJsonToolResult(payloadText) || {};
+            if (payload.ok === false) {
+                throw new Error(payload.error || 'Failed to generate commit message.');
+            }
+            const next = String(payload.message || '').trim();
             if (!next) throw new Error('AI returned an empty commit message.');
 
             this.state.commitMessage = String(next);
@@ -650,81 +661,8 @@ export class GitCommitModal {
         }
     }
 
-    buildCommitMessagePrompt(diffs) {
-        const items = Array.isArray(diffs) ? diffs : [];
-        const header = [
-            'You are generating a Git commit message.',
-            'Return ONLY the commit message text (no markdown fences, no explanations).',
-            'Format:',
-            '- First line: imperative, <= 72 chars.',
-            '- Optional blank line then bullet list with key changes.',
-            '',
-            'Changes (working tree vs HEAD):'
-        ].join('\n');
-
-        const body = items.slice(0, 40).map((d) => {
-            const repo = d.repoPath;
-            const file = d.filePath;
-            const diff = String(d.diff || '');
-            return `\n[repo] ${repo}\n[file] ${file}\n[diff]\n${diff}\n[/diff]\n`;
-        }).join('');
-
-        return `${header}${body}`.slice(0, 80_000);
-    }
-
-    getCommitMessageTargets() {
-        const selected = this.getSelectedReposForBatch();
-        if (selected.length) return selected.map((repoPath) => ({ repoPath }));
-        if (!isReposRootPath(this.state.repoPath, this.state.reposRoot) && this.state.repoPath) {
-            return [{ repoPath: this.state.repoPath }];
-        }
-        return [];
-    }
-
     getRepoOverview(repoPath) {
         return (this.state.repoOverviews || []).find((r) => r?.path === repoPath) || null;
-    }
-
-    getSelectedPathsForRepo(repoPath, repoOverview) {
-        const entry = this.state.selectedFilesByRepo?.[repoPath] || null;
-        const changes = Array.isArray(repoOverview?.changesAll)
-            ? repoOverview.changesAll.map((c) => String(c?.path || '')).filter(Boolean)
-            : [];
-
-        const files = new Set();
-        const prefixes = Array.from(entry?.prefixes || []);
-        const explicitFiles = Array.from(entry?.files || []);
-
-        for (const f of explicitFiles) files.add(f);
-        for (const prefix of prefixes) {
-            for (const c of changes) {
-                if (c.startsWith(prefix)) files.add(c);
-            }
-        }
-
-        if (files.size > 0) return Array.from(files);
-
-        return changes;
-    }
-
-    async collectDiffSamples(targets, { maxFiles = 20, maxCharsPerFile = 4000 } = {}) {
-        const out = [];
-        for (const t of targets) {
-            const repoPath = t?.repoPath;
-            if (!repoPath) continue;
-            const repo = this.getRepoOverview(repoPath);
-            const files = this.getSelectedPathsForRepo(repoPath, repo).slice(0, maxFiles);
-            for (const file of files) {
-                try {
-                    const diffText = await this.callTool('git_diff', { path: repoPath, file, cached: false, ref: 'HEAD' });
-                    const cleaned = String(diffText || '').slice(0, maxCharsPerFile);
-                    out.push({ repoPath, filePath: file, diff: cleaned });
-                } catch (error) {
-                    out.push({ repoPath, filePath: file, diff: `<<diff error: ${normalizeErrorMessage(error)}>>` });
-                }
-            }
-        }
-        return out;
     }
 
     async refreshAll({ force = false } = {}) {

@@ -1,0 +1,27 @@
+{
+  "tools": [
+    {
+      "name": "git_commit_message",
+      "title": "Generate Git Commit Message",
+      "description": "Generate a Git commit message using an LLM from provided diffs.",
+      "command": "tools/git_commit_message.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "diffs": {
+          "type": "array",
+          "description": "List of {repoPath,filePath,diff} items",
+          "optional": false,
+          "items": {
+            "type": "object",
+            "properties": {
+              "repoPath": { "type": "string" },
+              "filePath": { "type": "string" },
+              "diff": { "type": "string" }
+            },
+            "required": ["repoPath", "filePath", "diff"]
+          }
+        }
+      }
+    }
+  ]
+}
