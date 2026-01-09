@@ -47,7 +47,6 @@ export class GitCommitModal {
             selectedRepoPath: null,
             selectedPath: null,
             selectedSection: null, // 'staged' | 'unstaged' | 'untracked' | 'conflicted'
-            busy: false,
             commitMessage: '',
             commitMode: 'commit', // 'commit' | 'commitPush'
             commitMenuOpen: false,
@@ -445,17 +444,6 @@ export class GitCommitModal {
         await this.refreshAll({ force: true });
     }
 
-    setBusy(isBusy) {
-        this.state.busy = Boolean(isBusy);
-        const root = this.element.querySelector('.git-modal');
-        if (root) {
-            root.classList.toggle('busy', this.state.busy);
-        }
-        if (this.state.busy) this.closeCommitMenu();
-        if (this.state.busy) this.closePullMenu();
-        this.updateCommitButtons();
-    }
-
     toggleCommitMenu() {
         this.state.commitMenuOpen = !this.state.commitMenuOpen;
         this.syncStaticUI();
@@ -490,7 +478,6 @@ export class GitCommitModal {
         this.state.commitMode = next;
         this.closeCommitMenu();
         this.updateCommitButtons();
-        if (this.state.busy) return;
         if (this.state.identityPrompt?.visible) return;
         if (this.state.authPrompt?.visible) return;
         this.commit();
@@ -502,7 +489,6 @@ export class GitCommitModal {
         this.state.pullMode = next;
         this.closePullMenu();
         this.syncStaticUI();
-        if (this.state.busy) return;
         if (this.state.identityPrompt?.visible) return;
         if (this.state.authPrompt?.visible) return;
         this.pullSelectedRepos();
@@ -563,7 +549,6 @@ export class GitCommitModal {
             return;
         }
 
-        this.setBusy(true);
         this.setStatusLine('Generating commit message…');
         return withGlobalLoader(async () => {
             try {
@@ -618,8 +603,6 @@ export class GitCommitModal {
                 this.setStatusLine('Commit message generated.');
             } catch (error) {
                 this.setStatusLine(normalizeErrorMessage(error), true);
-            } finally {
-                this.setBusy(false);
             }
         });
     }
@@ -1086,11 +1069,11 @@ export class GitCommitModal {
         const hasSelection = selectedRepos.length > 0;
         if (commitButton) {
             // Commit can run in multi-repo view (repoOk may be false for repos root).
-            commitButton.disabled = this.state.busy || identityBlocking || authBlocking || !hasSelection || !messageOk;
+            commitButton.disabled = identityBlocking || authBlocking || !hasSelection || !messageOk;
             commitButton.textContent = mode === 'commitPush' ? 'Commit & Push' : 'Commit';
         }
         if (pushButton) {
-            pushButton.disabled = this.state.busy || identityBlocking || authBlocking || !repoOk;
+            pushButton.disabled = identityBlocking || authBlocking || !repoOk;
         }
     }
 
@@ -1190,7 +1173,6 @@ export class GitCommitModal {
         this.state.authPrompt = { visible: false, repoPath: null, pendingAction: null, token: '', remember: false };
         this.syncStaticUI();
         this.updateCommitButtons();
-        this.setBusy(true);
         this.setStatusLine(pending?.type === 'pull' ? 'Retrying pull…' : 'Retrying push…');
         try {
             if (pending?.type === 'push') {
@@ -1204,8 +1186,8 @@ export class GitCommitModal {
                 const list = Array.isArray(pending.repoPaths) ? pending.repoPaths : [];
                 await this.pullRepos(list, { token });
             }
-        } finally {
-            this.setBusy(false);
+        } catch (error) {
+            this.setStatusLine(normalizeErrorMessage(error), true);
         }
     }
 
@@ -1322,7 +1304,6 @@ export class GitCommitModal {
         }
 
         const nextScope = String(scope || '').trim() || 'local';
-        this.setBusy(true);
         try {
             await this.callTool('git_set_identity', {
                 path: repoPath,
@@ -1346,8 +1327,6 @@ export class GitCommitModal {
             }
         } catch (error) {
             this.setStatusLine(normalizeErrorMessage(error), true);
-        } finally {
-            this.setBusy(false);
         }
     }
 
@@ -1367,7 +1346,6 @@ export class GitCommitModal {
             return;
         }
         if (!selected.length) return;
-        this.setBusy(true);
         const shouldPush = (this.state.commitMode || 'commit') === 'commitPush';
         this.setStatusLine(shouldPush ? `Committing & pushing ${selected.length} repo(s)…` : `Committing ${selected.length} repo(s)…`);
         return withGlobalLoader(async () => {
@@ -1417,8 +1395,6 @@ export class GitCommitModal {
                 this.setStatusLine('Done.');
             } catch (error) {
                 this.setStatusLine(normalizeErrorMessage(error), true);
-            } finally {
-                this.setBusy(false);
             }
         });
     }
@@ -1477,13 +1453,8 @@ export class GitCommitModal {
     }
 
     async push({ silent = false, token = null } = {}) {
-        const alreadyBusy = this.state.busy;
-        if (!alreadyBusy) {
-            this.setBusy(true);
-        }
         const identityOk = await this.ensureGitIdentityOrPrompt(this.state.repoPath, { type: 'push', mode: 'single' });
         if (!identityOk) {
-            if (!alreadyBusy) this.setBusy(false);
             return;
         }
         if (!silent) {
@@ -1508,10 +1479,6 @@ export class GitCommitModal {
                 } else {
                     this.setStatusLine(msg, true);
                 }
-            } finally {
-                if (!alreadyBusy) {
-                    this.setBusy(false);
-                }
             }
         });
     }
@@ -1530,7 +1497,6 @@ export class GitCommitModal {
                 if (!ok) return;
             }
         }
-        this.setBusy(true);
         this.setStatusLine(`Pulling ${selected.length} repo(s)…`);
         try {
             const ok = await this.pullRepos(selected);
@@ -1541,8 +1507,6 @@ export class GitCommitModal {
             this.setStatusLine('Pulled.');
         } catch (error) {
             this.setStatusLine(humanizeGitError(normalizeErrorMessage(error), { action: 'pull' }), true);
-        } finally {
-            this.setBusy(false);
         }
     }
 

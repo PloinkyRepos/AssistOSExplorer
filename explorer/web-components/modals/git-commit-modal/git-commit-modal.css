@@ -45,10 +45,6 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen {
     border-radius: 0 !important;
 }
 
-.git-modal.busy .git-resize-handle {
-    display: none;
-}
-
 dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
     display: none;
 }
@@ -856,9 +852,4 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
 
 .git-menu-item.active {
     background: rgba(37, 99, 235, 0.10);
-}
-
-.git-modal.busy {
-    pointer-events: none;
-    opacity: 0.72;
 }
