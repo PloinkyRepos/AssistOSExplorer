@@ -1,4 +1,5 @@
 // Wire up search-related behaviors for FileExp without bloating the main presenter.
+import { callToolWithLoader } from "../../../utils/globalLoader.js";
 export function attachSearchController(fileExp) {
     const getState = () => fileExp.state;
     const defaultExclude = 'node_modules,.git';
@@ -126,7 +127,7 @@ export function attachSearchController(fileExp) {
                 await fileExp.cancelEdit();
             }
             try {
-                await window.webSkel.appServices.callTool('explorer', 'read_text_file', { path: normalized });
+                await callToolWithLoader('explorer', 'read_text_file', { path: normalized });
                 const parentDir = fileExp.parentPath(normalized) || '/';
                 state.path = parentDir;
                 const entries = await fileExp.loadDirectoryContent(parentDir);

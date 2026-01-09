@@ -1,4 +1,5 @@
 import { normalizePath, parsePatterns, groupMatchesByFile } from "../../pages/file-exp/file-exp-utils.js";
+import { callToolWithLoader } from "../../../utils/globalLoader.js";
 
 export class FileSearchModal {
     constructor(element, invalidate, props = {}) {
@@ -263,7 +264,7 @@ export class FileSearchModal {
         this.renderSearchByNameResults();
         try {
             const excludePatterns = parsePatterns(this.state.searchByNameExclude);
-            const result = await window.webSkel.appServices.callTool('explorer', 'search_files', {
+            const result = await callToolWithLoader('explorer', 'search_files', {
                 path: this.state.basePath || '/',
                 pattern: query,
                 excludePatterns
@@ -317,7 +318,7 @@ export class FileSearchModal {
             }
 
             const excludePatterns = parsePatterns(this.state.searchInFilesExclude);
-            const result = await window.webSkel.appServices.callTool('explorer', 'search_text', {
+            const result = await callToolWithLoader('explorer', 'search_text', {
                 path: this.state.basePath || '/',
                 query,
                 caseSensitive: this.state.searchInFilesCase,

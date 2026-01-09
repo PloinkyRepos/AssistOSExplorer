@@ -1,5 +1,6 @@
 // File system related UI actions for FileExp, attached to the presenter to keep it lean.
 import { showContextPasteMenu } from "./file-exp-utils.js";
+import { callToolWithLoader } from "../../../utils/globalLoader.js";
 
 export function attachFsActions(fileExp) {
     Object.assign(fileExp, {
@@ -11,7 +12,7 @@ export function attachFsActions(fileExp) {
             try {
                 await this.withLoader(async () => {
                     const tool = type === 'directory' ? 'delete_directory' : 'delete_file';
-                    await window.webSkel.appServices.callTool('explorer', tool, {path});
+                    await callToolWithLoader('explorer', tool, {path});
                     this.showStatus(`Successfully deleted ${path}`);
                     if (this.state.selectedPath === path) {
                         this.state.selectedPath = null;
@@ -47,7 +48,7 @@ export function attachFsActions(fileExp) {
             if (destination === source) return;
             try {
                 await this.withLoader(async () => {
-                    await window.webSkel.appServices.callTool('explorer', 'move_file', {source, destination});
+                    await callToolWithLoader('explorer', 'move_file', {source, destination});
                     const wasSelected = this.state.selectedPath === source;
                     if (this.state.clipboard?.path === source) {
                         this.state.clipboard = {...this.state.clipboard, path: destination, name: newName};
@@ -303,7 +304,7 @@ export function attachFsActions(fileExp) {
             try {
                 await this.withLoader(async () => {
                     if (clipboard.mode === 'cut') {
-                        await window.webSkel.appServices.callTool('explorer', 'move_file', {
+                        await callToolWithLoader('explorer', 'move_file', {
                             source: clipboard.path,
                             destination
                         });
@@ -315,7 +316,7 @@ export function attachFsActions(fileExp) {
                             if (!shouldOverwrite) return;
                             overwrite = true;
                         }
-                        await window.webSkel.appServices.callTool('explorer', 'copy_file', {
+                        await callToolWithLoader('explorer', 'copy_file', {
                             source: clipboard.path,
                             destination,
                             overwrite
@@ -359,7 +360,7 @@ export function attachFsActions(fileExp) {
             const newFilePath = this.joinPath(this.state.path, fileName.trim());
             try {
                 await this.withLoader(async () => {
-                    await window.webSkel.appServices.callTool('explorer', 'write_file', {
+                    await callToolWithLoader('explorer', 'write_file', {
                         path: newFilePath,
                         content: ''
                     });
@@ -378,7 +379,7 @@ export function attachFsActions(fileExp) {
             const newDirPath = this.joinPath(this.state.path, dirName.trim());
             try {
                 await this.withLoader(async () => {
-                    await window.webSkel.appServices.callTool('explorer', 'create_directory', {path: newDirPath});
+                    await callToolWithLoader('explorer', 'create_directory', {path: newDirPath});
                     this.showStatus(`Successfully created directory.`);
                     await this.loadDirectory(this.state.path);
                 });

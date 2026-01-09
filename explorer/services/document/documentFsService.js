@@ -1,4 +1,5 @@
 import { parseMarkdownDocument, serializeMarkdownDocument } from './markdownDocumentParser.js';
+import { callToolWithLoader } from '../../utils/globalLoader.js';
 
 const EXPLORER_AGENT_ID = 'explorer';
 
@@ -38,7 +39,7 @@ export default class DocumentFsService {
             throw new Error('DocumentFsService.readRaw requires a file path.');
         }
 
-        const result = await this.explorer.callTool(EXPLORER_AGENT_ID, 'read_text_file', { path });
+        const result = await callToolWithLoader(EXPLORER_AGENT_ID, 'read_text_file', { path }, this.explorer);
         ensureSuccess(result, path);
         return result.text ?? '';
     }
@@ -58,10 +59,10 @@ export default class DocumentFsService {
             throw new Error('DocumentFsService.writeRaw requires a file path.');
         }
 
-        await this.explorer.callTool(EXPLORER_AGENT_ID, 'write_file', {
+        await callToolWithLoader(EXPLORER_AGENT_ID, 'write_file', {
             path,
             content: content ?? ''
-        });
+        }, this.explorer);
     }
 
     async writeDocument(path, documentOrContent) {

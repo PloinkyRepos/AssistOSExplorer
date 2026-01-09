@@ -639,6 +639,7 @@ dialog.spinner {
     background: transparent;
     border: none;
     box-shadow: none;
+    z-index: 99999;
 }
 
 dialog.spinner:not(.spinner-default-style) {

@@ -1,4 +1,5 @@
 import markdownDocumentService from "./markdownDocumentService.js";
+import { callToolWithLoader } from "../utils/globalLoader.js";
 
 class DocumentService {
     constructor() {
@@ -71,7 +72,7 @@ class DocumentService {
         if (!path) {
             throw new Error("readTextFile requires a path.");
         }
-        const result = await appServices.callTool("explorer", "read_text_file", { path });
+        const result = await callToolWithLoader("explorer", "read_text_file", { path }, appServices);
         if (typeof result?.text === "string" && result.text.startsWith("Error:")) {
             if (defaultValue !== null) {
                 return defaultValue;
@@ -85,10 +86,10 @@ class DocumentService {
         if (!path) {
             throw new Error("writeTextFile requires a path.");
         }
-        await appServices.callTool("explorer", "write_file", {
+        await callToolWithLoader("explorer", "write_file", {
             path,
             content: content ?? ""
-        });
+        }, appServices);
     }
 
     async readJSONFile(appServices, path, { optional = false } = {}) {

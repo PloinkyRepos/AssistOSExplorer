@@ -23,3 +23,11 @@ export async function withGlobalLoader(fn) {
     }
 }
 
+export async function callToolWithLoader(agentName, toolName, args, appServices = null) {
+    const services = appServices
+        || (typeof window !== 'undefined' ? window.webSkel?.appServices : null);
+    if (!services || typeof services.callTool !== 'function') {
+        throw new Error('callToolWithLoader: appServices.callTool is not available.');
+    }
+    return withGlobalLoader(() => services.callTool(agentName, toolName, args));
+}

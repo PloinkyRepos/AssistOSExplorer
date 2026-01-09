@@ -244,6 +244,8 @@ const { searchTextWithinWorkspace, searchFilesWithinWorkspace } = createWorkspac
   maxTextSearchFileBytes: MAX_TEXT_SEARCH_FILE_BYTES
 });
 
+const schemas = createSchemas(z);
+
 const toolHandlers = createToolHandlers({
   fs,
   path,
@@ -277,9 +279,6 @@ const toolHandlers = createToolHandlers({
   DEFAULT_DIRECTORY_TREE_MAX_NODES,
   getAllowedDirectories: () => allowedDirectories
 });
-
-
-const schemas = createSchemas(z);
 
 const server = new Server({
   name: 'secure-filesystem-server',

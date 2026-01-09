@@ -16,7 +16,7 @@ import {
 import { attachSearchController } from "./file-exp-search.js";
 import { attachFsActions } from "./file-exp-fs-actions.js";
 import { attachGitController } from "./file-exp-git.js";
-import { withGlobalLoader } from "../../../utils/globalLoader.js";
+import { callToolWithLoader, withGlobalLoader } from "../../../utils/globalLoader.js";
 import { createFileExpCaches } from "./file-exp-caches.js";
 import { createDirectoryFilterController } from "./file-exp-directory-filter.js";
 import { openFile as openFileImpl, tryLoadMediaPreview as tryLoadMediaPreviewImpl, attachPreviewAnchorHandler as attachPreviewAnchorHandlerImpl, detachPreviewAnchorHandler as detachPreviewAnchorHandlerImpl, handlePreviewAnchorClick as handlePreviewAnchorClickImpl } from "./file-exp-preview.js";
@@ -149,7 +149,7 @@ export class FileExp {
         }
 
         try {
-            const contentResult = await window.webSkel.appServices.callTool('explorer', 'read_text_file', {path: path});
+            const contentResult = await callToolWithLoader('explorer', 'read_text_file', {path: path});
 
             if (contentResult.text.startsWith('Error:')) {
                 throw new Error(contentResult.text);
@@ -556,7 +556,7 @@ export class FileExp {
             if (cached) {
                 return cached;
             }
-            const result = await window.webSkel.appServices.callTool('explorer', 'list_directory_detailed', {path});
+            const result = await callToolWithLoader('explorer', 'list_directory_detailed', {path});
             const entries = parseDetailedDirectoryListing(result.text);
             const resolved = entries.map(entry => ({
                 ...entry,
@@ -700,7 +700,7 @@ export class FileExp {
             }
             await this.withLoader(async () => {
                 try {
-                    await window.webSkel.appServices.callTool('explorer', 'read_text_file', { path });
+                    await callToolWithLoader('explorer', 'read_text_file', { path });
                     const parentDir = this.parentPath(path) || '/';
                     this.state.path = parentDir;
                     const entries = await this.loadDirectoryContent(parentDir);
@@ -760,7 +760,7 @@ export class FileExp {
 
         const newContent = this.textarea.value;
         try {
-            await window.webSkel.appServices.callTool('explorer', 'write_file', {path: this.state.selectedPath, content: newContent});
+            await callToolWithLoader('explorer', 'write_file', {path: this.state.selectedPath, content: newContent});
             this.showStatus(`Successfully saved ${this.state.selectedPath}`, false);
             this.state.fileContent = newContent;
             this.state.hasUnsavedChanges = false;

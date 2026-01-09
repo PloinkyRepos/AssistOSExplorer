@@ -1,4 +1,5 @@
 import { parsePatterns } from "./file-exp-utils.js";
+import { callToolWithLoader } from "../../../utils/globalLoader.js";
 
 const DEBOUNCE_MS = 200;
 const MIN_QUERY_LENGTH = 2;
@@ -63,7 +64,7 @@ export function createDirectoryFilterController(fileExp) {
         const excludePatterns = parsePatterns(fileExp.state.searchByNameExclude || DEFAULT_EXCLUDE);
 
         try {
-            const result = await window.webSkel.appServices.callTool('explorer', 'search_files', {
+            const result = await callToolWithLoader('explorer', 'search_files', {
                 path: basePath,
                 pattern: query,
                 excludePatterns,

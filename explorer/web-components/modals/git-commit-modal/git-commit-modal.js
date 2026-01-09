@@ -20,6 +20,7 @@ import {
 } from "./git-commit-modal-selection.js";
 import { formatRepoSummary, renderRepoChangesTree } from "./git-commit-modal-tree.js";
 import { unifiedToSplitHtml, stripUnifiedDiffHeaders, stripUnifiedDiffFileHeaders, summarizeUnifiedDiffMeta } from "./git-commit-modal-diff.js";
+import { callToolWithLoader, withGlobalLoader } from "../../../utils/globalLoader.js";
 
 export class GitCommitModal {
     constructor(element, invalidate, props = {}) {
@@ -556,7 +557,7 @@ export class GitCommitModal {
     }
 
     async callTool(name, args) {
-        const result = await window.webSkel.appServices.callTool('explorer', name, args);
+        const result = await callToolWithLoader('explorer', name, args);
         if (result?.text?.startsWith?.('Error:')) {
             throw new Error(result.text);
         }
@@ -604,61 +605,63 @@ export class GitCommitModal {
 
         this.setBusy(true);
         this.setStatusLine('Generating commit message…');
-        try {
-            const selections = selectedRepos.map((repoPath) => ({
-                repoPath,
-                files: this.getPathsForCommitInRepo(repoPath)
-            })).filter((s) => s.repoPath && Array.isArray(s.files) && s.files.length > 0);
-            if (!selections.length) {
-                this.setStatusLine('Select at least one file to generate a message.', true);
-                return;
-            }
-
-            const diffs = [];
-            const maxFilesPerRepo = 80;
-            const maxFilesTotal = 20;
-
-            for (const selection of selections) {
-                const repoPath = selection.repoPath;
-                const files = Array.isArray(selection.files) ? selection.files.slice(0, maxFilesPerRepo) : [];
-                for (const filePath of files) {
-                    if (diffs.length >= maxFilesTotal) break;
-                    const diff = await this.callTool('git_diff', {
-                        path: repoPath,
-                        file: filePath,
-                        cached: false,
-                        ref: 'HEAD'
-                    });
-                    diffs.push({ repoPath, filePath, diff: diff || '' });
+        return withGlobalLoader(async () => {
+            try {
+                const selections = selectedRepos.map((repoPath) => ({
+                    repoPath,
+                    files: this.getPathsForCommitInRepo(repoPath)
+                })).filter((s) => s.repoPath && Array.isArray(s.files) && s.files.length > 0);
+                if (!selections.length) {
+                    this.setStatusLine('Select at least one file to generate a message.', true);
+                    return;
                 }
-                if (diffs.length >= maxFilesTotal) break;
-            }
 
-            if (!diffs.length) {
-                this.setStatusLine('Select at least one file to generate a message.', true);
-                return;
-            }
+                const diffs = [];
+                const maxFilesPerRepo = 80;
+                const maxFilesTotal = 20;
 
-            const payloadText = await this.callAgentTool('explorerSkillsAgent', 'git_commit_message', { diffs });
-            const payload = parseJsonToolResult(payloadText) || {};
-            if (payload.ok === false) {
-                throw new Error(payload.error || 'Failed to generate commit message.');
-            }
-            const next = String(payload.message || '').trim();
-            if (!next) throw new Error('AI returned an empty commit message.');
+                for (const selection of selections) {
+                    const repoPath = selection.repoPath;
+                    const files = Array.isArray(selection.files) ? selection.files.slice(0, maxFilesPerRepo) : [];
+                    for (const filePath of files) {
+                        if (diffs.length >= maxFilesTotal) break;
+                        const diff = await this.callTool('git_diff', {
+                            path: repoPath,
+                            file: filePath,
+                            cached: false,
+                            ref: 'HEAD'
+                        });
+                        diffs.push({ repoPath, filePath, diff: diff || '' });
+                    }
+                    if (diffs.length >= maxFilesTotal) break;
+                }
 
-            this.state.commitMessage = String(next);
-            if (messageBox) {
-                messageBox.value = String(next);
-                messageBox.focus();
+                if (!diffs.length) {
+                    this.setStatusLine('Select at least one file to generate a message.', true);
+                    return;
+                }
+
+                const payloadText = await this.callAgentTool('explorerSkillsAgent', 'git_commit_message', { diffs });
+                const payload = parseJsonToolResult(payloadText) || {};
+                if (payload.ok === false) {
+                    throw new Error(payload.error || 'Failed to generate commit message.');
+                }
+                const next = String(payload.message || '').trim();
+                if (!next) throw new Error('AI returned an empty commit message.');
+
+                this.state.commitMessage = String(next);
+                if (messageBox) {
+                    messageBox.value = String(next);
+                    messageBox.focus();
+                }
+                this.updateCommitButtons();
+                this.setStatusLine('Commit message generated.');
+            } catch (error) {
+                this.setStatusLine(normalizeErrorMessage(error), true);
+            } finally {
+                this.setBusy(false);
             }
-            this.updateCommitButtons();
-            this.setStatusLine('Commit message generated.');
-        } catch (error) {
-            this.setStatusLine(normalizeErrorMessage(error), true);
-        } finally {
-            this.setBusy(false);
-        }
+        });
     }
 
     getRepoOverview(repoPath) {
@@ -1438,55 +1441,57 @@ export class GitCommitModal {
         this.setBusy(true);
         const shouldPush = (this.state.commitMode || 'commit') === 'commitPush';
         this.setStatusLine(shouldPush ? `Committing & pushing ${selected.length} repo(s)…` : `Committing ${selected.length} repo(s)…`);
-        try {
-            for (const repoPath of selected) {
-                const identityOk = await this.ensureGitIdentityOrPrompt(repoPath, { type: 'commit', mode: 'batch', repoPaths: selected });
-                if (!identityOk) return;
-                const list = this.getPathsForCommitInRepo(repoPath);
-                if (!list.length) continue;
-                await this.callTool('git_stage', { path: repoPath, files: list });
-                const after = parseJsonToolResult(await this.callTool('git_status', { path: repoPath }));
-                const afterStatus = after?.status || after || {};
-                if (!(afterStatus.staged || []).length) {
-                    continue;
-                }
-                await this.callTool('git_commit', {
-                    path: repoPath,
-                    message,
-                    amend: Boolean(this.state.amend),
-                    signoff: Boolean(this.state.signoff)
-                });
-                if (shouldPush) {
-                    const token = getRememberedGitPat();
-                    try {
-                        await this.gitPushWithToken(repoPath, token);
-                    } catch (error) {
-                        const msg = normalizeErrorMessage(error);
-                        if (isGitAuthError(msg)) {
-                            if (!token) {
-                                this.showGitAuthPrompt(repoPath, { type: 'push', mode: 'batch', repoPaths: [repoPath] }, { message: msg });
+        return withGlobalLoader(async () => {
+            try {
+                for (const repoPath of selected) {
+                    const identityOk = await this.ensureGitIdentityOrPrompt(repoPath, { type: 'commit', mode: 'batch', repoPaths: selected });
+                    if (!identityOk) return;
+                    const list = this.getPathsForCommitInRepo(repoPath);
+                    if (!list.length) continue;
+                    await this.callTool('git_stage', { path: repoPath, files: list });
+                    const after = parseJsonToolResult(await this.callTool('git_status', { path: repoPath }));
+                    const afterStatus = after?.status || after || {};
+                    if (!(afterStatus.staged || []).length) {
+                        continue;
+                    }
+                    await this.callTool('git_commit', {
+                        path: repoPath,
+                        message,
+                        amend: Boolean(this.state.amend),
+                        signoff: Boolean(this.state.signoff)
+                    });
+                    if (shouldPush) {
+                        const token = getRememberedGitPat();
+                        try {
+                            await this.gitPushWithToken(repoPath, token);
+                        } catch (error) {
+                            const msg = normalizeErrorMessage(error);
+                            if (isGitAuthError(msg)) {
+                                if (!token) {
+                                    this.showGitAuthPrompt(repoPath, { type: 'push', mode: 'batch', repoPaths: [repoPath] }, { message: msg });
+                                    return;
+                                }
+                                this.setStatusLine(`${msg} (A token is already saved. Use “Token” to update it.)`, true);
                                 return;
                             }
-                            this.setStatusLine(`${msg} (A token is already saved. Use “Token” to update it.)`, true);
-                            return;
+                            throw error;
                         }
-                        throw error;
                     }
                 }
+                this.state.selectedFilesByRepo = {};
+                this.state.commitMessage = '';
+                const commitMessage = this.element.querySelector('#gitCommitMessage');
+                if (commitMessage) commitMessage.value = '';
+                this.diffCache.clear();
+                await this.loadRepoOverviews({ force: true });
+                await this.refreshAll({ force: true });
+                this.setStatusLine('Done.');
+            } catch (error) {
+                this.setStatusLine(normalizeErrorMessage(error), true);
+            } finally {
+                this.setBusy(false);
             }
-            this.state.selectedFilesByRepo = {};
-            this.state.commitMessage = '';
-            const commitMessage = this.element.querySelector('#gitCommitMessage');
-            if (commitMessage) commitMessage.value = '';
-            this.diffCache.clear();
-            await this.loadRepoOverviews({ force: true });
-            await this.refreshAll({ force: true });
-            this.setStatusLine('Done.');
-        } catch (error) {
-            this.setStatusLine(normalizeErrorMessage(error), true);
-        } finally {
-            this.setBusy(false);
-        }
+        });
     }
 
     async selectFile(filePath, section, repoPath = null) {
@@ -1586,29 +1591,31 @@ export class GitCommitModal {
         if (!silent) {
             this.setStatusLine('Pushing…');
         }
-        try {
-            const effectiveToken = String(token || '').trim() || getRememberedGitPat();
-            await this.gitPushWithToken(this.state.repoPath, effectiveToken);
-            if (!silent) {
-                this.setStatusLine('Pushed.');
-            }
-        } catch (error) {
-            const msg = normalizeErrorMessage(error);
-            if (isGitAuthError(msg)) {
+        return withGlobalLoader(async () => {
+            try {
                 const effectiveToken = String(token || '').trim() || getRememberedGitPat();
-                if (!effectiveToken) {
-                    this.showGitAuthPrompt(this.state.repoPath, { type: 'push', mode: 'batch', repoPaths: [this.state.repoPath] }, { message: msg });
-                } else {
-                    this.setStatusLine(`${msg} (A token is already saved. Use “Token” to update it.)`, true);
+                await this.gitPushWithToken(this.state.repoPath, effectiveToken);
+                if (!silent) {
+                    this.setStatusLine('Pushed.');
                 }
-            } else {
-                this.setStatusLine(msg, true);
+            } catch (error) {
+                const msg = normalizeErrorMessage(error);
+                if (isGitAuthError(msg)) {
+                    const effectiveToken = String(token || '').trim() || getRememberedGitPat();
+                    if (!effectiveToken) {
+                        this.showGitAuthPrompt(this.state.repoPath, { type: 'push', mode: 'batch', repoPaths: [this.state.repoPath] }, { message: msg });
+                    } else {
+                        this.setStatusLine(`${msg} (A token is already saved. Use “Token” to update it.)`, true);
+                    }
+                } else {
+                    this.setStatusLine(msg, true);
+                }
+            } finally {
+                if (!alreadyBusy) {
+                    this.setBusy(false);
+                }
             }
-        } finally {
-            if (!alreadyBusy) {
-                this.setBusy(false);
-            }
-        }
+        });
     }
 
     async pullSelectedRepos() {

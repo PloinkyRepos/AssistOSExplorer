@@ -7,6 +7,7 @@ import {
     scrollToLine,
     scrollPreviewToAnchor
 } from "./file-exp-utils.js";
+import { callToolWithLoader } from "../../../utils/globalLoader.js";
 
 export async function tryLoadMediaPreview(fileExp, filePath) {
     const isMedia = isImageFile(filePath) || isAudioFile(filePath) || isVideoFile(filePath);
@@ -14,7 +15,7 @@ export async function tryLoadMediaPreview(fileExp, filePath) {
         return false;
     }
     try {
-        const result = await window.webSkel.appServices.callTool('explorer', 'read_media_file', { path: filePath });
+        const result = await callToolWithLoader('explorer', 'read_media_file', { path: filePath });
         const blocks = Array.isArray(result?.blocks) ? result.blocks : [];
         const content = Array.isArray(result?.content) ? result.content : [];
         const block = [...blocks, ...content].find((item) => item?.data || item?.resource?.uri);
@@ -105,7 +106,7 @@ export async function openFile(fileExp, filePath, { largeFilePreviewLimitBytes, 
                 if (usePartial) {
                     args.head = largeFilePreviewLines;
                 }
-                return window.webSkel.appServices.callTool('explorer', 'read_text_file', args);
+                return callToolWithLoader('explorer', 'read_text_file', args);
             };
 
             let contentResult;
@@ -208,4 +209,3 @@ export function handlePreviewAnchorClick(fileExp, event) {
     }
     scrollPreviewToAnchor(previewRoot, targetId);
 }
-

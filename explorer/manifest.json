@@ -9,6 +9,7 @@
     "enable": [
         "soplang",
         "multimedia",
+        "explorerSkillsAgent",
         "soplangAgent global"
     ],
     "env": [
