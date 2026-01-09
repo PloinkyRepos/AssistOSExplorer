@@ -83,21 +83,17 @@
             <div class="git-commit-row git-commit-actions">
                 <div class="git-status" id="gitStatusLine" role="status"></div>
                 <div class="git-action-buttons">
-                    <div class="git-commit-split" id="gitPullSplit">
-                        <button type="button" class="secondary" id="gitPullButton" data-local-action="pullAction">Pull</button>
-                        <button type="button" class="secondary git-commit-split-toggle" aria-label="Pull options" data-local-action="togglePullMenu">▾</button>
-                        <div class="git-commit-menu" id="gitPullMenu" role="menu" style="display: none;">
-                            <div class="git-menu-item" role="menuitem" tabindex="0" data-local-action="setPullMode ffOnly">Fast-forward only</div>
-                            <div class="git-menu-item" role="menuitem" tabindex="0" data-local-action="setPullMode rebase">Rebase</div>
-                            <div class="git-menu-item" role="menuitem" tabindex="0" data-local-action="setPullMode merge">Merge</div>
-                        </div>
-                    </div>
                     <div class="git-commit-split" id="gitActionsSplit">
                         <button type="button" class="secondary git-actions-button" id="gitActionsButton" data-local-action="toggleActionsMenu">Git actions ▾</button>
                         <div class="git-commit-menu" id="gitActionsMenu" role="menu" style="display: none;">
                             <div class="git-menu-item" role="menuitem" tabindex="0" data-local-action="runGitAction commit">Commit</div>
                             <div class="git-menu-item" role="menuitem" tabindex="0" data-local-action="runGitAction commitPush">Commit &amp; Push</div>
                             <div class="git-menu-item" role="menuitem" tabindex="0" data-local-action="runGitAction push">Push</div>
+                            <div class="git-menu-item" role="menuitem" tabindex="0" data-local-action="runGitAction pull">Pull</div>
+                            <div class="git-menu-separator" role="separator"></div>
+                            <div class="git-menu-item" role="menuitem" tabindex="0" data-local-action="runGitAction pullFfOnly">Pull: Fast-forward only</div>
+                            <div class="git-menu-item" role="menuitem" tabindex="0" data-local-action="runGitAction pullRebase">Pull: Rebase</div>
+                            <div class="git-menu-item" role="menuitem" tabindex="0" data-local-action="runGitAction pullMerge">Pull: Merge</div>
                         </div>
                     </div>
                 </div>

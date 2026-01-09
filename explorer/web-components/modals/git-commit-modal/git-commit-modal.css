@@ -852,6 +852,10 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
     flex-wrap: wrap;
 }
 
+#gitActionsButton {
+    padding: 8px 6px;
+}
+
 .git-toggle {
     display: inline-flex;
     gap: 8px;
@@ -927,4 +931,10 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
 
 .git-menu-item.active {
     background: rgba(37, 99, 235, 0.10);
+}
+
+.git-menu-separator {
+    height: 1px;
+    background: var(--file-exp-border, rgba(148, 163, 184, 0.35));
+    margin: 4px 6px;
 }

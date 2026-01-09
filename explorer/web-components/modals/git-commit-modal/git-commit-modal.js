@@ -51,7 +51,6 @@ export class GitCommitModal {
             commitMode: 'commit', // 'commit' | 'commitPush'
             actionsMenuOpen: false,
             pullMode: 'ffOnly', // 'ffOnly' | 'rebase' | 'merge'
-            pullMenuOpen: false,
             settingsMenuOpen: false,
             amend: false,
             signoff: false,
@@ -269,7 +268,6 @@ export class GitCommitModal {
                     if (!inside) closeFn();
                 };
                 closeMenuIfOutside(this.state.actionsMenuOpen, '#gitActionsSplit', () => this.closeActionsMenu());
-                closeMenuIfOutside(this.state.pullMenuOpen, '#gitPullSplit', () => this.closePullMenu());
                 closeMenuIfOutside(this.state.settingsMenuOpen, '#gitSettingsSplit', () => this.closeSettingsMenu());
             };
             document.addEventListener('pointerdown', closeIfOutside, true);
@@ -411,18 +409,6 @@ export class GitCommitModal {
             actionsMenu.style.display = this.state.actionsMenuOpen ? '' : 'none';
         }
 
-        const pullMenu = this.element.querySelector('#gitPullMenu');
-        if (pullMenu) {
-            pullMenu.style.display = this.state.pullMenuOpen ? '' : 'none';
-            const items = pullMenu.querySelectorAll('.git-menu-item');
-            items.forEach((el) => {
-                const action = el.getAttribute('data-local-action') || '';
-                const parts = action.split(/\s+/);
-                const mode = parts[0] === 'setPullMode' ? parts[1] : null;
-                el.classList.toggle('active', Boolean(mode && mode === this.state.pullMode));
-            });
-        }
-
         const settingsMenu = this.element.querySelector('#gitSettingsMenu');
         if (settingsMenu) {
             settingsMenu.style.display = this.state.settingsMenuOpen ? '' : 'none';
@@ -510,29 +496,10 @@ export class GitCommitModal {
         this.syncStaticUI();
     }
 
-    togglePullMenu() {
-        this.state.pullMenuOpen = !this.state.pullMenuOpen;
-        if (this.state.pullMenuOpen) {
-            this.closeSettingsMenu();
-            this.closeActionsMenu();
-        }
-        this.syncStaticUI();
-        if (this.state.pullMenuOpen) {
-            setTimeout(() => this.element.querySelector('#gitPullMenu .git-menu-item.active')?.focus?.(), 0);
-        }
-    }
-
-    closePullMenu() {
-        if (!this.state.pullMenuOpen) return;
-        this.state.pullMenuOpen = false;
-        this.syncStaticUI();
-    }
-
     toggleSettingsMenu() {
         this.state.settingsMenuOpen = !this.state.settingsMenuOpen;
         if (this.state.settingsMenuOpen) {
             this.closeActionsMenu();
-            this.closePullMenu();
         }
         this.syncStaticUI();
         if (this.state.settingsMenuOpen) {
@@ -576,12 +543,33 @@ export class GitCommitModal {
         }
         if (next === 'push') {
             this.closeActionsMenu();
-            if (!this.state.repoPath || isReposRootPath(this.state.repoPath, this.state.reposRoot) || this.state.repoInfoOk === false) {
-                this.setStatusLine('Select a repository to push.', true);
+            if (this.state.identityPrompt?.visible || this.state.authPrompt?.visible) return;
+            const selected = this.getSelectedReposForBatch();
+            if (selected.length) {
+                this.pushSelectedRepos(selected);
                 return;
             }
-            if (this.state.identityPrompt?.visible || this.state.authPrompt?.visible) return;
+            if (!this.state.repoPath || isReposRootPath(this.state.repoPath, this.state.reposRoot) || this.state.repoInfoOk === false) {
+                this.setStatusLine('Select at least one repository to push.', true);
+                return;
+            }
             this.push({ silent: false });
+            return;
+        }
+        if (next === 'pull') {
+            this.closeActionsMenu();
+            if (this.state.identityPrompt?.visible || this.state.authPrompt?.visible) return;
+            this.pullSelectedRepos();
+            return;
+        }
+        if (next === 'pullFfOnly' || next === 'pullRebase' || next === 'pullMerge') {
+            const modeMap = {
+                pullFfOnly: 'ffOnly',
+                pullRebase: 'rebase',
+                pullMerge: 'merge'
+            };
+            this.closeActionsMenu();
+            this.setPullMode(null, modeMap[next]);
         }
     }
 
@@ -589,7 +577,6 @@ export class GitCommitModal {
         const next = (mode || element?.dataset?.mode || '').trim();
         if (next !== 'ffOnly' && next !== 'rebase' && next !== 'merge') return;
         this.state.pullMode = next;
-        this.closePullMenu();
         this.syncStaticUI();
         if (this.state.identityPrompt?.visible) return;
         if (this.state.authPrompt?.visible) return;
@@ -1168,9 +1155,70 @@ export class GitCommitModal {
         const authBlocking = Boolean(this.state.authPrompt?.visible);
         const hasSelection = selectedRepos.length > 0;
         const commitAllowed = !identityBlocking && !authBlocking && hasSelection && messageOk;
-        const pushAllowed = !identityBlocking && !authBlocking && repoOk;
+        const pushAllowed = !identityBlocking && !authBlocking && (repoOk || hasSelection);
+        const pullAllowed = !identityBlocking && !authBlocking && hasSelection;
         if (actionsButton) {
-            actionsButton.disabled = !commitAllowed && !pushAllowed;
+            actionsButton.disabled = !commitAllowed && !pushAllowed && !pullAllowed;
+        }
+    }
+
+    coerceCount(value) {
+        if (typeof value === 'number' && Number.isFinite(value)) return value;
+        if (typeof value === 'string') {
+            const trimmed = value.trim();
+            if (!trimmed) return null;
+            const parsed = Number(trimmed);
+            if (Number.isFinite(parsed)) return parsed;
+        }
+        return null;
+    }
+
+    extractAheadCount(payload) {
+        if (!payload || typeof payload !== 'object') return null;
+        const candidates = [
+            payload.ahead,
+            payload.aheadCount,
+            payload.ahead_by,
+            payload.aheadBy,
+            payload.status?.ahead,
+            payload.status?.aheadCount,
+            payload.status?.ahead_by,
+            payload.status?.aheadBy,
+            payload.branch?.ahead,
+            payload.branch?.aheadCount,
+            payload.tracking?.ahead,
+            payload.tracking?.aheadCount,
+            payload.tracking?.ahead_by,
+            payload.tracking?.aheadBy
+        ];
+        for (const candidate of candidates) {
+            const value = this.coerceCount(candidate);
+            if (value !== null) return value;
+        }
+        return null;
+    }
+
+    async getAheadCountForRepo(repoPath) {
+        if (!repoPath) return null;
+        let info = null;
+        try {
+            if (repoPath === this.state.repoPath) {
+                info = await this.loadRepoInfo({ force: true });
+            } else {
+                const text = await this.callTool('git_info', { path: repoPath });
+                info = parseJsonToolResult(text) || {};
+            }
+        } catch (_) {
+            info = null;
+        }
+        const fromInfo = this.extractAheadCount(info);
+        if (fromInfo !== null) return fromInfo;
+        try {
+            const statusText = await this.callTool('git_status', { path: repoPath });
+            const statusPayload = parseJsonToolResult(statusText) || {};
+            return this.extractAheadCount(statusPayload);
+        } catch (_) {
+            return null;
         }
     }
 
@@ -1355,9 +1403,15 @@ export class GitCommitModal {
     async pushRepos(repoPaths, { token = null } = {}) {
         const list = Array.isArray(repoPaths) ? repoPaths.filter(Boolean) : [];
         const effectiveToken = String(token || '').trim() || getRememberedGitPat();
+        let pushedAny = false;
         for (const repoPath of list) {
+            const ahead = await this.getAheadCountForRepo(repoPath);
+            if (ahead === 0) {
+                continue;
+            }
             try {
                 await this.gitPushWithToken(repoPath, effectiveToken);
+                pushedAny = true;
             } catch (error) {
                 const msg = normalizeErrorMessage(error);
                 if (isGitAuthError(msg)) {
@@ -1371,7 +1425,11 @@ export class GitCommitModal {
                 throw error;
             }
         }
-        return true;
+        if (!pushedAny && list.length) {
+            this.setStatusLine('Nothing to push. Selected repositories are up to date.');
+            return false;
+        }
+        return pushedAny;
     }
 
     async pullRepos(repoPaths, { token = null } = {}) {
@@ -1601,11 +1659,18 @@ export class GitCommitModal {
         if (!identityOk) {
             return;
         }
-        if (!silent) {
-            this.setStatusLine('Pushing…');
-        }
         return withGlobalLoader(async () => {
             try {
+                const ahead = await this.getAheadCountForRepo(this.state.repoPath);
+                if (ahead === 0) {
+                    if (!silent) {
+                        this.setStatusLine('Nothing to push. Branch is up to date with upstream.');
+                    }
+                    return;
+                }
+                if (!silent) {
+                    this.setStatusLine('Pushing…');
+                }
                 const effectiveToken = String(token || '').trim() || getRememberedGitPat();
                 await this.gitPushWithToken(this.state.repoPath, effectiveToken);
                 if (!silent) {
@@ -1623,6 +1688,30 @@ export class GitCommitModal {
                 } else {
                     this.setStatusLine(msg, true);
                 }
+            }
+        });
+    }
+
+    async pushSelectedRepos(repoPaths) {
+        const list = Array.isArray(repoPaths) ? repoPaths.filter(Boolean) : [];
+        if (!list.length) return false;
+        for (const repoPath of list) {
+            const identityOk = await this.ensureGitIdentityOrPrompt(repoPath, { type: 'push', mode: 'batch', repoPaths: list });
+            if (!identityOk) {
+                return false;
+            }
+        }
+        this.setStatusLine(`Pushing ${list.length} repo(s)…`);
+        return withGlobalLoader(async () => {
+            try {
+                const pushedAny = await this.pushRepos(list);
+                if (pushedAny) {
+                    this.setStatusLine('Pushed.');
+                }
+                return pushedAny;
+            } catch (error) {
+                this.setStatusLine(normalizeErrorMessage(error), true);
+                return false;
             }
         });
     }
