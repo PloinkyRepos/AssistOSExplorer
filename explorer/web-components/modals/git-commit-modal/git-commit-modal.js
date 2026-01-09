@@ -49,7 +49,7 @@ export class GitCommitModal {
             selectedSection: null, // 'staged' | 'unstaged' | 'untracked' | 'conflicted'
             commitMessage: '',
             commitMode: 'commit', // 'commit' | 'commitPush'
-            commitMenuOpen: false,
+            actionsMenuOpen: false,
             pullMode: 'ffOnly', // 'ffOnly' | 'rebase' | 'merge'
             pullMenuOpen: false,
             settingsMenuOpen: false,
@@ -214,14 +214,14 @@ export class GitCommitModal {
                 if (key !== 'Enter' && key !== ' ') return;
                 const target = event.target?.closest?.(
                     '.git-tree-file[data-local-action="openDiff"], ' +
-                    '.git-menu-item[data-local-action^="setCommitMode"]'
+                    '.git-menu-item[data-local-action^="runGitAction"]'
                 );
                 if (!target) return;
                 event.preventDefault();
                 const action = target.getAttribute('data-local-action') || '';
-                if (action.startsWith('setCommitMode')) {
+                if (action.startsWith('runGitAction')) {
                     const mode = action.split(/\s+/)[1] || '';
-                    this.setCommitMode(target, mode);
+                    this.runGitAction(target, mode);
                     return;
                 }
                 this.openDiff(target);
@@ -268,7 +268,7 @@ export class GitCommitModal {
                     const inside = root && (event.target === root || root.contains(event.target));
                     if (!inside) closeFn();
                 };
-                closeMenuIfOutside(this.state.commitMenuOpen, '#gitCommitSplit', () => this.closeCommitMenu());
+                closeMenuIfOutside(this.state.actionsMenuOpen, '#gitActionsSplit', () => this.closeActionsMenu());
                 closeMenuIfOutside(this.state.pullMenuOpen, '#gitPullSplit', () => this.closePullMenu());
                 closeMenuIfOutside(this.state.settingsMenuOpen, '#gitSettingsSplit', () => this.closeSettingsMenu());
             };
@@ -406,16 +406,9 @@ export class GitCommitModal {
 
         this.updateIdentityPrompt();
 
-        const commitMenu = this.element.querySelector('#gitCommitMenu');
-        if (commitMenu) {
-            commitMenu.style.display = this.state.commitMenuOpen ? '' : 'none';
-            const items = commitMenu.querySelectorAll('.git-menu-item');
-            items.forEach((el) => {
-                const action = el.getAttribute('data-local-action') || '';
-                const parts = action.split(/\s+/);
-                const mode = parts[0] === 'setCommitMode' ? parts[1] : null;
-                el.classList.toggle('active', Boolean(mode && mode === this.state.commitMode));
-            });
+        const actionsMenu = this.element.querySelector('#gitActionsMenu');
+        if (actionsMenu) {
+            actionsMenu.style.display = this.state.actionsMenuOpen ? '' : 'none';
         }
 
         const pullMenu = this.element.querySelector('#gitPullMenu');
@@ -495,25 +488,25 @@ export class GitCommitModal {
         this.state.selectedSection = null;
         this.state.identityPrompt = { visible: false, repoPath: null, pendingAction: null, name: '', email: '' };
         this.state.authPrompt = { visible: false, repoPath: null, pendingAction: null, token: '', remember: false };
-        this.closeCommitMenu();
+        this.closeActionsMenu();
         this.syncStaticUI();
         await this.refreshAll({ force: true });
     }
 
-    toggleCommitMenu() {
-        this.state.commitMenuOpen = !this.state.commitMenuOpen;
-        if (this.state.commitMenuOpen) {
+    toggleActionsMenu() {
+        this.state.actionsMenuOpen = !this.state.actionsMenuOpen;
+        if (this.state.actionsMenuOpen) {
             this.closeSettingsMenu();
         }
         this.syncStaticUI();
-        if (this.state.commitMenuOpen) {
-            setTimeout(() => this.element.querySelector('#gitCommitMenu .git-menu-item.active')?.focus?.(), 0);
+        if (this.state.actionsMenuOpen) {
+            setTimeout(() => this.element.querySelector('#gitActionsMenu .git-menu-item')?.focus?.(), 0);
         }
     }
 
-    closeCommitMenu() {
-        if (!this.state.commitMenuOpen) return;
-        this.state.commitMenuOpen = false;
+    closeActionsMenu() {
+        if (!this.state.actionsMenuOpen) return;
+        this.state.actionsMenuOpen = false;
         this.syncStaticUI();
     }
 
@@ -521,6 +514,7 @@ export class GitCommitModal {
         this.state.pullMenuOpen = !this.state.pullMenuOpen;
         if (this.state.pullMenuOpen) {
             this.closeSettingsMenu();
+            this.closeActionsMenu();
         }
         this.syncStaticUI();
         if (this.state.pullMenuOpen) {
@@ -537,7 +531,7 @@ export class GitCommitModal {
     toggleSettingsMenu() {
         this.state.settingsMenuOpen = !this.state.settingsMenuOpen;
         if (this.state.settingsMenuOpen) {
-            this.closeCommitMenu();
+            this.closeActionsMenu();
             this.closePullMenu();
         }
         this.syncStaticUI();
@@ -556,11 +550,39 @@ export class GitCommitModal {
         const next = (mode || element?.dataset?.mode || '').trim();
         if (next !== 'commit' && next !== 'commitPush') return;
         this.state.commitMode = next;
-        this.closeCommitMenu();
+        this.closeActionsMenu();
         this.updateCommitButtons();
         if (this.state.identityPrompt?.visible) return;
         if (this.state.authPrompt?.visible) return;
         this.commit();
+    }
+
+    runGitAction(element, mode) {
+        const next = (mode || element?.dataset?.mode || '').trim();
+        if (!next) return;
+        if (next === 'commit' || next === 'commitPush') {
+            const messageOk = Boolean((this.state.commitMessage || '').trim()) || this.state.amend;
+            const selected = this.getSelectedReposForBatch();
+            if (!selected.length) {
+                this.setStatusLine('Select at least one file to commit.', true);
+                return;
+            }
+            if (!messageOk) {
+                this.setStatusLine('Enter a commit message.', true);
+                return;
+            }
+            this.setCommitMode(null, next);
+            return;
+        }
+        if (next === 'push') {
+            this.closeActionsMenu();
+            if (!this.state.repoPath || isReposRootPath(this.state.repoPath, this.state.reposRoot) || this.state.repoInfoOk === false) {
+                this.setStatusLine('Select a repository to push.', true);
+                return;
+            }
+            if (this.state.identityPrompt?.visible || this.state.authPrompt?.visible) return;
+            this.push({ silent: false });
+        }
     }
 
     setPullMode(element, mode) {
@@ -1134,8 +1156,7 @@ export class GitCommitModal {
     }
 
     updateCommitButtons() {
-        const commitButton = this.element.querySelector('#gitCommitButton');
-        const pushButton = this.element.querySelector('#gitPushButton');
+        const actionsButton = this.element.querySelector('#gitActionsButton');
         const messageOk = Boolean((this.state.commitMessage || '').trim()) || this.state.amend;
         const selectedRepos = Array.from(new Set([
             ...Object.entries(this.state.selectedFilesByRepo || {})
@@ -1145,15 +1166,11 @@ export class GitCommitModal {
         const repoOk = this.state.repoInfoOk !== false;
         const identityBlocking = Boolean(this.state.identityPrompt?.visible);
         const authBlocking = Boolean(this.state.authPrompt?.visible);
-        const mode = this.state.commitMode || 'commit';
         const hasSelection = selectedRepos.length > 0;
-        if (commitButton) {
-            // Commit can run in multi-repo view (repoOk may be false for repos root).
-            commitButton.disabled = identityBlocking || authBlocking || !hasSelection || !messageOk;
-            commitButton.textContent = mode === 'commitPush' ? 'Commit & Push' : 'Commit';
-        }
-        if (pushButton) {
-            pushButton.disabled = identityBlocking || authBlocking || !repoOk;
+        const commitAllowed = !identityBlocking && !authBlocking && hasSelection && messageOk;
+        const pushAllowed = !identityBlocking && !authBlocking && repoOk;
+        if (actionsButton) {
+            actionsButton.disabled = !commitAllowed && !pushAllowed;
         }
     }
 

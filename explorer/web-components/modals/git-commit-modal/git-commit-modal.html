@@ -92,13 +92,12 @@
                             <div class="git-menu-item" role="menuitem" tabindex="0" data-local-action="setPullMode merge">Merge</div>
                         </div>
                     </div>
-                    <button type="button" class="secondary" id="gitPushButton" data-local-action="pushAction">Push</button>
-                    <div class="git-commit-split" id="gitCommitSplit">
-                        <button type="button" id="gitCommitButton" data-local-action="commit">Commit</button>
-                        <button type="button" class="secondary git-commit-split-toggle" aria-label="Commit options" data-local-action="toggleCommitMenu">▾</button>
-                        <div class="git-commit-menu" id="gitCommitMenu" role="menu" style="display: none;">
-                            <div class="git-menu-item" role="menuitem" tabindex="0" data-local-action="setCommitMode commit">Commit</div>
-                            <div class="git-menu-item" role="menuitem" tabindex="0" data-local-action="setCommitMode commitPush">Commit &amp; Push</div>
+                    <div class="git-commit-split" id="gitActionsSplit">
+                        <button type="button" class="secondary git-actions-button" id="gitActionsButton" data-local-action="toggleActionsMenu">Git actions ▾</button>
+                        <div class="git-commit-menu" id="gitActionsMenu" role="menu" style="display: none;">
+                            <div class="git-menu-item" role="menuitem" tabindex="0" data-local-action="runGitAction commit">Commit</div>
+                            <div class="git-menu-item" role="menuitem" tabindex="0" data-local-action="runGitAction commitPush">Commit &amp; Push</div>
+                            <div class="git-menu-item" role="menuitem" tabindex="0" data-local-action="runGitAction push">Push</div>
                         </div>
                     </div>
                 </div>
