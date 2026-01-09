@@ -292,9 +292,7 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
 }
 
 .git-main {
-    flex: 1 1 auto;
-    display: grid;
-    grid-template-columns: minmax(260px, 360px) 1fr;
+    display: flex;
     gap: 12px;
     overflow: hidden;
 }
@@ -308,6 +306,8 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
     display: flex;
     flex-direction: column;
     gap: 10px;
+    min-width: 260px;
+    max-width: 360px;
 }
 
 .git-repo-row {

@@ -1,6 +1,9 @@
 git-diff-viewer {
     display: block;
     min-height: 0;
+    position: relative;
+    overflow: auto;
+    width: 100%;
 }
 
 git-diff-viewer .git-diff {
