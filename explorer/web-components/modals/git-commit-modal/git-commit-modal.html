@@ -37,6 +37,26 @@
         </div>
 
         <div class="git-commit">
+            <div class="git-commit-settings">
+                <div class="git-commit-split" id="gitSettingsSplit">
+                    <button
+                        type="button"
+                        class="icon-button git-settings-button"
+                        id="gitSettingsButton"
+                        aria-label="Git settings"
+                        title="Git settings"
+                        data-local-action="toggleSettingsMenu"
+                    >
+                        <img src="./assets/icons/passkey-auth-icon.svg" alt="" class="git-settings-icon" aria-hidden="true">
+                    </button>
+                    <div class="git-commit-menu" id="gitSettingsMenu" role="menu" style="display: none;">
+                        <div class="git-menu-item" role="menuitem" tabindex="0" data-local-action="openGitIdentityPrompt">Credentials (name/email)</div>
+                        <div class="git-menu-item" role="menuitem" tabindex="0" data-local-action="openGitTokenPrompt">Token (PAT)</div>
+                    </div>
+                </div>
+            </div>
+            <git-identity-prompt data-presenter="git-identity-prompt"></git-identity-prompt>
+            <git-auth-prompt data-presenter="git-auth-prompt"></git-auth-prompt>
             <div class="git-commit-row">
                 <label class="git-commit-label" for="gitCommitMessage">Commit message</label>
                 <textarea id="gitCommitMessage" rows="3" placeholder="Describe your changes..." autocomplete="off" data-local-action="updateCommitMessage"></textarea>
@@ -49,39 +69,6 @@
                 >
                     <span aria-hidden="true">✦</span>
                 </button>
-            </div>
-            <div class="git-identity" id="gitIdentityPrompt" style="display: none;">
-                <div class="git-identity-title">Git identity required</div>
-                <div class="git-identity-row">
-                    <label class="git-identity-label" for="gitIdentityName">Name</label>
-                    <input id="gitIdentityName" type="text" autocomplete="off" spellcheck="false" />
-                </div>
-                <div class="git-identity-row">
-                    <label class="git-identity-label" for="gitIdentityEmail">Email</label>
-                    <input id="gitIdentityEmail" type="text" autocomplete="off" spellcheck="false" />
-                </div>
-                <div class="git-identity-actions">
-                    <button type="button" class="secondary" data-local-action="saveGitIdentity local">Save for this repo</button>
-                    <button type="button" class="secondary" data-local-action="saveGitIdentity global">Save global</button>
-                </div>
-            </div>
-            <div class="git-auth" id="gitAuthPrompt" style="display: none;">
-                <div class="git-auth-title">Authentication required</div>
-                <div class="git-auth-hint">Enter a Personal Access Token (PAT) for HTTPS push.</div>
-                <div class="git-auth-row">
-                    <label class="git-auth-label" for="gitAuthToken">Token</label>
-                    <input id="gitAuthToken" type="password" autocomplete="off" spellcheck="false" />
-                </div>
-                <div class="git-auth-actions">
-                    <label class="git-toggle git-toggle-small">
-                        <input type="checkbox" id="gitAuthRemember">
-                        Remember
-                    </label>
-                    <div class="git-auth-buttons">
-                        <button type="button" class="secondary" data-local-action="cancelGitToken">Cancel</button>
-                        <button type="button" data-local-action="saveGitToken">Continue</button>
-                    </div>
-                </div>
             </div>
             <div class="git-commit-row git-commit-options">
                 <label class="git-toggle">
@@ -96,7 +83,6 @@
             <div class="git-commit-row git-commit-actions">
                 <div class="git-status" id="gitStatusLine" role="status"></div>
                 <div class="git-action-buttons">
-                    <button type="button" class="secondary" id="gitTokenButton" title="Set/update Personal Access Token (PAT)" data-local-action="openGitTokenPrompt">Token</button>
                     <div class="git-commit-split" id="gitPullSplit">
                         <button type="button" class="secondary" id="gitPullButton" data-local-action="pullAction">Pull</button>
                         <button type="button" class="secondary git-commit-split-toggle" aria-label="Pull options" data-local-action="togglePullMenu">▾</button>

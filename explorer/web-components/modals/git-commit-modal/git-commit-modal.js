@@ -52,6 +52,7 @@ export class GitCommitModal {
             commitMenuOpen: false,
             pullMode: 'ffOnly', // 'ffOnly' | 'rebase' | 'merge'
             pullMenuOpen: false,
+            settingsMenuOpen: false,
             amend: false,
             signoff: false,
             identityPrompt: {
@@ -269,20 +270,42 @@ export class GitCommitModal {
                 };
                 closeMenuIfOutside(this.state.commitMenuOpen, '#gitCommitSplit', () => this.closeCommitMenu());
                 closeMenuIfOutside(this.state.pullMenuOpen, '#gitPullSplit', () => this.closePullMenu());
+                closeMenuIfOutside(this.state.settingsMenuOpen, '#gitSettingsSplit', () => this.closeSettingsMenu());
             };
             document.addEventListener('pointerdown', closeIfOutside, true);
             this.element.dataset.boundCommitMenu = 'true';
         }
 
-        const tokenInput = this.element.querySelector('#gitAuthToken');
-        if (tokenInput && !tokenInput.dataset.bound) {
-            tokenInput.addEventListener('keydown', (event) => {
-                if (event.key === 'Enter') {
-                    event.preventDefault();
-                    this.saveGitToken();
-                }
+        if (!this.element.dataset.boundPromptEvents) {
+            this.element.addEventListener('git-auth-submit', (event) => {
+                this.saveGitToken(event?.detail || {});
             });
-            tokenInput.dataset.bound = 'true';
+            this.element.addEventListener('git-auth-cancel', () => {
+                this.cancelGitToken();
+            });
+            this.element.addEventListener('git-auth-change', (event) => {
+                const detail = event?.detail || {};
+                this.state.authPrompt = {
+                    ...this.state.authPrompt,
+                    token: String(detail.token ?? this.state.authPrompt?.token ?? ''),
+                    remember: typeof detail.remember === 'boolean' ? detail.remember : Boolean(this.state.authPrompt?.remember)
+                };
+            });
+            this.element.addEventListener('git-identity-submit', (event) => {
+                this.saveGitIdentity(event?.detail || {});
+            });
+            this.element.addEventListener('git-identity-cancel', () => {
+                this.cancelGitIdentity();
+            });
+            this.element.addEventListener('git-identity-change', (event) => {
+                const detail = event?.detail || {};
+                this.state.identityPrompt = {
+                    ...this.state.identityPrompt,
+                    name: String(detail.name ?? this.state.identityPrompt?.name ?? ''),
+                    email: String(detail.email ?? this.state.identityPrompt?.email ?? '')
+                };
+            });
+            this.element.dataset.boundPromptEvents = 'true';
         }
 
         const changesRoot = this.element.querySelector('.git-changes');
@@ -381,10 +404,7 @@ export class GitCommitModal {
             repoPathInput.value = this.state.repoPath;
         }
 
-        const identityBox = this.element.querySelector('#gitIdentityPrompt');
-        if (identityBox) {
-            identityBox.style.display = this.state.identityPrompt?.visible ? '' : 'none';
-        }
+        this.updateIdentityPrompt();
 
         const commitMenu = this.element.querySelector('#gitCommitMenu');
         if (commitMenu) {
@@ -410,18 +430,54 @@ export class GitCommitModal {
             });
         }
 
-        const authBox = this.element.querySelector('#gitAuthPrompt');
-        if (authBox) {
-            authBox.style.display = this.state.authPrompt?.visible ? '' : 'none';
+        const settingsMenu = this.element.querySelector('#gitSettingsMenu');
+        if (settingsMenu) {
+            settingsMenu.style.display = this.state.settingsMenuOpen ? '' : 'none';
         }
-        const tokenInput = this.element.querySelector('#gitAuthToken');
-        if (tokenInput && tokenInput.value !== (this.state.authPrompt?.token || '')) {
-            tokenInput.value = this.state.authPrompt?.token || '';
+
+        this.updateAuthPrompt();
+    }
+
+    getIdentityPromptPresenter() {
+        return this.element.querySelector('git-identity-prompt')?.webSkelPresenter || null;
+    }
+
+    getAuthPromptPresenter() {
+        return this.element.querySelector('git-auth-prompt')?.webSkelPresenter || null;
+    }
+
+    updateIdentityPrompt(options = {}) {
+        const state = this.state.identityPrompt || {};
+        const detail = {
+            visible: Boolean(state.visible),
+            name: state.name || '',
+            email: state.email || ''
+        };
+        if (options.focus) detail.focus = options.focus;
+        const presenter = this.getIdentityPromptPresenter();
+        if (presenter?.setState) {
+            presenter.setState(detail);
+            return;
         }
-        const rememberInput = this.element.querySelector('#gitAuthRemember');
-        if (rememberInput) {
-            rememberInput.checked = Boolean(this.state.authPrompt?.remember);
+        const element = this.element.querySelector('git-identity-prompt');
+        element?.dispatchEvent?.(new CustomEvent('git-identity-update', { detail }));
+    }
+
+    updateAuthPrompt(options = {}) {
+        const state = this.state.authPrompt || {};
+        const detail = {
+            visible: Boolean(state.visible),
+            token: state.token || '',
+            remember: Boolean(state.remember)
+        };
+        if (options.focus) detail.focus = options.focus;
+        const presenter = this.getAuthPromptPresenter();
+        if (presenter?.setState) {
+            presenter.setState(detail);
+            return;
         }
+        const element = this.element.querySelector('git-auth-prompt');
+        element?.dispatchEvent?.(new CustomEvent('git-auth-update', { detail }));
     }
 
     async applyRepoPathFromInput() {
@@ -446,6 +502,9 @@ export class GitCommitModal {
 
     toggleCommitMenu() {
         this.state.commitMenuOpen = !this.state.commitMenuOpen;
+        if (this.state.commitMenuOpen) {
+            this.closeSettingsMenu();
+        }
         this.syncStaticUI();
         if (this.state.commitMenuOpen) {
             setTimeout(() => this.element.querySelector('#gitCommitMenu .git-menu-item.active')?.focus?.(), 0);
@@ -460,6 +519,9 @@ export class GitCommitModal {
 
     togglePullMenu() {
         this.state.pullMenuOpen = !this.state.pullMenuOpen;
+        if (this.state.pullMenuOpen) {
+            this.closeSettingsMenu();
+        }
         this.syncStaticUI();
         if (this.state.pullMenuOpen) {
             setTimeout(() => this.element.querySelector('#gitPullMenu .git-menu-item.active')?.focus?.(), 0);
@@ -469,6 +531,24 @@ export class GitCommitModal {
     closePullMenu() {
         if (!this.state.pullMenuOpen) return;
         this.state.pullMenuOpen = false;
+        this.syncStaticUI();
+    }
+
+    toggleSettingsMenu() {
+        this.state.settingsMenuOpen = !this.state.settingsMenuOpen;
+        if (this.state.settingsMenuOpen) {
+            this.closeCommitMenu();
+            this.closePullMenu();
+        }
+        this.syncStaticUI();
+        if (this.state.settingsMenuOpen) {
+            setTimeout(() => this.element.querySelector('#gitSettingsMenu .git-menu-item')?.focus?.(), 0);
+        }
+    }
+
+    closeSettingsMenu() {
+        if (!this.state.settingsMenuOpen) return;
+        this.state.settingsMenuOpen = false;
         this.syncStaticUI();
     }
 
@@ -1137,34 +1217,73 @@ export class GitCommitModal {
             remember: Boolean(remembered)
         };
         this.syncStaticUI();
+        this.updateAuthPrompt({ focus: 'token' });
         this.updateCommitButtons();
         this.setStatusLine(message || (remembered ? 'A token is already saved. Paste a new token to replace it.' : 'Authentication required to push.'), true);
-        setTimeout(() => this.element.querySelector('#gitAuthToken')?.focus?.(), 0);
     }
 
     openGitTokenPrompt() {
+        this.closeSettingsMenu();
         this.showGitAuthPrompt(this.state.repoPath, null, { message: '' });
+    }
+
+    openGitIdentityPrompt() {
+        this.closeSettingsMenu();
+        let repoPath = this.state.selectedRepoPath || this.state.repoPath;
+        if (!repoPath || isReposRootPath(repoPath, this.state.reposRoot)) {
+            const selected = this.getSelectedReposForBatch();
+            repoPath = selected[0] || '';
+        }
+        if (!repoPath) {
+            this.setStatusLine('Select a repository to set identity.', true);
+            return;
+        }
+        this.state.identityPrompt = {
+            visible: true,
+            repoPath,
+            pendingAction: null,
+            name: this.state.identityPrompt?.name || '',
+            email: this.state.identityPrompt?.email || ''
+        };
+        this.syncStaticUI();
+        this.updateIdentityPrompt({ focus: 'name' });
+        this.updateCommitButtons();
     }
 
     cancelGitToken() {
         this.state.authPrompt = { visible: false, repoPath: null, pendingAction: null, token: '', remember: false };
-        const tokenInput = this.element.querySelector('#gitAuthToken');
-        if (tokenInput) tokenInput.value = '';
         this.syncStaticUI();
         this.updateCommitButtons();
         this.setStatusLine('Cancelled.', true);
     }
 
-    async saveGitToken() {
-        const repoPath = this.state.authPrompt?.repoPath;
+    cancelGitIdentity() {
+        this.state.identityPrompt = { visible: false, repoPath: null, pendingAction: null, name: '', email: '' };
+        this.syncStaticUI();
+        this.updateCommitButtons();
+        this.setStatusLine('Cancelled.', true);
+    }
+
+    async saveGitToken(payload = {}) {
         const pending = this.state.authPrompt?.pendingAction;
-        const tokenInput = this.element.querySelector('#gitAuthToken');
-        const rememberInput = this.element.querySelector('#gitAuthRemember');
-        const token = String(tokenInput?.value || '').trim();
-        const remember = Boolean(rememberInput?.checked);
+        const token = String(payload.token ?? this.state.authPrompt?.token ?? '').trim();
+        const remember = typeof payload.remember === 'boolean' ? payload.remember : Boolean(this.state.authPrompt?.remember);
+        this.state.authPrompt = {
+            ...this.state.authPrompt,
+            token,
+            remember
+        };
         if (!token) {
+            this.state.authPrompt = {
+                ...this.state.authPrompt,
+                visible: true,
+                token: '',
+                remember
+            };
+            this.syncStaticUI();
+            this.updateAuthPrompt({ focus: 'token' });
+            this.updateCommitButtons();
             this.setStatusLine('Enter a token to continue.', true);
-            tokenInput?.focus?.();
             return;
         }
         if (remember) setRememberedGitPat(token);
@@ -1273,10 +1392,6 @@ export class GitCommitModal {
             // ignore and prompt
         }
 
-        const nameInput = this.element.querySelector('#gitIdentityName');
-        const emailInput = this.element.querySelector('#gitIdentityEmail');
-        if (nameInput) nameInput.value = '';
-        if (emailInput) emailInput.value = '';
         this.state.identityPrompt = {
             visible: true,
             repoPath,
@@ -1285,25 +1400,37 @@ export class GitCommitModal {
             email: ''
         };
         this.syncStaticUI();
+        this.updateIdentityPrompt({ focus: 'name' });
         this.updateCommitButtons();
         this.setStatusLine('Set git user.name and user.email to continue.', true);
-        setTimeout(() => nameInput?.focus?.(), 0);
         return false;
     }
 
-    async saveGitIdentity(element, scope) {
+    async saveGitIdentity(payload = {}) {
         const repoPath = this.state.identityPrompt?.repoPath;
         if (!repoPath) return;
-        const nameInput = this.element.querySelector('#gitIdentityName');
-        const emailInput = this.element.querySelector('#gitIdentityEmail');
-        const name = (nameInput?.value || '').trim();
-        const email = (emailInput?.value || '').trim();
+        const name = String(payload.name ?? this.state.identityPrompt?.name ?? '').trim();
+        const email = String(payload.email ?? this.state.identityPrompt?.email ?? '').trim();
+        this.state.identityPrompt = {
+            ...this.state.identityPrompt,
+            name,
+            email
+        };
         if (!name || !email) {
+            this.state.identityPrompt = {
+                ...this.state.identityPrompt,
+                visible: true,
+                name,
+                email
+            };
+            this.syncStaticUI();
+            this.updateIdentityPrompt({ focus: !name ? 'name' : 'email' });
+            this.updateCommitButtons();
             this.setStatusLine('Enter name and email.', true);
             return;
         }
 
-        const nextScope = String(scope || '').trim() || 'local';
+        const nextScope = String(payload.scope || '').trim() || 'local';
         try {
             await this.callTool('git_set_identity', {
                 path: repoPath,

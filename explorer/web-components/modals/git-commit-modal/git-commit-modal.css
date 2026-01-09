@@ -59,15 +59,69 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
     background: rgba(37, 99, 235, 0.10);
 }
 
-.git-resize-handle.n { top: -3px; left: 8px; right: 8px; height: 6px; cursor: ns-resize; }
-.git-resize-handle.s { bottom: -3px; left: 8px; right: 8px; height: 6px; cursor: ns-resize; }
-.git-resize-handle.e { top: 8px; right: -3px; bottom: 8px; width: 6px; cursor: ew-resize; }
-.git-resize-handle.w { top: 8px; left: -3px; bottom: 8px; width: 6px; cursor: ew-resize; }
+.git-resize-handle.n {
+    top: -3px;
+    left: 8px;
+    right: 8px;
+    height: 6px;
+    cursor: ns-resize;
+}
 
-.git-resize-handle.ne { top: -3px; right: -3px; width: 12px; height: 12px; cursor: nesw-resize; }
-.git-resize-handle.nw { top: -3px; left: -3px; width: 12px; height: 12px; cursor: nwse-resize; }
-.git-resize-handle.se { bottom: -3px; right: -3px; width: 12px; height: 12px; cursor: nwse-resize; }
-.git-resize-handle.sw { bottom: -3px; left: -3px; width: 12px; height: 12px; cursor: nesw-resize; }
+.git-resize-handle.s {
+    bottom: -3px;
+    left: 8px;
+    right: 8px;
+    height: 6px;
+    cursor: ns-resize;
+}
+
+.git-resize-handle.e {
+    top: 8px;
+    right: -3px;
+    bottom: 8px;
+    width: 6px;
+    cursor: ew-resize;
+}
+
+.git-resize-handle.w {
+    top: 8px;
+    left: -3px;
+    bottom: 8px;
+    width: 6px;
+    cursor: ew-resize;
+}
+
+.git-resize-handle.ne {
+    top: -3px;
+    right: -3px;
+    width: 12px;
+    height: 12px;
+    cursor: nesw-resize;
+}
+
+.git-resize-handle.nw {
+    top: -3px;
+    left: -3px;
+    width: 12px;
+    height: 12px;
+    cursor: nwse-resize;
+}
+
+.git-resize-handle.se {
+    bottom: -3px;
+    right: -3px;
+    width: 12px;
+    height: 12px;
+    cursor: nwse-resize;
+}
+
+.git-resize-handle.sw {
+    bottom: -3px;
+    left: -3px;
+    width: 12px;
+    height: 12px;
+    cursor: nesw-resize;
+}
 
 .git-modal button {
     background: var(--accent, #2563eb);
@@ -120,6 +174,12 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
 
 .git-modal .icon-button:hover {
     background: var(--file-exp-subtle-surface, rgba(148, 163, 184, 0.1));
+}
+
+.git-settings-icon {
+    width: 15px;
+    height: 25px;
+    display: block;
 }
 
 .git-modal input[type="text"],
@@ -663,7 +723,20 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
     padding: 10px 12px 12px;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    position: relative;
+}
+
+.git-commit-settings {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    align-self: flex-start;
+    width: 100%;
+}
+
+#gitSettingsButton {
+    position: relative;
+    margin-left: auto;
 }
 
 .git-identity {
@@ -754,6 +827,7 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
     display: flex;
     gap: 10px;
     align-items: center;
+    margin-bottom: 10px;
 }
 
 .git-commit-row textarea {
@@ -813,6 +887,7 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
     display: inline-flex;
     align-items: center;
     gap: 6px;
+    width: 100%;
 }
 
 .git-commit-split-toggle {

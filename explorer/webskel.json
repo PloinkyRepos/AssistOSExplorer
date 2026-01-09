@@ -177,6 +177,16 @@
       "presenterClassName": "GitCommitModal"
     },
     {
+      "name": "git-identity-prompt",
+      "type": "components",
+      "presenterClassName": "GitIdentityPrompt"
+    },
+    {
+      "name": "git-auth-prompt",
+      "type": "components",
+      "presenterClassName": "GitAuthPrompt"
+    },
+    {
       "name": "variable-values-tab",
       "type": "modals",
       "presenterClassName": "VariableValuesTab"
