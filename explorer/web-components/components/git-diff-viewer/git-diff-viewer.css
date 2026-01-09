@@ -1,0 +1,8 @@
+git-diff-viewer {
+    display: block;
+    min-height: 0;
+}
+
+git-diff-viewer .git-diff {
+    height: 100%;
+}

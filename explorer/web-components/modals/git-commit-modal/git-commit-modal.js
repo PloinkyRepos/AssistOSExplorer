@@ -19,7 +19,6 @@ import {
     togglePrefixSelection as togglePrefixSelectionOnEntry
 } from "./git-commit-modal-selection.js";
 import { formatRepoSummary, renderRepoChangesTree } from "./git-commit-modal-tree.js";
-import { unifiedToSplitHtml, stripUnifiedDiffHeaders, stripUnifiedDiffFileHeaders, summarizeUnifiedDiffMeta } from "./git-commit-modal-diff.js";
 import { callToolWithLoader, withGlobalLoader } from "../../../utils/globalLoader.js";
 
 export class GitCommitModal {
@@ -48,9 +47,6 @@ export class GitCommitModal {
             selectedRepoPath: null,
             selectedPath: null,
             selectedSection: null, // 'staged' | 'unstaged' | 'untracked' | 'conflicted'
-            diffText: '',
-            diffLoading: false,
-            diffMode: 'split',
             busy: false,
             commitMessage: '',
             commitMode: 'commit', // 'commit' | 'commitPush'
@@ -87,7 +83,6 @@ export class GitCommitModal {
     afterRender() {
         this.bindEvents();
         this.syncStaticUI();
-        this.renderDiff(this.state.diffText || '', { filePath: this.state.selectedPath, section: this.state.selectedSection });
         this.ensureDialogResizable();
         // On open: force-load repos overview so the user immediately sees changes across all repos.
         this.refreshAll({ force: true });
@@ -213,22 +208,6 @@ export class GitCommitModal {
     }
 
     bindEvents() {
-        const left = this.element.querySelector('#gitDiffLeft');
-        const right = this.element.querySelector('#gitDiffRight');
-        if (left && right && !this.element.dataset.boundDiffScroll) {
-            let syncing = false;
-            const sync = (source, target) => {
-                if (syncing) return;
-                syncing = true;
-                target.scrollTop = source.scrollTop;
-                target.scrollLeft = source.scrollLeft;
-                syncing = false;
-            };
-            left.addEventListener('scroll', () => sync(left, right), { passive: true });
-            right.addEventListener('scroll', () => sync(right, left), { passive: true });
-            this.element.dataset.boundDiffScroll = 'true';
-        }
-
         if (!this.element.dataset.boundDiffKeys) {
             this.element.addEventListener('keydown', (event) => {
                 const key = event.key;
@@ -355,12 +334,6 @@ export class GitCommitModal {
         this.pullSelectedRepos();
     }
 
-    openRepo(element) {
-        const repoPath = element?.dataset?.repoPath;
-        if (!repoPath) return;
-        this.openRepoPath(repoPath);
-    }
-
     toggleTreePrefixSelectionCheckbox(element) {
         const repoPath = element?.dataset?.repoPath;
         const prefix = element?.dataset?.prefix || '';
@@ -383,12 +356,6 @@ export class GitCommitModal {
         togglePrefixSelectionOnEntry(entry, '*', Boolean(element.checked));
         this.updateCommitButtons();
         this.renderRepoOverviews(this.state.repoOverviews);
-    }
-
-    async openRepoPath(repoPath) {
-        const input = this.element.querySelector('#gitRepoPathInput');
-        if (input) input.value = repoPath;
-        await this.applyRepoPathFromInput();
     }
 
     openDiff(element) {
@@ -456,13 +423,6 @@ export class GitCommitModal {
         if (rememberInput) {
             rememberInput.checked = Boolean(this.state.authPrompt?.remember);
         }
-    }
-
-    setDiffMode(element, mode) {
-        const next = (mode || element?.dataset?.mode || '').trim();
-        if (next !== 'split' && next !== 'unified') return;
-        this.state.diffMode = next;
-        this.renderDiff(this.state.diffText || '', { filePath: this.state.selectedPath, section: this.state.selectedSection });
     }
 
     async applyRepoPathFromInput() {
@@ -664,10 +624,6 @@ export class GitCommitModal {
         });
     }
 
-    getRepoOverview(repoPath) {
-        return (this.state.repoOverviews || []).find((r) => r?.path === repoPath) || null;
-    }
-
     async refreshAll({ force = false } = {}) {
         this.setStatusLine('Loading git status…');
         try {
@@ -743,23 +699,6 @@ export class GitCommitModal {
             if (this.state.upstream) bits.push(`Upstream: ${this.state.upstream}`);
             branchInfo.textContent = bits.length ? bits.join(' · ') : 'Not a git repository.';
         }
-    }
-
-    clearRepoSelection(repoPath) {
-        if (!repoPath) return;
-        if (this.state.selectedFilesByRepo?.[repoPath]) {
-            const next = { ...(this.state.selectedFilesByRepo || {}) };
-            delete next[repoPath];
-            this.state.selectedFilesByRepo = next;
-        }
-        if (this.state.selectedRepoPath === repoPath) {
-            this.state.selectedRepoPath = null;
-        }
-        if (this.state.selectedPath) {
-            this.clearSelectedDiff();
-        }
-        this.updateCommitButtons();
-        this.renderRepoOverviews(this.state.repoOverviews);
     }
 
     getSelectedFilesEntry(repoPath) {
@@ -1155,14 +1094,6 @@ export class GitCommitModal {
         }
     }
 
-    hasCommitSelectionForRepo(repoPath) {
-        if (!repoPath) return false;
-        if (isReposRootPath(repoPath, this.state.reposRoot)) return false;
-        const entry = this.state.selectedFilesByRepo?.[repoPath];
-        if (!entry) return false;
-        return Boolean((entry?.files && entry.files.size > 0) || (entry?.prefixes && entry.prefixes.size > 0));
-    }
-
     getAllChangedPathsForRepo(repoPath) {
         const repo = (this.state.repoOverviews || []).find((r) => r?.path === repoPath) || null;
         const rows = Array.isArray(repo?.changesAll) ? repo.changesAll : [];
@@ -1188,8 +1119,6 @@ export class GitCommitModal {
     clearSelectedDiff() {
         this.state.selectedPath = null;
         this.state.selectedSection = null;
-        this.state.diffText = '';
-        this.state.diffLoading = false;
         this.renderDiff('', { filePath: null, section: null });
         this.refreshActiveRowStyles();
     }
@@ -1533,45 +1462,14 @@ export class GitCommitModal {
         }
     }
 
+    getDiffViewer() {
+        return this.element.querySelector('git-diff-viewer')?.webSkelPresenter || null;
+    }
+
     renderDiff(text, { filePath, section, loading = false, isError = false } = {}) {
-        const title = this.element.querySelector('#gitDiffTitle');
-        const meta = this.element.querySelector('#gitDiffMeta');
-        const body = this.element.querySelector('#gitDiffBody');
-        const split = this.element.querySelector('#gitDiffSplit');
-        const left = this.element.querySelector('#gitDiffLeft');
-        const right = this.element.querySelector('#gitDiffRight');
-        if (title) title.textContent = 'Diff';
-        this.state.diffText = text || '';
-
-        const mode = this.state.diffMode || 'split';
-        if (split) split.style.display = mode === 'split' ? '' : 'none';
-        if (body) body.style.display = mode === 'unified' ? '' : 'none';
-
-        if (mode === 'split') {
-            const stripped = stripUnifiedDiffFileHeaders(this.state.diffText);
-            const { leftHtml, rightHtml, meta: diffMeta } = unifiedToSplitHtml(stripped);
-            if (meta) {
-                const parts = [];
-                if (filePath) parts.push(filePath);
-                const summary = summarizeUnifiedDiffMeta(diffMeta);
-                if (summary) parts.push(summary);
-                if (loading) parts.push('loading…');
-                meta.textContent = parts.join(' · ');
-            }
-            if (left) left.innerHTML = leftHtml;
-            if (right) right.innerHTML = rightHtml;
-            left?.classList.toggle('error', Boolean(isError));
-            right?.classList.toggle('error', Boolean(isError));
-        } else if (body) {
-            body.textContent = stripUnifiedDiffHeaders(this.state.diffText);
-            if (meta) {
-                const parts = [];
-                if (filePath) parts.push(filePath);
-                if (loading) parts.push('loading…');
-                meta.textContent = parts.join(' · ');
-            }
-            body.classList.toggle('error', Boolean(isError));
-        }
+        const viewer = this.getDiffViewer();
+        if (!viewer || typeof viewer.setDiff !== 'function') return;
+        viewer.setDiff(text, { filePath, section, loading, isError });
     }
 
     async commit() {
