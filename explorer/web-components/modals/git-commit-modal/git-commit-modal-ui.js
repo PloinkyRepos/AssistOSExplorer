@@ -10,6 +10,12 @@ export function createGitCommitUI(ctx) {
         cancelGitToken,
         saveGitIdentity,
         cancelGitIdentity,
+        saveGitIgnore,
+        cancelGitIgnore,
+        setIgnoreMode,
+        setIgnoreAnchor,
+        openIgnoreForDiff,
+        closeFileMenus,
         closeModal
     } = ctx;
 
@@ -20,7 +26,8 @@ export function createGitCommitUI(ctx) {
                 if (key !== 'Enter' && key !== ' ') return;
                 const target = event.target?.closest?.(
                     '.git-tree-file[data-local-action="openDiff"], ' +
-                    '.git-menu-item[data-local-action^="runGitAction"]'
+                    '.git-menu-item[data-local-action^="runGitAction"], ' +
+                    '.git-file-menu-item[data-local-action]'
                 );
                 if (!target) return;
                 event.preventDefault();
@@ -28,6 +35,10 @@ export function createGitCommitUI(ctx) {
                 if (action.startsWith('runGitAction')) {
                     const mode = action.split(/\s+/)[1] || '';
                     runGitAction(target, mode);
+                    return;
+                }
+                if (target.classList.contains('git-file-menu-item')) {
+                    target.click();
                     return;
                 }
                 openDiff(target);
@@ -54,18 +65,6 @@ export function createGitCommitUI(ctx) {
             commitMessage.dataset.bound = 'true';
         }
 
-        const amendInput = element.querySelector('#gitCommitAmend');
-        if (amendInput && !amendInput.dataset.bound) {
-            // WebSkel handles via `data-local-action="toggleAmend"`.
-            amendInput.dataset.bound = 'true';
-        }
-
-        const signoffInput = element.querySelector('#gitCommitSignoff');
-        if (signoffInput && !signoffInput.dataset.bound) {
-            // WebSkel handles via `data-local-action="toggleSignoff"`.
-            signoffInput.dataset.bound = 'true';
-        }
-
         if (!element.dataset.boundCommitMenu) {
             const closeIfOutside = (event) => {
                 const closeMenuIfOutside = (isOpen, rootSelector, closeFn) => {
@@ -76,6 +75,9 @@ export function createGitCommitUI(ctx) {
                 };
                 closeMenuIfOutside(state.actionsMenuOpen, '#gitActionsSplit', () => closeActionsMenu());
                 closeMenuIfOutside(state.settingsMenuOpen, '#gitSettingsSplit', () => closeSettingsMenu());
+                if (!event.target?.closest?.('.git-file-menu')) {
+                    closeFileMenus();
+                }
             };
             const controller = new AbortController();
             setMenuAbortController(controller);
@@ -114,6 +116,28 @@ export function createGitCommitUI(ctx) {
                     name: String(detail.name ?? state.identityPrompt?.name ?? ''),
                     email: String(detail.email ?? state.identityPrompt?.email ?? '')
                 };
+            });
+            element.addEventListener('git-ignore-submit', (event) => {
+                saveGitIgnore(event?.detail || {});
+            });
+            element.addEventListener('git-ignore-cancel', () => {
+                cancelGitIgnore();
+            });
+            element.addEventListener('git-ignore-change', (event) => {
+                const detail = event?.detail || {};
+                state.ignorePrompt = {
+                    ...state.ignorePrompt,
+                    patterns: String(detail.patterns ?? state.ignorePrompt?.patterns ?? '')
+                };
+            });
+            element.addEventListener('git-ignore-mode', (event) => {
+                setIgnoreMode(event?.detail || {});
+            });
+            element.addEventListener('git-ignore-anchor', (event) => {
+                setIgnoreAnchor(event?.detail || {});
+            });
+            element.addEventListener('git-diff-ignore', (event) => {
+                openIgnoreForDiff(event?.detail || {});
             });
             element.dataset.boundPromptEvents = 'true';
         }
@@ -159,10 +183,12 @@ export function createGitCommitUI(ctx) {
         }
 
         updateAuthPrompt();
+        updateIgnorePrompt();
     };
 
     const getIdentityPromptPresenter = () => element.querySelector('git-identity-prompt')?.webSkelPresenter || null;
     const getAuthPromptPresenter = () => element.querySelector('git-auth-prompt')?.webSkelPresenter || null;
+    const getIgnorePromptPresenter = () => element.querySelector('git-ignore-prompt')?.webSkelPresenter || null;
 
     const updateIdentityPrompt = (options = {}) => {
         const promptState = state.identityPrompt || {};
@@ -198,9 +224,34 @@ export function createGitCommitUI(ctx) {
         target?.dispatchEvent?.(new CustomEvent('git-auth-update', { detail }));
     };
 
+    const updateIgnorePrompt = (options = {}) => {
+        const promptState = state.ignorePrompt || {};
+        const paths = Array.isArray(promptState.paths) ? promptState.paths : [];
+        const preview = paths.slice(0, 4);
+        const detail = {
+            visible: Boolean(promptState.visible),
+            repoLabel: promptState.repoPath || '',
+            patterns: promptState.patterns || '',
+            mode: promptState.mode || 'file',
+            anchor: promptState.anchor !== false,
+            count: paths.length,
+            preview,
+            source: promptState.source || 'manual',
+            stopTracking: Boolean(promptState.stopTracking)
+        };
+        if (options.focus) detail.focus = options.focus;
+        const presenter = getIgnorePromptPresenter();
+        if (presenter?.setState) {
+            presenter.setState(detail);
+            return;
+        }
+        const target = element.querySelector('git-ignore-prompt');
+        target?.dispatchEvent?.(new CustomEvent('git-ignore-update', { detail }));
+    };
+
     const updateCommitButtons = () => {
         const actionsButton = element.querySelector('#gitActionsButton');
-        const messageOk = Boolean((state.commitMessage || '').trim()) || state.amend;
+        const messageOk = Boolean((state.commitMessage || '').trim());
         const selectedRepos = Array.from(new Set([
             ...Object.entries(state.selectedFilesByRepo || {})
                 .filter(([, entry]) => (entry?.files && entry.files.size > 0) || (entry?.prefixes && entry.prefixes.size > 0))
@@ -209,10 +260,11 @@ export function createGitCommitUI(ctx) {
         const repoOk = state.repoInfoOk !== false;
         const identityBlocking = Boolean(state.identityPrompt?.visible);
         const authBlocking = Boolean(state.authPrompt?.visible);
+        const ignoreBlocking = Boolean(state.ignorePrompt?.visible);
         const hasSelection = selectedRepos.length > 0;
-        const commitAllowed = !identityBlocking && !authBlocking && hasSelection && messageOk;
-        const pushAllowed = !identityBlocking && !authBlocking && (repoOk || hasSelection);
-        const pullAllowed = !identityBlocking && !authBlocking && hasSelection;
+        const commitAllowed = !identityBlocking && !authBlocking && !ignoreBlocking && hasSelection && messageOk;
+        const pushAllowed = !identityBlocking && !authBlocking && !ignoreBlocking && (repoOk || hasSelection);
+        const pullAllowed = !identityBlocking && !authBlocking && !ignoreBlocking && hasSelection;
         if (actionsButton) {
             actionsButton.disabled = !commitAllowed && !pushAllowed && !pullAllowed;
         }
@@ -221,15 +273,6 @@ export function createGitCommitUI(ctx) {
     const updateCommitMessage = (input) => {
         state.commitMessage = input?.value || '';
         updateCommitButtons();
-    };
-
-    const toggleAmend = (input) => {
-        state.amend = Boolean(input?.checked);
-        updateCommitButtons();
-    };
-
-    const toggleSignoff = (input) => {
-        state.signoff = Boolean(input?.checked);
     };
 
     const toggleActionsMenu = () => {
@@ -271,10 +314,9 @@ export function createGitCommitUI(ctx) {
         syncStaticUI,
         updateIdentityPrompt,
         updateAuthPrompt,
+        updateIgnorePrompt,
         updateCommitButtons,
         updateCommitMessage,
-        toggleAmend,
-        toggleSignoff,
         toggleActionsMenu,
         closeActionsMenu,
         toggleSettingsMenu,

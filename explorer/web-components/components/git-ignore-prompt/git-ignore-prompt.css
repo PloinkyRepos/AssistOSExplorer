@@ -1,8 +1,8 @@
-git-identity-prompt {
+git-ignore-prompt {
     display: none;
     margin-bottom: 10px;
 }
 
-git-identity-prompt.is-visible {
+git-ignore-prompt.is-visible {
     display: block;
 }

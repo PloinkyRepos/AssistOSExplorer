@@ -8,7 +8,7 @@ export function normalizeRepoRelativePrefix(prefix) {
 }
 
 export function createSelectionEntry() {
-    return { files: new Set(), prefixes: new Set(), sectionsByFile: new Map() };
+    return { files: new Set(), prefixes: new Set(), sectionsByFile: new Map(), excludedFiles: new Set() };
 }
 
 export function peekSelectionEntry(selectedFilesByRepo, repoPath) {
@@ -25,6 +25,7 @@ export function ensureSelectionEntry(selectedFilesByRepo, repoPath) {
         if (!store[repoPath].files) store[repoPath].files = new Set();
         if (!store[repoPath].prefixes) store[repoPath].prefixes = new Set();
         if (!store[repoPath].sectionsByFile) store[repoPath].sectionsByFile = new Map();
+        if (!store[repoPath].excludedFiles) store[repoPath].excludedFiles = new Set();
     }
     return store[repoPath];
 }
@@ -54,19 +55,28 @@ export function getAncestorCoveringPrefix(entry, prefix) {
 export function isPathSelected(entry, relativePath) {
     if (!entry) return false;
     const rel = String(relativePath || '');
+    if (entry.excludedFiles?.has?.(rel)) return false;
     if (entry.files?.has?.(rel)) return true;
     return Boolean(getCoveringPrefix(entry, rel));
 }
 
 export function toggleFileSelection(entry, filePath, section, isSelected) {
     if (!entry || !filePath) return;
-    if (!isSelected && getCoveringPrefix(entry, filePath)) return;
+    const coveredByPrefix = Boolean(getCoveringPrefix(entry, filePath));
     if (isSelected) {
-        entry.files.add(filePath);
-        if (section) entry.sectionsByFile.set(filePath, section);
+        entry.excludedFiles?.delete?.(filePath);
+        if (!coveredByPrefix) {
+            entry.files.add(filePath);
+            if (section) entry.sectionsByFile.set(filePath, section);
+        }
     } else {
+        if (coveredByPrefix) {
+            entry.excludedFiles?.add?.(filePath);
+            return;
+        }
         entry.files.delete(filePath);
         entry.sectionsByFile.delete(filePath);
+        entry.excludedFiles?.delete?.(filePath);
     }
 }
 
@@ -77,10 +87,12 @@ export function togglePrefixSelection(entry, prefix, isSelected) {
             entry.files?.clear?.();
             entry.sectionsByFile?.clear?.();
             entry.prefixes?.clear?.();
+            entry.excludedFiles?.clear?.();
             entry.prefixes?.add?.(ALL_PREFIX);
             return;
         }
         entry.prefixes?.delete?.(ALL_PREFIX);
+        entry.excludedFiles?.clear?.();
         return;
     }
     const normalizedPrefix = normalizeRepoRelativePrefix(prefix);
@@ -92,6 +104,11 @@ export function togglePrefixSelection(entry, prefix, isSelected) {
             if (String(filePath).startsWith(normalizedPrefix)) {
                 entry.files.delete(filePath);
                 entry.sectionsByFile.delete(filePath);
+            }
+        }
+        for (const filePath of Array.from(entry.excludedFiles || [])) {
+            if (String(filePath).startsWith(normalizedPrefix)) {
+                entry.excludedFiles.delete(filePath);
             }
         }
         for (const candidate of Array.from(entry.prefixes || [])) {

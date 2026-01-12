@@ -5,8 +5,12 @@
             <div class="git-modal-subtitle" id="gitRepoSubtitle"></div>
         </div>
         <div class="git-modal-window-actions">
-            <button type="button" class="icon-button" id="gitModalFullscreen" aria-label="Toggle fullscreen" data-local-action="toggleFullscreen">⤢</button>
-            <button type="button" class="icon-button" id="gitModalClose" aria-label="Close" data-local-action="closeModalAction">✕</button>
+            <button type="button" class="icon-button" id="gitModalFullscreen" aria-label="Toggle fullscreen"
+                    data-local-action="toggleFullscreen">⤢
+            </button>
+            <button type="button" class="icon-button" id="gitModalClose" aria-label="Close"
+                    data-local-action="closeModalAction">✕
+            </button>
         </div>
     </div>
 
@@ -14,12 +18,16 @@
         <div class="git-topbar">
             <div class="git-repo">
                 <label class="git-repo-label" for="gitRepoPathInput">Repo</label>
-                <input id="gitRepoPathInput" type="text" autocomplete="off" spellcheck="false" />
-                <button type="button" class="secondary" id="gitRepoPathApply" data-local-action="applyRepoPathFromInput">Open</button>
+                <input id="gitRepoPathInput" type="text" autocomplete="off" spellcheck="false"/>
+                <button type="button" class="secondary" id="gitRepoPathApply"
+                        data-local-action="applyRepoPathFromInput">Open
+                </button>
             </div>
             <div class="git-branch" id="gitBranchInfo"></div>
             <div class="git-topbar-actions">
-                <button type="button" class="secondary" id="gitRefreshButton" data-local-action="refreshAction">Refresh</button>
+                <button type="button" class="secondary" id="gitRefreshButton" data-local-action="refreshAction">
+                    Refresh
+                </button>
             </div>
         </div>
 
@@ -40,60 +48,79 @@
             <div class="git-commit-settings">
                 <div class="git-commit-split" id="gitSettingsSplit">
                     <button
-                        type="button"
-                        class="icon-button git-settings-button"
-                        id="gitSettingsButton"
-                        aria-label="Git settings"
-                        title="Git settings"
-                        data-local-action="toggleSettingsMenu"
+                            type="button"
+                            class="icon-button git-settings-button"
+                            id="gitSettingsButton"
+                            aria-label="Git settings"
+                            title="Git settings"
+                            data-local-action="toggleSettingsMenu"
                     >
-                        <img src="./assets/icons/passkey-auth-icon.svg" alt="" class="git-settings-icon" aria-hidden="true">
+                        <img src="./assets/icons/passkey-auth-icon.svg" alt="" class="git-settings-icon"
+                             aria-hidden="true">
                     </button>
                     <div class="git-commit-menu" id="gitSettingsMenu" role="menu" style="display: none;">
-                        <div class="git-menu-item" role="menuitem" tabindex="0" data-local-action="openGitIdentityPrompt">Credentials (name/email)</div>
-                        <div class="git-menu-item" role="menuitem" tabindex="0" data-local-action="openGitTokenPrompt">Token (PAT)</div>
+                        <div class="git-menu-item" role="menuitem" tabindex="0"
+                             data-local-action="openGitIdentityPrompt">Credentials (name/email)
+                        </div>
+                        <div class="git-menu-item" role="menuitem" tabindex="0" data-local-action="openGitTokenPrompt">
+                            Token (PAT)
+                        </div>
+                        <div class="git-menu-item" role="menuitem" tabindex="0" data-local-action="openGitIgnorePrompt">
+                            Add to .gitignore
+                        </div>
                     </div>
                 </div>
             </div>
             <git-identity-prompt data-presenter="git-identity-prompt"></git-identity-prompt>
             <git-auth-prompt data-presenter="git-auth-prompt"></git-auth-prompt>
-            <div class="git-commit-row">
-                <label class="git-commit-label" for="gitCommitMessage">Commit message</label>
-                <textarea id="gitCommitMessage" rows="3" placeholder="Describe your changes..." autocomplete="off" data-local-action="updateCommitMessage"></textarea>
+            <git-ignore-prompt data-presenter="git-ignore-prompt"></git-ignore-prompt>
+            <div class="git-commit-row git-commit-message">
+                <section class="commit-section">
+                    <label class="git-commit-label" for="gitCommitMessage">Commit message</label>
+                    <textarea id="gitCommitMessage" rows="3" placeholder="Describe your changes..." autocomplete="off"
+                              data-local-action="updateCommitMessage"></textarea>
+
+                </section>
                 <button
-                    type="button"
-                    class="icon-button git-ai-generate"
-                    aria-label="Generate commit message with AI"
-                    title="Generate message with AI"
-                    data-local-action="generateCommitMessage"
+                        type="button"
+                        class="icon-button git-ai-generate"
+                        aria-label="Generate commit message with AI"
+                        title="Generate message with AI"
+                        data-local-action="generateCommitMessage"
                 >
                     <span aria-hidden="true">✦</span>
                 </button>
-            </div>
-            <div class="git-commit-row git-commit-options">
-                <label class="git-toggle">
-                    <input type="checkbox" id="gitCommitAmend" data-local-action="toggleAmend">
-                    Amend
-                </label>
-                <label class="git-toggle">
-                    <input type="checkbox" id="gitCommitSignoff" data-local-action="toggleSignoff">
-                    Sign-off
-                </label>
             </div>
             <div class="git-commit-row git-commit-actions">
                 <div class="git-status" id="gitStatusLine" role="status"></div>
                 <div class="git-action-buttons">
                     <div class="git-commit-split" id="gitActionsSplit">
-                        <button type="button" class="secondary git-actions-button" id="gitActionsButton" data-local-action="toggleActionsMenu">Git actions ▾</button>
+                        <button type="button" class="secondary git-actions-button" id="gitActionsButton"
+                                data-local-action="toggleActionsMenu">Git actions ▾
+                        </button>
                         <div class="git-commit-menu" id="gitActionsMenu" role="menu" style="display: none;">
-                            <div class="git-menu-item" role="menuitem" tabindex="0" data-local-action="runGitAction commit">Commit</div>
-                            <div class="git-menu-item" role="menuitem" tabindex="0" data-local-action="runGitAction commitPush">Commit &amp; Push</div>
-                            <div class="git-menu-item" role="menuitem" tabindex="0" data-local-action="runGitAction push">Push</div>
-                            <div class="git-menu-item" role="menuitem" tabindex="0" data-local-action="runGitAction pull">Pull</div>
+                            <div class="git-menu-item" role="menuitem" tabindex="0"
+                                 data-local-action="runGitAction commit">Commit
+                            </div>
+                            <div class="git-menu-item" role="menuitem" tabindex="0"
+                                 data-local-action="runGitAction commitPush">Commit &amp; Push
+                            </div>
+                            <div class="git-menu-item" role="menuitem" tabindex="0"
+                                 data-local-action="runGitAction push">Push
+                            </div>
+                            <div class="git-menu-item" role="menuitem" tabindex="0"
+                                 data-local-action="runGitAction pull">Pull
+                            </div>
                             <div class="git-menu-separator" role="separator"></div>
-                            <div class="git-menu-item" role="menuitem" tabindex="0" data-local-action="runGitAction pullFfOnly">Pull: Fast-forward only</div>
-                            <div class="git-menu-item" role="menuitem" tabindex="0" data-local-action="runGitAction pullRebase">Pull: Rebase</div>
-                            <div class="git-menu-item" role="menuitem" tabindex="0" data-local-action="runGitAction pullMerge">Pull: Merge</div>
+                            <div class="git-menu-item" role="menuitem" tabindex="0"
+                                 data-local-action="runGitAction pullFfOnly">Pull: Fast-forward only
+                            </div>
+                            <div class="git-menu-item" role="menuitem" tabindex="0"
+                                 data-local-action="runGitAction pullRebase">Pull: Rebase
+                            </div>
+                            <div class="git-menu-item" role="menuitem" tabindex="0"
+                                 data-local-action="runGitAction pullMerge">Pull: Merge
+                            </div>
                         </div>
                     </div>
                 </div>

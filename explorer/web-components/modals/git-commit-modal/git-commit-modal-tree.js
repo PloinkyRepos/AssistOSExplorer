@@ -194,6 +194,7 @@ export function renderRepoChangesTree(repo, {
             row.classList.toggle('is-untracked', isUntracked);
             row.classList.toggle('is-new', isNewTracked);
             row.classList.toggle('is-modified', isModified);
+            row.classList.add('has-file-menu');
 
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
@@ -202,7 +203,6 @@ export function renderRepoChangesTree(repo, {
             checkbox.dataset.filePath = file.path;
             checkbox.setAttribute('data-local-action', 'toggleTreeFileSelectionCheckbox');
             checkbox.checked = Boolean(isFileSelected?.(repo.path, file.path));
-            checkbox.disabled = Boolean(getCoveringPrefix?.(repo.path, file.path));
 
             const button = document.createElement('div');
             button.className = 'git-tree-file';
@@ -215,6 +215,38 @@ export function renderRepoChangesTree(repo, {
 
             row.appendChild(checkbox);
             row.appendChild(button);
+            const menu = document.createElement('div');
+            menu.className = 'git-file-menu';
+
+            const menuButton = document.createElement('button');
+            menuButton.type = 'button';
+            menuButton.className = 'icon-button git-file-menu-button';
+            menuButton.setAttribute('data-local-action', 'toggleFileMenu');
+            menuButton.setAttribute('aria-label', 'File actions');
+            menuButton.title = 'File actions';
+            menuButton.textContent = '⋮';
+
+            const menuList = document.createElement('div');
+            menuList.className = 'git-file-menu-list';
+
+            const ignoreItem = document.createElement('div');
+            ignoreItem.className = 'git-file-menu-item';
+            ignoreItem.setAttribute('role', 'menuitem');
+            ignoreItem.setAttribute('tabindex', '0');
+            ignoreItem.dataset.repoPath = repo.path;
+            ignoreItem.dataset.filePath = file.path;
+            if (isUntracked) {
+                ignoreItem.setAttribute('data-local-action', 'openIgnoreForFile');
+                ignoreItem.textContent = 'Add to .gitignore';
+            } else {
+                ignoreItem.setAttribute('data-local-action', 'openStopTrackingForFile');
+                ignoreItem.textContent = 'Stop tracking + add to .gitignore';
+            }
+
+            menuList.appendChild(ignoreItem);
+            menu.appendChild(menuButton);
+            menu.appendChild(menuList);
+            row.appendChild(menu);
             out.appendChild(row);
         }
         return out;

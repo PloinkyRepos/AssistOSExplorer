@@ -56,6 +56,12 @@ export class GitCommitModal {
             cancelGitToken: this.cancelGitToken.bind(this),
             saveGitIdentity: this.saveGitIdentity.bind(this),
             cancelGitIdentity: this.cancelGitIdentity.bind(this),
+            saveGitIgnore: this.saveGitIgnore.bind(this),
+            cancelGitIgnore: this.cancelGitIgnore.bind(this),
+            setIgnoreMode: this.setIgnoreMode.bind(this),
+            setIgnoreAnchor: this.setIgnoreAnchor.bind(this),
+            openIgnoreForDiff: this.openIgnoreForDiff.bind(this),
+            closeFileMenus: this.closeFileMenus.bind(this),
             closeModal: this.closeModal.bind(this)
         });
         this.actions = createGitCommitActions({
@@ -66,6 +72,7 @@ export class GitCommitModal {
             syncStaticUI: this.syncStaticUI.bind(this),
             updateIdentityPrompt: this.updateIdentityPrompt.bind(this),
             updateAuthPrompt: this.updateAuthPrompt.bind(this),
+            updateIgnorePrompt: this.updateIgnorePrompt.bind(this),
             closeActionsMenu: this.closeActionsMenu.bind(this),
             closeSettingsMenu: this.closeSettingsMenu.bind(this),
             getSelectedReposForBatch: () => this.getSelectedReposForBatch(),
@@ -138,14 +145,6 @@ export class GitCommitModal {
         return this.ui.updateCommitMessage(element);
     }
 
-    toggleAmend(element) {
-        return this.ui.toggleAmend(element);
-    }
-
-    toggleSignoff(element) {
-        return this.ui.toggleSignoff(element);
-    }
-
     pushAction() {
         this.push({ silent: false });
     }
@@ -182,6 +181,48 @@ export class GitCommitModal {
         this.selectFile(filePath, section, repoPath);
     }
 
+    openIgnoreForFile(element) {
+        const repoPath = element?.dataset?.repoPath || null;
+        const filePath = element?.dataset?.filePath;
+        if (!repoPath || !filePath) return;
+        this.closeFileMenus();
+        this.actions.openGitIgnorePrompt({ repoPath, paths: [filePath], source: 'selection' });
+    }
+
+    openStopTrackingForFile(element) {
+        const repoPath = element?.dataset?.repoPath || null;
+        const filePath = element?.dataset?.filePath;
+        if (!repoPath || !filePath) return;
+        this.closeFileMenus();
+        this.actions.openGitIgnorePrompt({ repoPath, paths: [filePath], source: 'selection', stopTracking: true });
+    }
+
+    openIgnoreForDiff(payload = {}) {
+        const repoPath = payload.repoPath || null;
+        const filePath = payload.filePath;
+        if (!repoPath || !filePath) return;
+        this.actions.openGitIgnorePrompt({ repoPath, paths: [filePath], source: 'selection' });
+    }
+
+    toggleFileMenu(element) {
+        const menu = element?.closest?.('.git-file-menu');
+        if (!menu) return;
+        const willOpen = !menu.classList.contains('open');
+        this.closeFileMenus();
+        if (willOpen) {
+            menu.classList.add('open');
+            const firstItem = menu.querySelector('.git-file-menu-item');
+            if (firstItem) {
+                setTimeout(() => firstItem.focus(), 0);
+            }
+        }
+    }
+
+    closeFileMenus() {
+        const menus = this.element.querySelectorAll('.git-file-menu.open');
+        menus.forEach((menu) => menu.classList.remove('open'));
+    }
+
     toggleRepoFolderExpanded(element) {
         const folderId = element?.dataset?.folderId;
         if (!folderId) return;
@@ -200,6 +241,10 @@ export class GitCommitModal {
         return this.ui.updateAuthPrompt(options);
     }
 
+    updateIgnorePrompt(options = {}) {
+        return this.ui.updateIgnorePrompt(options);
+    }
+
     async applyRepoPathFromInput() {
         const input = this.element.querySelector('#gitRepoPathInput');
         const next = (input?.value || '').trim();
@@ -216,6 +261,16 @@ export class GitCommitModal {
         this.state.selectedSection = null;
         this.state.identityPrompt = { visible: false, repoPath: null, pendingAction: null, name: '', email: '' };
         this.state.authPrompt = { visible: false, repoPath: null, pendingAction: null, token: '', remember: false };
+        this.state.ignorePrompt = {
+            visible: false,
+            repoPath: null,
+            mode: 'file',
+            anchor: true,
+            patterns: '',
+            paths: [],
+            source: 'manual',
+            stopTracking: false
+        };
         this.closeActionsMenu();
         this.syncStaticUI();
         await this.refreshAll({ force: true });
@@ -408,6 +463,10 @@ export class GitCommitModal {
         return this.actions.openGitIdentityPrompt();
     }
 
+    openGitIgnorePrompt() {
+        return this.actions.openGitIgnorePrompt();
+    }
+
     cancelGitToken() {
         return this.actions.cancelGitToken();
     }
@@ -416,8 +475,24 @@ export class GitCommitModal {
         return this.actions.cancelGitIdentity();
     }
 
+    cancelGitIgnore() {
+        return this.actions.cancelGitIgnore();
+    }
+
     async saveGitToken(payload = {}) {
         return this.actions.saveGitToken(payload);
+    }
+
+    async saveGitIgnore(payload = {}) {
+        return this.actions.saveGitIgnore(payload);
+    }
+
+    setIgnoreMode(payload = {}) {
+        return this.actions.setIgnoreMode(payload);
+    }
+
+    setIgnoreAnchor(payload = {}) {
+        return this.actions.setIgnoreAnchor(payload);
     }
 
     async gitPushWithToken(repoPath, token) {

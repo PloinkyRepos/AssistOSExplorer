@@ -475,6 +475,76 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
     color: rgba(220, 38, 38, 0.95);
 }
 
+.git-tree-file-row.has-file-menu .git-tree-file {
+    width: auto;
+}
+
+.git-file-menu {
+    margin-left: auto;
+    position: relative;
+}
+
+.git-file-menu-button {
+    height: 24px;
+    padding: 0 6px;
+    font-size: 0.85rem;
+    border-radius: 999px;
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    background: rgba(148, 163, 184, 0.12);
+    color: var(--text-soft, rgba(15, 23, 42, 0.7));
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 120ms ease;
+}
+
+.git-tree-file-row.has-file-menu:hover .git-file-menu-button,
+.git-tree-file-row.has-file-menu:focus-within .git-file-menu-button,
+.git-file-menu.open .git-file-menu-button {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+}
+
+.git-file-menu-button:hover {
+    border-color: rgba(148, 163, 184, 0.6);
+    background: rgba(148, 163, 184, 0.2);
+}
+
+.git-file-menu-list {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    min-width: 160px;
+    background: #fff;
+    border: 1px solid var(--file-exp-border, rgba(148, 163, 184, 0.35));
+    border-radius: 10px;
+    padding: 6px;
+    box-shadow: 0 14px 32px rgba(15, 23, 42, 0.12);
+    display: none;
+    z-index: 20;
+}
+
+.git-file-menu.open .git-file-menu-list {
+    display: block;
+}
+
+.git-file-menu-item {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    text-align: left;
+    padding: 6px 10px;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    color: var(--text, #0f172a);
+    cursor: pointer;
+}
+
+.git-file-menu-item:hover {
+    background: rgba(148, 163, 184, 0.16);
+}
+
 .git-tree-folder-icon {
     display: inline-flex;
     align-items: center;
@@ -726,6 +796,13 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
     position: relative;
 }
 
+.commit-section {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
 .git-commit-settings {
     display: flex;
     align-items: center;
@@ -823,11 +900,130 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
     gap: 8px;
 }
 
+.git-ignore {
+    border: 1px dashed var(--file-exp-border, rgba(148, 163, 184, 0.35));
+    border-radius: 10px;
+    padding: 10px 12px;
+    background: var(--file-exp-subtle-surface, rgba(148, 163, 184, 0.08));
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.git-ignore-title {
+    font-weight: 800;
+    color: var(--text, #0f172a);
+}
+
+.git-ignore-subtitle {
+    color: var(--text-soft, rgba(15, 23, 42, 0.7));
+    font-size: 0.85rem;
+    max-width: 520px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.git-ignore-modes {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.git-ignore-mode-group {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.git-ignore-mode.active {
+    background: rgba(15, 23, 42, 0.08) !important;
+    border-color: rgba(15, 23, 42, 0.18) !important;
+    font-weight: 700;
+}
+
+.git-ignore-preview {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+}
+
+.git-ignore-chip {
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    background: rgba(148, 163, 184, 0.12);
+    border-radius: 999px;
+    padding: 2px 8px;
+    font-size: 0.75rem;
+    color: var(--text-soft, rgba(15, 23, 42, 0.7));
+    max-width: 240px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.git-ignore-chip-count {
+    color: var(--text, #0f172a);
+    border-style: dashed;
+}
+
+.git-ignore-chip-more {
+    background: rgba(15, 23, 42, 0.06);
+}
+
+.git-ignore-empty {
+    color: var(--text-soft, rgba(15, 23, 42, 0.7));
+    font-size: 0.85rem;
+}
+
+.git-ignore-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.git-ignore-label {
+    min-width: 70px;
+    color: var(--text-soft, rgba(15, 23, 42, 0.7));
+    font-size: 0.85rem;
+    font-weight: 700;
+}
+
+.git-ignore-row textarea {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 72px;
+}
+
+.git-ignore-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.git-ignore-buttons {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.git-ignore-hint {
+    color: var(--text-soft, rgba(15, 23, 42, 0.7));
+    font-size: 0.85rem;
+}
+
 .git-commit-row {
     display: flex;
     gap: 10px;
     align-items: center;
     margin-bottom: 10px;
+}
+
+.git-commit-message {
+    margin-bottom: 4px;
 }
 
 .git-commit-row textarea {
@@ -845,11 +1041,6 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
     min-width: 120px;
     color: var(--text-soft, rgba(15, 23, 42, 0.7));
     font-size: 0.85rem;
-}
-
-.git-commit-options {
-    gap: 18px;
-    flex-wrap: wrap;
 }
 
 #gitActionsButton {

@@ -71,9 +71,7 @@ export class GitAuthPrompt {
             this.state.remember = Boolean(next.remember);
         }
 
-        if (this.root) {
-            this.root.style.display = this.state.visible ? '' : 'none';
-        }
+        this.element.classList.toggle('is-visible', this.state.visible);
         if (this.tokenInput && this.tokenInput.value !== this.state.token) {
             this.tokenInput.value = this.state.token;
         }

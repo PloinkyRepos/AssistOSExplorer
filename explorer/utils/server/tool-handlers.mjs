@@ -80,6 +80,7 @@ export function createToolHandlers({
     GitDiffArgsSchema,
     GitStageArgsSchema,
     GitUnstageArgsSchema,
+    GitUntrackArgsSchema,
     GitCommitArgsSchema,
     GitPushArgsSchema,
     GitPullArgsSchema,
@@ -420,6 +421,12 @@ export function createToolHandlers({
     return jsonResponse(result);
   }
 
+  async function handleGitUntrack(args) {
+    const data = parseArgs(GitUntrackArgsSchema, args, 'git_untrack');
+    const result = await gitService.gitUntrack(data);
+    return jsonResponse(result);
+  }
+
   async function handleGitCommit(args) {
     const data = parseArgs(GitCommitArgsSchema, args, 'git_commit');
     const result = await gitService.gitCommit(data);
@@ -493,6 +500,7 @@ export function createToolHandlers({
     git_diff: handleGitDiff,
     git_stage: handleGitStage,
     git_unstage: handleGitUnstage,
+    git_untrack: handleGitUntrack,
     git_commit: handleGitCommit,
     git_push: handleGitPush,
     git_pull: handleGitPull,

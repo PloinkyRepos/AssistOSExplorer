@@ -187,6 +187,11 @@
       "presenterClassName": "GitAuthPrompt"
     },
     {
+      "name": "git-ignore-prompt",
+      "type": "components",
+      "presenterClassName": "GitIgnorePrompt"
+    },
+    {
       "name": "variable-values-tab",
       "type": "modals",
       "presenterClassName": "VariableValuesTab"

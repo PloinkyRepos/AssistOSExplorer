@@ -72,9 +72,7 @@ export class GitIdentityPrompt {
             this.state.email = String(next.email || '');
         }
 
-        if (this.root) {
-            this.root.style.display = this.state.visible ? '' : 'none';
-        }
+        this.element.classList.toggle('is-visible', this.state.visible);
         if (this.nameInput && this.nameInput.value !== this.state.name) {
             this.nameInput.value = this.state.name;
         }

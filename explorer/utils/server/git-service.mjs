@@ -336,6 +336,20 @@ export function createGitService({ validatePath }) {
     return { ok: true };
   }
 
+  async function gitUntrack({ path: repoPathArg, files = [] }) {
+    const repoPath = await resolveRepoPath(repoPathArg);
+    const gitBinary = await getGitBinary(repoPath);
+    const list = Array.isArray(files) ? files : [];
+    if (!list.length) {
+      throw new Error('git_untrack requires at least one file path.');
+    }
+    for (const file of list) {
+      if (!isGitRepoRelativePath(file)) throw new Error(`Invalid file path for git_untrack: ${file}`);
+    }
+    await runGit(repoPath, [gitBinary, 'rm', '--cached', '--', ...list], { timeoutMs: 25000 });
+    return { ok: true };
+  }
+
   async function gitCommit({ path: repoPathArg, message, amend = false, signoff = false }) {
     const repoPath = await resolveRepoPath(repoPathArg);
     const gitBinary = await getGitBinary(repoPath);
@@ -769,6 +783,7 @@ export function createGitService({ validatePath }) {
     gitDiff,
     gitStage,
     gitUnstage,
+    gitUntrack,
     gitCommit,
     gitPull,
     gitPush,

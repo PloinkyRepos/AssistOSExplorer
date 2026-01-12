@@ -19,6 +19,7 @@ export function createGitCommitActions(ctx) {
         syncStaticUI,
         updateIdentityPrompt,
         updateAuthPrompt,
+        updateIgnorePrompt,
         closeActionsMenu,
         closeSettingsMenu,
         getSelectedReposForBatch,
@@ -92,6 +93,16 @@ export function createGitCommitActions(ctx) {
         }
     };
 
+    const extractIdentityValues = (payload, fallback = {}) => {
+        const local = payload?.local || {};
+        const global = payload?.global || {};
+        const effective = payload?.effective || {};
+        return {
+            name: local.name || effective.name || global.name || fallback.name || '',
+            email: local.email || effective.email || global.email || fallback.email || ''
+        };
+    };
+
     const showGitAuthPrompt = (repoPath, pendingAction, { message = '' } = {}) => {
         const state = getState();
         const remembered = getRememberedGitPat();
@@ -117,7 +128,7 @@ export function createGitCommitActions(ctx) {
         showGitAuthPrompt(state.repoPath, null, { message: '' });
     };
 
-    const openGitIdentityPrompt = () => {
+    const openGitIdentityPrompt = async () => {
         closeSettingsMenu();
         const state = getState();
         let repoPath = state.selectedRepoPath || state.repoPath;
@@ -129,15 +140,23 @@ export function createGitCommitActions(ctx) {
             setStatusLine('Select a repository to set identity.', true);
             return;
         }
+
+        let payload = null;
+        try {
+            payload = parseJsonToolResult(await service.gitIdentity(repoPath)) || {};
+        } catch (_) {
+            payload = null;
+        }
+        const { name, email } = extractIdentityValues(payload, state.identityPrompt || {});
         state.identityPrompt = {
             visible: true,
             repoPath,
             pendingAction: null,
-            name: state.identityPrompt?.name || '',
-            email: state.identityPrompt?.email || ''
+            name,
+            email
         };
         syncStaticUI();
-        updateIdentityPrompt({ focus: 'name' });
+        updateIdentityPrompt({ focus: !name ? 'name' : (!email ? 'email' : 'name') });
         updateCommitButtons();
     };
 
@@ -155,6 +174,257 @@ export function createGitCommitActions(ctx) {
         syncStaticUI();
         updateCommitButtons();
         setStatusLine('Cancelled.', true);
+    };
+
+    const resolveIgnoreRepoPath = () => {
+        const state = getState();
+        const selectedRepo = state.selectedRepoPath;
+        if (selectedRepo && !isReposRootPath(selectedRepo, state.reposRoot)) return selectedRepo;
+        if (state.repoPath && !isReposRootPath(state.repoPath, state.reposRoot)) return state.repoPath;
+        const selected = getSelectedReposForBatch();
+        if (selected.length === 1) return selected[0];
+        return '';
+    };
+
+    const getUntrackedPathsForRepo = (repoPath) => {
+        const state = getState();
+        const repo = (state.repoOverviews || []).find((item) => item?.path === repoPath) || null;
+        const rows = Array.isArray(repo?.changesAll) ? repo.changesAll : [];
+        return rows
+            .filter((row) => {
+                if (!row) return false;
+                const flags = row.flags || {};
+                if (flags.untracked) return true;
+                if (row.kind === 'untracked') return true;
+                return row.x === '?' && row.y === '?';
+            })
+            .map((row) => String(row.path || '').trim())
+            .filter(Boolean)
+            .sort((a, b) => a.localeCompare(b));
+    };
+
+    const normalizeIgnorePattern = (value) => String(value || '').trim().replace(/^\.\/+/, '');
+
+    const buildIgnorePatterns = (paths, { mode = 'file', anchor = true } = {}) => {
+        const out = [];
+        const seen = new Set();
+        const list = Array.isArray(paths) ? paths : [];
+        for (const raw of list) {
+            const normalized = normalizeIgnorePattern(raw);
+            if (!normalized) continue;
+            let pattern = normalized;
+            if (mode === 'folder') {
+                const parts = normalized.split('/').filter(Boolean);
+                if (parts.length > 1) {
+                    pattern = `${parts.slice(0, -1).join('/')}/`;
+                }
+            }
+            if (anchor && !pattern.startsWith('/')) {
+                pattern = `/${pattern}`;
+            }
+            if (seen.has(pattern)) continue;
+            seen.add(pattern);
+            out.push(pattern);
+        }
+        return out.join('\n');
+    };
+
+    const openGitIgnorePrompt = (options = {}) => {
+        closeSettingsMenu();
+        const repoPath = options.repoPath || resolveIgnoreRepoPath();
+        if (!repoPath) {
+            const selected = getSelectedReposForBatch();
+            const message = selected.length > 1
+                ? 'Select files from a single repository to edit .gitignore.'
+                : 'Select a repository to edit .gitignore.';
+            setStatusLine(message, true);
+            return;
+        }
+        const overridePaths = Array.isArray(options.paths) ? options.paths.filter(Boolean) : [];
+        const selectedPaths = overridePaths.length ? overridePaths : getPathsForCommitInRepo(repoPath);
+        const fallbackPaths = selectedPaths.length ? selectedPaths : getUntrackedPathsForRepo(repoPath);
+        const source = options.source || (selectedPaths.length ? 'selection' : (fallbackPaths.length ? 'untracked' : 'manual'));
+        const mode = 'file';
+        const anchor = true;
+        const patterns = buildIgnorePatterns(fallbackPaths, { mode, anchor });
+        const state = getState();
+        state.ignorePrompt = {
+            visible: true,
+            repoPath,
+            mode,
+            anchor,
+            patterns,
+            paths: fallbackPaths,
+            source,
+            stopTracking: Boolean(options.stopTracking)
+        };
+        syncStaticUI();
+        updateIgnorePrompt({ focus: 'patterns' });
+        updateCommitButtons();
+        if (!fallbackPaths.length) {
+            setStatusLine('No files selected. Add ignore patterns manually.');
+        }
+    };
+
+    const setIgnoreMode = ({ mode } = {}) => {
+        const state = getState();
+        const next = String(mode || '').trim();
+        if (next !== 'file' && next !== 'folder') return;
+        const anchor = state.ignorePrompt?.anchor !== false;
+        const paths = Array.isArray(state.ignorePrompt?.paths) ? state.ignorePrompt.paths : [];
+        const patterns = paths.length
+            ? buildIgnorePatterns(paths, { mode: next, anchor })
+            : (state.ignorePrompt?.patterns || '');
+        state.ignorePrompt = {
+            ...state.ignorePrompt,
+            mode: next,
+            anchor,
+            patterns
+        };
+        syncStaticUI();
+        updateIgnorePrompt();
+        updateCommitButtons();
+    };
+
+    const setIgnoreAnchor = ({ anchor } = {}) => {
+        const state = getState();
+        const next = typeof anchor === 'boolean' ? anchor : Boolean(anchor);
+        const mode = state.ignorePrompt?.mode || 'file';
+        const paths = Array.isArray(state.ignorePrompt?.paths) ? state.ignorePrompt.paths : [];
+        const patterns = paths.length
+            ? buildIgnorePatterns(paths, { mode, anchor: next })
+            : (state.ignorePrompt?.patterns || '');
+        state.ignorePrompt = {
+            ...state.ignorePrompt,
+            anchor: next,
+            patterns
+        };
+        syncStaticUI();
+        updateIgnorePrompt();
+        updateCommitButtons();
+    };
+
+    const cancelGitIgnore = () => {
+        const state = getState();
+        state.ignorePrompt = {
+            visible: false,
+            repoPath: null,
+            mode: 'file',
+            anchor: true,
+            patterns: '',
+            paths: [],
+            source: 'manual',
+            stopTracking: false
+        };
+        syncStaticUI();
+        updateCommitButtons();
+        setStatusLine('Cancelled.', true);
+    };
+
+    const isMissingFileError = (error) => {
+        const message = normalizeErrorMessage(error).toLowerCase();
+        return message.includes('no such file') || message.includes('enoent') || message.includes('not found');
+    };
+
+    const saveGitIgnore = async (payload = {}) => {
+        const state = getState();
+        const repoPath = state.ignorePrompt?.repoPath;
+        if (!repoPath) return;
+        const raw = String(payload.patterns ?? state.ignorePrompt?.patterns ?? '').trim();
+        if (!raw) {
+            setStatusLine('Enter at least one ignore pattern.', true);
+            updateIgnorePrompt({ focus: 'patterns' });
+            return;
+        }
+        const lines = raw.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+        if (!lines.length) {
+            setStatusLine('Enter at least one ignore pattern.', true);
+            updateIgnorePrompt({ focus: 'patterns' });
+            return;
+        }
+
+        const ignorePath = `${String(repoPath).replace(/\/+$/g, '')}/.gitignore`;
+        const stopTracking = Boolean(state.ignorePrompt?.stopTracking);
+        const ignoredPaths = Array.isArray(state.ignorePrompt?.paths) ? state.ignorePrompt.paths : [];
+        return withGlobalLoader(async () => {
+            try {
+                let existing = '';
+                try {
+                    existing = await service.readTextFile(ignorePath);
+                } catch (error) {
+                    if (!isMissingFileError(error)) throw error;
+                }
+                const existingLines = String(existing || '').split(/\r?\n/);
+                const existingSet = new Set(existingLines.map((line) => line.trim()).filter(Boolean));
+                const toAdd = lines.filter((line) => !existingSet.has(line));
+                if (!toAdd.length && !stopTracking) {
+                    state.ignorePrompt = {
+                        visible: false,
+                        repoPath: null,
+                        mode: 'file',
+                        anchor: true,
+                        patterns: '',
+                        paths: [],
+                        source: 'manual',
+                        stopTracking: false
+                    };
+                    syncStaticUI();
+                    updateCommitButtons();
+                    setStatusLine('All patterns are already in .gitignore.');
+                    return;
+                }
+
+                if (stopTracking && ignoredPaths.length) {
+                    await service.gitUntrack(repoPath, ignoredPaths);
+                }
+                if (toAdd.length) {
+                    const needsNewline = existing && !existing.endsWith('\n');
+                    const nextContent = `${existing}${needsNewline ? '\n' : ''}${toAdd.join('\n')}\n`;
+                    await service.writeFile(ignorePath, nextContent);
+                }
+
+                state.ignorePrompt = {
+                    visible: false,
+                    repoPath: null,
+                    mode: 'file',
+                    anchor: true,
+                    patterns: '',
+                    paths: [],
+                    source: 'manual',
+                    stopTracking: false
+                };
+                if (state.selectedFilesByRepo && state.selectedFilesByRepo[repoPath]) {
+                    const entry = state.selectedFilesByRepo[repoPath];
+                    if (entry?.files && entry.files.size && ignoredPaths.length) {
+                        const nextFiles = new Set(entry.files);
+                        for (const path of ignoredPaths) {
+                            nextFiles.delete(path);
+                        }
+                        const nextEntry = { ...entry, files: nextFiles };
+                        if (!nextFiles.size && (!entry.prefixes || entry.prefixes.size === 0)) {
+                            const nextSelected = { ...state.selectedFilesByRepo };
+                            delete nextSelected[repoPath];
+                            state.selectedFilesByRepo = nextSelected;
+                        } else {
+                            state.selectedFilesByRepo = { ...state.selectedFilesByRepo, [repoPath]: nextEntry };
+                        }
+                    }
+                }
+                syncStaticUI();
+                updateCommitButtons();
+                await loadRepoOverviews({ force: true });
+                await refreshAll({ force: true });
+                if (stopTracking && toAdd.length) {
+                    setStatusLine(`Stopped tracking ${ignoredPaths.length} file(s) and added ${toAdd.length} pattern(s).`);
+                } else if (stopTracking) {
+                    setStatusLine(`Stopped tracking ${ignoredPaths.length} file(s).`);
+                } else {
+                    setStatusLine(`Added ${toAdd.length} pattern(s) to .gitignore.`);
+                }
+            } catch (error) {
+                setStatusLine(normalizeErrorMessage(error), true);
+            }
+        });
     };
 
     const isDiffFileHeaderLine = (line) => {
@@ -391,23 +661,25 @@ export function createGitCommitActions(ctx) {
 
     const ensureGitIdentityOrPrompt = async (repoPath, pendingAction) => {
         if (!repoPath) return false;
+        let payload = null;
         try {
-            const payload = parseJsonToolResult(await service.gitIdentity(repoPath)) || {};
+            payload = parseJsonToolResult(await service.gitIdentity(repoPath)) || {};
             if (payload.ok) return true;
         } catch (_) {
             // ignore and prompt
         }
 
         const state = getState();
+        const { name, email } = extractIdentityValues(payload, state.identityPrompt || {});
         state.identityPrompt = {
             visible: true,
             repoPath,
             pendingAction: pendingAction || null,
-            name: '',
-            email: ''
+            name,
+            email
         };
         syncStaticUI();
-        updateIdentityPrompt({ focus: 'name' });
+        updateIdentityPrompt({ focus: !name ? 'name' : (!email ? 'email' : 'name') });
         updateCommitButtons();
         setStatusLine('Set git user.name and user.email to continue.', true);
         return false;
@@ -469,7 +741,7 @@ export function createGitCommitActions(ctx) {
         const state = getState();
         const selected = getSelectedReposForBatch();
         const message = (state.commitMessage || '').trim();
-        if (!state.amend && !message) {
+        if (!message) {
             setStatusLine('Enter a commit message.', true);
             return;
         }
@@ -491,9 +763,7 @@ export function createGitCommitActions(ctx) {
                     }
                     await service.gitCommit({
                         path: repoPath,
-                        message,
-                        amend: Boolean(state.amend),
-                        signoff: Boolean(state.signoff)
+                        message
                     });
                     if (shouldPush) {
                         const token = getRememberedGitPat();
@@ -636,7 +906,7 @@ export function createGitCommitActions(ctx) {
         const next = (mode || element?.dataset?.mode || '').trim();
         if (!next) return;
         if (next === 'commit' || next === 'commitPush') {
-            const messageOk = Boolean((state.commitMessage || '').trim()) || state.amend;
+            const messageOk = Boolean((state.commitMessage || '').trim());
             const selected = getSelectedReposForBatch();
             if (!selected.length) {
                 setStatusLine('Select at least one file to commit.', true);
@@ -690,10 +960,15 @@ export function createGitCommitActions(ctx) {
         showGitAuthPrompt,
         openGitTokenPrompt,
         openGitIdentityPrompt,
+        openGitIgnorePrompt,
         cancelGitToken,
         cancelGitIdentity,
+        cancelGitIgnore,
         generateCommitMessage,
         saveGitToken,
+        saveGitIgnore,
+        setIgnoreMode,
+        setIgnoreAnchor,
         gitPushWithToken,
         gitPullWithToken,
         pushRepos,

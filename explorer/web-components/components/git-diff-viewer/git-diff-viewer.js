@@ -8,9 +8,11 @@ export class GitDiffViewer {
         this.state = {
             diffText: '',
             filePath: '',
+            repoPath: '',
             loading: false,
             isError: false,
-            mode: 'split'
+            mode: 'split',
+            canIgnore: false
         };
         this.invalidate();
     }
@@ -47,12 +49,21 @@ export class GitDiffViewer {
         this.render();
     }
 
-    setDiff(text, { filePath = null, loading = false, isError = false } = {}) {
+    setDiff(text, { filePath = null, repoPath = null, loading = false, isError = false, canIgnore = false } = {}) {
         this.state.diffText = text || '';
         this.state.filePath = filePath || '';
+        this.state.repoPath = repoPath || '';
         this.state.loading = Boolean(loading);
         this.state.isError = Boolean(isError);
+        this.state.canIgnore = Boolean(canIgnore);
         this.render();
+    }
+
+    ignoreFile() {
+        const filePath = this.state.filePath;
+        const repoPath = this.state.repoPath;
+        if (!filePath || !repoPath || !this.state.canIgnore) return;
+        this.emit('git-diff-ignore', { filePath, repoPath });
     }
 
     render() {
@@ -62,11 +73,16 @@ export class GitDiffViewer {
         const split = this.element.querySelector('#gitDiffSplit');
         const left = this.element.querySelector('#gitDiffLeft');
         const right = this.element.querySelector('#gitDiffRight');
+        const ignoreButton = this.element.querySelector('#gitDiffIgnore');
         if (title) title.textContent = 'Diff';
 
         const mode = this.state.mode || 'split';
         if (split) split.style.display = mode === 'split' ? '' : 'none';
         if (body) body.style.display = mode === 'unified' ? '' : 'none';
+        if (ignoreButton) {
+            const showIgnore = Boolean(this.state.canIgnore && this.state.filePath && this.state.repoPath);
+            ignoreButton.style.display = showIgnore ? '' : 'none';
+        }
 
         if (mode === 'split') {
             const stripped = stripUnifiedDiffFileHeaders(this.state.diffText);
@@ -93,5 +109,9 @@ export class GitDiffViewer {
             }
             body.classList.toggle('error', this.state.isError);
         }
+    }
+
+    emit(name, detail = {}) {
+        this.element.dispatchEvent(new CustomEvent(name, { detail, bubbles: true }));
     }
 }

@@ -21,8 +21,6 @@ export function createGitCommitState(props = {}) {
         actionsMenuOpen: false,
         pullMode: 'ffOnly', // 'ffOnly' | 'rebase' | 'merge'
         settingsMenuOpen: false,
-        amend: false,
-        signoff: false,
         identityPrompt: {
             visible: false,
             repoPath: null,
@@ -36,6 +34,16 @@ export function createGitCommitState(props = {}) {
             pendingAction: null,
             token: '',
             remember: false
+        },
+        ignorePrompt: {
+            visible: false,
+            repoPath: null,
+            mode: 'file', // 'file' | 'folder'
+            anchor: true,
+            patterns: '',
+            paths: [],
+            source: 'manual', // 'selection' | 'untracked' | 'manual'
+            stopTracking: false
         },
         lastStatusLine: ''
     };

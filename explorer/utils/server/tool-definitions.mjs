@@ -24,6 +24,7 @@ export function buildToolDefinitions(zodToJsonSchema, schemas) {
     GitDiffArgsSchema,
     GitStageArgsSchema,
     GitUnstageArgsSchema,
+    GitUntrackArgsSchema,
     GitCommitArgsSchema,
     GitPushArgsSchema,
     GitPullArgsSchema,
@@ -158,6 +159,11 @@ export function buildToolDefinitions(zodToJsonSchema, schemas) {
       name: 'git_unstage',
       description: 'Unstage files in a repository (or unstage all when files is empty).',
       inputSchema: zodToJsonSchema(GitUnstageArgsSchema)
+    },
+    {
+      name: 'git_untrack',
+      description: 'Remove files from git index while keeping them on disk (git rm --cached).',
+      inputSchema: zodToJsonSchema(GitUntrackArgsSchema)
     },
     {
       name: 'git_commit',

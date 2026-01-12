@@ -488,6 +488,11 @@ export function createGitCommitRepo(ctx) {
                 if (p.startsWith(prefix)) out.add(p);
             }
         }
+        if (entry?.excludedFiles?.size) {
+            for (const filePath of entry.excludedFiles) {
+                out.delete(filePath);
+            }
+        }
         return Array.from(out);
     };
 
