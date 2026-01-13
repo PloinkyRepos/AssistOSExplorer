@@ -21,7 +21,6 @@ export function createGitCommitActions(ctx) {
         updateAuthPrompt,
         updateIgnorePrompt,
         closeActionsMenu,
-        closeSettingsMenu,
         getSelectedReposForBatch,
         getPathsForCommitInRepo,
         setCommitMessage,
@@ -123,19 +122,31 @@ export function createGitCommitActions(ctx) {
     };
 
     const openGitTokenPrompt = () => {
-        closeSettingsMenu();
         const state = getState();
         showGitAuthPrompt(state.repoPath, null, { message: '' });
     };
 
-    const openGitIdentityPrompt = async () => {
-        closeSettingsMenu();
+    const resolveIdentityRepoPath = async () => {
         const state = getState();
-        let repoPath = state.selectedRepoPath || state.repoPath;
-        if (!repoPath || isReposRootPath(repoPath, state.reposRoot)) {
-            const selected = getSelectedReposForBatch();
-            repoPath = selected[0] || '';
+        const selectedRepo = state.selectedRepoPath;
+        if (selectedRepo && !isReposRootPath(selectedRepo, state.reposRoot)) return selectedRepo;
+        if (state.repoPath && !isReposRootPath(state.repoPath, state.reposRoot)) return state.repoPath;
+        const selected = getSelectedReposForBatch();
+        if (selected.length) return selected[0];
+        try {
+            const payload = parseJsonToolResult(await service.gitReposOverview(state.reposRoot)) || {};
+            const repos = Array.isArray(payload.repos) ? payload.repos : [];
+            const first = repos.map((repo) => repo?.path).find(Boolean);
+            if (first) return first;
+        } catch {
+            // ignore
         }
+        return '';
+    };
+
+    const openGitIdentityPrompt = async () => {
+        const state = getState();
+        const repoPath = await resolveIdentityRepoPath();
         if (!repoPath) {
             setStatusLine('Select a repository to set identity.', true);
             return;
@@ -163,6 +174,9 @@ export function createGitCommitActions(ctx) {
     const cancelGitToken = () => {
         const state = getState();
         state.authPrompt = { visible: false, repoPath: null, pendingAction: null, token: '', remember: false };
+        if (state.credentialsOpen && !state.credentialsGate) {
+            state.credentialsOpen = false;
+        }
         syncStaticUI();
         updateCommitButtons();
         setStatusLine('Cancelled.', true);
@@ -170,7 +184,42 @@ export function createGitCommitActions(ctx) {
 
     const cancelGitIdentity = () => {
         const state = getState();
+        if (state.credentialsGate) {
+            state.identityPrompt = {
+                ...state.identityPrompt,
+                visible: true
+            };
+            syncStaticUI();
+            updateIdentityPrompt({ focus: state.identityPrompt?.name ? 'email' : 'name' });
+            updateCommitButtons();
+            setStatusLine('Set git user.name and user.email to continue.', true);
+            return;
+        }
         state.identityPrompt = { visible: false, repoPath: null, pendingAction: null, name: '', email: '' };
+        if (state.credentialsOpen && !state.credentialsGate) {
+            state.credentialsOpen = false;
+        }
+        syncStaticUI();
+        updateCommitButtons();
+        setStatusLine('Cancelled.', true);
+    };
+
+    const cancelGitCredentials = () => {
+        const state = getState();
+        if (state.credentialsGate) {
+            state.identityPrompt = {
+                ...state.identityPrompt,
+                visible: true
+            };
+            syncStaticUI();
+            updateIdentityPrompt({ focus: state.identityPrompt?.name ? 'email' : 'name' });
+            updateCommitButtons();
+            setStatusLine('Set git user.name and user.email to continue.', true);
+            return;
+        }
+        state.identityPrompt = { visible: false, repoPath: null, pendingAction: null, name: '', email: '' };
+        state.authPrompt = { visible: false, repoPath: null, pendingAction: null, token: '', remember: false };
+        if (state.credentialsOpen) state.credentialsOpen = false;
         syncStaticUI();
         updateCommitButtons();
         setStatusLine('Cancelled.', true);
@@ -230,7 +279,6 @@ export function createGitCommitActions(ctx) {
     };
 
     const openGitIgnorePrompt = (options = {}) => {
-        closeSettingsMenu();
         const repoPath = options.repoPath || resolveIgnoreRepoPath();
         if (!repoPath) {
             const selected = getSelectedReposForBatch();
@@ -575,6 +623,154 @@ export function createGitCommitActions(ctx) {
         }
     };
 
+    const saveGitCredentials = async (payload = {}) => {
+        const state = getState();
+        const name = String(payload.name ?? state.identityPrompt?.name ?? '').trim();
+        const email = String(payload.email ?? state.identityPrompt?.email ?? '').trim();
+        const token = String(payload.token ?? state.authPrompt?.token ?? '').trim();
+        const remember = typeof payload.remember === 'boolean' ? payload.remember : Boolean(state.authPrompt?.remember);
+
+        const identityRequired = Boolean(state.credentialsGate || state.identityPrompt?.visible);
+        const authRequired = Boolean(state.authPrompt?.visible);
+        const identityValid = Boolean(name && email);
+        const tokenValid = Boolean(token);
+
+        state.identityPrompt = {
+            ...state.identityPrompt,
+            name,
+            email
+        };
+        state.authPrompt = {
+            ...state.authPrompt,
+            token,
+            remember
+        };
+
+        if (identityRequired && !identityValid) {
+            state.identityPrompt = {
+                ...state.identityPrompt,
+                visible: true,
+                name,
+                email
+            };
+            syncStaticUI();
+            updateIdentityPrompt({ focus: !name ? 'name' : 'email' });
+            updateCommitButtons();
+            setStatusLine('Enter name and email.', true);
+            return;
+        }
+        if (authRequired && !tokenValid) {
+            state.authPrompt = {
+                ...state.authPrompt,
+                visible: true,
+                token: '',
+                remember
+            };
+            syncStaticUI();
+            updateAuthPrompt({ focus: 'token' });
+            updateCommitButtons();
+            setStatusLine('Enter a token to continue.', true);
+            return;
+        }
+
+        let identitySaved = false;
+        let tokenSaved = false;
+        let repoPath = state.identityPrompt?.repoPath;
+        if (identityValid && (identityRequired || identityValid)) {
+            if (!repoPath) {
+                repoPath = await resolveIdentityRepoPath();
+            }
+            if (!repoPath) {
+                repoPath = state.reposRoot || state.repoPath || '';
+            }
+            if (!repoPath) {
+                setStatusLine('Select a repository to set identity.', true);
+                return;
+            }
+            try {
+                await service.gitSetIdentity({
+                    path: repoPath,
+                    scope: 'global',
+                    name,
+                    email
+                });
+                identitySaved = true;
+            } catch (error) {
+                setStatusLine(normalizeErrorMessage(error), true);
+                return;
+            }
+        }
+
+        if (tokenValid && (authRequired || tokenValid)) {
+            if (remember) setRememberedGitPat(token);
+            else setRememberedGitPat('');
+            tokenSaved = true;
+        }
+
+        const pending = state.authPrompt?.pendingAction || state.identityPrompt?.pendingAction;
+        const wasGate = state.credentialsGate;
+
+        if (identitySaved) {
+            state.identityPrompt = { visible: false, repoPath: null, pendingAction: null, name: '', email: '' };
+        }
+        if (tokenSaved || authRequired) {
+            state.authPrompt = { visible: false, repoPath: null, pendingAction: null, token: '', remember: false };
+        }
+        if (identitySaved && state.credentialsGate) {
+            state.credentialsGate = false;
+        }
+        if (state.credentialsOpen && !state.credentialsGate) {
+            state.credentialsOpen = false;
+        }
+
+        syncStaticUI();
+        updateCommitButtons();
+
+        if (pending?.type) {
+            if (pending.type === 'pull') {
+                setStatusLine('Retrying pull…');
+            } else if (pending.type === 'push') {
+                setStatusLine('Retrying push…');
+            } else if (pending.type === 'commit') {
+                setStatusLine('Retrying commit…');
+            }
+            try {
+                if (pending.type === 'commit') {
+                    await commitSelectedRepos();
+                } else if (pending.type === 'push') {
+                    if (pending.mode === 'batch') {
+                        const list = Array.isArray(pending.repoPaths) ? pending.repoPaths : [];
+                        await pushRepos(list, { token });
+                    } else {
+                        await push({ silent: false, token });
+                    }
+                } else if (pending.type === 'pull') {
+                    if (pending.mode === 'batch') {
+                        const list = Array.isArray(pending.repoPaths) ? pending.repoPaths : [];
+                        await pullRepos(list, { token });
+                    } else {
+                        await pullSelectedRepos();
+                    }
+                }
+            } catch (error) {
+                setStatusLine(normalizeErrorMessage(error), true);
+            }
+            return;
+        }
+
+        if (identitySaved && tokenSaved) {
+            setStatusLine('Credentials saved.');
+        } else if (identitySaved) {
+            setStatusLine('Git identity saved.');
+        } else if (tokenSaved) {
+            setStatusLine('Token saved.');
+        }
+
+        if (wasGate && identitySaved) {
+            await refreshAll({ force: true });
+        }
+    };
+
     const gitPushWithToken = async (repoPath, token) => {
         const payload = { path: repoPath };
         const cleanToken = String(token || '').trim();
@@ -710,20 +906,25 @@ export function createGitCommitActions(ctx) {
             return;
         }
 
-        const nextScope = String(payload.scope || '').trim() || 'local';
+        const nextScope = 'global';
         try {
             await service.gitSetIdentity({
                 path: repoPath,
-                scope: nextScope === 'global' ? 'global' : 'local',
+                scope: nextScope,
                 name,
                 email
             });
             const pending = state.identityPrompt?.pendingAction;
             state.identityPrompt = { visible: false, repoPath: null, pendingAction: null, name: '', email: '' };
+            const wasGate = state.credentialsGate;
+            state.credentialsGate = false;
             syncStaticUI();
             updateCommitButtons();
             setStatusLine('Git identity saved.');
 
+            if (wasGate && !pending?.type) {
+                await refreshAll({ force: true });
+            }
             if (pending?.type === 'commit') {
                 if (pending.mode === 'batch') await commitSelectedRepos();
                 else await commitSelectedRepos();
@@ -963,9 +1164,11 @@ export function createGitCommitActions(ctx) {
         openGitIgnorePrompt,
         cancelGitToken,
         cancelGitIdentity,
+        cancelGitCredentials,
         cancelGitIgnore,
         generateCommitMessage,
         saveGitToken,
+        saveGitCredentials,
         saveGitIgnore,
         setIgnoreMode,
         setIgnoreAnchor,

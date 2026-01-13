@@ -177,14 +177,9 @@
       "presenterClassName": "GitCommitModal"
     },
     {
-      "name": "git-identity-prompt",
+      "name": "git-credentials-prompt",
       "type": "components",
-      "presenterClassName": "GitIdentityPrompt"
-    },
-    {
-      "name": "git-auth-prompt",
-      "type": "components",
-      "presenterClassName": "GitAuthPrompt"
+      "presenterClassName": "GitCredentialsPrompt"
     },
     {
       "name": "git-ignore-prompt",

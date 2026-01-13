@@ -7,7 +7,7 @@ import { createGitCommitState } from "./git-commit-modal-state.js";
 import { createGitCommitUI } from "./git-commit-modal-ui.js";
 import { callToolWithLoader } from "../../../utils/globalLoader.js";
 import { joinPath } from "../../pages/file-exp/file-exp-utils.js";
-import { normalizeErrorMessage, parseJsonToolResult, normalizeSlashes } from "./git-commit-modal-utils.js";
+import { normalizeErrorMessage, parseJsonToolResult, normalizeSlashes, isReposRootPath } from "./git-commit-modal-utils.js";
 
 export class GitCommitModal {
     constructor(element, invalidate, props = {}) {
@@ -54,10 +54,8 @@ export class GitCommitModal {
             runGitAction: this.runGitAction.bind(this),
             openDiff: this.openDiff.bind(this),
             applyRepoPathFromInput: this.applyRepoPathFromInput.bind(this),
-            saveGitToken: this.saveGitToken.bind(this),
-            cancelGitToken: this.cancelGitToken.bind(this),
-            saveGitIdentity: this.saveGitIdentity.bind(this),
-            cancelGitIdentity: this.cancelGitIdentity.bind(this),
+            saveGitCredentials: this.saveGitCredentials.bind(this),
+            cancelGitCredentials: this.cancelGitCredentials.bind(this),
             saveGitIgnore: this.saveGitIgnore.bind(this),
             cancelGitIgnore: this.cancelGitIgnore.bind(this),
             setIgnoreMode: this.setIgnoreMode.bind(this),
@@ -76,7 +74,6 @@ export class GitCommitModal {
             updateAuthPrompt: this.updateAuthPrompt.bind(this),
             updateIgnorePrompt: this.updateIgnorePrompt.bind(this),
             closeActionsMenu: this.closeActionsMenu.bind(this),
-            closeSettingsMenu: this.closeSettingsMenu.bind(this),
             getSelectedReposForBatch: () => this.getSelectedReposForBatch(),
             getPathsForCommitInRepo: this.getPathsForCommitInRepo.bind(this),
             setCommitMessage: this.setCommitMessage.bind(this),
@@ -123,8 +120,12 @@ export class GitCommitModal {
         this.bindEvents();
         this.syncStaticUI();
         this.dialog.ensureDialogResizable();
-        // On open: force-load repos overview so the user immediately sees changes across all repos.
-        this.refreshAll({ force: true });
+        this.ensureCredentialsGate().then((gateActive) => {
+            if (!gateActive) {
+                // On open: force-load repos overview so the user immediately sees changes across all repos.
+                this.refreshAll({ force: true });
+            }
+        });
     }
 
     toggleFullscreen() {
@@ -137,6 +138,95 @@ export class GitCommitModal {
 
     closeModalAction() {
         this.closeModal();
+    }
+
+    async resolveIdentityRepoPath() {
+        const repoPath = this.state.selectedRepoPath || this.state.repoPath || '';
+        if (repoPath && !isReposRootPath(repoPath, this.state.reposRoot)) {
+            return repoPath;
+        }
+        const fromOverviews = (this.state.repoOverviews || [])
+            .map((repo) => repo?.path)
+            .find(Boolean);
+        if (fromOverviews) return fromOverviews;
+        try {
+            const text = await this.service.gitReposOverview(this.state.reposRoot);
+            const payload = parseJsonToolResult(text) || {};
+            const repos = Array.isArray(payload.repos) ? payload.repos : [];
+            const first = repos.map((repo) => repo?.path).find(Boolean);
+            if (first) return first;
+        } catch {
+            // ignore
+        }
+        return repoPath || this.state.reposRoot || '';
+    }
+
+    async prefillCredentialsPanel() {
+        const current = this.state.identityPrompt || {};
+        let repoPath = current.repoPath || this.state.selectedRepoPath || this.state.repoPath || '';
+        if (repoPath && isReposRootPath(repoPath, this.state.reposRoot)) {
+            repoPath = '';
+        }
+        if (!repoPath) {
+            repoPath = (this.state.repoOverviews || [])
+                .map((repo) => repo?.path)
+                .find((path) => path && !isReposRootPath(path, this.state.reposRoot)) || '';
+        }
+        if (!repoPath) return;
+
+        let payload = null;
+        try {
+            payload = parseJsonToolResult(await this.service.gitIdentity(repoPath)) || {};
+        } catch {
+            payload = null;
+        }
+        const local = payload?.local || {};
+        const global = payload?.global || {};
+        const effective = payload?.effective || {};
+        const name = local.name || effective.name || global.name || current.name || '';
+        const email = local.email || effective.email || global.email || current.email || '';
+        this.state.identityPrompt = {
+            ...current,
+            repoPath,
+            name,
+            email
+        };
+    }
+
+    async ensureCredentialsGate() {
+        let payload = null;
+        try {
+            payload = parseJsonToolResult(await this.service.gitIdentity(this.state.repoPath)) || {};
+        } catch {
+            payload = null;
+        }
+        if (payload?.ok) {
+            if (this.state.credentialsGate) {
+                this.state.credentialsGate = false;
+                this.syncStaticUI();
+            }
+            return false;
+        }
+
+        const local = payload?.local || {};
+        const global = payload?.global || {};
+        const effective = payload?.effective || {};
+        const name = local.name || effective.name || global.name || '';
+        const email = local.email || effective.email || global.email || '';
+        const repoPath = await this.resolveIdentityRepoPath();
+        this.state.credentialsGate = true;
+        this.state.identityPrompt = {
+            visible: true,
+            repoPath,
+            pendingAction: null,
+            name,
+            email
+        };
+        this.syncStaticUI();
+        this.updateIdentityPrompt({ focus: !name ? 'name' : (!email ? 'email' : 'name') });
+        this.updateCommitButtons();
+        this.setStatusLine('Set git user.name and user.email to continue.', true);
+        return true;
     }
 
     refreshAction() {
@@ -412,12 +502,16 @@ export class GitCommitModal {
         return this.ui.closeActionsMenu();
     }
 
-    toggleSettingsMenu() {
-        return this.ui.toggleSettingsMenu();
+    async toggleCredentials() {
+        const opening = !this.state.credentialsOpen;
+        if (opening && !this.state.credentialsGate) {
+            await this.prefillCredentialsPanel();
+        }
+        return this.ui.toggleCredentials();
     }
 
-    closeSettingsMenu() {
-        return this.ui.closeSettingsMenu();
+    closeCredentials() {
+        return this.ui.closeCredentials();
     }
 
     runGitAction(element, mode) {
@@ -591,10 +685,6 @@ export class GitCommitModal {
         return this.actions.openGitIdentityPrompt();
     }
 
-    openGitIgnorePrompt() {
-        return this.actions.openGitIgnorePrompt();
-    }
-
     cancelGitToken() {
         return this.actions.cancelGitToken();
     }
@@ -609,6 +699,14 @@ export class GitCommitModal {
 
     async saveGitToken(payload = {}) {
         return this.actions.saveGitToken(payload);
+    }
+
+    async saveGitCredentials(payload = {}) {
+        return this.actions.saveGitCredentials(payload);
+    }
+
+    cancelGitCredentials() {
+        return this.actions.cancelGitCredentials();
     }
 
     async saveGitIgnore(payload = {}) {

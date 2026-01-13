@@ -6,10 +6,8 @@ export function createGitCommitUI(ctx) {
         runGitAction,
         openDiff,
         applyRepoPathFromInput,
-        saveGitToken,
-        cancelGitToken,
-        saveGitIdentity,
-        cancelGitIdentity,
+        saveGitCredentials,
+        cancelGitCredentials,
         saveGitIgnore,
         cancelGitIgnore,
         setIgnoreMode,
@@ -74,7 +72,6 @@ export function createGitCommitUI(ctx) {
                     if (!inside) closeFn();
                 };
                 closeMenuIfOutside(state.actionsMenuOpen, '#gitActionsSplit', () => closeActionsMenu());
-                closeMenuIfOutside(state.settingsMenuOpen, '#gitSettingsSplit', () => closeSettingsMenu());
                 if (!event.target?.closest?.('.git-file-menu')) {
                     closeFileMenus();
                 }
@@ -89,32 +86,23 @@ export function createGitCommitUI(ctx) {
         }
 
         if (!element.dataset.boundPromptEvents) {
-            element.addEventListener('git-auth-submit', (event) => {
-                saveGitToken(event?.detail || {});
+            element.addEventListener('git-credentials-submit', (event) => {
+                saveGitCredentials(event?.detail || {});
             });
-            element.addEventListener('git-auth-cancel', () => {
-                cancelGitToken();
+            element.addEventListener('git-credentials-cancel', () => {
+                cancelGitCredentials();
             });
-            element.addEventListener('git-auth-change', (event) => {
-                const detail = event?.detail || {};
-                state.authPrompt = {
-                    ...state.authPrompt,
-                    token: String(detail.token ?? state.authPrompt?.token ?? ''),
-                    remember: typeof detail.remember === 'boolean' ? detail.remember : Boolean(state.authPrompt?.remember)
-                };
-            });
-            element.addEventListener('git-identity-submit', (event) => {
-                saveGitIdentity(event?.detail || {});
-            });
-            element.addEventListener('git-identity-cancel', () => {
-                cancelGitIdentity();
-            });
-            element.addEventListener('git-identity-change', (event) => {
+            element.addEventListener('git-credentials-change', (event) => {
                 const detail = event?.detail || {};
                 state.identityPrompt = {
                     ...state.identityPrompt,
                     name: String(detail.name ?? state.identityPrompt?.name ?? ''),
                     email: String(detail.email ?? state.identityPrompt?.email ?? '')
+                };
+                state.authPrompt = {
+                    ...state.authPrompt,
+                    token: String(detail.token ?? state.authPrompt?.token ?? ''),
+                    remember: typeof detail.remember === 'boolean' ? detail.remember : Boolean(state.authPrompt?.remember)
                 };
             });
             element.addEventListener('git-ignore-submit', (event) => {
@@ -170,58 +158,61 @@ export function createGitCommitUI(ctx) {
             repoPathInput.value = state.repoPath;
         }
 
-        updateIdentityPrompt();
-
         const actionsMenu = element.querySelector('#gitActionsMenu');
         if (actionsMenu) {
             actionsMenu.style.display = state.actionsMenuOpen ? '' : 'none';
         }
 
-        const settingsMenu = element.querySelector('#gitSettingsMenu');
-        if (settingsMenu) {
-            settingsMenu.style.display = state.settingsMenuOpen ? '' : 'none';
+        const modalRoot = element.classList.contains('git-modal') ? element : element.querySelector('.git-modal');
+        if (modalRoot) {
+            const gateActive = Boolean(state.credentialsGate);
+            const credentialsVisible = gateActive
+                || Boolean(state.credentialsOpen)
+                || Boolean(state.identityPrompt?.visible)
+                || Boolean(state.authPrompt?.visible);
+            modalRoot.classList.toggle('git-credentials-only', gateActive);
+            modalRoot.classList.toggle('git-credentials-open', credentialsVisible);
         }
 
-        updateAuthPrompt();
+        updateCredentialsPrompt();
         updateIgnorePrompt();
     };
 
-    const getIdentityPromptPresenter = () => element.querySelector('git-identity-prompt')?.webSkelPresenter || null;
-    const getAuthPromptPresenter = () => element.querySelector('git-auth-prompt')?.webSkelPresenter || null;
+    const getCredentialsPromptPresenter = () => element.querySelector('git-credentials-prompt')?.webSkelPresenter || null;
     const getIgnorePromptPresenter = () => element.querySelector('git-ignore-prompt')?.webSkelPresenter || null;
 
-    const updateIdentityPrompt = (options = {}) => {
-        const promptState = state.identityPrompt || {};
+    const updateCredentialsPrompt = (options = {}) => {
+        const identityState = state.identityPrompt || {};
+        const authState = state.authPrompt || {};
+        const visible = Boolean(
+            identityState.visible
+            || authState.visible
+            || state.credentialsGate
+            || state.credentialsOpen
+        );
         const detail = {
-            visible: Boolean(promptState.visible),
-            name: promptState.name || '',
-            email: promptState.email || ''
+            visible,
+            name: identityState.name || '',
+            email: identityState.email || '',
+            token: authState.token || '',
+            remember: Boolean(authState.remember)
         };
         if (options.focus) detail.focus = options.focus;
-        const presenter = getIdentityPromptPresenter();
+        const presenter = getCredentialsPromptPresenter();
         if (presenter?.setState) {
             presenter.setState(detail);
             return;
         }
-        const target = element.querySelector('git-identity-prompt');
-        target?.dispatchEvent?.(new CustomEvent('git-identity-update', { detail }));
+        const target = element.querySelector('git-credentials-prompt');
+        target?.dispatchEvent?.(new CustomEvent('git-credentials-update', { detail }));
+    };
+
+    const updateIdentityPrompt = (options = {}) => {
+        updateCredentialsPrompt(options);
     };
 
     const updateAuthPrompt = (options = {}) => {
-        const promptState = state.authPrompt || {};
-        const detail = {
-            visible: Boolean(promptState.visible),
-            token: promptState.token || '',
-            remember: Boolean(promptState.remember)
-        };
-        if (options.focus) detail.focus = options.focus;
-        const presenter = getAuthPromptPresenter();
-        if (presenter?.setState) {
-            presenter.setState(detail);
-            return;
-        }
-        const target = element.querySelector('git-auth-prompt');
-        target?.dispatchEvent?.(new CustomEvent('git-auth-update', { detail }));
+        updateCredentialsPrompt(options);
     };
 
     const updateIgnorePrompt = (options = {}) => {
@@ -277,9 +268,6 @@ export function createGitCommitUI(ctx) {
 
     const toggleActionsMenu = () => {
         state.actionsMenuOpen = !state.actionsMenuOpen;
-        if (state.actionsMenuOpen) {
-            closeSettingsMenu();
-        }
         syncStaticUI();
         if (state.actionsMenuOpen) {
             setTimeout(() => element.querySelector('#gitActionsMenu .git-menu-item')?.focus?.(), 0);
@@ -292,20 +280,21 @@ export function createGitCommitUI(ctx) {
         syncStaticUI();
     };
 
-    const toggleSettingsMenu = () => {
-        state.settingsMenuOpen = !state.settingsMenuOpen;
-        if (state.settingsMenuOpen) {
+    const toggleCredentials = () => {
+        if (state.credentialsGate) {
+            syncStaticUI();
+            return;
+        }
+        state.credentialsOpen = !state.credentialsOpen;
+        if (state.credentialsOpen) {
             closeActionsMenu();
         }
         syncStaticUI();
-        if (state.settingsMenuOpen) {
-            setTimeout(() => element.querySelector('#gitSettingsMenu .git-menu-item')?.focus?.(), 0);
-        }
     };
 
-    const closeSettingsMenu = () => {
-        if (!state.settingsMenuOpen) return;
-        state.settingsMenuOpen = false;
+    const closeCredentials = () => {
+        if (!state.credentialsOpen) return;
+        state.credentialsOpen = false;
         syncStaticUI();
     };
 
@@ -319,7 +308,7 @@ export function createGitCommitUI(ctx) {
         updateCommitMessage,
         toggleActionsMenu,
         closeActionsMenu,
-        toggleSettingsMenu,
-        closeSettingsMenu
+        toggleCredentials,
+        closeCredentials
     };
 }

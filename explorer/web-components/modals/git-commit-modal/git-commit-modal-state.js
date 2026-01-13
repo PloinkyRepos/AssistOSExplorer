@@ -20,7 +20,8 @@ export function createGitCommitState(props = {}) {
         commitMode: 'commit', // 'commit' | 'commitPush'
         actionsMenuOpen: false,
         pullMode: 'ffOnly', // 'ffOnly' | 'rebase' | 'merge'
-        settingsMenuOpen: false,
+        credentialsOpen: false,
+        credentialsGate: false,
         identityPrompt: {
             visible: false,
             repoPath: null,

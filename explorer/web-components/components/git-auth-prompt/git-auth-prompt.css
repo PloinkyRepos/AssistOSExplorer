@@ -1,8 +1,0 @@
-git-auth-prompt {
-    display: none;
-    margin-bottom: 10px;
-}
-
-git-auth-prompt.is-visible {
-    display: block;
-}

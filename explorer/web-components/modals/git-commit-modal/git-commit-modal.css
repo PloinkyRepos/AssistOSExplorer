@@ -35,6 +35,12 @@ dialog.modal.git-commit-modal-dialog.git-positioned {
     gap: 8px;
 }
 
+.git-modal-header-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+}
+
 dialog.modal.git-commit-modal-dialog.is-fullscreen {
     left: 0 !important;
     top: 0 !important;
@@ -182,6 +188,10 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
     display: block;
 }
 
+#gitModalFullscreen .git-settings-icon {
+    width: 25px;
+}
+
 .git-modal input[type="text"],
 .git-modal input[type="password"],
 .git-modal textarea {
@@ -250,6 +260,28 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
     gap: 12px;
     padding: 12px 14px 14px;
     overflow: hidden;
+}
+
+.git-credentials {
+    display: none;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.git-modal-content {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 0;
+    flex: 1 1 auto;
+}
+
+.git-modal.git-credentials-only .git-modal-content {
+    display: none;
+}
+
+.git-modal.git-credentials-open .git-credentials {
+    display: flex;
 }
 
 .git-topbar {
@@ -810,19 +842,15 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
 }
 
 .git-commit-settings {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    justify-content: flex-start;
-    align-self: flex-start;
-    width: 100%;
 }
 
 #gitSettingsButton {
     position: relative;
-    margin-left: auto;
 }
 
-.git-identity {
+.git-credentials-card {
     border: 1px dashed var(--file-exp-border, rgba(148, 163, 184, 0.35));
     border-radius: 10px;
     padding: 10px 12px;
@@ -832,76 +860,42 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
     gap: 10px;
 }
 
-.git-identity-title {
+.git-credentials-title {
     font-weight: 800;
     color: var(--text, #0f172a);
 }
 
-.git-identity-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.git-identity-label {
-    min-width: 60px;
-    color: var(--text-soft, rgba(15, 23, 42, 0.7));
-    font-size: 0.85rem;
-    font-weight: 700;
-}
-
-.git-identity-actions {
-    display: flex;
-    gap: 8px;
-    justify-content: flex-end;
-}
-
-.git-auth {
-    border: 1px dashed var(--file-exp-border, rgba(148, 163, 184, 0.35));
-    border-radius: 10px;
-    padding: 10px 12px;
-    background: var(--file-exp-subtle-surface, rgba(148, 163, 184, 0.08));
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.git-auth-title {
-    font-weight: 800;
-    color: var(--text, #0f172a);
-}
-
-.git-auth-hint {
+.git-credentials-hint {
     color: var(--text-soft, rgba(15, 23, 42, 0.7));
     font-size: 0.9rem;
 }
 
-.git-auth-row {
+.git-credentials-row {
     display: flex;
     align-items: center;
     gap: 10px;
 }
 
-.git-auth-label {
+.git-credentials-label {
     min-width: 60px;
     color: var(--text-soft, rgba(15, 23, 42, 0.7));
     font-size: 0.85rem;
     font-weight: 700;
 }
 
-.git-auth-row input {
+.git-credentials-row input {
     flex: 1 1 auto;
     min-width: 0;
 }
 
-.git-auth-actions {
+.git-credentials-actions {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 10px;
 }
 
-.git-auth-buttons {
+.git-credentials-buttons {
     display: inline-flex;
     gap: 8px;
 }
@@ -1089,6 +1083,10 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
     align-items: center;
     gap: 6px;
     width: 100%;
+}
+
+.git-modal-header .git-commit-split {
+    width: auto;
 }
 
 .git-commit-split-toggle {
