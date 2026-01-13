@@ -25,6 +25,7 @@ export function buildToolDefinitions(zodToJsonSchema, schemas) {
     GitStageArgsSchema,
     GitUnstageArgsSchema,
     GitUntrackArgsSchema,
+    GitRestoreArgsSchema,
     GitCommitArgsSchema,
     GitPushArgsSchema,
     GitPullArgsSchema,
@@ -164,6 +165,11 @@ export function buildToolDefinitions(zodToJsonSchema, schemas) {
       name: 'git_untrack',
       description: 'Remove files from git index while keeping them on disk (git rm --cached).',
       inputSchema: zodToJsonSchema(GitUntrackArgsSchema)
+    },
+    {
+      name: 'git_restore',
+      description: 'Restore files to the last commit (discard local changes).',
+      inputSchema: zodToJsonSchema(GitRestoreArgsSchema)
     },
     {
       name: 'git_commit',

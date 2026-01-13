@@ -66,6 +66,10 @@ export function createSchemas(z) {
     path: z.string(),
     files: z.array(z.string()).optional().default([])
   });
+  const GitRestoreArgsSchema = z.object({
+    path: z.string(),
+    files: z.array(z.string()).optional().default([])
+  });
   const GitCommitArgsSchema = z.object({
     path: z.string(),
     message: z.string().optional().default(''),
@@ -127,6 +131,7 @@ export function createSchemas(z) {
     GitStageArgsSchema,
     GitUnstageArgsSchema,
     GitUntrackArgsSchema,
+    GitRestoreArgsSchema,
     GitCommitArgsSchema,
     GitPushArgsSchema,
     GitPullArgsSchema,

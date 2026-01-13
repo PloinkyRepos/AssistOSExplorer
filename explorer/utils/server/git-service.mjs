@@ -413,6 +413,30 @@ export function createGitService({ validatePath }) {
     return { ok: true };
   }
 
+  async function gitRestore({ path: repoPathArg, files = [] }) {
+    const repoPath = await resolveRepoPath(repoPathArg);
+    const gitBinary = await getGitBinary(repoPath);
+    const list = Array.isArray(files) ? files : [];
+    if (list.length) {
+      for (const file of list) {
+        if (!isGitRepoRelativePath(file)) throw new Error(`Invalid file path for git_restore: ${file}`);
+      }
+    }
+    const target = list.length ? list : ['.'];
+    try {
+      await runGit(repoPath, [gitBinary, 'restore', '--source=HEAD', '--staged', '--worktree', '--', ...target]);
+      return { ok: true };
+    } catch {
+      try {
+        await runGit(repoPath, [gitBinary, 'reset', '-q', 'HEAD', '--', ...target]);
+      } catch {
+        // ignore reset fallback errors, checkout will surface the error if needed.
+      }
+      await runGit(repoPath, [gitBinary, 'checkout', '--', ...target]);
+      return { ok: true };
+    }
+  }
+
   async function gitCommit({ path: repoPathArg, message, amend = false, signoff = false }) {
     const repoPath = await resolveRepoPath(repoPathArg);
     const gitBinary = await getGitBinary(repoPath);
@@ -847,6 +871,7 @@ export function createGitService({ validatePath }) {
     gitStage,
     gitUnstage,
     gitUntrack,
+    gitRestore,
     gitCommit,
     gitPull,
     gitPush,

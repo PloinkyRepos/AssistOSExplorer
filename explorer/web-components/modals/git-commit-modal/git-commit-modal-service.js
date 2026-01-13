@@ -11,6 +11,7 @@ export function createGitCommitService({ callTool, callAgentTool }) {
         gitSetIdentity: (payload) => callTool('git_set_identity', payload),
         gitStage: (path, files) => callTool('git_stage', { path, files }),
         gitUntrack: (path, files) => callTool('git_untrack', { path, files }),
+        gitRestore: (path, files) => callTool('git_restore', { path, files }),
         gitCommit: (payload) => callTool('git_commit', payload),
         deleteFile: (path) => callTool('delete_file', { path }),
         readTextFile: (path) => callTool('read_text_file', { path }),

@@ -221,6 +221,26 @@ export class GitCommitModal {
         }
     }
 
+    async rollbackFile(element) {
+        const repoPath = element?.dataset?.repoPath || null;
+        const filePath = element?.dataset?.filePath;
+        if (!repoPath || !filePath) return;
+        this.closeFileMenus();
+        const row = element?.closest?.('.git-tree-file-row');
+        if (row?.classList?.contains('is-untracked')) {
+            this.setStatusLine(`Cannot rollback untracked file: ${filePath}.`, true);
+            return;
+        }
+        try {
+            this.setStatusLine(`Rolling back ${filePath}...`);
+            await this.service.gitRestore(repoPath, [filePath]);
+            await this.refreshAll({ force: true });
+            this.setStatusLine(`Rolled back ${filePath}.`);
+        } catch (error) {
+            this.setStatusLine(normalizeErrorMessage(error), true);
+        }
+    }
+
     openIgnoreForDiff(payload = {}) {
         const repoPath = payload.repoPath || null;
         const filePath = payload.filePath;
