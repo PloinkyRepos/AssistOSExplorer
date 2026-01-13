@@ -186,14 +186,16 @@ export function renderRepoChangesTree(repo, {
             const flags = file.flags || {};
             const kind = String(file.kind || '');
             const isUntracked = Boolean(flags.untracked) || kind === 'untracked' || (x === '?' && y === '?');
+            const isDeleted = !isUntracked && (x === 'D' || y === 'D');
             const isNewTracked = !isUntracked && (x === 'A' || y === 'A');
-            const isModified = !isUntracked && !isNewTracked && (
+            const isModified = !isUntracked && !isNewTracked && !isDeleted && (
                 x === 'M' || y === 'M' || x === 'R' || y === 'R' || x === 'C' || y === 'C'
                 || kind === 'staged' || kind === 'unstaged' || kind === 'staged+unstaged' || kind === 'conflicted'
             );
             row.classList.toggle('is-untracked', isUntracked);
             row.classList.toggle('is-new', isNewTracked);
             row.classList.toggle('is-modified', isModified);
+            row.classList.toggle('is-deleted', isDeleted);
             row.classList.add('has-file-menu');
 
             const checkbox = document.createElement('input');

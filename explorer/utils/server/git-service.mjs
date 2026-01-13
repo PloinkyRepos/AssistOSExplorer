@@ -21,7 +21,7 @@ function isGitRepoRelativePath(candidate) {
   return true;
 }
 
-async function runGit(cwd, args, { timeoutMs = 20000, okCodes = [0] } = {}) {
+async function runGit(cwd, args, { timeoutMs = 20000, okCodes = [0], input = null } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(args[0], args.slice(1), {
       cwd,
@@ -31,7 +31,7 @@ async function runGit(cwd, args, { timeoutMs = 20000, okCodes = [0] } = {}) {
         GIT_OPTIONAL_LOCKS: process.env.GIT_OPTIONAL_LOCKS || '0',
         GIT_DISCOVERY_ACROSS_FILESYSTEM: process.env.GIT_DISCOVERY_ACROSS_FILESYSTEM || '1'
       },
-      stdio: ['ignore', 'pipe', 'pipe']
+      stdio: ['pipe', 'pipe', 'pipe']
     });
 
     let stdout = '';
@@ -40,6 +40,11 @@ async function runGit(cwd, args, { timeoutMs = 20000, okCodes = [0] } = {}) {
       child.kill('SIGKILL');
       reject(new Error(`git timeout after ${timeoutMs}ms`));
     }, timeoutMs);
+
+    if (input !== null && input !== undefined) {
+      child.stdin.write(input);
+    }
+    child.stdin.end();
 
     child.stdout.setEncoding('utf8');
     child.stderr.setEncoding('utf8');
@@ -187,6 +192,47 @@ export function createGitService({ validatePath }) {
     return repoPath;
   }
 
+  async function getIgnoredPathSet(repoPath, paths) {
+    const unique = Array.from(new Set((paths || []).map((p) => String(p || '')).filter(Boolean)));
+    if (!unique.length) return new Set();
+    const gitBinary = await getGitBinary(repoPath);
+    const input = `${unique.join('\0')}\0`;
+    const { stdout } = await runGit(
+      repoPath,
+      [gitBinary, 'check-ignore', '-z', '--stdin'],
+      { timeoutMs: 5000, okCodes: [0, 1], input }
+    );
+    const ignored = stdout ? stdout.split('\0').filter(Boolean) : [];
+    return new Set(ignored);
+  }
+
+  async function filterIgnoredFromStatus(repoPath, status) {
+    if (!status) return status;
+    const staged = Array.isArray(status.staged) ? status.staged : [];
+    const unstaged = Array.isArray(status.unstaged) ? status.unstaged : [];
+    const untracked = Array.isArray(status.untracked) ? status.untracked : [];
+    const conflicted = Array.isArray(status.conflicted) ? status.conflicted : [];
+    const paths = [...staged, ...unstaged, ...untracked, ...conflicted]
+      .map((entry) => entry?.path)
+      .filter(Boolean);
+    if (!paths.length) return status;
+    let ignored = null;
+    try {
+      ignored = await getIgnoredPathSet(repoPath, paths);
+    } catch {
+      return status;
+    }
+    if (!ignored || ignored.size === 0) return status;
+    const filterList = (list) => list.filter((entry) => !ignored.has(entry?.path));
+    return {
+      ...status,
+      staged: filterList(staged),
+      unstaged: filterList(unstaged),
+      untracked: filterList(untracked),
+      conflicted: filterList(conflicted)
+    };
+  }
+
   async function gitInfo({ path: repoPathArg }) {
     const repoPath = await resolveRepoPath(repoPathArg);
     try {
@@ -231,7 +277,8 @@ export function createGitService({ validatePath }) {
     const gitBinary = await getGitBinary(repoPath);
     const { stdout } = await runGit(repoPath, [gitBinary, 'status', '--porcelain=v1', '-z', '-uall']);
     const entries = parseStatusPorcelainV1Z(stdout);
-    const status = categorizeStatusEntries(entries);
+    let status = categorizeStatusEntries(entries);
+    status = await filterIgnoredFromStatus(repoPath, status);
     return { ok: true, status };
   }
 
@@ -246,7 +293,8 @@ export function createGitService({ validatePath }) {
       { timeoutMs: 5000 }
     );
     const entries = parseStatusPorcelainV1Z(stdout);
-    const status = categorizeStatusEntries(entries);
+    let status = categorizeStatusEntries(entries);
+    status = await filterIgnoredFromStatus(repoPath, status);
     if (!includeUntracked) {
       status.untracked = [];
     }
@@ -308,7 +356,22 @@ export function createGitService({ validatePath }) {
     for (const file of list) {
       if (!isGitRepoRelativePath(file)) throw new Error(`Invalid file path for git_stage: ${file}`);
     }
-    await runGit(repoPath, [gitBinary, 'add', '--', ...list]);
+    const existing = [];
+    const missing = [];
+    for (const file of list) {
+      try {
+        await fs.stat(path.join(repoPath, file));
+        existing.push(file);
+      } catch {
+        missing.push(file);
+      }
+    }
+    if (existing.length) {
+      await runGit(repoPath, [gitBinary, 'add', '-A', '--', ...existing]);
+    }
+    if (missing.length) {
+      await runGit(repoPath, [gitBinary, 'rm', '--cached', '--ignore-unmatch', '--', ...missing]);
+    }
     return { ok: true };
   }
 
