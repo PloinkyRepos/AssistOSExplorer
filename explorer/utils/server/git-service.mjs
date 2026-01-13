@@ -106,9 +106,14 @@ function categorizeStatusEntries(entries) {
   const unstaged = [];
   const untracked = [];
   const conflicted = [];
+  const ignored = [];
 
   for (const entry of entries) {
     const xy = `${entry.x}${entry.y}`;
+    if (xy === '!!') {
+      ignored.push(entry);
+      continue;
+    }
     if (xy === '??') {
       untracked.push(entry);
       continue;
@@ -126,7 +131,8 @@ function categorizeStatusEntries(entries) {
   unstaged.sort(sortByPath);
   untracked.sort(sortByPath);
   conflicted.sort(sortByPath);
-  return { staged, unstaged, untracked, conflicted };
+  ignored.sort(sortByPath);
+  return { staged, unstaged, untracked, conflicted, ignored };
 }
 
 function normalizeGitConfigValue(value) {
@@ -192,46 +198,6 @@ export function createGitService({ validatePath }) {
     return repoPath;
   }
 
-  async function getIgnoredPathSet(repoPath, paths) {
-    const unique = Array.from(new Set((paths || []).map((p) => String(p || '')).filter(Boolean)));
-    if (!unique.length) return new Set();
-    const gitBinary = await getGitBinary(repoPath);
-    const input = `${unique.join('\0')}\0`;
-    const { stdout } = await runGit(
-      repoPath,
-      [gitBinary, 'check-ignore', '-z', '--stdin'],
-      { timeoutMs: 5000, okCodes: [0, 1], input }
-    );
-    const ignored = stdout ? stdout.split('\0').filter(Boolean) : [];
-    return new Set(ignored);
-  }
-
-  async function filterIgnoredFromStatus(repoPath, status) {
-    if (!status) return status;
-    const staged = Array.isArray(status.staged) ? status.staged : [];
-    const unstaged = Array.isArray(status.unstaged) ? status.unstaged : [];
-    const untracked = Array.isArray(status.untracked) ? status.untracked : [];
-    const conflicted = Array.isArray(status.conflicted) ? status.conflicted : [];
-    const paths = [...staged, ...unstaged, ...untracked, ...conflicted]
-      .map((entry) => entry?.path)
-      .filter(Boolean);
-    if (!paths.length) return status;
-    let ignored = null;
-    try {
-      ignored = await getIgnoredPathSet(repoPath, paths);
-    } catch {
-      return status;
-    }
-    if (!ignored || ignored.size === 0) return status;
-    const filterList = (list) => list.filter((entry) => !ignored.has(entry?.path));
-    return {
-      ...status,
-      staged: filterList(staged),
-      unstaged: filterList(unstaged),
-      untracked: filterList(untracked),
-      conflicted: filterList(conflicted)
-    };
-  }
 
   async function gitInfo({ path: repoPathArg }) {
     const repoPath = await resolveRepoPath(repoPathArg);
@@ -275,10 +241,9 @@ export function createGitService({ validatePath }) {
   async function gitStatus({ path: repoPathArg }) {
     const repoPath = await resolveRepoPath(repoPathArg);
     const gitBinary = await getGitBinary(repoPath);
-    const { stdout } = await runGit(repoPath, [gitBinary, 'status', '--porcelain=v1', '-z', '-uall']);
+    const { stdout } = await runGit(repoPath, [gitBinary, 'status', '--porcelain=v1', '-z', '-uall', '--ignored=matching']);
     const entries = parseStatusPorcelainV1Z(stdout);
-    let status = categorizeStatusEntries(entries);
-    status = await filterIgnoredFromStatus(repoPath, status);
+    const status = categorizeStatusEntries(entries);
     return { ok: true, status };
   }
 
@@ -289,14 +254,22 @@ export function createGitService({ validatePath }) {
     const { stdout } = await runGit(
       repoPath,
       // `--no-optional-locks` is a global git option (must be before the subcommand).
-      [gitBinary, '--no-optional-locks', 'status', '--porcelain=v1', '-z', untrackedFlag],
+      [
+        gitBinary,
+        '--no-optional-locks',
+        'status',
+        '--porcelain=v1',
+        '-z',
+        untrackedFlag,
+        ...(includeUntracked ? ['--ignored=matching'] : [])
+      ],
       { timeoutMs: 5000 }
     );
     const entries = parseStatusPorcelainV1Z(stdout);
-    let status = categorizeStatusEntries(entries);
-    status = await filterIgnoredFromStatus(repoPath, status);
+    const status = categorizeStatusEntries(entries);
     if (!includeUntracked) {
       status.untracked = [];
+      status.ignored = [];
     }
     return { ok: true, status };
   }
@@ -411,6 +384,40 @@ export function createGitService({ validatePath }) {
     }
     await runGit(repoPath, [gitBinary, 'rm', '--cached', '--', ...list], { timeoutMs: 25000 });
     return { ok: true };
+  }
+
+  async function gitCheckIgnore({ path: repoPathArg, files = [] }) {
+    const repoPath = await resolveRepoPath(repoPathArg);
+    const gitBinary = await getGitBinary(repoPath);
+    const list = Array.isArray(files) ? files : [];
+    if (!list.length) {
+      throw new Error('git_check_ignore requires at least one file path.');
+    }
+    for (const file of list) {
+      if (!isGitRepoRelativePath(file)) throw new Error(`Invalid file path for git_check_ignore: ${file}`);
+    }
+    const input = `${list.join('\0')}\0`;
+    const { stdout } = await runGit(
+      repoPath,
+      [gitBinary, 'check-ignore', '-n', '-z', '--stdin'],
+      { timeoutMs: 5000, okCodes: [0, 1], input }
+    );
+    const tokens = stdout ? stdout.split('\0').filter(Boolean) : [];
+    const matches = [];
+    for (let i = 0; i + 3 < tokens.length; i += 4) {
+      const source = tokens[i];
+      const lineRaw = tokens[i + 1];
+      const pattern = tokens[i + 2];
+      const pathValue = tokens[i + 3];
+      const line = Number.parseInt(lineRaw, 10);
+      matches.push({
+        source,
+        line: Number.isFinite(line) ? line : null,
+        pattern,
+        path: pathValue
+      });
+    }
+    return { ok: true, matches };
   }
 
   async function gitRestore({ path: repoPathArg, files = [] }) {
@@ -743,6 +750,7 @@ export function createGitService({ validatePath }) {
           const unstaged = Array.isArray(status.unstaged) ? status.unstaged : [];
           const untracked = Array.isArray(status.untracked) ? status.untracked : [];
           const conflicted = Array.isArray(status.conflicted) ? status.conflicted : [];
+          const ignored = Array.isArray(status.ignored) ? status.ignored : [];
           const dirty = staged.length > 0 || unstaged.length > 0 || untracked.length > 0 || conflicted.length > 0;
 
           if (!dirty) {
@@ -752,7 +760,9 @@ export function createGitService({ validatePath }) {
               branch: info.branch || null,
               dirty: false,
               counts: { staged: 0, unstaged: 0, untracked: 0, conflicted: 0 },
-              sample: { staged: [], unstaged: [], untracked: [], conflicted: [] }
+              sample: { staged: [], unstaged: [], untracked: [], conflicted: [] },
+              ignored: ignored.slice(0, 800).map((e) => e?.path).filter(Boolean),
+              ignoredCount: ignored.length
             });
             continue;
           }
@@ -769,6 +779,7 @@ export function createGitService({ validatePath }) {
           const fullUnstaged = Array.isArray(fullStatus.unstaged) ? fullStatus.unstaged : unstaged;
           const fullUntracked = Array.isArray(fullStatus.untracked) ? fullStatus.untracked : [];
           const fullConflicted = Array.isArray(fullStatus.conflicted) ? fullStatus.conflicted : conflicted;
+          const fullIgnored = Array.isArray(fullStatus.ignored) ? fullStatus.ignored : ignored;
           const toPaths = (items, limit = 250) => items.slice(0, limit).map((e) => e?.path).filter(Boolean);
           const toChangeRows = (status, limit = 800) => {
             const map = new Map();
@@ -844,7 +855,9 @@ export function createGitService({ validatePath }) {
               unstaged: fullUnstaged.slice(0, 8).map((e) => e?.path).filter(Boolean),
               untracked: fullUntracked.slice(0, 8).map((e) => e?.path).filter(Boolean),
               conflicted: fullConflicted.slice(0, 8).map((e) => e?.path).filter(Boolean)
-            }
+            },
+            ignored: toPaths(fullIgnored, 800),
+            ignoredCount: fullIgnored.length
           });
         } catch {
           results.push({
@@ -871,6 +884,7 @@ export function createGitService({ validatePath }) {
     gitStage,
     gitUnstage,
     gitUntrack,
+    gitCheckIgnore,
     gitRestore,
     gitCommit,
     gitPull,

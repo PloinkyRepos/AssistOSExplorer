@@ -473,6 +473,10 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
     color: rgba(22, 163, 74, 0.65);
 }
 
+.git-tree-file-row.is-ignored .git-tree-file {
+    color: #8b5a2b;
+}
+
 .git-tree-file-row.is-deleted .git-tree-file {
     color: rgba(148, 163, 184, 0.9);
 }

@@ -45,7 +45,26 @@ export function renderRepoChangesTree(repo, {
         ...(repo.changes.untracked || []),
         ...(repo.changes.conflicted || [])
     ].map((p) => ({ path: p, kind: 'unknown', x: null, y: null })) : [];
-    const rows = (changesAll && changesAll.length) ? changesAll : fallbackPaths;
+    const ignoredPaths = Array.isArray(repo?.ignored) ? repo.ignored : [];
+    const ignoredRows = ignoredPaths.map((p) => ({
+        path: p,
+        kind: 'ignored',
+        flags: { ignored: true },
+        x: ' ',
+        y: ' '
+    }));
+    const rows = [];
+    const seen = new Set();
+    const pushRow = (row) => {
+        if (!row?.path) return;
+        const key = String(row.path);
+        if (seen.has(key)) return;
+        seen.add(key);
+        rows.push(row);
+    };
+    const baseRows = (changesAll && changesAll.length) ? changesAll : fallbackPaths;
+    baseRows.forEach(pushRow);
+    ignoredRows.forEach(pushRow);
     if (!rows.length) return null;
 
     const root = document.createElement('div');
@@ -62,11 +81,13 @@ export function renderRepoChangesTree(repo, {
                 const part = parts[i];
                 const isLast = i === parts.length - 1;
                 if (isLast) {
+                    const isIgnored = Boolean(item?.flags?.ignored) || item.kind === 'ignored';
                     node.files.push({
                         name: part,
                         path: rel,
                         kind: item.kind,
                         flags: item.flags || null,
+                        ignored: isIgnored,
                         x: item.x,
                         y: item.y
                     });
@@ -88,7 +109,7 @@ export function renderRepoChangesTree(repo, {
             const current = stack.pop();
             const files = Array.isArray(current?.files) ? current.files : [];
             for (const f of files) {
-                if (f?.path) paths.push(f.path);
+                if (f?.path && !f.ignored) paths.push(f.path);
             }
             const children = current?.children;
             if (children && typeof children.values === 'function') {
@@ -185,6 +206,7 @@ export function renderRepoChangesTree(repo, {
             const y = file.y || ' ';
             const flags = file.flags || {};
             const kind = String(file.kind || '');
+            const isIgnored = Boolean(file.ignored) || Boolean(flags.ignored) || kind === 'ignored';
             const isUntracked = Boolean(flags.untracked) || kind === 'untracked' || (x === '?' && y === '?');
             const isDeleted = !isUntracked && (x === 'D' || y === 'D');
             const isNewTracked = !isUntracked && (x === 'A' || y === 'A');
@@ -196,6 +218,7 @@ export function renderRepoChangesTree(repo, {
             row.classList.toggle('is-new', isNewTracked);
             row.classList.toggle('is-modified', isModified);
             row.classList.toggle('is-deleted', isDeleted);
+            row.classList.toggle('is-ignored', isIgnored);
             row.classList.add('has-file-menu');
 
             const checkbox = document.createElement('input');
@@ -204,13 +227,18 @@ export function renderRepoChangesTree(repo, {
             checkbox.dataset.repoPath = repo.path;
             checkbox.dataset.filePath = file.path;
             checkbox.setAttribute('data-local-action', 'toggleTreeFileSelectionCheckbox');
-            checkbox.checked = Boolean(isFileSelected?.(repo.path, file.path));
+            checkbox.checked = !isIgnored && Boolean(isFileSelected?.(repo.path, file.path));
+            checkbox.disabled = isIgnored;
 
             const button = document.createElement('div');
             button.className = 'git-tree-file';
             button.setAttribute('role', 'button');
-            button.setAttribute('tabindex', '0');
-            button.setAttribute('data-local-action', 'openDiff');
+            button.setAttribute('tabindex', isIgnored ? '-1' : '0');
+            if (!isIgnored) {
+                button.setAttribute('data-local-action', 'openDiff');
+            } else {
+                button.setAttribute('aria-disabled', 'true');
+            }
             button.dataset.repoPath = repo.path;
             button.dataset.filePath = file.path;
             button.textContent = file.name;
@@ -231,21 +259,32 @@ export function renderRepoChangesTree(repo, {
             const menuList = document.createElement('div');
             menuList.className = 'git-file-menu-list';
 
-            const ignoreItem = document.createElement('div');
-            ignoreItem.className = 'git-file-menu-item';
-            ignoreItem.setAttribute('role', 'menuitem');
-            ignoreItem.setAttribute('tabindex', '0');
-            ignoreItem.dataset.repoPath = repo.path;
-            ignoreItem.dataset.filePath = file.path;
-            if (isUntracked) {
-                ignoreItem.setAttribute('data-local-action', 'openIgnoreForFile');
-                ignoreItem.textContent = 'Add to .gitignore';
+            if (!isIgnored) {
+                const ignoreItem = document.createElement('div');
+                ignoreItem.className = 'git-file-menu-item';
+                ignoreItem.setAttribute('role', 'menuitem');
+                ignoreItem.setAttribute('tabindex', '0');
+                ignoreItem.dataset.repoPath = repo.path;
+                ignoreItem.dataset.filePath = file.path;
+                if (isUntracked) {
+                    ignoreItem.setAttribute('data-local-action', 'openIgnoreForFile');
+                    ignoreItem.textContent = 'Add to .gitignore';
+                } else {
+                    ignoreItem.setAttribute('data-local-action', 'openStopTrackingForFile');
+                    ignoreItem.textContent = 'Stop tracking + add to .gitignore';
+                }
+                menuList.appendChild(ignoreItem);
             } else {
-                ignoreItem.setAttribute('data-local-action', 'openStopTrackingForFile');
-                ignoreItem.textContent = 'Stop tracking + add to .gitignore';
+                const removeIgnoreItem = document.createElement('div');
+                removeIgnoreItem.className = 'git-file-menu-item';
+                removeIgnoreItem.setAttribute('role', 'menuitem');
+                removeIgnoreItem.setAttribute('tabindex', '0');
+                removeIgnoreItem.dataset.repoPath = repo.path;
+                removeIgnoreItem.dataset.filePath = file.path;
+                removeIgnoreItem.setAttribute('data-local-action', 'removeIgnoreForFile');
+                removeIgnoreItem.textContent = 'Remove from .gitignore';
+                menuList.appendChild(removeIgnoreItem);
             }
-
-            menuList.appendChild(ignoreItem);
 
             const rollbackItem = document.createElement('div');
             rollbackItem.className = 'git-file-menu-item';

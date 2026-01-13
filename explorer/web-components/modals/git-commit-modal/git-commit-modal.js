@@ -7,7 +7,7 @@ import { createGitCommitState } from "./git-commit-modal-state.js";
 import { createGitCommitUI } from "./git-commit-modal-ui.js";
 import { callToolWithLoader } from "../../../utils/globalLoader.js";
 import { joinPath } from "../../pages/file-exp/file-exp-utils.js";
-import { normalizeErrorMessage } from "./git-commit-modal-utils.js";
+import { normalizeErrorMessage, parseJsonToolResult, normalizeSlashes } from "./git-commit-modal-utils.js";
 
 export class GitCommitModal {
     constructor(element, invalidate, props = {}) {
@@ -199,6 +199,90 @@ export class GitCommitModal {
         this.actions.openGitIgnorePrompt({ repoPath, paths: [filePath], source: 'selection', stopTracking: true });
     }
 
+    async removeIgnoreForFile(element) {
+        const repoPath = element?.dataset?.repoPath || null;
+        const filePath = element?.dataset?.filePath;
+        if (!repoPath || !filePath) return;
+        this.closeFileMenus();
+        const row = element?.closest?.('.git-tree-file-row');
+        if (!row?.classList?.contains('is-ignored')) {
+            this.setStatusLine(`File is not ignored: ${filePath}.`, true);
+            return;
+        }
+        try {
+            this.setStatusLine(`Removing ignore rule for ${filePath}...`);
+            const payloadText = await this.service.gitCheckIgnore(repoPath, [filePath]);
+            const payload = parseJsonToolResult(payloadText) || {};
+            const matches = Array.isArray(payload.matches) ? payload.matches : [];
+            if (!matches.length) {
+                this.setStatusLine(`No ignore rule found for ${filePath}.`, true);
+                return;
+            }
+            const normalizedRepo = normalizeSlashes(repoPath).replace(/\/+$/g, '');
+            const updates = new Map();
+            const blocked = new Set();
+            for (const match of matches) {
+                const sourceRaw = String(match?.source || '').trim();
+                if (!sourceRaw) continue;
+                const normalizedSource = normalizeSlashes(sourceRaw);
+                const sourcePath = normalizedSource.startsWith('/') || /^[A-Za-z]:/.test(normalizedSource)
+                    ? normalizedSource
+                    : normalizeSlashes(joinPath(normalizedRepo, normalizedSource));
+                if (!sourcePath.startsWith(`${normalizedRepo}/`) && sourcePath !== normalizedRepo) {
+                    blocked.add(sourceRaw);
+                    continue;
+                }
+                const entry = updates.get(sourcePath) || { lines: new Set(), patterns: new Set() };
+                if (Number.isFinite(match?.line)) entry.lines.add(match.line);
+                if (match?.pattern) entry.patterns.add(String(match.pattern));
+                updates.set(sourcePath, entry);
+            }
+            if (updates.size === 0) {
+                this.setStatusLine('Ignore rule is outside this repo. Update global ignore config manually.', true);
+                return;
+            }
+            let changedFiles = 0;
+            for (const [sourcePath, entry] of updates.entries()) {
+                const content = await this.service.readTextFile(sourcePath);
+                const lines = String(content ?? '').split(/\r?\n/);
+                const removeIndexes = new Set();
+                for (const lineNo of entry.lines) {
+                    const idx = Number(lineNo) - 1;
+                    if (idx >= 0 && idx < lines.length) removeIndexes.add(idx);
+                }
+                if (removeIndexes.size === 0 && entry.patterns.size) {
+                    const patterns = Array.from(entry.patterns.values());
+                    lines.forEach((line, idx) => {
+                        const trimmed = line.trim();
+                        if (patterns.includes(trimmed)) removeIndexes.add(idx);
+                    });
+                }
+                if (removeIndexes.size === 0) continue;
+                const nextLines = lines.filter((_, idx) => !removeIndexes.has(idx));
+                let nextContent = nextLines.join('\n');
+                if (content && content.endsWith('\n')) {
+                    nextContent = `${nextContent}\n`;
+                } else if (nextContent && !nextContent.endsWith('\n')) {
+                    nextContent = `${nextContent}\n`;
+                }
+                await this.service.writeFile(sourcePath, nextContent);
+                changedFiles += 1;
+            }
+            if (!changedFiles) {
+                this.setStatusLine(`No matching .gitignore entry removed for ${filePath}.`, true);
+                return;
+            }
+            await this.refreshAll({ force: true });
+            if (blocked.size) {
+                this.setStatusLine(`Removed ignore rule for ${filePath}. Some rules are in global ignores.`, true);
+                return;
+            }
+            this.setStatusLine(`Removed ignore rule for ${filePath}.`);
+        } catch (error) {
+            this.setStatusLine(normalizeErrorMessage(error), true);
+        }
+    }
+
     async deleteFile(element) {
         const repoPath = element?.dataset?.repoPath || null;
         const filePath = element?.dataset?.filePath;
@@ -227,7 +311,7 @@ export class GitCommitModal {
         if (!repoPath || !filePath) return;
         this.closeFileMenus();
         const row = element?.closest?.('.git-tree-file-row');
-        if (row?.classList?.contains('is-untracked')) {
+        if (row?.classList?.contains('is-untracked') || row?.classList?.contains('is-ignored')) {
             this.setStatusLine(`Cannot rollback untracked file: ${filePath}.`, true);
             return;
         }

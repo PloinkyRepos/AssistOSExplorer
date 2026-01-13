@@ -114,7 +114,17 @@ export function createGitCommitRepo(ctx) {
         return repos.filter((repo) => {
             if (!repo) return false;
             const counts = repo.counts || {};
-            return Boolean(repo.dirty || counts.staged || counts.unstaged || counts.untracked || counts.conflicted);
+            const ignoredCount = Number.isFinite(repo.ignoredCount)
+                ? repo.ignoredCount
+                : (Array.isArray(repo.ignored) ? repo.ignored.length : 0);
+            return Boolean(
+                repo.dirty
+                || counts.staged
+                || counts.unstaged
+                || counts.untracked
+                || counts.conflicted
+                || ignoredCount
+            );
         });
     };
 
@@ -306,7 +316,17 @@ export function createGitCommitRepo(ctx) {
 
                 repoWrapper.appendChild(repoRow);
 
-                const hasChanges = Boolean(repo?.dirty || counts.staged || counts.unstaged || counts.untracked || counts.conflicted);
+                const ignoredCount = Number.isFinite(repo?.ignoredCount)
+                    ? repo.ignoredCount
+                    : (Array.isArray(repo?.ignored) ? repo.ignored.length : 0);
+                const hasChanges = Boolean(
+                    repo?.dirty
+                    || counts.staged
+                    || counts.unstaged
+                    || counts.untracked
+                    || counts.conflicted
+                    || ignoredCount
+                );
                 if (hasChanges && isRepoChangesExpanded(repo.path)) {
                     const changesTree = renderRepoChangesTree(repo);
                     if (changesTree) {

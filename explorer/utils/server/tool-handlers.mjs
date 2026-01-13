@@ -81,6 +81,7 @@ export function createToolHandlers({
     GitStageArgsSchema,
     GitUnstageArgsSchema,
     GitUntrackArgsSchema,
+    GitCheckIgnoreArgsSchema,
     GitRestoreArgsSchema,
     GitCommitArgsSchema,
     GitPushArgsSchema,
@@ -428,6 +429,12 @@ export function createToolHandlers({
     return jsonResponse(result);
   }
 
+  async function handleGitCheckIgnore(args) {
+    const data = parseArgs(GitCheckIgnoreArgsSchema, args, 'git_check_ignore');
+    const result = await gitService.gitCheckIgnore(data);
+    return jsonResponse(result);
+  }
+
   async function handleGitRestore(args) {
     const data = parseArgs(GitRestoreArgsSchema, args, 'git_restore');
     const result = await gitService.gitRestore(data);
@@ -508,6 +515,7 @@ export function createToolHandlers({
     git_stage: handleGitStage,
     git_unstage: handleGitUnstage,
     git_untrack: handleGitUntrack,
+    git_check_ignore: handleGitCheckIgnore,
     git_restore: handleGitRestore,
     git_commit: handleGitCommit,
     git_push: handleGitPush,

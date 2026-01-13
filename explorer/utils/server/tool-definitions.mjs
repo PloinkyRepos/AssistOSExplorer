@@ -25,6 +25,7 @@ export function buildToolDefinitions(zodToJsonSchema, schemas) {
     GitStageArgsSchema,
     GitUnstageArgsSchema,
     GitUntrackArgsSchema,
+    GitCheckIgnoreArgsSchema,
     GitRestoreArgsSchema,
     GitCommitArgsSchema,
     GitPushArgsSchema,
@@ -165,6 +166,11 @@ export function buildToolDefinitions(zodToJsonSchema, schemas) {
       name: 'git_untrack',
       description: 'Remove files from git index while keeping them on disk (git rm --cached).',
       inputSchema: zodToJsonSchema(GitUntrackArgsSchema)
+    },
+    {
+      name: 'git_check_ignore',
+      description: 'Return ignore rule matches (source/pattern/line) for paths.',
+      inputSchema: zodToJsonSchema(GitCheckIgnoreArgsSchema)
     },
     {
       name: 'git_restore',
