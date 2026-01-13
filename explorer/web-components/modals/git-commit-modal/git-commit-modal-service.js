@@ -12,6 +12,7 @@ export function createGitCommitService({ callTool, callAgentTool }) {
         gitStage: (path, files) => callTool('git_stage', { path, files }),
         gitUntrack: (path, files) => callTool('git_untrack', { path, files }),
         gitCommit: (payload) => callTool('git_commit', payload),
+        deleteFile: (path) => callTool('delete_file', { path }),
         readTextFile: (path) => callTool('read_text_file', { path }),
         writeFile: (path, content) => callTool('write_file', { path, content }),
         generateCommitMessage: (diffs) => callAgentTool('explorerSkillsAgent', 'git_commit_message', { diffs })

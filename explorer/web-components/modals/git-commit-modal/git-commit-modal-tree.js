@@ -246,6 +246,16 @@ export function renderRepoChangesTree(repo, {
             }
 
             menuList.appendChild(ignoreItem);
+
+            const deleteItem = document.createElement('div');
+            deleteItem.className = 'git-file-menu-item';
+            deleteItem.setAttribute('role', 'menuitem');
+            deleteItem.setAttribute('tabindex', '0');
+            deleteItem.dataset.repoPath = repo.path;
+            deleteItem.dataset.filePath = file.path;
+            deleteItem.setAttribute('data-local-action', 'deleteFile');
+            deleteItem.textContent = 'Delete file';
+            menuList.appendChild(deleteItem);
             menu.appendChild(menuButton);
             menu.appendChild(menuList);
             row.appendChild(menu);

@@ -6,6 +6,8 @@ import { createGitCommitService } from "./git-commit-modal-service.js";
 import { createGitCommitState } from "./git-commit-modal-state.js";
 import { createGitCommitUI } from "./git-commit-modal-ui.js";
 import { callToolWithLoader } from "../../../utils/globalLoader.js";
+import { joinPath } from "../../pages/file-exp/file-exp-utils.js";
+import { normalizeErrorMessage } from "./git-commit-modal-utils.js";
 
 export class GitCommitModal {
     constructor(element, invalidate, props = {}) {
@@ -195,6 +197,28 @@ export class GitCommitModal {
         if (!repoPath || !filePath) return;
         this.closeFileMenus();
         this.actions.openGitIgnorePrompt({ repoPath, paths: [filePath], source: 'selection', stopTracking: true });
+    }
+
+    async deleteFile(element) {
+        const repoPath = element?.dataset?.repoPath || null;
+        const filePath = element?.dataset?.filePath;
+        if (!repoPath || !filePath) return;
+        this.closeFileMenus();
+        const row = element?.closest?.('.git-tree-file-row');
+        const isDeleted = Boolean(row?.classList?.contains('is-deleted'));
+        const fullPath = joinPath(repoPath, filePath);
+        try {
+            this.setStatusLine(isDeleted ? `Staging deletion for ${filePath}...` : `Deleting ${filePath}...`);
+            if (!isDeleted) {
+                await this.service.deleteFile(fullPath);
+            }
+            this.toggleFileSelection(repoPath, filePath, null, true);
+            await this.service.gitStage(repoPath, [filePath]);
+            await this.refreshAll({ force: true });
+            this.setStatusLine(isDeleted ? `Deletion staged: ${filePath}` : `Deleted ${filePath}.`);
+        } catch (error) {
+            this.setStatusLine(normalizeErrorMessage(error), true);
+        }
     }
 
     openIgnoreForDiff(payload = {}) {
