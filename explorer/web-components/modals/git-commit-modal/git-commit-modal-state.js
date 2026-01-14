@@ -54,7 +54,7 @@ export function createGitCommitState(props = {}) {
         getSelectedReposForBatch: () => getSelectedReposForBatch(state)
     };
 }
-
+let test="a test var for merge conflicts";
 export function getSelectedReposForBatch(state) {
     return Array.from(new Set([
         ...Object.entries(state.selectedFilesByRepo || {})
