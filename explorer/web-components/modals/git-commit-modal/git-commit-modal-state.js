@@ -24,6 +24,7 @@ export function createGitCommitState(props = {}) {
         credentialsGate: false,
         identityPrompt: {
             visible: false,
+            test:"test",
             repoPath: null,
             pendingAction: null,
             name: '',
