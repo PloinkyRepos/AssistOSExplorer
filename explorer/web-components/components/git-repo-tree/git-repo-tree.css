@@ -1,0 +1,6 @@
+git-repo-tree {
+    display: block;
+    height: 100%;
+    position: relative;
+    overflow: auto;
+}

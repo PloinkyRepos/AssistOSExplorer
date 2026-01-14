@@ -1,0 +1,134 @@
+export class GitConflictHelper {
+    constructor(element, invalidate) {
+        this.element = element;
+        this.invalidate = invalidate;
+        this.state = {
+            visible: false,
+            files: [],
+            selected: null,
+            ours: '',
+            theirs: '',
+            status: '',
+            loading: false
+        };
+        this.onUpdate = this.onUpdate.bind(this);
+        this.invalidate();
+    }
+
+    beforeRender() {}
+
+    afterRender() {
+        this.root = this.element.querySelector('#gitConflictHelper') || this.element;
+        this.list = this.element.querySelector('#gitConflictHelperList');
+        this.oursNode = this.element.querySelector('#gitConflictHelperOurs');
+        this.theirsNode = this.element.querySelector('#gitConflictHelperTheirs');
+        this.statusNode = this.element.querySelector('#gitConflictHelperStatus');
+
+        if (!this.element.dataset.boundConflictUpdate) {
+            this.element.addEventListener('git-conflict-update', this.onUpdate);
+            this.element.dataset.boundConflictUpdate = 'true';
+        }
+
+        this.applyState(this.state);
+    }
+
+    selectConflictFile(element) {
+        const repoPath = element?.dataset?.repoPath || '';
+        const filePath = element?.dataset?.filePath || '';
+        if (!filePath) return;
+        this.emit('git-conflict-select', { repoPath, filePath });
+    }
+
+    applyConflictChoice(_element, source) {
+        const selected = this.state.selected || {};
+        if (!selected.filePath || !selected.repoPath) return;
+        const side = String(source || '').trim();
+        if (side !== 'ours' && side !== 'theirs') return;
+        this.emit('git-conflict-apply', {
+            repoPath: selected.repoPath,
+            filePath: selected.filePath,
+            source: side
+        });
+    }
+
+    stageConflictFile() {
+        const selected = this.state.selected || {};
+        if (!selected.filePath || !selected.repoPath) return;
+        this.emit('git-conflict-stage', {
+            repoPath: selected.repoPath,
+            filePath: selected.filePath
+        });
+    }
+
+    refreshConflicts() {
+        this.emit('git-conflict-refresh');
+    }
+
+    cancelConflictResolution() {
+        this.emit('git-conflict-cancel');
+    }
+
+    setState(next = {}) {
+        this.applyState(next);
+    }
+
+    onUpdate(event) {
+        this.applyState(event?.detail || {});
+    }
+
+    applyState(next) {
+        if (!next || typeof next !== 'object') return;
+        if (Object.prototype.hasOwnProperty.call(next, 'visible')) {
+            this.state.visible = Boolean(next.visible);
+        }
+        if (Array.isArray(next.files)) {
+            this.state.files = next.files;
+        }
+        if (Object.prototype.hasOwnProperty.call(next, 'selected')) {
+            this.state.selected = next.selected || null;
+        }
+        if (Object.prototype.hasOwnProperty.call(next, 'ours')) {
+            this.state.ours = String(next.ours || '');
+        }
+        if (Object.prototype.hasOwnProperty.call(next, 'theirs')) {
+            this.state.theirs = String(next.theirs || '');
+        }
+        if (Object.prototype.hasOwnProperty.call(next, 'status')) {
+            this.state.status = String(next.status || '');
+        }
+        if (Object.prototype.hasOwnProperty.call(next, 'loading')) {
+            this.state.loading = Boolean(next.loading);
+        }
+
+        this.element.classList.toggle('is-visible', this.state.visible);
+        if (this.list) {
+            this.list.textContent = '';
+            for (const file of this.state.files || []) {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'git-conflict-helper-file';
+                if (this.state.selected && this.state.selected.filePath === file.filePath && this.state.selected.repoPath === file.repoPath) {
+                    button.classList.add('active');
+                }
+                button.dataset.repoPath = file.repoPath || '';
+                button.dataset.filePath = file.filePath || '';
+                button.setAttribute('data-local-action', 'selectConflictFile');
+                button.textContent = file.label || file.filePath || '';
+                this.list.appendChild(button);
+            }
+        }
+        if (this.oursNode) {
+            this.oursNode.textContent = this.state.loading ? 'Loading local version...' : (this.state.ours || '');
+        }
+        if (this.theirsNode) {
+            this.theirsNode.textContent = this.state.loading ? 'Loading remote version...' : (this.state.theirs || '');
+        }
+        if (this.statusNode) {
+            this.statusNode.textContent = this.state.status || '';
+        }
+    }
+
+    emit(name, detail = {}) {
+        this.element.dispatchEvent(new CustomEvent(name, { detail, bubbles: true }));
+    }
+}

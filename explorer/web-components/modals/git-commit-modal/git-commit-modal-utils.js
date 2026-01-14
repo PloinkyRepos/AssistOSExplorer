@@ -31,8 +31,61 @@ export function humanizeGitError(message, { action = null } = {}) {
 
 export function parseJsonToolResult(toolResultText) {
     if (!toolResultText) return null;
-    if (typeof toolResultText !== 'string') return toolResultText;
-    return JSON.parse(toolResultText);
+
+    const extractJson = (payload) => {
+        if (!payload || typeof payload !== 'object') {
+            return null;
+        }
+
+        if (Object.prototype.hasOwnProperty.call(payload, 'json')) {
+            return payload.json;
+        }
+
+        const blocks = Array.isArray(payload.content) ? payload.content : null;
+        if (blocks) {
+            const jsonBlock = blocks.find((block) => block?.type === 'json' && block.json !== undefined);
+            if (jsonBlock) {
+                return jsonBlock.json;
+            }
+            const textBlock = blocks.find((block) => block?.type === 'text' && typeof block.text === 'string');
+            if (textBlock?.text) {
+                try {
+                    return JSON.parse(textBlock.text);
+                } catch {
+                    return null;
+                }
+            }
+        }
+
+        if (typeof payload.text === 'string') {
+            const trimmed = payload.text.trim();
+            if (trimmed) {
+                try {
+                    return JSON.parse(trimmed);
+                } catch {
+                    // ignore
+                }
+            }
+        }
+
+        return payload;
+    };
+
+    if (typeof toolResultText !== 'string') {
+        return extractJson(toolResultText);
+    }
+
+    const trimmed = toolResultText.trim();
+    if (!trimmed) {
+        return null;
+    }
+
+    try {
+        const parsed = JSON.parse(trimmed);
+        return extractJson(parsed);
+    } catch {
+        return null;
+    }
 }
 
 export function normalizeSlashes(value) {
@@ -72,6 +125,48 @@ export function isGitIdentityError(message) {
     if (lower.includes('unable to auto-detect email address')) return true;
     if (lower.includes('please tell me who you are')) return true;
     return false;
+}
+
+export function isGitConflictError(message) {
+    const text = String(message || '');
+    const lower = text.toLowerCase();
+    if (lower.includes('conflict')) return true;
+    if (lower.includes('unmerged')) return true;
+    if (lower.includes('automatic merge failed')) return true;
+    if (lower.includes('fix conflicts')) return true;
+    return false;
+}
+
+export function isGitPullBlockedError(message) {
+    const text = String(message || '');
+    const lower = text.toLowerCase();
+    if (lower.includes('would be overwritten by merge')) return true;
+    if (lower.includes('would be overwritten by checkout')) return true;
+    if (lower.includes('please commit your changes or stash them')) return true;
+    if (lower.includes('cannot pull with rebase')) return true;
+    if (lower.includes('you have unstaged changes')) return true;
+    return false;
+}
+
+export function extractGitPullBlockedFiles(message) {
+    const text = String(message || '');
+    if (!text) return [];
+    const lines = text.split(/\r?\n/);
+    const startIndex = lines.findIndex((line) => line.toLowerCase().includes('would be overwritten by'));
+    if (startIndex < 0) return [];
+    const files = [];
+    for (let i = startIndex + 1; i < lines.length; i += 1) {
+        const raw = lines[i] || '';
+        const line = raw.trim();
+        if (!line) continue;
+        const lower = line.toLowerCase();
+        if (lower.startsWith('please commit')) break;
+        if (lower.startsWith('aborting')) break;
+        if (lower.startsWith('error:')) break;
+        if (lower.startsWith('fatal:')) break;
+        files.push(line);
+    }
+    return files;
 }
 
 const GIT_PAT_STORAGE_KEY = 'webskel.git.pat';

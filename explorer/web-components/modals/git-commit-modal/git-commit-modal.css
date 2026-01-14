@@ -260,6 +260,8 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
     gap: 12px;
     padding: 12px 14px 14px;
     overflow: hidden;
+    flex: 1 1 auto;
+    min-height: 0;
 }
 
 .git-credentials {
@@ -326,7 +328,9 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
 .git-main {
     display: flex;
     gap: 12px;
-    overflow: hidden;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
 }
 
 .git-changes {
@@ -339,7 +343,6 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
     flex-direction: column;
     gap: 10px;
     min-width: 260px;
-    max-width: 360px;
 }
 
 .git-repo-row {
@@ -850,6 +853,49 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
     position: relative;
 }
 
+.git-pull-blocked-panel {
+    display: none;
+    border: 1px solid rgba(217, 119, 6, 0.25);
+    background: rgba(255, 247, 237, 0.9);
+    border-radius: 12px;
+    padding: 10px 12px;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.git-pull-blocked-title {
+    font-weight: 800;
+    color: #7c2d12;
+}
+
+.git-pull-blocked-hint {
+    color: rgba(124, 45, 18, 0.8);
+    font-size: 0.9rem;
+}
+
+.git-pull-blocked-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.git-pull-blocked-item {
+    text-align: left;
+    border: 1px solid rgba(217, 119, 6, 0.2);
+    background: #fff;
+    border-radius: 8px;
+    padding: 6px 8px;
+    font-weight: 600;
+    color: var(--text, #0f172a);
+    cursor: pointer;
+}
+
+.git-pull-blocked-item:hover,
+.git-pull-blocked-item:focus {
+    background: rgba(255, 247, 237, 0.95);
+    outline: none;
+}
+
 .git-credentials-card {
     border: 1px dashed var(--file-exp-border, rgba(148, 163, 184, 0.35));
     border-radius: 10px;
@@ -1064,11 +1110,26 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
     font-size: 0.9rem;
     color: var(--text-soft, rgba(15, 23, 42, 0.7));
     overflow: hidden;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
 }
 
 .git-status.error {
     color: var(--file-exp-error, #b91c1c);
     font-weight: 600;
+}
+
+.git-status-text {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.git-status-action {
+    display: none;
+    font-size: 0.85rem;
+    padding: 4px 8px;
 }
 
 .git-action-buttons {

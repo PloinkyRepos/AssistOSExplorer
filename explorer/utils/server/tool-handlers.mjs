@@ -83,6 +83,10 @@ export function createToolHandlers({
     GitUntrackArgsSchema,
     GitCheckIgnoreArgsSchema,
     GitRestoreArgsSchema,
+    GitConflictVersionsArgsSchema,
+    GitCheckoutConflictArgsSchema,
+    GitStashArgsSchema,
+    GitStashPopArgsSchema,
     GitCommitArgsSchema,
     GitPushArgsSchema,
     GitPullArgsSchema,
@@ -441,6 +445,30 @@ export function createToolHandlers({
     return jsonResponse(result);
   }
 
+  async function handleGitConflictVersions(args) {
+    const data = parseArgs(GitConflictVersionsArgsSchema, args, 'git_conflict_versions');
+    const result = await gitService.gitConflictVersions(data);
+    return jsonResponse(result);
+  }
+
+  async function handleGitCheckoutConflict(args) {
+    const data = parseArgs(GitCheckoutConflictArgsSchema, args, 'git_checkout_conflict');
+    const result = await gitService.gitCheckoutConflict(data);
+    return jsonResponse(result);
+  }
+
+  async function handleGitStash(args) {
+    const data = parseArgs(GitStashArgsSchema, args, 'git_stash');
+    const result = await gitService.gitStash(data);
+    return jsonResponse(result);
+  }
+
+  async function handleGitStashPop(args) {
+    const data = parseArgs(GitStashPopArgsSchema, args, 'git_stash_pop');
+    const result = await gitService.gitStashPop(data);
+    return jsonResponse(result);
+  }
+
   async function handleGitCommit(args) {
     const data = parseArgs(GitCommitArgsSchema, args, 'git_commit');
     const result = await gitService.gitCommit(data);
@@ -517,6 +545,10 @@ export function createToolHandlers({
     git_untrack: handleGitUntrack,
     git_check_ignore: handleGitCheckIgnore,
     git_restore: handleGitRestore,
+    git_conflict_versions: handleGitConflictVersions,
+    git_checkout_conflict: handleGitCheckoutConflict,
+    git_stash: handleGitStash,
+    git_stash_pop: handleGitStashPop,
     git_commit: handleGitCommit,
     git_push: handleGitPush,
     git_pull: handleGitPull,

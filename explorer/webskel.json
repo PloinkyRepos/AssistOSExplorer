@@ -210,6 +210,41 @@
       "name": "git-diff-viewer",
       "type": "components",
       "presenterClassName": "GitDiffViewer"
+    },
+    {
+      "name": "git-conflict-helper",
+      "type": "components",
+      "presenterClassName": "GitConflictHelper"
+    },
+    {
+      "name": "git-conflict-banner",
+      "type": "components",
+      "presenterClassName": "GitConflictBanner"
+    },
+    {
+      "name": "git-status-bar",
+      "type": "components",
+      "presenterClassName": "GitStatusBar"
+    },
+    {
+      "name": "git-pull-blocked-panel",
+      "type": "components",
+      "presenterClassName": "GitPullBlockedPanel"
+    },
+    {
+      "name": "git-repo-tree",
+      "type": "components",
+      "presenterClassName": "GitRepoTree"
+    },
+    {
+      "name": "git-commit-actions",
+      "type": "components",
+      "presenterClassName": "GitCommitActions"
+    },
+    {
+      "name": "git-commit-body",
+      "type": "components",
+      "presenterClassName": "GitCommitBody"
     }
   ],
   "services": []

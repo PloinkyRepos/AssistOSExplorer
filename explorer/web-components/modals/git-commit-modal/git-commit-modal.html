@@ -38,89 +38,10 @@
             <git-credentials-prompt data-presenter="git-credentials-prompt"></git-credentials-prompt>
         </div>
         <div class="git-modal-content">
-        <div class="git-topbar">
-            <div class="git-repo">
-                <label class="git-repo-label" for="gitRepoPathInput">Repo</label>
-                <input id="gitRepoPathInput" type="text" autocomplete="off" spellcheck="false"/>
-                <button type="button" class="secondary" id="gitRepoPathApply"
-                        data-local-action="applyRepoPathFromInput">Open
-                </button>
-            </div>
-            <div class="git-branch" id="gitBranchInfo"></div>
-            <div class="git-topbar-actions">
-                <button type="button" class="secondary" id="gitRefreshButton" data-local-action="refreshAction">
-                    Refresh
-                </button>
-            </div>
-        </div>
-
-        <div class="git-main">
-            <div class="git-changes">
-                <div class="git-section git-section-repos" id="gitRepoCandidatesSection">
-                    <div class="git-section-header git-repos-header">
-                        <span>Repositories</span>
-                    </div>
-                    <div class="git-section-body" id="gitRepoCandidatesList"></div>
-                </div>
-            </div>
-
-            <git-diff-viewer data-presenter="git-diff-viewer"></git-diff-viewer>
-        </div>
-
-        <div class="git-commit">
-            <git-ignore-prompt data-presenter="git-ignore-prompt"></git-ignore-prompt>
-            <div class="git-commit-row git-commit-message">
-                <section class="commit-section">
-                    <label class="git-commit-label" for="gitCommitMessage">Commit message</label>
-                    <textarea id="gitCommitMessage" rows="3" placeholder="Describe your changes..." autocomplete="off"
-                              data-local-action="updateCommitMessage"></textarea>
-
-                </section>
-                <button
-                        type="button"
-                        class="icon-button git-ai-generate"
-                        aria-label="Generate commit message with AI"
-                        title="Generate message with AI"
-                        data-local-action="generateCommitMessage"
-                >
-                    <span aria-hidden="true">✦</span>
-                </button>
-            </div>
-            <div class="git-commit-row git-commit-actions">
-                <div class="git-status" id="gitStatusLine" role="status"></div>
-                <div class="git-action-buttons">
-                    <div class="git-commit-split" id="gitActionsSplit">
-                        <button type="button" class="secondary git-actions-button" id="gitActionsButton"
-                                data-local-action="toggleActionsMenu">Git actions ▾
-                        </button>
-                        <div class="git-commit-menu" id="gitActionsMenu" role="menu" style="display: none;">
-                            <div class="git-menu-item" role="menuitem" tabindex="0"
-                                 data-local-action="runGitAction commit">Commit
-                            </div>
-                            <div class="git-menu-item" role="menuitem" tabindex="0"
-                                 data-local-action="runGitAction commitPush">Commit &amp; Push
-                            </div>
-                            <div class="git-menu-item" role="menuitem" tabindex="0"
-                                 data-local-action="runGitAction push">Push
-                            </div>
-                            <div class="git-menu-item" role="menuitem" tabindex="0"
-                                 data-local-action="runGitAction pull">Pull
-                            </div>
-                            <div class="git-menu-separator" role="separator"></div>
-                            <div class="git-menu-item" role="menuitem" tabindex="0"
-                                 data-local-action="runGitAction pullFfOnly">Pull: Fast-forward only
-                            </div>
-                            <div class="git-menu-item" role="menuitem" tabindex="0"
-                                 data-local-action="runGitAction pullRebase">Pull: Rebase
-                            </div>
-                            <div class="git-menu-item" role="menuitem" tabindex="0"
-                                 data-local-action="runGitAction pullMerge">Pull: Merge
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <git-conflict-banner data-presenter="git-conflict-banner"></git-conflict-banner>
+        <git-pull-blocked-panel data-presenter="git-pull-blocked-panel"></git-pull-blocked-panel>
+        <git-conflict-helper data-presenter="git-conflict-helper"></git-conflict-helper>
+        <git-commit-body data-presenter="git-commit-body"></git-commit-body>
         </div>
     </div>
 </div>

@@ -1,0 +1,28 @@
+<div class="git-commit-body-inner">
+    <div class="git-topbar">
+        <div class="git-repo">
+            <label class="git-repo-label" for="gitRepoPathInput">Repo</label>
+            <input id="gitRepoPathInput" type="text" autocomplete="off" spellcheck="false"/>
+            <button type="button" class="secondary" id="gitRepoPathApply"
+                    data-local-action="applyRepoPathFromInput">Open
+            </button>
+        </div>
+        <div class="git-branch" id="gitBranchInfo"></div>
+        <div class="git-topbar-actions">
+            <button type="button" class="secondary" id="gitRefreshButton" data-local-action="refreshAction">
+                Refresh
+            </button>
+        </div>
+    </div>
+
+    <div class="git-main">
+        <git-repo-tree data-presenter="git-repo-tree"></git-repo-tree>
+
+        <git-diff-viewer data-presenter="git-diff-viewer"></git-diff-viewer>
+    </div>
+
+    <div class="git-commit">
+        <git-ignore-prompt data-presenter="git-ignore-prompt"></git-ignore-prompt>
+        <git-commit-actions data-presenter="git-commit-actions"></git-commit-actions>
+    </div>
+</div>

@@ -444,6 +444,96 @@ export function createGitService({ validatePath }) {
     }
   }
 
+  async function gitConflictVersions({ path: repoPathArg, file }) {
+    const repoPath = await resolveRepoPath(repoPathArg);
+    if (!isGitRepoRelativePath(file)) {
+      throw new Error(`Invalid file path for git_conflict_versions: ${file}`);
+    }
+    const gitBinary = await getGitBinary(repoPath);
+
+    const readStage = async (stage) => {
+      try {
+        const { stdout } = await runGit(repoPath, [gitBinary, 'show', `:${stage}:${file}`], { timeoutMs: 20000 });
+        return { content: stdout, error: null };
+      } catch (error) {
+        return { content: '', error: normalizeErrorMessage(error) };
+      }
+    };
+
+    const base = await readStage(1);
+    const ours = await readStage(2);
+    const theirs = await readStage(3);
+
+    return {
+      ok: true,
+      file,
+      base: base.content,
+      ours: ours.content,
+      theirs: theirs.content,
+      baseError: base.error,
+      oursError: ours.error,
+      theirsError: theirs.error
+    };
+  }
+
+  async function gitCheckoutConflict({ path: repoPathArg, file, source }) {
+    const repoPath = await resolveRepoPath(repoPathArg);
+    if (!isGitRepoRelativePath(file)) {
+      throw new Error(`Invalid file path for git_checkout_conflict: ${file}`);
+    }
+    const gitBinary = await getGitBinary(repoPath);
+    const side = source === 'theirs' ? '--theirs' : '--ours';
+    await runGit(repoPath, [gitBinary, 'checkout', side, '--', file], { timeoutMs: 25000 });
+    return { ok: true };
+  }
+
+  async function gitStash({ path: repoPathArg, includeUntracked = true, message = '' }) {
+    const repoPath = await resolveRepoPath(repoPathArg);
+    const gitBinary = await getGitBinary(repoPath);
+    const listStash = async () => {
+      try {
+        const { stdout } = await runGit(repoPath, [gitBinary, 'stash', 'list'], { timeoutMs: 5000 });
+        return stdout || '';
+      } catch {
+        return '';
+      }
+    };
+
+    const beforeList = await listStash();
+    const args = [gitBinary, 'stash', 'push'];
+    if (includeUntracked) args.push('-u');
+    const cleanMessage = String(message || '').trim();
+    if (cleanMessage) {
+      args.push('-m', cleanMessage);
+    }
+    const { stdout, stderr } = await runGit(repoPath, args, { timeoutMs: 20000 });
+    const output = `${stdout}\n${stderr}`.trim();
+    const afterList = await listStash();
+    const lowerOutput = output.toLowerCase();
+    const created = Boolean(afterList && afterList.trim() !== beforeList.trim() && !lowerOutput.includes('no local changes'));
+    let ref = null;
+    if (created) {
+      const firstLine = afterList.split(/\r?\n/)[0] || '';
+      ref = firstLine.split(':')[0].trim() || null;
+    }
+    return { ok: true, created, ref, output };
+  }
+
+  async function gitStashPop({ path: repoPathArg, ref = null, reinstateIndex = true }) {
+    const repoPath = await resolveRepoPath(repoPathArg);
+    const gitBinary = await getGitBinary(repoPath);
+    const args = [gitBinary, 'stash', 'pop'];
+    if (reinstateIndex) args.push('--index');
+    if (ref) args.push(ref);
+    const { stdout, stderr } = await runGit(repoPath, args, { timeoutMs: 30000, okCodes: [0, 1] });
+    const output = `${stdout}\n${stderr}`.trim();
+    const lower = output.toLowerCase();
+    const conflicts = lower.includes('conflict') || lower.includes('unmerged');
+    const noStash = lower.includes('no stash entries found');
+    const error = !conflicts && !noStash && (lower.includes('error:') || lower.includes('fatal:'));
+    return { ok: !error, conflicts, noStash, output };
+  }
+
   async function gitCommit({ path: repoPathArg, message, amend = false, signoff = false }) {
     const repoPath = await resolveRepoPath(repoPathArg);
     const gitBinary = await getGitBinary(repoPath);
@@ -886,6 +976,10 @@ export function createGitService({ validatePath }) {
     gitUntrack,
     gitCheckIgnore,
     gitRestore,
+    gitConflictVersions,
+    gitCheckoutConflict,
+    gitStash,
+    gitStashPop,
     gitCommit,
     gitPull,
     gitPush,

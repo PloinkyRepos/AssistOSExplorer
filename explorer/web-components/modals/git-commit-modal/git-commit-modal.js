@@ -54,6 +54,19 @@ export class GitCommitModal {
             runGitAction: this.runGitAction.bind(this),
             openDiff: this.openDiff.bind(this),
             applyRepoPathFromInput: this.applyRepoPathFromInput.bind(this),
+            refreshAction: this.refreshAction.bind(this),
+            generateCommitMessage: this.generateCommitMessage.bind(this),
+            toggleRepoChanges: this.toggleRepoChanges.bind(this),
+            toggleRepoFolderExpanded: this.toggleRepoFolderExpanded.bind(this),
+            toggleTreeFolder: this.toggleTreeFolder.bind(this),
+            toggleTreePrefixSelectionCheckbox: this.toggleTreePrefixSelectionCheckbox.bind(this),
+            toggleTreeFileSelectionCheckbox: this.toggleTreeFileSelectionCheckbox.bind(this),
+            toggleRepoAllChangesCheckbox: this.toggleRepoAllChangesCheckbox.bind(this),
+            openIgnoreForFile: this.openIgnoreForFile.bind(this),
+            openStopTrackingForFile: this.openStopTrackingForFile.bind(this),
+            removeIgnoreForFile: this.removeIgnoreForFile.bind(this),
+            rollbackFile: this.rollbackFile.bind(this),
+            deleteFile: this.deleteFile.bind(this),
             saveGitCredentials: this.saveGitCredentials.bind(this),
             cancelGitCredentials: this.cancelGitCredentials.bind(this),
             saveGitIgnore: this.saveGitIgnore.bind(this),
@@ -61,8 +74,13 @@ export class GitCommitModal {
             setIgnoreMode: this.setIgnoreMode.bind(this),
             setIgnoreAnchor: this.setIgnoreAnchor.bind(this),
             openIgnoreForDiff: this.openIgnoreForDiff.bind(this),
-            closeFileMenus: this.closeFileMenus.bind(this),
-            closeModal: this.closeModal.bind(this)
+            selectConflictFile: this.selectConflictFile.bind(this),
+            applyConflictChoice: this.applyConflictChoice.bind(this),
+            stageConflictFile: this.stageConflictFile.bind(this),
+            refreshConflicts: this.refreshConflicts.bind(this),
+            openConflictHelper: this.openConflictHelper.bind(this),
+            closeModal: this.closeModal.bind(this),
+            cancelConflictResolution: this.cancelConflictResolution.bind(this)
         });
         this.actions = createGitCommitActions({
             getState: () => this.state,
@@ -93,18 +111,13 @@ export class GitCommitModal {
     }
 
     clearCommitMessageInput() {
-        const commitMessage = this.element.querySelector('#gitCommitMessage');
-        if (commitMessage) commitMessage.value = '';
+        this.ui.updateCommitMessage('');
     }
 
     setCommitMessage(message) {
         const value = String(message || '').trim();
-        this.state.commitMessage = value;
-        const commitMessage = this.element.querySelector('#gitCommitMessage');
-        if (commitMessage) {
-            commitMessage.value = value;
-            commitMessage.focus();
-        }
+        this.ui.updateCommitMessage(value);
+        this.ui.focusCommitMessage?.();
     }
 
     afterUnload() {
@@ -230,7 +243,7 @@ export class GitCommitModal {
     }
 
     refreshAction() {
-        this.refreshAll({ force: true });
+        this.actions.refreshConflicts();
     }
 
     updateCommitMessage(element) {
@@ -266,9 +279,10 @@ export class GitCommitModal {
     }
 
     openDiff(element) {
-        const repoPath = element?.dataset?.repoPath || null;
-        const filePath = element?.dataset?.filePath;
-        const section = element?.dataset?.section || null;
+        const detail = element && !(element instanceof HTMLElement) ? element : null;
+        const repoPath = detail?.repoPath || element?.dataset?.repoPath || null;
+        const filePath = detail?.filePath || element?.dataset?.filePath;
+        const section = detail?.section || element?.dataset?.section || null;
         if (!filePath) return;
         this.selectFile(filePath, section, repoPath);
     }
@@ -422,23 +436,8 @@ export class GitCommitModal {
         this.actions.openGitIgnorePrompt({ repoPath, paths: [filePath], source: 'selection' });
     }
 
-    toggleFileMenu(element) {
-        const menu = element?.closest?.('.git-file-menu');
-        if (!menu) return;
-        const willOpen = !menu.classList.contains('open');
-        this.closeFileMenus();
-        if (willOpen) {
-            menu.classList.add('open');
-            const firstItem = menu.querySelector('.git-file-menu-item');
-            if (firstItem) {
-                setTimeout(() => firstItem.focus(), 0);
-            }
-        }
-    }
-
     closeFileMenus() {
-        const menus = this.element.querySelectorAll('.git-file-menu.open');
-        menus.forEach((menu) => menu.classList.remove('open'));
+        this.ui.closeFileMenus();
     }
 
     toggleRepoFolderExpanded(element) {
@@ -463,9 +462,8 @@ export class GitCommitModal {
         return this.ui.updateIgnorePrompt(options);
     }
 
-    async applyRepoPathFromInput() {
-        const input = this.element.querySelector('#gitRepoPathInput');
-        const next = (input?.value || '').trim();
+    async applyRepoPathFromInput(value) {
+        const next = String(value || '').trim();
         if (!next) {
             this.setStatusLine('Enter a repository path.', true);
             return;
@@ -518,12 +516,81 @@ export class GitCommitModal {
         return this.actions.runGitAction(element, mode);
     }
 
+    normalizeConflictDetail(detailOrElement, sourceOverride = null) {
+        if (detailOrElement instanceof HTMLElement) {
+            const repoPath = detailOrElement.dataset.repoPath || '';
+            const filePath = detailOrElement.dataset.filePath || '';
+            const source = sourceOverride || detailOrElement.dataset.source || '';
+            return { repoPath, filePath, source };
+        }
+        if (detailOrElement && typeof detailOrElement === 'object') {
+            if (sourceOverride) {
+                return { ...detailOrElement, source: sourceOverride };
+            }
+            return detailOrElement;
+        }
+        return sourceOverride ? { source: sourceOverride } : {};
+    }
+
+    selectConflictFile(detailOrElement) {
+        const detail = this.normalizeConflictDetail(detailOrElement);
+        return this.actions.selectConflictFile(detail);
+    }
+
+    applyConflictChoice(detailOrElement, sourceOverride) {
+        const detail = this.normalizeConflictDetail(detailOrElement, sourceOverride);
+        return this.actions.applyConflictChoice(detail);
+    }
+
+    stageConflictFile(detailOrElement) {
+        const detail = this.normalizeConflictDetail(detailOrElement);
+        return this.actions.stageConflictFile(detail);
+    }
+
+    refreshConflicts() {
+        return this.actions.refreshConflicts();
+    }
+
+    cancelConflictResolution() {
+        this.state.conflictFocus = false;
+        this.syncStaticUI();
+    }
+
+    hasAnyConflicts() {
+        const manual = Array.isArray(this.state.manualConflicts) ? this.state.manualConflicts : [];
+        if (manual.length) return true;
+        const repos = Array.isArray(this.state.repoOverviews) ? this.state.repoOverviews : [];
+        return repos.some((repo) => {
+            const changes = repo?.changes || {};
+            const counts = repo?.counts || {};
+            const conflicted = Array.isArray(changes.conflicted) ? changes.conflicted.length : 0;
+            return conflicted > 0 || Boolean(counts.conflicted);
+        });
+    }
+
+    async openConflictHelper() {
+        const hadConflicts = this.hasAnyConflicts();
+        const priorStatus = {
+            text: this.state.lastStatusLine,
+            isError: this.state.lastStatusIsError
+        };
+        this.state.conflictFocus = true;
+        if (!hadConflicts && typeof this.actions.refreshConflicts === 'function') {
+            try {
+                await this.actions.refreshConflicts();
+            } finally {
+                this.state.lastStatusLine = priorStatus.text;
+                this.state.lastStatusIsError = priorStatus.isError;
+                this.ui.updateStatusBar?.();
+            }
+        }
+        this.syncStaticUI();
+    }
+
     setStatusLine(text, isError = false) {
         this.state.lastStatusLine = text || '';
-        const status = this.element.querySelector('#gitStatusLine');
-        if (!status) return;
-        status.textContent = this.state.lastStatusLine;
-        status.classList.toggle('error', Boolean(isError));
+        this.state.lastStatusIsError = Boolean(isError);
+        this.ui.updateStatusBar?.();
     }
 
     async callTool(name, args) {
@@ -570,7 +637,9 @@ export class GitCommitModal {
     }
 
     async refreshAll({ force = false } = {}) {
-        return this.repo.refreshAll({ force });
+        const result = await this.repo.refreshAll({ force });
+        this.syncStaticUI();
+        return result;
     }
 
     async loadRepoInfo({ force = false } = {}) {
@@ -666,7 +735,8 @@ export class GitCommitModal {
     }
 
     clearSelectedDiff() {
-        return this.diff.clearSelectedDiff();
+        this.diff.clearSelectedDiff();
+        this.ui.updateRepoTree?.();
     }
 
     getPathsForCommitInRepo(repoPath) {
@@ -750,7 +820,8 @@ export class GitCommitModal {
     }
 
     async selectFile(filePath, section, repoPath = null) {
-        return this.diff.selectFile(filePath, section, repoPath);
+        await this.diff.selectFile(filePath, section, repoPath);
+        this.ui.updateRepoTree?.();
     }
 
     async commit() {

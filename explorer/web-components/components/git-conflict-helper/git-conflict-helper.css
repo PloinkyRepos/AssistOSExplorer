@@ -1,0 +1,130 @@
+git-conflict-helper {
+    display: none;
+}
+
+git-conflict-helper.is-visible {
+    display: block;
+}
+
+.git-conflict-helper {
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    background: rgba(254, 242, 242, 0.7);
+    border-radius: 12px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.git-conflict-helper-header {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.git-conflict-helper-title {
+    font-weight: 800;
+    color: #7f1d1d;
+}
+
+.git-conflict-helper-hint {
+    color: rgba(127, 29, 29, 0.8);
+    font-size: 0.9rem;
+}
+
+.git-conflict-helper-body {
+    display: grid;
+    grid-template-columns: minmax(160px, 220px) minmax(0, 1fr);
+    gap: 12px;
+    min-height: 140px;
+}
+
+.git-conflict-helper-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 280px;
+    overflow: auto;
+}
+
+.git-conflict-helper-file {
+    text-align: left;
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    background: #fff;
+    border-radius: 8px;
+    padding: 6px 8px;
+    font-weight: 600;
+    color: var(--text) !important;
+    cursor: pointer;
+}
+
+.git-conflict-helper-file.active {
+    color: var(--white-text) !important;
+}
+
+.git-conflict-helper-file:hover,
+.git-conflict-helper-file:focus {
+    background: rgba(254, 242, 242, 0.95);
+    outline: none;
+}
+
+.git-conflict-helper-compare {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 10px;
+}
+
+.git-conflict-helper-pane {
+    background: #fff;
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: 10px;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-height: 140px;
+}
+
+.git-conflict-helper-pane-title {
+    font-weight: 700;
+    color: #7f1d1d;
+}
+
+.git-conflict-helper-content {
+    flex: 1 1 auto;
+    margin: 0;
+    font-family: "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    font-size: 0.8rem;
+    white-space: pre;
+    overflow: auto;
+    max-height: 260px;
+}
+
+.git-conflict-helper-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.git-conflict-helper-status {
+    font-size: 0.85rem;
+    color: rgba(127, 29, 29, 0.8);
+}
+
+.git-conflict-helper-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+@media (max-width: 900px) {
+    .git-conflict-helper-body {
+        grid-template-columns: 1fr;
+    }
+
+    .git-conflict-helper-compare {
+        grid-template-columns: 1fr;
+    }
+}

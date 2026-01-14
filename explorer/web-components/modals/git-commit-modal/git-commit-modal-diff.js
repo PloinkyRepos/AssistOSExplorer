@@ -158,22 +158,26 @@ export function createGitCommitDiff(ctx) {
 
     const renderDiff = (text, { filePath, section, repoPath = null, loading = false, isError = false } = {}) => {
         const viewer = getDiffViewer();
-        if (!viewer || typeof viewer.setDiff !== 'function') return;
+        if (!viewer) return;
         const effectiveRepo = repoPath || getRepoPath();
         const canIgnore = canIgnoreFile(effectiveRepo, filePath);
-        viewer.setDiff(text, { filePath, section, repoPath: effectiveRepo, loading, isError, canIgnore });
+        if (typeof viewer.setState === 'function') {
+            viewer.setState({
+                diffText: text || '',
+                filePath: filePath || '',
+                repoPath: effectiveRepo || '',
+                loading: Boolean(loading),
+                isError: Boolean(isError),
+                canIgnore: Boolean(canIgnore)
+            });
+            return;
+        }
+        if (typeof viewer.setDiff === 'function') {
+            viewer.setDiff(text, { filePath, section, repoPath: effectiveRepo, loading, isError, canIgnore });
+        }
     };
 
-    const refreshActiveRowStyles = () => {
-        const activePath = state.selectedPath;
-        const activeRepo = state.selectedRepoPath || state.repoPath;
-        const items = element.querySelectorAll('.git-tree-file[data-local-action="openDiff"]');
-        items.forEach((el) => {
-            const isActive = Boolean(activePath && el.dataset.filePath === activePath && (!activeRepo || el.dataset.repoPath === activeRepo));
-            el.classList.toggle('active', isActive);
-            el.closest?.('.git-tree-file-row')?.classList.toggle('active', isActive);
-        });
-    };
+    const refreshActiveRowStyles = () => {};
 
     const buildDiffCacheKey = (repoPath, section, filePath) => `${repoPath || 'repo'}::${section || 'unknown'}::${filePath}`;
 

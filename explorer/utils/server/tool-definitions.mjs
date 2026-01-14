@@ -27,6 +27,10 @@ export function buildToolDefinitions(zodToJsonSchema, schemas) {
     GitUntrackArgsSchema,
     GitCheckIgnoreArgsSchema,
     GitRestoreArgsSchema,
+    GitConflictVersionsArgsSchema,
+    GitCheckoutConflictArgsSchema,
+    GitStashArgsSchema,
+    GitStashPopArgsSchema,
     GitCommitArgsSchema,
     GitPushArgsSchema,
     GitPullArgsSchema,
@@ -176,6 +180,26 @@ export function buildToolDefinitions(zodToJsonSchema, schemas) {
       name: 'git_restore',
       description: 'Restore files to the last commit (discard local changes).',
       inputSchema: zodToJsonSchema(GitRestoreArgsSchema)
+    },
+    {
+      name: 'git_conflict_versions',
+      description: 'Return base/ours/theirs versions for a conflicted file.',
+      inputSchema: zodToJsonSchema(GitConflictVersionsArgsSchema)
+    },
+    {
+      name: 'git_checkout_conflict',
+      description: 'Checkout ours/theirs version for a conflicted file.',
+      inputSchema: zodToJsonSchema(GitCheckoutConflictArgsSchema)
+    },
+    {
+      name: 'git_stash',
+      description: 'Stash local changes (optionally including untracked files).',
+      inputSchema: zodToJsonSchema(GitStashArgsSchema)
+    },
+    {
+      name: 'git_stash_pop',
+      description: 'Apply and drop the latest stash (or a specific ref).',
+      inputSchema: zodToJsonSchema(GitStashPopArgsSchema)
     },
     {
       name: 'git_commit',

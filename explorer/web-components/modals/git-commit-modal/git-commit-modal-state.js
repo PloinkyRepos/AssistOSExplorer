@@ -22,6 +22,20 @@ export function createGitCommitState(props = {}) {
         pullMode: 'ffOnly', // 'ffOnly' | 'rebase' | 'merge'
         credentialsOpen: false,
         credentialsGate: false,
+        pullBlocked: null,
+        autoStash: null,
+        manualConflicts: [],
+        hasConflicts: false,
+        conflictCount: 0,
+        conflictFocus: false,
+        conflictHelper: {
+            selected: null,
+            ours: '',
+            theirs: '',
+            status: '',
+            loading: false,
+            requestKey: null
+        },
         identityPrompt: {
             visible: false,
             test:"test",
@@ -47,7 +61,8 @@ export function createGitCommitState(props = {}) {
             source: 'manual', // 'selection' | 'untracked' | 'manual'
             stopTracking: false
         },
-        lastStatusLine: ''
+        lastStatusLine: '',
+        lastStatusIsError: false
     };
 
     return {

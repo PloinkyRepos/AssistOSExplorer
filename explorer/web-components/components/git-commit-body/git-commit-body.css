@@ -1,0 +1,18 @@
+git-commit-body {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+git-commit-body.is-hidden {
+    display: none;
+}
+
+.git-commit-body-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 0;
+    flex: 1 1 auto;
+}

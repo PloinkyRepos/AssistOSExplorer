@@ -66,6 +66,32 @@ export class GitDiffViewer {
         this.emit('git-diff-ignore', { filePath, repoPath });
     }
 
+    setState(next = {}) {
+        if (!next || typeof next !== 'object') return;
+        if (Object.prototype.hasOwnProperty.call(next, 'diffText')) {
+            this.state.diffText = String(next.diffText || '');
+        }
+        if (Object.prototype.hasOwnProperty.call(next, 'filePath')) {
+            this.state.filePath = String(next.filePath || '');
+        }
+        if (Object.prototype.hasOwnProperty.call(next, 'repoPath')) {
+            this.state.repoPath = String(next.repoPath || '');
+        }
+        if (Object.prototype.hasOwnProperty.call(next, 'loading')) {
+            this.state.loading = Boolean(next.loading);
+        }
+        if (Object.prototype.hasOwnProperty.call(next, 'isError')) {
+            this.state.isError = Boolean(next.isError);
+        }
+        if (Object.prototype.hasOwnProperty.call(next, 'canIgnore')) {
+            this.state.canIgnore = Boolean(next.canIgnore);
+        }
+        if (Object.prototype.hasOwnProperty.call(next, 'mode')) {
+            this.state.mode = String(next.mode || 'split') || 'split';
+        }
+        this.render();
+    }
+
     render() {
         const title = this.element.querySelector('#gitDiffTitle');
         const meta = this.element.querySelector('#gitDiffMeta');

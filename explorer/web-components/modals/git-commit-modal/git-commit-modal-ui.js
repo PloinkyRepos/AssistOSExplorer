@@ -1,3 +1,5 @@
+import { isReposRootPath } from "./git-commit-modal-utils.js";
+
 export function createGitCommitUI(ctx) {
     const {
         element,
@@ -6,6 +8,19 @@ export function createGitCommitUI(ctx) {
         runGitAction,
         openDiff,
         applyRepoPathFromInput,
+        refreshAction,
+        generateCommitMessage,
+        toggleRepoChanges,
+        toggleRepoFolderExpanded,
+        toggleTreeFolder,
+        toggleTreePrefixSelectionCheckbox,
+        toggleTreeFileSelectionCheckbox,
+        toggleRepoAllChangesCheckbox,
+        openIgnoreForFile,
+        openStopTrackingForFile,
+        removeIgnoreForFile,
+        rollbackFile,
+        deleteFile,
         saveGitCredentials,
         cancelGitCredentials,
         saveGitIgnore,
@@ -13,65 +28,21 @@ export function createGitCommitUI(ctx) {
         setIgnoreMode,
         setIgnoreAnchor,
         openIgnoreForDiff,
-        closeFileMenus,
-        closeModal
+        selectConflictFile,
+        applyConflictChoice,
+        stageConflictFile,
+        refreshConflicts,
+        openConflictHelper,
+        closeModal,
+        cancelConflictResolution
     } = ctx;
 
     const bindEvents = () => {
-        if (!element.dataset.boundDiffKeys) {
-            element.addEventListener('keydown', (event) => {
-                const key = event.key;
-                if (key !== 'Enter' && key !== ' ') return;
-                const target = event.target?.closest?.(
-                    '.git-tree-file[data-local-action="openDiff"], ' +
-                    '.git-menu-item[data-local-action^="runGitAction"], ' +
-                    '.git-file-menu-item[data-local-action]'
-                );
-                if (!target) return;
-                event.preventDefault();
-                const action = target.getAttribute('data-local-action') || '';
-                if (action.startsWith('runGitAction')) {
-                    const mode = action.split(/\s+/)[1] || '';
-                    runGitAction(target, mode);
-                    return;
-                }
-                if (target.classList.contains('git-file-menu-item')) {
-                    target.click();
-                    return;
-                }
-                openDiff(target);
-            });
-            element.dataset.boundDiffKeys = 'true';
-        }
-
-        const repoPathInput = element.querySelector('#gitRepoPathInput');
-        if (repoPathInput && !repoPathInput.dataset.bound) {
-            repoPathInput.addEventListener('keydown', (event) => {
-                if (event.key === 'Enter') {
-                    event.preventDefault();
-                    applyRepoPathFromInput();
-                }
-            });
-            repoPathInput.dataset.bound = 'true';
-        }
-
-        const commitMessage = element.querySelector('#gitCommitMessage');
-        if (commitMessage && !commitMessage.dataset.bound) {
-            commitMessage.addEventListener('input', (event) => {
-                updateCommitMessage(event.target);
-            });
-            commitMessage.dataset.bound = 'true';
-        }
-
         if (!element.dataset.boundCommitMenu) {
             const closeIfOutside = (event) => {
-                const closeMenuIfOutside = (isOpen, rootSelector, closeFn) => {
-                    if (!isOpen) return;
-                    const root = element.querySelector(rootSelector);
-                    const inside = root && (event.target === root || root.contains(event.target));
-                    if (!inside) closeFn();
-                };
-                closeMenuIfOutside(state.actionsMenuOpen, '#gitActionsSplit', () => closeActionsMenu());
+                const root = element.querySelector('#gitActionsSplit');
+                const inside = root && (event.target === root || root.contains(event.target));
+                if (!inside) closeActionsMenu();
                 if (!event.target?.closest?.('.git-file-menu')) {
                     closeFileMenus();
                 }
@@ -130,6 +101,75 @@ export function createGitCommitUI(ctx) {
             element.dataset.boundPromptEvents = 'true';
         }
 
+        if (!element.dataset.boundCommitBodyReady) {
+            element.addEventListener('git-commit-body-ready', () => {
+                updateCommitButtons();
+                syncStaticUI();
+            });
+            element.dataset.boundCommitBodyReady = 'true';
+        }
+
+        if (!element.dataset.boundCommitBodyActions) {
+            element.addEventListener('git-commit-body-action', (event) => {
+                handleCommitBodyAction(event?.detail || {});
+            });
+            element.dataset.boundCommitBodyActions = 'true';
+        }
+
+        if (!element.dataset.boundCommitActions) {
+            element.addEventListener('git-commit-actions-action', (event) => {
+                handleCommitActionsAction(event?.detail || {});
+            });
+            element.dataset.boundCommitActions = 'true';
+        }
+
+        if (!element.dataset.boundRepoTreeActions) {
+            element.addEventListener('git-repo-tree-action', (event) => {
+                handleRepoTreeAction(event?.detail || {});
+            });
+            element.dataset.boundRepoTreeActions = 'true';
+        }
+
+        if (!element.dataset.boundConflictHelper) {
+            element.addEventListener('git-conflict-select', (event) => {
+                selectConflictFile?.(event?.detail || {});
+            });
+            element.addEventListener('git-conflict-apply', (event) => {
+                applyConflictChoice?.(event?.detail || {});
+            });
+            element.addEventListener('git-conflict-stage', (event) => {
+                stageConflictFile?.(event?.detail || {});
+            });
+            element.addEventListener('git-conflict-refresh', () => {
+                refreshConflicts?.();
+            });
+            element.addEventListener('git-conflict-cancel', () => {
+                cancelConflictResolution?.();
+            });
+            element.dataset.boundConflictHelper = 'true';
+        }
+
+        if (!element.dataset.boundStatusResolve) {
+            element.addEventListener('git-status-resolve', () => {
+                openConflictHelper?.();
+            });
+            element.dataset.boundStatusResolve = 'true';
+        }
+
+        if (!element.dataset.boundConflictBanner) {
+            element.addEventListener('git-conflict-banner-open', () => {
+                openConflictHelper?.();
+            });
+            element.dataset.boundConflictBanner = 'true';
+        }
+
+        if (!element.dataset.boundPullBlockedEvents) {
+            element.addEventListener('git-pull-blocked-open', (event) => {
+                openDiff?.(event?.detail || {});
+            });
+            element.dataset.boundPullBlockedEvents = 'true';
+        }
+
         const changesRoot = element.querySelector('.git-changes');
         if (changesRoot && !changesRoot.dataset.bound) {
             // Selection is handled via WebSkel `data-local-action` on checkboxes.
@@ -153,15 +193,6 @@ export function createGitCommitUI(ctx) {
         if (subtitle) {
             subtitle.textContent = `Repository: ${state.repoPath}`;
         }
-        const repoPathInput = element.querySelector('#gitRepoPathInput');
-        if (repoPathInput && repoPathInput.value !== state.repoPath) {
-            repoPathInput.value = state.repoPath;
-        }
-
-        const actionsMenu = element.querySelector('#gitActionsMenu');
-        if (actionsMenu) {
-            actionsMenu.style.display = state.actionsMenuOpen ? '' : 'none';
-        }
 
         const modalRoot = element.classList.contains('git-modal') ? element : element.querySelector('.git-modal');
         if (modalRoot) {
@@ -175,11 +206,84 @@ export function createGitCommitUI(ctx) {
         }
 
         updateCredentialsPrompt();
+        updateConflictHelper();
+        updateStatusBar();
+        updateConflictBanner();
+        updatePullBlockedPanel();
+        updateCommitBody();
+        updateRepoTree();
         updateIgnorePrompt();
     };
 
     const getCredentialsPromptPresenter = () => element.querySelector('git-credentials-prompt')?.webSkelPresenter || null;
     const getIgnorePromptPresenter = () => element.querySelector('git-ignore-prompt')?.webSkelPresenter || null;
+    const getConflictHelperPresenter = () => element.querySelector('git-conflict-helper')?.webSkelPresenter || null;
+    const getConflictBannerPresenter = () => element.querySelector('git-conflict-banner')?.webSkelPresenter || null;
+    const getCommitBodyPresenter = () => element.querySelector('git-commit-body')?.webSkelPresenter || null;
+    const getCommitActionsPresenter = () => element.querySelector('git-commit-actions')?.webSkelPresenter || null;
+    const getRepoTreePresenter = () => element.querySelector('git-repo-tree')?.webSkelPresenter || null;
+
+    const handleCommitBodyAction = ({ action, element: actionElement, mode, value } = {}) => {
+        if (!action) return;
+        if (action === 'applyRepoPathFromInput') {
+            applyRepoPathFromInput?.(value);
+            return;
+        }
+        const actionMap = {
+            refreshAction,
+            generateCommitMessage
+        };
+        if (action === 'runGitAction') {
+            runGitAction?.(actionElement, mode);
+            return;
+        }
+        if (action === 'updateCommitMessage') {
+            updateCommitMessage(value);
+            return;
+        }
+        const handler = actionMap[action];
+        if (typeof handler === 'function') {
+            handler(actionElement);
+        }
+    };
+
+    const handleCommitActionsAction = ({ action, element: actionElement, mode, value } = {}) => {
+        if (!action) return;
+        if (action === 'runGitAction') {
+            runGitAction?.(actionElement, mode);
+            return;
+        }
+        if (action === 'updateCommitMessage') {
+            updateCommitMessage(value);
+            return;
+        }
+        if (action === 'generateCommitMessage') {
+            generateCommitMessage?.();
+            return;
+        }
+    };
+
+    const handleRepoTreeAction = ({ action, element: actionElement } = {}) => {
+        if (!action) return;
+        const actionMap = {
+            openDiff,
+            toggleRepoChanges,
+            toggleRepoFolderExpanded,
+            toggleTreeFolder,
+            toggleTreePrefixSelectionCheckbox,
+            toggleTreeFileSelectionCheckbox,
+            toggleRepoAllChangesCheckbox,
+            openIgnoreForFile,
+            openStopTrackingForFile,
+            removeIgnoreForFile,
+            rollbackFile,
+            deleteFile
+        };
+        const handler = actionMap[action];
+        if (typeof handler === 'function') {
+            handler(actionElement);
+        }
+    };
 
     const updateCredentialsPrompt = (options = {}) => {
         const identityState = state.identityPrompt || {};
@@ -240,6 +344,249 @@ export function createGitCommitUI(ctx) {
         target?.dispatchEvent?.(new CustomEvent('git-ignore-update', { detail }));
     };
 
+    const updateCommitBody = () => {
+        const body = element.querySelector('git-commit-body');
+        if (!body) return;
+        const visible = !state.credentialsGate && !state.conflictFocus;
+        const detail = {
+            visible,
+            repoPath: state.repoPath || ''
+        };
+        const presenter = getCommitBodyPresenter();
+        if (presenter?.setState) {
+            presenter.setState(detail);
+            return;
+        }
+        body.classList.toggle('is-hidden', !visible);
+    };
+
+    const updateStatusBar = () => {
+        const presenter = element.querySelector('git-status-bar')?.webSkelPresenter;
+        if (!presenter?.setState) return;
+        const message = state.lastStatusLine || '';
+        presenter.setState({
+            text: message,
+            isError: Boolean(state.lastStatusIsError),
+            showResolve: Boolean(state.hasConflicts)
+        });
+    };
+
+    const updateConflictBanner = () => {
+        const presenter = getConflictBannerPresenter();
+        if (!presenter?.setState) return;
+        presenter.setState({
+            visible: Boolean(state.hasConflicts) && !state.conflictFocus,
+            count: Number(state.conflictCount || 0)
+        });
+    };
+
+    const updateRepoTree = () => {
+        const presenter = getRepoTreePresenter();
+        if (!presenter?.setState) return;
+        presenter.setState({
+            reposRoot: state.reposRoot || '',
+            repos: Array.isArray(state.repoOverviews) ? state.repoOverviews : [],
+            loading: Boolean(state.repoOverviewsLoading),
+            repoTreeExpanded: state.repoTreeExpanded || {},
+            repoChangesExpanded: state.repoChangesExpanded || {},
+            treeExpandedByRepo: state.treeExpandedByRepo || {},
+            selectionState: state.selectedFilesByRepo || {},
+            selectedPath: state.selectedPath || '',
+            selectedRepoPath: state.selectedRepoPath || state.repoPath || ''
+        });
+    };
+
+    const getSelectedReposForBatch = () => {
+        return Array.from(new Set([
+            ...Object.entries(state.selectedFilesByRepo || {})
+                .filter(([, entry]) => (entry?.files && entry.files.size > 0) || (entry?.prefixes && entry.prefixes.size > 0))
+                .map(([repoPath]) => repoPath)
+        ]));
+    };
+
+    const collectConflictItems = (repoPaths) => {
+        const repos = Array.isArray(state.repoOverviews) ? state.repoOverviews : [];
+        const targetSet = Array.isArray(repoPaths) && repoPaths.length ? new Set(repoPaths) : null;
+        const items = [];
+        const manual = Array.isArray(state.manualConflicts) ? state.manualConflicts : [];
+        if (!repos.length && !manual.length) return [];
+        for (const repo of repos) {
+            if (!repo?.path) continue;
+            if (targetSet && !targetSet.has(repo.path)) continue;
+            const conflicted = Array.isArray(repo?.changes?.conflicted) ? repo.changes.conflicted : [];
+            for (const filePath of conflicted) {
+                if (!filePath) continue;
+                items.push({
+                    repoPath: repo.path,
+                    filePath,
+                    repoLabel: repo.name || repo.path.split('/').filter(Boolean).slice(-1)[0] || repo.path
+                });
+            }
+        }
+        items.sort((a, b) => {
+            const repoCompare = a.repoPath.localeCompare(b.repoPath);
+            if (repoCompare !== 0) return repoCompare;
+            return a.filePath.localeCompare(b.filePath);
+        });
+        if (manual.length) {
+            const seen = new Set(items.map((item) => `${item.repoPath}::${item.filePath}`));
+            for (const entry of manual) {
+                if (!entry?.repoPath || !entry?.filePath) continue;
+                if (targetSet && !targetSet.has(entry.repoPath)) continue;
+                const key = `${entry.repoPath}::${entry.filePath}`;
+                if (seen.has(key)) continue;
+                items.push({
+                    repoPath: entry.repoPath,
+                    filePath: entry.filePath,
+                    repoLabel: entry.repoPath.split('/').filter(Boolean).slice(-1)[0] || entry.repoPath
+                });
+                seen.add(key);
+            }
+        }
+        return items;
+    };
+
+    const resolveConflictTargets = () => {
+        const manual = Array.isArray(state.manualConflicts) ? state.manualConflicts : [];
+        if (manual.length) {
+            return Array.from(new Set(manual.map((entry) => entry?.repoPath).filter(Boolean)));
+        }
+        const selectedRepo = state.selectedRepoPath;
+        if (selectedRepo && !isReposRootPath(selectedRepo, state.reposRoot)) {
+            return [selectedRepo];
+        }
+        const selected = getSelectedReposForBatch();
+        if (selected.length) return selected;
+        if (state.repoPath && !isReposRootPath(state.repoPath, state.reposRoot)) {
+            return [state.repoPath];
+        }
+        return null;
+    };
+
+    const updateConflictHelper = () => {
+        const allItems = collectConflictItems(null);
+        state.hasConflicts = allItems.length > 0;
+        state.conflictCount = allItems.length;
+        const helper = element.querySelector('git-conflict-helper');
+        if (!helper) return;
+        const targetRepos = resolveConflictTargets();
+        const items = targetRepos ? collectConflictItems(targetRepos) : allItems;
+        if (!items.length) {
+            if (state.conflictFocus) {
+                state.conflictFocus = false;
+            }
+            state.manualConflicts = [];
+            state.conflictHelper = {
+                selected: null,
+                ours: '',
+                theirs: '',
+                status: '',
+                loading: false,
+                requestKey: null
+            };
+            const detail = {
+                visible: false,
+                files: [],
+                selected: null,
+                ours: '',
+                theirs: '',
+                status: '',
+                loading: false
+            };
+            const presenter = getConflictHelperPresenter();
+            presenter?.setState?.(detail);
+            return;
+        }
+        const hasMultipleRepos = new Set(items.map((item) => item.repoPath)).size > 1;
+        const files = items.map((item) => ({
+            repoPath: item.repoPath,
+            filePath: item.filePath,
+            label: hasMultipleRepos ? `${item.repoLabel}: ${item.filePath}` : item.filePath
+        }));
+
+        let helperState = state.conflictHelper || {};
+        let selected = helperState.selected;
+        const selectedValid = selected && files.some((file) => file.repoPath === selected.repoPath && file.filePath === selected.filePath);
+        if (!selectedValid) {
+            selected = null;
+        }
+        let selectionChanged = false;
+        if (!selected && files.length) {
+            selected = { repoPath: files[0].repoPath, filePath: files[0].filePath };
+            selectionChanged = true;
+            helperState = {
+                ...helperState,
+                selected,
+                ours: '',
+                theirs: '',
+                status: '',
+                loading: false,
+                requestKey: null
+            };
+            state.conflictHelper = helperState;
+        }
+
+        const detail = {
+            visible: true,
+            files,
+            selected: helperState.selected || selected,
+            ours: helperState.ours || '',
+            theirs: helperState.theirs || '',
+            status: helperState.status || '',
+            loading: Boolean(helperState.loading)
+        };
+        const presenter = getConflictHelperPresenter();
+        presenter?.setState?.(detail);
+
+        if (selectionChanged && typeof selectConflictFile === 'function') {
+            selectConflictFile(selected);
+        }
+    };
+
+    const getRepoLabel = (repoPath) => {
+        if (!repoPath) return '';
+        const repo = Array.isArray(state.repoOverviews)
+            ? state.repoOverviews.find((entry) => entry?.path === repoPath)
+            : null;
+        return repo?.name || repoPath.split('/').filter(Boolean).slice(-1)[0] || repoPath;
+    };
+
+    const updatePullBlockedPanel = () => {
+        const presenter = element.querySelector('git-pull-blocked-panel')?.webSkelPresenter;
+        if (!presenter) return;
+        const blocked = state.pullBlocked;
+        const files = Array.isArray(blocked?.files) ? blocked.files : [];
+        if (!blocked || !files.length) {
+            presenter.setState({ visible: false, files: [] });
+            return;
+        }
+        const repoLabel = getRepoLabel(blocked.repoPath);
+        const showRepo = Boolean(repoLabel);
+        const list = files.filter(Boolean).map((filePath) => ({
+            repoPath: blocked.repoPath || '',
+            filePath,
+            label: showRepo ? `${repoLabel}: ${filePath}` : filePath
+        }));
+        presenter.setState({
+            visible: true,
+            repoLabel,
+            files: list
+        });
+    };
+
+    const hasConflictsForRepos = (repoPaths) => {
+        return collectConflictItems(repoPaths).length > 0;
+    };
+
+    const hasPullBlockedForRepos = (repoPaths) => {
+        const blocked = state.pullBlocked;
+        if (!blocked?.files?.length) return false;
+        const repoPath = blocked.repoPath;
+        if (!repoPath) return true;
+        const list = Array.isArray(repoPaths) ? repoPaths : [];
+        return list.includes(repoPath);
+    };
+
     const updateCommitButtons = () => {
         const actionsButton = element.querySelector('#gitActionsButton');
         const messageOk = Boolean((state.commitMessage || '').trim());
@@ -253,31 +600,46 @@ export function createGitCommitUI(ctx) {
         const authBlocking = Boolean(state.authPrompt?.visible);
         const ignoreBlocking = Boolean(state.ignorePrompt?.visible);
         const hasSelection = selectedRepos.length > 0;
-        const commitAllowed = !identityBlocking && !authBlocking && !ignoreBlocking && hasSelection && messageOk;
+        const conflictBlocking = hasConflictsForRepos(selectedRepos);
+        const pullBlocked = hasPullBlockedForRepos(selectedRepos);
+        const commitAllowed = !identityBlocking && !authBlocking && !ignoreBlocking && !conflictBlocking && !pullBlocked && hasSelection && messageOk;
         const pushAllowed = !identityBlocking && !authBlocking && !ignoreBlocking && (repoOk || hasSelection);
         const pullAllowed = !identityBlocking && !authBlocking && !ignoreBlocking && hasSelection;
-        if (actionsButton) {
-            actionsButton.disabled = !commitAllowed && !pushAllowed && !pullAllowed;
+        const disabled = !commitAllowed && !pushAllowed && !pullAllowed;
+        const presenter = getCommitActionsPresenter();
+        if (presenter?.setState) {
+            presenter.setState({ actionsDisabled: disabled });
+        } else if (actionsButton) {
+            actionsButton.disabled = disabled;
         }
     };
 
     const updateCommitMessage = (input) => {
-        state.commitMessage = input?.value || '';
+        const value = typeof input === 'string' ? input : (input?.value || '');
+        state.commitMessage = value;
+        const presenter = getCommitActionsPresenter();
+        presenter?.setState?.({ commitMessage: value });
         updateCommitButtons();
     };
 
     const toggleActionsMenu = () => {
-        state.actionsMenuOpen = !state.actionsMenuOpen;
-        syncStaticUI();
-        if (state.actionsMenuOpen) {
-            setTimeout(() => element.querySelector('#gitActionsMenu .git-menu-item')?.focus?.(), 0);
-        }
+        const presenter = getCommitActionsPresenter();
+        presenter?.toggleActionsMenu?.();
     };
 
     const closeActionsMenu = () => {
-        if (!state.actionsMenuOpen) return;
-        state.actionsMenuOpen = false;
-        syncStaticUI();
+        const presenter = getCommitActionsPresenter();
+        presenter?.closeActionsMenu?.();
+    };
+
+    const closeFileMenus = () => {
+        const presenter = getRepoTreePresenter();
+        presenter?.closeFileMenus?.();
+    };
+
+    const focusCommitMessage = () => {
+        const presenter = getCommitActionsPresenter();
+        presenter?.focusCommitMessage?.();
     };
 
     const toggleCredentials = () => {
@@ -308,7 +670,11 @@ export function createGitCommitUI(ctx) {
         updateCommitMessage,
         toggleActionsMenu,
         closeActionsMenu,
+        closeFileMenus,
         toggleCredentials,
-        closeCredentials
+        closeCredentials,
+        focusCommitMessage,
+        updateStatusBar,
+        updateRepoTree
     };
 }

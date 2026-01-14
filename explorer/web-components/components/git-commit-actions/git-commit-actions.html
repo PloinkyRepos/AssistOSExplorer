@@ -1,0 +1,56 @@
+<div class="git-commit-row git-commit-message">
+    <section class="commit-section">
+        <label class="git-commit-label" for="gitCommitMessage">Commit message</label>
+        <textarea id="gitCommitMessage" rows="3" placeholder="Describe your changes..." autocomplete="off"
+                  data-local-action="updateCommitMessage"></textarea>
+    </section>
+    <button
+            type="button"
+            class="icon-button git-ai-generate"
+            aria-label="Generate commit message with AI"
+            title="Generate message with AI"
+            data-local-action="generateCommitMessage"
+    >
+        <span aria-hidden="true">✦</span>
+    </button>
+</div>
+<div class="git-commit-row git-commit-actions">
+    <git-status-bar data-presenter="git-status-bar"></git-status-bar>
+    <div class="git-action-buttons">
+        <div class="git-commit-split" id="gitActionsSplit">
+            <button type="button" class="secondary git-actions-button" id="gitActionsButton"
+                    data-local-action="toggleActionsMenu">Git actions ▾
+            </button>
+            <div class="git-commit-menu" id="gitActionsMenu" role="menu" style="display: none;">
+                <div class="git-menu-item" role="menuitem" tabindex="0"
+                     data-local-action="runGitAction commit">Commit
+                </div>
+                <div class="git-menu-item" role="menuitem" tabindex="0"
+                     data-local-action="runGitAction commitPush">Commit &amp; Push
+                </div>
+                <div class="git-menu-item" role="menuitem" tabindex="0"
+                     data-local-action="runGitAction push">Push
+                </div>
+                <div class="git-menu-item" role="menuitem" tabindex="0"
+                     data-local-action="runGitAction pull">Pull
+                </div>
+                <div class="git-menu-item" role="menuitem" tabindex="0"
+                     data-local-action="runGitAction stash">Stash
+                </div>
+                <div class="git-menu-item" role="menuitem" tabindex="0"
+                     data-local-action="runGitAction unstash">Unstash
+                </div>
+                <div class="git-menu-separator" role="separator"></div>
+                <div class="git-menu-item" role="menuitem" tabindex="0"
+                     data-local-action="runGitAction pullFfOnly">Pull: Fast-forward only
+                </div>
+                <div class="git-menu-item" role="menuitem" tabindex="0"
+                     data-local-action="runGitAction pullRebase">Pull: Rebase
+                </div>
+                <div class="git-menu-item" role="menuitem" tabindex="0"
+                     data-local-action="runGitAction pullMerge">Pull: Merge
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

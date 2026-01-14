@@ -5,6 +5,9 @@ import {
     isReposRootPath,
     isGitAuthError,
     isGitIdentityError,
+    isGitConflictError,
+    isGitPullBlockedError,
+    extractGitPullBlockedFiles,
     getRememberedGitPat,
     setRememberedGitPat
 } from "./git-commit-modal-utils.js";
@@ -100,6 +103,414 @@ export function createGitCommitActions(ctx) {
             name: local.name || effective.name || global.name || fallback.name || '',
             email: local.email || effective.email || global.email || fallback.email || ''
         };
+    };
+
+    const collectConflictedItems = (repoPaths) => {
+        const targets = Array.isArray(repoPaths) && repoPaths.length ? new Set(repoPaths) : null;
+        const repos = Array.isArray(getState().repoOverviews) ? getState().repoOverviews : [];
+        const out = [];
+        for (const repo of repos) {
+            if (!repo?.path) continue;
+            if (targets && !targets.has(repo.path)) continue;
+            const conflicted = Array.isArray(repo?.changes?.conflicted) ? repo.changes.conflicted : [];
+            for (const filePath of conflicted) {
+                if (!filePath) continue;
+                out.push({ repoPath: repo.path, filePath });
+            }
+        }
+        return out;
+    };
+
+    const hasConflictsForRepos = (repoPaths) => collectConflictedItems(repoPaths).length > 0;
+
+    const clearPullBlockedState = () => {
+        const state = getState();
+        if (!state.pullBlocked) return;
+        state.pullBlocked = null;
+        syncStaticUI();
+    };
+
+    const loadManualConflicts = async (repoPaths) => {
+        const state = getState();
+        const paths = Array.isArray(repoPaths) ? repoPaths.filter(Boolean) : [];
+        if (!paths.length) {
+            state.manualConflicts = [];
+            return;
+        }
+        const collected = [];
+        for (const repoPath of paths) {
+            try {
+                const text = await service.gitStatus(repoPath);
+                const payload = parseJsonToolResult(text) || {};
+                const status = payload?.status || payload || {};
+            const conflicted = Array.isArray(status.conflicted) ? status.conflicted : [];
+            for (const entry of conflicted) {
+                const filePath = typeof entry === 'string'
+                    ? entry
+                    : (entry?.path || entry?.filePath || '');
+                if (!filePath) continue;
+                collected.push({ repoPath, filePath });
+            }
+            } catch {
+                continue;
+            }
+        }
+        state.manualConflicts = collected;
+    };
+
+    const handlePullConflicts = async (message, repoPaths = null) => {
+        await loadManualConflicts(repoPaths);
+        await loadRepoOverviews({ force: true });
+        syncStaticUI();
+        updateCommitButtons();
+        setStatusLine(message || 'Merge conflicts detected. Resolve them before continuing.', true);
+    };
+
+    const restoreStash = async (repoPath, stashRef) => {
+        try {
+            const text = await service.gitStashPop({ path: repoPath, ref: stashRef, reinstateIndex: true });
+            const payload = parseJsonToolResult(text) || {};
+            if (payload.noStash) {
+                setStatusLine('No stash entries found to restore.', true);
+                return { ok: false, conflicts: false };
+            }
+            if (payload.conflicts) {
+                await handlePullConflicts('Conflicts after restoring stashed changes. Resolve them before continuing.', [repoPath]);
+                return { ok: false, conflicts: true };
+            }
+            if (payload.ok === false) {
+                setStatusLine(payload.output || 'Failed to restore stash.', true);
+                return { ok: false, conflicts: false };
+            }
+            return { ok: true, conflicts: false };
+        } catch (error) {
+            setStatusLine(normalizeErrorMessage(error), true);
+            return { ok: false, conflicts: false };
+        }
+    };
+
+    const pullWithAutoStash = async (repoPath, token, repoPaths) => {
+        const state = getState();
+        setStatusLine('Local changes detected. Stashing before pull...');
+        let stashPayload = null;
+        try {
+            const text = await service.gitStash({
+                path: repoPath,
+                includeUntracked: true,
+                message: 'webskel:auto-pull'
+            });
+            stashPayload = parseJsonToolResult(text) || {};
+        } catch (error) {
+            setStatusLine(normalizeErrorMessage(error), true);
+            return false;
+        }
+
+        const stashCreated = Boolean(stashPayload.created);
+        const stashRef = stashPayload.ref || null;
+
+        try {
+            await gitPullWithToken(repoPath, token);
+        } catch (error) {
+            const msg = humanizeGitError(normalizeErrorMessage(error), { action: 'pull' });
+            if (isGitIdentityError(msg)) {
+                if (stashCreated) {
+                    await restoreStash(repoPath, stashRef);
+                }
+                await ensureGitIdentityOrPrompt(repoPath, { type: 'pull', mode: 'batch', repoPaths });
+                return false;
+            }
+            if (isGitAuthError(msg)) {
+                if (stashCreated) {
+                    await restoreStash(repoPath, stashRef);
+                }
+                if (!token) {
+                    showGitAuthPrompt(repoPath, { type: 'pull', mode: 'batch', repoPaths }, { message: msg });
+                    return false;
+                }
+                setStatusLine(`${msg} (A token is already saved. Use "Token" to update it.)`, true);
+                return false;
+            }
+            if (isGitConflictError(msg)) {
+                if (stashCreated) {
+                    state.autoStash = { repoPath, ref: stashRef };
+                }
+                await handlePullConflicts('Pull completed with conflicts. Resolve them, then restore your stashed changes.', [repoPath]);
+                return false;
+            }
+            if (isGitPullBlockedError(msg)) {
+                if (stashCreated) {
+                    await restoreStash(repoPath, stashRef);
+                }
+                const blockedFiles = extractGitPullBlockedFiles(msg);
+                state.pullBlocked = blockedFiles.length ? { repoPath, files: blockedFiles } : null;
+                syncStaticUI();
+                updateCommitButtons();
+                setStatusLine('Pull blocked: could not auto-stash your local changes.', true);
+                return false;
+            }
+            if (stashCreated) {
+                await restoreStash(repoPath, stashRef);
+            }
+            throw error;
+        }
+
+        if (stashCreated) {
+            setStatusLine('Restoring stashed changes...');
+            const restored = await restoreStash(repoPath, stashRef);
+            if (!restored.ok) return false;
+        }
+
+        return true;
+    };
+
+    const maybeRestoreAutoStash = async () => {
+        const state = getState();
+        const pending = state.autoStash;
+        if (!pending?.repoPath) return false;
+        if (hasConflictsForRepos([pending.repoPath])) return false;
+        state.autoStash = null;
+        setStatusLine('Restoring stashed changes...');
+        const restored = await restoreStash(pending.repoPath, pending.ref);
+        if (restored.ok) {
+            await loadRepoOverviews({ force: true });
+            syncStaticUI();
+            updateCommitButtons();
+            setStatusLine('Restored stashed changes.');
+        }
+        return restored.ok;
+    };
+
+    const stashRepos = async (repoPaths) => {
+        const list = Array.isArray(repoPaths) ? repoPaths.filter(Boolean) : [];
+        if (!list.length) return { ok: false, created: 0, skipped: 0, total: 0 };
+        let created = 0;
+        let skipped = 0;
+        for (const repoPath of list) {
+            const text = await service.gitStash({
+                path: repoPath,
+                includeUntracked: true,
+                message: 'webskel:manual-stash'
+            });
+            const payload = parseJsonToolResult(text) || {};
+            if (payload.created) {
+                created += 1;
+            } else {
+                skipped += 1;
+            }
+        }
+        return { ok: true, created, skipped, total: list.length };
+    };
+
+    const stashSelectedRepos = async () => {
+        const state = getState();
+        const selected = getSelectedReposForBatch();
+        const targets = selected.length
+            ? selected
+            : (state.repoPath && !isReposRootPath(state.repoPath, state.reposRoot)) ? [state.repoPath] : [];
+        if (!targets.length) {
+            setStatusLine('Select a repository or file to stash.', true);
+            return;
+        }
+        state.autoStash = null;
+        setStatusLine(`Stashing ${targets.length} repo(s)...`);
+        return withGlobalLoader(async () => {
+            try {
+                const result = await stashRepos(targets);
+                if (!result.ok) return;
+                await loadRepoOverviews({ force: true });
+                await refreshAll({ force: true });
+                updateCommitButtons();
+                if (result.created === 0) {
+                    setStatusLine('Nothing to stash.');
+                    return;
+                }
+                if (result.created === result.total) {
+                    setStatusLine(`Stashed ${result.created} repo(s).`);
+                    return;
+                }
+                setStatusLine(`Stashed ${result.created} repo(s). ${result.skipped} repo(s) had no changes.`);
+            } catch (error) {
+                setStatusLine(normalizeErrorMessage(error), true);
+            }
+        });
+    };
+
+    const unstashSelectedRepos = async () => {
+        const state = getState();
+        const selected = getSelectedReposForBatch();
+        const targets = selected.length
+            ? selected
+            : (state.repoPath && !isReposRootPath(state.repoPath, state.reposRoot)) ? [state.repoPath] : [];
+        if (!targets.length) {
+            setStatusLine('Select a repository or file to unstash.', true);
+            return;
+        }
+        state.autoStash = null;
+        setStatusLine(`Unstashing ${targets.length} repo(s)...`);
+        return withGlobalLoader(async () => {
+            try {
+                for (const repoPath of targets) {
+                    const restored = await restoreStash(repoPath, null);
+                    if (!restored.ok) return;
+                    if (restored.conflicts) return;
+                }
+                await loadRepoOverviews({ force: true });
+                await refreshAll({ force: true });
+                updateCommitButtons();
+                setStatusLine('Unstash complete.');
+            } catch (error) {
+                setStatusLine(normalizeErrorMessage(error), true);
+            }
+        });
+    };
+
+    const selectConflictFile = async ({ repoPath, filePath } = {}) => {
+        if (!repoPath || !filePath) return;
+        const state = getState();
+        const selection = { repoPath, filePath };
+        const requestKey = `${repoPath}::${filePath}`;
+        state.conflictHelper = {
+            ...(state.conflictHelper || {}),
+            selected: selection,
+            ours: '',
+            theirs: '',
+            status: 'Loading conflict versions...',
+            loading: true,
+            requestKey
+        };
+        syncStaticUI();
+
+        try {
+            const text = await service.gitConflictVersions({ path: repoPath, file: filePath });
+            const payload = parseJsonToolResult(text) || {};
+            const ours = payload.ours ?? '';
+            const theirs = payload.theirs ?? '';
+            const oursError = payload.oursError || '';
+            const theirsError = payload.theirsError || '';
+            let status = '';
+            if (oursError || theirsError) {
+                const parts = [];
+                if (oursError) parts.push(`Local unavailable: ${oursError}`);
+                if (theirsError) parts.push(`Remote unavailable: ${theirsError}`);
+                status = parts.join(' · ');
+            } else {
+                status = 'Compare versions or resolve in your editor.';
+            }
+
+            const current = getState().conflictHelper || {};
+            if (current.requestKey !== requestKey) return;
+            state.conflictHelper = {
+                ...current,
+                selected: selection,
+                ours: String(ours || ''),
+                theirs: String(theirs || ''),
+                status,
+                loading: false,
+                requestKey: null
+            };
+        } catch (error) {
+            const current = getState().conflictHelper || {};
+            if (current.requestKey !== requestKey) return;
+            state.conflictHelper = {
+                ...current,
+                selected: selection,
+                loading: false,
+                status: normalizeErrorMessage(error)
+            };
+        }
+        syncStaticUI();
+    };
+
+    const normalizeConflictSource = (value) => {
+        const raw = String(value || '').trim().toLowerCase();
+        if (!raw) return '';
+        if (raw === 'ours' || raw === 'theirs') return raw;
+        if (raw.endsWith('/ours')) return 'ours';
+        if (raw.endsWith('/theirs')) return 'theirs';
+        const match = raw.match(/(ours|theirs)$/);
+        return match ? match[1] : '';
+    };
+
+    const applyConflictChoice = async ({ repoPath, filePath, source } = {}) => {
+        if (!repoPath || !filePath) return;
+        const side = normalizeConflictSource(source);
+        if (side !== 'ours' && side !== 'theirs') {
+            setStatusLine('Pick local or remote to continue.', true);
+            return;
+        }
+        const state = getState();
+        state.conflictHelper = {
+            ...(state.conflictHelper || {}),
+            selected: { repoPath, filePath },
+            status: `Applying ${side === 'ours' ? 'local' : 'remote'} version...`,
+            loading: true
+        };
+        syncStaticUI();
+
+        try {
+            await service.gitCheckoutConflict({ path: repoPath, file: filePath, source: side });
+            setStatusLine(`Applied ${side === 'ours' ? 'local' : 'remote'} version.`, false);
+            await refreshAll({ force: true });
+            state.manualConflicts = [];
+            const stillConflicted = collectConflictedItems([repoPath]).some((item) => item.filePath === filePath);
+            if (stillConflicted) {
+                await selectConflictFile({ repoPath, filePath });
+            }
+            updateCommitButtons();
+        } catch (error) {
+            state.conflictHelper = {
+                ...(state.conflictHelper || {}),
+                loading: false,
+                status: normalizeErrorMessage(error)
+            };
+            syncStaticUI();
+        }
+    };
+
+    const stageConflictFile = async ({ repoPath, filePath } = {}) => {
+        if (!repoPath || !filePath) return;
+        const state = getState();
+        state.conflictHelper = {
+            ...(state.conflictHelper || {}),
+            selected: { repoPath, filePath },
+            status: 'Staging resolved file...',
+            loading: true
+        };
+        syncStaticUI();
+
+        try {
+            await service.gitStage(repoPath, [filePath]);
+            setStatusLine('File staged.');
+            await refreshAll({ force: true });
+            state.manualConflicts = [];
+            const stillConflicted = collectConflictedItems([repoPath]).some((item) => item.filePath === filePath);
+            if (stillConflicted) {
+                await selectConflictFile({ repoPath, filePath });
+            }
+            updateCommitButtons();
+        } catch (error) {
+            state.conflictHelper = {
+                ...(state.conflictHelper || {}),
+                loading: false,
+                status: normalizeErrorMessage(error)
+            };
+            syncStaticUI();
+        }
+    };
+
+    const refreshConflicts = async () => {
+        await refreshAll({ force: true });
+        await maybeRestoreAutoStash();
+        const state = getState();
+        state.manualConflicts = [];
+        const selection = getState().conflictHelper?.selected;
+        if (selection?.repoPath && selection?.filePath) {
+            const stillConflicted = collectConflictedItems([selection.repoPath])
+                .some((item) => item.filePath === selection.filePath);
+            if (stillConflicted) {
+                await selectConflictFile(selection);
+            }
+        }
     };
 
     const showGitAuthPrompt = (repoPath, pendingAction, { message = '' } = {}) => {
@@ -830,6 +1241,9 @@ export function createGitCommitActions(ctx) {
     };
 
     const pullRepos = async (repoPaths, { token = null } = {}) => {
+        const state = getState();
+        state.pullBlocked = null;
+        syncStaticUI();
         const list = Array.isArray(repoPaths) ? repoPaths.filter(Boolean) : [];
         const effectiveToken = String(token || '').trim() || getRememberedGitPat();
         for (const repoPath of list) {
@@ -848,6 +1262,15 @@ export function createGitCommitActions(ctx) {
                     }
                     setStatusLine(`${msg} (A token is already saved. Use “Token” to update it.)`, true);
                     return false;
+                }
+                if (isGitConflictError(msg)) {
+                    await handlePullConflicts('Merge conflicts detected. Resolve them before continuing.', [repoPath]);
+                    return false;
+                }
+                if (isGitPullBlockedError(msg)) {
+                    const autoOk = await pullWithAutoStash(repoPath, effectiveToken, list);
+                    if (!autoOk) return false;
+                    continue;
                 }
                 throw error;
             }
@@ -947,10 +1370,27 @@ export function createGitCommitActions(ctx) {
             return;
         }
         if (!selected.length) return;
+        clearPullBlockedState();
         const shouldPush = (state.commitMode || 'commit') === 'commitPush';
-        setStatusLine(shouldPush ? `Committing & pushing ${selected.length} repo(s)…` : `Committing ${selected.length} repo(s)…`);
+        if (hasConflictsForRepos(selected)) {
+            syncStaticUI();
+            updateCommitButtons();
+            setStatusLine('Resolve merge conflicts before committing.', true);
+            return;
+        }
+        setStatusLine('Pulling latest changes before commit...');
         return withGlobalLoader(async () => {
             try {
+                const pullOk = await pullRepos(selected);
+                if (!pullOk) return;
+                await loadRepoOverviews({ force: true });
+                syncStaticUI();
+                updateCommitButtons();
+                if (hasConflictsForRepos(selected)) {
+                    setStatusLine('Resolve merge conflicts before committing.', true);
+                    return;
+                }
+                setStatusLine(shouldPush ? `Committing & pushing ${selected.length} repo(s)…` : `Committing ${selected.length} repo(s)…`);
                 for (const repoPath of selected) {
                     const identityOk = await ensureGitIdentityOrPrompt(repoPath, { type: 'commit', mode: 'batch', repoPaths: selected });
                     if (!identityOk) return;
@@ -1071,6 +1511,7 @@ export function createGitCommitActions(ctx) {
             setStatusLine('Select at least one file/repo to pull.', true);
             return;
         }
+        clearPullBlockedState();
         const mode = state.pullMode || 'ffOnly';
         if (mode !== 'ffOnly') {
             for (const repoPath of selected) {
@@ -1085,6 +1526,11 @@ export function createGitCommitActions(ctx) {
             clearDiffCache();
             await loadRepoOverviews({ force: true });
             await refreshAll({ force: true });
+            updateCommitButtons();
+            if (hasConflictsForRepos(selected)) {
+                setStatusLine('Pull completed with conflicts. Resolve them and refresh.', true);
+                return;
+            }
             setStatusLine('Pulled.');
         } catch (error) {
             setStatusLine(humanizeGitError(normalizeErrorMessage(error), { action: 'pull' }), true);
@@ -1145,6 +1591,18 @@ export function createGitCommitActions(ctx) {
             pullSelectedRepos();
             return;
         }
+        if (next === 'stash') {
+            closeActionsMenu();
+            if (state.identityPrompt?.visible || state.authPrompt?.visible) return;
+            stashSelectedRepos();
+            return;
+        }
+        if (next === 'unstash') {
+            closeActionsMenu();
+            if (state.identityPrompt?.visible || state.authPrompt?.visible) return;
+            unstashSelectedRepos();
+            return;
+        }
         if (next === 'pullFfOnly' || next === 'pullRebase' || next === 'pullMerge') {
             const modeMap = {
                 pullFfOnly: 'ffOnly',
@@ -1172,6 +1630,10 @@ export function createGitCommitActions(ctx) {
         saveGitIgnore,
         setIgnoreMode,
         setIgnoreAnchor,
+        selectConflictFile,
+        applyConflictChoice,
+        stageConflictFile,
+        refreshConflicts,
         gitPushWithToken,
         gitPullWithToken,
         pushRepos,
@@ -1182,6 +1644,8 @@ export function createGitCommitActions(ctx) {
         commit,
         push,
         pushSelectedRepos,
-        pullSelectedRepos
+        pullSelectedRepos,
+        stashSelectedRepos,
+        unstashSelectedRepos
     };
 }

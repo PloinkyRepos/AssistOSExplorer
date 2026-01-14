@@ -23,6 +23,8 @@ export function createGitCommitRepo(ctx) {
         clearSelectedDiff
     } = ctx;
 
+    const getRepoTreePresenter = () => element.querySelector('git-repo-tree')?.webSkelPresenter || null;
+
     const getSelectedFilesEntry = (repoPath) => {
         if (!repoPath) return null;
         const store = state.selectedFilesByRepo || {};
@@ -186,166 +188,19 @@ export function createGitCommitRepo(ctx) {
     });
 
     const renderRepoOverviews = (overviews) => {
-        const section = element.querySelector('#gitRepoCandidatesSection');
-        const container = element.querySelector('#gitRepoCandidatesList');
-        if (!section || !container) return;
-
-        container.innerHTML = '';
-        const items = Array.isArray(overviews) ? overviews : [];
-        const show = true;
-        section.style.display = show ? '' : 'none';
-
-        if (state.repoOverviewsLoading && items.length === 0) {
-            const loading = document.createElement('div');
-            loading.className = 'git-empty';
-            loading.textContent = 'Loading repositories…';
-            container.appendChild(loading);
-            return;
-        }
-
-        if (items.length === 0) {
-            const empty = document.createElement('div');
-            empty.className = 'git-empty';
-            empty.textContent = `No repositories found under ${state.reposRoot}.`;
-            container.appendChild(empty);
-            return;
-        }
-
-        const dirty = getDisplayedRepoOverviews();
-        if (dirty.length === 0 && !state.repoOverviewsLoading) {
-            const empty = document.createElement('div');
-            empty.className = 'git-empty';
-            empty.textContent = 'No repositories with changes.';
-            container.appendChild(empty);
-            return;
-        }
-
-        const tree = buildRepoTree();
-        const expandedMap = state.repoTreeExpanded || {};
-
-        const renderFolder = (node, depth = 0) => {
-            const folderId = node.id;
-
-            const wrapper = document.createElement('div');
-            wrapper.className = 'git-repo-row';
-
-            const row = document.createElement('div');
-            row.className = 'git-change-row';
-
-            const left = document.createElement('div');
-            left.className = 'git-repo-row-header';
-            left.style.paddingLeft = `${Math.min(24, depth * 12)}px`;
-
-            const expandBtn = document.createElement('button');
-            expandBtn.type = 'button';
-            expandBtn.className = 'secondary git-folder-toggle';
-            expandBtn.dataset.folderId = folderId;
-            expandBtn.setAttribute('data-local-action', 'toggleRepoFolderExpanded');
-            const isExpanded = expandedMap[folderId] === true;
-            expandBtn.textContent = isExpanded ? '▾' : '▸';
-
-            const label = document.createElement('div');
-            label.className = 'git-folder-label';
-            const badge = `S:${node.counts.staged} U:${node.counts.unstaged} N:${node.counts.untracked}${node.counts.conflicted ? ` C:${node.counts.conflicted}` : ''}`;
-            label.textContent = `${folderId === '/' ? state.reposRoot : node.name} · ${badge}`;
-
-            left.appendChild(expandBtn);
-            left.appendChild(label);
-
-            row.appendChild(left);
-            wrapper.appendChild(row);
-
-            if (!isExpanded) {
-                container.appendChild(wrapper);
-                return;
-            }
-
-            for (const repo of node.repos || []) {
-                const repoWrapper = document.createElement('div');
-                repoWrapper.className = 'git-repo-row';
-
-                const repoRow = document.createElement('div');
-                repoRow.className = 'git-change-row';
-
-                const repoLeft = document.createElement('div');
-                repoLeft.className = 'git-repo-row-header';
-                repoLeft.style.paddingLeft = `${Math.min(36, (depth + 1) * 12)}px`;
-
-                const repoCheckbox = document.createElement('input');
-                repoCheckbox.type = 'checkbox';
-                repoCheckbox.setAttribute('data-local-action', 'toggleRepoAllChangesCheckbox');
-                repoCheckbox.dataset.repoPath = repo.path;
-                const changedPaths = Array.isArray(repo?.changesAll)
-                    ? repo.changesAll.map((c) => String(c?.path || '')).filter(Boolean)
-                    : [];
-                const selectedCount = changedPaths.reduce((acc, p) => acc + (isFileSelected(repo.path, p) ? 1 : 0), 0);
-                const any = selectedCount > 0;
-                repoCheckbox.checked = changedPaths.length > 0 && selectedCount === changedPaths.length;
-                repoCheckbox.indeterminate = any && selectedCount < changedPaths.length;
-
-                const changesToggle = document.createElement('button');
-                changesToggle.type = 'button';
-                changesToggle.className = 'secondary git-tree-collapse';
-                changesToggle.dataset.repoPath = repo.path;
-                changesToggle.setAttribute('data-local-action', 'toggleRepoChanges');
-                const repoExpanded = isRepoChangesExpanded(repo.path);
-                changesToggle.textContent = repoExpanded ? '▾' : '▸';
-
-                const counts = repo.counts || { staged: 0, unstaged: 0, untracked: 0, conflicted: 0 };
-                const repoBadge = repo.ok
-                    ? `S:${counts.staged} U:${counts.unstaged} N:${counts.untracked}${counts.conflicted ? ` C:${counts.conflicted}` : ''}`
-                    : 'not git';
-                const label = document.createElement('div');
-                label.className = 'git-change-button';
-                label.textContent = `${repo.name} · ${repoBadge}${repo.branch ? ` · ${repo.branch}` : ''}`;
-                repoLeft.appendChild(changesToggle);
-                repoLeft.appendChild(repoCheckbox);
-                repoLeft.appendChild(label);
-
-                const info = document.createElement('div');
-                info.className = 'git-info-button';
-                info.setAttribute('role', 'button');
-                info.setAttribute('tabindex', '0');
-                const summary = formatRepoSummary(repo);
-                info.dataset.tooltip = summary;
-                info.title = summary;
-                info.setAttribute('aria-label', summary);
-                info.textContent = 'i';
-                repoLeft.appendChild(info);
-                repoRow.appendChild(repoLeft);
-
-                repoWrapper.appendChild(repoRow);
-
-                const ignoredCount = Number.isFinite(repo?.ignoredCount)
-                    ? repo.ignoredCount
-                    : (Array.isArray(repo?.ignored) ? repo.ignored.length : 0);
-                const hasChanges = Boolean(
-                    repo?.dirty
-                    || counts.staged
-                    || counts.unstaged
-                    || counts.untracked
-                    || counts.conflicted
-                    || ignoredCount
-                );
-                if (hasChanges && isRepoChangesExpanded(repo.path)) {
-                    const changesTree = renderRepoChangesTree(repo);
-                    if (changesTree) {
-                        repoWrapper.appendChild(changesTree);
-                    }
-                }
-
-                wrapper.appendChild(repoWrapper);
-            }
-
-            const childNames = Array.from(node.children.keys()).sort((a, b) => a.localeCompare(b));
-            for (const childName of childNames) {
-                renderFolder(node.children.get(childName), depth + 1);
-            }
-
-            container.appendChild(wrapper);
-        };
-
-        renderFolder(tree, 0);
+        const presenter = getRepoTreePresenter();
+        if (!presenter?.setState) return;
+        presenter.setState({
+            reposRoot: state.reposRoot || '',
+            repos: Array.isArray(overviews) ? overviews : [],
+            loading: Boolean(state.repoOverviewsLoading),
+            repoTreeExpanded: state.repoTreeExpanded || {},
+            repoChangesExpanded: state.repoChangesExpanded || {},
+            treeExpandedByRepo: state.treeExpandedByRepo || {},
+            selectionState: state.selectedFilesByRepo || {},
+            selectedPath: state.selectedPath || '',
+            selectedRepoPath: state.selectedRepoPath || state.repoPath || ''
+        });
     };
 
     const loadRepoOverviews = async ({ force = false } = {}) => {
@@ -353,49 +208,59 @@ export function createGitCommitRepo(ctx) {
         if (!force && repoOverviewCache.list && now - repoOverviewCache.at < 1500) {
             state.repoOverviews = repoOverviewCache.list;
             renderRepoOverviews(state.repoOverviews);
-            return;
+            return state.repoOverviews;
         }
-        if (state.repoOverviewsLoading) return;
+        if (state.repoOverviewsLoading) {
+            return repoOverviewCache.promise || state.repoOverviews;
+        }
         state.repoOverviewsLoading = true;
         renderRepoOverviews([]);
-        try {
-            const payload = parseJsonToolResult(await service.gitReposOverview(state.reposRoot)) || {};
-            const results = Array.isArray(payload.repos) ? payload.repos : [];
-            state.repoOverviews = results;
-            repoOverviewCache.at = now;
-            repoOverviewCache.list = results;
-            applyDefaultRepoTreeExpansion();
-            renderRepoOverviews(results);
-        } catch (error) {
+        const pending = (async () => {
             try {
-                const listingText = await service.listDirectoryDetailed(state.reposRoot);
-                const entries = parseDetailedDirectoryListing(listingText);
-                const results = (entries || [])
-                    .filter((entry) => entry && entry.type === 'directory' && entry.name && !String(entry.name).startsWith('.'))
-                    .map((entry) => ({
-                        name: entry.name,
-                        path: joinPath(state.reposRoot, entry.name),
-                        ok: true,
-                        branch: null,
-                        counts: { staged: 0, unstaged: 0, untracked: 0, conflicted: 0 },
-                        sample: { staged: [], unstaged: [], untracked: [], conflicted: [] }
-                    }))
-                    .sort((a, b) => a.name.localeCompare(b.name));
+                const payload = parseJsonToolResult(await service.gitReposOverview(state.reposRoot)) || {};
+                const results = Array.isArray(payload.repos) ? payload.repos : [];
                 state.repoOverviews = results;
                 repoOverviewCache.at = now;
                 repoOverviewCache.list = results;
                 applyDefaultRepoTreeExpansion();
                 renderRepoOverviews(results);
-                setStatusLine(`Loaded repositories list (status unavailable): ${normalizeErrorMessage(error)}`, true);
-            } catch (fallbackError) {
-                state.repoOverviews = [];
-                renderRepoOverviews([]);
-                setStatusLine(normalizeErrorMessage(fallbackError) || normalizeErrorMessage(error), true);
+                return results;
+            } catch (error) {
+                try {
+                    const listingText = await service.listDirectoryDetailed(state.reposRoot);
+                    const entries = parseDetailedDirectoryListing(listingText);
+                    const results = (entries || [])
+                        .filter((entry) => entry && entry.type === 'directory' && entry.name && !String(entry.name).startsWith('.'))
+                        .map((entry) => ({
+                            name: entry.name,
+                            path: joinPath(state.reposRoot, entry.name),
+                            ok: true,
+                            branch: null,
+                            counts: { staged: 0, unstaged: 0, untracked: 0, conflicted: 0 },
+                            sample: { staged: [], unstaged: [], untracked: [], conflicted: [] }
+                        }))
+                        .sort((a, b) => a.name.localeCompare(b.name));
+                    state.repoOverviews = results;
+                    repoOverviewCache.at = now;
+                    repoOverviewCache.list = results;
+                    applyDefaultRepoTreeExpansion();
+                    renderRepoOverviews(results);
+                    setStatusLine(`Loaded repositories list (status unavailable): ${normalizeErrorMessage(error)}`, true);
+                    return results;
+                } catch (fallbackError) {
+                    state.repoOverviews = [];
+                    renderRepoOverviews([]);
+                    setStatusLine(normalizeErrorMessage(fallbackError) || normalizeErrorMessage(error), true);
+                    return state.repoOverviews;
+                }
+            } finally {
+                state.repoOverviewsLoading = false;
+                renderRepoOverviews(state.repoOverviews);
+                repoOverviewCache.promise = null;
             }
-        } finally {
-            state.repoOverviewsLoading = false;
-            renderRepoOverviews(state.repoOverviews);
-        }
+        })();
+        repoOverviewCache.promise = pending;
+        return pending;
     };
 
     const applyRepoInfo = (info) => {

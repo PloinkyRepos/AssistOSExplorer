@@ -74,6 +74,25 @@ export function createSchemas(z) {
     path: z.string(),
     files: z.array(z.string()).optional().default([])
   });
+  const GitConflictVersionsArgsSchema = z.object({
+    path: z.string(),
+    file: z.string()
+  });
+  const GitCheckoutConflictArgsSchema = z.object({
+    path: z.string(),
+    file: z.string(),
+    source: z.enum(['ours', 'theirs'])
+  });
+  const GitStashArgsSchema = z.object({
+    path: z.string(),
+    includeUntracked: z.boolean().optional().default(true),
+    message: z.string().optional().default('')
+  });
+  const GitStashPopArgsSchema = z.object({
+    path: z.string(),
+    ref: z.string().optional().nullable().default(null),
+    reinstateIndex: z.boolean().optional().default(true)
+  });
   const GitCommitArgsSchema = z.object({
     path: z.string(),
     message: z.string().optional().default(''),
@@ -137,6 +156,10 @@ export function createSchemas(z) {
     GitUntrackArgsSchema,
     GitCheckIgnoreArgsSchema,
     GitRestoreArgsSchema,
+    GitConflictVersionsArgsSchema,
+    GitCheckoutConflictArgsSchema,
+    GitStashArgsSchema,
+    GitStashPopArgsSchema,
     GitCommitArgsSchema,
     GitPushArgsSchema,
     GitPullArgsSchema,
