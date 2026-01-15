@@ -1,5 +1,6 @@
 {
   "container": "node:20-alpine",
+  "postinstall": "apk add --no-cache git openssh-client ca-certificates",
   "env": [
     "OPENAI_API_KEY",
     "ANTHROPIC_API_KEY",
@@ -9,4 +10,3 @@
     "OPENROUTER_API_KEY"
   ]
 }
-
