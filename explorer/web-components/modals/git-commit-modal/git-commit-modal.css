@@ -934,12 +934,16 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
     flex: 1 1 auto;
     min-width: 0;
 }
-
+.autocommitSection{
+    display: flex;
+    gap: 20px;
+}
 .git-credentials-actions {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 10px;
+    align-self: end;
 }
 
 .git-credentials-buttons {
