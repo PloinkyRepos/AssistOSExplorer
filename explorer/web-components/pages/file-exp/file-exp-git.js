@@ -28,6 +28,21 @@ export function attachGitController(fileExp) {
         button.classList.toggle('has-conflicts', getConflictFlag());
     };
 
+    const refreshOpenGitModals = async () => {
+        const modals = Array.from(document.querySelectorAll('git-commit-modal'));
+        if (!modals.length) return;
+        for (const modal of modals) {
+            const presenter = modal?.webSkelPresenter || modal?.presenter || modal;
+            if (typeof presenter?.refreshAll === 'function') {
+                try {
+                    await presenter.refreshAll({ force: true });
+                } catch {
+                    // ignore refresh failures
+                }
+            }
+        }
+    };
+
     const autocommit = {
         timerId: null,
         running: false,
@@ -206,9 +221,14 @@ export function attachGitController(fileExp) {
             const selectedRepos = Array.isArray(repos) ? repos.filter(Boolean) : [];
             const repoList = selectedRepos.length ? selectedRepos : await listRepos();
             if (!repoList.length) return;
+            let committedAny = false;
 
             for (const repoPath of repoList) {
                 if (getConflictFlag()) return;
+                const initialStatus = await getRepoStatus(repoPath);
+                if (!hasAnyChanges(initialStatus)) {
+                    continue;
+                }
                 try {
                     await pullRepoWithToken(repoPath, token);
                 } catch (error) {
@@ -271,6 +291,7 @@ export function attachGitController(fileExp) {
                         userName: userName || null,
                         userEmail: userEmail || null
                     });
+                    committedAny = true;
                 } catch (error) {
                     const msg = normalizeErrorMessage(error);
                     if (isGitIdentityError(msg)) {
@@ -299,6 +320,10 @@ export function attachGitController(fileExp) {
                     showAutocommitStopped(msg || 'Push failed.');
                     return;
                 }
+            }
+
+            if (committedAny) {
+                await refreshOpenGitModals();
             }
         } catch {
             // ignore autocommit failures to avoid spamming; next tick will retry
