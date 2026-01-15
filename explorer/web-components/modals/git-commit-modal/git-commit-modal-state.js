@@ -28,6 +28,7 @@ export function createGitCommitState(props = {}) {
         pullMode: 'ffOnly', // 'ffOnly' | 'rebase' | 'merge'
         credentialsOpen: false,
         credentialsGate: false,
+        credentialsValidated: false,
         pullBlocked: null,
         autoStash: null,
         manualConflicts: [],

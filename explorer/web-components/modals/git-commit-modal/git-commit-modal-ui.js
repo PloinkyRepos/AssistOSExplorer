@@ -60,20 +60,40 @@ export function createGitCommitUI(ctx) {
             element.addEventListener('git-credentials-submit', (event) => {
                 saveGitCredentials(event?.detail || {});
             });
+            element.addEventListener('git-credentials-validate', (event) => {
+                saveGitCredentials({ ...(event?.detail || {}), validateOnly: true });
+            });
             element.addEventListener('git-credentials-cancel', () => {
                 cancelGitCredentials();
             });
             element.addEventListener('git-credentials-change', (event) => {
                 const detail = event?.detail || {};
+                const prevName = String(state.identityPrompt?.name ?? '');
+                const prevEmail = String(state.identityPrompt?.email ?? '');
+                const prevToken = String(state.authPrompt?.token ?? '');
+                const prevRemember = Boolean(state.authPrompt?.remember);
+                const nextName = String(detail.name ?? prevName);
+                const nextEmail = String(detail.email ?? prevEmail);
+                const nextToken = String(detail.token ?? prevToken);
+                const nextRemember = typeof detail.remember === 'boolean' ? detail.remember : prevRemember;
+                const credentialsChanged = (
+                    prevName !== nextName
+                    || prevEmail !== nextEmail
+                    || prevToken !== nextToken
+                    || prevRemember !== nextRemember
+                );
+                if (credentialsChanged) {
+                    state.credentialsValidated = false;
+                }
                 state.identityPrompt = {
                     ...state.identityPrompt,
-                    name: String(detail.name ?? state.identityPrompt?.name ?? ''),
-                    email: String(detail.email ?? state.identityPrompt?.email ?? '')
+                    name: nextName,
+                    email: nextEmail
                 };
                 state.authPrompt = {
                     ...state.authPrompt,
-                    token: String(detail.token ?? state.authPrompt?.token ?? ''),
-                    remember: typeof detail.remember === 'boolean' ? detail.remember : Boolean(state.authPrompt?.remember)
+                    token: nextToken,
+                    remember: nextRemember
                 };
             });
             element.addEventListener('git-ignore-submit', (event) => {
@@ -290,14 +310,17 @@ export function createGitCommitUI(ctx) {
         const authState = state.authPrompt || {};
         const autocommit = getAutocommitSettings();
         const repoOverviews = Array.isArray(state.repoOverviews) ? state.repoOverviews : [];
-        const autocommitRepos = repoOverviews
-            .map((repo) => ({
-                path: repo?.path || '',
-                name: repo?.name || repo?.relativePath || repo?.path || ''
-            }))
-            .filter((repo) => repo.path && repo.name);
+        const credentialsValidated = Boolean(state.credentialsValidated);
+        const autocommitRepos = credentialsValidated
+            ? repoOverviews
+                .map((repo) => ({
+                    path: repo?.path || '',
+                    name: repo?.name || repo?.relativePath || repo?.path || ''
+                }))
+                .filter((repo) => repo.path && repo.name)
+            : [];
         const savedRepos = Array.isArray(autocommit.repos) ? autocommit.repos : null;
-        const autocommitSelected = savedRepos !== null ? savedRepos : null;
+        const autocommitSelected = credentialsValidated && savedRepos !== null ? savedRepos : null;
         const visible = Boolean(
             identityState.visible
             || authState.visible
@@ -310,6 +333,7 @@ export function createGitCommitUI(ctx) {
             email: identityState.email || '',
             token: authState.token || '',
             remember: Boolean(authState.remember),
+            credentialsValidated,
             autocommitIntervalMinutes: Number(autocommit.intervalMinutes || 15),
             autocommitRepos,
             autocommitSelected

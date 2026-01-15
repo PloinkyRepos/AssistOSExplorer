@@ -383,6 +383,9 @@ export function attachGitController(fileExp) {
             ensureAutocommitTimer();
         }
     });
+    window.addEventListener('webskel-autocommit-settings-changed', () => {
+        ensureAutocommitTimer();
+    });
 
     Object.assign(fileExp, {
         openGitModal,

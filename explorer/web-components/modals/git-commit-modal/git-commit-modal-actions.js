@@ -1036,13 +1036,16 @@ export function createGitCommitActions(ctx) {
         const email = String(payload.email ?? state.identityPrompt?.email ?? '').trim();
         const token = String(payload.token ?? state.authPrompt?.token ?? '').trim();
         const remember = typeof payload.remember === 'boolean' ? payload.remember : Boolean(state.authPrompt?.remember);
+        const validateOnly = Boolean(payload.validateOnly);
         const autocommitIntervalMinutes = payload.autocommitIntervalMinutes;
         const autocommitRepos = Array.isArray(payload.autocommitRepos) ? payload.autocommitRepos : null;
 
         const identityRequired = Boolean(state.credentialsGate || state.identityPrompt?.visible);
         const authRequired = Boolean(state.authPrompt?.visible);
-        const identityValid = Boolean(name && email);
-        const tokenValid = Boolean(token);
+        const emailPattern = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+        const identityValid = Boolean(name && email && emailPattern.test(email));
+        const tokenRequired = remember || authRequired;
+        const tokenValid = !tokenRequired || Boolean(token);
 
         state.identityPrompt = {
             ...state.identityPrompt,
@@ -1055,7 +1058,7 @@ export function createGitCommitActions(ctx) {
             remember
         };
 
-        if (identityRequired && !identityValid) {
+        if (!identityValid) {
             state.identityPrompt = {
                 ...state.identityPrompt,
                 visible: true,
@@ -1065,10 +1068,10 @@ export function createGitCommitActions(ctx) {
             syncStaticUI();
             updateIdentityPrompt({ focus: !name ? 'name' : 'email' });
             updateCommitButtons();
-            setStatusLine('Enter name and email.', true);
+            setStatusLine(!name || !email ? 'Enter name and email.' : 'Enter a valid email address.', true);
             return;
         }
-        if (authRequired && !tokenValid) {
+        if (tokenRequired && !tokenValid) {
             state.authPrompt = {
                 ...state.authPrompt,
                 visible: true,
@@ -1079,6 +1082,58 @@ export function createGitCommitActions(ctx) {
             updateAuthPrompt({ focus: 'token' });
             updateCommitButtons();
             setStatusLine('Enter a token to continue.', true);
+            return;
+        }
+
+        if (!state.credentialsValidated) {
+            let validationRepoPath = state.identityPrompt?.repoPath || state.authPrompt?.repoPath;
+            if (!validationRepoPath) {
+                validationRepoPath = await resolveIdentityRepoPath();
+            }
+            if (!validationRepoPath) {
+                validationRepoPath = state.reposRoot || state.repoPath || '';
+            }
+            if (!validationRepoPath) {
+                setStatusLine('Select a repository to validate credentials.', true);
+                return;
+            }
+            if (!token) {
+                setStatusLine('Enter a token to validate credentials.', true);
+                return;
+            }
+            setStatusLine('Validating credentials...');
+            try {
+                await gitPullWithToken(validationRepoPath, token);
+            } catch (error) {
+                const msg = normalizeErrorMessage(error);
+                const lower = msg.toLowerCase();
+                if (isGitAuthError(msg) || lower.includes('repository not found')) {
+                    setStatusLine('Token validation failed. Check your token and repo access.', true);
+                    return;
+                }
+                if (lower.includes('remote is not https')) {
+                    setStatusLine(msg, true);
+                    return;
+                }
+                if (isGitIdentityError(msg)) {
+                    setStatusLine('Author identity is not valid for git. Update name/email and retry.', true);
+                    return;
+                }
+                if (!isGitPullBlockedError(msg) && !isGitConflictError(msg)) {
+                    setStatusLine(msg || 'Unable to validate credentials.', true);
+                    return;
+                }
+            }
+            state.credentialsValidated = true;
+            syncStaticUI();
+            updateCommitButtons();
+            setStatusLine('Credentials validated. Select autocommit repositories and save.');
+            await refreshAll({ force: true });
+            updateIdentityPrompt();
+            return;
+        }
+        if (validateOnly) {
+            setStatusLine('Credentials already validated.');
             return;
         }
 
@@ -1107,6 +1162,11 @@ export function createGitCommitActions(ctx) {
         }
 
         setAutocommitSettings({ intervalMinutes: autocommitIntervalMinutes, repos: autocommitRepos });
+        try {
+            window.dispatchEvent(new CustomEvent('webskel-autocommit-settings-changed'));
+        } catch {
+            // ignore dispatch errors
+        }
 
         const pending = state.authPrompt?.pendingAction || state.identityPrompt?.pendingAction;
         const wasGate = state.credentialsGate;
