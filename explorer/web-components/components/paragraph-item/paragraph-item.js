@@ -1,6 +1,6 @@
 const documentModule = assistOS.loadModule("document");
 import UIUtils from "../document-view-page/UIUtils.js";
-import pluginUtils from "../../../utils/pluginUtils.js";
+import pluginUtils from "../../../utils/pluginUtils.ui.js";
 
 const isMediaVariable = (variable) => {
     if (!variable || typeof variable !== 'object') {

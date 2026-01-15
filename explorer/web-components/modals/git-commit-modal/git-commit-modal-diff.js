@@ -152,6 +152,10 @@ export function createGitCommitDiff(ctx) {
         if (!repoPath || !filePath) return false;
         const repo = (state.repoOverviews || []).find((item) => item?.path === repoPath) || null;
         const rows = Array.isArray(repo?.changesAll) ? repo.changesAll : [];
+        const untracked = Array.isArray(repo?.changes?.untracked)
+            ? new Set(repo.changes.untracked.map((row) => String(row || '').trim()).filter(Boolean))
+            : null;
+        if (untracked?.has(filePath)) return true;
         const match = rows.find((row) => row?.path === filePath) || null;
         return isUntrackedChange(match);
     };

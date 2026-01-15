@@ -2,9 +2,9 @@ import {
     computeComponentBaseUrl,
     fetchOptionalText,
     fetchTextOrThrow,
-    registerRuntimeComponent,
     scopeCssToComponent
-} from '../../utils/pluginUtils.js';
+} from '../../utils/pluginUtils.core.js';
+import { registerRuntimeComponent } from '../../utils/pluginUtils.ui.js';
 
 const isNonEmptyString = (value) => typeof value === 'string' && value.trim().length > 0;
 

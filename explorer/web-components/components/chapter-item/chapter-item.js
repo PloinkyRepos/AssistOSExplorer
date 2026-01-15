@@ -1,5 +1,5 @@
 import {unescapeHtmlEntities} from "../../../imports.js";
-import pluginUtils from "../../../utils/pluginUtils.js";
+import pluginUtils from "../../../utils/pluginUtils.ui.js";
 import UIUtils from "../document-view-page/UIUtils.js";
 const documentModule = assistOS.loadModule("document");
 

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { computeComponentBaseUrl, resolveRuntimeAssetUrl } from '../../utils/pluginUtils.js';
+import { computeComponentBaseUrl, resolveRuntimeAssetUrl } from '../../utils/pluginUtils.core.js';
 
 test('computeComponentBaseUrl builds dependency paths', () => {
     const base = computeComponentBaseUrl('agent', 'child', {

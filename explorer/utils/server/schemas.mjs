@@ -97,7 +97,9 @@ export function createSchemas(z) {
     path: z.string(),
     message: z.string().optional().default(''),
     amend: z.boolean().optional().default(false),
-    signoff: z.boolean().optional().default(false)
+    signoff: z.boolean().optional().default(false),
+    userName: z.string().optional().nullable().default(null),
+    userEmail: z.string().optional().nullable().default(null)
   });
   const GitPushArgsSchema = z.object({
     path: z.string(),

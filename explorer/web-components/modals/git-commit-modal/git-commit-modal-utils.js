@@ -170,6 +170,8 @@ export function extractGitPullBlockedFiles(message) {
 }
 
 const GIT_PAT_STORAGE_KEY = 'webskel.git.pat';
+const GIT_IDENTITY_NAME_KEY = 'webskel.git.identity.name';
+const GIT_IDENTITY_EMAIL_KEY = 'webskel.git.identity.email';
 
 export function getRememberedGitPat() {
     try {
@@ -187,6 +189,36 @@ export function setRememberedGitPat(token) {
             return;
         }
         localStorage.setItem(GIT_PAT_STORAGE_KEY, value);
+    } catch {
+        // ignore
+    }
+}
+
+export function getRememberedGitIdentity() {
+    try {
+        return {
+            name: String(localStorage.getItem(GIT_IDENTITY_NAME_KEY) || ''),
+            email: String(localStorage.getItem(GIT_IDENTITY_EMAIL_KEY) || '')
+        };
+    } catch {
+        return { name: '', email: '' };
+    }
+}
+
+export function setRememberedGitIdentity({ name = '', email = '' } = {}) {
+    try {
+        const trimmedName = String(name || '').trim();
+        const trimmedEmail = String(email || '').trim();
+        if (trimmedName) {
+            localStorage.setItem(GIT_IDENTITY_NAME_KEY, trimmedName);
+        } else {
+            localStorage.removeItem(GIT_IDENTITY_NAME_KEY);
+        }
+        if (trimmedEmail) {
+            localStorage.setItem(GIT_IDENTITY_EMAIL_KEY, trimmedEmail);
+        } else {
+            localStorage.removeItem(GIT_IDENTITY_EMAIL_KEY);
+        }
     } catch {
         // ignore
     }

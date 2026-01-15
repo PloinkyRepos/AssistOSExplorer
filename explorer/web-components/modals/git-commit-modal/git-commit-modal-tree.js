@@ -32,20 +32,44 @@ export function formatRepoSummary(repo) {
 
 import { normalizeRepoRelativePrefix } from './git-commit-modal-selection.js';
 
+const toArray = (value) => {
+    if (!value) return [];
+    if (Array.isArray(value)) return value;
+    const iterator = value[Symbol.iterator];
+    if (typeof iterator === 'function') {
+        try {
+            return Array.from(value);
+        } catch {
+            return [];
+        }
+    }
+    return [];
+};
+
 export function renderRepoChangesTree(repo, {
     isFileSelected,
     getAncestorCoveringPrefix,
     getCoveringPrefix,
     isFolderExpanded
 } = {}) {
-    const changesAll = Array.isArray(repo?.changesAll) ? repo.changesAll : null;
+    const normalizeRow = (row) => {
+        if (!row) return null;
+        if (typeof row === 'string') {
+            return { path: row, kind: 'unknown', flags: null, x: null, y: null };
+        }
+        if (!row.path && row.filePath) {
+            return { ...row, path: row.filePath };
+        }
+        return row;
+    };
+    const changesAll = toArray(repo?.changesAll);
     const fallbackPaths = repo?.changes ? [
-        ...(repo.changes.staged || []),
-        ...(repo.changes.unstaged || []),
-        ...(repo.changes.untracked || []),
-        ...(repo.changes.conflicted || [])
+        ...toArray(repo.changes.staged),
+        ...toArray(repo.changes.unstaged),
+        ...toArray(repo.changes.untracked),
+        ...toArray(repo.changes.conflicted)
     ].map((p) => ({ path: p, kind: 'unknown', x: null, y: null })) : [];
-    const ignoredPaths = Array.isArray(repo?.ignored) ? repo.ignored : [];
+    const ignoredPaths = toArray(repo?.ignored);
     const ignoredRows = ignoredPaths.map((p) => ({
         path: p,
         kind: 'ignored',
@@ -56,11 +80,12 @@ export function renderRepoChangesTree(repo, {
     const rows = [];
     const seen = new Set();
     const pushRow = (row) => {
-        if (!row?.path) return;
-        const key = String(row.path);
+        const normalized = normalizeRow(row);
+        if (!normalized?.path) return;
+        const key = String(normalized.path);
         if (seen.has(key)) return;
         seen.add(key);
-        rows.push(row);
+        rows.push(normalized);
     };
     const baseRows = (changesAll && changesAll.length) ? changesAll : fallbackPaths;
     baseRows.forEach(pushRow);

@@ -210,7 +210,7 @@ export class GitRepoTree {
 
     getDisplayedRepoOverviews() {
         const repos = Array.isArray(this.state.repos) ? this.state.repos : [];
-        return repos.filter((repo) => {
+        const filtered = repos.filter((repo) => {
             if (!repo) return false;
             const counts = repo.counts || {};
             const ignoredCount = Number.isFinite(repo.ignoredCount)
@@ -225,6 +225,7 @@ export class GitRepoTree {
                 || ignoredCount
             );
         });
+        return filtered.length ? filtered : repos;
     }
 
     buildRepoTree(repos) {
@@ -382,7 +383,7 @@ export class GitRepoTree {
                 repoCheckbox.setAttribute('data-local-action', 'toggleRepoAllChangesCheckbox');
                 repoCheckbox.dataset.repoPath = repo.path;
                 const changedPaths = Array.isArray(repo?.changesAll)
-                    ? repo.changesAll.map((c) => String(c?.path || '')).filter(Boolean)
+                    ? repo.changesAll.map((c) => (typeof c === 'string' ? c : String(c?.path || ''))).filter(Boolean)
                     : [];
                 const selectedCount = changedPaths.reduce((acc, p) => acc + (this.isFileSelected(repo.path, p) ? 1 : 0), 0);
                 const any = selectedCount > 0;
@@ -414,7 +415,6 @@ export class GitRepoTree {
                 info.setAttribute('tabindex', '0');
                 const summary = formatRepoSummary(repo);
                 info.dataset.tooltip = summary;
-                info.title = summary;
                 info.setAttribute('aria-label', summary);
                 info.textContent = 'i';
                 repoLeft.appendChild(info);

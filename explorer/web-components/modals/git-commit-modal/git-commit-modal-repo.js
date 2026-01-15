@@ -113,7 +113,7 @@ export function createGitCommitRepo(ctx) {
 
     const getDisplayedRepoOverviews = () => {
         const repos = Array.isArray(state.repoOverviews) ? state.repoOverviews : [];
-        return repos.filter((repo) => {
+        const filtered = repos.filter((repo) => {
             if (!repo) return false;
             const counts = repo.counts || {};
             const ignoredCount = Number.isFinite(repo.ignoredCount)
@@ -128,6 +128,7 @@ export function createGitCommitRepo(ctx) {
                 || ignoredCount
             );
         });
+        return filtered.length ? filtered : repos;
     };
 
     const buildRepoTree = () => {
@@ -336,7 +337,7 @@ export function createGitCommitRepo(ctx) {
     const getAllChangedPathsForRepo = (repoPath) => {
         const repo = (state.repoOverviews || []).find((r) => r?.path === repoPath) || null;
         const rows = Array.isArray(repo?.changesAll) ? repo.changesAll : [];
-        return rows.map((r) => String(r?.path || '')).filter(Boolean);
+        return rows.map((r) => (typeof r === 'string' ? r : String(r?.path || ''))).filter(Boolean);
     };
 
     const reconcileSelectedDiffWithChanges = () => {

@@ -5,9 +5,9 @@ import { createGitCommitRepo } from "./git-commit-modal-repo.js";
 import { createGitCommitService } from "./git-commit-modal-service.js";
 import { createGitCommitState } from "./git-commit-modal-state.js";
 import { createGitCommitUI } from "./git-commit-modal-ui.js";
-import { callToolWithLoader } from "../../../utils/globalLoader.js";
+import { callExplorerTool, callAgentTool } from "../../../services/infrastructure/explorerApi.js";
 import { joinPath } from "../../pages/file-exp/file-exp-utils.js";
-import { normalizeErrorMessage, parseJsonToolResult, normalizeSlashes, isReposRootPath } from "./git-commit-modal-utils.js";
+import { normalizeErrorMessage, parseJsonToolResult, normalizeSlashes, isReposRootPath, getRememberedGitIdentity } from "./git-commit-modal-utils.js";
 
 export class GitCommitModal {
     constructor(element, invalidate, props = {}) {
@@ -187,17 +187,9 @@ export class GitCommitModal {
         }
         if (!repoPath) return;
 
-        let payload = null;
-        try {
-            payload = parseJsonToolResult(await this.service.gitIdentity(repoPath)) || {};
-        } catch {
-            payload = null;
-        }
-        const local = payload?.local || {};
-        const global = payload?.global || {};
-        const effective = payload?.effective || {};
-        const name = local.name || effective.name || global.name || current.name || '';
-        const email = local.email || effective.email || global.email || current.email || '';
+        const remembered = getRememberedGitIdentity();
+        const name = remembered.name || current.name || '';
+        const email = remembered.email || current.email || '';
         this.state.identityPrompt = {
             ...current,
             repoPath,
@@ -207,25 +199,16 @@ export class GitCommitModal {
     }
 
     async ensureCredentialsGate() {
-        let payload = null;
-        try {
-            payload = parseJsonToolResult(await this.service.gitIdentity(this.state.repoPath)) || {};
-        } catch {
-            payload = null;
-        }
-        if (payload?.ok) {
+        const remembered = getRememberedGitIdentity();
+        const name = remembered.name || '';
+        const email = remembered.email || '';
+        if (name && email) {
             if (this.state.credentialsGate) {
                 this.state.credentialsGate = false;
                 this.syncStaticUI();
             }
             return false;
         }
-
-        const local = payload?.local || {};
-        const global = payload?.global || {};
-        const effective = payload?.effective || {};
-        const name = local.name || effective.name || global.name || '';
-        const email = local.email || effective.email || global.email || '';
         const repoPath = await this.resolveIdentityRepoPath();
         this.state.credentialsGate = true;
         this.state.identityPrompt = {
@@ -238,7 +221,7 @@ export class GitCommitModal {
         this.syncStaticUI();
         this.updateIdentityPrompt({ focus: !name ? 'name' : (!email ? 'email' : 'name') });
         this.updateCommitButtons();
-        this.setStatusLine('Set git user.name and user.email to continue.', true);
+        this.setStatusLine('Set name and email to continue.', true);
         return true;
     }
 
@@ -415,8 +398,14 @@ export class GitCommitModal {
         if (!repoPath || !filePath) return;
         this.closeFileMenus();
         const row = element?.closest?.('.git-tree-file-row');
-        if (row?.classList?.contains('is-untracked') || row?.classList?.contains('is-ignored')) {
-            this.setStatusLine(`Cannot rollback untracked file: ${filePath}.`, true);
+        const isUntracked = Boolean(row?.classList?.contains('is-untracked'));
+        const isIgnored = Boolean(row?.classList?.contains('is-ignored'));
+        if (isUntracked) {
+            await this.deleteFile(element);
+            return;
+        }
+        if (isIgnored) {
+            this.setStatusLine(`Cannot rollback ignored file: ${filePath}.`, true);
             return;
         }
         try {
@@ -594,42 +583,11 @@ export class GitCommitModal {
     }
 
     async callTool(name, args) {
-        const result = await callToolWithLoader('explorer', name, args);
-        if (result?.text?.startsWith?.('Error:')) {
-            throw new Error(result.text);
-        }
-        return result?.text ?? '';
+        return callExplorerTool(name, args);
     }
 
     async callAgentTool(agentName, name, args) {
-        const client = window.webSkel?.appServices?.getClient?.(agentName);
-        if (!client || typeof client.callTool !== 'function') {
-            throw new Error(`Agent client not available: ${agentName}`);
-        }
-        const result = await client.callTool(name, args || {});
-        const blocks = Array.isArray(result?.content) ? result.content : [];
-        const firstText = blocks.find((block) => block?.type === 'text' && typeof block.text === 'string');
-        let text = firstText ? firstText.text : JSON.stringify(result, null, 2);
-
-        if (typeof text === 'string') {
-            const trimmed = text.trim();
-            if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-                try {
-                    const parsed = JSON.parse(trimmed);
-                    if (Array.isArray(parsed?.content)) {
-                        const inner = parsed.content.find((block) => block?.type === 'text' && typeof block.text === 'string');
-                        if (inner?.text) text = inner.text;
-                    } else if (typeof parsed?.text === 'string') {
-                        text = parsed.text;
-                    }
-                } catch {
-                    // keep original text
-                }
-            }
-        }
-
-        if (text?.startsWith?.('Error:')) throw new Error(text);
-        return text || '';
+        return callAgentTool(agentName, name, args);
     }
 
     async generateCommitMessage() {

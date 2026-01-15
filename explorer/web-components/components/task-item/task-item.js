@@ -41,18 +41,16 @@ export class TaskItem{
         this.paragraphText = this.paragraphPresenter.paragraph.text || "...........";
     }
     afterRender(){
-        let taskStatus = this.element.querySelector(".task-status");
-        if(this.status === "failed"){
-            taskStatus.setAttribute("data-local-action", "showTaskFailInfo");
-            taskStatus.classList.add("failed-link");
+        const taskStatus = this.element.querySelector(".task-item__status");
+        if (taskStatus) {
+            if (this.status === "failed") {
+                taskStatus.setAttribute("data-local-action", "showTaskFailInfo");
+            } else {
+                taskStatus.removeAttribute("data-local-action");
+            }
         }
-        if(this.status === "completed"){
-            taskStatus.classList.add("green");
-        }
-        if(!this.paragraphItem){
-            let taskLink = this.element.querySelector(".task-link");
-            taskLink.style.pointerEvents = "none";
-        }
+        this.element.dataset.status = this.status || '';
+        this.element.dataset.linkDisabled = this.paragraphItem ? 'false' : 'true';
     }
 
     scrollDocument(){
@@ -73,14 +71,16 @@ export class TaskItem{
         } else {
             info = taskInfo;
         }
-        let taskInfoHTML = `<div class="info-pop-up">${info}</div>`;
-        let taskAction = this.element.querySelector(".task-status");
+        let taskInfoHTML = `<div class="task-item__info">${info}</div>`;
+        let taskAction = this.element.querySelector(".task-item__status");
         taskAction.insertAdjacentHTML("beforeend", taskInfoHTML);
         document.addEventListener("click", this.removeInfoPopUp.bind(this), {once: true});
     }
     removeInfoPopUp(){
-        let taskInfo = this.element.querySelector(".info-pop-up");
-        taskInfo.remove();
+        let taskInfo = this.element.querySelector(".task-item__info");
+        if (taskInfo) {
+            taskInfo.remove();
+        }
     }
     async deleteTask(){
         await utilModule.removeTask(this.task.id);

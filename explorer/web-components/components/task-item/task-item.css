@@ -1,36 +1,27 @@
-task-item{
+task-item {
     height: 45px;
     padding: 10px;
     display: flex;
     align-items: center;
 }
-.task-button{
-    padding: 5px;
-    height: initial;
-    font-size: 14px;
-    line-height: normal;
-}
-.green{
-    color: green !important;
-}
-.task-name{
+.task-item__name {
     width: 30%;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
-.task-status{
+.task-item__status {
     position: relative;
     width: 15%;
 }
-.task-link{
+.task-item__link {
     position: relative;
 }
-.task-link-icon{
+.task-item__link-icon {
     width: 20px;
     cursor: pointer;
 }
-.info-pop-up{
+.task-item__info {
     position: absolute;
     background-color: var(--white);
     width: 350px;
@@ -47,29 +38,29 @@ task-item{
     line-height: 1.5;
     padding: 10px;
 }
-.agent-image{
+.task-item__agent-image {
     width: 30px;
     height: 30px;
     border-radius: 50%;
     margin-right: 10px;
 }
-.task-agent{
+.task-item__agent {
     width: 25%;
     display: flex;
     align-items: center;
 }
-.task-action{
+.task-item__action {
     width: 10%;
     display: flex;
     align-items: center;
     justify-content: center;
 }
-.agent-name{
+.task-item__agent-name {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
-.task-link{
+.task-item__link {
     cursor: pointer;
     width: 20%;
     overflow: hidden;
@@ -78,11 +69,20 @@ task-item{
     text-decoration: underline;
     color: var(--strong-blue);
 }
-.task-link:hover{
+.task-item__link:hover {
     color: var(--strong-blue);
 }
-.failed-link{
+task-item[data-status="failed"] .task-item__status {
     cursor: pointer;
     text-decoration: underline;
     color: var(--red) !important;
+}
+
+task-item[data-status="completed"] .task-item__status {
+    color: green;
+}
+
+task-item[data-link-disabled="true"] .task-item__link {
+    pointer-events: none;
+    text-decoration: none;
 }

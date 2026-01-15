@@ -1,7 +1,7 @@
 import {
     mergeRuntimePluginsIntoAssistOS,
     normalizeRuntimePlugins
-} from '../../utils/pluginUtils.js';
+} from '../../utils/pluginUtils.core.js';
 
 const isNonEmptyString = (value) => typeof value === 'string' && value.trim().length > 0;
 

@@ -534,10 +534,15 @@ export function createGitService({ validatePath }) {
     return { ok: !error, conflicts, noStash, output };
   }
 
-  async function gitCommit({ path: repoPathArg, message, amend = false, signoff = false }) {
+  async function gitCommit({ path: repoPathArg, message, amend = false, signoff = false, userName = null, userEmail = null }) {
     const repoPath = await resolveRepoPath(repoPathArg);
     const gitBinary = await getGitBinary(repoPath);
-    const args = [gitBinary, 'commit'];
+    const args = [gitBinary];
+    const cleanName = userName ? String(userName).trim() : '';
+    const cleanEmail = userEmail ? String(userEmail).trim() : '';
+    if (cleanName) args.push('-c', `user.name=${cleanName}`);
+    if (cleanEmail) args.push('-c', `user.email=${cleanEmail}`);
+    args.push('commit');
     if (amend) args.push('--amend');
     if (signoff) args.push('--signoff');
     if (message && message.trim()) {

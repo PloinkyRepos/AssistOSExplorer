@@ -1,24 +1,24 @@
-list-item:hover > .dark-highlight{
-    background-color: var(--black);
-}
-list-item > .dark-highlight{
-    color: var(--white);
-}
-list-item:hover > .light-highlight{
-    background-color: var(--action-button-background);
-}
-list-item{
-    width:100%;
+list-item {
+    width: 100%;
     color: var(--default-font-color);
 }
-list-item.disabled .list-item{
+list-item[data-highlight="dark"] .list-item__root {
+    color: var(--white);
+}
+list-item[data-highlight="dark"]:hover .list-item__root {
+    background-color: var(--black);
+}
+list-item[data-highlight="light"]:hover .list-item__root {
+    background-color: var(--action-button-background);
+}
+list-item.disabled .list-item__root {
     pointer-events: none;
     background-color: var(--very-light-gray);
 }
-list-item[data-highlight="light-highlight"].selected{
+list-item[data-highlight="light"].selected .list-item__root {
     background-color: var(--action-button-background);
 }
-.list-item {
+.list-item__root {
     font-weight: 500;
     cursor: pointer;
     width: 100%;
@@ -28,7 +28,7 @@ list-item[data-highlight="light-highlight"].selected{
     align-items: center;
     gap: 5px;
 }
-.list-item-name{
+.list-item__name {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;

@@ -5,10 +5,11 @@ import {
     getGitConflictFlag,
     setGitConflictFlag
 } from "../../modals/git-commit-modal/git-commit-modal-utils.js";
-import { callToolWithLoader } from "../../../utils/globalLoader.js";
+import { callExplorerTool, callAgentTool } from "../../../services/infrastructure/explorerApi.js";
+import { getReposRoot } from "../../../utils/reposRoot.js";
 
 export function attachGitController(fileExp) {
-    const reposRoot = '/.ploinky/repos';
+    const reposRoot = getReposRoot();
     const AUTOCOMMIT_MESSAGE = 'chore: autocommit';
 
     const getConflictFlag = () => getGitConflictFlag();
@@ -56,7 +57,7 @@ export function attachGitController(fileExp) {
     };
 
     const callGitTool = async (toolName, args) => {
-        const result = await callToolWithLoader('explorer', toolName, args);
+        const result = await callExplorerTool(toolName, args, { raw: true });
         const parsed = parseJsonToolResult(result);
         if (parsed !== null && parsed !== undefined) {
             return parsed;
@@ -66,37 +67,6 @@ export function attachGitController(fileExp) {
             return parseJsonToolResult(text);
         }
         return null;
-    };
-
-    const callAgentTool = async (agentName, name, args) => {
-        const client = window.webSkel?.appServices?.getClient?.(agentName);
-        if (!client || typeof client.callTool !== 'function') {
-            throw new Error(`Agent client not available: ${agentName}`);
-        }
-        const result = await client.callTool(name, args || {});
-        const blocks = Array.isArray(result?.content) ? result.content : [];
-        const firstText = blocks.find((block) => block?.type === 'text' && typeof block.text === 'string');
-        let text = firstText ? firstText.text : JSON.stringify(result, null, 2);
-
-        if (typeof text === 'string') {
-            const trimmed = text.trim();
-            if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-                try {
-                    const parsed = JSON.parse(trimmed);
-                    if (Array.isArray(parsed?.content)) {
-                        const inner = parsed.content.find((block) => block?.type === 'text' && typeof block.text === 'string');
-                        if (inner?.text) text = inner.text;
-                    } else if (typeof parsed?.text === 'string') {
-                        text = parsed.text;
-                    }
-                } catch {
-                    // keep original text
-                }
-            }
-        }
-
-        if (text?.startsWith?.('Error:')) throw new Error(text);
-        return text || '';
     };
 
     const listRepos = async () => {

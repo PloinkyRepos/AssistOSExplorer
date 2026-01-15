@@ -141,8 +141,25 @@ export function parseDirectoryListing(text) {
 
 export function parseDetailedDirectoryListing(text) {
     if (!text) return [];
+    if (Array.isArray(text)) {
+        return text
+            .filter(entry => entry && typeof entry.name === 'string')
+            .map(entry => ({
+                name: entry.name,
+                type: entry.type === 'directory' || entry.type === 'file' ? entry.type : 'other',
+                size: Number.isFinite(entry.size) ? entry.size : null,
+                modified: typeof entry.modified === 'string' ? entry.modified : null
+            }));
+    }
     try {
-        const parsed = JSON.parse(text);
+        let parsed = JSON.parse(text);
+        if (typeof parsed === 'string') {
+            try {
+                parsed = JSON.parse(parsed);
+            } catch {
+                return [];
+            }
+        }
         if (!Array.isArray(parsed)) return [];
         return parsed
             .filter(entry => entry && typeof entry.name === 'string')

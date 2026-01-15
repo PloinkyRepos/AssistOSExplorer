@@ -7,8 +7,6 @@ export function createGitCommitService({ callTool, callAgentTool }) {
         gitStatus: (path) => callTool('git_status', { path }),
         gitPush: (payload) => callTool('git_push', payload),
         gitPull: (payload) => callTool('git_pull', payload),
-        gitIdentity: (path) => callTool('git_identity', { path }),
-        gitSetIdentity: (payload) => callTool('git_set_identity', payload),
         gitStage: (path, files) => callTool('git_stage', { path, files }),
         gitUntrack: (path, files) => callTool('git_untrack', { path, files }),
         gitCheckIgnore: (path, files) => callTool('git_check_ignore', { path, files }),

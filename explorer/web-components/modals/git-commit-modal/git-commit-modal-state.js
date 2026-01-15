@@ -1,8 +1,14 @@
+import { createStore } from "../../../services/ui/store.js";
+import { getRememberedGitIdentity } from "./git-commit-modal-utils.js";
+import { getReposRoot } from "../../../utils/reposRoot.js";
+
 export function createGitCommitState(props = {}) {
-    const state = {
+    const rememberedIdentity = getRememberedGitIdentity();
+    const reposRoot = getReposRoot();
+    const initialState = {
         // Default to the multi-repo root so opening the modal immediately loads all repos under it.
-        repoPath: props.repoPath || '/.ploinky/repos',
-        reposRoot: '/.ploinky/repos',
+        repoPath: props.repoPath || reposRoot,
+        reposRoot,
         branch: null,
         upstream: null,
         remotes: [],
@@ -41,8 +47,8 @@ export function createGitCommitState(props = {}) {
             test:"test",
             repoPath: null,
             pendingAction: null,
-            name: '',
-            email: ''
+            name: rememberedIdentity.name,
+            email: rememberedIdentity.email
         },
         authPrompt: {
             visible: false,
@@ -65,12 +71,15 @@ export function createGitCommitState(props = {}) {
         lastStatusIsError: false
     };
 
+    const store = createStore({ initialState });
     return {
-        state,
-        getSelectedReposForBatch: () => getSelectedReposForBatch(state)
+        state: store.state,
+        dispatch: store.dispatch,
+        subscribe: store.subscribe,
+        getState: store.getState,
+        getSelectedReposForBatch: () => getSelectedReposForBatch(store.getState())
     };
 }
-let test="a test var for merge conflicts";
 export function getSelectedReposForBatch(state) {
     return Array.from(new Set([
         ...Object.entries(state.selectedFilesByRepo || {})

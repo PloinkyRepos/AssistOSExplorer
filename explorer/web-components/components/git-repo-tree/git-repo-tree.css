@@ -3,4 +3,5 @@ git-repo-tree {
     height: 100%;
     position: relative;
     overflow: auto;
+    min-width: 30%;
 }

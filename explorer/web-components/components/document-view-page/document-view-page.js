@@ -2,7 +2,7 @@ const documentModule = assistOS.loadModule("document");
 const workspaceModule = assistOS.loadModule("workspace");
 import {executorTimer, unescapeHtmlEntities} from "../../../imports.js";
 import UIUtils from "./UIUtils.js";
-import pluginUtils from "../../../utils/pluginUtils.js";
+import pluginUtils from "../../../utils/pluginUtils.ui.js";
 
 export class DocumentViewPage {
     constructor(element, invalidate) {

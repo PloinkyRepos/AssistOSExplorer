@@ -342,7 +342,6 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    min-width: 260px;
 }
 
 .git-repo-row {
@@ -670,6 +669,8 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
     pointer-events: none;
     transform: translateY(-4px);
     transition: opacity 0.12s ease, transform 0.12s ease;
+    width: -webkit-fill-available;
+    word-wrap: break-word;
 }
 
 .git-info-button:hover::after,

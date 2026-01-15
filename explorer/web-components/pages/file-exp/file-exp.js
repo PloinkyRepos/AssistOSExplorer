@@ -7,16 +7,18 @@ import {
     sanitizeEntryName,
     generateCopyName,
     parseDetailedDirectoryListing,
-    buildEntriesHTML,
     isMarkdownFile,
     prepareMarkdownPreviewContent,
     renderMarkdownPreview,
     renderCodePreview,
 } from "./file-exp-utils.js";
+import { createFileExpState, saveFilterSpecsPreference, saveColumnVisibilityPreference } from "./file-exp-state.js";
+import { createFileExpTooling } from "./file-exp-tooling.js";
+import { buildEntriesView } from "./file-exp-view-model.js";
 import { attachSearchController } from "./file-exp-search.js";
 import { attachFsActions } from "./file-exp-fs-actions.js";
 import { attachGitController } from "./file-exp-git.js";
-import { callToolWithLoader, withGlobalLoader } from "../../../utils/globalLoader.js";
+import { withGlobalLoader } from "../../../utils/globalLoader.js";
 import { createFileExpCaches } from "./file-exp-caches.js";
 import { createDirectoryFilterController } from "./file-exp-directory-filter.js";
 import { openFile as openFileImpl, tryLoadMediaPreview as tryLoadMediaPreviewImpl, attachPreviewAnchorHandler as attachPreviewAnchorHandlerImpl, detachPreviewAnchorHandler as detachPreviewAnchorHandlerImpl, handlePreviewAnchorClick as handlePreviewAnchorClickImpl } from "./file-exp-preview.js";
@@ -45,47 +47,8 @@ export class FileExp {
         this.prepareMarkdownPreviewContent = prepareMarkdownPreviewContent;
         this.renderMarkdownPreview = renderMarkdownPreview;
 
-        this.state = {
-            path: '/',
-            entries: [],
-            allEntries: [],
-            selectedPath: null,
-            fileContent: "",
-            previewContent: "",
-            selectedIsMarkdown: false,
-            markdownTextView: false,
-            documentId: null,
-            isEditing: false,
-            hasUnsavedChanges: false,
-            isResizing: false,
-            clipboard: null,
-            openMenuPath: null,
-            filterSpecs: this.loadFilterSpecsPreference(),
-            columnVisibility: this.loadColumnVisibilityPreference(),
-            searchMenuOpen: false,
-            searchOverlay: null,
-            directoryFilterQuery: '',
-            searchByNameQuery: '',
-            searchByNameExclude: 'node_modules,.git',
-            searchByNameResults: [],
-            searchByNameLoading: false,
-            searchByNameError: null,
-            searchInFilesQuery: '',
-            searchInFilesExclude: 'node_modules,.git',
-            searchInFilesCaseSensitive: false,
-            searchInFilesResults: [],
-            searchInFilesFileResults: [],
-            searchInFilesLoading: false,
-            searchInFilesError: null,
-            searchInFilesTruncated: false,
-            pendingHighlight: null,
-            previewMode: 'none',
-            mediaType: null,
-            fileLoadInfo: null,
-            sortBy: 'name',
-            sortDir: 'asc',
-            listWidth: null
-        };
+        this.stateStore = createFileExpState();
+        this.state = this.stateStore.state;
         this.pendingMenuFocusPath = null;
         this.searchByNameTimer = null;
         this.boundGlobalKeydown = null;
@@ -107,6 +70,7 @@ export class FileExp {
 
         this.caches = createFileExpCaches();
         this.directoryFilterController = createDirectoryFilterController(this);
+        this.tooling = createFileExpTooling();
     }
 
     async withLoader(fn) {
@@ -149,11 +113,7 @@ export class FileExp {
         }
 
         try {
-            const contentResult = await callToolWithLoader('explorer', 'read_text_file', {path: path});
-
-            if (contentResult.text.startsWith('Error:')) {
-                throw new Error(contentResult.text);
-            }
+            const contentResult = await this.tooling.readTextFile(path);
 
             const parentDir = this.parentPath(path) || '/';
             this.state.path = parentDir;
@@ -169,7 +129,8 @@ export class FileExp {
     }
 
     beforeRender() {
-        this.entriesHTML = buildEntriesHTML(this.state, {
+        const snapshot = this.stateStore?.getState ? this.stateStore.getState() : this.state;
+        this.entriesHTML = buildEntriesView(snapshot, {
             joinPath: this.joinPath,
             formatBytes: this.formatBytes,
             formatDate: this.formatDate
@@ -177,7 +138,8 @@ export class FileExp {
     }
 
     renderEntriesBody() {
-        this.entriesHTML = buildEntriesHTML(this.state, {
+        const snapshot = this.stateStore?.getState ? this.stateStore.getState() : this.state;
+        this.entriesHTML = buildEntriesView(snapshot, {
             joinPath: this.joinPath,
             formatBytes: this.formatBytes,
             formatDate: this.formatDate
@@ -353,7 +315,7 @@ export class FileExp {
                         const col = event.target.dataset.column;
                         if (!col) return;
                         this.state.columnVisibility[col] = Boolean(event.target.checked);
-                        this.saveColumnVisibilityPreference(this.state.columnVisibility);
+                        saveColumnVisibilityPreference(this.state.columnVisibility);
                         this.applyColumnVisibility();
                     });
                     checkbox.dataset.bound = 'true';
@@ -556,7 +518,7 @@ export class FileExp {
             if (cached) {
                 return cached;
             }
-            const result = await callToolWithLoader('explorer', 'list_directory_detailed', {path});
+            const result = await this.tooling.listDirectoryDetailed(path);
             const entries = parseDetailedDirectoryListing(result.text);
             const resolved = entries.map(entry => ({
                 ...entry,
@@ -572,9 +534,11 @@ export class FileExp {
     }
 
     async setEntries(entries) {
-        this.state.allEntries = entries || [];
+        const snapshot = this.stateStore?.getState ? this.stateStore.getState() : this.state;
+        const sourceEntries = Array.isArray(entries) ? entries : [];
+        this.state.allEntries = sourceEntries;
         try {
-            const filterQuery = String(this.state.directoryFilterQuery || '').trim().toLowerCase();
+            const filterQuery = String(snapshot.directoryFilterQuery || '').trim().toLowerCase();
             const applyDirectoryFilter = (items) => {
                 if (!filterQuery) return items || [];
                 return (items || []).filter((entry) => {
@@ -584,15 +548,15 @@ export class FileExp {
                 });
             };
 
-            if (this.state.filterSpecs) {
-                const filtered = await this.filterEntriesForSpecs(this.state.allEntries);
+            if (snapshot.filterSpecs) {
+                const filtered = await this.filterEntriesForSpecs(sourceEntries);
                 this.state.entries = this.sortEntries(applyDirectoryFilter(filtered));
             } else {
-                this.state.entries = this.sortEntries(applyDirectoryFilter(this.state.allEntries));
+                this.state.entries = this.sortEntries(applyDirectoryFilter(sourceEntries));
             }
         } catch (err) {
             console.warn('Failed to apply specs filter', err);
-            this.state.entries = this.sortEntries(this.state.allEntries);
+            this.state.entries = this.sortEntries(sourceEntries);
             this.showStatus('Could not apply filter. Showing all files.', true);
         }
     }
@@ -700,7 +664,7 @@ export class FileExp {
             }
             await this.withLoader(async () => {
                 try {
-                    await callToolWithLoader('explorer', 'read_text_file', { path });
+                    await this.tooling.readTextFile(path);
                     const parentDir = this.parentPath(path) || '/';
                     this.state.path = parentDir;
                     const entries = await this.loadDirectoryContent(parentDir);
@@ -760,7 +724,7 @@ export class FileExp {
 
         const newContent = this.textarea.value;
         try {
-            await callToolWithLoader('explorer', 'write_file', {path: this.state.selectedPath, content: newContent});
+            await this.tooling.writeFile(this.state.selectedPath, newContent);
             this.showStatus(`Successfully saved ${this.state.selectedPath}`, false);
             this.state.fileContent = newContent;
             this.state.hasUnsavedChanges = false;
@@ -879,56 +843,10 @@ export class FileExp {
     async toggleFilterSpecs(element) {
         await this.withLoader(async () => {
             this.state.filterSpecs = Boolean(element?.checked);
-            this.saveFilterSpecsPreference(this.state.filterSpecs);
+            saveFilterSpecsPreference(this.state.filterSpecs);
             await this.setEntries(this.state.allEntries?.length ? this.state.allEntries : this.state.entries);
             this.invalidate();
         });
-    }
-
-    loadFilterSpecsPreference() {
-        try {
-            const stored = window.localStorage.getItem('assistosExplorerFilterSpecs');
-            return stored === 'true';
-        } catch (_) {
-            return false;
-        }
-    }
-
-    saveFilterSpecsPreference(value) {
-        try {
-            window.localStorage.setItem('assistosExplorerFilterSpecs', value ? 'true' : 'false');
-        } catch (_) {
-            // ignore
-        }
-    }
-
-    loadColumnVisibilityPreference() {
-        const defaults = { type: false, size: false, modified: false };
-        try {
-            const raw = window.localStorage.getItem('assistosExplorerColumnVisibility');
-            if (!raw) return defaults;
-            const parsed = JSON.parse(raw);
-            return {
-                type: parsed.type !== false,
-                size: parsed.size !== false,
-                modified: parsed.modified !== false
-            };
-        } catch (_) {
-            return defaults;
-        }
-    }
-
-    saveColumnVisibilityPreference(value) {
-        try {
-            const payload = {
-                type: Boolean(value?.type),
-                size: Boolean(value?.size),
-                modified: Boolean(value?.modified)
-            };
-            window.localStorage.setItem('assistosExplorerColumnVisibility', JSON.stringify(payload));
-        } catch (_) {
-            // ignore
-        }
     }
 
     applyColumnVisibility() {
