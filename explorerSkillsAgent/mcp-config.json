@@ -22,6 +22,30 @@
           }
         }
       }
+    },
+    {
+      "name": "git_autocommit_tick",
+      "title": "Run Git Autocommit Tick",
+      "description": "Run one autocommit cycle across repos under the configured root.",
+      "command": "tools/git_autocommit_tick.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "reposRoot": {
+          "type": "string",
+          "description": "Repos root path (default: /.ploinky/repos).",
+          "optional": true
+        },
+        "token": {
+          "type": "string",
+          "description": "Optional Git token for HTTPS auth.",
+          "optional": true
+        },
+        "message": {
+          "type": "string",
+          "description": "Commit message for autocommits.",
+          "optional": true
+        }
+      }
     }
   ]
 }
