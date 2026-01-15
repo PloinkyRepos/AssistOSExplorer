@@ -1,9 +1,5 @@
 import {
     parseJsonToolResult,
-    normalizeErrorMessage,
-    humanizeGitError,
-    isGitConflictError,
-    isGitPullBlockedError,
     getRememberedGitPat,
     getAutocommitSettings,
     getGitConflictFlag,
@@ -72,6 +68,37 @@ export function attachGitController(fileExp) {
         return null;
     };
 
+    const callAgentTool = async (agentName, name, args) => {
+        const client = window.webSkel?.appServices?.getClient?.(agentName);
+        if (!client || typeof client.callTool !== 'function') {
+            throw new Error(`Agent client not available: ${agentName}`);
+        }
+        const result = await client.callTool(name, args || {});
+        const blocks = Array.isArray(result?.content) ? result.content : [];
+        const firstText = blocks.find((block) => block?.type === 'text' && typeof block.text === 'string');
+        let text = firstText ? firstText.text : JSON.stringify(result, null, 2);
+
+        if (typeof text === 'string') {
+            const trimmed = text.trim();
+            if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+                try {
+                    const parsed = JSON.parse(trimmed);
+                    if (Array.isArray(parsed?.content)) {
+                        const inner = parsed.content.find((block) => block?.type === 'text' && typeof block.text === 'string');
+                        if (inner?.text) text = inner.text;
+                    } else if (typeof parsed?.text === 'string') {
+                        text = parsed.text;
+                    }
+                } catch {
+                    // keep original text
+                }
+            }
+        }
+
+        if (text?.startsWith?.('Error:')) throw new Error(text);
+        return text || '';
+    };
+
     const listRepos = async () => {
         const payload = await callGitTool('git_repos_overview', { path: reposRoot }) || {};
         const repos = Array.isArray(payload?.repos) ? payload.repos : [];
@@ -88,81 +115,6 @@ export function attachGitController(fileExp) {
         return conflicted.length > 0;
     };
 
-    const repoHasAnyChanges = (status) => {
-        const staged = Array.isArray(status?.staged) ? status.staged : [];
-        const unstaged = Array.isArray(status?.unstaged) ? status.unstaged : [];
-        const untracked = Array.isArray(status?.untracked) ? status.untracked : [];
-        return staged.length > 0 || unstaged.length > 0 || untracked.length > 0;
-    };
-
-    const stageAll = async (repoPath) => {
-        await callGitTool('git_stage', { path: repoPath, files: [] });
-    };
-
-    const commit = async (repoPath) => {
-        await callGitTool('git_commit', {
-            path: repoPath,
-            message: AUTOCOMMIT_MESSAGE
-        });
-    };
-
-    const pull = async (repoPath, token) => {
-        const payload = {
-            path: repoPath,
-            rebase: false,
-            ffOnly: true
-        };
-        const cleanToken = String(token || '').trim();
-        if (cleanToken) payload.token = cleanToken;
-        await callGitTool('git_pull', payload);
-    };
-
-    const push = async (repoPath, token) => {
-        const payload = { path: repoPath };
-        const cleanToken = String(token || '').trim();
-        if (cleanToken) payload.token = cleanToken;
-        await callGitTool('git_push', payload);
-    };
-
-    const pullWithAutoStash = async (repoPath, token) => {
-        try {
-            await pull(repoPath, token);
-            return true;
-        } catch (error) {
-            const msg = humanizeGitError(normalizeErrorMessage(error), { action: 'pull' });
-            if (isGitConflictError(msg)) {
-                throw new Error(msg);
-            }
-            if (!isGitPullBlockedError(msg)) {
-                throw new Error(msg);
-            }
-
-            const stashResult = await callGitTool('git_stash', {
-                path: repoPath,
-                includeUntracked: true,
-                message: 'Autocommit: auto-stash before pull'
-            }) || {};
-
-            if (!stashResult.created) {
-                throw new Error(msg);
-            }
-
-            await pull(repoPath, token);
-
-            const popResult = await callGitTool('git_stash_pop', {
-                path: repoPath,
-                ref: stashResult.ref || null,
-                reinstateIndex: true
-            }) || {};
-
-            if (popResult.conflicts) {
-                throw new Error('Conflicts after restoring stashed changes. Resolve them before continuing.');
-            }
-
-            return true;
-        }
-    };
-
     const runAutocommitTick = async () => {
         if (autocommit.running) return;
         const { enabled } = getAutocommitSettings();
@@ -170,68 +122,36 @@ export function attachGitController(fileExp) {
         if (getConflictFlag()) return;
         autocommit.running = true;
         try {
-            const repos = await listRepos();
             const token = getRememberedGitPat();
-            for (const repoPath of repos) {
-                try {
-                    await pullWithAutoStash(repoPath, token);
-                } catch (error) {
-                    const msg = normalizeErrorMessage(error);
-                    if (isGitConflictError(msg)) {
-                        setConflictFlag(true);
-                        updateGitButtonIndicator();
-                    }
-                    clearAutocommitTimer();
-                    fileExp.showStatus(`Autocommit stopped: ${msg}`, true);
-                    return;
+            const raw = await callAgentTool('explorerSkillsAgent', 'git_autocommit_tick', {
+                reposRoot,
+                token,
+                message: AUTOCOMMIT_MESSAGE
+            });
+            const parsed = parseJsonToolResult(raw);
+            let result = parsed && typeof parsed === 'object' ? parsed : null;
+            if (result?.message && typeof result.message === 'string') {
+                const nested = parseJsonToolResult(result.message);
+                if (nested && typeof nested === 'object') {
+                    result = nested;
                 }
+            }
+            if (!result) return;
 
-                let status = null;
-                try {
-                    status = await getRepoStatus(repoPath);
-                } catch {
-                    continue;
-                }
-                if (repoHasConflicts(status)) {
-                    setConflictFlag(true);
-                    updateGitButtonIndicator();
-                    clearAutocommitTimer();
-                    fileExp.showStatus('Autocommit stopped: merge conflicts detected.', true);
-                    return;
-                }
-                if (!repoHasAnyChanges(status)) {
-                    continue;
-                }
-                await stageAll(repoPath);
-                const afterStage = await getRepoStatus(repoPath);
-                if (repoHasConflicts(afterStage)) {
-                    setConflictFlag(true);
-                    updateGitButtonIndicator();
-                    clearAutocommitTimer();
-                    fileExp.showStatus('Autocommit stopped: merge conflicts detected.', true);
-                    return;
-                }
-                const staged = Array.isArray(afterStage?.staged) ? afterStage.staged : [];
-                if (!staged.length) {
-                    continue;
-                }
+            if (result.conflicts) {
+                setConflictFlag(true);
+                updateGitButtonIndicator();
+                clearAutocommitTimer();
+                const message = String(result.message || 'Merge conflicts detected.').trim();
+                fileExp.showStatus(`Autocommit stopped: ${message}`, true);
+                return;
+            }
 
-                try {
-                    await commit(repoPath);
-                } catch (error) {
-                    const msg = normalizeErrorMessage(error);
-                    clearAutocommitTimer();
-                    fileExp.showStatus(`Autocommit stopped: ${msg}`, true);
-                    return;
-                }
-
-                try {
-                    await push(repoPath, token);
-                } catch (error) {
-                    const msg = normalizeErrorMessage(error);
-                    clearAutocommitTimer();
-                    fileExp.showStatus(`Autocommit stopped: ${msg}`, true);
-                    return;
+            if (result.ok === false || result.stopped) {
+                clearAutocommitTimer();
+                const message = String(result.message || 'Autocommit stopped.').trim();
+                if (message) {
+                    fileExp.showStatus(`Autocommit stopped: ${message}`, true);
                 }
             }
         } catch {
