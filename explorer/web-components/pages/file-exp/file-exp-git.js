@@ -124,6 +124,14 @@ export function attachGitController(fileExp) {
         await callGitTool('git_push', payload);
     };
 
+    const isNothingToCommitError = (message) => {
+        const lower = String(message || '').toLowerCase();
+        if (lower.includes('nothing to commit')) return true;
+        if (lower.includes('nothing added to commit')) return true;
+        if (lower.includes('no changes added to commit')) return true;
+        return false;
+    };
+
     const pullWithAutoStash = async (repoPath, token) => {
         try {
             await pull(repoPath, token);
@@ -220,6 +228,9 @@ export function attachGitController(fileExp) {
                     await commit(repoPath);
                 } catch (error) {
                     const msg = normalizeErrorMessage(error);
+                    if (isNothingToCommitError(msg)) {
+                        continue;
+                    }
                     clearAutocommitTimer();
                     fileExp.showStatus(`Autocommit stopped: ${msg}`, true);
                     return;
