@@ -940,10 +940,12 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
     gap: 12px;
     align-items: flex-start;
     font-size: 14px;
+    width: 100%;
 }
 
 .git-credentials-row-repos {
     align-items: flex-start;
+    width: 100%;
 }
 
 .autocommit-repos {
@@ -957,6 +959,8 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
     border-radius: 8px;
     background: var(--file-exp-panel, rgba(255, 255, 255, 0.6));
     min-width: 220px;
+    width: 100%;
+    position: relative;
 }
 
 .autocommit-repo {
