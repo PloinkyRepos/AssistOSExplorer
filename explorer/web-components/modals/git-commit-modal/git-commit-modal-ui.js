@@ -1,4 +1,4 @@
-import { isReposRootPath } from "./git-commit-modal-utils.js";
+import { isReposRootPath, getAutocommitSettings } from "./git-commit-modal-utils.js";
 
 export function createGitCommitUI(ctx) {
     const {
@@ -288,6 +288,7 @@ export function createGitCommitUI(ctx) {
     const updateCredentialsPrompt = (options = {}) => {
         const identityState = state.identityPrompt || {};
         const authState = state.authPrompt || {};
+        const autocommit = getAutocommitSettings();
         const visible = Boolean(
             identityState.visible
             || authState.visible
@@ -299,7 +300,9 @@ export function createGitCommitUI(ctx) {
             name: identityState.name || '',
             email: identityState.email || '',
             token: authState.token || '',
-            remember: Boolean(authState.remember)
+            remember: Boolean(authState.remember),
+            autocommitEnabled: Boolean(autocommit.enabled),
+            autocommitIntervalMinutes: Number(autocommit.intervalMinutes || 15)
         };
         if (options.focus) detail.focus = options.focus;
         const presenter = getCredentialsPromptPresenter();

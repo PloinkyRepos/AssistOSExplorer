@@ -191,3 +191,60 @@ export function setRememberedGitPat(token) {
         // ignore
     }
 }
+
+const AUTOCOMMIT_ENABLED_STORAGE_KEY = 'webskel.git.autocommit.enabled';
+const AUTOCOMMIT_INTERVAL_STORAGE_KEY = 'webskel.git.autocommit.intervalMinutes';
+const GIT_CONFLICT_FLAG_STORAGE_KEY = 'webskel.git.conflicts';
+
+export function getAutocommitSettings() {
+    let enabled = true;
+    let intervalMinutes = 15;
+    try {
+        const rawEnabled = localStorage.getItem(AUTOCOMMIT_ENABLED_STORAGE_KEY);
+        if (rawEnabled === 'true' || rawEnabled === 'false') {
+            enabled = rawEnabled === 'true';
+        }
+        const rawInterval = localStorage.getItem(AUTOCOMMIT_INTERVAL_STORAGE_KEY);
+        if (rawInterval !== null && rawInterval !== undefined) {
+            const parsed = Number(rawInterval);
+            if (Number.isFinite(parsed)) {
+                intervalMinutes = Math.max(1, Math.floor(parsed));
+            }
+        }
+    } catch {
+        // ignore
+    }
+    return { enabled, intervalMinutes };
+}
+
+export function setAutocommitSettings({ enabled = null, intervalMinutes = null } = {}) {
+    try {
+        if (typeof enabled === 'boolean') {
+            localStorage.setItem(AUTOCOMMIT_ENABLED_STORAGE_KEY, enabled ? 'true' : 'false');
+        }
+        if (intervalMinutes !== null && intervalMinutes !== undefined) {
+            const parsed = Number(intervalMinutes);
+            if (Number.isFinite(parsed)) {
+                localStorage.setItem(AUTOCOMMIT_INTERVAL_STORAGE_KEY, String(Math.max(1, Math.floor(parsed))));
+            }
+        }
+    } catch {
+        // ignore
+    }
+}
+
+export function getGitConflictFlag() {
+    try {
+        return localStorage.getItem(GIT_CONFLICT_FLAG_STORAGE_KEY) === 'true';
+    } catch {
+        return false;
+    }
+}
+
+export function setGitConflictFlag(value) {
+    try {
+        localStorage.setItem(GIT_CONFLICT_FLAG_STORAGE_KEY, value ? 'true' : 'false');
+    } catch {
+        // ignore
+    }
+}

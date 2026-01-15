@@ -9,7 +9,8 @@ import {
     isGitPullBlockedError,
     extractGitPullBlockedFiles,
     getRememberedGitPat,
-    setRememberedGitPat
+    setRememberedGitPat,
+    setAutocommitSettings
 } from "./git-commit-modal-utils.js";
 import { withGlobalLoader } from "../../../utils/globalLoader.js";
 
@@ -1040,6 +1041,8 @@ export function createGitCommitActions(ctx) {
         const email = String(payload.email ?? state.identityPrompt?.email ?? '').trim();
         const token = String(payload.token ?? state.authPrompt?.token ?? '').trim();
         const remember = typeof payload.remember === 'boolean' ? payload.remember : Boolean(state.authPrompt?.remember);
+        const autocommitEnabled = typeof payload.autocommitEnabled === 'boolean' ? payload.autocommitEnabled : null;
+        const autocommitIntervalMinutes = payload.autocommitIntervalMinutes;
 
         const identityRequired = Boolean(state.credentialsGate || state.identityPrompt?.visible);
         const authRequired = Boolean(state.authPrompt?.visible);
@@ -1117,6 +1120,8 @@ export function createGitCommitActions(ctx) {
             else setRememberedGitPat('');
             tokenSaved = true;
         }
+
+        setAutocommitSettings({ enabled: autocommitEnabled, intervalMinutes: autocommitIntervalMinutes });
 
         const pending = state.authPrompt?.pendingAction || state.identityPrompt?.pendingAction;
         const wasGate = state.credentialsGate;

@@ -81,6 +81,24 @@ main {
     margin-right: 0.5rem;
 }
 
+.git-conflict-indicator {
+    display: none;
+    margin-left: 8px;
+    width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    background: #dc2626;
+    color: #fff;
+    font-weight: 800;
+    line-height: 16px;
+    font-size: 12px;
+    text-align: center;
+}
+
+#gitButton.has-conflicts .git-conflict-indicator {
+    display: inline-block;
+}
+
 .toolbar-spacer {
     flex: 1;
 }

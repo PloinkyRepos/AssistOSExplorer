@@ -2,12 +2,13 @@ export class GitCredentialsPrompt {
     constructor(element, invalidate) {
         this.element = element;
         this.invalidate = invalidate;
-        this.state = { visible: false, name: '', email: '', token: '', remember: false };
+        this.state = { visible: false, name: '', email: '', token: '', remember: false, autocommitEnabled: true, autocommitIntervalMinutes: 15 };
         this.onUpdate = this.onUpdate.bind(this);
         this.onIdentityInput = this.onIdentityInput.bind(this);
         this.onTokenInput = this.onTokenInput.bind(this);
         this.onTokenKeydown = this.onTokenKeydown.bind(this);
         this.onRememberChange = this.onRememberChange.bind(this);
+        this.onAutocommitChange = this.onAutocommitChange.bind(this);
         this.invalidate();
     }
 
@@ -19,6 +20,8 @@ export class GitCredentialsPrompt {
         this.emailInput = this.element.querySelector('#gitCredentialsEmail');
         this.tokenInput = this.element.querySelector('#gitCredentialsToken');
         this.rememberInput = this.element.querySelector('#gitCredentialsRemember');
+        this.autocommitEnabledInput = this.element.querySelector('#gitCredentialsAutocommitEnabled');
+        this.autocommitIntervalInput = this.element.querySelector('#gitCredentialsAutocommitInterval');
 
         if (this.nameInput && !this.nameInput.dataset.boundCredentialsInput) {
             this.nameInput.addEventListener('input', this.onIdentityInput);
@@ -35,6 +38,14 @@ export class GitCredentialsPrompt {
         if (this.rememberInput && !this.rememberInput.dataset.boundCredentialsInput) {
             this.rememberInput.addEventListener('change', this.onRememberChange);
             this.rememberInput.dataset.boundCredentialsInput = 'true';
+        }
+        if (this.autocommitEnabledInput && !this.autocommitEnabledInput.dataset.boundCredentialsInput) {
+            this.autocommitEnabledInput.addEventListener('change', this.onAutocommitChange);
+            this.autocommitEnabledInput.dataset.boundCredentialsInput = 'true';
+        }
+        if (this.autocommitIntervalInput && !this.autocommitIntervalInput.dataset.boundCredentialsInput) {
+            this.autocommitIntervalInput.addEventListener('input', this.onAutocommitChange);
+            this.autocommitIntervalInput.dataset.boundCredentialsInput = 'true';
         }
         if (this.tokenInput && !this.tokenInput.dataset.boundCredentialsKeydown) {
             this.tokenInput.addEventListener('keydown', this.onTokenKeydown);
@@ -54,11 +65,16 @@ export class GitCredentialsPrompt {
         const email = (this.emailInput?.value || '').trim();
         const token = (this.tokenInput?.value || '').trim();
         const remember = Boolean(this.rememberInput?.checked);
+        const autocommitEnabled = Boolean(this.autocommitEnabledInput?.checked);
+        const intervalRaw = this.autocommitIntervalInput?.value;
+        const autocommitIntervalMinutes = Math.max(1, Math.floor(Number(intervalRaw || 15)));
         this.state.name = name;
         this.state.email = email;
         this.state.token = token;
         this.state.remember = remember;
-        this.emit('git-credentials-submit', { name, email, token, remember });
+        this.state.autocommitEnabled = autocommitEnabled;
+        this.state.autocommitIntervalMinutes = autocommitIntervalMinutes;
+        this.emit('git-credentials-submit', { name, email, token, remember, autocommitEnabled, autocommitIntervalMinutes });
     }
 
     cancelGitCredentials() {
@@ -82,7 +98,9 @@ export class GitCredentialsPrompt {
             name,
             email,
             token: this.state.token,
-            remember: this.state.remember
+            remember: this.state.remember,
+            autocommitEnabled: this.state.autocommitEnabled,
+            autocommitIntervalMinutes: this.state.autocommitIntervalMinutes
         });
     }
 
@@ -95,7 +113,9 @@ export class GitCredentialsPrompt {
             name: this.state.name,
             email: this.state.email,
             token,
-            remember
+            remember,
+            autocommitEnabled: this.state.autocommitEnabled,
+            autocommitIntervalMinutes: this.state.autocommitIntervalMinutes
         });
     }
 
@@ -106,7 +126,25 @@ export class GitCredentialsPrompt {
             name: this.state.name,
             email: this.state.email,
             token: this.state.token,
-            remember
+            remember,
+            autocommitEnabled: this.state.autocommitEnabled,
+            autocommitIntervalMinutes: this.state.autocommitIntervalMinutes
+        });
+    }
+
+    onAutocommitChange() {
+        const autocommitEnabled = Boolean(this.autocommitEnabledInput?.checked);
+        const intervalRaw = this.autocommitIntervalInput?.value;
+        const autocommitIntervalMinutes = Math.max(1, Math.floor(Number(intervalRaw || 15)));
+        this.state.autocommitEnabled = autocommitEnabled;
+        this.state.autocommitIntervalMinutes = autocommitIntervalMinutes;
+        this.emit('git-credentials-change', {
+            name: this.state.name,
+            email: this.state.email,
+            token: this.state.token,
+            remember: this.state.remember,
+            autocommitEnabled,
+            autocommitIntervalMinutes
         });
     }
 
@@ -134,6 +172,15 @@ export class GitCredentialsPrompt {
         if (Object.prototype.hasOwnProperty.call(next, 'remember')) {
             this.state.remember = Boolean(next.remember);
         }
+        if (Object.prototype.hasOwnProperty.call(next, 'autocommitEnabled')) {
+            this.state.autocommitEnabled = Boolean(next.autocommitEnabled);
+        }
+        if (Object.prototype.hasOwnProperty.call(next, 'autocommitIntervalMinutes')) {
+            const parsed = Number(next.autocommitIntervalMinutes);
+            if (Number.isFinite(parsed)) {
+                this.state.autocommitIntervalMinutes = Math.max(1, Math.floor(parsed));
+            }
+        }
 
         this.element.classList.toggle('is-visible', this.state.visible);
         if (this.nameInput && this.nameInput.value !== this.state.name) {
@@ -147,6 +194,15 @@ export class GitCredentialsPrompt {
         }
         if (this.rememberInput) {
             this.rememberInput.checked = this.state.remember;
+        }
+        if (this.autocommitEnabledInput) {
+            this.autocommitEnabledInput.checked = this.state.autocommitEnabled;
+        }
+        if (this.autocommitIntervalInput) {
+            const nextValue = String(this.state.autocommitIntervalMinutes || 15);
+            if (this.autocommitIntervalInput.value !== nextValue) {
+                this.autocommitIntervalInput.value = nextValue;
+            }
         }
 
         if (next.focus === 'name') {
