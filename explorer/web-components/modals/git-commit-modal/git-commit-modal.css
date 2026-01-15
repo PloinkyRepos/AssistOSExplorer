@@ -919,7 +919,6 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
 
 .git-credentials-row {
     display: flex;
-    align-items: center;
     gap: 10px;
 }
 
@@ -934,10 +933,56 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
     flex: 1 1 auto;
     min-width: 0;
 }
-.autocommitSection{
+
+.autocommitSection {
     display: flex;
-    gap: 20px;
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+    font-size: 14px;
 }
+
+.git-credentials-row-repos {
+    align-items: flex-start;
+}
+
+.autocommit-repos {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 160px;
+    overflow: auto;
+    padding: 6px 8px;
+    border: 1px solid var(--file-exp-border, rgba(148, 163, 184, 0.35));
+    border-radius: 8px;
+    background: var(--file-exp-panel, rgba(255, 255, 255, 0.6));
+    min-width: 220px;
+}
+
+.autocommit-repo {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 0.85rem;
+    color: var(--text, #0f172a);
+}
+
+.autocommit-repo-row {
+    align-items: center;
+    gap: 8px;
+    display: flex;
+}
+
+.autocommit-repo-row input {
+    flex-grow: unset;
+}
+
+.autocommit-repo-path {
+    font-size: 0.72rem;
+    color: var(--text-soft, rgba(15, 23, 42, 0.6));
+    padding-left: 22px;
+}
+
 .git-credentials-actions {
     display: flex;
     align-items: center;

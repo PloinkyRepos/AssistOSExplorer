@@ -44,6 +44,12 @@
           "type": "string",
           "description": "Commit message for autocommits.",
           "optional": true
+        },
+        "repos": {
+          "type": "array",
+          "description": "Optional list of repo paths or names to autocommit. When omitted, all repos under reposRoot are used.",
+          "optional": true,
+          "items": { "type": "string" }
         }
       }
     }

@@ -289,6 +289,15 @@ export function createGitCommitUI(ctx) {
         const identityState = state.identityPrompt || {};
         const authState = state.authPrompt || {};
         const autocommit = getAutocommitSettings();
+        const repoOverviews = Array.isArray(state.repoOverviews) ? state.repoOverviews : [];
+        const autocommitRepos = repoOverviews
+            .map((repo) => ({
+                path: repo?.path || '',
+                name: repo?.name || repo?.relativePath || repo?.path || ''
+            }))
+            .filter((repo) => repo.path && repo.name);
+        const savedRepos = Array.isArray(autocommit.repos) ? autocommit.repos : null;
+        const autocommitSelected = savedRepos !== null ? savedRepos : null;
         const visible = Boolean(
             identityState.visible
             || authState.visible
@@ -301,8 +310,9 @@ export function createGitCommitUI(ctx) {
             email: identityState.email || '',
             token: authState.token || '',
             remember: Boolean(authState.remember),
-            autocommitEnabled: Boolean(autocommit.enabled),
-            autocommitIntervalMinutes: Number(autocommit.intervalMinutes || 15)
+            autocommitIntervalMinutes: Number(autocommit.intervalMinutes || 15),
+            autocommitRepos,
+            autocommitSelected
         };
         if (options.focus) detail.focus = options.focus;
         const presenter = getCredentialsPromptPresenter();

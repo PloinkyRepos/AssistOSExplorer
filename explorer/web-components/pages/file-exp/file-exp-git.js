@@ -1,11 +1,18 @@
 import {
     parseJsonToolResult,
     getRememberedGitPat,
+    getRememberedGitIdentity,
+    normalizeErrorMessage,
+    humanizeGitError,
+    isGitAuthError,
+    isGitIdentityError,
+    isGitConflictError,
+    isGitPullBlockedError,
     getAutocommitSettings,
     getGitConflictFlag,
     setGitConflictFlag
 } from "../../modals/git-commit-modal/git-commit-modal-utils.js";
-import { callExplorerTool, callAgentTool } from "../../../services/infrastructure/explorerApi.js";
+import { callExplorerTool } from "../../../services/infrastructure/explorerApi.js";
 import { getReposRoot } from "../../../utils/reposRoot.js";
 
 export function attachGitController(fileExp) {
@@ -37,8 +44,8 @@ export function attachGitController(fileExp) {
     };
 
     const ensureAutocommitTimer = () => {
-        const { enabled, intervalMinutes } = getAutocommitSettings();
-        if (!enabled) {
+        const { intervalMinutes, repos } = getAutocommitSettings();
+        if (Array.isArray(repos) && repos.length === 0) {
             clearAutocommitTimer();
             return;
         }
@@ -85,43 +92,212 @@ export function attachGitController(fileExp) {
         return conflicted.length > 0;
     };
 
+    const extractChangePaths = (entries) => {
+        const list = Array.isArray(entries) ? entries : [];
+        return list
+            .map((entry) => {
+                if (!entry) return '';
+                if (typeof entry === 'string') return entry;
+                return entry.path || entry.filePath || entry.name || '';
+            })
+            .map((value) => String(value || '').trim())
+            .filter(Boolean);
+    };
+
+    const buildStageList = (status) => {
+        const unstaged = extractChangePaths(status?.unstaged);
+        const untracked = extractChangePaths(status?.untracked);
+        return Array.from(new Set([...unstaged, ...untracked]));
+    };
+
+    const hasAnyChanges = (status) => {
+        const staged = extractChangePaths(status?.staged);
+        const unstaged = extractChangePaths(status?.unstaged);
+        const untracked = extractChangePaths(status?.untracked);
+        return staged.length + unstaged.length + untracked.length > 0;
+    };
+
+    const showAutocommitStopped = (message) => {
+        clearAutocommitTimer();
+        fileExp.showStatus(`Autocommit stopped: ${message}`, true);
+    };
+
+    const setConflictAndStop = (message) => {
+        setConflictFlag(true);
+        updateGitButtonIndicator();
+        showAutocommitStopped(message || 'Merge conflicts detected.');
+    };
+
+    const pullRepoWithToken = async (repoPath, token) => {
+        const payload = { path: repoPath, ffOnly: true, rebase: false };
+        const cleanToken = String(token || '').trim();
+        if (cleanToken) payload.token = cleanToken;
+        await callExplorerTool('git_pull', payload);
+    };
+
+    const restoreStash = async (repoPath, stashRef) => {
+        try {
+            const text = await callExplorerTool('git_stash_pop', {
+                path: repoPath,
+                ref: stashRef || null,
+                reinstateIndex: true
+            }, { raw: true });
+            const payload = parseJsonToolResult(text) || {};
+            if (payload.noStash) {
+                return { ok: false, conflicts: false, message: 'No stash entries found to restore.' };
+            }
+            if (payload.conflicts) {
+                return { ok: false, conflicts: true, message: 'Conflicts after restoring stashed changes.' };
+            }
+            if (payload.ok === false) {
+                return { ok: false, conflicts: false, message: payload.output || 'Failed to restore stash.' };
+            }
+            return { ok: true, conflicts: false };
+        } catch (error) {
+            return { ok: false, conflicts: false, message: normalizeErrorMessage(error) };
+        }
+    };
+
+    const pullWithAutoStash = async (repoPath, token) => {
+        let stashPayload = null;
+        try {
+            const text = await callExplorerTool('git_stash', {
+                path: repoPath,
+                includeUntracked: true,
+                message: 'webskel:auto-pull'
+            }, { raw: true });
+            stashPayload = parseJsonToolResult(text) || {};
+        } catch (error) {
+            return { ok: false, message: normalizeErrorMessage(error) };
+        }
+
+        const stashCreated = Boolean(stashPayload.created);
+        const stashRef = stashPayload.ref || null;
+
+        try {
+            await pullRepoWithToken(repoPath, token);
+        } catch (error) {
+            const msg = humanizeGitError(normalizeErrorMessage(error), { action: 'pull' });
+            if (stashCreated) {
+                await restoreStash(repoPath, stashRef);
+            }
+            return { ok: false, message: msg };
+        }
+
+        if (stashCreated) {
+            const restored = await restoreStash(repoPath, stashRef);
+            if (!restored.ok) {
+                return { ok: false, conflicts: restored.conflicts, message: restored.message || 'Failed to restore stash.' };
+            }
+        }
+
+        return { ok: true };
+    };
+
     const runAutocommitTick = async () => {
         if (autocommit.running) return;
-        const { enabled } = getAutocommitSettings();
-        if (!enabled) return;
+        const { repos } = getAutocommitSettings();
         if (getConflictFlag()) return;
+        if (Array.isArray(repos) && repos.length === 0) return;
         autocommit.running = true;
         try {
             const token = getRememberedGitPat();
-            const raw = await callAgentTool('explorerSkillsAgent', 'git_autocommit_tick', {
-                reposRoot,
-                token,
-                message: AUTOCOMMIT_MESSAGE
-            });
-            const parsed = parseJsonToolResult(raw);
-            let result = parsed && typeof parsed === 'object' ? parsed : null;
-            if (result?.message && typeof result.message === 'string') {
-                const nested = parseJsonToolResult(result.message);
-                if (nested && typeof nested === 'object') {
-                    result = nested;
+            const rememberedIdentity = getRememberedGitIdentity();
+            const selectedRepos = Array.isArray(repos) ? repos.filter(Boolean) : [];
+            const repoList = selectedRepos.length ? selectedRepos : await listRepos();
+            if (!repoList.length) return;
+
+            for (const repoPath of repoList) {
+                if (getConflictFlag()) return;
+                try {
+                    await pullRepoWithToken(repoPath, token);
+                } catch (error) {
+                    const msg = humanizeGitError(normalizeErrorMessage(error), { action: 'pull' });
+                    if (isGitIdentityError(msg)) {
+                        showAutocommitStopped('Set name and email in Git settings to continue.');
+                        return;
+                    }
+                    if (isGitAuthError(msg)) {
+                        showAutocommitStopped(token ? `${msg} (A token is already saved. Use “Token” to update it.)` : msg);
+                        return;
+                    }
+                    if (isGitConflictError(msg)) {
+                        setConflictAndStop('Merge conflicts detected.');
+                        return;
+                    }
+                    if (isGitPullBlockedError(msg)) {
+                        const stashed = await pullWithAutoStash(repoPath, token);
+                        if (!stashed.ok) {
+                            if (stashed.conflicts) {
+                                setConflictAndStop(stashed.message || 'Conflicts after restoring stashed changes.');
+                            } else {
+                                showAutocommitStopped(stashed.message || 'Pull blocked: could not auto-stash your local changes.');
+                            }
+                            return;
+                        }
+                    } else {
+                        showAutocommitStopped(msg || 'Pull failed.');
+                        return;
+                    }
                 }
-            }
-            if (!result) return;
 
-            if (result.conflicts) {
-                setConflictFlag(true);
-                updateGitButtonIndicator();
-                clearAutocommitTimer();
-                const message = String(result.message || 'Merge conflicts detected.').trim();
-                fileExp.showStatus(`Autocommit stopped: ${message}`, true);
-                return;
-            }
+                const status = await getRepoStatus(repoPath);
+                if (repoHasConflicts(status)) {
+                    setConflictAndStop('Merge conflicts detected.');
+                    return;
+                }
+                if (!hasAnyChanges(status)) {
+                    continue;
+                }
+                const stageList = buildStageList(status);
+                if (stageList.length) {
+                    await callExplorerTool('git_stage', { path: repoPath, files: stageList });
+                }
+                const after = await getRepoStatus(repoPath);
+                const staged = extractChangePaths(after?.staged);
+                if (!staged.length) {
+                    continue;
+                }
+                const userName = String(rememberedIdentity.name || '').trim();
+                const userEmail = String(rememberedIdentity.email || '').trim();
+                if (!userName || !userEmail) {
+                    showAutocommitStopped('Set name and email in Git settings to continue.');
+                    return;
+                }
+                try {
+                    await callExplorerTool('git_commit', {
+                        path: repoPath,
+                        message: AUTOCOMMIT_MESSAGE,
+                        userName: userName || null,
+                        userEmail: userEmail || null
+                    });
+                } catch (error) {
+                    const msg = normalizeErrorMessage(error);
+                    if (isGitIdentityError(msg)) {
+                        showAutocommitStopped('Set name and email in Git settings to continue.');
+                        return;
+                    }
+                    if (isGitConflictError(msg)) {
+                        setConflictAndStop('Merge conflicts detected.');
+                        return;
+                    }
+                    showAutocommitStopped(msg || 'Commit failed.');
+                    return;
+                }
 
-            if (result.ok === false || result.stopped) {
-                clearAutocommitTimer();
-                const message = String(result.message || 'Autocommit stopped.').trim();
-                if (message) {
-                    fileExp.showStatus(`Autocommit stopped: ${message}`, true);
+                try {
+                    await callExplorerTool('git_push', {
+                        path: repoPath,
+                        token: String(token || '').trim() || undefined
+                    });
+                } catch (error) {
+                    const msg = normalizeErrorMessage(error);
+                    if (isGitAuthError(msg)) {
+                        showAutocommitStopped(token ? `${msg} (A token is already saved. Use “Token” to update it.)` : msg);
+                        return;
+                    }
+                    showAutocommitStopped(msg || 'Push failed.');
+                    return;
                 }
             }
         } catch {

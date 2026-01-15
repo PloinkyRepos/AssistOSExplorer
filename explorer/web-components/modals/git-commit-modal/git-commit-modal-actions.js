@@ -1036,8 +1036,8 @@ export function createGitCommitActions(ctx) {
         const email = String(payload.email ?? state.identityPrompt?.email ?? '').trim();
         const token = String(payload.token ?? state.authPrompt?.token ?? '').trim();
         const remember = typeof payload.remember === 'boolean' ? payload.remember : Boolean(state.authPrompt?.remember);
-        const autocommitEnabled = typeof payload.autocommitEnabled === 'boolean' ? payload.autocommitEnabled : null;
         const autocommitIntervalMinutes = payload.autocommitIntervalMinutes;
+        const autocommitRepos = Array.isArray(payload.autocommitRepos) ? payload.autocommitRepos : null;
 
         const identityRequired = Boolean(state.credentialsGate || state.identityPrompt?.visible);
         const authRequired = Boolean(state.authPrompt?.visible);
@@ -1106,7 +1106,7 @@ export function createGitCommitActions(ctx) {
             tokenSaved = true;
         }
 
-        setAutocommitSettings({ enabled: autocommitEnabled, intervalMinutes: autocommitIntervalMinutes });
+        setAutocommitSettings({ intervalMinutes: autocommitIntervalMinutes, repos: autocommitRepos });
 
         const pending = state.authPrompt?.pendingAction || state.identityPrompt?.pendingAction;
         const wasGate = state.credentialsGate;

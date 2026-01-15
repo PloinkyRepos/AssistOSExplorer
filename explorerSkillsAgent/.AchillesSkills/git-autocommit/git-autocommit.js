@@ -33,12 +33,26 @@ async function resolveWorkspaceRoot(context = {}) {
     process.cwd()
   ];
 
-  for (const base of baseCandidates) {
-    if (!base) continue;
+  const checkBase = async (base) => {
+    if (!base) return null;
     const repoRoot = path.join(base, '.ploinky', 'repos');
+    if (await pathExists(repoRoot)) return base;
+    return null;
+  };
+
+  for (const base of baseCandidates) {
+    const match = await checkBase(base);
+    if (match) return match;
+  }
+
+  // Fall back to walking up from CWD to find a workspace containing .ploinky/repos.
+  let current = process.cwd();
+  while (current && current !== path.dirname(current)) {
+    const repoRoot = path.join(current, '.ploinky', 'repos');
     if (await pathExists(repoRoot)) {
-      return base;
+      return current;
     }
+    current = path.dirname(current);
   }
 
   return envCandidates[0] || process.cwd();
@@ -280,6 +294,82 @@ async function listRepos(reposRoot) {
   return repos;
 }
 
+function normalizeRequestedRepos(requested, reposRoot) {
+  const list = Array.isArray(requested) ? requested : [];
+  const normalizedPaths = new Set();
+  const normalizedNames = new Set();
+  for (const entry of list) {
+    const raw = typeof entry === 'string' ? entry.trim() : '';
+    if (!raw) continue;
+    const baseName = path.basename(raw);
+    if (baseName) normalizedNames.add(baseName);
+    if (path.isAbsolute(raw)) {
+      normalizedPaths.add(path.normalize(raw));
+      continue;
+    }
+    if (!reposRoot) continue;
+    const relative = raw.replace(/^\.\/+/, '');
+    normalizedPaths.add(path.normalize(path.join(reposRoot, relative)));
+  }
+  return { normalizedPaths, normalizedNames };
+}
+
+function buildRequestedRepoList(requested, reposRoot) {
+  const list = Array.isArray(requested) ? requested : [];
+  const candidates = new Set();
+  for (const entry of list) {
+    const raw = typeof entry === 'string' ? entry.trim() : '';
+    if (!raw) continue;
+    if (path.isAbsolute(raw)) {
+      candidates.add(path.normalize(raw));
+      continue;
+    }
+    if (!reposRoot) continue;
+    const relative = raw.replace(/^\.\/+/, '');
+    candidates.add(path.normalize(path.join(reposRoot, relative)));
+  }
+  return Array.from(candidates);
+}
+
+async function resolveRequestedRepos(requested, reposRoot) {
+  const list = Array.isArray(requested) ? requested : [];
+  const candidates = new Set();
+  for (const entry of list) {
+    const raw = typeof entry === 'string' ? entry.trim() : '';
+    if (!raw) continue;
+    if (path.isAbsolute(raw)) {
+      candidates.add(path.normalize(raw));
+      continue;
+    }
+    if (!reposRoot) continue;
+    const relative = raw.replace(/^\.\/+/, '');
+    candidates.add(path.normalize(path.join(reposRoot, relative)));
+  }
+
+  const valid = [];
+  for (const repoPath of candidates) {
+    try {
+      const gitDir = path.join(repoPath, '.git');
+      if (await pathExists(gitDir)) {
+        valid.push(repoPath);
+        continue;
+      }
+      const gitBinary = await getGitBinary(repoPath);
+      const { stdout } = await runGit(repoPath, [gitBinary, 'rev-parse', '--is-inside-work-tree'], { timeoutMs: 5000 });
+      if (stdout.trim().startsWith('true')) {
+        valid.push(repoPath);
+      }
+    } catch {
+      // fallback to path existence in case git binary is unavailable in this context
+      if (await pathExists(repoPath)) {
+        valid.push(repoPath);
+      }
+      continue;
+    }
+  }
+  return valid;
+}
+
 async function getRepoStatus(repoPath) {
   const gitBinary = await getGitBinary(repoPath);
   const { stdout } = await runGit(repoPath, [gitBinary, 'status', '--porcelain=v1', '-z']);
@@ -375,19 +465,40 @@ export default async function gitAutocommit(input, context = {}) {
   const reposRoot = await resolveReposRoot(payload.reposRoot, workspaceRoot);
   const token = payload.token ? String(payload.token) : '';
   const message = payload.message ? String(payload.message) : 'chore: autocommit';
+  const requestedRepos = payload.repos;
 
-  const repos = await listRepos(reposRoot);
-  if (!repos.length) {
+  let repos = [];
+  let selectedRepos = [];
+  const { normalizedPaths, normalizedNames } = normalizeRequestedRepos(requestedRepos, reposRoot);
+  const hasSelection = normalizedPaths.size > 0 || normalizedNames.size > 0;
+
+  if (hasSelection) {
+    selectedRepos = buildRequestedRepoList(requestedRepos, reposRoot);
+    if (!selectedRepos.length) {
+      selectedRepos = await resolveRequestedRepos(requestedRepos, reposRoot);
+    }
+  } else {
+    repos = await listRepos(reposRoot);
+    selectedRepos = repos;
+  }
+
+  if (hasSelection && selectedRepos.length) {
+    // Allow explicit selections to run without filtering to listRepos.
+    repos = selectedRepos;
+  } else if (!hasSelection) {
+    repos = selectedRepos;
+  }
+  if (!selectedRepos.length) {
     return JSON.stringify({
       ok: true,
       stopped: false,
       conflicts: false,
-      message: 'No git repositories found for autocommit.'
+      message: hasSelection ? 'No selected git repositories found for autocommit.' : 'No git repositories found for autocommit.'
     });
   }
 
   let processed = 0;
-  for (const repoPath of repos) {
+  for (const repoPath of selectedRepos) {
     processed += 1;
     try {
       await pullWithAutoStash(repoPath, token);

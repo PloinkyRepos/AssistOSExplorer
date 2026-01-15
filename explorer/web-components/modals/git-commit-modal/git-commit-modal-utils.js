@@ -226,11 +226,13 @@ export function setRememberedGitIdentity({ name = '', email = '' } = {}) {
 
 const AUTOCOMMIT_ENABLED_STORAGE_KEY = 'webskel.git.autocommit.enabled';
 const AUTOCOMMIT_INTERVAL_STORAGE_KEY = 'webskel.git.autocommit.intervalMinutes';
+const AUTOCOMMIT_REPOS_STORAGE_KEY = 'webskel.git.autocommit.repos';
 const GIT_CONFLICT_FLAG_STORAGE_KEY = 'webskel.git.conflicts';
 
 export function getAutocommitSettings() {
     let enabled = true;
     let intervalMinutes = 15;
+    let repos = null;
     try {
         const rawEnabled = localStorage.getItem(AUTOCOMMIT_ENABLED_STORAGE_KEY);
         if (rawEnabled === 'true' || rawEnabled === 'false') {
@@ -243,13 +245,20 @@ export function getAutocommitSettings() {
                 intervalMinutes = Math.max(1, Math.floor(parsed));
             }
         }
+        const rawRepos = localStorage.getItem(AUTOCOMMIT_REPOS_STORAGE_KEY);
+        if (rawRepos) {
+            const parsed = JSON.parse(rawRepos);
+            if (Array.isArray(parsed)) {
+                repos = parsed.map((entry) => String(entry || '').trim()).filter(Boolean);
+            }
+        }
     } catch {
         // ignore
     }
-    return { enabled, intervalMinutes };
+    return { enabled, intervalMinutes, repos };
 }
 
-export function setAutocommitSettings({ enabled = null, intervalMinutes = null } = {}) {
+export function setAutocommitSettings({ enabled = null, intervalMinutes = null, repos = null } = {}) {
     try {
         if (typeof enabled === 'boolean') {
             localStorage.setItem(AUTOCOMMIT_ENABLED_STORAGE_KEY, enabled ? 'true' : 'false');
@@ -259,6 +268,10 @@ export function setAutocommitSettings({ enabled = null, intervalMinutes = null }
             if (Number.isFinite(parsed)) {
                 localStorage.setItem(AUTOCOMMIT_INTERVAL_STORAGE_KEY, String(Math.max(1, Math.floor(parsed))));
             }
+        }
+        if (Array.isArray(repos)) {
+            const cleaned = repos.map((entry) => String(entry || '').trim()).filter(Boolean);
+            localStorage.setItem(AUTOCOMMIT_REPOS_STORAGE_KEY, JSON.stringify(cleaned));
         }
     } catch {
         // ignore
