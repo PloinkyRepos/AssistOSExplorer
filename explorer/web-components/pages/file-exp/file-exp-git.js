@@ -21,11 +21,22 @@ export function attachGitController(fileExp) {
 
     const getConflictFlag = () => getGitConflictFlag();
     const setConflictFlag = (value) => setGitConflictFlag(Boolean(value));
+    let pushWarningMessage = '';
 
     const updateGitButtonIndicator = () => {
         const button = fileExp.element?.querySelector?.('#gitButton');
         if (!button) return;
+        if (!button.dataset.defaultTitle) {
+            button.dataset.defaultTitle = button.title || 'Commit and push with Git';
+        }
         button.classList.toggle('has-conflicts', getConflictFlag());
+        button.classList.toggle('has-push-warning', Boolean(pushWarningMessage));
+        button.title = pushWarningMessage || button.dataset.defaultTitle;
+    };
+
+    const setPushWarning = (message) => {
+        pushWarningMessage = message ? String(message) : '';
+        updateGitButtonIndicator();
     };
 
     const refreshOpenGitModals = async () => {
@@ -311,12 +322,15 @@ export function attachGitController(fileExp) {
                         path: repoPath,
                         token: String(token || '').trim() || undefined
                     });
+                    setPushWarning('');
                 } catch (error) {
                     const msg = normalizeErrorMessage(error);
                     if (isGitAuthError(msg)) {
+                        setPushWarning('Autocommit created commits but push failed. Please push manually.');
                         showAutocommitStopped(token ? `${msg} (A token is already saved. Use “Token” to update it.)` : msg);
                         return;
                     }
+                    setPushWarning('Autocommit created commits but push failed. Please push manually.');
                     showAutocommitStopped(msg || 'Push failed.');
                     return;
                 }

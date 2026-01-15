@@ -95,7 +95,25 @@ main {
     text-align: center;
 }
 
+.git-push-warning-indicator {
+    display: none;
+    margin-left: 8px;
+    width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    background: #f59e0b;
+    color: #111827;
+    font-weight: 800;
+    line-height: 16px;
+    font-size: 12px;
+    text-align: center;
+}
+
 #gitButton.has-conflicts .git-conflict-indicator {
+    display: inline-block;
+}
+
+#gitButton.has-push-warning .git-push-warning-indicator {
     display: inline-block;
 }
 
