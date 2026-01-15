@@ -7,7 +7,7 @@ export class GitCredentialsPrompt {
             name: '',
             email: '',
             token: '',
-            remember: false,
+            remember: true,
             credentialsValidated: false,
             autocommitIntervalMinutes: 15,
             autocommitRepos: [],

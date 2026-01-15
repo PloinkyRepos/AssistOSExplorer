@@ -56,7 +56,7 @@ export function createGitCommitState(props = {}) {
             repoPath: null,
             pendingAction: null,
             token: '',
-            remember: false
+            remember: true
         },
         ignorePrompt: {
             visible: false,
