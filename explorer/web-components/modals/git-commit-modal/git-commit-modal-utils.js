@@ -227,6 +227,7 @@ export function setRememberedGitIdentity({ name = '', email = '' } = {}) {
 const AUTOCOMMIT_ENABLED_STORAGE_KEY = 'webskel.git.autocommit.enabled';
 const AUTOCOMMIT_INTERVAL_STORAGE_KEY = 'webskel.git.autocommit.intervalMinutes';
 const AUTOCOMMIT_REPOS_STORAGE_KEY = 'webskel.git.autocommit.repos';
+const CREDENTIALS_VALIDATED_STORAGE_KEY = 'webskel.git.credentials.validated';
 const GIT_CONFLICT_FLAG_STORAGE_KEY = 'webskel.git.conflicts';
 
 export function getAutocommitSettings() {
@@ -273,6 +274,22 @@ export function setAutocommitSettings({ enabled = null, intervalMinutes = null, 
             const cleaned = repos.map((entry) => String(entry || '').trim()).filter(Boolean);
             localStorage.setItem(AUTOCOMMIT_REPOS_STORAGE_KEY, JSON.stringify(cleaned));
         }
+    } catch {
+        // ignore
+    }
+}
+
+export function getCredentialsValidated() {
+    try {
+        return localStorage.getItem(CREDENTIALS_VALIDATED_STORAGE_KEY) === 'true';
+    } catch {
+        return false;
+    }
+}
+
+export function setCredentialsValidated(value) {
+    try {
+        localStorage.setItem(CREDENTIALS_VALIDATED_STORAGE_KEY, value ? 'true' : 'false');
     } catch {
         // ignore
     }

@@ -12,7 +12,8 @@ import {
     getRememberedGitIdentity,
     setRememberedGitPat,
     setRememberedGitIdentity,
-    setAutocommitSettings
+    setAutocommitSettings,
+    setCredentialsValidated
 } from "./git-commit-modal-utils.js";
 import { withGlobalLoader } from "../../../utils/globalLoader.js";
 
@@ -1125,6 +1126,7 @@ export function createGitCommitActions(ctx) {
                 }
             }
             state.credentialsValidated = true;
+            setCredentialsValidated(true);
             syncStaticUI();
             updateCommitButtons();
             setStatusLine('Credentials validated. Select autocommit repositories and save.');

@@ -1,4 +1,4 @@
-import { isReposRootPath, getAutocommitSettings } from "./git-commit-modal-utils.js";
+import { isReposRootPath, getAutocommitSettings, setCredentialsValidated } from "./git-commit-modal-utils.js";
 
 export function createGitCommitUI(ctx) {
     const {
@@ -84,6 +84,7 @@ export function createGitCommitUI(ctx) {
                 );
                 if (credentialsChanged) {
                     state.credentialsValidated = false;
+                    setCredentialsValidated(false);
                 }
                 state.identityPrompt = {
                     ...state.identityPrompt,

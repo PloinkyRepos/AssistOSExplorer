@@ -1,5 +1,5 @@
 import { createStore } from "../../../services/ui/store.js";
-import { getRememberedGitIdentity } from "./git-commit-modal-utils.js";
+import { getRememberedGitIdentity, getCredentialsValidated } from "./git-commit-modal-utils.js";
 import { getReposRoot } from "../../../utils/reposRoot.js";
 
 export function createGitCommitState(props = {}) {
@@ -28,7 +28,7 @@ export function createGitCommitState(props = {}) {
         pullMode: 'ffOnly', // 'ffOnly' | 'rebase' | 'merge'
         credentialsOpen: false,
         credentialsGate: false,
-        credentialsValidated: false,
+        credentialsValidated: getCredentialsValidated(),
         pullBlocked: null,
         autoStash: null,
         manualConflicts: [],
