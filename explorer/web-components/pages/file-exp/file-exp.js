@@ -101,7 +101,14 @@ export class FileExp {
     }
 
     async loadStateFromURL() {
-        const path = window.location.hash.split('#file-exp')[1] || '/';
+        const rawPath = window.location.hash.split('#file-exp')[1] || '/';
+        let path = rawPath;
+        try {
+            path = decodeURIComponent(rawPath);
+        } catch (error) {
+            console.warn('Failed to decode file-exp path from URL:', rawPath, error);
+            path = rawPath;
+        }
 
         if (path === '/') {
             await this.loadDirectory('/');
@@ -803,7 +810,10 @@ export class FileExp {
     }
 
     showStatus(message, isError = false) {
-        const statusBanner = this.element.querySelector('#statusBanner');
+        const statusBanner = this.element?.querySelector?.('#statusBanner');
+        if (!statusBanner) {
+            return;
+        }
         if (!message) {
             statusBanner.classList.remove('visible', 'error');
             statusBanner.textContent = '';
