@@ -71,6 +71,7 @@ export class FileExp {
         this.caches = createFileExpCaches();
         this.directoryFilterController = createDirectoryFilterController(this);
         this.tooling = createFileExpTooling();
+        this.lastLoadError = null;
     }
 
     async withLoader(fn) {
@@ -521,6 +522,7 @@ export class FileExp {
 
     async loadDirectoryContent(path) {
         try {
+            this.lastLoadError = null;
             const cached = this.caches.dirListing.get(this, path);
             if (cached) {
                 return cached;
@@ -534,6 +536,10 @@ export class FileExp {
             this.caches.dirListing.set(this, path, resolved);
             return resolved;
         } catch (err) {
+            this.lastLoadError = err;
+            if (this.isPathNotFoundError(err)) {
+                return null;
+            }
             console.error(err);
             this.showStatus(err.message || 'Failed to load directory.', true);
             return [];
@@ -629,6 +635,15 @@ export class FileExp {
             this.state.openMenuPath = null;
             this.pendingMenuFocusPath = null;
             const entries = await this.loadDirectoryContent(this.state.path);
+            if (entries === null) {
+                if (this.state.path === '/') {
+                    this.showStatus('Root directory is not accessible.', true);
+                    return;
+                }
+                this.showStatus('Path not found. Returning to root.', true);
+                await this.loadDirectory('/');
+                return;
+            }
             await this.setEntries(entries);
             this.invalidate();
         });
@@ -823,6 +838,11 @@ export class FileExp {
         statusBanner.classList.add('visible');
         statusBanner.classList.toggle('error', Boolean(isError));
         setTimeout(() => this.showStatus(null), 3000);
+    }
+
+    isPathNotFoundError(err) {
+        const message = err?.message || '';
+        return err?.code === 'ENOENT' || message.includes('ENOENT');
     }
 
     async goUp() {
