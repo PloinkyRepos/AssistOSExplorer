@@ -1,0 +1,22 @@
+<div class="plan-item $$statusClass">
+    <div class="plan-item__view $$viewClass">
+        <div class="plan-item__meta">
+            <span class="plan-item__id">$$id</span>
+            <span class="plan-item__status">$$statusLabel</span>
+        </div>
+        <div class="plan-item__description">$$description</div>
+        <div class="plan-item__actions">
+            <button class="secondary" data-local-action="startEdit">Edit</button>
+            <button class="secondary" data-local-action="regenerateItem">Regenerate</button>
+            <button data-local-action="acceptItem">Accept</button>
+        </div>
+    </div>
+    <div class="plan-item__edit $$editClass">
+        <label class="plan-item__label">Edit item</label>
+        <textarea class="plan-item__edit-input" rows="3"></textarea>
+        <div class="plan-item__actions">
+            <button data-local-action="saveEdit">Save</button>
+            <button class="secondary" data-local-action="cancelEdit">Cancel</button>
+        </div>
+    </div>
+</div>

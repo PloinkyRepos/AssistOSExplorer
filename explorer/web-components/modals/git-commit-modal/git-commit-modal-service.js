@@ -19,6 +19,9 @@ export function createGitCommitService({ callTool, callAgentTool }) {
         deleteFile: (path) => callTool('delete_file', { path }),
         readTextFile: (path) => callTool('read_text_file', { path }),
         writeFile: (path, content) => callTool('write_file', { path, content }),
-        generateCommitMessage: (diffs) => callAgentTool('explorerSkillsAgent', 'git_commit_message', { diffs })
+        generateCommitMessage: (diffs) => callAgentTool('explorerSkillsAgent', 'skills_execute', {
+            skillName: 'git-commit-message',
+            input: { diffs }
+        })
     };
 }

@@ -1,0 +1,31 @@
+<div class="backlog-editor">
+    <div class="backlog-editor__toolbar">
+        <div class="backlog-editor__model">
+            <label for="backlogModelSelect">Model</label>
+            <select id="backlogModelSelect"></select>
+        </div>
+        <div class="backlog-editor__actions">
+            <button class="secondary" data-local-action="saveBacklog">Save</button>
+            <button data-local-action="analyzeBacklog">Analyze</button>
+            <button class="secondary" data-local-action="reviewPlan">Review Plan</button>
+            <button class="secondary" data-local-action="executePlan">Execute Plan</button>
+        </div>
+    </div>
+
+    <div class="backlog-editor__content">
+        <label for="backlogContent">Backlog</label>
+        <textarea id="backlogContent" rows="10" spellcheck="false"></textarea>
+    </div>
+
+    <div class="backlog-editor__plan">
+        <div class="backlog-editor__plan-header">
+            <h3>Plan</h3>
+            <span class="backlog-editor__plan-count">$$planCount</span>
+        </div>
+        <div class="backlog-editor__plan-list">
+            $$planItemsHTML
+        </div>
+    </div>
+
+    <div class="backlog-editor__status $$statusClass">$$statusMessage</div>
+</div>

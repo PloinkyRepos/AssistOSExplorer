@@ -52,6 +52,143 @@
           "items": { "type": "string" }
         }
       }
+    },
+    {
+      "name": "backlog_analyze",
+      "title": "Analyze Backlog",
+      "description": "Generate a structured plan from backlog content.",
+      "command": "tools/backlog_analyze.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "backlogContent": {
+          "type": "string",
+          "description": "Raw backlog text to analyze.",
+          "optional": false
+        },
+        "context": {
+          "type": "object",
+          "description": "Optional project context object.",
+          "optional": true
+        },
+        "modelName": {
+          "type": "string",
+          "description": "LLM model to use.",
+          "optional": true
+        }
+      }
+    },
+    {
+      "name": "backlog_regenerate_item",
+      "title": "Regenerate Backlog Plan Item",
+      "description": "Refine a single plan item based on feedback.",
+      "command": "tools/backlog_regenerate_item.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "planItem": {
+          "type": "object",
+          "description": "Plan item to refine.",
+          "optional": false
+        },
+        "userFeedback": {
+          "type": "string",
+          "description": "Feedback to guide regeneration.",
+          "optional": false
+        },
+        "modelName": {
+          "type": "string",
+          "description": "LLM model to use.",
+          "optional": true
+        }
+      }
+    },
+    {
+      "name": "backlog_review_plan",
+      "title": "Review Backlog Plan",
+      "description": "Validate the full plan and return a summary.",
+      "command": "tools/backlog_review_plan.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "plan": {
+          "type": "array",
+          "description": "Plan items array.",
+          "optional": false
+        },
+        "modelName": {
+          "type": "string",
+          "description": "LLM model to use.",
+          "optional": true
+        }
+      }
+    },
+    {
+      "name": "backlog_execute_plan",
+      "title": "Execute Backlog Plan",
+      "description": "Apply accepted plan items to their target files.",
+      "command": "tools/backlog_execute_plan.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "plan": {
+          "type": "array",
+          "description": "Plan items array (accepted items will be executed).",
+          "optional": false
+        },
+        "modelName": {
+          "type": "string",
+          "description": "LLM model to use.",
+          "optional": true
+        }
+      }
+    },
+    {
+      "name": "get_available_models",
+      "title": "Get Available LLM Models",
+      "description": "Read available LLM models from achillesAgentLib.",
+      "command": "tools/get_available_models.sh",
+      "cwd": "workspace",
+      "inputSchema": {}
+    },
+    {
+      "name": "skills_execute",
+      "title": "Execute V2 Skill",
+      "description": "Execute a skill through RecursiveSkilledAgent (v2).",
+      "command": "tools/execute_v2_skill.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "skillName": {
+          "type": "string",
+          "description": "Skill name to execute.",
+          "optional": false
+        },
+        "input": {
+          "type": "object",
+          "description": "Input payload forwarded to the skill.",
+          "optional": true
+        },
+        "action": {
+          "type": "string",
+          "description": "Optional action (execute or list).",
+          "optional": true
+        },
+        "metadata": {
+          "type": "object",
+          "description": "Optional metadata for execution.",
+          "optional": true
+        }
+      }
+    },
+    {
+      "name": "skills_list",
+      "title": "List V2 Skills",
+      "description": "List skills discovered by RecursiveSkilledAgent (v2).",
+      "command": "tools/execute_v2_skill.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "action": {
+          "type": "string",
+          "description": "Use \"list\" to return available skills.",
+          "optional": false
+        }
+      }
     }
   ]
 }

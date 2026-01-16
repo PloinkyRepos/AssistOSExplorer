@@ -56,6 +56,7 @@ export function createFileExpState() {
         fileContent: "",
         previewContent: "",
         selectedIsMarkdown: false,
+        selectedIsBacklog: false,
         markdownTextView: false,
         documentId: null,
         isEditing: false,
