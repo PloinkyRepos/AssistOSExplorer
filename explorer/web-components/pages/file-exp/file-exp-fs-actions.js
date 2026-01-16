@@ -138,7 +138,6 @@ export function attachFsActions(fileExp) {
                 }
                 this.state.selectedPath = path;
                 this.state.selectedIsMarkdown = this.isMarkdownFile(path) && type === 'file';
-                this.state.selectedIsBacklog = this.isBacklogFile(path) && type === 'file';
                 this.closeActionMenu(false);
                 this.state.openMenuPath = path;
                 this.pendingMenuFocusPath = path;

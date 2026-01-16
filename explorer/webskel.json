@@ -12,16 +12,6 @@
       "presenterClassName": "FileEditor"
     },
     {
-      "name": "backlog-editor",
-      "type": "components",
-      "presenterClassName": "BacklogEditor"
-    },
-    {
-      "name": "plan-item",
-      "type": "components",
-      "presenterClassName": "PlanItem"
-    },
-    {
       "name": "document-view-page",
       "type": "components",
       "presenterClassName": "DocumentViewPage"

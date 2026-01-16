@@ -8,7 +8,6 @@ import {
     generateCopyName,
     parseDetailedDirectoryListing,
     isMarkdownFile,
-    isBacklogFile,
     prepareMarkdownPreviewContent,
     renderMarkdownPreview,
     renderCodePreview,
@@ -43,7 +42,6 @@ export class FileExp {
         this.sanitizeEntryName = sanitizeEntryName;
         this.generateCopyName = (baseName, existingNames = null) => generateCopyName(baseName, existingNames, this.state?.entries || []);
         this.isMarkdownFile = isMarkdownFile;
-        this.isBacklogFile = isBacklogFile;
         this.prepareMarkdownPreviewContent = prepareMarkdownPreviewContent;
         this.renderMarkdownPreview = renderMarkdownPreview;
         this.prepareMarkdownPreviewContent = prepareMarkdownPreviewContent;
@@ -178,7 +176,7 @@ export class FileExp {
             editingActions.classList.remove('hidden');
         } else {
             editingActions.classList.add('hidden');
-            if (this.state.selectedPath && this.state.previewMode !== 'media' && this.state.previewMode !== 'backlog' && !isTruncatedPreview) {
+            if (this.state.selectedPath && this.state.previewMode !== 'media' && !isTruncatedPreview) {
                 editorActions.classList.remove('hidden');
             } else {
                 editorActions.classList.add('hidden');
@@ -197,9 +195,6 @@ export class FileExp {
             this.detachPreviewAnchorHandler();
             const content = this.state.previewContent || '<div class="preview-placeholder">Unable to preview file.</div>';
             previewContent.innerHTML = `<div class="media-preview">${content}</div>`;
-        } else if (this.state.previewMode === 'backlog') {
-            this.detachPreviewAnchorHandler();
-            previewContent.innerHTML = `<backlog-editor data-presenter="backlog-editor" data-path="${this.state.selectedPath}"></backlog-editor>`;
         } else if (this.state.selectedIsMarkdown) {
             if (this.state.markdownTextView) {
                 previewContent.innerHTML = `<pre id="filePreview" class="markdown-raw-view"></pre>`;
@@ -631,7 +626,6 @@ export class FileExp {
             this.state.fileContent = "";
             this.state.previewContent = "";
             this.state.selectedIsMarkdown = false;
-            this.state.selectedIsBacklog = false;
             this.state.previewMode = 'none';
             this.state.mediaType = null;
             this.state.fileLoadInfo = null;
@@ -719,10 +713,6 @@ export class FileExp {
 
     async editFile() {
         if (!this.state.selectedPath) return;
-        if (this.state.selectedIsBacklog) {
-            this.showStatus('Backlog files are edited in the backlog editor.', false);
-            return;
-        }
         if (this.state.fileLoadInfo?.truncated) {
             this.showStatus('Editing is disabled for large files. Please open it locally to modify.', true);
             return;

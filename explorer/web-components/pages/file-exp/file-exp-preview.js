@@ -51,7 +51,6 @@ export async function tryLoadMediaPreview(fileExp, filePath) {
         fileExp.state.mediaType = type;
         fileExp.state.previewContent = markup;
         fileExp.state.selectedIsMarkdown = false;
-        fileExp.state.selectedIsBacklog = false;
         fileExp.state.fileContent = '';
         fileExp.state.markdownTextView = false;
         fileExp.state.documentId = null;
@@ -85,7 +84,6 @@ export async function openFile(fileExp, filePath, { largeFilePreviewLimitBytes, 
             if (cachedPreview) {
                 fileExp.state.fileContent = cachedPreview.fileContent;
                 fileExp.state.selectedIsMarkdown = cachedPreview.selectedIsMarkdown;
-                fileExp.state.selectedIsBacklog = cachedPreview.selectedIsBacklog;
                 fileExp.state.previewContent = cachedPreview.previewContent;
                 fileExp.state.previewMode = cachedPreview.previewMode;
                 fileExp.state.fileLoadInfo = cachedPreview.fileLoadInfo;
@@ -137,15 +135,11 @@ export async function openFile(fileExp, filePath, { largeFilePreviewLimitBytes, 
             }
 
             fileExp.state.fileContent = contentResult.text;
-            fileExp.state.selectedIsBacklog = fileExp.isBacklogFile(filePath);
             fileExp.state.selectedIsMarkdown = fileExp.isMarkdownFile(filePath);
             fileExp.state.markdownTextView = false;
             fileExp.state.documentId = null;
             fileExp.state.hasUnsavedChanges = false;
-            if (fileExp.state.selectedIsBacklog) {
-                fileExp.state.previewContent = '';
-                fileExp.state.previewMode = 'backlog';
-            } else if (fileExp.state.selectedIsMarkdown) {
+            if (fileExp.state.selectedIsMarkdown) {
                 const previewSource = fileExp.prepareMarkdownPreviewContent(fileExp.state.fileContent);
                 fileExp.state.previewContent = renderMarkdownPreview(previewSource || '') || '';
                 fileExp.state.markdownTextView = false;
@@ -158,7 +152,6 @@ export async function openFile(fileExp, filePath, { largeFilePreviewLimitBytes, 
             fileExp.caches.filePreview.set(cacheKey, {
                 fileContent: fileExp.state.fileContent,
                 selectedIsMarkdown: fileExp.state.selectedIsMarkdown,
-                selectedIsBacklog: fileExp.state.selectedIsBacklog,
                 previewContent: fileExp.state.previewContent,
                 previewMode: fileExp.state.previewMode,
                 fileLoadInfo: fileExp.state.fileLoadInfo

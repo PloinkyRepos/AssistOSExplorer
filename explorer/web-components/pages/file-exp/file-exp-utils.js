@@ -179,10 +179,6 @@ export function isMarkdownFile(path) {
     return typeof path === 'string' && /\.md$/i.test(path);
 }
 
-export function isBacklogFile(path) {
-    return typeof path === 'string' && /\.backlog$/i.test(path);
-}
-
 export function escapeCssId(value) {
     if (!value) return '';
     if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
