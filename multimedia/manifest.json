@@ -1,3 +1,6 @@
 {
-  "container": "node:20-alpine"
+    "container": "node:20-alpine",
+    "profiles": {
+        "default": {}
+    }
 }

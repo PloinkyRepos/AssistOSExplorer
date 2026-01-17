@@ -1,7 +1,5 @@
 {
     "container": "node:20-alpine",
-    "preinstall": "npm install",
-    "postinstall": "apk add --no-cache git openssh-client ca-certificates",
     "update": "",
     "cli": "/bin/bash",
     "agent": "node /code/filesystem-http-server.mjs",
@@ -12,8 +10,15 @@
         "explorerSkillsAgent",
         "soplangAgent global"
     ],
-    "env": [
-        "ASSISTOS_FS_ROOT"
-    ],
-    "repos": {"soplangBuilder": "https://github.com/PloinkyRepos/SOPLangBuilder.git"}
+    "repos": {
+        "soplangBuilder": "https://github.com/PloinkyRepos/SOPLangBuilder.git"
+    },
+    "profiles": {
+        "default": {
+            "env": [
+                "ASSISTOS_FS_ROOT"
+            ],
+            "preinstall": "apk add --no-cache git openssh-client ca-certificates && npm install"
+        }
+    }
 }
