@@ -2,7 +2,7 @@
     "container": "node:20-bullseye",
     "update": "",
     "cli": "/bin/bash",
-    "agent": "node /code/filesystem-http-server.mjs",
+    "agent": "npm install && node /code/filesystem-http-server.mjs",
     "about": "AssistOS Explorer agent",
     "enable": [
         "soplang",
