@@ -1,5 +1,5 @@
 {
-    "container": "node:20-alpine",
+    "container": "node:20-bullseye",
     "update": "",
     "cli": "/bin/bash",
     "agent": "node /code/filesystem-http-server.mjs",
@@ -18,7 +18,7 @@
             "env": [
                 "ASSISTOS_FS_ROOT"
             ],
-            "preinstall": "apk add --no-cache git openssh-client ca-certificates && npm install"
+            "preinstall": "npm install"
         }
     }
 }

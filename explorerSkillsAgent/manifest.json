@@ -1,5 +1,5 @@
 {
-    "container": "node:20-alpine",
+    "container": "node:20-bullseye",
     "profiles": {
         "default": {
             "env": [
@@ -9,8 +9,7 @@
                 "MISTRAL_API_KEY",
                 "DEEPSEEK_API_KEY",
                 "OPENROUTER_API_KEY"
-            ],
-            "preinstall": "apk add --no-cache git openssh-client ca-certificates"
+            ]
         }
     }
 }
