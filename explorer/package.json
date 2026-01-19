@@ -11,6 +11,7 @@
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/server-filesystem": "^2025.8.21",
-    "zod-to-json-schema": "3.24.6"
+    "zod-to-json-schema": "3.24.6",
+    "mcp-sdk": "github:PloinkyRepos/MCPSDK#main"
   }
 }
