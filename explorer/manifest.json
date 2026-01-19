@@ -1,5 +1,6 @@
 {
     "container": "node:20-bullseye",
+    "start": "sleep infinity",
     "update": "",
     "cli": "/bin/bash",
     "agent": "node /code/filesystem-http-server.mjs",
