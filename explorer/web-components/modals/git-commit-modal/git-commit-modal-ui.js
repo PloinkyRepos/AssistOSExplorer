@@ -424,7 +424,7 @@ export function createGitCommitUI(ctx) {
         presenter.setState({
             reposRoot: state.reposRoot || '',
             repos: Array.isArray(state.repoOverviews) ? state.repoOverviews : [],
-            loading: Boolean(state.repoOverviewsLoading),
+            loading: Boolean(state.repoOverviewsLoading && !state.suppressInlineLoading),
             repoTreeExpanded: state.repoTreeExpanded || {},
             repoChangesExpanded: state.repoChangesExpanded || {},
             treeExpandedByRepo: state.treeExpandedByRepo || {},

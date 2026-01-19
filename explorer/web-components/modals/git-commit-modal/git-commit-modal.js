@@ -6,6 +6,7 @@ import { createGitCommitService } from "./git-commit-modal-service.js";
 import { createGitCommitState } from "./git-commit-modal-state.js";
 import { createGitCommitUI } from "./git-commit-modal-ui.js";
 import { callExplorerTool, callAgentTool } from "../../../services/infrastructure/explorerApi.js";
+import { withGlobalLoader } from "../../../utils/globalLoader.js";
 import { joinPath } from "../../pages/file-exp/file-exp-utils.js";
 import { normalizeErrorMessage, parseJsonToolResult, normalizeSlashes, isReposRootPath, getRememberedGitIdentity } from "./git-commit-modal-utils.js";
 
@@ -133,10 +134,17 @@ export class GitCommitModal {
         this.bindEvents();
         this.syncStaticUI();
         this.dialog.ensureDialogResizable();
-        this.ensureCredentialsGate().then((gateActive) => {
+        this.ensureCredentialsGate().then(async (gateActive) => {
             if (!gateActive) {
                 // On open: force-load repos overview so the user immediately sees changes across all repos.
-                this.refreshAll({ force: true });
+                this.state.suppressInlineLoading = true;
+                this.syncStaticUI();
+                try {
+                    await withGlobalLoader(() => this.refreshAll({ force: true }));
+                } finally {
+                    this.state.suppressInlineLoading = false;
+                    this.syncStaticUI();
+                }
             }
         });
     }

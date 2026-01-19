@@ -194,7 +194,7 @@ export function createGitCommitRepo(ctx) {
         presenter.setState({
             reposRoot: state.reposRoot || '',
             repos: Array.isArray(overviews) ? overviews : [],
-            loading: Boolean(state.repoOverviewsLoading),
+            loading: Boolean(state.repoOverviewsLoading && !state.suppressInlineLoading),
             repoTreeExpanded: state.repoTreeExpanded || {},
             repoChangesExpanded: state.repoChangesExpanded || {},
             treeExpandedByRepo: state.treeExpandedByRepo || {},
