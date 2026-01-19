@@ -368,6 +368,7 @@ export function createGitCommitActions(ctx) {
             selected: selection,
             ours: '',
             theirs: '',
+            choice: '',
             status: 'Loading conflict versions...',
             loading: true,
             requestKey
@@ -398,6 +399,7 @@ export function createGitCommitActions(ctx) {
                 selected: selection,
                 ours: String(ours || ''),
                 theirs: String(theirs || ''),
+                choice: '',
                 status,
                 loading: false,
                 requestKey: null
@@ -425,6 +427,103 @@ export function createGitCommitActions(ctx) {
         return match ? match[1] : '';
     };
 
+    const toPaths = (items) => (Array.isArray(items) ? items : [])
+        .map((entry) => (entry && typeof entry === 'object') ? entry.path : entry)
+        .map((value) => String(value || '').trim())
+        .filter(Boolean);
+
+    const toChangeRows = (status, limit = 800) => {
+        const map = new Map();
+        const touch = (entry, flag) => {
+            if (!entry) return;
+            const pathValue = entry && typeof entry === 'object' ? entry.path : entry;
+            const key = String(pathValue || '').trim();
+            if (!key) return;
+            const existing = map.get(key) || {
+                path: key,
+                flags: { staged: false, unstaged: false, untracked: false, conflicted: false },
+                origPath: null,
+                x: ' ',
+                y: ' '
+            };
+            existing.flags[flag] = true;
+            if (entry?.origPath && !existing.origPath) existing.origPath = entry.origPath;
+            if (typeof entry?.x === 'string' && entry.x.length) {
+                if (existing.x === ' ' || existing.x === '?' || entry.x !== ' ') {
+                    existing.x = entry.x;
+                }
+            }
+            if (typeof entry?.y === 'string' && entry.y.length) {
+                if (existing.y === ' ' || existing.y === '?' || entry.y !== ' ') {
+                    existing.y = entry.y;
+                }
+            }
+            map.set(key, existing);
+        };
+
+        const slice = (list) => (Array.isArray(list) ? list : []).slice(0, limit);
+        for (const entry of slice(status.conflicted)) touch(entry, 'conflicted');
+        for (const entry of slice(status.untracked)) touch(entry, 'untracked');
+        for (const entry of slice(status.unstaged)) touch(entry, 'unstaged');
+        for (const entry of slice(status.staged)) touch(entry, 'staged');
+
+        const rows = Array.from(map.values());
+        for (const row of rows) {
+            const f = row.flags || {};
+            row.kind = f.conflicted ? 'conflicted'
+                : f.untracked ? 'untracked'
+                    : (f.staged && f.unstaged) ? 'staged+unstaged'
+                        : f.staged ? 'staged'
+                            : f.unstaged ? 'unstaged'
+                                : 'unknown';
+        }
+        rows.sort((a, b) => a.path.localeCompare(b.path));
+        return rows;
+    };
+
+    const updateRepoOverviewFromStatus = (repoPath, statusPayload) => {
+        const state = getState();
+        const status = statusPayload?.status || statusPayload || {};
+        const staged = Array.isArray(status.staged) ? status.staged : [];
+        const unstaged = Array.isArray(status.unstaged) ? status.unstaged : [];
+        const untracked = Array.isArray(status.untracked) ? status.untracked : [];
+        const conflicted = Array.isArray(status.conflicted) ? status.conflicted : [];
+        const ignored = Array.isArray(status.ignored) ? status.ignored : [];
+        const counts = {
+            staged: staged.length,
+            unstaged: unstaged.length,
+            untracked: untracked.length,
+            conflicted: conflicted.length
+        };
+        const changes = {
+            staged: toPaths(staged),
+            unstaged: toPaths(unstaged),
+            untracked: toPaths(untracked),
+            conflicted: toPaths(conflicted)
+        };
+        const dirty = counts.staged + counts.unstaged + counts.untracked + counts.conflicted > 0;
+        const repoList = Array.isArray(state.repoOverviews) ? state.repoOverviews : [];
+        state.repoOverviews = repoList.map((repo) => {
+            if (!repo || repo.path !== repoPath) return repo;
+            return {
+                ...repo,
+                ok: true,
+                dirty,
+                counts,
+                changes,
+                changesAll: toChangeRows({ staged, unstaged, untracked, conflicted }),
+                sample: {
+                    staged: changes.staged.slice(0, 8),
+                    unstaged: changes.unstaged.slice(0, 8),
+                    untracked: changes.untracked.slice(0, 8),
+                    conflicted: changes.conflicted.slice(0, 8)
+                },
+                ignored: toPaths(ignored).slice(0, 800),
+                ignoredCount: ignored.length
+            };
+        });
+    };
+
     const applyConflictChoice = async ({ repoPath, filePath, source } = {}) => {
         if (!repoPath || !filePath) return;
         const side = normalizeConflictSource(source);
@@ -436,52 +535,47 @@ export function createGitCommitActions(ctx) {
         state.conflictHelper = {
             ...(state.conflictHelper || {}),
             selected: { repoPath, filePath },
-            status: `Applying ${side === 'ours' ? 'local' : 'remote'} version...`,
+            choice: side,
+            status: `Selected ${side === 'ours' ? 'local' : 'remote'} version. Click Save to apply.`,
+            loading: false
+        };
+        syncStaticUI();
+    };
+
+    const saveConflictResolution = async ({ repoPath, filePath, choice } = {}) => {
+        if (!repoPath || !filePath) return;
+        const side = normalizeConflictSource(choice || getState().conflictHelper?.choice);
+        if (side !== 'ours' && side !== 'theirs') {
+            setStatusLine('Pick local or remote to continue.', true);
+            return;
+        }
+        const state = getState();
+        state.conflictHelper = {
+            ...(state.conflictHelper || {}),
+            selected: { repoPath, filePath },
+            status: 'Saving resolution...',
             loading: true
         };
         syncStaticUI();
 
         try {
             await service.gitCheckoutConflict({ path: repoPath, file: filePath, source: side });
-            setStatusLine(`Applied ${side === 'ours' ? 'local' : 'remote'} version.`, false);
-            await refreshAll({ force: true });
-            state.manualConflicts = [];
-            const stillConflicted = collectConflictedItems([repoPath]).some((item) => item.filePath === filePath);
-            if (stillConflicted) {
-                await selectConflictFile({ repoPath, filePath });
-            }
-            updateCommitButtons();
-        } catch (error) {
+            await service.gitStage(repoPath, [filePath]);
+            const statusPayload = parseJsonToolResult(await service.gitStatus(repoPath)) || {};
+            updateRepoOverviewFromStatus(repoPath, statusPayload.status || statusPayload);
             state.conflictHelper = {
                 ...(state.conflictHelper || {}),
+                choice: '',
                 loading: false,
-                status: normalizeErrorMessage(error)
+                status: 'Resolved and staged.'
             };
-            syncStaticUI();
-        }
-    };
-
-    const stageConflictFile = async ({ repoPath, filePath } = {}) => {
-        if (!repoPath || !filePath) return;
-        const state = getState();
-        state.conflictHelper = {
-            ...(state.conflictHelper || {}),
-            selected: { repoPath, filePath },
-            status: 'Staging resolved file...',
-            loading: true
-        };
-        syncStaticUI();
-
-        try {
-            await service.gitStage(repoPath, [filePath]);
-            setStatusLine('File staged.');
-            await refreshAll({ force: true });
             state.manualConflicts = [];
             const stillConflicted = collectConflictedItems([repoPath]).some((item) => item.filePath === filePath);
             if (stillConflicted) {
                 await selectConflictFile({ repoPath, filePath });
             }
             updateCommitButtons();
+            syncStaticUI();
         } catch (error) {
             state.conflictHelper = {
                 ...(state.conflictHelper || {}),
@@ -1089,6 +1183,24 @@ export function createGitCommitActions(ctx) {
             return;
         }
 
+        if (!state.credentialsValidated && !state.credentialsDirty && state.autocommitDirty && !validateOnly) {
+            setAutocommitSettings({ intervalMinutes: autocommitIntervalMinutes, repos: autocommitRepos });
+            try {
+                window.dispatchEvent(new CustomEvent('webskel-autocommit-settings-changed'));
+            } catch {
+                // ignore dispatch errors
+            }
+            state.autocommitDirty = false;
+            state.autocommitDraft = {
+                intervalMinutes: autocommitIntervalMinutes,
+                repos: autocommitRepos
+            };
+            syncStaticUI();
+            updateCommitButtons();
+            setStatusLine('Autocommit settings saved.');
+            return;
+        }
+
         if (!state.credentialsValidated) {
             let validationRepoPath = state.identityPrompt?.repoPath || state.authPrompt?.repoPath;
             if (!validationRepoPath) {
@@ -1172,6 +1284,12 @@ export function createGitCommitActions(ctx) {
         } catch {
             // ignore dispatch errors
         }
+        state.autocommitDirty = false;
+        state.autocommitDraft = {
+            intervalMinutes: autocommitIntervalMinutes,
+            repos: autocommitRepos
+        };
+        state.credentialsDirty = false;
 
         const pending = state.authPrompt?.pendingAction || state.identityPrompt?.pendingAction;
         const wasGate = state.credentialsGate;
@@ -1687,7 +1805,7 @@ export function createGitCommitActions(ctx) {
         setIgnoreAnchor,
         selectConflictFile,
         applyConflictChoice,
-        stageConflictFile,
+        saveConflictResolution,
         refreshConflicts,
         gitPushWithToken,
         gitPullWithToken,

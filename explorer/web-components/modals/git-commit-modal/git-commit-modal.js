@@ -77,8 +77,7 @@ export class GitCommitModal {
             openIgnoreForDiff: this.openIgnoreForDiff.bind(this),
             selectConflictFile: this.selectConflictFile.bind(this),
             applyConflictChoice: this.applyConflictChoice.bind(this),
-            stageConflictFile: this.stageConflictFile.bind(this),
-            refreshConflicts: this.refreshConflicts.bind(this),
+            saveConflictResolution: this.saveConflictResolution.bind(this),
             openConflictHelper: this.openConflictHelper.bind(this),
             closeModal: this.closeModal.bind(this),
             cancelConflictResolution: this.cancelConflictResolution.bind(this)
@@ -539,13 +538,9 @@ export class GitCommitModal {
         return this.actions.applyConflictChoice(detail);
     }
 
-    stageConflictFile(detailOrElement) {
+    saveConflictResolution(detailOrElement) {
         const detail = this.normalizeConflictDetail(detailOrElement);
-        return this.actions.stageConflictFile(detail);
-    }
-
-    refreshConflicts() {
-        return this.actions.refreshConflicts();
+        return this.actions.saveConflictResolution(detail);
     }
 
     cancelConflictResolution() {

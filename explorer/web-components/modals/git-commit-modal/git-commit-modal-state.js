@@ -30,6 +30,9 @@ export function createGitCommitState(props = {}) {
         credentialsOpen: false,
         credentialsGate: false,
         credentialsValidated: getCredentialsValidated(),
+        credentialsDirty: false,
+        autocommitDirty: false,
+        autocommitDraft: null,
         pullBlocked: null,
         autoStash: null,
         manualConflicts: [],
@@ -40,6 +43,7 @@ export function createGitCommitState(props = {}) {
             selected: null,
             ours: '',
             theirs: '',
+            choice: '',
             status: '',
             loading: false,
             requestKey: null

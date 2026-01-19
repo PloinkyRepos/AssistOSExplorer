@@ -1,7 +1,7 @@
 <div class="git-conflict-helper" id="gitConflictHelper">
     <div class="git-conflict-helper-header">
         <div class="git-conflict-helper-title">Resolve conflicts</div>
-        <div class="git-conflict-helper-hint">Compare local (ours) and remote (theirs). Merge in your editor, then stage and refresh.</div>
+        <div class="git-conflict-helper-hint">Compare local (ours) and remote (theirs). Pick one, then save to resolve.</div>
     </div>
     <div class="git-conflict-helper-body">
         <div class="git-conflict-helper-list" id="gitConflictHelperList"></div>
@@ -19,10 +19,9 @@
     <div class="git-conflict-helper-footer">
         <div class="git-conflict-helper-status" id="gitConflictHelperStatus"></div>
         <div class="git-conflict-helper-actions">
-            <button type="button" class="secondary" data-local-action="applyConflictChoice ours">Use local</button>
-            <button type="button" class="secondary" data-local-action="applyConflictChoice theirs">Use remote</button>
-            <button type="button" class="secondary" data-local-action="stageConflictFile">Stage resolved</button>
-            <button type="button" class="secondary" data-local-action="refreshConflicts">Refresh</button>
+            <button type="button" class="secondary git-conflict-choice" data-local-action="applyConflictChoice ours">Use local</button>
+            <button type="button" class="secondary git-conflict-choice" data-local-action="applyConflictChoice theirs">Use remote</button>
+            <button type="button" class="primary git-conflict-save" data-local-action="saveConflictResolution" disabled>Save</button>
             <button type="button" class="secondary" data-local-action="cancelConflictResolution">Cancel</button>
         </div>
     </div>

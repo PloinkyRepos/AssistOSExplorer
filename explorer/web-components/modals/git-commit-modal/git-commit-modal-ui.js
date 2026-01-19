@@ -1,4 +1,4 @@
-import { isReposRootPath, getAutocommitSettings, setCredentialsValidated } from "./git-commit-modal-utils.js";
+import { isReposRootPath, getAutocommitSettings, setCredentialsValidated, getRememberedGitPat } from "./git-commit-modal-utils.js";
 
 export function createGitCommitUI(ctx) {
     const {
@@ -30,8 +30,7 @@ export function createGitCommitUI(ctx) {
         openIgnoreForDiff,
         selectConflictFile,
         applyConflictChoice,
-        stageConflictFile,
-        refreshConflicts,
+        saveConflictResolution,
         openConflictHelper,
         closeModal,
         cancelConflictResolution
@@ -76,15 +75,25 @@ export function createGitCommitUI(ctx) {
                 const nextEmail = String(detail.email ?? prevEmail);
                 const nextToken = String(detail.token ?? prevToken);
                 const nextRemember = typeof detail.remember === 'boolean' ? detail.remember : prevRemember;
-                const credentialsChanged = (
-                    prevName !== nextName
-                    || prevEmail !== nextEmail
-                    || prevToken !== nextToken
-                    || prevRemember !== nextRemember
-                );
-                if (credentialsChanged) {
-                    state.credentialsValidated = false;
-                    setCredentialsValidated(false);
+                if (detail.autocommitDirty) {
+                    state.autocommitDirty = true;
+                    state.autocommitDraft = {
+                        intervalMinutes: detail.autocommitIntervalMinutes,
+                        repos: Array.isArray(detail.autocommitRepos) ? detail.autocommitRepos : null
+                    };
+                }
+                if (detail.credentialsDirty) {
+                    const credentialsChanged = (
+                        prevName !== nextName
+                        || prevEmail !== nextEmail
+                        || prevToken !== nextToken
+                        || prevRemember !== nextRemember
+                    );
+                    if (credentialsChanged) {
+                        state.credentialsValidated = false;
+                        setCredentialsValidated(false);
+                        state.credentialsDirty = true;
+                    }
                 }
                 state.identityPrompt = {
                     ...state.identityPrompt,
@@ -96,6 +105,7 @@ export function createGitCommitUI(ctx) {
                     token: nextToken,
                     remember: nextRemember
                 };
+                updateIdentityPrompt();
             });
             element.addEventListener('git-ignore-submit', (event) => {
                 saveGitIgnore(event?.detail || {});
@@ -158,11 +168,8 @@ export function createGitCommitUI(ctx) {
             element.addEventListener('git-conflict-apply', (event) => {
                 applyConflictChoice?.(event?.detail || {});
             });
-            element.addEventListener('git-conflict-stage', (event) => {
-                stageConflictFile?.(event?.detail || {});
-            });
-            element.addEventListener('git-conflict-refresh', () => {
-                refreshConflicts?.();
+            element.addEventListener('git-conflict-save', (event) => {
+                saveConflictResolution?.(event?.detail || {});
             });
             element.addEventListener('git-conflict-cancel', () => {
                 cancelConflictResolution?.();
@@ -310,34 +317,44 @@ export function createGitCommitUI(ctx) {
         const identityState = state.identityPrompt || {};
         const authState = state.authPrompt || {};
         const autocommit = getAutocommitSettings();
+        const rememberedToken = getRememberedGitPat();
+        const autocommitDraft = state.autocommitDraft || {};
         const repoOverviews = Array.isArray(state.repoOverviews) ? state.repoOverviews : [];
         const credentialsValidated = Boolean(state.credentialsValidated);
-        const autocommitRepos = credentialsValidated
-            ? repoOverviews
-                .map((repo) => ({
-                    path: repo?.path || '',
-                    name: repo?.name || repo?.relativePath || repo?.path || ''
-                }))
-                .filter((repo) => repo.path && repo.name)
-            : [];
+        const autocommitRepos = repoOverviews
+            .map((repo) => ({
+                path: repo?.path || '',
+                name: repo?.name || repo?.relativePath || repo?.path || ''
+            }))
+            .filter((repo) => repo.path && repo.name);
         const savedRepos = Array.isArray(autocommit.repos) ? autocommit.repos : null;
-        const autocommitSelected = credentialsValidated && savedRepos !== null ? savedRepos : null;
+        const draftRepos = Array.isArray(autocommitDraft.repos) ? autocommitDraft.repos : null;
+        const draftInterval = Number(autocommitDraft.intervalMinutes);
+        const useDraft = Boolean(state.autocommitDirty);
+        const intervalMinutes = useDraft && Number.isFinite(draftInterval)
+            ? draftInterval
+            : Number(autocommit.intervalMinutes || 15);
+        const autocommitSelected = savedRepos !== null ? savedRepos : null;
         const visible = Boolean(
             identityState.visible
             || authState.visible
             || state.credentialsGate
             || state.credentialsOpen
         );
+        const tokenValue = (authState.token || (authState.remember ? rememberedToken : '')) || '';
         const detail = {
             visible,
             name: identityState.name || '',
             email: identityState.email || '',
-            token: authState.token || '',
+            token: tokenValue,
             remember: Boolean(authState.remember),
             credentialsValidated,
-            autocommitIntervalMinutes: Number(autocommit.intervalMinutes || 15),
+            credentialsDirty: Boolean(state.credentialsDirty),
+            autocommitDirty: Boolean(state.autocommitDirty),
+            tokenStored: Boolean(rememberedToken),
+            autocommitIntervalMinutes: intervalMinutes,
             autocommitRepos,
-            autocommitSelected
+            autocommitSelected: useDraft ? draftRepos : autocommitSelected
         };
         if (options.focus) detail.focus = options.focus;
         const presenter = getCredentialsPromptPresenter();
@@ -518,6 +535,7 @@ export function createGitCommitUI(ctx) {
                 selected: null,
                 ours: '',
                 theirs: '',
+                choice: '',
                 status: '',
                 loading: false,
                 requestKey: null
@@ -528,6 +546,7 @@ export function createGitCommitUI(ctx) {
                 selected: null,
                 ours: '',
                 theirs: '',
+                choice: '',
                 status: '',
                 loading: false
             };
@@ -557,6 +576,7 @@ export function createGitCommitUI(ctx) {
                 selected,
                 ours: '',
                 theirs: '',
+                choice: '',
                 status: '',
                 loading: false,
                 requestKey: null
@@ -570,6 +590,7 @@ export function createGitCommitUI(ctx) {
             selected: helperState.selected || selected,
             ours: helperState.ours || '',
             theirs: helperState.theirs || '',
+            choice: helperState.choice || '',
             status: helperState.status || '',
             loading: Boolean(helperState.loading)
         };

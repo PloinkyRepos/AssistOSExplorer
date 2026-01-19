@@ -9,6 +9,9 @@ export class GitCredentialsPrompt {
             token: '',
             remember: true,
             credentialsValidated: false,
+            credentialsDirty: false,
+            autocommitDirty: false,
+            tokenStored: false,
             autocommitIntervalMinutes: 15,
             autocommitRepos: [],
             autocommitSelected: null
@@ -109,6 +112,7 @@ export class GitCredentialsPrompt {
         this.state.name = name;
         this.state.email = email;
         this.state.credentialsValidated = false;
+        this.state.credentialsDirty = true;
         this.updateValidationState();
         this.renderAutocommitRepos();
         this.scheduleValidation();
@@ -118,7 +122,8 @@ export class GitCredentialsPrompt {
             token: this.state.token,
             remember: this.state.remember,
             autocommitIntervalMinutes: this.state.autocommitIntervalMinutes,
-            autocommitRepos: this.state.autocommitSelected
+            autocommitRepos: this.state.autocommitSelected,
+            credentialsDirty: true
         });
     }
 
@@ -128,6 +133,7 @@ export class GitCredentialsPrompt {
         this.state.token = token;
         this.state.remember = remember;
         this.state.credentialsValidated = false;
+        this.state.credentialsDirty = true;
         this.updateValidationState();
         this.renderAutocommitRepos();
         this.scheduleValidation();
@@ -137,7 +143,8 @@ export class GitCredentialsPrompt {
             token,
             remember,
             autocommitIntervalMinutes: this.state.autocommitIntervalMinutes,
-            autocommitRepos: this.state.autocommitSelected
+            autocommitRepos: this.state.autocommitSelected,
+            credentialsDirty: true
         });
     }
 
@@ -145,6 +152,7 @@ export class GitCredentialsPrompt {
         const remember = Boolean(this.rememberInput?.checked);
         this.state.remember = remember;
         this.state.credentialsValidated = false;
+        this.state.credentialsDirty = true;
         this.updateValidationState();
         this.renderAutocommitRepos();
         this.scheduleValidation();
@@ -154,7 +162,8 @@ export class GitCredentialsPrompt {
             token: this.state.token,
             remember,
             autocommitIntervalMinutes: this.state.autocommitIntervalMinutes,
-            autocommitRepos: this.state.autocommitSelected
+            autocommitRepos: this.state.autocommitSelected,
+            credentialsDirty: true
         });
     }
 
@@ -162,6 +171,7 @@ export class GitCredentialsPrompt {
         const intervalRaw = this.autocommitIntervalInput?.value;
         const autocommitIntervalMinutes = Math.max(1, Math.floor(Number(intervalRaw || 15)));
         this.state.autocommitIntervalMinutes = autocommitIntervalMinutes;
+        this.state.autocommitDirty = true;
         this.updateValidationState();
         this.emit('git-credentials-change', {
             name: this.state.name,
@@ -169,7 +179,8 @@ export class GitCredentialsPrompt {
             token: this.state.token,
             remember: this.state.remember,
             autocommitIntervalMinutes,
-            autocommitRepos: this.state.autocommitSelected
+            autocommitRepos: this.state.autocommitSelected,
+            autocommitDirty: true
         });
     }
 
@@ -178,6 +189,7 @@ export class GitCredentialsPrompt {
         if (!target || target.type !== 'checkbox' || !target.dataset?.repoPath) return;
         const autocommitRepos = this.getSelectedAutocommitRepos();
         this.state.autocommitSelected = autocommitRepos;
+        this.state.autocommitDirty = true;
         this.updateValidationState();
         this.emit('git-credentials-change', {
             name: this.state.name,
@@ -185,7 +197,8 @@ export class GitCredentialsPrompt {
             token: this.state.token,
             remember: this.state.remember,
             autocommitIntervalMinutes: this.state.autocommitIntervalMinutes,
-            autocommitRepos
+            autocommitRepos,
+            autocommitDirty: true
         });
     }
 
@@ -239,6 +252,15 @@ export class GitCredentialsPrompt {
         }
         if (Object.prototype.hasOwnProperty.call(next, 'credentialsValidated')) {
             this.state.credentialsValidated = Boolean(next.credentialsValidated);
+        }
+        if (Object.prototype.hasOwnProperty.call(next, 'credentialsDirty')) {
+            this.state.credentialsDirty = Boolean(next.credentialsDirty);
+        }
+        if (Object.prototype.hasOwnProperty.call(next, 'autocommitDirty')) {
+            this.state.autocommitDirty = Boolean(next.autocommitDirty);
+        }
+        if (Object.prototype.hasOwnProperty.call(next, 'tokenStored')) {
+            this.state.tokenStored = Boolean(next.tokenStored);
         }
         if (Object.prototype.hasOwnProperty.call(next, 'autocommitIntervalMinutes')) {
             const parsed = Number(next.autocommitIntervalMinutes);
@@ -327,7 +349,9 @@ export class GitCredentialsPrompt {
         const email = String(this.state.email || '').trim();
         if (!name || !email) return false;
         if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return false;
-        if (this.state.remember && !String(this.state.token || '').trim()) return false;
+        if (this.state.remember && !String(this.state.token || '').trim() && !this.state.tokenStored) {
+            return false;
+        }
         return true;
     }
 
@@ -340,7 +364,7 @@ export class GitCredentialsPrompt {
         if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
             return 'Enter a valid email address.';
         }
-        if (this.state.remember && !String(this.state.token || '').trim()) {
+        if (this.state.remember && !String(this.state.token || '').trim() && !this.state.tokenStored) {
             return 'Enter a token or disable “Remember token”.';
         }
         return '';
@@ -348,10 +372,14 @@ export class GitCredentialsPrompt {
 
     updateValidationState() {
         const valid = this.isCredentialsValid();
-        const canSave = valid && this.state.credentialsValidated;
+        const canSave = valid && (this.state.credentialsValidated || (this.state.autocommitDirty && !this.state.credentialsDirty));
         if (this.saveButton) {
             this.saveButton.disabled = !canSave;
-            const message = valid ? (this.state.credentialsValidated ? '' : 'Validate credentials to load repositories.') : this.getValidationMessage();
+            const message = valid
+                ? (this.state.credentialsValidated || (this.state.autocommitDirty && !this.state.credentialsDirty)
+                    ? ''
+                    : 'Validate credentials to load repositories.')
+                : this.getValidationMessage();
             if (message) {
                 this.saveButton.title = message;
             } else {
@@ -363,11 +391,11 @@ export class GitCredentialsPrompt {
     renderAutocommitRepos() {
         const container = this.autocommitReposContainer;
         if (!container) return;
-        if (!this.state.credentialsValidated) {
+        const repos = Array.isArray(this.state.autocommitRepos) ? this.state.autocommitRepos : [];
+        if (!this.state.credentialsValidated && repos.length === 0) {
             container.textContent = 'Validate credentials to load repositories.';
             return;
         }
-        const repos = Array.isArray(this.state.autocommitRepos) ? this.state.autocommitRepos : [];
         container.innerHTML = '';
         if (!repos.length) {
             container.textContent = 'No repositories loaded.';

@@ -8,6 +8,7 @@ export class GitConflictHelper {
             selected: null,
             ours: '',
             theirs: '',
+            choice: '',
             status: '',
             loading: false
         };
@@ -23,6 +24,8 @@ export class GitConflictHelper {
         this.oursNode = this.element.querySelector('#gitConflictHelperOurs');
         this.theirsNode = this.element.querySelector('#gitConflictHelperTheirs');
         this.statusNode = this.element.querySelector('#gitConflictHelperStatus');
+        this.choiceButtons = Array.from(this.element.querySelectorAll('.git-conflict-choice'));
+        this.saveButton = this.element.querySelector('.git-conflict-save');
 
         if (!this.element.dataset.boundConflictUpdate) {
             this.element.addEventListener('git-conflict-update', this.onUpdate);
@@ -51,17 +54,14 @@ export class GitConflictHelper {
         });
     }
 
-    stageConflictFile() {
+    saveConflictResolution() {
         const selected = this.state.selected || {};
         if (!selected.filePath || !selected.repoPath) return;
-        this.emit('git-conflict-stage', {
+        this.emit('git-conflict-save', {
             repoPath: selected.repoPath,
-            filePath: selected.filePath
+            filePath: selected.filePath,
+            choice: this.state.choice || ''
         });
-    }
-
-    refreshConflicts() {
-        this.emit('git-conflict-refresh');
     }
 
     cancelConflictResolution() {
@@ -92,6 +92,9 @@ export class GitConflictHelper {
         }
         if (Object.prototype.hasOwnProperty.call(next, 'theirs')) {
             this.state.theirs = String(next.theirs || '');
+        }
+        if (Object.prototype.hasOwnProperty.call(next, 'choice')) {
+            this.state.choice = String(next.choice || '');
         }
         if (Object.prototype.hasOwnProperty.call(next, 'status')) {
             this.state.status = String(next.status || '');
@@ -125,6 +128,21 @@ export class GitConflictHelper {
         }
         if (this.statusNode) {
             this.statusNode.textContent = this.state.status || '';
+        }
+        if (this.choiceButtons?.length) {
+            const disableChoices = Boolean(this.state.loading);
+            for (const button of this.choiceButtons) {
+                const action = button.getAttribute('data-local-action') || '';
+                const selected = action.includes('ours') ? 'ours' : action.includes('theirs') ? 'theirs' : '';
+                button.classList.toggle('is-selected', Boolean(selected && selected === this.state.choice));
+                button.disabled = disableChoices;
+                button.classList.toggle('is-disabled', disableChoices);
+            }
+        }
+        if (this.saveButton) {
+            const canSave = Boolean(this.state.choice) && !this.state.loading;
+            this.saveButton.disabled = !canSave;
+            this.saveButton.classList.toggle('is-ready', canSave);
         }
     }
 

@@ -119,6 +119,50 @@ git-conflict-helper.is-visible {
     gap: 8px;
 }
 
+.git-conflict-choice.is-selected {
+    border-color: rgba(22, 163, 74, 0.6);
+    background: rgba(22, 163, 74, 0.12);
+    color: #14532d !important;
+    position: relative;
+}
+
+.git-conflict-choice.is-selected::after {
+    content: "✓";
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    margin-left: 8px;
+    border-radius: 999px;
+    background: rgba(22, 163, 74, 0.15);
+    color: #15803d;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.git-conflict-choice.is-disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.git-conflict-save.primary {
+    border-color: rgba(22, 163, 74, 0.6);
+    background: rgba(22, 163, 74, 0.2);
+    color: #14532d !important;
+    font-weight: 700;
+}
+
+.git-conflict-save.is-ready {
+    border-color: rgba(22, 163, 74, 0.5);
+    background: rgba(22, 163, 74, 0.18);
+    color: #14532d !important;
+}
+
+.git-conflict-save.primary:disabled {
+    opacity: 0.6;
+}
+
 @media (max-width: 900px) {
     .git-conflict-helper-body {
         grid-template-columns: 1fr;

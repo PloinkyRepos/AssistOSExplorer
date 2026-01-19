@@ -129,13 +129,7 @@ export const copyRecursive = async (sourcePath, destinationPath, overwrite = fal
       }
       await fs.rm(destinationPath, { recursive: true, force: true });
     }
-    await fs.mkdir(destinationPath, { recursive: true });
-    const entries = await fs.readdir(sourcePath);
-    for (const entry of entries) {
-      const sourceChild = path.join(sourcePath, entry);
-      const destinationChild = path.join(destinationPath, entry);
-      await copyRecursive(sourceChild, destinationChild, true);
-    }
+    await fs.cp(sourcePath, destinationPath, { recursive: true, force: overwrite, errorOnExist: !overwrite });
     return;
   }
 
