@@ -12,7 +12,7 @@ import {
     getGitConflictFlag,
     setGitConflictFlag
 } from "../../modals/git-commit-modal/git-commit-modal-utils.js";
-import { callExplorerTool } from "../../../services/infrastructure/explorerApi.js";
+import { callAgentTool } from "../../../services/infrastructure/explorerApi.js";
 import { getReposRoot } from "../../../utils/reposRoot.js";
 
 export function attachGitController(fileExp) {
@@ -89,8 +89,8 @@ export function attachGitController(fileExp) {
         }, Math.max(1, intervalMinutes) * 60 * 1000);
     };
 
-    const callGitTool = async (toolName, args) => {
-        const result = await callExplorerTool(toolName, args, { raw: true });
+    const callGitTool = async (toolName, args, options = {}) => {
+        const result = await callAgentTool('gitAgent', toolName, args, { raw: true, ...options });
         const parsed = parseJsonToolResult(result);
         if (parsed !== null && parsed !== undefined) {
             return parsed;
@@ -158,12 +158,12 @@ export function attachGitController(fileExp) {
         const payload = { path: repoPath, ffOnly: true, rebase: false };
         const cleanToken = String(token || '').trim();
         if (cleanToken) payload.token = cleanToken;
-        await callExplorerTool('git_pull', payload);
+        await callAgentTool('gitAgent', 'git_pull', payload);
     };
 
     const restoreStash = async (repoPath, stashRef) => {
         try {
-            const text = await callExplorerTool('git_stash_pop', {
+            const text = await callAgentTool('gitAgent', 'git_stash_pop', {
                 path: repoPath,
                 ref: stashRef || null,
                 reinstateIndex: true
@@ -187,7 +187,7 @@ export function attachGitController(fileExp) {
     const pullWithAutoStash = async (repoPath, token) => {
         let stashPayload = null;
         try {
-            const text = await callExplorerTool('git_stash', {
+            const text = await callAgentTool('gitAgent', 'git_stash', {
                 path: repoPath,
                 includeUntracked: true,
                 message: 'webskel:auto-pull'
@@ -282,7 +282,7 @@ export function attachGitController(fileExp) {
                 }
                 const stageList = buildStageList(status);
                 if (stageList.length) {
-                    await callExplorerTool('git_stage', { path: repoPath, files: stageList });
+                    await callAgentTool('gitAgent', 'git_stage', { path: repoPath, files: stageList });
                 }
                 const after = await getRepoStatus(repoPath);
                 const staged = extractChangePaths(after?.staged);
@@ -296,7 +296,7 @@ export function attachGitController(fileExp) {
                     return;
                 }
                 try {
-                    await callExplorerTool('git_commit', {
+                    await callAgentTool('gitAgent', 'git_commit', {
                         path: repoPath,
                         message: AUTOCOMMIT_MESSAGE,
                         userName: userName || null,
@@ -318,7 +318,7 @@ export function attachGitController(fileExp) {
                 }
 
                 try {
-                    await callExplorerTool('git_push', {
+                    await callAgentTool('gitAgent', 'git_push', {
                         path: repoPath,
                         token: String(token || '').trim() || undefined
                     });

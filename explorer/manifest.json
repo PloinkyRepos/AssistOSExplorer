@@ -8,11 +8,14 @@
     "enable": [
         "soplang",
         "multimedia",
-        "explorerSkillsAgent",
+        "gitAgent global",
         "soplangAgent global"
     ],
     "env": [
         "ASSISTOS_FS_ROOT"
     ],
-    "repos": {"soplangBuilder": "https://github.com/PloinkyRepos/SOPLangBuilder.git"}
+    "repos": {
+        "soplangBuilder": "https://github.com/PloinkyRepos/SOPLangBuilder.git",
+        "gitMCP": "https://github.com/PloinkyRepos/gitAgent.git"
+    }
 }
