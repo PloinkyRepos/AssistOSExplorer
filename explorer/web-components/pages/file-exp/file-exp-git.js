@@ -382,10 +382,10 @@ export function attachGitController(fileExp) {
     };
 
     async function openGitModal() {
-        await syncConflictFlagFromRepos();
-        ensureAutocommitTimer();
         const repoPath = reposRoot;
         return fileExp.withLoader(async () => {
+            await syncConflictFlagFromRepos();
+            ensureAutocommitTimer();
             const modal = await assistOS.UI.createReactiveModal('git-commit-modal', { repoPath });
             if (getConflictFlag()) {
                 try {
