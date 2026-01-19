@@ -1,7 +1,6 @@
 {
     "container": "node:20-alpine",
-    "preinstall": "npm install",
-    "postinstall": "apk add --no-cache git openssh-client ca-certificates",
+    "preinstall": "apk add --no-cache git openssh-client ca-certificates && npm install",
     "update": "",
     "cli": "/bin/bash",
     "agent": "node /code/filesystem-http-server.mjs",
