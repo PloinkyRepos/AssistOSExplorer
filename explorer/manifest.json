@@ -18,8 +18,7 @@
         "default": {
             "env": [
                 "ASSISTOS_FS_ROOT"
-            ],
-            "preinstall": "npm install"
+            ]
         }
     }
 }
