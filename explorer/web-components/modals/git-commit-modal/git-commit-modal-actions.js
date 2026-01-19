@@ -968,7 +968,10 @@ export function createGitCommitActions(ctx) {
                 }
 
                 const payloadText = await service.generateCommitMessage(diffs);
-                const payload = parseJsonToolResult(payloadText) || {};
+                const payload = parseJsonToolResult(payloadText);
+                if (!payload || typeof payload !== 'object') {
+                    throw new Error('Failed to generate commit message.');
+                }
                 if (payload.ok === false) {
                     throw new Error(payload.error || 'Failed to generate commit message.');
                 }
