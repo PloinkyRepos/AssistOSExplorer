@@ -57,7 +57,8 @@ export function attachGitController(fileExp) {
     const autocommit = {
         timerId: null,
         running: false,
-        scheduledIntervalMinutes: null
+        scheduledIntervalMinutes: null,
+        conflictRefreshPending: false
     };
 
     const clearAutocommitTimer = () => {
@@ -70,12 +71,26 @@ export function attachGitController(fileExp) {
     };
 
     const ensureAutocommitTimer = () => {
-        const { intervalMinutes, repos } = getAutocommitSettings();
+        const { enabled, intervalMinutes, repos } = getAutocommitSettings();
+        if (enabled === false) {
+            clearAutocommitTimer();
+            return;
+        }
         if (Array.isArray(repos) && repos.length === 0) {
             clearAutocommitTimer();
             return;
         }
         if (getConflictFlag()) {
+            clearAutocommitTimer();
+            if (!autocommit.conflictRefreshPending) {
+                autocommit.conflictRefreshPending = true;
+                syncConflictFlagFromRepos()
+                    .catch(() => {})
+                    .finally(() => {
+                        autocommit.conflictRefreshPending = false;
+                        ensureAutocommitTimer();
+                    });
+            }
             clearAutocommitTimer();
             return;
         }
