@@ -548,6 +548,30 @@ th {
     color: var(--text);
 }
 
+.preview-header-extras {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    flex: 1 1 auto;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.preview-header-extras .backlog-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.preview-header-extras .backlog-filters label {
+    min-width: 140px;
+}
+
+.preview-header-extras .backlog-filters input,
+.preview-header-extras .backlog-filters select {
+    min-width: 120px;
+}
+
 .preview-header button {
     background: var(--accent);
     color: #fff;

@@ -222,6 +222,11 @@
       "presenterClassName": "GitConflictBanner"
     },
     {
+      "name": "backlog-create-modal",
+      "type": "modals",
+      "presenterClassName": "BacklogCreateModal"
+    },
+    {
       "name": "git-status-bar",
       "type": "components",
       "presenterClassName": "GitStatusBar"
@@ -245,6 +250,16 @@
       "name": "git-commit-body",
       "type": "components",
       "presenterClassName": "GitCommitBody"
+    },
+    {
+      "name": "backlog-panel",
+      "type": "components",
+      "presenterClassName": "BacklogPanel"
+    },
+    {
+      "name": "backlog-task-row",
+      "type": "components",
+      "presenterClassName": "BacklogTaskRow"
     }
   ],
   "services": []

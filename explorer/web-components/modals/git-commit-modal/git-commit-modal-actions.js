@@ -162,7 +162,9 @@ export function createGitCommitActions(ctx) {
 
     const restoreStash = async (repoPath, stashRef) => {
         try {
-            const text = await service.gitStashPop({ path: repoPath, ref: stashRef, reinstateIndex: true });
+            const request = { path: repoPath, reinstateIndex: true };
+            if (stashRef) request.ref = stashRef;
+            const text = await service.gitStashPop(request);
             const payload = parseJsonToolResult(text) || {};
             if (payload.noStash) {
                 setStatusLine('No stash entries found to restore.', true);

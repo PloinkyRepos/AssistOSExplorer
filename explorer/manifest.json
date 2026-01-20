@@ -9,13 +9,15 @@
         "soplang",
         "multimedia",
         "gitAgent global",
-        "soplangAgent global"
+        "soplangAgent global",
+        "taskAgent"
     ],
     "env": [
         "ASSISTOS_FS_ROOT"
     ],
     "repos": {
         "soplangBuilder": "https://github.com/PloinkyRepos/SOPLangBuilder.git",
-        "gitMCP": "https://github.com/PloinkyRepos/gitAgent.git"
+        "gitMCP": "https://github.com/PloinkyRepos/gitMCP.git",
+        "tasksMCP": "https://github.com/PloinkyRepos/tasksMCP"
     }
 }

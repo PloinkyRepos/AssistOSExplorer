@@ -18,6 +18,7 @@ import { buildEntriesView } from "./file-exp-view-model.js";
 import { attachSearchController } from "./file-exp-search.js";
 import { attachFsActions } from "./file-exp-fs-actions.js";
 import { attachGitController } from "./file-exp-git.js";
+import { attachTasksController } from "./file-exp-tasks.js";
 import { withGlobalLoader } from "../../../utils/globalLoader.js";
 import { createFileExpCaches } from "./file-exp-caches.js";
 import { createDirectoryFilterController } from "./file-exp-directory-filter.js";
@@ -57,6 +58,7 @@ export class FileExp {
         attachSearchController(this);
         attachFsActions(this);
         attachGitController(this);
+        attachTasksController(this);
 
         this.boundLoadStateFromURL = this.loadStateFromURL.bind(this);
         window.addEventListener('popstate', this.boundLoadStateFromURL);
@@ -169,14 +171,24 @@ export class FileExp {
 
         const editorActions = this.element.querySelector("#editorActions");
         const editingActions = this.element.querySelector("#editingActions");
+        const previewTitle = this.element.querySelector('.preview-title');
         const isTruncatedPreview = Boolean(this.state.fileLoadInfo?.truncated);
+        const selectedPath = this.state.selectedPath || '';
+        const isBacklog = selectedPath === '.backlog' || selectedPath.endsWith('/.backlog');
+        const headerExtras = this.element.querySelector('#previewHeaderExtras');
+        if (headerExtras && !isBacklog && headerExtras.children.length) {
+            headerExtras.innerHTML = '';
+        }
+        if (previewTitle) {
+            previewTitle.classList.toggle('hidden', isBacklog);
+        }
 
         if (this.state.isEditing) {
             editorActions.classList.add('hidden');
             editingActions.classList.remove('hidden');
         } else {
             editingActions.classList.add('hidden');
-            if (this.state.selectedPath && this.state.previewMode !== 'media' && !isTruncatedPreview) {
+            if (this.state.selectedPath && this.state.previewMode !== 'media' && !isTruncatedPreview && !isBacklog) {
                 editorActions.classList.remove('hidden');
             } else {
                 editorActions.classList.add('hidden');
@@ -191,6 +203,10 @@ export class FileExp {
             } else {
                 previewContent.innerHTML = `<file-editor data-presenter="file-editor" data-path="${this.state.selectedPath}"></file-editor>`;
             }
+        } else if (isBacklog) {
+            this.detachPreviewAnchorHandler();
+            const pathAttr = this.state.selectedPath || '';
+            previewContent.innerHTML = `<backlog-panel data-presenter="backlog-panel" data-path="${pathAttr}"></backlog-panel>`;
         } else if (this.state.previewMode === 'media') {
             this.detachPreviewAnchorHandler();
             const content = this.state.previewContent || '<div class="preview-placeholder">Unable to preview file.</div>';
@@ -713,6 +729,11 @@ export class FileExp {
 
     async editFile() {
         if (!this.state.selectedPath) return;
+        const selectedPath = this.state.selectedPath || '';
+        if (selectedPath === '.backlog' || selectedPath.endsWith('/.backlog')) {
+            this.showStatus('Backlog is managed by the Backlog panel.', true);
+            return;
+        }
         if (this.state.fileLoadInfo?.truncated) {
             this.showStatus('Editing is disabled for large files. Please open it locally to modify.', true);
             return;

@@ -178,11 +178,9 @@ export function attachGitController(fileExp) {
 
     const restoreStash = async (repoPath, stashRef) => {
         try {
-            const text = await callAgentTool('gitAgent', 'git_stash_pop', {
-                path: repoPath,
-                ref: stashRef || null,
-                reinstateIndex: true
-            }, { raw: true });
+            const request = { path: repoPath, reinstateIndex: true };
+            if (stashRef) request.ref = stashRef;
+            const text = await callAgentTool('gitAgent', 'git_stash_pop', request, { raw: true });
             const payload = parseJsonToolResult(text) || {};
             if (payload.noStash) {
                 return { ok: false, conflicts: false, message: 'No stash entries found to restore.' };
