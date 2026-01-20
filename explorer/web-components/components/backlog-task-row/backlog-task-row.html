@@ -1,0 +1,51 @@
+<div class="backlog-task-row">
+    <div class="backlog-task-header">
+        <span class="backlog-task-type-icon" data-field="typeIcon" aria-hidden="true"></span>
+        <div class="backlog-task-assignee">
+            <span class="label">Assignee:</span>
+            <span data-field="assigneeLabel">Unassigned</span>
+        </div>
+        <button type="button" class="secondary backlog-task-toggle" data-local-action="toggleMore">Show more</button>
+    </div>
+    <div class="backlog-task-main">
+        <textarea class="backlog-task-desc" data-field="description" rows="2" spellcheck="false"></textarea>
+    </div>
+    <div class="backlog-task-details" data-field="details">
+        <div class="backlog-task-grid">
+            <label>
+                Type
+                <select data-field="type"></select>
+            </label>
+            <label>
+                Status
+                <select data-field="status"></select>
+            </label>
+            <label>
+                Priority
+                <select data-field="priority"></select>
+            </label>
+            <label>
+                Assignee
+                <input data-field="assignee" type="text" autocomplete="off" spellcheck="false"/>
+            </label>
+            <label>
+                Tags
+                <input data-field="tags" type="text" autocomplete="off" spellcheck="false"/>
+            </label>
+            <label>
+                Repo
+                <select data-field="repo"></select>
+            </label>
+        </div>
+        <label class="backlog-task-observations">
+            Observations
+            <textarea data-field="observations" rows="3" spellcheck="false"></textarea>
+        </label>
+        <div class="backlog-task-meta" data-field="meta"></div>
+    </div>
+    <div class="backlog-task-actions">
+        <button type="button" class="secondary backlog-task-toggle" data-local-action="toggleMore">Show more</button>
+        <button type="button" class="secondary" data-local-action="deleteTask">Delete</button>
+        <button type="button" class="primary" data-local-action="saveTask" disabled>Save</button>
+    </div>
+</div>
