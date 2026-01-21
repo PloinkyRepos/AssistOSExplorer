@@ -113,6 +113,10 @@ main {
     display: inline-block;
 }
 
+#gitButton.has-git-error .git-conflict-indicator {
+    display: inline-block;
+}
+
 #gitButton.has-push-warning .git-push-warning-indicator {
     display: inline-block;
 }

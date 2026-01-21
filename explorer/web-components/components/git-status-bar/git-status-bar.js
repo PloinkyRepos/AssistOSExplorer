@@ -4,8 +4,7 @@ export class GitStatusBar {
         this.invalidate = invalidate;
         this.state = {
             text: '',
-            isError: false,
-            showResolve: false
+            isError: false
         };
         this.onUpdate = this.onUpdate.bind(this);
         this.invalidate();
@@ -16,17 +15,11 @@ export class GitStatusBar {
     afterRender() {
         this.root = this.element.querySelector('.git-status') || this.element;
         this.textNode = this.element.querySelector('.git-status-text');
-        this.resolveButton = this.element.querySelector('.git-status-action');
-
         if (!this.element.dataset.boundStatusUpdate) {
             this.element.addEventListener('git-status-update', this.onUpdate);
             this.element.dataset.boundStatusUpdate = 'true';
         }
         this.applyState(this.state);
-    }
-
-    resolveConflicts() {
-        this.emit('git-status-resolve');
     }
 
     setState(next = {}) {
@@ -45,10 +38,6 @@ export class GitStatusBar {
         if (Object.prototype.hasOwnProperty.call(next, 'isError')) {
             this.state.isError = Boolean(next.isError);
         }
-        if (Object.prototype.hasOwnProperty.call(next, 'showResolve')) {
-            this.state.showResolve = Boolean(next.showResolve);
-        }
-
         if (this.textNode) {
             this.textNode.textContent = this.state.text;
         } else if (this.root) {
@@ -56,9 +45,6 @@ export class GitStatusBar {
         }
         if (this.root) {
             this.root.classList.toggle('error', this.state.isError);
-        }
-        if (this.resolveButton) {
-            this.resolveButton.style.display = this.state.showResolve ? 'inline-flex' : 'none';
         }
     }
 

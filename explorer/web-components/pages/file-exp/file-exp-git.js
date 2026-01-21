@@ -10,7 +10,9 @@ import {
     isGitPullBlockedError,
     getAutocommitSettings,
     getGitConflictFlag,
-    setGitConflictFlag
+    setGitConflictFlag,
+    getGitErrorFlag,
+    setGitErrorFlag
 } from "../../modals/git-commit-modal/git-commit-modal-utils.js";
 import { callAgentTool } from "../../../services/infrastructure/explorerApi.js";
 import { getReposRoot } from "../../../utils/reposRoot.js";
@@ -21,6 +23,8 @@ export function attachGitController(fileExp) {
 
     const getConflictFlag = () => getGitConflictFlag();
     const setConflictFlag = (value) => setGitConflictFlag(Boolean(value));
+    const getErrorFlag = () => getGitErrorFlag();
+    const setErrorFlag = (value) => setGitErrorFlag(Boolean(value));
     let pushWarningMessage = '';
 
     const updateGitButtonIndicator = () => {
@@ -30,6 +34,7 @@ export function attachGitController(fileExp) {
             button.dataset.defaultTitle = button.title || 'Commit and push with Git';
         }
         button.classList.toggle('has-conflicts', getConflictFlag());
+        button.classList.toggle('has-git-error', getErrorFlag());
         button.classList.toggle('has-push-warning', Boolean(pushWarningMessage));
         button.title = pushWarningMessage || button.dataset.defaultTitle;
     };
@@ -160,6 +165,8 @@ export function attachGitController(fileExp) {
 
     const showAutocommitStopped = (message) => {
         clearAutocommitTimer();
+        setErrorFlag(true);
+        updateGitButtonIndicator();
         fileExp.showStatus(`Autocommit stopped: ${message}`, true);
     };
 
@@ -350,6 +357,8 @@ export function attachGitController(fileExp) {
             }
 
             if (committedAny) {
+                setErrorFlag(false);
+                updateGitButtonIndicator();
                 await refreshOpenGitModals();
             }
         } catch {
@@ -384,16 +393,7 @@ export function attachGitController(fileExp) {
         return fileExp.withLoader(async () => {
             await syncConflictFlagFromRepos();
             ensureAutocommitTimer();
-            const modal = await assistOS.UI.createReactiveModal('git-commit-modal', { repoPath });
-            if (getConflictFlag()) {
-                try {
-                    const el = modal?.element || modal;
-                    const presenter = el?.webSkelPresenter || el?.presenter || el;
-                    presenter?.openConflictHelper?.();
-                } catch {
-                    // ignore
-                }
-            }
+            await assistOS.UI.createReactiveModal('git-commit-modal', { repoPath });
         });
     }
 
@@ -408,6 +408,9 @@ export function attachGitController(fileExp) {
         if (event.key === 'webskel.git.conflicts') {
             updateGitButtonIndicator();
             ensureAutocommitTimer();
+        }
+        if (event.key === 'webskel.git.errors') {
+            updateGitButtonIndicator();
         }
     });
     window.addEventListener('webskel-autocommit-settings-changed', () => {

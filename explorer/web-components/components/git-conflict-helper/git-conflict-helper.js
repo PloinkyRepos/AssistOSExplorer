@@ -10,7 +10,8 @@ export class GitConflictHelper {
             theirs: '',
             choice: '',
             status: '',
-            loading: false
+            loading: false,
+            source: ''
         };
         this.onUpdate = this.onUpdate.bind(this);
         this.invalidate();
@@ -23,6 +24,8 @@ export class GitConflictHelper {
         this.list = this.element.querySelector('#gitConflictHelperList');
         this.oursNode = this.element.querySelector('#gitConflictHelperOurs');
         this.theirsNode = this.element.querySelector('#gitConflictHelperTheirs');
+        this.oursTitle = this.element.querySelector('#gitConflictHelperOursTitle');
+        this.theirsTitle = this.element.querySelector('#gitConflictHelperTheirsTitle');
         this.statusNode = this.element.querySelector('#gitConflictHelperStatus');
         this.choiceButtons = Array.from(this.element.querySelectorAll('.git-conflict-choice'));
         this.saveButton = this.element.querySelector('.git-conflict-save');
@@ -102,6 +105,9 @@ export class GitConflictHelper {
         if (Object.prototype.hasOwnProperty.call(next, 'loading')) {
             this.state.loading = Boolean(next.loading);
         }
+        if (Object.prototype.hasOwnProperty.call(next, 'source')) {
+            this.state.source = String(next.source || '');
+        }
 
         this.element.classList.toggle('is-visible', this.state.visible);
         if (this.list) {
@@ -125,6 +131,16 @@ export class GitConflictHelper {
         }
         if (this.theirsNode) {
             this.theirsNode.textContent = this.state.loading ? 'Loading remote version...' : (this.state.theirs || '');
+        }
+        if (this.oursTitle || this.theirsTitle) {
+            const source = (this.state.source || '').toLowerCase();
+            if (source === 'stash') {
+                if (this.oursTitle) this.oursTitle.textContent = 'Working tree (ours)';
+                if (this.theirsTitle) this.theirsTitle.textContent = 'Stash (theirs)';
+            } else {
+                if (this.oursTitle) this.oursTitle.textContent = 'Local (ours)';
+                if (this.theirsTitle) this.theirsTitle.textContent = 'Remote (theirs)';
+            }
         }
         if (this.statusNode) {
             this.statusNode.textContent = this.state.status || '';

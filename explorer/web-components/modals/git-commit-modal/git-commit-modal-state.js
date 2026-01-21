@@ -26,7 +26,7 @@ export function createGitCommitState(props = {}) {
         commitMessage: '',
         commitMode: 'commit', // 'commit' | 'commitPush'
         actionsMenuOpen: false,
-        pullMode: 'ffOnly', // 'ffOnly' | 'rebase' | 'merge'
+        pullMode: 'merge', // 'ffOnly' | 'rebase' | 'merge'
         credentialsOpen: false,
         credentialsGate: false,
         credentialsValidated: getCredentialsValidated(),

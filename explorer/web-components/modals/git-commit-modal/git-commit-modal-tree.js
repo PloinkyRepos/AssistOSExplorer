@@ -4,7 +4,10 @@ export function formatRepoSummary(repo) {
     }
     const counts = repo.counts || { staged: 0, unstaged: 0, untracked: 0, conflicted: 0 };
     const hasChanges = counts.staged || counts.unstaged || counts.untracked || counts.conflicted;
-    if (!hasChanges) return 'Clean.';
+    const stashCount = Number.isFinite(repo.stashCount) ? repo.stashCount : 0;
+    if (!hasChanges) {
+        return stashCount ? `Clean. Stashes: ${stashCount}.` : 'Clean.';
+    }
 
     const sample = repo.sample || {};
     const parts = [];
@@ -26,6 +29,9 @@ export function formatRepoSummary(repo) {
     addPart('unstaged', counts.unstaged, sample.unstaged);
     addPart('untracked', counts.untracked, sample.untracked);
     addPart('conflicts', counts.conflicted, sample.conflicted);
+    if (stashCount) {
+        parts.push(`stashes(${stashCount})`);
+    }
 
     return parts.join(' | ');
 }
@@ -52,6 +58,10 @@ export function renderRepoChangesTree(repo, {
     getCoveringPrefix,
     isFolderExpanded
 } = {}) {
+    const ignoredPaths = toArray(repo?.ignored);
+    const ignoredHints = toArray(repo?.ignoredHints);
+    const ignoredSet = new Set(ignoredPaths.map((p) => String(p)));
+    const ignoredHintSet = new Set(ignoredHints.map((p) => String(p).replace(/^\/+/, '')));
     const normalizeRow = (row) => {
         if (!row) return null;
         if (typeof row === 'string') {
@@ -69,7 +79,6 @@ export function renderRepoChangesTree(repo, {
         ...toArray(repo.changes.untracked),
         ...toArray(repo.changes.conflicted)
     ].map((p) => ({ path: p, kind: 'unknown', x: null, y: null })) : [];
-    const ignoredPaths = toArray(repo?.ignored);
     const ignoredRows = ignoredPaths.map((p) => ({
         path: p,
         kind: 'ignored',
@@ -84,6 +93,12 @@ export function renderRepoChangesTree(repo, {
         if (!normalized?.path) return;
         const key = String(normalized.path);
         if (seen.has(key)) return;
+        if (ignoredSet.has(key) || ignoredHintSet.has(key)) {
+            normalized.kind = 'ignored';
+            normalized.flags = { ...(normalized.flags || {}), ignored: true };
+            if (!normalized.x) normalized.x = ' ';
+            if (!normalized.y) normalized.y = ' ';
+        }
         seen.add(key);
         rows.push(normalized);
     };
@@ -152,6 +167,17 @@ export function renderRepoChangesTree(repo, {
         const indentStep = 18;
         const indent = (level) => `${level * indentStep}px`;
 
+        const hasIgnoredInPrefix = (pathPrefix) => {
+            if (!pathPrefix) return false;
+            for (const p of ignoredSet.values()) {
+                if (p === pathPrefix || p.startsWith(pathPrefix)) return true;
+            }
+            for (const p of ignoredHintSet.values()) {
+                if (p === pathPrefix || p.startsWith(pathPrefix)) return true;
+            }
+            return false;
+        };
+
         const folderNames = Array.from(node.children.keys()).sort((a, b) => a.localeCompare(b));
         for (const folder of folderNames) {
             const childNode = node.children.get(folder);
@@ -215,6 +241,48 @@ export function renderRepoChangesTree(repo, {
             row.appendChild(toggle);
             row.appendChild(checkbox);
             row.appendChild(label);
+            row.classList.add('has-file-menu');
+
+            const menu = document.createElement('div');
+            menu.className = 'git-file-menu';
+
+            const menuButton = document.createElement('button');
+            menuButton.type = 'button';
+            menuButton.className = 'icon-button git-file-menu-button';
+            menuButton.setAttribute('data-local-action', 'toggleFileMenu');
+            menuButton.setAttribute('aria-label', 'Folder actions');
+            menuButton.title = 'Folder actions';
+            menuButton.textContent = '⋮';
+
+            const menuList = document.createElement('div');
+            menuList.className = 'git-file-menu-list';
+
+            const folderIgnored = hasIgnoredInPrefix(normalizedPrefix);
+            if (!folderIgnored) {
+                const ignoreItem = document.createElement('div');
+                ignoreItem.className = 'git-file-menu-item';
+                ignoreItem.setAttribute('role', 'menuitem');
+                ignoreItem.setAttribute('tabindex', '0');
+                ignoreItem.dataset.repoPath = repo.path;
+                ignoreItem.dataset.prefix = normalizedPrefix;
+                ignoreItem.setAttribute('data-local-action', 'openIgnoreForFolder');
+                ignoreItem.textContent = 'Add folder to .gitignore';
+                menuList.appendChild(ignoreItem);
+            } else {
+                const removeIgnoreItem = document.createElement('div');
+                removeIgnoreItem.className = 'git-file-menu-item';
+                removeIgnoreItem.setAttribute('role', 'menuitem');
+                removeIgnoreItem.setAttribute('tabindex', '0');
+                removeIgnoreItem.dataset.repoPath = repo.path;
+                removeIgnoreItem.dataset.filePath = normalizedPrefix;
+                removeIgnoreItem.setAttribute('data-local-action', 'removeIgnoreForFile');
+                removeIgnoreItem.textContent = 'Remove from .gitignore';
+                menuList.appendChild(removeIgnoreItem);
+            }
+
+            menu.appendChild(menuButton);
+            menu.appendChild(menuList);
+            row.appendChild(menu);
             folderWrapper.appendChild(row);
             if (expanded) {
                 folderWrapper.appendChild(renderNode(childNode, depth + 1, nextPrefix));
@@ -243,6 +311,7 @@ export function renderRepoChangesTree(repo, {
             row.classList.toggle('is-new', isNewTracked);
             row.classList.toggle('is-modified', isModified);
             row.classList.toggle('is-deleted', isDeleted);
+            row.classList.toggle('is-conflicted', kind === 'conflicted' || Boolean(flags?.conflicted));
             row.classList.toggle('is-ignored', isIgnored);
             row.classList.add('has-file-menu');
 
@@ -295,10 +364,22 @@ export function renderRepoChangesTree(repo, {
                     ignoreItem.setAttribute('data-local-action', 'openIgnoreForFile');
                     ignoreItem.textContent = 'Add to .gitignore';
                 } else {
-                    ignoreItem.setAttribute('data-local-action', 'openStopTrackingForFile');
-                    ignoreItem.textContent = 'Stop tracking + add to .gitignore';
+                    ignoreItem.setAttribute('data-local-action', 'openIgnoreForFile');
+                    ignoreItem.textContent = 'Add to .gitignore (keep tracked)';
                 }
                 menuList.appendChild(ignoreItem);
+
+                if (!isUntracked) {
+                    const stopTrackingItem = document.createElement('div');
+                    stopTrackingItem.className = 'git-file-menu-item';
+                    stopTrackingItem.setAttribute('role', 'menuitem');
+                    stopTrackingItem.setAttribute('tabindex', '0');
+                    stopTrackingItem.dataset.repoPath = repo.path;
+                    stopTrackingItem.dataset.filePath = file.path;
+                    stopTrackingItem.setAttribute('data-local-action', 'openStopTrackingForFile');
+                    stopTrackingItem.textContent = 'Stop tracking + add to .gitignore';
+                    menuList.appendChild(stopTrackingItem);
+                }
             } else {
                 const removeIgnoreItem = document.createElement('div');
                 removeIgnoreItem.className = 'git-file-menu-item';

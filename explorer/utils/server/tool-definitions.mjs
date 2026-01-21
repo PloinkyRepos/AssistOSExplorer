@@ -30,6 +30,7 @@ export function buildToolDefinitions(zodToJsonSchema, schemas) {
     GitConflictVersionsArgsSchema,
     GitCheckoutConflictArgsSchema,
     GitStashArgsSchema,
+    GitStashListArgsSchema,
     GitStashPopArgsSchema,
     GitCommitArgsSchema,
     GitPushArgsSchema,
@@ -195,6 +196,11 @@ export function buildToolDefinitions(zodToJsonSchema, schemas) {
       name: 'git_stash',
       description: 'Stash local changes (optionally including untracked files).',
       inputSchema: zodToJsonSchema(GitStashArgsSchema)
+    },
+    {
+      name: 'git_stash_list',
+      description: 'List stashes in a repository.',
+      inputSchema: zodToJsonSchema(GitStashListArgsSchema)
     },
     {
       name: 'git_stash_pop',

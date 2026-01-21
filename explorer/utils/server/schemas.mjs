@@ -88,6 +88,9 @@ export function createSchemas(z) {
     includeUntracked: z.boolean().optional().default(true),
     message: z.string().optional().default('')
   });
+  const GitStashListArgsSchema = z.object({
+    path: z.string()
+  });
   const GitStashPopArgsSchema = z.object({
     path: z.string(),
     ref: z.string().optional().nullable().default(null),
@@ -161,6 +164,7 @@ export function createSchemas(z) {
     GitConflictVersionsArgsSchema,
     GitCheckoutConflictArgsSchema,
     GitStashArgsSchema,
+    GitStashListArgsSchema,
     GitStashPopArgsSchema,
     GitCommitArgsSchema,
     GitPushArgsSchema,

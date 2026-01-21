@@ -229,6 +229,7 @@ const AUTOCOMMIT_INTERVAL_STORAGE_KEY = 'webskel.git.autocommit.intervalMinutes'
 const AUTOCOMMIT_REPOS_STORAGE_KEY = 'webskel.git.autocommit.repos';
 const CREDENTIALS_VALIDATED_STORAGE_KEY = 'webskel.git.credentials.validated';
 const GIT_CONFLICT_FLAG_STORAGE_KEY = 'webskel.git.conflicts';
+const GIT_ERROR_FLAG_STORAGE_KEY = 'webskel.git.errors';
 
 export function getAutocommitSettings() {
     let enabled = true;
@@ -306,6 +307,22 @@ export function getGitConflictFlag() {
 export function setGitConflictFlag(value) {
     try {
         localStorage.setItem(GIT_CONFLICT_FLAG_STORAGE_KEY, value ? 'true' : 'false');
+    } catch {
+        // ignore
+    }
+}
+
+export function getGitErrorFlag() {
+    try {
+        return localStorage.getItem(GIT_ERROR_FLAG_STORAGE_KEY) === 'true';
+    } catch {
+        return false;
+    }
+}
+
+export function setGitErrorFlag(value) {
+    try {
+        localStorage.setItem(GIT_ERROR_FLAG_STORAGE_KEY, value ? 'true' : 'false');
     } catch {
         // ignore
     }

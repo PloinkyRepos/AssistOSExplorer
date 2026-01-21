@@ -160,6 +160,10 @@ export class GitRepoTree {
         this.emitAction('openIgnoreForFile', element);
     }
 
+    openIgnoreForFolder(element) {
+        this.emitAction('openIgnoreForFolder', element);
+    }
+
     openStopTrackingForFile(element) {
         this.emitAction('openStopTrackingForFile', element);
     }
@@ -216,6 +220,7 @@ export class GitRepoTree {
             const ignoredCount = Number.isFinite(repo.ignoredCount)
                 ? repo.ignoredCount
                 : (Array.isArray(repo.ignored) ? repo.ignored.length : 0);
+            const stashCount = Number.isFinite(repo.stashCount) ? repo.stashCount : 0;
             return Boolean(
                 repo.dirty
                 || counts.staged
@@ -223,6 +228,7 @@ export class GitRepoTree {
                 || counts.untracked
                 || counts.conflicted
                 || ignoredCount
+                || stashCount
             );
         });
         return filtered.length ? filtered : repos;
@@ -234,7 +240,7 @@ export class GitRepoTree {
             name: this.state.reposRoot,
             children: new Map(),
             repos: [],
-            counts: { staged: 0, unstaged: 0, untracked: 0, conflicted: 0 }
+            counts: { staged: 0, unstaged: 0, untracked: 0, conflicted: 0, stashed: 0 }
         };
 
         const addCounts = (target, counts) => {
@@ -243,6 +249,7 @@ export class GitRepoTree {
             target.counts.unstaged += c.unstaged || 0;
             target.counts.untracked += c.untracked || 0;
             target.counts.conflicted += c.conflicted || 0;
+            target.counts.stashed += c.stashed || 0;
         };
 
         for (const repo of repos) {
@@ -258,7 +265,7 @@ export class GitRepoTree {
                         name: part,
                         children: new Map(),
                         repos: [],
-                        counts: { staged: 0, unstaged: 0, untracked: 0, conflicted: 0 }
+                        counts: { staged: 0, unstaged: 0, untracked: 0, conflicted: 0, stashed: 0 }
                     });
                 }
                 node = node.children.get(part);
@@ -353,7 +360,8 @@ export class GitRepoTree {
 
             const label = document.createElement('div');
             label.className = 'git-folder-label';
-            const badge = `S:${node.counts.staged} U:${node.counts.unstaged} N:${node.counts.untracked}${node.counts.conflicted ? ` C:${node.counts.conflicted}` : ''}`;
+            const stashBadge = node.counts.stashed ? ` · stash:${node.counts.stashed}` : '';
+            const badge = `S:${node.counts.staged} U:${node.counts.unstaged} N:${node.counts.untracked}${node.counts.conflicted ? ` C:${node.counts.conflicted}` : ''}${stashBadge}`;
             label.textContent = `${folderId === '/' ? this.state.reposRoot : node.name} · ${badge}`;
 
             left.appendChild(expandBtn);
@@ -385,10 +393,12 @@ export class GitRepoTree {
                 const changedPaths = Array.isArray(repo?.changesAll)
                     ? repo.changesAll.map((c) => (typeof c === 'string' ? c : String(c?.path || ''))).filter(Boolean)
                     : [];
+                const entry = this.getSelectionEntry(repo.path);
+                const repoSelected = Boolean(entry?.prefixes?.has?.('*'));
                 const selectedCount = changedPaths.reduce((acc, p) => acc + (this.isFileSelected(repo.path, p) ? 1 : 0), 0);
                 const any = selectedCount > 0;
-                repoCheckbox.checked = changedPaths.length > 0 && selectedCount === changedPaths.length;
-                repoCheckbox.indeterminate = any && selectedCount < changedPaths.length;
+                repoCheckbox.checked = repoSelected || (changedPaths.length > 0 && selectedCount === changedPaths.length);
+                repoCheckbox.indeterminate = !repoSelected && any && selectedCount < changedPaths.length;
 
                 const changesToggle = document.createElement('button');
                 changesToggle.type = 'button';
@@ -399,8 +409,9 @@ export class GitRepoTree {
                 changesToggle.textContent = repoExpanded ? '▾' : '▸';
 
                 const counts = repo.counts || { staged: 0, unstaged: 0, untracked: 0, conflicted: 0 };
+                const stashCount = Number.isFinite(repo.stashCount) ? repo.stashCount : 0;
                 const repoBadge = repo.ok
-                    ? `S:${counts.staged} U:${counts.unstaged} N:${counts.untracked}${counts.conflicted ? ` C:${counts.conflicted}` : ''}`
+                    ? `S:${counts.staged} U:${counts.unstaged} N:${counts.untracked}${counts.conflicted ? ` C:${counts.conflicted}` : ''}${stashCount ? ` · stash:${stashCount}` : ''}`
                     : 'not git';
                 const label = document.createElement('div');
                 label.className = 'git-change-button';

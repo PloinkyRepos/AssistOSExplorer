@@ -399,16 +399,19 @@ export function createGitService({ validatePath }) {
     const input = `${list.join('\0')}\0`;
     const { stdout } = await runGit(
       repoPath,
-      [gitBinary, 'check-ignore', '-n', '-z', '--stdin'],
+      [gitBinary, 'check-ignore', '-v', '-z', '--stdin'],
       { timeoutMs: 5000, okCodes: [0, 1], input }
     );
-    const tokens = stdout ? stdout.split('\0').filter(Boolean) : [];
+    const records = stdout ? stdout.split('\0').filter(Boolean) : [];
     const matches = [];
-    for (let i = 0; i + 3 < tokens.length; i += 4) {
-      const source = tokens[i];
-      const lineRaw = tokens[i + 1];
-      const pattern = tokens[i + 2];
-      const pathValue = tokens[i + 3];
+    for (const record of records) {
+      const [left, pathValue] = record.split('\t');
+      if (!left || !pathValue) continue;
+      const parts = left.split(':');
+      if (parts.length < 3) continue;
+      const pattern = parts.pop();
+      const lineRaw = parts.pop();
+      const source = parts.join(':');
       const line = Number.parseInt(lineRaw, 10);
       matches.push({
         source,
@@ -517,6 +520,20 @@ export function createGitService({ validatePath }) {
       ref = firstLine.split(':')[0].trim() || null;
     }
     return { ok: true, created, ref, output };
+  }
+
+  async function gitStashList({ path: repoPathArg }) {
+    const repoPath = await resolveRepoPath(repoPathArg);
+    const gitBinary = await getGitBinary(repoPath);
+    const { stdout } = await runGit(repoPath, [gitBinary, 'stash', 'list'], { timeoutMs: 5000 });
+    const lines = (stdout || '').trim().split(/\r?\n/).filter(Boolean);
+    const entries = lines.map((line) => {
+      const parts = String(line).split(':');
+      const ref = parts.shift()?.trim() || '';
+      const summary = parts.join(':').trim();
+      return { ref, summary, raw: line };
+    });
+    return { ok: true, count: entries.length, entries };
   }
 
   async function gitStashPop({ path: repoPathArg, ref = null, reinstateIndex = true }) {
@@ -826,13 +843,25 @@ export function createGitService({ validatePath }) {
         } catch {
           info = { ok: false };
         }
+        let stashCount = 0;
+        if (info?.ok) {
+          try {
+            const gitBinary = await getGitBinary(current.path);
+            const { stdout } = await runGit(current.path, [gitBinary, 'stash', 'list'], { timeoutMs: 5000 });
+            const trimmed = (stdout || '').trim();
+            stashCount = trimmed ? trimmed.split(/\r?\n/).filter(Boolean).length : 0;
+          } catch {
+            stashCount = 0;
+          }
+        }
         if (!info || info.ok === false) {
           results.push({
             ...current,
             ok: false,
             branch: null,
             dirty: false,
-            counts: { staged: 0, unstaged: 0, untracked: 0, conflicted: 0 },
+            stashCount: 0,
+            counts: { staged: 0, unstaged: 0, untracked: 0, conflicted: 0, stashed: 0 },
             sample: { staged: [], unstaged: [], untracked: [], conflicted: [] }
           });
           continue;
@@ -854,7 +883,8 @@ export function createGitService({ validatePath }) {
               ok: true,
               branch: info.branch || null,
               dirty: false,
-              counts: { staged: 0, unstaged: 0, untracked: 0, conflicted: 0 },
+              stashCount,
+              counts: { staged: 0, unstaged: 0, untracked: 0, conflicted: 0, stashed: stashCount },
               sample: { staged: [], unstaged: [], untracked: [], conflicted: [] },
               ignored: ignored.slice(0, 800).map((e) => e?.path).filter(Boolean),
               ignoredCount: ignored.length
@@ -927,11 +957,13 @@ export function createGitService({ validatePath }) {
             ok: true,
             branch: info.branch || null,
             dirty: true,
+            stashCount,
             counts: {
               staged: fullStaged.length,
               unstaged: fullUnstaged.length,
               untracked: fullUntracked.length,
-              conflicted: fullConflicted.length
+              conflicted: fullConflicted.length,
+              stashed: stashCount
             },
             changesAll: toChangeRows({
               staged: fullStaged,
@@ -960,7 +992,8 @@ export function createGitService({ validatePath }) {
             ok: true,
             branch: info.branch || null,
             dirty: false,
-            counts: { staged: 0, unstaged: 0, untracked: 0, conflicted: 0 },
+            stashCount,
+            counts: { staged: 0, unstaged: 0, untracked: 0, conflicted: 0, stashed: stashCount },
             sample: { staged: [], unstaged: [], untracked: [], conflicted: [] }
           });
         }
@@ -984,6 +1017,7 @@ export function createGitService({ validatePath }) {
     gitConflictVersions,
     gitCheckoutConflict,
     gitStash,
+    gitStashList,
     gitStashPop,
     gitCommit,
     gitPull,

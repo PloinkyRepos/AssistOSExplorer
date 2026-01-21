@@ -8,7 +8,7 @@ import { createGitCommitUI } from "./git-commit-modal-ui.js";
 import { callExplorerTool, callAgentTool } from "../../../services/infrastructure/explorerApi.js";
 import { withGlobalLoader } from "../../../utils/globalLoader.js";
 import { joinPath } from "../../pages/file-exp/file-exp-utils.js";
-import { normalizeErrorMessage, parseJsonToolResult, normalizeSlashes, isReposRootPath, getRememberedGitIdentity } from "./git-commit-modal-utils.js";
+import { normalizeErrorMessage, parseJsonToolResult, normalizeSlashes, isReposRootPath, getRememberedGitIdentity, setGitErrorFlag } from "./git-commit-modal-utils.js";
 
 export class GitCommitModal {
     constructor(element, invalidate, props = {}) {
@@ -64,6 +64,7 @@ export class GitCommitModal {
             toggleTreeFileSelectionCheckbox: this.toggleTreeFileSelectionCheckbox.bind(this),
             toggleRepoAllChangesCheckbox: this.toggleRepoAllChangesCheckbox.bind(this),
             openIgnoreForFile: this.openIgnoreForFile.bind(this),
+            openIgnoreForFolder: this.openIgnoreForFolder.bind(this),
             openStopTrackingForFile: this.openStopTrackingForFile.bind(this),
             removeIgnoreForFile: this.removeIgnoreForFile.bind(this),
             rollbackFile: this.rollbackFile.bind(this),
@@ -285,6 +286,23 @@ export class GitCommitModal {
         this.actions.openGitIgnorePrompt({ repoPath, paths: [filePath], source: 'selection' });
     }
 
+    openIgnoreForFolder(element) {
+        const repoPath = element?.dataset?.repoPath || null;
+        const folderPath = element?.dataset?.prefix || element?.dataset?.folderPath || '';
+        if (!repoPath || !folderPath) return;
+        this.closeFileMenus();
+        const normalized = folderPath.endsWith('/') ? folderPath : `${folderPath}/`;
+        const anchored = normalized.startsWith('/') ? normalized : `/${normalized}`;
+        this.actions.openGitIgnorePrompt({
+            repoPath,
+            paths: [normalized],
+            source: 'selection',
+            mode: 'file',
+            anchor: true,
+            patterns: anchored
+        });
+    }
+
     openStopTrackingForFile(element) {
         const repoPath = element?.dataset?.repoPath || null;
         const filePath = element?.dataset?.filePath;
@@ -298,20 +316,11 @@ export class GitCommitModal {
         const filePath = element?.dataset?.filePath;
         if (!repoPath || !filePath) return;
         this.closeFileMenus();
-        const row = element?.closest?.('.git-tree-file-row');
-        if (!row?.classList?.contains('is-ignored')) {
-            this.setStatusLine(`File is not ignored: ${filePath}.`, true);
-            return;
-        }
         try {
             this.setStatusLine(`Removing ignore rule for ${filePath}...`);
             const payloadText = await this.service.gitCheckIgnore(repoPath, [filePath]);
             const payload = parseJsonToolResult(payloadText) || {};
             const matches = Array.isArray(payload.matches) ? payload.matches : [];
-            if (!matches.length) {
-                this.setStatusLine(`No ignore rule found for ${filePath}.`, true);
-                return;
-            }
             const normalizedRepo = normalizeSlashes(repoPath).replace(/\/+$/g, '');
             const updates = new Map();
             const blocked = new Set();
@@ -332,7 +341,38 @@ export class GitCommitModal {
                 updates.set(sourcePath, entry);
             }
             if (updates.size === 0) {
-                this.setStatusLine('Ignore rule is outside this repo. Update global ignore config manually.', true);
+                const ignorePath = `${normalizedRepo}/.gitignore`;
+                const normalized = String(filePath || '').trim().replace(/^\.\/+/, '').replace(/^\/+/, '');
+                const candidates = new Set([normalized, `/${normalized}`]);
+                const content = await this.service.readTextFile(ignorePath);
+                const lines = String(content ?? '').split(/\r?\n/);
+                const removeIndexes = new Set();
+                lines.forEach((line, idx) => {
+                    const trimmed = line.trim();
+                    if (candidates.has(trimmed)) removeIndexes.add(idx);
+                });
+                if (removeIndexes.size === 0) {
+                    this.setStatusLine(`No ignore rule found for ${filePath}.`, true);
+                    return;
+                }
+                const nextLines = lines.filter((_, idx) => !removeIndexes.has(idx));
+                let nextContent = nextLines.join('\n');
+                if (content && content.endsWith('\n')) {
+                    nextContent = `${nextContent}\n`;
+                } else if (nextContent && !nextContent.endsWith('\n')) {
+                    nextContent = `${nextContent}\n`;
+                }
+                await this.service.writeFile(ignorePath, nextContent);
+                const map = this.state.ignoreHints || {};
+                if (Array.isArray(map[repoPath])) {
+                    map[repoPath] = map[repoPath].filter((p) => {
+                        const cleaned = String(p || '').replace(/^\/+/, '');
+                        return cleaned !== normalized;
+                    });
+                    this.state.ignoreHints = map;
+                }
+                await this.refreshAll({ force: true });
+                this.setStatusLine(`Removed ignore rule for ${filePath}.`);
                 return;
             }
             let changedFiles = 0;
@@ -365,6 +405,12 @@ export class GitCommitModal {
             if (!changedFiles) {
                 this.setStatusLine(`No matching .gitignore entry removed for ${filePath}.`, true);
                 return;
+            }
+            if (this.state.ignoreHints?.[repoPath]) {
+                const normalized = String(filePath || '').trim().replace(/^\.\/+/, '').replace(/^\/+/, '');
+                const map = { ...this.state.ignoreHints };
+                map[repoPath] = (map[repoPath] || []).filter((p) => String(p || '').replace(/^\/+/, '') !== normalized);
+                this.state.ignoreHints = map;
             }
             await this.refreshAll({ force: true });
             if (blocked.size) {
@@ -582,6 +628,7 @@ export class GitCommitModal {
     setStatusLine(text, isError = false) {
         this.state.lastStatusLine = text || '';
         this.state.lastStatusIsError = Boolean(isError);
+        setGitErrorFlag(Boolean(isError));
         this.ui.updateStatusBar?.();
     }
 

@@ -342,6 +342,7 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
     display: flex;
     flex-direction: column;
     gap: 10px;
+    height: 100%;
 }
 
 .git-repo-row {
@@ -499,6 +500,10 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
     color: rgba(37, 99, 235, 0.95);
 }
 
+.git-tree-file-row.is-conflicted .git-tree-file {
+    color: #dc2626;
+}
+
 .git-tree-file-row.is-new .git-tree-file {
     color: rgba(22, 163, 74, 1);
 }
@@ -540,6 +545,8 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
 
 .git-tree-file-row.has-file-menu:hover .git-file-menu-button,
 .git-tree-file-row.has-file-menu:focus-within .git-file-menu-button,
+.git-tree-item.has-file-menu:hover .git-file-menu-button,
+.git-tree-item.has-file-menu:focus-within .git-file-menu-button,
 .git-file-menu.open .git-file-menu-button {
     opacity: 1;
     visibility: visible;
@@ -650,8 +657,8 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
 .git-info-button::after {
     content: attr(data-tooltip);
     position: absolute;
-    right: 0;
-    top: calc(100% + 8px);
+    right: 15px;
+    top: -15px;
     min-width: 240px;
     max-width: min(460px, 70vw);
     padding: 10px 12px;
@@ -661,7 +668,7 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
     box-shadow: 0 16px 28px rgba(15, 23, 42, 0.18);
     color: var(--text, #0f172a);
     font-size: 0.85rem;
-    font-weight: 600;
+    font-weight: 400;
     line-height: 1.25;
     white-space: normal;
     z-index: 60;
@@ -1225,12 +1232,17 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
 .git-menu-item {
     display: flex;
     align-items: center;
+    gap: 8px;
     padding: 8px 10px;
     border-radius: 8px;
     cursor: pointer;
     user-select: none;
     font-weight: 700;
     color: var(--text, #0f172a);
+}
+
+.git-menu-item .git-menu-info {
+    margin-left: auto;
 }
 
 .git-menu-item:hover,

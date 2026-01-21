@@ -152,8 +152,10 @@ export function createGitCommitActions(ctx) {
         state.manualConflicts = collected;
     };
 
-    const handlePullConflicts = async (message, repoPaths = null) => {
+    const handlePullConflicts = async (message, repoPaths = null, source = 'merge') => {
         await loadManualConflicts(repoPaths);
+        const state = getState();
+        state.conflictSource = source;
         await loadRepoOverviews({ force: true });
         syncStaticUI();
         updateCommitButtons();
@@ -171,7 +173,7 @@ export function createGitCommitActions(ctx) {
                 return { ok: false, conflicts: false };
             }
             if (payload.conflicts) {
-                await handlePullConflicts('Conflicts after restoring stashed changes. Resolve them before continuing.', [repoPath]);
+                await handlePullConflicts('Conflicts after restoring stashed changes. Resolve them before continuing.', [repoPath], 'stash');
                 return { ok: false, conflicts: true };
             }
             if (payload.ok === false) {
@@ -182,6 +184,58 @@ export function createGitCommitActions(ctx) {
         } catch (error) {
             setStatusLine(normalizeErrorMessage(error), true);
             return { ok: false, conflicts: false };
+        }
+    };
+
+    const encodeBase64 = (value) => {
+        const raw = String(value ?? '');
+        try {
+            return btoa(unescape(encodeURIComponent(raw)));
+        } catch {
+            try {
+                return btoa(raw);
+            } catch {
+                return '';
+            }
+        }
+    };
+
+    const getRepoLabel = (repoPath) => {
+        if (!repoPath) return '';
+        const state = getState();
+        const repo = Array.isArray(state.repoOverviews)
+            ? state.repoOverviews.find((entry) => entry?.path === repoPath)
+            : null;
+        return repo?.name || repoPath.split('/').filter(Boolean).slice(-1)[0] || repoPath;
+    };
+
+    const selectStashRef = async (repoPath) => {
+        try {
+            const text = await service.gitStashList({ path: repoPath });
+            const payload = parseJsonToolResult(text) || {};
+            const entries = Array.isArray(payload.entries) ? payload.entries : [];
+            if (!entries.length) {
+                setStatusLine('No stash entries found to restore.', true);
+                return { ok: false, canceled: false };
+            }
+            if (entries.length === 1) {
+                return { ok: true, ref: entries[0]?.ref || null };
+            }
+            const repoLabel = getRepoLabel(repoPath);
+            const stashes = encodeBase64(JSON.stringify(entries));
+            const selection = await assistOS.UI.showModal("git-stash-select-modal", {
+                repoPath,
+                repoLabel,
+                stashes
+            }, true);
+            const ref = selection?.ref || null;
+            if (!ref) {
+                return { ok: false, canceled: true };
+            }
+            return { ok: true, ref };
+        } catch (error) {
+            setStatusLine(normalizeErrorMessage(error), true);
+            return { ok: false, canceled: false };
         }
     };
 
@@ -230,7 +284,7 @@ export function createGitCommitActions(ctx) {
                 if (stashCreated) {
                     state.autoStash = { repoPath, ref: stashRef };
                 }
-                await handlePullConflicts('Pull completed with conflicts. Resolve them, then restore your stashed changes.', [repoPath]);
+                await handlePullConflicts('Pull completed with conflicts. Resolve them, then restore your stashed changes.', [repoPath], 'merge');
                 return false;
             }
             if (isGitPullBlockedError(msg)) {
@@ -346,7 +400,14 @@ export function createGitCommitActions(ctx) {
         return withGlobalLoader(async () => {
             try {
                 for (const repoPath of targets) {
-                    const restored = await restoreStash(repoPath, null);
+                    const selection = await selectStashRef(repoPath);
+                    if (!selection.ok) {
+                        if (selection.canceled) {
+                            setStatusLine('Unstash canceled.');
+                        }
+                        return;
+                    }
+                    const restored = await restoreStash(repoPath, selection.ref);
                     if (!restored.ok) return;
                     if (restored.conflicts) return;
                 }
@@ -380,10 +441,14 @@ export function createGitCommitActions(ctx) {
         try {
             const text = await service.gitConflictVersions({ path: repoPath, file: filePath });
             const payload = parseJsonToolResult(text) || {};
-            const ours = payload.ours ?? '';
-            const theirs = payload.theirs ?? '';
-            const oursError = payload.oursError || '';
-            const theirsError = payload.theirsError || '';
+            let ours = payload.ours ?? '';
+            let theirs = payload.theirs ?? '';
+            let oursError = payload.oursError || '';
+            let theirsError = payload.theirsError || '';
+            if (state.conflictSource === 'rebase') {
+                [ours, theirs] = [theirs, ours];
+                [oursError, theirsError] = [theirsError, oursError];
+            }
             let status = '';
             if (oursError || theirsError) {
                 const parts = [];
@@ -561,7 +626,10 @@ export function createGitCommitActions(ctx) {
         syncStaticUI();
 
         try {
-            await service.gitCheckoutConflict({ path: repoPath, file: filePath, source: side });
+            const checkoutSide = state.conflictSource === 'rebase'
+                ? (side === 'ours' ? 'theirs' : 'ours')
+                : side;
+            await service.gitCheckoutConflict({ path: repoPath, file: filePath, source: checkoutSide });
             await service.gitStage(repoPath, [filePath]);
             const statusPayload = parseJsonToolResult(await service.gitStatus(repoPath)) || {};
             updateRepoOverviewFromStatus(repoPath, statusPayload.status || statusPayload);
@@ -796,9 +864,10 @@ export function createGitCommitActions(ctx) {
         const selectedPaths = overridePaths.length ? overridePaths : getPathsForCommitInRepo(repoPath);
         const fallbackPaths = selectedPaths.length ? selectedPaths : getUntrackedPathsForRepo(repoPath);
         const source = options.source || (selectedPaths.length ? 'selection' : (fallbackPaths.length ? 'untracked' : 'manual'));
-        const mode = 'file';
-        const anchor = true;
-        const patterns = buildIgnorePatterns(fallbackPaths, { mode, anchor });
+        const mode = options.mode || 'file';
+        const anchor = options.anchor !== undefined ? Boolean(options.anchor) : true;
+        const overridePatterns = typeof options.patterns === 'string' ? options.patterns.trim() : '';
+        const patterns = overridePatterns || buildIgnorePatterns(fallbackPaths, { mode, anchor });
         const state = getState();
         state.ignorePrompt = {
             visible: true,
@@ -933,6 +1002,16 @@ export function createGitCommitActions(ctx) {
                     const needsNewline = existing && !existing.endsWith('\n');
                     const nextContent = `${existing}${needsNewline ? '\n' : ''}${toAdd.join('\n')}\n`;
                     await service.writeFile(ignorePath, nextContent);
+                }
+                if (!stopTracking && ignoredPaths.length) {
+                    const map = state.ignoreHints || {};
+                    const current = new Set(Array.isArray(map[repoPath]) ? map[repoPath] : []);
+                    for (const path of ignoredPaths) {
+                        const normalized = normalizeIgnorePattern(path);
+                        if (normalized) current.add(normalized);
+                    }
+                    map[repoPath] = Array.from(current);
+                    state.ignoreHints = map;
                 }
 
                 state.ignorePrompt = {
@@ -1421,6 +1500,7 @@ export function createGitCommitActions(ctx) {
         syncStaticUI();
         const list = Array.isArray(repoPaths) ? repoPaths.filter(Boolean) : [];
         const effectiveToken = String(token || '').trim() || getRememberedGitPat();
+        const conflictSource = state.pullMode === 'rebase' ? 'rebase' : 'merge';
         for (const repoPath of list) {
             try {
                 await gitPullWithToken(repoPath, effectiveToken);
@@ -1439,7 +1519,7 @@ export function createGitCommitActions(ctx) {
                     return false;
                 }
                 if (isGitConflictError(msg)) {
-                    await handlePullConflicts('Merge conflicts detected. Resolve them before continuing.', [repoPath]);
+                    await handlePullConflicts('Merge conflicts detected. Resolve them before continuing.', [repoPath], conflictSource);
                     return false;
                 }
                 if (isGitPullBlockedError(msg)) {
@@ -1679,7 +1759,7 @@ export function createGitCommitActions(ctx) {
         });
     };
 
-    const pullSelectedRepos = async () => {
+    const pullSelectedRepos = async (modeOverride = null) => {
         const state = getState();
         const selected = getSelectedReposForBatch();
         if (!selected.length) {
@@ -1687,7 +1767,7 @@ export function createGitCommitActions(ctx) {
             return;
         }
         clearPullBlockedState();
-        const mode = state.pullMode || 'ffOnly';
+        const mode = modeOverride || state.pullMode || 'merge';
         if (mode !== 'ffOnly') {
             for (const repoPath of selected) {
                 const ok = await ensureGitIdentityOrPrompt(repoPath, { type: 'pull', mode: 'batch', repoPaths: selected });
@@ -1763,7 +1843,7 @@ export function createGitCommitActions(ctx) {
         if (next === 'pull') {
             closeActionsMenu();
             if (state.identityPrompt?.visible || state.authPrompt?.visible) return;
-            pullSelectedRepos();
+            pullSelectedRepos('merge');
             return;
         }
         if (next === 'stash') {
@@ -1778,11 +1858,10 @@ export function createGitCommitActions(ctx) {
             unstashSelectedRepos();
             return;
         }
-        if (next === 'pullFfOnly' || next === 'pullRebase' || next === 'pullMerge') {
+        if (next === 'pullFfOnly' || next === 'pullRebase') {
             const modeMap = {
                 pullFfOnly: 'ffOnly',
-                pullRebase: 'rebase',
-                pullMerge: 'merge'
+                pullRebase: 'rebase'
             };
             closeActionsMenu();
             setPullMode(null, modeMap[next]);

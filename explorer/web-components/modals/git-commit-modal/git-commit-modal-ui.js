@@ -17,6 +17,7 @@ export function createGitCommitUI(ctx) {
         toggleTreeFileSelectionCheckbox,
         toggleRepoAllChangesCheckbox,
         openIgnoreForFile,
+        openIgnoreForFolder,
         openStopTrackingForFile,
         removeIgnoreForFile,
         rollbackFile,
@@ -177,13 +178,6 @@ export function createGitCommitUI(ctx) {
             element.dataset.boundConflictHelper = 'true';
         }
 
-        if (!element.dataset.boundStatusResolve) {
-            element.addEventListener('git-status-resolve', () => {
-                openConflictHelper?.();
-            });
-            element.dataset.boundStatusResolve = 'true';
-        }
-
         if (!element.dataset.boundConflictBanner) {
             element.addEventListener('git-conflict-banner-open', () => {
                 openConflictHelper?.();
@@ -302,6 +296,7 @@ export function createGitCommitUI(ctx) {
             toggleTreeFileSelectionCheckbox,
             toggleRepoAllChangesCheckbox,
             openIgnoreForFile,
+            openIgnoreForFolder,
             openStopTrackingForFile,
             removeIgnoreForFile,
             rollbackFile,
@@ -421,8 +416,7 @@ export function createGitCommitUI(ctx) {
         const message = state.lastStatusLine || '';
         presenter.setState({
             text: message,
-            isError: Boolean(state.lastStatusIsError),
-            showResolve: Boolean(state.hasConflicts)
+            isError: Boolean(state.lastStatusIsError)
         });
     };
 
@@ -530,6 +524,7 @@ export function createGitCommitUI(ctx) {
             if (state.conflictFocus) {
                 state.conflictFocus = false;
             }
+            state.conflictSource = null;
             state.manualConflicts = [];
             state.conflictHelper = {
                 selected: null,
@@ -585,14 +580,15 @@ export function createGitCommitUI(ctx) {
         }
 
         const detail = {
-            visible: true,
+            visible: Boolean(state.conflictFocus),
             files,
             selected: helperState.selected || selected,
             ours: helperState.ours || '',
             theirs: helperState.theirs || '',
             choice: helperState.choice || '',
             status: helperState.status || '',
-            loading: Boolean(helperState.loading)
+            loading: Boolean(helperState.loading),
+            source: state.conflictSource || ''
         };
         const presenter = getConflictHelperPresenter();
         presenter?.setState?.(detail);

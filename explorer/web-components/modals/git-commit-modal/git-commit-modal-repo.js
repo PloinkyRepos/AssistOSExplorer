@@ -220,12 +220,17 @@ export function createGitCommitRepo(ctx) {
             try {
                 const payload = parseJsonToolResult(await service.gitReposOverview(state.reposRoot)) || {};
                 const results = Array.isArray(payload.repos) ? payload.repos : [];
-                state.repoOverviews = results;
+                const hintMap = state.ignoreHints || {};
+                const merged = results.map((repo) => {
+                    const hints = Array.isArray(hintMap[repo?.path]) ? hintMap[repo.path] : [];
+                    return hints.length ? { ...repo, ignoredHints: hints } : repo;
+                });
+                state.repoOverviews = merged;
                 repoOverviewCache.at = now;
-                repoOverviewCache.list = results;
+                repoOverviewCache.list = merged;
                 applyDefaultRepoTreeExpansion();
-                renderRepoOverviews(results);
-                return results;
+                renderRepoOverviews(merged);
+                return merged;
             } catch (error) {
                 try {
                     const listingText = await service.listDirectoryDetailed(state.reposRoot);

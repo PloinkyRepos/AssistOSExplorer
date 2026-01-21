@@ -127,6 +127,11 @@
       "presenterClassName": "ConfirmActionModal"
     },
     {
+      "name": "git-stash-select-modal",
+      "type": "modals",
+      "presenterClassName": "GitStashSelectModal"
+    },
+    {
       "name": "document-tasks-modal",
       "type": "modals",
       "presenterClassName": "DocumentTasksModal"

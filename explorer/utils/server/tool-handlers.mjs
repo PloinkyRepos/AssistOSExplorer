@@ -86,6 +86,7 @@ export function createToolHandlers({
     GitConflictVersionsArgsSchema,
     GitCheckoutConflictArgsSchema,
     GitStashArgsSchema,
+    GitStashListArgsSchema,
     GitStashPopArgsSchema,
     GitCommitArgsSchema,
     GitPushArgsSchema,
@@ -463,6 +464,12 @@ export function createToolHandlers({
     return jsonResponse(result);
   }
 
+  async function handleGitStashList(args) {
+    const data = parseArgs(GitStashListArgsSchema, args, 'git_stash_list');
+    const result = await gitService.gitStashList(data);
+    return jsonResponse(result);
+  }
+
   async function handleGitStashPop(args) {
     const data = parseArgs(GitStashPopArgsSchema, args, 'git_stash_pop');
     const result = await gitService.gitStashPop(data);
@@ -548,6 +555,7 @@ export function createToolHandlers({
     git_conflict_versions: handleGitConflictVersions,
     git_checkout_conflict: handleGitCheckoutConflict,
     git_stash: handleGitStash,
+    git_stash_list: handleGitStashList,
     git_stash_pop: handleGitStashPop,
     git_commit: handleGitCommit,
     git_push: handleGitPush,

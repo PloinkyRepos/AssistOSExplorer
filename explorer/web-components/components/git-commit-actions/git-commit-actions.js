@@ -32,6 +32,19 @@ export class GitCommitActions {
     bindEvents() {
         if (this.boundActions) return;
         this.element.addEventListener('keydown', this.onKeydown);
+        this.element.addEventListener('click', (event) => {
+            const info = event.target?.closest?.('.git-menu-info');
+            if (!info) return;
+            event.preventDefault();
+            event.stopPropagation();
+        }, true);
+        this.element.addEventListener('keydown', (event) => {
+            const info = event.target?.closest?.('.git-menu-info');
+            if (!info) return;
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+            event.stopPropagation();
+        }, true);
 
         if (this.commitMessageInput) {
             this.commitMessageInput.addEventListener('input', (event) => {

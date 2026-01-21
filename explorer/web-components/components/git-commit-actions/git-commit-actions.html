@@ -32,9 +32,6 @@
                      data-local-action="runGitAction push">Push
                 </div>
                 <div class="git-menu-item" role="menuitem" tabindex="0"
-                     data-local-action="runGitAction pull">Pull
-                </div>
-                <div class="git-menu-item" role="menuitem" tabindex="0"
                      data-local-action="runGitAction stash">Stash
                 </div>
                 <div class="git-menu-item" role="menuitem" tabindex="0"
@@ -42,13 +39,20 @@
                 </div>
                 <div class="git-menu-separator" role="separator"></div>
                 <div class="git-menu-item" role="menuitem" tabindex="0"
-                     data-local-action="runGitAction pullFfOnly">Pull: Fast-forward only
+                     data-local-action="runGitAction pull">Pull: Merge
+                    <span class="git-menu-info git-info-button" role="button" tabindex="0"
+                          aria-label="About pull (merge)"
+                          data-tooltip="This happens when you have local commits and the remote has also been updated. Git combines both histories by creating a new &quot;merge commit&quot; that ties them together, showing where the two lines of work were joined.">
+                        i
+                    </span>
                 </div>
                 <div class="git-menu-item" role="menuitem" tabindex="0"
                      data-local-action="runGitAction pullRebase">Pull: Rebase
-                </div>
-                <div class="git-menu-item" role="menuitem" tabindex="0"
-                     data-local-action="runGitAction pullMerge">Pull: Merge
+                    <span class="git-menu-info git-info-button" role="button" tabindex="0"
+                          aria-label="About rebase pull"
+                          data-tooltip="Rebase replays your local changes on top of the latest remote version.">
+                        i
+                    </span>
                 </div>
             </div>
         </div>
