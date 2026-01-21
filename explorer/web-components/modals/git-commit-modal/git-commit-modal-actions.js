@@ -156,6 +156,7 @@ export function createGitCommitActions(ctx) {
         await loadManualConflicts(repoPaths);
         const state = getState();
         state.conflictSource = source;
+        state.conflictFocus = false;
         await loadRepoOverviews({ force: true });
         syncStaticUI();
         updateCommitButtons();
@@ -445,10 +446,8 @@ export function createGitCommitActions(ctx) {
             let theirs = payload.theirs ?? '';
             let oursError = payload.oursError || '';
             let theirsError = payload.theirsError || '';
-            if (state.conflictSource === 'rebase') {
-                [ours, theirs] = [theirs, ours];
-                [oursError, theirsError] = [theirsError, oursError];
-            }
+            // Keep Git's native meaning: ours=stage 2 (local), theirs=stage 3 (remote),
+            // regardless of merge/rebase context.
             let status = '';
             if (oursError || theirsError) {
                 const parts = [];
@@ -626,10 +625,7 @@ export function createGitCommitActions(ctx) {
         syncStaticUI();
 
         try {
-            const checkoutSide = state.conflictSource === 'rebase'
-                ? (side === 'ours' ? 'theirs' : 'ours')
-                : side;
-            await service.gitCheckoutConflict({ path: repoPath, file: filePath, source: checkoutSide });
+            await service.gitCheckoutConflict({ path: repoPath, file: filePath, source: side });
             await service.gitStage(repoPath, [filePath]);
             const statusPayload = parseJsonToolResult(await service.gitStatus(repoPath)) || {};
             updateRepoOverviewFromStatus(repoPath, statusPayload.status || statusPayload);
@@ -646,6 +642,9 @@ export function createGitCommitActions(ctx) {
             }
             updateCommitButtons();
             syncStaticUI();
+            if (!hasConflictsForRepos([repoPath])) {
+                setStatusLine('Ready.');
+            }
         } catch (error) {
             state.conflictHelper = {
                 ...(state.conflictHelper || {}),
@@ -1497,6 +1496,7 @@ export function createGitCommitActions(ctx) {
     const pullRepos = async (repoPaths, { token = null } = {}) => {
         const state = getState();
         state.pullBlocked = null;
+        state.conflictSource = state.pullMode === 'rebase' ? 'rebase' : 'merge';
         syncStaticUI();
         const list = Array.isArray(repoPaths) ? repoPaths.filter(Boolean) : [];
         const effectiveToken = String(token || '').trim() || getRememberedGitPat();
@@ -1768,6 +1768,7 @@ export function createGitCommitActions(ctx) {
         }
         clearPullBlockedState();
         const mode = modeOverride || state.pullMode || 'merge';
+        state.conflictSource = mode === 'rebase' ? 'rebase' : 'merge';
         if (mode !== 'ffOnly') {
             for (const repoPath of selected) {
                 const ok = await ensureGitIdentityOrPrompt(repoPath, { type: 'pull', mode: 'batch', repoPaths: selected });
