@@ -498,6 +498,22 @@ export function createGitCommitActions(ctx) {
         .map((value) => String(value || '').trim())
         .filter(Boolean);
 
+    const buildStageList = (status) => {
+        const unstaged = toPaths(status?.unstaged);
+        const untracked = toPaths(status?.untracked);
+        return Array.from(new Set([...unstaged, ...untracked]));
+    };
+
+    const hasAnyChangesInStatus = (status) => {
+        const staged = toPaths(status?.staged);
+        const unstaged = toPaths(status?.unstaged);
+        const untracked = toPaths(status?.untracked);
+        const conflicted = toPaths(status?.conflicted);
+        return staged.length + unstaged.length + untracked.length + conflicted.length > 0;
+    };
+
+    const hasConflictsInStatus = (status) => toPaths(status?.conflicted).length > 0;
+
     const toChangeRows = (status, limit = 800) => {
         const map = new Map();
         const touch = (entry, flag) => {
@@ -1096,6 +1112,40 @@ export function createGitCommitActions(ctx) {
         return out.join('\n');
     };
 
+    const generateCommitMessageForSelections = async (selections) => {
+        const cleanSelections = Array.isArray(selections) ? selections : [];
+        const diffs = [];
+        const maxFilesPerRepo = 80;
+        const maxFilesTotal = 20;
+        for (const selection of cleanSelections) {
+            const repoPath = selection?.repoPath;
+            const files = Array.isArray(selection?.files) ? selection.files.slice(0, maxFilesPerRepo) : [];
+            if (!repoPath || !files.length) continue;
+            for (const filePath of files) {
+                if (diffs.length >= maxFilesTotal) break;
+                const diff = await service.gitDiff({
+                    path: repoPath,
+                    file: filePath,
+                    cached: true,
+                    ref: 'HEAD'
+                });
+                const summary = summarizeDiffForAi(diff, { maxLines: 120 });
+                diffs.push({ repoPath, filePath, diff: summary || '' });
+            }
+            if (diffs.length >= maxFilesTotal) break;
+        }
+        if (!diffs.length) return '';
+        const payloadText = await service.generateCommitMessage(diffs);
+        const payload = parseJsonToolResult(payloadText);
+        if (!payload || typeof payload !== 'object') {
+            throw new Error('Failed to generate commit message.');
+        }
+        if (payload.ok === false) {
+            throw new Error(payload.error || 'Failed to generate commit message.');
+        }
+        return String(payload.message || '').trim();
+    };
+
     const generateCommitMessage = async () => {
         const selectedRepos = getSelectedReposForBatch();
         if (!selectedRepos.length) {
@@ -1159,6 +1209,16 @@ export function createGitCommitActions(ctx) {
                 setStatusLine(normalizeErrorMessage(error), true);
             }
         });
+    };
+
+    const dispatchAutocommitStop = (message = '') => {
+        window.dispatchEvent(new CustomEvent('webskel-autocommit-stop', {
+            detail: { message: message || '' }
+        }));
+    };
+
+    const dispatchAutocommitReset = () => {
+        window.dispatchEvent(new CustomEvent('webskel-autocommit-reset'));
     };
 
     const saveGitToken = async (payload = {}) => {
@@ -1692,6 +1752,135 @@ export function createGitCommitActions(ctx) {
         });
     };
 
+    const syncSelectedRepos = async () => {
+        const state = getState();
+        const selected = getSelectedReposForBatch();
+        if (!selected.length) {
+            setStatusLine('Select at least one repository to sync.', true);
+            return;
+        }
+        clearPullBlockedState();
+        setStatusLine(`Syncing ${selected.length} repo(s)…`);
+        return withGlobalLoader(async () => {
+            try {
+                const pullOk = await pullRepos(selected);
+                if (!pullOk) {
+                    dispatchAutocommitStop();
+                    return;
+                }
+                await loadRepoOverviews({ force: true });
+                syncStaticUI();
+                updateCommitButtons();
+                if (hasConflictsForRepos(selected)) {
+                    setStatusLine('Merge conflicts detected. Resolve them before continuing.', true);
+                    dispatchAutocommitStop();
+                    return;
+                }
+
+                const stagedSelections = [];
+                for (const repoPath of selected) {
+                    const statusPayload = parseJsonToolResult(await service.gitStatus(repoPath)) || {};
+                    const status = statusPayload?.status || statusPayload || {};
+                    updateRepoOverviewFromStatus(repoPath, statusPayload);
+                    if (!hasAnyChangesInStatus(status)) {
+                        continue;
+                    }
+                    if (hasConflictsInStatus(status)) {
+                        setStatusLine('Merge conflicts detected. Resolve them before continuing.', true);
+                        dispatchAutocommitStop();
+                        return;
+                    }
+                    const stageList = buildStageList(status);
+                    if (stageList.length) {
+                        await service.gitStage(repoPath, stageList);
+                    }
+                    const after = parseJsonToolResult(await service.gitStatus(repoPath)) || {};
+                    const afterStatus = after?.status || after || {};
+                    const staged = toPaths(afterStatus.staged);
+                    if (staged.length) {
+                        stagedSelections.push({ repoPath, files: staged });
+                    }
+                }
+
+                if (!stagedSelections.length) {
+                    setStatusLine('Nothing to commit.');
+                    dispatchAutocommitReset();
+                    return;
+                }
+
+                setStatusLine('Generating commit message...');
+                const message = await generateCommitMessageForSelections(stagedSelections);
+                if (!message) {
+                    setStatusLine('AI returned an empty commit message.', true);
+                    dispatchAutocommitStop();
+                    return;
+                }
+                setCommitMessage(message);
+                updateCommitButtons();
+
+                for (const selection of stagedSelections) {
+                    const repoPath = selection.repoPath;
+                    const identityOk = await ensureGitIdentityOrPrompt(repoPath, { type: 'sync', mode: 'batch', repoPaths: selected });
+                    if (!identityOk) {
+                        dispatchAutocommitStop();
+                        return;
+                    }
+                    const remembered = getRememberedGitIdentity();
+                    const userName = String(remembered.name || state.identityPrompt?.name || '').trim();
+                    const userEmail = String(remembered.email || state.identityPrompt?.email || '').trim();
+                    try {
+                        await service.gitCommit({
+                            path: repoPath,
+                            message,
+                            userName: userName || null,
+                            userEmail: userEmail || null
+                        });
+                    } catch (error) {
+                        const msg = normalizeErrorMessage(error);
+                        if (isGitIdentityError(msg)) {
+                            await ensureGitIdentityOrPrompt(repoPath, { type: 'sync', mode: 'batch', repoPaths: selected });
+                            dispatchAutocommitStop();
+                            return;
+                        }
+                        throw error;
+                    }
+                }
+
+                const token = getRememberedGitPat();
+                for (const repoPath of selected) {
+                    try {
+                        await gitPushWithToken(repoPath, token);
+                    } catch (error) {
+                        const msg = normalizeErrorMessage(error);
+                        if (isGitAuthError(msg)) {
+                            if (!token) {
+                                showGitAuthPrompt(repoPath, { type: 'push', mode: 'batch', repoPaths: selected }, { message: msg });
+                                dispatchAutocommitStop();
+                                return;
+                            }
+                            setStatusLine(`${msg} (A token is already saved. Use “Token” to update it.)`, true);
+                            dispatchAutocommitStop();
+                            return;
+                        }
+                        throw error;
+                    }
+                }
+
+                state.selectedFilesByRepo = {};
+                state.commitMessage = '';
+                clearCommitMessageInput();
+                clearDiffCache();
+                await loadRepoOverviews({ force: true });
+                await refreshAll({ force: true });
+                setStatusLine('Sync complete.');
+                dispatchAutocommitReset();
+            } catch (error) {
+                setStatusLine(normalizeErrorMessage(error), true);
+                dispatchAutocommitStop();
+            }
+        });
+    };
+
     const commit = async () => {
         await commitSelectedRepos();
     };
@@ -1845,6 +2034,12 @@ export function createGitCommitActions(ctx) {
             closeActionsMenu();
             if (state.identityPrompt?.visible || state.authPrompt?.visible) return;
             pullSelectedRepos('merge');
+            return;
+        }
+        if (next === 'sync') {
+            closeActionsMenu();
+            if (state.identityPrompt?.visible || state.authPrompt?.visible) return;
+            syncSelectedRepos();
             return;
         }
         if (next === 'stash') {

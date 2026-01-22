@@ -213,25 +213,7 @@ export class GitRepoTree {
     }
 
     getDisplayedRepoOverviews() {
-        const repos = Array.isArray(this.state.repos) ? this.state.repos : [];
-        const filtered = repos.filter((repo) => {
-            if (!repo) return false;
-            const counts = repo.counts || {};
-            const ignoredCount = Number.isFinite(repo.ignoredCount)
-                ? repo.ignoredCount
-                : (Array.isArray(repo.ignored) ? repo.ignored.length : 0);
-            const stashCount = Number.isFinite(repo.stashCount) ? repo.stashCount : 0;
-            return Boolean(
-                repo.dirty
-                || counts.staged
-                || counts.unstaged
-                || counts.untracked
-                || counts.conflicted
-                || ignoredCount
-                || stashCount
-            );
-        });
-        return filtered.length ? filtered : repos;
+        return Array.isArray(this.state.repos) ? this.state.repos : [];
     }
 
     buildRepoTree(repos) {
@@ -322,16 +304,8 @@ export class GitRepoTree {
             return;
         }
 
-        const dirty = this.getDisplayedRepoOverviews();
-        if (dirty.length === 0 && !this.state.loading) {
-            const empty = document.createElement('div');
-            empty.className = 'git-empty';
-            empty.textContent = 'No repositories with changes.';
-            this.list.appendChild(empty);
-            return;
-        }
-
-        const tree = this.buildRepoTree(dirty);
+        const repos = this.getDisplayedRepoOverviews();
+        const tree = this.buildRepoTree(repos);
         const expandedMap = this.state.repoTreeExpanded || {};
 
         const activePath = this.state.selectedPath || '';

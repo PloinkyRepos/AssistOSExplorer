@@ -416,6 +416,19 @@ export function attachGitController(fileExp) {
     window.addEventListener('webskel-autocommit-settings-changed', () => {
         ensureAutocommitTimer();
     });
+    window.addEventListener('webskel-autocommit-reset', () => {
+        clearAutocommitTimer();
+        ensureAutocommitTimer();
+    });
+    window.addEventListener('webskel-autocommit-stop', (event) => {
+        clearAutocommitTimer();
+        setErrorFlag(true);
+        updateGitButtonIndicator();
+        const message = String(event?.detail?.message || '').trim();
+        if (message) {
+            fileExp.showStatus(`Autocommit stopped: ${message}`, true);
+        }
+    });
 
     Object.assign(fileExp, {
         openGitModal,

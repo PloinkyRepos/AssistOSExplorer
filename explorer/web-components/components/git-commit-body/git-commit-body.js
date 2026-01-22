@@ -4,7 +4,8 @@ export class GitCommitBody {
         this.invalidate = invalidate;
         this.state = {
             visible: true,
-            repoPath: ''
+            repoPath: '',
+            advancedMode: false
         };
         this.boundActions = false;
         this.onUpdate = this.onUpdate.bind(this);
@@ -15,6 +16,7 @@ export class GitCommitBody {
 
     afterRender() {
         this.repoPathInput = this.element.querySelector('#gitRepoPathInput');
+        this.advancedModeInput = this.element.querySelector('#gitAdvancedMode');
         this.bindEvents();
         if (!this.element.dataset.boundCommitBody) {
             this.element.addEventListener('git-commit-body-update', this.onUpdate);
@@ -32,6 +34,11 @@ export class GitCommitBody {
                     event.preventDefault();
                     this.applyRepoPathFromInput();
                 }
+            });
+        }
+        if (this.advancedModeInput) {
+            this.advancedModeInput.addEventListener('change', () => {
+                this.toggleAdvancedMode();
             });
         }
         this.boundActions = true;
@@ -53,9 +60,19 @@ export class GitCommitBody {
         if (Object.prototype.hasOwnProperty.call(next, 'repoPath')) {
             this.state.repoPath = String(next.repoPath || '');
         }
+        if (Object.prototype.hasOwnProperty.call(next, 'advancedMode')) {
+            this.state.advancedMode = Boolean(next.advancedMode);
+        }
         this.element.classList.toggle('is-hidden', !this.state.visible);
+        const commitSection = this.element.querySelector('.git-commit');
+        if (commitSection) {
+            commitSection.classList.toggle('advanced-mode', this.state.advancedMode);
+        }
         if (this.repoPathInput && this.repoPathInput.value !== this.state.repoPath) {
             this.repoPathInput.value = this.state.repoPath;
+        }
+        if (this.advancedModeInput) {
+            this.advancedModeInput.checked = this.state.advancedMode;
         }
     }
 
@@ -68,6 +85,14 @@ export class GitCommitBody {
         this.emitAction('refreshAction');
     }
 
+    toggleAdvancedMode() {
+        const next = Boolean(this.advancedModeInput?.checked);
+        this.state.advancedMode = next;
+        const commitSection = this.element.querySelector('.git-commit');
+        if (commitSection) {
+            commitSection.classList.toggle('advanced-mode', next);
+        }
+    }
 
     emit(name, detail = {}) {
         this.element.dispatchEvent(new CustomEvent(name, { detail, bubbles: true }));

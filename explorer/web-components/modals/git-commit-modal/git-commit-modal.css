@@ -293,6 +293,21 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
     justify-content: space-between;
 }
 
+.git-advanced-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    margin-bottom: 6px;
+}
+
+.git-commit:not(.advanced-mode) .git-commit-row.git-commit-message {
+    display: none;
+}
+
+.git-commit:not(.advanced-mode) #gitActionsSplit {
+    display: none;
+}
+
 .git-repo {
     display: flex;
     align-items: center;
