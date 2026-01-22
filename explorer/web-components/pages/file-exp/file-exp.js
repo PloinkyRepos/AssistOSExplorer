@@ -206,7 +206,8 @@ export class FileExp {
         } else if (isBacklog) {
             this.detachPreviewAnchorHandler();
             const pathAttr = this.state.selectedPath || '';
-            previewContent.innerHTML = `<backlog-panel data-presenter="backlog-panel" data-path="${pathAttr}"></backlog-panel>`;
+            const repoPath = this.parentPath(pathAttr) || '/';
+            previewContent.innerHTML = `<backlog-panel data-presenter="backlog-panel" data-path="${pathAttr}" data-repo-path="${repoPath}"></backlog-panel>`;
         } else if (this.state.previewMode === 'media') {
             this.detachPreviewAnchorHandler();
             const content = this.state.previewContent || '<div class="preview-placeholder">Unable to preview file.</div>';

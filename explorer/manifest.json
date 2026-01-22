@@ -10,7 +10,7 @@
         "multimedia",
         "gitAgent global",
         "soplangAgent global",
-        "taskAgent"
+        "taskAgent global"
     ],
     "env": [
         "ASSISTOS_FS_ROOT"

@@ -567,6 +567,19 @@ th {
     gap: 8px;
 }
 
+.preview-header-extras #backlogHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    flex-wrap: wrap;
+}
+
+.preview-header-extras .backlog-title {
+    margin-right: auto;
+}
+
 .preview-header-extras .backlog-filters label {
     min-width: 140px;
 }
@@ -574,6 +587,12 @@ th {
 .preview-header-extras .backlog-filters input,
 .preview-header-extras .backlog-filters select {
     min-width: 120px;
+    height: 100%;
+}
+
+.preview-header-extras .backlog-filters {
+    width: 100%;
+    justify-content: flex-start;
 }
 
 .preview-header button {

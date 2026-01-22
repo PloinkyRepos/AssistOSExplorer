@@ -1,24 +1,22 @@
 import { callAgentTool, parseToolResult } from "../../../services/infrastructure/explorerApi.js";
 import { withGlobalLoader } from "../../../utils/globalLoader.js";
-import { getReposRoot } from "../../../utils/reposRoot.js";
+import { getWorkspaceRoot } from "../../../utils/workspaceRoot.js";
 
 export class BacklogPanel {
     constructor(element, invalidate, props = {}) {
         this.element = element;
         this.invalidate = invalidate;
         this.props = props || {};
-        this.reposRoot = getReposRoot();
+        this.workspaceRoot = getWorkspaceRoot();
+        this.repoPath = '';
         this.state = {
             config: null,
-            repos: [],
             tasks: [],
+            conflict: false,
             filters: {
-                repoPath: '',
                 status: '',
                 type: '',
                 priority: '',
-                assignee: '',
-                tag: '',
                 q: ''
             },
             error: ''
@@ -35,30 +33,56 @@ export class BacklogPanel {
         await this.refreshAll();
     }
 
+    afterUnload() {
+        if (this.boundCreateHandler) {
+            window.removeEventListener('backlog-task-create', this.boundCreateHandler);
+            this.boundCreateHandler = null;
+        }
+    }
+
     cacheElements() {
         this.errorBox = this.element.querySelector('#backlogError');
+        this.conflictBox = this.element.querySelector('#backlogConflict');
+        this.header = this.element.querySelector('#backlogHeader');
         this.filtersContainer = this.element.querySelector('#backlogFilters');
-        this.repoFilter = this.element.querySelector('#backlogRepoFilter');
         this.statusFilter = this.element.querySelector('#backlogStatusFilter');
         this.typeFilter = this.element.querySelector('#backlogTypeFilter');
         this.priorityFilter = this.element.querySelector('#backlogPriorityFilter');
-        this.assigneeFilter = this.element.querySelector('#backlogAssigneeFilter');
-        this.tagFilter = this.element.querySelector('#backlogTagFilter');
         this.searchFilter = this.element.querySelector('#backlogSearchFilter');
         this.list = this.element.querySelector('#backlogList');
         this.empty = this.element.querySelector('#backlogEmpty');
+        this.carouselInfo = this.element.querySelector('#backlogCarouselInfo');
+        this.state.currentIndex = this.state.currentIndex || 0;
+        this.repoPath = String(this.element.getAttribute('data-repo-path') || '').trim();
+        if (!this.repoPath) {
+            const pathAttr = String(this.element.getAttribute('data-path') || '').trim();
+            if (pathAttr) {
+                this.repoPath = this.parentPath(pathAttr);
+            }
+        }
+        this.repoPath = this.normalizeRepoPath(this.repoPath);
     }
 
     mountFiltersInHeader() {
-        if (!this.filtersContainer) return;
+        if (!this.filtersContainer || !this.header) return;
         const headerExtras = document.querySelector('#previewHeaderExtras');
         if (!headerExtras) return;
-        const existing = headerExtras.querySelector('.backlog-filters');
-        if (existing && existing !== this.filtersContainer) {
-            existing.remove();
+        const existingHeader = headerExtras.querySelector('#backlogHeader');
+        if (existingHeader && existingHeader !== this.header) {
+            existingHeader.remove();
         }
-        if (headerExtras.contains(this.filtersContainer)) return;
-        headerExtras.appendChild(this.filtersContainer);
+        const existingFilters = headerExtras.querySelector('.backlog-filters');
+        if (existingFilters && existingFilters !== this.filtersContainer) {
+            existingFilters.remove();
+        }
+        if (!headerExtras.contains(this.header)) {
+            headerExtras.appendChild(this.header);
+        }
+        if (!headerExtras.contains(this.filtersContainer)) {
+            headerExtras.appendChild(this.filtersContainer);
+        }
+        this.header.webSkelPresenter = this;
+        this.filtersContainer.webSkelPresenter = this;
     }
 
     bindEvents() {
@@ -69,21 +93,21 @@ export class BacklogPanel {
             this.element.addEventListener('backlog-task-delete', (event) => {
                 this.deleteTask(event?.detail || {});
             });
-            if (!window.__backlogCreateBound) {
-                window.addEventListener('backlog-task-create', (event) => {
+            this.element.addEventListener('backlog-task-status', (event) => {
+                this.updateTaskStatus(event?.detail || {});
+            });
+            if (!this.boundCreateHandler) {
+                this.boundCreateHandler = (event) => {
                     this.createBacklogTask(event?.detail || {});
-                });
-                window.__backlogCreateBound = true;
+                };
+                window.addEventListener('backlog-task-create', this.boundCreateHandler);
             }
             this.element.dataset.boundBacklogPanel = 'true';
         }
 
-        this.bindFilterInput(this.repoFilter, 'repoPath');
         this.bindFilterInput(this.statusFilter, 'status');
         this.bindFilterInput(this.typeFilter, 'type');
         this.bindFilterInput(this.priorityFilter, 'priority');
-        this.bindFilterInput(this.assigneeFilter, 'assignee');
-        this.bindFilterInput(this.tagFilter, 'tag');
         this.bindFilterInput(this.searchFilter, 'q');
     }
 
@@ -102,14 +126,19 @@ export class BacklogPanel {
     async refreshAll() {
         await withGlobalLoader(async () => {
             await this.loadConfig();
-            await this.loadRepos();
-            await this.loadTasks();
+            await this.checkBacklogConflict();
+            if (!this.state.conflict) {
+                await this.loadTasks();
+            } else {
+                this.state.tasks = [];
+                this.renderTasks();
+            }
         });
     }
 
     async loadConfig() {
         try {
-            const payload = await this.callTasksTool('task_config', {});
+            const payload = await this.callTasksTool('task_config', { repoPath: this.repoPath });
             this.state.config = payload?.config || null;
             this.clearError();
             this.renderSelectOptions();
@@ -118,39 +147,39 @@ export class BacklogPanel {
         }
     }
 
-    async loadRepos() {
-        try {
-            const payload = await this.callAgentToolRaw('gitAgent', 'git_repos_overview', { path: this.reposRoot });
-            const repos = Array.isArray(payload?.repos) ? payload.repos : [];
-            this.state.repos = repos.map((repo) => ({
-                path: repo?.path || '',
-                name: repo?.name || repo?.relativePath || repo?.path || ''
-            })).filter((repo) => repo.path);
-            this.clearError();
-            this.renderSelectOptions();
-        } catch (error) {
-            this.setError(`Repo list error: ${error?.message || error}`);
-        }
-    }
-
     async loadTasks() {
         try {
+            if (this.state.conflict) {
+                this.state.tasks = [];
+                this.renderTasks();
+                return;
+            }
             const args = {};
             const filters = this.state.filters;
-            if (filters.repoPath) args.repoPath = filters.repoPath;
             if (filters.status) args.status = filters.status;
             if (filters.type) args.type = filters.type;
             if (filters.priority) args.priority = filters.priority;
-            if (filters.assignee) args.assignee = filters.assignee;
-            if (filters.tag) args.tag = filters.tag;
             if (filters.q) args.q = filters.q;
-            const payload = await this.callTasksTool('task_list', args);
+            const payload = await this.callTasksTool('task_list', { ...args, repoPath: this.repoPath });
             this.state.tasks = Array.isArray(payload?.tasks) ? payload.tasks : [];
             this.clearError();
             this.renderTasks();
         } catch (error) {
             this.setError(`Task list error: ${error?.message || error}`);
         }
+    }
+
+    async checkBacklogConflict() {
+        let conflict = false;
+        try {
+            const payload = await this.callAgentToolRaw('gitAgent', 'git_status', { path: this.repoPath || this.workspaceRoot });
+            const conflicted = Array.isArray(payload?.status?.conflicted) ? payload.status.conflicted : [];
+            conflict = conflicted.some((entry) => String(entry || '') === '.backlog' || String(entry || '').endsWith('/.backlog'));
+        } catch {
+            conflict = false;
+        }
+        this.state.conflict = conflict;
+        this.updateConflictUI();
     }
 
     async callTasksTool(name, args) {
@@ -170,18 +199,6 @@ export class BacklogPanel {
         const statuses = Object.entries(config.statuses || {});
         const priorities = Object.entries(config.priorities || {});
         const types = Object.entries(config.types || {});
-        const repos = this.state.repos || [];
-
-        if (this.repoFilter) {
-            this.repoFilter.innerHTML = '';
-            this.repoFilter.appendChild(new Option('All', ''));
-            for (const repo of repos) {
-                this.repoFilter.appendChild(new Option(repo.name || repo.path, repo.path));
-            }
-            if (this.state.filters.repoPath) {
-                this.repoFilter.value = this.state.filters.repoPath;
-            }
-        }
         if (this.statusFilter) {
             this.statusFilter.innerHTML = '';
             this.statusFilter.appendChild(new Option('All', ''));
@@ -221,26 +238,47 @@ export class BacklogPanel {
         const tasks = Array.isArray(this.state.tasks) ? this.state.tasks : [];
         if (!tasks.length) {
             if (this.empty) this.empty.style.display = 'block';
+            if (this.carouselInfo) this.carouselInfo.textContent = '0 / 0';
             return;
         }
         if (this.empty) this.empty.style.display = 'none';
+        if (this.state.currentIndex >= tasks.length) {
+            this.state.currentIndex = Math.max(0, tasks.length - 1);
+        }
         const statuses = this.state.config?.statuses || {};
         const priorities = this.state.config?.priorities || {};
         const types = this.state.config?.types || {};
-        const repos = this.state.repos || [];
-        for (const task of tasks) {
-            const row = document.createElement('backlog-task-row');
-            row.setAttribute('data-presenter', 'backlog-task-row');
-            row.setAttribute('data-task', encodeURIComponent(JSON.stringify(task)));
-            row.setAttribute('data-statuses', encodeURIComponent(JSON.stringify(statuses)));
-            row.setAttribute('data-priorities', encodeURIComponent(JSON.stringify(priorities)));
-            row.setAttribute('data-types', encodeURIComponent(JSON.stringify(types)));
-            row.setAttribute('data-repos', encodeURIComponent(JSON.stringify(repos)));
-            this.list.appendChild(row);
+        const task = tasks[this.state.currentIndex];
+        if (!task) return;
+        const row = document.createElement('backlog-task-row');
+        row.setAttribute('data-presenter', 'backlog-task-row');
+        row.setAttribute('data-task', encodeURIComponent(JSON.stringify(task)));
+        row.setAttribute('data-statuses', encodeURIComponent(JSON.stringify(statuses)));
+        row.setAttribute('data-priorities', encodeURIComponent(JSON.stringify(priorities)));
+        row.setAttribute('data-types', encodeURIComponent(JSON.stringify(types)));
+        this.list.appendChild(row);
+        if (this.carouselInfo) {
+            this.carouselInfo.textContent = `${this.state.currentIndex + 1} / ${tasks.length}`;
         }
     }
 
+    prevTask() {
+        if (!Array.isArray(this.state.tasks) || !this.state.tasks.length) return;
+        this.state.currentIndex = Math.max(0, this.state.currentIndex - 1);
+        this.renderTasks();
+    }
+
+    nextTask() {
+        if (!Array.isArray(this.state.tasks) || !this.state.tasks.length) return;
+        this.state.currentIndex = Math.min(this.state.tasks.length - 1, this.state.currentIndex + 1);
+        this.renderTasks();
+    }
+
     async createBacklogTask(payload = {}) {
+        if (this.state.conflict) {
+            this.setError('Resolve .backlog conflicts before editing.');
+            return;
+        }
         const description = String(payload.description || '').trim();
         if (!description) {
             this.setError('Description is required.');
@@ -248,24 +286,55 @@ export class BacklogPanel {
         }
         const request = {
             description,
+            proposedSolution: payload.proposedSolution || '',
             type: payload.type || '',
             observations: payload.observations || '',
-            repoPath: payload.repoPath || '',
             status: payload.status || '',
             priority: payload.priority || '',
-            assignee: payload.assignee || '',
-            tags: Array.isArray(payload.tags) ? payload.tags : []
+            updatedBy: this.getCurrentUser(),
+            repoPath: this.repoPath
         };
         await withGlobalLoader(async () => {
             await this.callTasksTool('task_create', request);
+            await this.commitBacklog('Add backlog task');
             await this.loadTasks();
         });
     }
 
     async saveTask(payload) {
         if (!payload?.id) return;
+        if (this.state.conflict) {
+            this.setError('Resolve .backlog conflicts before editing.');
+            return;
+        }
         await withGlobalLoader(async () => {
-            await this.callTasksTool('task_update', payload);
+            await this.callTasksTool('task_update', { ...payload, updatedBy: this.getCurrentUser(), repoPath: this.repoPath });
+            await this.commitBacklog('Update backlog task');
+            await this.loadTasks();
+        });
+    }
+
+    async updateTaskStatus(payload) {
+        const id = payload?.id;
+        const status = payload?.status;
+        if (!id || !status) return;
+        if (this.state.conflict) {
+            this.setError('Resolve .backlog conflicts before editing.');
+            return;
+        }
+        await withGlobalLoader(async () => {
+            await this.callTasksTool('task_update', {
+                id,
+                status,
+                description: payload.description,
+                proposedSolution: payload.proposedSolution,
+                observations: payload.observations,
+                type: payload.type,
+                priority: payload.priority,
+                updatedBy: this.getCurrentUser(),
+                repoPath: this.repoPath
+            });
+            await this.commitBacklog('Update backlog status');
             await this.loadTasks();
         });
     }
@@ -273,11 +342,24 @@ export class BacklogPanel {
     async deleteTask(payload) {
         const id = payload?.id;
         if (!id) return;
+        if (this.state.conflict) {
+            this.setError('Resolve .backlog conflicts before editing.');
+            return;
+        }
         const ok = window.confirm('Delete this task?');
         if (!ok) return;
         await withGlobalLoader(async () => {
-            await this.callTasksTool('task_delete', { id });
-            await this.loadTasks();
+            try {
+                await this.callTasksTool('task_delete', { id, repoPath: this.repoPath });
+                await this.commitBacklog('Delete backlog task');
+            } catch (error) {
+                const message = String(error?.message || error);
+                if (!message.includes('Task not found')) {
+                    throw error;
+                }
+            } finally {
+                await this.loadTasks();
+            }
         });
     }
 
@@ -287,11 +369,16 @@ export class BacklogPanel {
         if (button) button.disabled = false;
     }
 
-    openCreateTaskModal() {
+    async openCreateTaskModal() {
+        if (this.state.conflict) {
+            this.setError('Resolve .backlog conflicts before editing.');
+            return;
+        }
+        if (!this.state.config || !Object.keys(this.state.config.statuses || {}).length) {
+            await this.loadConfig();
+        }
         const config = this.state.config || {};
-        const repos = this.state.repos || [];
         assistOS.UI.createReactiveModal('backlog-create-modal', {
-            repos: encodeURIComponent(JSON.stringify(repos)),
             statuses: encodeURIComponent(JSON.stringify(config.statuses || {})),
             priorities: encodeURIComponent(JSON.stringify(config.priorities || {})),
             types: encodeURIComponent(JSON.stringify(config.types || {})),
@@ -314,6 +401,64 @@ export class BacklogPanel {
         if (this.errorBox) {
             this.errorBox.textContent = '';
             this.errorBox.classList.remove('is-visible');
+        }
+    }
+
+    updateConflictUI() {
+        if (this.conflictBox) {
+            this.conflictBox.classList.toggle('is-visible', this.state.conflict);
+        }
+        const disabled = Boolean(this.state.conflict);
+        const inputs = this.element.querySelectorAll('input, select, textarea, button');
+        for (const input of inputs) {
+            if (input.closest('.backlog-actions')) continue;
+            if (input.closest('.backlog-create-actions')) continue;
+            input.disabled = disabled;
+        }
+        const createButton = this.element.querySelector('.backlog-create-actions button');
+        if (createButton) createButton.disabled = disabled;
+    }
+
+    getCurrentUser() {
+        const email = window?.assistOS?.user?.email;
+        return typeof email === 'string' ? email.trim() : '';
+    }
+
+    parentPath(value) {
+        const normalized = String(value || '').replace(/\\/g, '/').replace(/\/+$/g, '');
+        if (!normalized || normalized === '/') return '/';
+        const parts = normalized.split('/');
+        parts.pop();
+        const next = parts.join('/') || '/';
+        return next;
+    }
+
+    normalizeRepoPath(value) {
+        return String(value || '').replace(/\\/g, '/').replace(/\/+$/g, '');
+    }
+
+
+    async commitBacklog(message) {
+        try {
+            const status = await this.callAgentToolRaw('gitAgent', 'git_status', { path: this.repoPath || this.workspaceRoot });
+            const changed = [
+                ...(status?.status?.unstaged || []),
+                ...(status?.status?.staged || []),
+                ...(status?.status?.untracked || [])
+            ];
+            const hasBacklog = changed.some((entry) => String(entry || '') === '.backlog' || String(entry || '').endsWith('/.backlog'));
+            if (!hasBacklog) return;
+            await this.callAgentToolRaw('gitAgent', 'git_stage', { path: this.repoPath || this.workspaceRoot, files: ['.backlog'] });
+            await this.callAgentToolRaw('gitAgent', 'git_commit', {
+                path: this.repoPath || this.workspaceRoot,
+                message: message || 'Update backlog',
+                userEmail: this.getCurrentUser() || null
+            });
+        } catch (error) {
+            const msg = String(error?.message || error);
+            if (!msg.toLowerCase().includes('nothing to commit')) {
+                this.setError(`Backlog commit failed: ${msg}`);
+            }
         }
     }
 }

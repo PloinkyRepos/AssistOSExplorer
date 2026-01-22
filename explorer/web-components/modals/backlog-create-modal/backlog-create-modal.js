@@ -4,7 +4,6 @@ export class BacklogCreateModal {
         this.invalidate = invalidate;
         this.props = element?.props || element?._componentProxy?.props || {};
         this.state = {
-            repos: [],
             statuses: {},
             priorities: {},
             types: {},
@@ -25,19 +24,16 @@ export class BacklogCreateModal {
     }
 
     cacheElements() {
-        this.repoSelect = this.element.querySelector('#backlogModalRepo');
         this.typeSelect = this.element.querySelector('#backlogModalType');
         this.statusSelect = this.element.querySelector('#backlogModalStatus');
         this.prioritySelect = this.element.querySelector('#backlogModalPriority');
-        this.assigneeInput = this.element.querySelector('#backlogModalAssignee');
-        this.tagsInput = this.element.querySelector('#backlogModalTags');
         this.descInput = this.element.querySelector('#backlogModalDescription');
+        this.proposedSolutionInput = this.element.querySelector('#backlogModalProposedSolution');
         this.observationsInput = this.element.querySelector('#backlogModalObservations');
     }
 
     loadProps() {
         const props = this.props || {};
-        this.state.repos = this.parsePayload(props.repos) || [];
         this.state.statuses = this.parsePayload(props.statuses) || {};
         this.state.priorities = this.parsePayload(props.priorities) || {};
         this.state.types = this.parsePayload(props.types) || {};
@@ -56,13 +52,6 @@ export class BacklogCreateModal {
     }
 
     renderSelects() {
-        if (this.repoSelect) {
-            this.repoSelect.innerHTML = '';
-            this.repoSelect.appendChild(new Option('Select repo', ''));
-            for (const repo of this.state.repos || []) {
-                this.repoSelect.appendChild(new Option(repo.name || repo.path, repo.path));
-            }
-        }
         if (this.typeSelect) {
             this.typeSelect.innerHTML = '';
             for (const [key, label] of Object.entries(this.state.types || {})) {
@@ -113,13 +102,11 @@ export class BacklogCreateModal {
         }
         const payload = {
             description,
+            proposedSolution: this.proposedSolutionInput?.value || '',
             observations: this.observationsInput?.value || '',
             type: this.typeSelect?.value || '',
-            repoPath: this.repoSelect?.value || '',
             status: this.statusSelect?.value || '',
             priority: this.prioritySelect?.value || '',
-            assignee: this.assigneeInput?.value || '',
-            tags: (this.tagsInput?.value || '').split(',').map((tag) => tag.trim()).filter(Boolean)
         };
         window.dispatchEvent(new CustomEvent('backlog-task-create', { detail: payload }));
         this.closeModal();

@@ -1,51 +1,48 @@
 <div class="backlog-task-row">
     <div class="backlog-task-header">
-        <span class="backlog-task-type-icon" data-field="typeIcon" aria-hidden="true"></span>
-        <div class="backlog-task-assignee">
-            <span class="label">Assignee:</span>
-            <span data-field="assigneeLabel">Unassigned</span>
+        <div class="backlog-task-type-picker" data-field="typePicker">
+            <button type="button" class="backlog-task-type-trigger" data-local-action="toggleTypeMenu">
+                <span class="backlog-task-type-icon" data-field="typeIcon" aria-hidden="true"></span>
+            </button>
+            <div class="backlog-task-type-menu" data-field="typeMenu"></div>
+            <select class="backlog-task-type-select" data-field="type"></select>
         </div>
-        <button type="button" class="secondary backlog-task-toggle" data-local-action="toggleMore">Show more</button>
+        <span class="backlog-task-status-wrap">
+            <span class="backlog-task-status" data-field="statusIcon" aria-hidden="true"></span>
+            <span class="backlog-task-status-label" data-field="statusLabel"></span>
+        </span>
+        <div class="backlog-task-meta" data-field="meta"></div>
+        <div class="backlog-task-priority-picker" data-field="priorityPicker">
+            <button type="button" class="backlog-task-priority-trigger" data-local-action="togglePriorityMenu">
+                <span class="backlog-task-priority-dot" data-field="priorityDot" aria-hidden="true"></span>
+                <span class="backlog-task-priority-label" data-field="priorityLabel">Priority</span>
+            </button>
+            <div class="backlog-task-priority-menu" data-field="priorityMenu"></div>
+            <select class="backlog-task-priority-select" data-field="priority"></select>
+        </div>
     </div>
     <div class="backlog-task-main">
-        <textarea class="backlog-task-desc" data-field="description" rows="2" spellcheck="false"></textarea>
+        <textarea class="backlog-task-textarea backlog-task-desc" data-field="description" rows="2" spellcheck="false" placeholder="Describe the issue..."></textarea>
     </div>
-    <div class="backlog-task-details" data-field="details">
-        <div class="backlog-task-grid">
-            <label>
-                Type
-                <select data-field="type"></select>
-            </label>
-            <label>
-                Status
-                <select data-field="status"></select>
-            </label>
-            <label>
-                Priority
-                <select data-field="priority"></select>
-            </label>
-            <label>
-                Assignee
-                <input data-field="assignee" type="text" autocomplete="off" spellcheck="false"/>
-            </label>
-            <label>
-                Tags
-                <input data-field="tags" type="text" autocomplete="off" spellcheck="false"/>
-            </label>
-            <label>
-                Repo
-                <select data-field="repo"></select>
-            </label>
-        </div>
-        <label class="backlog-task-observations">
-            Observations
-            <textarea data-field="observations" rows="3" spellcheck="false"></textarea>
-        </label>
-        <div class="backlog-task-meta" data-field="meta"></div>
-    </div>
+    <label class="backlog-task-solution">
+        Proposed solution
+        <textarea class="backlog-task-textarea" data-field="proposedSolution" rows="3" spellcheck="false" placeholder="Suggested approach or fix..."></textarea>
+    </label>
+    <label class="backlog-task-observations">
+        Observations
+        <textarea class="backlog-task-textarea" data-field="observations" rows="3" spellcheck="false" placeholder="Notes, test results, or reasons for reopen/reject..."></textarea>
+    </label>
+    <div class="backlog-task-grid"></div>
+
     <div class="backlog-task-actions">
-        <button type="button" class="secondary backlog-task-toggle" data-local-action="toggleMore">Show more</button>
         <button type="button" class="secondary" data-local-action="deleteTask">Delete</button>
-        <button type="button" class="primary" data-local-action="saveTask" disabled>Save</button>
+        <div class="backlog-task-quick-actions" data-field="quickActions">
+            <button type="button" class="quick-action approve" data-local-action="approveTask" title="Approve this task">Approve</button>
+            <button type="button" class="quick-action reject" data-local-action="rejectTask" title="Reject this task">Reject</button>
+            <button type="button" class="quick-action reopen" data-local-action="reopenTask" title="Reopen with observations if needed">Reopen</button>
+            <button type="button" class="quick-action test-ready" data-local-action="markTestReady" title="Mark as ready for testing">Test ready</button>
+            <button type="button" class="quick-action done" data-local-action="markDone" title="Mark as done">Done</button>
+        </div>
+
     </div>
 </div>

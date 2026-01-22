@@ -1,18 +1,20 @@
 <div class="backlog-panel">
-    <div class="backlog-header">
+    <div class="backlog-header" id="backlogHeader">
         <div class="backlog-title">Backlog</div>
         <div class="backlog-actions">
-            <button type="button" class="secondary" data-local-action="refreshBacklog">Refresh</button>
+            <button type="button" class="secondary backlog-refresh" data-local-action="refreshBacklog" aria-label="Refresh">
+                <img src="./assets/icons/refresh.svg" alt="" aria-hidden="true"/>
+            </button>
+            <button type="button" class="primary" data-local-action="openCreateTaskModal">New task</button>
         </div>
     </div>
 
     <div class="backlog-error" id="backlogError" aria-live="polite"></div>
+    <div class="backlog-conflict" id="backlogConflict" aria-live="polite">
+        .backlog has merge conflicts. Resolve them before editing tasks.
+    </div>
 
     <div class="backlog-filters" id="backlogFilters">
-        <label>
-            Repo
-            <select id="backlogRepoFilter"></select>
-        </label>
         <label>
             Status
             <select id="backlogStatusFilter"></select>
@@ -26,24 +28,18 @@
             <select id="backlogPriorityFilter"></select>
         </label>
         <label>
-            Assignee
-            <input id="backlogAssigneeFilter" type="search" autocomplete="off" spellcheck="false"/>
-        </label>
-        <label>
-            Tag
-            <input id="backlogTagFilter" type="search" autocomplete="off" spellcheck="false"/>
-        </label>
-        <label>
             Search
             <input id="backlogSearchFilter" type="search" autocomplete="off" spellcheck="false"/>
         </label>
     </div>
 
-    <div class="backlog-create-actions">
-        <button type="button" class="primary" data-local-action="openCreateTaskModal">New task</button>
-    </div>
-
     <div class="backlog-section-title">Tasks</div>
     <div class="backlog-list" id="backlogList"></div>
     <div class="backlog-empty" id="backlogEmpty">No tasks found.</div>
+    <div class="backlog-carousel" id="backlogCarousel">
+        <button type="button" class="secondary" data-local-action="prevTask">Prev</button>
+        <div class="backlog-carousel-info" id="backlogCarouselInfo">0 / 0</div>
+        <button type="button" class="secondary" data-local-action="nextTask">Next</button>
+    </div>
+
 </div>

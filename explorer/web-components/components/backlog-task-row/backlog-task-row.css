@@ -1,5 +1,5 @@
 .backlog-task-row {
-    border: 1px solid var(--file-exp-border, rgba(148, 163, 184, 0.35));
+    border: 1px solid rgba(148, 163, 184, 0.6);
     border-radius: 10px;
     padding: 8px;
     background: var(--file-exp-panel, rgba(255, 255, 255, 0.85));
@@ -7,12 +7,252 @@
     flex-direction: column;
     gap: 8px;
     position: relative;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08), 0 3px 8px rgba(15, 23, 42, 0.06);
+    max-height: 70vh;
+    overflow: auto;
 }
 
 .backlog-task-header {
     display: flex;
     align-items: center;
     gap: 10px;
+}
+
+.backlog-task-type-picker {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.backlog-task-type-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 !important;
+    border-radius: 10px;
+    border: 1px solid var(--file-exp-border, rgba(148, 163, 184, 0.35));
+    background: rgba(255, 255, 255, 0.9);
+    cursor: pointer;
+}
+
+.backlog-task-type-trigger:hover {
+    background: rgba(248, 250, 252, 0.95);
+    color: var(--text);
+
+}
+
+.backlog-task-type-trigger:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.backlog-task-type-label {
+    font-size: 0.85rem;
+    color: var(--text, #0f172a);
+    font-weight: 600;
+}
+
+.backlog-task-type-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    min-width: 160px;
+    padding: 6px;
+    border-radius: 12px;
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    background: #fff;
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
+    display: none;
+    z-index: 10;
+}
+
+.backlog-task-type-menu.is-open {
+    display: grid;
+    gap: 4px;
+}
+
+.backlog-task-type-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    background: transparent !important;
+    cursor: pointer;
+    text-align: left;
+    font-size: 0.85rem;
+    color: var(--text) !important;
+}
+
+.backlog-task-type-option:hover {
+    border-color: rgba(148, 163, 184, 0.35);
+    background: var(--accent) !important;
+}
+
+.backlog-task-type-select {
+    display: none;
+}
+
+.backlog-task-priority-picker {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    margin-left: auto;
+}
+
+.backlog-task-priority-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    border-radius: 10px;
+    border: 1px solid var(--file-exp-border, rgba(148, 163, 184, 0.35));
+    background: rgba(255, 255, 255, 0.9) !important;
+    cursor: pointer;
+}
+
+.backlog-task-priority-trigger:hover {
+    background: rgba(248, 250, 252, 0.95);
+}
+
+.backlog-task-priority-trigger:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.backlog-task-priority-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: #94a3b8;
+}
+
+.backlog-task-priority-dot.priority-low {
+    background: #94a3b8;
+}
+
+.backlog-task-priority-dot.priority-medium {
+    background: #3b82f6;
+}
+
+.backlog-task-priority-dot.priority-high {
+    background: #f59e0b;
+}
+
+.backlog-task-priority-dot.priority-urgent {
+    background: #ef4444;
+}
+
+.backlog-task-priority-label {
+    font-size: 0.85rem;
+    color: var(--text, #0f172a);
+    font-weight: 600;
+}
+
+.backlog-task-priority-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    min-width: 160px;
+    padding: 6px;
+    border-radius: 12px;
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    background: #fff;
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
+    display: none;
+    z-index: 10;
+}
+
+.backlog-task-priority-menu.is-open {
+    display: grid;
+    gap: 4px;
+}
+
+.backlog-task-priority-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    background: transparent !important;
+    cursor: pointer;
+    text-align: left;
+    font-size: 0.85rem;
+    color: var(--text) !important;
+}
+
+.backlog-task-priority-option:hover {
+    border-color: rgba(148, 163, 184, 0.35);
+    background: var(--accent) !important;
+
+}
+
+.backlog-task-priority-select {
+    display: none;
+}
+
+.backlog-task-status-wrap {
+    top: 8px;
+    right: 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 56px;
+    pointer-events: none;
+}
+
+.backlog-task-status {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #94a3b8;
+    box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.2);
+    align-self: end;
+}
+
+.backlog-task-status-label {
+    font-size: 0.62rem;
+    font-weight: 600;
+    color: var(--text-soft, rgba(15, 23, 42, 0.55));
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.backlog-task-status.status-new {
+    background: #94a3b8;
+    box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.2);
+}
+
+.backlog-task-status.status-approved {
+    background: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.backlog-task-status.status-test-ready {
+    background: #f59e0b;
+    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
+}
+
+.backlog-task-status.status-testing {
+    background: #22c55e;
+    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
+}
+
+.backlog-task-status.status-reopened {
+    background: #ef4444;
+    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+}
+
+.backlog-task-status.status-rejected {
+    background: #7c3aed;
+    box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.2);
+}
+
+.backlog-task-status.status-done {
+    background: #10b981;
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
 }
 
 .backlog-task-type-icon {
@@ -39,29 +279,6 @@
     background: #f59e0b;
 }
 
-.backlog-task-assignee {
-    display: inline-flex;
-    gap: 6px;
-    font-size: 0.8rem;
-    color: var(--text-soft, rgba(15, 23, 42, 0.7));
-    font-weight: 600;
-    flex: 1 1 auto;
-}
-
-.backlog-task-assignee .label {
-    color: var(--text-soft, rgba(15, 23, 42, 0.55));
-}
-
-.backlog-task-details {
-    display: none;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.backlog-task-row.is-expanded .backlog-task-details {
-    display: flex;
-}
-
 .backlog-task-main {
     display: flex;
     flex-direction: column;
@@ -69,7 +286,6 @@
 }
 
 .backlog-task-main input,
-.backlog-task-main textarea,
 .backlog-task-grid input,
 .backlog-task-grid select {
     padding: 6px 8px;
@@ -79,13 +295,39 @@
     color: var(--text, #0f172a);
 }
 
+.backlog-task-textarea {
+    border-radius: 12px;
+    padding: 10px 12px;
+    background: linear-gradient(180deg, rgba(248, 250, 252, 0.95), rgba(241, 245, 249, 0.85));
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.06);
+    font-size: 0.95rem;
+    line-height: 1.4;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    min-height: calc(1.4em * 2);
+    resize: none;
+    overflow: hidden;
+}
+
+.backlog-task-textarea:focus {
+    outline: none;
+    border-color: rgba(59, 130, 246, 0.6);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2), inset 0 1px 2px rgba(15, 23, 42, 0.06);
+    background: rgba(255, 255, 255, 0.98);
+}
+
+.backlog-task-textarea::placeholder {
+    color: rgba(100, 116, 139, 0.7);
+}
+
 .backlog-task-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(120px, 1fr));
     gap: 8px;
 }
 
-.backlog-task-observations {
+.backlog-task-observations,
+.backlog-task-solution {
     display: flex;
     flex-direction: column;
     gap: 6px;
@@ -106,17 +348,58 @@
 .backlog-task-meta {
     font-size: 0.72rem;
     color: var(--text-soft, rgba(15, 23, 42, 0.6));
+    flex-grow: 1;
+    text-align: center;
 }
 
 .backlog-task-actions {
     display: flex;
-    justify-content: flex-end;
+    justify-content: space-between;
     align-items: center;
     gap: 8px;
 }
 
-.backlog-task-actions .backlog-task-toggle {
-    margin-right: auto;
+.backlog-task-quick-actions {
+    display: inline-flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.backlog-task-quick-actions .quick-action {
+    border: 1px solid transparent;
+    padding: 6px 10px;
+    border-radius: 10px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    color: #fff;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+
+.backlog-task-quick-actions .quick-action:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 16px rgba(15, 23, 42, 0.12);
+    filter: brightness(1.02);
+}
+
+.backlog-task-quick-actions .quick-action.approve {
+    background: #3b82f6;
+}
+
+.backlog-task-quick-actions .quick-action.reject {
+    background: #ef4444;
+}
+
+.backlog-task-quick-actions .quick-action.reopen {
+    background: #f97316;
+}
+
+.backlog-task-quick-actions .quick-action.test-ready {
+    background: #22c55e;
+}
+
+.backlog-task-quick-actions .quick-action.done {
+    background: #10b981;
 }
 
 @media (max-width: 980px) {
