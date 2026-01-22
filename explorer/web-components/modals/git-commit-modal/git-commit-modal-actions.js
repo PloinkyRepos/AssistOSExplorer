@@ -13,6 +13,8 @@ import {
     setRememberedGitPat,
     setRememberedGitIdentity,
     setAutocommitSettings,
+    getConflictAutoresolveSetting,
+    setConflictAutoresolveSetting,
     setCredentialsValidated
 } from "./git-commit-modal-utils.js";
 import { withGlobalLoader } from "../../../utils/globalLoader.js";
@@ -152,7 +154,102 @@ export function createGitCommitActions(ctx) {
         state.manualConflicts = collected;
     };
 
+    const extractConflictPaths = (status) => {
+        const list = Array.isArray(status?.conflicted) ? status.conflicted : [];
+        return list
+            .map((entry) => {
+                if (!entry) return '';
+                if (typeof entry === 'string') return entry;
+                return entry.path || entry.filePath || '';
+            })
+            .map((value) => String(value || '').trim())
+            .filter(Boolean);
+    };
+
+    const joinPath = (base, relative) => {
+        const left = String(base || '').replace(/\/+$/, '');
+        const right = String(relative || '').replace(/^\/+/, '');
+        if (!left) return right;
+        if (!right) return left;
+        return `${left}/${right}`;
+    };
+
+    const extractResolvedContent = (payload) => {
+        if (!payload) return '';
+        if (typeof payload === 'string') return payload;
+        if (typeof payload.content === 'string') return payload.content;
+        if (typeof payload.resolved === 'string') return payload.resolved;
+        if (typeof payload.result === 'string') return payload.result;
+        if (typeof payload.merged === 'string') return payload.merged;
+        if (typeof payload.output === 'string') return payload.output;
+        if (typeof payload.resolution === 'string') return payload.resolution;
+        return '';
+    };
+
+    const isAutoresolveEnabled = () => {
+        const state = getState();
+        if (state.autoresolveDirty) {
+            return Boolean(state.autoresolveDraft?.enabled);
+        }
+        return getConflictAutoresolveSetting();
+    };
+
+    const autoResolveConflicts = async (repoPaths, source = 'merge') => {
+        if (!isAutoresolveEnabled()) return { ok: false, errorMessage: '' };
+        const list = Array.isArray(repoPaths) ? repoPaths.filter(Boolean) : [];
+        if (!list.length) return { ok: false, errorMessage: '' };
+        setStatusLine('Auto-resolving conflicts...');
+        try {
+            for (const repoPath of list) {
+                const statusPayload = parseJsonToolResult(await service.gitStatus(repoPath)) || {};
+                const status = statusPayload?.status || statusPayload || {};
+                const conflictPaths = extractConflictPaths(status);
+                if (!conflictPaths.length) continue;
+                for (const filePath of conflictPaths) {
+                    const versionsText = await service.gitConflictVersions({ path: repoPath, file: filePath });
+                    const versions = parseJsonToolResult(versionsText) || {};
+                    const resolveText = await service.llmResolveConflict({
+                        base: versions.base || '',
+                        ours: versions.ours || '',
+                        theirs: versions.theirs || '',
+                        source
+                    });
+                    const resolvePayload = parseJsonToolResult(resolveText) || resolveText;
+                    const resolved = extractResolvedContent(resolvePayload);
+                    if (!resolved) {
+                        throw new Error('LLM returned empty conflict resolution.');
+                    }
+                    const absoluteFile = joinPath(repoPath, filePath);
+                    await service.writeFile(absoluteFile, resolved);
+                    await service.gitStage(repoPath, [filePath]);
+                }
+                const afterPayload = parseJsonToolResult(await service.gitStatus(repoPath)) || {};
+                const afterStatus = afterPayload?.status || afterPayload || {};
+                updateRepoOverviewFromStatus(repoPath, afterPayload);
+                if (extractConflictPaths(afterStatus).length) {
+                    return { ok: false, errorMessage: '' };
+                }
+            }
+            await loadManualConflicts(repoPaths);
+            setStatusLine('Conflicts auto-resolved.');
+            return { ok: true, errorMessage: '' };
+        } catch (error) {
+            const msg = normalizeErrorMessage(error);
+            if (msg.toLowerCase().includes('llm_resolve_conflict') && msg.toLowerCase().includes('not found')) {
+                return { ok: false, errorMessage: 'Autoresolve unavailable: llm_resolve_conflict tool not found.' };
+            }
+            return { ok: false, errorMessage: msg };
+        }
+    };
+
     const handlePullConflicts = async (message, repoPaths = null, source = 'merge') => {
+        const autoResult = await autoResolveConflicts(repoPaths, source);
+        if (autoResult.ok) {
+            await loadRepoOverviews({ force: true });
+            syncStaticUI();
+            updateCommitButtons();
+            return true;
+        }
         await loadManualConflicts(repoPaths);
         const state = getState();
         state.conflictSource = source;
@@ -160,7 +257,9 @@ export function createGitCommitActions(ctx) {
         await loadRepoOverviews({ force: true });
         syncStaticUI();
         updateCommitButtons();
-        setStatusLine(message || 'Merge conflicts detected. Resolve them before continuing.', true);
+        const fallbackMessage = autoResult.errorMessage || message || 'Merge conflicts detected. Resolve them before continuing.';
+        setStatusLine(fallbackMessage, true);
+        return false;
     };
 
     const restoreStash = async (repoPath, stashRef) => {
@@ -174,8 +273,8 @@ export function createGitCommitActions(ctx) {
                 return { ok: false, conflicts: false };
             }
             if (payload.conflicts) {
-                await handlePullConflicts('Conflicts after restoring stashed changes. Resolve them before continuing.', [repoPath], 'stash');
-                return { ok: false, conflicts: true };
+                const resolved = await handlePullConflicts('Conflicts after restoring stashed changes. Resolve them before continuing.', [repoPath], 'stash');
+                return { ok: resolved, conflicts: !resolved };
             }
             if (payload.ok === false) {
                 setStatusLine(payload.output || 'Failed to restore stash.', true);
@@ -1277,6 +1376,9 @@ export function createGitCommitActions(ctx) {
         const validateOnly = Boolean(payload.validateOnly);
         const autocommitIntervalMinutes = payload.autocommitIntervalMinutes;
         const autocommitRepos = Array.isArray(payload.autocommitRepos) ? payload.autocommitRepos : null;
+        const autoresolveConflicts = typeof payload.autoresolveConflicts === 'boolean'
+            ? payload.autoresolveConflicts
+            : getConflictAutoresolveSetting();
 
         const identityRequired = Boolean(state.credentialsGate || state.identityPrompt?.visible);
         const authRequired = Boolean(state.authPrompt?.visible);
@@ -1323,8 +1425,9 @@ export function createGitCommitActions(ctx) {
             return;
         }
 
-        if (!state.credentialsValidated && !state.credentialsDirty && state.autocommitDirty && !validateOnly) {
+        if (!state.credentialsValidated && !state.credentialsDirty && (state.autocommitDirty || state.autoresolveDirty) && !validateOnly) {
             setAutocommitSettings({ intervalMinutes: autocommitIntervalMinutes, repos: autocommitRepos });
+            setConflictAutoresolveSetting(autoresolveConflicts);
             try {
                 window.dispatchEvent(new CustomEvent('webskel-autocommit-settings-changed'));
             } catch {
@@ -1335,9 +1438,11 @@ export function createGitCommitActions(ctx) {
                 intervalMinutes: autocommitIntervalMinutes,
                 repos: autocommitRepos
             };
+            state.autoresolveDirty = false;
+            state.autoresolveDraft = { enabled: autoresolveConflicts };
             syncStaticUI();
             updateCommitButtons();
-            setStatusLine('Autocommit settings saved.');
+            setStatusLine('Settings saved.');
             return;
         }
 
@@ -1419,6 +1524,7 @@ export function createGitCommitActions(ctx) {
         }
 
         setAutocommitSettings({ intervalMinutes: autocommitIntervalMinutes, repos: autocommitRepos });
+        setConflictAutoresolveSetting(autoresolveConflicts);
         try {
             window.dispatchEvent(new CustomEvent('webskel-autocommit-settings-changed'));
         } catch {
@@ -1429,6 +1535,8 @@ export function createGitCommitActions(ctx) {
             intervalMinutes: autocommitIntervalMinutes,
             repos: autocommitRepos
         };
+        state.autoresolveDirty = false;
+        state.autoresolveDraft = { enabled: autoresolveConflicts };
         state.credentialsDirty = false;
 
         const pending = state.authPrompt?.pendingAction || state.identityPrompt?.pendingAction;
@@ -1579,7 +1687,8 @@ export function createGitCommitActions(ctx) {
                     return false;
                 }
                 if (isGitConflictError(msg)) {
-                    await handlePullConflicts('Merge conflicts detected. Resolve them before continuing.', [repoPath], conflictSource);
+                    const resolved = await handlePullConflicts('Merge conflicts detected. Resolve them before continuing.', [repoPath], conflictSource);
+                    if (resolved) continue;
                     return false;
                 }
                 if (isGitPullBlockedError(msg)) {
@@ -1772,9 +1881,11 @@ export function createGitCommitActions(ctx) {
                 syncStaticUI();
                 updateCommitButtons();
                 if (hasConflictsForRepos(selected)) {
-                    setStatusLine('Merge conflicts detected. Resolve them before continuing.', true);
-                    dispatchAutocommitStop();
-                    return;
+                    const resolved = await handlePullConflicts('Merge conflicts detected. Resolve them before continuing.', selected, state.pullMode === 'rebase' ? 'rebase' : 'merge');
+                    if (!resolved) {
+                        dispatchAutocommitStop();
+                        return;
+                    }
                 }
 
                 const stagedSelections = [];
@@ -1786,9 +1897,11 @@ export function createGitCommitActions(ctx) {
                         continue;
                     }
                     if (hasConflictsInStatus(status)) {
-                        setStatusLine('Merge conflicts detected. Resolve them before continuing.', true);
-                        dispatchAutocommitStop();
-                        return;
+                        const resolved = await handlePullConflicts('Merge conflicts detected. Resolve them before continuing.', [repoPath], state.pullMode === 'rebase' ? 'rebase' : 'merge');
+                        if (!resolved) {
+                            dispatchAutocommitStop();
+                            return;
+                        }
                     }
                     const stageList = buildStageList(status);
                     if (stageList.length) {

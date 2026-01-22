@@ -33,6 +33,8 @@ export function createGitCommitState(props = {}) {
         credentialsDirty: false,
         autocommitDirty: false,
         autocommitDraft: null,
+        autoresolveDirty: false,
+        autoresolveDraft: null,
         pullBlocked: null,
         autoStash: null,
         manualConflicts: [],

@@ -1,4 +1,4 @@
-import { isReposRootPath, getAutocommitSettings, setCredentialsValidated, getRememberedGitPat } from "./git-commit-modal-utils.js";
+import { isReposRootPath, getAutocommitSettings, getConflictAutoresolveSetting, setCredentialsValidated, getRememberedGitPat } from "./git-commit-modal-utils.js";
 
 export function createGitCommitUI(ctx) {
     const {
@@ -81,6 +81,12 @@ export function createGitCommitUI(ctx) {
                     state.autocommitDraft = {
                         intervalMinutes: detail.autocommitIntervalMinutes,
                         repos: Array.isArray(detail.autocommitRepos) ? detail.autocommitRepos : null
+                    };
+                }
+                if (detail.autoresolveDirty) {
+                    state.autoresolveDirty = true;
+                    state.autoresolveDraft = {
+                        enabled: Boolean(detail.autoresolveConflicts)
                     };
                 }
                 if (detail.credentialsDirty) {
@@ -312,8 +318,10 @@ export function createGitCommitUI(ctx) {
         const identityState = state.identityPrompt || {};
         const authState = state.authPrompt || {};
         const autocommit = getAutocommitSettings();
+        const autoresolveSaved = getConflictAutoresolveSetting();
         const rememberedToken = getRememberedGitPat();
         const autocommitDraft = state.autocommitDraft || {};
+        const autoresolveDraft = state.autoresolveDraft || {};
         const repoOverviews = Array.isArray(state.repoOverviews) ? state.repoOverviews : [];
         const credentialsValidated = Boolean(state.credentialsValidated);
         const autocommitRepos = repoOverviews
@@ -326,10 +334,14 @@ export function createGitCommitUI(ctx) {
         const draftRepos = Array.isArray(autocommitDraft.repos) ? autocommitDraft.repos : null;
         const draftInterval = Number(autocommitDraft.intervalMinutes);
         const useDraft = Boolean(state.autocommitDirty);
+        const useAutoresolveDraft = Boolean(state.autoresolveDirty);
         const intervalMinutes = useDraft && Number.isFinite(draftInterval)
             ? draftInterval
             : Number(autocommit.intervalMinutes || 15);
         const autocommitSelected = savedRepos !== null ? savedRepos : null;
+        const autoresolveConflicts = useAutoresolveDraft
+            ? Boolean(autoresolveDraft.enabled)
+            : Boolean(autoresolveSaved);
         const visible = Boolean(
             identityState.visible
             || authState.visible
@@ -346,10 +358,12 @@ export function createGitCommitUI(ctx) {
             credentialsValidated,
             credentialsDirty: Boolean(state.credentialsDirty),
             autocommitDirty: Boolean(state.autocommitDirty),
+            autoresolveDirty: Boolean(state.autoresolveDirty),
             tokenStored: Boolean(rememberedToken),
             autocommitIntervalMinutes: intervalMinutes,
             autocommitRepos,
-            autocommitSelected: useDraft ? draftRepos : autocommitSelected
+            autocommitSelected: useDraft ? draftRepos : autocommitSelected,
+            autoresolveConflicts
         };
         if (options.focus) detail.focus = options.focus;
         const presenter = getCredentialsPromptPresenter();

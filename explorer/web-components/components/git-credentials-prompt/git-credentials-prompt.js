@@ -14,7 +14,9 @@ export class GitCredentialsPrompt {
             tokenStored: false,
             autocommitIntervalMinutes: 15,
             autocommitRepos: [],
-            autocommitSelected: null
+            autocommitSelected: null,
+            autoresolveConflicts: false,
+            autoresolveDirty: false
         };
         this.onUpdate = this.onUpdate.bind(this);
         this.onIdentityInput = this.onIdentityInput.bind(this);
@@ -23,6 +25,7 @@ export class GitCredentialsPrompt {
         this.onRememberChange = this.onRememberChange.bind(this);
         this.onAutocommitChange = this.onAutocommitChange.bind(this);
         this.onAutocommitReposChange = this.onAutocommitReposChange.bind(this);
+        this.onAutoresolveChange = this.onAutoresolveChange.bind(this);
         this.scheduleValidation = this.scheduleValidation.bind(this);
         this.invalidate();
     }
@@ -37,6 +40,7 @@ export class GitCredentialsPrompt {
         this.rememberInput = this.element.querySelector('#gitCredentialsRemember');
         this.autocommitIntervalInput = this.element.querySelector('#gitCredentialsAutocommitInterval');
         this.autocommitReposContainer = this.element.querySelector('#gitCredentialsAutocommitRepos');
+        this.autoresolveInput = this.element.querySelector('#gitCredentialsAutoresolve');
         this.saveButton = this.element.querySelector('[data-local-action="saveGitCredentials"]');
 
         if (this.nameInput && !this.nameInput.dataset.boundCredentialsInput) {
@@ -63,6 +67,10 @@ export class GitCredentialsPrompt {
             this.autocommitReposContainer.addEventListener('change', this.onAutocommitReposChange);
             this.autocommitReposContainer.dataset.boundCredentialsInput = 'true';
         }
+        if (this.autoresolveInput && !this.autoresolveInput.dataset.boundCredentialsInput) {
+            this.autoresolveInput.addEventListener('change', this.onAutoresolveChange);
+            this.autoresolveInput.dataset.boundCredentialsInput = 'true';
+        }
         if (this.tokenInput && !this.tokenInput.dataset.boundCredentialsKeydown) {
             this.tokenInput.addEventListener('keydown', this.onTokenKeydown);
             this.tokenInput.dataset.boundCredentialsKeydown = 'true';
@@ -85,13 +93,15 @@ export class GitCredentialsPrompt {
         const intervalRaw = this.autocommitIntervalInput?.value;
         const autocommitIntervalMinutes = Math.max(1, Math.floor(Number(intervalRaw || 15)));
         const autocommitRepos = this.getSelectedAutocommitRepos();
+        const autoresolveConflicts = Boolean(this.autoresolveInput?.checked);
         this.state.name = name;
         this.state.email = email;
         this.state.token = token;
         this.state.remember = remember;
         this.state.autocommitIntervalMinutes = autocommitIntervalMinutes;
         this.state.autocommitSelected = autocommitRepos;
-        this.emit('git-credentials-submit', { name, email, token, remember, autocommitIntervalMinutes, autocommitRepos });
+        this.state.autoresolveConflicts = autoresolveConflicts;
+        this.emit('git-credentials-submit', { name, email, token, remember, autocommitIntervalMinutes, autocommitRepos, autoresolveConflicts });
     }
 
     cancelGitCredentials() {
@@ -123,6 +133,7 @@ export class GitCredentialsPrompt {
             remember: this.state.remember,
             autocommitIntervalMinutes: this.state.autocommitIntervalMinutes,
             autocommitRepos: this.state.autocommitSelected,
+            autoresolveConflicts: this.state.autoresolveConflicts,
             credentialsDirty: true
         });
     }
@@ -144,6 +155,7 @@ export class GitCredentialsPrompt {
             remember,
             autocommitIntervalMinutes: this.state.autocommitIntervalMinutes,
             autocommitRepos: this.state.autocommitSelected,
+            autoresolveConflicts: this.state.autoresolveConflicts,
             credentialsDirty: true
         });
     }
@@ -163,6 +175,7 @@ export class GitCredentialsPrompt {
             remember,
             autocommitIntervalMinutes: this.state.autocommitIntervalMinutes,
             autocommitRepos: this.state.autocommitSelected,
+            autoresolveConflicts: this.state.autoresolveConflicts,
             credentialsDirty: true
         });
     }
@@ -180,6 +193,7 @@ export class GitCredentialsPrompt {
             remember: this.state.remember,
             autocommitIntervalMinutes,
             autocommitRepos: this.state.autocommitSelected,
+            autoresolveConflicts: this.state.autoresolveConflicts,
             autocommitDirty: true
         });
     }
@@ -198,10 +212,27 @@ export class GitCredentialsPrompt {
             remember: this.state.remember,
             autocommitIntervalMinutes: this.state.autocommitIntervalMinutes,
             autocommitRepos,
+            autoresolveConflicts: this.state.autoresolveConflicts,
             autocommitDirty: true
         });
     }
 
+    onAutoresolveChange() {
+        const autoresolveConflicts = Boolean(this.autoresolveInput?.checked);
+        this.state.autoresolveConflicts = autoresolveConflicts;
+        this.state.autoresolveDirty = true;
+        this.updateValidationState();
+        this.emit('git-credentials-change', {
+            name: this.state.name,
+            email: this.state.email,
+            token: this.state.token,
+            remember: this.state.remember,
+            autocommitIntervalMinutes: this.state.autocommitIntervalMinutes,
+            autocommitRepos: this.state.autocommitSelected,
+            autoresolveConflicts,
+            autoresolveDirty: true
+        });
+    }
     onTokenKeydown(event) {
         if (event.key === 'Enter') {
             event.preventDefault();
@@ -222,14 +253,15 @@ export class GitCredentialsPrompt {
         if (!token) return;
         if (this.state.credentialsValidated) return;
         this.validateTimer = setTimeout(() => {
-            this.emit('git-credentials-validate', {
-                name,
-                email,
-                token,
-                remember: this.state.remember,
-                autocommitIntervalMinutes: this.state.autocommitIntervalMinutes,
-                autocommitRepos: this.state.autocommitSelected
-            });
+        this.emit('git-credentials-validate', {
+            name,
+            email,
+            token,
+            remember: this.state.remember,
+            autocommitIntervalMinutes: this.state.autocommitIntervalMinutes,
+            autocommitRepos: this.state.autocommitSelected,
+            autoresolveConflicts: this.state.autoresolveConflicts
+        });
         }, 400);
     }
 
@@ -274,6 +306,12 @@ export class GitCredentialsPrompt {
         if (Object.prototype.hasOwnProperty.call(next, 'autocommitSelected')) {
             this.state.autocommitSelected = this.normalizeRepoSelection(next.autocommitSelected);
         }
+        if (Object.prototype.hasOwnProperty.call(next, 'autoresolveConflicts')) {
+            this.state.autoresolveConflicts = Boolean(next.autoresolveConflicts);
+        }
+        if (Object.prototype.hasOwnProperty.call(next, 'autoresolveDirty')) {
+            this.state.autoresolveDirty = Boolean(next.autoresolveDirty);
+        }
 
         this.element.classList.toggle('is-visible', this.state.visible);
         if (this.nameInput && this.nameInput.value !== this.state.name) {
@@ -287,6 +325,9 @@ export class GitCredentialsPrompt {
         }
         if (this.rememberInput) {
             this.rememberInput.checked = this.state.remember;
+        }
+        if (this.autoresolveInput) {
+            this.autoresolveInput.checked = this.state.autoresolveConflicts;
         }
         if (this.autocommitIntervalInput) {
             const nextValue = String(this.state.autocommitIntervalMinutes || 15);
@@ -372,11 +413,14 @@ export class GitCredentialsPrompt {
 
     updateValidationState() {
         const valid = this.isCredentialsValid();
-        const canSave = valid && (this.state.credentialsValidated || (this.state.autocommitDirty && !this.state.credentialsDirty));
+        const canSave = valid && (
+            this.state.credentialsValidated
+            || ((this.state.autocommitDirty || this.state.autoresolveDirty) && !this.state.credentialsDirty)
+        );
         if (this.saveButton) {
             this.saveButton.disabled = !canSave;
             const message = valid
-                ? (this.state.credentialsValidated || (this.state.autocommitDirty && !this.state.credentialsDirty)
+                ? (this.state.credentialsValidated || ((this.state.autocommitDirty || this.state.autoresolveDirty) && !this.state.credentialsDirty)
                     ? ''
                     : 'Validate credentials to load repositories.')
                 : this.getValidationMessage();
