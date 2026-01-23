@@ -162,6 +162,12 @@ export class GitCredentialsPrompt {
 
     onRememberChange() {
         const remember = Boolean(this.rememberInput?.checked);
+        if (!remember) {
+            if (this.tokenInput) {
+                this.tokenInput.value = '';
+            }
+            this.state.token = '';
+        }
         this.state.remember = remember;
         this.state.credentialsValidated = false;
         this.state.credentialsDirty = true;
@@ -323,6 +329,11 @@ export class GitCredentialsPrompt {
         if (this.tokenInput && this.tokenInput.value !== this.state.token) {
             this.tokenInput.value = this.state.token;
         }
+        if (this.state.tokenStored) {
+            this.state.remember = true;
+        } else {
+            this.state.remember = false;
+        }
         if (this.rememberInput) {
             this.rememberInput.checked = this.state.remember;
         }
@@ -415,6 +426,7 @@ export class GitCredentialsPrompt {
         const valid = this.isCredentialsValid();
         const canSave = valid && (
             this.state.credentialsValidated
+            || !this.state.credentialsDirty
             || ((this.state.autocommitDirty || this.state.autoresolveDirty) && !this.state.credentialsDirty)
         );
         if (this.saveButton) {

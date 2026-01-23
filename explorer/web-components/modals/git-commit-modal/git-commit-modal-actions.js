@@ -889,7 +889,12 @@ export function createGitCommitActions(ctx) {
 
     const cancelGitCredentials = () => {
         const state = getState();
-        if (state.credentialsGate) {
+        const rememberedIdentity = getRememberedGitIdentity();
+        const rememberedToken = getRememberedGitPat();
+        const hasSavedIdentity = Boolean(String(rememberedIdentity.name || '').trim() && String(rememberedIdentity.email || '').trim());
+        const hasSavedToken = Boolean(String(rememberedToken || '').trim());
+        const hasAllSaved = hasSavedIdentity && hasSavedToken;
+        if (state.credentialsGate && hasAllSaved) {
             state.identityPrompt = {
                 ...state.identityPrompt,
                 visible: true
@@ -898,14 +903,21 @@ export function createGitCommitActions(ctx) {
             updateIdentityPrompt({ focus: state.identityPrompt?.name ? 'email' : 'name' });
             updateCommitButtons();
             setStatusLine('Set name and email to continue.', true);
-            return;
+            return false;
         }
         state.identityPrompt = { visible: false, repoPath: null, pendingAction: null, name: '', email: '' };
         state.authPrompt = { visible: false, repoPath: null, pendingAction: null, token: '', remember: false };
         if (state.credentialsOpen) state.credentialsOpen = false;
+        if (state.credentialsGate && !hasAllSaved) {
+            state.credentialsGate = false;
+        }
         syncStaticUI();
         updateCommitButtons();
         setStatusLine('Cancelled.', true);
+        if (!hasAllSaved) {
+            return true;
+        }
+        return false;
     };
 
     const resolveIgnoreRepoPath = () => {
@@ -1414,6 +1426,9 @@ export function createGitCommitActions(ctx) {
             updateCommitButtons();
             setStatusLine(!name || !email ? 'Enter name and email.' : 'Enter a valid email address.', true);
             return;
+        }
+        if (!remember) {
+            setRememberedGitPat('');
         }
         if (tokenRequired && !tokenValid) {
             state.authPrompt = {

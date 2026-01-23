@@ -1,4 +1,4 @@
-import { isReposRootPath, getAutocommitSettings, getConflictAutoresolveSetting, setCredentialsValidated, getRememberedGitPat } from "./git-commit-modal-utils.js";
+import { isReposRootPath, getAutocommitSettings, getConflictAutoresolveSetting, setCredentialsValidated, getRememberedGitPat, setRememberedGitPat } from "./git-commit-modal-utils.js";
 
 export function createGitCommitUI(ctx) {
     const {
@@ -76,6 +76,11 @@ export function createGitCommitUI(ctx) {
                 const nextEmail = String(detail.email ?? prevEmail);
                 const nextToken = String(detail.token ?? prevToken);
                 const nextRemember = typeof detail.remember === 'boolean' ? detail.remember : prevRemember;
+                if (nextRemember && nextToken) {
+                    setRememberedGitPat(nextToken);
+                } else if (!nextRemember) {
+                    setRememberedGitPat('');
+                }
                 if (detail.autocommitDirty) {
                     state.autocommitDirty = true;
                     state.autocommitDraft = {
@@ -348,13 +353,13 @@ export function createGitCommitUI(ctx) {
             || state.credentialsGate
             || state.credentialsOpen
         );
-        const tokenValue = (authState.token || (authState.remember ? rememberedToken : '')) || '';
+        const tokenValue = (authState.token || rememberedToken || '') || '';
         const detail = {
             visible,
             name: identityState.name || '',
             email: identityState.email || '',
             token: tokenValue,
-            remember: Boolean(authState.remember),
+            remember: Boolean(rememberedToken),
             credentialsValidated,
             credentialsDirty: Boolean(state.credentialsDirty),
             autocommitDirty: Boolean(state.autocommitDirty),

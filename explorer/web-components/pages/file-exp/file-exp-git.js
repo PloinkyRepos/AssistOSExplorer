@@ -167,7 +167,7 @@ export function attachGitController(fileExp) {
         clearAutocommitTimer();
         setErrorFlag(true);
         updateGitButtonIndicator();
-        fileExp.showStatus(`Autocommit stopped: ${message}`, true);
+        fileExp.showStatus(`AutoSync stopped: ${message}`, true);
     };
 
     const setConflictAndStop = (message) => {
@@ -360,6 +360,7 @@ export function attachGitController(fileExp) {
                 setErrorFlag(false);
                 updateGitButtonIndicator();
                 await refreshOpenGitModals();
+                fileExp.showStatus('AutoSync complete.');
             }
         } catch {
             // ignore autocommit failures to avoid spamming; next tick will retry
@@ -426,8 +427,16 @@ export function attachGitController(fileExp) {
         updateGitButtonIndicator();
         const message = String(event?.detail?.message || '').trim();
         if (message) {
-            fileExp.showStatus(`Autocommit stopped: ${message}`, true);
+            fileExp.showStatus(`AutoSync stopped: ${message}`, true);
         }
+    });
+    window.addEventListener('webskel-file-exp-refresh', async () => {
+        if (typeof fileExp.refresh === 'function') {
+            await fileExp.refresh();
+        }
+    });
+    window.addEventListener('webskel-git-modal-closed', () => {
+        updateGitButtonIndicator();
     });
 
     Object.assign(fileExp, {

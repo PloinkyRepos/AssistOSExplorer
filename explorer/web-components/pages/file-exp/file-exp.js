@@ -158,6 +158,7 @@ export class FileExp {
         if (entriesBody) {
             entriesBody.innerHTML = this.entriesHTML;
         }
+        this.applyColumnVisibility();
     }
 
     async afterRender() {
@@ -657,6 +658,25 @@ export class FileExp {
                     this.showStatus('Root directory is not accessible.', true);
                     return;
                 }
+                this.showStatus('Path not found. Returning to root.', true);
+                await this.loadDirectory('/');
+                return;
+            }
+            await this.setEntries(entries);
+            this.invalidate();
+        });
+
+        if (String(this.state.directoryFilterQuery || '').trim().length >= 2) {
+            await this.directoryFilterController.rerunIfActive();
+        }
+    }
+
+    async refresh() {
+        await this.withLoader(async () => {
+            const currentPath = this.state.path || '/';
+            this.caches.dirListing.invalidate(this, currentPath);
+            const entries = await this.loadDirectoryContent(currentPath);
+            if (entries === null) {
                 this.showStatus('Path not found. Returning to root.', true);
                 await this.loadDirectory('/');
                 return;

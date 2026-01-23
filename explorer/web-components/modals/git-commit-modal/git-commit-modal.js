@@ -440,6 +440,7 @@ export class GitCommitModal {
             await this.service.gitStage(repoPath, [filePath]);
             await this.refreshAll({ force: true });
             this.setStatusLine(isDeleted ? `Deletion staged: ${filePath}` : `Deleted ${filePath}.`);
+            window.dispatchEvent(new CustomEvent('webskel-file-exp-refresh', { detail: { path: fullPath } }));
         } catch (error) {
             this.setStatusLine(normalizeErrorMessage(error), true);
         }
@@ -466,6 +467,8 @@ export class GitCommitModal {
             await this.service.gitRestore(repoPath, [filePath]);
             await this.refreshAll({ force: true });
             this.setStatusLine(`Rolled back ${filePath}.`);
+            const fullPath = joinPath(repoPath, filePath);
+            window.dispatchEvent(new CustomEvent('webskel-file-exp-refresh', { detail: { path: fullPath } }));
         } catch (error) {
             this.setStatusLine(normalizeErrorMessage(error), true);
         }
@@ -784,7 +787,11 @@ export class GitCommitModal {
     }
 
     cancelGitCredentials() {
-        return this.actions.cancelGitCredentials();
+        const shouldClose = this.actions.cancelGitCredentials();
+        if (shouldClose) {
+            this.closeModal();
+        }
+        return shouldClose;
     }
 
     async saveGitIgnore(payload = {}) {
@@ -850,5 +857,6 @@ export class GitCommitModal {
 
     closeModal(payload) {
         assistOS.UI.closeModal(this.element, payload);
+        window.dispatchEvent(new CustomEvent('webskel-git-modal-closed'));
     }
 }
