@@ -93,7 +93,7 @@ export function createGitCommitActions(ctx) {
         const fromInfo = extractAheadCount(info);
         if (fromInfo !== null) return fromInfo;
         try {
-            const statusText = await service.gitStatus(repoPath);
+            const statusText = await service.gitStatus(repoPath, { includeAhead: true });
             const statusPayload = parseJsonToolResult(statusText) || {};
             return extractAheadCount(statusPayload);
         } catch (_) {
@@ -709,7 +709,7 @@ export function createGitCommitActions(ctx) {
         if (!repoPath || !filePath) return;
         const side = normalizeConflictSource(source);
         if (side !== 'ours' && side !== 'theirs') {
-            setStatusLine('Pick local or remote to continue.', true);
+            setStatusLine('Pick left or right to continue.', true);
             return;
         }
         const state = getState();
@@ -717,7 +717,7 @@ export function createGitCommitActions(ctx) {
             ...(state.conflictHelper || {}),
             selected: { repoPath, filePath },
             choice: side,
-            status: `Selected ${side === 'ours' ? 'local' : 'remote'} version. Click Save to apply.`,
+            status: `Selected ${side === 'ours' ? 'left' : 'right'} version. Click Save to apply.`,
             loading: false
         };
         syncStaticUI();
@@ -727,10 +727,14 @@ export function createGitCommitActions(ctx) {
         if (!repoPath || !filePath) return;
         const side = normalizeConflictSource(choice || getState().conflictHelper?.choice);
         if (side !== 'ours' && side !== 'theirs') {
-            setStatusLine('Pick local or remote to continue.', true);
+            setStatusLine('Pick left or right to continue.', true);
             return;
         }
         const state = getState();
+        const source = String(state.conflictSource || '').toLowerCase();
+        const applySide = source === 'stash'
+            ? (side === 'ours' ? 'theirs' : 'ours')
+            : side;
         state.conflictHelper = {
             ...(state.conflictHelper || {}),
             selected: { repoPath, filePath },
@@ -740,7 +744,7 @@ export function createGitCommitActions(ctx) {
         syncStaticUI();
 
         try {
-            await service.gitCheckoutConflict({ path: repoPath, file: filePath, source: side });
+            await service.gitCheckoutConflict({ path: repoPath, file: filePath, source: applySide });
             await service.gitStage(repoPath, [filePath]);
             const statusPayload = parseJsonToolResult(await service.gitStatus(repoPath)) || {};
             updateRepoOverviewFromStatus(repoPath, statusPayload.status || statusPayload);
@@ -1610,9 +1614,33 @@ export function createGitCommitActions(ctx) {
         await service.gitPush(payload);
     };
 
+    const applyGitIdentityForRepo = async (repoPath) => {
+        const remembered = getRememberedGitIdentity();
+        const state = getState();
+        const userName = String(remembered.name || state.identityPrompt?.name || '').trim();
+        const userEmail = String(remembered.email || state.identityPrompt?.email || '').trim();
+        if (!userName || !userEmail) {
+            return false;
+        }
+        try {
+            await service.gitSetIdentity({
+                path: repoPath,
+                scope: 'local',
+                name: userName,
+                email: userEmail
+            });
+            return true;
+        } catch {
+            return false;
+        }
+    };
+
     const gitPullWithToken = async (repoPath, token) => {
         const state = getState();
-        const mode = state.pullMode || 'ffOnly';
+        let mode = state.pullMode || 'ffOnly';
+        if (mode === 'rebase' && isAutoresolveEnabled()) {
+            mode = 'merge';
+        }
         const payload = { path: repoPath };
         if (mode === 'rebase') {
             payload.rebase = true;
@@ -1670,11 +1698,20 @@ export function createGitCommitActions(ctx) {
         const effectiveToken = String(token || '').trim() || getRememberedGitPat();
         const conflictSource = state.pullMode === 'rebase' ? 'rebase' : 'merge';
         for (const repoPath of list) {
+            if (state.pullMode !== 'ffOnly') {
+                const identityOk = await applyGitIdentityForRepo(repoPath);
+                if (!identityOk) {
+                    setStatusLine('Set name and email in Git settings to continue.', true);
+                    await ensureGitIdentityOrPrompt(repoPath, { type: 'pull', mode: 'batch', repoPaths: list });
+                    return false;
+                }
+            }
             try {
                 await gitPullWithToken(repoPath, effectiveToken);
             } catch (error) {
                 const msg = humanizeGitError(normalizeErrorMessage(error), { action: 'pull' });
                 if (isGitIdentityError(msg)) {
+                    setStatusLine('Set name and email in Git settings to continue.', true);
                     await ensureGitIdentityOrPrompt(repoPath, { type: 'pull', mode: 'batch', repoPaths: list });
                     return false;
                 }
@@ -1692,9 +1729,17 @@ export function createGitCommitActions(ctx) {
                     return false;
                 }
                 if (isGitPullBlockedError(msg)) {
-                    const autoOk = await pullWithAutoStash(repoPath, effectiveToken, list);
-                    if (!autoOk) return false;
-                    continue;
+                    if (isAutoresolveEnabled()) {
+                        const autoOk = await pullWithAutoStash(repoPath, effectiveToken, list);
+                        if (!autoOk) return false;
+                        continue;
+                    }
+                    const blockedFiles = extractGitPullBlockedFiles(msg);
+                    state.pullBlocked = blockedFiles.length ? { repoPath, files: blockedFiles } : null;
+                    syncStaticUI();
+                    updateCommitButtons();
+                    setStatusLine('Pull blocked: commit or stash local changes before merging.', true);
+                    return false;
                 }
                 throw error;
             }
@@ -1889,10 +1934,15 @@ export function createGitCommitActions(ctx) {
                 }
 
                 const stagedSelections = [];
+                const aheadByRepo = new Map();
                 for (const repoPath of selected) {
-                    const statusPayload = parseJsonToolResult(await service.gitStatus(repoPath)) || {};
+                    const statusPayload = parseJsonToolResult(await service.gitStatus(repoPath, { includeAhead: true })) || {};
                     const status = statusPayload?.status || statusPayload || {};
                     updateRepoOverviewFromStatus(repoPath, statusPayload);
+                    const aheadCount = extractAheadCount(statusPayload);
+                    if (aheadCount !== null) {
+                        aheadByRepo.set(repoPath, aheadCount);
+                    }
                     if (!hasAnyChangesInStatus(status)) {
                         continue;
                     }
@@ -1916,6 +1966,34 @@ export function createGitCommitActions(ctx) {
                 }
 
                 if (!stagedSelections.length) {
+                    const hasAhead = Array.from(aheadByRepo.values()).some((count) => Number(count) > 0);
+                    const shouldAttemptPush = hasAhead || aheadByRepo.size === 0;
+                    if (shouldAttemptPush) {
+                        const token = getRememberedGitPat();
+                        for (const repoPath of selected) {
+                            const ahead = aheadByRepo.get(repoPath);
+                            if (aheadByRepo.size > 0 && !ahead) continue;
+                            try {
+                                await gitPushWithToken(repoPath, token);
+                            } catch (error) {
+                                const msg = normalizeErrorMessage(error);
+                                if (isGitAuthError(msg)) {
+                                    if (!token) {
+                                        showGitAuthPrompt(repoPath, { type: 'push', mode: 'batch', repoPaths: selected }, { message: msg });
+                                        dispatchAutocommitStop();
+                                        return;
+                                    }
+                                    setStatusLine(`${msg} (A token is already saved. Use “Token” to update it.)`, true);
+                                    dispatchAutocommitStop();
+                                    return;
+                                }
+                                throw error;
+                            }
+                        }
+                        setStatusLine('Push complete.');
+                        dispatchAutocommitReset();
+                        return;
+                    }
                     setStatusLine('Nothing to commit.');
                     dispatchAutocommitReset();
                     return;
@@ -2078,21 +2156,23 @@ export function createGitCommitActions(ctx) {
             }
         }
         setStatusLine(`Pulling ${selected.length} repo(s)…`);
-        try {
-            const ok = await pullRepos(selected);
-            if (!ok) return;
-            clearDiffCache();
-            await loadRepoOverviews({ force: true });
-            await refreshAll({ force: true });
-            updateCommitButtons();
-            if (hasConflictsForRepos(selected)) {
-                setStatusLine('Pull completed with conflicts. Resolve them and refresh.', true);
-                return;
+        return withGlobalLoader(async () => {
+            try {
+                const ok = await pullRepos(selected);
+                if (!ok) return;
+                clearDiffCache();
+                await loadRepoOverviews({ force: true });
+                await refreshAll({ force: true });
+                updateCommitButtons();
+                if (hasConflictsForRepos(selected)) {
+                    setStatusLine('Pull completed with conflicts. Resolve them and refresh.', true);
+                    return;
+                }
+                setStatusLine('Pulled.');
+            } catch (error) {
+                setStatusLine(humanizeGitError(normalizeErrorMessage(error), { action: 'pull' }), true);
             }
-            setStatusLine('Pulled.');
-        } catch (error) {
-            setStatusLine(humanizeGitError(normalizeErrorMessage(error), { action: 'pull' }), true);
-        }
+        });
     };
 
     const setPullMode = (element, mode) => {

@@ -530,13 +530,8 @@ export function createGitCommitUI(ctx) {
         const allItems = collectConflictItems(null);
         state.hasConflicts = allItems.length > 0;
         state.conflictCount = allItems.length;
-        if (!state.autoStash?.ref && !state.autoStash?.repoPath) {
-            if (state.conflictSource === 'stash') {
-                state.conflictSource = state.pullMode === 'rebase' ? 'rebase' : 'merge';
-            }
-            if (state.conflictSource === 'rebase' && state.pullMode !== 'rebase') {
-                state.conflictSource = 'merge';
-            }
+        if (state.conflictSource === 'rebase' && state.pullMode !== 'rebase') {
+            state.conflictSource = 'merge';
         }
         const helper = element.querySelector('git-conflict-helper');
         if (!helper) return;

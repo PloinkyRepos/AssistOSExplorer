@@ -64,7 +64,7 @@ git-conflict-helper.is-visible {
 
 .git-conflict-helper-file:hover,
 .git-conflict-helper-file:focus {
-    background: rgba(254, 242, 242, 0.95);
+    background: var(--strong-blue);
     outline: none;
 }
 

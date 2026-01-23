@@ -45,7 +45,7 @@ export class GitStashSelectModal {
         }
         const rows = items.map((stash, index) => {
             const ref = this.escapeHtml(stash?.ref || '');
-            const summary = this.escapeHtml(stash?.summary || stash?.raw || '');
+            const summary = this.escapeHtml(stash?.summary || stash?.message || stash?.raw || '');
             const checked = index === 0 ? 'checked' : '';
             return `
                 <label class="stash-item">

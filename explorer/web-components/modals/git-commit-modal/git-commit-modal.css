@@ -915,7 +915,7 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
 
 .git-pull-blocked-item:hover,
 .git-pull-blocked-item:focus {
-    background: rgba(255, 247, 237, 0.95);
+    background: var(--strong-blue);
     outline: none;
 }
 

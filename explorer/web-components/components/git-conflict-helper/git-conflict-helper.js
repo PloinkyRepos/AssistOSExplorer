@@ -126,17 +126,20 @@ export class GitConflictHelper {
                 this.list.appendChild(button);
             }
         }
+        const source = (this.state.source || '').toLowerCase();
+        const swapSides = source === 'stash';
         if (this.oursNode) {
-            this.oursNode.textContent = this.state.loading ? 'Loading local version...' : (this.state.ours || '');
+            const oursText = swapSides ? this.state.theirs : this.state.ours;
+            this.oursNode.textContent = this.state.loading ? 'Loading local version...' : (oursText || '');
         }
         if (this.theirsNode) {
-            this.theirsNode.textContent = this.state.loading ? 'Loading remote version...' : (this.state.theirs || '');
+            const theirsText = swapSides ? this.state.ours : this.state.theirs;
+            this.theirsNode.textContent = this.state.loading ? 'Loading remote version...' : (theirsText || '');
         }
         if (this.oursTitle || this.theirsTitle) {
-            const source = (this.state.source || '').toLowerCase();
             if (source === 'stash') {
-                if (this.oursTitle) this.oursTitle.textContent = 'Working tree (ours)';
-                if (this.theirsTitle) this.theirsTitle.textContent = 'Stash (theirs)';
+                if (this.oursTitle) this.oursTitle.textContent = 'Stash (ours)';
+                if (this.theirsTitle) this.theirsTitle.textContent = 'Working tree (theirs)';
             } else {
                 if (this.oursTitle) this.oursTitle.textContent = 'Local (ours)';
                 if (this.theirsTitle) this.theirsTitle.textContent = 'Remote (theirs)';
