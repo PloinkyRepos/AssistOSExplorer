@@ -18,7 +18,6 @@ export class GitCredentialsPrompt {
             autoresolveConflicts: false,
             autoresolveDirty: false
         };
-        this.onUpdate = this.onUpdate.bind(this);
         this.onIdentityInput = this.onIdentityInput.bind(this);
         this.onTokenInput = this.onTokenInput.bind(this);
         this.onTokenKeydown = this.onTokenKeydown.bind(this);
@@ -75,12 +74,6 @@ export class GitCredentialsPrompt {
             this.tokenInput.addEventListener('keydown', this.onTokenKeydown);
             this.tokenInput.dataset.boundCredentialsKeydown = 'true';
         }
-
-        if (!this.element.dataset.boundCredentialsUpdate) {
-            this.element.addEventListener('git-credentials-update', this.onUpdate);
-            this.element.dataset.boundCredentialsUpdate = 'true';
-        }
-
         this.applyState(this.state);
     }
 
@@ -101,19 +94,23 @@ export class GitCredentialsPrompt {
         this.state.autocommitIntervalMinutes = autocommitIntervalMinutes;
         this.state.autocommitSelected = autocommitRepos;
         this.state.autoresolveConflicts = autoresolveConflicts;
-        this.emit('git-credentials-submit', { name, email, token, remember, autocommitIntervalMinutes, autocommitRepos, autoresolveConflicts });
+        this.getParentPresenter()?.saveGitCredentials?.({
+            name,
+            email,
+            token,
+            remember,
+            autocommitIntervalMinutes,
+            autocommitRepos,
+            autoresolveConflicts
+        });
     }
 
     cancelGitCredentials() {
-        this.emit('git-credentials-cancel');
+        this.getParentPresenter()?.cancelGitCredentials?.();
     }
 
     setState(next = {}) {
         this.applyState(next);
-    }
-
-    onUpdate(event) {
-        this.applyState(event?.detail || {});
     }
 
     onIdentityInput() {
@@ -126,7 +123,7 @@ export class GitCredentialsPrompt {
         this.updateValidationState();
         this.renderAutocommitRepos();
         this.scheduleValidation();
-        this.emit('git-credentials-change', {
+        this.getParentPresenter()?.handleCredentialsChange?.({
             name,
             email,
             token: this.state.token,
@@ -148,7 +145,7 @@ export class GitCredentialsPrompt {
         this.updateValidationState();
         this.renderAutocommitRepos();
         this.scheduleValidation();
-        this.emit('git-credentials-change', {
+        this.getParentPresenter()?.handleCredentialsChange?.({
             name: this.state.name,
             email: this.state.email,
             token,
@@ -162,19 +159,13 @@ export class GitCredentialsPrompt {
 
     onRememberChange() {
         const remember = Boolean(this.rememberInput?.checked);
-        if (!remember) {
-            if (this.tokenInput) {
-                this.tokenInput.value = '';
-            }
-            this.state.token = '';
-        }
         this.state.remember = remember;
         this.state.credentialsValidated = false;
         this.state.credentialsDirty = true;
         this.updateValidationState();
         this.renderAutocommitRepos();
         this.scheduleValidation();
-        this.emit('git-credentials-change', {
+        this.getParentPresenter()?.handleCredentialsChange?.({
             name: this.state.name,
             email: this.state.email,
             token: this.state.token,
@@ -192,7 +183,7 @@ export class GitCredentialsPrompt {
         this.state.autocommitIntervalMinutes = autocommitIntervalMinutes;
         this.state.autocommitDirty = true;
         this.updateValidationState();
-        this.emit('git-credentials-change', {
+        this.getParentPresenter()?.handleCredentialsChange?.({
             name: this.state.name,
             email: this.state.email,
             token: this.state.token,
@@ -211,7 +202,7 @@ export class GitCredentialsPrompt {
         this.state.autocommitSelected = autocommitRepos;
         this.state.autocommitDirty = true;
         this.updateValidationState();
-        this.emit('git-credentials-change', {
+        this.getParentPresenter()?.handleCredentialsChange?.({
             name: this.state.name,
             email: this.state.email,
             token: this.state.token,
@@ -228,7 +219,7 @@ export class GitCredentialsPrompt {
         this.state.autoresolveConflicts = autoresolveConflicts;
         this.state.autoresolveDirty = true;
         this.updateValidationState();
-        this.emit('git-credentials-change', {
+        this.getParentPresenter()?.handleCredentialsChange?.({
             name: this.state.name,
             email: this.state.email,
             token: this.state.token,
@@ -259,15 +250,16 @@ export class GitCredentialsPrompt {
         if (!token) return;
         if (this.state.credentialsValidated) return;
         this.validateTimer = setTimeout(() => {
-        this.emit('git-credentials-validate', {
-            name,
-            email,
-            token,
-            remember: this.state.remember,
-            autocommitIntervalMinutes: this.state.autocommitIntervalMinutes,
-            autocommitRepos: this.state.autocommitSelected,
-            autoresolveConflicts: this.state.autoresolveConflicts
-        });
+            this.getParentPresenter()?.saveGitCredentials?.({
+                name,
+                email,
+                token,
+                remember: this.state.remember,
+                autocommitIntervalMinutes: this.state.autocommitIntervalMinutes,
+                autocommitRepos: this.state.autocommitSelected,
+                autoresolveConflicts: this.state.autoresolveConflicts,
+                validateOnly: true
+            });
         }, 400);
     }
 
@@ -329,11 +321,6 @@ export class GitCredentialsPrompt {
         if (this.tokenInput && this.tokenInput.value !== this.state.token) {
             this.tokenInput.value = this.state.token;
         }
-        if (this.state.tokenStored) {
-            this.state.remember = true;
-        } else {
-            this.state.remember = false;
-        }
         if (this.rememberInput) {
             this.rememberInput.checked = this.state.remember;
         }
@@ -358,8 +345,8 @@ export class GitCredentialsPrompt {
         }
     }
 
-    emit(name, detail = {}) {
-        this.element.dispatchEvent(new CustomEvent(name, { detail, bubbles: true }));
+    getParentPresenter() {
+        return this.element.closest('git-commit-modal')?.webSkelPresenter || null;
     }
 
     normalizeRepoList(list) {

@@ -23,7 +23,6 @@ export class GitRepoTree {
         };
         this.boundActions = false;
         this.onKeydown = this.onKeydown.bind(this);
-        this.onUpdate = this.onUpdate.bind(this);
         this.invalidate();
     }
 
@@ -32,10 +31,6 @@ export class GitRepoTree {
     afterRender() {
         this.list = this.element.querySelector('.git-repo-tree-list');
         this.bindEvents();
-        if (!this.element.dataset.boundRepoTreeUpdate) {
-            this.element.addEventListener('git-repo-tree-update', this.onUpdate);
-            this.element.dataset.boundRepoTreeUpdate = 'true';
-        }
         this.render();
     }
 
@@ -63,10 +58,6 @@ export class GitRepoTree {
 
     setState(next = {}) {
         this.applyState(next);
-    }
-
-    onUpdate(event) {
-        this.applyState(event?.detail || {});
     }
 
     applyState(next = {}) {
@@ -101,40 +92,32 @@ export class GitRepoTree {
         this.render();
     }
 
-    emit(name, detail = {}) {
-        this.element.dispatchEvent(new CustomEvent(name, { detail, bubbles: true }));
-    }
-
-    emitAction(action, element) {
-        this.emit('git-repo-tree-action', { action, element });
-    }
-
     toggleRepoFolderExpanded(element) {
-        this.emitAction('toggleRepoFolderExpanded', element);
+        this.getParentPresenter()?.toggleRepoFolderExpanded?.(element);
     }
 
     toggleRepoChanges(element) {
-        this.emitAction('toggleRepoChanges', element);
+        this.getParentPresenter()?.toggleRepoChanges?.(element);
     }
 
     toggleRepoAllChangesCheckbox(element) {
-        this.emitAction('toggleRepoAllChangesCheckbox', element);
+        this.getParentPresenter()?.toggleRepoAllChangesCheckbox?.(element);
     }
 
     toggleTreeFolder(element) {
-        this.emitAction('toggleTreeFolder', element);
+        this.getParentPresenter()?.toggleTreeFolder?.(element);
     }
 
     toggleTreePrefixSelectionCheckbox(element) {
-        this.emitAction('toggleTreePrefixSelectionCheckbox', element);
+        this.getParentPresenter()?.toggleTreePrefixSelectionCheckbox?.(element);
     }
 
     toggleTreeFileSelectionCheckbox(element) {
-        this.emitAction('toggleTreeFileSelectionCheckbox', element);
+        this.getParentPresenter()?.toggleTreeFileSelectionCheckbox?.(element);
     }
 
     openDiff(element) {
-        this.emitAction('openDiff', element);
+        this.getParentPresenter()?.openDiff?.(element);
     }
 
     toggleFileMenu(element) {
@@ -157,27 +140,31 @@ export class GitRepoTree {
     }
 
     openIgnoreForFile(element) {
-        this.emitAction('openIgnoreForFile', element);
+        this.getParentPresenter()?.openIgnoreForFile?.(element);
     }
 
     openIgnoreForFolder(element) {
-        this.emitAction('openIgnoreForFolder', element);
+        this.getParentPresenter()?.openIgnoreForFolder?.(element);
     }
 
     openStopTrackingForFile(element) {
-        this.emitAction('openStopTrackingForFile', element);
+        this.getParentPresenter()?.openStopTrackingForFile?.(element);
     }
 
     removeIgnoreForFile(element) {
-        this.emitAction('removeIgnoreForFile', element);
+        this.getParentPresenter()?.removeIgnoreForFile?.(element);
     }
 
     rollbackFile(element) {
-        this.emitAction('rollbackFile', element);
+        this.getParentPresenter()?.rollbackFile?.(element);
     }
 
     deleteFile(element) {
-        this.emitAction('deleteFile', element);
+        this.getParentPresenter()?.deleteFile?.(element);
+    }
+
+    getParentPresenter() {
+        return this.element.closest('git-commit-modal')?.webSkelPresenter || null;
     }
 
     getSelectionEntry(repoPath) {

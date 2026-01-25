@@ -6,7 +6,6 @@ export class GitStatusBar {
             text: '',
             isError: false
         };
-        this.onUpdate = this.onUpdate.bind(this);
         this.invalidate();
     }
 
@@ -15,19 +14,11 @@ export class GitStatusBar {
     afterRender() {
         this.root = this.element.querySelector('.git-status') || this.element;
         this.textNode = this.element.querySelector('.git-status-text');
-        if (!this.element.dataset.boundStatusUpdate) {
-            this.element.addEventListener('git-status-update', this.onUpdate);
-            this.element.dataset.boundStatusUpdate = 'true';
-        }
         this.applyState(this.state);
     }
 
     setState(next = {}) {
         this.applyState(next);
-    }
-
-    onUpdate(event) {
-        this.applyState(event?.detail || {});
     }
 
     applyState(next = {}) {
@@ -48,7 +39,7 @@ export class GitStatusBar {
         }
     }
 
-    emit(name, detail = {}) {
-        this.element.dispatchEvent(new CustomEvent(name, { detail, bubbles: true }));
+    getParentPresenter() {
+        return this.element.closest('git-commit-modal')?.webSkelPresenter || null;
     }
 }

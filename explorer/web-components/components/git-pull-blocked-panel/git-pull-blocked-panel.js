@@ -7,7 +7,6 @@ export class GitPullBlockedPanel {
             repoLabel: '',
             files: []
         };
-        this.onUpdate = this.onUpdate.bind(this);
         this.invalidate();
     }
 
@@ -16,10 +15,6 @@ export class GitPullBlockedPanel {
     afterRender() {
         this.root = this.element.querySelector('.git-pull-blocked-panel') || this.element;
         this.list = this.element.querySelector('.git-pull-blocked-list');
-        if (!this.element.dataset.boundPullBlockedUpdate) {
-            this.element.addEventListener('git-pull-blocked-update', this.onUpdate);
-            this.element.dataset.boundPullBlockedUpdate = 'true';
-        }
         this.applyState(this.state);
     }
 
@@ -27,15 +22,11 @@ export class GitPullBlockedPanel {
         const repoPath = element?.dataset?.repoPath || '';
         const filePath = element?.dataset?.filePath || '';
         if (!filePath) return;
-        this.emit('git-pull-blocked-open', { repoPath, filePath });
+        this.getParentPresenter()?.openDiff?.({ repoPath, filePath });
     }
 
     setState(next = {}) {
         this.applyState(next);
-    }
-
-    onUpdate(event) {
-        this.applyState(event?.detail || {});
     }
 
     applyState(next = {}) {
@@ -75,7 +66,7 @@ export class GitPullBlockedPanel {
         }
     }
 
-    emit(name, detail = {}) {
-        this.element.dispatchEvent(new CustomEvent(name, { detail, bubbles: true }));
+    getParentPresenter() {
+        return this.element.closest('git-commit-modal')?.webSkelPresenter || null;
     }
 }

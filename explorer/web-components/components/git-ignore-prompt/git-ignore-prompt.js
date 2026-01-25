@@ -13,7 +13,6 @@ export class GitIgnorePrompt {
             source: 'manual',
             stopTracking: false
         };
-        this.onUpdate = this.onUpdate.bind(this);
         this.onPatternsInput = this.onPatternsInput.bind(this);
         this.onAnchorChange = this.onAnchorChange.bind(this);
         this.invalidate();
@@ -40,37 +39,27 @@ export class GitIgnorePrompt {
             this.anchorInput.addEventListener('change', this.onAnchorChange);
             this.anchorInput.dataset.boundIgnoreInput = 'true';
         }
-
-        if (!this.element.dataset.boundIgnoreUpdate) {
-            this.element.addEventListener('git-ignore-update', this.onUpdate);
-            this.element.dataset.boundIgnoreUpdate = 'true';
-        }
-
         this.applyState(this.state);
     }
 
     cancelGitIgnore() {
-        this.emit('git-ignore-cancel');
+        this.getParentPresenter()?.cancelGitIgnore?.();
     }
 
     saveGitIgnore() {
         const patterns = (this.patternsInput?.value || '').trim();
         this.state.patterns = patterns;
-        this.emit('git-ignore-submit', { patterns });
+        this.getParentPresenter()?.saveGitIgnore?.({ patterns });
     }
 
     setIgnoreMode(element, mode) {
         const next = (mode || element?.dataset?.mode || '').trim();
         if (next !== 'file' && next !== 'folder') return;
-        this.emit('git-ignore-mode', { mode: next });
+        this.getParentPresenter()?.setIgnoreMode?.({ mode: next });
     }
 
     setState(next = {}) {
         this.applyState(next);
-    }
-
-    onUpdate(event) {
-        this.applyState(event?.detail || {});
     }
 
     applyState(next) {
@@ -177,16 +166,16 @@ export class GitIgnorePrompt {
     onPatternsInput() {
         const patterns = (this.patternsInput?.value || '').trim();
         this.state.patterns = patterns;
-        this.emit('git-ignore-change', { patterns });
+        this.getParentPresenter()?.updateIgnorePatterns?.(patterns);
     }
 
     onAnchorChange() {
         const anchor = Boolean(this.anchorInput?.checked);
         this.state.anchor = anchor;
-        this.emit('git-ignore-anchor', { anchor });
+        this.getParentPresenter()?.setIgnoreAnchor?.({ anchor });
     }
 
-    emit(name, detail = {}) {
-        this.element.dispatchEvent(new CustomEvent(name, { detail, bubbles: true }));
+    getParentPresenter() {
+        return this.element.closest('git-commit-modal')?.webSkelPresenter || null;
     }
 }

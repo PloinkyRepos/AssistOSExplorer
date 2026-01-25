@@ -13,7 +13,6 @@ export class GitConflictHelper {
             loading: false,
             source: ''
         };
-        this.onUpdate = this.onUpdate.bind(this);
         this.invalidate();
     }
 
@@ -26,15 +25,10 @@ export class GitConflictHelper {
         this.theirsNode = this.element.querySelector('#gitConflictHelperTheirs');
         this.oursTitle = this.element.querySelector('#gitConflictHelperOursTitle');
         this.theirsTitle = this.element.querySelector('#gitConflictHelperTheirsTitle');
+        this.hintNode = this.element.querySelector('.git-conflict-helper-hint');
         this.statusNode = this.element.querySelector('#gitConflictHelperStatus');
         this.choiceButtons = Array.from(this.element.querySelectorAll('.git-conflict-choice'));
         this.saveButton = this.element.querySelector('.git-conflict-save');
-
-        if (!this.element.dataset.boundConflictUpdate) {
-            this.element.addEventListener('git-conflict-update', this.onUpdate);
-            this.element.dataset.boundConflictUpdate = 'true';
-        }
-
         this.applyState(this.state);
     }
 
@@ -42,7 +36,7 @@ export class GitConflictHelper {
         const repoPath = element?.dataset?.repoPath || '';
         const filePath = element?.dataset?.filePath || '';
         if (!filePath) return;
-        this.emit('git-conflict-select', { repoPath, filePath });
+        this.getParentPresenter()?.selectConflictFile?.({ repoPath, filePath });
     }
 
     applyConflictChoice(_element, source) {
@@ -50,7 +44,7 @@ export class GitConflictHelper {
         if (!selected.filePath || !selected.repoPath) return;
         const side = String(source || '').trim();
         if (side !== 'ours' && side !== 'theirs') return;
-        this.emit('git-conflict-apply', {
+        this.getParentPresenter()?.applyConflictChoice?.({
             repoPath: selected.repoPath,
             filePath: selected.filePath,
             source: side
@@ -60,7 +54,7 @@ export class GitConflictHelper {
     saveConflictResolution() {
         const selected = this.state.selected || {};
         if (!selected.filePath || !selected.repoPath) return;
-        this.emit('git-conflict-save', {
+        this.getParentPresenter()?.saveConflictResolution?.({
             repoPath: selected.repoPath,
             filePath: selected.filePath,
             choice: this.state.choice || ''
@@ -68,15 +62,11 @@ export class GitConflictHelper {
     }
 
     cancelConflictResolution() {
-        this.emit('git-conflict-cancel');
+        this.getParentPresenter()?.cancelConflictResolution?.();
     }
 
     setState(next = {}) {
         this.applyState(next);
-    }
-
-    onUpdate(event) {
-        this.applyState(event?.detail || {});
     }
 
     applyState(next) {
@@ -127,23 +117,20 @@ export class GitConflictHelper {
             }
         }
         const source = (this.state.source || '').toLowerCase();
-        const swapSides = source === 'stash';
         if (this.oursNode) {
-            const oursText = swapSides ? this.state.theirs : this.state.ours;
-            this.oursNode.textContent = this.state.loading ? 'Loading local version...' : (oursText || '');
+            this.oursNode.textContent = this.state.loading ? 'Loading local version...' : (this.state.ours || '');
         }
         if (this.theirsNode) {
-            const theirsText = swapSides ? this.state.ours : this.state.theirs;
-            this.theirsNode.textContent = this.state.loading ? 'Loading remote version...' : (theirsText || '');
+            this.theirsNode.textContent = this.state.loading ? 'Loading remote version...' : (this.state.theirs || '');
         }
         if (this.oursTitle || this.theirsTitle) {
-            if (source === 'stash') {
-                if (this.oursTitle) this.oursTitle.textContent = 'Stash (ours)';
-                if (this.theirsTitle) this.theirsTitle.textContent = 'Working tree (theirs)';
-            } else {
-                if (this.oursTitle) this.oursTitle.textContent = 'Local (ours)';
-                if (this.theirsTitle) this.theirsTitle.textContent = 'Remote (theirs)';
-            }
+            if (this.oursTitle) this.oursTitle.textContent = 'Local (ours)';
+            if (this.theirsTitle) this.theirsTitle.textContent = source === 'stash' ? 'Stash (theirs)' : 'Remote (theirs)';
+        }
+        if (this.hintNode) {
+            this.hintNode.textContent = source === 'stash'
+                ? 'Compare local (ours) and stashed changes (theirs). Pick one, then save to resolve.'
+                : 'Compare local (ours) and remote (theirs). Pick one, then save to resolve.';
         }
         if (this.statusNode) {
             this.statusNode.textContent = this.state.status || '';
@@ -165,7 +152,7 @@ export class GitConflictHelper {
         }
     }
 
-    emit(name, detail = {}) {
-        this.element.dispatchEvent(new CustomEvent(name, { detail, bubbles: true }));
+    getParentPresenter() {
+        return this.element.closest('git-commit-modal')?.webSkelPresenter || null;
     }
 }

@@ -8,7 +8,7 @@ import { createGitCommitUI } from "./git-commit-modal-ui.js";
 import { callExplorerTool, callAgentTool } from "../../../services/infrastructure/explorerApi.js";
 import { withGlobalLoader } from "../../../utils/globalLoader.js";
 import { joinPath } from "../../pages/file-exp/file-exp-utils.js";
-import { normalizeErrorMessage, parseJsonToolResult, normalizeSlashes, isReposRootPath, getRememberedGitIdentity, setGitErrorFlag } from "./git-commit-modal-utils.js";
+import { normalizeErrorMessage, parseJsonToolResult, normalizeSlashes, isReposRootPath, getRememberedGitIdentity, setGitErrorFlag, setCredentialsValidated, setRememberedGitPat } from "./git-commit-modal-utils.js";
 
 export class GitCommitModal {
     constructor(element, invalidate, props = {}) {
@@ -137,6 +137,72 @@ export class GitCommitModal {
         const value = String(message || '').trim();
         this.ui.updateCommitMessage(value);
         this.ui.focusCommitMessage?.();
+    }
+
+    updateCommitMessageDraft(message) {
+        const value = typeof message === 'string' ? message : String(message || '');
+        this.ui.updateCommitMessage(value);
+    }
+
+    handleCredentialsChange(detail = {}) {
+        const prevName = String(this.state.identityPrompt?.name ?? '');
+        const prevEmail = String(this.state.identityPrompt?.email ?? '');
+        const prevToken = String(this.state.authPrompt?.token ?? '');
+        const prevRemember = Boolean(this.state.authPrompt?.remember);
+        const nextName = String(detail.name ?? prevName);
+        const nextEmail = String(detail.email ?? prevEmail);
+        const nextToken = String(detail.token ?? prevToken);
+        const nextRemember = typeof detail.remember === 'boolean' ? detail.remember : prevRemember;
+        if (nextRemember && nextToken) {
+            setRememberedGitPat(nextToken);
+        } else if (!nextRemember) {
+            setRememberedGitPat('');
+        }
+        if (detail.autocommitDirty) {
+            this.state.autocommitDirty = true;
+            this.state.autocommitDraft = {
+                intervalMinutes: detail.autocommitIntervalMinutes,
+                repos: Array.isArray(detail.autocommitRepos) ? detail.autocommitRepos : null
+            };
+        }
+        if (detail.autoresolveDirty) {
+            this.state.autoresolveDirty = true;
+            this.state.autoresolveDraft = {
+                enabled: Boolean(detail.autoresolveConflicts)
+            };
+        }
+        if (detail.credentialsDirty) {
+            const credentialsChanged = (
+                prevName !== nextName
+                || prevEmail !== nextEmail
+                || prevToken !== nextToken
+                || prevRemember !== nextRemember
+            );
+            if (credentialsChanged) {
+                this.state.credentialsValidated = false;
+                setCredentialsValidated(false);
+                this.state.credentialsDirty = true;
+            }
+        }
+        this.state.identityPrompt = {
+            ...this.state.identityPrompt,
+            name: nextName,
+            email: nextEmail
+        };
+        this.state.authPrompt = {
+            ...this.state.authPrompt,
+            token: nextToken,
+            remember: nextRemember
+        };
+        this.updateIdentityPrompt();
+    }
+
+    updateIgnorePatterns(patterns) {
+        const nextPatterns = String(patterns ?? this.state.ignorePrompt?.patterns ?? '');
+        this.state.ignorePrompt = {
+            ...this.state.ignorePrompt,
+            patterns: nextPatterns
+        };
     }
 
     afterUnload() {

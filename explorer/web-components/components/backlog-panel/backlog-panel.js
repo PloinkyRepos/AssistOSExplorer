@@ -1,6 +1,7 @@
 import { callAgentTool, parseToolResult } from "../../../services/infrastructure/explorerApi.js";
 import { withGlobalLoader } from "../../../utils/globalLoader.js";
 import { getWorkspaceRoot } from "../../../utils/workspaceRoot.js";
+import { normalizeGitStatusPayload } from "../../modals/git-commit-modal/git-commit-modal-utils.js";
 
 export class BacklogPanel {
     constructor(element, invalidate, props = {}) {
@@ -441,12 +442,10 @@ export class BacklogPanel {
     async commitBacklog(message) {
         try {
             const status = await this.callAgentToolRaw('gitAgent', 'git_status', { path: this.repoPath || this.workspaceRoot });
-            const changed = [
-                ...(status?.status?.unstaged || []),
-                ...(status?.status?.staged || []),
-                ...(status?.status?.untracked || [])
-            ];
-            const hasBacklog = changed.some((entry) => String(entry || '') === '.backlog' || String(entry || '').endsWith('/.backlog'));
+            const normalized = normalizeGitStatusPayload(status?.status || status);
+            const changed = normalized.paths.unstaged
+                .concat(normalized.paths.staged, normalized.paths.untracked);
+            const hasBacklog = changed.some((entry) => entry === '.backlog' || entry.endsWith('/.backlog'));
             if (!hasBacklog) return;
             await this.callAgentToolRaw('gitAgent', 'git_stage', { path: this.repoPath || this.workspaceRoot, files: ['.backlog'] });
             await this.callAgentToolRaw('gitAgent', 'git_commit', {

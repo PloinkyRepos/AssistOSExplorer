@@ -9,7 +9,6 @@ export class GitCommitActions {
         };
         this.boundActions = false;
         this.onKeydown = this.onKeydown.bind(this);
-        this.onUpdate = this.onUpdate.bind(this);
         this.invalidate();
     }
 
@@ -22,10 +21,6 @@ export class GitCommitActions {
         this.actionsSplit = this.element.querySelector('#gitActionsSplit');
 
         this.bindEvents();
-        if (!this.element.dataset.boundCommitActions) {
-            this.element.addEventListener('git-commit-actions-update', this.onUpdate);
-            this.element.dataset.boundCommitActions = 'true';
-        }
         this.applyState(this.state);
     }
 
@@ -72,10 +67,6 @@ export class GitCommitActions {
         this.applyState(next);
     }
 
-    onUpdate(event) {
-        this.applyState(event?.detail || {});
-    }
-
     applyState(next = {}) {
         if (Object.prototype.hasOwnProperty.call(next, 'commitMessage')) {
             this.state.commitMessage = String(next.commitMessage || '');
@@ -100,11 +91,11 @@ export class GitCommitActions {
     updateCommitMessage(_element, value) {
         const nextValue = typeof value === 'string' ? value : this.commitMessageInput?.value || '';
         this.state.commitMessage = nextValue;
-        this.emitAction('updateCommitMessage', { value: nextValue });
+        this.getParentPresenter()?.updateCommitMessageDraft?.(nextValue);
     }
 
     generateCommitMessage() {
-        this.emitAction('generateCommitMessage');
+        this.getParentPresenter()?.generateCommitMessage?.();
     }
 
     toggleActionsMenu() {
@@ -123,18 +114,14 @@ export class GitCommitActions {
 
     runGitAction(element, mode) {
         this.closeActionsMenu();
-        this.emitAction('runGitAction', { element, mode });
+        this.getParentPresenter()?.runGitAction?.(element, mode);
     }
 
     focusCommitMessage() {
         this.commitMessageInput?.focus?.();
     }
 
-    emit(name, detail = {}) {
-        this.element.dispatchEvent(new CustomEvent(name, { detail, bubbles: true }));
-    }
-
-    emitAction(action, payload = {}) {
-        this.emit('git-commit-actions-action', { action, ...payload });
+    getParentPresenter() {
+        return this.element.closest('git-commit-modal')?.webSkelPresenter || null;
     }
 }

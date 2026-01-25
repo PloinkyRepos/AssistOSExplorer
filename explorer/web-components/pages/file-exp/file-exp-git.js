@@ -9,10 +9,13 @@ import {
     isGitConflictError,
     isGitPullBlockedError,
     getAutocommitSettings,
+    getConflictAutoresolveSetting,
     getGitConflictFlag,
     setGitConflictFlag,
     getGitErrorFlag,
-    setGitErrorFlag
+    setGitErrorFlag,
+    normalizeGitStatusPayload,
+    normalizeSlashes
 } from "../../modals/git-commit-modal/git-commit-modal-utils.js";
 import { callAgentTool } from "../../../services/infrastructure/explorerApi.js";
 import { getReposRoot } from "../../../utils/reposRoot.js";
@@ -85,17 +88,7 @@ export function attachGitController(fileExp) {
             clearAutocommitTimer();
             return;
         }
-        if (getConflictFlag()) {
-            clearAutocommitTimer();
-            if (!autocommit.conflictRefreshPending) {
-                autocommit.conflictRefreshPending = true;
-                syncConflictFlagFromRepos()
-                    .catch(() => {})
-                    .finally(() => {
-                        autocommit.conflictRefreshPending = false;
-                        ensureAutocommitTimer();
-                    });
-            }
+        if (getConflictFlag() && !isAutoresolveEnabled()) {
             clearAutocommitTimer();
             return;
         }
@@ -133,34 +126,16 @@ export function attachGitController(fileExp) {
         return payload?.status || payload || {};
     };
 
-    const repoHasConflicts = (status) => {
-        const conflicted = Array.isArray(status?.conflicted) ? status.conflicted : [];
-        return conflicted.length > 0;
-    };
-
-    const extractChangePaths = (entries) => {
-        const list = Array.isArray(entries) ? entries : [];
-        return list
-            .map((entry) => {
-                if (!entry) return '';
-                if (typeof entry === 'string') return entry;
-                return entry.path || entry.filePath || entry.name || '';
-            })
-            .map((value) => String(value || '').trim())
-            .filter(Boolean);
-    };
+    const repoHasConflicts = (status) => normalizeGitStatusPayload(status).counts.conflicted > 0;
 
     const buildStageList = (status) => {
-        const unstaged = extractChangePaths(status?.unstaged);
-        const untracked = extractChangePaths(status?.untracked);
-        return Array.from(new Set([...unstaged, ...untracked]));
+        const { paths } = normalizeGitStatusPayload(status);
+        return Array.from(new Set([...paths.unstaged, ...paths.untracked]));
     };
 
     const hasAnyChanges = (status) => {
-        const staged = extractChangePaths(status?.staged);
-        const unstaged = extractChangePaths(status?.unstaged);
-        const untracked = extractChangePaths(status?.untracked);
-        return staged.length + unstaged.length + untracked.length > 0;
+        const { counts } = normalizeGitStatusPayload(status);
+        return counts.staged + counts.unstaged + counts.untracked > 0;
     };
 
     const showAutocommitStopped = (message) => {
@@ -176,8 +151,10 @@ export function attachGitController(fileExp) {
         showAutocommitStopped(message || 'Merge conflicts detected.');
     };
 
+    const isAutoresolveEnabled = () => getConflictAutoresolveSetting();
+
     const pullRepoWithToken = async (repoPath, token) => {
-        const payload = { path: repoPath, ffOnly: true, rebase: false };
+        const payload = { path: repoPath, ffOnly: false, rebase: false };
         const cleanToken = String(token || '').trim();
         if (cleanToken) payload.token = cleanToken;
         await callAgentTool('gitAgent', 'git_pull', payload);
@@ -205,6 +182,21 @@ export function attachGitController(fileExp) {
     };
 
     const pullWithAutoStash = async (repoPath, token) => {
+        try {
+            const statusPayload = await getRepoStatus(repoPath);
+            const normalized = normalizeGitStatusPayload(statusPayload);
+            const changesCount = normalized.counts.staged
+                + normalized.counts.unstaged
+                + normalized.counts.untracked
+                + normalized.counts.conflicted;
+            if (changesCount === 0) {
+                await pullRepoWithToken(repoPath, token);
+                return { ok: true };
+            }
+        } catch (error) {
+            return { ok: false, message: normalizeErrorMessage(error) };
+        }
+
         let stashPayload = null;
         try {
             const text = await callAgentTool('gitAgent', 'git_stash', {
@@ -219,6 +211,9 @@ export function attachGitController(fileExp) {
 
         const stashCreated = Boolean(stashPayload.created);
         const stashRef = stashPayload.ref || null;
+        if (!stashCreated) {
+            return { ok: false, message: 'Failed to stash local changes before pull.' };
+        }
 
         try {
             await pullRepoWithToken(repoPath, token);
@@ -240,10 +235,76 @@ export function attachGitController(fileExp) {
         return { ok: true };
     };
 
+    const resolveConflictContent = (payload) => {
+        if (!payload) return '';
+        if (typeof payload === 'string') return payload;
+        if (typeof payload.content === 'string') return payload.content;
+        if (typeof payload.merged === 'string') return payload.merged;
+        if (typeof payload.output === 'string') return payload.output;
+        if (typeof payload.resolution === 'string') return payload.resolution;
+        return '';
+    };
+
+    const joinPath = (base, file) => {
+        const left = normalizeSlashes(base).replace(/\/+$/g, '');
+        const right = normalizeSlashes(file).replace(/^\/+/g, '');
+        return `${left}/${right}`;
+    };
+
+    const autoResolveConflicts = async (repoPath, source = 'merge') => {
+        if (!isAutoresolveEnabled()) return { ok: false, message: '' };
+        try {
+            fileExp.showStatus('Auto-resolving conflicts...');
+            const statusPayload = await getRepoStatus(repoPath);
+            const normalized = normalizeGitStatusPayload(statusPayload);
+            const conflictPaths = normalized.paths.conflicted;
+            if (!conflictPaths.length) return { ok: true };
+            for (const filePath of conflictPaths) {
+                const versionsText = await callAgentTool('gitAgent', 'git_conflict_versions', {
+                    path: repoPath,
+                    file: filePath
+                }, { raw: true });
+                const versions = parseJsonToolResult(versionsText) || {};
+                const localSide = (source === 'merge' || source === 'rebase' || source === 'stash') ? 'theirs' : 'ours';
+                const oursContent = localSide === 'ours' ? (versions.ours || '') : (versions.theirs || '');
+                const theirsContent = localSide === 'ours' ? (versions.theirs || '') : (versions.ours || '');
+                const resolveText = await callAgentTool('gitAgent', 'llm_resolve_conflict', {
+                    base: versions.base || '',
+                    ours: oursContent,
+                    theirs: theirsContent,
+                    source
+                }, { raw: true });
+                const resolvePayload = parseJsonToolResult(resolveText) || resolveText;
+                const resolved = resolveConflictContent(resolvePayload);
+                if (!resolved) {
+                    return { ok: false, message: 'Autoresolve returned empty content.' };
+                }
+                const absolutePath = joinPath(repoPath, filePath);
+                await fileExp.tooling.writeFile(absolutePath, resolved);
+                await callAgentTool('gitAgent', 'git_stage', { path: repoPath, files: [filePath] });
+            }
+            const afterPayload = await getRepoStatus(repoPath);
+            const afterNormalized = normalizeGitStatusPayload(afterPayload);
+            if (afterNormalized.counts.conflicted > 0) {
+                return { ok: false, message: '' };
+            }
+            setConflictFlag(false);
+            updateGitButtonIndicator();
+            fileExp.showStatus('Conflicts auto-resolved.');
+            return { ok: true };
+        } catch (error) {
+            const msg = normalizeErrorMessage(error);
+            if (msg.toLowerCase().includes('llm_resolve_conflict') && msg.toLowerCase().includes('not found')) {
+                return { ok: false, message: 'Autoresolve unavailable: llm_resolve_conflict tool not found.' };
+            }
+            return { ok: false, message: msg };
+        }
+    };
+
     const runAutocommitTick = async () => {
         if (autocommit.running) return;
         const { repos } = getAutocommitSettings();
-        if (getConflictFlag()) return;
+        if (getConflictFlag() && !isAutoresolveEnabled()) return;
         if (Array.isArray(repos) && repos.length === 0) return;
         autocommit.running = true;
         try {
@@ -256,7 +317,15 @@ export function attachGitController(fileExp) {
 
             for (const repoPath of repoList) {
                 if (getConflictFlag()) return;
-                const initialStatus = await getRepoStatus(repoPath);
+                let initialStatus = await getRepoStatus(repoPath);
+                if (normalizeGitStatusPayload(initialStatus).counts.conflicted > 0) {
+                    const resolved = await autoResolveConflicts(repoPath, 'merge');
+                    if (!resolved.ok) {
+                        setConflictAndStop(resolved.message || 'Merge conflicts detected.');
+                        return;
+                    }
+                    initialStatus = await getRepoStatus(repoPath);
+                }
                 if (!hasAnyChanges(initialStatus)) {
                     continue;
                 }
@@ -265,7 +334,7 @@ export function attachGitController(fileExp) {
                 } catch (error) {
                     const msg = humanizeGitError(normalizeErrorMessage(error), { action: 'pull' });
                     if (isGitIdentityError(msg)) {
-                        showAutocommitStopped('Set name and email in Git settings to continue.');
+                        showAutocommitStopped('Set name, email, and token in Git settings to continue.');
                         return;
                     }
                     if (isGitAuthError(msg)) {
@@ -273,18 +342,25 @@ export function attachGitController(fileExp) {
                         return;
                     }
                     if (isGitConflictError(msg)) {
-                        setConflictAndStop('Merge conflicts detected.');
-                        return;
+                        const resolved = await autoResolveConflicts(repoPath, 'merge');
+                        if (!resolved.ok) {
+                            setConflictAndStop(resolved.message || 'Merge conflicts detected.');
+                            return;
+                        }
                     }
                     if (isGitPullBlockedError(msg)) {
                         const stashed = await pullWithAutoStash(repoPath, token);
                         if (!stashed.ok) {
                             if (stashed.conflicts) {
-                                setConflictAndStop(stashed.message || 'Conflicts after restoring stashed changes.');
+                                const resolved = await autoResolveConflicts(repoPath, 'stash');
+                                if (!resolved.ok) {
+                                    setConflictAndStop(resolved.message || stashed.message || 'Conflicts after restoring stashed changes.');
+                                    return;
+                                }
                             } else {
                                 showAutocommitStopped(stashed.message || 'Pull blocked: could not auto-stash your local changes.');
+                                return;
                             }
-                            return;
                         }
                     } else {
                         showAutocommitStopped(msg || 'Pull failed.');
@@ -292,10 +368,14 @@ export function attachGitController(fileExp) {
                     }
                 }
 
-                const status = await getRepoStatus(repoPath);
+                let status = await getRepoStatus(repoPath);
                 if (repoHasConflicts(status)) {
-                    setConflictAndStop('Merge conflicts detected.');
-                    return;
+                    const resolved = await autoResolveConflicts(repoPath, 'merge');
+                    if (!resolved.ok) {
+                        setConflictAndStop(resolved.message || 'Merge conflicts detected.');
+                        return;
+                    }
+                    status = await getRepoStatus(repoPath);
                 }
                 if (!hasAnyChanges(status)) {
                     continue;
@@ -305,14 +385,14 @@ export function attachGitController(fileExp) {
                     await callAgentTool('gitAgent', 'git_stage', { path: repoPath, files: stageList });
                 }
                 const after = await getRepoStatus(repoPath);
-                const staged = extractChangePaths(after?.staged);
+                const staged = normalizeGitStatusPayload(after).paths.staged;
                 if (!staged.length) {
                     continue;
                 }
                 const userName = String(rememberedIdentity.name || '').trim();
                 const userEmail = String(rememberedIdentity.email || '').trim();
                 if (!userName || !userEmail) {
-                    showAutocommitStopped('Set name and email in Git settings to continue.');
+                    showAutocommitStopped('Set name, email, and token in Git settings to continue.');
                     return;
                 }
                 try {
@@ -326,7 +406,7 @@ export function attachGitController(fileExp) {
                 } catch (error) {
                     const msg = normalizeErrorMessage(error);
                     if (isGitIdentityError(msg)) {
-                        showAutocommitStopped('Set name and email in Git settings to continue.');
+                        showAutocommitStopped('Set name, email, and token in Git settings to continue.');
                         return;
                     }
                     if (isGitConflictError(msg)) {
@@ -434,9 +514,16 @@ export function attachGitController(fileExp) {
         if (typeof fileExp.refresh === 'function') {
             await fileExp.refresh();
         }
+        await syncConflictFlagFromRepos();
+        ensureAutocommitTimer();
     });
     window.addEventListener('webskel-git-modal-closed', () => {
         updateGitButtonIndicator();
+        syncConflictFlagFromRepos()
+            .catch(() => {})
+            .finally(() => {
+                ensureAutocommitTimer();
+            });
     });
 
     Object.assign(fileExp, {

@@ -6,7 +6,6 @@ export class GitConflictBanner {
             visible: false,
             count: 0
         };
-        this.onUpdate = this.onUpdate.bind(this);
         this.invalidate();
     }
 
@@ -15,25 +14,15 @@ export class GitConflictBanner {
     afterRender() {
         this.root = this.element.querySelector('#gitConflictBanner') || this.element;
         this.subtitle = this.element.querySelector('#gitConflictBannerSubtitle');
-
-        if (!this.element.dataset.boundConflictBannerUpdate) {
-            this.element.addEventListener('git-conflict-banner-update', this.onUpdate);
-            this.element.dataset.boundConflictBannerUpdate = 'true';
-        }
-
         this.applyState(this.state);
     }
 
     openConflictHelper() {
-        this.emit('git-conflict-banner-open');
+        this.getParentPresenter()?.openConflictHelper?.();
     }
 
     setState(next = {}) {
         this.applyState(next);
-    }
-
-    onUpdate(event) {
-        this.applyState(event?.detail || {});
     }
 
     applyState(next = {}) {
@@ -56,7 +45,7 @@ export class GitConflictBanner {
         }
     }
 
-    emit(name, detail = {}) {
-        this.element.dispatchEvent(new CustomEvent(name, { detail, bubbles: true }));
+    getParentPresenter() {
+        return this.element.closest('git-commit-modal')?.webSkelPresenter || null;
     }
 }

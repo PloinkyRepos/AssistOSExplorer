@@ -92,6 +92,42 @@ export function normalizeSlashes(value) {
     return String(value || '').replaceAll('\\', '/');
 }
 
+export function extractChangePaths(entries) {
+    const list = Array.isArray(entries) ? entries : [];
+    return list
+        .map((entry) => {
+            if (!entry) return '';
+            if (typeof entry === 'string') return entry;
+            return entry.path || entry.filePath || entry.name || '';
+        })
+        .map((value) => String(value || '').trim())
+        .filter(Boolean);
+}
+
+export function normalizeGitStatusPayload(payload) {
+    const status = payload?.status || payload || {};
+    const staged = Array.isArray(status.staged) ? status.staged : [];
+    const unstaged = Array.isArray(status.unstaged) ? status.unstaged : [];
+    const untracked = Array.isArray(status.untracked) ? status.untracked : [];
+    const conflicted = Array.isArray(status.conflicted) ? status.conflicted : [];
+    const ignored = Array.isArray(status.ignored) ? status.ignored : [];
+    const paths = {
+        staged: extractChangePaths(staged),
+        unstaged: extractChangePaths(unstaged),
+        untracked: extractChangePaths(untracked),
+        conflicted: extractChangePaths(conflicted),
+        ignored: extractChangePaths(ignored)
+    };
+    const counts = {
+        staged: staged.length,
+        unstaged: unstaged.length,
+        untracked: untracked.length,
+        conflicted: conflicted.length,
+        ignored: ignored.length
+    };
+    return { status, raw: { staged, unstaged, untracked, conflicted, ignored }, paths, counts };
+}
+
 export function stripTrailingSlash(value) {
     return normalizeSlashes(value).replace(/\/+$/g, '');
 }

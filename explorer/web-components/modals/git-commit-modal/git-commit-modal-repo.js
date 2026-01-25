@@ -367,7 +367,7 @@ export function createGitCommitRepo(ctx) {
         const entry = state.selectedFilesByRepo?.[repoPath] || null;
         const out = new Set();
         for (const file of entry?.files || []) {
-            if (changedSet.has(file)) out.add(file);
+            out.add(file);
         }
         const prefixes = Array.from(entry?.prefixes || []);
         for (const prefix of prefixes) {

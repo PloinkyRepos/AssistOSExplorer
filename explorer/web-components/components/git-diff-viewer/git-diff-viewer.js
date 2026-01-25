@@ -63,7 +63,7 @@ export class GitDiffViewer {
         const filePath = this.state.filePath;
         const repoPath = this.state.repoPath;
         if (!filePath || !repoPath || !this.state.canIgnore) return;
-        this.emit('git-diff-ignore', { filePath, repoPath });
+        this.getParentPresenter()?.openIgnoreForDiff?.({ filePath, repoPath });
     }
 
     setState(next = {}) {
@@ -137,7 +137,7 @@ export class GitDiffViewer {
         }
     }
 
-    emit(name, detail = {}) {
-        this.element.dispatchEvent(new CustomEvent(name, { detail, bubbles: true }));
+    getParentPresenter() {
+        return this.element.closest('git-commit-modal')?.webSkelPresenter || null;
     }
 }

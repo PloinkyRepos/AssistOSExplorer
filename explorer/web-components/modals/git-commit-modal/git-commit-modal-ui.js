@@ -1,42 +1,12 @@
-import { isReposRootPath, getAutocommitSettings, getConflictAutoresolveSetting, setCredentialsValidated, getRememberedGitPat, setRememberedGitPat } from "./git-commit-modal-utils.js";
+import { isReposRootPath, getAutocommitSettings, getConflictAutoresolveSetting, getRememberedGitPat } from "./git-commit-modal-utils.js";
 
 export function createGitCommitUI(ctx) {
     const {
         element,
         state,
-        setState,
-        setStateIn,
         setMenuAbortController,
-        runGitAction,
-        openDiff,
-        applyRepoPathFromInput,
-        refreshAction,
-        generateCommitMessage,
-        toggleRepoChanges,
-        toggleRepoFolderExpanded,
-        toggleTreeFolder,
-        toggleTreePrefixSelectionCheckbox,
-        toggleTreeFileSelectionCheckbox,
-        toggleRepoAllChangesCheckbox,
-        openIgnoreForFile,
-        openIgnoreForFolder,
-        openStopTrackingForFile,
-        removeIgnoreForFile,
-        rollbackFile,
-        deleteFile,
-        saveGitCredentials,
-        cancelGitCredentials,
-        saveGitIgnore,
-        cancelGitIgnore,
-        setIgnoreMode,
-        setIgnoreAnchor,
-        openIgnoreForDiff,
         selectConflictFile,
-        applyConflictChoice,
-        saveConflictResolution,
-        openConflictHelper,
         closeModal,
-        cancelConflictResolution
     } = ctx;
 
     const bindEvents = () => {
@@ -56,153 +26,6 @@ export function createGitCommitUI(ctx) {
                 signal: controller.signal
             });
             element.dataset.boundCommitMenu = 'true';
-        }
-
-        if (!element.dataset.boundPromptEvents) {
-            element.addEventListener('git-credentials-submit', (event) => {
-                saveGitCredentials(event?.detail || {});
-            });
-            element.addEventListener('git-credentials-validate', (event) => {
-                saveGitCredentials({ ...(event?.detail || {}), validateOnly: true });
-            });
-            element.addEventListener('git-credentials-cancel', () => {
-                cancelGitCredentials();
-            });
-            element.addEventListener('git-credentials-change', (event) => {
-                const detail = event?.detail || {};
-                const prevName = String(state.identityPrompt?.name ?? '');
-                const prevEmail = String(state.identityPrompt?.email ?? '');
-                const prevToken = String(state.authPrompt?.token ?? '');
-                const prevRemember = Boolean(state.authPrompt?.remember);
-                const nextName = String(detail.name ?? prevName);
-                const nextEmail = String(detail.email ?? prevEmail);
-                const nextToken = String(detail.token ?? prevToken);
-                const nextRemember = typeof detail.remember === 'boolean' ? detail.remember : prevRemember;
-                if (nextRemember && nextToken) {
-                    setRememberedGitPat(nextToken);
-                } else if (!nextRemember) {
-                    setRememberedGitPat('');
-                }
-                if (detail.autocommitDirty) {
-                    state.autocommitDirty = true;
-                    state.autocommitDraft = {
-                        intervalMinutes: detail.autocommitIntervalMinutes,
-                        repos: Array.isArray(detail.autocommitRepos) ? detail.autocommitRepos : null
-                    };
-                }
-                if (detail.autoresolveDirty) {
-                    state.autoresolveDirty = true;
-                    state.autoresolveDraft = {
-                        enabled: Boolean(detail.autoresolveConflicts)
-                    };
-                }
-                if (detail.credentialsDirty) {
-                    const credentialsChanged = (
-                        prevName !== nextName
-                        || prevEmail !== nextEmail
-                        || prevToken !== nextToken
-                        || prevRemember !== nextRemember
-                    );
-                    if (credentialsChanged) {
-                        state.credentialsValidated = false;
-                        setCredentialsValidated(false);
-                        state.credentialsDirty = true;
-                    }
-                }
-                state.identityPrompt = {
-                    ...state.identityPrompt,
-                    name: nextName,
-                    email: nextEmail
-                };
-                state.authPrompt = {
-                    ...state.authPrompt,
-                    token: nextToken,
-                    remember: nextRemember
-                };
-                updateIdentityPrompt();
-            });
-            element.addEventListener('git-ignore-submit', (event) => {
-                saveGitIgnore(event?.detail || {});
-            });
-            element.addEventListener('git-ignore-cancel', () => {
-                cancelGitIgnore();
-            });
-            element.addEventListener('git-ignore-change', (event) => {
-                const detail = event?.detail || {};
-                state.ignorePrompt = {
-                    ...state.ignorePrompt,
-                    patterns: String(detail.patterns ?? state.ignorePrompt?.patterns ?? '')
-                };
-            });
-            element.addEventListener('git-ignore-mode', (event) => {
-                setIgnoreMode(event?.detail || {});
-            });
-            element.addEventListener('git-ignore-anchor', (event) => {
-                setIgnoreAnchor(event?.detail || {});
-            });
-            element.addEventListener('git-diff-ignore', (event) => {
-                openIgnoreForDiff(event?.detail || {});
-            });
-            element.dataset.boundPromptEvents = 'true';
-        }
-
-        if (!element.dataset.boundCommitBodyReady) {
-            element.addEventListener('git-commit-body-ready', () => {
-                updateCommitButtons();
-                syncStaticUI();
-            });
-            element.dataset.boundCommitBodyReady = 'true';
-        }
-
-        if (!element.dataset.boundCommitBodyActions) {
-            element.addEventListener('git-commit-body-action', (event) => {
-                handleCommitBodyAction(event?.detail || {});
-            });
-            element.dataset.boundCommitBodyActions = 'true';
-        }
-
-        if (!element.dataset.boundCommitActions) {
-            element.addEventListener('git-commit-actions-action', (event) => {
-                handleCommitActionsAction(event?.detail || {});
-            });
-            element.dataset.boundCommitActions = 'true';
-        }
-
-        if (!element.dataset.boundRepoTreeActions) {
-            element.addEventListener('git-repo-tree-action', (event) => {
-                handleRepoTreeAction(event?.detail || {});
-            });
-            element.dataset.boundRepoTreeActions = 'true';
-        }
-
-        if (!element.dataset.boundConflictHelper) {
-            element.addEventListener('git-conflict-select', (event) => {
-                selectConflictFile?.(event?.detail || {});
-            });
-            element.addEventListener('git-conflict-apply', (event) => {
-                applyConflictChoice?.(event?.detail || {});
-            });
-            element.addEventListener('git-conflict-save', (event) => {
-                saveConflictResolution?.(event?.detail || {});
-            });
-            element.addEventListener('git-conflict-cancel', () => {
-                cancelConflictResolution?.();
-            });
-            element.dataset.boundConflictHelper = 'true';
-        }
-
-        if (!element.dataset.boundConflictBanner) {
-            element.addEventListener('git-conflict-banner-open', () => {
-                openConflictHelper?.();
-            });
-            element.dataset.boundConflictBanner = 'true';
-        }
-
-        if (!element.dataset.boundPullBlockedEvents) {
-            element.addEventListener('git-pull-blocked-open', (event) => {
-                openDiff?.(event?.detail || {});
-            });
-            element.dataset.boundPullBlockedEvents = 'true';
         }
 
         const changesRoot = element.querySelector('.git-changes');
@@ -258,69 +81,6 @@ export function createGitCommitUI(ctx) {
     const getCommitActionsPresenter = () => element.querySelector('git-commit-actions')?.webSkelPresenter || null;
     const getRepoTreePresenter = () => element.querySelector('git-repo-tree')?.webSkelPresenter || null;
 
-    const handleCommitBodyAction = ({ action, element: actionElement, mode, value } = {}) => {
-        if (!action) return;
-        if (action === 'applyRepoPathFromInput') {
-            applyRepoPathFromInput?.(value);
-            return;
-        }
-        const actionMap = {
-            refreshAction,
-            generateCommitMessage
-        };
-        if (action === 'runGitAction') {
-            runGitAction?.(actionElement, mode);
-            return;
-        }
-        if (action === 'updateCommitMessage') {
-            updateCommitMessage(value);
-            return;
-        }
-        const handler = actionMap[action];
-        if (typeof handler === 'function') {
-            handler(actionElement);
-        }
-    };
-
-    const handleCommitActionsAction = ({ action, element: actionElement, mode, value } = {}) => {
-        if (!action) return;
-        if (action === 'runGitAction') {
-            runGitAction?.(actionElement, mode);
-            return;
-        }
-        if (action === 'updateCommitMessage') {
-            updateCommitMessage(value);
-            return;
-        }
-        if (action === 'generateCommitMessage') {
-            generateCommitMessage?.();
-            return;
-        }
-    };
-
-    const handleRepoTreeAction = ({ action, element: actionElement } = {}) => {
-        if (!action) return;
-        const actionMap = {
-            openDiff,
-            toggleRepoChanges,
-            toggleRepoFolderExpanded,
-            toggleTreeFolder,
-            toggleTreePrefixSelectionCheckbox,
-            toggleTreeFileSelectionCheckbox,
-            toggleRepoAllChangesCheckbox,
-            openIgnoreForFile,
-            openIgnoreForFolder,
-            openStopTrackingForFile,
-            removeIgnoreForFile,
-            rollbackFile,
-            deleteFile
-        };
-        const handler = actionMap[action];
-        if (typeof handler === 'function') {
-            handler(actionElement);
-        }
-    };
-
     const updateCredentialsPrompt = (options = {}) => {
         const identityState = state.identityPrompt || {};
         const authState = state.authPrompt || {};
@@ -356,12 +116,13 @@ export function createGitCommitUI(ctx) {
             || state.credentialsOpen
         );
         const tokenValue = (authState.token || rememberedToken || '') || '';
+        const rememberState = typeof authState.remember === 'boolean' ? authState.remember : Boolean(rememberedToken);
         const detail = {
             visible,
             name: identityState.name || '',
             email: identityState.email || '',
             token: tokenValue,
-            remember: Boolean(rememberedToken),
+            remember: rememberState,
             credentialsValidated,
             credentialsDirty: Boolean(state.credentialsDirty),
             autocommitDirty: Boolean(state.autocommitDirty),
@@ -374,12 +135,7 @@ export function createGitCommitUI(ctx) {
         };
         if (options.focus) detail.focus = options.focus;
         const presenter = getCredentialsPromptPresenter();
-        if (presenter?.setState) {
-            presenter.setState(detail);
-            return;
-        }
-        const target = element.querySelector('git-credentials-prompt');
-        target?.dispatchEvent?.(new CustomEvent('git-credentials-update', { detail }));
+        presenter?.setState?.(detail);
     };
 
     const updateIdentityPrompt = (options = {}) => {
@@ -407,12 +163,7 @@ export function createGitCommitUI(ctx) {
         };
         if (options.focus) detail.focus = options.focus;
         const presenter = getIgnorePromptPresenter();
-        if (presenter?.setState) {
-            presenter.setState(detail);
-            return;
-        }
-        const target = element.querySelector('git-ignore-prompt');
-        target?.dispatchEvent?.(new CustomEvent('git-ignore-update', { detail }));
+        presenter?.setState?.(detail);
     };
 
     const updateCommitBody = () => {
@@ -424,11 +175,7 @@ export function createGitCommitUI(ctx) {
             repoPath: state.repoPath || ''
         };
         const presenter = getCommitBodyPresenter();
-        if (presenter?.setState) {
-            presenter.setState(detail);
-            return;
-        }
-        body.classList.toggle('is-hidden', !visible);
+        presenter?.setState?.(detail);
     };
 
     const updateStatusBar = () => {

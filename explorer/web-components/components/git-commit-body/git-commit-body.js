@@ -8,7 +8,6 @@ export class GitCommitBody {
             advancedMode: false
         };
         this.boundActions = false;
-        this.onUpdate = this.onUpdate.bind(this);
         this.invalidate();
     }
 
@@ -18,12 +17,10 @@ export class GitCommitBody {
         this.repoPathInput = this.element.querySelector('#gitRepoPathInput');
         this.advancedModeInput = this.element.querySelector('#gitAdvancedMode');
         this.bindEvents();
-        if (!this.element.dataset.boundCommitBody) {
-            this.element.addEventListener('git-commit-body-update', this.onUpdate);
-            this.element.dataset.boundCommitBody = 'true';
-        }
         this.applyState(this.state);
-        this.emit('git-commit-body-ready');
+        const parent = this.getParentPresenter();
+        parent?.updateCommitButtons?.();
+        parent?.syncStaticUI?.();
     }
 
     bindEvents() {
@@ -47,10 +44,6 @@ export class GitCommitBody {
 
     setState(next = {}) {
         this.applyState(next);
-    }
-
-    onUpdate(event) {
-        this.applyState(event?.detail || {});
     }
 
     applyState(next = {}) {
@@ -78,11 +71,11 @@ export class GitCommitBody {
 
     applyRepoPathFromInput() {
         const value = String(this.repoPathInput?.value || '').trim();
-        this.emitAction('applyRepoPathFromInput', { value });
+        this.getParentPresenter()?.applyRepoPathFromInput?.(value);
     }
 
     refreshAction() {
-        this.emitAction('refreshAction');
+        this.getParentPresenter()?.refreshAction?.();
     }
 
     toggleAdvancedMode() {
@@ -94,11 +87,7 @@ export class GitCommitBody {
         }
     }
 
-    emit(name, detail = {}) {
-        this.element.dispatchEvent(new CustomEvent(name, { detail, bubbles: true }));
-    }
-
-    emitAction(action, payload = {}) {
-        this.emit('git-commit-body-action', { action, ...payload });
+    getParentPresenter() {
+        return this.element.closest('git-commit-modal')?.webSkelPresenter || null;
     }
 }
