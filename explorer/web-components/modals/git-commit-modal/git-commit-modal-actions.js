@@ -22,6 +22,8 @@ import { withGlobalLoader } from "../../../utils/globalLoader.js";
 export function createGitCommitActions(ctx) {
     const {
         getState,
+        setState,
+        setStateIn,
         service,
         setStatusLine,
         updateCommitButtons,
@@ -39,6 +41,38 @@ export function createGitCommitActions(ctx) {
         loadRepoOverviews,
         refreshAll
     } = ctx;
+
+    const applyState = (patch = {}, options = {}) => {
+        if (typeof setState === 'function') {
+            setState(patch, options);
+            return;
+        }
+        Object.assign(getState(), patch);
+        if (!options.silent && typeof syncStaticUI === 'function') {
+            syncStaticUI();
+        }
+    };
+
+    const applyStateIn = (path, value, options = {}) => {
+        if (typeof setStateIn === 'function') {
+            setStateIn(path, value, options);
+            return;
+        }
+        const state = getState();
+        const targetPath = Array.isArray(path) ? path : [];
+        let cursor = state;
+        for (let i = 0; i < targetPath.length - 1; i += 1) {
+            const key = targetPath[i];
+            if (!cursor[key] || typeof cursor[key] !== 'object') cursor[key] = {};
+            cursor = cursor[key];
+        }
+        if (targetPath.length) {
+            cursor[targetPath[targetPath.length - 1]] = value;
+        }
+        if (!options.silent && typeof syncStaticUI === 'function') {
+            syncStaticUI();
+        }
+    };
 
     const coerceCount = (value) => {
         if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -122,15 +156,14 @@ export function createGitCommitActions(ctx) {
     const clearPullBlockedState = () => {
         const state = getState();
         if (!state.pullBlocked) return;
-        state.pullBlocked = null;
-        syncStaticUI();
+        applyState({ pullBlocked: null });
     };
 
     const loadManualConflicts = async (repoPaths) => {
         const state = getState();
         const paths = Array.isArray(repoPaths) ? repoPaths.filter(Boolean) : [];
         if (!paths.length) {
-            state.manualConflicts = [];
+            applyState({ manualConflicts: [] });
             return;
         }
         const collected = [];
@@ -151,7 +184,7 @@ export function createGitCommitActions(ctx) {
                 continue;
             }
         }
-        state.manualConflicts = collected;
+        applyState({ manualConflicts: collected }, { silent: true });
     };
 
     const extractConflictPaths = (status) => {
@@ -251,9 +284,7 @@ export function createGitCommitActions(ctx) {
             return true;
         }
         await loadManualConflicts(repoPaths);
-        const state = getState();
-        state.conflictSource = source;
-        state.conflictFocus = false;
+        applyState({ conflictSource: source, conflictFocus: false }, { silent: true });
         await loadRepoOverviews({ force: true });
         syncStaticUI();
         updateCommitButtons();
@@ -382,7 +413,7 @@ export function createGitCommitActions(ctx) {
             }
             if (isGitConflictError(msg)) {
                 if (stashCreated) {
-                    state.autoStash = { repoPath, ref: stashRef };
+                    applyState({ autoStash: { repoPath, ref: stashRef } }, { silent: true });
                 }
                 await handlePullConflicts('Pull completed with conflicts. Resolve them, then restore your stashed changes.', [repoPath], 'merge');
                 return false;
@@ -392,8 +423,7 @@ export function createGitCommitActions(ctx) {
                     await restoreStash(repoPath, stashRef);
                 }
                 const blockedFiles = extractGitPullBlockedFiles(msg);
-                state.pullBlocked = blockedFiles.length ? { repoPath, files: blockedFiles } : null;
-                syncStaticUI();
+                applyState({ pullBlocked: blockedFiles.length ? { repoPath, files: blockedFiles } : null });
                 updateCommitButtons();
                 setStatusLine('Pull blocked: could not auto-stash your local changes.', true);
                 return false;
@@ -418,7 +448,7 @@ export function createGitCommitActions(ctx) {
         const pending = state.autoStash;
         if (!pending?.repoPath) return false;
         if (hasConflictsForRepos([pending.repoPath])) return false;
-        state.autoStash = null;
+        applyState({ autoStash: null }, { silent: true });
         setStatusLine('Restoring stashed changes...');
         const restored = await restoreStash(pending.repoPath, pending.ref);
         if (restored.ok) {
@@ -461,7 +491,7 @@ export function createGitCommitActions(ctx) {
             setStatusLine('Select a repository or file to stash.', true);
             return;
         }
-        state.autoStash = null;
+        applyState({ autoStash: null }, { silent: true });
         setStatusLine(`Stashing ${targets.length} repo(s)...`);
         return withGlobalLoader(async () => {
             try {
@@ -495,7 +525,7 @@ export function createGitCommitActions(ctx) {
             setStatusLine('Select a repository or file to unstash.', true);
             return;
         }
-        state.autoStash = null;
+        applyState({ autoStash: null }, { silent: true });
         setStatusLine(`Unstashing ${targets.length} repo(s)...`);
         return withGlobalLoader(async () => {
             try {
@@ -526,17 +556,18 @@ export function createGitCommitActions(ctx) {
         const state = getState();
         const selection = { repoPath, filePath };
         const requestKey = `${repoPath}::${filePath}`;
-        state.conflictHelper = {
-            ...(state.conflictHelper || {}),
-            selected: selection,
-            ours: '',
-            theirs: '',
-            choice: '',
-            status: 'Loading conflict versions...',
-            loading: true,
-            requestKey
-        };
-        syncStaticUI();
+        applyState({
+            conflictHelper: {
+                ...(state.conflictHelper || {}),
+                selected: selection,
+                ours: '',
+                theirs: '',
+                choice: '',
+                status: 'Loading conflict versions...',
+                loading: true,
+                requestKey
+            }
+        });
 
         try {
             const text = await service.gitConflictVersions({ path: repoPath, file: filePath });
@@ -559,27 +590,30 @@ export function createGitCommitActions(ctx) {
 
             const current = getState().conflictHelper || {};
             if (current.requestKey !== requestKey) return;
-            state.conflictHelper = {
-                ...current,
-                selected: selection,
-                ours: String(ours || ''),
-                theirs: String(theirs || ''),
-                choice: '',
-                status,
-                loading: false,
-                requestKey: null
-            };
+            applyState({
+                conflictHelper: {
+                    ...current,
+                    selected: selection,
+                    ours: String(ours || ''),
+                    theirs: String(theirs || ''),
+                    choice: '',
+                    status,
+                    loading: false,
+                    requestKey: null
+                }
+            });
         } catch (error) {
             const current = getState().conflictHelper || {};
             if (current.requestKey !== requestKey) return;
-            state.conflictHelper = {
-                ...current,
-                selected: selection,
-                loading: false,
-                status: normalizeErrorMessage(error)
-            };
+            applyState({
+                conflictHelper: {
+                    ...current,
+                    selected: selection,
+                    loading: false,
+                    status: normalizeErrorMessage(error)
+                }
+            });
         }
-        syncStaticUI();
     };
 
     const normalizeConflictSource = (value) => {
@@ -684,7 +718,7 @@ export function createGitCommitActions(ctx) {
         };
         const dirty = counts.staged + counts.unstaged + counts.untracked + counts.conflicted > 0;
         const repoList = Array.isArray(state.repoOverviews) ? state.repoOverviews : [];
-        state.repoOverviews = repoList.map((repo) => {
+        const nextRepoOverviews = repoList.map((repo) => {
             if (!repo || repo.path !== repoPath) return repo;
             return {
                 ...repo,
@@ -703,6 +737,7 @@ export function createGitCommitActions(ctx) {
                 ignoredCount: ignored.length
             };
         });
+        applyState({ repoOverviews: nextRepoOverviews }, { silent: true });
     };
 
     const applyConflictChoice = async ({ repoPath, filePath, source } = {}) => {
@@ -713,14 +748,15 @@ export function createGitCommitActions(ctx) {
             return;
         }
         const state = getState();
-        state.conflictHelper = {
-            ...(state.conflictHelper || {}),
-            selected: { repoPath, filePath },
-            choice: side,
-            status: `Selected ${side === 'ours' ? 'left' : 'right'} version. Click Save to apply.`,
-            loading: false
-        };
-        syncStaticUI();
+        applyState({
+            conflictHelper: {
+                ...(state.conflictHelper || {}),
+                selected: { repoPath, filePath },
+                choice: side,
+                status: `Selected ${side === 'ours' ? 'left' : 'right'} version. Click Save to apply.`,
+                loading: false
+            }
+        });
     };
 
     const saveConflictResolution = async ({ repoPath, filePath, choice } = {}) => {
@@ -735,50 +771,52 @@ export function createGitCommitActions(ctx) {
         const applySide = source === 'stash'
             ? (side === 'ours' ? 'theirs' : 'ours')
             : side;
-        state.conflictHelper = {
-            ...(state.conflictHelper || {}),
-            selected: { repoPath, filePath },
-            status: 'Saving resolution...',
-            loading: true
-        };
-        syncStaticUI();
+        applyState({
+            conflictHelper: {
+                ...(state.conflictHelper || {}),
+                selected: { repoPath, filePath },
+                status: 'Saving resolution...',
+                loading: true
+            }
+        });
 
         try {
             await service.gitCheckoutConflict({ path: repoPath, file: filePath, source: applySide });
             await service.gitStage(repoPath, [filePath]);
             const statusPayload = parseJsonToolResult(await service.gitStatus(repoPath)) || {};
             updateRepoOverviewFromStatus(repoPath, statusPayload.status || statusPayload);
-            state.conflictHelper = {
-                ...(state.conflictHelper || {}),
-                choice: '',
-                loading: false,
-                status: 'Resolved and staged.'
-            };
-            state.manualConflicts = [];
+            applyState({
+                conflictHelper: {
+                    ...(state.conflictHelper || {}),
+                    choice: '',
+                    loading: false,
+                    status: 'Resolved and staged.'
+                },
+                manualConflicts: []
+            });
             const stillConflicted = collectConflictedItems([repoPath]).some((item) => item.filePath === filePath);
             if (stillConflicted) {
                 await selectConflictFile({ repoPath, filePath });
             }
             updateCommitButtons();
-            syncStaticUI();
             if (!hasConflictsForRepos([repoPath])) {
                 setStatusLine('Ready.');
             }
         } catch (error) {
-            state.conflictHelper = {
-                ...(state.conflictHelper || {}),
-                loading: false,
-                status: normalizeErrorMessage(error)
-            };
-            syncStaticUI();
+            applyState({
+                conflictHelper: {
+                    ...(state.conflictHelper || {}),
+                    loading: false,
+                    status: normalizeErrorMessage(error)
+                }
+            });
         }
     };
 
     const refreshConflicts = async () => {
         await refreshAll({ force: true });
         await maybeRestoreAutoStash();
-        const state = getState();
-        state.manualConflicts = [];
+        applyState({ manualConflicts: [] }, { silent: true });
         const selection = getState().conflictHelper?.selected;
         if (selection?.repoPath && selection?.filePath) {
             const stillConflicted = collectConflictedItems([selection.repoPath])
@@ -792,14 +830,15 @@ export function createGitCommitActions(ctx) {
     const showGitAuthPrompt = (repoPath, pendingAction, { message = '' } = {}) => {
         const state = getState();
         const remembered = getRememberedGitPat();
-        state.authPrompt = {
-            visible: true,
-            repoPath,
-            pendingAction: pendingAction || null,
-            token: '',
-            remember: Boolean(remembered)
-        };
-        syncStaticUI();
+        applyState({
+            authPrompt: {
+                visible: true,
+                repoPath,
+                pendingAction: pendingAction || null,
+                token: '',
+                remember: Boolean(remembered)
+            }
+        });
         updateAuthPrompt({ focus: 'token' });
         updateCommitButtons();
         setStatusLine(
@@ -842,25 +881,25 @@ export function createGitCommitActions(ctx) {
         const remembered = getRememberedGitIdentity();
         const name = remembered.name || state.identityPrompt?.name || '';
         const email = remembered.email || state.identityPrompt?.email || '';
-        state.identityPrompt = {
-            visible: true,
-            repoPath,
-            pendingAction: null,
-            name,
-            email
-        };
-        syncStaticUI();
+        applyState({
+            identityPrompt: {
+                visible: true,
+                repoPath,
+                pendingAction: null,
+                name,
+                email
+            }
+        });
         updateIdentityPrompt({ focus: !name ? 'name' : (!email ? 'email' : 'name') });
         updateCommitButtons();
     };
 
     const cancelGitToken = () => {
         const state = getState();
-        state.authPrompt = { visible: false, repoPath: null, pendingAction: null, token: '', remember: false };
-        if (state.credentialsOpen && !state.credentialsGate) {
-            state.credentialsOpen = false;
-        }
-        syncStaticUI();
+        applyState({
+            authPrompt: { visible: false, repoPath: null, pendingAction: null, token: '', remember: false },
+            credentialsOpen: state.credentialsOpen && !state.credentialsGate ? false : state.credentialsOpen
+        });
         updateCommitButtons();
         setStatusLine('Cancelled.', true);
     };
@@ -868,21 +907,21 @@ export function createGitCommitActions(ctx) {
     const cancelGitIdentity = () => {
         const state = getState();
         if (state.credentialsGate) {
-            state.identityPrompt = {
-                ...state.identityPrompt,
-                visible: true
-            };
-            syncStaticUI();
+            applyState({
+                identityPrompt: {
+                    ...state.identityPrompt,
+                    visible: true
+                }
+            });
             updateIdentityPrompt({ focus: state.identityPrompt?.name ? 'email' : 'name' });
             updateCommitButtons();
             setStatusLine('Set name and email to continue.', true);
             return;
         }
-        state.identityPrompt = { visible: false, repoPath: null, pendingAction: null, name: '', email: '' };
-        if (state.credentialsOpen && !state.credentialsGate) {
-            state.credentialsOpen = false;
-        }
-        syncStaticUI();
+        applyState({
+            identityPrompt: { visible: false, repoPath: null, pendingAction: null, name: '', email: '' },
+            credentialsOpen: state.credentialsOpen && !state.credentialsGate ? false : state.credentialsOpen
+        });
         updateCommitButtons();
         setStatusLine('Cancelled.', true);
     };
@@ -895,23 +934,23 @@ export function createGitCommitActions(ctx) {
         const hasSavedToken = Boolean(String(rememberedToken || '').trim());
         const hasAllSaved = hasSavedIdentity && hasSavedToken;
         if (state.credentialsGate && hasAllSaved) {
-            state.identityPrompt = {
-                ...state.identityPrompt,
-                visible: true
-            };
-            syncStaticUI();
+            applyState({
+                identityPrompt: {
+                    ...state.identityPrompt,
+                    visible: true
+                }
+            });
             updateIdentityPrompt({ focus: state.identityPrompt?.name ? 'email' : 'name' });
             updateCommitButtons();
             setStatusLine('Set name and email to continue.', true);
             return false;
         }
-        state.identityPrompt = { visible: false, repoPath: null, pendingAction: null, name: '', email: '' };
-        state.authPrompt = { visible: false, repoPath: null, pendingAction: null, token: '', remember: false };
-        if (state.credentialsOpen) state.credentialsOpen = false;
-        if (state.credentialsGate && !hasAllSaved) {
-            state.credentialsGate = false;
-        }
-        syncStaticUI();
+        applyState({
+            identityPrompt: { visible: false, repoPath: null, pendingAction: null, name: '', email: '' },
+            authPrompt: { visible: false, repoPath: null, pendingAction: null, token: '', remember: false },
+            credentialsOpen: state.credentialsOpen ? false : state.credentialsOpen,
+            credentialsGate: state.credentialsGate && !hasAllSaved ? false : state.credentialsGate
+        });
         updateCommitButtons();
         setStatusLine('Cancelled.', true);
         if (!hasAllSaved) {
@@ -998,18 +1037,18 @@ export function createGitCommitActions(ctx) {
         const anchor = options.anchor !== undefined ? Boolean(options.anchor) : true;
         const overridePatterns = typeof options.patterns === 'string' ? options.patterns.trim() : '';
         const patterns = overridePatterns || buildIgnorePatterns(fallbackPaths, { mode, anchor });
-        const state = getState();
-        state.ignorePrompt = {
-            visible: true,
-            repoPath,
-            mode,
-            anchor,
-            patterns,
-            paths: fallbackPaths,
-            source,
-            stopTracking: Boolean(options.stopTracking)
-        };
-        syncStaticUI();
+        applyState({
+            ignorePrompt: {
+                visible: true,
+                repoPath,
+                mode,
+                anchor,
+                patterns,
+                paths: fallbackPaths,
+                source,
+                stopTracking: Boolean(options.stopTracking)
+            }
+        });
         updateIgnorePrompt({ focus: 'patterns' });
         updateCommitButtons();
         if (!fallbackPaths.length) {
@@ -1026,13 +1065,14 @@ export function createGitCommitActions(ctx) {
         const patterns = paths.length
             ? buildIgnorePatterns(paths, { mode: next, anchor })
             : (state.ignorePrompt?.patterns || '');
-        state.ignorePrompt = {
-            ...state.ignorePrompt,
-            mode: next,
-            anchor,
-            patterns
-        };
-        syncStaticUI();
+        applyState({
+            ignorePrompt: {
+                ...state.ignorePrompt,
+                mode: next,
+                anchor,
+                patterns
+            }
+        });
         updateIgnorePrompt();
         updateCommitButtons();
     };
@@ -1045,29 +1085,30 @@ export function createGitCommitActions(ctx) {
         const patterns = paths.length
             ? buildIgnorePatterns(paths, { mode, anchor: next })
             : (state.ignorePrompt?.patterns || '');
-        state.ignorePrompt = {
-            ...state.ignorePrompt,
-            anchor: next,
-            patterns
-        };
-        syncStaticUI();
+        applyState({
+            ignorePrompt: {
+                ...state.ignorePrompt,
+                anchor: next,
+                patterns
+            }
+        });
         updateIgnorePrompt();
         updateCommitButtons();
     };
 
     const cancelGitIgnore = () => {
-        const state = getState();
-        state.ignorePrompt = {
-            visible: false,
-            repoPath: null,
-            mode: 'file',
-            anchor: true,
-            patterns: '',
-            paths: [],
-            source: 'manual',
-            stopTracking: false
-        };
-        syncStaticUI();
+        applyState({
+            ignorePrompt: {
+                visible: false,
+                repoPath: null,
+                mode: 'file',
+                anchor: true,
+                patterns: '',
+                paths: [],
+                source: 'manual',
+                stopTracking: false
+            }
+        });
         updateCommitButtons();
         setStatusLine('Cancelled.', true);
     };
@@ -1109,17 +1150,18 @@ export function createGitCommitActions(ctx) {
                 const existingSet = new Set(existingLines.map((line) => line.trim()).filter(Boolean));
                 const toAdd = lines.filter((line) => !existingSet.has(line));
                 if (!toAdd.length && !stopTracking) {
-                    state.ignorePrompt = {
-                        visible: false,
-                        repoPath: null,
-                        mode: 'file',
-                        anchor: true,
-                        patterns: '',
-                        paths: [],
-                        source: 'manual',
-                        stopTracking: false
-                    };
-                    syncStaticUI();
+                    applyState({
+                        ignorePrompt: {
+                            visible: false,
+                            repoPath: null,
+                            mode: 'file',
+                            anchor: true,
+                            patterns: '',
+                            paths: [],
+                            source: 'manual',
+                            stopTracking: false
+                        }
+                    });
                     updateCommitButtons();
                     setStatusLine('All patterns are already in .gitignore.');
                     return;
@@ -1133,18 +1175,37 @@ export function createGitCommitActions(ctx) {
                     const nextContent = `${existing}${needsNewline ? '\n' : ''}${toAdd.join('\n')}\n`;
                     await service.writeFile(ignorePath, nextContent);
                 }
-                if (!stopTracking && ignoredPaths.length) {
-                    const map = state.ignoreHints || {};
-                    const current = new Set(Array.isArray(map[repoPath]) ? map[repoPath] : []);
-                    for (const path of ignoredPaths) {
-                        const normalized = normalizeIgnorePattern(path);
-                        if (normalized) current.add(normalized);
-                    }
-                    map[repoPath] = Array.from(current);
-                    state.ignoreHints = map;
+            if (!stopTracking && ignoredPaths.length) {
+                const map = state.ignoreHints || {};
+                const current = new Set(Array.isArray(map[repoPath]) ? map[repoPath] : []);
+                for (const path of ignoredPaths) {
+                    const normalized = normalizeIgnorePattern(path);
+                    if (normalized) current.add(normalized);
                 }
+                map[repoPath] = Array.from(current);
+                applyState({ ignoreHints: map }, { silent: true });
+            }
 
-                state.ignorePrompt = {
+            let nextSelectedFiles = state.selectedFilesByRepo;
+            if (state.selectedFilesByRepo && state.selectedFilesByRepo[repoPath]) {
+                const entry = state.selectedFilesByRepo[repoPath];
+                if (entry?.files && entry.files.size && ignoredPaths.length) {
+                    const nextFiles = new Set(entry.files);
+                    for (const path of ignoredPaths) {
+                        nextFiles.delete(path);
+                    }
+                    const nextEntry = { ...entry, files: nextFiles };
+                    if (!nextFiles.size && (!entry.prefixes || entry.prefixes.size === 0)) {
+                        const nextSelected = { ...state.selectedFilesByRepo };
+                        delete nextSelected[repoPath];
+                        nextSelectedFiles = nextSelected;
+                    } else {
+                        nextSelectedFiles = { ...state.selectedFilesByRepo, [repoPath]: nextEntry };
+                    }
+                }
+            }
+            applyState({
+                ignorePrompt: {
                     visible: false,
                     repoPath: null,
                     mode: 'file',
@@ -1153,26 +1214,10 @@ export function createGitCommitActions(ctx) {
                     paths: [],
                     source: 'manual',
                     stopTracking: false
-                };
-                if (state.selectedFilesByRepo && state.selectedFilesByRepo[repoPath]) {
-                    const entry = state.selectedFilesByRepo[repoPath];
-                    if (entry?.files && entry.files.size && ignoredPaths.length) {
-                        const nextFiles = new Set(entry.files);
-                        for (const path of ignoredPaths) {
-                            nextFiles.delete(path);
-                        }
-                        const nextEntry = { ...entry, files: nextFiles };
-                        if (!nextFiles.size && (!entry.prefixes || entry.prefixes.size === 0)) {
-                            const nextSelected = { ...state.selectedFilesByRepo };
-                            delete nextSelected[repoPath];
-                            state.selectedFilesByRepo = nextSelected;
-                        } else {
-                            state.selectedFilesByRepo = { ...state.selectedFilesByRepo, [repoPath]: nextEntry };
-                        }
-                    }
-                }
-                syncStaticUI();
-                updateCommitButtons();
+                },
+                selectedFilesByRepo: nextSelectedFiles
+            });
+            updateCommitButtons();
                 await loadRepoOverviews({ force: true });
                 await refreshAll({ force: true });
                 if (stopTracking && toAdd.length) {
@@ -1341,19 +1386,22 @@ export function createGitCommitActions(ctx) {
         const pending = state.authPrompt?.pendingAction;
         const token = String(payload.token ?? state.authPrompt?.token ?? '').trim();
         const remember = typeof payload.remember === 'boolean' ? payload.remember : Boolean(state.authPrompt?.remember);
-        state.authPrompt = {
-            ...state.authPrompt,
-            token,
-            remember
-        };
-        if (!token) {
-            state.authPrompt = {
+        applyState({
+            authPrompt: {
                 ...state.authPrompt,
-                visible: true,
-                token: '',
+                token,
                 remember
-            };
-            syncStaticUI();
+            }
+        }, { silent: true });
+        if (!token) {
+            applyState({
+                authPrompt: {
+                    ...state.authPrompt,
+                    visible: true,
+                    token: '',
+                    remember
+                }
+            });
             updateAuthPrompt({ focus: 'token' });
             updateCommitButtons();
             setStatusLine('Enter a token to continue.', true);
@@ -1362,8 +1410,9 @@ export function createGitCommitActions(ctx) {
         if (remember) setRememberedGitPat(token);
         else setRememberedGitPat('');
 
-        state.authPrompt = { visible: false, repoPath: null, pendingAction: null, token: '', remember: false };
-        syncStaticUI();
+        applyState({
+            authPrompt: { visible: false, repoPath: null, pendingAction: null, token: '', remember: false }
+        });
         updateCommitButtons();
         setStatusLine(pending?.type === 'pull' ? 'Retrying pull…' : 'Retrying push…');
         try {
@@ -1403,25 +1452,28 @@ export function createGitCommitActions(ctx) {
         const tokenRequired = remember || authRequired;
         const tokenValid = !tokenRequired || Boolean(token);
 
-        state.identityPrompt = {
-            ...state.identityPrompt,
-            name,
-            email
-        };
-        state.authPrompt = {
-            ...state.authPrompt,
-            token,
-            remember
-        };
-
-        if (!identityValid) {
-            state.identityPrompt = {
+        applyState({
+            identityPrompt: {
                 ...state.identityPrompt,
-                visible: true,
                 name,
                 email
-            };
-            syncStaticUI();
+            },
+            authPrompt: {
+                ...state.authPrompt,
+                token,
+                remember
+            }
+        }, { silent: true });
+
+        if (!identityValid) {
+            applyState({
+                identityPrompt: {
+                    ...state.identityPrompt,
+                    visible: true,
+                    name,
+                    email
+                }
+            });
             updateIdentityPrompt({ focus: !name ? 'name' : 'email' });
             updateCommitButtons();
             setStatusLine(!name || !email ? 'Enter name and email.' : 'Enter a valid email address.', true);
@@ -1431,13 +1483,14 @@ export function createGitCommitActions(ctx) {
             setRememberedGitPat('');
         }
         if (tokenRequired && !tokenValid) {
-            state.authPrompt = {
-                ...state.authPrompt,
-                visible: true,
-                token: '',
-                remember
-            };
-            syncStaticUI();
+            applyState({
+                authPrompt: {
+                    ...state.authPrompt,
+                    visible: true,
+                    token: '',
+                    remember
+                }
+            });
             updateAuthPrompt({ focus: 'token' });
             updateCommitButtons();
             setStatusLine('Enter a token to continue.', true);
@@ -1452,14 +1505,15 @@ export function createGitCommitActions(ctx) {
             } catch {
                 // ignore dispatch errors
             }
-            state.autocommitDirty = false;
-            state.autocommitDraft = {
-                intervalMinutes: autocommitIntervalMinutes,
-                repos: autocommitRepos
-            };
-            state.autoresolveDirty = false;
-            state.autoresolveDraft = { enabled: autoresolveConflicts };
-            syncStaticUI();
+            applyState({
+                autocommitDirty: false,
+                autocommitDraft: {
+                    intervalMinutes: autocommitIntervalMinutes,
+                    repos: autocommitRepos
+                },
+                autoresolveDirty: false,
+                autoresolveDraft: { enabled: autoresolveConflicts }
+            });
             updateCommitButtons();
             setStatusLine('Settings saved.');
             return;
@@ -1504,9 +1558,8 @@ export function createGitCommitActions(ctx) {
                     return;
                 }
             }
-            state.credentialsValidated = true;
+            applyState({ credentialsValidated: true });
             setCredentialsValidated(true);
-            syncStaticUI();
             updateCommitButtons();
             setStatusLine('Credentials validated. Select autocommit repositories and save.');
             await refreshAll({ force: true });
@@ -1549,32 +1602,30 @@ export function createGitCommitActions(ctx) {
         } catch {
             // ignore dispatch errors
         }
-        state.autocommitDirty = false;
-        state.autocommitDraft = {
-            intervalMinutes: autocommitIntervalMinutes,
-            repos: autocommitRepos
-        };
-        state.autoresolveDirty = false;
-        state.autoresolveDraft = { enabled: autoresolveConflicts };
-        state.credentialsDirty = false;
+        applyState({
+            autocommitDirty: false,
+            autocommitDraft: {
+                intervalMinutes: autocommitIntervalMinutes,
+                repos: autocommitRepos
+            },
+            autoresolveDirty: false,
+            autoresolveDraft: { enabled: autoresolveConflicts },
+            credentialsDirty: false
+        }, { silent: true });
 
         const pending = state.authPrompt?.pendingAction || state.identityPrompt?.pendingAction;
         const wasGate = state.credentialsGate;
 
-        if (identitySaved) {
-            state.identityPrompt = { visible: false, repoPath: null, pendingAction: null, name: '', email: '' };
-        }
-        if (tokenSaved || authRequired) {
-            state.authPrompt = { visible: false, repoPath: null, pendingAction: null, token: '', remember: false };
-        }
-        if (identitySaved && state.credentialsGate) {
-            state.credentialsGate = false;
-        }
-        if (state.credentialsOpen && !state.credentialsGate) {
-            state.credentialsOpen = false;
-        }
-
-        syncStaticUI();
+        applyState({
+            identityPrompt: identitySaved
+                ? { visible: false, repoPath: null, pendingAction: null, name: '', email: '' }
+                : state.identityPrompt,
+            authPrompt: (tokenSaved || authRequired)
+                ? { visible: false, repoPath: null, pendingAction: null, token: '', remember: false }
+                : state.authPrompt,
+            credentialsGate: identitySaved && state.credentialsGate ? false : state.credentialsGate,
+            credentialsOpen: state.credentialsOpen && !state.credentialsGate ? false : state.credentialsOpen
+        });
         updateCommitButtons();
 
         if (pending?.type) {
@@ -1706,9 +1757,10 @@ export function createGitCommitActions(ctx) {
 
     const pullRepos = async (repoPaths, { token = null } = {}) => {
         const state = getState();
-        state.pullBlocked = null;
-        state.conflictSource = state.pullMode === 'rebase' ? 'rebase' : 'merge';
-        syncStaticUI();
+        applyState({
+            pullBlocked: null,
+            conflictSource: state.pullMode === 'rebase' ? 'rebase' : 'merge'
+        });
         const list = Array.isArray(repoPaths) ? repoPaths.filter(Boolean) : [];
         const effectiveToken = String(token || '').trim() || getRememberedGitPat();
         const conflictSource = state.pullMode === 'rebase' ? 'rebase' : 'merge';
@@ -1750,8 +1802,7 @@ export function createGitCommitActions(ctx) {
                         continue;
                     }
                     const blockedFiles = extractGitPullBlockedFiles(msg);
-                    state.pullBlocked = blockedFiles.length ? { repoPath, files: blockedFiles } : null;
-                    syncStaticUI();
+                    applyState({ pullBlocked: blockedFiles.length ? { repoPath, files: blockedFiles } : null });
                     updateCommitButtons();
                     setStatusLine('Pull blocked: commit or stash local changes before merging.', true);
                     return false;
@@ -1771,14 +1822,15 @@ export function createGitCommitActions(ctx) {
         const state = getState();
         const name = remembered.name || state.identityPrompt?.name || '';
         const email = remembered.email || state.identityPrompt?.email || '';
-        state.identityPrompt = {
-            visible: true,
-            repoPath,
-            pendingAction: pendingAction || null,
-            name,
-            email
-        };
-        syncStaticUI();
+        applyState({
+            identityPrompt: {
+                visible: true,
+                repoPath,
+                pendingAction: pendingAction || null,
+                name,
+                email
+            }
+        });
         updateIdentityPrompt({ focus: !name ? 'name' : (!email ? 'email' : 'name') });
         updateCommitButtons();
         setStatusLine('Set name and email to continue.', true);
@@ -1791,19 +1843,22 @@ export function createGitCommitActions(ctx) {
         if (!repoPath) return;
         const name = String(payload.name ?? state.identityPrompt?.name ?? '').trim();
         const email = String(payload.email ?? state.identityPrompt?.email ?? '').trim();
-        state.identityPrompt = {
-            ...state.identityPrompt,
-            name,
-            email
-        };
-        if (!name || !email) {
-            state.identityPrompt = {
+        applyState({
+            identityPrompt: {
                 ...state.identityPrompt,
-                visible: true,
                 name,
                 email
-            };
-            syncStaticUI();
+            }
+        }, { silent: true });
+        if (!name || !email) {
+            applyState({
+                identityPrompt: {
+                    ...state.identityPrompt,
+                    visible: true,
+                    name,
+                    email
+                }
+            });
             updateIdentityPrompt({ focus: !name ? 'name' : 'email' });
             updateCommitButtons();
             setStatusLine('Enter name and email.', true);
@@ -1811,10 +1866,11 @@ export function createGitCommitActions(ctx) {
         }
         setRememberedGitIdentity({ name, email });
         const pending = state.identityPrompt?.pendingAction;
-        state.identityPrompt = { visible: false, repoPath: null, pendingAction: null, name: '', email: '' };
         const wasGate = state.credentialsGate;
-        state.credentialsGate = false;
-        syncStaticUI();
+        applyState({
+            identityPrompt: { visible: false, repoPath: null, pendingAction: null, name: '', email: '' },
+            credentialsGate: false
+        });
         updateCommitButtons();
         setStatusLine('Identity saved locally. Git config unchanged.');
 
@@ -1908,8 +1964,7 @@ export function createGitCommitActions(ctx) {
                         }
                     }
                 }
-                state.selectedFilesByRepo = {};
-                state.commitMessage = '';
+                applyState({ selectedFilesByRepo: {}, commitMessage: '' }, { silent: true });
                 clearCommitMessageInput();
                 clearDiffCache();
                 await loadRepoOverviews({ force: true });
@@ -2072,8 +2127,7 @@ export function createGitCommitActions(ctx) {
                     }
                 }
 
-                state.selectedFilesByRepo = {};
-                state.commitMessage = '';
+                applyState({ selectedFilesByRepo: {}, commitMessage: '' }, { silent: true });
                 clearCommitMessageInput();
                 clearDiffCache();
                 await loadRepoOverviews({ force: true });
@@ -2163,7 +2217,7 @@ export function createGitCommitActions(ctx) {
         }
         clearPullBlockedState();
         const mode = modeOverride || state.pullMode || 'merge';
-        state.conflictSource = mode === 'rebase' ? 'rebase' : 'merge';
+        applyState({ conflictSource: mode === 'rebase' ? 'rebase' : 'merge' }, { silent: true });
         if (mode !== 'ffOnly') {
             for (const repoPath of selected) {
                 const ok = await ensureGitIdentityOrPrompt(repoPath, { type: 'pull', mode: 'batch', repoPaths: selected });
@@ -2194,8 +2248,7 @@ export function createGitCommitActions(ctx) {
         const state = getState();
         const next = (mode || element?.dataset?.mode || '').trim();
         if (next !== 'ffOnly' && next !== 'rebase' && next !== 'merge') return;
-        state.pullMode = next;
-        syncStaticUI();
+        applyState({ pullMode: next });
         if (state.identityPrompt?.visible) return;
         if (state.authPrompt?.visible) return;
         pullSelectedRepos();
@@ -2216,7 +2269,7 @@ export function createGitCommitActions(ctx) {
                 setStatusLine('Enter a commit message.', true);
                 return;
             }
-            state.commitMode = next;
+            applyState({ commitMode: next }, { silent: true });
             closeActionsMenu();
             updateCommitButtons();
             if (state.identityPrompt?.visible || state.authPrompt?.visible) return;

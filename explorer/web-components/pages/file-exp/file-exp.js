@@ -147,7 +147,7 @@ export class FileExp {
         });
     }
 
-    renderEntriesBody() {
+    renderEntries() {
         const snapshot = this.stateStore?.getState ? this.stateStore.getState() : this.state;
         this.entriesHTML = buildEntriesView(snapshot, {
             joinPath: this.joinPath,
@@ -159,6 +159,13 @@ export class FileExp {
             entriesBody.innerHTML = this.entriesHTML;
         }
         this.applyColumnVisibility();
+        if (this.state.openMenuPath) {
+            this.positionOpenActionMenu();
+        }
+    }
+
+    renderEntriesBody() {
+        this.renderEntries();
     }
 
     async afterRender() {

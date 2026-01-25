@@ -4,6 +4,8 @@ export function createGitCommitUI(ctx) {
     const {
         element,
         state,
+        setState,
+        setStateIn,
         setMenuAbortController,
         runGitAction,
         openDiff,

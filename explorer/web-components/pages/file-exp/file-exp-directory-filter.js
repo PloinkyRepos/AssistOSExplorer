@@ -24,7 +24,7 @@ export function createDirectoryFilterController(fileExp) {
 
     const applyLocalFilter = async () => {
         await fileExp.setEntries(fileExp.state.allEntries);
-        fileExp.renderEntriesBody();
+        fileExp.renderEntries();
     };
 
     const schedule = (rawQuery, { filterInput, filterClear } = {}) => {
@@ -100,7 +100,7 @@ export function createDirectoryFilterController(fileExp) {
                 : entries;
 
             fileExp.state.entries = fileExp.sortEntries(filteredBySpecs);
-            fileExp.renderEntriesBody();
+            fileExp.renderEntries();
         } catch (error) {
             if (localRequestId !== requestId) {
                 return;
@@ -108,7 +108,7 @@ export function createDirectoryFilterController(fileExp) {
             console.error('search_files failed', error);
             fileExp.showStatus(error?.message || 'Search failed.', true);
             fileExp.state.entries = [];
-            fileExp.renderEntriesBody();
+            fileExp.renderEntries();
         } finally {
             if (localRequestId !== requestId) {
                 return;

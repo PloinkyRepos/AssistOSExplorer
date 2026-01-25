@@ -49,6 +49,8 @@ export class GitCommitModal {
         this.ui = createGitCommitUI({
             element: this.element,
             state: this.state,
+            setState: this.setState.bind(this),
+            setStateIn: this.setStateIn.bind(this),
             setMenuAbortController: (controller) => {
                 this.menuAbortController = controller;
             },
@@ -85,6 +87,8 @@ export class GitCommitModal {
         });
         this.actions = createGitCommitActions({
             getState: () => this.state,
+            setState: this.setState.bind(this),
+            setStateIn: this.setStateIn.bind(this),
             service: this.service,
             setStatusLine: this.setStatusLine.bind(this),
             updateCommitButtons: this.updateCommitButtons.bind(this),
@@ -103,6 +107,20 @@ export class GitCommitModal {
             refreshAll: this.refreshAll.bind(this)
         });
         this.invalidate();
+    }
+
+    setState(patch = {}, options = {}) {
+        this.stateStore.dispatch({ type: 'PATCH', payload: patch });
+        if (!options.silent) {
+            this.syncStaticUI();
+        }
+    }
+
+    setStateIn(path, value, options = {}) {
+        this.stateStore.dispatch({ type: 'SET_IN', payload: { path, value } });
+        if (!options.silent) {
+            this.syncStaticUI();
+        }
     }
 
     beforeRender() {}
