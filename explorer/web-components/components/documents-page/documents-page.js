@@ -63,6 +63,7 @@ export class DocumentsPage {
         }
         await documentModule.deleteDocument(this.getDocumentId(_target));
         this.invalidate(this.refreshDocuments);
+        window.dispatchEvent(new CustomEvent('webskel-file-exp-refresh'));
     }
 
     async exportAction(_target) {

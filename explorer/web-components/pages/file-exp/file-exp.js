@@ -71,6 +71,7 @@ export class FileExp {
         this.boundContextMenu = this.handleContextMenu.bind(this);
 
         this.caches = createFileExpCaches();
+        this.inflightDirListing = new Map();
         this.directoryFilterController = createDirectoryFilterController(this);
         this.tooling = createFileExpTooling();
         this.lastLoadError = null;
@@ -112,6 +113,7 @@ export class FileExp {
             console.warn('Failed to decode file-exp path from URL:', rawPath, error);
             path = rawPath;
         }
+        path = this.normalizePath(path);
 
         if (path === '/') {
             await this.loadDirectory('/');
@@ -122,18 +124,47 @@ export class FileExp {
             await this.cancelEdit();
         }
 
-        try {
-            const contentResult = await this.tooling.readTextFile(path);
+        const isNotDirError = (err) => {
+            const message = String(err?.message || '');
+            return message.includes('ENOTDIR') || message.includes('not a directory');
+        };
 
+        try {
+            await this.tooling.readTextFile(path);
             const parentDir = this.parentPath(path) || '/';
             this.state.path = parentDir;
-            const entries = await this.loadDirectoryContent(parentDir);
-            await this.setEntries(entries);
             this.state.selectedPath = path;
             this.state.isEditing = false;
+            if (this.state.filterSpecs && !this.isMarkdownFile(path)) {
+                this.showStatus('Filter specs (.md) is enabled, so this file is hidden from the list. The file is still opened in the preview.', true);
+            }
             await this.openFile(path);
-        } catch (e) {
-            // If it fails, it's a directory
+            this.loadDirectoryContent(parentDir)
+                .then(async (entries) => {
+                    if (entries === null) {
+                        this.showStatus('Path not found. Returning to root.', true);
+                        await this.loadDirectory('/');
+                        return;
+                    }
+                    await this.setEntries(entries);
+                    this.invalidate();
+                })
+                .catch((err) => {
+                    if (this.isPathNotFoundError(err)) {
+                        this.showStatus('Path not found. Returning to root.', true);
+                        this.loadDirectory('/');
+                    }
+                });
+        } catch (err) {
+            if (this.isPathNotFoundError(err)) {
+                this.showStatus('Path not found. Returning to root.', true);
+                await this.loadDirectory('/');
+                return;
+            }
+            if (isNotDirError(err)) {
+                this.showStatus('Path is not a directory.', true);
+                return;
+            }
             await this.loadDirectory(path);
         }
     }
@@ -552,6 +583,14 @@ export class FileExp {
             if (cached) {
                 return cached;
             }
+            const globalInflight = window.__fileExpInflightDirListing || (window.__fileExpInflightDirListing = new Map());
+            if (this.inflightDirListing.has(path)) {
+                return await this.inflightDirListing.get(path);
+            }
+            if (globalInflight.has(path)) {
+                return await globalInflight.get(path);
+            }
+            const request = (async () => {
             const result = await this.tooling.listDirectoryDetailed(path);
             const entries = parseDetailedDirectoryListing(result.text);
             const resolved = entries.map(entry => ({
@@ -560,6 +599,15 @@ export class FileExp {
             }));
             this.caches.dirListing.set(this, path, resolved);
             return resolved;
+            })();
+            this.inflightDirListing.set(path, request);
+            globalInflight.set(path, request);
+            try {
+                return await request;
+            } finally {
+                this.inflightDirListing.delete(path);
+                globalInflight.delete(path);
+            }
         } catch (err) {
             this.lastLoadError = err;
             if (this.isPathNotFoundError(err)) {
@@ -886,7 +934,7 @@ export class FileExp {
         statusBanner.textContent = message;
         statusBanner.classList.add('visible');
         statusBanner.classList.toggle('error', Boolean(isError));
-        setTimeout(() => this.showStatus(null), 3000);
+        setTimeout(() => this.showStatus(null), 5000);
     }
 
     isPathNotFoundError(err) {

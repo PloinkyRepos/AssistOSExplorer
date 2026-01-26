@@ -627,13 +627,14 @@ th {
 
 .preview-title {
     display: flex;
-    flex-direction: column;
-    gap: 4px;
+    gap: 10px;
+    text-align: center;
+    line-height: 1;
 }
 
 .preview-filename {
-    font-size: 0.85rem;
     color: var(--text-soft);
+    font-weight: 600;
 }
 
 .preview-notice {
@@ -652,6 +653,12 @@ th {
 
 #markdownViewActions {
     margin-left: auto;
+}
+#markdownViewActions button,
+#editorActions button {
+    padding: 6px 14px;
+    font-size: 0.8rem;
+    font-weight: 600;
 }
 
 #toggleMarkdownViewButton {

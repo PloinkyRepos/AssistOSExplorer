@@ -16,6 +16,21 @@ export function humanizeGitError(message, { action = null } = {}) {
         .trim();
 
     const lower = cleaned.toLowerCase();
+    if (lower.includes('terminal prompts disabled') || lower.includes('could not read username')) {
+        return 'Authentication required. Open Git settings and enter your token.';
+    }
+    if (lower.includes('could not read password')) {
+        return 'Authentication required. Open Git settings and enter your token.';
+    }
+    if (lower.includes('authentication failed') || lower.includes('http basic: access denied')) {
+        return 'Authentication failed. Check your token and try again.';
+    }
+    if (lower.includes('permission denied')) {
+        return 'Authentication failed. You do not have permission for this repository.';
+    }
+    if (lower.includes('unable to auto-detect email address') || lower.includes('author identity unknown') || lower.includes('committer identity unknown')) {
+        return 'Missing Git identity. Open Git settings and set name + email.';
+    }
     if (action === 'pull' && (
         lower.includes('not possible to fast-forward')
         || lower.includes("can't be fast-forwarded")

@@ -10,6 +10,32 @@ export class ToolError extends Error {
 }
 
 const isNonEmptyString = (value) => typeof value === 'string' && value.trim().length > 0;
+const MISSING_SESSION_TEXT = 'Missing or invalid MCP session';
+let sessionPromptActive = false;
+
+const isMissingSessionError = (error) => {
+    const message = error?.message || error?.toString?.() || '';
+    return typeof message === 'string' && message.includes(MISSING_SESSION_TEXT);
+};
+
+const handleMissingSession = async () => {
+    if (sessionPromptActive) return;
+    sessionPromptActive = true;
+    try {
+        const confirmed = await assistOS.UI.showModal(
+            'confirm-action-modal',
+            { message: 'Session expired. Reload the app to reconnect.' },
+            true
+        );
+        if (confirmed) {
+            window.location.reload();
+        }
+    } finally {
+        setTimeout(() => {
+            sessionPromptActive = false;
+        }, 500);
+    }
+};
 
 export function parseToolResult(payload) {
     if (!payload) return null;
@@ -82,9 +108,16 @@ export function ensureSuccess(payload) {
 }
 
 export async function callExplorerTool(name, args, { raw = false } = {}) {
-    const result = await callToolWithLoader('explorer', name, args);
-    ensureSuccess(result);
-    return raw ? result : extractToolText(result);
+    try {
+        const result = await callToolWithLoader('explorer', name, args);
+        ensureSuccess(result);
+        return raw ? result : extractToolText(result);
+    } catch (error) {
+        if (isMissingSessionError(error)) {
+            await handleMissingSession();
+        }
+        throw error;
+    }
 }
 
 export async function callAgentTool(agentName, name, args, { raw = false } = {}) {
@@ -92,7 +125,14 @@ export async function callAgentTool(agentName, name, args, { raw = false } = {})
     if (!client || typeof client.callTool !== 'function') {
         throw new ToolError('client_unavailable', `Agent client not available: ${agentName}`);
     }
-    const result = await client.callTool(name, args || {});
-    ensureSuccess(result);
-    return raw ? result : extractToolText(result);
+    try {
+        const result = await client.callTool(name, args || {});
+        ensureSuccess(result);
+        return raw ? result : extractToolText(result);
+    } catch (error) {
+        if (isMissingSessionError(error)) {
+            await handleMissingSession();
+        }
+        throw error;
+    }
 }
