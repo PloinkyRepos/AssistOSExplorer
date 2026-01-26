@@ -439,6 +439,9 @@ export function attachGitController(fileExp) {
             if (committedAny) {
                 setErrorFlag(false);
                 updateGitButtonIndicator();
+                if (typeof fileExp.refresh === 'function') {
+                    await fileExp.refresh();
+                }
                 await refreshOpenGitModals();
                 fileExp.showStatus('AutoSync complete.');
             }

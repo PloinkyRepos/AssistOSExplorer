@@ -45,6 +45,10 @@ export function createGitOpsActions(ctx) {
         generateCommitMessageForSelections
     } = ctx;
 
+    const dispatchFileTreeRefresh = () => {
+        window.dispatchEvent(new CustomEvent('webskel-file-exp-refresh'));
+    };
+
     const gitPushWithToken = async (repoPath, token) => {
         const payload = { path: repoPath };
         const cleanToken = String(token || '').trim();
@@ -195,7 +199,7 @@ export function createGitOpsActions(ctx) {
         if (hasConflictsForRepos(selected)) {
             syncStaticUI();
             updateCommitButtons();
-            setStatusLine('Resolve merge conflicts before committing.', true);
+            await handlePullConflicts('Merge conflicts detected. Resolve them before continuing.', selected, 'merge');
             return;
         }
         setStatusLine('Pulling latest changes before commit...');
@@ -207,7 +211,7 @@ export function createGitOpsActions(ctx) {
                 syncStaticUI();
                 updateCommitButtons();
                 if (hasConflictsForRepos(selected)) {
-                    setStatusLine('Resolve merge conflicts before committing.', true);
+                    await handlePullConflicts('Merge conflicts detected. Resolve them before continuing.', selected, 'merge');
                     return;
                 }
                 setStatusLine(shouldPush ? `Committing & pushing ${selected.length} repo(s)…` : `Committing ${selected.length} repo(s)…`);
@@ -263,6 +267,7 @@ export function createGitOpsActions(ctx) {
                 clearDiffCache();
                 await loadRepoOverviews({ force: true });
                 await refreshAll({ force: true });
+                dispatchFileTreeRefresh();
                 setStatusLine('Done.');
             } catch (error) {
                 setStatusLine(normalizeErrorMessage(error), true);
@@ -371,6 +376,7 @@ export function createGitOpsActions(ctx) {
                 clearDiffCache();
                 await loadRepoOverviews({ force: true });
                 await refreshAll({ force: true });
+                dispatchFileTreeRefresh();
                 setStatusLine('Sync complete.');
                 dispatchAutocommitReset();
             } catch (error) {
@@ -450,6 +456,7 @@ export function createGitOpsActions(ctx) {
                 clearDiffCache();
                 await loadRepoOverviews({ force: true });
                 await refreshAll({ force: true });
+                dispatchFileTreeRefresh();
                 setStatusLine('Pull complete.');
             } catch (error) {
                 setStatusLine(normalizeErrorMessage(error), true);
