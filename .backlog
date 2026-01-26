@@ -1,0 +1,26 @@
+[
+  {
+    "id": "tsk_20260126074803_60bm",
+    "description": "sfds",
+    "proposedSolution": "sdfsdfsdfsdf",
+    "observations": "",
+    "type": "bug",
+    "status": "test-ready",
+    "priority": "medium",
+    "createdAt": "2026-01-26T07:48:03.862Z",
+    "updatedAt": "2026-01-26T10:38:05.957Z",
+    "updatedBy": "local@example.com"
+  },
+  {
+    "id": "tsk_20260126074813_ywe0",
+    "description": "sadfsadf",
+    "proposedSolution": "sdfsadf",
+    "observations": "",
+    "type": "bug",
+    "status": "new",
+    "priority": "medium",
+    "createdAt": "2026-01-26T07:48:13.823Z",
+    "updatedAt": "2026-01-26T07:48:13.823Z",
+    "updatedBy": "local@example.com"
+  }
+]
