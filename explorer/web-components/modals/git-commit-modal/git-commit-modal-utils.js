@@ -132,6 +132,25 @@ export function stripTrailingSlash(value) {
     return normalizeSlashes(value).replace(/\/+$/g, '');
 }
 
+export function normalizeRepoPath(value, workspaceRoot = '') {
+    const normalized = stripTrailingSlash(value);
+    if (!normalized) return '';
+    const root = stripTrailingSlash(workspaceRoot);
+    if (!root || root === '/') {
+        if (normalized.startsWith('/.ploinky/')) {
+            return normalized.slice(1);
+        }
+        return normalized;
+    }
+    if (normalized.startsWith('/.ploinky/')) {
+        return `${root}${normalized}`;
+    }
+    if (normalized.startsWith('.ploinky/')) {
+        return `${root}/${normalized}`;
+    }
+    return normalized;
+}
+
 export function isReposRootPath(candidate, reposRoot) {
     const normalizedCandidate = stripTrailingSlash(candidate);
     const normalizedRoot = stripTrailingSlash(reposRoot);

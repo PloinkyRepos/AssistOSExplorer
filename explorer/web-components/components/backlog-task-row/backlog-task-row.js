@@ -256,7 +256,7 @@ export class BacklogTaskRow {
         this.syncTypeIcon();
         if (this.typeMenu) this.typeMenu.classList.remove('is-open');
         this.unbindOutsideTypeMenu();
-        this.element.dispatchEvent(new CustomEvent('backlog-task-save', { detail: { id: this.state.task?.id, type: nextType }, bubbles: true }));
+        this.getParentPresenter()?.saveTask?.({ id: this.state.task?.id, type: nextType });
     }
 
     selectPriority(_element, priority) {
@@ -267,7 +267,7 @@ export class BacklogTaskRow {
         this.syncPriorityDisplay();
         if (this.priorityMenu) this.priorityMenu.classList.remove('is-open');
         this.unbindOutsidePriorityMenu();
-        this.element.dispatchEvent(new CustomEvent('backlog-task-save', { detail: { id: this.state.task?.id, priority: nextPriority }, bubbles: true }));
+        this.getParentPresenter()?.saveTask?.({ id: this.state.task?.id, priority: nextPriority });
     }
 
     syncStatusIcon() {
@@ -344,7 +344,7 @@ export class BacklogTaskRow {
             type: this.typeSelect?.value || '',
             priority: this.prioritySelect?.value || ''
         };
-        this.element.dispatchEvent(new CustomEvent('backlog-task-save', { detail: payload, bubbles: true }));
+        this.getParentPresenter()?.saveTask?.(payload);
     }
 
     approveTask() {
@@ -378,11 +378,15 @@ export class BacklogTaskRow {
             type: this.typeSelect?.value || '',
             priority: this.prioritySelect?.value || ''
         };
-        this.element.dispatchEvent(new CustomEvent('backlog-task-status', { detail: payload, bubbles: true }));
+        this.getParentPresenter()?.updateTaskStatus?.(payload);
     }
 
     deleteTask() {
         const task = this.state.task || {};
-        this.element.dispatchEvent(new CustomEvent('backlog-task-delete', { detail: { id: task.id }, bubbles: true }));
+        this.getParentPresenter()?.deleteTask?.({ id: task.id });
+    }
+
+    getParentPresenter() {
+        return this.element.closest('backlog-panel')?.webSkelPresenter || null;
     }
 }

@@ -108,11 +108,10 @@ export class BacklogCreateModal {
             status: this.statusSelect?.value || '',
             priority: this.prioritySelect?.value || '',
         };
-        window.dispatchEvent(new CustomEvent('backlog-task-create', { detail: payload }));
-        this.closeModal();
+        this.closeModal(payload);
     }
 
-    closeModal() {
-        assistOS.UI.closeModal(this.element);
+    closeModal(payload) {
+        assistOS.UI.closeModal(this.element, payload);
     }
 }

@@ -1,7 +1,7 @@
 import { callAgentTool, parseToolResult } from "../../../services/infrastructure/explorerApi.js";
 import { withGlobalLoader } from "../../../utils/globalLoader.js";
 import { getWorkspaceRoot } from "../../../utils/workspaceRoot.js";
-import { normalizeGitStatusPayload } from "../../modals/git-commit-modal/git-commit-modal-utils.js";
+import { normalizeGitStatusPayload, normalizeRepoPath } from "../../modals/git-commit-modal/git-commit-modal-utils.js";
 
 export class BacklogPanel {
     constructor(element, invalidate, props = {}) {
@@ -29,16 +29,12 @@ export class BacklogPanel {
 
     async afterRender() {
         this.cacheElements();
-        this.bindEvents();
+        this.bindFilterEvents();
         this.mountFiltersInHeader();
         await this.refreshAll();
     }
 
     afterUnload() {
-        if (this.boundCreateHandler) {
-            window.removeEventListener('backlog-task-create', this.boundCreateHandler);
-            this.boundCreateHandler = null;
-        }
     }
 
     cacheElements() {
@@ -54,6 +50,7 @@ export class BacklogPanel {
         this.empty = this.element.querySelector('#backlogEmpty');
         this.carouselInfo = this.element.querySelector('#backlogCarouselInfo');
         this.state.currentIndex = this.state.currentIndex || 0;
+        this.workspaceRoot = getWorkspaceRoot();
         this.repoPath = String(this.element.getAttribute('data-repo-path') || '').trim();
         if (!this.repoPath) {
             const pathAttr = String(this.element.getAttribute('data-path') || '').trim();
@@ -86,26 +83,7 @@ export class BacklogPanel {
         this.filtersContainer.webSkelPresenter = this;
     }
 
-    bindEvents() {
-        if (!this.element.dataset.boundBacklogPanel) {
-            this.element.addEventListener('backlog-task-save', (event) => {
-                this.saveTask(event?.detail || {});
-            });
-            this.element.addEventListener('backlog-task-delete', (event) => {
-                this.deleteTask(event?.detail || {});
-            });
-            this.element.addEventListener('backlog-task-status', (event) => {
-                this.updateTaskStatus(event?.detail || {});
-            });
-            if (!this.boundCreateHandler) {
-                this.boundCreateHandler = (event) => {
-                    this.createBacklogTask(event?.detail || {});
-                };
-                window.addEventListener('backlog-task-create', this.boundCreateHandler);
-            }
-            this.element.dataset.boundBacklogPanel = 'true';
-        }
-
+    bindFilterEvents() {
         this.bindFilterInput(this.statusFilter, 'status');
         this.bindFilterInput(this.typeFilter, 'type');
         this.bindFilterInput(this.priorityFilter, 'priority');
@@ -379,14 +357,17 @@ export class BacklogPanel {
             await this.loadConfig();
         }
         const config = this.state.config || {};
-        assistOS.UI.createReactiveModal('backlog-create-modal', {
+        const payload = await assistOS.UI.createReactiveModal('backlog-create-modal', {
             statuses: encodeURIComponent(JSON.stringify(config.statuses || {})),
             priorities: encodeURIComponent(JSON.stringify(config.priorities || {})),
             types: encodeURIComponent(JSON.stringify(config.types || {})),
             defaultStatus: config.defaultStatus || '',
             defaultPriority: config.defaultPriority || '',
             defaultType: config.defaultType || ''
-        });
+        }, true);
+        if (payload) {
+            await this.createBacklogTask(payload);
+        }
     }
 
     setError(message) {
@@ -435,7 +416,8 @@ export class BacklogPanel {
     }
 
     normalizeRepoPath(value) {
-        return String(value || '').replace(/\\/g, '/').replace(/\/+$/g, '');
+        const root = this.workspaceRoot || getWorkspaceRoot();
+        return normalizeRepoPath(value, root);
     }
 
 
