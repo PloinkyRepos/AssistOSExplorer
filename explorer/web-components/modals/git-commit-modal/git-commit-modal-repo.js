@@ -304,8 +304,11 @@ export function createGitCommitRepo(ctx) {
         return payload;
     };
 
-    const refreshAll = async ({ force = false } = {}) => {
-        setStatusLine('Loading git status…');
+    const refreshAll = async ({ force = false, keepStatus = false } = {}) => {
+        const shouldSetStatus = !keepStatus;
+        if (shouldSetStatus) {
+            setStatusLine('Loading git status…');
+        }
         try {
             await loadRepoOverviews({ force });
             reconcileSelectedDiffWithChanges();
@@ -321,19 +324,25 @@ export function createGitCommitRepo(ctx) {
                 if (branchInfo) {
                     branchInfo.textContent = 'Multi-repo view. Select a repository to see branch/status.';
                 }
-                setStatusLine('Select a repository from the list.');
+                if (shouldSetStatus) {
+                    setStatusLine('Select a repository from the list.');
+                }
                 return;
             }
 
             const repoInfo = await loadRepoInfo({ force });
             if (repoInfo && repoInfo.ok === false) {
                 updateCommitButtons();
-                setStatusLine('Select a repository from the list.');
+                if (shouldSetStatus) {
+                    setStatusLine('Select a repository from the list.');
+                }
                 return;
             }
             reconcileSelectedDiffWithChanges();
             updateCommitButtons();
-            setStatusLine('Ready.');
+            if (shouldSetStatus) {
+                setStatusLine('Ready.');
+            }
         } catch (error) {
             setStatusLine(normalizeErrorMessage(error), true);
         }

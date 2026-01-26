@@ -394,7 +394,7 @@ export function createGitOpsActions(ctx) {
                 clearCommitMessageInput();
                 clearDiffCache();
                 await loadRepoOverviews({ force: true });
-                await refreshAll({ force: true });
+                await refreshAll({ force: true, keepStatus: true });
                 dispatchFileTreeRefresh();
                 setStatusLine('Sync complete.');
                 dispatchAutocommitReset();
