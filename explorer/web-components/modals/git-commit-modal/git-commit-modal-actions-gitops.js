@@ -358,13 +358,14 @@ export function createGitOpsActions(ctx) {
                         await gitPushWithToken(repoPath, token);
                     } catch (error) {
                         const msg = normalizeErrorMessage(error);
+                        const human = humanizeGitError(msg, { action: 'push' });
                         if (isGitAuthError(msg)) {
                             if (!token) {
-                                showGitAuthPrompt(repoPath, { type: 'push', mode: 'batch', repoPaths: selected }, { message: msg });
+                                showGitAuthPrompt(repoPath, { type: 'push', mode: 'batch', repoPaths: selected }, { message: human });
                                 dispatchAutocommitStop();
                                 return;
                             }
-                            setStatusLine(`${msg} (A token is already saved. Use “Token” to update it.)`, true);
+                            setStatusLine(`${human} (A token is already saved. Use “Token” to update it.)`, true);
                             dispatchAutocommitStop();
                             return;
                         }
@@ -381,7 +382,7 @@ export function createGitOpsActions(ctx) {
                 setStatusLine('Sync complete.');
                 dispatchAutocommitReset();
             } catch (error) {
-                setStatusLine(normalizeErrorMessage(error), true);
+                setStatusLine(humanizeGitError(normalizeErrorMessage(error), { action: 'push' }), true);
                 dispatchAutocommitStop();
             }
         });
@@ -406,7 +407,7 @@ export function createGitOpsActions(ctx) {
                     setStatusLine('Push complete.');
                 }
             } catch (error) {
-                setStatusLine(normalizeErrorMessage(error), true);
+                setStatusLine(humanizeGitError(normalizeErrorMessage(error), { action: 'push' }), true);
             }
         });
     };
@@ -428,7 +429,7 @@ export function createGitOpsActions(ctx) {
                 if (!pushedAny) return;
                 setStatusLine('Pushed.');
             } catch (error) {
-                setStatusLine(normalizeErrorMessage(error), true);
+                setStatusLine(humanizeGitError(normalizeErrorMessage(error), { action: 'push' }), true);
             }
         });
     };
