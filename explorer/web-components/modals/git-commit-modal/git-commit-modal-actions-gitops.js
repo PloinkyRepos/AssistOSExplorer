@@ -295,6 +295,7 @@ export function createGitOpsActions(ctx) {
             setStatusLine('Select at least one repository to sync.', true);
             return;
         }
+        applyState({ pendingAction: { type: 'sync', mode: 'batch', repoPaths: selected } }, { silent: true });
         clearPullBlockedState();
         setStatusLine(`Syncing ${selected.length} repo(s)…`);
         return withGlobalLoader(async () => {
@@ -323,10 +324,12 @@ export function createGitOpsActions(ctx) {
                 if (!stagedSelections.length) {
                     const pushedAny = await pushRepos(selected);
                     if (!pushedAny) {
+                        applyState({ pendingAction: null }, { silent: true });
                         dispatchAutocommitReset();
                         return;
                     }
                     setStatusLine('Pushed.');
+                    applyState({ pendingAction: null }, { silent: true });
                     return;
                 }
 
@@ -393,6 +396,7 @@ export function createGitOpsActions(ctx) {
                 applyState({ selectedFilesByRepo: {}, commitMessage: '' }, { silent: true });
                 clearCommitMessageInput();
                 clearDiffCache();
+                applyState({ pendingAction: null }, { silent: true });
                 await loadRepoOverviews({ force: true });
                 await refreshAll({ force: true, keepStatus: true });
                 dispatchFileTreeRefresh();

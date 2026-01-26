@@ -41,6 +41,7 @@ export function createGitCommitState(props = {}) {
         hasConflicts: false,
         conflictCount: 0,
         conflictFocus: false,
+        pendingAction: null,
         conflictHelper: {
             selected: null,
             ours: '',

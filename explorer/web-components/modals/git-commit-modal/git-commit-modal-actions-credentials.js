@@ -57,6 +57,7 @@ export function createCredentialsActions(ctx) {
     const showGitAuthPrompt = (repoPath, pendingAction, { message = '' } = {}) => {
         const remembered = getRememberedGitPat();
         applyState({
+            pendingAction: pendingAction || null,
             authPrompt: {
                 visible: true,
                 repoPath,
@@ -106,7 +107,8 @@ export function createCredentialsActions(ctx) {
         const state = getState();
         applyState({
             authPrompt: { visible: false, repoPath: null, pendingAction: null, token: '', remember: false },
-            credentialsOpen: state.credentialsOpen && !state.credentialsGate ? false : state.credentialsOpen
+            credentialsOpen: state.credentialsOpen && !state.credentialsGate ? false : state.credentialsOpen,
+            pendingAction: null
         });
         updateCommitButtons();
         setStatusLine('Cancelled.', true);
@@ -157,7 +159,8 @@ export function createCredentialsActions(ctx) {
             identityPrompt: { visible: false, repoPath: null, pendingAction: null, name: '', email: '' },
             authPrompt: { visible: false, repoPath: null, pendingAction: null, token: '', remember: false },
             credentialsOpen: state.credentialsOpen ? false : state.credentialsOpen,
-            credentialsGate: state.credentialsGate && !hasAllSaved ? false : state.credentialsGate
+            credentialsGate: state.credentialsGate && !hasAllSaved ? false : state.credentialsGate,
+            pendingAction: null
         });
         updateCommitButtons();
         setStatusLine('Cancelled.', true);
@@ -169,7 +172,7 @@ export function createCredentialsActions(ctx) {
 
     const saveGitToken = async (payload = {}) => {
         const state = getState();
-        const pending = state.authPrompt?.pendingAction;
+        const pending = state.pendingAction || state.authPrompt?.pendingAction;
         const token = String(payload.token ?? state.authPrompt?.token ?? '').trim();
         const remember = typeof payload.remember === 'boolean' ? payload.remember : Boolean(state.authPrompt?.remember);
         applyState({
@@ -312,7 +315,7 @@ export function createCredentialsActions(ctx) {
             return;
         }
 
-        const pending = state.authPrompt?.pendingAction || state.identityPrompt?.pendingAction;
+        const pending = state.pendingAction || state.authPrompt?.pendingAction || state.identityPrompt?.pendingAction;
         if (!state.credentialsValidated && pending?.type && identityValid && tokenValid && !validateOnly) {
             applyState({ credentialsValidated: true });
             setCredentialsValidated(true);
@@ -501,7 +504,8 @@ export function createCredentialsActions(ctx) {
                 pendingAction: pendingAction || null,
                 name,
                 email
-            }
+            },
+            pendingAction: pendingAction || null
         });
         updateIdentityPrompt({ focus: !name ? 'name' : (!email ? 'email' : 'name') });
         updateCommitButtons();
@@ -537,11 +541,12 @@ export function createCredentialsActions(ctx) {
             return;
         }
         setRememberedGitIdentity({ name, email });
-        const pending = state.identityPrompt?.pendingAction;
+        const pending = state.pendingAction || state.identityPrompt?.pendingAction;
         const wasGate = state.credentialsGate;
         applyState({
             identityPrompt: { visible: false, repoPath: null, pendingAction: null, name: '', email: '' },
-            credentialsGate: false
+            credentialsGate: false,
+            pendingAction: null
         });
         updateCommitButtons();
         setStatusLine('Identity saved locally. Git config unchanged.');
