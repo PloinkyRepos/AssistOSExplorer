@@ -124,48 +124,58 @@ export class FileExp {
             await this.cancelEdit();
         }
 
-        const isNotDirError = (err) => {
-            const message = String(err?.message || '');
-            return message.includes('ENOTDIR') || message.includes('not a directory');
-        };
+        // Step 1: Get parent directory and entry name
+        const parentDir = this.parentPath(path) || '/';
+        const entryName = path.substring(parentDir.length).replace(/^\//, '');
 
         try {
-            await this.tooling.readTextFile(path);
-            const parentDir = this.parentPath(path) || '/';
-            this.state.path = parentDir;
-            this.state.selectedPath = path;
-            this.state.isEditing = false;
-            if (this.state.filterSpecs && !this.isMarkdownFile(path)) {
-                this.showStatus('Filter specs (.md) is enabled, so this file is hidden from the list. The file is still opened in the preview.', true);
-            }
-            await this.openFile(path);
-            this.loadDirectoryContent(parentDir)
-                .then(async (entries) => {
-                    if (entries === null) {
-                        this.showStatus('Path not found. Returning to root.', true);
-                        await this.loadDirectory('/');
-                        return;
-                    }
-                    await this.setEntries(entries);
-                    this.invalidate();
-                })
-                .catch((err) => {
-                    if (this.isPathNotFoundError(err)) {
-                        this.showStatus('Path not found. Returning to root.', true);
-                        this.loadDirectory('/');
-                    }
-                });
-        } catch (err) {
-            if (this.isPathNotFoundError(err)) {
+            // Step 2: Load parent content (from cache if available)
+            const parentEntries = await this.loadDirectoryContent(parentDir);
+
+            if (parentEntries === null) {
+                // Parent directory doesn't exist, so the path is invalid.
                 this.showStatus('Path not found. Returning to root.', true);
-                await this.loadDirectory('/');
+                await this.loadDirectory('/'); // This will now update the URL
                 return;
             }
-            if (isNotDirError(err)) {
-                this.showStatus('Path is not a directory.', true);
+
+            // Step 3: Find the entry in the parent's listing
+            const entry = parentEntries.find(e => e.name === entryName);
+
+            if (!entry) {
+                // The entry is not in the parent directory.
+                // This could mean the path itself is a directory, or the path is invalid.
+                // Let's try to load it as a directory. `loadDirectory` has its own error handling.
+                await this.loadDirectory(path); // This might also lead to a redirect to root, which will update the URL
                 return;
             }
-            await this.loadDirectory(path);
+
+            // Step 4: Execute action based on entry type
+            if (entry.type === 'file') {
+                this.state.path = parentDir;
+                this.state.selectedPath = path;
+                this.state.isEditing = false;
+                await this.setEntries(parentEntries); // Display the parent directory in the list
+                await this.openFile(path); // Open the file in the preview
+                // Update URL for files here, as loadDirectory doesn't handle files
+                const newUrl = `#file-exp${path}`;
+                if (window.location.hash !== newUrl) {
+                    history.pushState(null, '', newUrl);
+                }
+                this.invalidate();
+            } else if (entry.type === 'directory') {
+                await this.loadDirectory(path); // This will now update the URL
+            } else {
+                // Fallback for symlinks or other unknown types
+                this.showStatus(`Unsupported entry type for ${path}.`, true);
+                await this.loadDirectory(parentDir); // This will now update the URL
+            }
+
+        } catch (err) {
+            // This catch block handles unexpected errors from `loadDirectoryContent` or other operations.
+            console.error('Failed to load state from URL:', err);
+            this.showStatus('An error occurred while loading the path. Returning to root.', true);
+            await this.loadDirectory('/'); // This will now update the URL
         }
     }
 
@@ -694,7 +704,15 @@ export class FileExp {
             if (this.state.isEditing) {
                 await this.cancelEdit();
             }
-            this.state.path = this.normalizePath(path);
+            const normalizedPath = this.normalizePath(path);
+            this.state.path = normalizedPath;
+
+            // Update URL for directories here
+            const newUrl = `#file-exp${normalizedPath}`;
+            if (window.location.hash !== newUrl) {
+                history.pushState(null, '', newUrl);
+            }
+
             this.state.selectedPath = null;
             this.state.fileContent = "";
             this.state.previewContent = "";
@@ -763,12 +781,14 @@ export class FileExp {
             await this.cancelEdit();
         }
 
-        const newUrl = `#file-exp${path}`;
-        history.pushState(null, '', newUrl);
-
+        // history.pushState for directories is now handled by loadDirectory
         if (type === 'directory') {
             await this.loadDirectory(path);
         } else if (type === 'file') {
+            const newUrl = `#file-exp${path}`;
+            if (window.location.hash !== newUrl) {
+                history.pushState(null, '', newUrl);
+            }
             this.state.selectedPath = path;
             await this.openFile(path);
         } else {
@@ -778,6 +798,8 @@ export class FileExp {
             }
             await this.withLoader(async () => {
                 try {
+                    // This block is a fallback for unknown types, it tries to read as file then load as directory
+                    // The URL update for files is handled by openFile if successful, or loadDirectory if it falls back to directory
                     await this.tooling.readTextFile(path);
                     const parentDir = this.parentPath(path) || '/';
                     this.state.path = parentDir;
@@ -785,8 +807,12 @@ export class FileExp {
                     await this.setEntries(entries);
                     this.state.selectedPath = path;
                     await this.openFile(path);
+                    const newUrl = `#file-exp${path}`;
+                    if (window.location.hash !== newUrl) {
+                        history.pushState(null, '', newUrl);
+                    }
                 } catch (_) {
-                    await this.loadDirectory(path);
+                    await this.loadDirectory(path); // This will now update the URL
                 }
             });
         }
@@ -898,7 +924,7 @@ export class FileExp {
         const rootButton = document.createElement('button');
         rootButton.textContent = '/';
         rootButton.addEventListener('click', () => {
-            history.pushState(null, '', '#file-exp/');
+            // history.pushState handled by loadDirectory
             this.loadDirectory('/');
         });
         breadcrumbsEl.appendChild(rootButton);
@@ -914,7 +940,7 @@ export class FileExp {
             btn.textContent = `${segment} \/`;
             const path = current;
             btn.addEventListener('click', () => {
-                history.pushState(null, '', `#file-exp${path}`);
+                // history.pushState handled by loadDirectory
                 this.loadDirectory(path);
             });
             breadcrumbsEl.appendChild(btn);
@@ -945,8 +971,7 @@ export class FileExp {
     async goUp() {
         const parent = this.parentPath(this.state.path);
         if (parent !== null) {
-            const newUrl = `#file-exp${parent}`;
-            history.pushState(null, '', newUrl);
+            // history.pushState handled by loadDirectory
             await this.loadDirectory(parent);
         }
     }
