@@ -780,7 +780,7 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
 
 .git-diff-body {
     margin: 0;
-    padding: 0 10px 8px;
+    padding: 0 10px;
     overflow: auto;
     white-space: pre;
     font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;

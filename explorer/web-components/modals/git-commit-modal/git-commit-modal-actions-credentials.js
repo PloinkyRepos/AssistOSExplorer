@@ -304,7 +304,9 @@ export function createCredentialsActions(ctx) {
             return;
         }
 
-        if (!state.credentialsValidated) {
+        if (!state.credentialsValidated && !(validateOnly || tokenRequired || token)) {
+            setCredentialsValidated(false);
+        } else if (!state.credentialsValidated) {
             let validationRepoPath = state.identityPrompt?.repoPath || state.authPrompt?.repoPath;
             if (!validationRepoPath) {
                 validationRepoPath = await resolveIdentityRepoPath();
@@ -367,11 +369,14 @@ export function createCredentialsActions(ctx) {
                 repoPath = state.reposRoot || state.repoPath || '';
             }
             if (!repoPath) {
-                setStatusLine('Select a repository to set identity.', true);
-                return;
+                if (state.credentialsGate) {
+                    setStatusLine('Select a repository to set identity.', true);
+                    return;
+                }
+            } else {
+                setRememberedGitIdentity({ name, email });
+                identitySaved = true;
             }
-            setRememberedGitIdentity({ name, email });
-            identitySaved = true;
         }
 
         if (tokenValid && (authRequired || tokenValid)) {
