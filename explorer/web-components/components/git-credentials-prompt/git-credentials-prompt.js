@@ -413,15 +413,16 @@ export class GitCredentialsPrompt {
         const valid = this.isCredentialsValid();
         const canSave = valid && (
             this.state.credentialsValidated
-            || !this.state.credentialsDirty
-            || ((this.state.autocommitDirty || this.state.autoresolveDirty) && !this.state.credentialsDirty)
+            || this.state.credentialsDirty
+            || this.state.autocommitDirty
+            || this.state.autoresolveDirty
         );
         if (this.saveButton) {
             this.saveButton.disabled = !canSave;
             const message = valid
-                ? (this.state.credentialsValidated || ((this.state.autocommitDirty || this.state.autoresolveDirty) && !this.state.credentialsDirty)
+                ? (this.state.credentialsDirty || this.state.autocommitDirty || this.state.autoresolveDirty
                     ? ''
-                    : 'Validate credentials to load repositories.')
+                    : (this.state.credentialsValidated ? '' : 'Validate credentials to load repositories.'))
                 : this.getValidationMessage();
             if (message) {
                 this.saveButton.title = message;

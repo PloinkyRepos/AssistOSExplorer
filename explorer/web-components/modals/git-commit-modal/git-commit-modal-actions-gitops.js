@@ -100,12 +100,13 @@ export function createGitOpsActions(ctx) {
                 pushedAny = true;
             } catch (error) {
                 const msg = normalizeErrorMessage(error);
+                const human = humanizeGitError(msg, { action: 'push' });
                 if (isGitAuthError(msg)) {
                     if (!effectiveToken) {
-                        showGitAuthPrompt(repoPath, { type: 'push', mode: 'batch', repoPaths: list }, { message: msg });
+                        showGitAuthPrompt(repoPath, { type: 'push', mode: 'batch', repoPaths: list }, { message: human });
                         return false;
                     }
-                    setStatusLine(`${msg} (A token is already saved. Use “Token” to update it.)`, true);
+                    setStatusLine(`${human} (A token is already saved. Use “Token” to update it.)`, true);
                     return false;
                 }
                 throw error;
