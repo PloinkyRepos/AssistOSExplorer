@@ -19,8 +19,7 @@
             "env": [
                 "ASSISTOS_FS_ROOT"
             ],
-            "preinstall": "apt-get update && apt-get install -y git",
-            "install": "npm install"
+            "install": "apt-get update && apt-get install -y git && npm install"
         }
     }
 }
