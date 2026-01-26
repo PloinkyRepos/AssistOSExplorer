@@ -259,7 +259,7 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
     flex-direction: column;
     gap: 12px;
     padding: 12px 14px 14px;
-    overflow: hidden;
+    overflow: auto;
     flex: 1 1 auto;
     min-height: 0;
 }
@@ -278,8 +278,9 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
     flex: 1 1 auto;
 }
 
+/* Keep git content visible even when credentials are shown. */
 .git-modal.git-credentials-only .git-modal-content {
-    display: none;
+    display: flex;
 }
 
 .git-modal.git-credentials-open .git-credentials {
@@ -343,8 +344,8 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
 .git-main {
     display: flex;
     gap: 12px;
-    flex: 1 1 auto;
-    min-height: 0;
+    flex: 1 1 240px;
+    min-height: 300px;
     overflow: auto;
 }
 
