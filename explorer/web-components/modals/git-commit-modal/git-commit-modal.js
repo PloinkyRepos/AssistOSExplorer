@@ -216,6 +216,19 @@ export class GitCommitModal {
 
     afterRender() {
         this.bindEvents();
+        const remembered = getRememberedGitIdentity();
+        const hasIdentity = Boolean(remembered?.name && remembered?.email);
+        if (!hasIdentity) {
+            this.state.credentialsGate = true;
+            this.state.identityPrompt = {
+                ...this.state.identityPrompt,
+                visible: true,
+                repoPath: this.state.selectedRepoPath || this.state.repoPath || '',
+                pendingAction: null,
+                name: remembered?.name || '',
+                email: remembered?.email || ''
+            };
+        }
         this.syncStaticUI();
         this.dialog.ensureDialogResizable();
         this.ensureCredentialsGate().then(async (gateActive) => {

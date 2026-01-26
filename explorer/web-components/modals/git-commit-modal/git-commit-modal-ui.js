@@ -169,7 +169,7 @@ export function createGitCommitUI(ctx) {
     const updateCommitBody = () => {
         const body = element.querySelector('git-commit-body');
         if (!body) return;
-        const visible = !state.conflictFocus;
+        const visible = !state.conflictFocus && !state.credentialsGate;
         const detail = {
             visible,
             repoPath: state.repoPath || ''
