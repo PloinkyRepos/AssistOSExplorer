@@ -129,6 +129,7 @@ export function createGitCommitActions(ctx) {
         push: (...args) => push?.(...args),
         pushRepos: (...args) => pushRepos?.(...args),
         commitSelectedRepos: (...args) => commitSelectedRepos?.(...args),
+        syncSelectedRepos: (...args) => syncSelectedRepos?.(...args),
         getSelectedReposForBatch
     });
     const {

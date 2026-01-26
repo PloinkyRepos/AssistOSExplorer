@@ -30,6 +30,7 @@ export function createCredentialsActions(ctx) {
         pullSelectedRepos,
         push,
         pushRepos,
+        syncSelectedRepos,
         commitSelectedRepos,
         getSelectedReposForBatch,
         reposRoot
@@ -199,9 +200,15 @@ export function createCredentialsActions(ctx) {
             authPrompt: { visible: false, repoPath: null, pendingAction: null, token: '', remember: false }
         });
         updateCommitButtons();
-        setStatusLine(pending?.type === 'pull' ? 'Retrying pull…' : 'Retrying push…');
+        if (pending?.type === 'sync') {
+            setStatusLine('Retrying sync…');
+        } else {
+            setStatusLine(pending?.type === 'pull' ? 'Retrying pull…' : 'Retrying push…');
+        }
         try {
-            if (pending?.type === 'push') {
+            if (pending?.type === 'sync') {
+                await syncSelectedRepos?.({ token });
+            } else if (pending?.type === 'push') {
                 if (pending.mode === 'batch') {
                     const list = Array.isArray(pending.repoPaths) ? pending.repoPaths : [];
                     await pushRepos(list, { token });
@@ -304,7 +311,11 @@ export function createCredentialsActions(ctx) {
             return;
         }
 
-        if (!state.credentialsValidated && !(validateOnly || tokenRequired || token)) {
+        const pending = state.authPrompt?.pendingAction || state.identityPrompt?.pendingAction;
+        if (!state.credentialsValidated && pending?.type && identityValid && tokenValid && !validateOnly) {
+            applyState({ credentialsValidated: true });
+            setCredentialsValidated(true);
+        } else if (!state.credentialsValidated && !(validateOnly || tokenRequired || token)) {
             setCredentialsValidated(false);
         } else if (!state.credentialsValidated) {
             let validationRepoPath = state.identityPrompt?.repoPath || state.authPrompt?.repoPath;
@@ -403,7 +414,6 @@ export function createCredentialsActions(ctx) {
             credentialsDirty: false
         }, { silent: true });
 
-        const pending = state.authPrompt?.pendingAction || state.identityPrompt?.pendingAction;
         const wasGate = state.credentialsGate;
 
         applyState({
@@ -429,12 +439,16 @@ export function createCredentialsActions(ctx) {
                 setStatusLine('Retrying pull…');
             } else if (pending.type === 'push') {
                 setStatusLine('Retrying push…');
+            } else if (pending.type === 'sync') {
+                setStatusLine('Retrying sync…');
             } else if (pending.type === 'commit') {
                 setStatusLine('Retrying commit…');
             }
             try {
                 if (pending.type === 'commit') {
                     await commitSelectedRepos();
+                } else if (pending.type === 'sync') {
+                    await syncSelectedRepos?.({ token });
                 } else if (pending.type === 'push') {
                     if (pending.mode === 'batch') {
                         const list = Array.isArray(pending.repoPaths) ? pending.repoPaths : [];
@@ -540,6 +554,8 @@ export function createCredentialsActions(ctx) {
             await push({ silent: false });
         } else if (pending?.type === 'pull') {
             await pullSelectedRepos();
+        } else if (pending?.type === 'sync') {
+            await syncSelectedRepos?.();
         }
     };
 

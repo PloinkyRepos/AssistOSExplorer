@@ -119,7 +119,7 @@ export function createGitOpsActions(ctx) {
         return pushedAny;
     };
 
-    const pullRepos = async (repoPaths, { token = null } = {}) => {
+    const pullRepos = async (repoPaths, { token = null, pendingAction = null } = {}) => {
         const state = getState();
         applyState({
             pullBlocked: null,
@@ -135,7 +135,10 @@ export function createGitOpsActions(ctx) {
                 const identityOk = await applyGitIdentityForRepo(repoPath);
                 if (!identityOk) {
                     setStatusLine('Set name, email, and token in Git settings to continue.', true);
-                    await ensureGitIdentityOrPrompt(repoPath, { type: 'pull', mode: 'batch', repoPaths: list });
+                    await ensureGitIdentityOrPrompt(
+                        repoPath,
+                        pendingAction?.type ? pendingAction : { type: 'pull', mode: 'batch', repoPaths: list }
+                    );
                     return false;
                 }
             }
@@ -159,12 +162,19 @@ export function createGitOpsActions(ctx) {
                 const msg = humanizeGitError(normalizeErrorMessage(error), { action: 'pull' });
                 if (isGitIdentityError(msg)) {
                     setStatusLine('Set name, email, and token in Git settings to continue.', true);
-                    await ensureGitIdentityOrPrompt(repoPath, { type: 'pull', mode: 'batch', repoPaths: list });
+                    await ensureGitIdentityOrPrompt(
+                        repoPath,
+                        pendingAction?.type ? pendingAction : { type: 'pull', mode: 'batch', repoPaths: list }
+                    );
                     return false;
                 }
                 if (isGitAuthError(msg)) {
                     if (!effectiveToken) {
-                        showGitAuthPrompt(repoPath, { type: 'pull', mode: 'batch', repoPaths: list }, { message: msg });
+                        showGitAuthPrompt(
+                            repoPath,
+                            pendingAction?.type ? pendingAction : { type: 'pull', mode: 'batch', repoPaths: list },
+                            { message: msg }
+                        );
                         return false;
                     }
                     setStatusLine(`${msg} (A token is already saved. Use “Token” to update it.)`, true);
@@ -206,7 +216,7 @@ export function createGitOpsActions(ctx) {
         setStatusLine('Pulling latest changes before commit...');
         return withGlobalLoader(async () => {
             try {
-                const pullOk = await pullRepos(selected);
+                const pullOk = await pullRepos(selected, { pendingAction: { type: 'sync', mode: 'batch', repoPaths: selected } });
                 if (!pullOk) return;
                 await loadRepoOverviews({ force: true });
                 syncStaticUI();
@@ -276,7 +286,7 @@ export function createGitOpsActions(ctx) {
         });
     };
 
-    const syncSelectedRepos = async () => {
+    const syncSelectedRepos = async ({ token: tokenOverride = null } = {}) => {
         const state = getState();
         const selected = getSelectedReposForBatch();
         if (!selected.length) {
@@ -287,7 +297,10 @@ export function createGitOpsActions(ctx) {
         setStatusLine(`Syncing ${selected.length} repo(s)…`);
         return withGlobalLoader(async () => {
             try {
-                const pullOk = await pullRepos(selected);
+                const pullOk = await pullRepos(selected, {
+                    pendingAction: { type: 'sync', mode: 'batch', repoPaths: selected },
+                    token: tokenOverride
+                });
                 if (!pullOk) return;
                 const stagedSelections = [];
                 for (const repoPath of selected) {
@@ -352,7 +365,9 @@ export function createGitOpsActions(ctx) {
                     }
                 }
 
-                const token = getRememberedGitPat();
+                const token = String(tokenOverride || '').trim()
+                    || String(state.authPrompt?.token || '').trim()
+                    || getRememberedGitPat();
                 for (const repoPath of selected) {
                     try {
                         await gitPushWithToken(repoPath, token);
@@ -361,7 +376,7 @@ export function createGitOpsActions(ctx) {
                         const human = humanizeGitError(msg, { action: 'push' });
                         if (isGitAuthError(msg)) {
                             if (!token) {
-                                showGitAuthPrompt(repoPath, { type: 'push', mode: 'batch', repoPaths: selected }, { message: human });
+                                showGitAuthPrompt(repoPath, { type: 'sync', mode: 'batch', repoPaths: selected }, { message: human });
                                 dispatchAutocommitStop();
                                 return;
                             }
