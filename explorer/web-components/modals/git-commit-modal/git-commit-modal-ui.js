@@ -1,4 +1,10 @@
-import { isReposRootPath, getAutocommitSettings, getConflictAutoresolveSetting, getRememberedGitPat } from "./git-commit-modal-utils.js";
+import {
+    isReposRootPath,
+    getAutocommitSettings,
+    getConflictAutoresolveSetting,
+    getRememberedGitPat,
+    getRememberedGitIdentity
+} from "./git-commit-modal-utils.js";
 
 export function createGitCommitUI(ctx) {
     const {
@@ -86,6 +92,7 @@ export function createGitCommitUI(ctx) {
         const authState = state.authPrompt || {};
         const autocommit = getAutocommitSettings();
         const autoresolveSaved = getConflictAutoresolveSetting();
+        const rememberedIdentity = getRememberedGitIdentity();
         const rememberedToken = getRememberedGitPat();
         const autocommitDraft = state.autocommitDraft || {};
         const autoresolveDraft = state.autoresolveDraft || {};
@@ -119,8 +126,8 @@ export function createGitCommitUI(ctx) {
         const rememberState = typeof authState.remember === 'boolean' ? authState.remember : Boolean(rememberedToken);
         const detail = {
             visible,
-            name: identityState.name || '',
-            email: identityState.email || '',
+            name: identityState.name || rememberedIdentity.name || '',
+            email: identityState.email || rememberedIdentity.email || '',
             token: tokenValue,
             remember: rememberState,
             credentialsValidated,
