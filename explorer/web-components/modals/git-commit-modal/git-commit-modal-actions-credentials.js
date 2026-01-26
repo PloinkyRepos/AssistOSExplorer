@@ -207,7 +207,8 @@ export function createCredentialsActions(ctx) {
         }
         try {
             if (pending?.type === 'sync') {
-                await syncSelectedRepos?.({ token });
+                const list = Array.isArray(pending.repoPaths) ? pending.repoPaths : null;
+                await syncSelectedRepos?.({ token, repoPaths: list });
             } else if (pending?.type === 'push') {
                 if (pending.mode === 'batch') {
                     const list = Array.isArray(pending.repoPaths) ? pending.repoPaths : [];
@@ -448,7 +449,8 @@ export function createCredentialsActions(ctx) {
                 if (pending.type === 'commit') {
                     await commitSelectedRepos();
                 } else if (pending.type === 'sync') {
-                    await syncSelectedRepos?.({ token });
+                    const list = Array.isArray(pending.repoPaths) ? pending.repoPaths : null;
+                    await syncSelectedRepos?.({ token, repoPaths: list });
                 } else if (pending.type === 'push') {
                     if (pending.mode === 'batch') {
                         const list = Array.isArray(pending.repoPaths) ? pending.repoPaths : [];

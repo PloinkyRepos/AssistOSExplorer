@@ -286,9 +286,11 @@ export function createGitOpsActions(ctx) {
         });
     };
 
-    const syncSelectedRepos = async ({ token: tokenOverride = null } = {}) => {
+    const syncSelectedRepos = async ({ token: tokenOverride = null, repoPaths = null } = {}) => {
         const state = getState();
-        const selected = getSelectedReposForBatch();
+        const selected = Array.isArray(repoPaths) && repoPaths.length
+            ? repoPaths.filter(Boolean)
+            : getSelectedReposForBatch();
         if (!selected.length) {
             setStatusLine('Select at least one repository to sync.', true);
             return;
