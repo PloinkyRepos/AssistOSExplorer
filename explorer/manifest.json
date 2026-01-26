@@ -19,7 +19,7 @@
             "env": [
                 "ASSISTOS_FS_ROOT"
             ],
-            "install": "apt-get update && apt-get install -y git && npm install"
+            "install": "apt-get update && apt-get install -y git"
         }
     }
 }
