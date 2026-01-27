@@ -1,6 +1,6 @@
 {
-    "container": "node:20-alpine",
-    "preinstall": "npm install",
+    "container": "node:20-bullseye",
+    "start": "sleep infinity",
     "update": "",
     "cli": "/bin/bash",
     "agent": "node /code/filesystem-http-server.mjs",
@@ -12,12 +12,17 @@
         "soplangAgent global",
         "taskAgent global"
     ],
-    "env": [
-        "ASSISTOS_FS_ROOT"
-    ],
     "repos": {
         "soplangBuilder": "https://github.com/PloinkyRepos/SOPLangBuilder.git",
         "gitMCP": "https://github.com/PloinkyRepos/gitMCP.git",
         "tasksMCP": "https://github.com/PloinkyRepos/tasksMCP"
+    },
+    "profiles": {
+        "default": {
+            "env": [
+                "ASSISTOS_FS_ROOT"
+            ],
+            "install": "apt-get update && apt-get install -y git"
+        }
     }
 }
