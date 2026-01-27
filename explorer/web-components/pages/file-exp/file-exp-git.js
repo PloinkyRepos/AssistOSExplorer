@@ -265,7 +265,7 @@ export function attachGitController(fileExp) {
                     file: filePath
                 }, { raw: true });
                 const versions = parseJsonToolResult(versionsText) || {};
-                const localSide = (source === 'merge' || source === 'rebase' || source === 'stash') ? 'theirs' : 'ours';
+                const localSide = (source === 'rebase' || source === 'stash') ? 'theirs' : 'ours';
                 const oursContent = localSide === 'ours' ? (versions.ours || '') : (versions.theirs || '');
                 const theirsContent = localSide === 'ours' ? (versions.theirs || '') : (versions.ours || '');
                 const resolveText = await callAgentTool('gitAgent', 'llm_resolve_conflict', {

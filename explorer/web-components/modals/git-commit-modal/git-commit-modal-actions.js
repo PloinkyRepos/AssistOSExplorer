@@ -276,7 +276,7 @@ export function createGitCommitActions(ctx) {
                 for (const filePath of conflictPaths) {
                     const versionsText = await service.gitConflictVersions({ path: repoPath, file: filePath });
                     const versions = parseJsonToolResult(versionsText) || {};
-                    const localSide = (source === 'merge' || source === 'rebase' || source === 'stash') ? 'theirs' : 'ours';
+                    const localSide = (source === 'rebase' || source === 'stash') ? 'theirs' : 'ours';
                     const oursContent = localSide === 'ours' ? (versions.ours || '') : (versions.theirs || '');
                     const theirsContent = localSide === 'ours' ? (versions.theirs || '') : (versions.ours || '');
                     const resolveText = await service.llmResolveConflict({
