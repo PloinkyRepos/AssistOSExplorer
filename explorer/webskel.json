@@ -232,6 +232,16 @@
       "presenterClassName": "BacklogCreateModal"
     },
     {
+      "name": "backlog-create-file-modal",
+      "type": "modals",
+      "presenterClassName": "BacklogCreateFileModal"
+    },
+    {
+      "name": "backlog-conflict-modal",
+      "type": "modals",
+      "presenterClassName": "BacklogConflictModal"
+    },
+    {
       "name": "git-status-bar",
       "type": "components",
       "presenterClassName": "GitStatusBar"

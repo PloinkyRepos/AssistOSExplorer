@@ -256,7 +256,12 @@ export class BacklogTaskRow {
         this.syncTypeIcon();
         if (this.typeMenu) this.typeMenu.classList.remove('is-open');
         this.unbindOutsideTypeMenu();
-        this.getParentPresenter()?.saveTask?.({ id: this.state.task?.id, type: nextType });
+        this.getParentPresenter()?.saveTask?.({
+            id: this.state.task?.id,
+            type: nextType,
+            taskHash: this.state.task?.taskHash,
+            sourcePath: this.state.task?.sourcePath
+        });
     }
 
     selectPriority(_element, priority) {
@@ -267,7 +272,12 @@ export class BacklogTaskRow {
         this.syncPriorityDisplay();
         if (this.priorityMenu) this.priorityMenu.classList.remove('is-open');
         this.unbindOutsidePriorityMenu();
-        this.getParentPresenter()?.saveTask?.({ id: this.state.task?.id, priority: nextPriority });
+        this.getParentPresenter()?.saveTask?.({
+            id: this.state.task?.id,
+            priority: nextPriority,
+            taskHash: this.state.task?.taskHash,
+            sourcePath: this.state.task?.sourcePath
+        });
     }
 
     syncStatusIcon() {
@@ -342,7 +352,9 @@ export class BacklogTaskRow {
             proposedSolution: this.proposedSolutionInput?.value || '',
             observations: this.observationsInput?.value || '',
             type: this.typeSelect?.value || '',
-            priority: this.prioritySelect?.value || ''
+            priority: this.prioritySelect?.value || '',
+            taskHash: task.taskHash,
+            sourcePath: task.sourcePath
         };
         this.getParentPresenter()?.saveTask?.(payload);
     }
@@ -376,14 +388,16 @@ export class BacklogTaskRow {
             proposedSolution: this.proposedSolutionInput?.value || '',
             observations: this.observationsInput?.value || '',
             type: this.typeSelect?.value || '',
-            priority: this.prioritySelect?.value || ''
+            priority: this.prioritySelect?.value || '',
+            taskHash: task.taskHash,
+            sourcePath: task.sourcePath
         };
         this.getParentPresenter()?.updateTaskStatus?.(payload);
     }
 
     deleteTask() {
         const task = this.state.task || {};
-        this.getParentPresenter()?.deleteTask?.({ id: task.id });
+        this.getParentPresenter()?.deleteTask?.({ id: task.id, sourcePath: task.sourcePath });
     }
 
     getParentPresenter() {

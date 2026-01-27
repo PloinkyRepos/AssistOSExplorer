@@ -223,7 +223,7 @@ export class FileExp {
         const previewTitle = this.element.querySelector('.preview-title');
         const isTruncatedPreview = Boolean(this.state.fileLoadInfo?.truncated);
         const selectedPath = this.state.selectedPath || '';
-        const isBacklog = selectedPath === '.backlog' || selectedPath.endsWith('/.backlog');
+        const isBacklog = selectedPath.endsWith('.backlog');
         const headerExtras = this.element.querySelector('#previewHeaderExtras');
         if (headerExtras && !isBacklog && headerExtras.children.length) {
             headerExtras.innerHTML = '';
@@ -832,7 +832,7 @@ export class FileExp {
     async editFile() {
         if (!this.state.selectedPath) return;
         const selectedPath = this.state.selectedPath || '';
-        if (selectedPath === '.backlog' || selectedPath.endsWith('/.backlog')) {
+        if (selectedPath.endsWith('.backlog')) {
             this.showStatus('Backlog is managed by the Backlog panel.', true);
             return;
         }

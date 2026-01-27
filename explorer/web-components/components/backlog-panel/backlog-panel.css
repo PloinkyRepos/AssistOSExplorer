@@ -16,6 +16,13 @@
     font-weight: 700;
 }
 
+.backlog-file {
+    font-size: 1.1rem;
+    color: var(--text-soft, rgba(15, 23, 42, 0.65));
+    flex-grow: 1;
+    font-weight: 700;
+}
+
 .backlog-actions {
     display: inline-flex;
     gap: 6px;
@@ -96,6 +103,14 @@
     display: grid;
     grid-template-columns: repeat(3, minmax(140px, 1fr));
     gap: 8px;
+}
+
+.backlog-filter-actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 6px;
+    grid-column: 1 / -1;
 }
 
 .backlog-filters label,

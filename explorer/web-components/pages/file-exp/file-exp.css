@@ -576,10 +576,6 @@ th {
     flex-wrap: wrap;
 }
 
-.preview-header-extras .backlog-title {
-    margin-right: auto;
-}
-
 .preview-header-extras .backlog-filters label {
     min-width: 140px;
 }

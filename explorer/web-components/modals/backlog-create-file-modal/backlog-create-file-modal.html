@@ -1,0 +1,19 @@
+<div class="backlog-create-file-modal">
+    <div class="modal-header">
+        <div class="modal-title">Create backlog file</div>
+        <div class="close" data-local-action="closeModal">
+            <img class="close-icon" src="./assets/icons/x-mark.svg" alt="close">
+        </div>
+    </div>
+    <div class="modal-body">
+        <label>
+            File name
+            <input id="backlogFileNameInput" type="text" spellcheck="false" placeholder="team.backlog" />
+        </label>
+        <div class="backlog-create-file-hint">The file will be created in the repo root.</div>
+    </div>
+    <div class="modal-actions">
+        <button type="button" class="secondary" data-local-action="closeModal">Cancel</button>
+        <button type="button" class="primary" data-local-action="createFile">Create</button>
+    </div>
+</div>

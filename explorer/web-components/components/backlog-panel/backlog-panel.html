@@ -1,6 +1,6 @@
 <div class="backlog-panel">
     <div class="backlog-header" id="backlogHeader">
-        <div class="backlog-title">Backlog</div>
+        <div class="backlog-file" id="backlogFileLabel"></div>
         <div class="backlog-actions">
             <button type="button" class="secondary backlog-refresh" data-local-action="refreshBacklog" aria-label="Refresh">
                 <img src="./assets/icons/refresh.svg" alt="" aria-hidden="true"/>
@@ -31,6 +31,9 @@
             Search
             <input id="backlogSearchFilter" type="search" autocomplete="off" spellcheck="false"/>
         </label>
+        <div class="backlog-filter-actions">
+            <button type="button" class="secondary" data-local-action="clearFilters">Clear</button>
+        </div>
     </div>
 
     <div class="backlog-section-title">Tasks</div>
