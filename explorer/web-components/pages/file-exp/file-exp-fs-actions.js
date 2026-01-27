@@ -150,7 +150,8 @@ export function attachFsActions(fileExp) {
                 showContextPasteMenu({
                     x: event.clientX,
                     y: event.clientY,
-                    onPaste: () => this.pasteClipboard({ dataset: { targetPath: this.state.path } })
+                    targetPath: this.state.path,
+                    hostElement: this.element
                 });
             }
         },
@@ -245,6 +246,22 @@ export function attachFsActions(fileExp) {
             previousRow?.classList.remove('clipboard-row', 'clipboard-cut', 'clipboard-copy');
         },
 
+        humanizeFsError(error) {
+            const message = error?.message || error?.toString?.() || '';
+            if (typeof message === 'string') {
+                if (message.includes('Request timed out')) {
+                    return 'Operation timed out. Please try again.';
+                }
+                if (message.includes('Missing or invalid MCP session')) {
+                    return 'Session expired. Reload the app and try again.';
+                }
+                if (message.includes('Path is outside allowed roots')) {
+                    return 'Operation blocked: path is outside the workspace.';
+                }
+            }
+            return message || 'Operation failed. Please try again.';
+        },
+
         async pasteClipboard(element) {
             const clipboard = this.state.clipboard;
             if (!clipboard) {
@@ -324,6 +341,10 @@ export function attachFsActions(fileExp) {
                         this.showStatus(`Copied to ${destination}${overwrite ? ' (overwritten)' : ''}.`);
                     }
 
+                    this.caches?.dirListing?.invalidate?.(this, targetDir);
+                    if (sourceParent) {
+                        this.caches?.dirListing?.invalidate?.(this, sourceParent);
+                    }
                     const targetMatchesCurrentView = targetIsCurrentDirectory;
                     const sourceMatchesCurrentView = sourceParent === this.state.path;
 
@@ -346,7 +367,7 @@ export function attachFsActions(fileExp) {
                 });
             } catch (err) {
                 console.error(err);
-                this.showStatus(err.message || 'Failed to paste item.', true);
+                this.showStatus(this.humanizeFsError(err), true);
             }
             if (pasteCompleted && clipboard.mode === 'cut') {
                 this.state.clipboard = null;

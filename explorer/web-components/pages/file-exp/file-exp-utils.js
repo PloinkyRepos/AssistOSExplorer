@@ -443,7 +443,7 @@ export function scrollToLine(rootElement, lineNumber) {
 
 let activeContextPasteCleanup = null;
 
-export function showContextPasteMenu({ x, y, onPaste }) {
+export function showContextPasteMenu({ x, y, targetPath, hostElement }) {
     // Ensure only one paste context menu is visible at a time
     if (typeof activeContextPasteCleanup === 'function') {
         activeContextPasteCleanup();
@@ -451,11 +451,13 @@ export function showContextPasteMenu({ x, y, onPaste }) {
 
     const menu = document.createElement('div');
     menu.className = 'context-paste-menu';
-    menu.style.position = 'absolute';
+    menu.style.position = 'fixed';
     menu.style.top = `${y}px`;
     menu.style.left = `${x}px`;
-    menu.innerHTML = `<button type="button" class="context-paste-action">Paste here</button>`;
-    document.body.appendChild(menu);
+    const target = typeof targetPath === 'string' ? targetPath : '';
+    menu.innerHTML = `<button type="button" class="context-paste-action" data-local-action="pasteClipboard" data-target-path="${target}">Paste here</button>`;
+    const mount = hostElement instanceof HTMLElement ? hostElement : document.body;
+    mount.appendChild(menu);
     const cleanup = () => {
         menu.remove();
         document.removeEventListener('click', onOutside, true);
@@ -468,9 +470,8 @@ export function showContextPasteMenu({ x, y, onPaste }) {
             cleanup();
         }
     };
-    menu.querySelector('button')?.addEventListener('click', () => {
-        cleanup();
-        onPaste?.();
+    menu.addEventListener('click', () => {
+        setTimeout(cleanup, 0);
     });
     document.addEventListener('click', onOutside, true);
     activeContextPasteCleanup = cleanup;
