@@ -8,10 +8,15 @@
     --accent: #2563eb;
     --accent-muted: #93c5fd;
     --border: #e5e7eb;
+    --border-strong: #cbd5e1;
     --default-font: "Inter", sans-serif;
     --black: black;
     --white: white;
     --white-text: white;
+    --input-bg: var(--surface);
+    --input-bg-focus: var(--surface);
+    --input-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+    --shadow-sm: 0 2px 6px rgba(15, 23, 42, 0.12);
     --form-input-border: #BDBDBD;
     --light-gray: #BDBDBD;
     --very-light-gray: #c2c2c299;
@@ -37,6 +42,28 @@
     --button-padding: 10px 20px;
     --page-padding: 20px 40px;
     --page-header-font-size: 28px;
+    --backlog-status-new: #94a3b8;
+    --backlog-status-new-glow: rgba(148, 163, 184, 0.2);
+    --backlog-status-approved: #3b82f6;
+    --backlog-status-approved-glow: rgba(59, 130, 246, 0.2);
+    --backlog-status-test-ready: #f59e0b;
+    --backlog-status-test-ready-glow: rgba(245, 158, 11, 0.2);
+    --backlog-status-testing: #22c55e;
+    --backlog-status-testing-glow: rgba(34, 197, 94, 0.2);
+    --backlog-status-reopened: #ef4444;
+    --backlog-status-reopened-glow: rgba(239, 68, 68, 0.2);
+    --backlog-status-rejected: #7c3aed;
+    --backlog-status-rejected-glow: rgba(124, 58, 237, 0.2);
+    --backlog-status-done: #10b981;
+    --backlog-status-done-glow: rgba(16, 185, 129, 0.2);
+    --backlog-type-bug: #ef4444;
+    --backlog-type-future: #3b82f6;
+    --backlog-type-change: #f59e0b;
+    --backlog-action-approve: var(--backlog-status-approved);
+    --backlog-action-reject: var(--backlog-status-reopened);
+    --backlog-action-reopen: #f97316;
+    --backlog-action-test-ready: var(--backlog-status-testing);
+    --backlog-action-done: var(--backlog-status-done);
 }
 @supports (font-variation-settings: normal) {
     :root {

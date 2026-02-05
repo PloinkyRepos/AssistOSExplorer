@@ -5,6 +5,7 @@
             <button type="button" class="secondary backlog-refresh" data-local-action="refreshBacklog" aria-label="Refresh">
                 <img src="./assets/icons/refresh.svg" alt="" aria-hidden="true"/>
             </button>
+            <button type="button" class="secondary" data-local-action="toggleListView" id="backlogListToggle">List view</button>
             <button type="button" class="primary" data-local-action="openCreateTaskModal">New task</button>
         </div>
     </div>
@@ -20,14 +21,6 @@
             <select id="backlogStatusFilter"></select>
         </label>
         <label>
-            Type
-            <select id="backlogTypeFilter"></select>
-        </label>
-        <label>
-            Priority
-            <select id="backlogPriorityFilter"></select>
-        </label>
-        <label>
             Search
             <input id="backlogSearchFilter" type="search" autocomplete="off" spellcheck="false"/>
         </label>
@@ -38,6 +31,7 @@
 
     <div class="backlog-section-title">Tasks</div>
     <div class="backlog-list" id="backlogList"></div>
+    <div class="backlog-list-view" id="backlogListView" aria-label="Backlog list view"></div>
     <div class="backlog-empty" id="backlogEmpty">No tasks found.</div>
     <div class="backlog-carousel" id="backlogCarousel">
         <button type="button" class="secondary" data-local-action="prevTask">Prev</button>

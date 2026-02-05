@@ -1,36 +1,18 @@
 <div class="backlog-task-row">
     <div class="backlog-task-header">
-        <div class="backlog-task-type-picker" data-field="typePicker">
-            <button type="button" class="backlog-task-type-trigger" data-local-action="toggleTypeMenu">
-                <span class="backlog-task-type-icon" data-field="typeIcon" aria-hidden="true"></span>
-            </button>
-            <div class="backlog-task-type-menu" data-field="typeMenu"></div>
-            <select class="backlog-task-type-select" data-field="type"></select>
-        </div>
         <span class="backlog-task-status-wrap">
             <span class="backlog-task-status" data-field="statusIcon" aria-hidden="true"></span>
             <span class="backlog-task-status-label" data-field="statusLabel"></span>
         </span>
         <div class="backlog-task-meta" data-field="meta"></div>
-        <div class="backlog-task-priority-picker" data-field="priorityPicker">
-            <button type="button" class="backlog-task-priority-trigger" data-local-action="togglePriorityMenu">
-                <span class="backlog-task-priority-dot" data-field="priorityDot" aria-hidden="true"></span>
-                <span class="backlog-task-priority-label" data-field="priorityLabel">Priority</span>
-            </button>
-            <div class="backlog-task-priority-menu" data-field="priorityMenu"></div>
-            <select class="backlog-task-priority-select" data-field="priority"></select>
-        </div>
     </div>
     <div class="backlog-task-main">
         <textarea class="backlog-task-textarea backlog-task-desc" data-field="description" rows="2" spellcheck="false" placeholder="Describe the issue..."></textarea>
     </div>
+    <div class="backlog-task-options" data-field="optionsList"></div>
     <label class="backlog-task-solution">
-        Proposed solution
-        <textarea class="backlog-task-textarea" data-field="proposedSolution" rows="3" spellcheck="false" placeholder="Suggested approach or fix..."></textarea>
-    </label>
-    <label class="backlog-task-observations">
-        Observations
-        <textarea class="backlog-task-textarea" data-field="observations" rows="3" spellcheck="false" placeholder="Notes, test results, or reasons for reopen/reject..."></textarea>
+        Chosen Solution
+        <textarea class="backlog-task-textarea" data-field="resolution" rows="3" spellcheck="false" placeholder="Select options above or edit..."></textarea>
     </label>
     <div class="backlog-task-grid"></div>
 
@@ -38,9 +20,6 @@
         <button type="button" class="secondary" data-local-action="deleteTask">Delete</button>
         <div class="backlog-task-quick-actions" data-field="quickActions">
             <button type="button" class="quick-action approve" data-local-action="approveTask" title="Approve this task">Approve</button>
-            <button type="button" class="quick-action reject" data-local-action="rejectTask" title="Reject this task">Reject</button>
-            <button type="button" class="quick-action reopen" data-local-action="reopenTask" title="Reopen with observations if needed">Reopen</button>
-            <button type="button" class="quick-action test-ready" data-local-action="markTestReady" title="Mark as ready for testing">Test ready</button>
             <button type="button" class="quick-action done" data-local-action="markDone" title="Mark as done">Done</button>
         </div>
 

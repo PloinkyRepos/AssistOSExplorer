@@ -224,12 +224,16 @@ export class FileExp {
         const isTruncatedPreview = Boolean(this.state.fileLoadInfo?.truncated);
         const selectedPath = this.state.selectedPath || '';
         const isBacklog = selectedPath.endsWith('.backlog');
+        const showBacklogPanel = isBacklog && !this.state.backlogTextView;
         const headerExtras = this.element.querySelector('#previewHeaderExtras');
-        if (headerExtras && !isBacklog && headerExtras.children.length) {
+        if (headerExtras && !showBacklogPanel && headerExtras.children.length) {
             headerExtras.innerHTML = '';
         }
         if (previewTitle) {
-            previewTitle.classList.toggle('hidden', isBacklog);
+            previewTitle.classList.toggle('hidden', showBacklogPanel);
+        }
+        if (headerExtras && isBacklog) {
+            this.renderBacklogViewToggle(headerExtras, showBacklogPanel);
         }
 
         if (this.state.isEditing) {
@@ -237,7 +241,7 @@ export class FileExp {
             editingActions.classList.remove('hidden');
         } else {
             editingActions.classList.add('hidden');
-            if (this.state.selectedPath && this.state.previewMode !== 'media' && !isTruncatedPreview && !isBacklog) {
+            if (this.state.selectedPath && this.state.previewMode !== 'media' && !isTruncatedPreview && !showBacklogPanel) {
                 editorActions.classList.remove('hidden');
             } else {
                 editorActions.classList.add('hidden');
@@ -252,7 +256,7 @@ export class FileExp {
             } else {
                 previewContent.innerHTML = `<file-editor data-presenter="file-editor" data-path="${this.state.selectedPath}"></file-editor>`;
             }
-        } else if (isBacklog) {
+        } else if (showBacklogPanel) {
             this.detachPreviewAnchorHandler();
             const pathAttr = this.state.selectedPath || '';
             const repoPath = this.parentPath(pathAttr) || '/';
@@ -823,6 +827,9 @@ export class FileExp {
     }
 
     async openFile(filePath) {
+        if (filePath && !String(filePath).endsWith('.backlog')) {
+            this.state.backlogTextView = false;
+        }
         return openFileImpl(this, filePath, {
             largeFilePreviewLimitBytes: LARGE_FILE_PREVIEW_LIMIT_BYTES,
             largeFilePreviewLines: LARGE_FILE_PREVIEW_LINES
@@ -832,7 +839,7 @@ export class FileExp {
     async editFile() {
         if (!this.state.selectedPath) return;
         const selectedPath = this.state.selectedPath || '';
-        if (selectedPath.endsWith('.backlog')) {
+        if (selectedPath.endsWith('.backlog') && !this.state.backlogTextView) {
             this.showStatus('Backlog is managed by the Backlog panel.', true);
             return;
         }
@@ -1010,6 +1017,28 @@ export class FileExp {
                 cell.classList.toggle('column-hidden', !visible);
             });
         });
+    }
+
+    renderBacklogViewToggle(headerExtras, showBacklogPanel) {
+        if (!headerExtras) return;
+        let button = headerExtras.querySelector('#backlogViewToggle');
+        if (!button) {
+            button = document.createElement('button');
+            button.id = 'backlogViewToggle';
+            button.type = 'button';
+            button.className = 'secondary';
+            button.addEventListener('click', () => {
+                if (this.state.isEditing && this.state.hasUnsavedChanges) {
+                    this.showStatus('Save or cancel changes before switching backlog view.', true);
+                    return;
+                }
+                this.state.backlogTextView = !this.state.backlogTextView;
+                this.state.isEditing = false;
+                this.invalidate();
+            });
+            headerExtras.appendChild(button);
+        }
+        button.textContent = showBacklogPanel ? 'View as text' : 'View as backlog';
     }
 
     attachPreviewAnchorHandler() {

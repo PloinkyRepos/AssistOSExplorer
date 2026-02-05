@@ -13,10 +13,9 @@ export class BacklogPanel {
             config: null,
             tasks: [],
             conflict: false,
+            viewMode: 'carousel',
             filters: {
                 status: '',
-                type: '',
-                priority: '',
                 q: ''
             },
             error: ''
@@ -43,12 +42,13 @@ export class BacklogPanel {
         this.fileLabel = this.element.querySelector('#backlogFileLabel');
         this.filtersContainer = this.element.querySelector('#backlogFilters');
         this.statusFilter = this.element.querySelector('#backlogStatusFilter');
-        this.typeFilter = this.element.querySelector('#backlogTypeFilter');
-        this.priorityFilter = this.element.querySelector('#backlogPriorityFilter');
         this.searchFilter = this.element.querySelector('#backlogSearchFilter');
         this.list = this.element.querySelector('#backlogList');
+        this.listView = this.element.querySelector('#backlogListView');
+        this.listToggle = this.element.querySelector('#backlogListToggle');
         this.empty = this.element.querySelector('#backlogEmpty');
         this.carouselInfo = this.element.querySelector('#backlogCarouselInfo');
+        this.carousel = this.element.querySelector('#backlogCarousel');
         this.state.currentIndex = this.state.currentIndex || 0;
         this.workspaceRoot = getWorkspaceRoot();
         const rawRepoPath = String(this.element.getAttribute('data-repo-path') || '').trim();
@@ -104,8 +104,6 @@ export class BacklogPanel {
 
     bindFilterEvents() {
         this.bindFilterInput(this.statusFilter);
-        this.bindFilterInput(this.typeFilter);
-        this.bindFilterInput(this.priorityFilter);
         this.bindFilterInput(this.searchFilter);
     }
 
@@ -119,17 +117,13 @@ export class BacklogPanel {
 
     applyFilters() {
         this.state.filters.status = this.statusFilter?.value ?? '';
-        this.state.filters.type = this.typeFilter?.value ?? '';
-        this.state.filters.priority = this.priorityFilter?.value ?? '';
         this.state.filters.q = this.searchFilter?.value ?? '';
         this.loadTasks();
     }
 
     clearFilters() {
-        this.state.filters = { status: '', type: '', priority: '', q: '' };
+        this.state.filters = { status: '', q: '' };
         if (this.statusFilter) this.statusFilter.value = '';
-        if (this.typeFilter) this.typeFilter.value = '';
-        if (this.priorityFilter) this.priorityFilter.value = '';
         if (this.searchFilter) this.searchFilter.value = '';
         this.loadTasks();
     }
@@ -176,8 +170,6 @@ export class BacklogPanel {
             const args = {};
             const filters = this.state.filters;
             if (filters.status) args.status = filters.status;
-            if (filters.type) args.type = filters.type;
-            if (filters.priority) args.priority = filters.priority;
             if (filters.q) args.q = filters.q;
             if (this.backlogPath) {
                 args.backlogPath = this.backlogPath;
@@ -229,8 +221,6 @@ export class BacklogPanel {
     renderSelectOptions() {
         const config = this.state.config || {};
         const statuses = Object.entries(config.statuses || {});
-        const priorities = Object.entries(config.priorities || {});
-        const types = Object.entries(config.types || {});
         if (this.statusFilter) {
             this.statusFilter.innerHTML = '';
             this.statusFilter.appendChild(new Option('All', ''));
@@ -241,57 +231,154 @@ export class BacklogPanel {
                 this.statusFilter.value = this.state.filters.status;
             }
         }
-        if (this.typeFilter) {
-            this.typeFilter.innerHTML = '';
-            this.typeFilter.appendChild(new Option('All', ''));
-            for (const [key, label] of types) {
-                this.typeFilter.appendChild(new Option(label, key));
-            }
-            if (this.state.filters.type) {
-                this.typeFilter.value = this.state.filters.type;
-            }
-        }
-        if (this.priorityFilter) {
-            this.priorityFilter.innerHTML = '';
-            this.priorityFilter.appendChild(new Option('All', ''));
-            for (const [key, label] of priorities) {
-                this.priorityFilter.appendChild(new Option(label, key));
-            }
-            if (this.state.filters.priority) {
-                this.priorityFilter.value = this.state.filters.priority;
-            }
-        }
 
     }
 
     renderTasks() {
         if (!this.list) return;
+        if (this.listToggle) {
+            this.listToggle.classList.toggle('is-active', this.state.viewMode === 'list');
+            this.listToggle.textContent = this.state.viewMode === 'list' ? 'Carousel view' : 'List view';
+        }
         this.list.innerHTML = '';
+        if (this.listView) this.listView.innerHTML = '';
         const tasks = Array.isArray(this.state.tasks) ? this.state.tasks : [];
         if (!tasks.length) {
             if (this.empty) this.empty.style.display = 'block';
             if (this.carouselInfo) this.carouselInfo.textContent = '0 / 0';
+            if (this.carousel) this.carousel.style.display = 'none';
+            if (this.listView) this.listView.classList.remove('is-visible');
             return;
         }
         if (this.empty) this.empty.style.display = 'none';
+        if (this.state.viewMode === 'list') {
+            if (this.list) this.list.style.display = 'none';
+            if (this.carousel) this.carousel.style.display = 'none';
+            if (this.listView) this.listView.classList.add('is-visible');
+            this.renderListView(tasks);
+            if (this.carouselInfo) this.carouselInfo.textContent = `${this.state.currentIndex + 1} / ${tasks.length}`;
+            return;
+        }
+        if (this.listView) this.listView.classList.remove('is-visible');
+        if (this.list) this.list.style.display = '';
+        if (this.carousel) this.carousel.style.display = '';
         if (this.state.currentIndex >= tasks.length) {
             this.state.currentIndex = Math.max(0, tasks.length - 1);
         }
         const statuses = this.state.config?.statuses || {};
-        const priorities = this.state.config?.priorities || {};
-        const types = this.state.config?.types || {};
         const task = tasks[this.state.currentIndex];
         if (!task) return;
         const row = document.createElement('backlog-task-row');
         row.setAttribute('data-presenter', 'backlog-task-row');
         row.setAttribute('data-task', encodeURIComponent(JSON.stringify(task)));
         row.setAttribute('data-statuses', encodeURIComponent(JSON.stringify(statuses)));
-        row.setAttribute('data-priorities', encodeURIComponent(JSON.stringify(priorities)));
-        row.setAttribute('data-types', encodeURIComponent(JSON.stringify(types)));
         this.list.appendChild(row);
         if (this.carouselInfo) {
             this.carouselInfo.textContent = `${this.state.currentIndex + 1} / ${tasks.length}`;
         }
+    }
+
+    renderListView(tasks) {
+        if (!this.listView) return;
+        this.listView.innerHTML = '';
+        for (const task of tasks) {
+            const item = document.createElement('div');
+            item.className = 'backlog-list-item';
+            item.setAttribute('draggable', String(!this.state.conflict));
+            item.dataset.id = task.id;
+            const desc = String(task.description || '').trim() || '(No description)';
+            item.innerHTML = `
+                <div class="backlog-list-order">${Number(task.order) || ''}</div>
+                <div class="backlog-list-desc">${this.escapeHtml(desc)}</div>
+                <div class="backlog-list-status">${this.escapeHtml(task.status || '')}</div>
+            `;
+            if (!this.state.conflict) {
+                this.bindListDnD(item);
+            }
+            this.listView.appendChild(item);
+        }
+    }
+
+    bindListDnD(item) {
+        if (!item || item.dataset.boundDnD) return;
+        item.addEventListener('dragstart', (event) => {
+            this.dragState = { id: item.dataset.id };
+            event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.setData('text/plain', item.dataset.id || '');
+            item.classList.add('is-dragging');
+        });
+        item.addEventListener('dragend', () => {
+            item.classList.remove('is-dragging');
+            this.clearDragOver();
+            this.dragState = null;
+        });
+        item.addEventListener('dragover', (event) => {
+            event.preventDefault();
+            this.clearDragOver();
+            item.classList.add('is-drag-over');
+        });
+        item.addEventListener('dragleave', () => {
+            item.classList.remove('is-drag-over');
+        });
+        item.addEventListener('drop', async (event) => {
+            event.preventDefault();
+            item.classList.remove('is-drag-over');
+            const fromId = this.dragState?.id;
+            const toId = item.dataset.id;
+            if (!fromId || !toId || fromId === toId) return;
+            await this.reorderByDnD(fromId, toId);
+        });
+        item.dataset.boundDnD = 'true';
+    }
+
+    clearDragOver() {
+        if (!this.listView) return;
+        const items = this.listView.querySelectorAll('.backlog-list-item.is-drag-over');
+        for (const node of items) {
+            node.classList.remove('is-drag-over');
+        }
+    }
+
+    async reorderByDnD(fromId, toId) {
+        if (!this.repoPath || !this.backlogPath) return;
+        const tasks = Array.isArray(this.state.tasks) ? this.state.tasks : [];
+        const fromIndex = tasks.findIndex((task) => task.id === fromId);
+        const toIndex = tasks.findIndex((task) => task.id === toId);
+        if (fromIndex < 0 || toIndex < 0) return;
+        const next = [...tasks];
+        const [moved] = next.splice(fromIndex, 1);
+        next.splice(toIndex, 0, moved);
+        const order = next.map((task) => task.id);
+        await withGlobalLoader(async () => {
+            const result = await this.callTasksTool('task_reorder', {
+                order,
+                backlogPath: this.backlogPath,
+                repoPath: this.repoPath
+            });
+            if (Array.isArray(result?.tasks)) {
+                this.state.tasks = result.tasks;
+            }
+            this.renderTasks();
+        });
+    }
+
+    toggleListView() {
+        this.state.viewMode = this.state.viewMode === 'list' ? 'carousel' : 'list';
+        if (this.listToggle) {
+            this.listToggle.classList.toggle('is-active', this.state.viewMode === 'list');
+            this.listToggle.textContent = this.state.viewMode === 'list' ? 'Carousel view' : 'List view';
+        }
+        this.renderTasks();
+    }
+
+
+    escapeHtml(value) {
+        return String(value || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     }
 
     prevTask() {
@@ -323,12 +410,6 @@ export class BacklogPanel {
         }
         const request = {
             description,
-            proposedSolution: payload.proposedSolution || '',
-            type: payload.type || '',
-            observations: payload.observations || '',
-            status: payload.status || '',
-            priority: payload.priority || '',
-            updatedBy: this.getCurrentUser(),
             repoPath: this.repoPath
         };
         if (this.backlogPath) {
@@ -351,15 +432,22 @@ export class BacklogPanel {
             this.setError('Select a .backlog file before editing tasks.');
             return;
         }
-        await withGlobalLoader(async () => {
+        const request = {
+            ...payload,
+            ifMatch: payload.taskHash || '',
+            backlogPath: payload.sourcePath || this.backlogPath || '',
+            repoPath: this.repoPath
+        };
+        const silent = Boolean(payload?.silent);
+        const runUpdate = async () => {
             try {
-                await this.callTasksTool('task_update', {
-                    ...payload,
-                    ifMatch: payload.taskHash || '',
-                    backlogPath: payload.sourcePath || this.backlogPath || '',
-                    updatedBy: this.getCurrentUser(),
-                    repoPath: this.repoPath
-                });
+                const result = await this.callTasksTool('task_update', request);
+                if (result?.task && Array.isArray(this.state.tasks)) {
+                    const index = this.state.tasks.findIndex((task) => task?.id === result.task.id);
+                    if (index >= 0) {
+                        this.state.tasks[index] = result.task;
+                    }
+                }
             } catch (error) {
                 if (error?.data?.conflict) {
                     await this.handleTaskConflict(error.data.conflict, payload);
@@ -367,6 +455,17 @@ export class BacklogPanel {
                 }
                 throw error;
             }
+        };
+        if (silent) {
+            try {
+                await runUpdate();
+            } catch (error) {
+                this.setError(`Task update error: ${error?.message || error}`);
+            }
+            return;
+        }
+        await withGlobalLoader(async () => {
+            await runUpdate();
             await this.loadTasks();
         });
     }
@@ -390,13 +489,9 @@ export class BacklogPanel {
                     id,
                     status,
                     description: payload.description,
-                    proposedSolution: payload.proposedSolution,
-                    observations: payload.observations,
-                    type: payload.type,
-                    priority: payload.priority,
+                    resolution: payload.resolution,
                     ifMatch: payload.taskHash || '',
                     backlogPath: payload.sourcePath || this.backlogPath || '',
-                    updatedBy: this.getCurrentUser(),
                     repoPath: this.repoPath
                 });
             } catch (error) {
@@ -453,17 +548,7 @@ export class BacklogPanel {
             this.setError('Resolve .backlog conflicts before editing.');
             return;
         }
-        if (!this.state.config || !Object.keys(this.state.config.statuses || {}).length) {
-            await this.loadConfig();
-        }
-        const config = this.state.config || {};
         const payload = await assistOS.UI.createReactiveModal('backlog-create-modal', {
-            statuses: encodeURIComponent(JSON.stringify(config.statuses || {})),
-            priorities: encodeURIComponent(JSON.stringify(config.priorities || {})),
-            types: encodeURIComponent(JSON.stringify(config.types || {})),
-            defaultStatus: config.defaultStatus || '',
-            defaultPriority: config.defaultPriority || '',
-            defaultType: config.defaultType || ''
         }, true);
         if (payload) {
             await this.createBacklogTask(payload);
@@ -501,11 +586,6 @@ export class BacklogPanel {
         if (createButton) createButton.disabled = disabled;
     }
 
-    getCurrentUser() {
-        const email = window?.assistOS?.user?.email;
-        return typeof email === 'string' ? email.trim() : '';
-    }
-
     parentPath(value) {
         const normalized = String(value || '').replace(/\\/g, '/').replace(/\/+$/g, '');
         if (!normalized || normalized === '/') return '/';
@@ -535,7 +615,6 @@ export class BacklogPanel {
                 ...incomingMerged,
                 force: true,
                 backlogPath: incomingMerged.sourcePath || conflict.current.sourcePath || '',
-                updatedBy: this.getCurrentUser(),
                 repoPath: this.repoPath
             });
             await this.loadTasks();

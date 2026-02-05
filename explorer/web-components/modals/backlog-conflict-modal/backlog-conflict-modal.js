@@ -42,11 +42,10 @@ export class BacklogConflictModal {
         const current = this.state.current || {};
         const incoming = this.state.incoming || {};
         const fields = [
+            ['order', 'Order'],
             ['description', 'Description'],
-            ['proposedSolution', 'Proposed solution'],
-            ['observations', 'Observations'],
-            ['type', 'Type'],
-            ['priority', 'Priority']
+            ['resolution', 'Chosen solution'],
+            ['status', 'Status']
         ];
         this.grid.innerHTML = '';
         this.grid.appendChild(this.renderCard('Current version', current, fields));

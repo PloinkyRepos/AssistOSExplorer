@@ -58,10 +58,11 @@ Manual validation for backlog discovery, creation, task CRUD, filters, carousel,
 
 **Expected**
 - Task appears in carousel.
-- Status/type/priority use defaults.
+- Status defaults to `new`.
+- Order defaults to the last position.
 
 ### 3.2 Create task (full)
-1. Fill Description, Proposed solution, Observations, Type, Status, Priority.
+1. Fill Description, Proposed solution, Observations, Status.
 2. Create.
 
 **Expected**
@@ -79,25 +80,26 @@ Manual validation for backlog discovery, creation, task CRUD, filters, carousel,
 - Values persist after refresh.
 
 ### 4.2 Quick actions
-1. Use quick **Approve** / **Reopen** (or other available quick actions).
+1. Use quick **Approve**.
+2. Use quick **Done**.
 
 **Expected**
 - Status updates.
-- Observations can be edited in reopened/rejected states.
+- Observations can be edited.
 
-### 4.3 Type & priority menus
-1. Click type icon dropdown and change type.
-2. Change priority from its menu.
+### 4.3 Order controls
+1. Use **Up/Down** arrows to move order.
+2. Edit order number manually (integer).
 
 **Expected**
-- Changes persist.
+- Order updates and other tasks shift down.
 
 ---
 
 ## 5) Filters
 
-### 5.1 Status/type/priority filters
-1. Set each filter to a value.
+### 5.1 Status filter
+1. Set status filter to a value.
 
 **Expected**
 - List filters immediately.
@@ -118,7 +120,23 @@ Manual validation for backlog discovery, creation, task CRUD, filters, carousel,
 
 ---
 
-## 6) Carousel
+## 6) List view + drag & drop
+
+### 6.1 Toggle list view
+1. Click **List view**.
+
+**Expected**
+- Short list appears (2-line descriptions).
+
+### 6.2 Drag & drop reorder
+1. Drag a list item to a new position.
+
+**Expected**
+- Order updates; moved item takes new order and others shift.
+
+---
+
+## 7) Carousel
 
 1. With >=2 tasks, click **Prev** / **Next**.
 
@@ -127,7 +145,7 @@ Manual validation for backlog discovery, creation, task CRUD, filters, carousel,
 
 ---
 
-## 7) Conflict detection (same task)
+## 8) Conflict detection (same task)
 
 ### 7.1 Two tabs conflict
 1. Open same backlog file in two tabs.
@@ -195,4 +213,3 @@ Manual validation for backlog discovery, creation, task CRUD, filters, carousel,
 **Expected**
 - Modal closes.
 - No stray click handlers or manual binding errors.
-
