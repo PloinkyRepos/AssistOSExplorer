@@ -224,6 +224,7 @@ export class FileExp {
         const isTruncatedPreview = Boolean(this.state.fileLoadInfo?.truncated);
         const selectedPath = this.state.selectedPath || '';
         const isBacklog = selectedPath.endsWith('.backlog') || selectedPath.endsWith('.history');
+        const isHistory = selectedPath.endsWith('.history');
         const showBacklogPanel = isBacklog && !this.state.backlogTextView;
         const headerExtras = this.element.querySelector('#previewHeaderExtras');
         if (headerExtras && !showBacklogPanel && headerExtras.children.length) {
@@ -232,16 +233,12 @@ export class FileExp {
         if (previewTitle) {
             previewTitle.classList.toggle('hidden', showBacklogPanel);
         }
-        if (headerExtras && isBacklog) {
-            this.renderBacklogViewToggle(headerExtras, showBacklogPanel);
-        }
-
         if (this.state.isEditing) {
             editorActions.classList.add('hidden');
             editingActions.classList.remove('hidden');
         } else {
             editingActions.classList.add('hidden');
-            if (this.state.selectedPath && this.state.previewMode !== 'media' && !isTruncatedPreview && !showBacklogPanel) {
+            if (this.state.selectedPath && this.state.previewMode !== 'media' && !isTruncatedPreview && !showBacklogPanel && !isHistory) {
                 editorActions.classList.remove('hidden');
             } else {
                 editorActions.classList.add('hidden');
@@ -295,6 +292,10 @@ export class FileExp {
                 filePreview.textContent = "Select a file to see its contents.";
             }
             this.detachPreviewAnchorHandler();
+        }
+
+        if (isBacklog) {
+            this.renderBacklogViewToggle(headerExtras, showBacklogPanel);
         }
 
         const toggleListButton = this.element.querySelector('#toggleListButton');
@@ -839,6 +840,10 @@ export class FileExp {
     async editFile() {
         if (!this.state.selectedPath) return;
         const selectedPath = this.state.selectedPath || '';
+        if (selectedPath.endsWith('.history')) {
+            this.showStatus('History files are read-only.', true);
+            return;
+        }
         if (selectedPath.endsWith('.backlog') && !this.state.backlogTextView) {
             this.showStatus('Backlog is managed by the Backlog panel.', true);
             return;

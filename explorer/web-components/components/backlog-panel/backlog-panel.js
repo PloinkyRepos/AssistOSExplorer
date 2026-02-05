@@ -86,8 +86,16 @@ export class BacklogPanel {
         if (existingFilters && existingFilters !== this.filtersContainer) {
             existingFilters.remove();
         }
+        const actions = this.header.querySelector('.backlog-actions');
+        const existingActions = headerExtras.querySelector('.backlog-actions');
+        if (existingActions && existingActions !== actions) {
+            existingActions.remove();
+        }
         if (!headerExtras.contains(this.header)) {
             headerExtras.appendChild(this.header);
+        }
+        if (actions && !headerExtras.contains(actions)) {
+            headerExtras.appendChild(actions);
         }
         if (!headerExtras.contains(this.filtersContainer)) {
             headerExtras.appendChild(this.filtersContainer);
@@ -304,6 +312,7 @@ export class BacklogPanel {
         row.setAttribute('data-presenter', 'backlog-task-row');
         row.setAttribute('data-task', encodeURIComponent(JSON.stringify(task)));
         row.setAttribute('data-statuses', encodeURIComponent(JSON.stringify(statuses)));
+        row.setAttribute('data-readonly', this.isHistory ? 'true' : 'false');
         this.list.appendChild(row);
         if (this.carouselInfo) {
             this.carouselInfo.textContent = `${this.state.currentIndex + 1} / ${tasks.length}`;
@@ -617,6 +626,7 @@ export class BacklogPanel {
         for (const input of inputs) {
             if (input.closest('.backlog-actions')) continue;
             if (input.closest('.backlog-create-actions')) continue;
+            if (input.closest('.backlog-carousel')) continue;
             input.disabled = disabled || this.isHistory;
         }
         const createButton = this.element.querySelector('.backlog-create-actions button');

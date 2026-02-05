@@ -6,7 +6,8 @@ export class BacklogTaskRow {
         this.state = {
             task: null,
             statuses: {},
-            repos: []
+            repos: [],
+            readOnly: false
         };
         this.saveTimer = null;
         this.invalidate();
@@ -37,9 +38,11 @@ export class BacklogTaskRow {
     loadFromAttributes() {
         const taskPayload = this.element.getAttribute('data-task');
         const statusesPayload = this.element.getAttribute('data-statuses');
+        const readOnlyPayload = String(this.element.getAttribute('data-readonly') || '').trim();
         this.state.task = this.parsePayload(taskPayload) || {};
         this.state.statuses = this.parsePayload(statusesPayload) || {};
         this.state.repos = [];
+        this.state.readOnly = readOnlyPayload === 'true';
     }
 
     parsePayload(raw) {
@@ -52,6 +55,7 @@ export class BacklogTaskRow {
     }
 
     bindEvents() {
+        if (this.state.readOnly) return;
         const markDirty = () => {
             this.resizeDescription();
             this.resizeResolution();
@@ -112,7 +116,8 @@ export class BacklogTaskRow {
     updateFieldAccess() {
         const status = String(this.state.task?.status || '').trim();
         const editableStatuses = new Set(['new']);
-        const canEditAll = editableStatuses.has(status);
+        const isReadOnly = Boolean(this.state.readOnly);
+        const canEditAll = !isReadOnly && editableStatuses.has(status);
         if (this.descInput) this.descInput.disabled = !canEditAll;
         if (this.resolutionInput) this.resolutionInput.disabled = !canEditAll;
         if (this.optionsList) {
@@ -122,11 +127,19 @@ export class BacklogTaskRow {
             }
         }
         if (this.approveButton) this.approveButton.disabled = !canEditAll || !this.hasResolution();
-        if (this.deleteButton) this.deleteButton.disabled = !canEditAll;
+        if (this.deleteButton) {
+            this.deleteButton.disabled = !canEditAll;
+            this.deleteButton.style.display = isReadOnly ? 'none' : '';
+        }
     }
 
     updateQuickActions() {
         if (!this.quickActions) return;
+        if (this.state.readOnly) {
+            this.quickActions.style.display = 'none';
+            return;
+        }
+        this.quickActions.style.display = '';
         const status = String(this.state.task?.status || '').trim();
         const visibility = {
             approveTask: status === 'new',
