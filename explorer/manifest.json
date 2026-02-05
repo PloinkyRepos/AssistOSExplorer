@@ -10,7 +10,7 @@
         "multimedia",
         "gitAgent global",
         "soplangAgent global",
-        "taskAgent global"
+        "tasksAgent global"
     ],
     "repos": {
         "soplangBuilder": "https://github.com/PloinkyRepos/SOPLangBuilder.git",
