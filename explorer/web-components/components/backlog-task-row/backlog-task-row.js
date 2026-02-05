@@ -130,7 +130,7 @@ export class BacklogTaskRow {
         const status = String(this.state.task?.status || '').trim();
         const visibility = {
             approveTask: status === 'new',
-            markDone: status === 'approved'
+            markDone: false
         };
         for (const button of Array.from(this.quickActions.querySelectorAll('button[data-local-action]'))) {
             const action = button.getAttribute('data-local-action');

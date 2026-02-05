@@ -80,7 +80,8 @@ export async function openFile(fileExp, filePath, { largeFilePreviewLimitBytes, 
             const entrySize = Number.isFinite(entry?.size) ? entry.size : null;
             const shouldPreviewPartial = entrySize !== null && entrySize > largeFilePreviewLimitBytes;
             const cacheKey = fileExp.caches.filePreview.buildKey(filePath, entry, shouldPreviewPartial);
-            const cachedPreview = fileExp.caches.filePreview.get(cacheKey);
+            const isBacklogFile = String(filePath || '').endsWith('.backlog') || String(filePath || '').endsWith('.history');
+            const cachedPreview = isBacklogFile ? null : fileExp.caches.filePreview.get(cacheKey);
             if (cachedPreview) {
                 fileExp.state.fileContent = cachedPreview.fileContent;
                 fileExp.state.selectedIsMarkdown = cachedPreview.selectedIsMarkdown;
@@ -149,13 +150,15 @@ export async function openFile(fileExp, filePath, { largeFilePreviewLimitBytes, 
                 fileExp.state.markdownTextView = false;
                 fileExp.state.previewMode = 'code';
             }
-            fileExp.caches.filePreview.set(cacheKey, {
-                fileContent: fileExp.state.fileContent,
-                selectedIsMarkdown: fileExp.state.selectedIsMarkdown,
-                previewContent: fileExp.state.previewContent,
-                previewMode: fileExp.state.previewMode,
-                fileLoadInfo: fileExp.state.fileLoadInfo
-            });
+            if (!isBacklogFile) {
+                fileExp.caches.filePreview.set(cacheKey, {
+                    fileContent: fileExp.state.fileContent,
+                    selectedIsMarkdown: fileExp.state.selectedIsMarkdown,
+                    previewContent: fileExp.state.previewContent,
+                    previewMode: fileExp.state.previewMode,
+                    fileLoadInfo: fileExp.state.fileLoadInfo
+                });
+            }
             if (fileExp.state.pendingHighlight && fileExp.state.pendingHighlight.path === fileExp.normalizePath(filePath)) {
                 const lineNumber = fileExp.state.pendingHighlight.line;
                 fileExp.state.pendingHighlight = null;

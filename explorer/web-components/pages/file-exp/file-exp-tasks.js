@@ -33,19 +33,25 @@ export function attachTasksController(fileExp) {
     }
 
     const searchBacklogFiles = async (repoRoot) => {
-        const text = await callExplorerTool('search_files', {
-            path: repoRoot,
-            pattern: '.backlog',
-            excludePatterns: ['.git', '.ploinky', 'node_modules']
-        });
-        const lines = String(text || '')
-            .split(/\r?\n/)
-            .map((line) => line.trim())
-            .filter((line) => line && !line.toLowerCase().includes('no matches'));
-        return lines
+        const patterns = ['.backlog', '.history'];
+        const results = [];
+        for (const pattern of patterns) {
+            const text = await callExplorerTool('search_files', {
+                path: repoRoot,
+                pattern,
+                excludePatterns: ['.git', '.ploinky', 'node_modules']
+            });
+            const lines = String(text || '')
+                .split(/\r?\n/)
+                .map((line) => line.trim())
+                .filter((line) => line && !line.toLowerCase().includes('no matches'));
+            results.push(...lines);
+        }
+        const normalized = results
             .map((line) => (line.startsWith('/') ? line : `/${line}`))
             .map((fullPath) => fileExp.normalizePath(fullPath))
-            .filter((fullPath) => fullPath.endsWith('.backlog'));
+            .filter((fullPath) => fullPath.endsWith('.backlog') || fullPath.endsWith('.history'));
+        return Array.from(new Set(normalized));
     };
 
     async function openBacklog() {
@@ -92,7 +98,7 @@ export function attachTasksController(fileExp) {
                 await fileExp.openFile(backlogFiles[0]);
                 history.pushState(null, '', `#file-exp${backlogFiles[0]}`);
             } else {
-                fileExp.showStatus('Showing all .backlog files in this repo.', false);
+                fileExp.showStatus('Showing all backlog files in this repo.', false);
             }
         });
     }

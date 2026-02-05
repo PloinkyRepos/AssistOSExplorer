@@ -223,7 +223,7 @@ export class FileExp {
         const previewTitle = this.element.querySelector('.preview-title');
         const isTruncatedPreview = Boolean(this.state.fileLoadInfo?.truncated);
         const selectedPath = this.state.selectedPath || '';
-        const isBacklog = selectedPath.endsWith('.backlog');
+        const isBacklog = selectedPath.endsWith('.backlog') || selectedPath.endsWith('.history');
         const showBacklogPanel = isBacklog && !this.state.backlogTextView;
         const headerExtras = this.element.querySelector('#previewHeaderExtras');
         if (headerExtras && !showBacklogPanel && headerExtras.children.length) {
@@ -827,7 +827,7 @@ export class FileExp {
     }
 
     async openFile(filePath) {
-        if (filePath && !String(filePath).endsWith('.backlog')) {
+        if (filePath && !String(filePath).endsWith('.backlog') && !String(filePath).endsWith('.history')) {
             this.state.backlogTextView = false;
         }
         return openFileImpl(this, filePath, {
@@ -1027,13 +1027,16 @@ export class FileExp {
             button.id = 'backlogViewToggle';
             button.type = 'button';
             button.className = 'secondary';
-            button.addEventListener('click', () => {
+            button.addEventListener('click', async () => {
                 if (this.state.isEditing && this.state.hasUnsavedChanges) {
                     this.showStatus('Save or cancel changes before switching backlog view.', true);
                     return;
                 }
                 this.state.backlogTextView = !this.state.backlogTextView;
                 this.state.isEditing = false;
+                if (this.state.backlogTextView && this.state.selectedPath) {
+                    await this.openFile(this.state.selectedPath);
+                }
                 this.invalidate();
             });
             headerExtras.appendChild(button);

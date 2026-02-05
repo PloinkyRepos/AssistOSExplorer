@@ -1,4 +1,4 @@
-import { callAgentTool, parseToolResult } from "../../../services/infrastructure/explorerApi.js";
+import { callAgentTool, callExplorerTool, parseToolResult } from "../../../services/infrastructure/explorerApi.js";
 import { withGlobalLoader } from "../../../utils/globalLoader.js";
 import { getWorkspaceRoot } from "../../../utils/workspaceRoot.js";
 
@@ -49,11 +49,15 @@ export class BacklogPanel {
         this.empty = this.element.querySelector('#backlogEmpty');
         this.carouselInfo = this.element.querySelector('#backlogCarouselInfo');
         this.carousel = this.element.querySelector('#backlogCarousel');
+        this.sectionTitle = this.element.querySelector('#backlogSectionTitle');
+        this.exportButton = this.element.querySelector('#backlogExportHistory');
         this.state.currentIndex = this.state.currentIndex || 0;
         this.workspaceRoot = getWorkspaceRoot();
         const rawRepoPath = String(this.element.getAttribute('data-repo-path') || '').trim();
         const rawBacklogPath = String(this.element.getAttribute('data-path') || '').trim();
-        this.backlogPath = rawBacklogPath && rawBacklogPath.endsWith('.backlog') ? rawBacklogPath : '';
+        const isBacklogPath = rawBacklogPath.endsWith('.backlog') || rawBacklogPath.endsWith('.history');
+        this.backlogPath = rawBacklogPath && isBacklogPath ? rawBacklogPath : '';
+        this.isHistory = Boolean(this.backlogPath && this.backlogPath.endsWith('.history'));
         this.repoPath = rawRepoPath;
         if (!this.repoPath && this.backlogPath) {
             this.repoPath = this.parentPath(this.backlogPath);
@@ -67,6 +71,7 @@ export class BacklogPanel {
             this.backlogPath = '';
         }
         this.updateBacklogFileLabel();
+        this.updateModeUI();
     }
 
     mountFiltersInHeader() {
@@ -99,7 +104,29 @@ export class BacklogPanel {
             return;
         }
         const fileName = String(this.backlogPath).split('/').pop() || fallback;
-        this.fileLabel.textContent = fileName.split('.backlog')[0];
+        this.fileLabel.textContent = fileName.replace(/\.backlog$|\.history$/i, '');
+    }
+
+    updateModeUI() {
+        if (this.sectionTitle) {
+            this.sectionTitle.textContent = this.isHistory ? 'History' : 'Tasks';
+        }
+        if (this.conflictBox) {
+            this.conflictBox.textContent = this.isHistory
+                ? '.history has merge conflicts. Resolve them before viewing.'
+                : '.backlog has merge conflicts. Resolve them before editing tasks.';
+        }
+        const createButton = this.element.querySelector('[data-local-action="openCreateTaskModal"]');
+        if (createButton) {
+            createButton.style.display = this.isHistory ? 'none' : '';
+        }
+        if (this.exportButton) {
+            this.exportButton.style.display = this.isHistory ? '' : 'none';
+        }
+        if (this.statusFilter) {
+            const statusLabel = this.statusFilter.closest('label');
+            if (statusLabel) statusLabel.classList.toggle('is-hidden', this.isHistory);
+        }
     }
 
     bindFilterEvents() {
@@ -116,7 +143,11 @@ export class BacklogPanel {
     }
 
     applyFilters() {
-        this.state.filters.status = this.statusFilter?.value ?? '';
+        if (!this.isHistory) {
+            this.state.filters.status = this.statusFilter?.value ?? '';
+        } else {
+            this.state.filters.status = '';
+        }
         this.state.filters.q = this.searchFilter?.value ?? '';
         this.loadTasks();
     }
@@ -156,7 +187,7 @@ export class BacklogPanel {
     async loadTasks() {
         if (!this.repoPath) return;
         if (!this.backlogPath) {
-            this.setError('Select a .backlog file to load tasks.');
+            this.setError('Select a .backlog or .history file to load tasks.');
             this.state.tasks = [];
             this.renderTasks();
             return;
@@ -174,7 +205,8 @@ export class BacklogPanel {
             if (this.backlogPath) {
                 args.backlogPath = this.backlogPath;
             }
-            const payload = await this.callTasksTool('task_list', { ...args, repoPath: this.repoPath });
+            const toolName = this.isHistory ? 'task_history_list' : 'task_list';
+            const payload = await this.callTasksTool(toolName, { ...args, repoPath: this.repoPath });
             this.state.tasks = Array.isArray(payload?.tasks) ? payload.tasks : [];
             this.clearError();
             this.renderTasks();
@@ -197,7 +229,7 @@ export class BacklogPanel {
                 const relative = this.relativeToRepo(this.backlogPath);
                 conflict = conflicted.some((entry) => String(entry || '') === relative);
             } else {
-                conflict = conflicted.some((entry) => String(entry || '').endsWith('.backlog'));
+                conflict = conflicted.some((entry) => String(entry || '').endsWith('.backlog') || String(entry || '').endsWith('.history'));
             }
         } catch {
             conflict = false;
@@ -284,7 +316,7 @@ export class BacklogPanel {
         for (const task of tasks) {
             const item = document.createElement('div');
             item.className = 'backlog-list-item';
-            item.setAttribute('draggable', String(!this.state.conflict));
+            item.setAttribute('draggable', String(!this.state.conflict && !this.isHistory));
             item.dataset.id = task.id;
             const desc = String(task.description || '').trim() || '(No description)';
             item.innerHTML = `
@@ -292,7 +324,7 @@ export class BacklogPanel {
                 <div class="backlog-list-desc">${this.escapeHtml(desc)}</div>
                 <div class="backlog-list-status">${this.escapeHtml(task.status || '')}</div>
             `;
-            if (!this.state.conflict) {
+            if (!this.state.conflict && !this.isHistory) {
                 this.bindListDnD(item);
             }
             this.listView.appendChild(item);
@@ -340,6 +372,7 @@ export class BacklogPanel {
     }
 
     async reorderByDnD(fromId, toId) {
+        if (this.isHistory) return;
         if (!this.repoPath || !this.backlogPath) return;
         const tasks = Array.isArray(this.state.tasks) ? this.state.tasks : [];
         const fromIndex = tasks.findIndex((task) => task.id === fromId);
@@ -394,6 +427,7 @@ export class BacklogPanel {
     }
 
     async createBacklogTask(payload = {}) {
+        if (this.isHistory) return;
         if (this.state.conflict) {
             this.setError('Resolve .backlog conflicts before editing.');
             return;
@@ -422,6 +456,7 @@ export class BacklogPanel {
     }
 
     async saveTask(payload) {
+        if (this.isHistory) return;
         if (!payload?.id) return;
         if (this.state.conflict) {
             this.setError('Resolve .backlog conflicts before editing.');
@@ -471,6 +506,7 @@ export class BacklogPanel {
     }
 
     async updateTaskStatus(payload) {
+        if (this.isHistory) return;
         const id = payload?.id;
         const status = payload?.status;
         if (!id || !status) return;
@@ -506,6 +542,7 @@ export class BacklogPanel {
     }
 
     async deleteTask(payload) {
+        if (this.isHistory) return;
         const id = payload?.id;
         if (!id) return;
         if (this.state.conflict) {
@@ -580,10 +617,31 @@ export class BacklogPanel {
         for (const input of inputs) {
             if (input.closest('.backlog-actions')) continue;
             if (input.closest('.backlog-create-actions')) continue;
-            input.disabled = disabled;
+            input.disabled = disabled || this.isHistory;
         }
         const createButton = this.element.querySelector('.backlog-create-actions button');
-        if (createButton) createButton.disabled = disabled;
+        if (createButton) createButton.disabled = disabled || this.isHistory;
+    }
+
+    async exportHistory() {
+        if (!this.isHistory || !this.backlogPath) return;
+        try {
+            const raw = await callExplorerTool('read_text_file', { path: this.backlogPath }, { raw: true });
+            const parsed = parseToolResult(raw) || {};
+            const text = typeof parsed.text === 'string' ? parsed.text : '';
+            const fileName = (String(this.backlogPath).split('/').pop() || 'history').replace(/\.history$/i, '') + '.history.json';
+            const blob = new Blob([text], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 0);
+        } catch (error) {
+            this.setError(`Export failed: ${error?.message || error}`);
+        }
     }
 
     parentPath(value) {

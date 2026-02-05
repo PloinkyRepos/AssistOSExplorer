@@ -5,6 +5,7 @@
             <button type="button" class="secondary backlog-refresh" data-local-action="refreshBacklog" aria-label="Refresh">
                 <img src="./assets/icons/refresh.svg" alt="" aria-hidden="true"/>
             </button>
+            <button type="button" class="secondary" data-local-action="exportHistory" id="backlogExportHistory">Export history</button>
             <button type="button" class="secondary" data-local-action="toggleListView" id="backlogListToggle">List view</button>
             <button type="button" class="primary" data-local-action="openCreateTaskModal">New task</button>
         </div>
@@ -29,7 +30,7 @@
         </div>
     </div>
 
-    <div class="backlog-section-title">Tasks</div>
+    <div class="backlog-section-title" id="backlogSectionTitle">Tasks</div>
     <div class="backlog-list" id="backlogList"></div>
     <div class="backlog-list-view" id="backlogListView" aria-label="Backlog list view"></div>
     <div class="backlog-empty" id="backlogEmpty">No tasks found.</div>

@@ -129,6 +129,10 @@
     font-weight: 600;
 }
 
+.backlog-filters .is-hidden {
+    display: none;
+}
+
 .backlog-filters input,
 .backlog-filters select,
 .backlog-create-grid input,
