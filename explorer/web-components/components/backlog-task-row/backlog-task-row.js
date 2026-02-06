@@ -27,7 +27,7 @@ export class BacklogTaskRow {
         this.descInput = this.element.querySelector('[data-field="description"]');
         this.resolutionInput = this.element.querySelector('[data-field="resolution"]');
         this.optionsList = this.element.querySelector('[data-field="optionsList"]');
-        this.metaLine = this.element.querySelector('[data-field="meta"]');
+        this.orderControls = this.element.querySelector('[data-field="orderControls"]');
         this.statusIcon = this.element.querySelector('[data-field="statusIcon"]');
         this.statusLabel = this.element.querySelector('[data-field="statusLabel"]');
         this.quickActions = this.element.querySelector('[data-field="quickActions"]');
@@ -76,6 +76,17 @@ export class BacklogTaskRow {
                 scheduleSave();
             });
         }
+        if (this.orderControls && !this.orderControls.dataset.boundOrder) {
+            const up = this.orderControls.querySelector('[data-local-action="moveUp"]');
+            const down = this.orderControls.querySelector('[data-local-action="moveDown"]');
+            if (up) {
+                up.addEventListener('click', () => this.moveRelative(-1));
+            }
+            if (down) {
+                down.addEventListener('click', () => this.moveRelative(1));
+            }
+            this.orderControls.dataset.boundOrder = 'true';
+        }
     }
 
     applyState() {
@@ -89,9 +100,6 @@ export class BacklogTaskRow {
         this.syncStatusIcon();
         this.renderOptions();
 
-        if (this.metaLine) {
-            this.metaLine.textContent = '';
-        }
         this.resizeDescription();
         this.resizeResolution();
         this.updateApproveState();
@@ -130,6 +138,12 @@ export class BacklogTaskRow {
         if (this.deleteButton) {
             this.deleteButton.disabled = !canEditAll;
             this.deleteButton.style.display = isReadOnly ? 'none' : '';
+        }
+        if (this.orderControls) {
+            const buttons = Array.from(this.orderControls.querySelectorAll('button'));
+            for (const button of buttons) {
+                button.disabled = isReadOnly;
+            }
         }
     }
 
@@ -302,6 +316,12 @@ export class BacklogTaskRow {
     deleteTask() {
         const task = this.state.task || {};
         this.getParentPresenter()?.deleteTask?.({ id: task.id, sourcePath: task.sourcePath });
+    }
+
+    moveRelative(direction) {
+        if (!direction) return;
+        const task = this.state.task || {};
+        this.getParentPresenter()?.reorderRelative?.({ id: task.id, delta: direction, sourcePath: task.sourcePath });
     }
 
     getParentPresenter() {

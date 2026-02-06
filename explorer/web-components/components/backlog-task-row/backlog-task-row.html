@@ -1,10 +1,13 @@
 <div class="backlog-task-row">
     <div class="backlog-task-header">
-        <span class="backlog-task-status-wrap">
-            <span class="backlog-task-status" data-field="statusIcon" aria-hidden="true"></span>
+        <div class="backlog-task-status-wrap">
+            <div class="backlog-task-status" data-field="statusIcon" aria-hidden="true"></div>
             <span class="backlog-task-status-label" data-field="statusLabel"></span>
-        </span>
-        <div class="backlog-task-meta" data-field="meta"></div>
+        </div>
+        <div class="backlog-task-order" data-field="orderControls">
+            <button type="button" class="backlog-order-button" data-local-action="moveUp" title="Move up">▲</button>
+            <button type="button" class="backlog-order-button" data-local-action="moveDown" title="Move down">▼</button>
+        </div>
     </div>
     <div class="backlog-task-main">
         <textarea class="backlog-task-textarea backlog-task-desc" data-field="description" rows="2" spellcheck="false" placeholder="Describe the issue..."></textarea>

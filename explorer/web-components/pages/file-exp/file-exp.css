@@ -572,8 +572,8 @@ th {
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    width: 100%;
     flex-wrap: wrap;
+    flex: auto;
 }
 
 .preview-header-extras .backlog-filters label {

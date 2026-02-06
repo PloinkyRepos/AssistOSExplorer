@@ -46,6 +46,7 @@ export class BacklogPanel {
         this.list = this.element.querySelector('#backlogList');
         this.listView = this.element.querySelector('#backlogListView');
         this.listToggle = this.element.querySelector('#backlogListToggle');
+        this.listHint = this.element.querySelector('#backlogListHint');
         this.empty = this.element.querySelector('#backlogEmpty');
         this.carouselInfo = this.element.querySelector('#backlogCarouselInfo');
         this.carousel = this.element.querySelector('#backlogCarousel');
@@ -92,7 +93,8 @@ export class BacklogPanel {
             existingActions.remove();
         }
         if (!headerExtras.contains(this.header)) {
-            headerExtras.appendChild(this.header);
+            const togglebtn = headerExtras.querySelector('#backlogViewToggle');
+            headerExtras.insertBefore(this.header,togglebtn);
         }
         if (actions && !headerExtras.contains(actions)) {
             headerExtras.appendChild(actions);
@@ -282,6 +284,7 @@ export class BacklogPanel {
         }
         this.list.innerHTML = '';
         if (this.listView) this.listView.innerHTML = '';
+        if (this.listHint) this.listHint.style.display = 'none';
         const tasks = Array.isArray(this.state.tasks) ? this.state.tasks : [];
         if (!tasks.length) {
             if (this.empty) this.empty.style.display = 'block';
@@ -295,6 +298,9 @@ export class BacklogPanel {
             if (this.list) this.list.style.display = 'none';
             if (this.carousel) this.carousel.style.display = 'none';
             if (this.listView) this.listView.classList.add('is-visible');
+            if (this.listHint && !this.state.conflict && !this.isHistory) {
+                this.listHint.style.display = 'block';
+            }
             this.renderListView(tasks);
             if (this.carouselInfo) this.carouselInfo.textContent = `${this.state.currentIndex + 1} / ${tasks.length}`;
             return;
@@ -399,6 +405,36 @@ export class BacklogPanel {
             });
             if (Array.isArray(result?.tasks)) {
                 this.state.tasks = result.tasks;
+            }
+            this.renderTasks();
+        });
+    }
+
+    async reorderRelative(payload) {
+        if (this.isHistory) return;
+        if (!payload?.id || !payload?.delta) return;
+        if (!this.repoPath || !this.backlogPath) return;
+        const tasks = Array.isArray(this.state.tasks) ? this.state.tasks : [];
+        const fromIndex = tasks.findIndex((task) => task.id === payload.id);
+        if (fromIndex < 0) return;
+        const toIndex = Math.max(0, Math.min(tasks.length - 1, fromIndex + payload.delta));
+        if (toIndex === fromIndex) return;
+        const next = [...tasks];
+        const [moved] = next.splice(fromIndex, 1);
+        next.splice(toIndex, 0, moved);
+        const order = next.map((task) => task.id);
+        await withGlobalLoader(async () => {
+            const result = await this.callTasksTool('task_reorder', {
+                order,
+                backlogPath: this.backlogPath,
+                repoPath: this.repoPath
+            });
+            if (Array.isArray(result?.tasks)) {
+                this.state.tasks = result.tasks;
+                const updatedIndex = this.state.tasks.findIndex((task) => task.id === payload.id);
+                if (updatedIndex >= 0) {
+                    this.state.currentIndex = updatedIndex;
+                }
             }
             this.renderTasks();
         });
