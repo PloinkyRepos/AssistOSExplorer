@@ -5,7 +5,7 @@ document-variable-details{
 document-variable-details textarea{
     resize: none;
 }
-.modal-body{
+document-variable-details .modal-body{
     height: calc(100% - 56px);
     padding: 0;
 }
@@ -14,7 +14,7 @@ document-variable-details textarea{
     display: flex;
     font-size: 18px;
     font-weight: 400;
-    border-bottom: 1px solid var(--light-gray-border);
+    border-bottom: 1px solid var(--border);
 }
 
 .tab {
@@ -23,7 +23,7 @@ document-variable-details textarea{
     align-items: center;
 }
 .tab-icon{
-    --icon-color: #222222; /* default icon color */
+    --icon-color: var(--text);
     width: 20px;
     height: 20px;
     background-color: var(--icon-color);
@@ -45,11 +45,11 @@ document-variable-details textarea{
     mask-size: contain;
 }
 .active {
-    color: var(--strong-blue);
-    border-bottom: 2px solid var(--strong-blue);
+    color: var(--accent);
+    border-bottom: 2px solid var(--accent);
 }
 .active .tab-icon{
-    --settings-icon: var(--strong-blue);
+    --settings-icon: var(--accent);
 }
 
 .tab-content {

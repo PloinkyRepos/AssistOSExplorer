@@ -26,7 +26,7 @@ export class InsertImageModal {
                 <label class="modal-label" for="prompt">Prompt</label>
                 <textarea class="form-input" name="prompt" id="prompt" data-id="prompt"></textarea>
             </div>
-            <div class="modal-footer">
+            <div class="modal-actions">
                 <button type="button" class="general-button" data-local-action="changePersonality">Generate image</button>
             </div>
         </form>`;
@@ -111,7 +111,7 @@ export class InsertImageModal {
             <div class="images-grid">
                  ${stringHTML}
             </div>
-            <div class="modal-footer">
+            <div class="modal-actions">
                 <button type="button" class="general-button" data-local-action="insertImages">Insert</button>
             </div>
         </div>`;

@@ -227,7 +227,7 @@ const DEFAULT_TEXT_SEARCH_EXCLUDES = ['**/node_modules/**', '**/.git/**', '**/di
 const DEFAULT_DIRECTORY_TREE_MAX_DEPTH = Number.parseInt(process.env.DIRECTORY_TREE_MAX_DEPTH || '10', 10);
 const DEFAULT_DIRECTORY_TREE_MAX_NODES = Number.parseInt(process.env.DIRECTORY_TREE_MAX_NODES || '4000', 10);
 
-const { searchTextWithinWorkspace, searchFilesWithinWorkspace } = createWorkspaceSearch({
+const { searchTextWithinWorkspace, searchFilesWithinWorkspace, replaceTextWithinWorkspace } = createWorkspaceSearch({
   fs,
   path,
   readline,
@@ -236,6 +236,7 @@ const { searchTextWithinWorkspace, searchFilesWithinWorkspace } = createWorkspac
   validatePath,
   getAllowedDirectories: () => allowedDirectories,
   readFileWithCache,
+  writeFileContent,
   cacheConfig,
   indexDirectory,
   structureIndex,
@@ -273,6 +274,7 @@ const toolHandlers = createToolHandlers({
   searchTextCache,
   searchFilesWithinWorkspace,
   searchTextWithinWorkspace,
+  replaceTextWithinWorkspace,
   gitService,
   MAX_TEXT_SEARCH_FILE_BYTES,
   DEFAULT_DIRECTORY_TREE_MAX_DEPTH,

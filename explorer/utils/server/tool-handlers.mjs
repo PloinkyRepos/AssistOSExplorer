@@ -49,6 +49,7 @@ export function createToolHandlers({
   searchTextCache,
   searchFilesWithinWorkspace,
   searchTextWithinWorkspace,
+  replaceTextWithinWorkspace,
   gitService,
   MAX_TEXT_SEARCH_FILE_BYTES,
   DEFAULT_DIRECTORY_TREE_MAX_DEPTH,
@@ -73,6 +74,7 @@ export function createToolHandlers({
     CopyFileArgsSchema,
     SearchFilesArgsSchema,
     SearchTextArgsSchema,
+    ReplaceTextArgsSchema,
     GetFileInfoArgsSchema,
     CollectIDEPluginsArgsSchema,
     GitInfoArgsSchema,
@@ -370,6 +372,8 @@ export function createToolHandlers({
       path: validPath,
       query: data.query,
       caseSensitive: data.caseSensitive,
+      useRegex: data.useRegex,
+      wholeWord: data.wholeWord,
       maxResults: data.maxResults,
       excludePatterns: data.excludePatterns
     });
@@ -382,6 +386,17 @@ export function createToolHandlers({
     const text = JSON.stringify(payload);
     searchTextCache.set(cacheKey, text);
     return textResponse(text);
+  }
+
+  async function handleReplaceText(args) {
+    const data = parseArgs(ReplaceTextArgsSchema, args, 'replace_text');
+    const validPath = await validatePath(data.path);
+    const result = await replaceTextWithinWorkspace(validPath, data, { maxBytesPerFile: MAX_TEXT_SEARCH_FILE_BYTES });
+    if (Array.isArray(result.changedFilesAbs)) {
+      result.changedFilesAbs.forEach((filePath) => invalidateCachesForPath(filePath));
+    }
+    const { changedFilesAbs, ...payload } = result;
+    return jsonResponse(payload);
   }
 
   async function handleGetFileInfo(args) {
@@ -542,6 +557,7 @@ export function createToolHandlers({
     copy_file: handleCopyFile,
     search_files: handleSearchFiles,
     search_text: handleSearchText,
+    replace_text: handleReplaceText,
     get_file_info: handleGetFileInfo,
     collect_ide_plugins: handleCollectIdePlugins,
     git_info: handleGitInfo,

@@ -251,7 +251,7 @@ export class InsertAttachmentModal {
             <div class="images-grid">
                  ${stringHTML}
             </div>
-            <div class="modal-footer">
+            <div class="modal-actions">
                 <button type="button" class="general-button" data-local-action="insertImages">Insert</button>
             </div>
         </div>`;

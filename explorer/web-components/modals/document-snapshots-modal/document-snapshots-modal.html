@@ -5,8 +5,10 @@
   </div>
 </div>
 <div class="modal-body">
-  <button class="general-button snapshot-button" data-local-action="addSnapshot">Create Snapshot</button>
-  <button class="general-button current-version" data-local-action="openSnapshot $$originalDocumentId">Current Version</button>
+  <div class="modal-actions">
+    <button class="general-button snapshot-button" data-local-action="addSnapshot">Create Snapshot</button>
+    <button class="general-button current-version" data-local-action="openSnapshot $$originalDocumentId">Current Version</button>
+  </div>
   <div class="snapshots-list">
     $$snapshotsHTML
   </div>

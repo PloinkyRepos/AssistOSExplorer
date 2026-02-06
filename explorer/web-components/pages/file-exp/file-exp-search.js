@@ -66,7 +66,11 @@ export function attachSearchController(fileExp) {
     }
 
     async function openSearchInFiles() {
-        await openSearchModal('in-files');
+        await openSearchModal('replace');
+    }
+
+    async function openReplaceInFiles() {
+        await openSearchModal('replace');
     }
 
     function closeSearchOverlays() {
@@ -87,6 +91,11 @@ export function attachSearchController(fileExp) {
             openSearchInFiles();
             return;
         }
+        if (isMeta && event.shiftKey && event.key.toLowerCase() === 'r') {
+            event.preventDefault();
+            openSearchInFiles();
+            return;
+        }
         if (event.key === 'Escape') {
             const state = getState();
             if (state.searchMenuOpen) {
@@ -103,6 +112,29 @@ export function attachSearchController(fileExp) {
         if (dropdown && !dropdown.contains(event.target)) {
             state.searchMenuOpen = false;
             updateSearchUI();
+        }
+    }
+
+    async function handleReplaceComplete(event) {
+        const changed = Array.isArray(event?.detail?.changedFiles) ? event.detail.changedFiles : [];
+        if (!changed.length) return;
+        const state = getState();
+        if (state.isEditing && state.hasUnsavedChanges) {
+            fileExp.showStatus('Files were replaced on disk. Save or refresh to see changes.', true);
+            return;
+        }
+        try {
+            if (fileExp.caches?.dirListing?.invalidate && state.path) {
+                fileExp.caches.dirListing.invalidate(fileExp, state.path);
+            }
+            if (state.selectedPath && changed.includes(state.selectedPath)) {
+                await fileExp.withLoader(async () => {
+                    await fileExp.openFile(state.selectedPath);
+                });
+            }
+        } catch (error) {
+            console.warn('Failed to refresh after replace', error);
+            fileExp.showStatus('Replace completed. Manual refresh may be needed.', true);
         }
     }
 
@@ -150,8 +182,15 @@ export function attachSearchController(fileExp) {
         toggleSearchMenu,
         openSearchByName,
         openSearchInFiles,
+        openReplaceInFiles,
         closeSearchOverlays,
         openSearchResult,
-        navigateToPath
+        navigateToPath,
+        handleReplaceComplete
     });
+
+    if (!fileExp.boundReplaceComplete) {
+        fileExp.boundReplaceComplete = handleReplaceComplete;
+        window.addEventListener('file-exp-replace-complete', fileExp.boundReplaceComplete);
+    }
 }

@@ -4,48 +4,9 @@
     gap: 16px;
 }
 
-.backlog-conflict-modal button {
-    background: var(--accent, #2563eb);
-    color: #fff;
-    border: none;
-    border-radius: 8px;
-    padding: 8px 14px;
-    cursor: pointer;
-    transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    font-weight: 600;
-    line-height: 1;
-}
-
-.backlog-conflict-modal button.secondary {
-    background-color: var(--bg, var(--file-exp-panel, #fff));
-    color: var(--text, #0f172a);
-    border: 1px solid var(--border, var(--file-exp-border, rgba(148, 163, 184, 0.35)));
-}
-
-.backlog-conflict-modal button:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: 0 10px 18px rgba(37, 99, 235, 0.28);
-}
-
-.backlog-conflict-modal button.secondary:hover:not(:disabled) {
-    background-color: var(--border, var(--file-exp-border, rgba(148, 163, 184, 0.35)));
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-}
-
-.backlog-conflict-modal button:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-    transform: none;
-    box-shadow: none;
-}
-
 .backlog-conflict-hint {
     font-size: 13px;
-    color: #6b6f76;
+    color: var(--text-soft);
 }
 
 .backlog-conflict-grid {
@@ -55,17 +16,17 @@
 }
 
 .backlog-conflict-card {
-    border: 1px solid #d6d9de;
+    border: 1px solid var(--border);
     border-radius: 10px;
     padding: 12px;
-    background: #f9fafb;
+    background: var(--surface);
 }
 
 .backlog-conflict-card h4 {
     margin: 0 0 8px;
     font-size: 13px;
     font-weight: 600;
-    color: #2f3338;
+    color: var(--text);
 }
 
 .backlog-conflict-field {
@@ -76,15 +37,15 @@
 .backlog-conflict-label {
     display: block;
     font-weight: 600;
-    color: #3d4248;
+    color: var(--text-soft);
     margin-bottom: 2px;
 }
 
 .backlog-conflict-value {
     white-space: pre-wrap;
-    background: #ffffff;
-    border: 1px solid #e0e3e8;
+    background: var(--surface);
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 6px 8px;
-    color: #2b2f35;
+    color: var(--text);
 }

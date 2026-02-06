@@ -98,8 +98,8 @@ export class EditVariableValue {
             let tableContainer = this.element.querySelector('.table-container');
             tableContainer.classList.add('hidden');
         } else {
-            let modalFooter = this.element.querySelector('.modal-footer');
-            modalFooter.classList.add('hidden');
+            let modalActions = this.element.querySelector('.modal-actions');
+            modalActions?.classList.add('hidden');
             let contextMenu = this.element.querySelector('.context-menu');
             contextMenu.addEventListener("mousedown", (e) => {
                 e.preventDefault();

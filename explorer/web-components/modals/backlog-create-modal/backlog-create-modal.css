@@ -5,90 +5,14 @@
     min-width: 520px;
 }
 
-.backlog-create-modal button {
-    background: var(--accent, #2563eb);
-    color: #fff;
-    border: none;
-    border-radius: 8px;
-    padding: 8px 14px;
-    cursor: pointer;
-    transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    font-weight: 600;
-    line-height: 1;
-}
-
-.backlog-create-modal button.secondary {
-    background-color: var(--bg, var(--file-exp-panel, #fff));
-    color: var(--text, #0f172a);
-    border: 1px solid var(--border, var(--file-exp-border, rgba(148, 163, 184, 0.35)));
-}
-
-.backlog-create-modal button:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: 0 10px 18px rgba(37, 99, 235, 0.28);
-}
-
-.backlog-create-modal button.secondary:hover:not(:disabled) {
-    background-color: var(--border, var(--file-exp-border, rgba(148, 163, 184, 0.35)));
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-}
-
-.backlog-create-modal button:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-    transform: none;
-    box-shadow: none;
-}
-
-.backlog-create-modal .modal-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-}
-
-.backlog-create-modal .modal-title {
-    font-size: 1.2rem;
-    font-weight: 700;
-}
-
 .backlog-create-modal .modal-body {
     display: grid;
     grid-template-columns: repeat(2, minmax(200px, 1fr));
     gap: 12px;
 }
 
-.backlog-create-modal label {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    font-size: 0.85rem;
-    color: var(--text-soft, rgba(15, 23, 42, 0.7));
-    font-weight: 600;
-}
-
-.backlog-create-modal input,
-.backlog-create-modal select,
-.backlog-create-modal textarea {
-    padding: 6px 8px;
-    border-radius: 8px;
-    border: 1px solid var(--file-exp-border, rgba(148, 163, 184, 0.35));
-    background: var(--file-exp-panel, rgba(255, 255, 255, 0.85));
-    color: var(--text, #0f172a);
-}
-
 .backlog-create-modal .modal-description {
     grid-column: 1 / -1;
-}
-
-.backlog-create-modal .modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    margin: 10px;
 }
 
 @media (max-width: 720px) {

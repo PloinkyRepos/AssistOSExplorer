@@ -98,6 +98,10 @@ export class FileExp {
         if (this.boundOutsideSearchMenuClick) {
             document.removeEventListener('click', this.boundOutsideSearchMenuClick, true);
         }
+        if (this.boundReplaceComplete) {
+            window.removeEventListener('file-exp-replace-complete', this.boundReplaceComplete);
+            this.boundReplaceComplete = null;
+        }
         const entriesContainer = this.element?.querySelector('.entries');
         if (entriesContainer) {
             entriesContainer.removeEventListener('contextmenu', this.boundContextMenu, true);

@@ -41,8 +41,22 @@ export function createSchemas(z) {
     path: z.string(),
     query: z.string(),
     caseSensitive: z.boolean().optional().default(false),
-    maxResults: z.number().int().positive().max(5000).optional().default(200),
+    useRegex: z.boolean().optional().default(false),
+    wholeWord: z.boolean().optional().default(false),
+    maxResults: z.number().int().positive().max(5000).optional().default(2000),
     excludePatterns: z.array(z.string()).optional().default([])
+  });
+  const ReplaceTextArgsSchema = z.object({
+    path: z.string(),
+    query: z.string(),
+    replaceWith: z.string(),
+    caseSensitive: z.boolean().optional().default(false),
+    useRegex: z.boolean().optional().default(false),
+    wholeWord: z.boolean().optional().default(false),
+    maxResults: z.number().int().positive().max(100000).optional().default(50000),
+    excludePatterns: z.array(z.string()).optional().default([]),
+    selectedMatchIds: z.array(z.string()).optional().default([]),
+    dryRun: z.boolean().optional().default(false)
   });
   const GetFileInfoArgsSchema = z.object({ path: z.string() });
   const CollectIDEPluginsArgsSchema = z.object({});
@@ -151,6 +165,7 @@ export function createSchemas(z) {
     CopyFileArgsSchema,
     SearchFilesArgsSchema,
     SearchTextArgsSchema,
+    ReplaceTextArgsSchema,
     GetFileInfoArgsSchema,
     CollectIDEPluginsArgsSchema,
     GitInfoArgsSchema,

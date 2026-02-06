@@ -9,11 +9,15 @@
         </button>
     </div>
     <div class="search-modal-body">
+        <div class="search-mode-switch" role="tablist" aria-label="Search mode">
+            <button type="button" class="mode-button" data-mode="name" role="tab" aria-selected="false">Find file</button>
+            <button type="button" class="mode-button" data-mode="replace" role="tab" aria-selected="false">Find/Replace in files</button>
+        </div>
         <div class="search-overlay" id="searchByNameOverlay" aria-hidden="true">
             <div class="search-overlay-card">
                 <div class="search-overlay-header">
                     <div>
-                        <div class="search-overlay-title">Search file</div>
+                        <div class="search-overlay-title">Find file</div>
                         <div class="search-overlay-subtitle">Jump to a file by name (Cmd/Ctrl+P)</div>
                     </div>
                     <div class="search-exclude-wrapper">
@@ -37,8 +41,8 @@
             <div class="search-overlay-card">
                 <div class="search-overlay-header">
                     <div>
-                        <div class="search-overlay-title">Search in files</div>
-                        <div class="search-overlay-subtitle">Find text across workspace (Cmd/Ctrl+Shift+F)</div>
+                        <div class="search-overlay-title">Find/Replace in files</div>
+                        <div class="search-overlay-subtitle" id="searchInFilesSubtitle">Find and replace across workspace (Cmd/Ctrl+Shift+F)</div>
                     </div>
                     <div class="search-exclude-wrapper">
                         <label>Excluded files:</label>
@@ -52,11 +56,38 @@
                             <input type="text" id="searchInFilesQuery" placeholder="Search text..." autocomplete="off">
                         </div>
                     </div>
+                    <div class="search-row search-row-primary replace-only">
+                        <div class="search-query-group">
+                            <input type="text" id="replaceInFilesWith" placeholder="Replace with..." autocomplete="off">
+                        </div>
+                    </div>
                     <div class="search-row search-row-secondary">
                         <label class="search-toggle">
                             <input type="checkbox" id="searchInFilesCase">
                             Case sensitive
                         </label>
+                        <label class="search-toggle">
+                            <input type="checkbox" id="searchInFilesRegex">
+                            Regex
+                        </label>
+                        <label class="search-toggle">
+                            <input type="checkbox" id="searchInFilesWholeWord">
+                            Whole word
+                        </label>
+                    </div>
+                    <div class="search-row search-row-secondary search-scope-row">
+                        <label class="search-scope-label">Scope</label>
+                        <select id="searchInFilesScope">
+                            <option value="current">Current directory</option>
+                            <option value="workspace">Workspace</option>
+                            <option value="custom">Custom path</option>
+                        </select>
+                        <input type="text" id="searchInFilesBasePath" placeholder="/path" autocomplete="off">
+                    </div>
+                    <div class="search-row search-row-actions replace-only">
+                        <button type="button" class="general-button" id="replaceSelectedButton">Replace Selected</button>
+                        <button type="button" class="general-button secondary" id="replaceAllButton">Replace All</button>
+                        <div class="replace-status" id="replaceInFilesStatus"></div>
                     </div>
                     <div class="search-status" id="searchInFilesStatus"></div>
                     <div class="search-results" id="searchInFilesResults"></div>

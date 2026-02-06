@@ -17,6 +17,7 @@ export function buildToolDefinitions(zodToJsonSchema, schemas) {
     CopyFileArgsSchema,
     SearchFilesArgsSchema,
     SearchTextArgsSchema,
+    ReplaceTextArgsSchema,
     GetFileInfoArgsSchema,
     CollectIDEPluginsArgsSchema,
     GitInfoArgsSchema,
@@ -131,6 +132,11 @@ export function buildToolDefinitions(zodToJsonSchema, schemas) {
       name: 'search_text',
       description: 'Search for text matches inside files under a path.',
       inputSchema: zodToJsonSchema(SearchTextArgsSchema)
+    },
+    {
+      name: 'replace_text',
+      description: 'Replace text matches inside files under a path.',
+      inputSchema: zodToJsonSchema(ReplaceTextArgsSchema)
     },
     {
       name: 'get_file_info',

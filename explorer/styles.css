@@ -9,6 +9,12 @@
     --accent-muted: #93c5fd;
     --border: #e5e7eb;
     --border-strong: #cbd5e1;
+    --file-exp-panel: var(--surface);
+    --file-exp-border: var(--border);
+    --file-exp-subtle-surface: rgba(148, 163, 184, 0.12);
+    --file-exp-inline-code-bg: #f5f5f5;
+    --file-exp-code-bg: #f5f5f5;
+    --file-exp-error: #b91c1c;
     --default-font: "Inter", sans-serif;
     --black: black;
     --white: white;
@@ -83,6 +89,9 @@
         --accent: #60a5fa;
         --accent-muted: #3b82f6;
         --border: #1f2937;
+        --file-exp-subtle-surface: rgba(255, 255, 255, 0.08);
+        --file-exp-inline-code-bg: rgba(255, 255, 255, 0.08);
+        --file-exp-code-bg: #0c1424;
     }
 }
 .theme-dark {
@@ -96,6 +105,9 @@
     --accent-muted: #3b82f6;
     --border: #1f2937;
     --light-gray: #9ca3af;
+    --file-exp-subtle-surface: rgba(255, 255, 255, 0.08);
+    --file-exp-inline-code-bg: rgba(255, 255, 255, 0.08);
+    --file-exp-code-bg: #0c1424;
     --default-font: "Inter", sans-serif;
     --black: black;
     --white: white;
@@ -137,6 +149,9 @@
     --accent-muted: #93c5fd;
     --border: #e5e7eb;
     --default-font: "Inter", sans-serif;
+    --file-exp-subtle-surface: rgba(148, 163, 184, 0.12);
+    --file-exp-inline-code-bg: #f5f5f5;
+    --file-exp-code-bg: #f5f5f5;
     --black: black;
     --white: white;
     --white-text: white;

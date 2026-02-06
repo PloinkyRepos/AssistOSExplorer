@@ -7,6 +7,7 @@ export function createWorkspaceSearch({
   validatePath,
   getAllowedDirectories,
   readFileWithCache,
+  writeFileContent,
   cacheConfig,
   indexDirectory,
   structureIndex,
@@ -14,6 +15,83 @@ export function createWorkspaceSearch({
   defaultExcludes,
   maxTextSearchFileBytes
 }) {
+  const MAX_PREVIEW_CHARS = 200;
+
+  const escapeRegExp = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+  const normalizeMatchPath = (relativePath) => (relativePath ? `/${relativePath}` : '/');
+
+  const buildMatchId = (pathValue, line, column, matchIndex) => {
+    const payload = JSON.stringify([pathValue, line, column, matchIndex]);
+    return Buffer.from(payload, 'utf8').toString('base64');
+  };
+
+  const buildSearchRegex = (options) => {
+    const rawQuery = String(options?.query ?? '');
+    if (!rawQuery.trim()) {
+      return null;
+    }
+    const useRegex = Boolean(options?.useRegex);
+    const wholeWord = Boolean(options?.wholeWord);
+    const caseSensitive = Boolean(options?.caseSensitive);
+    let pattern = useRegex ? rawQuery : escapeRegExp(rawQuery);
+    if (wholeWord) {
+      pattern = `\\b(?:${pattern})\\b`;
+    }
+    const flags = caseSensitive ? 'g' : 'gi';
+    try {
+      return new RegExp(pattern, flags);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Invalid regex pattern: ${message}`);
+    }
+  };
+
+  const findMatchesInLine = (line, regex) => {
+    if (!regex) return [];
+    regex.lastIndex = 0;
+    const matches = [];
+    let matchIndex = 0;
+    let match;
+    while ((match = regex.exec(line)) !== null) {
+      const matchText = match[0] ?? '';
+      matches.push({
+        index: Number.isFinite(match.index) ? match.index : 0,
+        text: matchText,
+        match,
+        matchIndex
+      });
+      matchIndex += 1;
+      if (matchText.length === 0) {
+        if (regex.lastIndex === match.index) {
+          regex.lastIndex += 1;
+        }
+      }
+    }
+    return matches;
+  };
+
+  const applyReplacementTemplate = (template, match, offset, input) => {
+    const matchText = match[0] ?? '';
+    const groups = match.slice(1);
+    const namedGroups = match.groups || {};
+    return String(template ?? '').replace(/\$(\$|&|`|'|\d{1,2}|<[^>]+>)/g, (_full, token) => {
+      if (token === '$') return '$';
+      if (token === '&') return matchText;
+      if (token === '`') return input.slice(0, offset);
+      if (token === "'") return input.slice(offset + matchText.length);
+      if (token.startsWith('<') && token.endsWith('>')) {
+        const name = token.slice(1, -1);
+        return namedGroups[name] ?? '';
+      }
+      const num = Number(token);
+      if (!Number.isNaN(num)) {
+        if (num === 0) return `$${token}`;
+        return groups[num - 1] ?? '';
+      }
+      return `$${token}`;
+    });
+  };
   function isPathWithinAllowedDirectories(targetPath) {
     const normalized = path.resolve(targetPath);
     const allowedDirectories = getAllowedDirectories();
@@ -53,8 +131,8 @@ export function createWorkspaceSearch({
   async function searchTextWithinWorkspace(rootPath, options, config = {}) {
     const maxBytesPerFile = config.maxBytesPerFile || maxTextSearchFileBytes;
     const caseSensitive = Boolean(options.caseSensitive);
-    const normalizedQuery = caseSensitive ? options.query : options.query.toLowerCase();
-    const maxResults = options.maxResults || 200;
+    const maxResults = options.maxResults || 2000;
+    const regex = buildSearchRegex(options);
     const results = [];
     let truncated = false;
     let stop = false;
@@ -84,12 +162,20 @@ export function createWorkspaceSearch({
           for (let idx = 0; idx < lines.length; idx++) {
             if (stop) break;
             const line = lines[idx];
-            const haystack = caseSensitive ? line : line.toLowerCase();
-            if (haystack.includes(normalizedQuery)) {
+            const matches = findMatchesInLine(line, regex);
+            if (!matches.length) continue;
+            const resultPath = normalizeMatchPath(relativePath);
+            for (const match of matches) {
+              const column = match.index + 1;
               results.push({
-                path: relativePath ? `/${relativePath}` : '/',
+                path: resultPath,
                 line: idx + 1,
-                preview: line.trim().slice(0, 200)
+                column,
+                matchIndex: match.matchIndex,
+                match: match.text,
+                length: match.text.length,
+                preview: line.trim().slice(0, MAX_PREVIEW_CHARS),
+                id: buildMatchId(resultPath, idx + 1, column, match.matchIndex)
               });
               if (results.length >= maxResults) {
                 truncated = true;
@@ -107,12 +193,20 @@ export function createWorkspaceSearch({
         let lineNumber = 0;
         for await (const line of rl) {
           lineNumber++;
-          const haystack = caseSensitive ? line : line.toLowerCase();
-          if (haystack.includes(normalizedQuery)) {
+          const matches = findMatchesInLine(line, regex);
+          if (!matches.length) continue;
+          const resultPath = normalizeMatchPath(relativePath);
+          for (const match of matches) {
+            const column = match.index + 1;
             results.push({
-              path: relativePath ? `/${relativePath}` : '/',
+              path: resultPath,
               line: lineNumber,
-              preview: line.trim().slice(0, 200)
+              column,
+              matchIndex: match.matchIndex,
+              match: match.text,
+              length: match.text.length,
+              preview: line.trim().slice(0, MAX_PREVIEW_CHARS),
+              id: buildMatchId(resultPath, lineNumber, column, match.matchIndex)
             });
             if (results.length >= maxResults) {
               truncated = true;
@@ -165,6 +259,207 @@ export function createWorkspaceSearch({
 
     await walk(rootPath);
     return { results, truncated };
+  }
+
+  async function replaceTextWithinWorkspace(rootPath, options, config = {}) {
+    const maxBytesPerFile = config.maxBytesPerFile || maxTextSearchFileBytes;
+    const caseSensitive = Boolean(options.caseSensitive);
+    const regex = buildSearchRegex(options);
+    const shouldExclude = makeShouldExclude(options.excludePatterns, caseSensitive);
+    const selectedMatchIds = Array.isArray(options.selectedMatchIds) ? options.selectedMatchIds : [];
+    const selectedSet = new Set(selectedMatchIds);
+    const hasSelection = selectedSet.size > 0;
+    const remainingSelected = new Set(selectedMatchIds);
+    const dryRun = Boolean(options.dryRun);
+
+    const summary = {
+      filesScanned: 0,
+      filesMatched: 0,
+      filesChanged: 0,
+      totalMatches: 0,
+      totalReplacements: 0,
+      selectedMatches: hasSelection ? selectedSet.size : null,
+      missingMatches: 0,
+      skippedBinary: 0,
+      skippedTooLarge: 0,
+      skippedUnreadable: 0
+    };
+    const changedFiles = [];
+    const changedFilesAbs = [];
+    const errors = [];
+    let stop = false;
+
+    if (!regex) {
+      return { summary, changedFiles, changedFilesAbs, errors, truncated: false };
+    }
+
+    if (!isPathWithinAllowedDirectories(rootPath)) {
+      throw new Error('Access denied: path is outside allowed directories.');
+    }
+
+    const processFile = async (filePath, relativePath) => {
+      summary.filesScanned += 1;
+      try {
+        const stats = await fs.stat(filePath);
+        if (stats.size > maxBytesPerFile) {
+          summary.skippedTooLarge += 1;
+          return;
+        }
+        if (await isLikelyBinaryFile(filePath)) {
+          summary.skippedBinary += 1;
+          return;
+        }
+      } catch (error) {
+        summary.skippedUnreadable += 1;
+        errors.push({ path: normalizeMatchPath(relativePath), error: error instanceof Error ? error.message : String(error) });
+        return;
+      }
+
+      let text;
+      try {
+        text = await fs.readFile(filePath, 'utf8');
+      } catch (error) {
+        summary.skippedUnreadable += 1;
+        errors.push({ path: normalizeMatchPath(relativePath), error: error instanceof Error ? error.message : String(error) });
+        return;
+      }
+
+      const lineRegex = /[^\r\n]*\r?\n|[^\r\n]+$/g;
+      let lineMatch;
+      let lineNumber = 0;
+      let fileMatchCount = 0;
+      let fileReplacementCount = 0;
+      let contentChanged = false;
+      const output = [];
+
+      while ((lineMatch = lineRegex.exec(text)) !== null) {
+        if (stop) break;
+        const rawLine = lineMatch[0];
+        let lineText = rawLine;
+        let lineBreak = '';
+        if (rawLine.endsWith('\r\n')) {
+          lineText = rawLine.slice(0, -2);
+          lineBreak = '\r\n';
+        } else if (rawLine.endsWith('\n')) {
+          lineText = rawLine.slice(0, -1);
+          lineBreak = '\n';
+        }
+
+        lineNumber += 1;
+        const matches = findMatchesInLine(lineText, regex);
+        if (!matches.length) {
+          output.push(lineText + lineBreak);
+          continue;
+        }
+
+        const resultPath = normalizeMatchPath(relativePath);
+        let lastIndex = 0;
+        let lineBuilder = '';
+        let lineChanged = false;
+        for (const match of matches) {
+          const column = match.index + 1;
+          const matchId = buildMatchId(resultPath, lineNumber, column, match.matchIndex);
+          fileMatchCount += 1;
+          summary.totalMatches += 1;
+
+          const isSelected = !hasSelection || selectedSet.has(matchId);
+          const matchText = match.text;
+          const matchEnd = match.index + matchText.length;
+
+          if (isSelected) {
+            const replacement = options.useRegex
+              ? applyReplacementTemplate(options.replaceWith, match.match, match.index, lineText)
+              : String(options.replaceWith ?? '');
+            lineBuilder += lineText.slice(lastIndex, match.index) + replacement;
+            lastIndex = matchEnd;
+            fileReplacementCount += 1;
+            summary.totalReplacements += 1;
+            if (replacement !== matchText) {
+              lineChanged = true;
+            }
+            if (hasSelection) {
+              remainingSelected.delete(matchId);
+            }
+          } else {
+            lineBuilder += lineText.slice(lastIndex, matchEnd);
+            lastIndex = matchEnd;
+          }
+        }
+        lineBuilder += lineText.slice(lastIndex);
+        output.push(lineBuilder + lineBreak);
+
+        if (lineChanged) {
+          contentChanged = true;
+        }
+      }
+
+      if (fileMatchCount > 0) {
+        summary.filesMatched += 1;
+      }
+      if (fileReplacementCount > 0 && contentChanged) {
+        if (!dryRun) {
+          const updatedContent = output.join('');
+          if (updatedContent !== text) {
+            try {
+              await writeFileContent(filePath, updatedContent);
+            } catch (error) {
+              errors.push({ path: normalizeMatchPath(relativePath), error: error instanceof Error ? error.message : String(error) });
+              return;
+            }
+          }
+        }
+        summary.filesChanged += 1;
+        changedFiles.push(normalizeMatchPath(relativePath));
+        changedFilesAbs.push(filePath);
+      }
+    };
+
+    const walk = async (currentPath) => {
+      if (stop) return;
+      let entries;
+      try {
+        entries = await fs.readdir(currentPath, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const entry of entries) {
+        if (stop) break;
+        const fullPath = path.join(currentPath, entry.name);
+        try {
+          await validatePath(fullPath);
+        } catch {
+          continue;
+        }
+        const relativePath = path.relative(workspaceRoot, fullPath);
+        if (shouldExclude(relativePath || entry.name)) {
+          continue;
+        }
+        if (entry.isDirectory()) {
+          await walk(fullPath);
+        } else if (entry.isFile()) {
+          await processFile(fullPath, relativePath);
+        }
+        if (hasSelection && remainingSelected.size === 0) {
+          stop = true;
+          break;
+        }
+      }
+    };
+
+    await walk(rootPath);
+
+    if (hasSelection) {
+      summary.missingMatches = remainingSelected.size;
+    }
+
+    return {
+      summary,
+      changedFiles,
+      changedFilesAbs,
+      errors,
+      truncated: false,
+      dryRun
+    };
   }
 
   async function searchFilesWithinWorkspace(rootPath, options) {
@@ -266,6 +561,7 @@ export function createWorkspaceSearch({
   return {
     searchTextWithinWorkspace,
     searchFilesWithinWorkspace,
+    replaceTextWithinWorkspace,
     isPathWithinAllowedDirectories
   };
 }

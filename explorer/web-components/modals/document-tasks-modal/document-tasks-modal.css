@@ -28,8 +28,6 @@ dialog{
 .run-all-tasks,
 .cancel-all-tasks{
     font-size: 14px;
-    margin-top: 5px;
-    margin-left: 10px;
     padding: 5px;
     height: initial;
     line-height: normal;
@@ -73,7 +71,4 @@ dialog{
     pointer-events: none;
     cursor: initial;
     background-color: var(--very-light-gray);
-}
-.tasks-buttons{
-    display: flex;
 }

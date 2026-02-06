@@ -51,7 +51,7 @@ export class DocumentTasksModal {
         }
         if(tasksList !== ""){
             this.modalContent = `
-            <div class="tasks-buttons">
+            <div class="tasks-buttons modal-actions">
                 <button class="general-button run-all-tasks" data-local-action="runAllTasks">Run all</button>
                 <button class="general-button cancel-all-tasks" data-local-action="cancelAllTasks">Cancel all</button>
             </div>

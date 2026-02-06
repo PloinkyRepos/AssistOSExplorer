@@ -22,7 +22,7 @@
         <label class="form-label" for="documentTitle">Title</label>
         <input class="form-input" name="documentTitle" data-id="documentTitle" pattern=".*\S+.*" type="text" id="documentTitle" maxlength="50" required placeholder="Title of Document">
     </div>
-    <div class="add-document-footer">
+    <div class="add-document-footer modal-actions">
         <div class="general-button create-button disabled" data-local-action="addDocument">Create</div>
     </div>
 </form>
@@ -40,7 +40,7 @@
     <div class="uploaded-files">
         <div class="no-files">No files uploaded</div>
     </div>
-    <div class="upload-files-footer">
+    <div class="upload-files-footer modal-actions">
         <div class="general-button upload-button disabled" data-local-action="uploadFiles">Upload</div>
     </div>
     <input type="file" id="fileUpload" name="fileUpload" multiple accept="$$supportedFormats">

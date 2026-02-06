@@ -15,13 +15,13 @@ add-document-modal .form-item{
 .source-toggle {
     padding: 15px 25px 10px 25px;
     background: inherit;
-    color: var(--default-font-color);
+    color: var(--text-soft);
 }
 
 .file-limits{
     margin-top: 10px;
     font-size: 8px;
-    color: var(--header-font-color);
+    color: var(--text-soft);
     display: flex;
     justify-content: space-between;
     margin-bottom: 20px;
@@ -40,7 +40,7 @@ add-document-modal .form-item{
 
 .file-input {
     border-radius: 5px;
-    border: 1px dashed rgba(74, 74, 75, 0.90);
+    border: 1px dashed var(--border);
     width: 100%;
     display: flex;
     flex-direction: column;
@@ -57,19 +57,20 @@ add-document-modal .form-item{
     width: 25px;
     height: 25px;
     border-radius: 50%;
-    background: var(--gray-button-text);
+    background: var(--border);
     display: flex;
     align-items: center;
     justify-content: center;
 }
 .file-input-label{
-    color: var(--header-font-color);
+    color: var(--text);
     font-size: 13px;
 }
 .uploaded-files{
     border-radius: 5px;
     min-height: 75px;
-    border: 1px solid var(--form-input-border);
+    border: 1px solid var(--border);
+    background: var(--surface);
     padding: 10px;
     margin-bottom: 10px;
     display: grid;
@@ -78,7 +79,7 @@ add-document-modal .form-item{
     column-gap: 10px;
 }
 .no-files{
-    color: var(--form-input);
+    color: var(--text-soft);
     font-size: 14px;
     font-weight: 500;
 }
@@ -87,7 +88,7 @@ add-document-modal .form-item{
     justify-content: space-between;
     align-items: center;
     font-size: 12px;
-    color: var(--form-input);
+    color: var(--text-soft);
     height: 16px;
 }
 .file-name{

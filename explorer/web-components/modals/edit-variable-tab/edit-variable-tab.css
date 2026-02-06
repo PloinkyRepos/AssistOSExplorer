@@ -29,10 +29,6 @@ edit-variable-tab .form-item{
 .expression-multi-line{
     height: 140px;
 }
-.save-variable{
-    margin-top: 55px;
-    align-self: flex-start;
-}
 #type{
     width: 49%;
 }
@@ -41,7 +37,7 @@ edit-variable-tab .form-item{
     padding-right: 35px;
 }
 .search-select{
-    color: var(--form-input);
+    color: var(--text-soft);
     position: relative;
 }
 .search-select-input{
@@ -56,8 +52,8 @@ edit-variable-tab .form-item{
 }
 .select-options{
     width: 100%;
-    border: 1px solid var(--form-input-border);
-    background-color: var(--white);
+    border: 1px solid var(--border);
+    background-color: var(--surface);
     position: absolute;
     top: 40px;
     left: 0;
@@ -71,9 +67,9 @@ edit-variable-tab .form-item{
     font-size: 14px;
 }
 .option:hover{
-    background-color: var(--option-hover);
+    background-color: var(--file-exp-subtle-surface);
 }
 .option.selected{
-    background-color: var(--action-button-background);
+    background-color: var(--border);
 }
 /*search select*/
