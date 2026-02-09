@@ -1,6 +1,5 @@
 {
     "container": "node:20-bullseye",
-    "start": "sleep infinity",
     "update": "",
     "cli": "/bin/bash",
     "agent": "node /code/filesystem-http-server.mjs",
@@ -24,6 +23,7 @@
             "env": [
                 "ASSISTOS_FS_ROOT"
             ],
+            "preinstall": "scripts/hooks/preinstall.sh",
             "install": "apt-get update && apt-get install -y git"
         }
     }
