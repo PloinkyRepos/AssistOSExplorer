@@ -16,7 +16,8 @@
     "repos": {
         "soplangBuilder": "https://github.com/PloinkyRepos/SOPLangBuilder.git",
         "gitMCP": "https://github.com/PloinkyRepos/gitMCP.git",
-        "tasksMCP": "https://github.com/PloinkyRepos/tasksMCP"
+        "tasksMCP": "https://github.com/PloinkyRepos/tasksMCP",
+        "llmAssistant": "https://github.com/PloinkyRepos/llmAssistant.git"
     },
     "profiles": {
         "default": {
