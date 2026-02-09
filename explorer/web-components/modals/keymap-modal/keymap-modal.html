@@ -1,0 +1,16 @@
+<div class="modal-header">
+    <div class="modal-title">Keymap</div>
+    <div class="close" data-local-action="closeModal" aria-label="Close">
+        <img class="close-icon" src="./assets/icons/x-mark.svg" alt="close">
+    </div>
+</div>
+<div class="modal-body keymap-modal-body">
+    <p class="keymap-description">Focus a field and press a new shortcut. Use Backspace to clear.</p>
+    <div class="keymap-list" id="keymapList"></div>
+    <div class="keymap-warning" id="keymapWarning" role="status" aria-live="polite"></div>
+    <div class="modal-actions">
+        <button type="button" class="general-button secondary" data-local-action="resetDefaults">Reset</button>
+        <button type="button" class="gray-button" data-local-action="closeModal">Cancel</button>
+        <button type="button" class="general-button" data-local-action="saveKeymap">Save</button>
+    </div>
+</div>

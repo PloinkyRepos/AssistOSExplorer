@@ -1,4 +1,5 @@
 import { createStore } from "../../../services/ui/store.js";
+import { loadKeymap } from "../../../utils/keymap.js";
 
 const DEFAULT_COLUMN_VISIBILITY = { type: false, size: false, modified: false };
 
@@ -66,6 +67,7 @@ export function createFileExpState() {
         filterSpecs: loadFilterSpecsPreference(),
         columnVisibility: loadColumnVisibilityPreference(),
         searchMenuOpen: false,
+        toolbarMenuOpen: false,
         searchOverlay: null,
         directoryFilterQuery: '',
         searchByNameQuery: '',
@@ -81,6 +83,7 @@ export function createFileExpState() {
         searchInFilesLoading: false,
         searchInFilesError: null,
         searchInFilesTruncated: false,
+        keymap: loadKeymap(),
         pendingHighlight: null,
         previewMode: 'none',
         mediaType: null,

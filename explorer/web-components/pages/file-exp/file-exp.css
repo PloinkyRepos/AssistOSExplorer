@@ -81,6 +81,47 @@ main {
     margin-right: 0.5rem;
 }
 
+.toolbar .toolbar-dropdown {
+    position: relative;
+    margin-right: 0.5rem;
+}
+
+.toolbar-menu-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.toolbar-menu-button .chevron {
+    font-size: 0.85rem;
+    opacity: 0.7;
+}
+
+.toolbar-dropdown-menu.action-menu-dropdown {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: auto;
+    bottom: auto;
+    min-width: 180px;
+    z-index: 1000;
+    display: none;
+    visibility: hidden;
+}
+
+.toolbar-dropdown-menu.action-menu-dropdown.open {
+    display: flex;
+    visibility: visible;
+}
+
+.toolbar-dropdown-item.action-menu-item {
+    text-decoration: none;
+}
+
+.toolbar-dropdown-item.action-menu-item .action-menu-item-icon {
+    color: inherit;
+}
+
 .git-conflict-indicator {
     display: none;
     margin-left: 8px;

@@ -380,14 +380,25 @@ export function attachFsActions(fileExp) {
             if (!fileName || !fileName.trim()) return;
             const newFilePath = this.joinPath(this.state.path, fileName.trim());
             try {
+                let shouldSelect = false;
                 await this.withLoader(async () => {
                     await callToolWithLoader('explorer', 'write_file', {
                         path: newFilePath,
                         content: ''
                     });
                     this.showStatus(`Created file: ${newFilePath}`);
-                    await this.loadDirectory(this.state.path);
+                    this.caches?.dirListing?.invalidate?.(this, this.state.path);
+                    const entries = await this.loadDirectoryContent(this.state.path);
+                    if (entries === null) {
+                        return;
+                    }
+                    await this.setEntries(entries);
+                    this.invalidate();
+                    shouldSelect = true;
                 });
+                if (shouldSelect) {
+                    await this.selectEntry({ dataset: { entryPath: newFilePath, type: 'file' } });
+                }
             } catch (err) {
                 console.error(err);
                 this.showStatus(err.message || 'Failed to create file.', true);

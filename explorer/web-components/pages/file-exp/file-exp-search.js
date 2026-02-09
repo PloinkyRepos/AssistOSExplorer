@@ -1,5 +1,6 @@
 // Wire up search-related behaviors for FileExp without bloating the main presenter.
 import { callToolWithLoader } from "../../../utils/globalLoader.js";
+import { getKeymap, matchesShortcut } from "../../../utils/keymap.js";
 export function attachSearchController(fileExp) {
     const getState = () => fileExp.state;
     const defaultExclude = 'node_modules,.git';
@@ -73,6 +74,18 @@ export function attachSearchController(fileExp) {
         await openSearchModal('replace');
     }
 
+    async function openKeymapModal() {
+        const state = getState();
+        state.searchMenuOpen = false;
+        updateSearchUI();
+        const result = await assistOS.UI.createReactiveModal('keymap-modal', {
+            keymap: state.keymap || getKeymap()
+        }, true);
+        if (result?.keymap) {
+            state.keymap = result.keymap;
+        }
+    }
+
     function closeSearchOverlays() {
         const state = getState();
         state.searchMenuOpen = false;
@@ -80,20 +93,32 @@ export function attachSearchController(fileExp) {
     }
 
     function handleGlobalKeydown(event) {
-        const isMeta = event.metaKey || event.ctrlKey;
-        if (isMeta && !event.shiftKey && event.key.toLowerCase() === 'p') {
+        const keymap = getState().keymap || getKeymap();
+        if (keymap.findFile && matchesShortcut(event, keymap.findFile)) {
             event.preventDefault();
             openSearchByName();
             return;
         }
-        if (isMeta && event.shiftKey && event.key.toLowerCase() === 'f') {
+        if (keymap.findInFiles && matchesShortcut(event, keymap.findInFiles)) {
             event.preventDefault();
             openSearchInFiles();
             return;
         }
-        if (isMeta && event.shiftKey && event.key.toLowerCase() === 'r') {
+        if (keymap.replaceInFiles && matchesShortcut(event, keymap.replaceInFiles)) {
             event.preventDefault();
-            openSearchInFiles();
+            openReplaceInFiles();
+            return;
+        }
+        if (keymap.saveFile && matchesShortcut(event, keymap.saveFile)) {
+            if (getState().isEditing) {
+                event.preventDefault();
+                fileExp.saveFile();
+            }
+            return;
+        }
+        if (keymap.openKeymap && matchesShortcut(event, keymap.openKeymap)) {
+            event.preventDefault();
+            openKeymapModal();
             return;
         }
         if (event.key === 'Escape') {
@@ -183,6 +208,7 @@ export function attachSearchController(fileExp) {
         openSearchByName,
         openSearchInFiles,
         openReplaceInFiles,
+        openKeymapModal,
         closeSearchOverlays,
         openSearchResult,
         navigateToPath,

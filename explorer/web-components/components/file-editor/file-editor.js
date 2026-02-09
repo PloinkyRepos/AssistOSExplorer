@@ -1,5 +1,7 @@
 import { highlightCode } from "../../../utils/highlight.js";
 import { withGlobalLoader } from "../../../utils/globalLoader.js";
+import { getKeymap, matchesShortcut } from "../../../utils/keymap.js";
+import { requestLlmAutocomplete } from "../../../services/llmAutocompleteService.js";
 
 export class FileEditor {
     constructor(element, invalidate) {
@@ -13,6 +15,7 @@ export class FileEditor {
             fileType: extension || "js",
             theme: root.classList.contains("theme-dark") ? "dark" : "light"
         };
+        this.autocompleteInFlight = false;
         this.invalidate();
         this.boundAdjustForScrollbar = this.adjustForScrollbar.bind(this);
     }
@@ -74,6 +77,12 @@ export class FileEditor {
     }
 
     handleKeyDown(e) {
+        const keymap = getKeymap();
+        if (keymap.llmAutocomplete && matchesShortcut(e, keymap.llmAutocomplete)) {
+            e.preventDefault();
+            this.requestAutocomplete();
+            return;
+        }
         if (e.key === 'Tab') {
             e.preventDefault();
             const start = this.textarea.selectionStart;
@@ -81,6 +90,39 @@ export class FileEditor {
             this.textarea.value = this.textarea.value.substring(0, start) + '  ' + this.textarea.value.substring(end);
             this.textarea.selectionStart = this.textarea.selectionEnd = start + 2;
             this.syncHighlight();
+        }
+    }
+
+    async requestAutocomplete() {
+        if (this.autocompleteInFlight || !this.textarea) return;
+        const start = this.textarea.selectionStart ?? 0;
+        const end = this.textarea.selectionEnd ?? start;
+        const content = this.textarea.value ?? '';
+        this.autocompleteInFlight = true;
+        try {
+            const completion = await withGlobalLoader(() => requestLlmAutocomplete({
+                path: this.path,
+                content,
+                cursorOffset: start,
+                language: this.state.fileType || ''
+            }));
+            const insert = String(completion || '');
+            if (!insert.trim()) {
+                throw new Error('Empty autocomplete response.');
+            }
+            this.textarea.value = content.slice(0, start) + insert + content.slice(end);
+            const nextCursor = start + insert.length;
+            this.textarea.selectionStart = nextCursor;
+            this.textarea.selectionEnd = nextCursor;
+            this.textarea.dispatchEvent(new Event('input', { bubbles: true }));
+            this.syncHighlight();
+        } catch (error) {
+            console.error('Autocomplete failed', error);
+            if (typeof assistOS?.showToast === 'function') {
+                assistOS.showToast('Autocomplete failed. Please try again.', 'error', 3000);
+            }
+        } finally {
+            this.autocompleteInFlight = false;
         }
     }
 

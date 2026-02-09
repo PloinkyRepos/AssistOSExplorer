@@ -268,7 +268,7 @@ export function attachGitController(fileExp) {
                 const localSide = (source === 'rebase' || source === 'stash') ? 'theirs' : 'ours';
                 const oursContent = localSide === 'ours' ? (versions.ours || '') : (versions.theirs || '');
                 const theirsContent = localSide === 'ours' ? (versions.theirs || '') : (versions.ours || '');
-                const resolveText = await callAgentTool('gitAgent', 'llm_resolve_conflict', {
+                const resolveText = await callAgentTool('llmAssistant', 'llm_resolve_conflict', {
                     base: versions.base || '',
                     ours: oursContent,
                     theirs: theirsContent,

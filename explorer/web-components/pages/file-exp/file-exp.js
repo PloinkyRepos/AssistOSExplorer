@@ -386,6 +386,36 @@ export class FileExp {
             columnMenuButton.dataset.bound = 'true';
         }
 
+        const toolbarMenuButton = this.element.querySelector('#toolbarMenuButton');
+        const toolbarMenu = this.element.querySelector('#toolbarMenu');
+        if (toolbarMenuButton && toolbarMenu && !toolbarMenuButton.dataset.bound) {
+            const setToolbarMenuOpen = (open) => {
+                this.state.toolbarMenuOpen = open;
+                toolbarMenu.classList.toggle('open', open);
+                toolbarMenuButton.setAttribute('aria-expanded', open ? 'true' : 'false');
+            };
+            toolbarMenuButton.addEventListener('click', (e) => {
+                e.stopPropagation();
+                setToolbarMenuOpen(!this.state.toolbarMenuOpen);
+            });
+            toolbarMenu.addEventListener('click', (e) => {
+                const item = e.target.closest('[role=\"menuitem\"]');
+                if (item) {
+                    setToolbarMenuOpen(false);
+                }
+            });
+            document.addEventListener('click', (e) => {
+                if (!toolbarMenu.contains(e.target) && e.target !== toolbarMenuButton) {
+                    setToolbarMenuOpen(false);
+                }
+            });
+            toolbarMenuButton.dataset.bound = 'true';
+        }
+        if (toolbarMenuButton && toolbarMenu) {
+            toolbarMenu.classList.toggle('open', Boolean(this.state.toolbarMenuOpen));
+            toolbarMenuButton.setAttribute('aria-expanded', this.state.toolbarMenuOpen ? 'true' : 'false');
+        }
+
         const columnCheckboxes = this.element.querySelectorAll('#columnVisibilityMenu input[type="checkbox"]');
         if (columnCheckboxes && columnCheckboxes.length) {
             columnCheckboxes.forEach((checkbox) => {

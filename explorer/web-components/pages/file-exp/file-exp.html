@@ -21,21 +21,31 @@
                 </svg>
                 Refresh
             </button>
-            <button id="newDirButton" title="Create a new directory" data-local-action="newDirectory">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
-                     class="bi bi-folder-plus" viewBox="0 0 16 16">
-                    <path d="m.5 3 .04.87a1.99 1.99 0 0 0-.342 1.311l.637 7A2 2 0 0 0 2.826 14H9v-1H2.826a1 1 0 0 1-.995-.91l-.637-7A1 1 0 0 1 2.19 4h11.62a1 1 0 0 1 .996 1.09L14.54 8h1.005l.256-2.819A2 2 0 0 0 13.81 3H9.828a2 2 0 0 1-1.414-.586l-.828-.828A2 2 0 0 0 6.172 1H2.5a2 2 0 0 0-2 2zm.69-1.207A1 1 0 0 1 2.5 1h3.672a1 1 0 0 1 .707.293L7.586 3H2.19c-.24 0-.47.042-.683.12L1.19 1.793z"/>
-                    <path d="M13.5 10a.5.5 0 0 1 .5.5V12h1.5a.5.5 0 1 1 0 1H14v1.5a.5.5 0 1 1-1 0V13h-1.5a.5.5 0 0 1 0-1H13v-1.5a.5.5 0 0 1 .5-.5z"/>
-                </svg>
-                New Folder
-            </button>
-            <button id="newFileButton" title="Create a new file" data-local-action="newFile">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
-                     class="bi bi-file-earmark-plus-fill" viewBox="0 0 16 16">
-                    <path d="M9.293 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V4.707A1 1 0 0 0 13.707 4L10 .293A1 1 0 0 0 9.293 0zM9.5 3.5v-2l3 3h-2a1 1 0 0 1-1-1zM8.5 7v1.5H10a.5.5 0 0 1 0 1H8.5V11a.5.5 0 0 1-1 0V9.5H6a.5.5 0 0 1 0-1h1.5V7a.5.5 0 0 1 1 0z"/>
-                </svg>
-                New File
-            </button>
+            <div class="toolbar-dropdown">
+                <button id="toolbarMenuButton" class="secondary toolbar-menu-button" title="More actions" aria-haspopup="true"
+                        aria-expanded="false">
+                    Actions
+                    <span class="chevron">▾</span>
+                </button>
+                <div class="toolbar-dropdown-menu action-menu-dropdown" id="toolbarMenu" role="menu">
+                    <button type="button" class="toolbar-dropdown-item action-menu-item" data-local-action="newDirectory" role="menuitem">
+                        <img class="action-menu-item-icon" loading="lazy" src="./assets/icons/folder-with-letter.svg" alt="">
+                        <span class="action-menu-item-label">New Folder</span>
+                    </button>
+                    <button type="button" class="toolbar-dropdown-item action-menu-item" data-local-action="newFile" role="menuitem">
+                        <img class="action-menu-item-icon" loading="lazy" src="./assets/icons/document.svg" alt="">
+                        <span class="action-menu-item-label">New File</span>
+                    </button>
+                    <button type="button" class="toolbar-dropdown-item action-menu-item" data-local-action="openKeymapModal" role="menuitem">
+                        <img class="action-menu-item-icon" loading="lazy" src="./assets/icons/keys.svg" alt="">
+                        <span class="action-menu-item-label">Keymap</span>
+                    </button>
+                    <a class="toolbar-dropdown-item action-menu-item" href="/soplangAgent/web/build-status.html" target="_blank" rel="noopener" role="menuitem">
+                        <img class="action-menu-item-icon" loading="lazy" src="./assets/icons/build.svg" alt="">
+                        <span class="action-menu-item-label">Open Builder</span>
+                    </a>
+                </div>
+            </div>
             <button id="searchInFilesButton" class="secondary" title="Find/Replace in files (content)"
                     data-local-action="openSearchInFiles">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
@@ -64,8 +74,6 @@
                 <span class="git-conflict-indicator" id="gitConflictIndicator" aria-hidden="true">!</span>
                 <span class="git-push-warning-indicator" id="gitPushWarningIndicator" aria-hidden="true">!</span>
             </button>
-	            <a class="primary-button" href="/soplangAgent/web/build-status.html" target="_blank" rel="noopener">Open
-	                Builder</a>
 	        </div>
         <div class="workspace">
             <div class="panel list">

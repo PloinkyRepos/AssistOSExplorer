@@ -252,6 +252,7 @@ main {
     align-items: center;
     gap: 5px;
 }
+
 .toolbar button.secondary,
 #editingActions button.secondary {
     background-color: var(--bg);
@@ -594,7 +595,7 @@ td.actions-cell {
     visibility: visible;
 }
 
-.action-menu-item {
+.toolbar-dropdown .action-menu-item {
     background: transparent;
     border: none;
     width: 100%;

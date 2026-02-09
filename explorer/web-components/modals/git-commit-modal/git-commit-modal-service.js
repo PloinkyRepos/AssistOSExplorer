@@ -26,10 +26,10 @@ export function createGitCommitService({ callTool, callAgentTool }) {
         gitStashList: (payload) => callAgentTool('gitAgent', 'git_stash_list', payload),
         gitStashPop: (payload) => callAgentTool('gitAgent', 'git_stash_pop', compact(payload)),
         gitCommit: (payload) => callAgentTool('gitAgent', 'git_commit', payload),
-        llmResolveConflict: (payload) => callAgentTool('gitAgent', 'llm_resolve_conflict', payload),
+        llmResolveConflict: (payload) => callAgentTool('llmAssistant', 'llm_resolve_conflict', payload),
         deleteFile: (path) => callTool('delete_file', { path }),
         readTextFile: (path) => callTool('read_text_file', { path }),
         writeFile: (path, content) => callTool('write_file', { path, content }),
-        generateCommitMessage: (diffs) => callAgentTool('gitAgent', 'git_commit_message', { diffs })
+        generateCommitMessage: (diffs) => callAgentTool('llmAssistant', 'git_commit_message', { diffs })
     };
 }
