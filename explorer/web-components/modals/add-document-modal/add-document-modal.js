@@ -7,7 +7,6 @@ export class AddDocumentModal {
     constructor(element, invalidate) {
         this.invalidate = invalidate;
         this.element = element;
-        this.currentTheme = localStorage.getItem('theme') || 'light';
         this.invalidate();
     }
 

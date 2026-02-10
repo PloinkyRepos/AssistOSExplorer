@@ -1,0 +1,34 @@
+<div class="modal-header">
+    <div class="modal-title">Settings</div>
+    <div class="close" data-local-action="closeModal" aria-label="Close">
+        <img class="close-icon" src="./assets/icons/x-mark.svg" alt="close">
+    </div>
+</div>
+<div class="modal-body settings-modal-body">
+    <div class="settings-tabs" role="tablist" aria-label="Settings tabs">
+        <button type="button" class="settings-tab" data-local-action="switchTab keymap" data-tab="keymap" role="tab" aria-selected="true">Keymap</button>
+        <button type="button" class="settings-tab" data-local-action="switchTab theme" data-tab="theme" role="tab" aria-selected="false">Theme</button>
+    </div>
+
+    <div class="settings-content">
+        <section class="settings-section" data-section="keymap">
+            <p class="keymap-description">Focus a field and press a new shortcut. Use Backspace to clear.</p>
+            <div class="keymap-list" id="keymapList"></div>
+            <div class="keymap-warning" id="keymapWarning" role="status" aria-live="polite"></div>
+        </section>
+
+        <section class="settings-section hidden" data-section="theme">
+            <p class="theme-description">Choose a global theme for the entire application.</p>
+            <div class="theme-options" id="themeOptions" role="radiogroup" aria-label="Theme options">
+                <button type="button" class="theme-option" data-local-action="selectTheme light" data-theme="light" role="radio" aria-checked="false">Light</button>
+                <button type="button" class="theme-option" data-local-action="selectTheme dark" data-theme="dark" role="radio" aria-checked="false">Dark</button>
+            </div>
+        </section>
+    </div>
+
+    <div class="modal-actions">
+        <button type="button" class="general-button secondary" data-local-action="resetDefaults" data-role="reset-keymap">Reset Keymap</button>
+        <button type="button" class="gray-button" data-local-action="closeModal">Cancel</button>
+        <button type="button" class="general-button" data-local-action="saveSettings">Save</button>
+    </div>
+</div>

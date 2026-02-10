@@ -37,8 +37,8 @@ const KEYMAP_ACTIONS = [
     },
     {
         id: 'openKeymap',
-        label: 'Open Keymap',
-        description: 'Open keyboard shortcuts'
+        label: 'Open Settings',
+        description: 'Open settings'
     }
 ];
 

@@ -2,6 +2,7 @@ import { highlightCode } from "../../../utils/highlight.js";
 import { withGlobalLoader } from "../../../utils/globalLoader.js";
 import { getKeymap, matchesShortcut } from "../../../utils/keymap.js";
 import { requestLlmAutocomplete } from "../../../services/llmAutocompleteService.js";
+import { EXPLORER_THEME_CHANGE_EVENT, getCurrentTheme } from "../../../utils/theme.js";
 
 export class FileEditor {
     constructor(element, invalidate) {
@@ -9,28 +10,19 @@ export class FileEditor {
         this.invalidate = invalidate;
         this.path = this.element.dataset.path;
         const extension = (this.path.split('.').pop() || '').toLowerCase();
-        const root = document.documentElement;
         this.state = {
             editorContent: "Loading...",
-            fileType: extension || "js",
-            theme: root.classList.contains("theme-dark") ? "dark" : "light"
+            fileType: extension || "js"
         };
         this.autocompleteInFlight = false;
         this.invalidate();
         this.boundAdjustForScrollbar = this.adjustForScrollbar.bind(this);
+        this.boundThemeChange = this.handleThemeChange.bind(this);
     }
 
     beforeUnload() {
         window.removeEventListener('resize', this.boundAdjustForScrollbar);
-    }
-
-    toggleTheme() {
-        this.state.theme = this.state.theme === "dark" ? "light" : "dark";
-        this.applyTheme();
-    }
-
-    applyTheme() {
-        this.element.querySelector(".file-editor-container").setAttribute("data-theme", this.state.theme);
+        window.removeEventListener(EXPLORER_THEME_CHANGE_EVENT, this.boundThemeChange);
     }
 
     async beforeRender() {
@@ -74,6 +66,18 @@ export class FileEditor {
             this.syncScroll(this.textarea, this.codeBlock.parentElement, this.lineNumbers);
             this.adjustForScrollbar();
         }
+        window.removeEventListener(EXPLORER_THEME_CHANGE_EVENT, this.boundThemeChange);
+        window.addEventListener(EXPLORER_THEME_CHANGE_EVENT, this.boundThemeChange);
+    }
+
+    handleThemeChange() {
+        this.applyTheme();
+    }
+
+    applyTheme() {
+        const container = this.element.querySelector(".file-editor-container");
+        if (!container) return;
+        container.setAttribute("data-theme", getCurrentTheme());
     }
 
     handleKeyDown(e) {

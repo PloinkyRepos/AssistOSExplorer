@@ -177,17 +177,3 @@
 .file-editor-container[data-theme="light"] .code-output .function_ { color: #eab308; }
 .file-editor-container[data-theme="light"] .code-output .important { color: #d946ef; font-weight: 600; }
 
-
-.theme-toggle-button {
-    background: var(--bg);
-    color: var(--text);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 8px 14px;
-    cursor: pointer;
-    transition: background-color 0.15s ease;
-}
-
-.theme-toggle-button:hover {
-    background-color: var(--border);
-}

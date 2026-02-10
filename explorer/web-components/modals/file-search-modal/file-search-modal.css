@@ -206,6 +206,31 @@ dialog {
     color: inherit;
 }
 
+.theme-dark .search-row input[type="text"],
+.theme-dark .search-exclude-wrapper input[type="text"],
+.theme-dark .search-scope-row input[type="text"],
+.theme-dark .search-scope-row select {
+    background: #1b2638;
+    border-color: #475569;
+    color: #f8fafc;
+}
+
+.theme-dark .search-row input[type="text"]::placeholder,
+.theme-dark .search-exclude-wrapper input[type="text"]::placeholder,
+.theme-dark .search-scope-row input[type="text"]::placeholder {
+    color: #a8b4c8;
+}
+
+.theme-dark .search-row input[type="text"]:focus,
+.theme-dark .search-exclude-wrapper input[type="text"]:focus,
+.theme-dark .search-scope-row input[type="text"]:focus,
+.theme-dark .search-scope-row select:focus {
+    outline: 2px solid #93c5fd;
+    outline-offset: 1px;
+    border-color: #60a5fa;
+    box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.18);
+}
+
 .search-exclude {
     max-width: 320px;
 }

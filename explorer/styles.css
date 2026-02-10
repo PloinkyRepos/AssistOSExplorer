@@ -273,6 +273,26 @@ main {
     box-shadow: none;
 }
 
+.theme-dark .toolbar button.secondary,
+.theme-dark #editingActions button.secondary {
+    background-color: #1f2a3d;
+    border-color: #475569;
+    color: #f8fafc;
+}
+
+.theme-dark .toolbar button.secondary:hover,
+.theme-dark #editingActions button.secondary:hover {
+    background-color: #2b3a53;
+    border-color: #64748b;
+    box-shadow: 0 8px 16px rgba(2, 6, 23, 0.45);
+}
+
+.theme-dark .toolbar button.secondary:focus-visible,
+.theme-dark #editingActions button.secondary:focus-visible {
+    outline: 2px solid #93c5fd;
+    outline-offset: 1px;
+}
+
 .toolbar button:disabled {
     opacity: 0.6;
     cursor: not-allowed;
@@ -586,6 +606,21 @@ td.actions-cell {
     visibility: hidden;
 }
 
+.action-menu-dropdown .action-menu-item {
+    background: transparent;
+    border: none;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 14px;
+    font-size: 0.9rem;
+    color: var(--text);
+    cursor: pointer;
+    transition: background 0.12s ease, color 0.12s ease;
+    text-align: left;
+}
+
 .action-menu-container.open .action-menu-dropdown {
     display: flex;
     visibility: hidden;
@@ -647,6 +682,36 @@ td.actions-cell {
     background: transparent;
 }
 
+.theme-dark .action-menu-dropdown {
+    background: #182233;
+    border-color: #334155;
+    box-shadow: 0 18px 34px rgba(2, 6, 23, 0.55);
+}
+
+.theme-dark .action-menu-dropdown .action-menu-item {
+    color: #e2e8f0;
+}
+
+.theme-dark .action-menu-dropdown img.action-menu-item-icon {
+    filter: brightness(0) invert(1) opacity(0.92);
+}
+
+.theme-dark .action-menu-dropdown .action-menu-item:hover,
+.theme-dark .action-menu-dropdown .action-menu-item:focus-visible {
+    background: rgba(96, 165, 250, 0.2);
+    color: #f8fafc;
+}
+
+.theme-dark .action-menu-dropdown .action-menu-item.destructive {
+    color: #f87171;
+}
+
+.theme-dark .action-menu-dropdown .action-menu-item.destructive:hover,
+.theme-dark .action-menu-dropdown .action-menu-item.destructive:focus-visible {
+    background: rgba(239, 68, 68, 0.2);
+    color: #fecaca;
+}
+
 .clipboard-info {
     margin-left: clamp(8px, 1.8vw, 16px);
     font-size: 0.9rem;
@@ -674,6 +739,28 @@ tr.clipboard-row {
 
 tr.clipboard-row.clipboard-copy.active {
     background: rgba(37, 99, 235, 0.18);
+}
+
+dialog.modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    box-shadow: 0 24px 48px rgba(15, 23, 42, 0.28);
+}
+
+dialog.modal::backdrop {
+    background: rgba(15, 23, 42, 0.38);
+    backdrop-filter: blur(3px);
+}
+
+.theme-dark dialog.modal {
+    background: #152033;
+    border-color: #334155;
+    box-shadow: 0 30px 60px rgba(2, 6, 23, 0.62);
+}
+
+.theme-dark dialog.modal::backdrop {
+    background: rgba(2, 6, 23, 0.62);
+    backdrop-filter: blur(5px) saturate(110%);
 }
 
 /* WebSkel loader */

@@ -177,9 +177,9 @@
       "presenterClassName": "FileSearchModal"
     },
     {
-      "name": "keymap-modal",
+      "name": "settings-modal",
       "type": "modals",
-      "presenterClassName": "KeymapModal"
+      "presenterClassName": "SettingsModal"
     },
     {
       "name": "git-commit-modal",

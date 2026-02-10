@@ -1,6 +1,7 @@
 // Wire up search-related behaviors for FileExp without bloating the main presenter.
 import { callToolWithLoader } from "../../../utils/globalLoader.js";
 import { getKeymap, matchesShortcut } from "../../../utils/keymap.js";
+import { getCurrentTheme } from "../../../utils/theme.js";
 export function attachSearchController(fileExp) {
     const getState = () => fileExp.state;
     const defaultExclude = 'node_modules,.git';
@@ -107,12 +108,15 @@ export function attachSearchController(fileExp) {
         await openSearchModal('replace');
     }
 
-    async function openKeymapModal() {
+    async function openSettingsModal(_target, tab = 'keymap') {
         const state = getState();
+        const normalizedTab = tab === 'theme' ? 'theme' : 'keymap';
         state.searchMenuOpen = false;
         updateSearchUI();
-        const result = await assistOS.UI.createReactiveModal('keymap-modal', {
-            keymap: state.keymap || getKeymap()
+        const result = await assistOS.UI.createReactiveModal('settings-modal', {
+            tab: normalizedTab,
+            keymap: state.keymap || getKeymap(),
+            theme: getCurrentTheme()
         }, true);
         if (result?.keymap) {
             state.keymap = result.keymap;
@@ -151,7 +155,7 @@ export function attachSearchController(fileExp) {
         }
         if (keymap.openKeymap && matchesShortcut(event, keymap.openKeymap)) {
             event.preventDefault();
-            openKeymapModal();
+            openSettingsModal(null, 'keymap');
             return;
         }
         if (event.key === 'Escape') {
@@ -245,7 +249,7 @@ export function attachSearchController(fileExp) {
         openSearchByName,
         openSearchInFiles,
         openReplaceInFiles,
-        openKeymapModal,
+        openSettingsModal,
         closeSearchOverlays,
         openSearchResult,
         navigateToPath,
