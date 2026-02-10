@@ -1,6 +1,12 @@
 // File system related UI actions for FileExp, attached to the presenter to keep it lean.
 import { showContextPasteMenu } from "./file-exp-utils.js";
 import { callToolWithLoader } from "../../../utils/globalLoader.js";
+import { FILE_EXP_UI_ACTIONS } from "./file-exp-ui-controller.js";
+import { PREVIEW_ACTIONS } from "./file-exp-preview-controller.js";
+import {
+    invalidateFsMutationCaches,
+    isSameOrDescendantPath
+} from "./file-exp-fs-mutation-utils.js";
 
 export function attachFsActions(fileExp) {
     Object.assign(fileExp, {
@@ -14,13 +20,23 @@ export function attachFsActions(fileExp) {
                     const tool = type === 'directory' ? 'delete_directory' : 'delete_file';
                     await callToolWithLoader('explorer', tool, {path});
                     this.showStatus(`Successfully deleted ${path}`);
-                    if (this.state.selectedPath === path) {
-                        this.state.selectedPath = null;
-                        this.state.fileContent = "";
+
+                    if (isSameOrDescendantPath(this, this.state.selectedPath, path)) {
+                        this.dispatchUi({ type: FILE_EXP_UI_ACTIONS.RESET_DIRECTORY_CONTEXT });
+                        this.dispatchPreview({ type: PREVIEW_ACTIONS.RESET });
                     }
-                    if (this.state.clipboard?.path === path) {
+
+                    if (isSameOrDescendantPath(this, this.state.clipboard?.path, path)) {
                         this.state.clipboard = null;
                     }
+
+                    const parentPath = this.parentPath(path) || '/';
+                    invalidateFsMutationCaches(this, {
+                        directories: [this.state.path, parentPath],
+                        directoryBranches: type === 'directory' ? [path] : [],
+                        files: type === 'file' ? [path] : []
+                    });
+
                     await this.loadDirectory(this.state.path);
                 });
             } catch (err) {
@@ -49,6 +65,11 @@ export function attachFsActions(fileExp) {
             try {
                 await this.withLoader(async () => {
                     await callToolWithLoader('explorer', 'move_file', {source, destination});
+                    invalidateFsMutationCaches(this, {
+                        directories: [parent, this.state.path],
+                        directoryBranches: itemType === 'directory' ? [source] : [],
+                        files: itemType === 'file' ? [source] : []
+                    });
                     const wasSelected = this.state.selectedPath === source;
                     if (this.state.clipboard?.path === source) {
                         this.state.clipboard = {...this.state.clipboard, path: destination, name: newName};
@@ -341,10 +362,17 @@ export function attachFsActions(fileExp) {
                         this.showStatus(`Copied to ${destination}${overwrite ? ' (overwritten)' : ''}.`);
                     }
 
-                    this.caches?.dirListing?.invalidate?.(this, targetDir);
-                    if (sourceParent) {
-                        this.caches?.dirListing?.invalidate?.(this, sourceParent);
-                    }
+                    invalidateFsMutationCaches(this, {
+                        directories: [targetDir, sourceParent, this.state.path],
+                        directoryBranches: [
+                            ...(clipboard.type === 'directory' && clipboard.mode === 'cut' ? [clipboard.path] : []),
+                            ...(clipboard.type === 'directory' ? [destination] : [])
+                        ],
+                        files: [
+                            ...(clipboard.type === 'file' ? [destination] : []),
+                            ...(clipboard.type === 'file' && clipboard.mode === 'cut' ? [clipboard.path] : [])
+                        ]
+                    });
                     const targetMatchesCurrentView = targetIsCurrentDirectory;
                     const sourceMatchesCurrentView = sourceParent === this.state.path;
 
@@ -387,7 +415,10 @@ export function attachFsActions(fileExp) {
                         content: ''
                     });
                     this.showStatus(`Created file: ${newFilePath}`);
-                    this.caches?.dirListing?.invalidate?.(this, this.state.path);
+                    invalidateFsMutationCaches(this, {
+                        directories: [this.state.path],
+                        files: [newFilePath]
+                    });
                     const entries = await this.loadDirectoryContent(this.state.path);
                     if (entries === null) {
                         return;
@@ -413,6 +444,9 @@ export function attachFsActions(fileExp) {
                 await this.withLoader(async () => {
                     await callToolWithLoader('explorer', 'create_directory', {path: newDirPath});
                     this.showStatus(`Successfully created directory.`);
+                    invalidateFsMutationCaches(this, {
+                        directories: [this.state.path]
+                    });
                     await this.loadDirectory(this.state.path);
                 });
             } catch (err) {

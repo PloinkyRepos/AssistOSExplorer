@@ -729,6 +729,23 @@ th {
     overflow: auto;
 }
 
+.preview-content {
+    height: 100%;
+    min-height: 0;
+}
+
+.preview-standard-pane {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+}
+
+.preview-standard-pane > #filePreview {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
 .preview-split {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -880,6 +897,19 @@ th {
 .preview-pane-shell html-web-view .html-web-view-shell {
     border: none;
     border-radius: 0;
+}
+
+.preview-component-mount,
+.preview-web-mount {
+    height: 100%;
+    min-height: 0;
+}
+
+.preview-component-mount > *,
+.preview-web-mount > * {
+    display: block;
+    height: 100%;
+    min-height: 0;
 }
 
 .media-preview {

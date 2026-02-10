@@ -61,7 +61,7 @@ export function createPreviewHeaderController(host) {
         Object.entries(modeButtons).forEach(([mode, button]) => {
             if (!button) return;
             button.classList.toggle('active', previewUiState.viewMode === mode);
-            button.style.display = splitActive ? 'none' : '';
+            button.classList.toggle('hidden', splitActive);
         });
     };
 

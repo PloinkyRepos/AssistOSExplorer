@@ -83,6 +83,7 @@ export class FileExp {
         this.previewHeaderController = createPreviewHeaderController(this);
         this.tooling = createFileExpTooling();
         this.lastLoadError = null;
+        this.previewDom = null;
     }
 
     async withLoader(fn) {
@@ -92,6 +93,7 @@ export class FileExp {
 
     beforeUnload() {
         this.detachPreviewAnchorHandler();
+        this.previewDom = null;
         if (this.boundGlobalKeydown) {
             document.removeEventListener('keydown', this.boundGlobalKeydown);
         }
@@ -492,153 +494,381 @@ export class FileExp {
         return hasMarkdownInTreeImpl(this, dirPath);
     }
 
-    renderPreviewPanel(previewContent, previewUiState) {
-        if (!previewContent) return;
-        if (previewUiState.isHtml && previewUiState.viewMode !== 'code') {
-            this.renderHtmlPreviewPanel(previewContent, previewUiState);
-            return;
+    toggleHidden(element, hidden = true) {
+        if (!element) return;
+        element.classList.toggle('hidden', Boolean(hidden));
+    }
+
+    createPreviewActionButton(label, action, className = 'preview-pane-action') {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = className;
+        button.dataset.localAction = action;
+        button.textContent = label;
+        return button;
+    }
+
+    createPreviewCloseButton(action, label) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'close preview-pane-close';
+        button.dataset.localAction = action;
+        button.setAttribute('aria-label', label);
+        button.setAttribute('title', label);
+
+        const icon = document.createElement('img');
+        icon.className = 'close-icon';
+        icon.src = './assets/icons/x-mark.svg';
+        icon.alt = 'close';
+        button.appendChild(icon);
+        return button;
+    }
+
+    clearMountElement(mount) {
+        if (!mount) return;
+        mount.textContent = '';
+        if (mount.dataset) {
+            delete mount.dataset.presenterKey;
         }
+    }
+
+    mountPresenterElement(mount, { key, tagName, attributes = {} }) {
+        if (!mount || !tagName) return null;
+        const normalizedTag = String(tagName).toLowerCase();
+        const normalizedKey = String(key || normalizedTag);
+        const currentKey = mount.dataset?.presenterKey || '';
+        const currentNode = mount.firstElementChild;
+        const currentTag = currentNode?.tagName?.toLowerCase() || '';
+        const shouldReplace = !currentNode || currentTag !== normalizedTag || currentKey !== normalizedKey;
+
+        let node = currentNode;
+        if (shouldReplace) {
+            mount.textContent = '';
+            node = document.createElement(normalizedTag);
+            mount.appendChild(node);
+            if (mount.dataset) {
+                mount.dataset.presenterKey = normalizedKey;
+            }
+        }
+
+        Object.entries(attributes).forEach(([attr, value]) => {
+            if (value === undefined || value === null || value === '') {
+                node.removeAttribute(attr);
+            } else {
+                node.setAttribute(attr, String(value));
+            }
+        });
+
+        return node;
+    }
+
+    ensurePreviewDom(previewContent) {
+        const cached = this.previewDom;
+        if (cached && cached.host === previewContent && previewContent.contains(cached.standardPane) && previewContent.contains(cached.htmlSplit)) {
+            return cached;
+        }
+
+        const standardPane = document.createElement('div');
+        standardPane.className = 'preview-standard-pane';
+
+        const filePreview = document.createElement('div');
+        filePreview.id = 'filePreview';
+        filePreview.className = 'code-preview';
+
+        const mediaPreview = document.createElement('div');
+        mediaPreview.className = 'media-preview hidden';
+
+        const componentMount = document.createElement('div');
+        componentMount.className = 'preview-component-mount hidden';
+
+        standardPane.appendChild(filePreview);
+        standardPane.appendChild(mediaPreview);
+        standardPane.appendChild(componentMount);
+
+        const htmlSplit = document.createElement('div');
+        htmlSplit.className = 'preview-split hidden';
+
+        const codePane = document.createElement('div');
+        codePane.className = 'preview-pane';
+        const codePaneShell = document.createElement('div');
+        codePaneShell.className = 'preview-pane-shell';
+        const codePaneHeader = document.createElement('div');
+        codePaneHeader.className = 'preview-pane-header';
+        const codePaneTitle = document.createElement('span');
+        codePaneTitle.className = 'preview-pane-title';
+        codePaneTitle.textContent = 'Code';
+        const codePaneActions = document.createElement('div');
+        codePaneActions.className = 'preview-pane-actions';
+        const hideCodeButton = this.createPreviewCloseButton('setPreviewViewMode web', 'Hide Code');
+        codePaneActions.appendChild(hideCodeButton);
+        codePaneHeader.appendChild(codePaneTitle);
+        codePaneHeader.appendChild(codePaneActions);
+        const codePaneBody = document.createElement('div');
+        codePaneBody.className = 'preview-pane-body';
+        const splitCodeComponentMount = document.createElement('div');
+        splitCodeComponentMount.className = 'preview-component-mount hidden';
+        codePaneBody.appendChild(splitCodeComponentMount);
+        codePaneShell.appendChild(codePaneHeader);
+        codePaneShell.appendChild(codePaneBody);
+        codePane.appendChild(codePaneShell);
+
+        const webPane = document.createElement('div');
+        webPane.className = 'preview-pane';
+        const webPaneShell = document.createElement('div');
+        webPaneShell.className = 'preview-pane-shell';
+        const webPaneHeader = document.createElement('div');
+        webPaneHeader.className = 'preview-pane-header';
+        const webUrlLabel = document.createElement('span');
+        webUrlLabel.className = 'html-web-view-url';
+        const webPaneActions = document.createElement('div');
+        webPaneActions.className = 'preview-pane-actions';
+        const webActionGroup = document.createElement('div');
+        webActionGroup.className = 'html-web-view-actions';
+        const refreshWebButton = this.createPreviewActionButton('Refresh', 'refreshWebPreviewPane');
+        const openWebTabButton = this.createPreviewActionButton('Open in tab', 'openWebPreviewInTab');
+        webActionGroup.appendChild(refreshWebButton);
+        webActionGroup.appendChild(openWebTabButton);
+        const hideWebButton = this.createPreviewCloseButton('setPreviewViewMode code', 'Hide Web');
+        webPaneActions.appendChild(webActionGroup);
+        webPaneActions.appendChild(hideWebButton);
+        webPaneHeader.appendChild(webUrlLabel);
+        webPaneHeader.appendChild(webPaneActions);
+        const webPaneBody = document.createElement('div');
+        webPaneBody.className = 'preview-pane-body';
+        const webPlaceholder = document.createElement('div');
+        webPlaceholder.className = 'preview-placeholder hidden';
+        webPlaceholder.textContent = 'Web preview is unavailable for this file.';
+        const webMount = document.createElement('div');
+        webMount.className = 'preview-web-mount hidden';
+        webPaneBody.appendChild(webPlaceholder);
+        webPaneBody.appendChild(webMount);
+        webPaneShell.appendChild(webPaneHeader);
+        webPaneShell.appendChild(webPaneBody);
+        webPane.appendChild(webPaneShell);
+
+        htmlSplit.appendChild(codePane);
+        htmlSplit.appendChild(webPane);
+
+        previewContent.replaceChildren(standardPane, htmlSplit);
+
+        this.previewDom = {
+            host: previewContent,
+            standardPane,
+            filePreview,
+            mediaPreview,
+            componentMount,
+            htmlSplit,
+            codePane,
+            codePaneBody,
+            splitCodeComponentMount,
+            hideCodeButton,
+            webPane,
+            webPaneBody,
+            webUrlLabel,
+            webActionGroup,
+            refreshWebButton,
+            openWebTabButton,
+            hideWebButton,
+            webPlaceholder,
+            webMount
+        };
+
+        return this.previewDom;
+    }
+
+    renderStandardPreview(refs, previewUiState) {
+        const defaultText = 'Select a file to see its contents.';
+        this.toggleHidden(refs.standardPane, false);
+        this.toggleHidden(refs.htmlSplit, true);
+        refs.htmlSplit.classList.remove('single');
+        this.toggleHidden(refs.mediaPreview, true);
+        this.toggleHidden(refs.componentMount, true);
+        this.toggleHidden(refs.splitCodeComponentMount, true);
+        this.clearMountElement(refs.splitCodeComponentMount);
+
+        if (refs.filePreview.parentElement !== refs.standardPane) {
+            refs.standardPane.insertBefore(refs.filePreview, refs.mediaPreview);
+        }
+        this.toggleHidden(refs.filePreview, false);
 
         if (this.state.isEditing) {
             this.detachPreviewAnchorHandler();
+            this.toggleHidden(refs.filePreview, true);
+            this.toggleHidden(refs.componentMount, false);
             if (this.state.selectedIsMarkdown && this.state.documentId) {
-                previewContent.innerHTML = `<document-view-page data-presenter="document-view-page" data-path="${this.state.selectedPath}" documentId="${this.state.documentId}"></document-view-page>`;
+                this.mountPresenterElement(refs.componentMount, {
+                    key: `document-view:${this.state.selectedPath}:${this.state.documentId}`,
+                    tagName: 'document-view-page',
+                    attributes: {
+                        'data-presenter': 'document-view-page',
+                        'data-path': this.state.selectedPath,
+                        documentId: this.state.documentId
+                    }
+                });
             } else {
-                previewContent.innerHTML = `<file-editor data-presenter="file-editor" data-path="${this.state.selectedPath}"></file-editor>`;
+                this.mountPresenterElement(refs.componentMount, {
+                    key: `file-editor:${this.state.selectedPath}`,
+                    tagName: 'file-editor',
+                    attributes: {
+                        'data-presenter': 'file-editor',
+                        'data-path': this.state.selectedPath
+                    }
+                });
             }
             return;
         }
 
         if (previewUiState.showBacklogPanel) {
             this.detachPreviewAnchorHandler();
+            this.toggleHidden(refs.filePreview, true);
+            this.toggleHidden(refs.componentMount, false);
             const pathAttr = this.state.selectedPath || '';
             const repoPath = this.parentPath(pathAttr) || '/';
-            previewContent.innerHTML = `<backlog-panel data-presenter="backlog-panel" data-path="${pathAttr}" data-repo-path="${repoPath}"></backlog-panel>`;
+            this.mountPresenterElement(refs.componentMount, {
+                key: `backlog-panel:${pathAttr}:${repoPath}`,
+                tagName: 'backlog-panel',
+                attributes: {
+                    'data-presenter': 'backlog-panel',
+                    'data-path': pathAttr,
+                    'data-repo-path': repoPath
+                }
+            });
             return;
         }
+
+        this.clearMountElement(refs.componentMount);
 
         if (this.state.previewMode === 'media') {
             this.detachPreviewAnchorHandler();
+            this.toggleHidden(refs.filePreview, true);
+            this.toggleHidden(refs.mediaPreview, false);
             const content = this.state.previewContent || '<div class="preview-placeholder">Unable to preview file.</div>';
-            previewContent.innerHTML = `<div class="media-preview">${content}</div>`;
+            refs.mediaPreview.innerHTML = content;
             return;
         }
 
+        this.toggleHidden(refs.mediaPreview, true);
+        refs.mediaPreview.textContent = '';
+
         if (this.state.selectedIsMarkdown) {
             if (this.state.markdownTextView) {
-                previewContent.innerHTML = `<pre id="filePreview" class="markdown-raw-view"></pre>`;
-                const filePreview = this.element.querySelector("#filePreview");
-                if (this.state.selectedPath) {
-                    filePreview.textContent = this.state.fileContent;
-                } else {
-                    filePreview.textContent = "Select a file to see its contents.";
-                }
+                refs.filePreview.className = 'markdown-raw-view';
+                refs.filePreview.textContent = this.state.selectedPath ? this.state.fileContent : defaultText;
                 this.detachPreviewAnchorHandler();
             } else {
-                previewContent.innerHTML = `<div id="filePreview" class="markdown-preview"></div>`;
-                const filePreview = this.element.querySelector("#filePreview");
+                refs.filePreview.className = 'markdown-preview';
                 if (this.state.selectedPath) {
                     const content = typeof this.state.previewContent === 'string' ? this.state.previewContent : '';
-                    filePreview.innerHTML = content;
+                    refs.filePreview.innerHTML = content;
                 } else {
-                    filePreview.textContent = "Select a file to see its contents.";
+                    refs.filePreview.textContent = defaultText;
                 }
                 this.attachPreviewAnchorHandler();
             }
             return;
         }
 
-        previewContent.innerHTML = `<div id="filePreview" class="code-preview"></div>`;
-        const filePreview = this.element.querySelector("#filePreview");
+        refs.filePreview.className = 'code-preview';
         if (this.state.selectedPath) {
-            filePreview.innerHTML = this.state.previewContent;
+            refs.filePreview.innerHTML = this.state.previewContent || '';
         } else {
-            filePreview.textContent = "Select a file to see its contents.";
+            refs.filePreview.textContent = defaultText;
         }
         this.detachPreviewAnchorHandler();
     }
 
-    renderHtmlPreviewPanel(previewContent, previewUiState) {
+    renderHtmlPreview(refs, previewUiState) {
         this.detachPreviewAnchorHandler();
+        this.toggleHidden(refs.standardPane, true);
+        this.toggleHidden(refs.htmlSplit, false);
+        this.toggleHidden(refs.componentMount, true);
+        this.clearMountElement(refs.componentMount);
+
         const webViewUrl = this.state.webViewUrl || this.buildWebViewUrl(this.state.selectedPath);
         const reloadToken = Number(this.state.webViewReloadToken || 0);
+        refs.webUrlLabel.textContent = webViewUrl || '';
+        refs.webUrlLabel.title = webViewUrl || '';
 
-        const renderPaneHeader = (leadingContent, actionsHtml, options = {}) => {
-            const leadingHtml = options.rawLeading
-                ? leadingContent
-                : `<span class="preview-pane-title">${leadingContent}</span>`;
-            return `
-            <div class="preview-pane-header">
-                ${leadingHtml}
-                <div class="preview-pane-actions">${actionsHtml}</div>
-            </div>
-        `;
-        };
+        let showCodePane = previewUiState.viewMode === 'split' && !previewUiState.codeHidden;
+        let showWebPane = previewUiState.viewMode === 'web' || (previewUiState.viewMode === 'split' && !previewUiState.webHidden);
+        if (!showCodePane && !showWebPane) {
+            showWebPane = true;
+        }
 
-        const renderClosePaneButton = (action, label) => `
-            <button type="button" class="close preview-pane-close" data-local-action="${action}" aria-label="${label}" title="${label}">
-                <img class="close-icon" src="./assets/icons/x-mark.svg" alt="close">
-            </button>
-        `;
+        this.toggleHidden(refs.codePane, !showCodePane);
+        this.toggleHidden(refs.webPane, !showWebPane);
+        refs.htmlSplit.classList.toggle('single', !(showCodePane && showWebPane));
+        this.toggleHidden(refs.hideCodeButton, previewUiState.viewMode !== 'split' || !showCodePane);
+        this.toggleHidden(refs.hideWebButton, previewUiState.viewMode !== 'split' || !showWebPane);
 
-        const renderWebPaneHeader = (includeCloseButton = false) => {
-            const webActions = [
-                `<button type="button" class="secondary preview-pane-action" data-local-action="refreshWebPreviewPane">Refresh</button>`,
-                `<button type="button" class="secondary preview-pane-action" data-local-action="openWebPreviewInTab">Open in tab</button>`
-            ];
-            const trailingActions = [`<div class="html-web-view-actions">${webActions.join('')}</div>`];
-            if (includeCloseButton) {
-                trailingActions.push(renderClosePaneButton('setPreviewViewMode code', 'Hide Web'));
+        if (showCodePane) {
+            this.toggleHidden(refs.splitCodeComponentMount, true);
+            if (this.state.isEditing) {
+                this.toggleHidden(refs.filePreview, true);
+                this.toggleHidden(refs.splitCodeComponentMount, false);
+                this.mountPresenterElement(refs.splitCodeComponentMount, {
+                    key: `file-editor:${this.state.selectedPath}`,
+                    tagName: 'file-editor',
+                    attributes: {
+                        'data-presenter': 'file-editor',
+                        'data-path': this.state.selectedPath
+                    }
+                });
+            } else {
+                this.clearMountElement(refs.splitCodeComponentMount);
+                if (refs.filePreview.parentElement !== refs.codePaneBody) {
+                    refs.codePaneBody.insertBefore(refs.filePreview, refs.splitCodeComponentMount);
+                }
+                refs.filePreview.className = 'code-preview';
+                refs.filePreview.innerHTML = this.state.previewContent || 'Select a file to see its contents.';
+                this.toggleHidden(refs.filePreview, false);
             }
-            const urlLabel = webViewUrl || '';
-            return renderPaneHeader(
-                `<span class="html-web-view-url" title="${urlLabel}">${urlLabel}</span>`,
-                trailingActions.join(''),
-                { rawLeading: true }
-            );
-        };
+        } else {
+            this.toggleHidden(refs.filePreview, true);
+            this.toggleHidden(refs.splitCodeComponentMount, true);
+            this.clearMountElement(refs.splitCodeComponentMount);
+        }
 
-        const renderCodePane = () => {
-            const actions = [
-                renderClosePaneButton('setPreviewViewMode web', 'Hide Code')
-            ];
-            const body = this.state.isEditing
-                ? `<file-editor data-presenter="file-editor" data-path="${this.state.selectedPath}"></file-editor>`
-                : `<div id="filePreview" class="code-preview">${this.state.previewContent || "Select a file to see its contents."}</div>`;
-            return `
-                <div class="preview-pane-shell">
-                    ${renderPaneHeader('Code', actions.join(''))}
-                    <div class="preview-pane-body">${body}</div>
-                </div>
-            `;
-        };
-
-        const renderWebPane = (splitControls = false) => {
-            const body = !webViewUrl
-                ? `<div class="preview-placeholder">Web preview is currently available only for files inside /fileExplorer/explorer.</div>`
-                : `<html-web-view data-presenter="html-web-view" data-url="${webViewUrl}" data-source-path="${this.state.selectedPath}" data-reload-token="${reloadToken}" data-live-source-selector=".code-input"></html-web-view>`;
-            return `
-                <div class="preview-pane-shell">
-                    ${renderWebPaneHeader(splitControls)}
-                    <div class="preview-pane-body">${body}</div>
-                </div>
-            `;
-        };
-
-        if (previewUiState.viewMode === 'web') {
-            previewContent.innerHTML = renderWebPane(false);
+        if (!showWebPane) {
+            this.toggleHidden(refs.webPlaceholder, true);
+            this.toggleHidden(refs.webMount, true);
             return;
         }
 
-        const codePaneClass = 'preview-pane';
-        const webPaneClass = 'preview-pane';
-        const splitClass = 'preview-split';
-        previewContent.innerHTML = `
-            <div class="${splitClass}">
-                <div class="${codePaneClass}">${renderCodePane()}</div>
-                <div class="${webPaneClass}">${renderWebPane(true)}</div>
-            </div>
-        `;
+        const canOpenPreview = Boolean(webViewUrl);
+        refs.refreshWebButton.toggleAttribute('disabled', !canOpenPreview);
+        refs.openWebTabButton.toggleAttribute('disabled', !canOpenPreview);
+
+        if (!canOpenPreview) {
+            this.clearMountElement(refs.webMount);
+            this.toggleHidden(refs.webMount, true);
+            this.toggleHidden(refs.webPlaceholder, false);
+            return;
+        }
+
+        this.toggleHidden(refs.webPlaceholder, true);
+        this.toggleHidden(refs.webMount, false);
+        this.mountPresenterElement(refs.webMount, {
+            key: `html-web-view:${webViewUrl}:${reloadToken}:${this.state.selectedPath || ''}`,
+            tagName: 'html-web-view',
+            attributes: {
+                'data-presenter': 'html-web-view',
+                'data-url': webViewUrl,
+                'data-source-path': this.state.selectedPath || '',
+                'data-reload-token': String(reloadToken),
+                'data-live-source-selector': '.code-input'
+            }
+        });
+    }
+
+    renderPreviewPanel(previewContent, previewUiState) {
+        if (!previewContent) return;
+        const refs = this.ensurePreviewDom(previewContent);
+        if (previewUiState.isHtml && previewUiState.viewMode !== 'code') {
+            this.renderHtmlPreview(refs, previewUiState);
+            return;
+        }
+        this.renderStandardPreview(refs, previewUiState);
     }
 
     toggleMarkdownView() {
