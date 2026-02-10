@@ -53,7 +53,6 @@ export function createGitCommitState(props = {}) {
         },
         identityPrompt: {
             visible: false,
-            test:"test",
             repoPath: null,
             pendingAction: null,
             name: rememberedIdentity.name,

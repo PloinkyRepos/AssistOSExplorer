@@ -2,9 +2,33 @@
 import { callToolWithLoader } from "../../../utils/globalLoader.js";
 import { getKeymap, matchesShortcut } from "../../../utils/keymap.js";
 import { getCurrentTheme } from "../../../utils/theme.js";
+import { FILE_EXP_REPLACE_COMPLETE_EVENT } from "../../../utils/appEvents.js";
 export function attachSearchController(fileExp) {
     const getState = () => fileExp.state;
     const defaultExclude = 'node_modules,.git';
+    const setDocumentListener = (key, eventName, handler, options) => {
+        if (typeof fileExp.setDocumentListener === 'function') {
+            return fileExp.setDocumentListener(key, eventName, handler, options);
+        }
+        document.addEventListener(eventName, handler, options);
+        return () => document.removeEventListener(eventName, handler, options);
+    };
+    const removeDocumentListener = (key) => {
+        if (typeof fileExp.removeDocumentListener === 'function') {
+            return fileExp.removeDocumentListener(key);
+        }
+        return false;
+    };
+    const setWindowListener = (key, eventName, handler, options) => {
+        if (typeof fileExp.setWindowListener === 'function') {
+            return fileExp.setWindowListener(key, eventName, handler, options);
+        }
+        if (typeof fileExp.addWindowListener === 'function') {
+            return fileExp.addWindowListener(eventName, handler, options);
+        }
+        window.addEventListener(eventName, handler, options);
+        return () => window.removeEventListener(eventName, handler, options);
+    };
 
     const getEl = (selector) => fileExp.element?.querySelector(selector);
 
@@ -17,17 +41,17 @@ export function attachSearchController(fileExp) {
             menuButton.setAttribute('aria-expanded', state.searchMenuOpen ? 'true' : 'false');
         }
         if (state.searchMenuOpen) {
-            document.addEventListener('click', fileExp.boundOutsideSearchMenuClick, true);
+            setDocumentListener('search-menu-outside', 'click', fileExp.boundOutsideSearchMenuClick, true);
         } else {
-            document.removeEventListener('click', fileExp.boundOutsideSearchMenuClick, true);
+            removeDocumentListener('search-menu-outside');
         }
     }
 
     function setupSearchBindings() {
         if (!fileExp.boundGlobalKeydown) {
             fileExp.boundGlobalKeydown = handleGlobalKeydown;
-            document.addEventListener('keydown', fileExp.boundGlobalKeydown);
         }
+        setDocumentListener('search-global-keydown', 'keydown', fileExp.boundGlobalKeydown);
         if (!fileExp.boundOutsideSearchMenuClick) {
             fileExp.boundOutsideSearchMenuClick = handleOutsideSearchMenuClick;
         }
@@ -35,7 +59,7 @@ export function attachSearchController(fileExp) {
 
     function toggleSearchMenu() {
         const state = getState();
-        state.searchMenuOpen = !state.searchMenuOpen;
+        fileExp.setSearchMenuOpen(!state.searchMenuOpen);
         updateSearchUI();
     }
 
@@ -72,7 +96,7 @@ export function attachSearchController(fileExp) {
 
     async function openSearchModal(mode) {
         const state = getState();
-        state.searchMenuOpen = false;
+        fileExp.setSearchMenuOpen(false);
         updateSearchUI();
 
         const result = await assistOS.UI.createReactiveModal('file-search-modal', {
@@ -90,7 +114,7 @@ export function attachSearchController(fileExp) {
         if (result && result.path) {
             const normalized = fileExp.normalizePath(result.path);
             if (result.line) {
-                state.pendingHighlight = { path: normalized, line: result.line };
+                fileExp.setPendingHighlight({ path: normalized, line: result.line });
             }
             await navigateToPath(normalized);
         }
@@ -111,7 +135,7 @@ export function attachSearchController(fileExp) {
     async function openSettingsModal(_target, tab = 'keymap') {
         const state = getState();
         const normalizedTab = tab === 'theme' ? 'theme' : 'keymap';
-        state.searchMenuOpen = false;
+        fileExp.setSearchMenuOpen(false);
         updateSearchUI();
         const result = await assistOS.UI.createReactiveModal('settings-modal', {
             tab: normalizedTab,
@@ -124,8 +148,7 @@ export function attachSearchController(fileExp) {
     }
 
     function closeSearchOverlays() {
-        const state = getState();
-        state.searchMenuOpen = false;
+        fileExp.setSearchMenuOpen(false);
         updateSearchUI();
     }
 
@@ -172,7 +195,7 @@ export function attachSearchController(fileExp) {
         if (!state.searchMenuOpen) return;
         const dropdown = fileExp.element.querySelector('.search-dropdown');
         if (dropdown && !dropdown.contains(event.target)) {
-            state.searchMenuOpen = false;
+            fileExp.setSearchMenuOpen(false);
             updateSearchUI();
         }
     }
@@ -204,9 +227,8 @@ export function attachSearchController(fileExp) {
         const path = element?.dataset?.filePath;
         if (!path) return;
         const line = element.dataset.line ? Number.parseInt(element.dataset.line, 10) : null;
-        const state = getState();
         const normalized = fileExp.normalizePath(path);
-        state.pendingHighlight = line ? { path: normalized, line } : null;
+        fileExp.setPendingHighlight(line ? { path: normalized, line } : null);
         closeSearchOverlays();
         await navigateToPath(normalized);
     }
@@ -235,7 +257,7 @@ export function attachSearchController(fileExp) {
                 await fileExp.openFile(normalized);
                 history.replaceState(null, '', `#file-exp${normalized}`);
             } catch (error) {
-                state.pendingHighlight = null;
+                fileExp.setPendingHighlight(null);
                 await fileExp.loadDirectory(normalized);
                 history.replaceState(null, '', `#file-exp${normalized}`);
             }
@@ -258,6 +280,6 @@ export function attachSearchController(fileExp) {
 
     if (!fileExp.boundReplaceComplete) {
         fileExp.boundReplaceComplete = handleReplaceComplete;
-        window.addEventListener('file-exp-replace-complete', fileExp.boundReplaceComplete);
     }
+    setWindowListener('replace-complete', FILE_EXP_REPLACE_COMPLETE_EVENT, fileExp.boundReplaceComplete);
 }

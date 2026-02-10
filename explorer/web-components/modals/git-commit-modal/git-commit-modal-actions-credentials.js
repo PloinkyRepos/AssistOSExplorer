@@ -15,6 +15,7 @@ import {
     setConflictAutoresolveSetting,
     setCredentialsValidated
 } from "./git-commit-modal-utils.js";
+import { AUTOCOMMIT_SETTINGS_CHANGED_EVENT } from "../../../utils/appEvents.js";
 
 export function createCredentialsActions(ctx) {
     const {
@@ -297,7 +298,7 @@ export function createCredentialsActions(ctx) {
             setAutocommitSettings({ intervalMinutes: autocommitIntervalMinutes, repos: autocommitRepos });
             setConflictAutoresolveSetting(autoresolveConflicts);
             try {
-                window.dispatchEvent(new CustomEvent('webskel-autocommit-settings-changed'));
+                window.dispatchEvent(new CustomEvent(AUTOCOMMIT_SETTINGS_CHANGED_EVENT));
             } catch {
                 // ignore dispatch errors
             }
@@ -403,7 +404,7 @@ export function createCredentialsActions(ctx) {
         setAutocommitSettings({ intervalMinutes: autocommitIntervalMinutes, repos: autocommitRepos });
         setConflictAutoresolveSetting(autoresolveConflicts);
         try {
-            window.dispatchEvent(new CustomEvent('webskel-autocommit-settings-changed'));
+            window.dispatchEvent(new CustomEvent(AUTOCOMMIT_SETTINGS_CHANGED_EVENT));
         } catch {
             // ignore dispatch errors
         }

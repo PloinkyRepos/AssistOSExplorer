@@ -139,7 +139,7 @@ export function attachFsActions(fileExp) {
                 this.state.selectedPath = path;
                 this.state.selectedIsMarkdown = this.isMarkdownFile(path) && type === 'file';
                 this.closeActionMenu(false);
-                this.state.openMenuPath = path;
+                this.setOpenMenuPath(path);
                 this.pendingMenuFocusPath = path;
                 this.invalidate();
                 return;
@@ -173,7 +173,7 @@ export function attachFsActions(fileExp) {
                 dropdown.style.bottom = '';
             }
             this.pendingMenuFocusPath = null;
-            this.state.openMenuPath = null;
+            this.setOpenMenuPath(null);
             if (shouldInvalidate) this.invalidate();
             return true;
         },
@@ -182,7 +182,7 @@ export function attachFsActions(fileExp) {
             if (this.state.openMenuPath && this.state.openMenuPath !== path) {
                 this.closeActionMenu(false);
             }
-            this.state.openMenuPath = path;
+            this.setOpenMenuPath(path);
             const container = this.element?.querySelector(`[data-action-menu="true"][data-entry-path="${path}"]`);
             if (!container) return;
             container.classList.add('open');

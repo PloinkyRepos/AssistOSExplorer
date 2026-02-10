@@ -691,10 +691,29 @@ th {
 #markdownViewActions {
     margin-left: auto;
 }
+#webViewActions {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+}
+#webViewActions.hidden {
+    display: none;
+}
+#webViewActions button.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+}
 #markdownViewActions button,
 #editorActions button {
     padding: 6px 14px;
     font-size: 0.8rem;
+    font-weight: 600;
+}
+#webViewActions button {
+    padding: 6px 10px;
+    font-size: 0.78rem;
     font-weight: 600;
 }
 
@@ -708,6 +727,159 @@ th {
 .preview-body {
     flex-grow: 1;
     overflow: auto;
+}
+
+.preview-split {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 10px;
+    height: 100%;
+    min-height: 0;
+    padding: 10px;
+}
+
+.preview-split.single {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.preview-pane {
+    min-height: 0;
+    overflow: hidden;
+}
+
+.preview-pane.hidden {
+    display: none;
+}
+
+.preview-pane-shell {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    border: 1px solid var(--file-exp-border);
+    border-radius: 10px;
+    background: var(--file-exp-panel);
+    overflow: hidden;
+}
+
+.preview-pane-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--file-exp-border);
+    background: var(--file-exp-subtle-surface);
+}
+
+.preview-pane-header .html-web-view-url {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 0.82rem;
+    color: var(--text-soft);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.preview-pane-title {
+    font-size: 0.82rem;
+    letter-spacing: 0.01em;
+    font-weight: 700;
+    color: var(--text-soft);
+    text-transform: uppercase;
+}
+
+.preview-pane-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.preview-pane-actions .html-web-view-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.preview-pane-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 6px 10px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background-color: var(--bg);
+    color: var(--text);
+    cursor: pointer;
+    transition: background-color 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease, border-color 0.12s ease;
+}
+
+.preview-pane-action:hover {
+    background-color: var(--border);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    transform: translateY(-1px);
+}
+
+.preview-pane-action:active {
+    transform: translateY(0);
+    box-shadow: none;
+}
+
+.preview-pane-action:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+
+.preview-pane-close {
+    border: none;
+    background: transparent;
+    padding: 0;
+    width: 18px;
+    height: 18px;
+    opacity: 0.78;
+    cursor: pointer;
+    transition: opacity 0.12s ease;
+}
+
+.preview-pane-close .close-icon {
+    width: 13px;
+    display: block;
+}
+
+.preview-pane-close:hover {
+    opacity: 1;
+}
+
+.preview-pane-close:active {
+    opacity: 0.92;
+}
+
+.preview-pane-close:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+.preview-pane-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+}
+
+.preview-pane-shell .code-preview {
+    border: none;
+    border-radius: 0;
+}
+
+.preview-pane-shell html-web-view .html-web-view-shell {
+    border: none;
+    border-radius: 0;
 }
 
 .media-preview {

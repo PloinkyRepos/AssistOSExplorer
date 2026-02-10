@@ -95,7 +95,7 @@ export async function openFile(fileExp, filePath, { largeFilePreviewLimitBytes, 
                 fileExp.state.hasUnsavedChanges = false;
                 fileExp.state.isEditing = false;
                 if (fileExp.state.pendingHighlight && fileExp.state.pendingHighlight.path !== fileExp.normalizePath(filePath)) {
-                    fileExp.state.pendingHighlight = null;
+                    fileExp.setPendingHighlight(null);
                 }
                 fileExp.invalidate();
                 return;
@@ -164,7 +164,7 @@ export async function openFile(fileExp, filePath, { largeFilePreviewLimitBytes, 
                 });
             }
             if (fileExp.state.pendingHighlight && fileExp.state.pendingHighlight.path !== fileExp.normalizePath(filePath)) {
-                fileExp.state.pendingHighlight = null;
+                fileExp.setPendingHighlight(null);
             }
             fileExp.invalidate();
         } catch (err) {

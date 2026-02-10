@@ -3,6 +3,7 @@ import { withGlobalLoader } from "../../../utils/globalLoader.js";
 import { getKeymap, matchesShortcut } from "../../../utils/keymap.js";
 import { requestLlmAutocomplete } from "../../../services/llmAutocompleteService.js";
 import { EXPLORER_THEME_CHANGE_EVENT, getCurrentTheme } from "../../../utils/theme.js";
+import { HTML_PREVIEW_LIVE_UPDATE_EVENT, normalizePreviewSourcePath } from "../../../utils/htmlPreviewLive.js";
 
 export class FileEditor {
     constructor(element, invalidate) {
@@ -138,6 +139,7 @@ export class FileEditor {
         this.updateLineNumbers();
         this.syncScroll(this.textarea, this.codeBlock.parentElement, this.lineNumbers);
         this.adjustForScrollbar();
+        this.emitHtmlPreviewLiveUpdate(code);
     }
 
     highlight(text, type) {
@@ -170,6 +172,19 @@ export class FileEditor {
 
     getCode() {
         return this.state.editorContent;
+    }
+
+    emitHtmlPreviewLiveUpdate(content) {
+        const fileType = String(this.state.fileType || '').toLowerCase();
+        if (fileType !== 'html' && fileType !== 'htm') {
+            return;
+        }
+        window.dispatchEvent(new CustomEvent(HTML_PREVIEW_LIVE_UPDATE_EVENT, {
+            detail: {
+                path: normalizePreviewSourcePath(this.path),
+                content: String(content ?? '')
+            }
+        }));
     }
 
 }

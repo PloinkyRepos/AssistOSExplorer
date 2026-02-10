@@ -19,10 +19,27 @@ import {
 } from "../../modals/git-commit-modal/git-commit-modal-utils.js";
 import { callAgentTool } from "../../../services/infrastructure/explorerApi.js";
 import { getReposRoot } from "../../../utils/reposRoot.js";
+import {
+    AUTOCOMMIT_SETTINGS_CHANGED_EVENT,
+    AUTOCOMMIT_RESET_EVENT,
+    AUTOCOMMIT_STOP_EVENT,
+    FILE_EXP_REFRESH_EVENT,
+    GIT_MODAL_CLOSED_EVENT
+} from "../../../utils/appEvents.js";
 
 export function attachGitController(fileExp) {
     const reposRoot = getReposRoot();
     const AUTOCOMMIT_MESSAGE = 'chore: autocommit';
+    const setWindowListener = (key, eventName, handler, options) => {
+        if (typeof fileExp.setWindowListener === 'function') {
+            return fileExp.setWindowListener(key, eventName, handler, options);
+        }
+        if (typeof fileExp.addWindowListener === 'function') {
+            return fileExp.addWindowListener(eventName, handler, options);
+        }
+        window.addEventListener(eventName, handler, options);
+        return () => window.removeEventListener(eventName, handler, options);
+    };
 
     const getConflictFlag = () => getGitConflictFlag();
     const setConflictFlag = (value) => setGitConflictFlag(Boolean(value));
@@ -483,7 +500,7 @@ export function attachGitController(fileExp) {
 
     updateGitButtonIndicator();
     ensureAutocommitTimer();
-    window.addEventListener('storage', (event) => {
+    const handleStorageEvent = (event) => {
         if (!event?.key) return;
         if (event.key.startsWith('webskel.git.autocommit.')) {
             ensureAutocommitTimer();
@@ -496,15 +513,15 @@ export function attachGitController(fileExp) {
         if (event.key === 'webskel.git.errors') {
             updateGitButtonIndicator();
         }
-    });
-    window.addEventListener('webskel-autocommit-settings-changed', () => {
+    };
+    const handleAutocommitSettingsChanged = () => {
         ensureAutocommitTimer();
-    });
-    window.addEventListener('webskel-autocommit-reset', () => {
+    };
+    const handleAutocommitReset = () => {
         clearAutocommitTimer();
         ensureAutocommitTimer();
-    });
-    window.addEventListener('webskel-autocommit-stop', (event) => {
+    };
+    const handleAutocommitStop = (event) => {
         clearAutocommitTimer();
         setErrorFlag(true);
         updateGitButtonIndicator();
@@ -512,21 +529,31 @@ export function attachGitController(fileExp) {
         if (message) {
             fileExp.showStatus(`AutoSync stopped: ${message}`, true);
         }
-    });
-    window.addEventListener('webskel-file-exp-refresh', async () => {
+    };
+    const handleFileExpRefresh = async () => {
         if (typeof fileExp.refresh === 'function') {
             await fileExp.refresh();
         }
         await syncConflictFlagFromRepos();
         ensureAutocommitTimer();
-    });
-    window.addEventListener('webskel-git-modal-closed', () => {
+    };
+    const handleGitModalClosed = () => {
         updateGitButtonIndicator();
         syncConflictFlagFromRepos()
             .catch(() => {})
             .finally(() => {
                 ensureAutocommitTimer();
             });
+    };
+
+    setWindowListener('git-storage', 'storage', handleStorageEvent);
+    setWindowListener('git-autocommit-settings-changed', AUTOCOMMIT_SETTINGS_CHANGED_EVENT, handleAutocommitSettingsChanged);
+    setWindowListener('git-autocommit-reset', AUTOCOMMIT_RESET_EVENT, handleAutocommitReset);
+    setWindowListener('git-autocommit-stop', AUTOCOMMIT_STOP_EVENT, handleAutocommitStop);
+    setWindowListener('git-file-exp-refresh', FILE_EXP_REFRESH_EVENT, handleFileExpRefresh);
+    setWindowListener('git-modal-closed', GIT_MODAL_CLOSED_EVENT, handleGitModalClosed);
+    fileExp.registerCleanup?.(() => {
+        clearAutocommitTimer();
     });
 
     Object.assign(fileExp, {

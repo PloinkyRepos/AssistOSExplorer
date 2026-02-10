@@ -3,6 +3,7 @@ import {
     parseJsonToolResult,
     setGitConflictFlag
 } from "./git-commit-modal-utils.js";
+import { AUTOCOMMIT_RESET_EVENT } from "../../../utils/appEvents.js";
 
 export function createConflictActions(ctx) {
     const {
@@ -162,7 +163,7 @@ export function createConflictActions(ctx) {
             updateCommitButtons();
             if (!hasConflictsForRepos([repoPath])) {
                 setGitConflictFlag(false);
-                window.dispatchEvent(new CustomEvent('webskel-autocommit-reset'));
+                window.dispatchEvent(new CustomEvent(AUTOCOMMIT_RESET_EVENT));
                 setStatusLine('Ready.');
             }
         } catch (error) {

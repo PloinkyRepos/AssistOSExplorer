@@ -13,6 +13,7 @@ import { createGitOpsActions } from "./git-commit-modal-actions-gitops.js";
 import { createStashActions } from "./git-commit-modal-actions-stash.js";
 import { createRepoActions } from "./git-commit-modal-actions-repo.js";
 import { createAutoStashActions } from "./git-commit-modal-actions-autostash.js";
+import { AUTOCOMMIT_STOP_EVENT, AUTOCOMMIT_RESET_EVENT } from "../../../utils/appEvents.js";
 
 export function createGitCommitActions(ctx) {
     const {
@@ -82,13 +83,13 @@ export function createGitCommitActions(ctx) {
     let gitPullWithToken;
 
     const dispatchAutocommitStop = (message = '') => {
-        window.dispatchEvent(new CustomEvent('webskel-autocommit-stop', {
+        window.dispatchEvent(new CustomEvent(AUTOCOMMIT_STOP_EVENT, {
             detail: { message: message || '' }
         }));
     };
 
     const dispatchAutocommitReset = () => {
-        window.dispatchEvent(new CustomEvent('webskel-autocommit-reset'));
+        window.dispatchEvent(new CustomEvent(AUTOCOMMIT_RESET_EVENT));
     };
 
     const commitMessageActions = createCommitMessageActions({

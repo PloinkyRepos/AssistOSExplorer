@@ -10,10 +10,9 @@ import {
     isMarkdownFile,
     prepareMarkdownPreviewContent,
     renderMarkdownPreview,
-    renderCodePreview,
-    scrollToLine,
+    renderCodePreview
 } from "./file-exp-utils.js";
-import { createFileExpState, saveFilterSpecsPreference, saveColumnVisibilityPreference } from "./file-exp-state.js";
+import { createFileExpState, saveFilterSpecsPreference } from "./file-exp-state.js";
 import { createFileExpTooling } from "./file-exp-tooling.js";
 import { buildEntriesView } from "./file-exp-view-model.js";
 import { attachSearchController } from "./file-exp-search.js";
@@ -26,6 +25,14 @@ import { createDirectoryFilterController } from "./file-exp-directory-filter.js"
 import { openFile as openFileImpl, tryLoadMediaPreview as tryLoadMediaPreviewImpl, attachPreviewAnchorHandler as attachPreviewAnchorHandlerImpl, detachPreviewAnchorHandler as detachPreviewAnchorHandlerImpl, handlePreviewAnchorClick as handlePreviewAnchorClickImpl } from "./file-exp-preview.js";
 import { filterEntriesForSpecs as filterEntriesForSpecsImpl, hasMarkdownInTree as hasMarkdownInTreeImpl } from "./file-exp-specs.js";
 import { positionOpenActionMenu as positionOpenActionMenuImpl } from "./file-exp-action-menu.js";
+import { getNextMarkdownToggle, getNextBacklogViewToggle, PREVIEW_ACTIONS, previewReducer } from "./file-exp-preview-controller.js";
+import { FILE_EXP_UI_ACTIONS, fileExpUiReducer } from "./file-exp-ui-controller.js";
+import { createPreviewHeaderController } from "./file-exp-preview-header-controller.js";
+import { FILE_EXP_REPLACE_COMPLETE_EVENT } from "../../../utils/appEvents.js";
+import { createDomListenerRegistry } from "../../../utils/domListenerRegistry.js";
+import { runAfterRender as runLayoutAfterRender } from "./file-exp-layout-controller.js";
+import { loadStateFromURL as loadStateFromURLImpl, loadDirectory as loadDirectoryImpl, refreshDirectory as refreshDirectoryImpl, renderBreadcrumbs as renderBreadcrumbsImpl, goUpDirectory as goUpDirectoryImpl } from "./file-exp-navigation-controller.js";
+import { selectEntry as selectEntryImpl, handleSortClick as handleSortClickImpl } from "./file-exp-selection-controller.js";
 
 const LARGE_FILE_PREVIEW_LIMIT_BYTES = 1.5 * 1024 * 1024; // ~1.5MB safety window before transport limits
 const LARGE_FILE_PREVIEW_LINES = 400;
@@ -46,15 +53,16 @@ export class FileExp {
         this.isMarkdownFile = isMarkdownFile;
         this.prepareMarkdownPreviewContent = prepareMarkdownPreviewContent;
         this.renderMarkdownPreview = renderMarkdownPreview;
-        this.prepareMarkdownPreviewContent = prepareMarkdownPreviewContent;
-        this.renderMarkdownPreview = renderMarkdownPreview;
 
         this.stateStore = createFileExpState();
         this.state = this.stateStore.state;
+        this.cleanupCallbacks = [];
+        this.domListenerRegistry = createDomListenerRegistry();
         this.pendingMenuFocusPath = null;
         this.searchByNameTimer = null;
         this.boundGlobalKeydown = null;
         this.boundOutsideSearchMenuClick = null;
+        this.boundSortClickHandler = (event) => this.handleSortClick(event);
 
         attachSearchController(this);
         attachFsActions(this);
@@ -62,18 +70,17 @@ export class FileExp {
         attachTasksController(this);
 
         this.boundLoadStateFromURL = this.loadStateFromURL.bind(this);
-        window.addEventListener('popstate', this.boundLoadStateFromURL);
+        this.setWindowListener('file-exp-popstate', 'popstate', this.boundLoadStateFromURL);
         this.invalidate(this.boundLoadStateFromURL);
 
         this.boundOutsideMenuClick = this.handleOutsideMenuClick.bind(this);
         this.boundMenuKeydown = this.handleMenuKeydown.bind(this);
-        this.outsideMenuListenerAttached = false;
-        this.menuKeydownListenerAttached = false;
         this.boundContextMenu = this.handleContextMenu.bind(this);
 
         this.caches = createFileExpCaches();
         this.inflightDirListing = new Map();
         this.directoryFilterController = createDirectoryFilterController(this);
+        this.previewHeaderController = createPreviewHeaderController(this);
         this.tooling = createFileExpTooling();
         this.lastLoadError = null;
     }
@@ -84,16 +91,7 @@ export class FileExp {
 
 
     beforeUnload() {
-        window.removeEventListener('popstate', this.boundLoadStateFromURL);
         this.detachPreviewAnchorHandler();
-        if (this.outsideMenuListenerAttached) {
-            document.removeEventListener('click', this.boundOutsideMenuClick);
-            this.outsideMenuListenerAttached = false;
-        }
-        if (this.menuKeydownListenerAttached) {
-            document.removeEventListener('keydown', this.boundMenuKeydown);
-            this.menuKeydownListenerAttached = false;
-        }
         if (this.boundGlobalKeydown) {
             document.removeEventListener('keydown', this.boundGlobalKeydown);
         }
@@ -101,88 +99,83 @@ export class FileExp {
             document.removeEventListener('click', this.boundOutsideSearchMenuClick, true);
         }
         if (this.boundReplaceComplete) {
-            window.removeEventListener('file-exp-replace-complete', this.boundReplaceComplete);
+            window.removeEventListener(FILE_EXP_REPLACE_COMPLETE_EVENT, this.boundReplaceComplete);
             this.boundReplaceComplete = null;
         }
         const entriesContainer = this.element?.querySelector('.entries');
         if (entriesContainer) {
             entriesContainer.removeEventListener('contextmenu', this.boundContextMenu, true);
         }
+        this.flushCleanupCallbacks();
+    }
+
+    registerCleanup(callback) {
+        if (typeof callback !== 'function') {
+            return () => {};
+        }
+        this.cleanupCallbacks.push(callback);
+        return callback;
+    }
+
+    addWindowListener(type, listener, options) {
+        return this.domListenerRegistry.add(window, type, listener, options);
+    }
+
+    addDocumentListener(type, listener, options) {
+        return this.domListenerRegistry.add(document, type, listener, options);
+    }
+
+    setDomListener(key, target, type, listener, options) {
+        if (!key) return () => {};
+        return this.domListenerRegistry.set(key, target, type, listener, options);
+    }
+
+    removeDomListener(key) {
+        if (!key) return false;
+        return this.domListenerRegistry.remove(key);
+    }
+
+    setWindowListener(key, type, listener, options) {
+        return this.setDomListener(`window:${key}`, window, type, listener, options);
+    }
+
+    removeWindowListener(key) {
+        return this.removeDomListener(`window:${key}`);
+    }
+
+    setDocumentListener(key, type, listener, options) {
+        return this.setDomListener(`document:${key}`, document, type, listener, options);
+    }
+
+    removeDocumentListener(key) {
+        return this.removeDomListener(`document:${key}`);
+    }
+
+    setElementListener(key, element, type, listener, options) {
+        return this.setDomListener(`element:${key}`, element, type, listener, options);
+    }
+
+    removeElementListener(key) {
+        return this.removeDomListener(`element:${key}`);
+    }
+
+    flushCleanupCallbacks() {
+        if (!Array.isArray(this.cleanupCallbacks) || !this.cleanupCallbacks.length) {
+            return;
+        }
+        const callbacks = this.cleanupCallbacks.splice(0, this.cleanupCallbacks.length);
+        for (const callback of callbacks.reverse()) {
+            try {
+                callback();
+            } catch (_) {
+                // Ignore cleanup errors to avoid breaking unload flow.
+            }
+        }
+        this.domListenerRegistry.clear();
     }
 
     async loadStateFromURL() {
-        const rawPath = window.location.hash.split('#file-exp')[1] || '/';
-        let path = rawPath;
-        try {
-            path = decodeURIComponent(rawPath);
-        } catch (error) {
-            console.warn('Failed to decode file-exp path from URL:', rawPath, error);
-            path = rawPath;
-        }
-        path = this.normalizePath(path);
-
-        if (path === '/') {
-            await this.loadDirectory('/');
-            return;
-        }
-
-        if (this.state.isEditing) {
-            await this.cancelEdit();
-        }
-
-        // Step 1: Get parent directory and entry name
-        const parentDir = this.parentPath(path) || '/';
-        const entryName = path.substring(parentDir.length).replace(/^\//, '');
-
-        try {
-            // Step 2: Load parent content (from cache if available)
-            const parentEntries = await this.loadDirectoryContent(parentDir);
-
-            if (parentEntries === null) {
-                // Parent directory doesn't exist, so the path is invalid.
-                this.showStatus('Path not found. Returning to root.', true);
-                await this.loadDirectory('/'); // This will now update the URL
-                return;
-            }
-
-            // Step 3: Find the entry in the parent's listing
-            const entry = parentEntries.find(e => e.name === entryName);
-
-            if (!entry) {
-                // The entry is not in the parent directory.
-                // This could mean the path itself is a directory, or the path is invalid.
-                // Let's try to load it as a directory. `loadDirectory` has its own error handling.
-                await this.loadDirectory(path); // This might also lead to a redirect to root, which will update the URL
-                return;
-            }
-
-            // Step 4: Execute action based on entry type
-            if (entry.type === 'file') {
-                this.state.path = parentDir;
-                this.state.selectedPath = path;
-                this.state.isEditing = false;
-                await this.setEntries(parentEntries); // Display the parent directory in the list
-                await this.openFile(path); // Open the file in the preview
-                // Update URL for files here, as loadDirectory doesn't handle files
-                const newUrl = `#file-exp${path}`;
-                if (window.location.hash !== newUrl) {
-                    history.pushState(null, '', newUrl);
-                }
-                this.invalidate();
-            } else if (entry.type === 'directory') {
-                await this.loadDirectory(path); // This will now update the URL
-            } else {
-                // Fallback for symlinks or other unknown types
-                this.showStatus(`Unsupported entry type for ${path}.`, true);
-                await this.loadDirectory(parentDir); // This will now update the URL
-            }
-
-        } catch (err) {
-            // This catch block handles unexpected errors from `loadDirectoryContent` or other operations.
-            console.error('Failed to load state from URL:', err);
-            this.showStatus('An error occurred while loading the path. Returning to root.', true);
-            await this.loadDirectory('/'); // This will now update the URL
-        }
+        return loadStateFromURLImpl(this);
     }
 
     beforeRender() {
@@ -216,424 +209,9 @@ export class FileExp {
     }
 
     async afterRender() {
-        this.renderBreadcrumbs();
-        if (this.state.selectedPath) {
-            const row = this.element.querySelector(`[data-entry-path="${this.state.selectedPath}"]`);
-            if (row) {
-                row.classList.add('active');
-            }
-        }
-
-        const editorActions = this.element.querySelector("#editorActions");
-        const editingActions = this.element.querySelector("#editingActions");
-        const previewTitle = this.element.querySelector('.preview-title');
-        const isTruncatedPreview = Boolean(this.state.fileLoadInfo?.truncated);
-        const selectedPath = this.state.selectedPath || '';
-        const isBacklog = selectedPath.endsWith('.backlog') || selectedPath.endsWith('.history');
-        const isHistory = selectedPath.endsWith('.history');
-        const showBacklogPanel = isBacklog && !this.state.backlogTextView;
-        const headerExtras = this.element.querySelector('#previewHeaderExtras');
-        if (headerExtras && !showBacklogPanel && headerExtras.children.length) {
-            headerExtras.innerHTML = '';
-        }
-        if (previewTitle) {
-            previewTitle.classList.toggle('hidden', showBacklogPanel);
-        }
-
-        if (this.state.isEditing) {
-            editorActions.classList.add('hidden');
-            editingActions.classList.remove('hidden');
-        } else {
-            editingActions.classList.add('hidden');
-            if (this.state.selectedPath && this.state.previewMode !== 'media' && !isTruncatedPreview && !showBacklogPanel && !isHistory) {
-                editorActions.classList.remove('hidden');
-            } else {
-                editorActions.classList.add('hidden');
-            }
-        }
-
-        const previewContent = this.element.querySelector('.preview-content');
-        if (this.state.isEditing) {
-            this.detachPreviewAnchorHandler();
-            if (this.state.selectedIsMarkdown && this.state.documentId) {
-                previewContent.innerHTML = `<document-view-page data-presenter="document-view-page" data-path="${this.state.selectedPath}" documentId="${this.state.documentId}"></document-view-page>`;
-            } else {
-                previewContent.innerHTML = `<file-editor data-presenter="file-editor" data-path="${this.state.selectedPath}"></file-editor>`;
-            }
-        } else if (showBacklogPanel) {
-            this.detachPreviewAnchorHandler();
-            const pathAttr = this.state.selectedPath || '';
-            const repoPath = this.parentPath(pathAttr) || '/';
-            previewContent.innerHTML = `<backlog-panel data-presenter="backlog-panel" data-path="${pathAttr}" data-repo-path="${repoPath}"></backlog-panel>`;
-        } else if (this.state.previewMode === 'media') {
-            this.detachPreviewAnchorHandler();
-            const content = this.state.previewContent || '<div class="preview-placeholder">Unable to preview file.</div>';
-            previewContent.innerHTML = `<div class="media-preview">${content}</div>`;
-        } else if (this.state.selectedIsMarkdown) {
-            if (this.state.markdownTextView) {
-                previewContent.innerHTML = `<pre id="filePreview" class="markdown-raw-view"></pre>`;
-                const filePreview = this.element.querySelector("#filePreview");
-                if (this.state.selectedPath) {
-                    filePreview.textContent = this.state.fileContent;
-                } else {
-                    filePreview.textContent = "Select a file to see its contents.";
-                }
-                this.detachPreviewAnchorHandler();
-            } else {
-                previewContent.innerHTML = `<div id="filePreview" class="markdown-preview"></div>`;
-                const filePreview = this.element.querySelector("#filePreview");
-                if (this.state.selectedPath) {
-                    const content = typeof this.state.previewContent === 'string' ? this.state.previewContent : '';
-                    filePreview.innerHTML = content;
-                } else {
-                    filePreview.textContent = "Select a file to see its contents.";
-                }
-                this.attachPreviewAnchorHandler();
-            }
-        } else {
-            previewContent.innerHTML = `<div id="filePreview" class="code-preview"></div>`;
-            const filePreview = this.element.querySelector("#filePreview");
-            if (this.state.selectedPath) {
-                filePreview.innerHTML = this.state.previewContent;
-            } else {
-                filePreview.textContent = "Select a file to see its contents.";
-            }
-            this.detachPreviewAnchorHandler();
-        }
-
-        if (isBacklog) {
-            this.renderBacklogViewToggle(headerExtras, showBacklogPanel);
-        }
-
-        const pendingHighlight = this.state.pendingHighlight;
-        if (pendingHighlight && pendingHighlight.path === this.normalizePath(this.state.selectedPath || '')) {
-            const didScroll = scrollToLine(this.element, pendingHighlight.line);
-            if (didScroll) {
-                this.state.pendingHighlight = null;
-            }
-        }
-
-        const toggleListButton = this.element.querySelector('#toggleListButton');
-        const listPanel = this.element.querySelector('.list');
-        const previewPanel = this.element.querySelector('.preview');
-
-        const updateToggleState = () => {
-            const collapsed = listPanel.classList.contains('collapsed');
-            toggleListButton.setAttribute('aria-expanded', String(!collapsed));
-            toggleListButton.setAttribute('title', collapsed ? 'Expand directory panel' : 'Collapse directory panel');
-            toggleListButton.setAttribute('aria-label', collapsed ? 'Expand directory panel' : 'Collapse directory panel');
-        };
-
-        const applySavedWidth = () => {
-            if (listPanel && !listPanel.classList.contains('collapsed')) {
-                if (!this.state.listWidth && listPanel.offsetWidth) {
-                    this.state.listWidth = listPanel.offsetWidth;
-                }
-                if (this.state.listWidth) {
-                    const widthPx = `${this.state.listWidth}px`;
-                    listPanel.style.width = widthPx;
-                    listPanel.style.flex = '0 0 auto';
-                    listPanel.style.flexBasis = widthPx;
-                    if (previewPanel) {
-                        previewPanel.style.flex = '1 1 auto';
-                    }
-                }
-            }
-        };
-
-        applySavedWidth();
-
-        if (listPanel && !listPanel.classList.contains('collapsed')) {
-            if (!this.state.listWidth && listPanel.offsetWidth) {
-                this.state.listWidth = listPanel.offsetWidth;
-            }
-            if (this.state.listWidth) {
-                listPanel.style.width = `${this.state.listWidth}px`;
-            }
-        }
-
-	        if (!toggleListButton.dataset.bound) {
-	            toggleListButton.addEventListener('click', () => {
-	                const isCollapsed = listPanel.classList.contains('collapsed');
-	                if (!isCollapsed) {
-	                    const currentWidth = Math.round(listPanel.getBoundingClientRect().width || listPanel.offsetWidth);
-	                    if (currentWidth > 0) {
-	                        this.state.listWidth = currentWidth;
-	                    }
-	                    listPanel.classList.add('collapsed');
-	                    listPanel.style.width = '';
-	                    listPanel.style.flex = '';
-	                    listPanel.style.flexBasis = '';
-	                    if (previewPanel) {
-	                        previewPanel.style.flex = '1 1 auto';
-	                    }
-	                } else {
-	                    listPanel.classList.remove('collapsed');
-	                    applySavedWidth();
-	                }
-	                updateToggleState();
-	            });
-	            toggleListButton.dataset.bound = 'true';
-	        }
-	        updateToggleState();
-
-        const columnMenuButton = this.element.querySelector('#columnVisibilityButton');
-        const columnMenu = this.element.querySelector('#columnVisibilityMenu');
-        if (columnMenuButton && columnMenu && !columnMenuButton.dataset.bound) {
-            const toggleMenu = () => {
-                const isOpen = columnMenu.classList.toggle('open');
-                columnMenuButton.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-            };
-            columnMenuButton.addEventListener('click', (e) => {
-                e.stopPropagation();
-                toggleMenu();
-            });
-            document.addEventListener('click', (e) => {
-                if (!columnMenu.contains(e.target) && e.target !== columnMenuButton) {
-                    columnMenu.classList.remove('open');
-                    columnMenuButton.setAttribute('aria-expanded', 'false');
-                }
-            });
-            columnMenuButton.dataset.bound = 'true';
-        }
-
-        const toolbarMenuButton = this.element.querySelector('#toolbarMenuButton');
-        const toolbarMenu = this.element.querySelector('#toolbarMenu');
-        if (toolbarMenuButton && toolbarMenu && !toolbarMenuButton.dataset.bound) {
-            const setToolbarMenuOpen = (open) => {
-                this.state.toolbarMenuOpen = open;
-                toolbarMenu.classList.toggle('open', open);
-                toolbarMenuButton.setAttribute('aria-expanded', open ? 'true' : 'false');
-            };
-            toolbarMenuButton.addEventListener('click', (e) => {
-                e.stopPropagation();
-                setToolbarMenuOpen(!this.state.toolbarMenuOpen);
-            });
-            toolbarMenu.addEventListener('click', (e) => {
-                const item = e.target.closest('[role=\"menuitem\"]');
-                if (item) {
-                    setToolbarMenuOpen(false);
-                }
-            });
-            document.addEventListener('click', (e) => {
-                if (!toolbarMenu.contains(e.target) && e.target !== toolbarMenuButton) {
-                    setToolbarMenuOpen(false);
-                }
-            });
-            toolbarMenuButton.dataset.bound = 'true';
-        }
-        if (toolbarMenuButton && toolbarMenu) {
-            toolbarMenu.classList.toggle('open', Boolean(this.state.toolbarMenuOpen));
-            toolbarMenuButton.setAttribute('aria-expanded', this.state.toolbarMenuOpen ? 'true' : 'false');
-        }
-
-        const columnCheckboxes = this.element.querySelectorAll('#columnVisibilityMenu input[type="checkbox"]');
-        if (columnCheckboxes && columnCheckboxes.length) {
-            columnCheckboxes.forEach((checkbox) => {
-                const column = checkbox.dataset.column;
-                if (column && this.state.columnVisibility[column] !== undefined) {
-                    checkbox.checked = Boolean(this.state.columnVisibility[column]);
-                }
-                if (!checkbox.dataset.bound) {
-                    checkbox.addEventListener('change', (event) => {
-                        const col = event.target.dataset.column;
-                        if (!col) return;
-                        this.state.columnVisibility[col] = Boolean(event.target.checked);
-                        saveColumnVisibilityPreference(this.state.columnVisibility);
-                        this.applyColumnVisibility();
-                    });
-                    checkbox.dataset.bound = 'true';
-                }
-            });
-        }
-
-        this.applyColumnVisibility();
-
-        const resizer = this.element.querySelector('#resizer');
-        let startX = 0;
-        let startWidth = 0;
-
-	        const handleMouseMove = (e) => {
-	            if (!this.state.isResizing) return;
-	            if (listPanel.classList.contains('collapsed')) return;
-	            const delta = e.clientX - startX;
-	            const newWidth = Math.max(200, startWidth + delta);
-	            const widthPx = `${newWidth}px`;
-	            listPanel.style.width = widthPx;
-	            listPanel.style.flex = '0 0 auto';
-            listPanel.style.flexBasis = widthPx;
-            if (previewPanel) {
-                previewPanel.style.flex = '1 1 auto';
-            }
-        };
-
-	        const handleMouseUp = () => {
-	            this.state.isResizing = false;
-	            if (!listPanel.classList.contains('collapsed')) {
-	                const currentWidth = listPanel.offsetWidth;
-	                if (currentWidth > 0) {
-	                    this.state.listWidth = currentWidth;
-	                }
-	            }
-	            document.removeEventListener('mousemove', handleMouseMove);
-	            document.removeEventListener('mouseup', handleMouseUp);
-	        };
-
-	        const handleMouseDown = (e) => {
-	            e.preventDefault();
-	            if (listPanel.classList.contains('collapsed')) return;
-	            startX = e.clientX;
-	            startWidth = listPanel.getBoundingClientRect().width || this.state.listWidth || listPanel.offsetWidth;
-	            this.state.isResizing = true;
-	            listPanel.style.flex = '0 0 auto';
-            listPanel.style.flexBasis = `${startWidth}px`;
-            if (previewPanel) {
-                previewPanel.style.flex = '1 1 auto';
-            }
-            document.addEventListener('mousemove', handleMouseMove);
-            document.addEventListener('mouseup', handleMouseUp);
-        };
-
-        if (resizer && !resizer.dataset.bound) {
-            resizer.addEventListener('mousedown', handleMouseDown);
-            resizer.dataset.bound = 'true';
-        }
-
-        const saveButton = this.element.querySelector('#saveButton');
-        if (saveButton) {
-            if (this.state.selectedIsMarkdown) {
-                saveButton.classList.add('hidden');
-            } else {
-                saveButton.classList.remove('hidden');
-            }
-        }
-
-        if (this.state.isEditing && !this.state.selectedIsMarkdown) {
-            const textarea = this.element.querySelector('.code-input');
-            if (textarea) {
-                const updateDirtyFlag = () => {
-                    this.state.hasUnsavedChanges = textarea.value !== this.state.fileContent;
-                };
-                if (!textarea.dataset.dirtyBound) {
-                    textarea.addEventListener('input', updateDirtyFlag);
-                    textarea.dataset.dirtyBound = 'true';
-                }
-                updateDirtyFlag();
-            }
-        } else {
-            this.state.hasUnsavedChanges = false;
-        }
-
-        const cancelButton = this.element.querySelector('#cancelButton');
-        if (cancelButton) {
-            cancelButton.textContent = this.state.selectedIsMarkdown ? 'Close' : 'Cancel';
-        }
-
-        const markdownViewActions = this.element.querySelector('#markdownViewActions');
-        const toggleMarkdownViewButton = this.element.querySelector('#toggleMarkdownViewButton');
-        if (markdownViewActions && toggleMarkdownViewButton) {
-            if (!this.state.isEditing && this.state.selectedIsMarkdown && this.state.selectedPath) {
-                markdownViewActions.classList.remove('hidden');
-                toggleMarkdownViewButton.textContent = this.state.markdownTextView ? 'View as preview' : 'View as text';
-            } else {
-                markdownViewActions.classList.add('hidden');
-            }
-        }
-
-        const fileNameLabel = this.element.querySelector('#editorFileName');
-        if (fileNameLabel) {
-            const fallbackName = this.state.selectedPath ? this.state.selectedPath.split('/').pop() : '';
-            fileNameLabel.textContent = fallbackName;
-        }
-
-        const previewNotice = this.element.querySelector('#previewNotice');
-        if (previewNotice) {
-            if (this.state.fileLoadInfo?.truncated) {
-                const info = this.state.fileLoadInfo;
-                const previewLines = info.previewLines || LARGE_FILE_PREVIEW_LINES;
-                const sizeText = Number.isFinite(info.size) ? this.formatBytes(info.size) : 'large';
-                previewNotice.textContent = info.message
-                    || `File is ${sizeText}; showing first ${previewLines} lines only. Editing is disabled for this view.`;
-                previewNotice.classList.remove('hidden');
-            } else {
-                previewNotice.textContent = '';
-                previewNotice.classList.add('hidden');
-            }
-        }
-
-        const clipboard = this.state.clipboard;
-        const clearClipboardButton = this.element.querySelector('#clearClipboardButton');
-        if (clearClipboardButton) {
-            if (clipboard) {
-                clearClipboardButton.removeAttribute('disabled');
-            } else {
-                clearClipboardButton.setAttribute('disabled', 'true');
-            }
-        }
-        const clipboardGroup = this.element.querySelector('.clipboard-group');
-        const clipboardInfo = this.element.querySelector('#clipboardInfo');
-        const sortButtons = this.element.querySelectorAll('[data-sort-key]');
-        sortButtons.forEach((btn) => {
-            if (!btn.dataset.sortBound) {
-                btn.addEventListener('click', (event) => this.handleSortClick(event));
-                btn.dataset.sortBound = 'true';
-            }
-            const key = btn.dataset.sortKey;
-            const isActive = this.state.sortBy === key;
-            btn.classList.toggle('active', isActive);
-            btn.dataset.direction = isActive ? this.state.sortDir : '';
-            btn.setAttribute('aria-sort', isActive ? (this.state.sortDir === 'asc' ? 'ascending' : 'descending') : 'none');
+        return runLayoutAfterRender(this, {
+            previewLines: LARGE_FILE_PREVIEW_LINES
         });
-        if (this.state.openMenuPath) {
-            if (!this.outsideMenuListenerAttached) {
-                document.addEventListener('click', this.boundOutsideMenuClick);
-                this.outsideMenuListenerAttached = true;
-            }
-            if (!this.menuKeydownListenerAttached) {
-                document.addEventListener('keydown', this.boundMenuKeydown);
-                this.menuKeydownListenerAttached = true;
-            }
-        } else {
-            if (this.outsideMenuListenerAttached) {
-                document.removeEventListener('click', this.boundOutsideMenuClick);
-                this.outsideMenuListenerAttached = false;
-            }
-            if (this.menuKeydownListenerAttached) {
-                document.removeEventListener('keydown', this.boundMenuKeydown);
-                this.menuKeydownListenerAttached = false;
-            }
-        }
-
-        if (this.pendingMenuFocusPath && this.state.openMenuPath === this.pendingMenuFocusPath) {
-            const menuContainer = this.element.querySelector(`[data-action-menu="true"][data-entry-path="${this.state.openMenuPath}"]`);
-            const firstItem = menuContainer?.querySelector('.action-menu-item');
-            if (firstItem) {
-                firstItem.focus();
-            }
-            this.pendingMenuFocusPath = null;
-        } else if (!this.state.openMenuPath) {
-            this.pendingMenuFocusPath = null;
-        }
-
-        if (this.state.openMenuPath) {
-            this.positionOpenActionMenu();
-        }
-
-        const filterToggle = this.element.querySelector('#filterSpecsToggle');
-        if (filterToggle) {
-            filterToggle.checked = Boolean(this.state.filterSpecs);
-        }
-
-        this.setupSearchBindings();
-        this.updateSearchUI();
-
-        this.directoryFilterController.bindControls();
-
-        const entriesContainer = this.element.querySelector('.entries');
-        if (entriesContainer && !entriesContainer.dataset.contextBound) {
-            entriesContainer.addEventListener('contextmenu', this.boundContextMenu, true);
-            entriesContainer.dataset.contextBound = 'true';
-        }
     }
 
     async loadDirectoryContent(path) {
@@ -750,122 +328,15 @@ export class FileExp {
     }
 
     async loadDirectory(path = this.state.path) {
-        await this.withLoader(async () => {
-            if (this.state.isEditing) {
-                await this.cancelEdit();
-            }
-            const normalizedPath = this.normalizePath(path);
-            this.state.path = normalizedPath;
-
-            // Update URL for directories here
-            const newUrl = `#file-exp${normalizedPath}`;
-            if (window.location.hash !== newUrl) {
-                history.pushState(null, '', newUrl);
-            }
-
-            this.state.selectedPath = null;
-            this.state.fileContent = "";
-            this.state.previewContent = "";
-            this.state.selectedIsMarkdown = false;
-            this.state.previewMode = 'none';
-            this.state.mediaType = null;
-            this.state.fileLoadInfo = null;
-            this.state.markdownTextView = false;
-            this.state.documentId = null;
-            this.state.isEditing = false;
-            this.state.openMenuPath = null;
-            this.pendingMenuFocusPath = null;
-            const entries = await this.loadDirectoryContent(this.state.path);
-            if (entries === null) {
-                if (this.state.path === '/') {
-                    this.showStatus('Root directory is not accessible.', true);
-                    return;
-                }
-                this.showStatus('Path not found. Returning to root.', true);
-                await this.loadDirectory('/');
-                return;
-            }
-            await this.setEntries(entries);
-            this.invalidate();
-        });
-
-        if (String(this.state.directoryFilterQuery || '').trim().length >= 2) {
-            await this.directoryFilterController.rerunIfActive();
-        }
+        return loadDirectoryImpl(this, path);
     }
 
     async refresh() {
-        await this.withLoader(async () => {
-            const currentPath = this.state.path || '/';
-            this.caches.dirListing.invalidate(this, currentPath);
-            const entries = await this.loadDirectoryContent(currentPath);
-            if (entries === null) {
-                this.showStatus('Path not found. Returning to root.', true);
-                await this.loadDirectory('/');
-                return;
-            }
-            await this.setEntries(entries);
-            this.invalidate();
-        });
-
-        if (String(this.state.directoryFilterQuery || '').trim().length >= 2) {
-            await this.directoryFilterController.rerunIfActive();
-        }
+        return refreshDirectoryImpl(this);
     }
 
     async selectEntry(element) {
-        const path = element.dataset.entryPath;
-        const type = element.dataset.type;
-
-        if (this.state.openMenuPath) {
-            this.state.openMenuPath = null;
-            this.pendingMenuFocusPath = null;
-        }
-
-        if (this.state.isEditing && this.state.hasUnsavedChanges) {
-            if (!confirm("You have unsaved changes. Are you sure you want to navigate away?")) {
-                return;
-            }
-            await this.cancelEdit();
-        } else if (this.state.isEditing) {
-            await this.cancelEdit();
-        }
-
-        // history.pushState for directories is now handled by loadDirectory
-        if (type === 'directory') {
-            await this.loadDirectory(path);
-        } else if (type === 'file') {
-            const newUrl = `#file-exp${path}`;
-            if (window.location.hash !== newUrl) {
-                history.pushState(null, '', newUrl);
-            }
-            this.state.selectedPath = path;
-            await this.openFile(path);
-        } else {
-            if (typeof this.navigateToPath === 'function') {
-                await this.navigateToPath(path);
-                return;
-            }
-            await this.withLoader(async () => {
-                try {
-                    // This block is a fallback for unknown types, it tries to read as file then load as directory
-                    // The URL update for files is handled by openFile if successful, or loadDirectory if it falls back to directory
-                    await this.tooling.readTextFile(path);
-                    const parentDir = this.parentPath(path) || '/';
-                    this.state.path = parentDir;
-                    const entries = await this.loadDirectoryContent(parentDir);
-                    await this.setEntries(entries);
-                    this.state.selectedPath = path;
-                    await this.openFile(path);
-                    const newUrl = `#file-exp${path}`;
-                    if (window.location.hash !== newUrl) {
-                        history.pushState(null, '', newUrl);
-                    }
-                } catch (_) {
-                    await this.loadDirectory(path); // This will now update the URL
-                }
-            });
-        }
+        return selectEntryImpl(this, element);
     }
 
     async tryLoadMediaPreview(filePath) {
@@ -876,10 +347,12 @@ export class FileExp {
         if (filePath && !String(filePath).endsWith('.backlog') && !String(filePath).endsWith('.history')) {
             this.state.backlogTextView = false;
         }
-        return openFileImpl(this, filePath, {
+        const result = await openFileImpl(this, filePath, {
             largeFilePreviewLimitBytes: LARGE_FILE_PREVIEW_LIMIT_BYTES,
             largeFilePreviewLines: LARGE_FILE_PREVIEW_LINES
         });
+        this.syncWebViewForPath(filePath);
+        return result;
     }
 
     async editFile() {
@@ -913,7 +386,7 @@ export class FileExp {
             }
         }
         this.state.markdownTextView = false;
-        this.state.hasUnsavedChanges = false;
+        this.setHasUnsavedChanges(false);
         this.state.isEditing = true;
         this.invalidate();
     }
@@ -929,7 +402,7 @@ export class FileExp {
             await this.tooling.writeFile(this.state.selectedPath, newContent);
             this.showStatus(`Successfully saved ${this.state.selectedPath}`, false);
             this.state.fileContent = newContent;
-            this.state.hasUnsavedChanges = false;
+            this.setHasUnsavedChanges(false);
             this.caches.filePreview.invalidateForPath(this.state.selectedPath);
             this.caches.dirListing.invalidate(this, this.state.path);
 
@@ -954,6 +427,13 @@ export class FileExp {
                 this.state.previewContent = renderCodePreview(newContent, this.state.selectedPath);
             }
 
+            if (this.isHtmlPreviewCandidate(this.state.selectedPath) && this.state.previewViewMode !== 'code') {
+                this.dispatchPreview({
+                    type: PREVIEW_ACTIONS.REFRESH,
+                    payload: { path: this.state.selectedPath }
+                });
+            }
+
             this.state.isEditing = false;
             this.editorPresenter = null;
             this.invalidate();
@@ -966,7 +446,7 @@ export class FileExp {
     async cancelEdit() {
         this.state.isEditing = false;
         this.state.markdownTextView = false;
-        this.state.hasUnsavedChanges = false;
+        this.setHasUnsavedChanges(false);
         this.editorPresenter = null;
         if (this.state.selectedIsMarkdown && this.state.selectedPath) {
             await this.openFile(this.state.selectedPath);
@@ -976,32 +456,7 @@ export class FileExp {
     }
 
     renderBreadcrumbs() {
-        const breadcrumbsEl = this.element.querySelector('#breadcrumbs');
-        breadcrumbsEl.innerHTML = '';
-        const rootButton = document.createElement('button');
-        rootButton.textContent = '/';
-        rootButton.addEventListener('click', () => {
-            // history.pushState handled by loadDirectory
-            this.loadDirectory('/');
-        });
-        breadcrumbsEl.appendChild(rootButton);
-
-        if (!this.state.path || this.state.path === '/') return;
-
-        const segments = this.state.path.split('/').filter(Boolean);
-        let current = '';
-        segments.forEach(segment => {
-            current += `/${segment}`;
-          //  breadcrumbsEl.appendChild(document.createTextNode('/'));
-            const btn = document.createElement('button');
-            btn.textContent = `${segment} \/`;
-            const path = current;
-            btn.addEventListener('click', () => {
-                // history.pushState handled by loadDirectory
-                this.loadDirectory(path);
-            });
-            breadcrumbsEl.appendChild(btn);
-        });
+        return renderBreadcrumbsImpl(this);
     }
 
     showStatus(message, isError = false) {
@@ -1026,11 +481,7 @@ export class FileExp {
     }
 
     async goUp() {
-        const parent = this.parentPath(this.state.path);
-        if (parent !== null) {
-            // history.pushState handled by loadDirectory
-            await this.loadDirectory(parent);
-        }
+        return goUpDirectoryImpl(this);
     }
 
     async filterEntriesForSpecs(entries = []) {
@@ -1041,17 +492,167 @@ export class FileExp {
         return hasMarkdownInTreeImpl(this, dirPath);
     }
 
-    toggleMarkdownView() {
-        if (!this.state.selectedIsMarkdown || this.state.isEditing) {
+    renderPreviewPanel(previewContent, previewUiState) {
+        if (!previewContent) return;
+        if (previewUiState.isHtml && previewUiState.viewMode !== 'code') {
+            this.renderHtmlPreviewPanel(previewContent, previewUiState);
             return;
         }
-        this.state.markdownTextView = !this.state.markdownTextView;
+
+        if (this.state.isEditing) {
+            this.detachPreviewAnchorHandler();
+            if (this.state.selectedIsMarkdown && this.state.documentId) {
+                previewContent.innerHTML = `<document-view-page data-presenter="document-view-page" data-path="${this.state.selectedPath}" documentId="${this.state.documentId}"></document-view-page>`;
+            } else {
+                previewContent.innerHTML = `<file-editor data-presenter="file-editor" data-path="${this.state.selectedPath}"></file-editor>`;
+            }
+            return;
+        }
+
+        if (previewUiState.showBacklogPanel) {
+            this.detachPreviewAnchorHandler();
+            const pathAttr = this.state.selectedPath || '';
+            const repoPath = this.parentPath(pathAttr) || '/';
+            previewContent.innerHTML = `<backlog-panel data-presenter="backlog-panel" data-path="${pathAttr}" data-repo-path="${repoPath}"></backlog-panel>`;
+            return;
+        }
+
+        if (this.state.previewMode === 'media') {
+            this.detachPreviewAnchorHandler();
+            const content = this.state.previewContent || '<div class="preview-placeholder">Unable to preview file.</div>';
+            previewContent.innerHTML = `<div class="media-preview">${content}</div>`;
+            return;
+        }
+
+        if (this.state.selectedIsMarkdown) {
+            if (this.state.markdownTextView) {
+                previewContent.innerHTML = `<pre id="filePreview" class="markdown-raw-view"></pre>`;
+                const filePreview = this.element.querySelector("#filePreview");
+                if (this.state.selectedPath) {
+                    filePreview.textContent = this.state.fileContent;
+                } else {
+                    filePreview.textContent = "Select a file to see its contents.";
+                }
+                this.detachPreviewAnchorHandler();
+            } else {
+                previewContent.innerHTML = `<div id="filePreview" class="markdown-preview"></div>`;
+                const filePreview = this.element.querySelector("#filePreview");
+                if (this.state.selectedPath) {
+                    const content = typeof this.state.previewContent === 'string' ? this.state.previewContent : '';
+                    filePreview.innerHTML = content;
+                } else {
+                    filePreview.textContent = "Select a file to see its contents.";
+                }
+                this.attachPreviewAnchorHandler();
+            }
+            return;
+        }
+
+        previewContent.innerHTML = `<div id="filePreview" class="code-preview"></div>`;
+        const filePreview = this.element.querySelector("#filePreview");
+        if (this.state.selectedPath) {
+            filePreview.innerHTML = this.state.previewContent;
+        } else {
+            filePreview.textContent = "Select a file to see its contents.";
+        }
+        this.detachPreviewAnchorHandler();
+    }
+
+    renderHtmlPreviewPanel(previewContent, previewUiState) {
+        this.detachPreviewAnchorHandler();
+        const webViewUrl = this.state.webViewUrl || this.buildWebViewUrl(this.state.selectedPath);
+        const reloadToken = Number(this.state.webViewReloadToken || 0);
+
+        const renderPaneHeader = (leadingContent, actionsHtml, options = {}) => {
+            const leadingHtml = options.rawLeading
+                ? leadingContent
+                : `<span class="preview-pane-title">${leadingContent}</span>`;
+            return `
+            <div class="preview-pane-header">
+                ${leadingHtml}
+                <div class="preview-pane-actions">${actionsHtml}</div>
+            </div>
+        `;
+        };
+
+        const renderClosePaneButton = (action, label) => `
+            <button type="button" class="close preview-pane-close" data-local-action="${action}" aria-label="${label}" title="${label}">
+                <img class="close-icon" src="./assets/icons/x-mark.svg" alt="close">
+            </button>
+        `;
+
+        const renderWebPaneHeader = (includeCloseButton = false) => {
+            const webActions = [
+                `<button type="button" class="secondary preview-pane-action" data-local-action="refreshWebPreviewPane">Refresh</button>`,
+                `<button type="button" class="secondary preview-pane-action" data-local-action="openWebPreviewInTab">Open in tab</button>`
+            ];
+            const trailingActions = [`<div class="html-web-view-actions">${webActions.join('')}</div>`];
+            if (includeCloseButton) {
+                trailingActions.push(renderClosePaneButton('setPreviewViewMode code', 'Hide Web'));
+            }
+            const urlLabel = webViewUrl || '';
+            return renderPaneHeader(
+                `<span class="html-web-view-url" title="${urlLabel}">${urlLabel}</span>`,
+                trailingActions.join(''),
+                { rawLeading: true }
+            );
+        };
+
+        const renderCodePane = () => {
+            const actions = [
+                renderClosePaneButton('setPreviewViewMode web', 'Hide Code')
+            ];
+            const body = this.state.isEditing
+                ? `<file-editor data-presenter="file-editor" data-path="${this.state.selectedPath}"></file-editor>`
+                : `<div id="filePreview" class="code-preview">${this.state.previewContent || "Select a file to see its contents."}</div>`;
+            return `
+                <div class="preview-pane-shell">
+                    ${renderPaneHeader('Code', actions.join(''))}
+                    <div class="preview-pane-body">${body}</div>
+                </div>
+            `;
+        };
+
+        const renderWebPane = (splitControls = false) => {
+            const body = !webViewUrl
+                ? `<div class="preview-placeholder">Web preview is currently available only for files inside /fileExplorer/explorer.</div>`
+                : `<html-web-view data-presenter="html-web-view" data-url="${webViewUrl}" data-source-path="${this.state.selectedPath}" data-reload-token="${reloadToken}" data-live-source-selector=".code-input"></html-web-view>`;
+            return `
+                <div class="preview-pane-shell">
+                    ${renderWebPaneHeader(splitControls)}
+                    <div class="preview-pane-body">${body}</div>
+                </div>
+            `;
+        };
+
+        if (previewUiState.viewMode === 'web') {
+            previewContent.innerHTML = renderWebPane(false);
+            return;
+        }
+
+        const codePaneClass = 'preview-pane';
+        const webPaneClass = 'preview-pane';
+        const splitClass = 'preview-split';
+        previewContent.innerHTML = `
+            <div class="${splitClass}">
+                <div class="${codePaneClass}">${renderCodePane()}</div>
+                <div class="${webPaneClass}">${renderWebPane(true)}</div>
+            </div>
+        `;
+    }
+
+    toggleMarkdownView() {
+        const transition = getNextMarkdownToggle(this.state);
+        if (!transition.changed) {
+            return;
+        }
+        Object.assign(this.state, transition.patch);
         this.invalidate();
     }
 
     async toggleFilterSpecs(element) {
         await this.withLoader(async () => {
-            this.state.filterSpecs = Boolean(element?.checked);
+            this.setFilterSpecs(Boolean(element?.checked));
             saveFilterSpecsPreference(this.state.filterSpecs);
             await this.setEntries(this.state.allEntries?.length ? this.state.allEntries : this.state.entries);
             this.invalidate();
@@ -1078,13 +679,16 @@ export class FileExp {
             button.type = 'button';
             button.className = 'secondary';
             button.addEventListener('click', async () => {
-                if (this.state.isEditing && this.state.hasUnsavedChanges) {
+                const transition = getNextBacklogViewToggle(this.state);
+                if (transition.blocked) {
                     this.showStatus('Save or cancel changes before switching backlog view.', true);
                     return;
                 }
-                this.state.backlogTextView = !this.state.backlogTextView;
-                this.state.isEditing = false;
-                if (this.state.backlogTextView && this.state.selectedPath) {
+                if (!transition.changed) {
+                    return;
+                }
+                Object.assign(this.state, transition.patch);
+                if (transition.shouldReloadSelection && this.state.selectedPath) {
                     await this.openFile(this.state.selectedPath);
                 }
                 this.invalidate();
@@ -1092,6 +696,165 @@ export class FileExp {
             headerExtras.appendChild(button);
         }
         button.textContent = showBacklogPanel ? 'View as text' : 'View as backlog';
+    }
+
+    setPreviewViewMode(_target, mode) {
+        if (!this.isHtmlPreviewCandidate(this.state.selectedPath)) {
+            return;
+        }
+        this.dispatchPreview({
+            type: PREVIEW_ACTIONS.SET_VIEW_MODE,
+            payload: { mode }
+        }, { invalidate: true });
+    }
+
+    getActiveWebViewPresenter() {
+        const webViewElement = this.element?.querySelector?.('html-web-view');
+        return webViewElement?.webSkelPresenter || null;
+    }
+
+    refreshWebPreviewPane() {
+        const presenter = this.getActiveWebViewPresenter();
+        if (presenter && typeof presenter.refreshIframe === 'function') {
+            presenter.refreshIframe();
+            return;
+        }
+        this.dispatchPreview({
+            type: PREVIEW_ACTIONS.REFRESH,
+            payload: { path: this.state.selectedPath }
+        }, { invalidate: true });
+    }
+
+    openWebPreviewInTab() {
+        const presenter = this.getActiveWebViewPresenter();
+        if (presenter && typeof presenter.openInNewTab === 'function') {
+            presenter.openInNewTab();
+            return;
+        }
+        const webViewUrl = this.state.webViewUrl || this.buildWebViewUrl(this.state.selectedPath);
+        if (!webViewUrl) return;
+        try {
+            const absoluteUrl = new URL(webViewUrl, window.location.origin).toString();
+            window.open(absoluteUrl, '_blank', 'noopener,noreferrer');
+        } catch (_) {
+            // ignore malformed URL fallback
+        }
+    }
+
+    dispatchUi(action, options = {}) {
+        const { invalidate = false } = options;
+        const transition = fileExpUiReducer(this.state, action);
+        if (!transition.changed) {
+            return false;
+        }
+        Object.assign(this.state, transition.patch);
+        if (invalidate) {
+            this.invalidate();
+        }
+        return true;
+    }
+
+    setToolbarMenuOpen(open, options = {}) {
+        return this.dispatchUi({
+            type: FILE_EXP_UI_ACTIONS.SET_TOOLBAR_MENU_OPEN,
+            payload: { open }
+        }, options);
+    }
+
+    setSearchMenuOpen(open, options = {}) {
+        return this.dispatchUi({
+            type: FILE_EXP_UI_ACTIONS.SET_SEARCH_MENU_OPEN,
+            payload: { open }
+        }, options);
+    }
+
+    setPendingHighlight(highlight, options = {}) {
+        return this.dispatchUi({
+            type: FILE_EXP_UI_ACTIONS.SET_PENDING_HIGHLIGHT,
+            payload: { highlight }
+        }, options);
+    }
+
+    setOpenMenuPath(pathValue, options = {}) {
+        return this.dispatchUi({
+            type: FILE_EXP_UI_ACTIONS.SET_OPEN_MENU_PATH,
+            payload: { path: pathValue }
+        }, options);
+    }
+
+    setListWidth(width, options = {}) {
+        return this.dispatchUi({
+            type: FILE_EXP_UI_ACTIONS.SET_LIST_WIDTH,
+            payload: { width }
+        }, options);
+    }
+
+    setIsResizing(isResizing, options = {}) {
+        return this.dispatchUi({
+            type: FILE_EXP_UI_ACTIONS.SET_IS_RESIZING,
+            payload: { isResizing }
+        }, options);
+    }
+
+    setColumnVisibility(column, visible, options = {}) {
+        return this.dispatchUi({
+            type: FILE_EXP_UI_ACTIONS.SET_COLUMN_VISIBILITY,
+            payload: { column, visible }
+        }, options);
+    }
+
+    setHasUnsavedChanges(hasUnsavedChanges, options = {}) {
+        return this.dispatchUi({
+            type: FILE_EXP_UI_ACTIONS.SET_HAS_UNSAVED_CHANGES,
+            payload: { hasUnsavedChanges }
+        }, options);
+    }
+
+    setFilterSpecs(filterSpecs, options = {}) {
+        return this.dispatchUi({
+            type: FILE_EXP_UI_ACTIONS.SET_FILTER_SPECS,
+            payload: { filterSpecs }
+        }, options);
+    }
+
+    isHtmlPreviewCandidate(pathValue) {
+        return /\.html?$/i.test(String(pathValue || ''));
+    }
+
+    syncWebViewForPath(pathValue) {
+        this.dispatchPreview({
+            type: PREVIEW_ACTIONS.SYNC_PATH,
+            payload: {
+                path: pathValue,
+                buildWebViewUrl: (path) => this.buildWebViewUrl(path)
+            }
+        });
+    }
+
+    dispatchPreview(action, options = {}) {
+        const { invalidate = false } = options;
+        const transition = previewReducer(this.state, action);
+        if (!transition.changed) {
+            return false;
+        }
+        Object.assign(this.state, transition.patch);
+        if (invalidate) {
+            this.invalidate();
+        }
+        return true;
+    }
+
+    buildWebViewUrl(pathValue) {
+        const rawPath = String(pathValue || '').trim();
+        if (!rawPath) return '';
+        const normalized = rawPath.replace(/\\/g, '/').replace(/^\/+/, '');
+        if (!normalized || normalized.includes('..')) return '';
+        const encodedPath = normalized
+            .split('/')
+            .filter(Boolean)
+            .map((part) => encodeURIComponent(part))
+            .join('/');
+        return `/${encodedPath}`;
     }
 
     attachPreviewAnchorHandler() {
@@ -1111,13 +874,7 @@ export class FileExp {
     }
 
     handleSortClick(event) {
-        const key = event.currentTarget?.dataset?.sortKey;
-        if (!key) return;
-        const nextDir = this.state.sortBy === key && this.state.sortDir === 'asc' ? 'desc' : 'asc';
-        this.state.sortBy = key;
-        this.state.sortDir = nextDir;
-        this.state.entries = this.sortEntries(this.state.entries);
-        this.invalidate();
+        return handleSortClickImpl(this, event);
     }
 
 }

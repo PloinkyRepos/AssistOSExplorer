@@ -1,5 +1,6 @@
 import { normalizePath, parsePatterns } from "../../pages/file-exp/file-exp-utils.js";
 import { callToolWithLoader } from "../../../utils/globalLoader.js";
+import { FILE_EXP_REPLACE_COMPLETE_EVENT } from "../../../utils/appEvents.js";
 
 export class FileSearchModal {
     constructor(element, invalidate, props = {}) {
@@ -1005,7 +1006,7 @@ export class FileSearchModal {
             }
             this.searchInFilesCache.clear();
             if (Array.isArray(payload?.changedFiles) && payload.changedFiles.length > 0) {
-                window.dispatchEvent(new CustomEvent('file-exp-replace-complete', {
+                window.dispatchEvent(new CustomEvent(FILE_EXP_REPLACE_COMPLETE_EVENT, {
                     detail: { changedFiles: payload.changedFiles }
                 }));
             }

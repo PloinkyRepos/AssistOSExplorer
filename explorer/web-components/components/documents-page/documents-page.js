@@ -1,3 +1,5 @@
+import { FILE_EXP_REFRESH_EVENT } from "../../../utils/appEvents.js";
+
 const documentModule = assistOS.loadModule("document");
 export class DocumentsPage {
     constructor(element, invalidate) {
@@ -63,7 +65,7 @@ export class DocumentsPage {
         }
         await documentModule.deleteDocument(this.getDocumentId(_target));
         this.invalidate(this.refreshDocuments);
-        window.dispatchEvent(new CustomEvent('webskel-file-exp-refresh'));
+        window.dispatchEvent(new CustomEvent(FILE_EXP_REFRESH_EVENT));
     }
 
     async exportAction(_target) {

@@ -9,6 +9,7 @@ import { callExplorerTool, callAgentTool } from "../../../services/infrastructur
 import { withGlobalLoader } from "../../../utils/globalLoader.js";
 import { joinPath } from "../../pages/file-exp/file-exp-utils.js";
 import { normalizeErrorMessage, parseJsonToolResult, normalizeSlashes, isReposRootPath, getRememberedGitIdentity, setGitErrorFlag, setCredentialsValidated, setRememberedGitPat } from "./git-commit-modal-utils.js";
+import { FILE_EXP_REFRESH_EVENT, GIT_MODAL_CLOSED_EVENT } from "../../../utils/appEvents.js";
 
 export class GitCommitModal {
     constructor(element, invalidate, props = {}) {
@@ -158,16 +159,17 @@ export class GitCommitModal {
         } else if (!nextRemember) {
             setRememberedGitPat('');
         }
+        const patch = {};
         if (detail.autocommitDirty) {
-            this.state.autocommitDirty = true;
-            this.state.autocommitDraft = {
+            patch.autocommitDirty = true;
+            patch.autocommitDraft = {
                 intervalMinutes: detail.autocommitIntervalMinutes,
                 repos: Array.isArray(detail.autocommitRepos) ? detail.autocommitRepos : null
             };
         }
         if (detail.autoresolveDirty) {
-            this.state.autoresolveDirty = true;
-            this.state.autoresolveDraft = {
+            patch.autoresolveDirty = true;
+            patch.autoresolveDraft = {
                 enabled: Boolean(detail.autoresolveConflicts)
             };
         }
@@ -179,30 +181,33 @@ export class GitCommitModal {
                 || prevRemember !== nextRemember
             );
             if (credentialsChanged) {
-                this.state.credentialsValidated = false;
+                patch.credentialsValidated = false;
                 setCredentialsValidated(false);
-                this.state.credentialsDirty = true;
+                patch.credentialsDirty = true;
             }
         }
-        this.state.identityPrompt = {
+        patch.identityPrompt = {
             ...this.state.identityPrompt,
             name: nextName,
             email: nextEmail
         };
-        this.state.authPrompt = {
+        patch.authPrompt = {
             ...this.state.authPrompt,
             token: nextToken,
             remember: nextRemember
         };
+        this.setState(patch, { silent: true });
         this.updateIdentityPrompt();
     }
 
     updateIgnorePatterns(patterns) {
         const nextPatterns = String(patterns ?? this.state.ignorePrompt?.patterns ?? '');
-        this.state.ignorePrompt = {
-            ...this.state.ignorePrompt,
-            patterns: nextPatterns
-        };
+        this.setState({
+            ignorePrompt: {
+                ...this.state.ignorePrompt,
+                patterns: nextPatterns
+            }
+        }, { silent: true });
     }
 
     afterUnload() {
@@ -219,27 +224,29 @@ export class GitCommitModal {
         const remembered = getRememberedGitIdentity();
         const hasIdentity = Boolean(remembered?.name && remembered?.email);
         if (!hasIdentity) {
-            this.state.credentialsGate = true;
-            this.state.identityPrompt = {
-                ...this.state.identityPrompt,
-                visible: true,
-                repoPath: this.state.selectedRepoPath || this.state.repoPath || '',
-                pendingAction: null,
-                name: remembered?.name || '',
-                email: remembered?.email || ''
-            };
+            this.setState({
+                credentialsGate: true,
+                identityPrompt: {
+                    ...this.state.identityPrompt,
+                    visible: true,
+                    repoPath: this.state.selectedRepoPath || this.state.repoPath || '',
+                    pendingAction: null,
+                    name: remembered?.name || '',
+                    email: remembered?.email || ''
+                }
+            }, { silent: true });
         }
         this.syncStaticUI();
         this.dialog.ensureDialogResizable();
         this.ensureCredentialsGate().then(async (gateActive) => {
             if (!gateActive) {
                 // On open: force-load repos overview so the user immediately sees changes across all repos.
-                this.state.suppressInlineLoading = true;
+                this.setState({ suppressInlineLoading: true }, { silent: true });
                 this.syncStaticUI();
                 try {
                     await withGlobalLoader(() => this.refreshAll({ force: true }));
                 } finally {
-                    this.state.suppressInlineLoading = false;
+                    this.setState({ suppressInlineLoading: false }, { silent: true });
                     this.syncStaticUI();
                 }
             }
@@ -537,7 +544,7 @@ export class GitCommitModal {
             await this.service.gitStage(repoPath, [filePath]);
             await this.refreshAll({ force: true });
             this.setStatusLine(isDeleted ? `Deletion staged: ${filePath}` : `Deleted ${filePath}.`);
-            window.dispatchEvent(new CustomEvent('webskel-file-exp-refresh', { detail: { path: fullPath } }));
+            window.dispatchEvent(new CustomEvent(FILE_EXP_REFRESH_EVENT, { detail: { path: fullPath } }));
         } catch (error) {
             this.setStatusLine(normalizeErrorMessage(error), true);
         }
@@ -565,7 +572,7 @@ export class GitCommitModal {
             await this.refreshAll({ force: true });
             this.setStatusLine(`Rolled back ${filePath}.`);
             const fullPath = joinPath(repoPath, filePath);
-            window.dispatchEvent(new CustomEvent('webskel-file-exp-refresh', { detail: { path: fullPath } }));
+            window.dispatchEvent(new CustomEvent(FILE_EXP_REFRESH_EVENT, { detail: { path: fullPath } }));
         } catch (error) {
             this.setStatusLine(normalizeErrorMessage(error), true);
         }
@@ -954,6 +961,6 @@ export class GitCommitModal {
 
     closeModal(payload) {
         assistOS.UI.closeModal(this.element, payload);
-        window.dispatchEvent(new CustomEvent('webskel-git-modal-closed'));
+        window.dispatchEvent(new CustomEvent(GIT_MODAL_CLOSED_EVENT));
     }
 }

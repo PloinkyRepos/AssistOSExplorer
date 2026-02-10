@@ -1,0 +1,311 @@
+import { saveColumnVisibilityPreference } from "./file-exp-state.js";
+import { getPreviewUiState as derivePreviewUiState } from "./file-exp-preview-state.js";
+import { scrollToLine } from "./file-exp-utils.js";
+
+export async function runAfterRender(fileExp, options = {}) {
+    const previewLinesFallback = Number.isFinite(options.previewLines) ? options.previewLines : 400;
+
+    fileExp.renderBreadcrumbs();
+    if (fileExp.state.selectedPath) {
+        const row = fileExp.element.querySelector(`[data-entry-path="${fileExp.state.selectedPath}"]`);
+        if (row) {
+            row.classList.add('active');
+        }
+    }
+
+    const previewUiState = derivePreviewUiState(fileExp.state);
+    fileExp.previewHeaderController.sync(previewUiState);
+
+    const previewContent = fileExp.element.querySelector('.preview-content');
+    fileExp.renderPreviewPanel(previewContent, previewUiState);
+
+    const pendingHighlight = fileExp.state.pendingHighlight;
+    if (pendingHighlight && pendingHighlight.path === fileExp.normalizePath(fileExp.state.selectedPath || '')) {
+        const didScroll = scrollToLine(fileExp.element, pendingHighlight.line);
+        if (didScroll) {
+            fileExp.setPendingHighlight(null);
+        }
+    }
+
+    const toggleListButton = fileExp.element.querySelector('#toggleListButton');
+    const listPanel = fileExp.element.querySelector('.list');
+    const previewPanel = fileExp.element.querySelector('.preview');
+    const columnMenuButton = fileExp.element.querySelector('#columnVisibilityButton');
+    const columnMenu = fileExp.element.querySelector('#columnVisibilityMenu');
+    const toolbarMenuButton = fileExp.element.querySelector('#toolbarMenuButton');
+    const toolbarMenu = fileExp.element.querySelector('#toolbarMenu');
+
+    const updateToggleState = () => {
+        if (!toggleListButton || !listPanel) return;
+        const collapsed = listPanel.classList.contains('collapsed');
+        toggleListButton.setAttribute('aria-expanded', String(!collapsed));
+        toggleListButton.setAttribute('title', collapsed ? 'Expand directory panel' : 'Collapse directory panel');
+        toggleListButton.setAttribute('aria-label', collapsed ? 'Expand directory panel' : 'Collapse directory panel');
+    };
+
+    const applySavedWidth = () => {
+        if (!listPanel || listPanel.classList.contains('collapsed')) return;
+        if (!fileExp.state.listWidth && listPanel.offsetWidth) {
+            fileExp.setListWidth(listPanel.offsetWidth);
+        }
+        if (fileExp.state.listWidth) {
+            const widthPx = `${fileExp.state.listWidth}px`;
+            listPanel.style.width = widthPx;
+            listPanel.style.flex = '0 0 auto';
+            listPanel.style.flexBasis = widthPx;
+            if (previewPanel) {
+                previewPanel.style.flex = '1 1 auto';
+            }
+        }
+    };
+
+    applySavedWidth();
+    if (listPanel && !listPanel.classList.contains('collapsed')) {
+        if (!fileExp.state.listWidth && listPanel.offsetWidth) {
+            fileExp.setListWidth(listPanel.offsetWidth);
+        }
+        if (fileExp.state.listWidth) {
+            listPanel.style.width = `${fileExp.state.listWidth}px`;
+        }
+    }
+
+    if (toggleListButton && listPanel) {
+        const onToggleListClick = () => {
+            const isCollapsed = listPanel.classList.contains('collapsed');
+            if (!isCollapsed) {
+                const currentWidth = Math.round(listPanel.getBoundingClientRect().width || listPanel.offsetWidth);
+                if (currentWidth > 0) {
+                    fileExp.setListWidth(currentWidth);
+                }
+                listPanel.classList.add('collapsed');
+                listPanel.style.width = '';
+                listPanel.style.flex = '';
+                listPanel.style.flexBasis = '';
+                if (previewPanel) {
+                    previewPanel.style.flex = '1 1 auto';
+                }
+            } else {
+                listPanel.classList.remove('collapsed');
+                applySavedWidth();
+            }
+            updateToggleState();
+        };
+        fileExp.setElementListener('toggle-list-button', toggleListButton, 'click', onToggleListClick);
+        updateToggleState();
+    }
+
+    if (columnMenuButton && columnMenu) {
+        const toggleMenu = () => {
+            const isOpen = columnMenu.classList.toggle('open');
+            columnMenuButton.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        };
+        const onColumnButtonClick = (event) => {
+            event.stopPropagation();
+            toggleMenu();
+        };
+        const onColumnDocumentClick = (event) => {
+            if (!columnMenu.contains(event.target) && event.target !== columnMenuButton) {
+                columnMenu.classList.remove('open');
+                columnMenuButton.setAttribute('aria-expanded', 'false');
+            }
+        };
+        fileExp.setElementListener('column-menu-button', columnMenuButton, 'click', onColumnButtonClick);
+        fileExp.setDocumentListener('column-menu-outside', 'click', onColumnDocumentClick);
+    } else {
+        fileExp.removeDocumentListener('column-menu-outside');
+    }
+
+    if (toolbarMenuButton && toolbarMenu) {
+        const setToolbarMenuOpen = (open) => {
+            fileExp.setToolbarMenuOpen(open);
+            toolbarMenu.classList.toggle('open', open);
+            toolbarMenuButton.setAttribute('aria-expanded', open ? 'true' : 'false');
+        };
+        const onToolbarButtonClick = (event) => {
+            event.stopPropagation();
+            setToolbarMenuOpen(!fileExp.state.toolbarMenuOpen);
+        };
+        const onToolbarMenuClick = (event) => {
+            const item = event.target.closest('[role="menuitem"]');
+            if (item) {
+                setToolbarMenuOpen(false);
+            }
+        };
+        const onToolbarOutsideClick = (event) => {
+            if (!toolbarMenu.contains(event.target) && event.target !== toolbarMenuButton) {
+                setToolbarMenuOpen(false);
+            }
+        };
+        fileExp.setElementListener('toolbar-menu-button', toolbarMenuButton, 'click', onToolbarButtonClick);
+        fileExp.setElementListener('toolbar-menu-container', toolbarMenu, 'click', onToolbarMenuClick);
+        fileExp.setDocumentListener('toolbar-menu-outside', 'click', onToolbarOutsideClick);
+        toolbarMenu.classList.toggle('open', Boolean(fileExp.state.toolbarMenuOpen));
+        toolbarMenuButton.setAttribute('aria-expanded', fileExp.state.toolbarMenuOpen ? 'true' : 'false');
+    } else {
+        fileExp.removeDocumentListener('toolbar-menu-outside');
+    }
+
+    const columnCheckboxes = fileExp.element.querySelectorAll('#columnVisibilityMenu input[type="checkbox"]');
+    columnCheckboxes.forEach((checkbox) => {
+        const column = checkbox.dataset.column;
+        if (column && fileExp.state.columnVisibility[column] !== undefined) {
+            checkbox.checked = Boolean(fileExp.state.columnVisibility[column]);
+        }
+        if (!column) return;
+        const onColumnVisibilityChange = (event) => {
+            const col = event.target.dataset.column;
+            if (!col) return;
+            fileExp.setColumnVisibility(col, Boolean(event.target.checked));
+            saveColumnVisibilityPreference(fileExp.state.columnVisibility);
+            fileExp.applyColumnVisibility();
+        };
+        fileExp.setElementListener(`column-visibility-${column}`, checkbox, 'change', onColumnVisibilityChange);
+    });
+    fileExp.applyColumnVisibility();
+
+    const resizer = fileExp.element.querySelector('#resizer');
+    if (resizer && listPanel) {
+        const onResizerMouseDown = (event) => {
+            event.preventDefault();
+            if (listPanel.classList.contains('collapsed')) return;
+
+            const startX = event.clientX;
+            const startWidth = listPanel.getBoundingClientRect().width || fileExp.state.listWidth || listPanel.offsetWidth;
+            fileExp.setIsResizing(true);
+            listPanel.style.flex = '0 0 auto';
+            listPanel.style.flexBasis = `${startWidth}px`;
+            if (previewPanel) {
+                previewPanel.style.flex = '1 1 auto';
+            }
+
+            const onMouseMove = (moveEvent) => {
+                if (!fileExp.state.isResizing) return;
+                if (listPanel.classList.contains('collapsed')) return;
+                const delta = moveEvent.clientX - startX;
+                const newWidth = Math.max(200, startWidth + delta);
+                const widthPx = `${newWidth}px`;
+                listPanel.style.width = widthPx;
+                listPanel.style.flex = '0 0 auto';
+                listPanel.style.flexBasis = widthPx;
+                if (previewPanel) {
+                    previewPanel.style.flex = '1 1 auto';
+                }
+            };
+
+            let stopMove = () => {};
+            let stopUp = () => {};
+            const onMouseUp = () => {
+                fileExp.setIsResizing(false);
+                if (!listPanel.classList.contains('collapsed')) {
+                    const currentWidth = listPanel.offsetWidth;
+                    if (currentWidth > 0) {
+                        fileExp.setListWidth(currentWidth);
+                    }
+                }
+                stopMove();
+                stopUp();
+            };
+
+            stopMove = fileExp.addDocumentListener('mousemove', onMouseMove);
+            stopUp = fileExp.addDocumentListener('mouseup', onMouseUp);
+        };
+        fileExp.setElementListener('list-resizer', resizer, 'mousedown', onResizerMouseDown);
+    }
+
+    const saveButton = fileExp.element.querySelector('#saveButton');
+    if (saveButton) {
+        saveButton.classList.toggle('hidden', Boolean(fileExp.state.selectedIsMarkdown));
+    }
+
+    if (fileExp.state.isEditing && !fileExp.state.selectedIsMarkdown) {
+        const textarea = fileExp.element.querySelector('.code-input');
+        if (textarea) {
+            const updateDirtyFlag = () => {
+                fileExp.setHasUnsavedChanges(textarea.value !== fileExp.state.fileContent);
+            };
+            fileExp.setElementListener('editor-dirty-input', textarea, 'input', updateDirtyFlag);
+            updateDirtyFlag();
+        }
+    } else {
+        fileExp.setHasUnsavedChanges(false);
+        fileExp.removeElementListener('editor-dirty-input');
+    }
+
+    const cancelButton = fileExp.element.querySelector('#cancelButton');
+    if (cancelButton) {
+        cancelButton.textContent = fileExp.state.selectedIsMarkdown ? 'Close' : 'Cancel';
+    }
+
+    const previewNotice = fileExp.element.querySelector('#previewNotice');
+    if (previewNotice) {
+        if (fileExp.state.fileLoadInfo?.truncated) {
+            const info = fileExp.state.fileLoadInfo;
+            const previewLines = info.previewLines || previewLinesFallback;
+            const sizeText = Number.isFinite(info.size) ? fileExp.formatBytes(info.size) : 'large';
+            previewNotice.textContent = info.message
+                || `File is ${sizeText}; showing first ${previewLines} lines only. Editing is disabled for this view.`;
+            previewNotice.classList.remove('hidden');
+        } else {
+            previewNotice.textContent = '';
+            previewNotice.classList.add('hidden');
+        }
+    }
+
+    const clipboard = fileExp.state.clipboard;
+    const clearClipboardButton = fileExp.element.querySelector('#clearClipboardButton');
+    if (clearClipboardButton) {
+        if (clipboard) {
+            clearClipboardButton.removeAttribute('disabled');
+        } else {
+            clearClipboardButton.setAttribute('disabled', 'true');
+        }
+    }
+
+    const sortButtons = fileExp.element.querySelectorAll('[data-sort-key]');
+    sortButtons.forEach((btn) => {
+        const sortKey = btn.dataset.sortKey;
+        if (!sortKey) return;
+        fileExp.setElementListener(`sort-${sortKey}`, btn, 'click', fileExp.boundSortClickHandler);
+        const isActive = fileExp.state.sortBy === sortKey;
+        btn.classList.toggle('active', isActive);
+        btn.dataset.direction = isActive ? fileExp.state.sortDir : '';
+        btn.setAttribute('aria-sort', isActive ? (fileExp.state.sortDir === 'asc' ? 'ascending' : 'descending') : 'none');
+    });
+
+    if (fileExp.state.openMenuPath) {
+        fileExp.setDocumentListener('open-menu-outside', 'click', fileExp.boundOutsideMenuClick);
+        fileExp.setDocumentListener('open-menu-keydown', 'keydown', fileExp.boundMenuKeydown);
+    } else {
+        fileExp.removeDocumentListener('open-menu-outside');
+        fileExp.removeDocumentListener('open-menu-keydown');
+    }
+
+    if (fileExp.pendingMenuFocusPath && fileExp.state.openMenuPath === fileExp.pendingMenuFocusPath) {
+        const menuContainer = fileExp.element.querySelector(`[data-action-menu="true"][data-entry-path="${fileExp.state.openMenuPath}"]`);
+        const firstItem = menuContainer?.querySelector('.action-menu-item');
+        if (firstItem) {
+            firstItem.focus();
+        }
+        fileExp.pendingMenuFocusPath = null;
+    } else if (!fileExp.state.openMenuPath) {
+        fileExp.pendingMenuFocusPath = null;
+    }
+
+    if (fileExp.state.openMenuPath) {
+        fileExp.positionOpenActionMenu();
+    }
+
+    const filterToggle = fileExp.element.querySelector('#filterSpecsToggle');
+    if (filterToggle) {
+        filterToggle.checked = Boolean(fileExp.state.filterSpecs);
+    }
+
+    fileExp.setupSearchBindings();
+    fileExp.updateSearchUI();
+    fileExp.directoryFilterController.bindControls();
+
+    const entriesContainer = fileExp.element.querySelector('.entries');
+    if (entriesContainer) {
+        fileExp.setElementListener('entries-contextmenu', entriesContainer, 'contextmenu', fileExp.boundContextMenu, true);
+    }
+}

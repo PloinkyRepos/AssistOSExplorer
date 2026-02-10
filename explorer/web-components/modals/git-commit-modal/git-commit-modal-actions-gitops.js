@@ -13,6 +13,7 @@ import {
     normalizeGitStatusPayload
 } from "./git-commit-modal-utils.js";
 import { withGlobalLoader } from "../../../utils/globalLoader.js";
+import { FILE_EXP_REFRESH_EVENT } from "../../../utils/appEvents.js";
 
 export function createGitOpsActions(ctx) {
     const {
@@ -46,7 +47,7 @@ export function createGitOpsActions(ctx) {
     } = ctx;
 
     const dispatchFileTreeRefresh = () => {
-        window.dispatchEvent(new CustomEvent('webskel-file-exp-refresh'));
+        window.dispatchEvent(new CustomEvent(FILE_EXP_REFRESH_EVENT));
     };
 
     const gitPushWithToken = async (repoPath, token) => {

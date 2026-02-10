@@ -12,6 +12,11 @@
       "presenterClassName": "FileEditor"
     },
     {
+      "name": "html-web-view",
+      "type": "components",
+      "presenterClassName": "HtmlWebView"
+    },
+    {
       "name": "document-view-page",
       "type": "components",
       "presenterClassName": "DocumentViewPage"
