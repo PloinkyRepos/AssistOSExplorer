@@ -38,6 +38,37 @@ export function attachSearchController(fileExp) {
         updateSearchUI();
     }
 
+    function buildDirectorySuggestions() {
+        const state = getState();
+        const suggestions = new Set(['/']);
+        const normalize = (value) => fileExp.normalizePath(value || '/');
+        const add = (value) => {
+            if (!value) return;
+            suggestions.add(normalize(value));
+        };
+
+        add(state.path || '/');
+        let current = normalize(state.path || '/');
+        while (current && current !== '/') {
+            const parent = fileExp.parentPath(current) || '/';
+            add(parent);
+            if (parent === current) break;
+            current = parent;
+        }
+
+        const entries = Array.isArray(state.allEntries) ? state.allEntries : Array.isArray(state.entries) ? state.entries : [];
+        entries.forEach((entry) => {
+            if (entry?.type === 'directory' && entry.path) {
+                add(entry.path);
+            }
+        });
+
+        const cachedDirs = fileExp.caches?.dirListing?.keys?.() || [];
+        cachedDirs.forEach((dir) => add(dir));
+
+        return Array.from(suggestions).sort();
+    }
+
     async function openSearchModal(mode) {
         const state = getState();
         state.searchMenuOpen = false;
@@ -50,6 +81,8 @@ export function attachSearchController(fileExp) {
             searchInFilesQuery: state.searchInFilesQuery || '',
             searchInFilesExclude: state.searchInFilesExclude || defaultExclude,
             searchInFilesCase: Boolean(state.searchInFilesCaseSensitive),
+            searchInFilesBasePath: state.searchInFilesBasePath || '/',
+            directorySuggestions: buildDirectorySuggestions(),
             basePath: fileExp.normalizePath(state.path || '/')
         }, true);
 
@@ -168,9 +201,10 @@ export function attachSearchController(fileExp) {
         if (!path) return;
         const line = element.dataset.line ? Number.parseInt(element.dataset.line, 10) : null;
         const state = getState();
-        state.pendingHighlight = line ? { path, line } : null;
+        const normalized = fileExp.normalizePath(path);
+        state.pendingHighlight = line ? { path: normalized, line } : null;
         closeSearchOverlays();
-        await navigateToPath(path);
+        await navigateToPath(normalized);
     }
 
     async function navigateToPath(targetPath) {
@@ -191,6 +225,9 @@ export function attachSearchController(fileExp) {
                 await fileExp.setEntries(entries);
                 state.selectedPath = normalized;
                 state.isEditing = false;
+                if (state.pendingHighlight && state.pendingHighlight.path === normalized) {
+                    fileExp.caches?.filePreview?.invalidateForPath?.(normalized);
+                }
                 await fileExp.openFile(normalized);
                 history.replaceState(null, '', `#file-exp${normalized}`);
             } catch (error) {

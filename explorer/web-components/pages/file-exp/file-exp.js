@@ -11,6 +11,7 @@ import {
     prepareMarkdownPreviewContent,
     renderMarkdownPreview,
     renderCodePreview,
+    scrollToLine,
 } from "./file-exp-utils.js";
 import { createFileExpState, saveFilterSpecsPreference, saveColumnVisibilityPreference } from "./file-exp-state.js";
 import { createFileExpTooling } from "./file-exp-tooling.js";
@@ -80,6 +81,7 @@ export class FileExp {
     async withLoader(fn) {
         return withGlobalLoader(fn);
     }
+
 
     beforeUnload() {
         window.removeEventListener('popstate', this.boundLoadStateFromURL);
@@ -237,6 +239,7 @@ export class FileExp {
         if (previewTitle) {
             previewTitle.classList.toggle('hidden', showBacklogPanel);
         }
+
         if (this.state.isEditing) {
             editorActions.classList.add('hidden');
             editingActions.classList.remove('hidden');
@@ -300,6 +303,14 @@ export class FileExp {
 
         if (isBacklog) {
             this.renderBacklogViewToggle(headerExtras, showBacklogPanel);
+        }
+
+        const pendingHighlight = this.state.pendingHighlight;
+        if (pendingHighlight && pendingHighlight.path === this.normalizePath(this.state.selectedPath || '')) {
+            const didScroll = scrollToLine(this.element, pendingHighlight.line);
+            if (didScroll) {
+                this.state.pendingHighlight = null;
+            }
         }
 
         const toggleListButton = this.element.querySelector('#toggleListButton');

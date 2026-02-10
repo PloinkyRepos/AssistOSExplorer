@@ -17,6 +17,16 @@ export function createWorkspaceSearch({
 }) {
   const MAX_PREVIEW_CHARS = 200;
 
+  const buildMatchPreview = (line, match) => {
+    const textLine = typeof line === 'string' ? line : '';
+    const matchStart = Number.isFinite(match?.index) ? match.index : 0;
+    const matchLength = typeof match?.text === 'string' ? match.text.length : 0;
+    const matchEnd = Math.min(textLine.length, matchStart + matchLength);
+    const cappedEnd = Math.min(textLine.length, MAX_PREVIEW_CHARS);
+    const endIndex = Math.max(matchEnd, cappedEnd);
+    return textLine.slice(0, endIndex);
+  };
+
   const escapeRegExp = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
   const normalizeMatchPath = (relativePath) => (relativePath ? `/${relativePath}` : '/');
@@ -174,7 +184,7 @@ export function createWorkspaceSearch({
                 matchIndex: match.matchIndex,
                 match: match.text,
                 length: match.text.length,
-                preview: line.trim().slice(0, MAX_PREVIEW_CHARS),
+                preview: buildMatchPreview(line, match),
                 id: buildMatchId(resultPath, idx + 1, column, match.matchIndex)
               });
               if (results.length >= maxResults) {
@@ -205,7 +215,7 @@ export function createWorkspaceSearch({
               matchIndex: match.matchIndex,
               match: match.text,
               length: match.text.length,
-              preview: line.trim().slice(0, MAX_PREVIEW_CHARS),
+              preview: buildMatchPreview(line, match),
               id: buildMatchId(resultPath, lineNumber, column, match.matchIndex)
             });
             if (results.length >= maxResults) {

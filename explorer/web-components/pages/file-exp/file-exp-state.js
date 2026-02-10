@@ -78,6 +78,7 @@ export function createFileExpState() {
         searchInFilesQuery: '',
         searchInFilesExclude: 'node_modules,.git',
         searchInFilesCaseSensitive: false,
+        searchInFilesBasePath: '/',
         searchInFilesResults: [],
         searchInFilesFileResults: [],
         searchInFilesLoading: false,

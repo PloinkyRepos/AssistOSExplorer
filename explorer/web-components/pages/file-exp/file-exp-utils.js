@@ -420,25 +420,84 @@ export function renderCodePreview(content, filePath) {
     `;
 }
 
+function ensureLineHighlight(container, top, height) {
+    if (!container) return;
+    let highlight = container.querySelector('.line-highlight');
+    if (!highlight) {
+        highlight = document.createElement('div');
+        highlight.className = 'line-highlight';
+        container.appendChild(highlight);
+    }
+    if (getComputedStyle(container).position === 'static') {
+        container.style.position = 'relative';
+    }
+    highlight.style.top = `${top}px`;
+    highlight.style.height = `${height}px`;
+}
+
+export function clearLineHighlight(rootElement) {
+    if (!rootElement) return;
+    rootElement.querySelectorAll('.line-highlight').forEach((el) => el.remove());
+}
+
 export function scrollToLine(rootElement, lineNumber) {
     if (!rootElement || !Number.isFinite(lineNumber) || lineNumber <= 0) {
-        return;
+        return false;
     }
     const linesColumn = rootElement.querySelector('.code-preview-lines');
     const codeColumn = rootElement.querySelector('.code-preview-code');
-    const targetLine = linesColumn?.querySelector(`span:nth-child(${lineNumber})`);
-    if (!targetLine || !linesColumn || !codeColumn) {
-        return;
+    const rawView = rootElement.querySelector('.markdown-raw-view');
+    const previewBody = rootElement.querySelector('.preview-body');
+
+    if (linesColumn && codeColumn) {
+        const targetLine = linesColumn.querySelector(`span:nth-child(${lineNumber})`);
+        if (!targetLine) return false;
+        const lineHeight = Number.parseFloat(getComputedStyle(linesColumn).lineHeight)
+            || Number.parseFloat(getComputedStyle(codeColumn).lineHeight)
+            || 16;
+        const linesPaddingTop = Number.parseFloat(getComputedStyle(linesColumn).paddingTop) || 0;
+        const codePaddingTop = Number.parseFloat(getComputedStyle(codeColumn).paddingTop) || 0;
+        const offsetTop = linesPaddingTop + (lineNumber - 1) * lineHeight;
+        ensureLineHighlight(linesColumn, offsetTop, lineHeight);
+        ensureLineHighlight(codeColumn, codePaddingTop + (lineNumber - 1) * lineHeight, lineHeight);
+        if (typeof targetLine.scrollIntoView === 'function') {
+            try {
+                targetLine.scrollIntoView({ block: 'center', inline: 'nearest' });
+            } catch (_) {
+                // ignore scrollIntoView failures
+            }
+        }
+        const codeScrollable = codeColumn.scrollHeight > codeColumn.clientHeight ? codeColumn : null;
+        const linesScrollable = linesColumn.scrollHeight > linesColumn.clientHeight ? linesColumn : null;
+        const bodyScrollable = previewBody && previewBody.scrollHeight > previewBody.clientHeight ? previewBody : null;
+        if (linesScrollable) {
+            linesScrollable.scrollTop = offsetTop - 20;
+        }
+        if (codeScrollable) {
+            codeScrollable.scrollTop = linesScrollable ? linesScrollable.scrollTop : (offsetTop - 20);
+        }
+        if (!codeScrollable && bodyScrollable) {
+            bodyScrollable.scrollTop = offsetTop - 20;
+        }
+        return true;
     }
-    const offsetTop = targetLine.offsetTop;
-    const parent = linesColumn.parentElement;
-    const codeParent = codeColumn.parentElement;
-    if (parent) {
-        parent.scrollTop = offsetTop - 20;
+
+    if (rawView) {
+        const computed = window.getComputedStyle(rawView);
+        const lineHeight = Number.parseFloat(computed.lineHeight) || 16;
+        const paddingTop = Number.parseFloat(computed.paddingTop) || 0;
+        const offsetTop = paddingTop + (lineNumber - 1) * lineHeight;
+        ensureLineHighlight(rawView, offsetTop, lineHeight);
+        const rawScrollable = rawView.scrollHeight > rawView.clientHeight ? rawView : null;
+        const bodyScrollable = previewBody && previewBody.scrollHeight > previewBody.clientHeight ? previewBody : null;
+        if (rawScrollable) {
+            rawScrollable.scrollTop = offsetTop - 20;
+        } else if (bodyScrollable) {
+            bodyScrollable.scrollTop = offsetTop - 20;
+        }
+        return true;
     }
-    if (codeParent) {
-        codeParent.scrollTop = offsetTop - 20;
-    }
+    return false;
 }
 
 let activeContextPasteCleanup = null;

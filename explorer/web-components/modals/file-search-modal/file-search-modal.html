@@ -76,13 +76,9 @@
                         </label>
                     </div>
                     <div class="search-row search-row-secondary search-scope-row">
-                        <label class="search-scope-label">Scope</label>
-                        <select id="searchInFilesScope">
-                            <option value="current">Current directory</option>
-                            <option value="workspace">Workspace</option>
-                            <option value="custom">Custom path</option>
-                        </select>
-                        <input type="text" id="searchInFilesBasePath" placeholder="/path" autocomplete="off">
+                        <label class="search-scope-label" for="searchInFilesBasePath">Scope</label>
+                        <input type="text" id="searchInFilesBasePath" placeholder="/" autocomplete="off" list="searchInFilesBasePathList">
+                        <datalist id="searchInFilesBasePathList"></datalist>
                     </div>
                     <div class="search-row search-row-actions replace-only">
                         <button type="button" class="general-button" id="replaceSelectedButton">Replace Selected</button>

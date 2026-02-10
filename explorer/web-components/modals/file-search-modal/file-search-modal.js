@@ -13,8 +13,7 @@ export class FileSearchModal {
         this.state = {
             mode: props.mode || 'name',
             basePath: props.basePath || '/',
-            searchInFilesScope: props.searchInFilesScope || 'current',
-            searchInFilesCustomPath: props.searchInFilesCustomPath || props.basePath || '/',
+            searchInFilesBasePath: props.searchInFilesBasePath || '/',
             searchByNameQuery: props.searchByNameQuery || '',
             searchByNameExclude: props.searchByNameExclude || this.defaultExclude,
             searchByNameResults: [],
@@ -36,7 +35,8 @@ export class FileSearchModal {
             replaceInFilesSummary: null,
             searchByNameTimer: null,
             searchInFilesTimer: null,
-            selectedMatchIds: new Set()
+            selectedMatchIds: new Set(),
+            directorySuggestions: Array.isArray(props.directorySuggestions) ? props.directorySuggestions : []
         };
         this.invalidate();
     }
@@ -57,14 +57,8 @@ export class FileSearchModal {
     }
 
     resolveSearchBasePath() {
-        const scope = this.state.searchInFilesScope || 'current';
-        if (scope === 'workspace') {
-            return '/';
-        }
-        if (scope === 'custom') {
-            return this.normalizeBasePath(this.state.searchInFilesCustomPath || this.state.basePath || '/');
-        }
-        return this.normalizeBasePath(this.state.basePath || '/');
+        const value = this.state.searchInFilesBasePath || '/';
+        return this.normalizeBasePath(value || '/');
     }
 
     afterRender() {
@@ -117,11 +111,11 @@ export class FileSearchModal {
 
         const matchText = firstMatch[0] ?? '';
         const matchIndex = Number.isFinite(firstMatch.index) ? firstMatch.index : 0;
-        const context = 50;
-        const start = Math.max(0, matchIndex - context);
-        const end = Math.min(value.length, matchIndex + matchText.length + context);
+        const contextAfter = 50;
+        const start = 0;
+        const end = Math.min(value.length, matchIndex + matchText.length + contextAfter);
         const snippet = value.slice(start, end);
-        const prefix = start > 0 ? '…' : '';
+        const prefix = '';
         const suffix = end < value.length ? '…' : '';
 
         regex.lastIndex = 0;
@@ -223,26 +217,11 @@ export class FileSearchModal {
             searchInFilesWholeWord.dataset.bound = 'true';
         }
 
-        const searchInFilesScope = this.element.querySelector('#searchInFilesScope');
-        if (searchInFilesScope && !searchInFilesScope.dataset.bound) {
-            searchInFilesScope.addEventListener('change', (e) => {
-                this.state.searchInFilesScope = e.target.value || 'current';
-                if (this.state.searchInFilesScope !== 'custom' && !this.state.searchInFilesCustomPath) {
-                    this.state.searchInFilesCustomPath = this.state.basePath || '/';
-                }
-                this.syncUIFromState();
-                this.scheduleSearchInFiles();
-            });
-            searchInFilesScope.dataset.bound = 'true';
-        }
-
         const searchInFilesBasePath = this.element.querySelector('#searchInFilesBasePath');
         if (searchInFilesBasePath && !searchInFilesBasePath.dataset.bound) {
             searchInFilesBasePath.addEventListener('input', (e) => {
-                if (this.state.searchInFilesScope !== 'custom') {
-                    return;
-                }
-                this.state.searchInFilesCustomPath = e.target.value;
+                this.state.searchInFilesBasePath = e.target.value;
+                this.updateBasePathSuggestions();
                 this.scheduleSearchInFiles();
             });
             searchInFilesBasePath.dataset.bound = 'true';
@@ -361,7 +340,6 @@ export class FileSearchModal {
         this.state.mode = nextMode;
         const nameOverlay = this.element.querySelector('#searchByNameOverlay');
         const textOverlay = this.element.querySelector('#searchInFilesOverlay');
-        const subtitle = this.element.querySelector('#searchInFilesSubtitle');
         if (nameOverlay) {
             nameOverlay.classList.toggle('open', nextMode === 'name');
             nameOverlay.setAttribute('aria-hidden', nextMode === 'name' ? 'false' : 'true');
@@ -372,9 +350,22 @@ export class FileSearchModal {
             textOverlay.classList.toggle('replace-mode', nextMode === 'replace');
             textOverlay.setAttribute('aria-hidden', isTextMode ? 'false' : 'true');
         }
-        if (subtitle) {
-            subtitle.textContent = 'Find and replace across workspace (Cmd/Ctrl+Shift+F)';
-        }
+    }
+
+    updateBasePathSuggestions() {
+        const list = this.element.querySelector('#searchInFilesBasePathList');
+        if (!list) return;
+        list.innerHTML = '';
+        const raw = String(this.state.searchInFilesBasePath || '').trim().toLowerCase();
+        const all = Array.isArray(this.state.directorySuggestions) ? this.state.directorySuggestions : [];
+        const filtered = raw
+            ? all.filter((entry) => entry.toLowerCase().startsWith(raw) || entry.toLowerCase().includes(raw))
+            : all;
+        filtered.slice(0, 80).forEach((entry) => {
+            const option = document.createElement('option');
+            option.value = entry;
+            list.appendChild(option);
+        });
     }
 
     syncUIFromState() {
@@ -393,20 +384,10 @@ export class FileSearchModal {
         setValue('#searchInFilesQuery', state.searchInFilesQuery);
         setValue('#searchInFilesExclude', state.searchInFilesExclude);
         setValue('#replaceInFilesWith', state.replaceInFilesWith);
-        setValue('#searchInFilesScope', state.searchInFilesScope || 'current');
         const basePathInput = this.element.querySelector('#searchInFilesBasePath');
         if (basePathInput) {
-            const scope = state.searchInFilesScope || 'current';
-            if (scope === 'workspace') {
-                basePathInput.value = '/';
-                basePathInput.disabled = true;
-            } else if (scope === 'custom') {
-                basePathInput.value = state.searchInFilesCustomPath || state.basePath || '/';
-                basePathInput.disabled = false;
-            } else {
-                basePathInput.value = state.basePath || '/';
-                basePathInput.disabled = true;
-            }
+            basePathInput.value = state.searchInFilesBasePath || '/';
+            basePathInput.disabled = false;
         }
         const textCaseInput = this.element.querySelector('#searchInFilesCase');
         if (textCaseInput) {
@@ -420,6 +401,7 @@ export class FileSearchModal {
         if (wholeWordInput) {
             wholeWordInput.checked = Boolean(state.searchInFilesWholeWord);
         }
+        this.updateBasePathSuggestions();
         this.renderSearchByNameResults();
         this.renderSearchInFilesResults();
         this.renderReplaceStatus();
@@ -732,7 +714,14 @@ export class FileSearchModal {
         const totalMatches = matches.length;
         const selectedCount = selected.size;
         if (this.state.searchInFilesLoading) {
-            status.textContent = 'Searching across files...';
+            status.classList.add('loading');
+            status.innerHTML = '';
+            const spinner = document.createElement('span');
+            spinner.className = 'search-spinner';
+            const text = document.createElement('span');
+            text.textContent = 'Searching across files...';
+            status.appendChild(spinner);
+            status.appendChild(text);
             return;
         }
         if (this.state.searchInFilesError) {

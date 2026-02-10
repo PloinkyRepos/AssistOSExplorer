@@ -5,7 +5,8 @@ import {
     renderMarkdownPreview,
     renderCodePreview,
     scrollToLine,
-    scrollPreviewToAnchor
+    scrollPreviewToAnchor,
+    clearLineHighlight
 } from "./file-exp-utils.js";
 import { callToolWithLoader } from "../../../utils/globalLoader.js";
 
@@ -68,6 +69,7 @@ export async function tryLoadMediaPreview(fileExp, filePath) {
 export async function openFile(fileExp, filePath, { largeFilePreviewLimitBytes, largeFilePreviewLines }) {
     await fileExp.withLoader(async () => {
         try {
+            clearLineHighlight(fileExp.element);
             fileExp.state.previewMode = 'code';
             fileExp.state.mediaType = null;
             fileExp.state.fileLoadInfo = null;
@@ -92,7 +94,9 @@ export async function openFile(fileExp, filePath, { largeFilePreviewLimitBytes, 
                 fileExp.state.documentId = null;
                 fileExp.state.hasUnsavedChanges = false;
                 fileExp.state.isEditing = false;
-                fileExp.state.pendingHighlight = null;
+                if (fileExp.state.pendingHighlight && fileExp.state.pendingHighlight.path !== fileExp.normalizePath(filePath)) {
+                    fileExp.state.pendingHighlight = null;
+                }
                 fileExp.invalidate();
                 return;
             }
@@ -159,11 +163,7 @@ export async function openFile(fileExp, filePath, { largeFilePreviewLimitBytes, 
                     fileLoadInfo: fileExp.state.fileLoadInfo
                 });
             }
-            if (fileExp.state.pendingHighlight && fileExp.state.pendingHighlight.path === fileExp.normalizePath(filePath)) {
-                const lineNumber = fileExp.state.pendingHighlight.line;
-                fileExp.state.pendingHighlight = null;
-                setTimeout(() => scrollToLine(fileExp.element, lineNumber), 0);
-            } else {
+            if (fileExp.state.pendingHighlight && fileExp.state.pendingHighlight.path !== fileExp.normalizePath(filePath)) {
                 fileExp.state.pendingHighlight = null;
             }
             fileExp.invalidate();

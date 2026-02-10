@@ -50,6 +50,9 @@ export function createFileExpCaches({
                 const normalized = normalizeDirPath(fileExp?.normalizePath, dirPath);
                 dirListing.delete(normalized);
                 mdTree.delete(normalized);
+            },
+            keys() {
+                return Array.from(dirListing.keys());
             }
         },
         filePreview: {
@@ -89,4 +92,3 @@ export function createFileExpCaches({
         }
     };
 }
-
