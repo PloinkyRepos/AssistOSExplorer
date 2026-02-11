@@ -116,9 +116,34 @@ jobs:
           echo "[update] fileExplorer updated to $(git rev-parse --short HEAD)"
           UPDATE_REPO
 
+      - name: Update gitTest repository
+        env:
+          WORKSPACE: ${{ inputs.workspace_name || vars.EXPLORER_WORKSPACE || 'explorerWorkspace' }}
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key "${{ env.SSH_USER }}@${{ env.SSH_HOST }}" bash -s -- "$WORKSPACE" << 'UPDATE_GITTEST'
+          set -euo pipefail
+          WORKSPACE="$1"
+          export PATH="$HOME/ploinky/bin:$HOME/.local/bin:$PATH"
+
+          WORK_DIR="$HOME/$WORKSPACE"
+          GITTEST_REPO="$WORK_DIR/.ploinky/repos/gitTest"
+          if [ ! -d "$GITTEST_REPO/.git" ]; then
+            echo "[update] gitTest repo not found, adding it..."
+            cd "$WORK_DIR"
+            ploinky add repo gitTest https://github.com/AssistosTest/gitTest.git main || true
+          else
+            echo "[update] Updating gitTest repo..."
+            cd "$GITTEST_REPO"
+            git fetch origin 2>/dev/null || true
+            git pull origin main 2>/dev/null || git pull origin master 2>/dev/null || true
+            echo "[update] gitTest updated to $(git rev-parse --short HEAD)"
+          fi
+          UPDATE_GITTEST
+
       - name: Update environment variables
         env:
           WORKSPACE: ${{ inputs.workspace_name || vars.EXPLORER_WORKSPACE || 'explorerWorkspace' }}
+          ROUTER_PORT: ${{ inputs.router_port || vars.EXPLORER_ROUTER_PORT || '8097' }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           AXIOLOGIC_API_KEY: ${{ secrets.AXIOLOGIC_API_KEY }}
@@ -136,7 +161,8 @@ jobs:
           set -eo pipefail
           export PATH="\$HOME/ploinky/bin:\$HOME/.local/bin:\$PATH"
 
-          cd "\$HOME/${WORKSPACE}"
+          WORK_DIR="\$HOME/${WORKSPACE}"
+          cd "\$WORK_DIR"
           echo "[update] Updating environment variables..."
 
           set_var() {
@@ -146,6 +172,11 @@ jobs:
               ploinky var "\$name" "\$value" 2>/dev/null || true
             fi
           }
+
+          # Infrastructure variables (must match deploy-explorer.yml)
+          ploinky var PLOINKY_CODE_WRITABLE "1" 2>/dev/null || true
+          ploinky var PLOINKY_ROUTER_URL "http://host.containers.internal:${ROUTER_PORT}" 2>/dev/null || true
+          ploinky var ASSISTOS_FS_ROOT "\$WORK_DIR" 2>/dev/null || true
 
           # API Keys
           set_var OPENAI_API_KEY "${OPENAI_API_KEY:-}"
@@ -193,13 +224,31 @@ jobs:
 
           WORK_DIR="$HOME/$WORKSPACE"
           cd "$WORK_DIR"
+          mkdir -p "$WORK_DIR/logs"
           echo "[update] Restarting explorer on router port $ROUTER_PORT..."
 
           ploinky stop || true
           nohup ploinky start explorer "$ROUTER_PORT" > "$WORK_DIR/logs/update-start.log" 2>&1 &
+
+          echo "[update] Waiting for router to come up..."
           sleep 10
+          for i in $(seq 1 90); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:${ROUTER_PORT}/dashboard" || true)
+            if [ "$code" = "200" ] || [ "$code" = "302" ]; then
+              echo "[update] Router is responding (HTTP $code)"
+              break
+            fi
+            if [ "$i" = "90" ]; then
+              echo "[update] WARNING: router did not respond within 3 minutes"
+              tail -50 "$WORK_DIR/logs/update-start.log" || true
+              exit 1
+            fi
+            sleep 2
+          done
+
           echo "[update] Containers:"
           podman ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | head -80
+          echo "[update] Restart complete."
           RESTART
 
       - name: Cleanup SSH key
