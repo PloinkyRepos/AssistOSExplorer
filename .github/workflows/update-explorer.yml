@@ -88,6 +88,31 @@ jobs:
           echo "[update] Ploinky updated."
           UPDATE_PLOINKY
 
+      - name: Sync achillesAgentLib to workspace
+        if: ${{ inputs.update_ploinky == true }}
+        env:
+          WORKSPACE: ${{ inputs.workspace_name || vars.EXPLORER_WORKSPACE || 'explorerWorkspace' }}
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key "${{ env.SSH_USER }}@${{ env.SSH_HOST }}" bash -s -- "$WORKSPACE" << 'SYNC_LIB'
+          set -euo pipefail
+          WORKSPACE="$1"
+          PLOINKY_LIB="$HOME/ploinky/node_modules/achillesAgentLib"
+          if [ ! -d "$PLOINKY_LIB" ]; then
+            echo "[sync] achillesAgentLib not found in ploinky, skipping."
+            exit 0
+          fi
+          WORK_DIR="$HOME/$WORKSPACE"
+          for AGENT_DIR in "$WORK_DIR/agents"/*/; do
+            TARGET="$AGENT_DIR/node_modules/achillesAgentLib"
+            if [ -d "$AGENT_DIR/node_modules" ]; then
+              echo "[sync] Updating achillesAgentLib in $(basename "$AGENT_DIR")..."
+              rm -rf "$TARGET"
+              cp -r "$PLOINKY_LIB" "$TARGET"
+            fi
+          done
+          echo "[sync] achillesAgentLib synced."
+          SYNC_LIB
+
       - name: Update fileExplorer repository
         env:
           WORKSPACE: ${{ inputs.workspace_name || vars.EXPLORER_WORKSPACE || 'explorerWorkspace' }}
