@@ -88,25 +88,6 @@ jobs:
           echo "[update] Ploinky updated."
           UPDATE_PLOINKY
 
-      - name: Force agent dependency reinstall
-        if: ${{ inputs.update_ploinky == true }}
-        env:
-          WORKSPACE: ${{ inputs.workspace_name || vars.EXPLORER_WORKSPACE || 'explorerWorkspace' }}
-        run: |
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key "${{ env.SSH_USER }}@${{ env.SSH_HOST }}" bash -s -- "$WORKSPACE" << 'FORCE_DEPS'
-          set -euo pipefail
-          WORKSPACE="$1"
-          WORK_DIR="$HOME/$WORKSPACE"
-          for AGENT_DIR in "$WORK_DIR/agents"/*/; do
-            MARKER="$AGENT_DIR/node_modules/mcp-sdk"
-            if [ -d "$MARKER" ]; then
-              echo "[deps] Removing mcp-sdk marker in $(basename "$AGENT_DIR") to force npm install..."
-              rm -rf "$MARKER"
-            fi
-          done
-          echo "[deps] Dependency reinstall will be triggered on next ploinky start/refresh."
-          FORCE_DEPS
-
       - name: Update fileExplorer repository
         env:
           WORKSPACE: ${{ inputs.workspace_name || vars.EXPLORER_WORKSPACE || 'explorerWorkspace' }}
@@ -257,6 +238,22 @@ jobs:
           fi
 
           ploinky stop || true
+
+          # Remove mcp-sdk markers and stopped containers so ploinky start
+          # creates fresh containers with a full npm install.
+          for AGENT_DIR in "$WORK_DIR/agents"/*/; do
+            MARKER="$AGENT_DIR/node_modules/mcp-sdk"
+            if [ -d "$MARKER" ]; then
+              echo "[update] Removing mcp-sdk marker for $(basename "$AGENT_DIR")..."
+              rm -rf "$MARKER"
+            fi
+          done
+          # Remove stopped containers so ploinky start recreates them
+          for cid in $(podman ps -a --filter "status=exited" --format '{{.Names}}' | grep "explorerWorkspace" || true); do
+            echo "[update] Removing stopped container $cid..."
+            podman rm "$cid" 2>/dev/null || true
+          done
+
           nohup ploinky start explorer "$ROUTER_PORT" > "$WORK_DIR/logs/update-start.log" 2>&1 &
 
           echo "[update] Waiting for router to come up..."
