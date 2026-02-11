@@ -44,13 +44,17 @@ export function createCredentialsActions(ctx) {
         if (state.repoPath && !isReposRootPath(state.repoPath, state.reposRoot)) return state.repoPath;
         const selected = getSelectedReposForBatch();
         if (selected.length) return selected[0];
-        try {
-            const payload = parseJsonToolResult(await service.gitReposOverview(state.reposRoot)) || {};
-            const repos = Array.isArray(payload.repos) ? payload.repos : [];
-            const first = repos.map((repo) => repo?.path).find(Boolean);
-            if (first) return first;
-        } catch {
-            // ignore
+        const scanPaths = [state.reposRoot, '.'];
+        for (const scanPath of scanPaths) {
+            if (!scanPath) continue;
+            try {
+                const payload = parseJsonToolResult(await service.gitReposOverview(scanPath)) || {};
+                const repos = Array.isArray(payload.repos) ? payload.repos : [];
+                const first = repos.map((repo) => repo?.path).find(Boolean);
+                if (first) return first;
+            } catch {
+                // ignore
+            }
         }
         return '';
     };

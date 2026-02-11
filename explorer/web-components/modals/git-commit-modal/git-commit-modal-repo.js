@@ -218,8 +218,18 @@ export function createGitCommitRepo(ctx) {
         renderRepoOverviews([]);
         const pending = (async () => {
             try {
-                const payload = parseJsonToolResult(await service.gitReposOverview(state.reposRoot)) || {};
-                const results = Array.isArray(payload.repos) ? payload.repos : [];
+                let results = [];
+                const scanPaths = [state.reposRoot, '.'];
+                for (const scanPath of scanPaths) {
+                    if (!scanPath) continue;
+                    try {
+                        const payload = parseJsonToolResult(await service.gitReposOverview(scanPath)) || {};
+                        results = Array.isArray(payload.repos) ? payload.repos : [];
+                        if (results.length) break;
+                    } catch {
+                        // try next path
+                    }
+                }
                 const hintMap = state.ignoreHints || {};
                 const merged = results.map((repo) => {
                     const hints = Array.isArray(hintMap[repo?.path]) ? hintMap[repo.path] : [];

@@ -114,22 +114,26 @@ async function resolveReposRootAbs() {
     if (cachedReposRootAbs) return cachedReposRootAbs;
     if (reposRootPromise) return reposRootPromise;
     reposRootPromise = (async () => {
-        try {
-            const gitClient = window.webSkel?.appServices?.getClient?.('gitAgent');
-            if (!gitClient || typeof gitClient.callTool !== 'function') {
-                return cachedReposRootAbs;
-            }
-            const result = await gitClient.callTool('git_repos_overview', { path: '.ploinky/repos' });
-            const parsed = parseToolResult(result);
-            const root = parsed?.reposRoot;
-            if (isNonEmptyString(root) && root.startsWith('/')) {
-                cachedReposRootAbs = root.trim().replace(/\/+$/g, '');
-            }
-        } catch {
-            // ignore, fall back to empty
-        } finally {
-            reposRootPromise = null;
+        const gitClient = window.webSkel?.appServices?.getClient?.('gitAgent');
+        if (!gitClient || typeof gitClient.callTool !== 'function') {
+            return cachedReposRootAbs;
         }
+        const scanPaths = ['.ploinky/repos', '.'];
+        for (const scanPath of scanPaths) {
+            try {
+                const result = await gitClient.callTool('git_repos_overview', { path: scanPath });
+                const parsed = parseToolResult(result);
+                const repos = Array.isArray(parsed?.repos) ? parsed.repos : [];
+                const root = parsed?.reposRoot;
+                if (isNonEmptyString(root) && root.startsWith('/') && repos.length > 0) {
+                    cachedReposRootAbs = root.trim().replace(/\/+$/g, '');
+                    break;
+                }
+            } catch {
+                // ignore, try next path
+            }
+        }
+        reposRootPromise = null;
         return cachedReposRootAbs;
     })();
     return reposRootPromise;

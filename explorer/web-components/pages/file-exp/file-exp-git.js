@@ -133,9 +133,19 @@ export function attachGitController(fileExp) {
     };
 
     const listRepos = async () => {
-        const payload = await callGitTool('git_repos_overview', { path: reposRoot }) || {};
-        const repos = Array.isArray(payload?.repos) ? payload.repos : [];
-        return repos.map((r) => r?.path).filter(Boolean);
+        const scanPaths = [reposRoot, '.'];
+        for (const scanPath of scanPaths) {
+            if (!scanPath) continue;
+            try {
+                const payload = await callGitTool('git_repos_overview', { path: scanPath }) || {};
+                const repos = Array.isArray(payload?.repos) ? payload.repos : [];
+                const paths = repos.map((r) => r?.path).filter(Boolean);
+                if (paths.length) return paths;
+            } catch {
+                // try next path
+            }
+        }
+        return [];
     };
 
     const getRepoStatus = async (repoPath) => {
