@@ -56,71 +56,36 @@
 
                 <div class="doc-section" id="tool-reference">
                     <h2>Tool Reference</h2>
-                    <p>Here is a detailed list of the MCP tools provided by the Explorer agent.</p>
+                    <p>Here is the current tool surface provided by the Explorer agent (grouped by domain).</p>
                     
-                    <h3>read_text_file</h3>
-                    <p>Reads the contents of a text file.</p>
+                    <h3>Filesystem read/write</h3>
+                    <p><code>read_file</code> (deprecated), <code>read_text_file</code>, <code>read_media_file</code>, <code>read_multiple_files</code>, <code>write_file</code>, <code>write_binary_file</code>, <code>edit_file</code>.</p>
                     <pre><code>{
   path: string,
   tail?: number, // If provided, returns only the last N lines
   head?: number  // If provided, returns only the first N lines
 }</code></pre>
 
-                    <h3>write_file</h3>
-                    <p>Creates or overwrites a file with new content.</p>
-                    <pre><code>{
-  path: string,
-  content: string
-}</code></pre>
+                    <h3>Directory and file operations</h3>
+                    <p><code>create_directory</code>, <code>delete_file</code>, <code>delete_directory</code>, <code>list_directory</code>, <code>list_directory_with_sizes</code>, <code>list_directory_detailed</code>, <code>directory_tree</code>, <code>move_file</code>, <code>copy_file</code>, <code>get_file_info</code>.</p>
 
-                    <h3>list_directory</h3>
-                    <p>Lists files and directories within a path.</p>
-                    <pre><code>{
-  path: string
-}</code></pre>
-                    
-                    <h3>list_directory_detailed</h3>
-                    <p>Lists directory contents with metadata as JSON.</p>
-                    <pre><code>{
-  path: string
-}</code></pre>
+                    <h3>Search and replace</h3>
+                    <p><code>search_files</code>, <code>search_text</code>, <code>replace_text</code>.</p>
 
-                    <h3>create_directory</h3>
-                    <p>Ensures a directory exists by creating it recursively.</p>
-                    <pre><code>{
-  path: string
-}</code></pre>
+                    <h3>IDE integration</h3>
+                    <p><code>collect_ide_plugins</code>, <code>list_allowed_directories</code>.</p>
 
-                    <h3>delete_file / delete_directory</h3>
-                    <p>Deletes a file or directory.</p>
-                    <pre><code>{
-  path: string
-}</code></pre>
+                    <h3>Git tools</h3>
+                    <p><code>git_info</code>, <code>git_status</code>, <code>git_diff</code>, <code>git_stage</code>, <code>git_unstage</code>, <code>git_untrack</code>, <code>git_check_ignore</code>, <code>git_restore</code>, <code>git_conflict_versions</code>, <code>git_checkout_conflict</code>, <code>git_stash</code>, <code>git_stash_list</code>, <code>git_stash_pop</code>, <code>git_commit</code>, <code>git_push</code>, <code>git_pull</code>, <code>git_diagnose</code>, <code>git_repos_overview</code>, <code>git_identity</code>, <code>git_set_identity</code>.</p>
 
-                    <h3>move_file</h3>
-                    <p>Moves or renames a file or directory.</p>
+                    <h3>Path safety model</h3>
+                    <p>All tools resolve paths against the configured workspace roots. Absolute paths inside allowed roots are accepted; relative or slash-prefixed paths are resolved into workspace context and blocked if traversal escapes configured roots.</p>
                     <pre><code>{
-  source: string,
-  destination: string
+  // examples of safe args patterns
+  path: "/.ploinky/repos/fileExplorer/docs/development.html",
+  source: "/repo/fileA.txt",
+  destination: "/repo/fileB.txt"
 }</code></pre>
-
-                    <h3>copy_file</h3>
-                    <p>Copies a file or directory, with an option to overwrite.</p>
-                    <pre><code>{
-  source: string,
-  destination: string,
-  overwrite?: boolean
-}</code></pre>
-
-                    <h3>get_file_info</h3>
-                    <p>Retrieves metadata about a file or directory.</p>
-                    <pre><code>{
-  path: string
-}</code></pre>
-
-                    <h3>collect_ide_plugins</h3>
-                    <p>Aggregates IDE plugin configurations.</p>
-                    <pre><code>{}</code></pre>
                 </div>
             </div>
         </div>

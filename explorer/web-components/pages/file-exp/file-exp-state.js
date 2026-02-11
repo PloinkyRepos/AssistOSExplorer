@@ -25,10 +25,11 @@ export function loadColumnVisibilityPreference() {
         const raw = window.localStorage.getItem('assistosExplorerColumnVisibility');
         if (!raw) return DEFAULT_COLUMN_VISIBILITY;
         const parsed = JSON.parse(raw);
+        const toVisible = (value) => value === true || value === 'true';
         return {
-            type: parsed.type !== false,
-            size: parsed.size !== false,
-            modified: parsed.modified !== false
+            type: toVisible(parsed?.type),
+            size: toVisible(parsed?.size),
+            modified: toVisible(parsed?.modified)
         };
     } catch (_) {
         return DEFAULT_COLUMN_VISIBILITY;
@@ -58,6 +59,7 @@ export function createFileExpState() {
         previewContent: "",
         selectedIsMarkdown: false,
         markdownTextView: false,
+        backlogTextView: false,
         documentId: null,
         isEditing: false,
         hasUnsavedChanges: false,

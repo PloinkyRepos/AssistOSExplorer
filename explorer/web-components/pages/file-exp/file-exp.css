@@ -107,6 +107,7 @@ main {
     z-index: 1000;
     display: none;
     visibility: hidden;
+    overflow: visible;
 }
 
 .toolbar-dropdown-menu.action-menu-dropdown.open {
@@ -120,6 +121,56 @@ main {
 
 .toolbar-dropdown-item.action-menu-item .action-menu-item-icon {
     color: inherit;
+}
+
+.toolbar-submenu {
+    position: relative;
+}
+
+.toolbar-submenu-trigger {
+    justify-content: flex-start;
+}
+
+.toolbar-submenu-chevron {
+    margin-left: auto;
+    font-size: 0.82rem;
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.toolbar-submenu-menu {
+    position: absolute;
+    top: -7px;
+    left: calc(100% - 6px);
+    min-width: 172px;
+    display: none;
+    flex-direction: column;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 16px 32px rgba(15, 23, 42, 0.16);
+    padding: 6px 0;
+    z-index: 1205;
+}
+
+.toolbar-submenu:hover > .toolbar-submenu-menu,
+.toolbar-submenu:focus-within > .toolbar-submenu-menu {
+    display: flex;
+}
+
+.toolbar-submenu:hover > .toolbar-submenu-trigger,
+.toolbar-submenu:focus-within > .toolbar-submenu-trigger {
+    background: rgba(37, 99, 235, 0.12);
+}
+
+.toolbar-submenu-menu .toolbar-dropdown-item.action-menu-item {
+    white-space: nowrap;
+}
+
+:root.theme-dark .toolbar-submenu-menu {
+    background: #182233;
+    border-color: #334155;
+    box-shadow: 0 18px 34px rgba(2, 6, 23, 0.55);
 }
 
 .git-conflict-indicator {
@@ -318,10 +369,12 @@ main {
     display: flex;
     flex-grow: 1;
     overflow: hidden;
+    --file-exp-list-width: 40%;
 }
 
 .list {
-    width: 40%; /* Initial width */
+    width: var(--file-exp-list-width);
+    flex: 0 0 var(--file-exp-list-width);
     min-width: 305px;
     display: flex;
     flex-direction: column;
@@ -574,6 +627,11 @@ th {
     background-color: var(--file-exp-border);
     opacity: 0.6;
     flex-shrink: 0;
+}
+
+.workspace.resizing,
+.workspace.resizing * {
+    cursor: col-resize !important;
 }
 
 .preview {
@@ -946,6 +1004,7 @@ th {
 
 .list.collapsed {
     width: 40px !important; /* Collapsed width */
+    flex: 0 0 40px !important;
     min-width: 40px;
 }
 

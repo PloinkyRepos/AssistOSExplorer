@@ -33,6 +33,19 @@ Open:
 - Dashboard: `http://127.0.0.1:8080/dashboard`
 - File Explorer UI route: `http://127.0.0.1:8080/#file-exp/`
 
+## HTML Web Preview Pathing
+
+Explorer Web Preview for `.html` files uses repo-scoped URLs generated from the selected file path:
+
+- Example URL: `/.ploinky/repos/fileExplorer/docs/development.html?__previewReload=1`
+- This avoids collisions between similarly named files in different repos.
+
+To keep this working on fresh clones/environments, the repository includes a versioned symlink:
+
+- `explorer/.ploinky/repos/fileExplorer -> ../../..`
+
+Do not replace this with a local-only symlink such as `explorer/docs`; that breaks portability and can reintroduce `404` in preview on other machines.
+
 ## Why GLOBAL mode matters
 
 Ploinky agents can be enabled in different run modes:
@@ -65,3 +78,11 @@ ploinky start explorer 8080
 ```
 
 If you prefer Docker over Podman, ensure your Ploinky workspace is configured for it.
+
+If HTML preview returns `404` for repo-scoped paths, validate static exposure quickly:
+
+```bash
+curl -I "http://127.0.0.1:8080/.ploinky/repos/fileExplorer/docs/development.html"
+```
+
+Expected: `HTTP/1.1 200`.

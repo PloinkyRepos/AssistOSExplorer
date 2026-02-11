@@ -22,9 +22,28 @@ export function createWorkspaceSearch({
     const matchStart = Number.isFinite(match?.index) ? match.index : 0;
     const matchLength = typeof match?.text === 'string' ? match.text.length : 0;
     const matchEnd = Math.min(textLine.length, matchStart + matchLength);
-    const cappedEnd = Math.min(textLine.length, MAX_PREVIEW_CHARS);
-    const endIndex = Math.max(matchEnd, cappedEnd);
-    return textLine.slice(0, endIndex);
+    const previewLength = Math.max(MAX_PREVIEW_CHARS, matchLength || 0);
+    if (textLine.length <= previewLength) {
+      return textLine;
+    }
+
+    const matchCenter = matchStart + Math.floor(matchLength / 2);
+    let start = Math.max(0, matchCenter - Math.floor(previewLength / 2));
+    let end = Math.min(textLine.length, start + previewLength);
+
+    // Ensure entire match is present in preview window.
+    if (end < matchEnd) {
+      end = matchEnd;
+      start = Math.max(0, end - previewLength);
+    }
+
+    // Keep fixed window size where possible.
+    if (end - start < previewLength) {
+      start = Math.max(0, end - previewLength);
+      end = Math.min(textLine.length, start + previewLength);
+    }
+
+    return textLine.slice(start, end);
   };
 
   const escapeRegExp = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

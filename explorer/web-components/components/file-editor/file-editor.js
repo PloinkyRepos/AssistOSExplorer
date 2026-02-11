@@ -2,6 +2,7 @@ import { highlightCode } from "../../../utils/highlight.js";
 import { withGlobalLoader } from "../../../utils/globalLoader.js";
 import { getKeymap, matchesShortcut } from "../../../utils/keymap.js";
 import { requestLlmAutocomplete } from "../../../services/llmAutocompleteService.js";
+import { callExplorerTool } from "../../../services/infrastructure/explorerApi.js";
 import { EXPLORER_THEME_CHANGE_EVENT, getCurrentTheme } from "../../../utils/theme.js";
 import { HTML_PREVIEW_LIVE_UPDATE_EVENT, normalizePreviewSourcePath } from "../../../utils/htmlPreviewLive.js";
 
@@ -29,12 +30,8 @@ export class FileEditor {
     async beforeRender() {
         if (this.state.editorContent === "Loading...") {
             try {
-                const contentResult = await withGlobalLoader(() => window.webSkel.appServices.callTool('explorer', 'read_text_file', {path: this.path}));
-                if (contentResult.text.startsWith('Error:')) {
-                    this.state.editorContent = `Error loading file: ${contentResult.text}`
-                } else {
-                    this.state.editorContent = contentResult.text;
-                }
+                const content = await callExplorerTool('read_text_file', { path: this.path });
+                this.state.editorContent = String(content ?? '');
                 this.invalidate();
             } catch (e) {
                 console.error(e);

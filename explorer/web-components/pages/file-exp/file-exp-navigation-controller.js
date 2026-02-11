@@ -123,16 +123,20 @@ export async function refreshDirectory(fileExp) {
 
 export function renderBreadcrumbs(fileExp) {
     const breadcrumbsEl = fileExp.element.querySelector('#breadcrumbs');
-    breadcrumbsEl.innerHTML = '';
+    if (!breadcrumbsEl) return;
+    const fragment = document.createDocumentFragment();
 
     const rootButton = document.createElement('button');
     rootButton.textContent = '/';
     rootButton.addEventListener('click', () => {
         fileExp.loadDirectory('/');
     });
-    breadcrumbsEl.appendChild(rootButton);
+    fragment.appendChild(rootButton);
 
-    if (!fileExp.state.path || fileExp.state.path === '/') return;
+    if (!fileExp.state.path || fileExp.state.path === '/') {
+        breadcrumbsEl.replaceChildren(fragment);
+        return;
+    }
 
     const segments = fileExp.state.path.split('/').filter(Boolean);
     let current = '';
@@ -144,8 +148,10 @@ export function renderBreadcrumbs(fileExp) {
         btn.addEventListener('click', () => {
             fileExp.loadDirectory(path);
         });
-        breadcrumbsEl.appendChild(btn);
+        fragment.appendChild(btn);
     });
+
+    breadcrumbsEl.replaceChildren(fragment);
 }
 
 export async function goUpDirectory(fileExp) {

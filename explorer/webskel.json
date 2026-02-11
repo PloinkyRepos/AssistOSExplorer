@@ -7,6 +7,11 @@
       "presenterClassName": "FileExp"
     },
     {
+      "name": "file-exp-entries",
+      "type": "components",
+      "presenterClassName": "FileExpEntries"
+    },
+    {
       "name": "file-editor",
       "type": "components",
       "presenterClassName": "FileEditor"
@@ -15,6 +20,11 @@
       "name": "html-web-view",
       "type": "components",
       "presenterClassName": "HtmlWebView"
+    },
+    {
+      "name": "file-exp-preview",
+      "type": "components",
+      "presenterClassName": "FileExpPreview"
     },
     {
       "name": "document-view-page",

@@ -5,7 +5,8 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "test": "npm run test:unit",
+    "test": "npm run test:docs && npm run test:unit",
+    "test:docs": "node --test tests/unit/docsConsistency.test.js",
     "test:unit": "node --test \"tests/unit/*.test.js\""
   },
   "license": "MIT",

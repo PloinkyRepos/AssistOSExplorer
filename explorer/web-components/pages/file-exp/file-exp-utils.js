@@ -514,7 +514,13 @@ export function showContextPasteMenu({ x, y, targetPath, hostElement }) {
     menu.style.top = `${y}px`;
     menu.style.left = `${x}px`;
     const target = typeof targetPath === 'string' ? targetPath : '';
-    menu.innerHTML = `<button type="button" class="context-paste-action" data-local-action="pasteClipboard" data-target-path="${target}">Paste here</button>`;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'context-paste-action';
+    button.dataset.localAction = 'pasteClipboard';
+    button.dataset.targetPath = target;
+    button.textContent = 'Paste here';
+    menu.appendChild(button);
     const mount = hostElement instanceof HTMLElement ? hostElement : document.body;
     mount.appendChild(menu);
     const cleanup = () => {

@@ -113,8 +113,9 @@ export function attachSearchController(fileExp) {
 
         if (result && result.path) {
             const normalized = fileExp.normalizePath(result.path);
-            if (result.line) {
-                fileExp.setPendingHighlight({ path: normalized, line: result.line });
+            const line = Number.parseInt(String(result.line ?? ''), 10);
+            if (Number.isFinite(line) && line > 0) {
+                fileExp.setPendingHighlight({ path: normalized, line });
             }
             await navigateToPath(normalized);
         }
@@ -226,7 +227,8 @@ export function attachSearchController(fileExp) {
     async function openSearchResult(element) {
         const path = element?.dataset?.filePath;
         if (!path) return;
-        const line = element.dataset.line ? Number.parseInt(element.dataset.line, 10) : null;
+        const parsedLine = Number.parseInt(String(element.dataset.line ?? ''), 10);
+        const line = Number.isFinite(parsedLine) && parsedLine > 0 ? parsedLine : null;
         const normalized = fileExp.normalizePath(path);
         fileExp.setPendingHighlight(line ? { path: normalized, line } : null);
         closeSearchOverlays();

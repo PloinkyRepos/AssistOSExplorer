@@ -9,12 +9,10 @@ import {
     parseDetailedDirectoryListing,
     isMarkdownFile,
     prepareMarkdownPreviewContent,
-    renderMarkdownPreview,
-    renderCodePreview
+    renderMarkdownPreview
 } from "./file-exp-utils.js";
 import { createFileExpState, saveFilterSpecsPreference } from "./file-exp-state.js";
 import { createFileExpTooling } from "./file-exp-tooling.js";
-import { buildEntriesView } from "./file-exp-view-model.js";
 import { attachSearchController } from "./file-exp-search.js";
 import { attachFsActions } from "./file-exp-fs-actions.js";
 import { attachGitController } from "./file-exp-git.js";
@@ -33,6 +31,18 @@ import { createDomListenerRegistry } from "../../../utils/domListenerRegistry.js
 import { runAfterRender as runLayoutAfterRender } from "./file-exp-layout-controller.js";
 import { loadStateFromURL as loadStateFromURLImpl, loadDirectory as loadDirectoryImpl, refreshDirectory as refreshDirectoryImpl, renderBreadcrumbs as renderBreadcrumbsImpl, goUpDirectory as goUpDirectoryImpl } from "./file-exp-navigation-controller.js";
 import { selectEntry as selectEntryImpl, handleSortClick as handleSortClickImpl } from "./file-exp-selection-controller.js";
+import { editFile as editFileImpl, saveFile as saveFileImpl, cancelEdit as cancelEditImpl } from "./file-exp-editor-controller.js";
+import {
+    toggleHidden as toggleHiddenImpl,
+    createPreviewActionButton as createPreviewActionButtonImpl,
+    createPreviewCloseButton as createPreviewCloseButtonImpl,
+    clearMountElement as clearMountElementImpl,
+    mountPresenterElement as mountPresenterElementImpl,
+    ensurePreviewDom as ensurePreviewDomImpl,
+    renderStandardPreview as renderStandardPreviewImpl,
+    renderHtmlPreview as renderHtmlPreviewImpl,
+    renderPreviewPanel as renderPreviewPanelImpl
+} from "./file-exp-preview-renderer.js";
 
 const LARGE_FILE_PREVIEW_LIMIT_BYTES = 1.5 * 1024 * 1024; // ~1.5MB safety window before transport limits
 const LARGE_FILE_PREVIEW_LINES = 400;
@@ -104,7 +114,8 @@ export class FileExp {
             window.removeEventListener(FILE_EXP_REPLACE_COMPLETE_EVENT, this.boundReplaceComplete);
             this.boundReplaceComplete = null;
         }
-        const entriesContainer = this.element?.querySelector('.entries');
+        const entriesContainer = this.element?.querySelector('.entries')
+            || this.element?.querySelector('file-exp-entries');
         if (entriesContainer) {
             entriesContainer.removeEventListener('contextmenu', this.boundContextMenu, true);
         }
@@ -181,24 +192,23 @@ export class FileExp {
     }
 
     beforeRender() {
-        const snapshot = this.stateStore?.getState ? this.stateStore.getState() : this.state;
-        this.entriesHTML = buildEntriesView(snapshot, {
-            joinPath: this.joinPath,
-            formatBytes: this.formatBytes,
-            formatDate: this.formatDate
-        });
+    }
+
+    getEntriesPresenter() {
+        const entriesElement = this.element?.querySelector?.('file-exp-entries');
+        return entriesElement?.webSkelPresenter || null;
     }
 
     renderEntries() {
         const snapshot = this.stateStore?.getState ? this.stateStore.getState() : this.state;
-        this.entriesHTML = buildEntriesView(snapshot, {
-            joinPath: this.joinPath,
-            formatBytes: this.formatBytes,
-            formatDate: this.formatDate
-        });
-        const entriesBody = this.element?.querySelector?.('#entriesBody');
-        if (entriesBody) {
-            entriesBody.innerHTML = this.entriesHTML;
+        const entriesPresenter = this.getEntriesPresenter();
+        if (entriesPresenter && typeof entriesPresenter.renderEntries === 'function') {
+            entriesPresenter.renderEntries(snapshot);
+        } else {
+            const entriesBody = this.element?.querySelector?.('#entriesBody');
+            if (entriesBody) {
+                entriesBody.replaceChildren();
+            }
         }
         this.applyColumnVisibility();
         if (this.state.openMenuPath) {
@@ -347,7 +357,7 @@ export class FileExp {
 
     async openFile(filePath) {
         if (filePath && !String(filePath).endsWith('.backlog') && !String(filePath).endsWith('.history')) {
-            this.state.backlogTextView = false;
+            this.setPreviewState({ backlogTextView: false }, { invalidate: false });
         }
         const result = await openFileImpl(this, filePath, {
             largeFilePreviewLimitBytes: LARGE_FILE_PREVIEW_LIMIT_BYTES,
@@ -358,103 +368,15 @@ export class FileExp {
     }
 
     async editFile() {
-        if (!this.state.selectedPath) return;
-        const selectedPath = this.state.selectedPath || '';
-        if (selectedPath.endsWith('.history')) {
-            this.showStatus('History files are read-only.', true);
-            return;
-        }
-        if (selectedPath.endsWith('.backlog') && !this.state.backlogTextView) {
-            this.showStatus('Backlog is managed by the Backlog panel.', true);
-            return;
-        }
-        if (this.state.fileLoadInfo?.truncated) {
-            this.showStatus('Editing is disabled for large files. Please open it locally to modify.', true);
-            return;
-        }
-        if (this.state.selectedIsMarkdown && !this.state.documentId) {
-            try {
-                const documentModule = window.assistOS?.loadModule?.('document');
-                if (documentModule) {
-                    const doc = await documentModule.loadDocument(this.state.selectedPath);
-                    this.state.documentId = doc?.id ?? null;
-                    if (doc?.id && window.assistOS?.workspace) {
-                        window.assistOS.workspace.currentDocumentId = doc.id;
-                        window.assistOS.workspace.currentDocumentPath = this.state.selectedPath;
-                    }
-                }
-            } catch (error) {
-                console.warn('Failed to prepare document editor', error);
-            }
-        }
-        this.state.markdownTextView = false;
-        this.setHasUnsavedChanges(false);
-        this.state.isEditing = true;
-        this.invalidate();
+        return editFileImpl(this);
     }
 
     async saveFile() {
-        this.textarea = this.element.querySelector('.code-input');
-        if (!this.textarea) {
-            return;
-        }
-
-        const newContent = this.textarea.value;
-        try {
-            await this.tooling.writeFile(this.state.selectedPath, newContent);
-            this.showStatus(`Successfully saved ${this.state.selectedPath}`, false);
-            this.state.fileContent = newContent;
-            this.setHasUnsavedChanges(false);
-            this.caches.filePreview.invalidateForPath(this.state.selectedPath);
-            this.caches.dirListing.invalidate(this, this.state.path);
-
-            if (this.state.selectedIsMarkdown) {
-                const previewSource = this.prepareMarkdownPreviewContent(newContent);
-                this.state.previewContent = renderMarkdownPreview(previewSource);
-                this.state.markdownTextView = false;
-                try {
-                    const documentModule = window.assistOS?.loadModule?.('document');
-                    if (documentModule) {
-                        const doc = await documentModule.loadDocument(this.state.selectedPath);
-                        this.state.documentId = doc?.id ?? null;
-                        if (doc?.id) {
-                            window.assistOS.workspace.currentDocumentId = doc.id;
-                            window.assistOS.workspace.currentDocumentPath = this.state.selectedPath;
-                        }
-                    }
-                } catch (docError) {
-                    console.warn('Failed to refresh document after save', docError);
-                }
-            } else {
-                this.state.previewContent = renderCodePreview(newContent, this.state.selectedPath);
-            }
-
-            if (this.isHtmlPreviewCandidate(this.state.selectedPath) && this.state.previewViewMode !== 'code') {
-                this.dispatchPreview({
-                    type: PREVIEW_ACTIONS.REFRESH,
-                    payload: { path: this.state.selectedPath }
-                });
-            }
-
-            this.state.isEditing = false;
-            this.editorPresenter = null;
-            this.invalidate();
-        } catch (err) {
-            console.error(err);
-            this.showStatus(err.message || 'Failed to save file.', true);
-        }
+        return saveFileImpl(this);
     }
 
     async cancelEdit() {
-        this.state.isEditing = false;
-        this.state.markdownTextView = false;
-        this.setHasUnsavedChanges(false);
-        this.editorPresenter = null;
-        if (this.state.selectedIsMarkdown && this.state.selectedPath) {
-            await this.openFile(this.state.selectedPath);
-            return;
-        }
-        this.invalidate();
+        return cancelEditImpl(this);
     }
 
     renderBreadcrumbs() {
@@ -495,380 +417,39 @@ export class FileExp {
     }
 
     toggleHidden(element, hidden = true) {
-        if (!element) return;
-        element.classList.toggle('hidden', Boolean(hidden));
+        return toggleHiddenImpl(this, element, hidden);
     }
 
     createPreviewActionButton(label, action, className = 'preview-pane-action') {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = className;
-        button.dataset.localAction = action;
-        button.textContent = label;
-        return button;
+        return createPreviewActionButtonImpl(label, action, className);
     }
 
     createPreviewCloseButton(action, label) {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'close preview-pane-close';
-        button.dataset.localAction = action;
-        button.setAttribute('aria-label', label);
-        button.setAttribute('title', label);
-
-        const icon = document.createElement('img');
-        icon.className = 'close-icon';
-        icon.src = './assets/icons/x-mark.svg';
-        icon.alt = 'close';
-        button.appendChild(icon);
-        return button;
+        return createPreviewCloseButtonImpl(action, label);
     }
 
     clearMountElement(mount) {
-        if (!mount) return;
-        mount.textContent = '';
-        if (mount.dataset) {
-            delete mount.dataset.presenterKey;
-        }
+        return clearMountElementImpl(mount);
     }
 
     mountPresenterElement(mount, { key, tagName, attributes = {} }) {
-        if (!mount || !tagName) return null;
-        const normalizedTag = String(tagName).toLowerCase();
-        const normalizedKey = String(key || normalizedTag);
-        const currentKey = mount.dataset?.presenterKey || '';
-        const currentNode = mount.firstElementChild;
-        const currentTag = currentNode?.tagName?.toLowerCase() || '';
-        const shouldReplace = !currentNode || currentTag !== normalizedTag || currentKey !== normalizedKey;
-
-        let node = currentNode;
-        if (shouldReplace) {
-            mount.textContent = '';
-            node = document.createElement(normalizedTag);
-            mount.appendChild(node);
-            if (mount.dataset) {
-                mount.dataset.presenterKey = normalizedKey;
-            }
-        }
-
-        Object.entries(attributes).forEach(([attr, value]) => {
-            if (value === undefined || value === null || value === '') {
-                node.removeAttribute(attr);
-            } else {
-                node.setAttribute(attr, String(value));
-            }
-        });
-
-        return node;
+        return mountPresenterElementImpl(mount, { key, tagName, attributes });
     }
 
     ensurePreviewDom(previewContent) {
-        const cached = this.previewDom;
-        if (cached && cached.host === previewContent && previewContent.contains(cached.standardPane) && previewContent.contains(cached.htmlSplit)) {
-            return cached;
-        }
-
-        const standardPane = document.createElement('div');
-        standardPane.className = 'preview-standard-pane';
-
-        const filePreview = document.createElement('div');
-        filePreview.id = 'filePreview';
-        filePreview.className = 'code-preview';
-
-        const mediaPreview = document.createElement('div');
-        mediaPreview.className = 'media-preview hidden';
-
-        const componentMount = document.createElement('div');
-        componentMount.className = 'preview-component-mount hidden';
-
-        standardPane.appendChild(filePreview);
-        standardPane.appendChild(mediaPreview);
-        standardPane.appendChild(componentMount);
-
-        const htmlSplit = document.createElement('div');
-        htmlSplit.className = 'preview-split hidden';
-
-        const codePane = document.createElement('div');
-        codePane.className = 'preview-pane';
-        const codePaneShell = document.createElement('div');
-        codePaneShell.className = 'preview-pane-shell';
-        const codePaneHeader = document.createElement('div');
-        codePaneHeader.className = 'preview-pane-header';
-        const codePaneTitle = document.createElement('span');
-        codePaneTitle.className = 'preview-pane-title';
-        codePaneTitle.textContent = 'Code';
-        const codePaneActions = document.createElement('div');
-        codePaneActions.className = 'preview-pane-actions';
-        const hideCodeButton = this.createPreviewCloseButton('setPreviewViewMode web', 'Hide Code');
-        codePaneActions.appendChild(hideCodeButton);
-        codePaneHeader.appendChild(codePaneTitle);
-        codePaneHeader.appendChild(codePaneActions);
-        const codePaneBody = document.createElement('div');
-        codePaneBody.className = 'preview-pane-body';
-        const splitCodeComponentMount = document.createElement('div');
-        splitCodeComponentMount.className = 'preview-component-mount hidden';
-        codePaneBody.appendChild(splitCodeComponentMount);
-        codePaneShell.appendChild(codePaneHeader);
-        codePaneShell.appendChild(codePaneBody);
-        codePane.appendChild(codePaneShell);
-
-        const webPane = document.createElement('div');
-        webPane.className = 'preview-pane';
-        const webPaneShell = document.createElement('div');
-        webPaneShell.className = 'preview-pane-shell';
-        const webPaneHeader = document.createElement('div');
-        webPaneHeader.className = 'preview-pane-header';
-        const webUrlLabel = document.createElement('span');
-        webUrlLabel.className = 'html-web-view-url';
-        const webPaneActions = document.createElement('div');
-        webPaneActions.className = 'preview-pane-actions';
-        const webActionGroup = document.createElement('div');
-        webActionGroup.className = 'html-web-view-actions';
-        const refreshWebButton = this.createPreviewActionButton('Refresh', 'refreshWebPreviewPane');
-        const openWebTabButton = this.createPreviewActionButton('Open in tab', 'openWebPreviewInTab');
-        webActionGroup.appendChild(refreshWebButton);
-        webActionGroup.appendChild(openWebTabButton);
-        const hideWebButton = this.createPreviewCloseButton('setPreviewViewMode code', 'Hide Web');
-        webPaneActions.appendChild(webActionGroup);
-        webPaneActions.appendChild(hideWebButton);
-        webPaneHeader.appendChild(webUrlLabel);
-        webPaneHeader.appendChild(webPaneActions);
-        const webPaneBody = document.createElement('div');
-        webPaneBody.className = 'preview-pane-body';
-        const webPlaceholder = document.createElement('div');
-        webPlaceholder.className = 'preview-placeholder hidden';
-        webPlaceholder.textContent = 'Web preview is unavailable for this file.';
-        const webMount = document.createElement('div');
-        webMount.className = 'preview-web-mount hidden';
-        webPaneBody.appendChild(webPlaceholder);
-        webPaneBody.appendChild(webMount);
-        webPaneShell.appendChild(webPaneHeader);
-        webPaneShell.appendChild(webPaneBody);
-        webPane.appendChild(webPaneShell);
-
-        htmlSplit.appendChild(codePane);
-        htmlSplit.appendChild(webPane);
-
-        previewContent.replaceChildren(standardPane, htmlSplit);
-
-        this.previewDom = {
-            host: previewContent,
-            standardPane,
-            filePreview,
-            mediaPreview,
-            componentMount,
-            htmlSplit,
-            codePane,
-            codePaneBody,
-            splitCodeComponentMount,
-            hideCodeButton,
-            webPane,
-            webPaneBody,
-            webUrlLabel,
-            webActionGroup,
-            refreshWebButton,
-            openWebTabButton,
-            hideWebButton,
-            webPlaceholder,
-            webMount
-        };
-
-        return this.previewDom;
+        return ensurePreviewDomImpl(this, previewContent);
     }
 
     renderStandardPreview(refs, previewUiState) {
-        const defaultText = 'Select a file to see its contents.';
-        this.toggleHidden(refs.standardPane, false);
-        this.toggleHidden(refs.htmlSplit, true);
-        refs.htmlSplit.classList.remove('single');
-        this.toggleHidden(refs.mediaPreview, true);
-        this.toggleHidden(refs.componentMount, true);
-        this.toggleHidden(refs.splitCodeComponentMount, true);
-        this.clearMountElement(refs.splitCodeComponentMount);
-
-        if (refs.filePreview.parentElement !== refs.standardPane) {
-            refs.standardPane.insertBefore(refs.filePreview, refs.mediaPreview);
-        }
-        this.toggleHidden(refs.filePreview, false);
-
-        if (this.state.isEditing) {
-            this.detachPreviewAnchorHandler();
-            this.toggleHidden(refs.filePreview, true);
-            this.toggleHidden(refs.componentMount, false);
-            if (this.state.selectedIsMarkdown && this.state.documentId) {
-                this.mountPresenterElement(refs.componentMount, {
-                    key: `document-view:${this.state.selectedPath}:${this.state.documentId}`,
-                    tagName: 'document-view-page',
-                    attributes: {
-                        'data-presenter': 'document-view-page',
-                        'data-path': this.state.selectedPath,
-                        documentId: this.state.documentId
-                    }
-                });
-            } else {
-                this.mountPresenterElement(refs.componentMount, {
-                    key: `file-editor:${this.state.selectedPath}`,
-                    tagName: 'file-editor',
-                    attributes: {
-                        'data-presenter': 'file-editor',
-                        'data-path': this.state.selectedPath
-                    }
-                });
-            }
-            return;
-        }
-
-        if (previewUiState.showBacklogPanel) {
-            this.detachPreviewAnchorHandler();
-            this.toggleHidden(refs.filePreview, true);
-            this.toggleHidden(refs.componentMount, false);
-            const pathAttr = this.state.selectedPath || '';
-            const repoPath = this.parentPath(pathAttr) || '/';
-            this.mountPresenterElement(refs.componentMount, {
-                key: `backlog-panel:${pathAttr}:${repoPath}`,
-                tagName: 'backlog-panel',
-                attributes: {
-                    'data-presenter': 'backlog-panel',
-                    'data-path': pathAttr,
-                    'data-repo-path': repoPath
-                }
-            });
-            return;
-        }
-
-        this.clearMountElement(refs.componentMount);
-
-        if (this.state.previewMode === 'media') {
-            this.detachPreviewAnchorHandler();
-            this.toggleHidden(refs.filePreview, true);
-            this.toggleHidden(refs.mediaPreview, false);
-            const content = this.state.previewContent || '<div class="preview-placeholder">Unable to preview file.</div>';
-            refs.mediaPreview.innerHTML = content;
-            return;
-        }
-
-        this.toggleHidden(refs.mediaPreview, true);
-        refs.mediaPreview.textContent = '';
-
-        if (this.state.selectedIsMarkdown) {
-            if (this.state.markdownTextView) {
-                refs.filePreview.className = 'markdown-raw-view';
-                refs.filePreview.textContent = this.state.selectedPath ? this.state.fileContent : defaultText;
-                this.detachPreviewAnchorHandler();
-            } else {
-                refs.filePreview.className = 'markdown-preview';
-                if (this.state.selectedPath) {
-                    const content = typeof this.state.previewContent === 'string' ? this.state.previewContent : '';
-                    refs.filePreview.innerHTML = content;
-                } else {
-                    refs.filePreview.textContent = defaultText;
-                }
-                this.attachPreviewAnchorHandler();
-            }
-            return;
-        }
-
-        refs.filePreview.className = 'code-preview';
-        if (this.state.selectedPath) {
-            refs.filePreview.innerHTML = this.state.previewContent || '';
-        } else {
-            refs.filePreview.textContent = defaultText;
-        }
-        this.detachPreviewAnchorHandler();
+        return renderStandardPreviewImpl(this, refs, previewUiState);
     }
 
     renderHtmlPreview(refs, previewUiState) {
-        this.detachPreviewAnchorHandler();
-        this.toggleHidden(refs.standardPane, true);
-        this.toggleHidden(refs.htmlSplit, false);
-        this.toggleHidden(refs.componentMount, true);
-        this.clearMountElement(refs.componentMount);
-
-        const webViewUrl = this.state.webViewUrl || this.buildWebViewUrl(this.state.selectedPath);
-        const reloadToken = Number(this.state.webViewReloadToken || 0);
-        refs.webUrlLabel.textContent = webViewUrl || '';
-        refs.webUrlLabel.title = webViewUrl || '';
-
-        let showCodePane = previewUiState.viewMode === 'split' && !previewUiState.codeHidden;
-        let showWebPane = previewUiState.viewMode === 'web' || (previewUiState.viewMode === 'split' && !previewUiState.webHidden);
-        if (!showCodePane && !showWebPane) {
-            showWebPane = true;
-        }
-
-        this.toggleHidden(refs.codePane, !showCodePane);
-        this.toggleHidden(refs.webPane, !showWebPane);
-        refs.htmlSplit.classList.toggle('single', !(showCodePane && showWebPane));
-        this.toggleHidden(refs.hideCodeButton, previewUiState.viewMode !== 'split' || !showCodePane);
-        this.toggleHidden(refs.hideWebButton, previewUiState.viewMode !== 'split' || !showWebPane);
-
-        if (showCodePane) {
-            this.toggleHidden(refs.splitCodeComponentMount, true);
-            if (this.state.isEditing) {
-                this.toggleHidden(refs.filePreview, true);
-                this.toggleHidden(refs.splitCodeComponentMount, false);
-                this.mountPresenterElement(refs.splitCodeComponentMount, {
-                    key: `file-editor:${this.state.selectedPath}`,
-                    tagName: 'file-editor',
-                    attributes: {
-                        'data-presenter': 'file-editor',
-                        'data-path': this.state.selectedPath
-                    }
-                });
-            } else {
-                this.clearMountElement(refs.splitCodeComponentMount);
-                if (refs.filePreview.parentElement !== refs.codePaneBody) {
-                    refs.codePaneBody.insertBefore(refs.filePreview, refs.splitCodeComponentMount);
-                }
-                refs.filePreview.className = 'code-preview';
-                refs.filePreview.innerHTML = this.state.previewContent || 'Select a file to see its contents.';
-                this.toggleHidden(refs.filePreview, false);
-            }
-        } else {
-            this.toggleHidden(refs.filePreview, true);
-            this.toggleHidden(refs.splitCodeComponentMount, true);
-            this.clearMountElement(refs.splitCodeComponentMount);
-        }
-
-        if (!showWebPane) {
-            this.toggleHidden(refs.webPlaceholder, true);
-            this.toggleHidden(refs.webMount, true);
-            return;
-        }
-
-        const canOpenPreview = Boolean(webViewUrl);
-        refs.refreshWebButton.toggleAttribute('disabled', !canOpenPreview);
-        refs.openWebTabButton.toggleAttribute('disabled', !canOpenPreview);
-
-        if (!canOpenPreview) {
-            this.clearMountElement(refs.webMount);
-            this.toggleHidden(refs.webMount, true);
-            this.toggleHidden(refs.webPlaceholder, false);
-            return;
-        }
-
-        this.toggleHidden(refs.webPlaceholder, true);
-        this.toggleHidden(refs.webMount, false);
-        this.mountPresenterElement(refs.webMount, {
-            key: `html-web-view:${webViewUrl}:${reloadToken}:${this.state.selectedPath || ''}`,
-            tagName: 'html-web-view',
-            attributes: {
-                'data-presenter': 'html-web-view',
-                'data-url': webViewUrl,
-                'data-source-path': this.state.selectedPath || '',
-                'data-reload-token': String(reloadToken),
-                'data-live-source-selector': '.code-input'
-            }
-        });
+        return renderHtmlPreviewImpl(this, refs, previewUiState);
     }
 
     renderPreviewPanel(previewContent, previewUiState) {
-        if (!previewContent) return;
-        const refs = this.ensurePreviewDom(previewContent);
-        if (previewUiState.isHtml && previewUiState.viewMode !== 'code') {
-            this.renderHtmlPreview(refs, previewUiState);
-            return;
-        }
-        this.renderStandardPreview(refs, previewUiState);
+        return renderPreviewPanelImpl(this, previewContent, previewUiState);
     }
 
     toggleMarkdownView() {
@@ -876,8 +457,7 @@ export class FileExp {
         if (!transition.changed) {
             return;
         }
-        Object.assign(this.state, transition.patch);
-        this.invalidate();
+        this.setPreviewState(transition.patch, { invalidate: true });
     }
 
     async toggleFilterSpecs(element) {
@@ -892,7 +472,7 @@ export class FileExp {
     applyColumnVisibility() {
         const columns = ['type', 'size', 'modified'];
         columns.forEach((col) => {
-            const visible = this.state.columnVisibility?.[col] !== false;
+            const visible = Boolean(this.state.columnVisibility?.[col]);
             const cells = this.element.querySelectorAll(`.col-${col}`);
             cells.forEach((cell) => {
                 cell.classList.toggle('column-hidden', !visible);
@@ -917,7 +497,7 @@ export class FileExp {
                 if (!transition.changed) {
                     return;
                 }
-                Object.assign(this.state, transition.patch);
+                this.setPreviewState(transition.patch, { invalidate: false });
                 if (transition.shouldReloadSelection && this.state.selectedPath) {
                     await this.openFile(this.state.selectedPath);
                 }
@@ -1047,6 +627,13 @@ export class FileExp {
         }, options);
     }
 
+    setPreviewState(patch, options = {}) {
+        return this.dispatchUi({
+            type: FILE_EXP_UI_ACTIONS.SET_PREVIEW_STATE,
+            payload: { patch }
+        }, options);
+    }
+
     isHtmlPreviewCandidate(pathValue) {
         return /\.html?$/i.test(String(pathValue || ''));
     }
@@ -1079,6 +666,7 @@ export class FileExp {
         if (!rawPath) return '';
         const normalized = rawPath.replace(/\\/g, '/').replace(/^\/+/, '');
         if (!normalized || normalized.includes('..')) return '';
+
         const encodedPath = normalized
             .split('/')
             .filter(Boolean)

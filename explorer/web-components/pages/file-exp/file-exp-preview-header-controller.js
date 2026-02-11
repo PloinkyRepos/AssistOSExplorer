@@ -78,7 +78,7 @@ export function createPreviewHeaderController(host) {
             if (!elements) return;
 
             if (elements.headerExtras && !previewUiState.showBacklogPanel && elements.headerExtras.children.length) {
-                elements.headerExtras.innerHTML = '';
+                elements.headerExtras.replaceChildren();
             }
             if (elements.previewTitle) {
                 elements.previewTitle.classList.toggle('hidden', previewUiState.showBacklogPanel);

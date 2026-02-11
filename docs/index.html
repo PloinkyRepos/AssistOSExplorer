@@ -62,6 +62,10 @@
                         <h3>Plugins and extensibility</h3>
                         <p>Explorer loads extensions dynamically from <code>IDE-plugins/</code> manifests. Each plugin ships HTML/JS/CSS assets, declares where it appears, and can call MCP tools or SOPLang actions to add new document or paragraph-level capabilities without hardcoding.</p>
                     </div>
+                    <div class="subsection">
+                        <h3>Current file explorer capabilities</h3>
+                        <p>The current UI includes directory navigation, contextual file actions (new/rename/copy/move/delete), directory-level filter/search, find/replace in files, Markdown preview/text toggle, media preview, HTML Web Preview (Code/Web/Split modes), backlog views for <code>.backlog</code> and <code>.history</code>, plus integrated Git status/commit workflows.</p>
+                    </div>
                 </div>
 
                 <div class="doc-section">
@@ -78,6 +82,7 @@ export ASSISTOS_FS_ROOT=&lt;path-to-workspace&gt;
 p-cli start explorer 8080
 # open http://127.0.0.1:8080/explorer/index.html via the Ploinky router
 </code></pre>
+                    <p><strong>Note for HTML docs preview:</strong> repo-scoped preview paths are expected (for example <code>/.ploinky/repos/fileExplorer/docs/development.html</code>). Keep the versioned symlink <code>explorer/.ploinky/repos/fileExplorer -&gt; ../../..</code> in the repository so these paths resolve on all environments.</p>
                 </div>
 
                 <div class="features" style="padding-top: 1rem;">

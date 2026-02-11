@@ -1,20 +1,12 @@
 import { parseMarkdownDocument, serializeMarkdownDocument } from './markdownDocumentParser.js';
 import { callToolWithLoader } from '../../utils/globalLoader.js';
-
-const EXPLORER_AGENT_ID = 'explorer';
+import { callExplorerTool } from '../infrastructure/explorerApi.js';
 
 const resolveAppServices = (appServices) => {
     if (appServices && typeof appServices.callTool === 'function') {
         return appServices;
     }
-
-    if (typeof window !== 'undefined'
-        && window.webSkel?.appServices
-        && typeof window.webSkel.appServices.callTool === 'function') {
-        return window.webSkel.appServices;
-    }
-
-    throw new Error('DocumentFsService: Unable to resolve appServices.');
+    return null;
 };
 
 const ensureSuccess = (result, path) => {
@@ -34,12 +26,21 @@ export default class DocumentFsService {
         return resolveAppServices(this.appServices);
     }
 
+    async callExplorer(name, args) {
+        // Keep compatibility with explicit injected appServices (tests/custom hosts),
+        // otherwise use the centralized explorerApi path.
+        if (this.explorer) {
+            return callToolWithLoader('explorer', name, args, this.explorer);
+        }
+        return callExplorerTool(name, args, { raw: true });
+    }
+
     async readRaw(path) {
         if (!path) {
             throw new Error('DocumentFsService.readRaw requires a file path.');
         }
 
-        const result = await callToolWithLoader(EXPLORER_AGENT_ID, 'read_text_file', { path }, this.explorer);
+        const result = await this.callExplorer('read_text_file', { path });
         ensureSuccess(result, path);
         return result.text ?? '';
     }
@@ -59,10 +60,10 @@ export default class DocumentFsService {
             throw new Error('DocumentFsService.writeRaw requires a file path.');
         }
 
-        await callToolWithLoader(EXPLORER_AGENT_ID, 'write_file', {
+        await this.callExplorer('write_file', {
             path,
             content: content ?? ''
-        }, this.explorer);
+        });
     }
 
     async writeDocument(path, documentOrContent) {

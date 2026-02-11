@@ -9,6 +9,7 @@ The UI is built on the **WebSkel** framework, and all filesystem operations are 
 ## Key Features
 
 -   **Web-Based File Explorer**: A clean and intuitive UI for browsing and managing files in your workspace.
+-   **Repo-Scoped HTML Preview**: HTML preview URLs preserve repo-scoped paths (for example `/.ploinky/repos/fileExplorer/docs/development.html`) so assets resolve consistently across repos and avoid path collisions.
 -   **Extensible Plugin System**: Dynamically load custom plugins to add new features. Plugins can be triggered from the document, chapter, or paragraph level, allowing for highly contextual actions.
 -   **Rich Document Handling**: Treats `.md` files not just as text, but as structured documents. This allows for advanced editing, interaction, and data persistence through embedded `soplang` commands.
 -   **Blob Storage Service**: A content-addressable storage system for handling file uploads, accessible to other agents in the workspace.
@@ -43,6 +44,10 @@ For a complete guide to the agent's architecture, plugin development, and advanc
 
 3.  Access the Explorer UI via the router (the default port is 8080):
     -   `http://127.0.0.1:8080/explorer/index.html`
+
+4.  Ensure repo-scoped docs preview paths are available in static hosting:
+    -   keep `explorer/.ploinky/repos/fileExplorer -> ../../..` in the repository.
+    -   this exposes `/.ploinky/repos/fileExplorer/docs/*` via the static router and keeps Web Preview stable without local-only symlinks like `explorer/docs`.
 
 ---
 

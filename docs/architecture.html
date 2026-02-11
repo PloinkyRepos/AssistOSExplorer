@@ -117,6 +117,18 @@
                                 <td>The main page orchestrating the file explorer view.</td>
                             </tr>
                             <tr>
+                                <td><code>file-exp-entries</code></td>
+                                <td>Dedicated presenter for rendering and updating the entries table/list.</td>
+                            </tr>
+                            <tr>
+                                <td><code>file-exp-preview</code></td>
+                                <td>Dedicated presenter for preview area orchestration (code/media/markdown/html).</td>
+                            </tr>
+                            <tr>
+                                <td><code>html-web-view</code></td>
+                                <td>Sandboxed iframe presenter used by HTML preview (Code/Web/Split modes).</td>
+                            </tr>
+                            <tr>
                                 <td><code>document-view-page</code></td>
                                 <td>Renders a full document with its chapters and paragraphs.</td>
                             </tr>
@@ -157,10 +169,12 @@ p-cli start explorer 8080
                     <div style="margin-left:1rem;margin-top:0.4rem;">
                         <h3>Context & tips</h3>
                         <p>Global mode runs the agent in the current workspace folder (see <a href="https://ploinky.com/cli-reference.html" target="_blank" rel="noopener noreferrer">Ploinky CLI reference</a>). Explorer auto-enables the <code>soplang</code> and <code>multimedia</code> agents from this repo; avoid enabling duplicates. Restart Explorer after adding or changing plugin <code>config.json</code> so discovery reruns. If you hack locally, run <code>npm install</code> at repo root (and <code>explorer/</code> if needed); most UI/JS/CSS changes hot-reload in the browser.</p>
+                        <p>HTML Web Preview uses repo-scoped paths (for example <code>/.ploinky/repos/fileExplorer/docs/development.html</code>). Keep <code>explorer/.ploinky/repos/fileExplorer -&gt; ../../..</code> versioned so preview remains portable across clean clones.</p>
                     </div>
                     <div style="margin-left:1rem;margin-top:0.4rem;">
                         <h3>Repo layout (visual)</h3>
 <pre><code>.../fileExplorer/explorer/
+├─ .ploinky/repos/fileExplorer -> ../../..  # repo-scoped static bridge for docs preview
 ├─ filesystem-http-server.mjs   # Backend: MCP, blob service, plugin discovery
 ├─ index.html / main.js         # SPA entry point
 ├─ webskel.json                 # Core UI components

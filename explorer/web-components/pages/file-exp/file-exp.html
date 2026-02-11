@@ -36,6 +36,23 @@
                         <img class="action-menu-item-icon" loading="lazy" src="./assets/icons/document.svg" alt="">
                         <span class="action-menu-item-label">New File</span>
                     </button>
+                    <div class="toolbar-submenu" role="none">
+                        <button type="button" class="toolbar-dropdown-item action-menu-item toolbar-submenu-trigger" aria-haspopup="true">
+                            <img class="action-menu-item-icon" loading="lazy" src="./assets/icons/task.svg" alt="">
+                            <span class="action-menu-item-label">Backlog</span>
+                            <span class="toolbar-submenu-chevron" aria-hidden="true">▸</span>
+                        </button>
+                        <div class="toolbar-submenu-menu" role="menu" aria-label="Backlog actions">
+                            <button type="button" class="toolbar-dropdown-item action-menu-item" data-local-action="newBacklog" role="menuitem">
+                                <img class="action-menu-item-icon" loading="lazy" src="./assets/icons/plus.svg" alt="">
+                                <span class="action-menu-item-label">New</span>
+                            </button>
+                            <button type="button" class="toolbar-dropdown-item action-menu-item" data-local-action="showAllBacklogs" role="menuitem">
+                                <img class="action-menu-item-icon" loading="lazy" src="./assets/icons/list.svg" alt="">
+                                <span class="action-menu-item-label">Show all</span>
+                            </button>
+                        </div>
+                    </div>
                     <button type="button" class="toolbar-dropdown-item action-menu-item" data-local-action="openSettingsModal" role="menuitem">
                         <img class="action-menu-item-icon" loading="lazy" src="./assets/icons/keys.svg" alt="">
                         <span class="action-menu-item-label">Settings</span>
@@ -66,9 +83,6 @@
                 Filter specs (.md)
             </label>
 	            <span class="toolbar-spacer"></span>
-            <button id="tasksButton" class="secondary" title="Show *.backlog files" data-local-action="openBacklog">
-                Backlog
-            </button>
             <button id="gitButton" class="secondary" title="Commit and push with Git" data-local-action="openGitModal">
                 Git
                 <span class="git-conflict-indicator" id="gitConflictIndicator" aria-hidden="true">!</span>
@@ -120,35 +134,7 @@
                         </button>
                     </div>
                 </div>
-                <div class="entries">
-                    <table>
-                        <thead>
-                        <tr>
-                            <th>
-                                <button type="button" class="sort-button" data-sort-key="name" aria-sort="none">
-                                    Name
-                                    <span class="sort-indicator" aria-hidden="true"></span>
-                                </button>
-                            </th>
-                            <th class="col-type">Type</th>
-                            <th class="col-size">
-                                <button type="button" class="sort-button" data-sort-key="size" aria-sort="none">
-                                    Size
-                                    <span class="sort-indicator" aria-hidden="true"></span>
-                                </button>
-                            </th>
-                            <th class="col-modified">
-                                <button type="button" class="sort-button" data-sort-key="modified" aria-sort="none">
-                                    Modified
-                                    <span class="sort-indicator" aria-hidden="true"></span>
-                                </button>
-                            </th>
-                            <th class="col-actions"></th>
-                        </tr>
-                        </thead>
-                        <tbody id="entriesBody">$$entriesHTML</tbody>
-                    </table>
-                </div>
+                <file-exp-entries data-presenter="file-exp-entries"></file-exp-entries>
             </div>
             <div class="resizer" id="resizer"></div>
             <div class="panel preview">
@@ -177,9 +163,7 @@
                 </div>
                 <div id="previewNotice" class="preview-notice hidden" role="status"></div>
                 <div class="preview-body">
-                    <div class="preview-content">
-                        <pre id="filePreview"></pre>
-                    </div>
+                    <file-exp-preview data-presenter="file-exp-preview"></file-exp-preview>
                 </div>
             </div>
         </div>

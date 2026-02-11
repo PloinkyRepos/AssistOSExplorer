@@ -48,20 +48,25 @@ export async function tryLoadMediaPreview(fileExp, filePath) {
             markup = `<a href="${src}" target="_blank" rel="noopener">Open media</a>`;
         }
 
-        fileExp.state.previewMode = 'media';
-        fileExp.state.mediaType = type;
-        fileExp.state.previewContent = markup;
-        fileExp.state.selectedIsMarkdown = false;
-        fileExp.state.fileContent = '';
-        fileExp.state.markdownTextView = false;
-        fileExp.state.documentId = null;
-        fileExp.state.hasUnsavedChanges = false;
+        fileExp.setPreviewState({
+            previewMode: 'media',
+            mediaType: type,
+            previewContent: markup,
+            selectedIsMarkdown: false,
+            fileContent: '',
+            markdownTextView: false,
+            documentId: null,
+            hasUnsavedChanges: false,
+            isEditing: false
+        });
         return true;
     } catch (err) {
         console.warn('Media preview failed', err);
         fileExp.showStatus(err.message || 'Could not preview media file.', true);
-        fileExp.state.previewMode = 'code';
-        fileExp.state.mediaType = null;
+        fileExp.setPreviewState({
+            previewMode: 'code',
+            mediaType: null
+        });
         return false;
     }
 }
@@ -70,9 +75,11 @@ export async function openFile(fileExp, filePath, { largeFilePreviewLimitBytes, 
     await fileExp.withLoader(async () => {
         try {
             clearLineHighlight(fileExp.element);
-            fileExp.state.previewMode = 'code';
-            fileExp.state.mediaType = null;
-            fileExp.state.fileLoadInfo = null;
+            fileExp.setPreviewState({
+                previewMode: 'code',
+                mediaType: null,
+                fileLoadInfo: null
+            });
             if (await tryLoadMediaPreview(fileExp, filePath)) {
                 fileExp.invalidate();
                 return;
@@ -80,20 +87,32 @@ export async function openFile(fileExp, filePath, { largeFilePreviewLimitBytes, 
 
             const entry = (fileExp.state.allEntries || []).find((item) => item?.path === filePath);
             const entrySize = Number.isFinite(entry?.size) ? entry.size : null;
+            const pendingHighlight = fileExp.state.pendingHighlight;
+            const hasPendingForFile = pendingHighlight
+                && fileExp.normalizePath(pendingHighlight.path || '') === fileExp.normalizePath(filePath);
+            const pendingLine = hasPendingForFile
+                ? Number.parseInt(String(pendingHighlight.line ?? ''), 10)
+                : null;
+            const effectivePendingLine = Number.isFinite(pendingLine) && pendingLine > 0 ? pendingLine : null;
+            const previewLineBudget = effectivePendingLine
+                ? Math.max(largeFilePreviewLines, effectivePendingLine + 80)
+                : largeFilePreviewLines;
             const shouldPreviewPartial = entrySize !== null && entrySize > largeFilePreviewLimitBytes;
             const cacheKey = fileExp.caches.filePreview.buildKey(filePath, entry, shouldPreviewPartial);
             const isBacklogFile = String(filePath || '').endsWith('.backlog') || String(filePath || '').endsWith('.history');
-            const cachedPreview = isBacklogFile ? null : fileExp.caches.filePreview.get(cacheKey);
+            const cachedPreview = (isBacklogFile || hasPendingForFile) ? null : fileExp.caches.filePreview.get(cacheKey);
             if (cachedPreview) {
-                fileExp.state.fileContent = cachedPreview.fileContent;
-                fileExp.state.selectedIsMarkdown = cachedPreview.selectedIsMarkdown;
-                fileExp.state.previewContent = cachedPreview.previewContent;
-                fileExp.state.previewMode = cachedPreview.previewMode;
-                fileExp.state.fileLoadInfo = cachedPreview.fileLoadInfo;
-                fileExp.state.markdownTextView = false;
-                fileExp.state.documentId = null;
-                fileExp.state.hasUnsavedChanges = false;
-                fileExp.state.isEditing = false;
+                fileExp.setPreviewState({
+                    fileContent: cachedPreview.fileContent,
+                    selectedIsMarkdown: cachedPreview.selectedIsMarkdown,
+                    previewContent: cachedPreview.previewContent,
+                    previewMode: cachedPreview.previewMode,
+                    fileLoadInfo: cachedPreview.fileLoadInfo,
+                    markdownTextView: false,
+                    documentId: null,
+                    hasUnsavedChanges: false,
+                    isEditing: false
+                });
                 if (fileExp.state.pendingHighlight && fileExp.state.pendingHighlight.path !== fileExp.normalizePath(filePath)) {
                     fileExp.setPendingHighlight(null);
                 }
@@ -109,7 +128,7 @@ export async function openFile(fileExp, filePath, { largeFilePreviewLimitBytes, 
             const readText = async (usePartial = false) => {
                 const args = { path: filePath };
                 if (usePartial) {
-                    args.head = largeFilePreviewLines;
+                    args.head = previewLineBudget;
                 }
                 return callToolWithLoader('explorer', 'read_text_file', args);
             };
@@ -128,32 +147,33 @@ export async function openFile(fileExp, filePath, { largeFilePreviewLimitBytes, 
                 }
             }
 
-            if (truncated) {
-                fileExp.state.fileLoadInfo = {
-                    truncated: true,
-                    size: entrySize,
-                    previewLines: largeFilePreviewLines,
-                    message: `File is ${entrySize ? fileExp.formatBytes(entrySize) : 'large'}; showing first ${largeFilePreviewLines} lines. Editing is disabled in this view.`
-                };
-            } else {
-                fileExp.state.fileLoadInfo = null;
-            }
+            const fileLoadInfo = truncated ? {
+                truncated: true,
+                size: entrySize,
+                previewLines: previewLineBudget,
+                message: `File is ${entrySize ? fileExp.formatBytes(entrySize) : 'large'}; showing first ${previewLineBudget} lines. Editing is disabled in this view.`
+            } : null;
 
-            fileExp.state.fileContent = contentResult.text;
-            fileExp.state.selectedIsMarkdown = fileExp.isMarkdownFile(filePath);
-            fileExp.state.markdownTextView = false;
-            fileExp.state.documentId = null;
-            fileExp.state.hasUnsavedChanges = false;
-            if (fileExp.state.selectedIsMarkdown) {
-                const previewSource = fileExp.prepareMarkdownPreviewContent(fileExp.state.fileContent);
-                fileExp.state.previewContent = renderMarkdownPreview(previewSource || '') || '';
-                fileExp.state.markdownTextView = false;
-                fileExp.state.previewMode = 'markdown';
-            } else {
-                fileExp.state.previewContent = renderCodePreview(fileExp.state.fileContent, filePath);
-                fileExp.state.markdownTextView = false;
-                fileExp.state.previewMode = 'code';
-            }
+            const fileContent = String(contentResult?.text || '');
+            const selectedIsMarkdown = fileExp.isMarkdownFile(filePath);
+            const useMarkdownTextViewForHighlight = Boolean(hasPendingForFile && selectedIsMarkdown);
+            const previewContent = selectedIsMarkdown
+                ? (renderMarkdownPreview(fileExp.prepareMarkdownPreviewContent(fileContent) || '') || '')
+                : renderCodePreview(fileContent, filePath);
+            const previewMode = selectedIsMarkdown ? 'markdown' : 'code';
+
+            fileExp.setPreviewState({
+                fileLoadInfo,
+                fileContent,
+                selectedIsMarkdown,
+                markdownTextView: useMarkdownTextViewForHighlight,
+                documentId: null,
+                hasUnsavedChanges: false,
+                previewContent,
+                previewMode,
+                mediaType: null,
+                isEditing: false
+            });
             if (!isBacklogFile) {
                 fileExp.caches.filePreview.set(cacheKey, {
                     fileContent: fileExp.state.fileContent,

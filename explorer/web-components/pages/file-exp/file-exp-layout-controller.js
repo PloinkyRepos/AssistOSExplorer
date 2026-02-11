@@ -6,30 +6,51 @@ export async function runAfterRender(fileExp, options = {}) {
     const previewLinesFallback = Number.isFinite(options.previewLines) ? options.previewLines : 400;
 
     fileExp.renderBreadcrumbs();
-    if (fileExp.state.selectedPath) {
-        const row = fileExp.element.querySelector(`[data-entry-path="${fileExp.state.selectedPath}"]`);
-        if (row) {
-            row.classList.add('active');
-        }
-    }
+    fileExp.renderEntries();
 
     const previewUiState = derivePreviewUiState(fileExp.state);
     fileExp.previewHeaderController.sync(previewUiState);
 
-    const previewContent = fileExp.element.querySelector('.preview-content');
-    fileExp.renderPreviewPanel(previewContent, previewUiState);
+    const previewPresenterElement = fileExp.element.querySelector('file-exp-preview');
+    const previewPresenter = previewPresenterElement?.webSkelPresenter || null;
+    if (previewPresenter && typeof previewPresenter.renderPreview === 'function') {
+        previewPresenter.renderPreview(previewUiState);
+    } else {
+        const previewContent = fileExp.element.querySelector('.preview-content');
+        fileExp.renderPreviewPanel(previewContent, previewUiState);
+    }
 
     const pendingHighlight = fileExp.state.pendingHighlight;
     if (pendingHighlight && pendingHighlight.path === fileExp.normalizePath(fileExp.state.selectedPath || '')) {
         const didScroll = scrollToLine(fileExp.element, pendingHighlight.line);
         if (didScroll) {
             fileExp.setPendingHighlight(null);
+            if (fileExp.pendingHighlightRetryTimer) {
+                window.clearTimeout(fileExp.pendingHighlightRetryTimer);
+                fileExp.pendingHighlightRetryTimer = null;
+            }
+        } else if (Number.isFinite(pendingHighlight.line) && pendingHighlight.line > 0) {
+            if (fileExp.pendingHighlightRetryTimer) {
+                window.clearTimeout(fileExp.pendingHighlightRetryTimer);
+            }
+            fileExp.pendingHighlightRetryTimer = window.setTimeout(() => {
+                const current = fileExp.state.pendingHighlight;
+                if (!current) return;
+                if (current.path !== fileExp.normalizePath(fileExp.state.selectedPath || '')) return;
+                const retried = scrollToLine(fileExp.element, current.line);
+                if (retried) {
+                    fileExp.setPendingHighlight(null);
+                }
+            }, 80);
         }
+    } else if (fileExp.pendingHighlightRetryTimer) {
+        window.clearTimeout(fileExp.pendingHighlightRetryTimer);
+        fileExp.pendingHighlightRetryTimer = null;
     }
 
     const toggleListButton = fileExp.element.querySelector('#toggleListButton');
+    const workspace = fileExp.element.querySelector('.workspace');
     const listPanel = fileExp.element.querySelector('.list');
-    const previewPanel = fileExp.element.querySelector('.preview');
     const columnMenuButton = fileExp.element.querySelector('#columnVisibilityButton');
     const columnMenu = fileExp.element.querySelector('#columnVisibilityMenu');
     const toolbarMenuButton = fileExp.element.querySelector('#toolbarMenuButton');
@@ -43,19 +64,23 @@ export async function runAfterRender(fileExp, options = {}) {
         toggleListButton.setAttribute('aria-label', collapsed ? 'Expand directory panel' : 'Collapse directory panel');
     };
 
+    const setWorkspaceListWidth = (width) => {
+        if (!workspace || !Number.isFinite(width) || width <= 0) return;
+        workspace.style.setProperty('--file-exp-list-width', `${Math.max(200, Math.round(width))}px`);
+    };
+
+    const syncCollapsedState = () => {
+        if (!workspace || !listPanel) return;
+        workspace.classList.toggle('list-collapsed', listPanel.classList.contains('collapsed'));
+    };
+
     const applySavedWidth = () => {
         if (!listPanel || listPanel.classList.contains('collapsed')) return;
         if (!fileExp.state.listWidth && listPanel.offsetWidth) {
             fileExp.setListWidth(listPanel.offsetWidth);
         }
         if (fileExp.state.listWidth) {
-            const widthPx = `${fileExp.state.listWidth}px`;
-            listPanel.style.width = widthPx;
-            listPanel.style.flex = '0 0 auto';
-            listPanel.style.flexBasis = widthPx;
-            if (previewPanel) {
-                previewPanel.style.flex = '1 1 auto';
-            }
+            setWorkspaceListWidth(fileExp.state.listWidth);
         }
     };
 
@@ -63,11 +88,10 @@ export async function runAfterRender(fileExp, options = {}) {
     if (listPanel && !listPanel.classList.contains('collapsed')) {
         if (!fileExp.state.listWidth && listPanel.offsetWidth) {
             fileExp.setListWidth(listPanel.offsetWidth);
-        }
-        if (fileExp.state.listWidth) {
-            listPanel.style.width = `${fileExp.state.listWidth}px`;
+            setWorkspaceListWidth(listPanel.offsetWidth);
         }
     }
+    syncCollapsedState();
 
     if (toggleListButton && listPanel) {
         const onToggleListClick = () => {
@@ -78,16 +102,11 @@ export async function runAfterRender(fileExp, options = {}) {
                     fileExp.setListWidth(currentWidth);
                 }
                 listPanel.classList.add('collapsed');
-                listPanel.style.width = '';
-                listPanel.style.flex = '';
-                listPanel.style.flexBasis = '';
-                if (previewPanel) {
-                    previewPanel.style.flex = '1 1 auto';
-                }
             } else {
                 listPanel.classList.remove('collapsed');
                 applySavedWidth();
             }
+            syncCollapsedState();
             updateToggleState();
         };
         fileExp.setElementListener('toggle-list-button', toggleListButton, 'click', onToggleListClick);
@@ -148,8 +167,8 @@ export async function runAfterRender(fileExp, options = {}) {
     const columnCheckboxes = fileExp.element.querySelectorAll('#columnVisibilityMenu input[type="checkbox"]');
     columnCheckboxes.forEach((checkbox) => {
         const column = checkbox.dataset.column;
-        if (column && fileExp.state.columnVisibility[column] !== undefined) {
-            checkbox.checked = Boolean(fileExp.state.columnVisibility[column]);
+        if (column) {
+            checkbox.checked = Boolean(fileExp.state.columnVisibility?.[column]);
         }
         if (!column) return;
         const onColumnVisibilityChange = (event) => {
@@ -172,34 +191,27 @@ export async function runAfterRender(fileExp, options = {}) {
             const startX = event.clientX;
             const startWidth = listPanel.getBoundingClientRect().width || fileExp.state.listWidth || listPanel.offsetWidth;
             fileExp.setIsResizing(true);
-            listPanel.style.flex = '0 0 auto';
-            listPanel.style.flexBasis = `${startWidth}px`;
-            if (previewPanel) {
-                previewPanel.style.flex = '1 1 auto';
-            }
+            workspace?.classList.add('resizing');
+            setWorkspaceListWidth(startWidth);
 
             const onMouseMove = (moveEvent) => {
                 if (!fileExp.state.isResizing) return;
                 if (listPanel.classList.contains('collapsed')) return;
                 const delta = moveEvent.clientX - startX;
                 const newWidth = Math.max(200, startWidth + delta);
-                const widthPx = `${newWidth}px`;
-                listPanel.style.width = widthPx;
-                listPanel.style.flex = '0 0 auto';
-                listPanel.style.flexBasis = widthPx;
-                if (previewPanel) {
-                    previewPanel.style.flex = '1 1 auto';
-                }
+                setWorkspaceListWidth(newWidth);
             };
 
             let stopMove = () => {};
             let stopUp = () => {};
             const onMouseUp = () => {
                 fileExp.setIsResizing(false);
+                workspace?.classList.remove('resizing');
                 if (!listPanel.classList.contains('collapsed')) {
                     const currentWidth = listPanel.offsetWidth;
                     if (currentWidth > 0) {
                         fileExp.setListWidth(currentWidth);
+                        setWorkspaceListWidth(currentWidth);
                     }
                 }
                 stopMove();
@@ -304,7 +316,8 @@ export async function runAfterRender(fileExp, options = {}) {
     fileExp.updateSearchUI();
     fileExp.directoryFilterController.bindControls();
 
-    const entriesContainer = fileExp.element.querySelector('.entries');
+    const entriesContainer = fileExp.element.querySelector('.entries')
+        || fileExp.element.querySelector('file-exp-entries');
     if (entriesContainer) {
         fileExp.setElementListener('entries-contextmenu', entriesContainer, 'contextmenu', fileExp.boundContextMenu, true);
     }

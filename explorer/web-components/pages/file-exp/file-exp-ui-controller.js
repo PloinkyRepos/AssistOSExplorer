@@ -1,5 +1,6 @@
 export const FILE_EXP_UI_ACTIONS = Object.freeze({
     RESET_DIRECTORY_CONTEXT: 'file-exp-ui/reset-directory-context',
+    SET_PREVIEW_STATE: 'file-exp-ui/set-preview-state',
     SET_TOOLBAR_MENU_OPEN: 'file-exp-ui/set-toolbar-menu-open',
     SET_SEARCH_MENU_OPEN: 'file-exp-ui/set-search-menu-open',
     SET_OPEN_MENU_PATH: 'file-exp-ui/set-open-menu-path',
@@ -22,6 +23,7 @@ export function getDirectoryResetPatch() {
         mediaType: null,
         fileLoadInfo: null,
         markdownTextView: false,
+        backlogTextView: false,
         documentId: null,
         isEditing: false,
         hasUnsavedChanges: false,
@@ -37,6 +39,35 @@ export function fileExpUiReducer(state, action) {
     switch (action.type) {
         case FILE_EXP_UI_ACTIONS.RESET_DIRECTORY_CONTEXT: {
             const patch = getDirectoryResetPatch();
+            const changed = Object.keys(patch).some((key) => state?.[key] !== patch[key]);
+            return { changed, patch };
+        }
+        case FILE_EXP_UI_ACTIONS.SET_PREVIEW_STATE: {
+            const rawPatch = action.payload?.patch;
+            if (!rawPatch || typeof rawPatch !== 'object') {
+                return { changed: false };
+            }
+            const allowedKeys = new Set([
+                'fileContent',
+                'previewContent',
+                'selectedIsMarkdown',
+                'previewMode',
+                'mediaType',
+                'fileLoadInfo',
+                'markdownTextView',
+                'backlogTextView',
+                'documentId',
+                'hasUnsavedChanges',
+                'isEditing'
+            ]);
+            const patch = {};
+            for (const [key, value] of Object.entries(rawPatch)) {
+                if (!allowedKeys.has(key)) continue;
+                patch[key] = value;
+            }
+            if (!Object.keys(patch).length) {
+                return { changed: false };
+            }
             const changed = Object.keys(patch).some((key) => state?.[key] !== patch[key]);
             return { changed, patch };
         }

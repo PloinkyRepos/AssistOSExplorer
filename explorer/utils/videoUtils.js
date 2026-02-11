@@ -1,6 +1,8 @@
 import CustomAudio from './CustomAudio.js';
 
-const workspaceModule = assistOS.loadModule('workspace');
+function getWorkspaceModule() {
+    return globalThis.assistOS?.loadModule?.('workspace') || null;
+}
 
 async function playEffects(effectsCopy, mediaPlayer, self) {
     if (effectsCopy.length === 0) {
@@ -10,6 +12,10 @@ async function playEffects(effectsCopy, mediaPlayer, self) {
         const { playAt, audioInstance, id } = effect;
         if (mediaPlayer.currentTime >= (playAt - 2) && !audioInstance.audio.sourceLoaded) {
             audioInstance.audio.sourceLoaded = true;
+            const workspaceModule = getWorkspaceModule();
+            if (!workspaceModule?.getAudioURL) {
+                throw new Error('Workspace module is not available.');
+            }
             effect.audioInstance.audio.src = await workspaceModule.getAudioURL(id);
             effect.audioInstance.audio.load();
         }
@@ -113,6 +119,10 @@ function uploadVideoThumbnail(url, videoElement) {
                 const blob = await canvasToBlobAsync(canvas);
                 canvas.remove();
                 const arrayBuffer = await blob.arrayBuffer();
+                const workspaceModule = getWorkspaceModule();
+                if (!workspaceModule?.putImage) {
+                    throw new Error('Workspace module is not available.');
+                }
                 const thumbnailId = await workspaceModule.putImage(arrayBuffer);
                 resolve(thumbnailId);
             } catch (error) {

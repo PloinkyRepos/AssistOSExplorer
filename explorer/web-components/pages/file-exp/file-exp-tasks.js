@@ -1,109 +1,111 @@
-import { callAgentTool, callExplorerTool, parseToolResult } from "../../../services/infrastructure/explorerApi.js";
-import { getReposRoot } from "../../../utils/reposRoot.js";
-
 export function attachTasksController(fileExp) {
     const normalize = (value) => String(value || '').replace(/\\/g, '/').replace(/\/+$/g, '');
 
-    const pickRepoRoot = (currentDir, repos) => {
-        const normalizedDir = normalize(currentDir);
-        let best = '';
-        for (const repoPath of repos) {
-            const normalizedRepo = normalize(repoPath);
-            if (!normalizedRepo) continue;
-            if (normalizedDir === normalizedRepo || normalizedDir.startsWith(`${normalizedRepo}/`)) {
-                if (!best || normalizedRepo.length > best.length) {
-                    best = normalizedRepo;
-                }
-            }
-        }
-        return best;
-    };
+    const resolveCurrentFolder = () => normalize(fileExp.state.path || '/') || '/';
 
-    async function getRepoList() {
-        let repos = [];
-        try {
-            const reposRoot = getReposRoot();
-            const raw = await callAgentTool('gitAgent', 'git_repos_overview', { path: reposRoot }, { raw: true });
-            const payload = parseToolResult(raw) || {};
-            repos = Array.isArray(payload?.repos) ? payload.repos.map((repo) => repo?.path).filter(Boolean) : [];
-        } catch {
-            repos = [];
+    const listBacklogFilesInCurrentFolder = async (folderPath) => {
+        const entries = await fileExp.loadDirectoryContent(folderPath);
+        if (!Array.isArray(entries)) {
+            return [];
         }
-        return repos;
-    }
-
-    const searchBacklogFiles = async (repoRoot) => {
-        const patterns = ['.backlog', '.history'];
-        const results = [];
-        for (const pattern of patterns) {
-            const text = await callExplorerTool('search_files', {
-                path: repoRoot,
-                pattern,
-                excludePatterns: ['.git', '.ploinky', 'node_modules']
-            });
-            const lines = String(text || '')
-                .split(/\r?\n/)
-                .map((line) => line.trim())
-                .filter((line) => line && !line.toLowerCase().includes('no matches'));
-            results.push(...lines);
-        }
-        const normalized = results
-            .map((line) => (line.startsWith('/') ? line : `/${line}`))
-            .map((fullPath) => fileExp.normalizePath(fullPath))
+        return entries
+            .filter((entry) => entry?.type === 'file')
+            .map((entry) => fileExp.normalizePath(entry.path || fileExp.joinPath(folderPath, entry.name || '')))
             .filter((fullPath) => fullPath.endsWith('.backlog') || fullPath.endsWith('.history'));
-        return Array.from(new Set(normalized));
     };
 
-    async function openBacklog() {
+    const applyBacklogFilterResult = async (folderPath, backlogFiles, preferredPath = '') => {
+        const entries = backlogFiles.map((fullPath) => ({
+            name: fullPath.split('/').pop() || fullPath,
+            path: fullPath,
+            type: 'file',
+            size: null,
+            modified: null
+        }));
+
+        fileExp.state.path = folderPath;
+        fileExp.state.entries = fileExp.sortEntries(entries);
+        fileExp.state.allEntries = fileExp.state.entries;
+        fileExp.renderEntries();
+        fileExp.setPreviewState({ backlogTextView: false }, { invalidate: false });
+
+        const normalizedPreferred = preferredPath ? fileExp.normalizePath(preferredPath) : '';
+        const selectedPath = normalizedPreferred && backlogFiles.includes(normalizedPreferred)
+            ? normalizedPreferred
+            : (backlogFiles.length === 1 ? backlogFiles[0] : '');
+
+        fileExp.state.selectedPath = selectedPath;
+        if (selectedPath) {
+            await fileExp.openFile(selectedPath);
+            history.pushState(null, '', `#file-exp${selectedPath}`);
+        }
+    };
+
+    async function showAllBacklogs() {
         return fileExp.withLoader(async () => {
-            const currentDir = fileExp.state.path || '/';
-            const repoList = await getRepoList();
-            const repoRoot = pickRepoRoot(currentDir, repoList) || normalize(currentDir) || '/';
+            const currentFolder = resolveCurrentFolder();
             let backlogFiles = [];
             try {
-                backlogFiles = await searchBacklogFiles(repoRoot);
+                backlogFiles = await listBacklogFilesInCurrentFolder(currentFolder);
             } catch {
                 backlogFiles = [];
             }
+
             if (!backlogFiles.length) {
-                const payload = await assistOS.UI.createReactiveModal('backlog-create-file-modal', {}, true);
-                const rawName = String(payload?.filename || '').trim();
-                if (!rawName) {
-                    fileExp.showStatus('No backlog files found in this repo.', true);
-                    return;
-                }
-                const fileName = rawName.endsWith('.backlog') ? rawName : `${rawName}.backlog`;
-                const backlogPath = fileExp.joinPath(repoRoot, fileName);
-                try {
-                    await fileExp.tooling.writeFile(backlogPath, JSON.stringify([], null, 2));
-                    backlogFiles = [backlogPath];
-                } catch {
-                    fileExp.showStatus('Failed to create backlog file in this repo.', true);
-                    return;
-                }
+                fileExp.showStatus('No backlog files found in current folder.', true);
+                return;
             }
-            const entries = backlogFiles.map((fullPath) => ({
-                name: fullPath.split('/').pop() || fullPath,
-                path: fullPath,
-                type: 'file',
-                size: null,
-                modified: null
-            }));
-            fileExp.state.path = repoRoot;
-            fileExp.state.entries = fileExp.sortEntries(entries);
-            fileExp.state.allEntries = fileExp.state.entries;
-            fileExp.renderEntries();
-            fileExp.state.selectedPath = backlogFiles.length === 1 ? backlogFiles[0] : '';
-            if (backlogFiles.length === 1) {
-                await fileExp.openFile(backlogFiles[0]);
-                history.pushState(null, '', `#file-exp${backlogFiles[0]}`);
-            } else {
-                fileExp.showStatus('Showing all backlog files in this repo.', false);
+
+            await applyBacklogFilterResult(currentFolder, backlogFiles);
+            if (backlogFiles.length > 1) {
+                fileExp.showStatus('Showing all backlog files in current folder.', false);
             }
         });
     }
 
+    async function newBacklog() {
+        return fileExp.withLoader(async () => {
+            const currentFolder = resolveCurrentFolder();
+            const payload = await assistOS.UI.createReactiveModal('backlog-create-file-modal', {}, true);
+            const rawName = String(payload?.filename || '').trim();
+            if (!rawName) {
+                return;
+            }
+
+            const fileName = rawName.endsWith('.backlog') ? rawName : `${rawName}.backlog`;
+            const backlogPath = fileExp.joinPath(currentFolder, fileName);
+
+            try {
+                await fileExp.tooling.writeFile(backlogPath, JSON.stringify([], null, 2));
+            } catch {
+                fileExp.showStatus('Failed to create backlog file in current folder.', true);
+                return;
+            }
+
+            fileExp.caches?.dirListing?.invalidate?.(fileExp, currentFolder);
+            let backlogFiles = [];
+            try {
+                backlogFiles = await listBacklogFilesInCurrentFolder(currentFolder);
+            } catch {
+                backlogFiles = [];
+            }
+            const normalizedPath = fileExp.normalizePath(backlogPath);
+            if (!backlogFiles.includes(normalizedPath)) {
+                backlogFiles.unshift(normalizedPath);
+            }
+
+            await applyBacklogFilterResult(currentFolder, Array.from(new Set(backlogFiles)), normalizedPath);
+            fileExp.showStatus(`Created ${fileName}.`, false);
+        });
+    }
+
+    async function openBacklog() {
+        return showAllBacklogs();
+    }
+
     Object.assign(fileExp, {
-        openBacklog
+        openBacklog,
+        newBacklog,
+        showAllBacklogs
     });
 }

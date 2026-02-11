@@ -1,6 +1,7 @@
 import { normalizePath, parsePatterns } from "../../pages/file-exp/file-exp-utils.js";
 import { callToolWithLoader } from "../../../utils/globalLoader.js";
 import { FILE_EXP_REPLACE_COMPLETE_EVENT } from "../../../utils/appEvents.js";
+import { callExplorerTool } from "../../../services/infrastructure/explorerApi.js";
 
 export class FileSearchModal {
     constructor(element, invalidate, props = {}) {
@@ -45,11 +46,10 @@ export class FileSearchModal {
     beforeRender() {}
 
     async callTool(agentName, toolName, args) {
-        const services = window.webSkel?.appServices;
-        if (!services || typeof services.callTool !== 'function') {
-            throw new Error('callTool: appServices.callTool is not available.');
+        if (agentName !== 'explorer') {
+            throw new Error(`Unsupported agent for FileSearchModal: ${agentName}`);
         }
-        return services.callTool(agentName, toolName, args);
+        return callExplorerTool(toolName, args, { raw: true });
     }
 
     normalizeBasePath(value) {
@@ -112,11 +112,12 @@ export class FileSearchModal {
 
         const matchText = firstMatch[0] ?? '';
         const matchIndex = Number.isFinite(firstMatch.index) ? firstMatch.index : 0;
+        const contextBefore = 60;
         const contextAfter = 50;
-        const start = 0;
+        const start = Math.max(0, matchIndex - contextBefore);
         const end = Math.min(value.length, matchIndex + matchText.length + contextAfter);
         const snippet = value.slice(start, end);
-        const prefix = '';
+        const prefix = start > 0 ? '…' : '';
         const suffix = end < value.length ? '…' : '';
 
         regex.lastIndex = 0;
@@ -136,6 +137,18 @@ export class FileSearchModal {
         }
         result += this.escapeHtml(snippet.slice(lastIndex));
         return `${prefix}${result}${suffix}`;
+    }
+
+    getEventTargetElement(event) {
+        const target = event?.target;
+        if (target instanceof Element) return target;
+        if (target?.parentElement instanceof Element) return target.parentElement;
+        return null;
+    }
+
+    parseLineValue(value) {
+        const parsed = Number.parseInt(String(value ?? ''), 10);
+        return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
     }
 
     bindEvents() {
@@ -261,7 +274,9 @@ export class FileSearchModal {
         const modeSwitch = this.element.querySelector('.search-mode-switch');
         if (modeSwitch && !modeSwitch.dataset.bound) {
             modeSwitch.addEventListener('click', (event) => {
-                const button = event.target.closest('.mode-button');
+                const targetEl = this.getEventTargetElement(event);
+                if (!targetEl) return;
+                const button = targetEl.closest('.mode-button');
                 if (!button?.dataset?.mode) return;
                 this.setMode(button.dataset.mode);
                 this.syncUIFromState();
@@ -275,9 +290,11 @@ export class FileSearchModal {
         const byNameResults = this.element.querySelector('#searchByNameResults');
         if (byNameResults && !byNameResults.dataset.boundClick) {
             byNameResults.addEventListener('click', (event) => {
-                const target = event.target.closest('.search-result-item');
+                const targetEl = this.getEventTargetElement(event);
+                if (!targetEl) return;
+                const target = targetEl.closest('.search-result-item');
                 if (target?.dataset?.filePath) {
-                    const line = target.dataset.line ? Number.parseInt(target.dataset.line, 10) : null;
+                    const line = this.parseLineValue(target.dataset.line);
                     this.closeModal({ path: target.dataset.filePath, line });
                 }
             });
@@ -287,12 +304,14 @@ export class FileSearchModal {
         const inFilesResults = this.element.querySelector('#searchInFilesResults');
         if (inFilesResults && !inFilesResults.dataset.boundClick) {
             inFilesResults.addEventListener('click', (event) => {
-                if (event.target.closest('input[type="checkbox"]') || event.target.closest('label.search-checkbox')) {
+                const targetEl = this.getEventTargetElement(event);
+                if (!targetEl) return;
+                if (targetEl.closest('input[type="checkbox"]') || targetEl.closest('label.search-checkbox')) {
                     return;
                 }
-                const target = event.target.closest('.search-match-item');
+                const target = targetEl.closest('.search-match-item');
                 if (target?.dataset?.filePath) {
-                    const line = target.dataset.line ? Number.parseInt(target.dataset.line, 10) : null;
+                    const line = this.parseLineValue(target.dataset.line);
                     this.closeModal({ path: target.dataset.filePath, line });
                 }
             });

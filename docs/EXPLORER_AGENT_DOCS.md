@@ -20,6 +20,7 @@ This guide consolidates all Explorer documentation (architecture, document model
 - **Manifest**: `explorer/manifest.json` – `container: node:20-alpine`, `agent: node /code/filesystem-http-server.mjs`, `env: ["ASSISTOS_FS_ROOT"]`, `enable: ["soplang","multimedia"]`.
 - **Global mode**: `p-cli enable agent fileExplorer/explorer global` runs in the current workspace folder. First `p-cli start explorer <port>` also pins the router/static port.
 - **Router**: <a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md">Ploinky</a> router serves static UI and proxies MCP on the chosen port (e.g., 8080 → `/explorer/index.html`).
+- **Repo-scoped static exposure for docs preview**: Keep `explorer/.ploinky/repos/fileExplorer -> ../../..` versioned in git so `/.ploinky/repos/fileExplorer/docs/*` resolves on all environments.
 - **Allowed directories**: Derived from `ASSISTOS_FS_ROOT`/`MCP_FS_ROOT` (comma-separated). If missing, falls back to `process.cwd()`. Multiple roots → first is workspace root.
 - **Containers & workspace**: Explorer and soplangAgent containers mount the same host workspace volume; each has its own MCP endpoints.
 
@@ -37,6 +38,7 @@ This guide consolidates all Explorer documentation (architecture, document model
 ## 4) Document Model & Editing
 
 - **View/Edit modes**: Any file can be opened; Markdown gets structured document features, other text/code files use the general editor (with syntax highlighting, no document DOM).
+- **HTML Web Preview URL model**: Preview preserves repo-scoped paths generated from selected file path (e.g., `/.ploinky/repos/fileExplorer/docs/development.html?__previewReload=1`) instead of flattening to root-level `/docs/*`.
 - **Hydration**: `DocumentStore.hydrateDocumentModel` parses Markdown plus comment markers into a hierarchy (document → chapters → paragraphs).
   - Example comment markers:
     - `<!--{"achiles-ide-document": {"id": "guide", "title": "My Guide"}}-->`
@@ -100,9 +102,11 @@ This guide consolidates all Explorer documentation (architecture, document model
 - **Auto-enabled agents**: `soplang`, `multimedia` (from Explorer manifest).
 - **Dependencies**: `npm install` at repo root (and `explorer/` if needed).
 - **Hot reload**: UI refresh picks up most changes; plugin `config.json` or new plugins require Explorer restart to rescan. SOPLang comment edits are re-hydrated on reload; rerun `buildFromMarkdown` to persist into the SOPLang store.
+- **Preview portability rule**: Do not rely on local-only symlinks like `explorer/docs`. Use the repo-scoped symlink under `explorer/.ploinky/repos/fileExplorer` so preview works consistently on clean clones.
 - **Repo layout (Explorer)**:
   ```
   explorer/
+  ├─ .ploinky/repos/fileExplorer -> ../../..  # repo-scoped static path bridge for web preview
   ├─ filesystem-http-server.mjs   # MCP, plugin discovery
   ├─ index.html / main.js         # SPA entry
   ├─ webskel.json                 # UI components
