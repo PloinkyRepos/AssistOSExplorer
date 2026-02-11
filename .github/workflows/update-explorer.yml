@@ -227,6 +227,21 @@ jobs:
           mkdir -p "$WORK_DIR/logs"
           echo "[update] Restarting explorer on router port $ROUTER_PORT..."
 
+          # Ensure routing.json has our port BEFORE ploinky stop, so
+          # killRouterIfRunning() kills the correct router (not the
+          # default port 8080 which belongs to the coral workspace).
+          ROUTING_FILE="$WORK_DIR/.ploinky/routing.json"
+          if [ -f "$ROUTING_FILE" ]; then
+            python3 -c "
+import json, sys
+with open('$ROUTING_FILE') as f: cfg = json.load(f)
+cfg['port'] = $ROUTER_PORT
+with open('$ROUTING_FILE', 'w') as f: json.dump(cfg, f, indent=2)
+" 2>/dev/null || true
+          else
+            echo "{\"port\":$ROUTER_PORT,\"routes\":{}}" > "$ROUTING_FILE"
+          fi
+
           ploinky stop || true
           nohup ploinky start explorer "$ROUTER_PORT" > "$WORK_DIR/logs/update-start.log" 2>&1 &
 

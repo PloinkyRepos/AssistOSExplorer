@@ -232,6 +232,15 @@ jobs:
           ploinky var ASSISTOS_FS_ROOT "$WORK_DIR" || true
 
           mkdir -p "$WORK_DIR/logs"
+
+          # Seed routing.json with our port BEFORE ploinky start, so the
+          # internal killRouterIfRunning() kills only our router (not the
+          # default port 8080 which belongs to the coral workspace).
+          ROUTING_FILE="$WORK_DIR/.ploinky/routing.json"
+          if [ ! -f "$ROUTING_FILE" ]; then
+            echo "{\"port\":$ROUTER_PORT,\"routes\":{}}" > "$ROUTING_FILE"
+          fi
+
           echo "[deploy] Starting explorer..."
           nohup ploinky start explorer "$ROUTER_PORT" > "$WORK_DIR/logs/deploy-start.log" 2>&1 &
 
