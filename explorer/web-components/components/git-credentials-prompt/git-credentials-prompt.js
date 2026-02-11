@@ -311,6 +311,16 @@ export class GitCredentialsPrompt {
             this.state.autoresolveDirty = Boolean(next.autoresolveDirty);
         }
 
+        // When pre-filled credentials arrive but haven't been validated yet,
+        // mark dirty so the Save button becomes clickable for validation.
+        if (
+            !this.state.credentialsValidated
+            && !this.state.credentialsDirty
+            && this.isCredentialsValid()
+        ) {
+            this.state.credentialsDirty = true;
+        }
+
         this.element.classList.toggle('is-visible', this.state.visible);
         if (this.nameInput && this.nameInput.value !== this.state.name) {
             this.nameInput.value = this.state.name;
