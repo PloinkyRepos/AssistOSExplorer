@@ -223,6 +223,9 @@ jobs:
           ploinky add repo fileExplorer https://github.com/PloinkyRepos/AssistOSExplorer.git "$EXPLORER_BRANCH" || true
           ploinky enable repo fileExplorer
 
+          echo "[deploy] Adding gitTest repo..."
+          ploinky add repo gitTest https://github.com/AssistosTest/gitTest.git main || true
+
           # Configure defaults
           ploinky var PLOINKY_CODE_WRITABLE "1" || true
           ploinky var PLOINKY_ROUTER_URL "http://host.containers.internal:${ROUTER_PORT}" || true
