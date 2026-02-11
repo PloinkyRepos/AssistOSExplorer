@@ -274,14 +274,18 @@ export class GitCommitModal {
             .map((repo) => repo?.path)
             .find(Boolean);
         if (fromOverviews) return fromOverviews;
-        try {
-            const text = await this.service.gitReposOverview(this.state.reposRoot);
-            const payload = parseJsonToolResult(text) || {};
-            const repos = Array.isArray(payload.repos) ? payload.repos : [];
-            const first = repos.map((repo) => repo?.path).find(Boolean);
-            if (first) return first;
-        } catch {
-            // ignore
+        const scanPaths = [this.state.reposRoot, '.'];
+        for (const scanPath of scanPaths) {
+            if (!scanPath) continue;
+            try {
+                const text = await this.service.gitReposOverview(scanPath);
+                const payload = parseJsonToolResult(text) || {};
+                const repos = Array.isArray(payload.repos) ? payload.repos : [];
+                const first = repos.map((repo) => repo?.path).find(Boolean);
+                if (first) return first;
+            } catch {
+                // ignore
+            }
         }
         return repoPath || this.state.reposRoot || '';
     }
