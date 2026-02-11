@@ -1,3 +1,4 @@
+// Unit tests for docs consistency validation
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
