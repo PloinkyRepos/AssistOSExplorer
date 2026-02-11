@@ -232,12 +232,7 @@ jobs:
           # default port 8080 which belongs to the coral workspace).
           ROUTING_FILE="$WORK_DIR/.ploinky/routing.json"
           if [ -f "$ROUTING_FILE" ]; then
-            python3 -c "
-import json, sys
-with open('$ROUTING_FILE') as f: cfg = json.load(f)
-cfg['port'] = $ROUTER_PORT
-with open('$ROUTING_FILE', 'w') as f: json.dump(cfg, f, indent=2)
-" 2>/dev/null || true
+            python3 -c "import json; f=open('$ROUTING_FILE'); cfg=json.load(f); f.close(); cfg['port']=$ROUTER_PORT; f=open('$ROUTING_FILE','w'); json.dump(cfg,f,indent=2); f.close()" 2>/dev/null || true
           else
             echo "{\"port\":$ROUTER_PORT,\"routes\":{}}" > "$ROUTING_FILE"
           fi
