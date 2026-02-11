@@ -1,0 +1,116 @@
+name: Destroy Explorer (Remote Wipe)
+
+on:
+  workflow_dispatch:
+    inputs:
+      workspace_name:
+        description: 'Workspace directory name to wipe on the remote host'
+        required: false
+        default: 'explorerWorkspace'
+        type: string
+      remove_workspace_dir:
+        description: 'Also remove the entire workspace directory (rm -rf ~/workspace_name)'
+        required: false
+        default: true
+        type: boolean
+
+env:
+  SSH_USER: ${{ vars.SSH_USER || 'admin' }}
+  SSH_HOST: ${{ vars.SSH_HOST || '193.180.209.191' }}
+
+jobs:
+  destroy:
+    name: Destroy deployment on Remote Host
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Prepare SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ env.SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Destroy explorer workspace
+        env:
+          WORKSPACE: ${{ inputs.workspace_name || vars.EXPLORER_WORKSPACE || 'explorerWorkspace' }}
+          REMOVE_DIR: ${{ inputs.remove_workspace_dir }}
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key "${{ env.SSH_USER }}@${{ env.SSH_HOST }}" bash -s -- "$WORKSPACE" "$REMOVE_DIR" << 'DESTROY'
+          set -euo pipefail
+          WORKSPACE="$1"
+          REMOVE_DIR="$2"
+          export PATH="$HOME/ploinky/bin:$HOME/.local/bin:$PATH"
+
+          WORK_DIR="$HOME/$WORKSPACE"
+          echo "[destroy] Workspace: $WORK_DIR"
+
+          if [ -d "$WORK_DIR" ]; then
+            cd "$WORK_DIR"
+            echo "[destroy] Stopping services..."
+            ploinky stop 2>/dev/null || true
+            ploinky shutdown 2>/dev/null || true
+            ploinky clean 2>/dev/null || true
+          fi
+
+          echo "[destroy] Removing remaining containers for workspace $WORKSPACE..."
+          REMAINING=$(podman ps -a --format '{{.Names}}' | grep "_${WORKSPACE}_" || true)
+          if [ -n "$REMAINING" ]; then
+            printf '%s\n' "$REMAINING" | while IFS= read -r C; do
+              [ -z "$C" ] && continue
+              echo "[destroy]   stopping $C"
+              podman stop "$C" 2>/dev/null || true
+              podman rm -f "$C" 2>/dev/null || true
+            done
+          fi
+
+          if [ -d "$WORK_DIR" ]; then
+            echo "[destroy] Removing workspace contents..."
+            podman unshare rm -rf \
+              "$WORK_DIR/.ploinky" \
+              "$WORK_DIR/agents" \
+              "$WORK_DIR/code" \
+              "$WORK_DIR/skills" \
+              "$WORK_DIR/shared" \
+              "$WORK_DIR/logs" \
+              "$WORK_DIR/gitTest" \
+              2>/dev/null || true
+            rm -rf \
+              "$WORK_DIR/.ploinky" \
+              "$WORK_DIR/agents" \
+              "$WORK_DIR/code" \
+              "$WORK_DIR/skills" \
+              "$WORK_DIR/shared" \
+              "$WORK_DIR/logs" \
+              "$WORK_DIR/gitTest" \
+              2>/dev/null || true
+          fi
+
+          if [ "$REMOVE_DIR" = "true" ]; then
+            echo "[destroy] Removing workspace directory..."
+            podman unshare rm -rf "$WORK_DIR" 2>/dev/null || true
+            rm -rf "$WORK_DIR" 2>/dev/null || true
+          fi
+
+          echo "[destroy] Remaining containers for $WORKSPACE:"
+          podman ps -a --format '{{.Names}}' | grep "_${WORKSPACE}_" || echo "[destroy] none"
+          echo "[destroy] Done."
+          DESTROY
+
+      - name: Create summary
+        if: always()
+        run: |
+          echo "## Explorer Destroy" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Host: \`${{ env.SSH_HOST }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Workspace: \`${{ inputs.workspace_name || vars.EXPLORER_WORKSPACE || 'explorerWorkspace' }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Remove workspace dir: \`${{ inputs.remove_workspace_dir }}\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key

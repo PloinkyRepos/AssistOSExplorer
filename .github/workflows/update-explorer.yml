@@ -1,0 +1,207 @@
+name: Update Explorer
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'AssistOSExplorer branch to update to'
+        required: false
+        default: 'main'
+        type: string
+      update_ploinky:
+        description: 'Also update Ploinky on the remote host'
+        required: false
+        default: false
+        type: boolean
+      ploinky_branch:
+        description: 'Ploinky branch (if updating)'
+        required: false
+        default: 'master'
+        type: string
+      workspace_name:
+        description: 'Workspace directory name on the remote host'
+        required: false
+        default: 'explorerWorkspace'
+        type: string
+      router_port:
+        description: 'Router port on the remote host'
+        required: false
+        default: '8097'
+        type: string
+      restart_services:
+        description: 'Restart services after update'
+        required: false
+        default: true
+        type: boolean
+
+  push:
+    branches:
+      - main
+    paths:
+      - 'explorer/**'
+      - '.github/workflows/update-explorer.yml'
+
+env:
+  SSH_USER: ${{ vars.SSH_USER || 'admin' }}
+  SSH_HOST: ${{ vars.SSH_HOST || '193.180.209.191' }}
+
+jobs:
+  update:
+    name: Update on Remote Host
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch || 'main' }}
+          fetch-depth: 0
+
+      - name: Prepare SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ env.SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Update Ploinky
+        if: ${{ inputs.update_ploinky == true }}
+        env:
+          PLOINKY_BRANCH: ${{ inputs.ploinky_branch || 'master' }}
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key "${{ env.SSH_USER }}@${{ env.SSH_HOST }}" bash -s -- "$PLOINKY_BRANCH" << 'UPDATE_PLOINKY'
+          set -euo pipefail
+          PLOINKY_BRANCH="$1"
+          PLOINKY_DIR="$HOME/ploinky"
+          if [ ! -d "$PLOINKY_DIR/.git" ]; then
+            echo "[update] Ploinky not found, skipping."
+            exit 0
+          fi
+          cd "$PLOINKY_DIR"
+          git stash 2>/dev/null || true
+          git fetch origin
+          git checkout "${PLOINKY_BRANCH:-master}"
+          git pull origin "${PLOINKY_BRANCH:-master}"
+          npm install
+          echo "[update] Ploinky updated."
+          UPDATE_PLOINKY
+
+      - name: Update fileExplorer repository
+        env:
+          WORKSPACE: ${{ inputs.workspace_name || vars.EXPLORER_WORKSPACE || 'explorerWorkspace' }}
+          EXPLORER_BRANCH: ${{ inputs.branch || 'main' }}
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key "${{ env.SSH_USER }}@${{ env.SSH_HOST }}" bash -s -- "$WORKSPACE" "$EXPLORER_BRANCH" << 'UPDATE_REPO'
+          set -euo pipefail
+          WORKSPACE="$1"
+          EXPLORER_BRANCH="$2"
+          export PATH="$HOME/ploinky/bin:$HOME/.local/bin:$PATH"
+
+          WORK_DIR="$HOME/$WORKSPACE"
+          EXPLORER_REPO="$WORK_DIR/.ploinky/repos/fileExplorer"
+          if [ ! -d "$EXPLORER_REPO/.git" ]; then
+            echo "[update] fileExplorer repo not found at $EXPLORER_REPO"
+            exit 1
+          fi
+
+          echo "[update] Updating fileExplorer repo to $EXPLORER_BRANCH..."
+          cd "$EXPLORER_REPO"
+          git stash 2>/dev/null || true
+          git clean -fd 2>/dev/null || true
+          git fetch origin
+          git checkout "${EXPLORER_BRANCH:-main}"
+          git reset --hard "origin/${EXPLORER_BRANCH:-main}"
+          echo "[update] fileExplorer updated to $(git rev-parse --short HEAD)"
+          UPDATE_REPO
+
+      - name: Update environment variables
+        env:
+          WORKSPACE: ${{ inputs.workspace_name || vars.EXPLORER_WORKSPACE || 'explorerWorkspace' }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          AXIOLOGIC_API_KEY: ${{ secrets.AXIOLOGIC_API_KEY }}
+          OPENAI_OPENCODE_KEY: ${{ secrets.OPENAI_OPENCODE_KEY }}
+          OPENAI_AXIOLOGIC_KIRO_URL: ${{ vars.OPENAI_AXIOLOGIC_KIRO_URL }}
+          OPENAI_AXIOLOGIC_KIRO_KEY_ENV: ${{ vars.OPENAI_AXIOLOGIC_KIRO_KEY_ENV }}
+          ANTHROPIC_AXIOLOGIC_ANTIGRAVITY_URL: ${{ vars.ANTHROPIC_AXIOLOGIC_ANTIGRAVITY_URL }}
+          ANTHROPIC_AXIOLOGIC_ANTIGRAVITY_KEY_ENV: ${{ vars.ANTHROPIC_AXIOLOGIC_ANTIGRAVITY_KEY_ENV }}
+          OPENAI_OPENCODE_URL: ${{ vars.OPENAI_OPENCODE_URL }}
+          OPENAI_OPENAI_RESPONSES_URL: ${{ vars.OPENAI_OPENAI_RESPONSES_URL }}
+          OPENAI_OPENAI_RESPONSES_KEY_ENV: ${{ vars.OPENAI_OPENAI_RESPONSES_KEY_ENV }}
+          LLM_MODELS: ${{ vars.LLM_MODELS }}
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key "${{ env.SSH_USER }}@${{ env.SSH_HOST }}" 'bash -s' << ENVVARS
+          set -eo pipefail
+          export PATH="\$HOME/ploinky/bin:\$HOME/.local/bin:\$PATH"
+
+          cd "\$HOME/${WORKSPACE}"
+          echo "[update] Updating environment variables..."
+
+          set_var() {
+            local name="\$1"
+            local value="\$2"
+            if [ -n "\$value" ]; then
+              ploinky var "\$name" "\$value" 2>/dev/null || true
+            fi
+          }
+
+          # API Keys
+          set_var OPENAI_API_KEY "${OPENAI_API_KEY:-}"
+          set_var OPENROUTER_API_KEY "${OPENROUTER_API_KEY:-}"
+          set_var AXIOLOGIC_API_KEY "${AXIOLOGIC_API_KEY:-}"
+          set_var OPENAI_OPENCODE_KEY "${OPENAI_OPENCODE_KEY:-}"
+
+          # LLM Provider endpoints
+          set_var OPENAI_AXIOLOGIC_KIRO_URL "${OPENAI_AXIOLOGIC_KIRO_URL:-}"
+          set_var OPENAI_AXIOLOGIC_KIRO_KEY_ENV "${OPENAI_AXIOLOGIC_KIRO_KEY_ENV:-}"
+          set_var ANTHROPIC_AXIOLOGIC_ANTIGRAVITY_URL "${ANTHROPIC_AXIOLOGIC_ANTIGRAVITY_URL:-}"
+          set_var ANTHROPIC_AXIOLOGIC_ANTIGRAVITY_KEY_ENV "${ANTHROPIC_AXIOLOGIC_ANTIGRAVITY_KEY_ENV:-}"
+          set_var OPENAI_OPENCODE_URL "${OPENAI_OPENCODE_URL:-}"
+          set_var OPENAI_OPENAI_RESPONSES_URL "${OPENAI_OPENAI_RESPONSES_URL:-}"
+          set_var OPENAI_OPENAI_RESPONSES_KEY_ENV "${OPENAI_OPENAI_RESPONSES_KEY_ENV:-}"
+
+          # LLM Model definitions (dynamically parsed from LLM_MODELS var)
+          if [ -n "${LLM_MODELS:-}" ]; then
+            IFS=';' read -ra MODEL_ENTRIES <<< "${LLM_MODELS}"
+            for entry in "\${MODEL_ENTRIES[@]}"; do
+              entry="\$(printf '%s' "\$entry" | xargs)"
+              [ -z "\$entry" ] && continue
+              model_key="\${entry%%=*}"
+              model_val="\${entry#*=}"
+              if [ -n "\$model_key" ] && [ -n "\$model_val" ]; then
+                set_var "\$model_key" "\$model_val"
+              fi
+            done
+          fi
+
+          echo "[update] Environment variables updated."
+          ENVVARS
+
+      - name: Restart services
+        if: ${{ inputs.restart_services == '' || inputs.restart_services == true }}
+        env:
+          WORKSPACE: ${{ inputs.workspace_name || vars.EXPLORER_WORKSPACE || 'explorerWorkspace' }}
+          ROUTER_PORT: ${{ inputs.router_port || vars.EXPLORER_ROUTER_PORT || '8097' }}
+        run: |
+          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=10 -i ~/.ssh/deploy_key "${{ env.SSH_USER }}@${{ env.SSH_HOST }}" bash -s -- "$WORKSPACE" "$ROUTER_PORT" << 'RESTART'
+          set -euo pipefail
+          WORKSPACE="$1"
+          ROUTER_PORT="$2"
+          export PATH="$HOME/ploinky/bin:$HOME/.local/bin:$PATH"
+
+          WORK_DIR="$HOME/$WORKSPACE"
+          cd "$WORK_DIR"
+          echo "[update] Restarting explorer on router port $ROUTER_PORT..."
+
+          ploinky stop || true
+          nohup ploinky start explorer "$ROUTER_PORT" > "$WORK_DIR/logs/update-start.log" 2>&1 &
+          sleep 10
+          echo "[update] Containers:"
+          podman ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | head -80
+          RESTART
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key

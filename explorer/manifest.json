@@ -24,7 +24,7 @@
                 "ASSISTOS_FS_ROOT"
             ],
             "preinstall": "scripts/hooks/preinstall.sh",
-            "install": "apt-get update && apt-get install -y git"
+            "install": "/code/scripts/hooks/install.sh"
         }
     }
 }
