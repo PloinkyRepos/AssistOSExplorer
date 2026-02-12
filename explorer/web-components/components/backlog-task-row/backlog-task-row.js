@@ -217,7 +217,10 @@ export class BacklogTaskRow {
         if (status !== 'new') return;
         if (!this.resolutionInput) return;
         if (this.hasResolution()) return;
-        this.setResolutionLines([options[0]]);
+        this.resolutionInput.value = options[0];
+        this.resizeResolution();
+        this.syncOptionSelectionFromResolution();
+        this.updateApproveState();
     }
 
     renderOptions() {
