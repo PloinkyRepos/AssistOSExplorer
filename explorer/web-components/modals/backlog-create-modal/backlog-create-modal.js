@@ -37,13 +37,14 @@ export class BacklogCreateModal {
             alert('Description is required.');
             return;
         }
-        const payload = {
-            description
-        };
-        this.closeModal(payload);
+        this.closeModalWithPayload({ description });
     }
 
-    closeModal(payload) {
+    closeModal(_element) {
+        assistOS.UI.closeModal(this.element);
+    }
+
+    closeModalWithPayload(payload) {
         assistOS.UI.closeModal(this.element, payload);
     }
 }

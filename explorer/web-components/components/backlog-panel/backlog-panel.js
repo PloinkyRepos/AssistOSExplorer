@@ -632,7 +632,7 @@ export class BacklogPanel {
         }
         const payload = await assistOS.UI.createReactiveModal('backlog-create-modal', {
         }, true);
-        if (payload) {
+        if (payload && typeof payload.description === 'string' && payload.description.trim()) {
             await this.createBacklogTask(payload);
         }
     }
