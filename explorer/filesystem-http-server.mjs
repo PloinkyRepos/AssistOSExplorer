@@ -170,59 +170,91 @@ invalidateCachesForPath = (targetPath) => {
   directoryTreeCache.clear();
 };
 
-function resolvePathsInArgs(args) {
+function getResolvedAllowedRoots() {
+  const roots = [workspaceRoot, ...(allowedDirectories || [])]
+    .filter(Boolean)
+    .map((dir) => path.resolve(dir));
+  return Array.from(new Set(roots));
+}
+
+function isPathWithinRoots(candidatePath, roots = getResolvedAllowedRoots()) {
+  const resolvedCandidate = path.resolve(candidatePath);
+  return roots.some((root) => {
+    const resolvedRoot = path.resolve(root);
+    if (resolvedCandidate === resolvedRoot) return true;
+    const relative = path.relative(resolvedRoot, resolvedCandidate);
+    return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
+  });
+}
+
+async function resolveCanonicalPath(targetPath) {
+  const normalizedTarget = path.resolve(targetPath);
+  try {
+    return await fs.realpath(normalizedTarget);
+  } catch {
+    let current = path.dirname(normalizedTarget);
+    while (true) {
+      try {
+        const realCurrent = await fs.realpath(current);
+        const suffix = path.relative(current, normalizedTarget);
+        return path.resolve(realCurrent, suffix);
+      } catch {
+        const parent = path.dirname(current);
+        if (parent === current) {
+          return null;
+        }
+        current = parent;
+      }
+    }
+  }
+}
+
+async function resolvePathInAllowedRoots(inputPath) {
+  if (typeof inputPath !== 'string') return inputPath;
+  if (!workspaceRoot) throw new Error('Workspace root not configured.');
+  if (inputPath.includes('\0')) throw new Error(`Invalid path: ${inputPath}`);
+  const candidate = inputPath.trim();
+  const roots = getResolvedAllowedRoots();
+  const workspaceResolved = path.resolve(workspaceRoot);
+
+  let resolvedPath;
+  if (path.isAbsolute(candidate) && isPathWithinRoots(candidate, roots)) {
+    resolvedPath = path.resolve(candidate);
+  } else {
+    const safePart = candidate.startsWith('/') ? candidate.slice(1) : candidate;
+    resolvedPath = path.resolve(workspaceResolved, safePart);
+  }
+
+  if (!isPathWithinRoots(resolvedPath, roots)) {
+    throw new Error(`Access denied: path traversal attempt for "${inputPath}"`);
+  }
+
+  const canonicalPath = await resolveCanonicalPath(resolvedPath);
+  if (!canonicalPath || !isPathWithinRoots(canonicalPath, roots)) {
+    throw new Error(`Access denied: symlink escape attempt for "${inputPath}"`);
+  }
+
+  return canonicalPath;
+}
+
+async function resolvePathsInArgs(args) {
   const originalArgs = args ?? {};
   const newArgs = { ...originalArgs };
-  if (!workspaceRoot) throw new Error("Workspace root not configured.");
-
-  const resolve = (p) => {
-    if (typeof p !== 'string') return p;
-    if (p.includes('\0')) throw new Error(`Invalid path: ${p}`);
-
-    const candidate = p.trim();
-    const rootResolved = path.resolve(workspaceRoot);
-    const allowedResolved = (allowedDirectories || []).map((d) => path.resolve(d));
-
-    const isWithinAllowedRoots = (absPath) => {
-      const resolved = path.resolve(absPath);
-      if (resolved === rootResolved || resolved.startsWith(rootResolved + path.sep)) return true;
-      return allowedResolved.some((dir) => resolved === dir || resolved.startsWith(dir + path.sep));
-    };
-
-    // If caller provided an absolute path inside allowed roots, keep it as-is.
-    // Otherwise, keep supporting the existing convention: "/x/y" means "workspace-relative x/y".
-    let resolvedPath;
-    if (path.isAbsolute(candidate) && isWithinAllowedRoots(candidate)) {
-      resolvedPath = candidate;
-    } else {
-      const safePart = candidate.startsWith('/') ? candidate.substring(1) : candidate;
-      resolvedPath = path.join(workspaceRoot, safePart);
-    }
-
-    // Security check to prevent path traversal outside workspaceRoot.
-    const normalized = path.resolve(resolvedPath);
-    if (!normalized.startsWith(rootResolved)) {
-      throw new Error(`Access denied: path traversal attempt for "${p}"`);
-    }
-    return resolvedPath;
-  };
-
-  if (typeof newArgs.path === 'string') newArgs.path = resolve(newArgs.path);
-  if (typeof newArgs.source === 'string') newArgs.source = resolve(newArgs.source);
-  if (typeof newArgs.destination === 'string') newArgs.destination = resolve(newArgs.destination);
-  if (Array.isArray(newArgs.paths)) newArgs.paths = newArgs.paths.map(resolve);
+  if (typeof newArgs.path === 'string') newArgs.path = await resolvePathInAllowedRoots(newArgs.path);
+  if (typeof newArgs.source === 'string') newArgs.source = await resolvePathInAllowedRoots(newArgs.source);
+  if (typeof newArgs.destination === 'string') newArgs.destination = await resolvePathInAllowedRoots(newArgs.destination);
+  if (Array.isArray(newArgs.paths)) newArgs.paths = await Promise.all(newArgs.paths.map(resolvePathInAllowedRoots));
 
   return newArgs;
 }
 
-// The library's validatePath function seems to hang when passed a resolved absolute path.
-// Path resolution and security checks are now handled in `resolvePathsInArgs`,
-// so we can bypass the library's validation by replacing it with a passthrough function.
-const validatePath = async (p) => p;
+const validatePath = async (p) => resolvePathInAllowedRoots(p);
 
 const gitService = createGitService({ validatePath });
 
 const MAX_TEXT_SEARCH_FILE_BYTES = Number.parseInt(process.env.SEARCH_TEXT_MAX_BYTES || '2097152', 10);
+const SEARCH_TEXT_TIMEOUT_MS = Number.parseInt(process.env.SEARCH_TEXT_TIMEOUT_MS || '30000', 10);
+const REPLACE_TEXT_TIMEOUT_MS = Number.parseInt(process.env.REPLACE_TEXT_TIMEOUT_MS || '45000', 10);
 const DEFAULT_TEXT_SEARCH_EXCLUDES = ['**/node_modules/**', '**/.git/**', '**/dist/**', '**/build/**', '**/.DS_Store'];
 const DEFAULT_DIRECTORY_TREE_MAX_DEPTH = Number.parseInt(process.env.DIRECTORY_TREE_MAX_DEPTH || '10', 10);
 const DEFAULT_DIRECTORY_TREE_MAX_NODES = Number.parseInt(process.env.DIRECTORY_TREE_MAX_NODES || '4000', 10);
@@ -277,6 +309,8 @@ const toolHandlers = createToolHandlers({
   replaceTextWithinWorkspace,
   gitService,
   MAX_TEXT_SEARCH_FILE_BYTES,
+  SEARCH_TEXT_TIMEOUT_MS,
+  REPLACE_TEXT_TIMEOUT_MS,
   DEFAULT_DIRECTORY_TREE_MAX_DEPTH,
   DEFAULT_DIRECTORY_TREE_MAX_NODES,
   getAllowedDirectories: () => allowedDirectories
@@ -298,7 +332,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     const { name, arguments: rawArgs } = request.params;
-    const args = resolvePathsInArgs(rawArgs);
+    const args = await resolvePathsInArgs(rawArgs);
     const handler = toolHandlers[name];
     if (!handler) {
       throw new Error(`Unknown tool: ${name}`);

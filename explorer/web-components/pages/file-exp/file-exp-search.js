@@ -1,8 +1,9 @@
 // Wire up search-related behaviors for FileExp without bloating the main presenter.
-import { callToolWithLoader } from "../../../utils/globalLoader.js";
 import { getKeymap, matchesShortcut } from "../../../utils/keymap.js";
 import { getCurrentTheme } from "../../../utils/theme.js";
 import { FILE_EXP_REPLACE_COMPLETE_EVENT } from "../../../utils/appEvents.js";
+import { withTimeout } from "../../utils/workspace-search-utils.js";
+import { callExplorerTool } from "../../../services/infrastructure/explorerApi.js";
 export function attachSearchController(fileExp) {
     const getState = () => fileExp.state;
     const defaultExclude = 'node_modules,.git';
@@ -98,6 +99,9 @@ export function attachSearchController(fileExp) {
         const state = getState();
         fileExp.setSearchMenuOpen(false);
         updateSearchUI();
+        const previousSearchByNameExclude = String(state.searchByNameExclude || defaultExclude);
+        const previousWorkspaceVersion = Number.isFinite(state.workspaceVersion) ? state.workspaceVersion : 0;
+        const previousDirectoryFilterQuery = String(state.directoryFilterQuery || '').trim();
 
         const result = await assistOS.UI.createReactiveModal('file-search-modal', {
             mode,
@@ -106,10 +110,63 @@ export function attachSearchController(fileExp) {
             searchInFilesQuery: state.searchInFilesQuery || '',
             searchInFilesExclude: state.searchInFilesExclude || defaultExclude,
             searchInFilesCase: Boolean(state.searchInFilesCaseSensitive),
+            searchInFilesRegex: Boolean(state.searchInFilesRegex),
+            searchInFilesWholeWord: Boolean(state.searchInFilesWholeWord),
             searchInFilesBasePath: state.searchInFilesBasePath || '/',
+            workspaceVersion: Number.isFinite(state.workspaceVersion) ? state.workspaceVersion : 0,
             directorySuggestions: buildDirectorySuggestions(),
             basePath: fileExp.normalizePath(state.path || '/')
         }, true);
+
+        if (result && typeof result === 'object') {
+            if (Object.prototype.hasOwnProperty.call(result, 'searchByNameQuery')) {
+                state.searchByNameQuery = String(result.searchByNameQuery || '');
+            }
+            if (Object.prototype.hasOwnProperty.call(result, 'searchByNameExclude')) {
+                state.searchByNameExclude = String(result.searchByNameExclude || defaultExclude);
+            }
+            if (Object.prototype.hasOwnProperty.call(result, 'searchInFilesQuery')) {
+                state.searchInFilesQuery = String(result.searchInFilesQuery || '');
+            }
+            if (Object.prototype.hasOwnProperty.call(result, 'searchInFilesExclude')) {
+                state.searchInFilesExclude = String(result.searchInFilesExclude || defaultExclude);
+            }
+            if (Object.prototype.hasOwnProperty.call(result, 'searchInFilesCaseSensitive')
+                || Object.prototype.hasOwnProperty.call(result, 'searchInFilesCase')) {
+                state.searchInFilesCaseSensitive = Boolean(
+                    result.searchInFilesCaseSensitive ?? result.searchInFilesCase
+                );
+            }
+            if (Object.prototype.hasOwnProperty.call(result, 'searchInFilesRegex')) {
+                state.searchInFilesRegex = Boolean(result.searchInFilesRegex);
+            }
+            if (Object.prototype.hasOwnProperty.call(result, 'searchInFilesWholeWord')) {
+                state.searchInFilesWholeWord = Boolean(result.searchInFilesWholeWord);
+            }
+            if (Object.prototype.hasOwnProperty.call(result, 'searchInFilesBasePath')) {
+                state.searchInFilesBasePath = fileExp.normalizePath(result.searchInFilesBasePath || '/');
+            }
+            const modalWorkspaceVersion = Number.parseInt(String(result.workspaceVersion ?? ''), 10);
+            if (Number.isFinite(modalWorkspaceVersion) && modalWorkspaceVersion > (state.workspaceVersion || 0)) {
+                state.workspaceVersion = modalWorkspaceVersion;
+                window.__assistosExplorerWorkspaceVersion = modalWorkspaceVersion;
+            }
+        }
+
+        const currentWorkspaceVersion = Number.isFinite(state.workspaceVersion) ? state.workspaceVersion : 0;
+        const shouldRefreshDirectoryFilter = !result?.path
+            && previousDirectoryFilterQuery.length >= 2
+            && (
+                String(state.searchByNameExclude || defaultExclude) !== previousSearchByNameExclude
+                || currentWorkspaceVersion !== previousWorkspaceVersion
+            );
+        if (shouldRefreshDirectoryFilter) {
+            try {
+                await fileExp.directoryFilterController?.rerunIfActive?.();
+            } catch (error) {
+                console.warn('Failed to rerun active directory filter after search settings update', error);
+            }
+        }
 
         if (result && result.path) {
             const normalized = fileExp.normalizePath(result.path);
@@ -202,21 +259,47 @@ export function attachSearchController(fileExp) {
     }
 
     async function handleReplaceComplete(event) {
-        const changed = Array.isArray(event?.detail?.changedFiles) ? event.detail.changedFiles : [];
+        const changedRaw = Array.isArray(event?.detail?.changedFiles) ? event.detail.changedFiles : [];
+        if (!changedRaw.length) return;
+        const changed = changedRaw
+            .map((pathValue) => fileExp.normalizePath(pathValue))
+            .filter(Boolean);
         if (!changed.length) return;
         const state = getState();
+        if (typeof fileExp.bumpWorkspaceVersion === 'function') {
+            fileExp.bumpWorkspaceVersion();
+        }
         if (state.isEditing && state.hasUnsavedChanges) {
             fileExp.showStatus('Files were replaced on disk. Save or refresh to see changes.', true);
             return;
         }
         try {
-            if (fileExp.caches?.dirListing?.invalidate && state.path) {
-                fileExp.caches.dirListing.invalidate(fileExp, state.path);
+            if (fileExp.caches?.filePreview?.invalidateForPath) {
+                changed.forEach((filePath) => fileExp.caches.filePreview.invalidateForPath(filePath));
             }
-            if (state.selectedPath && changed.includes(state.selectedPath)) {
-                await fileExp.withLoader(async () => {
-                    await fileExp.openFile(state.selectedPath);
+            if (fileExp.caches?.dirListing?.invalidate) {
+                const dirsToInvalidate = new Set();
+                if (state.path) {
+                    dirsToInvalidate.add(fileExp.normalizePath(state.path));
+                }
+                changed.forEach((filePath) => {
+                    const parent = fileExp.parentPath(filePath) || '/';
+                    dirsToInvalidate.add(fileExp.normalizePath(parent));
                 });
+                dirsToInvalidate.forEach((dirPath) => {
+                    fileExp.caches.dirListing.invalidate(fileExp, dirPath);
+                });
+            }
+            const selectedPath = state.selectedPath ? fileExp.normalizePath(state.selectedPath) : '';
+            if (selectedPath && changed.includes(selectedPath)) {
+                void fileExp.openFile(state.selectedPath, {
+                    showLoader: false,
+                    requestTimeoutMs: 6000,
+                    suppressReadErrorStatus: true
+                }).catch((error) => {
+                    console.warn('Background refresh after replace failed', error);
+                });
+                fileExp.showStatus('Replace completed. Current file refreshes in background.', false);
             }
         } catch (error) {
             console.warn('Failed to refresh after replace', error);
@@ -238,6 +321,7 @@ export function attachSearchController(fileExp) {
     async function navigateToPath(targetPath) {
         const normalized = fileExp.normalizePath(targetPath);
         const state = getState();
+        const isTimeoutError = (error) => /timed out/i.test(String(error?.message || ''));
         return fileExp.withLoader(async () => {
             if (state.isEditing && state.hasUnsavedChanges) {
                 if (!confirm("You have unsaved changes. Navigate away?")) {
@@ -246,7 +330,13 @@ export function attachSearchController(fileExp) {
                 await fileExp.cancelEdit();
             }
             try {
-                await callToolWithLoader('explorer', 'read_text_file', { path: normalized });
+                await withTimeout(
+                    () => callExplorerTool('read_text_file', { path: normalized }, { raw: true, withLoader: false }),
+                    {
+                        timeoutMs: 10000,
+                        timeoutMessage: 'Opening file timed out. Try again in a moment.'
+                    }
+                );
                 const parentDir = fileExp.parentPath(normalized) || '/';
                 state.path = parentDir;
                 const entries = await fileExp.loadDirectoryContent(parentDir);
@@ -259,6 +349,10 @@ export function attachSearchController(fileExp) {
                 await fileExp.openFile(normalized);
                 history.replaceState(null, '', `#file-exp${normalized}`);
             } catch (error) {
+                if (isTimeoutError(error)) {
+                    fileExp.showStatus(error.message || 'Opening file timed out. Try again.', true);
+                    return;
+                }
                 fileExp.setPendingHighlight(null);
                 await fileExp.loadDirectory(normalized);
                 history.replaceState(null, '', `#file-exp${normalized}`);

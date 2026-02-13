@@ -1,5 +1,5 @@
 import { parsePatterns } from "./file-exp-utils.js";
-import { callToolWithLoader } from "../../../utils/globalLoader.js";
+import { callExplorerTool } from "../../../services/infrastructure/explorerApi.js";
 
 const DEBOUNCE_MS = 200;
 const MIN_QUERY_LENGTH = 2;
@@ -64,21 +64,33 @@ export function createDirectoryFilterController(fileExp) {
         const excludePatterns = parsePatterns(fileExp.state.searchByNameExclude || DEFAULT_EXCLUDE);
 
         try {
-            const result = await callToolWithLoader('explorer', 'search_files', {
+            const result = await callExplorerTool('search_files', {
                 path: basePath,
                 pattern: query,
                 excludePatterns,
-                maxResults: MAX_RESULTS
-            });
+                maxResults: MAX_RESULTS,
+                workspaceVersion: Number.isFinite(fileExp.state.workspaceVersion) ? fileExp.state.workspaceVersion : 0
+            }, { raw: true, withLoader: false });
+
+            let payload = result?.json;
+            if (!payload && typeof result?.text === 'string') {
+                try {
+                    payload = JSON.parse(result.text);
+                } catch (_) {
+                    payload = null;
+                }
+            }
 
             if (localRequestId !== requestId) {
                 return;
             }
 
-            const lines = (result.text || '')
-                .split(/\r?\n/)
-                .map((line) => line.trim())
-                .filter((line) => line && !line.toLowerCase().includes('no matches'));
+            const lines = Array.isArray(payload?.results)
+                ? payload.results
+                : (result.text || '')
+                    .split(/\r?\n/)
+                    .map((line) => line.trim())
+                    .filter((line) => line && !line.toLowerCase().includes('no matches'));
 
             const entries = lines
                 .map((line) => fileExp.normalizePath(line.startsWith('/') ? line : `/${line}`))

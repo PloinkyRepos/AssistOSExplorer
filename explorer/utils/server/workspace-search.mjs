@@ -16,6 +16,48 @@ export function createWorkspaceSearch({
   maxTextSearchFileBytes
 }) {
   const MAX_PREVIEW_CHARS = 200;
+  const BINARY_PROBE_CACHE_TTL_MS = 15000;
+  const BINARY_PROBE_CACHE_MAX_ENTRIES = 4000;
+  const binaryProbeCache = new Map();
+
+  const touchBinaryProbeCache = (filePath, entry) => {
+    binaryProbeCache.delete(filePath);
+    binaryProbeCache.set(filePath, entry);
+  };
+
+  const pruneBinaryProbeCache = () => {
+    while (binaryProbeCache.size > BINARY_PROBE_CACHE_MAX_ENTRIES) {
+      const oldestKey = binaryProbeCache.keys().next().value;
+      binaryProbeCache.delete(oldestKey);
+    }
+  };
+
+  const getCachedBinaryProbe = (filePath, stats) => {
+    if (!stats || !filePath) return null;
+    const entry = binaryProbeCache.get(filePath);
+    if (!entry) return null;
+    if ((Date.now() - entry.cachedAt) > BINARY_PROBE_CACHE_TTL_MS) {
+      binaryProbeCache.delete(filePath);
+      return null;
+    }
+    if (entry.mtimeMs !== stats.mtimeMs || entry.size !== stats.size) {
+      binaryProbeCache.delete(filePath);
+      return null;
+    }
+    touchBinaryProbeCache(filePath, entry);
+    return Boolean(entry.isBinary);
+  };
+
+  const setCachedBinaryProbe = (filePath, stats, isBinary) => {
+    if (!stats || !filePath) return;
+    touchBinaryProbeCache(filePath, {
+      mtimeMs: stats.mtimeMs,
+      size: stats.size,
+      isBinary: Boolean(isBinary),
+      cachedAt: Date.now()
+    });
+    pruneBinaryProbeCache();
+  };
 
   const buildMatchPreview = (line, match) => {
     const textLine = typeof line === 'string' ? line : '';
@@ -124,17 +166,30 @@ export function createWorkspaceSearch({
   function isPathWithinAllowedDirectories(targetPath) {
     const normalized = path.resolve(targetPath);
     const allowedDirectories = getAllowedDirectories();
-    return allowedDirectories.some((dir) => normalized.startsWith(path.resolve(dir)));
+    return allowedDirectories.some((dir) => {
+      const resolvedDir = path.resolve(dir);
+      if (normalized === resolvedDir) return true;
+      const relative = path.relative(resolvedDir, normalized);
+      return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
+    });
   }
 
-  async function isLikelyBinaryFile(filePath) {
+  async function isLikelyBinaryFile(filePath, stats = null) {
+    const cached = getCachedBinaryProbe(filePath, stats);
+    if (cached !== null) {
+      return cached;
+    }
     let handle;
     try {
       handle = await fs.open(filePath, 'r');
       const buffer = Buffer.alloc(1024);
       const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
       const slice = buffer.subarray(0, bytesRead);
-      return slice.includes(0);
+      const isBinary = slice.includes(0);
+      if (stats) {
+        setCachedBinaryProbe(filePath, stats, isBinary);
+      }
+      return isBinary;
     } catch {
       return false;
     } finally {
@@ -159,27 +214,43 @@ export function createWorkspaceSearch({
 
   async function searchTextWithinWorkspace(rootPath, options, config = {}) {
     const maxBytesPerFile = config.maxBytesPerFile || maxTextSearchFileBytes;
+    const timeoutMs = Number.isFinite(config.timeoutMs) && config.timeoutMs > 0 ? config.timeoutMs : 0;
+    const startedAt = Date.now();
     const caseSensitive = Boolean(options.caseSensitive);
     const maxResults = options.maxResults || 2000;
     const regex = buildSearchRegex(options);
     const results = [];
     let truncated = false;
+    let timedOut = false;
     let stop = false;
+    const hasTimedOut = () => timeoutMs > 0 && (Date.now() - startedAt) >= timeoutMs;
+    const markTimedOut = () => {
+      timedOut = true;
+      truncated = true;
+      stop = true;
+    };
 
     if (!isPathWithinAllowedDirectories(rootPath)) {
       throw new Error('Access denied: path is outside allowed directories.');
     }
 
     const shouldExclude = makeShouldExclude(options.excludePatterns, caseSensitive);
+    const rootResolved = path.resolve(rootPath);
+    const scopedPaths = Array.isArray(options?.paths) ? options.paths : [];
 
     const searchFileForQuery = async (filePath, relativePath) => {
+      if (stop) return;
+      if (hasTimedOut()) {
+        markTimedOut();
+        return;
+      }
       let handle;
       try {
         const stats = await fs.stat(filePath);
         if (stats.size > maxBytesPerFile) {
           return;
         }
-        if (await isLikelyBinaryFile(filePath)) {
+        if (await isLikelyBinaryFile(filePath, stats)) {
           return;
         }
 
@@ -190,6 +261,10 @@ export function createWorkspaceSearch({
           const lines = text.split(/\r?\n/);
           for (let idx = 0; idx < lines.length; idx++) {
             if (stop) break;
+            if (hasTimedOut()) {
+              markTimedOut();
+              break;
+            }
             const line = lines[idx];
             const matches = findMatchesInLine(line, regex);
             if (!matches.length) continue;
@@ -221,6 +296,12 @@ export function createWorkspaceSearch({
         const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
         let lineNumber = 0;
         for await (const line of rl) {
+          if (hasTimedOut()) {
+            markTimedOut();
+            rl.close();
+            stream.destroy();
+            break;
+          }
           lineNumber++;
           const matches = findMatchesInLine(line, regex);
           if (!matches.length) continue;
@@ -260,6 +341,10 @@ export function createWorkspaceSearch({
 
     const walk = async (currentPath) => {
       if (stop) return;
+      if (hasTimedOut()) {
+        markTimedOut();
+        return;
+      }
       let entries;
       try {
         entries = await fs.readdir(currentPath, { withFileTypes: true });
@@ -268,10 +353,12 @@ export function createWorkspaceSearch({
       }
       for (const entry of entries) {
         if (stop) break;
+        if (hasTimedOut()) {
+          markTimedOut();
+          break;
+        }
         const fullPath = path.join(currentPath, entry.name);
-        try {
-          await validatePath(fullPath);
-        } catch {
+        if (!isPathWithinAllowedDirectories(fullPath)) {
           continue;
         }
         const relativePath = path.relative(workspaceRoot, fullPath);
@@ -286,12 +373,48 @@ export function createWorkspaceSearch({
       }
     };
 
+    if (scopedPaths.length > 0) {
+      const seenPaths = new Set();
+      for (const rawPath of scopedPaths) {
+        if (stop) break;
+        if (hasTimedOut()) {
+          markTimedOut();
+          break;
+        }
+        if (typeof rawPath !== 'string' || !rawPath.trim()) continue;
+        const fullPath = path.resolve(rawPath);
+        if (seenPaths.has(fullPath)) continue;
+        seenPaths.add(fullPath);
+        if (!(fullPath === rootResolved || fullPath.startsWith(`${rootResolved}${path.sep}`))) {
+          continue;
+        }
+        let stats;
+        try {
+          stats = await fs.stat(fullPath);
+        } catch {
+          continue;
+        }
+        if (!stats.isFile()) continue;
+        const relativePath = path.relative(workspaceRoot, fullPath);
+        if (shouldExclude(relativePath || path.basename(fullPath))) {
+          continue;
+        }
+        await searchFileForQuery(fullPath, relativePath);
+      }
+      return { results, truncated, timedOut };
+    }
+
     await walk(rootPath);
-    return { results, truncated };
+    return { results, truncated, timedOut };
   }
 
   async function replaceTextWithinWorkspace(rootPath, options, config = {}) {
     const maxBytesPerFile = config.maxBytesPerFile || maxTextSearchFileBytes;
+    const timeoutMs = Number.isFinite(config.timeoutMs) && config.timeoutMs > 0 ? config.timeoutMs : 0;
+    const startedAt = Date.now();
+    const maxResults = Number.isFinite(options?.maxResults) && options.maxResults > 0
+      ? options.maxResults
+      : 50000;
     const caseSensitive = Boolean(options.caseSensitive);
     const regex = buildSearchRegex(options);
     const shouldExclude = makeShouldExclude(options.excludePatterns, caseSensitive);
@@ -316,10 +439,18 @@ export function createWorkspaceSearch({
     const changedFiles = [];
     const changedFilesAbs = [];
     const errors = [];
+    let truncated = false;
+    let timedOut = false;
     let stop = false;
+    const hasTimedOut = () => timeoutMs > 0 && (Date.now() - startedAt) >= timeoutMs;
+    const markTimedOut = () => {
+      timedOut = true;
+      truncated = true;
+      stop = true;
+    };
 
     if (!regex) {
-      return { summary, changedFiles, changedFilesAbs, errors, truncated: false };
+      return { summary, changedFiles, changedFilesAbs, errors, truncated: false, timedOut: false, dryRun };
     }
 
     if (!isPathWithinAllowedDirectories(rootPath)) {
@@ -327,6 +458,11 @@ export function createWorkspaceSearch({
     }
 
     const processFile = async (filePath, relativePath) => {
+      if (stop) return;
+      if (hasTimedOut()) {
+        markTimedOut();
+        return;
+      }
       summary.filesScanned += 1;
       try {
         const stats = await fs.stat(filePath);
@@ -334,7 +470,7 @@ export function createWorkspaceSearch({
           summary.skippedTooLarge += 1;
           return;
         }
-        if (await isLikelyBinaryFile(filePath)) {
+        if (await isLikelyBinaryFile(filePath, stats)) {
           summary.skippedBinary += 1;
           return;
         }
@@ -363,6 +499,10 @@ export function createWorkspaceSearch({
 
       while ((lineMatch = lineRegex.exec(text)) !== null) {
         if (stop) break;
+        if (hasTimedOut()) {
+          markTimedOut();
+          break;
+        }
         const rawLine = lineMatch[0];
         let lineText = rawLine;
         let lineBreak = '';
@@ -386,6 +526,15 @@ export function createWorkspaceSearch({
         let lineBuilder = '';
         let lineChanged = false;
         for (const match of matches) {
+          if (hasTimedOut()) {
+            markTimedOut();
+            break;
+          }
+          if (summary.totalMatches >= maxResults) {
+            truncated = true;
+            stop = true;
+            break;
+          }
           const column = match.index + 1;
           const matchId = buildMatchId(resultPath, lineNumber, column, match.matchIndex);
           fileMatchCount += 1;
@@ -413,6 +562,11 @@ export function createWorkspaceSearch({
             lineBuilder += lineText.slice(lastIndex, matchEnd);
             lastIndex = matchEnd;
           }
+          if (summary.totalMatches >= maxResults) {
+            truncated = true;
+            stop = true;
+            break;
+          }
         }
         lineBuilder += lineText.slice(lastIndex);
         output.push(lineBuilder + lineBreak);
@@ -420,6 +574,12 @@ export function createWorkspaceSearch({
         if (lineChanged) {
           contentChanged = true;
         }
+        if (stop) {
+          break;
+        }
+      }
+      if (stop && lineRegex.lastIndex < text.length) {
+        output.push(text.slice(lineRegex.lastIndex));
       }
 
       if (fileMatchCount > 0) {
@@ -445,6 +605,10 @@ export function createWorkspaceSearch({
 
     const walk = async (currentPath) => {
       if (stop) return;
+      if (hasTimedOut()) {
+        markTimedOut();
+        return;
+      }
       let entries;
       try {
         entries = await fs.readdir(currentPath, { withFileTypes: true });
@@ -453,10 +617,12 @@ export function createWorkspaceSearch({
       }
       for (const entry of entries) {
         if (stop) break;
+        if (hasTimedOut()) {
+          markTimedOut();
+          break;
+        }
         const fullPath = path.join(currentPath, entry.name);
-        try {
-          await validatePath(fullPath);
-        } catch {
+        if (!isPathWithinAllowedDirectories(fullPath)) {
           continue;
         }
         const relativePath = path.relative(workspaceRoot, fullPath);
@@ -486,7 +652,8 @@ export function createWorkspaceSearch({
       changedFiles,
       changedFilesAbs,
       errors,
-      truncated: false,
+      truncated,
+      timedOut,
       dryRun
     };
   }
@@ -496,11 +663,26 @@ export function createWorkspaceSearch({
     const maxResults = options.maxResults || 5000;
     const pattern = String(options.pattern || '').trim();
     const results = [];
+    const seen = new Set();
     let truncated = false;
 
     if (!isPathWithinAllowedDirectories(rootPath)) {
       throw new Error('Access denied: path is outside allowed directories.');
     }
+
+    const pushResult = (relativePath) => {
+      const normalized = relativePath ? `/${relativePath}` : '/';
+      if (seen.has(normalized)) {
+        return false;
+      }
+      seen.add(normalized);
+      results.push(normalized);
+      if (results.length >= maxResults) {
+        truncated = true;
+        return true;
+      }
+      return false;
+    };
 
     const hasGlobMeta = /[*?[\]]/.test(pattern);
     const normalizedNeedle = pattern.toLowerCase();
@@ -536,9 +718,7 @@ export function createWorkspaceSearch({
         const childRel = path.relative(workspaceRoot, childValid);
         if (shouldExclude(childRel || entry.name)) continue;
         if (matches(childRel, entry.name)) {
-          results.push(childRel ? `/${childRel}` : '/');
-          if (results.length >= maxResults) {
-            truncated = true;
+          if (pushResult(childRel)) {
             return { ok: true, stop: true };
           }
         }
@@ -556,6 +736,11 @@ export function createWorkspaceSearch({
       return { results, truncated };
     }
 
+    // Indexed walk was incomplete; rebuild from disk for complete and deduplicated results.
+    results.length = 0;
+    seen.clear();
+    truncated = false;
+
     async function walkFromDisk(currentPath) {
       const normalizedCurrent = path.resolve(currentPath);
       const rel = path.relative(workspaceRoot, normalizedCurrent);
@@ -570,9 +755,7 @@ export function createWorkspaceSearch({
         const childRel = path.relative(workspaceRoot, childValid);
         if (shouldExclude(childRel || entry.name)) continue;
         if (matches(childRel, entry.name)) {
-          results.push(childRel ? `/${childRel}` : '/');
-          if (results.length >= maxResults) {
-            truncated = true;
+          if (pushResult(childRel)) {
             return;
           }
         }

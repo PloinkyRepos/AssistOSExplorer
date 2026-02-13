@@ -52,6 +52,8 @@ export function createToolHandlers({
   replaceTextWithinWorkspace,
   gitService,
   MAX_TEXT_SEARCH_FILE_BYTES,
+  SEARCH_TEXT_TIMEOUT_MS,
+  REPLACE_TEXT_TIMEOUT_MS,
   DEFAULT_DIRECTORY_TREE_MAX_DEPTH,
   DEFAULT_DIRECTORY_TREE_MAX_NODES,
   getAllowedDirectories
@@ -98,6 +100,8 @@ export function createToolHandlers({
     GitIdentityArgsSchema,
     GitSetIdentityArgsSchema
   } = schemas;
+  const inflightSearchFiles = new Map();
+  const inflightSearchText = new Map();
 
   async function handleReadText(args) {
     const data = parseArgs(ReadTextFileArgsSchema, args, 'read_text_file');
@@ -353,21 +357,36 @@ export function createToolHandlers({
       path: validPath,
       pattern: data.pattern,
       excludePatterns: data.excludePatterns,
-      maxResults: data.maxResults
+      maxResults: data.maxResults,
+      workspaceVersion: data.workspaceVersion
     });
     const cached = searchFilesCache.get(cacheKey);
     if (cached) {
-      return textResponse(cached);
+      return jsonResponse(cached);
     }
-    const { results: relativeResults } = await searchFilesWithinWorkspace(validPath, data);
-    const text = relativeResults.length > 0 ? relativeResults.join('\n') : 'No matches found';
-    searchFilesCache.set(cacheKey, text);
-    return textResponse(text);
+    let pending = inflightSearchFiles.get(cacheKey);
+    if (!pending) {
+      pending = (async () => {
+        const { results: relativeResults, truncated } = await searchFilesWithinWorkspace(validPath, data);
+        const payload = { results: relativeResults, truncated: Boolean(truncated) };
+        searchFilesCache.set(cacheKey, payload);
+        return payload;
+      })()
+        .finally(() => {
+          inflightSearchFiles.delete(cacheKey);
+        });
+      inflightSearchFiles.set(cacheKey, pending);
+    }
+    const payload = await pending;
+    return jsonResponse(payload);
   }
 
   async function handleSearchText(args) {
     const data = parseArgs(SearchTextArgsSchema, args, 'search_text');
     const validPath = await validatePath(data.path);
+    const scopedPaths = Array.isArray(data.paths)
+      ? Array.from(new Set(data.paths.map((entry) => String(entry || '').trim()).filter(Boolean))).sort()
+      : [];
     const cacheKey = buildCacheKey('search_text', {
       path: validPath,
       query: data.query,
@@ -375,23 +394,45 @@ export function createToolHandlers({
       useRegex: data.useRegex,
       wholeWord: data.wholeWord,
       maxResults: data.maxResults,
-      excludePatterns: data.excludePatterns
+      excludePatterns: data.excludePatterns,
+      paths: scopedPaths,
+      workspaceVersion: data.workspaceVersion
     });
     const cached = searchTextCache.get(cacheKey);
     if (cached) {
       return textResponse(cached);
     }
-    const { results, truncated } = await searchTextWithinWorkspace(validPath, data, { maxBytesPerFile: MAX_TEXT_SEARCH_FILE_BYTES });
-    const payload = { results, truncated };
-    const text = JSON.stringify(payload);
-    searchTextCache.set(cacheKey, text);
+    let pending = inflightSearchText.get(cacheKey);
+    if (!pending) {
+      pending = (async () => {
+        const searchArgs = scopedPaths.length > 0
+          ? { ...data, paths: scopedPaths }
+          : data;
+        const { results, truncated, timedOut } = await searchTextWithinWorkspace(validPath, searchArgs, {
+          maxBytesPerFile: MAX_TEXT_SEARCH_FILE_BYTES,
+          timeoutMs: SEARCH_TEXT_TIMEOUT_MS
+        });
+        const payload = { results, truncated, timedOut: Boolean(timedOut) };
+        const text = JSON.stringify(payload);
+        searchTextCache.set(cacheKey, text);
+        return text;
+      })()
+        .finally(() => {
+          inflightSearchText.delete(cacheKey);
+        });
+      inflightSearchText.set(cacheKey, pending);
+    }
+    const text = await pending;
     return textResponse(text);
   }
 
   async function handleReplaceText(args) {
     const data = parseArgs(ReplaceTextArgsSchema, args, 'replace_text');
     const validPath = await validatePath(data.path);
-    const result = await replaceTextWithinWorkspace(validPath, data, { maxBytesPerFile: MAX_TEXT_SEARCH_FILE_BYTES });
+    const result = await replaceTextWithinWorkspace(validPath, data, {
+      maxBytesPerFile: MAX_TEXT_SEARCH_FILE_BYTES,
+      timeoutMs: REPLACE_TEXT_TIMEOUT_MS
+    });
     if (Array.isArray(result.changedFilesAbs)) {
       result.changedFilesAbs.forEach((filePath) => invalidateCachesForPath(filePath));
     }

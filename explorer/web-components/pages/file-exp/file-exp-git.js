@@ -308,6 +308,7 @@ export function attachGitController(fileExp) {
                 }
                 const absolutePath = joinPath(repoPath, filePath);
                 await fileExp.tooling.writeFile(absolutePath, resolved);
+                fileExp.bumpWorkspaceVersion?.();
                 await callAgentTool('gitAgent', 'git_stage', { path: repoPath, files: [filePath] });
             }
             const afterPayload = await getRepoStatus(repoPath);

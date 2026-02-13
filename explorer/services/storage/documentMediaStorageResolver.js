@@ -113,7 +113,17 @@ export function createDocumentMediaStorageResolver(callExplorerTool, { retries =
             { retries }
         );
         const normalizedWorkspace = trimSlashes(normalizeFsPath(workspaceRoot), { leading: false, trailing: true });
-        const lines = splitLines(response?.text ?? '');
+        let payload = response?.json;
+        if (!payload && typeof response?.text === 'string') {
+            try {
+                payload = JSON.parse(response.text);
+            } catch (_) {
+                payload = null;
+            }
+        }
+        const lines = Array.isArray(payload?.results)
+            ? payload.results.map((value) => String(value || '').trim()).filter(Boolean)
+            : splitLines(response?.text ?? '');
         for (const candidate of lines) {
             const normalizedCandidate = normalizeFsPath(candidate);
             if (!normalizedCandidate.toLowerCase().endsWith(`/${DOCUMENT_MEDIA_URL_ROOT}`)) {

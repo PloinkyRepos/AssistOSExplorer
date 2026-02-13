@@ -366,6 +366,31 @@ dialog {
     gap: 4px;
 }
 
+.search-load-more-row {
+    display: flex;
+    justify-content: flex-start;
+    padding: 2px 0 4px;
+}
+
+.search-load-more-row.global {
+    justify-content: center;
+    padding: 6px 0 2px;
+}
+
+.search-load-more-button {
+    border: 1px solid var(--file-exp-border);
+    background: var(--file-exp-panel);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 6px 10px;
+    cursor: pointer;
+    font-size: 0.85rem;
+}
+
+.search-load-more-button:hover {
+    background: var(--file-exp-subtle-surface);
+}
+
 .search-match-item {
     display: flex;
     align-items: flex-start;

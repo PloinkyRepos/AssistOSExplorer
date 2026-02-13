@@ -8,15 +8,30 @@ import {
     scrollPreviewToAnchor,
     clearLineHighlight
 } from "./file-exp-utils.js";
-import { callToolWithLoader } from "../../../utils/globalLoader.js";
+import { callExplorerTool } from "../../../services/infrastructure/explorerApi.js";
+import { withTimeout } from "../../utils/workspace-search-utils.js";
 
-export async function tryLoadMediaPreview(fileExp, filePath) {
+const DEFAULT_FILE_READ_TIMEOUT_MS = 12000;
+
+function resolveFileReadTimeoutMs(value) {
+    const parsed = Number.parseInt(String(value ?? ""), 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_FILE_READ_TIMEOUT_MS;
+    return parsed;
+}
+
+export async function tryLoadMediaPreview(fileExp, filePath, { requestTimeoutMs = DEFAULT_FILE_READ_TIMEOUT_MS } = {}) {
     const isMedia = isImageFile(filePath) || isAudioFile(filePath) || isVideoFile(filePath);
     if (!isMedia) {
         return false;
     }
     try {
-        const result = await callToolWithLoader('explorer', 'read_media_file', { path: filePath });
+        const result = await withTimeout(
+            () => callExplorerTool('read_media_file', { path: filePath }, { raw: true, withLoader: false }),
+            {
+                timeoutMs: requestTimeoutMs,
+                timeoutMessage: `Reading media timed out after ${Math.ceil(requestTimeoutMs / 1000)}s.`
+            }
+        );
         const blocks = Array.isArray(result?.blocks) ? result.blocks : [];
         const content = Array.isArray(result?.content) ? result.content : [];
         const block = [...blocks, ...content].find((item) => item?.data || item?.resource?.uri);
@@ -71,8 +86,15 @@ export async function tryLoadMediaPreview(fileExp, filePath) {
     }
 }
 
-export async function openFile(fileExp, filePath, { largeFilePreviewLimitBytes, largeFilePreviewLines }) {
-    await fileExp.withLoader(async () => {
+export async function openFile(fileExp, filePath, {
+    largeFilePreviewLimitBytes,
+    largeFilePreviewLines,
+    showLoader = true,
+    requestTimeoutMs = null,
+    suppressReadErrorStatus = false
+}) {
+    const effectiveTimeoutMs = resolveFileReadTimeoutMs(requestTimeoutMs);
+    const run = async () => {
         try {
             clearLineHighlight(fileExp.element);
             fileExp.setPreviewState({
@@ -80,7 +102,7 @@ export async function openFile(fileExp, filePath, { largeFilePreviewLimitBytes, 
                 mediaType: null,
                 fileLoadInfo: null
             });
-            if (await tryLoadMediaPreview(fileExp, filePath)) {
+            if (await tryLoadMediaPreview(fileExp, filePath, { requestTimeoutMs: effectiveTimeoutMs })) {
                 fileExp.invalidate();
                 return;
             }
@@ -98,7 +120,12 @@ export async function openFile(fileExp, filePath, { largeFilePreviewLimitBytes, 
                 ? Math.max(largeFilePreviewLines, effectivePendingLine + 80)
                 : largeFilePreviewLines;
             const shouldPreviewPartial = entrySize !== null && entrySize > largeFilePreviewLimitBytes;
-            const cacheKey = fileExp.caches.filePreview.buildKey(filePath, entry, shouldPreviewPartial);
+            const cacheKey = fileExp.caches.filePreview.buildKey(
+                filePath,
+                entry,
+                shouldPreviewPartial,
+                fileExp.state.workspaceVersion
+            );
             const isBacklogFile = String(filePath || '').endsWith('.backlog') || String(filePath || '').endsWith('.history');
             const cachedPreview = (isBacklogFile || hasPendingForFile) ? null : fileExp.caches.filePreview.get(cacheKey);
             if (cachedPreview) {
@@ -130,7 +157,13 @@ export async function openFile(fileExp, filePath, { largeFilePreviewLimitBytes, 
                 if (usePartial) {
                     args.head = previewLineBudget;
                 }
-                return callToolWithLoader('explorer', 'read_text_file', args);
+                return withTimeout(
+                    () => callExplorerTool('read_text_file', args, { raw: true, withLoader: false }),
+                    {
+                        timeoutMs: effectiveTimeoutMs,
+                        timeoutMessage: `Reading file timed out after ${Math.ceil(effectiveTimeoutMs / 1000)}s.`
+                    }
+                );
             };
 
             let contentResult;
@@ -189,9 +222,17 @@ export async function openFile(fileExp, filePath, { largeFilePreviewLimitBytes, 
             fileExp.invalidate();
         } catch (err) {
             console.error(err);
-            fileExp.showStatus(err.message || 'Failed to read file.', true);
+            if (!suppressReadErrorStatus) {
+                fileExp.showStatus(err.message || 'Failed to read file.', true);
+            }
         }
-    });
+    };
+
+    if (showLoader) {
+        await fileExp.withLoader(run);
+        return;
+    }
+    await run();
 }
 
 export function attachPreviewAnchorHandler(fileExp) {

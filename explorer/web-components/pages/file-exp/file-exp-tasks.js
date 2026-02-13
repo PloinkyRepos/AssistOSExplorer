@@ -77,6 +77,7 @@ export function attachTasksController(fileExp) {
 
             try {
                 await fileExp.tooling.writeFile(backlogPath, JSON.stringify([], null, 2));
+                fileExp.bumpWorkspaceVersion?.();
             } catch {
                 fileExp.showStatus('Failed to create backlog file in current folder.', true);
                 return;

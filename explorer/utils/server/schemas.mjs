@@ -35,7 +35,8 @@ export function createSchemas(z) {
     path: z.string(),
     pattern: z.string(),
     excludePatterns: z.array(z.string()).optional().default([]),
-    maxResults: z.number().int().positive().max(20000).optional().default(5000)
+    maxResults: z.number().int().positive().max(20000).optional().default(5000),
+    workspaceVersion: z.number().int().nonnegative().optional().default(0)
   });
   const SearchTextArgsSchema = z.object({
     path: z.string(),
@@ -44,7 +45,9 @@ export function createSchemas(z) {
     useRegex: z.boolean().optional().default(false),
     wholeWord: z.boolean().optional().default(false),
     maxResults: z.number().int().positive().max(5000).optional().default(2000),
-    excludePatterns: z.array(z.string()).optional().default([])
+    excludePatterns: z.array(z.string()).optional().default([]),
+    paths: z.array(z.string()).optional().default([]),
+    workspaceVersion: z.number().int().nonnegative().optional().default(0)
   });
   const ReplaceTextArgsSchema = z.object({
     path: z.string(),
@@ -56,6 +59,7 @@ export function createSchemas(z) {
     maxResults: z.number().int().positive().max(100000).optional().default(50000),
     excludePatterns: z.array(z.string()).optional().default([]),
     selectedMatchIds: z.array(z.string()).optional().default([]),
+    workspaceVersion: z.number().int().nonnegative().optional().default(0),
     dryRun: z.boolean().optional().default(false)
   });
   const GetFileInfoArgsSchema = z.object({ path: z.string() });

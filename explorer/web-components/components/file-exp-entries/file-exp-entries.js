@@ -27,6 +27,10 @@ const PASTE_ICON_TEMPLATE = createTemplate(`
 </svg>
 `);
 
+const VIRTUALIZATION_THRESHOLD = 180;
+const DEFAULT_ROW_HEIGHT = 38;
+const VIRTUALIZATION_OVERSCAN = 10;
+
 function createTemplate(markup) {
     const template = document.createElement('template');
     template.innerHTML = String(markup || '').trim();
@@ -61,6 +65,17 @@ export class FileExpEntries {
         this.rowsByPath = new Map();
         this.snapshot = null;
         this.tbody = null;
+        this.scrollContainer = null;
+        this.resizeObserver = null;
+        this.pendingPatchFrame = null;
+        this.virtual = {
+            enabled: false,
+            scrollTop: 0,
+            viewportHeight: 0,
+            rowHeight: DEFAULT_ROW_HEIGHT
+        };
+        this.boundHandleScroll = this.handleScroll.bind(this);
+        this.boundHandleResize = this.handleResize.bind(this);
         this.invalidate();
     }
 
@@ -68,12 +83,66 @@ export class FileExpEntries {
 
     afterRender() {
         this.tbody = this.element.querySelector('#entriesBody');
+        this.scrollContainer = this.element.querySelector('.entries');
+        this.bindVirtualizationListeners();
         this.syncFromHost();
     }
 
     beforeUnload() {
+        this.unbindVirtualizationListeners();
+        if (this.pendingPatchFrame !== null) {
+            cancelAnimationFrame(this.pendingPatchFrame);
+            this.pendingPatchFrame = null;
+        }
         this.rowsByPath.clear();
         this.tbody = null;
+        this.scrollContainer = null;
+    }
+
+    bindVirtualizationListeners() {
+        this.unbindVirtualizationListeners();
+        if (!this.scrollContainer) return;
+        this.scrollContainer.addEventListener('scroll', this.boundHandleScroll, { passive: true });
+        window.addEventListener('resize', this.boundHandleResize);
+        if (typeof ResizeObserver !== 'undefined') {
+            this.resizeObserver = new ResizeObserver(() => {
+                this.handleResize();
+            });
+            this.resizeObserver.observe(this.scrollContainer);
+        }
+        this.virtual.scrollTop = this.scrollContainer.scrollTop || 0;
+        this.virtual.viewportHeight = this.scrollContainer.clientHeight || 0;
+    }
+
+    unbindVirtualizationListeners() {
+        if (this.scrollContainer) {
+            this.scrollContainer.removeEventListener('scroll', this.boundHandleScroll);
+        }
+        window.removeEventListener('resize', this.boundHandleResize);
+        if (this.resizeObserver) {
+            this.resizeObserver.disconnect();
+            this.resizeObserver = null;
+        }
+    }
+
+    handleScroll() {
+        if (!this.virtual.enabled || !this.scrollContainer) return;
+        this.virtual.scrollTop = this.scrollContainer.scrollTop || 0;
+        this.schedulePatchRows();
+    }
+
+    handleResize() {
+        if (!this.scrollContainer) return;
+        this.virtual.viewportHeight = this.scrollContainer.clientHeight || 0;
+        this.schedulePatchRows();
+    }
+
+    schedulePatchRows() {
+        if (this.pendingPatchFrame !== null) return;
+        this.pendingPatchFrame = requestAnimationFrame(() => {
+            this.pendingPatchFrame = null;
+            this.patchRows();
+        });
     }
 
     getHostPresenter() {
@@ -253,12 +322,77 @@ export class FileExpEntries {
         return row;
     }
 
+    createSpacerRow(height, position) {
+        const row = document.createElement('tr');
+        row.className = 'entries-virtual-spacer';
+        row.dataset.spacer = position;
+        row.setAttribute('aria-hidden', 'true');
+        const cell = document.createElement('td');
+        cell.colSpan = 5;
+        cell.style.height = `${Math.max(0, Math.round(height))}px`;
+        row.appendChild(cell);
+        return row;
+    }
+
+    shouldVirtualize(entriesCount) {
+        return Boolean(this.scrollContainer) && entriesCount >= VIRTUALIZATION_THRESHOLD;
+    }
+
+    syncVirtualViewport() {
+        if (!this.scrollContainer) return;
+        this.virtual.viewportHeight = this.scrollContainer.clientHeight || 0;
+        this.virtual.scrollTop = this.scrollContainer.scrollTop || 0;
+    }
+
+    clampVirtualScroll(entriesCount) {
+        if (!this.scrollContainer || !this.virtual.enabled) return;
+        const rowHeight = Math.max(1, Number(this.virtual.rowHeight) || DEFAULT_ROW_HEIGHT);
+        const viewportHeight = Math.max(0, Number(this.virtual.viewportHeight) || 0);
+        const maxScrollTop = Math.max(0, entriesCount * rowHeight - viewportHeight);
+        if (this.scrollContainer.scrollTop > maxScrollTop) {
+            this.scrollContainer.scrollTop = maxScrollTop;
+        }
+        this.virtual.scrollTop = this.scrollContainer.scrollTop || 0;
+    }
+
+    computeVirtualWindow(totalCount) {
+        const rowHeight = Math.max(1, Number(this.virtual.rowHeight) || DEFAULT_ROW_HEIGHT);
+        const viewportHeight = Math.max(
+            rowHeight,
+            Number(this.virtual.viewportHeight) || this.scrollContainer?.clientHeight || rowHeight
+        );
+        const visibleRows = Math.max(1, Math.ceil(viewportHeight / rowHeight));
+        const startIndex = Math.max(0, Math.floor((this.virtual.scrollTop || 0) / rowHeight) - VIRTUALIZATION_OVERSCAN);
+        const endIndex = Math.min(totalCount, startIndex + visibleRows + (VIRTUALIZATION_OVERSCAN * 2));
+        return {
+            startIndex,
+            endIndex,
+            topSpacerHeight: startIndex * rowHeight,
+            bottomSpacerHeight: Math.max(0, (totalCount - endIndex) * rowHeight)
+        };
+    }
+
+    updateMeasuredRowHeight() {
+        if (!this.virtual.enabled || !this.tbody) return;
+        const row = this.tbody.querySelector('tr:not(.entries-virtual-spacer)');
+        if (!row) return;
+        const measured = Math.round(row.getBoundingClientRect().height || 0);
+        if (!Number.isFinite(measured) || measured <= 0) return;
+        if (Math.abs(measured - this.virtual.rowHeight) >= 1) {
+            this.virtual.rowHeight = measured;
+            this.schedulePatchRows();
+        }
+    }
+
     patchRows() {
         if (!this.tbody) return;
         const host = this.getHostPresenter();
         if (!host) return;
         const state = this.snapshot || host.state || {};
         const entries = Array.isArray(state.entries) ? state.entries : [];
+        this.virtual.enabled = this.shouldVirtualize(entries.length);
+        this.syncVirtualViewport();
+        this.clampVirtualScroll(entries.length);
         const clipboard = state.clipboard || null;
         const selectedPath = String(state.selectedPath || '');
         const openMenuPath = String(state.openMenuPath || '');
@@ -273,9 +407,23 @@ export class FileExpEntries {
             return;
         }
 
-        entries.forEach((entry) => {
+        const windowRange = this.virtual.enabled
+            ? this.computeVirtualWindow(entries.length)
+            : {
+                startIndex: 0,
+                endIndex: entries.length,
+                topSpacerHeight: 0,
+                bottomSpacerHeight: 0
+            };
+
+        if (this.virtual.enabled && windowRange.topSpacerHeight > 0) {
+            fragment.appendChild(this.createSpacerRow(windowRange.topSpacerHeight, 'top'));
+        }
+
+        for (let index = windowRange.startIndex; index < windowRange.endIndex; index += 1) {
+            const entry = entries[index];
             const entryPath = this.toEntryPath(entry, state, host);
-            if (!entryPath) return;
+            if (!entryPath) continue;
             const type = String(entry?.type || 'file');
             const row = this.rowsByPath.get(entryPath) || this.createRow(entryPath);
             row.dataset.entryPath = entryPath;
@@ -303,11 +451,16 @@ export class FileExpEntries {
             row.replaceChildren(nameCell, typeCell, sizeCell, modifiedCell, actionsCell);
             nextRows.set(entryPath, row);
             fragment.appendChild(row);
-        });
+        }
+
+        if (this.virtual.enabled && windowRange.bottomSpacerHeight > 0) {
+            fragment.appendChild(this.createSpacerRow(windowRange.bottomSpacerHeight, 'bottom'));
+        }
 
         this.rowsByPath = nextRows;
         this.tbody.replaceChildren(fragment);
         this.applyColumnVisibility(state);
+        this.updateMeasuredRowHeight();
     }
 
     delegateAction(methodName, ...args) {

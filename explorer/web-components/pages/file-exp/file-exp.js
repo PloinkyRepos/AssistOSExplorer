@@ -66,6 +66,14 @@ export class FileExp {
 
         this.stateStore = createFileExpState();
         this.state = this.stateStore.state;
+        if (typeof window !== 'undefined') {
+            const globalVersion = Number.parseInt(String(window.__assistosExplorerWorkspaceVersion ?? '0'), 10);
+            if (Number.isFinite(globalVersion) && globalVersion > this.state.workspaceVersion) {
+                this.state.workspaceVersion = globalVersion;
+            } else {
+                window.__assistosExplorerWorkspaceVersion = this.state.workspaceVersion;
+            }
+        }
         this.cleanupCallbacks = [];
         this.domListenerRegistry = createDomListenerRegistry();
         this.pendingMenuFocusPath = null;
@@ -189,6 +197,16 @@ export class FileExp {
 
     async loadStateFromURL() {
         return loadStateFromURLImpl(this);
+    }
+
+    bumpWorkspaceVersion() {
+        const current = Number.isFinite(this.state.workspaceVersion) ? this.state.workspaceVersion : 0;
+        const next = current + 1;
+        this.state.workspaceVersion = next;
+        if (typeof window !== 'undefined') {
+            window.__assistosExplorerWorkspaceVersion = next;
+        }
+        return next;
     }
 
     beforeRender() {
@@ -355,13 +373,14 @@ export class FileExp {
         return tryLoadMediaPreviewImpl(this, filePath);
     }
 
-    async openFile(filePath) {
+    async openFile(filePath, options = {}) {
         if (filePath && !String(filePath).endsWith('.backlog') && !String(filePath).endsWith('.history')) {
             this.setPreviewState({ backlogTextView: false }, { invalidate: false });
         }
         const result = await openFileImpl(this, filePath, {
             largeFilePreviewLimitBytes: LARGE_FILE_PREVIEW_LIMIT_BYTES,
-            largeFilePreviewLines: LARGE_FILE_PREVIEW_LINES
+            largeFilePreviewLines: LARGE_FILE_PREVIEW_LINES,
+            ...options
         });
         this.syncWebViewForPath(filePath);
         return result;
@@ -672,7 +691,7 @@ export class FileExp {
             .filter(Boolean)
             .map((part) => encodeURIComponent(part))
             .join('/');
-        return `/${encodedPath}`;
+        return `/workspace-files/${encodedPath}`;
     }
 
     attachPreviewAnchorHandler() {

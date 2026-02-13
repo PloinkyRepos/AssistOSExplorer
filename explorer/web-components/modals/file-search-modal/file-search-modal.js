@@ -1,7 +1,21 @@
-import { normalizePath, parsePatterns } from "../../pages/file-exp/file-exp-utils.js";
-import { callToolWithLoader } from "../../../utils/globalLoader.js";
-import { FILE_EXP_REPLACE_COMPLETE_EVENT } from "../../../utils/appEvents.js";
+import { normalizePath } from "../../pages/file-exp/file-exp-utils.js";
 import { callExplorerTool } from "../../../services/infrastructure/explorerApi.js";
+import { createTimedCache } from "../../utils/timed-cache.js";
+import {
+    highlightSearchPreview,
+    parsePositiveLineValue
+} from "../../utils/workspace-search-utils.js";
+import { fileSearchModalSearchMethods } from "./file-search-modal-search.js";
+import { fileSearchModalReplaceMethods } from "./file-search-modal-replace.js";
+
+const SEARCH_RESULTS_FILE_BATCH = 20;
+const SEARCH_RESULTS_MATCH_BATCH = 40;
+const SEARCH_RESULTS_AUTO_EXPAND_THRESHOLD_PX = 140;
+const SEARCH_RESULTS_AUTO_EXPAND_COOLDOWN_MS = 140;
+const SEARCH_IN_FILES_CACHE_TTL_MS = 5000;
+const SEARCH_IN_FILES_CACHE_MAX_ENTRIES = 50;
+const SEARCH_REQUEST_TIMEOUT_MS = 15000;
+const REPLACE_REQUEST_TIMEOUT_MS = 30000;
 
 export class FileSearchModal {
     constructor(element, invalidate, props = {}) {
@@ -9,9 +23,22 @@ export class FileSearchModal {
         this.invalidate = invalidate;
         this.props = props || {};
         this.defaultExclude = 'node_modules,.git';
-        this.searchInFilesCache = new Map();
-        this.searchInFilesCacheTtlMs = 5000;
+        this.searchInFilesCacheTtlMs = SEARCH_IN_FILES_CACHE_TTL_MS;
+        this.searchInFilesCacheMaxEntries = SEARCH_IN_FILES_CACHE_MAX_ENTRIES;
+        this.searchInFilesCache = createTimedCache({
+            ttlMs: this.searchInFilesCacheTtlMs,
+            maxEntries: this.searchInFilesCacheMaxEntries,
+            refreshOnGet: true
+        });
+        this.searchInFilesRequestTimeoutMs = SEARCH_REQUEST_TIMEOUT_MS;
+        this.replaceInFilesRequestTimeoutMs = REPLACE_REQUEST_TIMEOUT_MS;
         this.searchInFilesRequestId = 0;
+        this.searchInFilesFileBatchSize = SEARCH_RESULTS_FILE_BATCH;
+        this.searchInFilesMatchBatchSize = SEARCH_RESULTS_MATCH_BATCH;
+        this.searchResultsAutoExpandThresholdPx = SEARCH_RESULTS_AUTO_EXPAND_THRESHOLD_PX;
+        this.searchResultsAutoExpandCooldownMs = SEARCH_RESULTS_AUTO_EXPAND_COOLDOWN_MS;
+        this.searchResultsLastAutoExpandAt = 0;
+        this.boundHandleInFilesResultsScroll = this.handleInFilesResultsScroll.bind(this);
         this.state = {
             mode: props.mode || 'name',
             basePath: props.basePath || '/',
@@ -26,12 +53,18 @@ export class FileSearchModal {
             searchInFilesCase: Boolean(props.searchInFilesCase),
             searchInFilesRegex: Boolean(props.searchInFilesRegex),
             searchInFilesWholeWord: Boolean(props.searchInFilesWholeWord),
+            workspaceVersion: Number.isFinite(props.workspaceVersion) ? props.workspaceVersion : 0,
             replaceInFilesWith: props.replaceInFilesWith || '',
             searchInFilesResults: [],
             searchInFilesFileResults: [],
+            searchInFilesVisibleFileCount: 0,
+            searchInFilesVisibleMatchCounts: {},
             searchInFilesLoading: false,
+            searchInFilesRefreshing: false,
             searchInFilesError: null,
             searchInFilesTruncated: false,
+            searchInFilesTimedOut: false,
+            searchInFilesCacheStats: null,
             replaceInFilesLoading: false,
             replaceInFilesError: null,
             replaceInFilesSummary: null,
@@ -40,16 +73,33 @@ export class FileSearchModal {
             selectedMatchIds: new Set(),
             directorySuggestions: Array.isArray(props.directorySuggestions) ? props.directorySuggestions : []
         };
+        this.refreshSearchInFilesCacheStats?.();
         this.invalidate();
     }
 
     beforeRender() {}
 
+    beforeUnload() {
+        this.searchInFilesRequestId += 1;
+        if (this.state.searchByNameTimer) {
+            clearTimeout(this.state.searchByNameTimer);
+            this.state.searchByNameTimer = null;
+        }
+        if (this.state.searchInFilesTimer) {
+            clearTimeout(this.state.searchInFilesTimer);
+            this.state.searchInFilesTimer = null;
+        }
+        const inFilesResults = this.element?.querySelector('#searchInFilesResults');
+        if (inFilesResults) {
+            inFilesResults.removeEventListener('scroll', this.boundHandleInFilesResultsScroll);
+        }
+    }
+
     async callTool(agentName, toolName, args) {
         if (agentName !== 'explorer') {
             throw new Error(`Unsupported agent for FileSearchModal: ${agentName}`);
         }
-        return callExplorerTool(toolName, args, { raw: true });
+        return callExplorerTool(toolName, args, { raw: true, withLoader: false });
     }
 
     normalizeBasePath(value) {
@@ -62,81 +112,126 @@ export class FileSearchModal {
         return this.normalizeBasePath(value || '/');
     }
 
+    getVisibleSearchInFilesCount(totalFiles) {
+        if (totalFiles <= 0) return 0;
+        const configured = Number.parseInt(String(this.state.searchInFilesVisibleFileCount ?? ''), 10);
+        const fallback = Math.min(totalFiles, this.searchInFilesFileBatchSize);
+        if (!Number.isFinite(configured) || configured <= 0) {
+            return fallback;
+        }
+        return Math.min(totalFiles, configured);
+    }
+
+    getVisibleMatchesForFile(filePath, totalMatches) {
+        if (!filePath || totalMatches <= 0) return 0;
+        const counts = this.state.searchInFilesVisibleMatchCounts || {};
+        const configured = Number.parseInt(String(counts[filePath] ?? ''), 10);
+        const fallback = Math.min(totalMatches, this.searchInFilesMatchBatchSize);
+        if (!Number.isFinite(configured) || configured <= 0) {
+            return fallback;
+        }
+        return Math.min(totalMatches, configured);
+    }
+
+    resetSearchInFilesProgressiveWindow() {
+        const files = Array.isArray(this.state.searchInFilesFileResults) ? this.state.searchInFilesFileResults : [];
+        const visibleFileCount = Math.min(files.length, this.searchInFilesFileBatchSize);
+        const visibleMatchCounts = {};
+        for (let index = 0; index < visibleFileCount; index += 1) {
+            const item = files[index];
+            if (!item?.path) continue;
+            const totalMatches = Array.isArray(item.matches) ? item.matches.length : 0;
+            visibleMatchCounts[item.path] = Math.min(totalMatches, this.searchInFilesMatchBatchSize);
+        }
+        this.state.searchInFilesVisibleFileCount = visibleFileCount;
+        this.state.searchInFilesVisibleMatchCounts = visibleMatchCounts;
+        this.searchResultsLastAutoExpandAt = 0;
+    }
+
+    loadMoreSearchInFilesFiles(step = this.searchInFilesFileBatchSize) {
+        const files = Array.isArray(this.state.searchInFilesFileResults) ? this.state.searchInFilesFileResults : [];
+        if (!files.length) return false;
+        const currentCount = this.getVisibleSearchInFilesCount(files.length);
+        if (currentCount >= files.length) return false;
+        const nextCount = Math.min(files.length, currentCount + Math.max(1, Number(step) || 1));
+        const nextVisibleMatchCounts = { ...(this.state.searchInFilesVisibleMatchCounts || {}) };
+        for (let index = currentCount; index < nextCount; index += 1) {
+            const fileItem = files[index];
+            if (!fileItem?.path) continue;
+            const totalMatches = Array.isArray(fileItem.matches) ? fileItem.matches.length : 0;
+            const existing = Number.parseInt(String(nextVisibleMatchCounts[fileItem.path] ?? ''), 10);
+            if (!Number.isFinite(existing) || existing <= 0) {
+                nextVisibleMatchCounts[fileItem.path] = Math.min(totalMatches, this.searchInFilesMatchBatchSize);
+            }
+        }
+        this.state.searchInFilesVisibleFileCount = nextCount;
+        this.state.searchInFilesVisibleMatchCounts = nextVisibleMatchCounts;
+        this.renderSearchInFilesResults();
+        return true;
+    }
+
+    loadMoreSearchInFileMatches(filePath, step = this.searchInFilesMatchBatchSize) {
+        if (!filePath) return false;
+        const files = Array.isArray(this.state.searchInFilesFileResults) ? this.state.searchInFilesFileResults : [];
+        const fileItem = files.find((item) => item?.path === filePath);
+        if (!fileItem) return false;
+        const totalMatches = Array.isArray(fileItem.matches) ? fileItem.matches.length : 0;
+        if (!totalMatches) return false;
+        const nextVisibleMatchCounts = { ...(this.state.searchInFilesVisibleMatchCounts || {}) };
+        const currentCount = this.getVisibleMatchesForFile(filePath, totalMatches);
+        if (currentCount >= totalMatches) return false;
+        nextVisibleMatchCounts[filePath] = Math.min(
+            totalMatches,
+            currentCount + Math.max(1, Number(step) || 1)
+        );
+        this.state.searchInFilesVisibleMatchCounts = nextVisibleMatchCounts;
+        this.renderSearchInFilesResults();
+        return true;
+    }
+
+    handleInFilesResultsScroll() {
+        if (this.state.mode !== 'replace') return;
+        if (this.state.searchInFilesLoading) return;
+        if (this.state.searchInFilesRefreshing) return;
+        const container = this.element?.querySelector('#searchInFilesResults');
+        if (!container) return;
+        const remaining = container.scrollHeight - (container.scrollTop + container.clientHeight);
+        if (remaining > this.searchResultsAutoExpandThresholdPx) return;
+        this.autoExpandSearchInFilesResults();
+    }
+
+    autoExpandSearchInFilesResults() {
+        const now = Date.now();
+        if ((now - this.searchResultsLastAutoExpandAt) < this.searchResultsAutoExpandCooldownMs) {
+            return;
+        }
+        const files = Array.isArray(this.state.searchInFilesFileResults) ? this.state.searchInFilesFileResults : [];
+        if (!files.length) return;
+        const visibleFileCount = this.getVisibleSearchInFilesCount(files.length);
+        const visibleFiles = files.slice(0, visibleFileCount);
+        let expanded = false;
+        for (let index = visibleFiles.length - 1; index >= 0; index -= 1) {
+            const item = visibleFiles[index];
+            const totalMatches = Array.isArray(item?.matches) ? item.matches.length : 0;
+            if (!item?.path || totalMatches <= 0) continue;
+            const visibleMatches = this.getVisibleMatchesForFile(item.path, totalMatches);
+            if (visibleMatches < totalMatches) {
+                expanded = this.loadMoreSearchInFileMatches(item.path);
+                break;
+            }
+        }
+        if (!expanded) {
+            expanded = this.loadMoreSearchInFilesFiles();
+        }
+        if (expanded) {
+            this.searchResultsLastAutoExpandAt = now;
+        }
+    }
+
     afterRender() {
         this.syncUIFromState();
         this.bindEvents();
         this.runInitialSearch();
-    }
-
-    escapeHtml(value) {
-        return String(value ?? '')
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
-    }
-
-    escapeRegExp(value) {
-        return String(value ?? '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    }
-
-    buildHighlightRegex() {
-        const query = String(this.state.searchInFilesQuery || '').trim();
-        if (!query) return null;
-        const useRegex = Boolean(this.state.searchInFilesRegex);
-        const wholeWord = Boolean(this.state.searchInFilesWholeWord);
-        const caseSensitive = Boolean(this.state.searchInFilesCase);
-        let pattern = useRegex ? query : this.escapeRegExp(query);
-        if (wholeWord) {
-            pattern = `\\b(?:${pattern})\\b`;
-        }
-        const flags = caseSensitive ? 'g' : 'gi';
-        try {
-            return new RegExp(pattern, flags);
-        } catch (_) {
-            return null;
-        }
-    }
-
-    highlightPreview(text) {
-        const value = String(text ?? '');
-        if (!value) return '';
-        const regex = this.buildHighlightRegex();
-        if (!regex) return this.escapeHtml(value);
-        regex.lastIndex = 0;
-        const firstMatch = regex.exec(value);
-        if (!firstMatch) {
-            return this.escapeHtml(value);
-        }
-
-        const matchText = firstMatch[0] ?? '';
-        const matchIndex = Number.isFinite(firstMatch.index) ? firstMatch.index : 0;
-        const contextBefore = 60;
-        const contextAfter = 50;
-        const start = Math.max(0, matchIndex - contextBefore);
-        const end = Math.min(value.length, matchIndex + matchText.length + contextAfter);
-        const snippet = value.slice(start, end);
-        const prefix = start > 0 ? '…' : '';
-        const suffix = end < value.length ? '…' : '';
-
-        regex.lastIndex = 0;
-        let lastIndex = 0;
-        let result = '';
-        let match;
-        while ((match = regex.exec(snippet)) !== null) {
-            const textMatch = match[0] ?? '';
-            const localStart = Number.isFinite(match.index) ? match.index : 0;
-            const localEnd = localStart + textMatch.length;
-            result += this.escapeHtml(snippet.slice(lastIndex, localStart));
-            result += `<mark class="search-highlight">${this.escapeHtml(snippet.slice(localStart, localEnd))}</mark>`;
-            lastIndex = localEnd;
-            if (textMatch.length === 0) {
-                regex.lastIndex = localStart + 1;
-            }
-        }
-        result += this.escapeHtml(snippet.slice(lastIndex));
-        return `${prefix}${result}${suffix}`;
     }
 
     getEventTargetElement(event) {
@@ -144,11 +239,6 @@ export class FileSearchModal {
         if (target instanceof Element) return target;
         if (target?.parentElement instanceof Element) return target.parentElement;
         return null;
-    }
-
-    parseLineValue(value) {
-        const parsed = Number.parseInt(String(value ?? ''), 10);
-        return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
     }
 
     bindEvents() {
@@ -294,7 +384,7 @@ export class FileSearchModal {
                 if (!targetEl) return;
                 const target = targetEl.closest('.search-result-item');
                 if (target?.dataset?.filePath) {
-                    const line = this.parseLineValue(target.dataset.line);
+                    const line = parsePositiveLineValue(target.dataset.line);
                     this.closeModal({ path: target.dataset.filePath, line });
                 }
             });
@@ -306,12 +396,22 @@ export class FileSearchModal {
             inFilesResults.addEventListener('click', (event) => {
                 const targetEl = this.getEventTargetElement(event);
                 if (!targetEl) return;
+                const loadMoreButton = targetEl.closest('.search-load-more-button');
+                if (loadMoreButton) {
+                    const action = loadMoreButton.dataset.searchAction;
+                    if (action === 'load-more-files') {
+                        this.loadMoreSearchInFilesFiles();
+                    } else if (action === 'load-more-file-matches') {
+                        this.loadMoreSearchInFileMatches(loadMoreButton.dataset.filePath);
+                    }
+                    return;
+                }
                 if (targetEl.closest('input[type="checkbox"]') || targetEl.closest('label.search-checkbox')) {
                     return;
                 }
                 const target = targetEl.closest('.search-match-item');
                 if (target?.dataset?.filePath) {
-                    const line = this.parseLineValue(target.dataset.line);
+                    const line = parsePositiveLineValue(target.dataset.line);
                     this.closeModal({ path: target.dataset.filePath, line });
                 }
             });
@@ -338,6 +438,10 @@ export class FileSearchModal {
                 }
             });
             inFilesResults.dataset.boundClick = 'true';
+        }
+        if (inFilesResults && !inFilesResults.dataset.boundScroll) {
+            inFilesResults.addEventListener('scroll', this.boundHandleInFilesResultsScroll, { passive: true });
+            inFilesResults.dataset.boundScroll = 'true';
         }
 
         if (!this.element.dataset.boundEscape) {
@@ -447,233 +551,6 @@ export class FileSearchModal {
         }
     }
 
-    scheduleSearchByName() {
-        if (this.state.searchByNameTimer) {
-            clearTimeout(this.state.searchByNameTimer);
-        }
-        this.state.searchByNameTimer = setTimeout(() => this.runSearchByName(), 200);
-    }
-
-    scheduleSearchInFiles() {
-        if (this.state.searchInFilesTimer) {
-            clearTimeout(this.state.searchInFilesTimer);
-        }
-        this.state.replaceInFilesError = null;
-        this.state.replaceInFilesSummary = null;
-        this.renderReplaceStatus();
-        const query = (this.state.searchInFilesQuery || '').trim();
-        if (!query) {
-            this.searchInFilesRequestId += 1;
-            this.state.searchInFilesLoading = false;
-            this.state.searchInFilesError = 'Enter text to search for.';
-            this.state.searchInFilesResults = [];
-            this.state.searchInFilesFileResults = [];
-            this.state.searchInFilesTruncated = false;
-            this.state.selectedMatchIds = new Set();
-            this.renderSearchInFilesResults();
-            return;
-        }
-        this.state.searchInFilesTimer = setTimeout(() => this.runSearchInFiles(), 200);
-    }
-
-    buildSearchInFilesCacheKey() {
-        const basePath = this.resolveSearchBasePath();
-        const query = (this.state.searchInFilesQuery || '').trim();
-        const exclude = this.state.searchInFilesExclude || this.defaultExclude;
-        const caseSensitive = Boolean(this.state.searchInFilesCase);
-        const useRegex = Boolean(this.state.searchInFilesRegex);
-        const wholeWord = Boolean(this.state.searchInFilesWholeWord);
-        return JSON.stringify({ basePath, query, exclude, caseSensitive, useRegex, wholeWord });
-    }
-
-    getCachedSearchInFilesResult(key) {
-        const entry = this.searchInFilesCache.get(key);
-        if (!entry) return null;
-        if ((Date.now() - entry.cachedAt) > this.searchInFilesCacheTtlMs) {
-            this.searchInFilesCache.delete(key);
-            return null;
-        }
-        return entry.value;
-    }
-
-    setCachedSearchInFilesResult(key, value) {
-        this.searchInFilesCache.set(key, { cachedAt: Date.now(), value });
-        // keep cache small
-        if (this.searchInFilesCache.size > 50) {
-            const firstKey = this.searchInFilesCache.keys().next().value;
-            this.searchInFilesCache.delete(firstKey);
-        }
-    }
-
-    async runSearchByName() {
-        const query = (this.state.searchByNameQuery || '').trim();
-        if (!query) {
-            this.state.searchByNameResults = [];
-            this.state.searchByNameError = null;
-            this.renderSearchByNameResults();
-            return;
-        }
-        if (query.length < 2) {
-            this.state.searchByNameResults = [];
-            this.state.searchByNameError = 'Type at least 2 characters.';
-            this.renderSearchByNameResults();
-            return;
-        }
-            this.state.searchByNameLoading = true;
-            this.state.searchByNameError = null;
-            this.renderSearchByNameResults();
-        try {
-            const excludePatterns = parsePatterns(this.state.searchByNameExclude);
-            const result = await this.callTool('explorer', 'search_files', {
-                path: this.state.basePath || '/',
-                pattern: query,
-                excludePatterns
-            });
-            const lines = (result.text || '')
-                .split(/\r?\n/)
-                .map((line) => line.trim())
-                .filter((line) => line && !line.toLowerCase().includes('no matches'));
-            const items = lines.map((line) => {
-                const normalized = normalizePath(line.startsWith('/') ? line : `/${line}`);
-                const name = normalized.split('/').pop() || '/';
-                return {
-                    path: normalized,
-                    name,
-                    displayPath: normalized
-                };
-            });
-            this.state.searchByNameResults = items;
-        } catch (error) {
-            console.error('search_files failed', error);
-            this.state.searchByNameError = error?.message || 'Search failed.';
-            this.state.searchByNameResults = [];
-        } finally {
-            this.state.searchByNameLoading = false;
-            this.renderSearchByNameResults();
-        }
-    }
-
-    async runSearchInFiles() {
-        const query = (this.state.searchInFilesQuery || '').trim();
-        if (!query) {
-            this.state.searchInFilesResults = [];
-            this.state.searchInFilesError = 'Enter text to search for.';
-            this.state.searchInFilesFileResults = [];
-            this.state.selectedMatchIds = new Set();
-            this.renderSearchInFilesResults();
-            return;
-        }
-        const requestId = ++this.searchInFilesRequestId;
-            this.state.searchInFilesLoading = true;
-            this.state.searchInFilesError = null;
-            this.state.searchInFilesTruncated = false;
-            this.renderSearchInFilesResults();
-        try {
-            const cacheKey = this.buildSearchInFilesCacheKey();
-            const cached = this.getCachedSearchInFilesResult(cacheKey);
-            if (cached) {
-                this.state.searchInFilesResults = cached.matches || [];
-                this.state.searchInFilesFileResults = this.groupMatchesByFileDetailed(this.state.searchInFilesResults);
-                this.state.selectedMatchIds = new Set(this.state.searchInFilesResults.map((item) => item.id));
-                this.state.searchInFilesTruncated = Boolean(cached.truncated);
-                return;
-            }
-
-            const excludePatterns = parsePatterns(this.state.searchInFilesExclude);
-            const result = await this.callTool('explorer', 'search_text', {
-                path: this.resolveSearchBasePath(),
-                query,
-                caseSensitive: this.state.searchInFilesCase,
-                useRegex: this.state.searchInFilesRegex,
-                wholeWord: this.state.searchInFilesWholeWord,
-                excludePatterns
-            });
-            if (requestId !== this.searchInFilesRequestId) {
-                return;
-            }
-            let payload = result.json;
-            if (!payload) {
-                try {
-                    payload = JSON.parse(result.text || '{}');
-                } catch (_) {
-                    payload = null;
-                }
-            }
-            const matches = payload?.results || [];
-            this.state.searchInFilesResults = matches.map((match) => {
-                const path = match.path ? normalizePath(match.path) : '/';
-                const line = match.line || null;
-                const column = match.column || null;
-                const matchIndex = match.matchIndex ?? 0;
-                const id = match.id || `${path}:${line}:${column}:${matchIndex}`;
-                return {
-                    path,
-                    line,
-                    column,
-                    matchIndex,
-                    match: match.match || '',
-                    preview: match.preview || '',
-                    id
-                };
-            });
-            this.state.searchInFilesFileResults = this.groupMatchesByFileDetailed(this.state.searchInFilesResults);
-            this.state.selectedMatchIds = new Set(this.state.searchInFilesResults.map((item) => item.id));
-            this.state.searchInFilesTruncated = Boolean(payload?.truncated);
-            this.setCachedSearchInFilesResult(this.buildSearchInFilesCacheKey(), {
-                matches: this.state.searchInFilesResults,
-                truncated: this.state.searchInFilesTruncated
-            });
-        } catch (error) {
-            if (requestId !== this.searchInFilesRequestId) {
-                return;
-            }
-            console.error('search_text failed', error);
-            this.state.searchInFilesError = error?.message || 'Search failed.';
-            this.state.searchInFilesResults = [];
-            this.state.searchInFilesFileResults = [];
-            this.state.searchInFilesTruncated = false;
-            this.state.selectedMatchIds = new Set();
-        } finally {
-            if (requestId !== this.searchInFilesRequestId) {
-                return;
-            }
-            this.state.searchInFilesLoading = false;
-            this.renderSearchInFilesResults();
-            this.updateReplaceButtons();
-        }
-    }
-
-    groupMatchesByFileDetailed(matches = []) {
-        const grouped = new Map();
-        matches.forEach((item) => {
-            if (!item?.path) return;
-            const existing = grouped.get(item.path) || {
-                path: item.path,
-                count: 0,
-                firstLine: null,
-                preview: '',
-                matches: []
-            };
-            existing.count += 1;
-            if (existing.firstLine === null && item.line) {
-                existing.firstLine = item.line;
-            }
-            if (!existing.preview && item.preview) {
-                existing.preview = item.preview;
-            }
-            existing.matches.push(item);
-            grouped.set(item.path, existing);
-        });
-        return Array.from(grouped.values()).map((entry) => {
-            entry.matches.sort((a, b) => {
-                const lineDiff = (a.line || 0) - (b.line || 0);
-                if (lineDiff !== 0) return lineDiff;
-                return (a.column || 0) - (b.column || 0);
-            });
-            return entry;
-        });
-    }
-
     renderSearchByNameResults() {
         const container = this.element.querySelector('#searchByNameResults');
         const status = this.element.querySelector('#searchByNameStatus');
@@ -728,7 +605,7 @@ export class FileSearchModal {
         container.innerHTML = '';
         status.className = 'search-status';
 
-        const files = this.state.searchInFilesFileResults;
+        const files = Array.isArray(this.state.searchInFilesFileResults) ? this.state.searchInFilesFileResults : [];
         const matches = this.state.searchInFilesResults || [];
         const selected = this.state.selectedMatchIds instanceof Set ? this.state.selectedMatchIds : new Set();
         const totalMatches = matches.length;
@@ -740,6 +617,17 @@ export class FileSearchModal {
             spinner.className = 'search-spinner';
             const text = document.createElement('span');
             text.textContent = 'Searching across files...';
+            status.appendChild(spinner);
+            status.appendChild(text);
+            return;
+        }
+        if (this.state.searchInFilesRefreshing && files.length === 0) {
+            status.classList.add('loading');
+            status.innerHTML = '';
+            const spinner = document.createElement('span');
+            spinner.className = 'search-spinner';
+            const text = document.createElement('span');
+            text.textContent = 'Refreshing changed files...';
             status.appendChild(spinner);
             status.appendChild(text);
             return;
@@ -758,11 +646,28 @@ export class FileSearchModal {
             return;
         }
 
+        const visibleFileCount = this.getVisibleSearchInFilesCount(files.length);
+        const visibleFiles = files.slice(0, visibleFileCount);
+        const remainingFiles = Math.max(0, files.length - visibleFiles.length);
+        const highlightOptions = {
+            query: this.state.searchInFilesQuery,
+            useRegex: this.state.searchInFilesRegex,
+            wholeWord: this.state.searchInFilesWholeWord,
+            caseSensitive: this.state.searchInFilesCase
+        };
         const truncatedNote = this.state.searchInFilesTruncated ? ' (truncated)' : '';
+        const timedOutNote = this.state.searchInFilesTimedOut ? ' • timed out' : '';
+        const refreshingNote = this.state.searchInFilesRefreshing ? ' • refreshing' : '';
         const selectedNote = totalMatches ? ` • ${selectedCount}/${totalMatches} selected` : '';
-        status.textContent = `${files.length} file${files.length === 1 ? '' : 's'}, ${totalMatches} match${totalMatches === 1 ? '' : 'es'}${truncatedNote}${selectedNote}`;
+        const visibilityNote = remainingFiles > 0
+            ? ` • showing ${visibleFiles.length}/${files.length} files`
+            : '';
+        status.textContent = `${files.length} file${files.length === 1 ? '' : 's'}, ${totalMatches} match${totalMatches === 1 ? '' : 'es'}${truncatedNote}${selectedNote}${visibilityNote}${timedOutNote}${refreshingNote}`;
         if (this.state.searchInFilesTruncated) {
             status.classList.add('strong');
+        }
+        if (this.state.searchInFilesRefreshing) {
+            status.classList.add('loading');
         }
 
         const selectionBar = document.createElement('div');
@@ -781,7 +686,7 @@ export class FileSearchModal {
         selectionBar.appendChild(selectAllLabel);
         container.appendChild(selectionBar);
 
-        files.forEach((item) => {
+        visibleFiles.forEach((item) => {
             const fileGroup = document.createElement('div');
             fileGroup.className = 'search-file-group';
             const header = document.createElement('div');
@@ -793,10 +698,13 @@ export class FileSearchModal {
             fileCheckbox.type = 'checkbox';
             fileCheckbox.dataset.toggle = 'toggle-file';
             fileCheckbox.dataset.filePath = item.path;
-            const fileMatches = item.matches || [];
+            const fileMatches = Array.isArray(item.matches) ? item.matches : [];
             const fileSelected = fileMatches.filter((match) => selected.has(match.id)).length;
             fileCheckbox.checked = fileMatches.length > 0 && fileSelected === fileMatches.length;
             fileCheckbox.indeterminate = fileSelected > 0 && fileSelected < fileMatches.length;
+            const visibleMatchCount = this.getVisibleMatchesForFile(item.path, fileMatches.length);
+            const visibleMatches = fileMatches.slice(0, visibleMatchCount);
+            const remainingMatches = Math.max(0, fileMatches.length - visibleMatches.length);
 
             const pathLabel = document.createElement('div');
             pathLabel.className = 'search-result-path';
@@ -814,7 +722,7 @@ export class FileSearchModal {
 
             const matchList = document.createElement('div');
             matchList.className = 'search-match-list';
-            fileMatches.forEach((match) => {
+            visibleMatches.forEach((match) => {
                 const row = document.createElement('div');
                 row.className = 'search-match-item';
                 row.dataset.filePath = match.path;
@@ -844,7 +752,7 @@ export class FileSearchModal {
                 }
                 const preview = document.createElement('div');
                 preview.className = 'search-result-preview';
-                preview.innerHTML = this.highlightPreview(match.preview || '');
+                preview.innerHTML = highlightSearchPreview(match.preview || '', highlightOptions);
                 info.appendChild(metaLine);
                 info.appendChild(preview);
 
@@ -853,9 +761,40 @@ export class FileSearchModal {
                 matchList.appendChild(row);
             });
 
+            if (remainingMatches > 0) {
+                const loadMoreRow = document.createElement('div');
+                loadMoreRow.className = 'search-load-more-row';
+                const loadMoreButton = document.createElement('button');
+                loadMoreButton.type = 'button';
+                loadMoreButton.className = 'search-load-more-button';
+                loadMoreButton.dataset.searchAction = 'load-more-file-matches';
+                loadMoreButton.dataset.filePath = item.path;
+                const nextChunk = Math.min(this.searchInFilesMatchBatchSize, remainingMatches);
+                loadMoreButton.textContent = `Load ${nextChunk} more match${nextChunk === 1 ? '' : 'es'} (${remainingMatches} remaining)`;
+                loadMoreRow.appendChild(loadMoreButton);
+                matchList.appendChild(loadMoreRow);
+            }
+
             fileGroup.appendChild(matchList);
             container.appendChild(fileGroup);
         });
+
+        if (remainingFiles > 0) {
+            const loadMoreFilesRow = document.createElement('div');
+            loadMoreFilesRow.className = 'search-load-more-row global';
+            const loadMoreFilesButton = document.createElement('button');
+            loadMoreFilesButton.type = 'button';
+            loadMoreFilesButton.className = 'search-load-more-button';
+            loadMoreFilesButton.dataset.searchAction = 'load-more-files';
+            const nextFilesChunk = Math.min(this.searchInFilesFileBatchSize, remainingFiles);
+            loadMoreFilesButton.textContent = `Load ${nextFilesChunk} more file${nextFilesChunk === 1 ? '' : 's'} (${remainingFiles} remaining)`;
+            loadMoreFilesRow.appendChild(loadMoreFilesButton);
+            container.appendChild(loadMoreFilesRow);
+        }
+
+        if (this.state.mode === 'replace') {
+            requestAnimationFrame(() => this.handleInFilesResultsScroll());
+        }
     }
 
     toggleAllMatches(checked) {
@@ -903,7 +842,9 @@ export class FileSearchModal {
         const query = (this.state.searchInFilesQuery || '').trim();
         const hasMatches = Array.isArray(this.state.searchInFilesResults) && this.state.searchInFilesResults.length > 0;
         const selectedCount = this.state.selectedMatchIds instanceof Set ? this.state.selectedMatchIds.size : 0;
-        const busy = Boolean(this.state.replaceInFilesLoading) || Boolean(this.state.searchInFilesLoading);
+        const busy = Boolean(this.state.replaceInFilesLoading)
+            || Boolean(this.state.searchInFilesLoading)
+            || Boolean(this.state.searchInFilesRefreshing);
         if (replaceSelectedButton) {
             replaceSelectedButton.disabled = busy || !query || !hasMatches || selectedCount === 0;
         }
@@ -931,116 +872,28 @@ export class FileSearchModal {
         }
     }
 
-    async performReplace({ selectedOnly }) {
-        if (this.state.replaceInFilesLoading) return;
-        const query = (this.state.searchInFilesQuery || '').trim();
-        if (!query) {
-            this.state.replaceInFilesError = 'Enter text to search for.';
-            this.state.replaceInFilesSummary = null;
-            this.renderReplaceStatus();
-            return;
-        }
-        const matches = this.state.searchInFilesResults || [];
-        if (!matches.length) {
-            this.state.replaceInFilesError = 'No matches to replace.';
-            this.state.replaceInFilesSummary = null;
-            this.renderReplaceStatus();
-            return;
-        }
-        const selectedIds = selectedOnly
-            ? Array.from(this.state.selectedMatchIds instanceof Set ? this.state.selectedMatchIds : [])
-            : [];
-        if (selectedOnly && selectedIds.length === 0) {
-            this.state.replaceInFilesError = 'Select at least one match to replace.';
-            this.state.replaceInFilesSummary = null;
-            this.renderReplaceStatus();
-            return;
-        }
-        if (!selectedOnly && this.state.searchInFilesTruncated) {
-            const proceed = confirm('Search results are truncated. Replace All may affect more matches than shown. Continue?');
-            if (!proceed) return;
-        }
-
-        const estimated = selectedOnly ? selectedIds.length : matches.length;
-        if (estimated >= 1000) {
-            const proceed = confirm(`Replace ${estimated} occurrence${estimated === 1 ? '' : 's'}?`);
-            if (!proceed) return;
-        }
-
-        this.state.replaceInFilesLoading = true;
-        this.state.replaceInFilesError = null;
-        this.state.replaceInFilesSummary = null;
-        this.renderReplaceStatus();
-        this.updateReplaceButtons();
-
-        try {
-            const excludePatterns = parsePatterns(this.state.searchInFilesExclude);
-            const result = await callToolWithLoader('explorer', 'replace_text', {
-                path: this.resolveSearchBasePath(),
-                query,
-                replaceWith: this.state.replaceInFilesWith ?? '',
-                caseSensitive: this.state.searchInFilesCase,
-                useRegex: this.state.searchInFilesRegex,
-                wholeWord: this.state.searchInFilesWholeWord,
-                excludePatterns,
-                selectedMatchIds: selectedOnly ? selectedIds : [],
-                dryRun: false
-            });
-            let payload = result?.json;
-            if (!payload) {
-                try {
-                    payload = JSON.parse(result?.text || '{}');
-                } catch (_) {
-                    payload = null;
-                }
-            }
-            if (!payload) {
-                const text = typeof result?.text === 'string' ? result.text.trim() : '';
-                if (text.startsWith('Error:')) {
-                    throw new Error(text.replace(/^Error:\s*/i, '') || 'Replace failed.');
-                }
-                throw new Error('Invalid replace response.');
-            }
-            const summary = payload?.summary;
-            const replacements = summary?.totalReplacements ?? 0;
-            const filesChanged = summary?.filesChanged ?? 0;
-            if (payload?.errors?.length) {
-                console.warn('replace_text errors', payload.errors);
-            }
-            const missing = summary?.missingMatches || 0;
-            if (replacements > 0) {
-                if (filesChanged > 0) {
-                    this.state.replaceInFilesSummary = `Replaced ${replacements} occurrence${replacements === 1 ? '' : 's'} in ${filesChanged} file${filesChanged === 1 ? '' : 's'}.`;
-                } else {
-                    this.state.replaceInFilesSummary = `Matched ${replacements} occurrence${replacements === 1 ? '' : 's'}, but no file content changed.`;
-                }
-            } else {
-                this.state.replaceInFilesSummary = 'No replacements were made.';
-            }
-            if (missing > 0) {
-                this.state.replaceInFilesSummary += ` ${missing} selected match${missing === 1 ? '' : 'es'} no longer available.`;
-            }
-            if (payload?.errors?.length) {
-                this.state.replaceInFilesSummary += ` ${payload.errors.length} file${payload.errors.length === 1 ? '' : 's'} failed.`;
-            }
-            this.searchInFilesCache.clear();
-            if (Array.isArray(payload?.changedFiles) && payload.changedFiles.length > 0) {
-                window.dispatchEvent(new CustomEvent(FILE_EXP_REPLACE_COMPLETE_EVENT, {
-                    detail: { changedFiles: payload.changedFiles }
-                }));
-            }
-            await this.runSearchInFiles();
-        } catch (error) {
-            console.error('replace_text failed', error);
-            this.state.replaceInFilesError = error?.message || 'Replace failed.';
-        } finally {
-            this.state.replaceInFilesLoading = false;
-            this.renderReplaceStatus();
-            this.updateReplaceButtons();
-        }
+    buildClosePayload(payload = {}) {
+        const basePayload = payload && typeof payload === 'object' ? { ...payload } : {};
+        basePayload.searchByNameQuery = String(this.state.searchByNameQuery || '');
+        basePayload.searchByNameExclude = String(this.state.searchByNameExclude || this.defaultExclude);
+        basePayload.searchInFilesQuery = String(this.state.searchInFilesQuery || '');
+        basePayload.searchInFilesExclude = String(this.state.searchInFilesExclude || this.defaultExclude);
+        basePayload.searchInFilesCase = Boolean(this.state.searchInFilesCase);
+        basePayload.searchInFilesCaseSensitive = Boolean(this.state.searchInFilesCase);
+        basePayload.searchInFilesRegex = Boolean(this.state.searchInFilesRegex);
+        basePayload.searchInFilesWholeWord = Boolean(this.state.searchInFilesWholeWord);
+        basePayload.searchInFilesBasePath = this.resolveSearchBasePath();
+        basePayload.workspaceVersion = Number.isFinite(this.state.workspaceVersion) ? this.state.workspaceVersion : 0;
+        return basePayload;
     }
 
     closeModal(payload) {
-        assistOS.UI.closeModal(this.element, payload);
+        assistOS.UI.closeModal(this.element, this.buildClosePayload(payload));
     }
 }
+
+Object.assign(
+    FileSearchModal.prototype,
+    fileSearchModalSearchMethods,
+    fileSearchModalReplaceMethods
+);

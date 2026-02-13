@@ -1,4 +1,4 @@
-import { callToolWithLoader } from '../../utils/globalLoader.js';
+import { callTool, callToolWithLoader } from '../../utils/globalLoader.js';
 
 export class ToolError extends Error {
     constructor(code, message, data = null) {
@@ -206,9 +206,11 @@ async function normalizeAgentArgs(agentName, toolName, args) {
     return next;
 }
 
-export async function callExplorerTool(name, args, { raw = false } = {}) {
+export async function callExplorerTool(name, args, { raw = false, withLoader = true } = {}) {
     try {
-        const result = await callToolWithLoader('explorer', name, args);
+        const result = withLoader
+            ? await callToolWithLoader('explorer', name, args)
+            : await callTool('explorer', name, args);
         ensureSuccess(result);
         return raw ? result : extractToolText(result);
     } catch (error) {

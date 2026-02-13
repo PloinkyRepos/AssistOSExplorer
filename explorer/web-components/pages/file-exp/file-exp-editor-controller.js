@@ -48,6 +48,7 @@ export async function saveFile(fileExp) {
     const newContent = fileExp.textarea.value;
     try {
         await fileExp.tooling.writeFile(fileExp.state.selectedPath, newContent);
+        fileExp.bumpWorkspaceVersion?.();
         fileExp.showStatus(`Successfully saved ${fileExp.state.selectedPath}`, false);
         fileExp.setPreviewState({
             fileContent: newContent,

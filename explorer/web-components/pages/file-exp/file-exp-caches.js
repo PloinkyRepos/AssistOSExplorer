@@ -1,38 +1,28 @@
-const createTimedCache = ({ ttlMs }) => {
-    const cache = new Map();
-    return {
-        get(key) {
-            const entry = cache.get(key);
-            if (!entry) return null;
-            if ((Date.now() - entry.cachedAt) > ttlMs) {
-                cache.delete(key);
-                return null;
-            }
-            return entry.value;
-        },
-        set(key, value) {
-            cache.set(key, { cachedAt: Date.now(), value });
-        },
-        delete(key) {
-            cache.delete(key);
-        },
-        clear() {
-            cache.clear();
-        },
-        keys() {
-            return cache.keys();
-        }
-    };
-};
+import { createTimedCache } from "../../utils/timed-cache.js";
 
 export function createFileExpCaches({
     dirListingTtlMs = 5000,
     filePreviewTtlMs = 15000,
-    mdTreeTtlMs = 15000
+    mdTreeTtlMs = 15000,
+    dirListingMaxEntries = 300,
+    filePreviewMaxEntries = 300,
+    mdTreeMaxEntries = 150
 } = {}) {
-    const dirListing = createTimedCache({ ttlMs: dirListingTtlMs });
-    const filePreview = createTimedCache({ ttlMs: filePreviewTtlMs });
-    const mdTree = createTimedCache({ ttlMs: mdTreeTtlMs });
+    const dirListing = createTimedCache({
+        ttlMs: dirListingTtlMs,
+        maxEntries: dirListingMaxEntries,
+        refreshOnGet: true
+    });
+    const filePreview = createTimedCache({
+        ttlMs: filePreviewTtlMs,
+        maxEntries: filePreviewMaxEntries,
+        refreshOnGet: true
+    });
+    const mdTree = createTimedCache({
+        ttlMs: mdTreeTtlMs,
+        maxEntries: mdTreeMaxEntries,
+        refreshOnGet: true
+    });
 
     const normalizeDirPath = (normalizePathFn, dirPath) => normalizePathFn ? normalizePathFn(dirPath) : dirPath;
 
@@ -56,10 +46,11 @@ export function createFileExpCaches({
             }
         },
         filePreview: {
-            buildKey(filePath, entry, truncated) {
+            buildKey(filePath, entry, truncated, workspaceVersion = 0) {
                 const modified = entry?.modified || '';
                 const size = Number.isFinite(entry?.size) ? entry.size : '';
-                return `${filePath}|${modified}|${size}|${truncated ? 'partial' : 'full'}`;
+                const version = Number.isFinite(workspaceVersion) ? workspaceVersion : 0;
+                return `${filePath}|${modified}|${size}|${truncated ? 'partial' : 'full'}|v:${version}`;
             },
             get(cacheKey) {
                 return filePreview.get(cacheKey);

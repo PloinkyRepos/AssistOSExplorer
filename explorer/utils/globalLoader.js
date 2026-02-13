@@ -31,3 +31,12 @@ export async function callToolWithLoader(agentName, toolName, args, appServices 
     }
     return withGlobalLoader(() => services.callTool(agentName, toolName, args));
 }
+
+export async function callTool(agentName, toolName, args, appServices = null) {
+    const services = appServices
+        || (typeof window !== 'undefined' ? window.webSkel?.appServices : null);
+    if (!services || typeof services.callTool !== 'function') {
+        throw new Error('callTool: appServices.callTool is not available.');
+    }
+    return services.callTool(agentName, toolName, args);
+}

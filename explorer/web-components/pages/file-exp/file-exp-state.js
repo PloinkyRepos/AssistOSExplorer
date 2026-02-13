@@ -3,6 +3,18 @@ import { loadKeymap } from "../../../utils/keymap.js";
 
 const DEFAULT_COLUMN_VISIBILITY = { type: false, size: false, modified: false };
 
+export function loadWorkspaceVersionSeed() {
+    try {
+        const raw = typeof window !== 'undefined'
+            ? window.__assistosExplorerWorkspaceVersion
+            : 0;
+        const parsed = Number.parseInt(String(raw ?? '0'), 10);
+        return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+    } catch (_) {
+        return 0;
+    }
+}
+
 export function loadFilterSpecsPreference() {
     try {
         const stored = window.localStorage.getItem('assistosExplorerFilterSpecs');
@@ -70,6 +82,7 @@ export function createFileExpState() {
         columnVisibility: loadColumnVisibilityPreference(),
         searchMenuOpen: false,
         toolbarMenuOpen: false,
+        workspaceVersion: loadWorkspaceVersionSeed(),
         searchOverlay: null,
         directoryFilterQuery: '',
         searchByNameQuery: '',
@@ -80,6 +93,8 @@ export function createFileExpState() {
         searchInFilesQuery: '',
         searchInFilesExclude: 'node_modules,.git',
         searchInFilesCaseSensitive: false,
+        searchInFilesRegex: false,
+        searchInFilesWholeWord: false,
         searchInFilesBasePath: '/',
         searchInFilesResults: [],
         searchInFilesFileResults: [],

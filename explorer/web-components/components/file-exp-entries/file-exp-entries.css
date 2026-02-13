@@ -7,3 +7,9 @@ file-exp-entries {
 .column-hidden {
     display: none !important;
 }
+
+.entries-virtual-spacer > td {
+    padding: 0;
+    border: 0;
+    pointer-events: none;
+}

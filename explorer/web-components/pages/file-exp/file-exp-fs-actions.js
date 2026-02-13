@@ -19,6 +19,7 @@ export function attachFsActions(fileExp) {
                 await this.withLoader(async () => {
                     const tool = type === 'directory' ? 'delete_directory' : 'delete_file';
                     await callToolWithLoader('explorer', tool, {path});
+                    this.bumpWorkspaceVersion?.();
                     this.showStatus(`Successfully deleted ${path}`);
 
                     if (isSameOrDescendantPath(this, this.state.selectedPath, path)) {
@@ -65,6 +66,7 @@ export function attachFsActions(fileExp) {
             try {
                 await this.withLoader(async () => {
                     await callToolWithLoader('explorer', 'move_file', {source, destination});
+                    this.bumpWorkspaceVersion?.();
                     invalidateFsMutationCaches(this, {
                         directories: [parent, this.state.path],
                         directoryBranches: itemType === 'directory' ? [source] : [],
@@ -346,6 +348,7 @@ export function attachFsActions(fileExp) {
                             source: clipboard.path,
                             destination
                         });
+                        this.bumpWorkspaceVersion?.();
                         this.showStatus(`Moved to ${destination}.`);
                     } else {
                         let overwrite = false;
@@ -359,6 +362,7 @@ export function attachFsActions(fileExp) {
                             destination,
                             overwrite
                         });
+                        this.bumpWorkspaceVersion?.();
                         this.showStatus(`Copied to ${destination}${overwrite ? ' (overwritten)' : ''}.`);
                     }
 
@@ -414,6 +418,7 @@ export function attachFsActions(fileExp) {
                         path: newFilePath,
                         content: ''
                     });
+                    this.bumpWorkspaceVersion?.();
                     this.showStatus(`Created file: ${newFilePath}`);
                     invalidateFsMutationCaches(this, {
                         directories: [this.state.path],
@@ -443,6 +448,7 @@ export function attachFsActions(fileExp) {
             try {
                 await this.withLoader(async () => {
                     await callToolWithLoader('explorer', 'create_directory', {path: newDirPath});
+                    this.bumpWorkspaceVersion?.();
                     this.showStatus(`Successfully created directory.`);
                     invalidateFsMutationCaches(this, {
                         directories: [this.state.path]
