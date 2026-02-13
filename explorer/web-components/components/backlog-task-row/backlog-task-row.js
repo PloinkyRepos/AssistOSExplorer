@@ -199,8 +199,15 @@ export class BacklogTaskRow {
         this.queueSave();
     }
 
+    getResolutionValue() {
+        if (this.resolutionInput && typeof this.resolutionInput.value === 'string') {
+            return this.resolutionInput.value;
+        }
+        return String(this.state.task?.resolution || '');
+    }
+
     hasResolution() {
-        return this.parseResolutionLines(this.resolutionInput?.value || '').length > 0;
+        return this.parseResolutionLines(this.getResolutionValue()).length > 0;
     }
 
     updateApproveState() {
