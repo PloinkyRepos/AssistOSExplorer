@@ -1,4 +1,5 @@
 {
+    "sandbox": true,
     "container": "node:20-bullseye",
     "update": "",
     "cli": "/bin/bash",

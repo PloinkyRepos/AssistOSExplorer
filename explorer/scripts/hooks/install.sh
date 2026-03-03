@@ -12,7 +12,12 @@ echo "============================================"
 echo "Installing explorer dependencies..."
 echo "============================================"
 
-apt-get update && apt-get install -y git
+if [ "${PLOINKY_RUNTIME:-}" = "bwrap" ]; then
+    echo "Running under bwrap — skipping apt-get (using host packages)"
+    command -v git >/dev/null || { echo "ERROR: git not found on host"; exit 1; }
+else
+    apt-get update && apt-get install -y git
+fi
 
 echo ""
 echo "============================================"
