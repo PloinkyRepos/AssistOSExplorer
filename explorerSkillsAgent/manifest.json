@@ -1,4 +1,5 @@
 {
+    "agent": "sh /code/scripts/startAgent.sh",
     "lite-sandbox": true,
     "container": "node:20-bullseye",
     "profiles": {
@@ -9,7 +10,8 @@
                 "GEMINI_API_KEY",
                 "MISTRAL_API_KEY",
                 "DEEPSEEK_API_KEY",
-                "OPENROUTER_API_KEY"
+                "OPENROUTER_API_KEY",
+                "SOUL_GATEWAY_API_KEY"
             ]
         }
     }

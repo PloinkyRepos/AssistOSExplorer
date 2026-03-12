@@ -20,7 +20,8 @@
     "profiles": {
         "default": {
             "env": [
-                "ASSISTOS_FS_ROOT"
+                "ASSISTOS_FS_ROOT",
+                "SOUL_GATEWAY_API_KEY"
             ],
             "preinstall": "scripts/hooks/preinstall.sh",
             "install": "/code/scripts/hooks/install.sh"
