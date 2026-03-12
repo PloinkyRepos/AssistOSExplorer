@@ -6,17 +6,15 @@
     "agent": "node /code/filesystem-http-server.mjs",
     "about": "AssistOS Explorer agent",
     "enable": [
-        "soplang",
-        "multimedia",
-        "gitAgent global",
-        "soplangAgent global",
-        "tasksAgent global",
-        "llmAssistant global"
+        "gitAssistant/gitAgent global",
+        "soplangBuilder/soplangAgent global",
+        "tasksAssistant/tasksAgent global",
+        "llmAssistant/llmAssistant global"
     ],
     "repos": {
         "soplangBuilder": "https://github.com/PloinkyRepos/SOPLangBuilder.git",
-        "gitMCP": "https://github.com/PloinkyRepos/gitMCP.git",
-        "tasksMCP": "https://github.com/PloinkyRepos/tasksMCP",
+        "gitAssistant": "https://github.com/PloinkyRepos/gitMCP.git",
+        "tasksAssistant": "https://github.com/PloinkyRepos/tasksMCP.git",
         "llmAssistant": "https://github.com/PloinkyRepos/llmAssistant.git"
     },
     "profiles": {

@@ -132,9 +132,8 @@
                         <code>allowedDirectories</code> derived from
                         <code>ASSISTOS_FS_ROOT</code>/<code>MCP_FS_ROOT</code>.
                     </li>
-                    <li><strong>SOPLang (soplangAgent):</strong> Executes SOPLang scripts, owns
-                        <code>soplang-tool</code>, and runs <code>SoplangBuilder.buildFromMarkdown</code> for document
-                        sync.
+                    <li><strong>SOPLang (soplangAgent):</strong> Executes SOPLang scripts, exposes explicit MCP tools
+                        such as <code>sync_markdown_documents</code> and <code>execute_workspace_build</code>, and runs document sync or the workspace build separately.
                     </li>
                     <li><strong>Shared workspace:</strong> Both containers see the same files; neither proxies to the
                         other.
@@ -210,8 +209,8 @@
             <div class="doc-section" id="soplang">
                 <h2>What is SOPLang</h2>
                 <p>SOPLang (Standard Operating Procedure Language) is the IDE’s automation/runtime layer. It runs in
-                    <strong>soplangAgent</strong> (own container) and is invoked via the <code>soplang-tool</code> MCP
-                    tool.</p>
+                    <strong>soplangAgent</strong> (own container) and is invoked via explicit MCP tools such as
+                    <code>sync_markdown_documents</code> and <code>execute_workspace_build</code>.</p>
                 <div class="subsection">
                     <h3>Role and execution</h3>
                     <p>SOPLang executes scripted flows, maintains a dependency graph of variables, and persists structured document data. It shares the workspace volume with Explorer and is called directly (not proxied) by the UI over MCP. Commands can orchestrate other agents and mutate variables that the UI re-hydrates.</p>
@@ -222,7 +221,7 @@
                 </div>
                 <div class="subsection">
                     <h3>What happens on build</h3>
-                    <p>During <code>buildFromMarkdown</code>, <code>parseDocsFromMarkdown</code> reads <code>achiles-ide-*</code> comments and SOPLang commands (including variable assignments), builds templates, clears and reapplies chapters/paragraphs/metadata, then <code>workspace.forceSave()</code> and <code>workspace.buildAll()</code> persist the document store. Variables and commands parsed from Markdown are stored with the document; subsequent SOPLang runs can update them, and hydration will reflect the latest values.</p>
+                    <p>During <code>syncMarkdownDocuments</code>, <code>parseDocsFromMarkdown</code> reads <code>achilles-ide-*</code> comments and SOPLang commands (including variable assignments), builds templates, clears and reapplies chapters/paragraphs/metadata, then <code>workspace.forceSave()</code> persists the document store. <code>executeWorkspaceBuild</code> runs <code>workspace.buildAll()</code> separately. Variables and commands parsed from Markdown are stored with the document; subsequent SOPLang runs can update them, and hydration will reflect the latest values.</p>
                     <p>Persisted variables and commands ground AI flows: prompts or templates can inject these values, workflows can mutate them between runs, and the dependency graph keeps state consistent across LLM calls. When AI-driven plugins or scripts run, they read the same graph and feed results back so the next step (human or AI) sees updated context.</p>
                    <br>
                     <p class="muted">Screenshots below show the variables panel: initial state with no variables, the list
@@ -253,15 +252,15 @@ agent "MyAgent" do
   action "do_something"
 end
 ```</code></pre>
-                <p>Blocks are preserved verbatim; execution happens via <code>soplang-tool</code> in <strong>soplangAgent</strong>.</p>
+                <p>Blocks are preserved verbatim; execution happens via explicit SOPLang MCP tools in <strong>soplangAgent</strong>.</p>
             </div>
 
             <div class="doc-section" id="soplang-comments">
                 <h3>Achilles comment markers</h3>
                 <p>HTML comments map Markdown to the document model and keep SOPLang commands attached to structure:</p>
-<pre><code>&lt;!--{"achiles-ide-document": {"id": "doc-1", "title": "My Doc"}}--&gt;
-&lt;!--{"achiles-ide-chapter": {"title": "Intro", "commands": "@set title \"Intro\""}}--&gt;
-&lt;!--{"achiles-ide-paragraph": {"title": "P1", "commands": "@media_image_123 attach id \"blob-id\""}}--&gt;</code></pre>
+<pre><code>&lt;!--{"achilles-ide-document": {"id": "doc-1", "title": "My Doc"}}--&gt;
+&lt;!--{"achilles-ide-chapter": {"title": "Intro", "commands": "@set title \"Intro\""}}--&gt;
+&lt;!--{"achilles-ide-paragraph": {"title": "P1", "commands": "@media_image_123 attach id \"blob-id\""}}--&gt;</code></pre>
                 <div class="subsection">
                     <p><strong>Document:</strong> ids/titles and doc-level metadata.</p>
                     <p><strong>Chapter:</strong> headings plus commands before a heading.</p>
@@ -278,7 +277,7 @@ end
                     <div class="subsection">
                         <p><strong>Variables:</strong> Stored with the document model; after execution, reload/hydrate to see updates in the Variables panel.</p>
                         <p><strong>Media commands:</strong> Store blob IDs (not URLs); the UI builds URLs at runtime.</p>
-                        <p><strong>Scopes:</strong> Commands can sit at document, chapter, or paragraph level via <code>achiles-ide-*</code> comments.</p>
+                        <p><strong>Scopes:</strong> Commands can sit at document, chapter, or paragraph level via <code>achilles-ide-*</code> comments.</p>
                     </div>
             </div>
 
@@ -294,17 +293,17 @@ end
 
             <div class="doc-section" id="soplang-build">
                 <h3>SOPLang Build (Markdown → Documents)</h3>
-                <p><code>SoplangBuilder.buildFromMarkdown</code> runs inside <strong>soplangAgent</strong> to sync
+                <p><code>SoplangBuilder.syncMarkdownDocuments</code> runs inside <strong>soplangAgent</strong> to sync
                     Markdown into the document store.</p>
                 <div class="subsection">
                     <p><strong>Pick workspace root:</strong> <code>pickRoot()</code> checks <code>SOPLANG_WORKSPACE_ROOT</code> or parent folders.</p>
                     <p><strong>Discover Markdown:</strong> <code>walkMarkdown(root)</code> finds <code>.md</code> files, skipping build/dev dirs.</p>
-                    <p><strong>Parse structure:</strong> <code>parseDocsFromMarkdown</code> reads <code>achiles-ide-document/chapter/paragraph</code> comments and SOPLang commands into templates; commands are also parsed into the SOPLang variable graph.</p>
+                    <p><strong>Parse structure:</strong> <code>parseDocsFromMarkdown</code> reads <code>achilles-ide-document/chapter/paragraph</code> comments and SOPLang commands into templates; commands are also parsed into the SOPLang variable graph.</p>
                     <p><strong>Apply templates:</strong> Existing docs are cleared/synced; metadata, chapters, paragraphs, references, commands, and variables are applied, updating the graph definitions.</p>
-                    <p><strong>Persist:</strong> <code>workspace.forceSave()</code> then <code>workspace.buildAll()</code> write data to storage.</p>
+                    <p><strong>Persist:</strong> <code>workspace.forceSave()</code> writes synchronized document data to storage. <code>executeWorkspaceBuild</code> triggers <code>workspace.buildAll()</code> separately.</p>
                 </div>
-                <p>Invoke via MCP: <code>methodName: "buildFromMarkdown"</code>, <code>pluginName:
-                    "SoplangBuilder"</code>. Logs: <code>SOPLangBuilder/last-tool.log</code>.</p>
+                <p>Invoke via MCP: <code>methodName: "syncMarkdownDocuments"</code>, <code>pluginName:
+                    "SoplangBuilder"</code> for sync, and <code>methodName: "executeWorkspaceBuild"</code> for the full build step. Logs: <code>SOPLangBuilder/last-tool.log</code>.</p>
             </div>
 
             <div class="doc-section" id="troubleshooting">
@@ -312,7 +311,7 @@ end
                     <div class="subsection">
                         <p><strong>MCP errors:</strong> “Path outside allowed roots” means <code>ASSISTOS_FS_ROOT</code>/<code>MCP_FS_ROOT</code> is wrong or the path is outside the first allowed root.</p>
                         <p><strong>SOPLang build fails:</strong> Check <code>SOPLangBuilder/last-tool.log</code> and ensure <code>soplangAgent</code> is enabled and running.</p>
-                        <p><strong>No Markdown picked up:</strong> Make sure <code>achiles-ide-*</code> comments exist and files aren’t inside skipped build dirs.</p>
+                        <p><strong>No Markdown picked up:</strong> Make sure <code>achilles-ide-*</code> comments exist and files aren’t inside skipped build dirs.</p>
                         <p><strong>Variables not updated:</strong> After executing SOPLang blocks, reload to re-hydrate document state into the UI.</p>
                     </div>
             </div>

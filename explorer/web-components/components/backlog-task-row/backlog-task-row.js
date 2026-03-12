@@ -76,17 +76,6 @@ export class BacklogTaskRow {
                 scheduleSave();
             });
         }
-        if (this.orderControls && !this.orderControls.dataset.boundOrder) {
-            const up = this.orderControls.querySelector('[data-local-action="moveUp"]');
-            const down = this.orderControls.querySelector('[data-local-action="moveDown"]');
-            if (up) {
-                up.addEventListener('click', () => this.moveRelative(-1));
-            }
-            if (down) {
-                down.addEventListener('click', () => this.moveRelative(1));
-            }
-            this.orderControls.dataset.boundOrder = 'true';
-        }
     }
 
     applyState() {
@@ -326,6 +315,14 @@ export class BacklogTaskRow {
     deleteTask() {
         const task = this.state.task || {};
         this.getParentPresenter()?.deleteTask?.({ id: task.id, sourcePath: task.sourcePath });
+    }
+
+    moveUp() {
+        this.moveRelative(-1);
+    }
+
+    moveDown() {
+        this.moveRelative(1);
     }
 
     moveRelative(direction) {

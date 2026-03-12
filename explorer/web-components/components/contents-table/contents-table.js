@@ -33,19 +33,10 @@ export class ContentsTable{
                 const chapterItem = document.createElement('a');
                 chapterItem.className = 'toc-item toc-chapter';
                 chapterItem.href = `#chapter-${chapter.id}`;
+                chapterItem.setAttribute('data-local-action', `openChapter ${chapter.id}`);
                 const rawTitle = assistOS.UI.unsanitize(chapter.title);
                 const displayTitle = rawTitle.replace(/\s*\{#[^\}]+\}\s*$/, '');
                 chapterItem.textContent = `Chapter ${index + 1}: ${displayTitle}`;
-                chapterItem.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    const target = document.getElementById(`chapter-${chapter.id}`);
-                    if (target) {
-                        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                        history.replaceState(null, '', `#chapter-${chapter.id}`);
-                    } else {
-                        history.replaceState(null, '', `#chapter-${chapter.id}`);
-                    }
-                });
                 tocContent.appendChild(chapterItem);
             });
         } else {
@@ -58,6 +49,15 @@ export class ContentsTable{
     async deleteTable(){
         await this.saveTocState();
         this.element.remove();
+    }
+    openChapter(_target, chapterId) {
+        if (!chapterId) return;
+        const anchor = `#chapter-${chapterId}`;
+        const target = document.getElementById(`chapter-${chapterId}`);
+        if (target) {
+            target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        history.replaceState(null, '', anchor);
     }
     async toggleTocVisibility(arrow){
         const tocContent = document.querySelector('.toc-content');

@@ -128,9 +128,7 @@ export function renderBreadcrumbs(fileExp) {
 
     const rootButton = document.createElement('button');
     rootButton.textContent = '/';
-    rootButton.addEventListener('click', () => {
-        fileExp.loadDirectory('/');
-    });
+    rootButton.setAttribute('data-local-action', 'openBreadcrumb /');
     fragment.appendChild(rootButton);
 
     if (!fileExp.state.path || fileExp.state.path === '/') {
@@ -144,10 +142,7 @@ export function renderBreadcrumbs(fileExp) {
         current += `/${segment}`;
         const btn = document.createElement('button');
         btn.textContent = `${segment} /`;
-        const path = current;
-        btn.addEventListener('click', () => {
-            fileExp.loadDirectory(path);
-        });
+        btn.setAttribute('data-local-action', `openBreadcrumb ${current}`);
         fragment.appendChild(btn);
     });
 

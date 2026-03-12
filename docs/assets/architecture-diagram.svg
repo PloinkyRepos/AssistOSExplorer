@@ -64,10 +64,10 @@
   <text class="label" x="730" y="316" text-anchor="middle">soplangAgent</text>
   <text class="muted" x="730" y="338" text-anchor="middle">
     <tspan x="730" dy="0">Container: node:20-alpine</tspan>
-    <tspan x="730" dy="14">soplang-tool (SoplangBuilder)</tspan>
+    <tspan x="730" dy="14">Explicit SOPLang MCP tools</tspan>
   </text>
 
-  <text class="muted" x="1030" y="236" text-anchor="middle">MCP → soplang-tool</text>
+  <text class="muted" x="1030" y="236" text-anchor="middle">MCP → soplangAgent tools</text>
 
   <line class="arrow" x1="830" y1="270" x2="1030" y2="190"></line>
 </svg>

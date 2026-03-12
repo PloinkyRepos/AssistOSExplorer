@@ -145,6 +145,21 @@ export function createRuntimePluginLoader({
         return loaded;
     };
 
+    const ensureComponentRegistered = async (componentName, runtimePlugins) => {
+        if (!isNonEmptyString(componentName)) {
+            return null;
+        }
+
+        const plugins = runtimePlugins || cachedNormalizedPlugins || (await fetchRuntimePlugins()).normalized;
+        const scheduled = scheduleComponents(plugins);
+        const meta = Array.from(scheduled.values()).find((entry) => entry.componentName === componentName.trim());
+        if (!meta) {
+            return null;
+        }
+
+        return componentRegistry.loadComponent(meta);
+    };
+
     const mergeIntoAssistOS = (assistOS, runtimePlugins) => {
         mergeRuntimePluginsIntoAssistOS(assistOS, runtimePlugins);
     };
@@ -152,6 +167,7 @@ export function createRuntimePluginLoader({
     return {
         fetchRuntimePlugins,
         loadComponents,
+        ensureComponentRegistered,
         mergeIntoAssistOS
     };
 }

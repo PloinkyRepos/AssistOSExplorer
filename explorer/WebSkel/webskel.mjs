@@ -87,6 +87,12 @@ class L {
     }
     return i;
   }
+  async waitForDescendantRenders(e) {
+    await Promise.resolve();
+    const t = [...e.querySelectorAll("[data-presenter]")].filter((n) => n !== e);
+    const o = t.map((n) => n.renderCompletePromise).filter((n) => n && typeof n.then == "function");
+    o.length && await Promise.allSettled(o);
+  }
 }
 function $(r) {
   if (!r) {
@@ -762,7 +768,16 @@ class h {
         constructor() {
           super(), this.variables = {}, this.componentName = e.name, this.props = {}, this.presenterReadyPromise = new Promise((t) => {
             this.onPresenterReady = t;
-          }), this.isPresenterReady = !1;
+          }), this.isPresenterReady = !1, this.renderCompletePromise = null, this.onRenderComplete = null, this.resetRenderCompletePromise();
+        }
+        resetRenderCompletePromise() {
+          typeof this.onRenderComplete == "function" && (this.onRenderComplete(), this.onRenderComplete = null);
+          this.renderCompletePromise = new Promise((t) => {
+            this.onRenderComplete = t;
+          });
+        }
+        resolveRenderComplete() {
+          typeof this.onRenderComplete == "function" && (this.onRenderComplete(), this.onRenderComplete = null);
         }
         invalidateProxy() {
           this.invalidateFn && this.invalidateFn();
@@ -779,13 +794,14 @@ class h {
               const l = (c) => {
                 n.innerHTML = `Error rendering component: ${n.componentName}
 : ` + c + c.stack.split(`
-`)[1], console.error(c), h.instance.hideLoading();
+`)[1], console.error(c), n.resolveRenderComplete(), h.instance.hideLoading();
               }, d = async () => {
                 try {
+                  n.resetRenderCompletePromise();
                   await n.webSkelPresenter.beforeRender();
                   for (let c in n.variables)
                     typeof n.webSkelPresenter[c] < "u" && (n.variables[c] = n.webSkelPresenter[c]);
-                  n.refresh(), await n.webSkelPresenter.afterRender?.();
+                  n.refresh(), await h.instance.ResourceManager.waitForDescendantRenders(n), await n.webSkelPresenter.afterRender?.(), n.resolveRenderComplete();
                 } catch (c) {
                   l(c);
                 }
@@ -804,7 +820,7 @@ class h {
             });
             n.invalidateFn = s, n.webSkelPresenter = h.instance.ResourceManager.initialisePresenter(o, n, s, this.props);
           } else
-            n.refresh();
+            n.refresh(), n.resolveRenderComplete();
         }
         async disconnectedCallback() {
           this._webSkelProps?.revoke(), this.webSkelPresenter && this.webSkelPresenter.afterUnload && await this.webSkelPresenter.afterUnload(), this.resources && this.resources.css && await h.instance.ResourceManager.unloadStyleSheets(this.componentName);

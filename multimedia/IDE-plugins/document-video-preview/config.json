@@ -1,6 +1,6 @@
 {
     "component": "document-video-preview",
-    "location": [],
+    "location": ["document"],
     "tooltip": "Video Preview",
     "icon": "/multimedia/IDE-plugins/assets/icons/preview.svg",
     "presenter": "DocumentVideoPreview",

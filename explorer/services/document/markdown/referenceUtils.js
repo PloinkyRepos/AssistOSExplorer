@@ -3,7 +3,7 @@ import { normalizeLineEndings } from './metadataUtils.js';
 export const TABLE_OF_CONTENTS_HEADING_RE = /^#{1,6}\s+Table of Contents$/i;
 export const REFERENCES_HEADING_RE = /^#{1,6}\s+References$/i;
 
-const REFERENCES_MARKER_COMMENT_RE = /<!--\s*<achiles-ide-references>\s*-->/i;
+const REFERENCES_MARKER_COMMENT_RE = /<!--\s*<achilles-ide-references>\s*-->/i;
 const REFERENCES_ANCHOR_LINE_RE = /^<a\s+id="references-section"><\/a>\s*$/i;
 const MARKDOWN_HEADING_RE = /^#{1,6}\s+/;
 const NUMBERED_LIST_LINE_RE = /^\d+\.\s+/;

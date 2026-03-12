@@ -343,40 +343,6 @@ export class FileSearchModal {
             replaceInFilesWith.dataset.bound = 'true';
         }
 
-        const replaceSelectedButton = this.element.querySelector('#replaceSelectedButton');
-        if (replaceSelectedButton && !replaceSelectedButton.dataset.bound) {
-            replaceSelectedButton.addEventListener('click', () => this.performReplace({ selectedOnly: true }));
-            replaceSelectedButton.dataset.bound = 'true';
-        }
-
-        const replaceAllButton = this.element.querySelector('#replaceAllButton');
-        if (replaceAllButton && !replaceAllButton.dataset.bound) {
-            replaceAllButton.addEventListener('click', () => this.performReplace({ selectedOnly: false }));
-            replaceAllButton.dataset.bound = 'true';
-        }
-
-        const closeButton = this.element.querySelector('#searchModalClose');
-        if (closeButton && !closeButton.dataset.bound) {
-            closeButton.addEventListener('click', () => this.closeModal());
-            closeButton.dataset.bound = 'true';
-        }
-
-        const modeSwitch = this.element.querySelector('.search-mode-switch');
-        if (modeSwitch && !modeSwitch.dataset.bound) {
-            modeSwitch.addEventListener('click', (event) => {
-                const targetEl = this.getEventTargetElement(event);
-                if (!targetEl) return;
-                const button = targetEl.closest('.mode-button');
-                if (!button?.dataset?.mode) return;
-                this.setMode(button.dataset.mode);
-                this.syncUIFromState();
-                if (this.state.mode === 'replace') {
-                    this.runSearchInFiles();
-                }
-            });
-            modeSwitch.dataset.bound = 'true';
-        }
-
         const byNameResults = this.element.querySelector('#searchByNameResults');
         if (byNameResults && !byNameResults.dataset.boundClick) {
             byNameResults.addEventListener('click', (event) => {
@@ -474,6 +440,23 @@ export class FileSearchModal {
             textOverlay.classList.toggle('replace-mode', nextMode === 'replace');
             textOverlay.setAttribute('aria-hidden', isTextMode ? 'false' : 'true');
         }
+    }
+
+    setSearchMode(_target, mode) {
+        if (!mode) return;
+        this.setMode(mode);
+        this.syncUIFromState();
+        if (this.state.mode === 'replace') {
+            this.runSearchInFiles();
+        }
+    }
+
+    replaceSelected() {
+        this.performReplace({ selectedOnly: true });
+    }
+
+    replaceAll() {
+        this.performReplace({ selectedOnly: false });
     }
 
     updateBasePathSuggestions() {

@@ -72,9 +72,9 @@
                 <div class="doc-section" id="data-model">
                     <h2>The Document Data Model</h2>
                     <p>When a Markdown file is loaded, it is transformed into a rich, in-memory representation. This process, known as <strong>hydration</strong>, is handled by the <code>DocumentStore</code> service. The <code>hydrateDocumentModel</code> function enriches the document with metadata, comments, references, and other structured data, creating a hierarchical model that the UI components can interact with.</p>
-                    <p><strong>Example:</strong> A file with <code>&lt;!--{"achiles-ide-document": {"id": "guide", "title": "My Guide"}}--&gt;</code> and chapter/paragraph comments is hydrated into a document with <code>docId = "guide"</code>, chapters built from comments or headings, and paragraph records carrying <code>text</code> and <code>commands</code>.</p>
+                    <p><strong>Example:</strong> A file with <code>&lt;!--{"achilles-ide-document": {"id": "guide", "title": "My Guide"}}--&gt;</code> and chapter/paragraph comments is hydrated into a document with <code>docId = "guide"</code>, chapters built from comments or headings, and paragraph records carrying <code>text</code> and <code>commands</code>.</p>
                     <h3>Full document example</h3>
-<pre><code>&lt;!-- {"achiles-ide-document":{"id":"L2RvY3VtZW50cy9kb2MubWQ=","title":"doc","infoText":"this is example document","comments":{"toc":{"collapsed":false},"tor":{"collapsed":false,"references":[{"id":"1765191283759","type":"journal","authors":"Smith, J. R., & Doe, A. B.","year":2024,"title":"The Evolving Role of Machine Learning in Predictive Modeling.","pages":"112-135","url":"International Journal of Technological Research,"},{"id":"1765191353867","type":"book","authors":"Johnson, K. T.","year":2022,"title":"Principles of Modern Data Structures and Algorithms.","publisher":"Technical Press Inc.","location":"New York, NY."}]}},"version":1,"updatedAt":"2025-12-08T11:02:37.023Z"}} --&gt;
+<pre><code>&lt;!-- {"achilles-ide-document":{"id":"L2RvY3VtZW50cy9kb2MubWQ=","title":"doc","infoText":"this is example document","comments":{"toc":{"collapsed":false},"tor":{"collapsed":false,"references":[{"id":"1765191283759","type":"journal","authors":"Smith, J. R., & Doe, A. B.","year":2024,"title":"The Evolving Role of Machine Learning in Predictive Modeling.","pages":"112-135","url":"International Journal of Technological Research,"},{"id":"1765191353867","type":"book","authors":"Johnson, K. T.","year":2022,"title":"Principles of Modern Data Structures and Algorithms.","publisher":"Technical Press Inc.","location":"New York, NY."}]}},"version":1,"updatedAt":"2025-12-08T11:02:37.023Z"}} --&gt;
 # Demo Document
 
 This is a demonstration of a structured Markdown document in the Achilles IDE.
@@ -83,27 +83,27 @@ This is a demonstration of a structured Markdown document in the Achilles IDE.
 - [Chapter 1: Introduction](#chapter-chapter-7ee41719-ab70-4cf2-9286-2a65534c9512)
 - [Chapter 2: Advanced Features](#chapter-chapter-2)
 
-&lt;!-- {"achiles-ide-chapter":{"id":"chapter-7ee41719-ab70-4cf2-9286-2a65534c9512","title":"Introduction","commands":"@media_image_dcfb80 attach id 512e672bd91e9861eb0f21e2dedd943d6257c123afde52c3 name trevi.jpg width 669 height 446 size 92987\n","comments":{"status":"ok","plugin":"edit-variables","pluginLastOpened":"edit-variables","collapsed":false},"anchorId":"chapter-chapter-7ee41719-ab70-4cf2-9286-2a65534c9512"}} --&gt;
+&lt;!-- {"achilles-ide-chapter":{"id":"chapter-7ee41719-ab70-4cf2-9286-2a65534c9512","title":"Introduction","commands":"@media_image_dcfb80 attach id 512e672bd91e9861eb0f21e2dedd943d6257c123afde52c3 name trevi.jpg width 669 height 446 size 92987\n","comments":{"status":"ok","plugin":"edit-variables","pluginLastOpened":"edit-variables","collapsed":false},"anchorId":"chapter-chapter-7ee41719-ab70-4cf2-9286-2a65534c9512"}} --&gt;
 &lt;a id="chapter-chapter-7ee41719-ab70-4cf2-9286-2a65534c9512"&gt;&lt;/a&gt;
 ## Introduction
-&lt;!-- {"achiles-ide-paragraph":{"id":"paragraph-e696c9a7-8db8-4722-a693-1ba44ea64ebd","type":"markdown","commands":"@media_image_50a8ed attach id cea79d6a5e6b48dd4130f85d04c4476fda6655514bba082e name trevi.jpg width 669 height 446 size 92987\n","comments":{"status":"ok","plugin":"edit-variables","pluginLastOpened":"edit-variables"},"title":"Paragraph 1"}} --&gt;
+&lt;!-- {"achilles-ide-paragraph":{"id":"paragraph-e696c9a7-8db8-4722-a693-1ba44ea64ebd","type":"markdown","commands":"@media_image_50a8ed attach id cea79d6a5e6b48dd4130f85d04c4476fda6655514bba082e name trevi.jpg width 669 height 446 size 92987\n","comments":{"status":"ok","plugin":"edit-variables","pluginLastOpened":"edit-variables"},"title":"Paragraph 1"}} --&gt;
 This is the first paragraph of the introduction. It explains the purpose of this document. The structured nature of this file allows for context-aware plugins and actions.
 
-&lt;!-- {"achiles-ide-paragraph":{"id":"paragraph-2","type":"markdown","commands":"@test_var := test_value\n","comments":{"status":"ok","plugin":"edit-variables","pluginLastOpened":"edit-variables"},"title":"Paragraph 2"}} --&gt;
+&lt;!-- {"achilles-ide-paragraph":{"id":"paragraph-2","type":"markdown","commands":"@test_var := test_value\n","comments":{"status":"ok","plugin":"edit-variables","pluginLastOpened":"edit-variables"},"title":"Paragraph 2"}} --&gt;
 This second paragraph can have its own set of comments, references, and embedded commands.
 
 
-&lt;!-- {"achiles-ide-chapter":{"id":"chapter-2","title":"Advanced Features","comments":{"collapsed":true},"anchorId":"references-section"}} --&gt;
+&lt;!-- {"achilles-ide-chapter":{"id":"chapter-2","title":"Advanced Features","comments":{"collapsed":true},"anchorId":"references-section"}} --&gt;
 &lt;a id="references-section"&gt;&lt;/a&gt;
 ## Advanced Features
-&lt;!-- {"achiles-ide-paragraph":{"id":"paragraph-3","type":"markdown","title":"SOPLang Commands"}} --&gt;
+&lt;!-- {"achilles-ide-paragraph":{"id":"paragraph-3","type":"markdown","title":"SOPLang Commands"}} --&gt;
 This paragraph demonstrates an embedded SOPLang command for media. While it appears as a command here, the IDE will render it as a rich media element.
 
-&lt;!-- {"achiles-ide-paragraph":{"id":"paragraph-4","type":"markdown","comments":{"status":"ok","plugin":"edit-variables","pluginLastOpened":"edit-variables"},"title":"Another Paragraph"}} --&gt;
+&lt;!-- {"achilles-ide-paragraph":{"id":"paragraph-4","type":"markdown","comments":{"status":"ok","plugin":"edit-variables","pluginLastOpened":"edit-variables"},"title":"Another Paragraph"}} --&gt;
 This paragraph contains a command that will be parsed by the system.
 
 
-&lt;!-- &lt;achiles-ide-references&gt; --&gt;
+&lt;!-- &lt;achilles-ide-references&gt; --&gt;
 &lt;a id="references-section"&gt;&lt;/a&gt;
 ## References
 1. Smith, J. R., & Doe, A. B. (2024). The Evolving Role of Machine Learning in Predictive Modeling.. International Journal of Technological Research,
@@ -143,7 +143,7 @@ This paragraph contains a command that will be parsed by the system.
                     <h2>Document Info</h2>
                     <p>Each document contains a set of metadata that provides essential information about it. This includes the document's <strong>Title</strong> and a summary or abstract in the <strong>Info Text</strong> field. This data is managed within the document's metadata and can be edited through the UI to provide context for the document's content.</p>
                     <p><strong>Example (metadata block):</strong></p>
-<pre><code>&lt;!-- {"achiles-ide-document":{"id":"L2RvY3VtZW50cy9kb2MubWQ=","title":"doc","infoText":"this is example document", ... }} --&gt;</code></pre>
+<pre><code>&lt;!-- {"achilles-ide-document":{"id":"L2RvY3VtZW50cy9kb2MubWQ=","title":"doc","infoText":"this is example document", ... }} --&gt;</code></pre>
                     <p><strong>Example (UI):</strong> In the info pane, set Title to "Release Notes" and Info Text to "Changelog for v1.2"; these values are saved back into the document metadata.</p>
                 </div>
 

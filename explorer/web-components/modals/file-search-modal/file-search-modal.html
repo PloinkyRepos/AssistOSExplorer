@@ -10,8 +10,8 @@
     </div>
     <div class="search-modal-body">
         <div class="search-mode-switch" role="tablist" aria-label="Search mode">
-            <button type="button" class="mode-button" data-mode="name" role="tab" aria-selected="false">Find file</button>
-            <button type="button" class="mode-button" data-mode="replace" role="tab" aria-selected="false">Find/Replace in files</button>
+            <button type="button" class="mode-button" data-mode="name" data-local-action="setSearchMode name" role="tab" aria-selected="false">Find file</button>
+            <button type="button" class="mode-button" data-mode="replace" data-local-action="setSearchMode replace" role="tab" aria-selected="false">Find/Replace in files</button>
         </div>
         <div class="search-overlay" id="searchByNameOverlay" aria-hidden="true">
             <div class="search-overlay-card">
@@ -81,8 +81,8 @@
                         <datalist id="searchInFilesBasePathList"></datalist>
                     </div>
                     <div class="search-row search-row-actions replace-only">
-                        <button type="button" class="general-button" id="replaceSelectedButton">Replace Selected</button>
-                        <button type="button" class="general-button secondary" id="replaceAllButton">Replace All</button>
+                        <button type="button" class="general-button" id="replaceSelectedButton" data-local-action="replaceSelected">Replace Selected</button>
+                        <button type="button" class="general-button secondary" id="replaceAllButton" data-local-action="replaceAll">Replace All</button>
                         <div class="replace-status" id="replaceInFilesStatus"></div>
                     </div>
                     <div class="search-status" id="searchInFilesStatus"></div>

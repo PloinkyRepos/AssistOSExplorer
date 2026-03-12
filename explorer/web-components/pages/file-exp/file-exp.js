@@ -507,24 +507,30 @@ export class FileExp {
             button.id = 'backlogViewToggle';
             button.type = 'button';
             button.className = 'secondary';
-            button.addEventListener('click', async () => {
-                const transition = getNextBacklogViewToggle(this.state);
-                if (transition.blocked) {
-                    this.showStatus('Save or cancel changes before switching backlog view.', true);
-                    return;
-                }
-                if (!transition.changed) {
-                    return;
-                }
-                this.setPreviewState(transition.patch, { invalidate: false });
-                if (transition.shouldReloadSelection && this.state.selectedPath) {
-                    await this.openFile(this.state.selectedPath);
-                }
-                this.invalidate();
-            });
+            button.setAttribute('data-local-action', 'toggleBacklogView');
             headerExtras.appendChild(button);
         }
         button.textContent = showBacklogPanel ? 'View as text' : 'View as backlog';
+    }
+
+    async toggleBacklogView() {
+        const transition = getNextBacklogViewToggle(this.state);
+        if (transition.blocked) {
+            this.showStatus('Save or cancel changes before switching backlog view.', true);
+            return;
+        }
+        if (!transition.changed) {
+            return;
+        }
+        this.setPreviewState(transition.patch, { invalidate: false });
+        if (transition.shouldReloadSelection && this.state.selectedPath) {
+            await this.openFile(this.state.selectedPath);
+        }
+        this.invalidate();
+    }
+
+    async openBreadcrumb(_target, path) {
+        await this.loadDirectory(path || '/');
     }
 
     setPreviewViewMode(_target, mode) {

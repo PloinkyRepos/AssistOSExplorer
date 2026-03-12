@@ -46,12 +46,12 @@
                 </div>
                 <div class="doc-section" id="overview">
                     <h1>SOPLang Build (Markdown → Documents)</h1>
-                    <p>Use <code>SoplangBuilder.buildFromMarkdown</code> (served by <code>soplangAgent</code>) to scan Markdown files and synchronize structured documents into the SOPLang workspace. Explorer remains the UI; the build pipeline itself runs in the separate soplangAgent container.</p>
+                    <p>Use <code>SoplangBuilder.syncMarkdownDocuments</code> (served by <code>soplangAgent</code>) to scan Markdown files and synchronize structured documents into the SOPLang workspace. Run <code>SoplangBuilder.executeWorkspaceBuild</code> separately when you want the full SOPLang pipeline. Explorer remains the UI; the heavy build pipeline itself runs in the separate soplangAgent container.</p>
                 </div>
 
                 <div class="doc-section" id="build-from-markdown">
                     <h2>Building from Markdown</h2>
-                    <p>The core of the build process for documents originates from Markdown files. The <code>SoplangBuilder</code> plugin, specifically its <code>buildFromMarkdown</code> method, is responsible for this operation.</p>
+                    <p>The core document sync process originates from Markdown files. The <code>SoplangBuilder</code> plugin uses <code>syncMarkdownDocuments</code> for ingestion and <code>executeWorkspaceBuild</code> for the separate execution phase.</p>
                     
                     <h3>Workflow Steps:</h3>
                     <ol>
@@ -64,15 +64,15 @@
                         <li>
                             <strong>Structured Document Parsing:</strong> For each discovered Markdown file, <code>parseDocsFromMarkdown(content, filePath)</code> extracts structured metadata. This function looks for special HTML-like comments embedded directly within the Markdown content. These comments define the document's structure, including documents, chapters, and paragraphs, along with their associated metadata and SOPLang commands.
                             <h4>Example Markdown Comments:</h4>
-                            <pre><code>&lt;!--{"achiles-ide-document": {"id": "my-document", "title": "My Awesome Document", "commands": "doc-level-command"}}--&gt;
+                            <pre><code>&lt;!--{"achilles-ide-document": {"id": "my-document", "title": "My Awesome Document", "commands": "doc-level-command"}}--&gt;
 # My Document Title
 
-&lt;!--{"achiles-ide-chapter": {"title": "Introduction", "commands": "chapter-level-command"}}--&gt;
+&lt;!--{"achilles-ide-chapter": {"title": "Introduction", "commands": "chapter-level-command"}}--&gt;
 ## Introduction
 
 This is an introductory paragraph.
 
-&lt;!--{"achiles-ide-paragraph": {"text": "This is a special paragraph.", "commands": "@media_image_123 attach id \"some-blob-id\" name \"my-image.png\""}}--&gt;
+&lt;!--{"achilles-ide-paragraph": {"text": "This is a special paragraph.", "commands": "@media_image_123 attach id \"some-blob-id\" name \"my-image.png\""}}--&gt;
 This paragraph might have embedded commands.
 </code></pre>
                         </li>
@@ -87,13 +87,13 @@ This paragraph might have embedded commands.
 
                 <div class="doc-section" id="soplang-agent-interaction">
                     <h2>SOPLang Agent Interaction</h2>
-                    <p>The <code>buildFromMarkdown</code> function is invoked through the <code>soplangAgent</code> (repo <code>SOPLangBuilder</code>) using its MCP tool <code>soplang-tool</code> defined in <code>soplangAgent/mcp-config.json</code>. Payload fields: <code>pluginName</code> (string), <code>methodName</code> (string), <code>params</code> (array, optional).</p>
+                    <p>The <code>syncMarkdownDocuments</code> function is invoked through the <code>soplangAgent</code> (repo <code>SOPLangBuilder</code>) using its MCP tool <code>sync_markdown_documents</code> defined in <code>soplangAgent/mcp-config.json</code>. The execution phase is exposed separately through <code>execute_workspace_build</code>.</p>
                     <p>Setup steps from workspace root:</p>
                     <ol>
                         <li><code>p-cli enable repo SOPLangBuilder</code></li>
                         <li><code>p-cli enable agent SOPLangBuilder/soplangAgent global</code></li>
                         <li>Start the agent per <a href="https://ploinky.com/cli-reference.html" target="_blank" rel="noopener noreferrer">Ploinky</a> CLI (e.g., <code>p-cli start soplangAgent</code> if not already running).</li>
-                        <li>Call MCP tool <code>soplang-tool</code> with <code>pluginName: "SoplangBuilder"</code> and <code>methodName: "buildFromMarkdown"</code> (add <code>params</code> array if needed). Results and plugin console output are written to <code>SOPLangBuilder/last-tool.log</code>; persistence/log/audit paths are set in <code>soplangAgent/soplang-tool.sh</code>.</li>
+                        <li>Call MCP tool <code>sync_markdown_documents</code> for document sync. Call <code>execute_workspace_build</code> when you want the full SOPLang execution step. Results and plugin console output are written to <code>SOPLangBuilder/last-tool.log</code>; persistence/log/audit paths are set in <code>soplangAgent/soplang-tool.sh</code>.</li>
                     </ol>
                 </div>
             </div>

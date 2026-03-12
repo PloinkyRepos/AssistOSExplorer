@@ -60,9 +60,9 @@ end
                     <div class="doc-section" id="achilles-comments">
                         <h2>Achilles comment blocks</h2>
                         <p>The build pipeline and document hydrator read special HTML comments embedded in Markdown to map content to the document model. Common markers:</p>
-<pre><code>&lt;!--{"achiles-ide-document": {"id": "doc-1", "title": "My Doc"}}--&gt;
-&lt;!--{"achiles-ide-chapter": {"title": "Intro", "commands": "@set title \"Intro\""}}--&gt;
-&lt;!--{"achiles-ide-paragraph": {"title": "P1", "commands": "@media_image_123 attach id \"blob-id\""}}--&gt;</code></pre>
+<pre><code>&lt;!--{"achilles-ide-document": {"id": "doc-1", "title": "My Doc"}}--&gt;
+&lt;!--{"achilles-ide-chapter": {"title": "Intro", "commands": "@set title \"Intro\""}}--&gt;
+&lt;!--{"achilles-ide-paragraph": {"title": "P1", "commands": "@media_image_123 attach id \"blob-id\""}}--&gt;</code></pre>
                         <ul>
                             <li><strong>Document</strong> comments set ids/titles and high-level metadata.</li>
                             <li><strong>Chapter</strong> comments set headings and commands before a heading.</li>
@@ -99,7 +99,7 @@ end
                         <p>SOPLang is part of the full content flow:</p>
                         <ul>
                             <li><strong>documents.html</strong> explains how the hydrator turns Markdown + comments into chapters/paragraphs.</li>
-                            <li>The <strong>SOPLang Build guide</strong> covers the <code>buildFromMarkdown</code> pipeline that scans for <code>achiles-ide-*</code> comments and persists structured data.</li>
+                            <li>The <strong>SOPLang Build guide</strong> covers the <code>syncMarkdownDocuments</code> and <code>executeWorkspaceBuild</code> split for scanning <code>achilles-ide-*</code> comments and running the workspace build separately.</li>
                             <li>During hydration, SOPLang commands live in the <code>commands</code> fields; plugins and the SOPLang agent read/write them to keep the Markdown authoritative.</li>
                         </ul>
                     </div>

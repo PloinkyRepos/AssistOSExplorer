@@ -48,8 +48,6 @@ export class FFMpegImageToVideo {
         this.renderAttachments("audio");
         this.renderAttachments("video");
 
-        this.element.querySelector('[data-local-action="saveCommand"]').addEventListener("click", this.saveCommand.bind(this));
-
         this.durationInput = this.element.querySelector('[data-field="duration"]');
         this.fpsInput = this.element.querySelector('[data-field="fps"]');
         this.widthInput = this.element.querySelector('[data-field="width"]');

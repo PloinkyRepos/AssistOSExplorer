@@ -36,6 +36,8 @@ const DEFAULT_STYLE_PREFERENCES = {
     "infoText-font-size": "medium"
 };
 
+const DEFAULT_IMAGE_SCENE_DURATION = 3;
+
 const DOCUMENT_TYPES = {
     DOCUMENT: 'document',
     SNAPSHOT: 'snapshot'
@@ -59,6 +61,52 @@ const findDocumentByChapterId = (chapterId) => {
 const getDocumentModel = async (documentIdOrPath) => {
     const path = documentStore.resolvePath(documentIdOrPath);
     return documentStore.get(path);
+};
+
+const getChapterSceneAttachment = (chapter, type, paragraphIndex) => {
+    const attachments = chapter?.mediaAttachments?.[type];
+    if (!Array.isArray(attachments) || paragraphIndex < 0) {
+        return null;
+    }
+    return attachments[paragraphIndex] ?? null;
+};
+
+const getSceneCommands = (chapter, paragraph, paragraphIndex) => {
+    const commands = paragraph?.commands ? { ...paragraph.commands } : {};
+    if (!commands.video) {
+        const chapterVideo = getChapterSceneAttachment(chapter, 'video', paragraphIndex);
+        if (chapterVideo) {
+            commands.video = chapterVideo;
+        }
+    }
+    if (!commands.image) {
+        const chapterImage = getChapterSceneAttachment(chapter, 'image', paragraphIndex);
+        if (chapterImage) {
+            commands.image = chapterImage;
+        }
+    }
+    return commands;
+};
+
+const getSceneDuration = (commands = {}) => {
+    if (commands.video) {
+        const videoDuration = Number(commands.video.end) - Number(commands.video.start);
+        const audioDuration = Number(commands.audio?.duration) || 0;
+        return Math.max(Number.isFinite(videoDuration) ? videoDuration : 0, audioDuration);
+    }
+    if (commands.audio) {
+        return Number(commands.audio.duration) || 0;
+    }
+    if (commands.silence) {
+        return Number(commands.silence.duration) || 0;
+    }
+    if (commands.image) {
+        const imageDuration = Number(commands.image.duration);
+        return Number.isFinite(imageDuration) && imageDuration > 0
+            ? imageDuration
+            : DEFAULT_IMAGE_SCENE_DURATION;
+    }
+    return 0;
 };
 
 const persistDocument = async (documentIdOrPath) => {
@@ -609,6 +657,16 @@ const documentModule = {
     },
     async getStylePreferences() {
         return clone(DEFAULT_STYLE_PREFERENCES);
+    },
+    async estimateDocumentVideoLength(documentIdOrPath) {
+        const document = await getDocumentModel(documentIdOrPath);
+        let duration = 0;
+        for (const chapter of document.chapters || []) {
+            for (const [paragraphIndex, paragraph] of (chapter.paragraphs || []).entries()) {
+                duration += getSceneDuration(getSceneCommands(chapter, paragraph, paragraphIndex));
+            }
+        }
+        return duration;
     }
 };
 

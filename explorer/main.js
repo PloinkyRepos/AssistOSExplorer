@@ -43,6 +43,34 @@ async function start() {
     assistOS.rawRuntimePlugins = rawRuntimePlugins || {};
     runtimePluginLoader.mergeIntoAssistOS(assistOS, runtimePlugins);
 
+    const installRuntimeComponentGuards = () => {
+        const ensureComponentRegistered = async (componentName) => {
+            const normalizedName = typeof componentName === 'string' ? componentName.trim() : '';
+            if (!normalizedName) {
+                return null;
+            }
+            return runtimePluginLoader.ensureComponentRegistered(normalizedName, runtimePlugins);
+        };
+
+        webSkel.ensureComponentRegistered = ensureComponentRegistered;
+
+        const wrapComponentOpener = (methodName) => {
+            const original = webSkel[methodName];
+            if (typeof original !== 'function') {
+                return;
+            }
+            webSkel[methodName] = async (componentName, ...args) => {
+                await ensureComponentRegistered(componentName);
+                return original.call(webSkel, componentName, ...args);
+            };
+        };
+
+        wrapComponentOpener('showModal');
+        wrapComponentOpener('createReactiveModal');
+    };
+
+    installRuntimeComponentGuards();
+
     if (typeof window !== 'undefined') {
         window.UI = webSkel;
     }

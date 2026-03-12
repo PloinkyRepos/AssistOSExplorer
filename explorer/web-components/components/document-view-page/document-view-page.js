@@ -241,9 +241,7 @@ export class DocumentViewPage {
         }
         UIUtils.changeCommentIndicator(this.element, this._document.comments.messages);
         UIUtils.displayCurrentStatus(this.element, this._document.comments, "infoText");
-        if(this._document.comments.pluginLastOpened){
-            await this.openPlugin("", "infoText", this._document.comments.pluginLastOpened, true);
-        }
+        delete this.currentPlugin;
     }
 
     async updateStatus(status, type, pluginName, autoPin) {

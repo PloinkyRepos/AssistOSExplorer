@@ -35,6 +35,17 @@ const DEFAULT_CUSTOM_TYPES = [
 ];
 const EXPLORER_AGENT_ID = 'explorer';
 
+const TRANSIENT_MCP_ERROR_PATTERNS = [
+    'Missing or invalid MCP session',
+    'Request timed out'
+];
+
+function isRecoverableMcpError(error) {
+    const message = error?.message || error?.toString?.() || '';
+    if (typeof message !== 'string') return false;
+    return TRANSIENT_MCP_ERROR_PATTERNS.some((pattern) => message.includes(pattern));
+}
+
 const buildUIHelpers = () => {
     const configs = { components: [] };
 
@@ -449,6 +460,18 @@ class AssistosSDK {
         this.clients = new Map();
     }
 
+    resetClient(agentId) {
+        const existing = this.clients.get(agentId);
+        if (existing && typeof existing.close === 'function') {
+            try {
+                void existing.close();
+            } catch (_) {
+                // Ignore close errors during client reset.
+            }
+        }
+        this.clients.delete(agentId);
+    }
+
     getClient(agentId) {
         if (!agentId || typeof agentId !== 'string') {
             throw new Error('Agent id must be a non-empty string.');
@@ -461,8 +484,8 @@ class AssistosSDK {
     }
 
     async callTool(agentId, tool, args = {}) {
-        const client = this.getClient(agentId);
-        try {
+        const executeCall = async () => {
+            const client = this.getClient(agentId);
             const result = await client.callTool(tool, args);
             const blocks = Array.isArray(result?.content) ? result.content : [];
             const firstText = blocks.find(block => block?.type === 'text' && typeof block.text === 'string');
@@ -477,7 +500,20 @@ class AssistosSDK {
                 }
             }
             return { text, json, blocks, raw: result };
+        };
+
+        try {
+            return await executeCall();
         } catch (error) {
+            if (isRecoverableMcpError(error)) {
+                this.resetClient(agentId);
+                try {
+                    return await executeCall();
+                } catch (retryError) {
+                    console.error(`Agent call failed after retry (${agentId}:${tool})`, retryError);
+                    throw retryError;
+                }
+            }
             console.error(`Agent call failed (${agentId}:${tool})`, error);
             throw error;
         }

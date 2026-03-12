@@ -11,7 +11,7 @@ This guide consolidates all Explorer documentation (architecture, document model
 - **Document manager**: Markdown is parsed into chapters/paragraphs with metadata and SOPLang commands.
 - **No HTTP blob endpoint in current server**: UI helpers expect `/blobs/<agent>`, but `filesystem-http-server.mjs` only exposes MCP on `/mcp` and a `/health` check.
 - **Auto-enabled deps**: Explorer manifest enables `soplang` and `multimedia` (same repo); avoid enabling duplicates manually.
-- **Separate SOPLang agent**: `soplangAgent` (repo `SOPLangBuilder`) provides `soplang-tool` and `SoplangBuilder.buildFromMarkdown`; it runs in its own container sharing the workspace.
+- **Separate SOPLang agent**: `soplangAgent` (repo `SOPLangBuilder`) provides explicit MCP tools such as `sync_markdown_documents` and `execute_workspace_build`; it runs in its own container sharing the workspace.
 
 ---
 
@@ -30,7 +30,7 @@ This guide consolidates all Explorer documentation (architecture, document model
 
 - **Browser (<a href="https://github.com/OutfinityResearch/WebSkel/blob/master/README.md">WebSkel UI</a>)** → **<a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md">Ploinky</a> Router** (static/proxy) → **Explorer container** (MCP filesystem tools) → **Workspace FS (allowed roots)**.
 - **MCP clients** (UI/other agents) call Explorer MCP directly for filesystem tools.
-- **soplangAgent container** (node:20-alpine, `soplang-tool`) receives MCP calls separately; it reads files directly from the mounted workspace.
+- **soplangAgent container** (node:20-alpine) receives MCP calls separately; it reads files directly from the mounted workspace.
 - Both containers run independently; there is no hop Explorer → soplangAgent.
 
 ---
@@ -41,9 +41,9 @@ This guide consolidates all Explorer documentation (architecture, document model
 - **HTML Web Preview URL model**: Preview preserves repo-scoped paths generated from selected file path (e.g., `/.ploinky/repos/fileExplorer/docs/development.html?__previewReload=1`) instead of flattening to root-level `/docs/*`.
 - **Hydration**: `DocumentStore.hydrateDocumentModel` parses Markdown plus comment markers into a hierarchy (document → chapters → paragraphs).
   - Example comment markers:
-    - `<!--{"achiles-ide-document": {"id": "guide", "title": "My Guide"}}-->`
-    - `<!--{"achiles-ide-chapter": {"title": "Intro"}}-->`
-    - `<!--{"achiles-ide-paragraph": {"text": "Hello", "commands": "@media_image_123 attach id \"blob-id\" name \"hero.png\""}}-->`
+    - `<!--{"achilles-ide-document": {"id": "guide", "title": "My Guide"}}-->`
+    - `<!--{"achilles-ide-chapter": {"title": "Intro"}}-->`
+    - `<!--{"achilles-ide-paragraph": {"text": "Hello", "commands": "@media_image_123 attach id \"blob-id\" name \"hero.png\""}}-->`
 - **Persistence via SOPLang commands**: Commands are embedded inline and preserved on save.
   - Example: `@media_image_123 attach id "blob-id" name "hero.png"` stays in the Markdown; UI renders the image using parsed data.
 - **Document info**: Title and Info Text are stored in metadata (e.g., Title “Release Notes”, Info “Changelog for v1.2”).
@@ -58,7 +58,7 @@ This guide consolidates all Explorer documentation (architecture, document model
 ## 5) SOPLang Usage in Documents
 
 - **Embed code**: Use fenced ` ```soplang ` blocks for scripts.
-- **Achilles comments**: `achiles-ide-document/chapter/paragraph` markers map Markdown to the model and keep commands in sync.
+- **Achilles comments**: `achilles-ide-document/chapter/paragraph` markers map Markdown to the model and keep commands in sync.
 - **Variables & media**: Commands like `@set doc_owner "alice@company.com"` or `@media_image_123 attach id "abcd" name "diagram.png"` live in the Markdown and are parsed on hydration.
 - **Execution**: UI actions can run SOPLang blocks via soplangAgent; outputs/variable updates flow back into the model. Reload to re-hydrate after edits.
 - **Flow fit**: Documents + SOPLang commands define structure; the build pipeline (below) persists them via soplangAgent.
@@ -88,9 +88,9 @@ This guide consolidates all Explorer documentation (architecture, document model
 
 - **MCP (Explorer):** Serves filesystem tools over `/mcp` (plus `/health`), enforcing `allowedDirectories` from `ASSISTOS_FS_ROOT`/`MCP_FS_ROOT`. Path args are resolved/normalized; anything outside whitelisted roots is rejected. No `/blobs` HTTP endpoint.
 - **MCP capabilities (by function):** Read text/media/small batches; write/edit text or binary; list/tree directories (simple/detailed/sized); move/copy/delete; metadata/info and search; list allowed directories; aggregate `IDE-plugins/*/config.json` for the UI.
-- **SOPLang (soplangAgent):** Separate container and MCP tool (`soplang-tool`). Runs SOPLang scripts, manages variables, and hosts plugins such as `SoplangBuilder`. Commands and variables are embedded in Markdown comments/blocks and preserved on save.
+- **SOPLang (soplangAgent):** Separate container with explicit MCP tools such as `sync_markdown_documents`, `execute_workspace_build`, `build_from_specs_markdown`, `get_variables_with_values`, and `execute_skill`. Runs SOPLang scripts, manages variables, and hosts plugins such as `SoplangBuilder`. Commands and variables are embedded in Markdown comments/blocks and preserved on save.
 - **Variables & commands:** `@set releaseVersion "1.4.0"`, `@media_image_hero attach id "blob-id" name "hero.png"`. Variables live in the document model; media commands store blob IDs only.
-- **SOPLang build (Markdown → Documents):** `SoplangBuilder.buildFromMarkdown` scans `.md` files, reads `achiles-ide-document/chapter/paragraph` comments, applies templates to the document store, then `workspace.forceSave()` + `workspace.buildAll()`. Invoke via MCP with `pluginName: "SoplangBuilder"`, `methodName: "buildFromMarkdown"`; logs at `SOPLangBuilder/last-tool.log`.
+- **SOPLang build (Markdown → Documents):** `SoplangBuilder.syncMarkdownDocuments` scans `.md` files, reads `achilles-ide-document/chapter/paragraph` comments, applies templates to the document store, then `workspace.forceSave()` persists the synchronized state. `SoplangBuilder.executeWorkspaceBuild` runs `workspace.buildAll()` separately for expensive or long-running skill execution. Invoke via MCP with `sync_markdown_documents` and `execute_workspace_build`; logs at `SOPLangBuilder/last-tool.log`.
 
 ---
 
@@ -101,7 +101,7 @@ This guide consolidates all Explorer documentation (architecture, document model
 - **Filesystem root**: Set `ASSISTOS_FS_ROOT` (or `MCP_FS_ROOT`) to the workspace path(s); fallback is cwd. First root is workspace root.
 - **Auto-enabled agents**: `soplang`, `multimedia` (from Explorer manifest).
 - **Dependencies**: `npm install` at repo root (and `explorer/` if needed).
-- **Hot reload**: UI refresh picks up most changes; plugin `config.json` or new plugins require Explorer restart to rescan. SOPLang comment edits are re-hydrated on reload; rerun `buildFromMarkdown` to persist into the SOPLang store.
+- **Hot reload**: UI refresh picks up most changes; plugin `config.json` or new plugins require Explorer restart to rescan. SOPLang comment edits are re-hydrated on reload; rerun `syncMarkdownDocuments` to persist into the SOPLang store.
 - **Preview portability rule**: Do not rely on local-only symlinks like `explorer/docs`. Use the repo-scoped symlink under `explorer/.ploinky/repos/fileExplorer` so preview works consistently on clean clones.
 - **Repo layout (Explorer)**:
   ```
@@ -121,7 +121,7 @@ This guide consolidates all Explorer documentation (architecture, document model
 ## 9) SOPLang Agent (overview)
 
 - **Manifest**: `soplangAgent/manifest.json` – `container: node:20-alpine`, `postinstall: apk add ffmpeg`.
-- **MCP tool**: `soplang-tool` (`soplangAgent/mcp-config.json`) with `pluginName`, `methodName`, `params`.
+- **MCP tools**: explicit entries in `soplangAgent/mcp-config.json`, including `sync_markdown_documents`, `execute_workspace_build`, `build_from_specs_markdown`, `get_variables_with_values`, and `execute_skill`.
 - **Plugins loaded**: SOPLang core plugins plus `plugins/SoplangBuilder.js` if present; log captured in `last-tool.log`.
 - **Workspace access**: Reads markdown directly from mounted workspace; not dependent on Explorer backend.
 
@@ -130,5 +130,5 @@ This guide consolidates all Explorer documentation (architecture, document model
 ## 10) General Notes
 
 - Blob uploads: UI utilities target `/blobs/<agent>`, but the current Explorer server does not implement this HTTP endpoint. Plan workflows accordingly (or add server support if needed).
-- MCP isolation: Call Explorer and soplangAgent independently; do not route soplang-tool through Explorer.
+- MCP isolation: Call Explorer and soplangAgent independently; do not route SOPLang MCP calls through Explorer.
 - View vs. edit: All files support both; structured features apply only to Markdown. Syntax highlighting is presentation only for code/text files.

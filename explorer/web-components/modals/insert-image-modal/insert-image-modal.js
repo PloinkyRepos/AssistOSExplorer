@@ -46,36 +46,6 @@ export class InsertImageModal {
     }
 
     afterRender() {
-        if (this.modalBody === this.galleryImagesSection) {
-            let images = this.element.querySelectorAll(".gallery-image");
-            images.forEach((image) => {
-                image.addEventListener("click", (event) => {
-                    let imgContainer = event.target.parentElement;
-                    let imgId = event.target.getAttribute("id");
-                    let image = this.allImages.find((img) => img.id === imgId);
-                    let checkbox = imgContainer.querySelector(".image-checkbox");
-                    event.target.classList.toggle("selected-image");
-                    if (imgContainer.classList.contains("selected")) {
-                        imgContainer.classList.remove("selected");
-                        checkbox.checked = false;
-                        checkbox.style.visibility = "hidden";
-                        this.selectedImage = "";
-                    } else {
-                        imgContainer.classList.add("selected");
-                        checkbox.checked = true;
-                        checkbox.style.visibility = "visible";
-                        if (this.selectedImage) {
-                            let selectedImgContainer = this.element.querySelector(`#${this.selectedImage.id}`).parentElement;
-                            selectedImgContainer.classList.remove("selected");
-                            selectedImgContainer.querySelector(".image-checkbox").checked = false;
-                            selectedImgContainer.querySelector(".image-checkbox").style.visibility = "hidden";
-                        }
-                        this.selectedImage = image;
-                    }
-                });
-            });
-        }
-
     }
 
     openGallerySection() {
@@ -101,7 +71,7 @@ export class InsertImageModal {
         for (let image of this.allImages) {
             stringHTML += `
             <div class="img-container">
-                <img class="gallery-image" src="${image.src}" alt="${image.timestamp}" id="${image.id}">
+                <img class="gallery-image" src="${image.src}" alt="${image.timestamp}" id="${image.id}" data-local-action="selectGalleryImage ${image.id}">
                 <input type="checkbox" class="image-checkbox">
             </div>
             `;
@@ -121,6 +91,42 @@ export class InsertImageModal {
 
     insertImages(_target) {
         assistOS.UI.closeModal(_target, this.selectedImage);
+    }
+
+    selectGalleryImage(targetElement, imageId) {
+        if (!imageId) return;
+        const imgContainer = targetElement.parentElement;
+        if (!imgContainer) return;
+        const image = this.allImages.find((img) => img.id === imageId);
+        const checkbox = imgContainer.querySelector(".image-checkbox");
+        targetElement.classList.toggle("selected-image");
+        if (imgContainer.classList.contains("selected")) {
+            imgContainer.classList.remove("selected");
+            if (checkbox) {
+                checkbox.checked = false;
+                checkbox.style.visibility = "hidden";
+            }
+            this.selectedImage = "";
+            return;
+        }
+        imgContainer.classList.add("selected");
+        if (checkbox) {
+            checkbox.checked = true;
+            checkbox.style.visibility = "visible";
+        }
+        if (this.selectedImage) {
+            const selectedImg = this.element.querySelector(`#${this.selectedImage.id}`);
+            const selectedImgContainer = selectedImg?.parentElement;
+            if (selectedImgContainer) {
+                selectedImgContainer.classList.remove("selected");
+                const previousCheckbox = selectedImgContainer.querySelector(".image-checkbox");
+                if (previousCheckbox) {
+                    previousCheckbox.checked = false;
+                    previousCheckbox.style.visibility = "hidden";
+                }
+            }
+        }
+        this.selectedImage = image || "";
     }
 
     openMyDevice(_target) {

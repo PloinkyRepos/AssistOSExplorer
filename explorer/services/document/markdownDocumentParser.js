@@ -1,5 +1,6 @@
 import {
     COMMENT_KEY_PREFIX,
+    LEGACY_COMMENT_KEY_PREFIX,
     COMMENT_KEYS,
     normalizeLineEndings,
     decodeHtmlEntities,
@@ -19,6 +20,63 @@ import {
 } from './markdown/referenceUtils.js';
 
 const DEFAULT_HEADING_LEVEL = 2;
+
+const splitImplicitChapters = (text) => {
+    const normalized = normalizeLineEndings(text ?? '');
+    const lines = normalized.split('\n');
+    const chapters = [];
+
+    let current = null;
+    const startChapter = (headingLevel, headingText) => {
+        if (current) {
+            chapters.push(current);
+        }
+        current = {
+            headingLevel,
+            headingText: decodeHtmlEntities((headingText || '').trim()) || `Chapter ${chapters.length + 1}`,
+            bodyLines: []
+        };
+    };
+
+    for (const line of lines) {
+        const headingMatch = line.match(/^(#{1,6})\s+(.*)$/);
+        if (headingMatch) {
+            startChapter(headingMatch[1].length, headingMatch[2].replace(/\s*\{#[^}]+\}\s*$/, ''));
+            continue;
+        }
+
+        if (!current) {
+            startChapter(DEFAULT_HEADING_LEVEL, `Chapter ${chapters.length + 1}`);
+        }
+        current.bodyLines.push(line);
+    }
+
+    if (current) {
+        chapters.push(current);
+    }
+
+    return chapters
+        .map((chapter) => {
+            const body = chapter.bodyLines.join('\n');
+            const paragraphs = parseParagraphBlocks(body);
+            const hasMeaningfulContent = chapter.headingText.trim() || paragraphs.length > 0;
+            if (!hasMeaningfulContent) {
+                return null;
+            }
+            return {
+                id: null,
+                metadata: { title: chapter.headingText },
+                heading: {
+                    level: chapter.headingLevel,
+                    text: chapter.headingText,
+                    raw: `${'#'.repeat(chapter.headingLevel)} ${chapter.headingText}`
+                },
+                leading: '',
+                paragraphs
+            };
+        })
+        .filter(Boolean);
+};
 
 const parseChapterBlock = (chapterComment, block, { hasStructuredReferences = false } = {}) => {
     const metadata = filterMetadataFields(COMMENT_KEYS.CHAPTER, { ...(chapterComment.value ?? {}) });
@@ -161,15 +219,19 @@ const parseMarkdownDocument = (markdown) => {
         && documentMetadata.comments.tor.references.length > 0
     );
 
-    const chapters = chapterComments.map((chapterComment, index) => {
+    let chapters = chapterComments.map((chapterComment, index) => {
         const nextChapterStart = chapterComments[index + 1]?.start ?? text.length;
         const chapterBlock = text.slice(chapterComment.end, nextChapterStart);
         return parseChapterBlock(chapterComment, chapterBlock, { hasStructuredReferences });
     });
 
+    if (chapters.length === 0) {
+        chapters = splitImplicitChapters(stripMetadataCommentBlocks(text));
+    }
+
     return {
         metadata: documentMetadata,
-        preface,
+        preface: chapters.length > 0 ? '' : preface,
         chapters,
         raw: text,
         documentId
@@ -229,7 +291,7 @@ const serializeMarkdownDocument = (document) => {
         if (referencesComment) {
             referencesParts.push(referencesComment);
         }
-        referencesParts.push('<!-- <achiles-ide-references> -->\n');
+        referencesParts.push('<!-- <achilles-ide-references> -->\n');
         referencesParts.push('<a id="references-section"></a>\n');
         referencesParts.push('## References\n');
         documentComments.tor.references.forEach((reference, index) => {
@@ -316,12 +378,17 @@ const stripAchilesComments = (text) => {
         try {
             const parsed = JSON.parse(payload);
             const keys = Object.keys(parsed).filter(
-                (key) => typeof key === 'string' && key.startsWith(COMMENT_KEY_PREFIX)
+                (key) => typeof key === 'string'
+                    && (key.startsWith(COMMENT_KEY_PREFIX) || key.startsWith(LEGACY_COMMENT_KEY_PREFIX))
             );
             if (keys.length === 1) {
+                const rawKey = keys[0];
+                const normalizedKey = rawKey.startsWith(LEGACY_COMMENT_KEY_PREFIX)
+                    ? `${COMMENT_KEY_PREFIX}${rawKey.slice(LEGACY_COMMENT_KEY_PREFIX.length)}`
+                    : rawKey;
                 return {
-                    key: keys[0],
-                    metadata: parsed[keys[0]] ?? {}
+                    key: normalizedKey,
+                    metadata: parsed[rawKey] ?? {}
                 };
             }
         } catch (_) {

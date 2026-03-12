@@ -92,7 +92,7 @@ export function createMediaClient({
 
     return {
         async getImageURL(imageId) {
-            return imageId ? `/${imageId}` : '';
+            return imageId ? `/blobs/explorer/${imageId}` : '';
         },
         async getAudioURL(audioId) {
             if (!audioId) {

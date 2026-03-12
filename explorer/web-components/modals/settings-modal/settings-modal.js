@@ -105,7 +105,7 @@ export class SettingsModal {
                     </div>
                     <div class="keymap-input-group">
                         <input type="text" class="form-input keymap-input" data-action-id="${action.id}" value="${displayValue}" readonly>
-                        <button type="button" class="gray-button keymap-clear" data-action-id="${action.id}">Clear</button>
+                        <button type="button" class="gray-button keymap-clear" data-action-id="${action.id}" data-local-action="clearShortcut ${action.id}">Clear</button>
                     </div>
                 </div>
             `;
@@ -138,17 +138,11 @@ export class SettingsModal {
             });
             input.dataset.bound = "true";
         });
+    }
 
-        const clearButtons = this.element.querySelectorAll(".keymap-clear");
-        clearButtons.forEach((button) => {
-            if (button.dataset.bound) return;
-            button.addEventListener("click", (event) => {
-                const actionId = event.currentTarget?.dataset?.actionId;
-                if (!actionId) return;
-                this.setShortcut(actionId, "");
-            });
-            button.dataset.bound = "true";
-        });
+    clearShortcut(_target, actionId) {
+        if (!actionId) return;
+        this.setShortcut(actionId, "");
     }
 
     setShortcut(actionId, shortcut) {

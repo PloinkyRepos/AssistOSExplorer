@@ -1,4 +1,5 @@
-export const COMMENT_KEY_PREFIX = 'achiles-ide-';
+export const COMMENT_KEY_PREFIX = 'achilles-ide-';
+export const LEGACY_COMMENT_KEY_PREFIX = 'achiles-ide-';
 
 export const COMMENT_KEYS = {
     DOCUMENT: `${COMMENT_KEY_PREFIX}document`,
@@ -6,6 +7,19 @@ export const COMMENT_KEYS = {
     PARAGRAPH: `${COMMENT_KEY_PREFIX}paragraph`,
     TOC: `${COMMENT_KEY_PREFIX}toc`,
     REFERENCES: `${COMMENT_KEY_PREFIX}references`
+};
+
+const normalizeCommentKey = (key) => {
+    if (typeof key !== 'string') {
+        return key;
+    }
+    if (key.startsWith(COMMENT_KEY_PREFIX)) {
+        return key;
+    }
+    if (key.startsWith(LEGACY_COMMENT_KEY_PREFIX)) {
+        return `${COMMENT_KEY_PREFIX}${key.slice(LEGACY_COMMENT_KEY_PREFIX.length)}`;
+    }
+    return key;
 };
 
 export const ALLOWED_METADATA_FIELDS = {
@@ -117,12 +131,17 @@ export const getMetadataComments = (text) => {
             }
         }
         if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-            const keys = Object.keys(parsed).filter((key) => typeof key === 'string' && key.startsWith(COMMENT_KEY_PREFIX));
-            if (keys.length === 1) {
-                const key = keys[0];
+            const rawKeys = Object.keys(parsed).filter(
+                (key) => typeof key === 'string' && (key.startsWith(COMMENT_KEY_PREFIX) || key.startsWith(LEGACY_COMMENT_KEY_PREFIX))
+            );
+            const keys = rawKeys.map((key) => normalizeCommentKey(key));
+            const uniqueKeys = [...new Set(keys)];
+            if (uniqueKeys.length === 1 && rawKeys.length === 1) {
+                const rawKey = rawKeys[0];
+                const key = uniqueKeys[0];
                 results.push({
                     key,
-                    value: parsed[key],
+                    value: parsed[rawKey],
                     start,
                     end: end + 3
                 });
