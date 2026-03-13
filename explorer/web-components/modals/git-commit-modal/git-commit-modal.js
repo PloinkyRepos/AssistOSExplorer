@@ -245,6 +245,12 @@ export class GitCommitModal {
                 this.syncStaticUI();
                 try {
                     await withGlobalLoader(() => this.refreshAll({ force: true }));
+                    if (this.props?.openConflictHelper) {
+                        if (this.props.selectedRepoPath) {
+                            this.setState({ selectedRepoPath: this.props.selectedRepoPath }, { silent: true });
+                        }
+                        await this.openConflictHelper();
+                    }
                 } finally {
                     this.setState({ suppressInlineLoading: false }, { silent: true });
                     this.syncStaticUI();

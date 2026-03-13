@@ -314,7 +314,7 @@ export function createGitCommitActions(ctx) {
         }
     };
 
-    const handlePullConflicts = async (message, repoPaths = null, source = 'merge') => {
+    const handlePullConflicts = async (message, repoPaths = null, source = 'merge', seededConflicts = null) => {
         const autoResult = await autoResolveConflicts(repoPaths, source);
         if (autoResult.ok) {
             await loadRepoOverviews({ force: true });
@@ -323,9 +323,31 @@ export function createGitCommitActions(ctx) {
             return true;
         }
         await loadManualConflicts(repoPaths);
-        applyState({ conflictSource: source, conflictFocus: false }, { silent: true });
+        let manualConflicts = Array.isArray(getState().manualConflicts) ? getState().manualConflicts : [];
+        if (!manualConflicts.length && Array.isArray(seededConflicts) && seededConflicts.length) {
+            manualConflicts = seededConflicts
+                .filter((entry) => entry?.repoPath && entry?.filePath)
+                .map((entry) => ({ repoPath: entry.repoPath, filePath: entry.filePath }));
+            applyState({ manualConflicts }, { silent: true });
+        }
         await loadRepoOverviews({ force: true });
+        const repoConflicts = collectConflictedItems(repoPaths);
+        const effectiveConflicts = manualConflicts.length ? manualConflicts : repoConflicts;
+        if (!manualConflicts.length && repoConflicts.length) {
+            applyState({ manualConflicts: repoConflicts }, { silent: true });
+            manualConflicts = repoConflicts;
+        }
+        const firstConflict = effectiveConflicts[0] || null;
+        const hasResolvableConflicts = effectiveConflicts.length > 0;
+        applyState({
+            conflictSource: source,
+            conflictFocus: hasResolvableConflicts,
+            selectedRepoPath: firstConflict?.repoPath || getState().selectedRepoPath || null
+        }, { silent: true });
         syncStaticUI();
+        if (hasResolvableConflicts && firstConflict && typeof selectConflictFile === 'function') {
+            await selectConflictFile(firstConflict);
+        }
         updateCommitButtons();
         const fallbackMessage = autoResult.errorMessage || message || 'Merge conflicts detected. Resolve them before continuing.';
         setStatusLine(fallbackMessage, true);
@@ -334,21 +356,45 @@ export function createGitCommitActions(ctx) {
 
     const restoreStash = async (repoPath, stashRef) => {
         try {
-            const request = { path: repoPath, reinstateIndex: true };
-            if (stashRef) request.ref = stashRef;
-            const text = await service.gitStashPop(request);
-            const payload = parseJsonToolResult(text) || {};
+            const popStash = async (reinstateIndex) => {
+                const request = { path: repoPath, reinstateIndex };
+                if (stashRef) request.ref = stashRef;
+                const text = await service.gitStashPop(request);
+                return parseJsonToolResult(text) || {};
+            };
+
+            let payload = await popStash(true);
+            let restoredWithoutIndex = false;
+            if (payload.indexConflicts) {
+                setStatusLine('Could not restore staged state. Retrying stash without index...');
+                payload = await popStash(false);
+                restoredWithoutIndex = payload.ok !== false && !payload.conflicts;
+            }
+
             if (payload.noStash) {
                 setStatusLine('No stash entries found to restore.', true);
                 return { ok: false, conflicts: false };
             }
             if (payload.conflicts) {
-                const resolved = await handlePullConflicts('Conflicts after restoring stashed changes. Resolve them before continuing.', [repoPath], 'stash');
+                const seededConflicts = Array.isArray(payload.conflictPaths)
+                    ? payload.conflictPaths
+                        .filter(Boolean)
+                        .map((filePath) => ({ repoPath, filePath }))
+                    : [];
+                const resolved = await handlePullConflicts(
+                    'Conflicts after restoring stashed changes. Resolve them before continuing.',
+                    [repoPath],
+                    'stash',
+                    seededConflicts
+                );
                 return { ok: resolved, conflicts: !resolved };
             }
             if (payload.ok === false) {
                 setStatusLine(payload.output || 'Failed to restore stash.', true);
                 return { ok: false, conflicts: false };
+            }
+            if (restoredWithoutIndex) {
+                setStatusLine('Restored stashed changes without staged state.');
             }
             return { ok: true, conflicts: false };
         } catch (error) {

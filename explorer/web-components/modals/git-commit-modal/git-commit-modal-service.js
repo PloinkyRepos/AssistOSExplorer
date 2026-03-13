@@ -24,7 +24,7 @@ export function createGitCommitService({ callTool, callAgentTool }) {
         gitCheckoutConflict: (payload) => callAgentTool('gitAgent', 'git_checkout_conflict', payload),
         gitStash: (payload) => callAgentTool('gitAgent', 'git_stash', payload),
         gitStashList: (payload) => callAgentTool('gitAgent', 'git_stash_list', payload),
-        gitStashPop: (payload) => callAgentTool('gitAgent', 'git_stash_pop', compact(payload)),
+        gitStashPop: (payload) => callAgentTool('gitAgent', 'git_stash_pop', compact(payload), { raw: true }),
         gitCommit: (payload) => callAgentTool('gitAgent', 'git_commit', payload),
         llmResolveConflict: (payload) => callAgentTool('llmAssistant', 'llm_resolve_conflict', payload),
         deleteFile: (path) => callTool('delete_file', { path }),

@@ -50,7 +50,6 @@ export function createToolHandlers({
   searchFilesWithinWorkspace,
   searchTextWithinWorkspace,
   replaceTextWithinWorkspace,
-  gitService,
   MAX_TEXT_SEARCH_FILE_BYTES,
   SEARCH_TEXT_TIMEOUT_MS,
   REPLACE_TEXT_TIMEOUT_MS,
@@ -78,27 +77,7 @@ export function createToolHandlers({
     SearchTextArgsSchema,
     ReplaceTextArgsSchema,
     GetFileInfoArgsSchema,
-    CollectIDEPluginsArgsSchema,
-    GitInfoArgsSchema,
-    GitStatusArgsSchema,
-    GitDiffArgsSchema,
-    GitStageArgsSchema,
-    GitUnstageArgsSchema,
-    GitUntrackArgsSchema,
-    GitCheckIgnoreArgsSchema,
-    GitRestoreArgsSchema,
-    GitConflictVersionsArgsSchema,
-    GitCheckoutConflictArgsSchema,
-    GitStashArgsSchema,
-    GitStashListArgsSchema,
-    GitStashPopArgsSchema,
-    GitCommitArgsSchema,
-    GitPushArgsSchema,
-    GitPullArgsSchema,
-    GitDiagnoseArgsSchema,
-    GitReposOverviewArgsSchema,
-    GitIdentityArgsSchema,
-    GitSetIdentityArgsSchema
+    CollectIDEPluginsArgsSchema
   } = schemas;
   const inflightSearchFiles = new Map();
   const inflightSearchText = new Map();
@@ -454,126 +433,6 @@ export function createToolHandlers({
     return jsonResponse(pluginsByLocation);
   }
 
-  async function handleGitInfo(args) {
-    const data = parseArgs(GitInfoArgsSchema, args, 'git_info');
-    const info = await gitService.gitInfo(data);
-    return jsonResponse(info);
-  }
-
-  async function handleGitStatus(args) {
-    const data = parseArgs(GitStatusArgsSchema, args, 'git_status');
-    const status = await gitService.gitStatus(data);
-    return jsonResponse(status);
-  }
-
-  async function handleGitDiff(args) {
-    const data = parseArgs(GitDiffArgsSchema, args, 'git_diff');
-    const diff = await gitService.gitDiff(data);
-    return textResponse(diff || '');
-  }
-
-  async function handleGitStage(args) {
-    const data = parseArgs(GitStageArgsSchema, args, 'git_stage');
-    const result = await gitService.gitStage(data);
-    return jsonResponse(result);
-  }
-
-  async function handleGitUnstage(args) {
-    const data = parseArgs(GitUnstageArgsSchema, args, 'git_unstage');
-    const result = await gitService.gitUnstage(data);
-    return jsonResponse(result);
-  }
-
-  async function handleGitUntrack(args) {
-    const data = parseArgs(GitUntrackArgsSchema, args, 'git_untrack');
-    const result = await gitService.gitUntrack(data);
-    return jsonResponse(result);
-  }
-
-  async function handleGitCheckIgnore(args) {
-    const data = parseArgs(GitCheckIgnoreArgsSchema, args, 'git_check_ignore');
-    const result = await gitService.gitCheckIgnore(data);
-    return jsonResponse(result);
-  }
-
-  async function handleGitRestore(args) {
-    const data = parseArgs(GitRestoreArgsSchema, args, 'git_restore');
-    const result = await gitService.gitRestore(data);
-    return jsonResponse(result);
-  }
-
-  async function handleGitConflictVersions(args) {
-    const data = parseArgs(GitConflictVersionsArgsSchema, args, 'git_conflict_versions');
-    const result = await gitService.gitConflictVersions(data);
-    return jsonResponse(result);
-  }
-
-  async function handleGitCheckoutConflict(args) {
-    const data = parseArgs(GitCheckoutConflictArgsSchema, args, 'git_checkout_conflict');
-    const result = await gitService.gitCheckoutConflict(data);
-    return jsonResponse(result);
-  }
-
-  async function handleGitStash(args) {
-    const data = parseArgs(GitStashArgsSchema, args, 'git_stash');
-    const result = await gitService.gitStash(data);
-    return jsonResponse(result);
-  }
-
-  async function handleGitStashList(args) {
-    const data = parseArgs(GitStashListArgsSchema, args, 'git_stash_list');
-    const result = await gitService.gitStashList(data);
-    return jsonResponse(result);
-  }
-
-  async function handleGitStashPop(args) {
-    const data = parseArgs(GitStashPopArgsSchema, args, 'git_stash_pop');
-    const result = await gitService.gitStashPop(data);
-    return jsonResponse(result);
-  }
-
-  async function handleGitCommit(args) {
-    const data = parseArgs(GitCommitArgsSchema, args, 'git_commit');
-    const result = await gitService.gitCommit(data);
-    return jsonResponse(result);
-  }
-
-  async function handleGitPush(args) {
-    const data = parseArgs(GitPushArgsSchema, args, 'git_push');
-    const result = await gitService.gitPush(data);
-    return jsonResponse(result);
-  }
-
-  async function handleGitPull(args) {
-    const data = parseArgs(GitPullArgsSchema, args, 'git_pull');
-    const result = await gitService.gitPull(data);
-    return jsonResponse(result);
-  }
-
-  async function handleGitDiagnose(args) {
-    const data = parseArgs(GitDiagnoseArgsSchema, args, 'git_diagnose');
-    const result = await gitService.gitDiagnose(data);
-    return jsonResponse(result);
-  }
-
-  async function handleGitReposOverview(args) {
-    const data = parseArgs(GitReposOverviewArgsSchema, args, 'git_repos_overview');
-    const result = await gitService.gitReposOverview(data);
-    return jsonResponse(result);
-  }
-
-  async function handleGitIdentity(args) {
-    const data = parseArgs(GitIdentityArgsSchema, args, 'git_identity');
-    const result = await gitService.gitIdentity(data);
-    return jsonResponse(result);
-  }
-
-  async function handleGitSetIdentity(args) {
-    const data = parseArgs(GitSetIdentityArgsSchema, args, 'git_set_identity');
-    const result = await gitService.gitSetIdentity(data);
-    return jsonResponse(result);
-  }
-
   async function handleListAllowedDirectories() {
     const allowed = getAllowedDirectories ? getAllowedDirectories() : [];
     return textResponse(`Allowed directories:\n${allowed.join('\n')}`);
@@ -601,26 +460,6 @@ export function createToolHandlers({
     replace_text: handleReplaceText,
     get_file_info: handleGetFileInfo,
     collect_ide_plugins: handleCollectIdePlugins,
-    git_info: handleGitInfo,
-    git_status: handleGitStatus,
-    git_diff: handleGitDiff,
-    git_stage: handleGitStage,
-    git_unstage: handleGitUnstage,
-    git_untrack: handleGitUntrack,
-    git_check_ignore: handleGitCheckIgnore,
-    git_restore: handleGitRestore,
-    git_conflict_versions: handleGitConflictVersions,
-    git_checkout_conflict: handleGitCheckoutConflict,
-    git_stash: handleGitStash,
-    git_stash_list: handleGitStashList,
-    git_stash_pop: handleGitStashPop,
-    git_commit: handleGitCommit,
-    git_push: handleGitPush,
-    git_pull: handleGitPull,
-    git_diagnose: handleGitDiagnose,
-    git_repos_overview: handleGitReposOverview,
-    git_identity: handleGitIdentity,
-    git_set_identity: handleGitSetIdentity,
     list_allowed_directories: handleListAllowedDirectories
   };
 }

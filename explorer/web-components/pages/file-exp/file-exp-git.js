@@ -172,10 +172,14 @@ export function attachGitController(fileExp) {
         fileExp.showStatus(`AutoSync stopped: ${message}`, true);
     };
 
-    const setConflictAndStop = (message) => {
+    const setConflictAndStop = (message, repoPath = null) => {
         setConflictFlag(true);
         updateGitButtonIndicator();
         showAutocommitStopped(message || 'Merge conflicts detected.');
+        void openGitModal({
+            openConflictHelper: true,
+            selectedRepoPath: repoPath || null
+        });
     };
 
     const isAutoresolveEnabled = () => getConflictAutoresolveSetting();
@@ -189,10 +193,19 @@ export function attachGitController(fileExp) {
 
     const restoreStash = async (repoPath, stashRef) => {
         try {
-            const request = { path: repoPath, reinstateIndex: true };
-            if (stashRef) request.ref = stashRef;
-            const text = await callAgentTool('gitAgent', 'git_stash_pop', request, { raw: true });
-            const payload = parseJsonToolResult(text) || {};
+            const popStash = async (reinstateIndex) => {
+                const request = { path: repoPath, reinstateIndex };
+                if (stashRef) request.ref = stashRef;
+                const text = await callAgentTool('gitAgent', 'git_stash_pop', request, { raw: true });
+                return parseJsonToolResult(text) || {};
+            };
+            let payload = await popStash(true);
+            let restoredWithoutIndex = false;
+            if (payload.indexConflicts) {
+                fileExp.showStatus('Could not restore staged state. Retrying stash without index...');
+                payload = await popStash(false);
+                restoredWithoutIndex = payload.ok !== false && !payload.conflicts;
+            }
             if (payload.noStash) {
                 return { ok: false, conflicts: false, message: 'No stash entries found to restore.' };
             }
@@ -201,6 +214,9 @@ export function attachGitController(fileExp) {
             }
             if (payload.ok === false) {
                 return { ok: false, conflicts: false, message: payload.output || 'Failed to restore stash.' };
+            }
+            if (restoredWithoutIndex) {
+                return { ok: true, conflicts: false, message: 'Restored stashed changes without staged state.' };
             }
             return { ok: true, conflicts: false };
         } catch (error) {
@@ -349,7 +365,7 @@ export function attachGitController(fileExp) {
                 if (normalizeGitStatusPayload(initialStatus).counts.conflicted > 0) {
                     const resolved = await autoResolveConflicts(repoPath, 'merge');
                     if (!resolved.ok) {
-                        setConflictAndStop(resolved.message || 'Merge conflicts detected.');
+                        setConflictAndStop(resolved.message || 'Merge conflicts detected.', repoPath);
                         return;
                     }
                     initialStatus = await getRepoStatus(repoPath);
@@ -372,7 +388,7 @@ export function attachGitController(fileExp) {
                     if (isGitConflictError(msg)) {
                         const resolved = await autoResolveConflicts(repoPath, 'merge');
                         if (!resolved.ok) {
-                            setConflictAndStop(resolved.message || 'Merge conflicts detected.');
+                            setConflictAndStop(resolved.message || 'Merge conflicts detected.', repoPath);
                             return;
                         }
                     }
@@ -382,7 +398,7 @@ export function attachGitController(fileExp) {
                             if (stashed.conflicts) {
                                 const resolved = await autoResolveConflicts(repoPath, 'stash');
                                 if (!resolved.ok) {
-                                    setConflictAndStop(resolved.message || stashed.message || 'Conflicts after restoring stashed changes.');
+                                    setConflictAndStop(resolved.message || stashed.message || 'Conflicts after restoring stashed changes.', repoPath);
                                     return;
                                 }
                             } else {
@@ -400,7 +416,7 @@ export function attachGitController(fileExp) {
                 if (repoHasConflicts(status)) {
                     const resolved = await autoResolveConflicts(repoPath, 'merge');
                     if (!resolved.ok) {
-                        setConflictAndStop(resolved.message || 'Merge conflicts detected.');
+                        setConflictAndStop(resolved.message || 'Merge conflicts detected.', repoPath);
                         return;
                     }
                     status = await getRepoStatus(repoPath);
@@ -438,7 +454,7 @@ export function attachGitController(fileExp) {
                         return;
                     }
                     if (isGitConflictError(msg)) {
-                        setConflictAndStop('Merge conflicts detected.');
+                        setConflictAndStop('Merge conflicts detected.', repoPath);
                         return;
                     }
                     showAutocommitStopped(msg || 'Commit failed.');
@@ -500,12 +516,16 @@ export function attachGitController(fileExp) {
         }
     };
 
-    async function openGitModal() {
+    async function openGitModal(options = {}) {
         const repoPath = reposRoot;
         return fileExp.withLoader(async () => {
             await syncConflictFlagFromRepos();
             ensureAutocommitTimer();
-            await assistOS.UI.createReactiveModal('git-commit-modal', { repoPath });
+            await assistOS.UI.createReactiveModal('git-commit-modal', {
+                repoPath,
+                openConflictHelper: Boolean(options.openConflictHelper),
+                selectedRepoPath: options.selectedRepoPath || null
+            });
         });
     }
 

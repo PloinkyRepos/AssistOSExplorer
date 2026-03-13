@@ -13,7 +13,6 @@ import { createTimedCache, buildCacheKey } from './utils/server/timed-cache.mjs'
 import { createStructureIndex } from './utils/server/structure-index.mjs';
 import { createWorkspaceSearch } from './utils/server/workspace-search.mjs';
 import { buildDirectoryTree } from './utils/server/directory-tree.mjs';
-import { createGitService } from './utils/server/git-service.mjs';
 import { loadFilesystemDeps, loadZodToJsonSchema } from './utils/server/deps.mjs';
 import { getRequestedRoots, resolveAllowedDirectories } from './utils/server/env-config.mjs';
 import { createCacheConfig, initCacheHelpers } from './utils/server/cache-setup.mjs';
@@ -250,8 +249,6 @@ async function resolvePathsInArgs(args) {
 
 const validatePath = async (p) => resolvePathInAllowedRoots(p);
 
-const gitService = createGitService({ validatePath });
-
 const MAX_TEXT_SEARCH_FILE_BYTES = Number.parseInt(process.env.SEARCH_TEXT_MAX_BYTES || '2097152', 10);
 const SEARCH_TEXT_TIMEOUT_MS = Number.parseInt(process.env.SEARCH_TEXT_TIMEOUT_MS || '30000', 10);
 const REPLACE_TEXT_TIMEOUT_MS = Number.parseInt(process.env.REPLACE_TEXT_TIMEOUT_MS || '45000', 10);
@@ -307,7 +304,6 @@ const toolHandlers = createToolHandlers({
   searchFilesWithinWorkspace,
   searchTextWithinWorkspace,
   replaceTextWithinWorkspace,
-  gitService,
   MAX_TEXT_SEARCH_FILE_BYTES,
   SEARCH_TEXT_TIMEOUT_MS,
   REPLACE_TEXT_TIMEOUT_MS,

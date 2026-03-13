@@ -211,8 +211,11 @@ export async function callExplorerTool(name, args, { raw = false, withLoader = t
         const result = withLoader
             ? await callToolWithLoader('explorer', name, args)
             : await callTool('explorer', name, args);
+        if (raw) {
+            return result;
+        }
         ensureSuccess(result);
-        return raw ? result : extractToolText(result);
+        return extractToolText(result);
     } catch (error) {
         if (isMissingSessionError(error)) {
             await handleMissingSession();
@@ -229,8 +232,11 @@ export async function callAgentTool(agentName, name, args, { raw = false } = {})
     try {
         const normalizedArgs = await normalizeAgentArgs(agentName, name, args || {});
         const result = await client.callTool(name, normalizedArgs || {});
+        if (raw) {
+            return result;
+        }
         ensureSuccess(result);
-        return raw ? result : extractToolText(result);
+        return extractToolText(result);
     } catch (error) {
         if (isMissingSessionError(error)) {
             await handleMissingSession();

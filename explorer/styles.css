@@ -92,6 +92,20 @@
         --file-exp-subtle-surface: rgba(255, 255, 255, 0.08);
         --file-exp-inline-code-bg: rgba(255, 255, 255, 0.08);
         --file-exp-code-bg: #0c1424;
+        --backlog-status-new: #cbd5e1;
+        --backlog-status-new-glow: rgba(203, 213, 225, 0.34);
+        --backlog-status-approved: #60a5fa;
+        --backlog-status-approved-glow: rgba(96, 165, 250, 0.34);
+        --backlog-status-test-ready: #fbbf24;
+        --backlog-status-test-ready-glow: rgba(251, 191, 36, 0.34);
+        --backlog-status-testing: #4ade80;
+        --backlog-status-testing-glow: rgba(74, 222, 128, 0.34);
+        --backlog-status-reopened: #f87171;
+        --backlog-status-reopened-glow: rgba(248, 113, 113, 0.34);
+        --backlog-status-rejected: #a78bfa;
+        --backlog-status-rejected-glow: rgba(167, 139, 250, 0.34);
+        --backlog-status-done: #34d399;
+        --backlog-status-done-glow: rgba(52, 211, 153, 0.34);
     }
 }
 .theme-dark {
@@ -108,6 +122,20 @@
     --file-exp-subtle-surface: rgba(255, 255, 255, 0.08);
     --file-exp-inline-code-bg: rgba(255, 255, 255, 0.08);
     --file-exp-code-bg: #0c1424;
+    --backlog-status-new: #cbd5e1;
+    --backlog-status-new-glow: rgba(203, 213, 225, 0.34);
+    --backlog-status-approved: #60a5fa;
+    --backlog-status-approved-glow: rgba(96, 165, 250, 0.34);
+    --backlog-status-test-ready: #fbbf24;
+    --backlog-status-test-ready-glow: rgba(251, 191, 36, 0.34);
+    --backlog-status-testing: #4ade80;
+    --backlog-status-testing-glow: rgba(74, 222, 128, 0.34);
+    --backlog-status-reopened: #f87171;
+    --backlog-status-reopened-glow: rgba(248, 113, 113, 0.34);
+    --backlog-status-rejected: #a78bfa;
+    --backlog-status-rejected-glow: rgba(167, 139, 250, 0.34);
+    --backlog-status-done: #34d399;
+    --backlog-status-done-glow: rgba(52, 211, 153, 0.34);
     --default-font: "Inter", sans-serif;
     --black: black;
     --white: white;
@@ -902,7 +930,7 @@ dialog.spinner::backdrop {
 .toast-container {
     pointer-events: none;
     position: fixed;
-    width: 350px;
+    width: min(380px, calc(100vw - 24px));
     right: 16px;
     top: 70px;
     z-index: 9999;
@@ -912,15 +940,16 @@ dialog.spinner::backdrop {
     pointer-events: auto;
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
     z-index: 10;
     overflow: hidden;
-    border: 1px solid;
-    padding: 15px;
-    border-radius: 10px;
-    margin-bottom: 8px;
-    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
-    background: var(--surface);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    padding: 14px 16px;
+    border-radius: 14px;
+    margin-bottom: 10px;
+    box-shadow: 0 18px 36px rgba(15, 23, 42, 0.14), 0 4px 12px rgba(15, 23, 42, 0.1);
+    background: color-mix(in srgb, var(--surface) 90%, white 10%);
+    backdrop-filter: blur(14px);
 }
 
 .message-type {
@@ -928,25 +957,36 @@ dialog.spinner::backdrop {
     margin-right: 8px;
     display: inline-flex;
     align-items: center;
+    letter-spacing: 0.01em;
 }
 
 .toast-message {
-    max-width: 230px;
+    max-width: 265px;
     color: var(--text);
+    line-height: 1.45;
+    font-size: 0.92rem;
 }
 
 .timeout-toast .close {
-    color: rgba(0, 0, 0, 0.35);
-    background: transparent;
-    border: none;
+    color: rgba(15, 23, 42, 0.55);
+    background: rgba(255, 255, 255, 0.3);
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 999px;
     cursor: pointer;
-    padding: 4px;
+    padding: 6px;
     display: inline-flex;
+    transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+
+.timeout-toast .close:hover {
+    background: rgba(255, 255, 255, 0.5);
+    border-color: rgba(148, 163, 184, 0.28);
+    transform: translateY(-1px);
 }
 
 .toast-left {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
 }
 
 .toast-icon {
@@ -956,41 +996,102 @@ dialog.spinner::backdrop {
 }
 
 .timeout-toast.success {
-    background-color: #d4edda;
-    color: #28a745;
-    border-color: #28a745;
+    background: linear-gradient(180deg, rgba(220, 252, 231, 0.98), rgba(240, 253, 244, 0.98));
+    color: #166534;
+    border-color: rgba(34, 197, 94, 0.35);
 }
 
 .timeout-toast.success .message-type {
-    color: #28a745;
+    color: #15803d;
 }
 
 .timeout-toast.info {
-    background-color: #d9ecff;
-    color: var(--strong-blue);
-    border-color: var(--strong-blue);
+    background: linear-gradient(180deg, rgba(219, 234, 254, 0.98), rgba(239, 246, 255, 0.98));
+    color: #1d4ed8;
+    border-color: rgba(59, 130, 246, 0.32);
 }
 
 .timeout-toast.info .message-type {
-    color: var(--strong-blue);
+    color: #2563eb;
 }
 
 .timeout-toast.warning {
-    background-color: #fff4d6;
-    color: #ffa726;
-    border-color: #ffa726;
+    background: linear-gradient(180deg, rgba(254, 243, 199, 0.98), rgba(255, 251, 235, 0.98));
+    color: #b45309;
+    border-color: rgba(245, 158, 11, 0.34);
 }
 
 .timeout-toast.warning .message-type {
-    color: #ffa726;
+    color: #d97706;
 }
 
 .timeout-toast.error {
-    background-color: #f8d7da;
-    color: #dc3545;
-    border-color: var(--red);
+    background: linear-gradient(180deg, rgba(254, 226, 226, 0.98), rgba(254, 242, 242, 0.98));
+    color: #991b1b;
+    border-color: rgba(239, 68, 68, 0.38);
 }
 
 .timeout-toast.error .message-type {
-    color: var(--red);
+    color: #dc2626;
+}
+
+.theme-dark .timeout-toast {
+    background: linear-gradient(180deg, rgba(17, 25, 39, 0.98), rgba(15, 23, 42, 0.98));
+    border-color: rgba(71, 85, 105, 0.45);
+    box-shadow: 0 22px 42px rgba(2, 6, 23, 0.48), 0 6px 18px rgba(2, 6, 23, 0.32);
+}
+
+.theme-dark .toast-message {
+    color: #e5eefc;
+}
+
+.theme-dark .timeout-toast .close {
+    color: rgba(226, 232, 240, 0.8);
+    background: rgba(30, 41, 59, 0.72);
+    border-color: rgba(71, 85, 105, 0.5);
+}
+
+.theme-dark .timeout-toast .close:hover {
+    background: rgba(51, 65, 85, 0.9);
+    border-color: rgba(96, 165, 250, 0.35);
+}
+
+.theme-dark .timeout-toast.success {
+    background: linear-gradient(180deg, rgba(20, 83, 45, 0.96), rgba(17, 94, 89, 0.94));
+    border-color: rgba(74, 222, 128, 0.34);
+    color: #dcfce7;
+}
+
+.theme-dark .timeout-toast.success .message-type {
+    color: #86efac;
+}
+
+.theme-dark .timeout-toast.info {
+    background: linear-gradient(180deg, rgba(30, 64, 175, 0.92), rgba(30, 41, 59, 0.96));
+    border-color: rgba(96, 165, 250, 0.42);
+    color: #dbeafe;
+}
+
+.theme-dark .timeout-toast.info .message-type {
+    color: #93c5fd;
+}
+
+.theme-dark .timeout-toast.warning {
+    background: linear-gradient(180deg, rgba(120, 53, 15, 0.94), rgba(69, 26, 3, 0.96));
+    border-color: rgba(251, 191, 36, 0.42);
+    color: #fef3c7;
+}
+
+.theme-dark .timeout-toast.warning .message-type {
+    color: #fbbf24;
+}
+
+.theme-dark .timeout-toast.error {
+    background: linear-gradient(180deg, rgba(127, 29, 29, 0.95), rgba(69, 10, 10, 0.98));
+    border-color: rgba(248, 113, 113, 0.42);
+    color: #fee2e2;
+}
+
+.theme-dark .timeout-toast.error .message-type {
+    color: #fca5a5;
 }

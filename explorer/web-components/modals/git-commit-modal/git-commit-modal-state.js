@@ -20,7 +20,7 @@ export function createGitCommitState(props = {}) {
         repoChangesExpanded: {},
         treeExpandedByRepo: {},
         selectedFilesByRepo: {},
-        selectedRepoPath: null,
+        selectedRepoPath: props.selectedRepoPath || null,
         selectedPath: null,
         selectedSection: null, // 'staged' | 'unstaged' | 'untracked' | 'conflicted'
         commitMessage: '',

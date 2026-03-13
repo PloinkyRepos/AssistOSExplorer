@@ -328,16 +328,19 @@ export class BacklogPanel {
     renderListView(tasks) {
         if (!this.listView) return;
         this.listView.innerHTML = '';
+        const statuses = this.state.config?.statuses || {};
         for (const task of tasks) {
             const item = document.createElement('div');
             item.className = 'backlog-list-item';
             item.setAttribute('draggable', String(!this.state.conflict && !this.isHistory));
             item.dataset.id = task.id;
+            const status = String(task.status || '').trim();
+            const statusLabel = String(statuses[status] || status || 'Status');
             const desc = String(task.description || '').trim() || '(No description)';
             item.innerHTML = `
                 <div class="backlog-list-order">${Number(task.order) || ''}</div>
                 <div class="backlog-list-desc">${this.escapeHtml(desc)}</div>
-                <div class="backlog-list-status">${this.escapeHtml(task.status || '')}</div>
+                <div class="backlog-list-status ${status ? `status-${this.escapeHtml(status)}` : ''}">${this.escapeHtml(statusLabel)}</div>
             `;
             if (!this.state.conflict && !this.isHistory) {
                 this.bindListDnD(item);

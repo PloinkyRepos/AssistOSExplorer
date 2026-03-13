@@ -28,6 +28,7 @@ export class BacklogTaskRow {
         this.resolutionInput = this.element.querySelector('[data-field="resolution"]');
         this.optionsList = this.element.querySelector('[data-field="optionsList"]');
         this.orderControls = this.element.querySelector('[data-field="orderControls"]');
+        this.statusWrap = this.element.querySelector('.backlog-task-status-wrap');
         this.statusIcon = this.element.querySelector('[data-field="statusIcon"]');
         this.statusLabel = this.element.querySelector('[data-field="statusLabel"]');
         this.quickActions = this.element.querySelector('[data-field="quickActions"]');
@@ -99,6 +100,12 @@ export class BacklogTaskRow {
         if (!this.statusIcon) return;
         const status = String(this.state.task?.status || '').trim();
         const label = this.state.statuses?.[status] || status || '';
+        if (this.statusWrap) {
+            this.statusWrap.className = 'backlog-task-status-wrap';
+            if (status) {
+                this.statusWrap.classList.add(`status-${status}`);
+            }
+        }
         this.statusIcon.className = 'backlog-task-status';
         if (status) {
             this.statusIcon.classList.add(`status-${status}`);

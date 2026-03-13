@@ -9,6 +9,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
+    padding: 4px 0 2px;
 }
 
 .backlog-title {
@@ -46,6 +47,12 @@
     background-color: var(--bg);
     color: var(--text);
     border: 1px solid var(--border);
+}
+
+.theme-dark .backlog-panel button.secondary {
+    background: rgba(31, 41, 55, 0.9);
+    border-color: rgba(71, 85, 105, 0.8);
+    color: #e5eefc;
 }
 
 .backlog-panel button:hover {
@@ -113,6 +120,15 @@
     display: grid;
     grid-template-columns: repeat(2, minmax(160px, 1fr));
     gap: 8px;
+    padding: 10px 12px;
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    border-radius: 14px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(248, 250, 252, 0.9));
+}
+
+.theme-dark .backlog-filters {
+    border-color: rgba(71, 85, 105, 0.4);
+    background: linear-gradient(180deg, rgba(17, 25, 39, 0.94), rgba(15, 23, 42, 0.96));
 }
 
 .backlog-filter-actions {
@@ -147,6 +163,16 @@
     border: 1px solid var(--file-exp-border);
     background: var(--file-exp-panel);
     color: var(--text);
+}
+
+.theme-dark .backlog-filters input,
+.theme-dark .backlog-filters select,
+.theme-dark .backlog-create-grid input,
+.theme-dark .backlog-create-grid select,
+.theme-dark .backlog-create-grid textarea {
+    background: rgba(15, 23, 42, 0.88);
+    border-color: rgba(71, 85, 105, 0.55);
+    color: #f8fafc;
 }
 
 .backlog-section-title {
@@ -189,6 +215,11 @@
     background: var(--file-exp-panel);
 }
 
+.theme-dark .backlog-list-view {
+    border-color: #334155;
+    background: linear-gradient(180deg, rgba(17, 25, 39, 0.98), rgba(15, 23, 42, 0.96));
+}
+
 .backlog-list-hint {
     display: none;
     font-size: 0.78rem;
@@ -204,11 +235,28 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 8px 10px;
-    border-radius: 8px;
-    border: 1px solid transparent;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid rgba(148, 163, 184, 0.12);
     background: rgba(255, 255, 255, 0.7);
     cursor: grab;
+    transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease, transform 120ms ease;
+}
+
+.theme-dark .backlog-list-item {
+    background: rgba(15, 23, 42, 0.9);
+    border-color: rgba(71, 85, 105, 0.42);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.backlog-list-item:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
+}
+
+.theme-dark .backlog-list-item:hover {
+    box-shadow: 0 14px 24px rgba(2, 6, 23, 0.28);
+    border-color: rgba(96, 165, 250, 0.24);
 }
 
 .backlog-list-item:active {
@@ -235,14 +283,92 @@
     line-height: 1.2;
     max-height: 2.4em;
     flex-grow: 1;
+    font-weight: 500;
 }
 
 .backlog-list-status {
     font-size: 0.7rem;
+    font-weight: 800;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--text-soft);
+    letter-spacing: 0.08em;
+    color: var(--text);
     text-align: right;
+    justify-self: end;
+    border-radius: 999px;
+    border: 1px solid var(--file-exp-border);
+    padding: 0.3rem 0.65rem;
+    background: rgba(148, 163, 184, 0.14);
+    white-space: nowrap;
+}
+
+.backlog-list-status.status-new {
+    border-color: rgba(148, 163, 184, 0.28);
+    background: rgba(148, 163, 184, 0.16);
+}
+
+.backlog-list-status.status-approved {
+    border-color: rgba(59, 130, 246, 0.35);
+    background: rgba(59, 130, 246, 0.16);
+    color: #1d4ed8;
+}
+
+.backlog-list-status.status-test-ready {
+    border-color: rgba(245, 158, 11, 0.38);
+    background: rgba(245, 158, 11, 0.18);
+    color: #92400e;
+}
+
+.backlog-list-status.status-testing {
+    border-color: rgba(34, 197, 94, 0.38);
+    background: rgba(34, 197, 94, 0.18);
+    color: #166534;
+}
+
+.backlog-list-status.status-reopened {
+    border-color: rgba(239, 68, 68, 0.38);
+    background: rgba(239, 68, 68, 0.18);
+    color: #991b1b;
+}
+
+.backlog-list-status.status-rejected {
+    border-color: rgba(124, 58, 237, 0.38);
+    background: rgba(124, 58, 237, 0.18);
+    color: #6d28d9;
+}
+
+.backlog-list-status.status-done {
+    border-color: rgba(16, 185, 129, 0.38);
+    background: rgba(16, 185, 129, 0.18);
+    color: #047857;
+}
+
+.theme-dark .backlog-list-status {
+    border-color: rgba(148, 163, 184, 0.28);
+    color: #e5eefc;
+}
+
+.theme-dark .backlog-list-status.status-approved {
+    color: #bfdbfe;
+}
+
+.theme-dark .backlog-list-status.status-test-ready {
+    color: #fde68a;
+}
+
+.theme-dark .backlog-list-status.status-testing {
+    color: #bbf7d0;
+}
+
+.theme-dark .backlog-list-status.status-reopened {
+    color: #fecaca;
+}
+
+.theme-dark .backlog-list-status.status-rejected {
+    color: #ddd6fe;
+}
+
+.theme-dark .backlog-list-status.status-done {
+    color: #a7f3d0;
 }
 
 .backlog-empty {
