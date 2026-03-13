@@ -85,6 +85,35 @@ export async function registerRuntimeComponent(webSkel, componentDefinition) {
     upsertConfigEntry();
 }
 
+function getPluginSettingsMap() {
+    const settings = assistOS?.pluginSettings;
+    if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
+        return {};
+    }
+    return settings;
+}
+
+function getPluginKey(plugin) {
+    const agent = typeof plugin?.agent === 'string' ? plugin.agent.trim() : '';
+    const component = typeof plugin?.component === 'string' ? plugin.component.trim() : '';
+    if (!agent || !component) {
+        return '';
+    }
+    return `${agent}/${component}`;
+}
+
+function isPluginEnabled(plugin) {
+    const key = getPluginKey(plugin);
+    if (!key) {
+        return true;
+    }
+    const entry = getPluginSettingsMap()[key];
+    if (!entry || typeof entry !== 'object') {
+        return true;
+    }
+    return entry.enabled !== false;
+}
+
 async function openPlugin(componentName, type, context, presenter, autoPin = false) {
     const registry = assistOS.workspace.plugins[type];
     if (!Array.isArray(registry)) {
@@ -94,6 +123,10 @@ async function openPlugin(componentName, type, context, presenter, autoPin = fal
     const plugin = registry.find((p) => p && p.component === componentName);
     if (!plugin) {
         console.warn(`[runtime-plugins] Plugin "${componentName}" not found for type "${type}".`);
+        return;
+    }
+    if (!isPluginEnabled(plugin)) {
+        console.warn(`[runtime-plugins] Plugin "${componentName}" is disabled in workspace settings.`);
         return;
     }
     await initializePlugin(plugin);
@@ -148,7 +181,7 @@ async function initializePlugin(plugin) {
 
 async function renderPluginIcons(containerElement, type) {
     const registry = assistOS.workspace.plugins[type];
-    const plugins = Array.isArray(registry) ? registry : [];
+    const plugins = Array.isArray(registry) ? registry.filter((plugin) => plugin && isPluginEnabled(plugin)) : [];
     for (const plugin of plugins) {
         if (!plugin) continue;
         if (plugin.iconPresenter && plugin.iconComponent) {
@@ -194,7 +227,11 @@ async function getPluginIcon(plugin) {
     if (!icon) {
         return '';
     }
-    if (icon.startsWith('data:') || /^https?:\/\//i.test(icon)) {
+    if (
+        icon.startsWith('data:')
+        || /^https?:\/\//i.test(icon)
+        || icon.startsWith('/workspace-files/')
+    ) {
         return icon;
     }
     const agent = plugin.agent || '';

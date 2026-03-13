@@ -1,0 +1,125 @@
+plugin-settings-modal .plugin-settings-modal-body {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: min(880px, 92vw);
+}
+
+plugin-settings-modal .plugin-settings-description {
+    margin: 0;
+    color: var(--text-soft);
+    font-size: 0.95rem;
+}
+
+plugin-settings-modal .plugin-settings-status {
+    min-height: 1.2rem;
+    color: var(--text-soft);
+    font-size: 0.9rem;
+}
+
+plugin-settings-modal .plugin-settings-status.error {
+    color: var(--file-exp-error);
+}
+
+plugin-settings-modal .plugin-settings-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: min(62vh, 720px);
+    overflow: auto;
+    padding-right: 4px;
+}
+
+plugin-settings-modal .plugin-settings-empty {
+    padding: 18px;
+    border: 1px dashed var(--border);
+    border-radius: 12px;
+    color: var(--text-soft);
+    background: var(--surface);
+}
+
+plugin-settings-modal .plugin-settings-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 14px;
+    align-items: center;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--surface);
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+}
+
+plugin-settings-modal .plugin-settings-row:hover {
+    border-color: color-mix(in srgb, var(--accent) 24%, var(--border));
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+}
+
+plugin-settings-modal .plugin-settings-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+plugin-settings-modal .plugin-settings-key {
+    font-weight: 700;
+    color: var(--text);
+    word-break: break-word;
+}
+
+plugin-settings-modal .plugin-settings-meta {
+    color: var(--text-soft);
+    font-size: 0.9rem;
+}
+
+plugin-settings-modal .plugin-settings-toggle {
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface-2, var(--surface));
+    color: var(--text);
+    min-width: 104px;
+    padding: 9px 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: border-color 120ms ease, background 120ms ease, color 120ms ease, transform 120ms ease;
+}
+
+plugin-settings-modal .plugin-settings-toggle:hover {
+    transform: translateY(-1px);
+}
+
+plugin-settings-modal .plugin-settings-toggle.enabled {
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+    background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+    color: var(--accent);
+}
+
+plugin-settings-modal .plugin-settings-toggle:disabled {
+    opacity: 0.65;
+    cursor: progress;
+    transform: none;
+}
+
+.theme-dark plugin-settings-modal .plugin-settings-row {
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.18);
+}
+
+.theme-dark plugin-settings-modal .plugin-settings-row:hover {
+    box-shadow: 0 18px 42px rgba(0, 0, 0, 0.24);
+}
+
+@media (max-width: 720px) {
+    plugin-settings-modal .plugin-settings-modal-body {
+        min-width: auto;
+    }
+
+    plugin-settings-modal .plugin-settings-row {
+        grid-template-columns: 1fr;
+        align-items: stretch;
+    }
+
+    plugin-settings-modal .plugin-settings-toggle {
+        justify-self: start;
+    }
+}

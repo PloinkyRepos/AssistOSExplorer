@@ -35,17 +35,6 @@ const DEFAULT_CUSTOM_TYPES = [
 ];
 const EXPLORER_AGENT_ID = 'explorer';
 
-const TRANSIENT_MCP_ERROR_PATTERNS = [
-    'Missing or invalid MCP session',
-    'Request timed out'
-];
-
-function isRecoverableMcpError(error) {
-    const message = error?.message || error?.toString?.() || '';
-    if (typeof message !== 'string') return false;
-    return TRANSIENT_MCP_ERROR_PATTERNS.some((pattern) => message.includes(pattern));
-}
-
 const buildUIHelpers = () => {
     const configs = { components: [] };
 
@@ -484,7 +473,7 @@ class AssistosSDK {
     }
 
     async callTool(agentId, tool, args = {}) {
-        const executeCall = async () => {
+        try {
             const client = this.getClient(agentId);
             const result = await client.callTool(tool, args);
             const blocks = Array.isArray(result?.content) ? result.content : [];
@@ -500,20 +489,7 @@ class AssistosSDK {
                 }
             }
             return { text, json, blocks, raw: result };
-        };
-
-        try {
-            return await executeCall();
         } catch (error) {
-            if (isRecoverableMcpError(error)) {
-                this.resetClient(agentId);
-                try {
-                    return await executeCall();
-                } catch (retryError) {
-                    console.error(`Agent call failed after retry (${agentId}:${tool})`, retryError);
-                    throw retryError;
-                }
-            }
             console.error(`Agent call failed (${agentId}:${tool})`, error);
             throw error;
         }

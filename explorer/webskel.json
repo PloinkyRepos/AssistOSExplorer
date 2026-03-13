@@ -197,6 +197,11 @@
       "presenterClassName": "SettingsModal"
     },
     {
+      "name": "plugin-settings-modal",
+      "type": "modals",
+      "presenterClassName": "PluginSettingsModal"
+    },
+    {
       "name": "git-commit-modal",
       "type": "modals",
       "presenterClassName": "GitCommitModal"

@@ -172,16 +172,6 @@ document-view-page {
     margin-right: 0;
 }
 
-.toolbar {
-    display: flex;
-    align-items: center;
-    border: none;
-    padding: unset;
-    background-color: unset;
-    backdrop-filter: unset;
-    gap: unset;
-}
-
 .toolbar-margin {
     margin-right: 10px;
 }

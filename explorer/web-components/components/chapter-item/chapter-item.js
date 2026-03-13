@@ -245,27 +245,15 @@ export class ChapterItem {
         }*/
     }
 
-    async updateStatus(status, type, pluginName, autoPin) {
+    async updateStatus(status, type, pluginName, autoPin, persist = true) {
         UIUtils.changeStatusIcon(this.element, status, type, pluginName, autoPin);
         if(status === this.chapter.comments.status && pluginName === this.chapter.comments.plugin){
             return; // No change in status or plugin
         }
         this.chapter.comments.status = status;
         this.chapter.comments.plugin = pluginName;
-        await documentModule.updateChapter(this.chapter.id,
-            this.chapter.title,
-            this.chapter.commands,
-            this.chapter.comments);
-    }
-    async updateLastOpenedPlugin(pluginName) {
-        const normalized = pluginName || "";
-        if (this.chapter.comments.pluginLastOpened === normalized) {
+        if (!persist) {
             return;
-        }
-        if (normalized) {
-            this.chapter.comments.pluginLastOpened = normalized;
-        } else {
-            delete this.chapter.comments.pluginLastOpened;
         }
         await documentModule.updateChapter(this.chapter.id,
             this.chapter.title,
@@ -417,7 +405,6 @@ export class ChapterItem {
             hostType: 'chapter'
         }
         await pluginUtils.openPlugin(pluginName, type, context, this, autoPin);
-        await this.updateLastOpenedPlugin(pluginName);
     }
     async closePlugin(targetElement, focusoutClose) {
         let pluginContainer = this.element.querySelector(`.chapter-plugin-container`);
@@ -431,7 +418,6 @@ export class ChapterItem {
         }
         delete this.currentPlugin;
         pluginUtils.removeHighlightPlugin("chapter", this);
-        await this.updateLastOpenedPlugin("");
         if (focusoutClose) {
             return pluginName;
         }

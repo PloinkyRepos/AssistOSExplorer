@@ -256,6 +256,11 @@ export async function aggregateIdePlugins(rootDir) {
       const finalPluginConfig = pluginConfigWithoutLocation;
       finalPluginConfig.agent = agentName;
 
+      const relativePluginDir = path.relative(rootDir, pluginDir);
+      if (relativePluginDir && !relativePluginDir.startsWith('..') && !path.isAbsolute(relativePluginDir)) {
+        finalPluginConfig.assetRootPath = relativePluginDir.split(path.sep).join('/');
+      }
+
       for (const loc of locations) {
         if (!loc) continue;
         const bucket = ensureBucket(loc);

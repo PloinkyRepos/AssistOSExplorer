@@ -64,6 +64,11 @@ export function createSchemas(z) {
   });
   const GetFileInfoArgsSchema = z.object({ path: z.string() });
   const CollectIDEPluginsArgsSchema = z.object({});
+  const GetPluginSettingsArgsSchema = z.object({});
+  const SetPluginEnabledArgsSchema = z.object({
+    key: z.string(),
+    enabled: z.boolean()
+  });
   const GitInfoArgsSchema = z.object({ path: z.string() });
   const GitStatusArgsSchema = z.object({ path: z.string() });
   const GitDiffArgsSchema = z.object({
@@ -172,6 +177,8 @@ export function createSchemas(z) {
     ReplaceTextArgsSchema,
     GetFileInfoArgsSchema,
     CollectIDEPluginsArgsSchema,
+    GetPluginSettingsArgsSchema,
+    SetPluginEnabledArgsSchema,
     GitInfoArgsSchema,
     GitStatusArgsSchema,
     GitDiffArgsSchema,

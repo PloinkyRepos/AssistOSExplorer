@@ -205,6 +205,12 @@ export function attachSearchController(fileExp) {
         }
     }
 
+    async function openPluginSettingsModal() {
+        fileExp.setSearchMenuOpen(false);
+        updateSearchUI();
+        await assistOS.UI.createReactiveModal('plugin-settings-modal', {}, true);
+    }
+
     function closeSearchOverlays() {
         fileExp.setSearchMenuOpen(false);
         updateSearchUI();
@@ -368,6 +374,7 @@ export function attachSearchController(fileExp) {
         openSearchInFiles,
         openReplaceInFiles,
         openSettingsModal,
+        openPluginSettingsModal,
         closeSearchOverlays,
         openSearchResult,
         navigateToPath,

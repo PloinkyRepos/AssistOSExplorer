@@ -19,6 +19,14 @@ const hasRuntimePlugins = (runtimePlugins) => {
     return Object.values(runtimePlugins).some((entries) => Array.isArray(entries) && entries.length > 0);
 };
 
+const normalizePluginSettings = (payload) => {
+    const plugins = payload?.plugins;
+    if (!plugins || typeof plugins !== 'object' || Array.isArray(plugins)) {
+        return {};
+    }
+    return plugins;
+};
+
 async function start() {
     initializeTheme();
     const webSkel = await WebSkel.initialise('webskel.json');
@@ -33,6 +41,8 @@ async function start() {
     });
 
     const { raw: rawRuntimePlugins, normalized: runtimePlugins } = await runtimePluginLoader.fetchRuntimePlugins();
+    const pluginSettingsResult = await assistosSDK.callTool(EXPLORER_AGENT_ID, 'get_plugin_settings', {});
+    const pluginSettings = normalizePluginSettings(pluginSettingsResult?.json);
     const assistOS = initialiseAssistOS({
         ui: webSkel,
         runtimePlugins: hasRuntimePlugins(runtimePlugins) ? runtimePlugins : undefined
@@ -41,6 +51,7 @@ async function start() {
     assistOS.appServices = assistosSDK;
     assistOS.runtimePlugins = runtimePlugins;
     assistOS.rawRuntimePlugins = rawRuntimePlugins || {};
+    assistOS.pluginSettings = pluginSettings;
     runtimePluginLoader.mergeIntoAssistOS(assistOS, runtimePlugins);
 
     const installRuntimeComponentGuards = () => {

@@ -134,9 +134,9 @@ export class EditVariables {
                 `;
         }
         if (showError) {
-            this.updateStatus("error");
+            this.updateStatus("error", false);
         } else {
-            this.updateStatus("ok");
+            this.updateStatus("ok", false);
         }
         this.variablesHTML = variablesHTML;
     }
@@ -223,13 +223,13 @@ export class EditVariables {
         this.invalidate();
     }
 
-    async updateStatus(status) {
+    async updateStatus(status, persist = true) {
         if (this.paragraph) {
-            await this.paragraphPresenter.updateStatus(status, "paragraph", "edit-variables", true);
+            await this.paragraphPresenter.updateStatus(status, "paragraph", "edit-variables", true, persist);
         } else if (this.chapter) {
-            await this.chapterPresenter.updateStatus(status, "chapter", "edit-variables", true);
+            await this.chapterPresenter.updateStatus(status, "chapter", "edit-variables", true, persist);
         } else {
-            await this.documentPresenter.updateStatus(status, "infoText", "edit-variables", true);
+            await this.documentPresenter.updateStatus(status, "infoText", "edit-variables", true, persist);
         }
     }
 

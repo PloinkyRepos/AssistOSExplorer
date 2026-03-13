@@ -77,10 +77,45 @@ export function createToolHandlers({
     SearchTextArgsSchema,
     ReplaceTextArgsSchema,
     GetFileInfoArgsSchema,
-    CollectIDEPluginsArgsSchema
+    CollectIDEPluginsArgsSchema,
+    GetPluginSettingsArgsSchema,
+    SetPluginEnabledArgsSchema
   } = schemas;
   const inflightSearchFiles = new Map();
   const inflightSearchText = new Map();
+  const pluginSettingsPath = path.join(workspaceRoot, '.ploinky', 'explorer-plugin-settings.json');
+
+  async function readPluginSettings() {
+    try {
+      const raw = await fs.readFile(pluginSettingsPath, 'utf8');
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return { plugins: {} };
+      }
+      const plugins = parsed.plugins && typeof parsed.plugins === 'object' && !Array.isArray(parsed.plugins)
+        ? parsed.plugins
+        : {};
+      return { plugins };
+    } catch (error) {
+      if (error && typeof error === 'object' && error.code === 'ENOENT') {
+        return { plugins: {} };
+      }
+      console.warn(`[filesystem-http] Failed to read plugin settings ${pluginSettingsPath}:`, error instanceof Error ? error.message : String(error));
+      return { plugins: {} };
+    }
+  }
+
+  async function writePluginSettings(settings) {
+    const dirPath = path.dirname(pluginSettingsPath);
+    await fs.mkdir(dirPath, { recursive: true });
+    const normalized = {
+      plugins: settings?.plugins && typeof settings.plugins === 'object' && !Array.isArray(settings.plugins)
+        ? settings.plugins
+        : {}
+    };
+    await fs.writeFile(pluginSettingsPath, `${JSON.stringify(normalized, null, 2)}\n`, 'utf8');
+    invalidateCachesForPath(pluginSettingsPath);
+  }
 
   async function handleReadText(args) {
     const data = parseArgs(ReadTextFileArgsSchema, args, 'read_text_file');
@@ -433,6 +468,31 @@ export function createToolHandlers({
     return jsonResponse(pluginsByLocation);
   }
 
+  async function handleGetPluginSettings(args) {
+    parseArgs(GetPluginSettingsArgsSchema, args, 'get_plugin_settings');
+    const settings = await readPluginSettings();
+    return jsonResponse(settings);
+  }
+
+  async function handleSetPluginEnabled(args) {
+    const data = parseArgs(SetPluginEnabledArgsSchema, args, 'set_plugin_enabled');
+    const settings = await readPluginSettings();
+    const nextPlugins = {
+      ...(settings.plugins || {}),
+      [data.key]: {
+        enabled: data.enabled
+      }
+    };
+    const nextSettings = { plugins: nextPlugins };
+    await writePluginSettings(nextSettings);
+    return jsonResponse({
+      ok: true,
+      key: data.key,
+      enabled: data.enabled,
+      settings: nextSettings
+    });
+  }
+
   async function handleListAllowedDirectories() {
     const allowed = getAllowedDirectories ? getAllowedDirectories() : [];
     return textResponse(`Allowed directories:\n${allowed.join('\n')}`);
@@ -460,6 +520,8 @@ export function createToolHandlers({
     replace_text: handleReplaceText,
     get_file_info: handleGetFileInfo,
     collect_ide_plugins: handleCollectIdePlugins,
+    get_plugin_settings: handleGetPluginSettings,
+    set_plugin_enabled: handleSetPluginEnabled,
     list_allowed_directories: handleListAllowedDirectories
   };
 }

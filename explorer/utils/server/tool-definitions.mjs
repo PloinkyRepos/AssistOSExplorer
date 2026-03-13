@@ -20,26 +20,8 @@ export function buildToolDefinitions(zodToJsonSchema, schemas) {
     ReplaceTextArgsSchema,
     GetFileInfoArgsSchema,
     CollectIDEPluginsArgsSchema,
-    GitInfoArgsSchema,
-    GitStatusArgsSchema,
-    GitDiffArgsSchema,
-    GitStageArgsSchema,
-    GitUnstageArgsSchema,
-    GitUntrackArgsSchema,
-    GitCheckIgnoreArgsSchema,
-    GitRestoreArgsSchema,
-    GitConflictVersionsArgsSchema,
-    GitCheckoutConflictArgsSchema,
-    GitStashArgsSchema,
-    GitStashListArgsSchema,
-    GitStashPopArgsSchema,
-    GitCommitArgsSchema,
-    GitPushArgsSchema,
-    GitPullArgsSchema,
-    GitDiagnoseArgsSchema,
-    GitReposOverviewArgsSchema,
-    GitIdentityArgsSchema,
-    GitSetIdentityArgsSchema
+    GetPluginSettingsArgsSchema,
+    SetPluginEnabledArgsSchema
   } = schemas;
 
   return [
@@ -147,6 +129,16 @@ export function buildToolDefinitions(zodToJsonSchema, schemas) {
       name: 'collect_ide_plugins',
       description: 'Aggregate IDE plugin configurations grouped by location based on config.json files.',
       inputSchema: zodToJsonSchema(CollectIDEPluginsArgsSchema)
+    },
+    {
+      name: 'get_plugin_settings',
+      description: 'Read persisted workspace plugin settings from /.ploinky/explorer-plugin-settings.json.',
+      inputSchema: zodToJsonSchema(GetPluginSettingsArgsSchema)
+    },
+    {
+      name: 'set_plugin_enabled',
+      description: 'Persist enabled or disabled state for a plugin in workspace settings.',
+      inputSchema: zodToJsonSchema(SetPluginEnabledArgsSchema)
     },
     {
       name: 'list_allowed_directories',

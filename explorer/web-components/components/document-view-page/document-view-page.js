@@ -244,29 +244,15 @@ export class DocumentViewPage {
         delete this.currentPlugin;
     }
 
-    async updateStatus(status, type, pluginName, autoPin) {
+    async updateStatus(status, type, pluginName, autoPin, persist = true) {
         UIUtils.changeStatusIcon(this.element, status, type, pluginName, autoPin);
         if(status === this._document.comments.status && pluginName === this._document.comments.plugin){
             return; // No change in status or plugin
         }
         this._document.comments.status = status;
         this._document.comments.plugin = pluginName;
-        await documentModule.updateDocument(this._document.id,
-            this._document.title,
-            this._document.docId,
-            this._document.infoText,
-            this._document.commands,
-            this._document.comments);
-    }
-    async updateLastOpenedPlugin(pluginName) {
-        const normalized = pluginName || "";
-        if (this._document.comments.pluginLastOpened === normalized) {
+        if (!persist) {
             return;
-        }
-        if (normalized) {
-            this._document.comments.pluginLastOpened = normalized;
-        } else {
-            delete this._document.comments.pluginLastOpened;
         }
         await documentModule.updateDocument(this._document.id,
             this._document.title,
@@ -746,7 +732,6 @@ export class DocumentViewPage {
             }
             await pluginUtils.openPlugin(pluginName, "infoText", context, this, autoPin);
         }
-        await this.updateLastOpenedPlugin(pluginName);
     }
 
     async closePlugin(targetElement, type, focusoutClose) {
@@ -760,7 +745,6 @@ export class DocumentViewPage {
         let pluginName = pluginElement.tagName.toLowerCase();
         pluginElement.remove();
         pluginUtils.removeHighlightPlugin("infoText", this);
-        await this.updateLastOpenedPlugin("");
         if (focusoutClose) {
             return pluginName;
         }

@@ -1,47 +1,106 @@
 const isNonEmptyString = (value) => typeof value === 'string' && value.trim().length > 0;
+const WORKSPACE_FILES_PREFIX = '/workspace-files';
+
+function normalizePathSegments(value) {
+    return String(value || '')
+        .replace(/\\/g, '/')
+        .replace(/^\/+/, '')
+        .replace(/\/+/g, '/')
+        .split('/')
+        .filter((segment) => segment && segment !== '..' && segment !== '.')
+        .join('/');
+}
+
+function buildWorkspaceFilesUrl(relativePath) {
+    const cleaned = normalizePathSegments(relativePath);
+    return cleaned ? `${WORKSPACE_FILES_PREFIX}/${cleaned}` : WORKSPACE_FILES_PREFIX;
+}
+
+function joinUrlSegments(base, ...segments) {
+    const normalizedBase = String(base || '').replace(/\/+$/, '');
+    const normalizedSegments = segments
+        .map((segment) => normalizePathSegments(segment))
+        .filter(Boolean);
+    if (!normalizedSegments.length) {
+        return normalizedBase;
+    }
+    return `${normalizedBase}/${normalizedSegments.join('/')}`.replace(/\/+/g, '/');
+}
+
+function getParentPath(value) {
+    const cleaned = normalizePathSegments(value);
+    if (!cleaned) {
+        return '';
+    }
+    const segments = cleaned.split('/');
+    segments.pop();
+    return segments.join('/');
+}
 
 export const DEFAULT_PLUGIN_LOCATIONS = ['document', 'chapter', 'paragraph', 'infoText'];
 
-export function resolveRuntimeAssetUrl(agent, component, assetPath, fallback = '') {
+export function resolveRuntimeAssetUrl(agent, component, assetPath, fallback = '', {assetBaseUrl, pluginsBaseUrl} = {}) {
     if (!isNonEmptyString(agent) || !isNonEmptyString(component)) {
         return assetPath;
     }
+    const effectiveAssetBaseUrl = isNonEmptyString(assetBaseUrl)
+        ? assetBaseUrl.trim().replace(/\/+$/, '')
+        : `/${agent}/IDE-plugins/${component}`;
+    const effectivePluginsBaseUrl = isNonEmptyString(pluginsBaseUrl)
+        ? pluginsBaseUrl.trim().replace(/\/+$/, '')
+        : `/${agent}/IDE-plugins`;
     if (!isNonEmptyString(assetPath)) {
-        return fallback ? `/${agent}/IDE-plugins/${component}/${fallback}` : `/${agent}/IDE-plugins/${component}`;
+        return fallback ? joinUrlSegments(effectiveAssetBaseUrl, fallback) : effectiveAssetBaseUrl;
     }
     const trimmed = assetPath.trim();
     if (/^https?:\/\//i.test(trimmed) || trimmed.startsWith('data:')) {
         return trimmed;
     }
-    const withoutLeadingSlash = trimmed.replace(/^\/+/, '');
-    if (withoutLeadingSlash.startsWith(`${agent}/IDE-plugins/`) || withoutLeadingSlash.startsWith('IDE-plugins/')) {
-        return trimmed.startsWith('/') ? trimmed : `/${withoutLeadingSlash}`;
+    if (trimmed.startsWith(`${WORKSPACE_FILES_PREFIX}/`)) {
+        return trimmed;
     }
-    const cleaned = withoutLeadingSlash
-        .replace(/^\.\/+/, '')
-        .split('/')
-        .filter((segment) => segment && segment !== '..')
-        .join('/');
-    return `/${agent}/IDE-plugins/${component}/${cleaned}`;
+    const withoutLeadingSlash = trimmed.replace(/^\/+/, '');
+    if (withoutLeadingSlash.startsWith(`${agent}/IDE-plugins/`)) {
+        const relativeToPlugins = withoutLeadingSlash.slice(`${agent}/IDE-plugins/`.length);
+        return joinUrlSegments(effectivePluginsBaseUrl, relativeToPlugins);
+    }
+    if (withoutLeadingSlash.startsWith('IDE-plugins/')) {
+        const relativeToPlugins = withoutLeadingSlash.slice('IDE-plugins/'.length);
+        return joinUrlSegments(effectivePluginsBaseUrl, relativeToPlugins);
+    }
+    const cleaned = normalizePathSegments(withoutLeadingSlash.replace(/^\.\/+/, ''));
+    return joinUrlSegments(effectiveAssetBaseUrl, cleaned);
 }
 
-export function computeComponentBaseUrl(agent, component, {ownerComponent, isDependency, customPath} = {}) {
+export function computeComponentBaseUrl(agent, component, {
+    ownerComponent,
+    isDependency,
+    customPath,
+    assetBaseUrl,
+    pluginsBaseUrl,
+    ownerAssetBaseUrl
+} = {}) {
     if (!isNonEmptyString(agent) || !isNonEmptyString(component)) {
         return '';
     }
+    const effectiveAssetBaseUrl = isNonEmptyString(assetBaseUrl)
+        ? assetBaseUrl.trim().replace(/\/+$/, '')
+        : `/${agent}/IDE-plugins/${component}`;
+    const effectivePluginsBaseUrl = isNonEmptyString(pluginsBaseUrl)
+        ? pluginsBaseUrl.trim().replace(/\/+$/, '')
+        : `/${agent}/IDE-plugins`;
     if (isNonEmptyString(customPath)) {
-        const cleaned = customPath
-            .replace(/^\.\/+/, '')
-            .replace(/^\/+/, '')
-            .replace(/\/+/g, '/');
-        return `/${agent}/IDE-plugins/${cleaned}`.replace(/\/+/g, '/');
+        return joinUrlSegments(effectivePluginsBaseUrl, customPath);
     }
     if (isDependency && isNonEmptyString(ownerComponent) && ownerComponent.trim() !== component.trim()) {
-        const owner = ownerComponent.trim();
         const child = component.trim();
+        if (isNonEmptyString(ownerAssetBaseUrl)) {
+            return joinUrlSegments(ownerAssetBaseUrl, 'components', child, child);
+        }
+        const owner = ownerComponent.trim();
         return `/${agent}/IDE-plugins/${owner}/components/${child}/${child}`;
     }
-    return `/${agent}/IDE-plugins/${component}/${component}`;
+    return joinUrlSegments(effectiveAssetBaseUrl, component);
 }
 
 export function normalizeRuntimePlugins(runtimePlugins) {
@@ -76,7 +135,17 @@ export function normalizeRuntimePlugins(runtimePlugins) {
                 continue;
             }
 
-            const baseUrl = computeComponentBaseUrl(agent, component);
+            const assetRootPath = isNonEmptyString(entry.assetRootPath) ? normalizePathSegments(entry.assetRootPath) : '';
+            const assetBaseUrl = assetRootPath
+                ? buildWorkspaceFilesUrl(assetRootPath)
+                : `/${agent}/IDE-plugins/${component}`;
+            const pluginsBaseUrl = assetRootPath
+                ? buildWorkspaceFilesUrl(getParentPath(assetRootPath))
+                : `/${agent}/IDE-plugins`;
+            const baseUrl = computeComponentBaseUrl(agent, component, {
+                assetBaseUrl,
+                pluginsBaseUrl
+            });
             const normalizedEntry = {
                 ...entry,
                 component,
@@ -85,10 +154,13 @@ export function normalizeRuntimePlugins(runtimePlugins) {
                 type: isNonEmptyString(entry.type) ? entry.type : 'embedded',
                 autoPin: Boolean(entry.autoPin),
                 agent,
-                icon: resolveRuntimeAssetUrl(agent, component, entry.icon, 'icon.svg'),
+                icon: resolveRuntimeAssetUrl(agent, component, entry.icon, 'icon.svg', {
+                    assetBaseUrl,
+                    pluginsBaseUrl
+                }),
                 runtime: true,
                 componentBaseUrl: baseUrl,
-                assetBaseUrl: `/${agent}/IDE-plugins/${component}`
+                assetBaseUrl
             };
 
             if (Array.isArray(entry.dependencies) && entry.dependencies.length > 0) {
@@ -110,7 +182,9 @@ export function normalizeRuntimePlugins(runtimePlugins) {
                         baseUrl: computeComponentBaseUrl(dependencyAgent, dependencyName, {
                             ownerComponent: dependency.ownerComponent || component,
                             isDependency: true,
-                            customPath: dependencyPath
+                            customPath: dependencyPath,
+                            pluginsBaseUrl,
+                            ownerAssetBaseUrl: assetBaseUrl
                         })
                     };
                 });
