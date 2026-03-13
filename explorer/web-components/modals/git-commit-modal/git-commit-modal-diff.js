@@ -112,7 +112,9 @@ export const unifiedToSplitHtml = (text) => {
             continue;
         }
         if (line.startsWith('\\')) {
-            pushMetaLine(line);
+            // The unified diff marker for missing trailing newlines is useful in
+            // raw mode, but in split mode it creates noisy duplicated rows on
+            // both panes because Git can emit one marker for each side.
             continue;
         }
         if (line.startsWith(' ')) {
