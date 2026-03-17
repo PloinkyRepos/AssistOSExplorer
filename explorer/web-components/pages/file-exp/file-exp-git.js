@@ -18,7 +18,7 @@ import {
     normalizeSlashes
 } from "../../modals/git-commit-modal/git-commit-modal-utils.js";
 import { callAgentTool } from "../../../services/infrastructure/explorerApi.js";
-import { getReposRoot } from "../../../utils/reposRoot.js";
+import { getReposRoot, getRepoScanPaths } from "../../../utils/reposRoot.js";
 import {
     AUTOCOMMIT_SETTINGS_CHANGED_EVENT,
     AUTOCOMMIT_RESET_EVENT,
@@ -133,19 +133,25 @@ export function attachGitController(fileExp) {
     };
 
     const listRepos = async () => {
-        const scanPaths = [reposRoot, '.'];
+        const seen = new Set();
+        const results = [];
+        const scanPaths = getRepoScanPaths({ rootHint: reposRoot });
         for (const scanPath of scanPaths) {
             if (!scanPath) continue;
             try {
                 const payload = await callGitTool('git_repos_overview', { path: scanPath }) || {};
                 const repos = Array.isArray(payload?.repos) ? payload.repos : [];
-                const paths = repos.map((r) => r?.path).filter(Boolean);
-                if (paths.length) return paths;
+                for (const repo of repos) {
+                    const repoPath = String(repo?.path || '').trim();
+                    if (!repoPath || seen.has(repoPath)) continue;
+                    seen.add(repoPath);
+                    results.push(repoPath);
+                }
             } catch {
                 // try next path
             }
         }
-        return [];
+        return results;
     };
 
     const getRepoStatus = async (repoPath) => {
