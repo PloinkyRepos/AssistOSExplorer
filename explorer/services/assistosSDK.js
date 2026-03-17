@@ -18,22 +18,63 @@ import { createMediaClient } from './media/mediaClient.js';
 
 const DEFAULT_EMAIL = 'local@example.com';
 const DEFAULT_AGENT_IMAGE = './assets/icons/person.svg';
-const DEFAULT_COMMANDS = [
-    'assign',
-    'new',
-    'macro',
-    'jsdef',
-    'append',
-    'replace',
-    'remove'
-];
-const DEFAULT_CUSTOM_TYPES = [
-    'text',
-    'number',
-    'date',
-    'list'
-];
 const EXPLORER_AGENT_ID = 'explorer';
+const SOPLANG_AGENT_ID = 'soplangAgent';
+
+let cachedCommands = null;
+let cachedCustomTypes = null;
+let pendingCommands = null;
+let pendingCustomTypes = null;
+
+const fetchCommands = async () => {
+    if (cachedCommands) {
+        return cachedCommands;
+    }
+    if (pendingCommands) {
+        return pendingCommands;
+    }
+
+    pendingCommands = (async () => {
+        try {
+            const result = await assistosSDK.callTool(SOPLANG_AGENT_ID, 'get_commands');
+            cachedCommands = Array.isArray(result?.json) ? result.json : [];
+            return cachedCommands;
+        } catch (error) {
+            console.error('[assistOS] Failed to load commands:', error);
+            cachedCommands = [];
+            return cachedCommands;
+        } finally {
+            pendingCommands = null;
+        }
+    })();
+
+    return pendingCommands;
+};
+
+const fetchCustomTypes = async () => {
+    if (cachedCustomTypes) {
+        return cachedCustomTypes;
+    }
+    if (pendingCustomTypes) {
+        return pendingCustomTypes;
+    }
+
+    pendingCustomTypes = (async () => {
+        try {
+            const result = await assistosSDK.callTool(SOPLANG_AGENT_ID, 'get_types');
+            cachedCustomTypes = Array.isArray(result?.json) ? result.json : [];
+            return cachedCustomTypes;
+        } catch (error) {
+            console.error('[assistOS] Failed to load custom types:', error);
+            cachedCustomTypes = [];
+            return cachedCustomTypes;
+        } finally {
+            pendingCustomTypes = null;
+        }
+    })();
+
+    return pendingCustomTypes;
+};
 
 const buildUIHelpers = () => {
     const configs = { components: [] };
@@ -210,12 +251,16 @@ const buildNotificationRouter = () => ({
 
 const buildAgentModule = () => ({
     async getDefaultAgent() {
+        const [commands, customTypes] = await Promise.all([
+            fetchCommands(),
+            fetchCustomTypes()
+        ]);
         return {
             id: 'local-agent',
             name: 'Local Agent',
             image: DEFAULT_AGENT_IMAGE,
-            commands: DEFAULT_COMMANDS,
-            customTypes: DEFAULT_CUSTOM_TYPES
+            commands,
+            customTypes
         };
     },
     async getAgents() {
@@ -244,10 +289,10 @@ const buildWorkspaceModule = (workspaceState) => {
             };
         },
         async getCommands() {
-            return [...DEFAULT_COMMANDS];
+            return fetchCommands();
         },
         async getCustomTypes() {
-            return [...DEFAULT_CUSTOM_TYPES];
+            return fetchCustomTypes();
         },
         async getImageURL(imageId) {
             return mediaClient.getImageURL(imageId);
@@ -459,6 +504,12 @@ class AssistosSDK {
             }
         }
         this.clients.delete(agentId);
+        if (agentId === SOPLANG_AGENT_ID) {
+            cachedCommands = null;
+            cachedCustomTypes = null;
+            pendingCommands = null;
+            pendingCustomTypes = null;
+        }
     }
 
     getClient(agentId) {
