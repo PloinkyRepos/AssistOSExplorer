@@ -80,12 +80,14 @@ touch "$secrets_file"
 
 # If already configured in secrets, don't overwrite.
 if grep -q '^ASSISTOS_FS_ROOT=' "$secrets_file"; then
-    exit 0
+    :
+else
+    {
+        echo
+        echo "ASSISTOS_FS_ROOT=${workspace_root}"
+    } >> "$secrets_file"
 fi
 
-{
-    echo
-    echo "ASSISTOS_FS_ROOT=${workspace_root}"
-} >> "$secrets_file"
+/bin/bash "$(dirname "$0")/setup-sso.sh" seed || true
 
 exit 0

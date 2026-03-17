@@ -5,7 +5,14 @@
     "cli": "/bin/bash",
     "agent": "node /code/filesystem-http-server.mjs",
     "about": "AssistOS Explorer agent",
+    "ploinky": "pwd enable",
+    "pwd": {
+        "user": "admin",
+        "password": "admin"
+    },
     "enable": [
+        "postgres",
+        "keycloak",
         "gitAssistant/gitAgent global",
         "soplangBuilder/soplangAgent global",
         "tasksAssistant/tasksAgent global",
@@ -24,7 +31,8 @@
                 "SOUL_GATEWAY_API_KEY"
             ],
             "preinstall": "scripts/hooks/preinstall.sh",
-            "install": "/code/scripts/hooks/install.sh"
+            "install": "/code/scripts/hooks/install.sh",
+            "hosthook_postinstall": "scripts/hooks/postinstall-sso.sh"
         }
     }
 }
