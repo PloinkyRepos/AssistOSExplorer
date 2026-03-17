@@ -7,6 +7,7 @@ import { createGitCommitState } from "./git-commit-modal-state.js";
 import { createGitCommitUI } from "./git-commit-modal-ui.js";
 import { callExplorerTool, callAgentTool } from "../../../services/infrastructure/explorerApi.js";
 import { withGlobalLoader } from "../../../utils/globalLoader.js";
+import { getRepoScanPaths } from "../../../utils/reposRoot.js";
 import { joinPath } from "../../pages/file-exp/file-exp-utils.js";
 import { normalizeErrorMessage, parseJsonToolResult, normalizeSlashes, isReposRootPath, getRememberedGitIdentity, setGitErrorFlag, setCredentialsValidated, setRememberedGitPat } from "./git-commit-modal-utils.js";
 import { FILE_EXP_REFRESH_EVENT, GIT_MODAL_CLOSED_EVENT } from "../../../utils/appEvents.js";
@@ -280,7 +281,7 @@ export class GitCommitModal {
             .map((repo) => repo?.path)
             .find(Boolean);
         if (fromOverviews) return fromOverviews;
-        const scanPaths = [this.state.reposRoot, '.'];
+        const scanPaths = getRepoScanPaths({ rootHint: this.state.reposRoot });
         for (const scanPath of scanPaths) {
             if (!scanPath) continue;
             try {

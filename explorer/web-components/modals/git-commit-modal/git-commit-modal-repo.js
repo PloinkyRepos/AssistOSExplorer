@@ -1,5 +1,6 @@
 import { parseDetailedDirectoryListing, joinPath } from "../../pages/file-exp/file-exp-utils.js";
 import { parseJsonToolResult, isReposRootPath, normalizeErrorMessage } from "./git-commit-modal-utils.js";
+import { getRepoScanPaths, getInternalReposRoot } from "../../../utils/reposRoot.js";
 import {
     ensureSelectionEntry,
     peekSelectionEntry,
@@ -24,6 +25,32 @@ export function createGitCommitRepo(ctx) {
     } = ctx;
 
     const getRepoTreePresenter = () => element.querySelector('git-repo-tree')?.webSkelPresenter || null;
+    const internalReposRoot = getInternalReposRoot({ rootHint: state.reposRoot });
+
+    const mergeRepoResults = (collections = []) => {
+        const merged = [];
+        const seenPaths = new Set();
+        for (const collection of collections) {
+            for (const repo of Array.isArray(collection) ? collection : []) {
+                const repoPath = String(repo?.path || '').trim();
+                if (!repoPath || seenPaths.has(repoPath)) continue;
+                seenPaths.add(repoPath);
+                const relativePath = String(repo?.relativePath || repo?.name || '').replace(/^\/+/, '');
+                const nextRelativePath = repoPath.startsWith(`${internalReposRoot}/`)
+                    ? `.ploinky/repos/${relativePath || repoPath.slice(internalReposRoot.length + 1)}`
+                    : relativePath;
+                merged.push({
+                    ...repo,
+                    relativePath: nextRelativePath || relativePath
+                });
+            }
+        }
+        return merged.sort((a, b) => {
+            const left = String(a?.relativePath || a?.name || a?.path || '');
+            const right = String(b?.relativePath || b?.name || b?.path || '');
+            return left.localeCompare(right, undefined, { sensitivity: 'base' });
+        });
+    };
 
     const getSelectedFilesEntry = (repoPath) => {
         if (!repoPath) return null;
@@ -218,20 +245,22 @@ export function createGitCommitRepo(ctx) {
         renderRepoOverviews([]);
         const pending = (async () => {
             try {
-                let results = [];
-                const scanPaths = [state.reposRoot, '.'];
+                const resultSets = [];
+                const scanPaths = getRepoScanPaths({ rootHint: state.reposRoot });
                 for (const scanPath of scanPaths) {
                     if (!scanPath) continue;
                     try {
                         const payload = parseJsonToolResult(await service.gitReposOverview(scanPath)) || {};
-                        results = Array.isArray(payload.repos) ? payload.repos : [];
-                        if (results.length) break;
+                        const results = Array.isArray(payload.repos) ? payload.repos : [];
+                        if (results.length) {
+                            resultSets.push(results);
+                        }
                     } catch {
                         // try next path
                     }
                 }
                 const hintMap = state.ignoreHints || {};
-                const merged = results.map((repo) => {
+                const merged = mergeRepoResults(resultSets).map((repo) => {
                     const hints = Array.isArray(hintMap[repo?.path]) ? hintMap[repo.path] : [];
                     return hints.length ? { ...repo, ignoredHints: hints } : repo;
                 });
@@ -243,19 +272,25 @@ export function createGitCommitRepo(ctx) {
                 return merged;
             } catch (error) {
                 try {
-                    const listingText = await service.listDirectoryDetailed(state.reposRoot);
-                    const entries = parseDetailedDirectoryListing(listingText);
-                    const results = (entries || [])
-                        .filter((entry) => entry && entry.type === 'directory' && entry.name && !String(entry.name).startsWith('.'))
-                        .map((entry) => ({
-                            name: entry.name,
-                            path: joinPath(state.reposRoot, entry.name),
-                            ok: true,
-                            branch: null,
-                            counts: { staged: 0, unstaged: 0, untracked: 0, conflicted: 0 },
-                            sample: { staged: [], unstaged: [], untracked: [], conflicted: [] }
-                        }))
-                        .sort((a, b) => a.name.localeCompare(b.name));
+                    const fallbackCollections = [];
+                    const scanPaths = getRepoScanPaths({ rootHint: state.reposRoot, includeWorkspaceFallback: false });
+                    for (const scanPath of scanPaths) {
+                        const listingText = await service.listDirectoryDetailed(scanPath);
+                        const entries = parseDetailedDirectoryListing(listingText);
+                        const listed = (entries || [])
+                            .filter((entry) => entry && entry.type === 'directory' && entry.name && !String(entry.name).startsWith('.'))
+                            .map((entry) => ({
+                                name: entry.name,
+                                path: joinPath(scanPath, entry.name),
+                                relativePath: joinPath(scanPath === internalReposRoot ? '.ploinky/repos' : '', entry.name).replace(/^\/+/, ''),
+                                ok: true,
+                                branch: null,
+                                counts: { staged: 0, unstaged: 0, untracked: 0, conflicted: 0 },
+                                sample: { staged: [], unstaged: [], untracked: [], conflicted: [] }
+                            }));
+                        fallbackCollections.push(listed);
+                    }
+                    const results = mergeRepoResults(fallbackCollections);
                     state.repoOverviews = results;
                     repoOverviewCache.at = now;
                     repoOverviewCache.list = results;

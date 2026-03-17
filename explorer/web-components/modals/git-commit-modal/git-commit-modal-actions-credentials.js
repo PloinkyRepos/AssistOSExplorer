@@ -15,6 +15,7 @@ import {
     setConflictAutoresolveSetting,
     setCredentialsValidated
 } from "./git-commit-modal-utils.js";
+import { getRepoScanPaths } from "../../../utils/reposRoot.js";
 import { AUTOCOMMIT_SETTINGS_CHANGED_EVENT } from "../../../utils/appEvents.js";
 
 export function createCredentialsActions(ctx) {
@@ -44,7 +45,7 @@ export function createCredentialsActions(ctx) {
         if (state.repoPath && !isReposRootPath(state.repoPath, state.reposRoot)) return state.repoPath;
         const selected = getSelectedReposForBatch();
         if (selected.length) return selected[0];
-        const scanPaths = [state.reposRoot, '.'];
+        const scanPaths = getRepoScanPaths({ rootHint: state.reposRoot });
         for (const scanPath of scanPaths) {
             if (!scanPath) continue;
             try {
