@@ -3,6 +3,25 @@
         <div class="path-info">
             <span>Path:</span>
             <div class="breadcrumbs" id="breadcrumbs"></div>
+            <div class="path-info-actions">
+                <div class="toolbar-dropdown path-info-dropdown">
+                    <button id="accountMenuButton" class="secondary toolbar-menu-button path-info-menu-button" title="Account actions"
+                            aria-haspopup="true" aria-expanded="false">
+                        <img class="path-info-menu-icon" loading="lazy" src="./assets/icons/person.svg" alt="">
+                        <span class="chevron">▾</span>
+                    </button>
+                    <div class="toolbar-dropdown-menu action-menu-dropdown path-info-dropdown-menu" id="accountMenu" role="menu">
+                        <a class="toolbar-dropdown-item action-menu-item" href="/auth/account?agent=explorer&amp;returnTo=/explorer/index.html" role="menuitem">
+                            <img class="action-menu-item-icon" loading="lazy" src="./assets/icons/person.svg" alt="">
+                            <span class="action-menu-item-label">Change credentials</span>
+                        </a>
+                        <a class="toolbar-dropdown-item action-menu-item" href="/auth/logout?returnTo=%2Fauth%2Flogged-out%3Fnext%3D%2Fexplorer%2Findex.html" role="menuitem">
+                            <img class="action-menu-item-icon" loading="lazy" src="./assets/icons/logout.svg" alt="">
+                            <span class="action-menu-item-label">Logout</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
         </div>
 	        <div class="toolbar">
             <button id="upButton" class="secondary" title="Go to parent directory" data-local-action="goUp">

@@ -55,6 +55,8 @@ export async function runAfterRender(fileExp, options = {}) {
     const columnMenu = fileExp.element.querySelector('#columnVisibilityMenu');
     const toolbarMenuButton = fileExp.element.querySelector('#toolbarMenuButton');
     const toolbarMenu = fileExp.element.querySelector('#toolbarMenu');
+    const accountMenuButton = fileExp.element.querySelector('#accountMenuButton');
+    const accountMenu = fileExp.element.querySelector('#accountMenu');
 
     const updateToggleState = () => {
         if (!toggleListButton || !listPanel) return;
@@ -162,6 +164,35 @@ export async function runAfterRender(fileExp, options = {}) {
         toolbarMenuButton.setAttribute('aria-expanded', fileExp.state.toolbarMenuOpen ? 'true' : 'false');
     } else {
         fileExp.removeDocumentListener('toolbar-menu-outside');
+    }
+
+    if (accountMenuButton && accountMenu) {
+        const setAccountMenuOpen = (open) => {
+            accountMenu.classList.toggle('open', open);
+            accountMenuButton.setAttribute('aria-expanded', open ? 'true' : 'false');
+        };
+        const onAccountButtonClick = (event) => {
+            event.stopPropagation();
+            const willOpen = !accountMenu.classList.contains('open');
+            setAccountMenuOpen(willOpen);
+        };
+        const onAccountMenuClick = (event) => {
+            const item = event.target.closest('[role="menuitem"]');
+            if (item) {
+                setAccountMenuOpen(false);
+            }
+        };
+        const onAccountOutsideClick = (event) => {
+            if (!accountMenu.contains(event.target) && event.target !== accountMenuButton) {
+                setAccountMenuOpen(false);
+            }
+        };
+        fileExp.setElementListener('account-menu-button', accountMenuButton, 'click', onAccountButtonClick);
+        fileExp.setElementListener('account-menu-container', accountMenu, 'click', onAccountMenuClick);
+        fileExp.setDocumentListener('account-menu-outside', 'click', onAccountOutsideClick);
+        accountMenuButton.setAttribute('aria-expanded', accountMenu.classList.contains('open') ? 'true' : 'false');
+    } else {
+        fileExp.removeDocumentListener('account-menu-outside');
     }
 
     const columnCheckboxes = fileExp.element.querySelectorAll('#columnVisibilityMenu input[type="checkbox"]');

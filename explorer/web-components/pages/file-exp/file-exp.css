@@ -330,11 +330,16 @@ main {
 }
 
 .path-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
     padding: 12px 16px;
     border-bottom: 1px solid var(--border);
     background: var(--surface);
     margin-left: 0;
     flex-wrap: wrap;
+    position: relative;
+    z-index: 3;
 }
 
 .path-info > span {
@@ -345,6 +350,9 @@ main {
     display: flex;
     align-items: center;
     gap: 4px;
+    min-width: 0;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
 }
 
 .breadcrumbs button {
@@ -363,6 +371,44 @@ main {
 .breadcrumbs .separator {
     margin: 0 2px;
     color: var(--text-soft);
+}
+
+.path-info-actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex: 0 0 auto;
+}
+
+.path-info-dropdown {
+    position: relative;
+    margin-right: 0;
+}
+
+.path-info-menu-button {
+    margin-top: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+
+.path-info-menu-icon {
+    width: 16px;
+    height: 16px;
+    display: block;
+    opacity: 0.92;
+}
+
+.path-info-dropdown-menu.action-menu-dropdown {
+    top: calc(100% + 6px);
+    left: auto;
+    right: 0;
+    min-width: 210px;
+    z-index: 1200;
 }
 
 .workspace {
