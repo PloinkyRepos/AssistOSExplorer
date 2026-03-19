@@ -64,6 +64,14 @@ export function createCredentialsActions(ctx) {
         return '';
     };
 
+    const getGithubIdentityFallback = (state = getState()) => {
+        const githubUser = state?.githubAuth?.connection?.user || {};
+        return {
+            name: String(githubUser?.name || githubUser?.login || '').trim(),
+            email: String(githubUser?.email || '').trim()
+        };
+    };
+
     const getAuthMethod = (state = getState()) => {
         return normalizeGitAuthMethod(state.authPrompt?.authMethod || getRememberedGitAuthMethod());
     };
@@ -115,8 +123,9 @@ export function createCredentialsActions(ctx) {
         }
 
         const remembered = getRememberedGitIdentity();
-        const name = remembered.name || state.identityPrompt?.name || '';
-        const email = remembered.email || state.identityPrompt?.email || '';
+        const githubIdentity = getGithubIdentityFallback(state);
+        const name = remembered.name || state.identityPrompt?.name || githubIdentity.name;
+        const email = remembered.email || state.identityPrompt?.email || githubIdentity.email;
         applyState({
             identityPrompt: {
                 visible: true,
@@ -595,8 +604,9 @@ export function createCredentialsActions(ctx) {
             return true;
         }
         const state = getState();
-        const name = remembered.name || state.identityPrompt?.name || '';
-        const email = remembered.email || state.identityPrompt?.email || '';
+        const stateGithubIdentity = getGithubIdentityFallback(state);
+        const name = remembered.name || state.identityPrompt?.name || stateGithubIdentity.name;
+        const email = remembered.email || state.identityPrompt?.email || stateGithubIdentity.email;
         applyState({
             identityPrompt: {
                 visible: true,

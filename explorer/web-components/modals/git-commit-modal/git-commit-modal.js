@@ -229,25 +229,31 @@ export class GitCommitModal {
 
     afterRender() {
         this.bindEvents();
-        this.refreshGithubAuthStatus().catch(() => {});
-        const remembered = getRememberedGitIdentity();
-        const hasIdentity = Boolean(remembered?.name && remembered?.email);
-        if (!hasIdentity) {
-            this.setState({
-                credentialsGate: true,
-                identityPrompt: {
-                    ...this.state.identityPrompt,
-                    visible: true,
-                    repoPath: this.state.selectedRepoPath || this.state.repoPath || '',
-                    pendingAction: null,
-                    name: remembered?.name || '',
-                    email: remembered?.email || ''
-                }
-            }, { silent: true });
-        }
-        this.syncStaticUI();
         this.dialog.ensureDialogResizable();
-        this.ensureCredentialsGate().then(async (gateActive) => {
+        (async () => {
+            await this.refreshGithubAuthStatus({ silent: true }).catch(() => {});
+            const remembered = getRememberedGitIdentity();
+            const githubUser = this.state.githubAuth?.connection?.user || {};
+            const githubName = String(githubUser?.name || githubUser?.login || '').trim();
+            const githubEmail = String(githubUser?.email || '').trim();
+            const initialName = remembered?.name || githubName || '';
+            const initialEmail = remembered?.email || githubEmail || '';
+            const hasIdentity = Boolean(initialName && initialEmail);
+            if (!hasIdentity) {
+                this.setState({
+                    credentialsGate: true,
+                    identityPrompt: {
+                        ...this.state.identityPrompt,
+                        visible: true,
+                        repoPath: this.state.selectedRepoPath || this.state.repoPath || '',
+                        pendingAction: null,
+                        name: initialName,
+                        email: initialEmail
+                    }
+                }, { silent: true });
+            }
+            this.syncStaticUI();
+            const gateActive = await this.ensureCredentialsGate();
             if (!gateActive) {
                 // On open: force-load repos overview so the user immediately sees changes across all repos.
                 this.setState({ suppressInlineLoading: true }, { silent: true });
@@ -265,6 +271,8 @@ export class GitCommitModal {
                     this.syncStaticUI();
                 }
             }
+        })().catch(() => {
+            this.syncStaticUI();
         });
     }
 
@@ -318,9 +326,12 @@ export class GitCommitModal {
         }
         if (!repoPath) return;
 
+        const githubUser = this.state.githubAuth?.connection?.user || {};
+        const githubName = String(githubUser?.name || githubUser?.login || '').trim();
+        const githubEmail = String(githubUser?.email || '').trim();
         const remembered = getRememberedGitIdentity();
-        const name = remembered.name || current.name || '';
-        const email = remembered.email || current.email || '';
+        const name = remembered.name || current.name || githubName;
+        const email = remembered.email || current.email || githubEmail;
         this.state.identityPrompt = {
             ...current,
             repoPath,
@@ -331,8 +342,11 @@ export class GitCommitModal {
 
     async ensureCredentialsGate() {
         const remembered = getRememberedGitIdentity();
-        const name = remembered.name || '';
-        const email = remembered.email || '';
+        const githubUser = this.state.githubAuth?.connection?.user || {};
+        const githubName = String(githubUser?.name || githubUser?.login || '').trim();
+        const githubEmail = String(githubUser?.email || '').trim();
+        const name = remembered.name || githubName || '';
+        const email = remembered.email || githubEmail || '';
         if (name && email) {
             if (this.state.credentialsGate) {
                 this.state.credentialsGate = false;

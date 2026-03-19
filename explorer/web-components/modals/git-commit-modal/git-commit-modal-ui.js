@@ -89,6 +89,14 @@ export function createGitCommitUI(ctx) {
     const getCommitActionsPresenter = () => element.querySelector('git-commit-actions')?.webSkelPresenter || null;
     const getRepoTreePresenter = () => element.querySelector('git-repo-tree')?.webSkelPresenter || null;
 
+    const getGithubIdentityFallback = () => {
+        const githubUser = state.githubAuth?.connection?.user || {};
+        return {
+            name: String(githubUser?.name || githubUser?.login || '').trim(),
+            email: String(githubUser?.email || '').trim()
+        };
+    };
+
     const updateCredentialsPrompt = (options = {}) => {
         const identityState = state.identityPrompt || {};
         const authState = state.authPrompt || {};
@@ -128,13 +136,29 @@ export function createGitCommitUI(ctx) {
         const githubAuth = state.githubAuth || {};
         const githubConnection = githubAuth.connection || {};
         const githubPending = githubAuth.pending || {};
-        const authMethod = normalizeGitAuthMethod(authState.authMethod || rememberedAuthMethod);
+        const githubIdentity = getGithubIdentityFallback();
         const tokenValue = (authState.token || rememberedToken || '') || '';
+        const preferredGithub = Boolean(
+            githubAuth.connected
+            && !rememberedToken
+            && !authState.token
+            && !state.credentialsDirty
+        );
+        const authMethod = preferredGithub
+            ? 'github'
+            : normalizeGitAuthMethod(authState.authMethod || rememberedAuthMethod);
+        const fallbackToGithubIdentity = Boolean(
+            githubAuth.connected
+            && authMethod === 'github'
+            && !state.credentialsDirty
+        );
+        const resolvedName = identityState.name || rememberedIdentity.name || (fallbackToGithubIdentity ? githubIdentity.name : '');
+        const resolvedEmail = identityState.email || rememberedIdentity.email || (fallbackToGithubIdentity ? githubIdentity.email : '');
         const rememberState = typeof authState.remember === 'boolean' ? authState.remember : Boolean(rememberedToken);
         const detail = {
             visible,
-            name: identityState.name || rememberedIdentity.name || '',
-            email: identityState.email || rememberedIdentity.email || '',
+            name: resolvedName,
+            email: resolvedEmail,
             authMethod,
             token: tokenValue,
             remember: rememberState,
@@ -150,6 +174,8 @@ export function createGitCommitUI(ctx) {
             githubPending: Boolean(githubPending.userCode || githubPending.verificationUri),
             githubVerificationUri: githubPending.verificationUriComplete || githubPending.verificationUri || '',
             githubUserCode: githubPending.userCode || '',
+            autocommitReposLoading: Boolean(state.repoOverviewsLoading),
+            autocommitReposLoaded: Boolean(state.repoOverviewsLoaded),
             autocommitIntervalMinutes: intervalMinutes,
             autocommitRepos,
             autocommitSelected: useDraft ? draftRepos : autocommitSelected,

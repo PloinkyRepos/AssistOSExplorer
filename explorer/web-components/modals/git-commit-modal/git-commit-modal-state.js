@@ -16,6 +16,7 @@ export function createGitCommitState(props = {}) {
         repoInfoOk: null,
         repoOverviews: [],
         repoOverviewsLoading: false,
+        repoOverviewsLoaded: false,
         suppressInlineLoading: false,
         repoTreeExpanded: {},
         repoChangesExpanded: {},

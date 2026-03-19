@@ -20,6 +20,8 @@ export class GitCredentialsPrompt {
             githubPending: false,
             githubVerificationUri: '',
             githubUserCode: '',
+            autocommitReposLoading: false,
+            autocommitReposLoaded: false,
             autocommitIntervalMinutes: 15,
             autocommitRepos: [],
             autocommitSelected: null,
@@ -433,6 +435,12 @@ export class GitCredentialsPrompt {
         if (Object.prototype.hasOwnProperty.call(next, 'githubUserCode')) {
             this.state.githubUserCode = String(next.githubUserCode || '');
         }
+        if (Object.prototype.hasOwnProperty.call(next, 'autocommitReposLoading')) {
+            this.state.autocommitReposLoading = Boolean(next.autocommitReposLoading);
+        }
+        if (Object.prototype.hasOwnProperty.call(next, 'autocommitReposLoaded')) {
+            this.state.autocommitReposLoaded = Boolean(next.autocommitReposLoaded);
+        }
         if (Object.prototype.hasOwnProperty.call(next, 'autocommitIntervalMinutes')) {
             const parsed = Number(next.autocommitIntervalMinutes);
             if (Number.isFinite(parsed)) {
@@ -653,7 +661,7 @@ export class GitCredentialsPrompt {
             const message = savable
                 ? (this.state.credentialsDirty || this.state.autocommitDirty || this.state.autoresolveDirty
                     ? ''
-                    : (this.state.credentialsValidated ? '' : 'Validate credentials to load repositories.'))
+                    : '')
                 : this.getValidationMessage();
             if (message) {
                 this.saveButton.title = message;
@@ -667,13 +675,13 @@ export class GitCredentialsPrompt {
         const container = this.autocommitReposContainer;
         if (!container) return;
         const repos = Array.isArray(this.state.autocommitRepos) ? this.state.autocommitRepos : [];
-        if (!this.state.credentialsValidated && repos.length === 0) {
-            container.textContent = 'Validate credentials to load repositories.';
+        if ((!this.state.autocommitReposLoaded || this.state.autocommitReposLoading) && repos.length === 0) {
+            container.textContent = 'Loading repositories...';
             return;
         }
         container.innerHTML = '';
         if (!repos.length) {
-            container.textContent = 'No repositories loaded.';
+            container.textContent = 'No repositories found.';
             return;
         }
         const selectedList = Array.isArray(this.state.autocommitSelected)

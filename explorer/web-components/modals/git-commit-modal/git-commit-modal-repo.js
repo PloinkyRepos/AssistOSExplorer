@@ -235,6 +235,7 @@ export function createGitCommitRepo(ctx) {
         const now = Date.now();
         if (!force && repoOverviewCache.list && now - repoOverviewCache.at < 1500) {
             state.repoOverviews = repoOverviewCache.list;
+            state.repoOverviewsLoaded = true;
             renderRepoOverviews(state.repoOverviews);
             return state.repoOverviews;
         }
@@ -265,6 +266,7 @@ export function createGitCommitRepo(ctx) {
                     return hints.length ? { ...repo, ignoredHints: hints } : repo;
                 });
                 state.repoOverviews = merged;
+                state.repoOverviewsLoaded = true;
                 repoOverviewCache.at = now;
                 repoOverviewCache.list = merged;
                 applyDefaultRepoTreeExpansion();
@@ -292,6 +294,7 @@ export function createGitCommitRepo(ctx) {
                     }
                     const results = mergeRepoResults(fallbackCollections);
                     state.repoOverviews = results;
+                    state.repoOverviewsLoaded = true;
                     repoOverviewCache.at = now;
                     repoOverviewCache.list = results;
                     applyDefaultRepoTreeExpansion();
@@ -300,6 +303,7 @@ export function createGitCommitRepo(ctx) {
                     return results;
                 } catch (fallbackError) {
                     state.repoOverviews = [];
+                    state.repoOverviewsLoaded = true;
                     renderRepoOverviews([]);
                     setStatusLine(normalizeErrorMessage(fallbackError) || normalizeErrorMessage(error), true);
                     return state.repoOverviews;
