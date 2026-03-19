@@ -162,7 +162,9 @@ export function createGitOpsActions(ctx) {
             if (state.pullMode !== 'ffOnly') {
                 const identityOk = await applyGitIdentityForRepo(repoPath);
                 if (!identityOk) {
-                    setStatusLine('Set name/email and connect GitHub or add a token in Git settings to continue.', true);
+                    setStatusLine(auth.githubConnected
+                        ? 'Set name/email in Git settings to continue.'
+                        : 'Set name/email and connect GitHub or add a token in Git settings to continue.', true);
                     await ensureGitIdentityOrPrompt(
                         repoPath,
                         pendingAction?.type ? pendingAction : { type: 'pull', mode: 'batch', repoPaths: list }
@@ -189,7 +191,9 @@ export function createGitOpsActions(ctx) {
             } catch (error) {
                 const msg = humanizeGitError(normalizeErrorMessage(error), { action: 'pull' });
                 if (isGitIdentityError(msg)) {
-                    setStatusLine('Set name/email and connect GitHub or add a token in Git settings to continue.', true);
+                    setStatusLine(auth.githubConnected
+                        ? 'Set name/email in Git settings to continue.'
+                        : 'Set name/email and connect GitHub or add a token in Git settings to continue.', true);
                     await ensureGitIdentityOrPrompt(
                         repoPath,
                         pendingAction?.type ? pendingAction : { type: 'pull', mode: 'batch', repoPaths: list }

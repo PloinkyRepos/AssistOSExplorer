@@ -291,16 +291,6 @@ export function createCredentialsActions(ctx) {
 
     const saveGitCredentials = async (payload = {}) => {
         const state = getState();
-        if (
-            !state.credentialsDirty
-            && !state.autocommitDirty
-            && !state.autoresolveDirty
-            && !state.credentialsGate
-            && !state.pendingAction
-        ) {
-            setStatusLine('');
-            return true;
-        }
         const name = String(payload.name ?? state.identityPrompt?.name ?? '').trim();
         const email = String(payload.email ?? state.identityPrompt?.email ?? '').trim();
         const authMethod = normalizeGitAuthMethod(payload.authMethod ?? getAuthMethod(state));
@@ -315,12 +305,33 @@ export function createCredentialsActions(ctx) {
         const githubConnected = Boolean(state.githubAuth?.connected);
         const githubConfigured = Boolean(state.githubAuth?.configured);
         const rememberedToken = getRememberedGitPat();
+        const rememberedIdentity = getRememberedGitIdentity();
+        const rememberedAuthMethod = normalizeGitAuthMethod(getRememberedGitAuthMethod());
+        const usingGithub = authMethod === 'github';
+        const hasIdentityChange = name !== String(rememberedIdentity.name || '').trim()
+            || email !== String(rememberedIdentity.email || '').trim();
+        const hasAuthMethodChange = authMethod !== rememberedAuthMethod;
+        const hasTokenChange = usingGithub
+            ? Boolean(rememberedToken)
+            : (remember ? token !== String(rememberedToken || '') : Boolean(rememberedToken));
+        const hasPersistableChanges = hasIdentityChange || hasAuthMethodChange || hasTokenChange;
+
+        if (
+            !state.credentialsDirty
+            && !state.autocommitDirty
+            && !state.autoresolveDirty
+            && !state.credentialsGate
+            && !state.pendingAction
+            && !hasPersistableChanges
+        ) {
+            setStatusLine('');
+            return true;
+        }
 
         const identityRequired = Boolean(state.credentialsGate || state.identityPrompt?.visible);
         const authRequired = Boolean(state.authPrompt?.visible);
         const emailPattern = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
         const identityValid = Boolean(name && email && emailPattern.test(email));
-        const usingGithub = authMethod === 'github';
         const effectiveToken = usingGithub ? '' : (token || (remember ? rememberedToken : ''));
         const authValid = usingGithub ? githubConnected : Boolean(effectiveToken);
         setRememberedGitAuthMethod(authMethod);
@@ -619,7 +630,13 @@ export function createCredentialsActions(ctx) {
         });
         updateIdentityPrompt({ focus: !name ? 'name' : (!email ? 'email' : 'name') });
         updateCommitButtons();
-        setStatusLine('Set name/email and connect GitHub or add a token to continue.', true);
+        const githubConnected = Boolean(state.githubAuth?.connected);
+        setStatusLine(
+            githubConnected
+                ? 'Set name/email to continue.'
+                : 'Set name/email and connect GitHub or add a token to continue.',
+            true
+        );
         return false;
     };
 
