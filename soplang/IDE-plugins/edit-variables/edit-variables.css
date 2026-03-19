@@ -13,7 +13,7 @@
 .table-labels{
     font-size: 16px;
     display: grid;
-    grid-template-columns: 1fr 2fr 6fr 6fr 2fr;
+    grid-template-columns: 1fr 2fr 6fr 6fr auto;
     padding-top: 10px;
 }
 .empty-table{
@@ -27,6 +27,25 @@
     display: flex;
     justify-content: end;
     align-items: center;
+    white-space: nowrap;
+}
+.manual-editor-header{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 10px;
+    padding-bottom: 8px;
+    border-bottom: 3px solid var(--light-gray-border);
+}
+.manual-editor-title{
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--plugin-focus);
+}
+.manual-edit-actions{
+    display: flex;
+    gap: 8px;
+    margin-right: 10px;
 }
 .right-margin{
     margin-right: 10px;
@@ -37,9 +56,36 @@
 
 .variables-table{
     display: grid;
-    grid-template-columns: 1fr 2fr 6fr 6fr 2fr;
+    grid-template-columns: 1fr 2fr 6fr 6fr auto;
     overflow: auto;
     max-height: calc(100vh - 450px);
+}
+.manual-commands-editor{
+    border-top: 1px solid var(--light-gray-border);
+    padding-top: 12px;
+}
+.manual-commands-label{
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--plugin-focus);
+    margin-bottom: 8px;
+}
+.manual-commands-textarea{
+    width: 100%;
+    min-height: 200px;
+    resize: vertical;
+    border: 1px solid var(--light-gray-border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-family: monospace;
+    font-size: 14px;
+    line-height: 1.4;
+    background: var(--white);
+    color: var(--text);
+}
+.manual-commands-textarea:focus{
+    outline: none;
+    border-color: var(--accent);
 }
 .open-editor{
     margin-right: 13px;

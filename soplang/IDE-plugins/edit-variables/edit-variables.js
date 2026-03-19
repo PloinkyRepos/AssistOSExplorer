@@ -24,6 +24,8 @@ export class EditVariables {
         this.element.classList.add("maintain-focus");
         let pinned = this.element.getAttribute("data-pin");
         this.pinned = pinned === "true";
+        this.isManualMode = false;
+        this.manualCommands = "";
         this.invalidate();
     }
 
@@ -90,6 +92,13 @@ export class EditVariables {
 
     async beforeRender() {
         this.initVariables();
+        if (!this.isManualMode) {
+            this.manualCommands = this.commands || "";
+        }
+        this.manualEditHiddenClass = this.isManualMode ? "hidden" : "";
+        this.manualEditActiveClass = this.isManualMode ? "" : "hidden";
+        this.variablesTableClass = this.isManualMode ? "hidden" : "";
+        this.manualEditorClass = this.isManualMode ? "" : "hidden";
         this.variables = this.getVariables();
         let variablesHTML = "";
         this.variablesHeader = `<div class="no-variables">No variables defined</div>`;
@@ -148,6 +157,13 @@ export class EditVariables {
             pin.setAttribute("data-local-action", "unpinPlugin");
             pinPlugin(pin, this.element);
         }
+        if (this.isManualMode) {
+            const textarea = this.element.querySelector(".manual-commands-textarea");
+            if (textarea) {
+                textarea.value = this.manualCommands || "";
+                textarea.focus();
+            }
+        }
     }
 
     pinPlugin(pin) {
@@ -170,6 +186,28 @@ export class EditVariables {
             await this.documentPresenter.refreshVariables();
             this.invalidate();
         }
+    }
+
+    openManualEdit() {
+        this.isManualMode = true;
+        this.manualCommands = this.commands || "";
+        this.invalidate();
+    }
+
+    async saveManualCommands() {
+        const textarea = this.element.querySelector(".manual-commands-textarea");
+        const newCommands = textarea ? textarea.value : "";
+        await assistOS.loadifyComponent(this.element, async () => {
+            await this.updateCommands(newCommands);
+            await this.documentPresenter.refreshVariables();
+            this.isManualMode = false;
+        });
+        this.invalidate();
+    }
+
+    cancelManualEdit() {
+        this.isManualMode = false;
+        this.invalidate();
     }
 
     async openEditValue(valueCell, varName) {
