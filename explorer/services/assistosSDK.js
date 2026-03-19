@@ -517,7 +517,7 @@ class AssistosSDK {
             throw new Error('Agent id must be a non-empty string.');
         }
         if (!this.clients.has(agentId)) {
-            const baseUrl = `/mcps/${agentId}/mcp`;
+            const baseUrl = `/mcps/${agentId}/mcp?agent=${encodeURIComponent(EXPLORER_AGENT_ID)}`;
             this.clients.set(agentId, createAgentClient(baseUrl));
         }
         return this.clients.get(agentId);
