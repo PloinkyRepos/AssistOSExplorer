@@ -6,12 +6,20 @@ export class GitCredentialsPrompt {
             visible: false,
             name: '',
             email: '',
+            authMethod: 'token',
             token: '',
             remember: true,
+            authRequired: false,
             credentialsValidated: false,
             credentialsDirty: false,
             autocommitDirty: false,
             tokenStored: false,
+            githubConfigured: false,
+            githubConnected: false,
+            githubUserLabel: '',
+            githubPending: false,
+            githubVerificationUri: '',
+            githubUserCode: '',
             autocommitIntervalMinutes: 15,
             autocommitRepos: [],
             autocommitSelected: null,
@@ -19,6 +27,7 @@ export class GitCredentialsPrompt {
             autoresolveDirty: false
         };
         this.onIdentityInput = this.onIdentityInput.bind(this);
+        this.onAuthMethodChange = this.onAuthMethodChange.bind(this);
         this.onTokenInput = this.onTokenInput.bind(this);
         this.onTokenKeydown = this.onTokenKeydown.bind(this);
         this.onRememberChange = this.onRememberChange.bind(this);
@@ -35,8 +44,18 @@ export class GitCredentialsPrompt {
         this.root = this.element.querySelector('#gitCredentialsPrompt') || this.element;
         this.nameInput = this.element.querySelector('#gitCredentialsName');
         this.emailInput = this.element.querySelector('#gitCredentialsEmail');
+        this.authMethodInputs = Array.from(this.element.querySelectorAll('input[name="gitCredentialsAuthMethod"]'));
         this.tokenInput = this.element.querySelector('#gitCredentialsToken');
         this.rememberInput = this.element.querySelector('#gitCredentialsRemember');
+        this.githubPanel = this.element.querySelector('#gitGithubPanel');
+        this.tokenPanel = this.element.querySelector('#gitTokenPanel');
+        this.githubAuth = this.element.querySelector('#gitGithubAuth');
+        this.githubStatus = this.element.querySelector('#gitGithubStatus');
+        this.githubPending = this.element.querySelector('#gitGithubPending');
+        this.githubCode = this.element.querySelector('#gitGithubCode');
+        this.githubContinueButton = this.element.querySelector('[data-local-action="continueGithubAuth"]');
+        this.githubActions = this.element.querySelector('.git-github-actions');
+        this.githubDisconnectButton = this.element.querySelector('[data-local-action="disconnectGithubAuth"]');
         this.autocommitIntervalInput = this.element.querySelector('#gitCredentialsAutocommitInterval');
         this.autocommitReposContainer = this.element.querySelector('#gitCredentialsAutocommitRepos');
         this.autoresolveInput = this.element.querySelector('#gitCredentialsAutoresolve');
@@ -49,6 +68,12 @@ export class GitCredentialsPrompt {
         if (this.emailInput && !this.emailInput.dataset.boundCredentialsInput) {
             this.emailInput.addEventListener('input', this.onIdentityInput);
             this.emailInput.dataset.boundCredentialsInput = 'true';
+        }
+        for (const input of this.authMethodInputs) {
+            if (!input.dataset.boundCredentialsInput) {
+                input.addEventListener('change', this.onAuthMethodChange);
+                input.dataset.boundCredentialsInput = 'true';
+            }
         }
         if (this.tokenInput && !this.tokenInput.dataset.boundCredentialsInput) {
             this.tokenInput.addEventListener('input', this.onTokenInput);
@@ -78,9 +103,9 @@ export class GitCredentialsPrompt {
     }
 
     saveGitCredentials() {
-        if (!this.isCredentialsValid()) return;
         const name = (this.nameInput?.value || '').trim();
         const email = (this.emailInput?.value || '').trim();
+        const authMethod = this.getSelectedAuthMethod();
         const token = (this.tokenInput?.value || '').trim();
         const remember = Boolean(this.rememberInput?.checked);
         const intervalRaw = this.autocommitIntervalInput?.value;
@@ -89,6 +114,7 @@ export class GitCredentialsPrompt {
         const autoresolveConflicts = Boolean(this.autoresolveInput?.checked);
         this.state.name = name;
         this.state.email = email;
+        this.state.authMethod = authMethod;
         this.state.token = token;
         this.state.remember = remember;
         this.state.autocommitIntervalMinutes = autocommitIntervalMinutes;
@@ -97,6 +123,7 @@ export class GitCredentialsPrompt {
         this.getParentPresenter()?.saveGitCredentials?.({
             name,
             email,
+            authMethod,
             token,
             remember,
             autocommitIntervalMinutes,
@@ -107,6 +134,58 @@ export class GitCredentialsPrompt {
 
     cancelGitCredentials() {
         this.getParentPresenter()?.cancelGitCredentials?.();
+    }
+
+    disconnectGithubAuth() {
+        this.getParentPresenter()?.disconnectGithubAuth?.();
+    }
+
+    async copyGithubCode() {
+        const code = String(this.state.githubUserCode || '').trim();
+        if (!code) return false;
+        try {
+            if (globalThis.navigator?.clipboard?.writeText) {
+                await globalThis.navigator.clipboard.writeText(code);
+            } else {
+                const textarea = document.createElement('textarea');
+                textarea.value = code;
+                textarea.setAttribute('readonly', '');
+                textarea.style.position = 'fixed';
+                textarea.style.opacity = '0';
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                textarea.remove();
+            }
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    openGithubVerification() {
+        const url = String(this.state.githubVerificationUri || '').trim();
+        if (!url) return false;
+        window.open(url, '_blank', 'noopener,noreferrer');
+        return true;
+    }
+
+    async continueGithubAuth() {
+        const copied = await this.copyGithubCode();
+        const opened = this.openGithubVerification();
+        if (copied && opened) {
+            await globalThis.assistOS?.showToast?.('Code copied. GitHub verification opened in a new tab.', 'success', 2500);
+            return;
+        }
+        if (opened) {
+            await globalThis.assistOS?.showToast?.('GitHub verification opened. Copy the code manually if needed.', 'info', 3000);
+            return;
+        }
+        if (copied) {
+            await globalThis.assistOS?.showToast?.('Code copied. Open GitHub verification to continue.', 'info', 3000);
+            return;
+        }
+        await globalThis.assistOS?.showToast?.('Could not start GitHub verification. Please try again.', 'error', 3000);
     }
 
     setState(next = {}) {
@@ -126,6 +205,29 @@ export class GitCredentialsPrompt {
         this.getParentPresenter()?.handleCredentialsChange?.({
             name,
             email,
+            authMethod: this.state.authMethod,
+            token: this.state.token,
+            remember: this.state.remember,
+            autocommitIntervalMinutes: this.state.autocommitIntervalMinutes,
+            autocommitRepos: this.state.autocommitSelected,
+            autoresolveConflicts: this.state.autoresolveConflicts,
+            credentialsDirty: true
+        });
+    }
+
+    onAuthMethodChange() {
+        const authMethod = this.getSelectedAuthMethod();
+        this.state.authMethod = authMethod;
+        this.state.credentialsValidated = false;
+        this.state.credentialsDirty = true;
+        this.updateAuthPanels();
+        this.updateValidationState();
+        this.renderAutocommitRepos();
+        this.scheduleValidation();
+        this.getParentPresenter()?.handleCredentialsChange?.({
+            name: this.state.name,
+            email: this.state.email,
+            authMethod,
             token: this.state.token,
             remember: this.state.remember,
             autocommitIntervalMinutes: this.state.autocommitIntervalMinutes,
@@ -140,6 +242,9 @@ export class GitCredentialsPrompt {
         const remember = Boolean(this.rememberInput?.checked);
         this.state.token = token;
         this.state.remember = remember;
+        if (!remember) {
+            this.state.tokenStored = false;
+        }
         this.state.credentialsValidated = false;
         this.state.credentialsDirty = true;
         this.updateValidationState();
@@ -148,6 +253,7 @@ export class GitCredentialsPrompt {
         this.getParentPresenter()?.handleCredentialsChange?.({
             name: this.state.name,
             email: this.state.email,
+            authMethod: this.state.authMethod,
             token,
             remember,
             autocommitIntervalMinutes: this.state.autocommitIntervalMinutes,
@@ -160,6 +266,9 @@ export class GitCredentialsPrompt {
     onRememberChange() {
         const remember = Boolean(this.rememberInput?.checked);
         this.state.remember = remember;
+        if (!remember) {
+            this.state.tokenStored = false;
+        }
         this.state.credentialsValidated = false;
         this.state.credentialsDirty = true;
         this.updateValidationState();
@@ -168,6 +277,7 @@ export class GitCredentialsPrompt {
         this.getParentPresenter()?.handleCredentialsChange?.({
             name: this.state.name,
             email: this.state.email,
+            authMethod: this.state.authMethod,
             token: this.state.token,
             remember,
             autocommitIntervalMinutes: this.state.autocommitIntervalMinutes,
@@ -186,6 +296,7 @@ export class GitCredentialsPrompt {
         this.getParentPresenter()?.handleCredentialsChange?.({
             name: this.state.name,
             email: this.state.email,
+            authMethod: this.state.authMethod,
             token: this.state.token,
             remember: this.state.remember,
             autocommitIntervalMinutes,
@@ -205,6 +316,7 @@ export class GitCredentialsPrompt {
         this.getParentPresenter()?.handleCredentialsChange?.({
             name: this.state.name,
             email: this.state.email,
+            authMethod: this.state.authMethod,
             token: this.state.token,
             remember: this.state.remember,
             autocommitIntervalMinutes: this.state.autocommitIntervalMinutes,
@@ -222,6 +334,7 @@ export class GitCredentialsPrompt {
         this.getParentPresenter()?.handleCredentialsChange?.({
             name: this.state.name,
             email: this.state.email,
+            authMethod: this.state.authMethod,
             token: this.state.token,
             remember: this.state.remember,
             autocommitIntervalMinutes: this.state.autocommitIntervalMinutes,
@@ -245,15 +358,19 @@ export class GitCredentialsPrompt {
         const name = String(this.state.name || '').trim();
         const email = String(this.state.email || '').trim();
         const token = String(this.state.token || '').trim();
+        const authMethod = this.state.authMethod === 'github' ? 'github' : 'token';
         if (!name || !email) return;
         if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return;
-        if (!token) return;
+        if (authMethod === 'github' && !this.state.githubConnected) return;
+        const hasStoredToken = this.state.remember && this.state.tokenStored;
+        if (authMethod === 'token' && !token && !hasStoredToken) return;
         if (this.state.credentialsValidated) return;
         this.validateTimer = setTimeout(() => {
             this.getParentPresenter()?.saveGitCredentials?.({
                 name,
                 email,
-                token,
+                authMethod,
+                token: authMethod === 'github' ? '' : token,
                 remember: this.state.remember,
                 autocommitIntervalMinutes: this.state.autocommitIntervalMinutes,
                 autocommitRepos: this.state.autocommitSelected,
@@ -274,11 +391,17 @@ export class GitCredentialsPrompt {
         if (Object.prototype.hasOwnProperty.call(next, 'email')) {
             this.state.email = String(next.email || '');
         }
+        if (Object.prototype.hasOwnProperty.call(next, 'authMethod')) {
+            this.state.authMethod = String(next.authMethod || '').trim().toLowerCase() === 'github' ? 'github' : 'token';
+        }
         if (Object.prototype.hasOwnProperty.call(next, 'token')) {
             this.state.token = String(next.token || '');
         }
         if (Object.prototype.hasOwnProperty.call(next, 'remember')) {
             this.state.remember = Boolean(next.remember);
+        }
+        if (Object.prototype.hasOwnProperty.call(next, 'authRequired')) {
+            this.state.authRequired = Boolean(next.authRequired);
         }
         if (Object.prototype.hasOwnProperty.call(next, 'credentialsValidated')) {
             this.state.credentialsValidated = Boolean(next.credentialsValidated);
@@ -291,6 +414,24 @@ export class GitCredentialsPrompt {
         }
         if (Object.prototype.hasOwnProperty.call(next, 'tokenStored')) {
             this.state.tokenStored = Boolean(next.tokenStored);
+        }
+        if (Object.prototype.hasOwnProperty.call(next, 'githubConfigured')) {
+            this.state.githubConfigured = Boolean(next.githubConfigured);
+        }
+        if (Object.prototype.hasOwnProperty.call(next, 'githubConnected')) {
+            this.state.githubConnected = Boolean(next.githubConnected);
+        }
+        if (Object.prototype.hasOwnProperty.call(next, 'githubUserLabel')) {
+            this.state.githubUserLabel = String(next.githubUserLabel || '');
+        }
+        if (Object.prototype.hasOwnProperty.call(next, 'githubPending')) {
+            this.state.githubPending = Boolean(next.githubPending);
+        }
+        if (Object.prototype.hasOwnProperty.call(next, 'githubVerificationUri')) {
+            this.state.githubVerificationUri = String(next.githubVerificationUri || '');
+        }
+        if (Object.prototype.hasOwnProperty.call(next, 'githubUserCode')) {
+            this.state.githubUserCode = String(next.githubUserCode || '');
         }
         if (Object.prototype.hasOwnProperty.call(next, 'autocommitIntervalMinutes')) {
             const parsed = Number(next.autocommitIntervalMinutes);
@@ -328,12 +469,51 @@ export class GitCredentialsPrompt {
         if (this.emailInput && this.emailInput.value !== this.state.email) {
             this.emailInput.value = this.state.email;
         }
+        for (const input of this.authMethodInputs || []) {
+            input.checked = input.value === this.state.authMethod;
+        }
         if (this.tokenInput && this.tokenInput.value !== this.state.token) {
             this.tokenInput.value = this.state.token;
         }
         if (this.rememberInput) {
             this.rememberInput.checked = this.state.remember;
         }
+        if (this.githubStatus) {
+            if (this.state.githubConnected) {
+                this.githubStatus.textContent = this.state.githubUserLabel
+                    ? `Connected as ${this.state.githubUserLabel}.`
+                    : 'Connected.';
+            } else if (!this.state.githubConfigured) {
+                this.githubStatus.textContent = 'GitHub sign-in is unavailable.';
+            } else if (this.state.githubPending) {
+                this.githubStatus.textContent = 'Complete sign-in in GitHub.';
+            } else {
+                this.githubStatus.textContent = 'Preparing sign-in...';
+            }
+        }
+        if (this.githubAuth) {
+            let githubState = 'idle';
+            if (this.state.githubConnected) githubState = 'connected';
+            else if (!this.state.githubConfigured) githubState = 'unavailable';
+            else if (this.state.githubPending) githubState = 'pending';
+            this.githubAuth.dataset.state = githubState;
+        }
+        if (this.githubPending) {
+            this.githubPending.hidden = !this.state.githubPending;
+        }
+        if (this.githubCode) {
+            this.githubCode.textContent = this.state.githubUserCode || '';
+        }
+        if (this.githubContinueButton) {
+            this.githubContinueButton.disabled = !this.state.githubUserCode || !this.state.githubVerificationUri;
+        }
+        if (this.githubDisconnectButton) {
+            this.githubDisconnectButton.hidden = !this.state.githubConnected;
+        }
+        if (this.githubActions) {
+            this.githubActions.hidden = !this.state.githubConnected;
+        }
+        this.updateAuthPanels();
         if (this.autoresolveInput) {
             this.autoresolveInput.checked = this.state.autoresolveConflicts;
         }
@@ -393,12 +573,50 @@ export class GitCredentialsPrompt {
         return selected;
     }
 
-    isCredentialsValid() {
+    getSelectedAuthMethod() {
+        const selected = (this.authMethodInputs || []).find((input) => input.checked);
+        return selected?.value === 'github' ? 'github' : 'token';
+    }
+
+    updateAuthPanels() {
+        const useGithub = this.state.authMethod === 'github';
+        if (this.githubPanel) {
+            this.githubPanel.hidden = !useGithub;
+        }
+        if (this.tokenPanel) {
+            this.tokenPanel.hidden = useGithub;
+        }
+    }
+
+    hasValidIdentity() {
         const name = String(this.state.name || '').trim();
         const email = String(this.state.email || '').trim();
         if (!name || !email) return false;
         if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return false;
-        if (this.state.remember && !String(this.state.token || '').trim() && !this.state.tokenStored) {
+        return true;
+    }
+
+    canSaveCredentials() {
+        if (!this.hasValidIdentity()) return false;
+        if (this.state.authMethod === 'github' && !this.state.githubConnected) {
+            return Boolean(this.state.githubConfigured);
+        }
+        if (this.state.authMethod === 'token'
+            && !String(this.state.token || '').trim()
+            && !(this.state.remember && this.state.tokenStored)) {
+            return false;
+        }
+        return true;
+    }
+
+    isCredentialsValid() {
+        if (!this.hasValidIdentity()) return false;
+        if (this.state.authMethod === 'github' && !this.state.githubConnected) {
+            return false;
+        }
+        if (this.state.authMethod === 'token'
+            && !String(this.state.token || '').trim()
+            && !(this.state.remember && this.state.tokenStored)) {
             return false;
         }
         return true;
@@ -413,23 +631,26 @@ export class GitCredentialsPrompt {
         if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
             return 'Enter a valid email address.';
         }
-        if (this.state.remember && !String(this.state.token || '').trim() && !this.state.tokenStored) {
-            return 'Enter a token or disable “Remember token”.';
+        if (this.state.authMethod === 'github' && !this.state.githubConnected) {
+            if (!this.state.githubConfigured) {
+                return 'GitHub sign-in is not available in this workspace.';
+            }
+            return '';
+        }
+        if (this.state.authMethod === 'token'
+            && !String(this.state.token || '').trim()
+            && !(this.state.remember && this.state.tokenStored)) {
+            return 'Enter a token to continue.';
         }
         return '';
     }
 
     updateValidationState() {
         const valid = this.isCredentialsValid();
-        const canSave = valid && (
-            this.state.credentialsValidated
-            || this.state.credentialsDirty
-            || this.state.autocommitDirty
-            || this.state.autoresolveDirty
-        );
+        const savable = this.canSaveCredentials();
         if (this.saveButton) {
-            this.saveButton.disabled = !canSave;
-            const message = valid
+            this.saveButton.disabled = false;
+            const message = savable
                 ? (this.state.credentialsDirty || this.state.autocommitDirty || this.state.autoresolveDirty
                     ? ''
                     : (this.state.credentialsValidated ? '' : 'Validate credentials to load repositories.'))

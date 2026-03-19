@@ -10,6 +10,8 @@ import {
     extractGitPullBlockedFiles,
     getRememberedGitPat,
     getRememberedGitIdentity,
+    getRememberedGitAuthMethod,
+    normalizeGitAuthMethod,
     normalizeGitStatusPayload
 } from "./git-commit-modal-utils.js";
 import { withGlobalLoader } from "../../../utils/globalLoader.js";
@@ -50,6 +52,26 @@ export function createGitOpsActions(ctx) {
         window.dispatchEvent(new CustomEvent(FILE_EXP_REFRESH_EVENT));
     };
 
+    const getAuthMethod = (state = getState()) => {
+        return normalizeGitAuthMethod(state.authPrompt?.authMethod || getRememberedGitAuthMethod());
+    };
+
+    const getAuthContext = (state = getState(), tokenOverride = null) => {
+        const authMethod = getAuthMethod(state);
+        const githubConnected = Boolean(state.githubAuth?.connected);
+        const token = authMethod === 'token'
+            ? (String(tokenOverride || '').trim()
+                || String(state.authPrompt?.token || '').trim()
+                || getRememberedGitPat())
+            : '';
+        return {
+            authMethod,
+            githubConnected,
+            usingGithub: authMethod === 'github',
+            token
+        };
+    };
+
     const gitPushWithToken = async (repoPath, token) => {
         const payload = { path: repoPath };
         const cleanToken = String(token || '').trim();
@@ -87,9 +109,7 @@ export function createGitOpsActions(ctx) {
             setStatusLine('Select at least one repository to push.', true);
             return false;
         }
-        const effectiveToken = String(token || '').trim()
-            || String(state.authPrompt?.token || '').trim()
-            || getRememberedGitPat();
+        const auth = getAuthContext(state, token);
         let pushedAny = false;
         for (const repoPath of list) {
             const ahead = await getAheadCountForRepo(repoPath);
@@ -97,17 +117,26 @@ export function createGitOpsActions(ctx) {
                 continue;
             }
             try {
-                await gitPushWithToken(repoPath, effectiveToken);
+                await gitPushWithToken(repoPath, auth.token);
                 pushedAny = true;
             } catch (error) {
                 const msg = normalizeErrorMessage(error);
                 const human = humanizeGitError(msg, { action: 'push' });
                 if (isGitAuthError(msg)) {
-                    if (!effectiveToken) {
-                        showGitAuthPrompt(repoPath, { type: 'push', mode: 'batch', repoPaths: list }, { message: human });
+                    if (auth.usingGithub && !auth.githubConnected) {
+                        showGitAuthPrompt(repoPath, { type: 'push', mode: 'batch', repoPaths: list }, { message: human, authMethod: 'github' });
                         return false;
                     }
-                    setStatusLine(`${human} (A token is already saved. Use “Token” to update it.)`, true);
+                    if (!auth.usingGithub && !auth.token) {
+                        showGitAuthPrompt(repoPath, { type: 'push', mode: 'batch', repoPaths: list }, { message: human, authMethod: 'token' });
+                        return false;
+                    }
+                    setStatusLine(
+                        auth.usingGithub
+                            ? `${human} (Reconnect GitHub or switch to Token.)`
+                            : `${human} (Use Token to update credentials or switch to GitHub.)`,
+                        true
+                    );
                     return false;
                 }
                 throw error;
@@ -127,15 +156,13 @@ export function createGitOpsActions(ctx) {
             conflictSource: state.pullMode === 'rebase' ? 'rebase' : 'merge'
         });
         const list = Array.isArray(repoPaths) ? repoPaths.filter(Boolean) : [];
-        const effectiveToken = String(token || '').trim()
-            || String(state.authPrompt?.token || '').trim()
-            || getRememberedGitPat();
+        const auth = getAuthContext(state, token);
         const conflictSource = state.pullMode === 'rebase' ? 'rebase' : 'merge';
         for (const repoPath of list) {
             if (state.pullMode !== 'ffOnly') {
                 const identityOk = await applyGitIdentityForRepo(repoPath);
                 if (!identityOk) {
-                    setStatusLine('Set name, email, and token in Git settings to continue.', true);
+                    setStatusLine('Set name/email and connect GitHub or add a token in Git settings to continue.', true);
                     await ensureGitIdentityOrPrompt(
                         repoPath,
                         pendingAction?.type ? pendingAction : { type: 'pull', mode: 'batch', repoPaths: list }
@@ -154,15 +181,15 @@ export function createGitOpsActions(ctx) {
                     + normalized.counts.unstaged
                     + normalized.counts.untracked) > 0;
                 if (hasLocalChanges) {
-                    const autoOk = await pullWithAutoStash(repoPath, effectiveToken, list);
+                    const autoOk = await pullWithAutoStash(repoPath, auth.token, list);
                     if (!autoOk) return false;
                     continue;
                 }
-                await gitPullWithToken(repoPath, effectiveToken);
+                await gitPullWithToken(repoPath, auth.token);
             } catch (error) {
                 const msg = humanizeGitError(normalizeErrorMessage(error), { action: 'pull' });
                 if (isGitIdentityError(msg)) {
-                    setStatusLine('Set name, email, and token in Git settings to continue.', true);
+                    setStatusLine('Set name/email and connect GitHub or add a token in Git settings to continue.', true);
                     await ensureGitIdentityOrPrompt(
                         repoPath,
                         pendingAction?.type ? pendingAction : { type: 'pull', mode: 'batch', repoPaths: list }
@@ -170,15 +197,28 @@ export function createGitOpsActions(ctx) {
                     return false;
                 }
                 if (isGitAuthError(msg)) {
-                    if (!effectiveToken) {
+                    if (auth.usingGithub && !auth.githubConnected) {
                         showGitAuthPrompt(
                             repoPath,
                             pendingAction?.type ? pendingAction : { type: 'pull', mode: 'batch', repoPaths: list },
-                            { message: msg }
+                            { message: msg, authMethod: 'github' }
                         );
                         return false;
                     }
-                    setStatusLine(`${msg} (A token is already saved. Use “Token” to update it.)`, true);
+                    if (!auth.usingGithub && !auth.token) {
+                        showGitAuthPrompt(
+                            repoPath,
+                            pendingAction?.type ? pendingAction : { type: 'pull', mode: 'batch', repoPaths: list },
+                            { message: msg, authMethod: 'token' }
+                        );
+                        return false;
+                    }
+                    setStatusLine(
+                        auth.usingGithub
+                            ? `${msg} (Reconnect GitHub or switch to Token.)`
+                            : `${msg} (Use Token to update credentials or switch to GitHub.)`,
+                        true
+                    );
                     return false;
                 }
                 if (isGitConflictError(msg)) {
@@ -187,7 +227,7 @@ export function createGitOpsActions(ctx) {
                     return false;
                 }
                 if (isGitPullBlockedError(msg)) {
-                    const autoOk = await pullWithAutoStash(repoPath, effectiveToken, list);
+                    const autoOk = await pullWithAutoStash(repoPath, auth.token, list);
                     if (!autoOk) return false;
                     continue;
                 }
@@ -257,17 +297,26 @@ export function createGitOpsActions(ctx) {
                         throw error;
                     }
                     if (shouldPush) {
-                        const token = getRememberedGitPat();
+                        const auth = getAuthContext(getState());
                         try {
-                            await gitPushWithToken(repoPath, token);
+                            await gitPushWithToken(repoPath, auth.token);
                         } catch (error) {
                             const msg = normalizeErrorMessage(error);
                             if (isGitAuthError(msg)) {
-                                if (!token) {
-                                    showGitAuthPrompt(repoPath, { type: 'push', mode: 'batch', repoPaths: [repoPath] }, { message: msg });
+                                if (auth.usingGithub && !auth.githubConnected) {
+                                    showGitAuthPrompt(repoPath, { type: 'push', mode: 'batch', repoPaths: [repoPath] }, { message: msg, authMethod: 'github' });
                                     return;
                                 }
-                                setStatusLine(`${msg} (A token is already saved. Use “Token” to update it.)`, true);
+                                if (!auth.usingGithub && !auth.token) {
+                                    showGitAuthPrompt(repoPath, { type: 'push', mode: 'batch', repoPaths: [repoPath] }, { message: msg, authMethod: 'token' });
+                                    return;
+                                }
+                                setStatusLine(
+                                    auth.usingGithub
+                                        ? `${msg} (Reconnect GitHub or switch to Token.)`
+                                        : `${msg} (Use Token to update credentials or switch to GitHub.)`,
+                                    true
+                                );
                                 return;
                             }
                             throw error;
@@ -282,7 +331,7 @@ export function createGitOpsActions(ctx) {
                 dispatchFileTreeRefresh();
                 setStatusLine('Done.');
             } catch (error) {
-                setStatusLine(normalizeErrorMessage(error), true);
+                setStatusLine(humanizeGitError(normalizeErrorMessage(error)), true);
             }
         });
     };
@@ -371,22 +420,30 @@ export function createGitOpsActions(ctx) {
                     }
                 }
 
-                const token = String(tokenOverride || '').trim()
-                    || String(state.authPrompt?.token || '').trim()
-                    || getRememberedGitPat();
+                const auth = getAuthContext(getState(), tokenOverride);
                 for (const repoPath of selected) {
                     try {
-                        await gitPushWithToken(repoPath, token);
+                        await gitPushWithToken(repoPath, auth.token);
                     } catch (error) {
                         const msg = normalizeErrorMessage(error);
                         const human = humanizeGitError(msg, { action: 'push' });
                         if (isGitAuthError(msg)) {
-                            if (!token) {
-                                showGitAuthPrompt(repoPath, { type: 'sync', mode: 'batch', repoPaths: selected }, { message: human });
+                            if (auth.usingGithub && !auth.githubConnected) {
+                                showGitAuthPrompt(repoPath, { type: 'sync', mode: 'batch', repoPaths: selected }, { message: human, authMethod: 'github' });
                                 dispatchAutocommitStop();
                                 return;
                             }
-                            setStatusLine(`${human} (A token is already saved. Use “Token” to update it.)`, true);
+                            if (!auth.usingGithub && !auth.token) {
+                                showGitAuthPrompt(repoPath, { type: 'sync', mode: 'batch', repoPaths: selected }, { message: human, authMethod: 'token' });
+                                dispatchAutocommitStop();
+                                return;
+                            }
+                            setStatusLine(
+                                auth.usingGithub
+                                    ? `${human} (Reconnect GitHub or switch to Token.)`
+                                    : `${human} (Use Token to update credentials or switch to GitHub.)`,
+                                true
+                            );
                             dispatchAutocommitStop();
                             return;
                         }

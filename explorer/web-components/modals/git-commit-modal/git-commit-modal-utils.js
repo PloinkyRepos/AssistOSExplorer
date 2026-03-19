@@ -17,16 +17,22 @@ export function humanizeGitError(message, { action = null } = {}) {
 
     const lower = cleaned.toLowerCase();
     if (lower.includes('terminal prompts disabled') || lower.includes('could not read username')) {
-        return 'Authentication required. Open Git settings and enter your token.';
+        return 'Authentication required. Open Git settings and connect GitHub or enter your token.';
     }
     if (lower.includes('could not read password')) {
-        return 'Authentication required. Open Git settings and enter your token.';
+        return 'Authentication required. Open Git settings and connect GitHub or enter your token.';
     }
     if (lower.includes('authentication failed') || lower.includes('http basic: access denied')) {
-        return 'Authentication failed. Check your token and try again.';
+        return 'Authentication failed. Reconnect GitHub or check your token and try again.';
     }
     if (lower.includes('permission denied')) {
         return 'Authentication failed. You do not have permission for this repository.';
+    }
+    if (lower.includes('failed to remove') && lower.includes('resource busy')) {
+        if (lower.includes('node_modules')) {
+            return 'Pull failed because a node_modules folder is in use. Stop the running agent or container that uses this repo and try again.';
+        }
+        return 'Pull failed because a folder in the repository is currently in use. Stop the process using it and try again.';
     }
     if (lower.includes('unable to auto-detect email address') || lower.includes('author identity unknown') || lower.includes('committer identity unknown')) {
         return 'Missing Git identity. Open Git settings and set name + email.';
@@ -242,6 +248,11 @@ export function extractGitPullBlockedFiles(message) {
 const GIT_PAT_STORAGE_KEY = 'webskel.git.pat';
 const GIT_IDENTITY_NAME_KEY = 'webskel.git.identity.name';
 const GIT_IDENTITY_EMAIL_KEY = 'webskel.git.identity.email';
+const GIT_AUTH_METHOD_STORAGE_KEY = 'webskel.git.auth.method';
+
+export function normalizeGitAuthMethod(value) {
+    return String(value || '').trim().toLowerCase() === 'github' ? 'github' : 'token';
+}
 
 export function getRememberedGitPat() {
     try {
@@ -289,6 +300,22 @@ export function setRememberedGitIdentity({ name = '', email = '' } = {}) {
         } else {
             localStorage.removeItem(GIT_IDENTITY_EMAIL_KEY);
         }
+    } catch {
+        // ignore
+    }
+}
+
+export function getRememberedGitAuthMethod() {
+    try {
+        return normalizeGitAuthMethod(localStorage.getItem(GIT_AUTH_METHOD_STORAGE_KEY) || '');
+    } catch {
+        return 'token';
+    }
+}
+
+export function setRememberedGitAuthMethod(value) {
+    try {
+        localStorage.setItem(GIT_AUTH_METHOD_STORAGE_KEY, normalizeGitAuthMethod(value));
     } catch {
         // ignore
     }

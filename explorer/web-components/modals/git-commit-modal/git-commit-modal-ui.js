@@ -3,7 +3,9 @@ import {
     getAutocommitSettings,
     getConflictAutoresolveSetting,
     getRememberedGitPat,
-    getRememberedGitIdentity
+    getRememberedGitIdentity,
+    getRememberedGitAuthMethod,
+    normalizeGitAuthMethod
 } from "./git-commit-modal-utils.js";
 
 export function createGitCommitUI(ctx) {
@@ -94,6 +96,7 @@ export function createGitCommitUI(ctx) {
         const autoresolveSaved = getConflictAutoresolveSetting();
         const rememberedIdentity = getRememberedGitIdentity();
         const rememberedToken = getRememberedGitPat();
+        const rememberedAuthMethod = getRememberedGitAuthMethod();
         const autocommitDraft = state.autocommitDraft || {};
         const autoresolveDraft = state.autoresolveDraft || {};
         const repoOverviews = Array.isArray(state.repoOverviews) ? state.repoOverviews : [];
@@ -122,19 +125,31 @@ export function createGitCommitUI(ctx) {
             || state.credentialsGate
             || state.credentialsOpen
         );
+        const githubAuth = state.githubAuth || {};
+        const githubConnection = githubAuth.connection || {};
+        const githubPending = githubAuth.pending || {};
+        const authMethod = normalizeGitAuthMethod(authState.authMethod || rememberedAuthMethod);
         const tokenValue = (authState.token || rememberedToken || '') || '';
         const rememberState = typeof authState.remember === 'boolean' ? authState.remember : Boolean(rememberedToken);
         const detail = {
             visible,
             name: identityState.name || rememberedIdentity.name || '',
             email: identityState.email || rememberedIdentity.email || '',
+            authMethod,
             token: tokenValue,
             remember: rememberState,
+            authRequired: Boolean(authState.visible),
             credentialsValidated,
             credentialsDirty: Boolean(state.credentialsDirty),
             autocommitDirty: Boolean(state.autocommitDirty),
             autoresolveDirty: Boolean(state.autoresolveDirty),
             tokenStored: Boolean(rememberedToken),
+            githubConfigured: Boolean(githubAuth.configured),
+            githubConnected: Boolean(githubAuth.connected),
+            githubUserLabel: githubConnection?.user?.login || githubConnection?.user?.name || '',
+            githubPending: Boolean(githubPending.userCode || githubPending.verificationUri),
+            githubVerificationUri: githubPending.verificationUriComplete || githubPending.verificationUri || '',
+            githubUserCode: githubPending.userCode || '',
             autocommitIntervalMinutes: intervalMinutes,
             autocommitRepos,
             autocommitSelected: useDraft ? draftRepos : autocommitSelected,

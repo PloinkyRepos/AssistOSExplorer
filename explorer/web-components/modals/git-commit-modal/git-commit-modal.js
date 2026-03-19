@@ -9,7 +9,7 @@ import { callExplorerTool, callAgentTool } from "../../../services/infrastructur
 import { withGlobalLoader } from "../../../utils/globalLoader.js";
 import { getRepoScanPaths } from "../../../utils/reposRoot.js";
 import { joinPath } from "../../pages/file-exp/file-exp-utils.js";
-import { normalizeErrorMessage, parseJsonToolResult, normalizeSlashes, isReposRootPath, getRememberedGitIdentity, setGitErrorFlag, setCredentialsValidated, setRememberedGitPat } from "./git-commit-modal-utils.js";
+import { normalizeErrorMessage, parseJsonToolResult, normalizeSlashes, isReposRootPath, getRememberedGitIdentity, getRememberedGitAuthMethod, normalizeGitAuthMethod, setGitErrorFlag, setCredentialsValidated } from "./git-commit-modal-utils.js";
 import { FILE_EXP_REFRESH_EVENT, GIT_MODAL_CLOSED_EVENT } from "../../../utils/appEvents.js";
 
 export class GitCommitModal {
@@ -21,6 +21,8 @@ export class GitCommitModal {
         this.diffCache = new Map();
         this.repoOverviewCache = { at: 0, list: [] };
         this.dialogState = { isFullscreen: false, prev: null };
+        this.githubPollTimer = null;
+        this.githubStartPromise = null;
         this.menuAbortController = null;
         this.stateStore = createGitCommitState(props);
         this.state = this.stateStore.state;
@@ -151,15 +153,12 @@ export class GitCommitModal {
         const prevEmail = String(this.state.identityPrompt?.email ?? '');
         const prevToken = String(this.state.authPrompt?.token ?? '');
         const prevRemember = Boolean(this.state.authPrompt?.remember);
+        const prevAuthMethod = normalizeGitAuthMethod(this.state.authPrompt?.authMethod ?? getRememberedGitAuthMethod());
         const nextName = String(detail.name ?? prevName);
         const nextEmail = String(detail.email ?? prevEmail);
         const nextToken = String(detail.token ?? prevToken);
         const nextRemember = typeof detail.remember === 'boolean' ? detail.remember : prevRemember;
-        if (nextRemember && nextToken) {
-            setRememberedGitPat(nextToken);
-        } else if (!nextRemember) {
-            setRememberedGitPat('');
-        }
+        const nextAuthMethod = normalizeGitAuthMethod(detail.authMethod ?? prevAuthMethod);
         const patch = {};
         if (detail.autocommitDirty) {
             patch.autocommitDirty = true;
@@ -180,6 +179,7 @@ export class GitCommitModal {
                 || prevEmail !== nextEmail
                 || prevToken !== nextToken
                 || prevRemember !== nextRemember
+                || prevAuthMethod !== nextAuthMethod
             );
             if (credentialsChanged) {
                 patch.credentialsValidated = false;
@@ -195,10 +195,16 @@ export class GitCommitModal {
         patch.authPrompt = {
             ...this.state.authPrompt,
             token: nextToken,
-            remember: nextRemember
+            remember: nextRemember,
+            authMethod: nextAuthMethod
         };
         this.setState(patch, { silent: true });
         this.updateIdentityPrompt();
+        if (nextAuthMethod === 'github') {
+            queueMicrotask(() => {
+                this.ensureGithubDeviceFlow({ silent: true }).catch(() => {});
+            });
+        }
     }
 
     updateIgnorePatterns(patterns) {
@@ -212,6 +218,7 @@ export class GitCommitModal {
     }
 
     afterUnload() {
+        this.clearGithubPollTimer();
         this.menuAbortController?.abort();
         this.menuAbortController = null;
     }
@@ -222,6 +229,7 @@ export class GitCommitModal {
 
     afterRender() {
         this.bindEvents();
+        this.refreshGithubAuthStatus().catch(() => {});
         const remembered = getRememberedGitIdentity();
         const hasIdentity = Boolean(remembered?.name && remembered?.email);
         if (!hasIdentity) {
@@ -350,6 +358,139 @@ export class GitCommitModal {
 
     refreshAction() {
         this.actions.refreshConflicts();
+    }
+
+    clearGithubPollTimer() {
+        if (this.githubPollTimer) {
+            clearTimeout(this.githubPollTimer);
+            this.githubPollTimer = null;
+        }
+    }
+
+    scheduleGithubPoll(intervalSeconds = 5) {
+        this.clearGithubPollTimer();
+        const delayMs = Math.max(3, Number(intervalSeconds || 5)) * 1000;
+        this.githubPollTimer = setTimeout(() => {
+            this.pollGithubAuth({ silent: true }).catch(() => {});
+        }, delayMs);
+    }
+
+    updateGithubAuthState(github = {}, { silent = false } = {}) {
+        this.state.githubAuth = {
+            configured: Boolean(github?.configured),
+            connected: Boolean(github?.connected),
+            connection: github?.connection || null,
+            pending: github?.pending || null,
+            setup: github?.setup || null
+        };
+        if (!silent) {
+            this.syncStaticUI();
+        }
+    }
+
+    async refreshGithubAuthStatus({ silent = false } = {}) {
+        const payload = await this.service.githubAuthStatus();
+        this.updateGithubAuthState(payload?.github || {}, { silent });
+        const pending = payload?.github?.pending || null;
+        if (pending?.interval) {
+            this.scheduleGithubPoll(pending.interval);
+        } else {
+            this.clearGithubPollTimer();
+        }
+        this.ensureGithubDeviceFlow({ silent: true }).catch(() => {});
+        return payload?.github || {};
+    }
+
+    isGithubAuthSelected() {
+        return normalizeGitAuthMethod(this.state.authPrompt?.authMethod ?? getRememberedGitAuthMethod()) === 'github';
+    }
+
+    async ensureGithubDeviceFlow({ force = false, silent = false } = {}) {
+        if (!this.isGithubAuthSelected()) {
+            return this.state.githubAuth || {};
+        }
+        const github = this.state.githubAuth || {};
+        const pending = github.pending || null;
+        if (!github.configured || github.connected) {
+            return github;
+        }
+        if (!force && (pending?.userCode || pending?.verificationUri)) {
+            this.updateAuthPrompt();
+            this.updateCommitButtons();
+            return github;
+        }
+        if (this.githubStartPromise && !force) {
+            return this.githubStartPromise;
+        }
+        this.githubStartPromise = (async () => {
+            const payload = await this.service.startGithubDeviceFlow();
+            const nextGithub = payload?.github || {};
+            this.updateGithubAuthState(nextGithub, { silent });
+            const nextPending = nextGithub.pending || null;
+            if (nextPending?.interval) {
+                this.scheduleGithubPoll(nextPending.interval);
+            } else {
+                this.clearGithubPollTimer();
+            }
+            this.updateAuthPrompt();
+            this.updateCommitButtons();
+            if (!silent) {
+                this.setStatusLine(
+                    nextPending?.userCode
+                        ? `Open GitHub and enter code ${nextPending.userCode}.`
+                        : 'Continue GitHub sign-in in the browser.'
+                );
+            }
+            return nextGithub;
+        })();
+        try {
+            return await this.githubStartPromise;
+        } finally {
+            this.githubStartPromise = null;
+        }
+    }
+
+    async startGithubAuth() {
+        return this.ensureGithubDeviceFlow({ force: true });
+    }
+
+    async pollGithubAuth({ silent = false } = {}) {
+        const payload = await this.service.pollGithubDeviceFlow();
+        const github = payload?.github || {};
+        this.updateGithubAuthState(github, { silent });
+        const pending = github.pending || null;
+        if (github.connected) {
+            this.clearGithubPollTimer();
+            this.updateAuthPrompt();
+            this.updateCommitButtons();
+            if (!silent) {
+                const login = github?.connection?.user?.login || github?.connection?.user?.name || 'GitHub';
+                this.setStatusLine(`GitHub connected as ${login}.`);
+            }
+            return github;
+        }
+        if (pending?.interval) {
+            this.scheduleGithubPoll(pending.interval);
+        } else {
+            this.clearGithubPollTimer();
+            if (this.isGithubAuthSelected()) {
+                return this.ensureGithubDeviceFlow({ force: true, silent });
+            }
+        }
+        if (!silent && pending?.userCode) {
+            this.setStatusLine(`Waiting for GitHub approval for code ${pending.userCode}.`);
+        }
+        return github;
+    }
+
+    async disconnectGithubAuth() {
+        const payload = await this.service.disconnectGithubAuth();
+        this.clearGithubPollTimer();
+        this.updateGithubAuthState(payload?.github || {});
+        this.updateAuthPrompt();
+        this.updateCommitButtons();
+        this.setStatusLine('GitHub disconnected.');
+        await this.ensureGithubDeviceFlow({ force: true, silent: true }).catch(() => {});
     }
 
     updateCommitMessage(element) {
@@ -636,7 +777,14 @@ export class GitCommitModal {
         this.state.selectedPath = null;
         this.state.selectedSection = null;
         this.state.identityPrompt = { visible: false, repoPath: null, pendingAction: null, name: '', email: '' };
-        this.state.authPrompt = { visible: false, repoPath: null, pendingAction: null, token: '', remember: false };
+        this.state.authPrompt = {
+            visible: false,
+            repoPath: null,
+            pendingAction: null,
+            token: '',
+            remember: false,
+            authMethod: getRememberedGitAuthMethod()
+        };
         this.state.ignorePrompt = {
             visible: false,
             repoPath: null,
@@ -898,14 +1046,17 @@ export class GitCommitModal {
     }
 
     async saveGitCredentials(payload = {}) {
-        return this.actions.saveGitCredentials(payload);
+        const shouldClose = await this.actions.saveGitCredentials(payload);
+        if (shouldClose) {
+            this.closeCredentials();
+            this.syncStaticUI();
+        }
+        return shouldClose;
     }
 
     cancelGitCredentials() {
         const shouldClose = this.actions.cancelGitCredentials();
-        if (shouldClose) {
-            this.closeModal();
-        }
+        if (shouldClose) this.closeCredentials();
         return shouldClose;
     }
 

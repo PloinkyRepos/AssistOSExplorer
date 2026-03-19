@@ -7,6 +7,33 @@ export function createGitCommitService({ callTool, callAgentTool }) {
         }
         return next;
     };
+    const AUTH_AGENT = 'explorer';
+    const callAuthJson = async (pathname, { method = 'GET', body = null } = {}) => {
+        const hasQuery = pathname.includes('?');
+        const url = `${pathname}${hasQuery ? '&' : '?'}agent=${encodeURIComponent(AUTH_AGENT)}`;
+        const headers = { Accept: 'application/json' };
+        const init = {
+            method,
+            headers,
+            credentials: 'same-origin'
+        };
+        if (body !== null) {
+            headers['Content-Type'] = 'application/json';
+            init.body = JSON.stringify(body);
+        }
+        const response = await fetch(url, init);
+        let payload = {};
+        try {
+            payload = await response.json();
+        } catch {
+            payload = {};
+        }
+        if (!response.ok || payload?.ok === false) {
+            const message = payload?.message || payload?.error || `auth_http_${response.status}`;
+            throw new Error(String(message || 'auth_request_failed'));
+        }
+        return payload;
+    };
     return {
         gitDiff: (args) => callAgentTool('gitAgent', 'git_diff', args),
         gitInfo: (path) => callAgentTool('gitAgent', 'git_info', { path }),
@@ -30,6 +57,10 @@ export function createGitCommitService({ callTool, callAgentTool }) {
         deleteFile: (path) => callTool('delete_file', { path }),
         readTextFile: (path) => callTool('read_text_file', { path }),
         writeFile: (path, content) => callTool('write_file', { path, content }),
-        generateCommitMessage: (diffs) => callAgentTool('llmAssistant', 'git_commit_message', { diffs })
+        generateCommitMessage: (diffs) => callAgentTool('llmAssistant', 'git_commit_message', { diffs }),
+        githubAuthStatus: () => callAuthJson('/auth/github/status'),
+        startGithubDeviceFlow: () => callAuthJson('/auth/github/device/start', { method: 'POST', body: {} }),
+        pollGithubDeviceFlow: () => callAuthJson('/auth/github/device/poll', { method: 'POST', body: {} }),
+        disconnectGithubAuth: () => callAuthJson('/auth/github/disconnect', { method: 'POST', body: {} })
     };
 }
