@@ -8,6 +8,15 @@ export function getPreviewUiState(state) {
     const viewMode = isHtml ? (state?.previewViewMode || 'code') : 'code';
     const codeHidden = Boolean(isHtml && viewMode === 'split' && state?.webViewCodePaneHidden);
     const webHidden = Boolean(isHtml && viewMode === 'split' && state?.webViewPaneHidden);
+    const canEdit = Boolean(selectedPath && state?.previewMode !== 'media' && !isTruncatedPreview && !showBacklogPanel && !isHistory);
+    const fileName = selectedPath.split('/').pop() || '';
+    const extensionMatch = fileName.match(/\.([^.]+)$/);
+    const extension = extensionMatch ? extensionMatch[1].toLowerCase() : '';
+    const isPlainTextFile = !extension || extension === 'txt' || extension === 'text' || extension === 'log';
+    const showTextPreview = canEdit
+        && isPlainTextFile
+        && !state?.selectedIsMarkdown
+        && !(isHtml && viewMode === 'web');
 
     return {
         selectedPath,
@@ -20,7 +29,9 @@ export function getPreviewUiState(state) {
         isTruncatedPreview,
         showBacklogPanel,
         showEditingActions: Boolean(state?.isEditing),
-        showEditAction: Boolean(selectedPath && state?.previewMode !== 'media' && !isTruncatedPreview && !showBacklogPanel && !isHistory),
+        showEditAction: canEdit,
+        showWrapToggle: showTextPreview,
+        wrapEnabled: Boolean(state?.previewWrapEnabled),
         showMarkdownToggle: Boolean(!state?.isEditing && state?.selectedIsMarkdown && selectedPath),
         showWebViewActions: Boolean(isHtml && selectedPath)
     };

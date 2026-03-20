@@ -182,6 +182,7 @@ export function ensurePreviewDom(fileExp, previewContent) {
 
 export function renderStandardPreview(fileExp, refs, previewUiState) {
     const defaultText = 'Select a file to see its contents.';
+    const wrapClassName = previewUiState.wrapEnabled ? ' is-wrapped' : '';
     toggleHidden(fileExp, refs.standardPane, false);
     toggleHidden(fileExp, refs.htmlSplit, true);
     refs.htmlSplit.classList.remove('single');
@@ -256,7 +257,7 @@ export function renderStandardPreview(fileExp, refs, previewUiState) {
 
     if (fileExp.state.selectedIsMarkdown) {
         if (fileExp.state.markdownTextView) {
-            refs.filePreview.className = 'markdown-raw-view';
+            refs.filePreview.className = `markdown-raw-view${wrapClassName}`;
             refs.filePreview.textContent = fileExp.state.selectedPath ? fileExp.state.fileContent : defaultText;
             fileExp.detachPreviewAnchorHandler();
         } else {
@@ -272,7 +273,7 @@ export function renderStandardPreview(fileExp, refs, previewUiState) {
         return;
     }
 
-    refs.filePreview.className = 'code-preview';
+    refs.filePreview.className = `code-preview${wrapClassName}`;
     if (fileExp.state.selectedPath) {
         refs.filePreview.innerHTML = fileExp.state.previewContent || '';
     } else {
@@ -325,9 +326,10 @@ export function renderHtmlPreview(fileExp, _refs, previewUiState, previewContent
         const actions = [
             renderClosePaneButton('setPreviewViewMode web', 'Hide Code')
         ];
+        const wrapClassName = previewUiState.wrapEnabled ? ' is-wrapped' : '';
         const body = fileExp.state.isEditing
             ? `<file-editor data-presenter="file-editor" data-path="${fileExp.state.selectedPath}"></file-editor>`
-            : `<div id="filePreview" class="code-preview">${fileExp.state.previewContent || "Select a file to see its contents."}</div>`;
+            : `<div id="filePreview" class="code-preview${wrapClassName}">${fileExp.state.previewContent || "Select a file to see its contents."}</div>`;
         return `
             <div class="preview-pane-shell">
                 ${renderPaneHeader('Code', actions.join(''))}

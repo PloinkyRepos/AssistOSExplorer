@@ -52,6 +52,7 @@ export function fileExpUiReducer(state, action) {
                 'previewContent',
                 'selectedIsMarkdown',
                 'previewMode',
+                'previewWrapEnabled',
                 'mediaType',
                 'fileLoadInfo',
                 'markdownTextView',

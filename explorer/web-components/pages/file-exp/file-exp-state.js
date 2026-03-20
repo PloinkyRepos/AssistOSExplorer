@@ -3,6 +3,7 @@ import { loadKeymap } from "../../../utils/keymap.js";
 
 const DEFAULT_COLUMN_VISIBILITY = { type: false, size: false, modified: false };
 const DEFAULT_LIST_WIDTH = null;
+const DEFAULT_PREVIEW_WRAP_ENABLED = false;
 
 export function loadWorkspaceVersionSeed() {
     try {
@@ -85,6 +86,23 @@ export function saveListWidthPreference(value) {
     }
 }
 
+export function loadPreviewWrapPreference() {
+    try {
+        const stored = window.localStorage.getItem('assistosExplorerPreviewWrap');
+        return stored === 'true';
+    } catch (_) {
+        return DEFAULT_PREVIEW_WRAP_ENABLED;
+    }
+}
+
+export function savePreviewWrapPreference(value) {
+    try {
+        window.localStorage.setItem('assistosExplorerPreviewWrap', value ? 'true' : 'false');
+    } catch (_) {
+        // ignore
+    }
+}
+
 export function createFileExpState() {
     const initialState = {
         path: '/',
@@ -128,6 +146,7 @@ export function createFileExpState() {
         keymap: loadKeymap(),
         pendingHighlight: null,
         previewMode: 'none',
+        previewWrapEnabled: loadPreviewWrapPreference(),
         previewViewMode: 'code',
         webViewUrl: '',
         webViewReloadToken: 0,

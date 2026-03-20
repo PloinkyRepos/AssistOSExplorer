@@ -6,6 +6,7 @@ export function createPreviewHeaderController(host) {
             previewTitle: root.querySelector('.preview-title'),
             headerExtras: root.querySelector('#previewHeaderExtras'),
             editorActions: root.querySelector('#editorActions'),
+            wrapPreviewButton: root.querySelector('#wrapPreviewButton'),
             editingActions: root.querySelector('#editingActions'),
             markdownViewActions: root.querySelector('#markdownViewActions'),
             toggleMarkdownViewButton: root.querySelector('#toggleMarkdownViewButton'),
@@ -18,7 +19,7 @@ export function createPreviewHeaderController(host) {
     };
 
     const syncEditActions = (elements, previewUiState) => {
-        const { editorActions, editingActions } = elements;
+        const { editorActions, editingActions, wrapPreviewButton } = elements;
         if (!editorActions || !editingActions) return;
         if (previewUiState.showEditingActions) {
             editorActions.classList.add('hidden');
@@ -27,6 +28,13 @@ export function createPreviewHeaderController(host) {
         }
         editingActions.classList.add('hidden');
         editorActions.classList.toggle('hidden', !previewUiState.showEditAction);
+        if (wrapPreviewButton) {
+            wrapPreviewButton.classList.toggle('hidden', !previewUiState.showWrapToggle);
+            wrapPreviewButton.classList.toggle('active', Boolean(previewUiState.wrapEnabled));
+            wrapPreviewButton.setAttribute('aria-pressed', previewUiState.wrapEnabled ? 'true' : 'false');
+            wrapPreviewButton.setAttribute('title', previewUiState.wrapEnabled ? 'Disable line wrap' : 'Enable line wrap');
+            wrapPreviewButton.textContent = previewUiState.wrapEnabled ? 'Unwrap' : 'Wrap';
+        }
     };
 
     const syncMarkdownActions = (elements, previewUiState) => {

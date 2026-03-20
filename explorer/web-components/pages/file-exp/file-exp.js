@@ -11,7 +11,7 @@ import {
     prepareMarkdownPreviewContent,
     renderMarkdownPreview
 } from "./file-exp-utils.js";
-import { createFileExpState, saveFilterSpecsPreference, saveListWidthPreference } from "./file-exp-state.js";
+import { createFileExpState, saveFilterSpecsPreference, saveListWidthPreference, savePreviewWrapPreference } from "./file-exp-state.js";
 import { createFileExpTooling } from "./file-exp-tooling.js";
 import { attachSearchController } from "./file-exp-search.js";
 import { attachFsActions } from "./file-exp-fs-actions.js";
@@ -477,6 +477,12 @@ export class FileExp {
             return;
         }
         this.setPreviewState(transition.patch, { invalidate: true });
+    }
+
+    togglePreviewWrap() {
+        const nextValue = !Boolean(this.state.previewWrapEnabled);
+        this.setPreviewState({ previewWrapEnabled: nextValue }, { invalidate: true });
+        savePreviewWrapPreference(nextValue);
     }
 
     async toggleFilterSpecs(element) {
