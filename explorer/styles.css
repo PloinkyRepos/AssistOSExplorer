@@ -821,6 +821,7 @@ dialog.spinner::backdrop {
     border: none;
     background: none;
     overflow: hidden;
+    border-radius: 50%;
 }
 
 .spinner-shell {
