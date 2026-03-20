@@ -218,6 +218,11 @@ export class GitRepoTree {
         return peekSelectionEntry(this.state.selectionState, repoPath);
     }
 
+    findRepoOverview(repoPath) {
+        const repos = Array.isArray(this.state.repos) ? this.state.repos : [];
+        return repos.find((repo) => repo?.path === repoPath) || null;
+    }
+
     isFileSelected(repoPath, filePath) {
         const entry = this.getSelectionEntry(repoPath);
         return isPathSelected(entry, filePath);
@@ -236,14 +241,19 @@ export class GitRepoTree {
     isRepoChangesExpanded(repoPath) {
         if (!repoPath) return true;
         const current = this.state.repoChangesExpanded?.[repoPath];
-        return current === undefined ? true : Boolean(current);
+        if (current !== undefined) {
+            return Boolean(current);
+        }
+        const repo = this.findRepoOverview(repoPath);
+        const counts = repo?.counts || {};
+        return Boolean(repo?.dirty || counts.staged || counts.unstaged || counts.untracked || counts.conflicted);
     }
 
     isTreeFolderExpanded(repoPath, prefix) {
         if (!repoPath || !prefix) return true;
         const key = `${repoPath}::${prefix}`;
         const current = this.state.treeExpandedByRepo?.[key];
-        return current === undefined ? true : Boolean(current);
+        return current === undefined ? undefined : Boolean(current);
     }
 
     getDisplayedRepoOverviews() {

@@ -183,7 +183,9 @@ export function renderRepoChangesTree(repo, {
             const childNode = node.children.get(folder);
             const nextPrefix = prefix ? `${prefix}${folder}/` : `${folder}/`;
             const normalizedPrefix = normalizeRepoRelativePrefix(nextPrefix);
-            const expanded = isFolderExpanded ? Boolean(isFolderExpanded(repo.path, normalizedPrefix)) : true;
+            const subtreeFiles = collectSubtreeFilePaths(childNode);
+            const expandedState = isFolderExpanded ? isFolderExpanded(repo.path, normalizedPrefix) : undefined;
+            const expanded = expandedState === undefined ? subtreeFiles.length > 0 : Boolean(expandedState);
 
             const folderWrapper = document.createElement('div');
             folderWrapper.className = 'git-tree-folder-node';
@@ -207,7 +209,6 @@ export function renderRepoChangesTree(repo, {
             checkbox.dataset.prefix = normalizedPrefix;
             checkbox.setAttribute('data-local-action', 'toggleTreePrefixSelectionCheckbox');
 
-            const subtreeFiles = collectSubtreeFilePaths(childNode);
             const ancestorPrefix = getAncestorCoveringPrefix?.(repo.path, normalizedPrefix) || null;
             const explicitlySelected = Boolean(getCoveringPrefix?.(repo.path, normalizedPrefix) === normalizedPrefix);
 

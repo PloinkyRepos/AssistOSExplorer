@@ -116,7 +116,12 @@ export function createGitCommitRepo(ctx) {
     const isRepoChangesExpanded = (repoPath) => {
         if (!repoPath) return true;
         const current = state.repoChangesExpanded?.[repoPath];
-        return current === undefined ? true : Boolean(current);
+        if (current !== undefined) {
+            return Boolean(current);
+        }
+        const repo = (Array.isArray(state.repoOverviews) ? state.repoOverviews : []).find((entry) => entry?.path === repoPath);
+        const counts = repo?.counts || {};
+        return Boolean(repo?.dirty || counts.staged || counts.unstaged || counts.untracked || counts.conflicted);
     };
 
     const toggleTreeFolder = (elementNode) => {
@@ -135,7 +140,7 @@ export function createGitCommitRepo(ctx) {
         if (!repoPath || !prefix) return true;
         const key = `${repoPath}::${prefix}`;
         const current = state.treeExpandedByRepo?.[key];
-        return current === undefined ? true : Boolean(current);
+        return current === undefined ? undefined : Boolean(current);
     };
 
     const getDisplayedRepoOverviews = () => {
