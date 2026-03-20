@@ -136,6 +136,11 @@ export function createGitCommitUI(ctx) {
         const githubAuth = state.githubAuth || {};
         const githubConnection = githubAuth.connection || {};
         const githubPending = githubAuth.pending || {};
+        const githubScope = String(githubConnection?.scope || '').trim();
+        const githubScopes = githubScope
+            ? githubScope.split(',').map((value) => value.trim()).filter(Boolean)
+            : [];
+        const githubHasRepoScope = githubScopes.includes('repo') || githubScopes.includes('public_repo');
         const githubIdentity = getGithubIdentityFallback();
         const tokenValue = (authState.token || rememberedToken || '') || '';
         const preferredGithub = Boolean(
@@ -171,6 +176,8 @@ export function createGitCommitUI(ctx) {
             githubConfigured: Boolean(githubAuth.configured),
             githubConnected: Boolean(githubAuth.connected),
             githubUserLabel: githubConnection?.user?.login || githubConnection?.user?.name || '',
+            githubScope,
+            githubHasRepoScope,
             githubPending: Boolean(githubPending.userCode || githubPending.verificationUri),
             githubVerificationUri: githubPending.verificationUriComplete || githubPending.verificationUri || '',
             githubUserCode: githubPending.userCode || '',

@@ -17,6 +17,8 @@ export class GitCredentialsPrompt {
             githubConfigured: false,
             githubConnected: false,
             githubUserLabel: '',
+            githubScope: '',
+            githubHasRepoScope: false,
             githubPending: false,
             githubVerificationUri: '',
             githubUserCode: '',
@@ -53,6 +55,8 @@ export class GitCredentialsPrompt {
         this.tokenPanel = this.element.querySelector('#gitTokenPanel');
         this.githubAuth = this.element.querySelector('#gitGithubAuth');
         this.githubStatus = this.element.querySelector('#gitGithubStatus');
+        this.githubScope = this.element.querySelector('#gitGithubScope');
+        this.githubWarning = this.element.querySelector('#gitGithubWarning');
         this.githubPending = this.element.querySelector('#gitGithubPending');
         this.githubCode = this.element.querySelector('#gitGithubCode');
         this.githubContinueButton = this.element.querySelector('[data-local-action="continueGithubAuth"]');
@@ -426,6 +430,12 @@ export class GitCredentialsPrompt {
         if (Object.prototype.hasOwnProperty.call(next, 'githubUserLabel')) {
             this.state.githubUserLabel = String(next.githubUserLabel || '');
         }
+        if (Object.prototype.hasOwnProperty.call(next, 'githubScope')) {
+            this.state.githubScope = String(next.githubScope || '').trim();
+        }
+        if (Object.prototype.hasOwnProperty.call(next, 'githubHasRepoScope')) {
+            this.state.githubHasRepoScope = Boolean(next.githubHasRepoScope);
+        }
         if (Object.prototype.hasOwnProperty.call(next, 'githubPending')) {
             this.state.githubPending = Boolean(next.githubPending);
         }
@@ -497,6 +507,24 @@ export class GitCredentialsPrompt {
                 this.githubStatus.textContent = 'Complete sign-in in GitHub.';
             } else {
                 this.githubStatus.textContent = 'Preparing sign-in...';
+            }
+        }
+        if (this.githubScope) {
+            const hasScope = Boolean(this.state.githubConnected && this.state.githubScope);
+            this.githubScope.hidden = !hasScope;
+            if (hasScope) {
+                this.githubScope.textContent = `Scopes: ${this.state.githubScope}`;
+            } else {
+                this.githubScope.textContent = '';
+            }
+        }
+        if (this.githubWarning) {
+            const showWarning = Boolean(this.state.githubConnected && this.state.githubScope && !this.state.githubHasRepoScope);
+            this.githubWarning.hidden = !showWarning;
+            if (showWarning) {
+                this.githubWarning.textContent = 'This GitHub authorization does not include repo access. Push may fail with 403.';
+            } else {
+                this.githubWarning.textContent = '';
             }
         }
         if (this.githubAuth) {
