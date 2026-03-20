@@ -52,6 +52,27 @@ export function createGitOpsActions(ctx) {
         window.dispatchEvent(new CustomEvent(FILE_EXP_REFRESH_EVENT));
     };
 
+    const formatCount = (count, singular, plural = `${singular}s`) => {
+        const safe = Number.isFinite(Number(count)) ? Number(count) : 0;
+        return `${safe} ${safe === 1 ? singular : plural}`;
+    };
+
+    const joinParts = (parts = []) => {
+        const list = parts.filter(Boolean);
+        if (!list.length) return '';
+        if (list.length === 1) return list[0];
+        if (list.length === 2) return `${list[0]} and ${list[1]}`;
+        return `${list.slice(0, -1).join(', ')}, and ${list[list.length - 1]}`;
+    };
+
+    const buildCompletionMessage = ({ intro, details = [], outro = '' }) => {
+        const detailText = joinParts(details);
+        if (detailText && outro) return `${intro} ${detailText}. ${outro}`;
+        if (detailText) return `${intro} ${detailText}.`;
+        if (outro) return `${intro} ${outro}`;
+        return intro;
+    };
+
     const getAuthMethod = (state = getState()) => {
         return normalizeGitAuthMethod(state.authPrompt?.authMethod || getRememberedGitAuthMethod());
     };
@@ -107,29 +128,33 @@ export function createGitOpsActions(ctx) {
         const list = Array.isArray(repoPaths) ? repoPaths.filter(Boolean) : [];
         if (!list.length) {
             setStatusLine('Select at least one repository to push.', true);
-            return false;
+            return { ok: false, pushedRepos: 0, pushedCommits: 0, skippedRepos: 0 };
         }
         const auth = getAuthContext(state, token);
-        let pushedAny = false;
+        let pushedRepos = 0;
+        let pushedCommits = 0;
+        let skippedRepos = 0;
         for (const repoPath of list) {
             const ahead = await getAheadCountForRepo(repoPath);
             if (ahead === 0) {
+                skippedRepos += 1;
                 continue;
             }
             try {
                 await gitPushWithToken(repoPath, auth.token);
-                pushedAny = true;
+                pushedRepos += 1;
+                pushedCommits += Math.max(0, Number(ahead) || 0);
             } catch (error) {
                 const msg = normalizeErrorMessage(error);
                 const human = humanizeGitError(msg, { action: 'push' });
                 if (isGitAuthError(msg)) {
                     if (auth.usingGithub && !auth.githubConnected) {
                         showGitAuthPrompt(repoPath, { type: 'push', mode: 'batch', repoPaths: list }, { message: human, authMethod: 'github' });
-                        return false;
+                        return { ok: false, pushedRepos, pushedCommits, skippedRepos };
                     }
                     if (!auth.usingGithub && !auth.token) {
                         showGitAuthPrompt(repoPath, { type: 'push', mode: 'batch', repoPaths: list }, { message: human, authMethod: 'token' });
-                        return false;
+                        return { ok: false, pushedRepos, pushedCommits, skippedRepos };
                     }
                     setStatusLine(
                         auth.usingGithub
@@ -137,16 +162,16 @@ export function createGitOpsActions(ctx) {
                             : `${human} (Use Token to update credentials or switch to GitHub.)`,
                         true
                     );
-                    return false;
+                    return { ok: false, pushedRepos, pushedCommits, skippedRepos };
                 }
                 throw error;
             }
         }
-        if (!pushedAny && list.length) {
+        if (pushedRepos === 0 && list.length) {
             setStatusLine('Nothing to push. Selected repositories are up to date.');
-            return false;
+            return { ok: false, pushedRepos, pushedCommits, skippedRepos };
         }
-        return pushedAny;
+        return { ok: true, pushedRepos, pushedCommits, skippedRepos };
     };
 
     const pullRepos = async (repoPaths, { token = null, pendingAction = null } = {}) => {
@@ -158,6 +183,7 @@ export function createGitOpsActions(ctx) {
         const list = Array.isArray(repoPaths) ? repoPaths.filter(Boolean) : [];
         const auth = getAuthContext(state, token);
         const conflictSource = state.pullMode === 'rebase' ? 'rebase' : 'merge';
+        let pulledRepos = 0;
         for (const repoPath of list) {
             if (state.pullMode !== 'ffOnly') {
                 const identityOk = await applyGitIdentityForRepo(repoPath);
@@ -169,7 +195,7 @@ export function createGitOpsActions(ctx) {
                         repoPath,
                         pendingAction?.type ? pendingAction : { type: 'pull', mode: 'batch', repoPaths: list }
                     );
-                    return false;
+                    return { ok: false, pulledRepos };
                 }
             }
             try {
@@ -177,17 +203,19 @@ export function createGitOpsActions(ctx) {
                 const normalized = normalizeGitStatusPayload(statusPayload);
                 if (normalized.counts.conflicted > 0) {
                     const resolved = await handlePullConflicts('Resolve merge conflicts before pulling.', [repoPath], conflictSource);
-                    if (!resolved) return false;
+                    if (!resolved) return { ok: false, pulledRepos };
                 }
                 const hasLocalChanges = (normalized.counts.staged
                     + normalized.counts.unstaged
                     + normalized.counts.untracked) > 0;
                 if (hasLocalChanges) {
                     const autoOk = await pullWithAutoStash(repoPath, auth.token, list);
-                    if (!autoOk) return false;
+                    if (!autoOk) return { ok: false, pulledRepos };
+                    pulledRepos += 1;
                     continue;
                 }
                 await gitPullWithToken(repoPath, auth.token);
+                pulledRepos += 1;
             } catch (error) {
                 const msg = humanizeGitError(normalizeErrorMessage(error), { action: 'pull' });
                 if (isGitIdentityError(msg)) {
@@ -198,7 +226,7 @@ export function createGitOpsActions(ctx) {
                         repoPath,
                         pendingAction?.type ? pendingAction : { type: 'pull', mode: 'batch', repoPaths: list }
                     );
-                    return false;
+                    return { ok: false, pulledRepos };
                 }
                 if (isGitAuthError(msg)) {
                     if (auth.usingGithub && !auth.githubConnected) {
@@ -207,7 +235,7 @@ export function createGitOpsActions(ctx) {
                             pendingAction?.type ? pendingAction : { type: 'pull', mode: 'batch', repoPaths: list },
                             { message: msg, authMethod: 'github' }
                         );
-                        return false;
+                        return { ok: false, pulledRepos };
                     }
                     if (!auth.usingGithub && !auth.token) {
                         showGitAuthPrompt(
@@ -215,7 +243,7 @@ export function createGitOpsActions(ctx) {
                             pendingAction?.type ? pendingAction : { type: 'pull', mode: 'batch', repoPaths: list },
                             { message: msg, authMethod: 'token' }
                         );
-                        return false;
+                        return { ok: false, pulledRepos };
                     }
                     setStatusLine(
                         auth.usingGithub
@@ -223,22 +251,23 @@ export function createGitOpsActions(ctx) {
                             : `${msg} (Use Token to update credentials or switch to GitHub.)`,
                         true
                     );
-                    return false;
+                    return { ok: false, pulledRepos };
                 }
                 if (isGitConflictError(msg)) {
                     const resolved = await handlePullConflicts('Merge conflicts detected. Resolve them before continuing.', [repoPath], conflictSource);
                     if (resolved) continue;
-                    return false;
+                    return { ok: false, pulledRepos };
                 }
                 if (isGitPullBlockedError(msg)) {
                     const autoOk = await pullWithAutoStash(repoPath, auth.token, list);
-                    if (!autoOk) return false;
+                    if (!autoOk) return { ok: false, pulledRepos };
+                    pulledRepos += 1;
                     continue;
                 }
                 throw error;
             }
         }
-        return true;
+        return { ok: true, pulledRepos };
     };
 
     const commitSelectedRepos = async () => {
@@ -261,8 +290,8 @@ export function createGitOpsActions(ctx) {
         setStatusLine('Pulling latest changes before commit...');
         return withGlobalLoader(async () => {
             try {
-                const pullOk = await pullRepos(selected, { pendingAction: { type: 'sync', mode: 'batch', repoPaths: selected } });
-                if (!pullOk) return;
+                const pullResult = await pullRepos(selected, { pendingAction: { type: 'sync', mode: 'batch', repoPaths: selected } });
+                if (!pullResult?.ok) return;
                 await loadRepoOverviews({ force: true });
                 syncStaticUI();
                 updateCommitButtons();
@@ -271,6 +300,9 @@ export function createGitOpsActions(ctx) {
                     return;
                 }
                 setStatusLine(shouldPush ? `Committing & pushing ${selected.length} repo(s)…` : `Committing ${selected.length} repo(s)…`);
+                let committedRepos = 0;
+                let committedFiles = 0;
+                let pushSummary = { ok: false, pushedRepos: 0, pushedCommits: 0, skippedRepos: 0 };
                 for (const repoPath of selected) {
                     const identityOk = await ensureGitIdentityOrPrompt(repoPath, { type: 'commit', mode: 'batch', repoPaths: selected });
                     if (!identityOk) return;
@@ -300,10 +332,14 @@ export function createGitOpsActions(ctx) {
                         }
                         throw error;
                     }
+                    committedRepos += 1;
+                    committedFiles += list.length;
                     if (shouldPush) {
                         const auth = getAuthContext(getState());
                         try {
                             await gitPushWithToken(repoPath, auth.token);
+                            pushSummary.pushedRepos += 1;
+                            pushSummary.pushedCommits += 1;
                         } catch (error) {
                             const msg = normalizeErrorMessage(error);
                             if (isGitAuthError(msg)) {
@@ -333,7 +369,18 @@ export function createGitOpsActions(ctx) {
                 await loadRepoOverviews({ force: true });
                 await refreshAll({ force: true });
                 dispatchFileTreeRefresh();
-                setStatusLine('Done.');
+                const details = [];
+                if (pullResult.pulledRepos > 0) {
+                    details.push(`pulled the latest changes for ${formatCount(pullResult.pulledRepos, 'repository')}`);
+                }
+                if (committedRepos > 0) {
+                    details.push(`committed ${formatCount(committedFiles, 'file')} in ${formatCount(committedRepos, 'repository')}`);
+                }
+                if (shouldPush && pushSummary.pushedRepos > 0) {
+                    details.push(`pushed ${formatCount(pushSummary.pushedCommits, 'commit')} from ${formatCount(pushSummary.pushedRepos, 'repository')}`);
+                }
+                const intro = shouldPush ? 'Commit and push finished.' : 'Commit finished.';
+                setStatusLine(buildCompletionMessage({ intro, details }));
             } catch (error) {
                 setStatusLine(humanizeGitError(normalizeErrorMessage(error)), true);
             }
@@ -354,11 +401,11 @@ export function createGitOpsActions(ctx) {
         setStatusLine(`Syncing ${selected.length} repo(s)…`);
         return withGlobalLoader(async () => {
             try {
-                const pullOk = await pullRepos(selected, {
+                const pullResult = await pullRepos(selected, {
                     pendingAction: { type: 'sync', mode: 'batch', repoPaths: selected },
                     token: tokenOverride
                 });
-                if (!pullOk) return;
+                if (!pullResult?.ok) return;
                 const stagedSelections = [];
                 for (const repoPath of selected) {
                     const statusPayload = parseJsonToolResult(await service.gitStatus(repoPath)) || {};
@@ -376,13 +423,19 @@ export function createGitOpsActions(ctx) {
                 }
 
                 if (!stagedSelections.length) {
-                    const pushedAny = await pushRepos(selected);
-                    if (!pushedAny) {
+                    const pushSummary = await pushRepos(selected);
+                    if (!pushSummary?.ok) {
                         applyState({ pendingAction: null }, { silent: true });
                         dispatchAutocommitReset();
                         return;
                     }
-                    setStatusLine('Pushed.');
+                    setStatusLine(buildCompletionMessage({
+                        intro: 'Sync finished.',
+                        details: [
+                            pullResult.pulledRepos > 0 ? `pulled the latest changes for ${formatCount(pullResult.pulledRepos, 'repository')}` : '',
+                            pushSummary.pushedRepos > 0 ? `pushed ${formatCount(pushSummary.pushedCommits, 'commit')} from ${formatCount(pushSummary.pushedRepos, 'repository')}` : ''
+                        ]
+                    }));
                     applyState({ pendingAction: null }, { silent: true });
                     return;
                 }
@@ -395,6 +448,8 @@ export function createGitOpsActions(ctx) {
                 }
                 setCommitMessage(message);
                 updateCommitButtons();
+                let committedRepos = 0;
+                let committedFiles = 0;
 
                 for (const selection of stagedSelections) {
                     const repoPath = selection.repoPath;
@@ -422,12 +477,19 @@ export function createGitOpsActions(ctx) {
                         }
                         throw error;
                     }
+                    committedRepos += 1;
+                    committedFiles += Array.isArray(selection.files) ? selection.files.length : 0;
                 }
 
                 const auth = getAuthContext(getState(), tokenOverride);
+                let pushedRepos = 0;
+                let pushedCommits = 0;
                 for (const repoPath of selected) {
                     try {
+                        const aheadCount = Math.max(0, Number(await getAheadCountForRepo(repoPath)) || 0);
                         await gitPushWithToken(repoPath, auth.token);
+                        pushedRepos += 1;
+                        pushedCommits += Math.max(1, aheadCount);
                     } catch (error) {
                         const msg = normalizeErrorMessage(error);
                         const human = humanizeGitError(msg, { action: 'push' });
@@ -462,7 +524,14 @@ export function createGitOpsActions(ctx) {
                 await loadRepoOverviews({ force: true });
                 await refreshAll({ force: true, keepStatus: true });
                 dispatchFileTreeRefresh();
-                setStatusLine('Sync complete.');
+                setStatusLine(buildCompletionMessage({
+                    intro: 'Sync finished.',
+                    details: [
+                        pullResult.pulledRepos > 0 ? `pulled the latest changes for ${formatCount(pullResult.pulledRepos, 'repository')}` : '',
+                        committedRepos > 0 ? `committed ${formatCount(committedFiles, 'file')} in ${formatCount(committedRepos, 'repository')}` : '',
+                        pushedRepos > 0 ? `pushed ${formatCount(pushedCommits, 'commit')} from ${formatCount(pushedRepos, 'repository')}` : ''
+                    ]
+                }));
                 dispatchAutocommitReset();
             } catch (error) {
                 setStatusLine(humanizeGitError(normalizeErrorMessage(error), { action: 'push' }), true);
@@ -484,10 +553,15 @@ export function createGitOpsActions(ctx) {
         setStatusLine('Pushing...');
         return withGlobalLoader(async () => {
             try {
-                const pushedAny = await pushRepos([state.repoPath], { token });
-                if (!pushedAny) return;
+                const pushSummary = await pushRepos([state.repoPath], { token });
+                if (!pushSummary?.ok) return;
                 if (!silent) {
-                    setStatusLine('Push complete.');
+                    setStatusLine(buildCompletionMessage({
+                        intro: 'Push finished.',
+                        details: [
+                            `pushed ${formatCount(pushSummary.pushedCommits, 'commit')} from ${formatCount(pushSummary.pushedRepos, 'repository')}`
+                        ]
+                    }));
                 }
             } catch (error) {
                 setStatusLine(humanizeGitError(normalizeErrorMessage(error), { action: 'push' }), true);
@@ -508,9 +582,14 @@ export function createGitOpsActions(ctx) {
         setStatusLine(`Pushing ${list.length} repo(s)…`);
         return withGlobalLoader(async () => {
             try {
-                const pushedAny = await pushRepos(list);
-                if (!pushedAny) return;
-                setStatusLine('Pushed.');
+                const pushSummary = await pushRepos(list);
+                if (!pushSummary?.ok) return;
+                setStatusLine(buildCompletionMessage({
+                    intro: 'Push finished.',
+                    details: [
+                        `pushed ${formatCount(pushSummary.pushedCommits, 'commit')} from ${formatCount(pushSummary.pushedRepos, 'repository')}`
+                    ]
+                }));
             } catch (error) {
                 setStatusLine(humanizeGitError(normalizeErrorMessage(error), { action: 'push' }), true);
             }
@@ -536,13 +615,18 @@ export function createGitOpsActions(ctx) {
         setStatusLine(`Pulling ${selected.length} repo(s)…`);
         return withGlobalLoader(async () => {
             try {
-                const ok = await pullRepos(selected);
-                if (!ok) return;
+                const pullResult = await pullRepos(selected);
+                if (!pullResult?.ok) return;
                 clearDiffCache();
                 await loadRepoOverviews({ force: true });
                 await refreshAll({ force: true });
                 dispatchFileTreeRefresh();
-                setStatusLine('Pull complete.');
+                setStatusLine(buildCompletionMessage({
+                    intro: 'Pull finished.',
+                    details: [
+                        `updated ${formatCount(pullResult.pulledRepos, 'repository')}`
+                    ]
+                }));
             } catch (error) {
                 setStatusLine(normalizeErrorMessage(error), true);
             }
