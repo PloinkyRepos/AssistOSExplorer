@@ -20,3 +20,42 @@ git-commit-body.is-hidden {
 .git-commit {
     flex: 0 0 auto;
 }
+
+.git-main > git-repo-tree {
+    flex: 0 0 var(--git-tree-width, 420px);
+    min-width: 280px;
+}
+
+.git-main > git-diff-viewer {
+    flex: 1 1 auto;
+    min-width: 320px;
+    min-height: 0;
+}
+
+.git-main-resizer {
+    position: relative;
+    flex: 0 0 10px;
+    align-self: stretch;
+    cursor: col-resize;
+    border-radius: 999px;
+    background: transparent;
+    touch-action: none;
+}
+
+.git-main-resizer::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    left: 50%;
+    width: 2px;
+    transform: translateX(-50%);
+    border-radius: 999px;
+    background: rgba(148, 163, 184, 0.45);
+    transition: background-color 120ms ease, box-shadow 120ms ease;
+}
+
+.git-main-resizer:hover::before,
+.git-main.resizing .git-main-resizer::before {
+    background: rgba(59, 130, 246, 0.75);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}

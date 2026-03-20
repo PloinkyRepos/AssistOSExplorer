@@ -227,11 +227,6 @@ export function renderRepoChangesTree(repo, {
             const icon = document.createElement('span');
             icon.className = 'git-tree-folder-icon';
             icon.setAttribute('aria-hidden', 'true');
-            icon.innerHTML = `
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M3.5 6.5h6l2 2H20.5v10a2 2 0 0 1-2 2H5.5a2 2 0 0 1-2-2v-12a2 2 0 0 1 2-2Z"></path>
-                </svg>
-            `.trim();
             const text = document.createElement('span');
             text.className = 'git-tree-folder-name';
             text.textContent = folder;

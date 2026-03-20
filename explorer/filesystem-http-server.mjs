@@ -7,7 +7,7 @@ import readline from 'node:readline';
 import { minimatch } from 'minimatch';
 
 import { server as mcpServer, streamHttp as mcpStreamHttp, types as mcpTypes, zod as mcpZod } from 'mcp-sdk';
-import { copyRecursive, createCacheHelpers } from './utils/filesystem-utils.mjs';
+import { copyRecursive, createCacheHelpers, describeDirectoryEntry } from './utils/filesystem-utils.mjs';
 import { aggregateIdePlugins } from './utils/ide-plugins.mjs';
 import { createTimedCache, buildCacheKey } from './utils/server/timed-cache.mjs';
 import { createStructureIndex } from './utils/server/structure-index.mjs';
@@ -99,25 +99,7 @@ let readFileWithCache = async (validPath, { skipReadForLarge = false } = {}) => 
 
 let listDirectoryDetailedWithCache = async (validPath) => {
   const entries = await fs.readdir(validPath, { withFileTypes: true });
-  return Promise.all(entries.map(async entry => {
-    const entryPath = path.join(validPath, entry.name);
-    try {
-      const stats = await fs.stat(entryPath);
-      return {
-        name: entry.name,
-        type: entry.isDirectory() ? 'directory' : entry.isFile() ? 'file' : 'other',
-        size: stats.size,
-        modified: stats.mtime.toISOString()
-      };
-    } catch {
-      return {
-        name: entry.name,
-        type: entry.isDirectory() ? 'directory' : entry.isFile() ? 'file' : 'other',
-        size: null,
-        modified: null
-      };
-    }
-  }));
+  return Promise.all(entries.map((entry) => describeDirectoryEntry(validPath, entry)));
 };
 
 let invalidateCachesForPath = () => {};

@@ -6,6 +6,23 @@ import {
     getAncestorCoveringPrefix
 } from "../../modals/git-commit-modal/git-commit-modal-selection.js";
 
+const formatCountLabel = (count, singular, plural = `${singular}s`) => {
+    const normalized = Number(count) || 0;
+    return `${normalized} ${normalized === 1 ? singular : plural}`;
+};
+
+const formatRepoTreeCounts = (counts = {}, { stashCount = 0, cleanLabel = 'Clean' } = {}) => {
+    const parts = [];
+
+    if (counts.staged) parts.push(formatCountLabel(counts.staged, 'staged file'));
+    if (counts.unstaged) parts.push(formatCountLabel(counts.unstaged, 'changed file'));
+    if (counts.untracked) parts.push(formatCountLabel(counts.untracked, 'new file'));
+    if (counts.conflicted) parts.push(formatCountLabel(counts.conflicted, 'conflict'));
+    if (stashCount) parts.push(formatCountLabel(stashCount, 'stash'));
+
+    return parts.length ? parts.join(', ') : cleanLabel;
+};
+
 export class GitRepoTree {
     constructor(element, invalidate) {
         this.element = element;
@@ -14,6 +31,7 @@ export class GitRepoTree {
             reposRoot: '',
             repos: [],
             loading: false,
+            repoFilterQuery: '',
             repoTreeExpanded: {},
             repoChangesExpanded: {},
             treeExpandedByRepo: {},
@@ -23,6 +41,7 @@ export class GitRepoTree {
         };
         this.boundActions = false;
         this.onKeydown = this.onKeydown.bind(this);
+        this.onFilterInput = this.onFilterInput.bind(this);
         this.invalidate();
     }
 
@@ -30,13 +49,24 @@ export class GitRepoTree {
 
     afterRender() {
         this.list = this.element.querySelector('.git-repo-tree-list');
+        this.filterInput = this.element.querySelector('#gitRepoFilterInput');
         this.bindEvents();
+        this.syncFilterInput();
         this.render();
     }
 
     bindEvents() {
-        if (this.boundActions) return;
-        this.element.addEventListener('keydown', this.onKeydown);
+        if (!this.element.dataset.boundRepoTreeKeydown) {
+            this.element.addEventListener('keydown', this.onKeydown);
+            this.element.dataset.boundRepoTreeKeydown = 'true';
+        }
+        if (this.filterInput && this.filterInput !== this.boundFilterInput) {
+            if (this.boundFilterInput) {
+                this.boundFilterInput.removeEventListener('input', this.onFilterInput);
+            }
+            this.filterInput.addEventListener('input', this.onFilterInput);
+            this.boundFilterInput = this.filterInput;
+        }
         this.boundActions = true;
     }
 
@@ -71,6 +101,9 @@ export class GitRepoTree {
         if (Object.prototype.hasOwnProperty.call(next, 'loading')) {
             this.state.loading = Boolean(next.loading);
         }
+        if (Object.prototype.hasOwnProperty.call(next, 'repoFilterQuery')) {
+            this.state.repoFilterQuery = String(next.repoFilterQuery || '');
+        }
         if (Object.prototype.hasOwnProperty.call(next, 'repoTreeExpanded')) {
             this.state.repoTreeExpanded = next.repoTreeExpanded || {};
         }
@@ -89,6 +122,20 @@ export class GitRepoTree {
         if (Object.prototype.hasOwnProperty.call(next, 'selectedRepoPath')) {
             this.state.selectedRepoPath = String(next.selectedRepoPath || '');
         }
+        this.syncFilterInput();
+        this.render();
+    }
+
+    syncFilterInput() {
+        if (this.filterInput && this.filterInput.value !== this.state.repoFilterQuery) {
+            this.filterInput.value = this.state.repoFilterQuery;
+        }
+    }
+
+    onFilterInput(event) {
+        const value = String(event?.target?.value || '');
+        if (value === this.state.repoFilterQuery) return;
+        this.state.repoFilterQuery = value;
         this.render();
     }
 
@@ -200,7 +247,18 @@ export class GitRepoTree {
     }
 
     getDisplayedRepoOverviews() {
-        return Array.isArray(this.state.repos) ? this.state.repos : [];
+        const repos = Array.isArray(this.state.repos) ? this.state.repos : [];
+        const needle = String(this.state.repoFilterQuery || '').trim().toLowerCase();
+        if (!needle) return repos;
+        return repos.filter((repo) => {
+            const haystacks = [
+                repo?.name,
+                repo?.relativePath,
+                repo?.path,
+                repo?.branch
+            ].map((value) => String(value || '').toLowerCase());
+            return haystacks.some((value) => value.includes(needle));
+        });
     }
 
     buildRepoTree(repos) {
@@ -292,6 +350,13 @@ export class GitRepoTree {
         }
 
         const repos = this.getDisplayedRepoOverviews();
+        if (repos.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'git-empty';
+            empty.textContent = 'No repositories match this filter.';
+            this.list.appendChild(empty);
+            return;
+        }
         const tree = this.buildRepoTree(repos);
         const expandedMap = this.state.repoTreeExpanded || {};
 
@@ -321,9 +386,11 @@ export class GitRepoTree {
 
             const label = document.createElement('div');
             label.className = 'git-folder-label';
-            const stashBadge = node.counts.stashed ? ` · stash:${node.counts.stashed}` : '';
-            const badge = `S:${node.counts.staged} U:${node.counts.unstaged} N:${node.counts.untracked}${node.counts.conflicted ? ` C:${node.counts.conflicted}` : ''}${stashBadge}`;
-            label.textContent = `${folderId === '/' ? this.state.reposRoot : node.name} · ${badge}`;
+            const summary = formatRepoTreeCounts(node.counts, {
+                stashCount: node.counts.stashed,
+                cleanLabel: 'No changes'
+            });
+            label.textContent = `${folderId === '/' ? this.state.reposRoot : node.name} · ${summary}`;
 
             left.appendChild(expandBtn);
             left.appendChild(label);
@@ -370,13 +437,9 @@ export class GitRepoTree {
                 changesToggle.textContent = repoExpanded ? '▾' : '▸';
 
                 const counts = repo.counts || { staged: 0, unstaged: 0, untracked: 0, conflicted: 0 };
-                const stashCount = Number.isFinite(repo.stashCount) ? repo.stashCount : 0;
-                const repoBadge = repo.ok
-                    ? `S:${counts.staged} U:${counts.unstaged} N:${counts.untracked}${counts.conflicted ? ` C:${counts.conflicted}` : ''}${stashCount ? ` · stash:${stashCount}` : ''}`
-                    : 'not git';
                 const label = document.createElement('div');
                 label.className = 'git-change-button';
-                label.textContent = `${repo.name} · ${repoBadge}${repo.branch ? ` · ${repo.branch}` : ''}`;
+                label.textContent = `${repo.name}${repo.branch ? ` · ${repo.branch}` : ''}`;
                 repoLeft.appendChild(changesToggle);
                 repoLeft.appendChild(repoCheckbox);
                 repoLeft.appendChild(label);

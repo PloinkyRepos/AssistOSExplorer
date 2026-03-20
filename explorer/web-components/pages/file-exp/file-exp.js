@@ -11,7 +11,7 @@ import {
     prepareMarkdownPreviewContent,
     renderMarkdownPreview
 } from "./file-exp-utils.js";
-import { createFileExpState, saveFilterSpecsPreference } from "./file-exp-state.js";
+import { createFileExpState, saveFilterSpecsPreference, saveListWidthPreference } from "./file-exp-state.js";
 import { createFileExpTooling } from "./file-exp-tooling.js";
 import { attachSearchController } from "./file-exp-search.js";
 import { attachFsActions } from "./file-exp-fs-actions.js";
@@ -618,10 +618,13 @@ export class FileExp {
     }
 
     setListWidth(width, options = {}) {
-        return this.dispatchUi({
+        const result = this.dispatchUi({
             type: FILE_EXP_UI_ACTIONS.SET_LIST_WIDTH,
             payload: { width }
         }, options);
+        const nextWidth = Number.isFinite(this.state?.listWidth) ? this.state.listWidth : null;
+        saveListWidthPreference(nextWidth);
+        return result;
     }
 
     setIsResizing(isResizing, options = {}) {

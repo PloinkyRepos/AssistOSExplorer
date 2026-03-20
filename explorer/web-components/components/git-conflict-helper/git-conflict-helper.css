@@ -106,7 +106,7 @@ git-conflict-helper.is-visible {
 .git-conflict-helper-content {
     flex: 1 1 auto;
     margin: 0;
-    font-family: "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    font-family: var(--mono-font);
     font-size: 0.8rem;
     white-space: pre;
     overflow: auto;

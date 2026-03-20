@@ -1,45 +1,6 @@
-const FOLDER_ICON_TEMPLATE = createTemplate(`
-<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-folder-fill" viewBox="0 0 16 16">
-  <path d="M9.828 3h3.982a2 2 0 0 1 1.992 2.181l-.637 7A2 2 0 0 1 13.174 14H2.826a2 2 0 0 1-1.991-1.819l-.637-7a1.99 1.99 0 0 1 .342-1.31L.5 3a2 2 0 0 1 2-2h3.672a2 2 0 0 1 1.414.586l.828.828A2 2 0 0 0 9.828 3zm-8.322.12C1.72 3.042 1.95 3 2.19 3h5.396l-.707-.707A1 1 0 0 0 6.172 2H2.5a1 1 0 0 0-1 .981l.006.139z"></path>
-</svg>
-`);
-
-const FILE_ICON_TEMPLATE = createTemplate(`
-<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-file-earmark-fill" viewBox="0 0 16 16">
-  <path d="M4 0h5.5v1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4.5h1V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2z"></path>
-  <path d="M9.5 3.5 14 8V3.5A1.5 1.5 0 0 0 12.5 2H9.5v1.5z"></path>
-</svg>
-`);
-
-const DELETE_ICON_TEMPLATE = createTemplate(`
-<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="action-menu-item-icon" viewBox="0 0 16 16" aria-hidden="true">
-    <path d="M5.5 5.5a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0v-6a.5.5 0 0 1 .5-.5z"></path>
-    <path d="M8 6a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"></path>
-    <path d="M11 5.5a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0v-6a.5.5 0 0 1 .5-.5z"></path>
-    <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1h-1v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-1a1 1 0 0 1 0-2h4.5l1-1h3l1 1H14a1 1 0 0 1 1 1zm-3 1H4v9a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1V4z"></path>
-</svg>
-`);
-
-const PASTE_ICON_TEMPLATE = createTemplate(`
-<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="action-menu-item-icon" viewBox="0 0 16 16" aria-hidden="true">
-    <path d="M4 1.5A1.5 1.5 0 0 1 5.5 0h5A1.5 1.5 0 0 1 12 1.5V3h1.5A1.5 1.5 0 0 1 15 4.5v9A1.5 1.5 0 0 1 13.5 15h-7A1.5 1.5 0 0 1 5 13.5V12h3.5A1.5 1.5 0 0 0 10 10.5v-7A1.5 1.5 0 0 0 8.5 2H7V1.5A.5.5 0 0 0 6.5 1h-1a.5.5 0 0 0-.5.5V2H4v-.5z"></path>
-    <path d="M6.5 13a.5.5 0 0 1-.5-.5V5A1.5 1.5 0 0 1 7.5 3.5h1A1.5 1.5 0 0 1 10 5v5.5a.5.5 0 0 1-.5.5H6v1a.5.5 0 0 1-.5.5z"></path>
-</svg>
-`);
-
 const VIRTUALIZATION_THRESHOLD = 180;
 const DEFAULT_ROW_HEIGHT = 38;
 const VIRTUALIZATION_OVERSCAN = 10;
-
-function createTemplate(markup) {
-    const template = document.createElement('template');
-    template.innerHTML = String(markup || '').trim();
-    return template;
-}
-
-function cloneTemplate(template) {
-    return template.content.firstElementChild.cloneNode(true);
-}
 
 function createIconImage(src, alt = '') {
     const image = document.createElement('img');
@@ -55,6 +16,13 @@ function createActionLabel(label) {
     span.className = 'action-menu-item-label';
     span.textContent = label;
     return span;
+}
+
+function createEntryIcon(iconClass) {
+    const icon = document.createElement('span');
+    icon.className = `entry-icon ${iconClass}`;
+    icon.setAttribute('aria-hidden', 'true');
+    return icon;
 }
 
 export class FileExpEntries {
@@ -182,18 +150,27 @@ export class FileExpEntries {
         return `action-menu-${normalized || 'row'}`;
     }
 
-    createSelectCell(className, value, entryPath, type, iconNode = null) {
+    createSelectCell(className, value, entryPath, type, iconClass = '', options = {}) {
         const cell = document.createElement('td');
         cell.className = className;
         cell.dataset.entryPath = entryPath;
         cell.dataset.type = type;
         cell.dataset.localAction = 'selectEntry';
-        if (iconNode) {
+        if (options.isSymlink) {
+            cell.dataset.symlink = 'true';
+            if (options.linkTarget) {
+                cell.dataset.linkTarget = options.linkTarget;
+            }
+        }
+        if (iconClass) {
             const icon = document.createElement('span');
             icon.className = 'icon';
-            icon.appendChild(iconNode);
+            icon.appendChild(createEntryIcon(iconClass));
             cell.appendChild(icon);
-            cell.appendChild(document.createTextNode(` ${value}`));
+            const label = document.createElement('span');
+            label.className = 'entry-label';
+            label.textContent = value;
+            cell.appendChild(label);
         } else {
             cell.textContent = value;
         }
@@ -288,7 +265,7 @@ export class FileExpEntries {
                 type,
                 disabled: !canPasteInto,
                 extraDataset: { targetPath: entryPath },
-                iconNode: cloneTemplate(PASTE_ICON_TEMPLATE)
+                iconNode: createIconImage('./assets/icons/paste.svg')
             }));
         }
 
@@ -298,7 +275,7 @@ export class FileExpEntries {
             entryPath,
             type,
             destructive: true,
-            iconNode: cloneTemplate(DELETE_ICON_TEMPLATE)
+            iconNode: createIconImage('./assets/icons/trash-can.svg')
         }));
 
         container.appendChild(trigger);
@@ -428,15 +405,27 @@ export class FileExpEntries {
             const row = this.rowsByPath.get(entryPath) || this.createRow(entryPath);
             row.dataset.entryPath = entryPath;
             row.dataset.type = type;
+            row.dataset.symlink = entry?.isSymlink ? 'true' : 'false';
+            if (entry?.linkTarget) {
+                row.title = `Symbolic link to ${entry.linkTarget}`;
+            } else {
+                row.removeAttribute('title');
+            }
             row.classList.toggle('active', selectedPath === entryPath);
+            row.classList.toggle('is-symlink', Boolean(entry?.isSymlink));
 
             const isClipboardSource = clipboard?.path === entryPath;
             row.classList.toggle('clipboard-row', Boolean(isClipboardSource));
             row.classList.toggle('clipboard-cut', Boolean(isClipboardSource && clipboard?.mode === 'cut'));
             row.classList.toggle('clipboard-copy', Boolean(isClipboardSource && clipboard?.mode === 'copy'));
 
-            const iconNode = type === 'directory' ? cloneTemplate(FOLDER_ICON_TEMPLATE) : cloneTemplate(FILE_ICON_TEMPLATE);
-            const nameCell = this.createSelectCell('col-name', entry?.name || '', entryPath, type, iconNode);
+            const iconClass = entry?.isSymlink
+                ? (type === 'directory' ? 'icon-folder-symlink' : 'icon-file-symlink')
+                : (type === 'directory' ? 'icon-folder' : 'icon-file');
+            const nameCell = this.createSelectCell('col-name', entry?.name || '', entryPath, type, iconClass, {
+                isSymlink: Boolean(entry?.isSymlink),
+                linkTarget: entry?.linkTarget || ''
+            });
             const typeCell = this.createSelectCell('col-type', type, entryPath, type);
             const sizeValue = type === 'directory' ? '—' : host.formatBytes(entry?.size);
             const sizeCell = this.createSelectCell('col-size', sizeValue, entryPath, type);

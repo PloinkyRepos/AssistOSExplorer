@@ -148,7 +148,9 @@ export function parseDetailedDirectoryListing(text) {
                 name: entry.name,
                 type: entry.type === 'directory' || entry.type === 'file' ? entry.type : 'other',
                 size: Number.isFinite(entry.size) ? entry.size : null,
-                modified: typeof entry.modified === 'string' ? entry.modified : null
+                modified: typeof entry.modified === 'string' ? entry.modified : null,
+                isSymlink: Boolean(entry.isSymlink),
+                linkTarget: typeof entry.linkTarget === 'string' ? entry.linkTarget : null
             }));
     }
     try {
@@ -167,7 +169,9 @@ export function parseDetailedDirectoryListing(text) {
                 name: entry.name,
                 type: entry.type === 'directory' || entry.type === 'file' ? entry.type : 'other',
                 size: Number.isFinite(entry.size) ? entry.size : null,
-                modified: typeof entry.modified === 'string' ? entry.modified : null
+                modified: typeof entry.modified === 'string' ? entry.modified : null,
+                isSymlink: Boolean(entry.isSymlink),
+                linkTarget: typeof entry.linkTarget === 'string' ? entry.linkTarget : null
             }));
     } catch (error) {
         console.warn('Falling back to plain directory listing parsing.', error);
@@ -541,88 +545,4 @@ export function showContextPasteMenu({ x, y, targetPath, hostElement }) {
     document.addEventListener('click', onOutside, true);
     activeContextPasteCleanup = cleanup;
     return cleanup;
-}
-
-export function buildEntriesHTML(state, helpers) {
-    const { joinPath, formatBytes, formatDate } = helpers;
-    const folderIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-folder-fill" viewBox="0 0 16 16">
-  <path d="M9.828 3h3.982a2 2 0 0 1 1.992 2.181l-.637 7A2 2 0 0 1 13.174 14H2.826a2 2 0 0 1-1.991-1.819l-.637-7a1.99 1.99 0 0 1 .342-1.31L.5 3a2 2 0 0 1 2-2h3.672a2 2 0 0 1 1.414.586l.828.828A2 2 0 0 0 9.828 3zm-8.322.12C1.72 3.042 1.95 3 2.19 3h5.396l-.707-.707A1 1 0 0 0 6.172 2H2.5a1 1 0 0 0-1 .981l.006.139z"/>
-</svg>`;
-    const fileIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-file-earmark-fill" viewBox="0 0 16 16">
-  <path d="M4 0h5.5v1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4.5h1V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2z"/>
-  <path d="M9.5 3.5 14 8V3.5A1.5 1.5 0 0 0 12.5 2H9.5v1.5z"/>
-</svg>`;
-    const rows = [];
-    const clipboard = state.clipboard;
-    const entries = state.entries || [];
-
-    if (!entries.length) {
-        return `<tr><td colspan="5">Empty directory.</td></tr>`;
-    }
-
-    entries.forEach((entry, index) => {
-        const entryPath = entry?.path ? normalizePath(entry.path) : joinPath(state.path, entry.name);
-        const icon = entry.type === 'directory' ? folderIcon : fileIcon;
-        const entryAttributes = `data-entry-path="${entryPath}" data-type="${entry.type}"`;
-        const isClipboardSource = clipboard?.path === entryPath;
-        const clipboardAttr = isClipboardSource ? ` data-clipboard="${clipboard.mode}"` : '';
-        const rowClasses = [];
-        if (state.selectedPath === entryPath) {
-            rowClasses.push('active');
-        }
-        const classAttr = rowClasses.length ? ` class="${rowClasses.join(' ')}"` : '';
-        const isMenuOpen = state.openMenuPath === entryPath;
-        const actionMenuClass = `action-menu-container${isMenuOpen ? ' open' : ''}`;
-        const menuId = `action-menu-${index}`;
-        const canPasteInto = Boolean(clipboard) && entry.type === 'directory';
-        const pasteMenuItem = entry.type === 'directory' ? `
-                            <button type="button" class="action-menu-item${canPasteInto ? '' : ' disabled'}" data-local-action="pasteClipboard" ${entryAttributes}
-                                    data-target-path="${entryPath}" role="menuitem" ${canPasteInto ? '' : 'disabled'}>
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="action-menu-item-icon" viewBox="0 0 16 16" aria-hidden="true">
-                                    <path d="M4 1.5A1.5 1.5 0 0 1 5.5 0h5A1.5 1.5 0 0 1 12 1.5V3h1.5A1.5 1.5 0 0 1 15 4.5v9A1.5 1.5 0 0 1 13.5 15h-7A1.5 1.5 0 0 1 5 13.5V12h3.5A1.5 1.5 0 0 0 10 10.5v-7A1.5 1.5 0 0 0 8.5 2H7V1.5A.5.5 0 0 0 6.5 1h-1a.5.5 0 0 0-.5.5V2H4v-.5z"/>
-                                    <path d="M6.5 13a.5.5 0 0 1-.5-.5V5A1.5 1.5 0 0 1 7.5 3.5h1A1.5 1.5 0 0 1 10 5v5.5a.5.5 0 0 1-.5.5H6v1a.5.5 0 0 1-.5.5z"/>
-                                </svg>
-                                <span class="action-menu-item-label">Paste into</span>
-                            </button>
-            ` : '';
-        rows.push(`
-            <tr${classAttr}${clipboardAttr} data-entry-path="${entryPath}" data-type="${entry.type}">
-                <td class="col-name" ${entryAttributes} data-local-action="selectEntry"><span class="icon">${icon}</span> ${entry.name}</td>
-                <td class="col-type" ${entryAttributes} data-local-action="selectEntry">${entry.type}</td>
-                <td class="col-size" ${entryAttributes} data-local-action="selectEntry">${entry.type === 'directory' ? '—' : formatBytes(entry.size)}</td>
-                <td class="col-modified" ${entryAttributes} data-local-action="selectEntry">${entry.modified ? formatDate(entry.modified) : '—'}</td>
-                <td class="actions-cell col-actions">
-                    <div class="${actionMenuClass}" data-action-menu="true" data-entry-path="${entryPath}">
-                        <button type="button" class="secondary action-menu-trigger" data-local-action="toggleActionMenu" ${entryAttributes}
-                                aria-haspopup="true" aria-expanded="${isMenuOpen ? 'true' : 'false'}" aria-controls="${menuId}" title="More actions">
-                            <img class="action-menu-trigger-icon" loading="lazy" src="./assets/icons/action-dots.svg" alt="More actions">
-                        </button>
-                        <div class="action-menu-dropdown" id="${menuId}" role="menu">
-                            <button type="button" class="action-menu-item" data-local-action="renameEntry" ${entryAttributes} role="menuitem">
-                                <img class="action-menu-item-icon" loading="lazy" src="./assets/icons/edit.svg" alt="">
-                                <span class="action-menu-item-label">Rename</span>
-                            </button>
-                            <button type="button" class="action-menu-item" data-local-action="copyEntry" ${entryAttributes} role="menuitem">
-                                <img class="action-menu-item-icon" loading="lazy" src="./assets/icons/copy.svg" alt="">
-                                <span class="action-menu-item-label">Copy</span>
-                            </button>
-                            <button type="button" class="action-menu-item" data-local-action="cutEntry" ${entryAttributes} role="menuitem">
-                                <img class="action-menu-item-icon" loading="lazy" src="./assets/icons/cut.svg" alt="">
-                                <span class="action-menu-item-label">Cut</span>
-                            </button>
-                            ${pasteMenuItem}
-                            <button type="button" class="action-menu-item destructive" data-local-action="deleteEntry" ${entryAttributes} role="menuitem">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="action-menu-item-icon" viewBox="0 0 16 16" aria-hidden="true">
-                                    <path d="M5.5 5.5a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0v-6a.5.5 0 0 1 .5-.5zm2.5.5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0v-6zm3-.5a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0v-6a.5.5 0 0 1 .5-.5z"/>
-                                    <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1h-1v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-1a1 1 0 0 1 0-2h4.5l1-1h3l1 1H14a1 1 0 0 1 1 1zm-3 1H4v9a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1V4z"/>
-                                </svg>
-                                <span class="action-menu-item-label">Delete</span>
-                            </button>
-                        </div>
-                    </div>
-                </td>
-            </tr>`);
-    });
-
-    return rows.join('');
 }

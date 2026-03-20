@@ -387,6 +387,15 @@ export function createGitCommitActions(ctx) {
                     'stash',
                     seededConflicts
                 );
+                if (!resolved) {
+                    const detectedConflicts = collectConflictedItems([repoPath]);
+                    if (!seededConflicts.length && !detectedConflicts.length) {
+                        setStatusLine(
+                            'Stash restore did not finish cleanly, but no conflicted files were detected for the resolver. Refresh the repository and inspect its Git status.',
+                            true
+                        );
+                    }
+                }
                 return { ok: resolved, conflicts: !resolved };
             }
             if (payload.ok === false) {

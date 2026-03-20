@@ -1,3 +1,5 @@
+import { describeDirectoryEntry } from '../filesystem-utils.mjs';
+
 export function createCacheConfig(env) {
   return {
     maxFileSizeBytes: 2 * 1024 * 1024,
@@ -19,25 +21,7 @@ export function initCacheHelpers({ createCacheHelpers, readFileContent, cacheCon
 
   let listDirectoryDetailedWithCache = async (validPath) => {
     const entries = await fs.readdir(validPath, { withFileTypes: true });
-    return Promise.all(entries.map(async entry => {
-      const entryPath = path.join(validPath, entry.name);
-      try {
-        const stats = await fs.stat(entryPath);
-        return {
-          name: entry.name,
-          type: entry.isDirectory() ? 'directory' : entry.isFile() ? 'file' : 'other',
-          size: stats.size,
-          modified: stats.mtime.toISOString()
-        };
-      } catch {
-        return {
-          name: entry.name,
-          type: entry.isDirectory() ? 'directory' : entry.isFile() ? 'file' : 'other',
-          size: null,
-          modified: null
-        };
-      }
-    }));
+    return Promise.all(entries.map((entry) => describeDirectoryEntry(validPath, entry)));
   };
 
   let invalidateCachesForPath = () => {};

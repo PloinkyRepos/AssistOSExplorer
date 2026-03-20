@@ -4,6 +4,62 @@ file-exp-entries {
     min-height: 0;
 }
 
+.entry-label {
+    display: inline-flex;
+    align-items: center;
+    line-height: 1.2;
+    vertical-align: middle;
+    margin-left: 3px;
+}
+
+.col-name .icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    vertical-align: middle;
+    flex: 0 0 auto;
+}
+
+.entry-icon {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    background-color: currentColor;
+    vertical-align: middle;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
+    -webkit-mask-size: contain;
+    mask-size: contain;
+}
+
+.entry-icon.icon-folder {
+    -webkit-mask-image: url("./assets/icons/folder-fill.svg");
+    mask-image: url("./assets/icons/folder-fill.svg");
+}
+
+.entry-icon.icon-file {
+    -webkit-mask-image: url("./assets/icons/file-fill.svg");
+    mask-image: url("./assets/icons/file-fill.svg");
+}
+
+.entry-icon.icon-folder-symlink {
+    -webkit-mask-image: url("./assets/icons/folder-symlink.svg");
+    mask-image: url("./assets/icons/folder-symlink.svg");
+}
+
+.entry-icon.icon-file-symlink {
+    -webkit-mask-image: url("./assets/icons/file-symlink.svg");
+    mask-image: url("./assets/icons/file-symlink.svg");
+}
+
+tr.is-symlink .col-name .icon {
+    opacity: 0.9;
+}
+
 .column-hidden {
     display: none !important;
 }

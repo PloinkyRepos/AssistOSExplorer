@@ -52,6 +52,11 @@ document-snapshots-modal{
 .action-box-snapshots:hover{
     background-color: var(--very-light-gray);
 }
+.action-box-snapshots .action-icon{
+    width: 14px;
+    height: 14px;
+    display: block;
+}
 .current-version{
     margin-top: 10px;
     display: none;

@@ -27,6 +27,48 @@ const isFreshDir = (entry, stats, ttlMs) => {
   return entry.mtimeMs === stats.mtimeMs;
 };
 
+export async function describeDirectoryEntry(basePath, entry) {
+  const entryPath = path.join(basePath, entry.name);
+  let linkStats = null;
+  let effectiveStats = null;
+  let linkTarget = null;
+
+  try {
+    linkStats = await fs.lstat(entryPath);
+    if (linkStats.isSymbolicLink()) {
+      try {
+        linkTarget = await fs.readlink(entryPath);
+      } catch {
+        linkTarget = null;
+      }
+    }
+  } catch {
+    linkStats = null;
+  }
+
+  try {
+    effectiveStats = await fs.stat(entryPath);
+  } catch {
+    effectiveStats = null;
+  }
+
+  const stats = effectiveStats || linkStats;
+  const type = stats?.isDirectory?.()
+    ? 'directory'
+    : stats?.isFile?.()
+      ? 'file'
+      : 'other';
+
+  return {
+    name: entry.name,
+    type,
+    size: stats ? stats.size : null,
+    modified: stats?.mtime ? stats.mtime.toISOString() : null,
+    isSymlink: Boolean(linkStats?.isSymbolicLink?.()),
+    linkTarget
+  };
+}
+
 export function createCacheHelpers({ readFileContent, config } = {}) {
   if (typeof readFileContent !== 'function') {
     throw new Error('createCacheHelpers requires a readFileContent function');
@@ -77,25 +119,7 @@ export function createCacheHelpers({ readFileContent, config } = {}) {
     }
 
     const entries = await fs.readdir(validPath, { withFileTypes: true });
-    const detailed = await Promise.all(entries.map(async entry => {
-      const entryPath = path.join(validPath, entry.name);
-      try {
-        const entryStats = await fs.stat(entryPath);
-        return {
-          name: entry.name,
-          type: entry.isDirectory() ? 'directory' : entry.isFile() ? 'file' : 'other',
-          size: entryStats.size,
-          modified: entryStats.mtime.toISOString()
-        };
-      } catch {
-        return {
-          name: entry.name,
-          type: entry.isDirectory() ? 'directory' : entry.isFile() ? 'file' : 'other',
-          size: null,
-          modified: null
-        };
-      }
-    }));
+    const detailed = await Promise.all(entries.map((entry) => describeDirectoryEntry(validPath, entry)));
 
     dirCache.set(validPath, { entries: detailed, mtimeMs: stats.mtimeMs, cachedAt: Date.now() });
     pruneCache(dirCache, cacheConfig.maxDirs);

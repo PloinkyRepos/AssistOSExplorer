@@ -2,6 +2,7 @@ import { createStore } from "../../../services/ui/store.js";
 import { loadKeymap } from "../../../utils/keymap.js";
 
 const DEFAULT_COLUMN_VISIBILITY = { type: false, size: false, modified: false };
+const DEFAULT_LIST_WIDTH = null;
 
 export function loadWorkspaceVersionSeed() {
     try {
@@ -61,6 +62,29 @@ export function saveColumnVisibilityPreference(value) {
     }
 }
 
+export function loadListWidthPreference() {
+    try {
+        const raw = window.localStorage.getItem('assistosExplorerListWidth');
+        const value = Number.parseInt(String(raw ?? ''), 10);
+        return Number.isFinite(value) && value >= 200 ? value : DEFAULT_LIST_WIDTH;
+    } catch (_) {
+        return DEFAULT_LIST_WIDTH;
+    }
+}
+
+export function saveListWidthPreference(value) {
+    try {
+        const next = Number.parseInt(String(value ?? ''), 10);
+        if (!Number.isFinite(next) || next < 200) {
+            window.localStorage.removeItem('assistosExplorerListWidth');
+            return;
+        }
+        window.localStorage.setItem('assistosExplorerListWidth', String(next));
+    } catch (_) {
+        // ignore
+    }
+}
+
 export function createFileExpState() {
     const initialState = {
         path: '/',
@@ -113,7 +137,7 @@ export function createFileExpState() {
         fileLoadInfo: null,
         sortBy: 'name',
         sortDir: 'asc',
-        listWidth: null
+        listWidth: loadListWidthPreference()
     };
     return createStore({ initialState });
 }
