@@ -107,8 +107,8 @@ export function createGitCommitRepo(ctx) {
         const repoPath = elementNode?.dataset?.repoPath;
         if (!repoPath) return;
         const expanded = { ...(state.repoChangesExpanded || {}) };
-        const current = expanded[repoPath];
-        expanded[repoPath] = current === undefined ? false : !current;
+        const current = isRepoChangesExpanded(repoPath);
+        expanded[repoPath] = !current;
         state.repoChangesExpanded = expanded;
         renderRepoOverviews(state.repoOverviews);
     };
@@ -130,8 +130,8 @@ export function createGitCommitRepo(ctx) {
         if (!repoPath || !prefix) return;
         const key = `${repoPath}::${prefix}`;
         const expanded = { ...(state.treeExpandedByRepo || {}) };
-        const current = expanded[key];
-        expanded[key] = current === undefined ? false : !current;
+        const current = isTreeFolderExpanded(repoPath, prefix);
+        expanded[key] = !current;
         state.treeExpandedByRepo = expanded;
         renderRepoOverviews(state.repoOverviews);
     };
