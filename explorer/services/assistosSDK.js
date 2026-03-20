@@ -528,11 +528,13 @@ class AssistosSDK {
             const client = this.getClient(agentId);
             const result = await client.callTool(tool, args);
             const blocks = Array.isArray(result?.content) ? result.content : [];
-            const firstText = blocks.find(block => block?.type === 'text' && typeof block.text === 'string');
+            const textBlocks = blocks.filter(block => block?.type === 'text' && typeof block.text === 'string');
+            const nonStderrText = textBlocks.find(block => !block.text.startsWith('stderr:'));
+            const firstText = nonStderrText || textBlocks[0];
             const firstJson = blocks.find(block => block?.type === 'json' && block.json !== undefined);
             const text = firstText ? firstText.text : JSON.stringify(result, null, 2);
             let json = firstJson ? firstJson.json : undefined;
-            if (!json && typeof firstText?.text === 'string') {
+            if (!json && typeof firstText?.text === 'string' && !firstText.text.startsWith('stderr:')) {
                 try {
                     json = JSON.parse(firstText.text);
                 } catch (parseError) {
