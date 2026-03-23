@@ -23,6 +23,7 @@ export const DOCUMENT_PLUGIN_CATEGORY = 'document';
 export const APPLICATION_PLUGIN_CATEGORY = 'application';
 export const DEFAULT_DOCUMENT_PLUGIN_LOCATIONS = ['document', 'chapter', 'paragraph', 'infoText'];
 export const APPLICATION_PLUGIN_LOCATION_PATTERN = /^[a-z0-9-]+:[a-z0-9-]+$/i;
+export const APPLICATION_PLUGIN_ID_PATTERN = /^[a-z][a-z0-9-]*$/i;
 const VALID_PLUGIN_TYPES = new Set(['embedded', 'modal']);
 
 function isNonEmptyString(value) {
@@ -148,6 +149,14 @@ function validateAndNormalizePluginConfig(parsedConfig, pluginEntryName, configP
   if (parsedConfig.label !== undefined && !isNonEmptyString(parsedConfig.label)) {
     console.warn(`[filesystem-http] Plugin ${configPath} has an invalid label.`);
     return null;
+  }
+
+  if (parsedConfig.id !== undefined) {
+    const pluginId = isNonEmptyString(parsedConfig.id) ? parsedConfig.id.trim() : '';
+    if (!pluginId || !APPLICATION_PLUGIN_ID_PATTERN.test(pluginId)) {
+      console.warn(`[filesystem-http] Plugin ${configPath} has an invalid id. Use letters, numbers, and dashes, starting with a letter.`);
+      return null;
+    }
   }
 
   if (parsedConfig.icon !== undefined && !isNonEmptyString(parsedConfig.icon)) {

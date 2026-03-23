@@ -41,6 +41,16 @@ export const DOCUMENT_PLUGIN_CATEGORY = 'document';
 export const APPLICATION_PLUGIN_CATEGORY = 'application';
 export const DEFAULT_DOCUMENT_PLUGIN_LOCATIONS = ['document', 'chapter', 'paragraph', 'infoText'];
 
+export function getApplicationPluginPolicyKey(entry) {
+    const pluginId = isNonEmptyString(entry?.id) ? entry.id.trim() : '';
+    if (pluginId) {
+        return pluginId;
+    }
+    const agent = isNonEmptyString(entry?.agent) ? entry.agent.trim() : '';
+    const component = isNonEmptyString(entry?.component) ? entry.component.trim() : '';
+    return agent && component ? `${agent}/${component}` : '';
+}
+
 function createEmptyRuntimePluginState() {
     return {
         [DOCUMENT_PLUGIN_CATEGORY]: Object.fromEntries(DEFAULT_DOCUMENT_PLUGIN_LOCATIONS.map((loc) => [loc, []])),
@@ -179,6 +189,7 @@ export function normalizeRuntimePlugins(runtimePlugins) {
             ...entry,
             pluginCategory: category,
             location,
+            id: isNonEmptyString(entry.id) ? entry.id.trim() : undefined,
             component,
             label: isNonEmptyString(entry.label)
                 ? entry.label.trim()
@@ -263,6 +274,36 @@ export function mergeRuntimePluginsIntoAssistOS(assistOS, runtimePlugins) {
 
         bucket.push(entry);
     });
+}
+
+export function filterRuntimePluginsByApplicationPolicy(runtimePlugins, applicationPluginsPolicy) {
+    const normalizedPolicy = applicationPluginsPolicy && typeof applicationPluginsPolicy === 'object' && !Array.isArray(applicationPluginsPolicy)
+        ? applicationPluginsPolicy
+        : null;
+
+    if (!normalizedPolicy) {
+        return runtimePlugins;
+    }
+
+    const filtered = createEmptyRuntimePluginState();
+
+    forEachRuntimePluginEntry(runtimePlugins, (entry, { category, location }) => {
+        if (!entry || typeof entry !== 'object') {
+            return;
+        }
+
+        if (category === APPLICATION_PLUGIN_CATEGORY) {
+            const key = getApplicationPluginPolicyKey(entry);
+            if (key && normalizedPolicy[key] === false) {
+                return;
+            }
+        }
+
+        const bucket = ensureRuntimePluginBucket(filtered, category, location);
+        bucket.push(entry);
+    });
+
+    return filtered;
 }
 
 export async function fetchTextOrThrow(url, description) {

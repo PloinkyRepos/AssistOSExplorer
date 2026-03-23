@@ -24,6 +24,10 @@
         "tasksAssistant": "https://github.com/PloinkyRepos/tasksMCP.git",
         "llmAssistant": "https://github.com/PloinkyRepos/llmAssistant.git"
     },
+    "applicationPlugins": {
+        "git": true,
+        "soplang-builder": true
+    },
     "profiles": {
         "default": {
             "env": [

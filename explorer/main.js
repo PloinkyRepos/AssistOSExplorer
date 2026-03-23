@@ -3,6 +3,7 @@ import assistosSDK, { initialiseAssistOS } from './services/assistosSDK.js';
 import { createComponentRegistry } from './services/runtime/componentRegistry.js';
 import { createRuntimePluginLoader } from './services/runtime/runtimePluginLoader.js';
 import { attachUiFallbacks } from './services/runtime/uiFallbacks.js';
+import { filterRuntimePluginsByApplicationPolicy } from './utils/pluginUtils.core.js';
 import { initializeTheme } from './utils/theme.js';
 
 const EXPLORER_AGENT_ID = 'explorer';
@@ -32,6 +33,36 @@ const normalizePluginSettings = (payload) => {
     return plugins;
 };
 
+const normalizeApplicationPluginPolicy = (payload) => {
+    const raw = payload?.applicationPlugins;
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+        return {};
+    }
+
+    const normalized = {};
+    for (const [key, value] of Object.entries(raw)) {
+        const trimmedKey = typeof key === 'string' ? key.trim() : '';
+        if (!trimmedKey || typeof value !== 'boolean') {
+            continue;
+        }
+        normalized[trimmedKey] = value;
+    }
+    return normalized;
+};
+
+async function loadExplorerManifest() {
+    try {
+        const response = await fetch('./manifest.json', { cache: 'no-cache' });
+        if (!response.ok) {
+            return {};
+        }
+        const parsed = await response.json();
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch (_) {
+        return {};
+    }
+}
+
 async function start() {
     initializeTheme();
     const webSkel = await WebSkel.initialise('webskel.json');
@@ -45,7 +76,11 @@ async function start() {
         componentRegistry
     });
 
-    const { raw: rawRuntimePlugins, normalized: runtimePlugins } = await runtimePluginLoader.fetchRuntimePlugins();
+    const explorerManifest = await loadExplorerManifest();
+    const applicationPluginPolicy = normalizeApplicationPluginPolicy(explorerManifest);
+    const { raw: rawRuntimePlugins, normalized: runtimePluginsRaw } = await runtimePluginLoader.fetchRuntimePlugins();
+    const runtimePlugins = filterRuntimePluginsByApplicationPolicy(runtimePluginsRaw, applicationPluginPolicy);
+    const filteredRawRuntimePlugins = filterRuntimePluginsByApplicationPolicy(rawRuntimePlugins, applicationPluginPolicy);
     const pluginSettingsResult = await assistosSDK.callTool(EXPLORER_AGENT_ID, 'get_plugin_settings', {});
     const pluginSettings = normalizePluginSettings(pluginSettingsResult?.json);
     const assistOS = initialiseAssistOS({
@@ -54,8 +89,10 @@ async function start() {
     });
     assistOS.webSkel = webSkel;
     assistOS.appServices = assistosSDK;
+    assistOS.explorerManifest = explorerManifest;
+    assistOS.applicationPluginPolicy = applicationPluginPolicy;
     assistOS.runtimePlugins = runtimePlugins;
-    assistOS.rawRuntimePlugins = rawRuntimePlugins || {};
+    assistOS.rawRuntimePlugins = filteredRawRuntimePlugins || {};
     assistOS.pluginSettings = pluginSettings;
     runtimePluginLoader.mergeIntoAssistOS(assistOS, runtimePlugins);
 

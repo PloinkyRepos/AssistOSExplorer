@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+    filterRuntimePluginsByApplicationPolicy,
     computeComponentBaseUrl,
     mergeRuntimePluginsIntoAssistOS,
     normalizeRuntimePlugins,
@@ -119,4 +120,44 @@ test('mergeRuntimePluginsIntoAssistOS separates document and application registr
     assert.equal(assistOS.workspace.plugins.paragraph[0].component, 'audio-plugin');
     assert.equal(assistOS.workspace.appPlugins['file-exp:toolbar'].length, 1);
     assert.equal(assistOS.workspace.appPlugins['file-exp:toolbar'][0].component, 'git-explorer-shell');
+});
+
+test('filterRuntimePluginsByApplicationPolicy removes disabled application plugins only', () => {
+    const runtimePlugins = {
+        document: {
+            paragraph: [{
+                pluginCategory: 'document',
+                location: 'paragraph',
+                agent: 'multimedia',
+                component: 'audio-plugin'
+            }]
+        },
+        application: {
+            'file-exp:toolbar': [
+                {
+                    id: 'git',
+                    pluginCategory: 'application',
+                    location: 'file-exp:toolbar',
+                    agent: 'gitAgent',
+                    component: 'git-tool-button'
+                },
+                {
+                    id: 'soplang-builder',
+                    pluginCategory: 'application',
+                    location: 'file-exp:toolbar',
+                    agent: 'soplangAgent',
+                    component: 'open-builder-button'
+                }
+            ]
+        }
+    };
+
+    const filtered = filterRuntimePluginsByApplicationPolicy(runtimePlugins, {
+        git: false,
+        'soplang-builder': true
+    });
+
+    assert.equal(filtered.document.paragraph.length, 1);
+    assert.equal(filtered.application['file-exp:toolbar'].length, 1);
+    assert.equal(filtered.application['file-exp:toolbar'][0].component, 'open-builder-button');
 });
