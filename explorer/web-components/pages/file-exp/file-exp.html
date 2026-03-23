@@ -15,6 +15,14 @@
                             <img class="action-menu-item-icon" loading="lazy" src="./assets/icons/person.svg" alt="">
                             <span class="action-menu-item-label">Change credentials</span>
                         </a>
+                        <button type="button" class="toolbar-dropdown-item action-menu-item" data-local-action="openSettingsModal" role="menuitem">
+                            <img class="action-menu-item-icon" loading="lazy" src="./assets/icons/keys.svg" alt="">
+                            <span class="action-menu-item-label">Settings</span>
+                        </button>
+                        <button type="button" class="toolbar-dropdown-item action-menu-item" data-local-action="openPluginSettingsModal" role="menuitem">
+                            <img class="action-menu-item-icon" loading="lazy" src="./assets/icons/list.svg" alt="">
+                            <span class="action-menu-item-label">Plugin Settings</span>
+                        </button>
                         <a class="toolbar-dropdown-item action-menu-item" href="/auth/logout?returnTo=%2Fauth%2Flogged-out%3Fnext%3D%2Fexplorer%2Findex.html" role="menuitem">
                             <img class="action-menu-item-icon" loading="lazy" src="./assets/icons/logout.svg" alt="">
                             <span class="action-menu-item-label">Logout</span>
@@ -43,7 +51,7 @@
             <div class="toolbar-dropdown">
                 <button id="toolbarMenuButton" class="secondary toolbar-menu-button" title="More actions" aria-haspopup="true"
                         aria-expanded="false">
-                    Actions
+                    New
                     <span class="chevron">▾</span>
                 </button>
                 <div class="toolbar-dropdown-menu action-menu-dropdown" id="toolbarMenu" role="menu">
@@ -72,18 +80,6 @@
                             </button>
                         </div>
                     </div>
-                    <button type="button" class="toolbar-dropdown-item action-menu-item" data-local-action="openSettingsModal" role="menuitem">
-                        <img class="action-menu-item-icon" loading="lazy" src="./assets/icons/keys.svg" alt="">
-                        <span class="action-menu-item-label">Settings</span>
-                    </button>
-                    <button type="button" class="toolbar-dropdown-item action-menu-item" data-local-action="openPluginSettingsModal" role="menuitem">
-                        <img class="action-menu-item-icon" loading="lazy" src="./assets/icons/list.svg" alt="">
-                        <span class="action-menu-item-label">Plugin Settings</span>
-                    </button>
-                    <a class="toolbar-dropdown-item action-menu-item" href="/soplangAgent/web/build-status.html" target="_blank" rel="noopener" role="menuitem">
-                        <img class="action-menu-item-icon" loading="lazy" src="./assets/icons/build.svg" alt="">
-                        <span class="action-menu-item-label">Open Builder</span>
-                    </a>
                 </div>
             </div>
             <button id="searchInFilesButton" class="secondary" title="Find/Replace in files (content)"
