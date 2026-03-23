@@ -1,4 +1,5 @@
 {
+    "pluginCategory": "document",
     "component": "video-creator",
     "location": [],
     "tooltip": "Video Creator",

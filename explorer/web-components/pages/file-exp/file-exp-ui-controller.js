@@ -7,6 +7,7 @@ export const FILE_EXP_UI_ACTIONS = Object.freeze({
     SET_PENDING_HIGHLIGHT: 'file-exp-ui/set-pending-highlight',
     SET_SORT: 'file-exp-ui/set-sort',
     SET_LIST_WIDTH: 'file-exp-ui/set-list-width',
+    SET_LIST_COLLAPSED: 'file-exp-ui/set-list-collapsed',
     SET_IS_RESIZING: 'file-exp-ui/set-is-resizing',
     SET_COLUMN_VISIBILITY: 'file-exp-ui/set-column-visibility',
     SET_HAS_UNSAVED_CHANGES: 'file-exp-ui/set-has-unsaved-changes',
@@ -127,6 +128,13 @@ export function fileExpUiReducer(state, action) {
             return {
                 changed: width !== (state?.listWidth ?? null),
                 patch: { listWidth: width }
+            };
+        }
+        case FILE_EXP_UI_ACTIONS.SET_LIST_COLLAPSED: {
+            const listCollapsed = Boolean(action.payload?.listCollapsed);
+            return {
+                changed: listCollapsed !== Boolean(state?.listCollapsed),
+                patch: { listCollapsed }
             };
         }
         case FILE_EXP_UI_ACTIONS.SET_IS_RESIZING: {

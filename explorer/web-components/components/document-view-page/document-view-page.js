@@ -463,7 +463,7 @@ export class DocumentViewPage {
         if (pluginElement.classList.contains("pinned")) {
             return;
         }
-        this.currentPlugin = await this.closePlugin("", true);
+        await this.closePlugin("", "infoText", true);
     }
 
     async focusOutHandlerTitle(element) {

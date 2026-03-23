@@ -23,8 +23,8 @@ export class DocumentVideoPreview {
         }
         for (const chapter of this.document.chapters) {
             for (const [paragraphIndex, paragraph] of (chapter?.paragraphs || []).entries()) {
-                const commands = this.getSceneCommands(chapter, paragraph, paragraphIndex);
-                if (this.hasSceneMedia(commands)) {
+                const scenes = this.getParagraphScenes(chapter, paragraph, paragraphIndex);
+                if (scenes.some((scene) => this.hasSceneMedia(scene))) {
                     return true;
                 }
             }
@@ -40,8 +40,10 @@ export class DocumentVideoPreview {
         return attachments[paragraphIndex] ?? null;
     }
 
-    getSceneCommands(chapter, paragraph, paragraphIndex) {
-        const commands = paragraph?.commands ? { ...paragraph.commands } : {};
+    getBaseSceneCommands(paragraph, chapter, paragraphIndex) {
+        const commands = paragraph?.commands && typeof paragraph.commands === "object" && !Array.isArray(paragraph.commands)
+            ? { ...paragraph.commands }
+            : {};
         if (!commands.video) {
             const chapterVideo = this.getChapterSceneAttachment(chapter, "video", paragraphIndex);
             if (chapterVideo) {
@@ -55,6 +57,59 @@ export class DocumentVideoPreview {
             }
         }
         return commands;
+    }
+
+    getParagraphScenes(chapter, paragraph, paragraphIndex) {
+        const paragraphAudio = Array.isArray(paragraph?.mediaAttachments?.audio) ? paragraph.mediaAttachments.audio : [];
+        const paragraphVideo = Array.isArray(paragraph?.mediaAttachments?.video) ? paragraph.mediaAttachments.video : [];
+        const paragraphImage = Array.isArray(paragraph?.mediaAttachments?.image) ? paragraph.mediaAttachments.image : [];
+        const baseCommands = this.getBaseSceneCommands(paragraph, chapter, paragraphIndex);
+        const sceneCount = Math.max(paragraphAudio.length, paragraphVideo.length, paragraphImage.length);
+
+        if (sceneCount > 0) {
+            const scenes = [];
+            for (let sceneIndex = 0; sceneIndex < sceneCount; sceneIndex += 1) {
+                const scene = {};
+                const audio = paragraphAudio[sceneIndex];
+                const video = paragraphVideo[sceneIndex];
+                const image = paragraphImage[sceneIndex];
+                if (audio) {
+                    scene.audio = audio;
+                }
+                if (video) {
+                    scene.video = video;
+                }
+                if (image) {
+                    scene.image = image;
+                }
+                if (!scene.video && sceneIndex === 0 && baseCommands.video) {
+                    scene.video = baseCommands.video;
+                }
+                if (!scene.image && sceneIndex === 0 && baseCommands.image) {
+                    scene.image = baseCommands.image;
+                }
+                if (this.hasSceneMedia(scene)) {
+                    scenes.push(scene);
+                }
+            }
+            if (scenes.length > 0) {
+                return scenes;
+            }
+        }
+
+        return this.hasSceneMedia(baseCommands) ? [baseCommands] : [];
+    }
+
+    getParagraphSceneCount(chapter, paragraph, paragraphIndex) {
+        return this.getParagraphScenes(chapter, paragraph, paragraphIndex).length;
+    }
+
+    getSceneCommands(chapter, paragraph, paragraphIndex, sceneIndex = 0) {
+        const scenes = this.getParagraphScenes(chapter, paragraph, paragraphIndex);
+        if (!scenes.length) {
+            return {};
+        }
+        return scenes[Math.max(0, Math.min(sceneIndex, scenes.length - 1))] || {};
     }
 
     hasSceneMedia(commands = {}) {
@@ -173,9 +228,10 @@ export class DocumentVideoPreview {
             this.boundIncrementTimestamp = this.incrementTimestamp.bind(this);
         }
         this.attachLoadEventListeners();
+        this.paragraphSceneIndex = 0;
         let currentParagraph = this.document.chapters[0].paragraphs[0];
-        this.setPlayNextHandler(this.getSceneCommands(this.document.chapters[0], currentParagraph, 0));
-        this.setCurrentParagraphAndChapter(0, 0);
+        this.setPlayNextHandler(this.getSceneCommands(this.document.chapters[0], currentParagraph, 0, 0));
+        this.setCurrentParagraphAndChapter(0, 0, 0);
         this.loadResource("image", blackScreen);
         this.setEditingState(false);
 
@@ -298,7 +354,7 @@ export class DocumentVideoPreview {
             this.nextButton.classList.remove("disabled");
             let currentParagraph = this.document.chapters[this.chapterIndex].paragraphs[this.paragraphIndex];
             let currentChapter = this.document.chapters[this.chapterIndex];
-            const sceneCommands = this.getSceneCommands(currentChapter, currentParagraph, this.paragraphIndex);
+            const sceneCommands = this.getSceneCommands(currentChapter, currentParagraph, this.paragraphIndex, this.paragraphSceneIndex);
             this.setPlayNextHandler(sceneCommands);
 
             if (!this.isPaused && mode !== "playFromBeginning") {
@@ -372,23 +428,37 @@ export class DocumentVideoPreview {
     }
 
     decrementParagraphIndex() {
+        if (this.paragraphSceneIndex > 0) {
+            this.paragraphSceneIndex -= 1;
+            return;
+        }
         this.paragraphIndex -= 1;
         if (this.paragraphIndex < 0) {
             this.chapterIndex -= 1;
             if(this.chapterIndex < 0){
                 console.log("reached start of document");
-                this.setCurrentParagraphAndChapter(0, 0);
+                this.setCurrentParagraphAndChapter(0, 0, 0);
                 return;
             }
             this.paragraphIndex = this.document.chapters[this.chapterIndex].paragraphs.length - 1;
         }
+        const previousParagraph = this.document.chapters[this.chapterIndex]?.paragraphs?.[this.paragraphIndex];
+        const sceneCount = this.getParagraphSceneCount(this.document.chapters[this.chapterIndex], previousParagraph, this.paragraphIndex);
+        this.paragraphSceneIndex = Math.max(0, sceneCount - 1);
     }
 
     incrementParagraphIndex() {
         if(!this.document.chapters[this.chapterIndex]){
-            //end of document
             return;
         }
+        const currentChapter = this.document.chapters[this.chapterIndex];
+        const currentParagraph = currentChapter?.paragraphs?.[this.paragraphIndex];
+        const sceneCount = this.getParagraphSceneCount(currentChapter, currentParagraph, this.paragraphIndex);
+        if (sceneCount > 0 && this.paragraphSceneIndex < sceneCount - 1) {
+            this.paragraphSceneIndex += 1;
+            return;
+        }
+        this.paragraphSceneIndex = 0;
         this.paragraphIndex += 1;
         if (this.paragraphIndex === this.document.chapters[this.chapterIndex].paragraphs.length) {
             this.chapterIndex += 1;
@@ -448,7 +518,7 @@ export class DocumentVideoPreview {
             mode = "play";
             this.nextButton.classList.remove("disabled");
             this.previousButton.classList.remove("disabled");
-            this.setCurrentParagraphAndChapter(0, 0);
+            this.setCurrentParagraphAndChapter(0, 0, 0);
 
             this.chapterAudioLoaded = true;
             this.audioLoaded = true;
@@ -499,7 +569,7 @@ export class DocumentVideoPreview {
             playPromises.push(this.chapterAudioPlayer.play());
         }
         let currentParagraph = currentChapter.paragraphs[this.paragraphIndex];
-        const sceneCommands = this.getSceneCommands(currentChapter, currentParagraph, this.paragraphIndex);
+        const sceneCommands = this.getSceneCommands(currentChapter, currentParagraph, this.paragraphIndex, this.paragraphSceneIndex);
         if(sceneCommands.audio){
             playPromises.push(this.audioPlayer.play());
         }
@@ -542,56 +612,60 @@ export class DocumentVideoPreview {
     async playNext() {
         for (let i = this.chapterIndex; i < this.document.chapters.length; i++) {
             let chapter = this.document.chapters[i];
-            for (let j = this.paragraphIndex; j < chapter.paragraphs.length; j++) {
+            const paragraphStartIndex = i === this.chapterIndex ? this.paragraphIndex : 0;
+            for (let j = paragraphStartIndex; j < chapter.paragraphs.length; j++) {
                 let paragraph = chapter.paragraphs[j];
-                let sceneCommands = this.getSceneCommands(chapter, paragraph, j);
-                if (this.isPaused) {
-                    await new Promise(resolve => {
-                        this.resumeCallback = resolve;
-                    });
-                }
-                await this.playChapterBackgroundSound(chapter);
-                if(sceneCommands.video){
-                    let videoCommand = sceneCommands.video;
-                    let videoSrc = await workspaceModule.getVideoURL(videoCommand.id);
-                    this.setCurrentParagraphAndChapter(i, j);
-                    this.scrollDocument();
-                    this.loadResource("video", videoSrc, videoCommand.start, videoCommand.end, videoCommand.volume);
-                    if (sceneCommands.audio){
-                        let audioCommand = sceneCommands.audio;
-                        let audioSrc = await workspaceModule.getAudioURL(audioCommand.id);
-                        this.loadResource("audio", audioSrc, "", "", audioCommand.volume);
+                const scenes = this.getParagraphScenes(chapter, paragraph, j);
+                const sceneStartIndex = i === this.chapterIndex && j === this.paragraphIndex
+                    ? this.paragraphSceneIndex
+                    : 0;
+                for (let sceneIndex = sceneStartIndex; sceneIndex < scenes.length; sceneIndex += 1) {
+                    const sceneCommands = scenes[sceneIndex];
+                    if (this.isPaused) {
+                        await new Promise(resolve => {
+                            this.resumeCallback = resolve;
+                        });
                     }
-                    return;
-                } else if (sceneCommands.audio) {
-                    let imageSrc = blackScreen;
-                    if(sceneCommands.image){
-                        imageSrc = await workspaceModule.getImageURL(sceneCommands.image.id);
-                    }
-                    this.setCurrentParagraphAndChapter(i, j);
-                    this.loadResource("image", imageSrc);
-                    let audioSrc = await workspaceModule.getAudioURL(sceneCommands.audio.id);
-                    this.loadResource("audio", audioSrc, "", "", sceneCommands.audio.volume);
-                    this.scrollDocument();
-                    return;
-                } else if (sceneCommands["silence"]){
-                    if(sceneCommands.image){
+                    await this.playChapterBackgroundSound(chapter);
+                    this.setCurrentParagraphAndChapter(i, j, sceneIndex);
+                    if(sceneCommands.video){
+                        let videoCommand = sceneCommands.video;
+                        let videoSrc = await workspaceModule.getVideoURL(videoCommand.id);
+                        this.scrollDocument();
+                        this.loadResource("video", videoSrc, videoCommand.start, videoCommand.end, videoCommand.volume);
+                        if (sceneCommands.audio){
+                            let audioCommand = sceneCommands.audio;
+                            let audioSrc = await workspaceModule.getAudioURL(audioCommand.id);
+                            this.loadResource("audio", audioSrc, "", "", audioCommand.volume);
+                        }
+                        return;
+                    } else if (sceneCommands.audio) {
+                        let imageSrc = blackScreen;
+                        if(sceneCommands.image){
+                            imageSrc = await workspaceModule.getImageURL(sceneCommands.image.id);
+                        }
+                        this.loadResource("image", imageSrc);
+                        let audioSrc = await workspaceModule.getAudioURL(sceneCommands.audio.id);
+                        this.loadResource("audio", audioSrc, "", "", sceneCommands.audio.volume);
+                        this.scrollDocument();
+                        return;
+                    } else if (sceneCommands["silence"]){
+                        if(sceneCommands.image){
+                            let imageSrc = await workspaceModule.getImageURL(sceneCommands.image.id);
+                            this.loadResource("image", imageSrc);
+                        } else {
+                            this.loadResource("image", blackScreen);
+                        }
+                        let duration = sceneCommands["silence"].duration;
+                        this.executeSilenceCommand(duration);
+                        return;
+                    } else if(sceneCommands.image){
                         let imageSrc = await workspaceModule.getImageURL(sceneCommands.image.id);
                         this.loadResource("image", imageSrc);
-                    } else {
-                        this.loadResource("image", blackScreen);
+                        this.scrollDocument();
+                        this.executeSilenceCommand(this.getSceneDuration(sceneCommands));
+                        return;
                     }
-                    this.setCurrentParagraphAndChapter(i, j);
-                    let duration = sceneCommands["silence"].duration;
-                    this.executeSilenceCommand(duration);
-                    return;
-                } else if(sceneCommands.image){
-                    this.setCurrentParagraphAndChapter(i, j);
-                    let imageSrc = await workspaceModule.getImageURL(sceneCommands.image.id);
-                    this.loadResource("image", imageSrc);
-                    this.scrollDocument();
-                    this.executeSilenceCommand(this.getSceneDuration(sceneCommands));
-                    return;
                 }
             }
         }
@@ -599,9 +673,10 @@ export class DocumentVideoPreview {
         this.prepareVideoForReload();
     }
 
-    setCurrentParagraphAndChapter(chapterIndex, paragraphIndex) {
+    setCurrentParagraphAndChapter(chapterIndex, paragraphIndex, sceneIndex = 0) {
         this.chapterIndex = chapterIndex;
         this.paragraphIndex = paragraphIndex;
+        this.paragraphSceneIndex = sceneIndex;
         this.currentChapterNumber.innerHTML = chapterIndex + 1;
         this.currentParagraphNumber.innerHTML = paragraphIndex + 1;
         let currentParagraph = this.document.chapters[this.chapterIndex].paragraphs[this.paragraphIndex];
@@ -650,14 +725,14 @@ export class DocumentVideoPreview {
     async skipToNextScene(targetElement) {
         this.nextButton.classList.add("disabled");
         //skip is called at the beginning of the document
-        if(this.chapterIndex === 0 && this.paragraphIndex === 0){
+        if(this.chapterIndex === 0 && this.paragraphIndex === 0 && this.paragraphSceneIndex === 0){
             this.previousButton.classList.remove("disabled");
         }
         this.cancelTimeouts();
         let playPause = this.element.querySelector(".play-pause");
         let currentMode = playPause.getAttribute("data-mode");
         let paragraph = this.document.chapters[this.chapterIndex].paragraphs[this.paragraphIndex];
-        let sceneCommands = this.getSceneCommands(this.document.chapters[this.chapterIndex], paragraph, this.paragraphIndex);
+        let sceneCommands = this.getSceneCommands(this.document.chapters[this.chapterIndex], paragraph, this.paragraphIndex, this.paragraphSceneIndex);
         if(currentMode === "playFromBeginning"){
             currentMode = "pause";
             playPause.setAttribute("data-mode", currentMode);
@@ -699,11 +774,11 @@ export class DocumentVideoPreview {
         }
 
         let nextParagraph = this.document.chapters[this.chapterIndex].paragraphs[this.paragraphIndex];
-        let nextSceneCommands = this.getSceneCommands(this.document.chapters[this.chapterIndex], nextParagraph, this.paragraphIndex);
+        let nextSceneCommands = this.getSceneCommands(this.document.chapters[this.chapterIndex], nextParagraph, this.paragraphIndex, this.paragraphSceneIndex);
         if(!this.hasSceneMedia(nextSceneCommands)){
             return this.skipToNextScene();
         }
-        this.setCurrentParagraphAndChapter(this.chapterIndex, this.paragraphIndex);
+        this.setCurrentParagraphAndChapter(this.chapterIndex, this.paragraphIndex, this.paragraphSceneIndex);
         await this.playChapterBackgroundSound(this.document.chapters[this.chapterIndex]);
         if(nextSceneCommands.video){
             let hasAudio = false;
@@ -857,15 +932,18 @@ export class DocumentVideoPreview {
             currentMode = "pause";
             this.isPaused = true;
             let lastParagraphIndex = this.document.chapters[this.document.chapters.length - 1].paragraphs.length - 1;
-            this.setCurrentParagraphAndChapter(this.document.chapters.length - 1, lastParagraphIndex);
+            const lastChapterIndex = this.document.chapters.length - 1;
+            const lastChapter = this.document.chapters[lastChapterIndex];
+            const lastParagraph = lastChapter.paragraphs[lastParagraphIndex];
+            const lastSceneIndex = Math.max(0, this.getParagraphSceneCount(lastChapter, lastParagraph, lastParagraphIndex) - 1);
+            this.setCurrentParagraphAndChapter(lastChapterIndex, lastParagraphIndex, lastSceneIndex);
 
-            let lastChapter = this.document.chapters[this.chapterIndex];
-            paragraph = lastChapter.paragraphs[this.paragraphIndex];
-            this.currentTime -= this.getSceneDuration(this.getSceneCommands(lastChapter, paragraph, this.paragraphIndex));
+            paragraph = this.document.chapters[this.chapterIndex].paragraphs[this.paragraphIndex];
+            this.currentTime -= this.getSceneDuration(this.getSceneCommands(this.document.chapters[this.chapterIndex], paragraph, this.paragraphIndex, this.paragraphSceneIndex));
         } else {
             paragraph = this.document.chapters[this.chapterIndex].paragraphs[this.paragraphIndex];
         }
-        let sceneCommands = this.getSceneCommands(this.document.chapters[this.chapterIndex], paragraph, this.paragraphIndex);
+        let sceneCommands = this.getSceneCommands(this.document.chapters[this.chapterIndex], paragraph, this.paragraphIndex, this.paragraphSceneIndex);
 
 
         if (currentMode === "play"){
@@ -900,11 +978,11 @@ export class DocumentVideoPreview {
         this.decrementParagraphIndex();
         await this.playChapterBackgroundSound(this.document.chapters[this.chapterIndex]);
         let previousParagraph = this.document.chapters[this.chapterIndex].paragraphs[this.paragraphIndex];
-        let previousSceneCommands = this.getSceneCommands(this.document.chapters[this.chapterIndex], previousParagraph, this.paragraphIndex);
-        if (this.chapterIndex === 0 && this.paragraphIndex === 0) {
+        let previousSceneCommands = this.getSceneCommands(this.document.chapters[this.chapterIndex], previousParagraph, this.paragraphIndex, this.paragraphSceneIndex);
+        if (this.chapterIndex === 0 && this.paragraphIndex === 0 && this.paragraphSceneIndex === 0) {
             //reached start of document
             this.loadResource("image", blackScreen);
-            this.setCurrentParagraphAndChapter(0, 0);
+            this.setCurrentParagraphAndChapter(0, 0, 0);
             this.audioPlayer.currentTime = 0;
             this.chapterAudioPlayer.currentTime = 0;
             this.audioPlayer.src = "";
@@ -930,7 +1008,7 @@ export class DocumentVideoPreview {
         if(!this.hasSceneMedia(previousSceneCommands)){
             return this.skipToPreviousScene();
         }
-        this.setCurrentParagraphAndChapter(this.chapterIndex, this.paragraphIndex);
+        this.setCurrentParagraphAndChapter(this.chapterIndex, this.paragraphIndex, this.paragraphSceneIndex);
         //load previous scene from beginning
         if(previousSceneCommands.video){
             let hasAudio = false;

@@ -3,6 +3,7 @@ import { loadKeymap } from "../../../utils/keymap.js";
 
 const DEFAULT_COLUMN_VISIBILITY = { type: false, size: false, modified: false };
 const DEFAULT_LIST_WIDTH = null;
+const DEFAULT_LIST_COLLAPSED = false;
 const DEFAULT_PREVIEW_WRAP_ENABLED = false;
 
 export function loadWorkspaceVersionSeed() {
@@ -86,6 +87,25 @@ export function saveListWidthPreference(value) {
     }
 }
 
+export function loadListCollapsedPreference() {
+    try {
+        const stored = window.localStorage.getItem('assistosExplorerListCollapsed');
+        if (stored === 'true') return true;
+        if (stored === 'false') return false;
+        return DEFAULT_LIST_COLLAPSED;
+    } catch (_) {
+        return DEFAULT_LIST_COLLAPSED;
+    }
+}
+
+export function saveListCollapsedPreference(value) {
+    try {
+        window.localStorage.setItem('assistosExplorerListCollapsed', value ? 'true' : 'false');
+    } catch (_) {
+        // ignore
+    }
+}
+
 export function loadPreviewWrapPreference() {
     try {
         const stored = window.localStorage.getItem('assistosExplorerPreviewWrap');
@@ -156,7 +176,8 @@ export function createFileExpState() {
         fileLoadInfo: null,
         sortBy: 'name',
         sortDir: 'asc',
-        listWidth: loadListWidthPreference()
+        listWidth: loadListWidthPreference(),
+        listCollapsed: loadListCollapsedPreference()
     };
     return createStore({ initialState });
 }

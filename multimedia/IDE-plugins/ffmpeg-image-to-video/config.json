@@ -1,4 +1,5 @@
 {
+    "pluginCategory": "document",
     "component": "ffmpeg-image-to-video",
     "location": ["chapter", "paragraph"],
     "tooltip": "FFmpeg: Images to Video",

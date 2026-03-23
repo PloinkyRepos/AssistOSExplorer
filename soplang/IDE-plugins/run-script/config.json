@@ -1,4 +1,5 @@
 {
+    "pluginCategory": "document",
     "component": "run-script",
     "location": ["infoText"],
     "tooltip": "Run Script",

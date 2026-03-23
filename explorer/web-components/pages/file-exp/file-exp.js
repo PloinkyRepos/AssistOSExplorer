@@ -11,12 +11,12 @@ import {
     prepareMarkdownPreviewContent,
     renderMarkdownPreview
 } from "./file-exp-utils.js";
-import { createFileExpState, saveFilterSpecsPreference, saveListWidthPreference, savePreviewWrapPreference } from "./file-exp-state.js";
+import { createFileExpState, saveFilterSpecsPreference, saveListWidthPreference, saveListCollapsedPreference, savePreviewWrapPreference } from "./file-exp-state.js";
 import { createFileExpTooling } from "./file-exp-tooling.js";
 import { attachSearchController } from "./file-exp-search.js";
 import { attachFsActions } from "./file-exp-fs-actions.js";
-import { attachGitController } from "./file-exp-git.js";
 import { attachTasksController } from "./file-exp-tasks.js";
+import { attachApplicationPluginHost } from "./file-exp-application-plugins.js";
 import { withGlobalLoader } from "../../../utils/globalLoader.js";
 import { createFileExpCaches } from "./file-exp-caches.js";
 import { createDirectoryFilterController } from "./file-exp-directory-filter.js";
@@ -26,6 +26,7 @@ import { positionOpenActionMenu as positionOpenActionMenuImpl } from "./file-exp
 import { getNextMarkdownToggle, getNextBacklogViewToggle, PREVIEW_ACTIONS, previewReducer } from "./file-exp-preview-controller.js";
 import { FILE_EXP_UI_ACTIONS, fileExpUiReducer } from "./file-exp-ui-controller.js";
 import { createPreviewHeaderController } from "./file-exp-preview-header-controller.js";
+import { getPreviewUiState } from "./file-exp-preview-state.js";
 import { FILE_EXP_REPLACE_COMPLETE_EVENT } from "../../../utils/appEvents.js";
 import { createDomListenerRegistry } from "../../../utils/domListenerRegistry.js";
 import { runAfterRender as runLayoutAfterRender } from "./file-exp-layout-controller.js";
@@ -84,8 +85,8 @@ export class FileExp {
 
         attachSearchController(this);
         attachFsActions(this);
-        attachGitController(this);
         attachTasksController(this);
+        attachApplicationPluginHost(this);
 
         this.boundLoadStateFromURL = this.loadStateFromURL.bind(this);
         this.setWindowListener('file-exp-popstate', 'popstate', this.boundLoadStateFromURL);
@@ -471,6 +472,47 @@ export class FileExp {
         return renderPreviewPanelImpl(this, previewContent, previewUiState);
     }
 
+    refreshPreviewUi() {
+        const previewUiState = getPreviewUiState(this.state);
+        this.previewHeaderController?.sync(previewUiState);
+
+        const previewPresenterElement = this.element?.querySelector?.('file-exp-preview');
+        const previewPresenter = previewPresenterElement?.webSkelPresenter || null;
+        if (previewPresenter && typeof previewPresenter.renderPreview === 'function') {
+            previewPresenter.renderPreview(previewUiState);
+        } else {
+            const previewContent = this.element?.querySelector?.('.preview-content');
+            if (previewContent) {
+                this.renderPreviewPanel(previewContent, previewUiState);
+            }
+        }
+
+        const saveButton = this.element?.querySelector?.('#saveButton');
+        if (saveButton) {
+            saveButton.classList.toggle('hidden', Boolean(this.state.selectedIsMarkdown));
+        }
+
+        const cancelButton = this.element?.querySelector?.('#cancelButton');
+        if (cancelButton) {
+            cancelButton.textContent = this.state.selectedIsMarkdown ? 'Close' : 'Cancel';
+        }
+
+        const previewNotice = this.element?.querySelector?.('#previewNotice');
+        if (previewNotice) {
+            if (this.state.fileLoadInfo?.truncated) {
+                const info = this.state.fileLoadInfo;
+                const previewLines = info.previewLines || LARGE_FILE_PREVIEW_LINES;
+                const sizeText = Number.isFinite(info.size) ? this.formatBytes(info.size) : 'large';
+                previewNotice.textContent = info.message
+                    || `File is ${sizeText}; showing first ${previewLines} lines only. Editing is disabled for this view.`;
+                previewNotice.classList.remove('hidden');
+            } else {
+                previewNotice.textContent = '';
+                previewNotice.classList.add('hidden');
+            }
+        }
+    }
+
     toggleMarkdownView() {
         const transition = getNextMarkdownToggle(this.state);
         if (!transition.changed) {
@@ -630,6 +672,15 @@ export class FileExp {
         }, options);
         const nextWidth = Number.isFinite(this.state?.listWidth) ? this.state.listWidth : null;
         saveListWidthPreference(nextWidth);
+        return result;
+    }
+
+    setListCollapsed(listCollapsed, options = {}) {
+        const result = this.dispatchUi({
+            type: FILE_EXP_UI_ACTIONS.SET_LIST_COLLAPSED,
+            payload: { listCollapsed }
+        }, options);
+        saveListCollapsedPreference(Boolean(this.state?.listCollapsed));
         return result;
     }
 

@@ -1,4 +1,5 @@
 {
+    "pluginCategory": "document",
     "component": "edit-variables",
     "location": ["document", "chapter", "paragraph"],
     "tooltip": "Edit Variables",

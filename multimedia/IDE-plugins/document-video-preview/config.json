@@ -1,4 +1,5 @@
 {
+    "pluginCategory": "document",
     "component": "document-video-preview",
     "location": ["document"],
     "tooltip": "Video Preview",

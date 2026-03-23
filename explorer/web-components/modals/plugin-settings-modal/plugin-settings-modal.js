@@ -14,23 +14,36 @@ function normalizeSettingsMap(parsed) {
 function flattenPluginsByKey(pluginBuckets) {
     const buckets = pluginBuckets && typeof pluginBuckets === "object" ? pluginBuckets : {};
     const items = new Map();
-    for (const [location, plugins] of Object.entries(buckets)) {
-        if (!Array.isArray(plugins)) continue;
-        for (const plugin of plugins) {
-            const agent = typeof plugin?.agent === "string" && plugin.agent.trim() ? plugin.agent.trim() : "unknown";
-            const component = typeof plugin?.component === "string" && plugin.component.trim() ? plugin.component.trim() : "";
-            if (!component) continue;
-            const key = `${agent}/${component}`;
-            const existing = items.get(key) || {
-                key,
-                agent,
-                component,
-                locations: []
-            };
-            if (!existing.locations.includes(location)) {
-                existing.locations.push(location);
+    for (const [category, categoryBuckets] of Object.entries(buckets)) {
+        if (!categoryBuckets || typeof categoryBuckets !== "object" || Array.isArray(categoryBuckets)) continue;
+        for (const [location, plugins] of Object.entries(categoryBuckets)) {
+            if (!Array.isArray(plugins)) continue;
+            for (const plugin of plugins) {
+                const agent = typeof plugin?.agent === "string" && plugin.agent.trim() ? plugin.agent.trim() : "unknown";
+                const component = typeof plugin?.component === "string" && plugin.component.trim() ? plugin.component.trim() : "";
+                if (!component) continue;
+                const key = `${agent}/${component}`;
+                const existing = items.get(key) || {
+                    key,
+                    agent,
+                    component,
+                    label: "",
+                    tooltip: "",
+                    pluginCategory: category,
+                    locations: []
+                };
+                existing.pluginCategory = plugin?.pluginCategory || existing.pluginCategory || category;
+                existing.label = typeof plugin?.label === "string" && plugin.label.trim()
+                    ? plugin.label.trim()
+                    : existing.label || component;
+                existing.tooltip = typeof plugin?.tooltip === "string" && plugin.tooltip.trim()
+                    ? plugin.tooltip.trim()
+                    : existing.tooltip || existing.label;
+                if (!existing.locations.includes(location)) {
+                    existing.locations.push(location);
+                }
+                items.set(key, existing);
             }
-            items.set(key, existing);
         }
     }
     return Array.from(items.values())
@@ -106,8 +119,8 @@ export class PluginSettingsModal {
             return `
                 <div class="plugin-settings-row">
                     <div class="plugin-settings-info">
-                        <div class="plugin-settings-key">${item.key}</div>
-                        <div class="plugin-settings-meta">Locations: ${locations}</div>
+                        <div class="plugin-settings-key">${item.label || item.component}</div>
+                        <div class="plugin-settings-meta">${item.key} · Category: ${item.pluginCategory} · Locations: ${locations}</div>
                     </div>
                     <button
                         type="button"

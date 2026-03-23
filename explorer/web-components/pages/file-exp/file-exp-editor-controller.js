@@ -36,7 +36,7 @@ export async function editFile(fileExp) {
         hasUnsavedChanges: false,
         isEditing: true
     });
-    fileExp.invalidate();
+    fileExp.refreshPreviewUi();
 }
 
 export async function saveFile(fileExp) {
@@ -91,7 +91,7 @@ export async function saveFile(fileExp) {
 
         fileExp.setPreviewState({ isEditing: false });
         fileExp.editorPresenter = null;
-        fileExp.invalidate();
+        fileExp.refreshPreviewUi();
     } catch (err) {
         console.error(err);
         fileExp.showStatus(err.message || 'Failed to save file.', true);
@@ -106,8 +106,14 @@ export async function cancelEdit(fileExp) {
     });
     fileExp.editorPresenter = null;
     if (fileExp.state.selectedIsMarkdown && fileExp.state.selectedPath) {
-        await fileExp.openFile(fileExp.state.selectedPath);
+        fileExp.bumpWorkspaceVersion?.();
+        fileExp.caches.filePreview.invalidateForPath(fileExp.state.selectedPath);
+        fileExp.caches.dirListing.invalidate(fileExp, fileExp.state.path);
+        await fileExp.openFile(fileExp.state.selectedPath, {
+            showLoader: false,
+            invalidate: false
+        });
         return;
     }
-    fileExp.invalidate();
+    fileExp.refreshPreviewUi();
 }

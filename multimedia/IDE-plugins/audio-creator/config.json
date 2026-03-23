@@ -1,4 +1,5 @@
 {
+    "pluginCategory": "document",
     "component": "audio-creator",
     "location": [],
     "tooltip": "Audio Creator",

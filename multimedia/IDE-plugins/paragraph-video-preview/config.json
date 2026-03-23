@@ -1,6 +1,7 @@
 {
+    "pluginCategory": "document",
     "component": "paragraph-video-preview",
-    "location": ["paragraph"],
+    "location": [],
     "tooltip": "Video Preview",
     "icon": "/multimedia/IDE-plugins/assets/icons/preview.svg",
     "presenter": "ParagraphVideoPreview",

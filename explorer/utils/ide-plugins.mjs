@@ -19,7 +19,10 @@ export const SKIP_DIRECTORY_NAMES = new Set([
   'tmp'
 ]);
 
-export const DEFAULT_PLUGIN_LOCATIONS = ['document', 'chapter', 'paragraph', 'infoText'];
+export const DOCUMENT_PLUGIN_CATEGORY = 'document';
+export const APPLICATION_PLUGIN_CATEGORY = 'application';
+export const DEFAULT_DOCUMENT_PLUGIN_LOCATIONS = ['document', 'chapter', 'paragraph', 'infoText'];
+export const APPLICATION_PLUGIN_LOCATION_PATTERN = /^[a-z0-9-]+:[a-z0-9-]+$/i;
 const VALID_PLUGIN_TYPES = new Set(['embedded', 'modal']);
 
 function isNonEmptyString(value) {
@@ -94,6 +97,12 @@ function validateAndNormalizePluginConfig(parsedConfig, pluginEntryName, configP
     return null;
   }
 
+  const pluginCategory = isNonEmptyString(parsedConfig.pluginCategory) ? parsedConfig.pluginCategory.trim() : '';
+  if (!pluginCategory || (pluginCategory !== DOCUMENT_PLUGIN_CATEGORY && pluginCategory !== APPLICATION_PLUGIN_CATEGORY)) {
+    console.warn(`[filesystem-http] Plugin ${configPath} must declare pluginCategory as "${DOCUMENT_PLUGIN_CATEGORY}" or "${APPLICATION_PLUGIN_CATEGORY}".`);
+    return null;
+  }
+
   const locationsRaw = parsedConfig.location;
   const locations = Array.isArray(locationsRaw)
     ? locationsRaw.map((loc) => (typeof loc === 'string' ? loc.trim() : '')).filter(Boolean)
@@ -106,10 +115,18 @@ function validateAndNormalizePluginConfig(parsedConfig, pluginEntryName, configP
     return null;
   }
 
-  const invalidLocations = locations.filter((location) => !DEFAULT_PLUGIN_LOCATIONS.includes(location));
-  if (invalidLocations.length > 0) {
-    console.warn(`[filesystem-http] Plugin ${configPath} has unsupported locations: ${invalidLocations.join(', ')}`);
-    return null;
+  if (pluginCategory === DOCUMENT_PLUGIN_CATEGORY) {
+    const invalidLocations = locations.filter((location) => !DEFAULT_DOCUMENT_PLUGIN_LOCATIONS.includes(location));
+    if (invalidLocations.length > 0) {
+      console.warn(`[filesystem-http] Plugin ${configPath} has unsupported document locations: ${invalidLocations.join(', ')}`);
+      return null;
+    }
+  } else {
+    const invalidLocations = locations.filter((location) => !APPLICATION_PLUGIN_LOCATION_PATTERN.test(location));
+    if (invalidLocations.length > 0) {
+      console.warn(`[filesystem-http] Plugin ${configPath} has invalid application slots: ${invalidLocations.join(', ')}`);
+      return null;
+    }
   }
 
   const component = isNonEmptyString(parsedConfig.component) ? parsedConfig.component.trim() : pluginEntryName;
@@ -125,6 +142,11 @@ function validateAndNormalizePluginConfig(parsedConfig, pluginEntryName, configP
 
   if (parsedConfig.tooltip !== undefined && !isNonEmptyString(parsedConfig.tooltip)) {
     console.warn(`[filesystem-http] Plugin ${configPath} has an invalid tooltip.`);
+    return null;
+  }
+
+  if (parsedConfig.label !== undefined && !isNonEmptyString(parsedConfig.label)) {
+    console.warn(`[filesystem-http] Plugin ${configPath} has an invalid label.`);
     return null;
   }
 
@@ -162,6 +184,7 @@ function validateAndNormalizePluginConfig(parsedConfig, pluginEntryName, configP
     locations: [...new Set(locations)],
     pluginConfig: {
       ...parsedConfig,
+      pluginCategory,
       component,
       dependencies
     }
@@ -171,19 +194,22 @@ function validateAndNormalizePluginConfig(parsedConfig, pluginEntryName, configP
 export async function aggregateIdePlugins(rootDir) {
   if (!rootDir) throw new Error('Workspace root not configured.');
 
-  const aggregated = Object.create(null);
+  const aggregated = {
+    [DOCUMENT_PLUGIN_CATEGORY]: Object.create(null),
+    [APPLICATION_PLUGIN_CATEGORY]: Object.create(null)
+  };
   const visitedAgents = new Set();
   let pluginCount = 0;
 
-  const ensureBucket = (location) => {
-    if (!aggregated[location]) {
-      aggregated[location] = [];
+  const ensureBucket = (category, location) => {
+    if (!aggregated[category][location]) {
+      aggregated[category][location] = [];
     }
-    return aggregated[location];
+    return aggregated[category][location];
   };
 
-  for (const location of DEFAULT_PLUGIN_LOCATIONS) {
-    ensureBucket(location);
+  for (const location of DEFAULT_DOCUMENT_PLUGIN_LOCATIONS) {
+    ensureBucket(DOCUMENT_PLUGIN_CATEGORY, location);
   }
 
   const candidateDirsProcessed = new Set();
@@ -263,8 +289,11 @@ export async function aggregateIdePlugins(rootDir) {
 
       for (const loc of locations) {
         if (!loc) continue;
-        const bucket = ensureBucket(loc);
-        bucket.push({ ...finalPluginConfig });
+        const bucket = ensureBucket(finalPluginConfig.pluginCategory, loc);
+        bucket.push({
+          ...finalPluginConfig,
+          location: loc
+        });
         pluginCount += 1;
       }
     }
@@ -326,12 +355,14 @@ export async function aggregateIdePlugins(rootDir) {
     }
   }
 
-  for (const [location, plugins] of Object.entries(aggregated)) {
-    plugins.sort((a, b) => {
-      const aKey = (a?.component || '').toLowerCase();
-      const bKey = (b?.component || '').toLowerCase();
-      return aKey.localeCompare(bKey);
-    });
+  for (const buckets of Object.values(aggregated)) {
+    for (const plugins of Object.values(buckets)) {
+      plugins.sort((a, b) => {
+        const aKey = (a?.component || '').toLowerCase();
+        const bKey = (b?.component || '').toLowerCase();
+        return aKey.localeCompare(bKey);
+      });
+    }
   }
 
   return aggregated;

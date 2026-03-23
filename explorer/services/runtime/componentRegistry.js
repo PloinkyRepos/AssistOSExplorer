@@ -80,7 +80,9 @@ export function createComponentRegistry(webSkel) {
 
         const componentType = meta?.componentType === 'modals' ? 'modals' : 'components';
         const assets = await fetchComponentAssets(meta);
-        const scopedCss = scopeCssToComponent(assets.css, meta.componentName);
+        const scopedCss = componentType === 'modals'
+            ? assets.css
+            : scopeCssToComponent(assets.css, meta.componentName);
         const presenterModuleInstance = await importPresenterModule(meta, assets.safeBase, assets.presenterSource);
 
         const component = {

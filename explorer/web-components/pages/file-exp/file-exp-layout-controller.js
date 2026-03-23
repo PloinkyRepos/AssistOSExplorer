@@ -1,4 +1,5 @@
 import { saveColumnVisibilityPreference } from "./file-exp-state.js";
+import { renderApplicationPluginSlots } from "./file-exp-application-plugins.js";
 import { getPreviewUiState as derivePreviewUiState } from "./file-exp-preview-state.js";
 import { scrollToLine } from "./file-exp-utils.js";
 
@@ -71,6 +72,11 @@ export async function runAfterRender(fileExp, options = {}) {
         workspace.style.setProperty('--file-exp-list-width', `${Math.max(200, Math.round(width))}px`);
     };
 
+    const applyCollapsedState = () => {
+        if (!listPanel) return;
+        listPanel.classList.toggle('collapsed', Boolean(fileExp.state.listCollapsed));
+    };
+
     const syncCollapsedState = () => {
         if (!workspace || !listPanel) return;
         workspace.classList.toggle('list-collapsed', listPanel.classList.contains('collapsed'));
@@ -86,6 +92,7 @@ export async function runAfterRender(fileExp, options = {}) {
         }
     };
 
+    applyCollapsedState();
     applySavedWidth();
     if (listPanel && !listPanel.classList.contains('collapsed')) {
         if (!fileExp.state.listWidth && listPanel.offsetWidth) {
@@ -103,9 +110,11 @@ export async function runAfterRender(fileExp, options = {}) {
                 if (currentWidth > 0) {
                     fileExp.setListWidth(currentWidth);
                 }
-                listPanel.classList.add('collapsed');
+                fileExp.setListCollapsed(true);
+                applyCollapsedState();
             } else {
-                listPanel.classList.remove('collapsed');
+                fileExp.setListCollapsed(false);
+                applyCollapsedState();
                 applySavedWidth();
             }
             syncCollapsedState();
@@ -352,4 +361,6 @@ export async function runAfterRender(fileExp, options = {}) {
     if (entriesContainer) {
         fileExp.setElementListener('entries-contextmenu', entriesContainer, 'contextmenu', fileExp.boundContextMenu, true);
     }
+
+    await renderApplicationPluginSlots(fileExp);
 }

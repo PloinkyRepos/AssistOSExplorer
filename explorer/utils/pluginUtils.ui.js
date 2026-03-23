@@ -141,6 +141,9 @@ async function openPlugin(componentName, type, context, presenter, autoPin = fal
             context: encodeURIComponent(JSON.stringify(context)),
         }, true);
         removeHighlightPlugin(type, presenter);
+        if (presenter && presenter.currentPlugin === componentName) {
+            delete presenter.currentPlugin;
+        }
     }
     let pluginElement = presenter.element.querySelector(componentName);
     if (pluginElement) {

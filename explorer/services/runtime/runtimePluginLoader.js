@@ -1,4 +1,5 @@
 import {
+    forEachRuntimePluginEntry,
     mergeRuntimePluginsIntoAssistOS,
     normalizeRuntimePlugins
 } from '../../utils/pluginUtils.core.js';
@@ -53,63 +54,58 @@ export function createRuntimePluginLoader({
 
     const scheduleComponents = (runtimePlugins) => {
         const scheduled = new Map();
-    const scheduleComponent = (meta) => {
-        const componentName = meta?.componentName;
-        const agent = meta?.agent;
-        if (!isNonEmptyString(componentName) || !isNonEmptyString(agent)) {
-            return;
-        }
+        const scheduleComponent = (meta) => {
+            const componentName = meta?.componentName;
+            const agent = meta?.agent;
+            if (!isNonEmptyString(componentName) || !isNonEmptyString(agent)) {
+                return;
+            }
             const key = `${agent.trim()}::${componentName.trim()}`;
             if (!scheduled.has(key)) {
-            scheduled.set(key, {
-                componentName: componentName.trim(),
-                presenterName: isNonEmptyString(meta.presenterName) ? meta.presenterName.trim() : undefined,
-                agent: agent.trim(),
-                ownerComponent: isNonEmptyString(meta.ownerComponent) ? meta.ownerComponent.trim() : undefined,
-                isDependency: Boolean(meta.isDependency),
-                customPath: isNonEmptyString(meta.customPath) ? meta.customPath.trim() : undefined,
-                baseUrl: isNonEmptyString(meta.baseUrl) ? meta.baseUrl.trim() : undefined,
-                componentType: meta?.componentType === 'modals' ? 'modals' : 'components'
-            });
-        }
-    };
-
-        for (const entries of Object.values(runtimePlugins || {})) {
-            if (!Array.isArray(entries)) {
-                continue;
-            }
-            for (const plugin of entries) {
-                if (!plugin || typeof plugin !== 'object') {
-                    continue;
-                }
-                scheduleComponent({
-                    componentName: plugin.component,
-                    presenterName: plugin.presenter,
-                    agent: plugin.agent,
-                    ownerComponent: plugin.component,
-                    isDependency: false,
-                    baseUrl: plugin.componentBaseUrl,
-                    componentType: plugin.type === 'modal' ? 'modals' : 'components'
+                scheduled.set(key, {
+                    componentName: componentName.trim(),
+                    presenterName: isNonEmptyString(meta.presenterName) ? meta.presenterName.trim() : undefined,
+                    agent: agent.trim(),
+                    ownerComponent: isNonEmptyString(meta.ownerComponent) ? meta.ownerComponent.trim() : undefined,
+                    isDependency: Boolean(meta.isDependency),
+                    customPath: isNonEmptyString(meta.customPath) ? meta.customPath.trim() : undefined,
+                    baseUrl: isNonEmptyString(meta.baseUrl) ? meta.baseUrl.trim() : undefined,
+                    componentType: meta?.componentType === 'modals' ? 'modals' : 'components'
                 });
-                if (Array.isArray(plugin.dependencies)) {
-                    for (const dependency of plugin.dependencies) {
-                        if (!dependency || typeof dependency !== 'object') {
-                            continue;
-                        }
-                        scheduleComponent({
-                            componentName: dependency.component || dependency.name,
-                            presenterName: dependency.presenter || dependency.presenterClassName,
-                            agent: dependency.agent || plugin.agent,
-                            ownerComponent: dependency.ownerComponent || plugin.component,
-                            isDependency: true,
-                            customPath: dependency.path || dependency.directory,
-                            baseUrl: dependency.baseUrl,
-                            componentType: dependency.type === 'modal' ? 'modals' : 'components'
-                        });
+            }
+        };
+
+        forEachRuntimePluginEntry(runtimePlugins, (plugin) => {
+            if (!plugin || typeof plugin !== 'object') {
+                return;
+            }
+            scheduleComponent({
+                componentName: plugin.component,
+                presenterName: plugin.presenter,
+                agent: plugin.agent,
+                ownerComponent: plugin.component,
+                isDependency: false,
+                baseUrl: plugin.componentBaseUrl,
+                componentType: plugin.type === 'modal' ? 'modals' : 'components'
+            });
+            if (Array.isArray(plugin.dependencies)) {
+                for (const dependency of plugin.dependencies) {
+                    if (!dependency || typeof dependency !== 'object') {
+                        continue;
                     }
+                    scheduleComponent({
+                        componentName: dependency.component || dependency.name,
+                        presenterName: dependency.presenter || dependency.presenterClassName,
+                        agent: dependency.agent || plugin.agent,
+                        ownerComponent: dependency.ownerComponent || plugin.component,
+                        isDependency: true,
+                        customPath: dependency.path || dependency.directory,
+                        baseUrl: dependency.baseUrl,
+                        componentType: dependency.type === 'modal' ? 'modals' : 'components'
+                    });
                 }
             }
-        }
+        });
 
         return scheduled;
     };

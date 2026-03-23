@@ -90,6 +90,7 @@ export async function openFile(fileExp, filePath, {
     largeFilePreviewLimitBytes,
     largeFilePreviewLines,
     showLoader = true,
+    invalidate = true,
     requestTimeoutMs = null,
     suppressReadErrorStatus = false
 }) {
@@ -103,7 +104,11 @@ export async function openFile(fileExp, filePath, {
                 fileLoadInfo: null
             });
             if (await tryLoadMediaPreview(fileExp, filePath, { requestTimeoutMs: effectiveTimeoutMs })) {
-                fileExp.invalidate();
+                if (invalidate) {
+                    fileExp.invalidate();
+                } else {
+                    fileExp.refreshPreviewUi();
+                }
                 return;
             }
 
@@ -143,7 +148,11 @@ export async function openFile(fileExp, filePath, {
                 if (fileExp.state.pendingHighlight && fileExp.state.pendingHighlight.path !== fileExp.normalizePath(filePath)) {
                     fileExp.setPendingHighlight(null);
                 }
-                fileExp.invalidate();
+                if (invalidate) {
+                    fileExp.invalidate();
+                } else {
+                    fileExp.refreshPreviewUi();
+                }
                 return;
             }
 
@@ -219,7 +228,11 @@ export async function openFile(fileExp, filePath, {
             if (fileExp.state.pendingHighlight && fileExp.state.pendingHighlight.path !== fileExp.normalizePath(filePath)) {
                 fileExp.setPendingHighlight(null);
             }
-            fileExp.invalidate();
+            if (invalidate) {
+                fileExp.invalidate();
+            } else {
+                fileExp.refreshPreviewUi();
+            }
         } catch (err) {
             console.error(err);
             if (!suppressReadErrorStatus) {

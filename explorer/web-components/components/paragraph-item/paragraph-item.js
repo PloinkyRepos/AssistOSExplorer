@@ -234,7 +234,7 @@ export class ParagraphItem {
                 if(pluginElement.classList.contains("pinned")){
                     return;
                 }
-                this.currentPlugin = await this.closePlugin("", true);
+                await this.closePlugin("", true);
             }
 
         );

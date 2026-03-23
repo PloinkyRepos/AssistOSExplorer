@@ -16,7 +16,12 @@ const hasRuntimePlugins = (runtimePlugins) => {
     if (!runtimePlugins) {
         return false;
     }
-    return Object.values(runtimePlugins).some((entries) => Array.isArray(entries) && entries.length > 0);
+    return Object.values(runtimePlugins).some((buckets) => (
+        buckets
+        && typeof buckets === 'object'
+        && !Array.isArray(buckets)
+        && Object.values(buckets).some((entries) => Array.isArray(entries) && entries.length > 0)
+    ));
 };
 
 const normalizePluginSettings = (payload) => {

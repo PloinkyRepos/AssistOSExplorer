@@ -397,8 +397,15 @@ const createAssistOS = (options = {}) => {
     const { ui: providedUI, modules: moduleOverrides, runtimePlugins } = options;
     const ui = providedUI ?? buildUIHelpers();
     const fallbackUI = buildUIHelpers();
+    const runtimeDocumentPlugins = runtimePlugins?.document && typeof runtimePlugins.document === 'object' && !Array.isArray(runtimePlugins.document)
+        ? runtimePlugins.document
+        : {};
+    const runtimeApplicationPlugins = runtimePlugins?.application && typeof runtimePlugins.application === 'object' && !Array.isArray(runtimePlugins.application)
+        ? runtimePlugins.application
+        : {};
     const workspaceState = {
-        plugins: JSON.parse(JSON.stringify(runtimePlugins || {})),
+        plugins: JSON.parse(JSON.stringify(runtimeDocumentPlugins)),
+        appPlugins: JSON.parse(JSON.stringify(runtimeApplicationPlugins)),
         currentDocumentId: null,
         currentDocumentMetadataId: null,
         currentDocumentPath: null,

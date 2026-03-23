@@ -173,48 +173,26 @@ main {
     box-shadow: 0 18px 34px rgba(2, 6, 23, 0.55);
 }
 
-.git-conflict-indicator {
-    display: none;
-    margin-left: 8px;
-    width: 16px;
-    height: 16px;
-    border-radius: 999px;
-    background: #dc2626;
-    color: #fff;
-    font-weight: 800;
-    line-height: 16px;
-    font-size: 12px;
-    text-align: center;
-}
-
-.git-push-warning-indicator {
-    display: none;
-    margin-left: 8px;
-    width: 16px;
-    height: 16px;
-    border-radius: 999px;
-    background: #f59e0b;
-    color: #111827;
-    font-weight: 800;
-    line-height: 16px;
-    font-size: 12px;
-    text-align: center;
-}
-
-#gitButton.has-conflicts .git-conflict-indicator {
-    display: inline-block;
-}
-
-#gitButton.has-git-error .git-conflict-indicator {
-    display: inline-block;
-}
-
-#gitButton.has-push-warning .git-push-warning-indicator {
-    display: inline-block;
-}
-
 .toolbar-spacer {
     flex: 1;
+}
+
+.app-toolbar-slot {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.app-toolbar-slot .app-plugin-mount {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+}
+
+.app-toolbar-slot.is-empty {
+    display: none;
 }
 
 .toolbar .primary-button {
@@ -416,6 +394,30 @@ main {
     flex-grow: 1;
     overflow: hidden;
     --file-exp-list-width: 40%;
+}
+
+.app-plugin-bar {
+    flex: 0 0 74px;
+    width: 74px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 10px;
+    border-left: 1px solid var(--file-exp-border);
+    background: linear-gradient(180deg, rgba(148, 163, 184, 0.08), rgba(148, 163, 184, 0.02));
+    overflow-y: auto;
+}
+
+.app-plugin-bar.is-empty {
+    display: none;
+}
+
+.app-plugin-bar .app-plugin-mount {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 .list {

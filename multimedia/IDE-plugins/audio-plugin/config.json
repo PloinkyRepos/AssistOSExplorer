@@ -1,4 +1,5 @@
 {
+    "pluginCategory": "document",
     "component": "audio-plugin",
     "location": ["chapter", "paragraph"],
     "tooltip": "Audio Plugin",

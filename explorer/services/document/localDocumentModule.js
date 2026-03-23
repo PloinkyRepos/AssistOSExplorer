@@ -71,8 +71,10 @@ const getChapterSceneAttachment = (chapter, type, paragraphIndex) => {
     return attachments[paragraphIndex] ?? null;
 };
 
-const getSceneCommands = (chapter, paragraph, paragraphIndex) => {
-    const commands = paragraph?.commands ? { ...paragraph.commands } : {};
+const getBaseSceneCommands = (chapter, paragraph, paragraphIndex) => {
+    const commands = paragraph?.commands && typeof paragraph.commands === 'object' && !Array.isArray(paragraph.commands)
+        ? { ...paragraph.commands }
+        : {};
     if (!commands.video) {
         const chapterVideo = getChapterSceneAttachment(chapter, 'video', paragraphIndex);
         if (chapterVideo) {
@@ -86,6 +88,49 @@ const getSceneCommands = (chapter, paragraph, paragraphIndex) => {
         }
     }
     return commands;
+};
+
+const getParagraphScenes = (chapter, paragraph, paragraphIndex) => {
+    const paragraphAudio = Array.isArray(paragraph?.mediaAttachments?.audio) ? paragraph.mediaAttachments.audio : [];
+    const paragraphVideo = Array.isArray(paragraph?.mediaAttachments?.video) ? paragraph.mediaAttachments.video : [];
+    const paragraphImage = Array.isArray(paragraph?.mediaAttachments?.image) ? paragraph.mediaAttachments.image : [];
+    const baseCommands = getBaseSceneCommands(chapter, paragraph, paragraphIndex);
+    const sceneCount = Math.max(paragraphAudio.length, paragraphVideo.length, paragraphImage.length);
+
+    if (sceneCount > 0) {
+        const scenes = [];
+        for (let sceneIndex = 0; sceneIndex < sceneCount; sceneIndex += 1) {
+            const scene = {};
+            const audio = paragraphAudio[sceneIndex];
+            const video = paragraphVideo[sceneIndex];
+            const image = paragraphImage[sceneIndex];
+            if (audio) {
+                scene.audio = audio;
+            }
+            if (video) {
+                scene.video = video;
+            }
+            if (image) {
+                scene.image = image;
+            }
+            if (!scene.video && sceneIndex === 0 && baseCommands.video) {
+                scene.video = baseCommands.video;
+            }
+            if (!scene.image && sceneIndex === 0 && baseCommands.image) {
+                scene.image = baseCommands.image;
+            }
+            if (scene.video || scene.audio || scene.image || scene.silence) {
+                scenes.push(scene);
+            }
+        }
+        if (scenes.length > 0) {
+            return scenes;
+        }
+    }
+
+    return baseCommands.video || baseCommands.audio || baseCommands.image || baseCommands.silence
+        ? [baseCommands]
+        : [];
 };
 
 const getSceneDuration = (commands = {}) => {
@@ -663,7 +708,10 @@ const documentModule = {
         let duration = 0;
         for (const chapter of document.chapters || []) {
             for (const [paragraphIndex, paragraph] of (chapter.paragraphs || []).entries()) {
-                duration += getSceneDuration(getSceneCommands(chapter, paragraph, paragraphIndex));
+                const scenes = getParagraphScenes(chapter, paragraph, paragraphIndex);
+                for (const scene of scenes) {
+                    duration += getSceneDuration(scene);
+                }
             }
         }
         return duration;

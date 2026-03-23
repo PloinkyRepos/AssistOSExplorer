@@ -105,13 +105,9 @@
                 <input type="checkbox" id="filterSpecsToggle" data-local-action="toggleFilterSpecs"/>
                 Filter specs (.md)
             </label>
-	            <span class="toolbar-spacer"></span>
-            <button id="gitButton" class="secondary" title="Commit and push with Git" data-local-action="openGitModal">
-                Git
-                <span class="git-conflict-indicator" id="gitConflictIndicator" aria-hidden="true">!</span>
-                <span class="git-push-warning-indicator" id="gitPushWarningIndicator" aria-hidden="true">!</span>
-            </button>
-	        </div>
+            <span class="toolbar-spacer"></span>
+            <div class="app-toolbar-slot" id="fileExpToolbarPlugins" aria-label="Application toolbar plugins"></div>
+        </div>
         <div class="workspace">
             <div class="panel list">
                 <div class="list-header">
@@ -192,6 +188,7 @@
                     <file-exp-preview data-presenter="file-exp-preview"></file-exp-preview>
                 </div>
             </div>
+            <aside class="app-plugin-bar" id="fileExpPluginBar" aria-label="Application plugins"></aside>
         </div>
     </section>
     <div class="status" id="statusBanner"></div>

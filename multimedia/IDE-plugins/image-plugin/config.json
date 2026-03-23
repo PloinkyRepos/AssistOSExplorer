@@ -1,4 +1,5 @@
 {
+    "pluginCategory": "document",
     "component": "image-plugin",
     "location": ["chapter", "paragraph"],
     "tooltip": "Image Plugin",
