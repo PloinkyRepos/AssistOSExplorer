@@ -34,6 +34,22 @@ export class DocumentViewPage {
     }
     async refreshVariables(){
         this.variables = await documentModule.getDocCommandsParsed(this._document.docId);
+        try {
+            const result = await assistOS.appServices?.callTool("soplangAgent", "get_variables_with_values");
+            const enriched = Array.isArray(result?.json) ? result.json : [];
+            for (const cmd of this.variables) {
+                const match = enriched.find(v =>
+                    (v.varName || v.name) === cmd.varName &&
+                    (v.docId || v.documentId) === this._document.docId
+                );
+                if (match) {
+                    cmd.value = match.value;
+                    if (match.errorInfo) cmd.errorInfo = match.errorInfo;
+                }
+            }
+        } catch (_) {
+            // MCP unavailable — variables render without values
+        }
     }
     getVariables(chapterId, paragraphId) {
         return this.variables.filter(variable => {

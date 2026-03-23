@@ -1,4 +1,14 @@
 let workspaceModule = assistOS.loadModule("workspace");
+const hasUpdateApi = workspaceModule && typeof workspaceModule.updateTableRow === "function";
+const hasInsertApi = workspaceModule && typeof workspaceModule.insertTableRow === "function";
+const hasDeleteApi = workspaceModule && typeof workspaceModule.deleteTableRow === "function";
+
+const generateTempId = () => {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+        return crypto.randomUUID();
+    }
+    return `row-${Math.random().toString(36).slice(2, 10)}`;
+};
 
 export class EditVariableValue {
     constructor(element, invalidate) {
@@ -88,8 +98,8 @@ export class EditVariableValue {
             let tableContainer = this.element.querySelector('.table-container');
             tableContainer.classList.add('hidden');
         } else {
-            let modalFooter = this.element.querySelector('.modal-footer');
-            modalFooter.classList.add('hidden');
+            let modalActions = this.element.querySelector('.modal-actions');
+            modalActions?.classList.add('hidden');
             let contextMenu = this.element.querySelector('.context-menu');
             contextMenu.addEventListener("mousedown", (e) => {
                 e.preventDefault();
@@ -161,7 +171,10 @@ export class EditVariableValue {
             let row = this.variable.value.data[rowIndex];
             row[columnName] = value;
             //update server side
-            let computedRow = await workspaceModule.updateTableRow(this.docId, this.variable.varName, row);
+            let computedRow = row;
+            if (hasUpdateApi) {
+                computedRow = await workspaceModule.updateTableRow(this.docId, this.variable.varName, row);
+            }
             for(let column of this.computedColumns){
                 let cellToUpdate = this.element.querySelector(`input[data-id="${truid}"][data-column="${column.name}"]`);
                 if(cellToUpdate){
@@ -190,7 +203,13 @@ export class EditVariableValue {
         for(let column of this.columns){
             newRow[column.name] = "";
         }
-        let computedRow = await workspaceModule.insertTableRow(this.docId, this.variable.varName, newRow, position);
+        let computedRow;
+        if (hasInsertApi) {
+            computedRow = await workspaceModule.insertTableRow(this.docId, this.variable.varName, newRow, position);
+        } else {
+            const tempId = generateTempId();
+            computedRow = {...newRow, truid: tempId, id: tempId};
+        }
         if(position == null){
             position = this.variable.value.data.length; // Default to append
         }
@@ -216,7 +235,9 @@ export class EditVariableValue {
         let rowIndex = this.variable.value.data.findIndex(row => row.id === truid);
         this.variable.value.data.splice(rowIndex, 1);
         //update server side
-        await workspaceModule.deleteTableRow(this.docId, this.variable.varName, truid);
+        if (hasDeleteApi) {
+            await workspaceModule.deleteTableRow(this.docId, this.variable.varName, truid);
+        }
     }
     saveVarValue(targetElement) {
         let varValue;

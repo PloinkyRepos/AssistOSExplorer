@@ -7,8 +7,30 @@
     "presenter": "EditVariables",
     "type": "embedded",
     "autoPin": true,
-    "dependencies": [{
-        "name": "add-variable",
-        "presenter": "AddVariable"
-    }]
+    "dependencies": [
+        {
+            "name": "add-variable",
+            "presenter": "AddVariable"
+        },
+        {
+            "name": "edit-variable-tab",
+            "presenter": "EditVariableTab"
+        },
+        {
+            "name": "document-variable-details",
+            "presenter": "DocumentVariableDetails"
+        },
+        {
+            "name": "variable-values-tab",
+            "presenter": "VariableValuesTab"
+        },
+        {
+            "name": "edit-variable-value",
+            "presenter": "EditVariableValue"
+        },
+        {
+            "name": "table-editor",
+            "presenter": "TableEditor"
+        }
+    ]
 }

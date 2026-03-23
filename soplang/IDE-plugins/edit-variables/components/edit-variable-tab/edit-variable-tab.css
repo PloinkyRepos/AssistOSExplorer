@@ -7,6 +7,12 @@ edit-variable-tab .form-item{
 .expression-multi-line {
     resize: none;
 }
+.expression-input {
+    resize: none;
+    overflow-y: auto;
+    max-height: 150px;
+    field-sizing: content;
+}
 .edit-variable-form{
     display: flex;
     flex-direction: column;

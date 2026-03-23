@@ -117,21 +117,6 @@
       "presenterClassName": "AddDocumentModal"
     },
     {
-      "name": "add-variable",
-      "type": "modals",
-      "presenterClassName": "AddVariable"
-    },
-    {
-      "name": "edit-variable-value",
-      "type": "modals",
-      "presenterClassName": "EditVariableValue"
-    },
-    {
-      "name": "document-variable-details",
-      "type": "modals",
-      "presenterClassName": "DocumentVariableDetails"
-    },
-    {
       "name": "document-snapshots-modal",
       "type": "modals",
       "presenterClassName": "DocumentSnapshotsModal"
@@ -195,16 +180,6 @@
       "name": "plugin-settings-modal",
       "type": "modals",
       "presenterClassName": "PluginSettingsModal"
-    },
-    {
-      "name": "variable-values-tab",
-      "type": "modals",
-      "presenterClassName": "VariableValuesTab"
-    },
-    {
-      "name": "edit-variable-tab",
-      "type": "modals",
-      "presenterClassName": "EditVariableTab"
     },
     {
       "name": "backlog-create-modal",
