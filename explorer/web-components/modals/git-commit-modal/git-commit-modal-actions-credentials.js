@@ -9,11 +9,14 @@ import {
     getRememberedGitPat,
     getRememberedGitIdentity,
     getRememberedGitAuthMethod,
+    getRememberedGitTokenSource,
     getAutocommitSettings,
     normalizeGitAuthMethod,
+    normalizeGitTokenSource,
     setRememberedGitPat,
     setRememberedGitIdentity,
     setRememberedGitAuthMethod,
+    setRememberedGitTokenSource,
     setAutocommitSettings,
     getConflictAutoresolveSetting,
     setConflictAutoresolveSetting,
@@ -250,8 +253,13 @@ export function createCredentialsActions(ctx) {
             setStatusLine('Enter a token to continue.', true);
             return;
         }
-        if (remember) setRememberedGitPat(token);
-        else setRememberedGitPat('');
+        if (remember) {
+            setRememberedGitPat(token);
+            setRememberedGitTokenSource('token');
+        } else {
+            setRememberedGitPat('');
+            setRememberedGitTokenSource('');
+        }
 
         applyState({
             authPrompt: {
@@ -302,17 +310,19 @@ export function createCredentialsActions(ctx) {
         const autoresolveConflicts = typeof payload.autoresolveConflicts === 'boolean'
             ? payload.autoresolveConflicts
             : getConflictAutoresolveSetting();
-        const githubConnected = Boolean(state.githubAuth?.connected);
-        const githubConfigured = Boolean(state.githubAuth?.configured);
         const rememberedToken = getRememberedGitPat();
+        const rememberedTokenSource = normalizeGitTokenSource(getRememberedGitTokenSource());
+        const githubConnected = Boolean(state.githubAuth?.connected || (rememberedTokenSource === 'github' && rememberedToken));
+        const githubConfigured = Boolean(state.githubAuth?.configured || githubConnected);
         const rememberedIdentity = getRememberedGitIdentity();
         const rememberedAuthMethod = normalizeGitAuthMethod(getRememberedGitAuthMethod());
         const usingGithub = authMethod === 'github';
+        const storedGithubToken = rememberedTokenSource === 'github' ? rememberedToken : '';
         const hasIdentityChange = name !== String(rememberedIdentity.name || '').trim()
             || email !== String(rememberedIdentity.email || '').trim();
         const hasAuthMethodChange = authMethod !== rememberedAuthMethod;
         const hasTokenChange = usingGithub
-            ? Boolean(rememberedToken)
+            ? false
             : (remember ? token !== String(rememberedToken || '') : Boolean(rememberedToken));
         const hasPersistableChanges = hasIdentityChange || hasAuthMethodChange || hasTokenChange;
 
@@ -332,8 +342,8 @@ export function createCredentialsActions(ctx) {
         const authRequired = Boolean(state.authPrompt?.visible);
         const emailPattern = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
         const identityValid = Boolean(name && email && emailPattern.test(email));
-        const effectiveToken = usingGithub ? '' : (token || (remember ? rememberedToken : ''));
-        const authValid = usingGithub ? githubConnected : Boolean(effectiveToken);
+        const effectiveToken = usingGithub ? storedGithubToken : (token || (remember ? rememberedToken : ''));
+        const authValid = usingGithub ? Boolean(githubConnected || effectiveToken) : Boolean(effectiveToken);
         setRememberedGitAuthMethod(authMethod);
 
         applyState({
@@ -366,6 +376,7 @@ export function createCredentialsActions(ctx) {
         }
         if (!usingGithub && !remember) {
             setRememberedGitPat('');
+            setRememberedGitTokenSource('');
         }
         const pending = state.pendingAction || state.authPrompt?.pendingAction || state.identityPrompt?.pendingAction;
         const canSaveGithubSetup = usingGithub && githubConfigured && !githubConnected && !pending?.type && !validateOnly;
@@ -445,7 +456,7 @@ export function createCredentialsActions(ctx) {
                     path: validationRepoPath,
                     rebase: false,
                     ffOnly: false,
-                    token: usingGithub ? null : effectiveToken
+                    token: effectiveToken || null
                 });
             } catch (error) {
                 const msg = normalizeErrorMessage(error);
@@ -509,6 +520,11 @@ export function createCredentialsActions(ctx) {
         if (!usingGithub && authValid && (authRequired || authValid)) {
             if (remember) setRememberedGitPat(effectiveToken);
             else setRememberedGitPat('');
+            setRememberedGitTokenSource(remember ? 'token' : '');
+            tokenSaved = true;
+        } else if (usingGithub && authValid && effectiveToken) {
+            setRememberedGitPat(effectiveToken);
+            setRememberedGitTokenSource('github');
             tokenSaved = true;
         }
 
@@ -566,18 +582,18 @@ export function createCredentialsActions(ctx) {
                     await commitSelectedRepos();
                 } else if (pending.type === 'sync') {
                     const list = Array.isArray(pending.repoPaths) ? pending.repoPaths : null;
-                    await syncSelectedRepos?.({ token: usingGithub ? null : effectiveToken, repoPaths: list });
+                    await syncSelectedRepos?.({ token: effectiveToken || null, repoPaths: list });
                 } else if (pending.type === 'push') {
                     if (pending.mode === 'batch') {
                         const list = Array.isArray(pending.repoPaths) ? pending.repoPaths : [];
-                        await pushRepos(list, { token: usingGithub ? null : effectiveToken });
+                        await pushRepos(list, { token: effectiveToken || null });
                     } else {
-                        await push({ silent: false, token: usingGithub ? null : effectiveToken });
+                        await push({ silent: false, token: effectiveToken || null });
                     }
                 } else if (pending.type === 'pull') {
                     if (pending.mode === 'batch') {
                         const list = Array.isArray(pending.repoPaths) ? pending.repoPaths : [];
-                        await pullRepos(list, { token: usingGithub ? null : effectiveToken });
+                        await pullRepos(list, { token: effectiveToken || null });
                     } else {
                         await pullSelectedRepos();
                     }
@@ -630,7 +646,9 @@ export function createCredentialsActions(ctx) {
         });
         updateIdentityPrompt({ focus: !name ? 'name' : (!email ? 'email' : 'name') });
         updateCommitButtons();
-        const githubConnected = Boolean(state.githubAuth?.connected);
+        const githubConnected = Boolean(state.githubAuth?.connected || (
+            normalizeGitTokenSource(getRememberedGitTokenSource()) === 'github' && getRememberedGitPat()
+        ));
         setStatusLine(
             githubConnected
                 ? 'Set name/email to continue.'

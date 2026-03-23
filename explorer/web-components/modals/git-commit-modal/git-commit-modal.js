@@ -9,7 +9,24 @@ import { callExplorerTool, callAgentTool } from "../../../services/infrastructur
 import { withGlobalLoader } from "../../../utils/globalLoader.js";
 import { getRepoScanPaths } from "../../../utils/reposRoot.js";
 import { joinPath } from "../../pages/file-exp/file-exp-utils.js";
-import { normalizeErrorMessage, parseJsonToolResult, normalizeSlashes, isReposRootPath, getRememberedGitIdentity, getRememberedGitAuthMethod, normalizeGitAuthMethod, setGitErrorFlag, setCredentialsValidated } from "./git-commit-modal-utils.js";
+import {
+    normalizeErrorMessage,
+    parseJsonToolResult,
+    normalizeSlashes,
+    isReposRootPath,
+    getRememberedGitIdentity,
+    getRememberedGitAuthMethod,
+    getRememberedGitPat,
+    getRememberedGitTokenSource,
+    getRememberedGithubConnection,
+    setRememberedGitPat,
+    setRememberedGitTokenSource,
+    setRememberedGithubConnection,
+    clearRememberedGithubConnection,
+    normalizeGitAuthMethod,
+    setGitErrorFlag,
+    setCredentialsValidated
+} from "./git-commit-modal-utils.js";
 import { FILE_EXP_REFRESH_EVENT, GIT_MODAL_CLOSED_EVENT } from "../../../utils/appEvents.js";
 
 export class GitCommitModal {
@@ -390,10 +407,19 @@ export class GitCommitModal {
     }
 
     updateGithubAuthState(github = {}, { silent = false } = {}) {
+        const rememberedToken = getRememberedGitPat();
+        const rememberedTokenSource = getRememberedGitTokenSource();
+        const hasRememberedGithubToken = rememberedTokenSource === 'github' && Boolean(rememberedToken);
+        const liveConnection = github?.connection || null;
+        if (liveConnection) {
+            setRememberedGithubConnection(liveConnection);
+        }
+        const rememberedConnection = getRememberedGithubConnection();
+        const effectiveConnection = liveConnection || rememberedConnection || null;
         this.state.githubAuth = {
-            configured: Boolean(github?.configured),
-            connected: Boolean(github?.connected),
-            connection: github?.connection || null,
+            configured: Boolean(github?.configured || github?.setup?.configured || hasRememberedGithubToken || effectiveConnection),
+            connected: Boolean(github?.connected || (hasRememberedGithubToken && effectiveConnection)),
+            connection: effectiveConnection,
             pending: github?.pending || null,
             setup: github?.setup || null
         };
@@ -471,10 +497,24 @@ export class GitCommitModal {
     async pollGithubAuth({ silent = false } = {}) {
         const payload = await this.service.pollGithubDeviceFlow();
         const github = payload?.github || {};
+        const token = String(payload?.token || github?.token || '').trim();
+        if (token) {
+            setRememberedGitPat(token);
+            setRememberedGitTokenSource('github');
+            if (github?.connection) {
+                setRememberedGithubConnection(github.connection);
+            }
+            setCredentialsValidated(false);
+        }
         this.updateGithubAuthState(github, { silent });
         const pending = github.pending || null;
         if (github.connected) {
             this.clearGithubPollTimer();
+            await this.prefillCredentialsPanel();
+            const gateActive = await this.ensureCredentialsGate();
+            if (!gateActive && !this.state.repoOverviewsLoaded) {
+                await this.refreshAll({ force: true });
+            }
             this.updateAuthPrompt();
             this.updateCommitButtons();
             if (!silent) {
@@ -500,6 +540,12 @@ export class GitCommitModal {
     async disconnectGithubAuth() {
         const payload = await this.service.disconnectGithubAuth();
         this.clearGithubPollTimer();
+        if (getRememberedGitTokenSource() === 'github') {
+            setRememberedGitPat('');
+            setRememberedGitTokenSource('');
+            setCredentialsValidated(false);
+        }
+        clearRememberedGithubConnection();
         this.updateGithubAuthState(payload?.github || {});
         this.updateAuthPrompt();
         this.updateCommitButtons();

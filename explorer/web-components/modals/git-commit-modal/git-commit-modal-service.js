@@ -1,3 +1,5 @@
+import { parseJsonToolResult } from "./git-commit-modal-utils.js";
+
 export function createGitCommitService({ callTool, callAgentTool }) {
     const compact = (payload) => {
         const next = {};
@@ -7,32 +9,16 @@ export function createGitCommitService({ callTool, callAgentTool }) {
         }
         return next;
     };
-    const AUTH_AGENT = 'explorer';
-    const callAuthJson = async (pathname, { method = 'GET', body = null } = {}) => {
-        const hasQuery = pathname.includes('?');
-        const url = `${pathname}${hasQuery ? '&' : '?'}agent=${encodeURIComponent(AUTH_AGENT)}`;
-        const headers = { Accept: 'application/json' };
-        const init = {
-            method,
-            headers,
-            credentials: 'same-origin'
+    const callGitAuthJson = async (toolName, args = {}) => {
+        const payload = parseJsonToolResult(await callAgentTool('gitAgent', toolName, args, { raw: true })) || {};
+        if (payload?.ok === false) {
+            throw new Error(String(payload?.message || payload?.error || 'git_auth_request_failed'));
+        }
+        return {
+            ok: true,
+            github: payload,
+            token: payload?.token || ''
         };
-        if (body !== null) {
-            headers['Content-Type'] = 'application/json';
-            init.body = JSON.stringify(body);
-        }
-        const response = await fetch(url, init);
-        let payload = {};
-        try {
-            payload = await response.json();
-        } catch {
-            payload = {};
-        }
-        if (!response.ok || payload?.ok === false) {
-            const message = payload?.message || payload?.error || `auth_http_${response.status}`;
-            throw new Error(String(message || 'auth_request_failed'));
-        }
-        return payload;
     };
     return {
         gitDiff: (args) => callAgentTool('gitAgent', 'git_diff', args),
@@ -58,9 +44,9 @@ export function createGitCommitService({ callTool, callAgentTool }) {
         readTextFile: (path) => callTool('read_text_file', { path }),
         writeFile: (path, content) => callTool('write_file', { path, content }),
         generateCommitMessage: (diffs) => callAgentTool('llmAssistant', 'git_commit_message', { diffs }),
-        githubAuthStatus: () => callAuthJson('/auth/github/status'),
-        startGithubDeviceFlow: () => callAuthJson('/auth/github/device/start', { method: 'POST', body: {} }),
-        pollGithubDeviceFlow: () => callAuthJson('/auth/github/device/poll', { method: 'POST', body: {} }),
-        disconnectGithubAuth: () => callAuthJson('/auth/github/disconnect', { method: 'POST', body: {} })
+        githubAuthStatus: () => callGitAuthJson('git_auth_status'),
+        startGithubDeviceFlow: () => callGitAuthJson('git_auth_begin'),
+        pollGithubDeviceFlow: () => callGitAuthJson('git_auth_poll'),
+        disconnectGithubAuth: () => callGitAuthJson('git_auth_disconnect')
     };
 }

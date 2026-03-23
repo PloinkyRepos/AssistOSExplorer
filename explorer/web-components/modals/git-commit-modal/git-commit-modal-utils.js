@@ -249,9 +249,18 @@ const GIT_PAT_STORAGE_KEY = 'webskel.git.pat';
 const GIT_IDENTITY_NAME_KEY = 'webskel.git.identity.name';
 const GIT_IDENTITY_EMAIL_KEY = 'webskel.git.identity.email';
 const GIT_AUTH_METHOD_STORAGE_KEY = 'webskel.git.auth.method';
+const GIT_TOKEN_SOURCE_STORAGE_KEY = 'webskel.git.token.source';
+const GITHUB_CONNECTION_STORAGE_KEY = 'webskel.git.github.connection';
 
 export function normalizeGitAuthMethod(value) {
     return String(value || '').trim().toLowerCase() === 'github' ? 'github' : 'token';
+}
+
+export function normalizeGitTokenSource(value) {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (normalized === 'github') return 'github';
+    if (normalized === 'token') return 'token';
+    return '';
 }
 
 export function getRememberedGitPat() {
@@ -270,6 +279,85 @@ export function setRememberedGitPat(token) {
             return;
         }
         localStorage.setItem(GIT_PAT_STORAGE_KEY, value);
+    } catch {
+        // ignore
+    }
+}
+
+export function getRememberedGitTokenSource() {
+    try {
+        return normalizeGitTokenSource(localStorage.getItem(GIT_TOKEN_SOURCE_STORAGE_KEY) || '');
+    } catch {
+        return '';
+    }
+}
+
+export function setRememberedGitTokenSource(source) {
+    try {
+        const value = normalizeGitTokenSource(source);
+        if (!value) {
+            localStorage.removeItem(GIT_TOKEN_SOURCE_STORAGE_KEY);
+            return;
+        }
+        localStorage.setItem(GIT_TOKEN_SOURCE_STORAGE_KEY, value);
+    } catch {
+        // ignore
+    }
+}
+
+function sanitizeRememberedGithubConnection(connection = null) {
+    if (!connection || typeof connection !== 'object') return null;
+    const user = connection.user && typeof connection.user === 'object'
+        ? {
+            id: connection.user.id || null,
+            login: String(connection.user.login || '').trim(),
+            name: String(connection.user.name || '').trim(),
+            email: String(connection.user.email || '').trim(),
+            avatarUrl: String(connection.user.avatarUrl || '').trim(),
+            profileUrl: String(connection.user.profileUrl || '').trim()
+        }
+        : null;
+    const sanitized = {
+        provider: 'github',
+        connectedAt: connection.connectedAt || null,
+        updatedAt: connection.updatedAt || null,
+        tokenType: String(connection.tokenType || 'bearer').trim() || 'bearer',
+        scope: String(connection.scope || '').trim(),
+        user
+    };
+    const hasUser = Boolean(user?.login || user?.name || user?.email);
+    if (!hasUser && !sanitized.scope) {
+        return null;
+    }
+    return sanitized;
+}
+
+export function getRememberedGithubConnection() {
+    try {
+        const raw = localStorage.getItem(GITHUB_CONNECTION_STORAGE_KEY);
+        if (!raw) return null;
+        return sanitizeRememberedGithubConnection(JSON.parse(raw));
+    } catch {
+        return null;
+    }
+}
+
+export function setRememberedGithubConnection(connection) {
+    try {
+        const value = sanitizeRememberedGithubConnection(connection);
+        if (!value) {
+            localStorage.removeItem(GITHUB_CONNECTION_STORAGE_KEY);
+            return;
+        }
+        localStorage.setItem(GITHUB_CONNECTION_STORAGE_KEY, JSON.stringify(value));
+    } catch {
+        // ignore
+    }
+}
+
+export function clearRememberedGithubConnection() {
+    try {
+        localStorage.removeItem(GITHUB_CONNECTION_STORAGE_KEY);
     } catch {
         // ignore
     }

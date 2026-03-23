@@ -11,7 +11,9 @@ import {
     getRememberedGitPat,
     getRememberedGitIdentity,
     getRememberedGitAuthMethod,
+    getRememberedGitTokenSource,
     normalizeGitAuthMethod,
+    normalizeGitTokenSource,
     normalizeGitStatusPayload
 } from "./git-commit-modal-utils.js";
 import { withGlobalLoader } from "../../../utils/globalLoader.js";
@@ -79,12 +81,15 @@ export function createGitOpsActions(ctx) {
 
     const getAuthContext = (state = getState(), tokenOverride = null) => {
         const authMethod = getAuthMethod(state);
-        const githubConnected = Boolean(state.githubAuth?.connected);
+        const rememberedToken = getRememberedGitPat();
+        const rememberedTokenSource = normalizeGitTokenSource(getRememberedGitTokenSource());
+        const githubToken = rememberedTokenSource === 'github' ? rememberedToken : '';
+        const githubConnected = Boolean(state.githubAuth?.connected || githubToken);
         const token = authMethod === 'token'
             ? (String(tokenOverride || '').trim()
                 || String(state.authPrompt?.token || '').trim()
-                || getRememberedGitPat())
-            : '';
+                || rememberedToken)
+            : (String(tokenOverride || '').trim() || githubToken);
         return {
             authMethod,
             githubConnected,

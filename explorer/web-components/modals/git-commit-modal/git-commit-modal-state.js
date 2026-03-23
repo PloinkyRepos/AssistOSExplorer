@@ -1,10 +1,21 @@
 import { createStore } from "../../../services/ui/store.js";
-import { getRememberedGitIdentity, getCredentialsValidated, getRememberedGitAuthMethod } from "./git-commit-modal-utils.js";
+import {
+    getRememberedGitIdentity,
+    getCredentialsValidated,
+    getRememberedGitAuthMethod,
+    getRememberedGitPat,
+    getRememberedGitTokenSource,
+    getRememberedGithubConnection
+} from "./git-commit-modal-utils.js";
 import { getReposRoot } from "../../../utils/reposRoot.js";
 
 export function createGitCommitState(props = {}) {
     const rememberedIdentity = getRememberedGitIdentity();
     const rememberedAuthMethod = getRememberedGitAuthMethod();
+    const rememberedPat = getRememberedGitPat();
+    const rememberedTokenSource = getRememberedGitTokenSource();
+    const rememberedGithubConnection = getRememberedGithubConnection();
+    const hasRememberedGithubToken = rememberedTokenSource === 'github' && Boolean(rememberedPat);
     const reposRoot = getReposRoot();
     const initialState = {
         // Default to the multi-repo root so opening the modal immediately loads all repos under it.
@@ -69,9 +80,9 @@ export function createGitCommitState(props = {}) {
             authMethod: rememberedAuthMethod
         },
         githubAuth: {
-            configured: false,
-            connected: false,
-            connection: null,
+            configured: hasRememberedGithubToken,
+            connected: hasRememberedGithubToken,
+            connection: hasRememberedGithubToken ? rememberedGithubConnection : null,
             pending: null,
             setup: null
         },
