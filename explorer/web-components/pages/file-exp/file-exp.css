@@ -753,6 +753,12 @@ th {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
+    width: 100%;
+    justify-content: flex-start;
+    padding: 10px 12px;
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    border-radius: 14px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(248, 250, 252, 0.9));
 }
 
 .preview-header-extras #backlogHeader {
@@ -764,7 +770,38 @@ th {
     flex: auto;
 }
 
+.preview-header-extras .backlog-file {
+    font-size: 1.1rem;
+    color: var(--text-soft);
+    flex-grow: 1;
+    font-weight: 700;
+}
+
+.preview-header-extras .backlog-actions {
+    display: inline-flex;
+    gap: 6px;
+}
+
+.preview-header-extras .backlog-refresh {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    justify-content: center;
+}
+
+.preview-header-extras .backlog-refresh svg {
+    width: 16px;
+    height: 16px;
+    display: block;
+}
+
 .preview-header-extras .backlog-filters label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 0.8rem;
+    color: var(--text-soft);
+    font-weight: 600;
     min-width: 140px;
 }
 
@@ -772,11 +809,35 @@ th {
 .preview-header-extras .backlog-filters select {
     min-width: 120px;
     height: 100%;
+    padding: 6px 8px;
+    border-radius: 8px;
+    border: 1px solid var(--file-exp-border);
+    background: var(--file-exp-panel);
+    color: var(--text);
 }
 
-.preview-header-extras .backlog-filters {
-    width: 100%;
-    justify-content: flex-start;
+.preview-header-extras .backlog-filters input[type="search"]::-webkit-search-cancel-button {
+    cursor: pointer;
+}
+
+.preview-header-extras .backlog-filter-actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 6px;
+    align-self: flex-end;
+}
+
+.theme-dark .preview-header-extras .backlog-filters {
+    border-color: rgba(71, 85, 105, 0.4);
+    background: linear-gradient(180deg, rgba(17, 25, 39, 0.94), rgba(15, 23, 42, 0.96));
+}
+
+.theme-dark .preview-header-extras .backlog-filters input,
+.theme-dark .preview-header-extras .backlog-filters select {
+    background: rgba(15, 23, 42, 0.88);
+    border-color: rgba(71, 85, 105, 0.55);
+    color: #f8fafc;
 }
 
 .preview-header button {

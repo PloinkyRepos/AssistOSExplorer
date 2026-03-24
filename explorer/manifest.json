@@ -26,7 +26,8 @@
     },
     "applicationPlugins": {
         "git": true,
-        "soplang-builder": true
+        "soplang-builder": true,
+        "tasks": true
     },
     "profiles": {
         "default": {

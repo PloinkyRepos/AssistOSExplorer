@@ -1,5 +1,6 @@
 import { PREVIEW_ACTIONS } from "./file-exp-preview-controller.js";
 import { renderCodePreview, renderMarkdownPreview } from "./file-exp-utils.js";
+import { getPreviewUiState } from "./file-exp-preview-state.js";
 
 export async function editFile(fileExp) {
     if (!fileExp?.state?.selectedPath) return;
@@ -8,7 +9,8 @@ export async function editFile(fileExp) {
         fileExp.showStatus('History files are read-only.', true);
         return;
     }
-    if (selectedPath.endsWith('.backlog') && !fileExp.state.backlogTextView) {
+    const previewUiState = getPreviewUiState(fileExp.state);
+    if (selectedPath.endsWith('.backlog') && previewUiState.showBacklogPanel) {
         fileExp.showStatus('Backlog is managed by the Backlog panel.', true);
         return;
     }

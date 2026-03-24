@@ -97,7 +97,7 @@ export function createPreviewHeaderController(host) {
             syncWebActions(elements, previewUiState);
             syncFileName(elements);
 
-            if (previewUiState.isBacklog && typeof host.renderBacklogViewToggle === 'function') {
+            if (previewUiState.canToggleBacklogView && typeof host.renderBacklogViewToggle === 'function') {
                 host.renderBacklogViewToggle(elements.headerExtras, previewUiState.showBacklogPanel);
             }
         }

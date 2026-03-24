@@ -46,7 +46,7 @@ function encodeContext(context) {
 function buildPluginContext(fileExp, slot) {
     return {
         slot,
-        currentPath: fileExp.normalizePath(fileExp.state.currentPath || '/'),
+        currentPath: fileExp.normalizePath(fileExp.state.path || '/'),
         selectedPath: fileExp.normalizePath(fileExp.state.selectedPath || ''),
         workspaceVersion: Number.isFinite(fileExp.state.workspaceVersion) ? fileExp.state.workspaceVersion : 0
     };

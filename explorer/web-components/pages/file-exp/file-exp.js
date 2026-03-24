@@ -15,7 +15,6 @@ import { createFileExpState, saveFilterSpecsPreference, saveListWidthPreference,
 import { createFileExpTooling } from "./file-exp-tooling.js";
 import { attachSearchController } from "./file-exp-search.js";
 import { attachFsActions } from "./file-exp-fs-actions.js";
-import { attachTasksController } from "./file-exp-tasks.js";
 import { attachApplicationPluginHost } from "./file-exp-application-plugins.js";
 import { withGlobalLoader } from "../../../utils/globalLoader.js";
 import { createFileExpCaches } from "./file-exp-caches.js";
@@ -85,7 +84,6 @@ export class FileExp {
 
         attachSearchController(this);
         attachFsActions(this);
-        attachTasksController(this);
         attachApplicationPluginHost(this);
 
         this.boundLoadStateFromURL = this.loadStateFromURL.bind(this);

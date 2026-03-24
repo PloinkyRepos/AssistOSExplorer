@@ -1,9 +1,20 @@
+function hasTasksPluginEnabled() {
+    const appPlugins = window.assistOS?.workspace?.appPlugins;
+    if (!appPlugins || typeof appPlugins !== 'object' || Array.isArray(appPlugins)) {
+        return false;
+    }
+    return Object.values(appPlugins)
+        .flatMap((bucket) => Array.isArray(bucket) ? bucket : [])
+        .some((plugin) => plugin?.id === 'tasks');
+}
+
 export function getPreviewUiState(state) {
     const selectedPath = state?.selectedPath || '';
     const isTruncatedPreview = Boolean(state?.fileLoadInfo?.truncated);
     const isBacklog = selectedPath.endsWith('.backlog') || selectedPath.endsWith('.history');
     const isHistory = selectedPath.endsWith('.history');
-    const showBacklogPanel = isBacklog && !state?.backlogTextView;
+    const tasksPluginEnabled = hasTasksPluginEnabled();
+    const showBacklogPanel = tasksPluginEnabled && isBacklog && !state?.backlogTextView;
     const isHtml = /\.html?$/i.test(selectedPath);
     const isPdf = /\.pdf$/i.test(selectedPath);
     const viewMode = isHtml ? (state?.previewViewMode || 'code') : 'code';
@@ -36,7 +47,9 @@ export function getPreviewUiState(state) {
         codeHidden,
         webHidden,
         isTruncatedPreview,
+        tasksPluginEnabled,
         showBacklogPanel,
+        canToggleBacklogView: Boolean(tasksPluginEnabled && isBacklog),
         showEditingActions: Boolean(state?.isEditing),
         showEditAction: canEdit,
         showWrapToggle: showTextPreview,

@@ -673,6 +673,16 @@ export class DocumentViewPage {
         if (newTasksBadge) {
             newTasksBadge.remove();
         }
+        const appPlugins = window.assistOS?.workspace?.appPlugins;
+        const tasksEnabled = appPlugins && typeof appPlugins === 'object' && !Array.isArray(appPlugins)
+            ? Object.values(appPlugins)
+                .flatMap((bucket) => Array.isArray(bucket) ? bucket : [])
+                .some((plugin) => plugin?.id === 'tasks')
+            : false;
+        if (!tasksEnabled) {
+            await assistOS?.showToast?.('Tasks plugin is disabled.', 'info', 2500);
+            return;
+        }
         await assistOS.UI.showModal("document-tasks-modal", {["document-id"]: this._document.id});
     }
 

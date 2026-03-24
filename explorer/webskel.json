@@ -72,11 +72,6 @@
       "presenterClassName": "FilesMenu"
     },
     {
-      "name": "task-item",
-      "type": "components",
-      "presenterClassName": "TaskItem"
-    },
-    {
       "name": "table-editor",
       "type": "components",
       "presenterClassName": "TableEditor"
@@ -127,11 +122,6 @@
       "presenterClassName": "ConfirmActionModal"
     },
     {
-      "name": "document-tasks-modal",
-      "type": "modals",
-      "presenterClassName": "DocumentTasksModal"
-    },
-    {
       "name": "show-error-modal",
       "type": "modals",
       "presenterClassName": "ShowErrorModal"
@@ -180,31 +170,6 @@
       "name": "plugin-settings-modal",
       "type": "modals",
       "presenterClassName": "PluginSettingsModal"
-    },
-    {
-      "name": "backlog-create-modal",
-      "type": "modals",
-      "presenterClassName": "BacklogCreateModal"
-    },
-    {
-      "name": "backlog-create-file-modal",
-      "type": "modals",
-      "presenterClassName": "BacklogCreateFileModal"
-    },
-    {
-      "name": "backlog-conflict-modal",
-      "type": "modals",
-      "presenterClassName": "BacklogConflictModal"
-    },
-    {
-      "name": "backlog-panel",
-      "type": "components",
-      "presenterClassName": "BacklogPanel"
-    },
-    {
-      "name": "backlog-task-row",
-      "type": "components",
-      "presenterClassName": "BacklogTaskRow"
     }
   ],
   "services": []
