@@ -10,6 +10,86 @@ import {
 
 export function attachFsActions(fileExp) {
     Object.assign(fileExp, {
+        resolveUploadTargetPath(targetPath = this.state.selectedPath) {
+            const fallbackPath = this.state.path || '/';
+            const raw = typeof targetPath === 'string' && targetPath.trim() ? targetPath.trim() : fallbackPath;
+            const normalizedTarget = this.normalizePath(raw);
+            const selectedEntry = Array.isArray(this.state.entries)
+                ? this.state.entries.find((entry) => this.normalizePath(entry.path) === normalizedTarget)
+                : null;
+            if (selectedEntry?.type === 'directory') {
+                return normalizedTarget;
+            }
+            if (selectedEntry?.type === 'file') {
+                return this.parentPath(normalizedTarget) || '/';
+            }
+            return this.normalizePath(fallbackPath);
+        },
+
+        openUploadPicker(element) {
+            const input = this.element.querySelector('#fileUploadInput');
+            if (!input) {
+                this.showStatus('Upload input is unavailable.', true);
+                return;
+            }
+            const targetPath = element?.dataset?.targetPath || this.state.selectedPath || this.state.path || '/';
+            input.dataset.targetPath = this.resolveUploadTargetPath(targetPath);
+            input.value = '';
+            input.click();
+        },
+
+        uploadHere(element) {
+            this.closeActionMenu(false);
+            this.openUploadPicker(element);
+        },
+
+        async handleUploadSelection(event) {
+            const input = event?.target;
+            const files = Array.from(input?.files || []);
+            if (!files.length) return;
+
+            const targetDir = this.resolveUploadTargetPath(input?.dataset?.targetPath || this.state.selectedPath || this.state.path);
+            const uploadedPaths = [];
+            try {
+                await this.withLoader(async () => {
+                    for (const file of files) {
+                        const targetPath = this.joinPath(targetDir, file.name);
+                        const response = await fetch(`/upload?path=${encodeURIComponent(targetPath)}`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': file.type || 'application/octet-stream'
+                            },
+                            body: file
+                        });
+                        const payload = await response.json().catch(() => ({}));
+                        if (!response.ok || payload?.ok === false) {
+                            throw new Error(payload?.error || `Failed to upload ${file.name}.`);
+                        }
+                        uploadedPaths.push(targetPath);
+                    }
+
+                    this.bumpWorkspaceVersion?.();
+                    invalidateFsMutationCaches(this, {
+                        directories: [targetDir, this.state.path],
+                        files: uploadedPaths
+                    });
+                    await this.loadDirectory(this.state.path);
+                    this.showStatus(
+                        uploadedPaths.length === 1
+                            ? `Uploaded ${files[0].name}.`
+                            : `Uploaded ${uploadedPaths.length} files.`
+                    );
+                });
+            } catch (err) {
+                console.error(err);
+                this.showStatus(err.message || 'Failed to upload files.', true);
+            } finally {
+                if (input) {
+                    input.value = '';
+                }
+            }
+        },
+
         async deleteEntry(element) {
             const path = element.dataset.entryPath;
             const type = element.dataset.type;

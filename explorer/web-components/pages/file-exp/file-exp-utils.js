@@ -217,6 +217,7 @@ export function getFileTypeFromPath(path) {
 const imageExtensions = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'tiff', 'tif'];
 const audioExtensions = ['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a'];
 const videoExtensions = ['mp4', 'webm', 'ogv', 'mov', 'm4v', 'avi', 'mkv'];
+const pdfExtensions = ['pdf'];
 
 export function isImageFile(path) {
     const ext = getFileTypeFromPath(path);
@@ -231,6 +232,11 @@ export function isAudioFile(path) {
 export function isVideoFile(path) {
     const ext = getFileTypeFromPath(path);
     return videoExtensions.includes(ext);
+}
+
+export function isPdfFile(path) {
+    const ext = getFileTypeFromPath(path);
+    return pdfExtensions.includes(ext);
 }
 
 export function prepareMarkdownPreviewContent(rawText) {

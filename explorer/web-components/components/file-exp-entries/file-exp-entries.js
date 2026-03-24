@@ -259,6 +259,14 @@ export class FileExpEntries {
 
         if (type === 'directory') {
             dropdown.appendChild(this.createMenuItem({
+                action: 'uploadHere',
+                label: 'Upload here',
+                entryPath,
+                type,
+                extraDataset: { targetPath: entryPath },
+                iconNode: createIconImage('./assets/icons/upload.svg')
+            }));
+            dropdown.appendChild(this.createMenuItem({
                 action: 'pasteClipboard',
                 label: 'Paste into',
                 entryPath,
@@ -481,6 +489,10 @@ export class FileExpEntries {
 
     pasteClipboard(...args) {
         return this.delegateAction('pasteClipboard', ...args);
+    }
+
+    uploadHere(...args) {
+        return this.delegateAction('uploadHere', ...args);
     }
 
     deleteEntry(...args) {

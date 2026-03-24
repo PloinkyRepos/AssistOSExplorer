@@ -2,6 +2,7 @@ import {
     isImageFile,
     isAudioFile,
     isVideoFile,
+    isPdfFile,
     renderMarkdownPreview,
     renderCodePreview,
     scrollToLine,
@@ -86,6 +87,35 @@ export async function tryLoadMediaPreview(fileExp, filePath, { requestTimeoutMs 
     }
 }
 
+export async function tryLoadPdfPreview(fileExp, filePath) {
+    if (!isPdfFile(filePath)) {
+        return false;
+    }
+
+    const src = fileExp.buildWebViewUrl(filePath);
+    if (!src) {
+        fileExp.showStatus('Could not build PDF preview URL.', true);
+        return false;
+    }
+
+    const safeName = String(filePath || '').split('/').pop() || 'PDF document';
+    const escapedSrc = src.replace(/"/g, '&quot;');
+    const escapedTitle = safeName.replace(/"/g, '&quot;');
+
+    fileExp.setPreviewState({
+        previewMode: 'pdf',
+        mediaType: 'pdf',
+        previewContent: `<iframe class="media-pdf" src="${escapedSrc}" title="Preview of ${escapedTitle}"></iframe>`,
+        selectedIsMarkdown: false,
+        fileContent: '',
+        markdownTextView: false,
+        documentId: null,
+        hasUnsavedChanges: false,
+        isEditing: false
+    });
+    return true;
+}
+
 export async function openFile(fileExp, filePath, {
     largeFilePreviewLimitBytes,
     largeFilePreviewLines,
@@ -103,6 +133,14 @@ export async function openFile(fileExp, filePath, {
                 mediaType: null,
                 fileLoadInfo: null
             });
+            if (await tryLoadPdfPreview(fileExp, filePath)) {
+                if (invalidate) {
+                    fileExp.invalidate();
+                } else {
+                    fileExp.refreshPreviewUi();
+                }
+                return;
+            }
             if (await tryLoadMediaPreview(fileExp, filePath, { requestTimeoutMs: effectiveTimeoutMs })) {
                 if (invalidate) {
                     fileExp.invalidate();

@@ -243,6 +243,14 @@ export function renderStandardPreview(fileExp, refs, previewUiState) {
 
     clearMountElement(refs.componentMount);
 
+    if (fileExp.state.previewMode === 'pdf') {
+        fileExp.detachPreviewAnchorHandler();
+        toggleHidden(fileExp, refs.filePreview, true);
+        toggleHidden(fileExp, refs.mediaPreview, false);
+        refs.mediaPreview.innerHTML = fileExp.state.previewContent || '<div class="preview-placeholder">Unable to preview PDF.</div>';
+        return;
+    }
+
     if (fileExp.state.previewMode === 'media') {
         fileExp.detachPreviewAnchorHandler();
         toggleHidden(fileExp, refs.filePreview, true);

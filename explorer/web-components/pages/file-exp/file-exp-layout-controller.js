@@ -58,6 +58,7 @@ export async function runAfterRender(fileExp, options = {}) {
     const toolbarMenu = fileExp.element.querySelector('#toolbarMenu');
     const accountMenuButton = fileExp.element.querySelector('#accountMenuButton');
     const accountMenu = fileExp.element.querySelector('#accountMenu');
+    const fileUploadInput = fileExp.element.querySelector('#fileUploadInput');
 
     const updateToggleState = () => {
         if (!toggleListButton || !listPanel) return;
@@ -202,6 +203,12 @@ export async function runAfterRender(fileExp, options = {}) {
         accountMenuButton.setAttribute('aria-expanded', accountMenu.classList.contains('open') ? 'true' : 'false');
     } else {
         fileExp.removeDocumentListener('account-menu-outside');
+    }
+
+    if (fileUploadInput) {
+        fileExp.setElementListener('file-upload-input', fileUploadInput, 'change', (event) => {
+            fileExp.handleUploadSelection?.(event);
+        });
     }
 
     const columnCheckboxes = fileExp.element.querySelectorAll('#columnVisibilityMenu input[type="checkbox"]');
