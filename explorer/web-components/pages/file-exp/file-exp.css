@@ -896,6 +896,19 @@ th {
     display: none;
 }
 
+.preview-comments-badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 36px;
+    padding: 0 12px;
+    border-radius: 999px;
+    background: var(--file-exp-subtle-surface);
+    border: 1px solid var(--file-exp-border);
+    color: var(--text-soft);
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
 #markdownViewActions {
     margin-left: auto;
 }
@@ -957,6 +970,7 @@ th {
     flex-direction: column;
     height: 100%;
     min-height: 0;
+    position: relative;
 }
 
 .preview-standard-pane > #filePreview {
@@ -1254,9 +1268,18 @@ th {
     line-height: inherit;
 }
 
-.code-preview-lines span {
+.code-preview-lines span,
+.code-preview-lines button {
     display: block;
     line-height: inherit;
+}
+
+.dpu-comment-popover {
+    position: static;
+}
+
+.dpu-comment-popover.hidden {
+    display: none;
 }
 
 .code-preview-code {

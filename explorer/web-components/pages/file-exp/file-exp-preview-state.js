@@ -10,6 +10,7 @@ function hasTasksPluginEnabled() {
 
 export function getPreviewUiState(state) {
     const selectedPath = state?.selectedPath || '';
+    const isConfidentialVirtual = selectedPath === '/Confidential' || selectedPath.startsWith('/Confidential/');
     const isTruncatedPreview = Boolean(state?.fileLoadInfo?.truncated);
     const isBacklog = selectedPath.endsWith('.backlog') || selectedPath.endsWith('.history');
     const isHistory = selectedPath.endsWith('.history');
@@ -20,8 +21,13 @@ export function getPreviewUiState(state) {
     const viewMode = isHtml ? (state?.previewViewMode || 'code') : 'code';
     const codeHidden = Boolean(isHtml && viewMode === 'split' && state?.webViewCodePaneHidden);
     const webHidden = Boolean(isHtml && viewMode === 'split' && state?.webViewPaneHidden);
+    const canEditDpuFile = Boolean(
+        isConfidentialVirtual
+        && state?.dpuSelectedCanWrite
+    );
     const canEdit = Boolean(
         selectedPath
+        && (!isConfidentialVirtual || canEditDpuFile)
         && state?.previewMode !== 'media'
         && state?.previewMode !== 'pdf'
         && !isPdf

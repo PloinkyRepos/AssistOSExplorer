@@ -1,6 +1,7 @@
 import { PREVIEW_ACTIONS } from "./file-exp-preview-controller.js";
 import { renderCodePreview, renderMarkdownPreview } from "./file-exp-utils.js";
 import { getPreviewUiState } from "./file-exp-preview-state.js";
+import { isDpuSecretPath, isDpuVirtualPath, openDpuFile, updateDpuFile, updateDpuSecret } from "./file-exp-dpu-provider.js";
 
 export async function editFile(fileExp) {
     if (!fileExp?.state?.selectedPath) return;
@@ -49,15 +50,33 @@ export async function saveFile(fileExp) {
 
     const newContent = fileExp.textarea.value;
     try {
-        await fileExp.tooling.writeFile(fileExp.state.selectedPath, newContent);
-        fileExp.bumpWorkspaceVersion?.();
+        if (isDpuVirtualPath(fileExp.state.selectedPath)) {
+            if (!fileExp.state.dpuSelectedCanWrite) {
+                throw new Error('You do not have permission to save this DPU file.');
+            }
+            if (isDpuSecretPath(fileExp.state.selectedPath)) {
+                await updateDpuSecret(fileExp, fileExp.state.selectedPath, {
+                    value: newContent
+                });
+            } else {
+                if (!fileExp.state.dpuSelectedObjectId) {
+                    throw new Error('You do not have permission to save this Confidential file.');
+                }
+                await updateDpuFile(fileExp, fileExp.state.selectedPath, {
+                    content: newContent
+                });
+            }
+        } else {
+            await fileExp.tooling.writeFile(fileExp.state.selectedPath, newContent);
+            fileExp.bumpWorkspaceVersion?.();
+            fileExp.caches.filePreview.invalidateForPath(fileExp.state.selectedPath);
+            fileExp.caches.dirListing.invalidate(fileExp, fileExp.state.path);
+        }
         fileExp.showStatus(`Successfully saved ${fileExp.state.selectedPath}`, false);
         fileExp.setPreviewState({
             fileContent: newContent,
             hasUnsavedChanges: false
         });
-        fileExp.caches.filePreview.invalidateForPath(fileExp.state.selectedPath);
-        fileExp.caches.dirListing.invalidate(fileExp, fileExp.state.path);
 
         if (fileExp.state.selectedIsMarkdown) {
             const previewSource = fileExp.prepareMarkdownPreviewContent(newContent);
@@ -107,6 +126,13 @@ export async function cancelEdit(fileExp) {
         hasUnsavedChanges: false
     });
     fileExp.editorPresenter = null;
+    if (isDpuVirtualPath(fileExp.state.selectedPath)) {
+        await openDpuFile(fileExp, fileExp.state.selectedPath, {
+            showLoader: false,
+            invalidate: false
+        });
+        return;
+    }
     if (fileExp.state.selectedIsMarkdown && fileExp.state.selectedPath) {
         fileExp.bumpWorkspaceVersion?.();
         fileExp.caches.filePreview.invalidateForPath(fileExp.state.selectedPath);

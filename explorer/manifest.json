@@ -7,13 +7,29 @@
     "about": "AssistOS Explorer agent",
     "ploinky": "pwd enable",
     "pwd": {
-        "user": "admin",
-        "password": "admin"
+        "users": [
+            {
+                "username": "admin",
+                "password": "admin",
+                "name": "Admin"
+            },
+            {
+                "username": "qa1",
+                "password": "qa1pass",
+                "name": "QA 1"
+            },
+            {
+                "username": "qa2",
+                "password": "qa2pass",
+                "name": "QA 2"
+            }
+        ]
     },
     "enable": [
         "postgres",
         "keycloak",
         "gitAssistant/gitAgent global",
+        "dpuAssistant/dpuAgent global",
         "soplangBuilder/soplangAgent global",
         "tasksAssistant/tasksAgent global",
         "llmAssistant/llmAssistant global"
@@ -26,6 +42,7 @@
     },
     "applicationPlugins": {
         "git": true,
+        "dpu-runtime-support": true,
         "soplang-builder": true,
         "tasks": true
     },

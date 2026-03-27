@@ -4,6 +4,7 @@ import { getCurrentTheme } from "../../../utils/theme.js";
 import { FILE_EXP_REPLACE_COMPLETE_EVENT } from "../../../utils/appEvents.js";
 import { withTimeout } from "../../utils/workspace-search-utils.js";
 import { callExplorerTool } from "../../../services/infrastructure/explorerApi.js";
+import { buildFileExpHash } from "./file-exp-utils.js";
 export function attachSearchController(fileExp) {
     const getState = () => fileExp.state;
     const defaultExclude = 'node_modules,.git';
@@ -353,7 +354,7 @@ export function attachSearchController(fileExp) {
                     fileExp.caches?.filePreview?.invalidateForPath?.(normalized);
                 }
                 await fileExp.openFile(normalized);
-                history.replaceState(null, '', `#file-exp${normalized}`);
+                history.replaceState(null, '', buildFileExpHash(normalized));
             } catch (error) {
                 if (isTimeoutError(error)) {
                     fileExp.showStatus(error.message || 'Opening file timed out. Try again.', true);
@@ -361,7 +362,7 @@ export function attachSearchController(fileExp) {
                 }
                 fileExp.setPendingHighlight(null);
                 await fileExp.loadDirectory(normalized);
-                history.replaceState(null, '', `#file-exp${normalized}`);
+                history.replaceState(null, '', buildFileExpHash(normalized));
             }
         });
     }

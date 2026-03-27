@@ -1,6 +1,16 @@
 import { parseMarkdownDocument, serializeMarkdownDocument } from './markdownDocumentParser.js';
 import { callToolWithLoader } from '../../utils/globalLoader.js';
-import { callExplorerTool } from '../infrastructure/explorerApi.js';
+import { callAgentTool, callExplorerTool, parseToolResult, ToolError } from '../infrastructure/explorerApi.js';
+import {
+    DPU_MY_SPACE_PATH,
+    DPU_SHARED_PATH,
+    isDpuSecretPath,
+    isDpuVirtualPath,
+    normalizeDpuPath,
+    resolveDpuSecretKey
+} from '../dpu/dpuPaths.js';
+import { resolveDpuConfidentialNodeAtPath } from '../dpu/dpuPathResolver.js';
+import { isDpuFileType } from '../dpu/dpuTypes.js';
 
 const resolveAppServices = (appServices) => {
     if (appServices && typeof appServices.callTool === 'function') {
@@ -35,9 +45,74 @@ export default class DocumentFsService {
         return callExplorerTool(name, args, { raw: true });
     }
 
+    async callDpu(name, args = {}) {
+        const raw = await callAgentTool('dpuAgent', name, args, { raw: true });
+        const parsed = parseToolResult(raw);
+        if (!parsed || typeof parsed !== 'object') {
+            throw new ToolError('invalid_dpu_response', `Invalid DPU response for ${name}.`);
+        }
+        if (parsed.ok === false) {
+            throw new ToolError('dpu_error', parsed.error || `DPU call failed: ${name}`, parsed);
+        }
+        return parsed;
+    }
+
+    async resolveDpuConfidentialNode(path) {
+        const normalizedPath = normalizeDpuPath(path);
+        if (normalizedPath === DPU_MY_SPACE_PATH) {
+            const roots = await this.callDpu('dpu_workspace_roots');
+            return {
+                id: roots?.roots?.mySpace?.id || '',
+                type: 'folder',
+                name: 'My Space'
+            };
+        }
+
+        if (normalizedPath === DPU_SHARED_PATH) {
+            return {
+                id: '',
+                type: 'folder',
+                name: 'Shared'
+            };
+        }
+        return resolveDpuConfidentialNodeAtPath(normalizedPath, {
+            getRoots: async () => (await this.callDpu('dpu_workspace_roots'))?.roots || {},
+            listConfidential: async (args) => this.callDpu('dpu_confidential_list', args)
+        });
+    }
+
     async readRaw(path) {
         if (!path) {
             throw new Error('DocumentFsService.readRaw requires a file path.');
+        }
+
+        if (isDpuVirtualPath(path)) {
+            if (isDpuSecretPath(path)) {
+                const secretKey = resolveDpuSecretKey(path);
+                if (!secretKey) {
+                    throw new Error(`DPU secret path is invalid: ${path}`);
+                }
+                const parsed = await this.callDpu('dpu_secret_get', { key: secretKey });
+                const secret = parsed.secret || {};
+                if (!secret.valueVisible) {
+                    throw new Error(`DPU secret is not readable: ${path}`);
+                }
+                return String(secret.value ?? '');
+            }
+
+            const node = await this.resolveDpuConfidentialNode(path);
+            if (!node?.id) {
+                throw new Error(`DPU confidential file not found: ${path}`);
+            }
+            const parsed = await this.callDpu('dpu_confidential_get', { id: node.id });
+            const objectRecord = parsed.object || {};
+            if (!isDpuFileType(objectRecord.type, node.type)) {
+                throw new Error(`DPU path is not a file: ${path}`);
+            }
+            if (!objectRecord.contentVisible) {
+                throw new Error(`DPU confidential file is not readable: ${path}`);
+            }
+            return String(objectRecord.content ?? '');
         }
 
         const result = await this.callExplorer('read_text_file', { path });
@@ -58,6 +133,30 @@ export default class DocumentFsService {
     async writeRaw(path, content) {
         if (!path) {
             throw new Error('DocumentFsService.writeRaw requires a file path.');
+        }
+
+        if (isDpuVirtualPath(path)) {
+            if (isDpuSecretPath(path)) {
+                const secretKey = resolveDpuSecretKey(path);
+                if (!secretKey) {
+                    throw new Error(`DPU secret path is invalid: ${path}`);
+                }
+                await this.callDpu('dpu_secret_put', {
+                    key: secretKey,
+                    value: content ?? ''
+                });
+                return;
+            }
+
+            const node = await this.resolveDpuConfidentialNode(path);
+            if (!node?.id) {
+                throw new Error(`DPU confidential file not found: ${path}`);
+            }
+            await this.callDpu('dpu_confidential_update', {
+                id: node.id,
+                content: content ?? ''
+            });
+            return;
         }
 
         await this.callExplorer('write_file', {

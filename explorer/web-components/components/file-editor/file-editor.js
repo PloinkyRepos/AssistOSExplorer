@@ -5,6 +5,7 @@ import { requestLlmAutocomplete } from "../../../services/llmAutocompleteService
 import { callExplorerTool } from "../../../services/infrastructure/explorerApi.js";
 import { EXPLORER_THEME_CHANGE_EVENT, getCurrentTheme } from "../../../utils/theme.js";
 import { HTML_PREVIEW_LIVE_UPDATE_EVENT, normalizePreviewSourcePath } from "../../../utils/htmlPreviewLive.js";
+import { isDpuVirtualPath } from "../../pages/file-exp/file-exp-dpu-provider.js";
 
 export class FileEditor {
     constructor(element, invalidate) {
@@ -30,8 +31,13 @@ export class FileEditor {
     async beforeRender() {
         if (this.state.editorContent === "Loading...") {
             try {
-                const content = await callExplorerTool('read_text_file', { path: this.path });
-                this.state.editorContent = String(content ?? '');
+                if (isDpuVirtualPath(this.path)) {
+                    const fileExp = this.element.closest('file-exp')?.webSkelPresenter || null;
+                    this.state.editorContent = String(fileExp?.state?.fileContent ?? '');
+                } else {
+                    const content = await callExplorerTool('read_text_file', { path: this.path });
+                    this.state.editorContent = String(content ?? '');
+                }
                 this.invalidate();
             } catch (e) {
                 console.error(e);

@@ -161,3 +161,38 @@ test('filterRuntimePluginsByApplicationPolicy removes disabled application plugi
     assert.equal(filtered.application['file-exp:toolbar'].length, 1);
     assert.equal(filtered.application['file-exp:toolbar'][0].component, 'open-builder-button');
 });
+
+test('filterRuntimePluginsByApplicationPolicy keeps enabled internal application plugins', () => {
+    const runtimePlugins = {
+        document: {},
+        application: {
+            'file-exp:internal': [
+                {
+                    id: 'dpu-runtime-support',
+                    pluginCategory: 'application',
+                    location: 'file-exp:internal',
+                    agent: 'dpuAgent',
+                    component: 'dpu-runtime-support'
+                }
+            ],
+            'file-exp:toolbar': [
+                {
+                    id: 'git',
+                    pluginCategory: 'application',
+                    location: 'file-exp:toolbar',
+                    agent: 'gitAgent',
+                    component: 'git-tool-button'
+                }
+            ]
+        }
+    };
+
+    const filtered = filterRuntimePluginsByApplicationPolicy(runtimePlugins, {
+        git: false,
+        'dpu-runtime-support': true
+    });
+
+    assert.equal(filtered.application['file-exp:internal'].length, 1);
+    assert.equal(filtered.application['file-exp:internal'][0].component, 'dpu-runtime-support');
+    assert.equal(filtered.application['file-exp:toolbar'], undefined);
+});

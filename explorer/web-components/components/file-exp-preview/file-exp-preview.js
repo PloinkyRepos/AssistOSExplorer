@@ -46,4 +46,8 @@ export class FileExpPreview {
     openWebPreviewInTab() {
         return this.getHostPresenter()?.openWebPreviewInTab?.();
     }
+
+    deleteDpuComment(target, commentId) {
+        return this.getHostPresenter()?.deleteDpuComment?.(target, commentId);
+    }
 }

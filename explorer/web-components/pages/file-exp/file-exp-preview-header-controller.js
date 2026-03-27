@@ -85,7 +85,7 @@ export function createPreviewHeaderController(host) {
             const elements = getElements();
             if (!elements) return;
 
-            if (elements.headerExtras && !previewUiState.showBacklogPanel && elements.headerExtras.children.length) {
+            if (elements.headerExtras && elements.headerExtras.children.length) {
                 elements.headerExtras.replaceChildren();
             }
             if (elements.previewTitle) {
@@ -99,6 +99,9 @@ export function createPreviewHeaderController(host) {
 
             if (previewUiState.canToggleBacklogView && typeof host.renderBacklogViewToggle === 'function') {
                 host.renderBacklogViewToggle(elements.headerExtras, previewUiState.showBacklogPanel);
+            }
+            if (typeof host.renderDpuCommentActions === 'function') {
+                host.renderDpuCommentActions(elements.headerExtras, previewUiState);
             }
         }
     };

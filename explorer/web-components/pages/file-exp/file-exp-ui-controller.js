@@ -26,6 +26,12 @@ export function getDirectoryResetPatch() {
         markdownTextView: false,
         backlogTextView: false,
         documentId: null,
+        dpuSelectedObjectId: null,
+        dpuSelectedCanWrite: false,
+        dpuSelectedCanComment: false,
+        dpuSelectedCommentCount: 0,
+        dpuSelectedComments: [],
+        dpuCommentsOpen: false,
         isEditing: false,
         hasUnsavedChanges: false,
         openMenuPath: null
@@ -59,6 +65,12 @@ export function fileExpUiReducer(state, action) {
                 'markdownTextView',
                 'backlogTextView',
                 'documentId',
+                'dpuSelectedObjectId',
+                'dpuSelectedCanWrite',
+                'dpuSelectedCanComment',
+                'dpuSelectedCommentCount',
+                'dpuSelectedComments',
+                'dpuCommentsOpen',
                 'hasUnsavedChanges',
                 'isEditing'
             ]);

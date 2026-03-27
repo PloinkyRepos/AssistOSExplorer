@@ -1,4 +1,5 @@
 import { FILE_EXP_UI_ACTIONS } from "./file-exp-ui-controller.js";
+import { buildFileExpHash } from "./file-exp-utils.js";
 
 export async function selectEntry(fileExp, element) {
     const path = element.dataset.entryPath;
@@ -24,7 +25,7 @@ export async function selectEntry(fileExp, element) {
     }
 
     if (type === 'file') {
-        const newUrl = `#file-exp${path}`;
+        const newUrl = buildFileExpHash(path);
         if (window.location.hash !== newUrl) {
             history.pushState(null, '', newUrl);
         }
@@ -47,7 +48,7 @@ export async function selectEntry(fileExp, element) {
             await fileExp.setEntries(entries);
             fileExp.state.selectedPath = path;
             await fileExp.openFile(path);
-            const newUrl = `#file-exp${path}`;
+            const newUrl = buildFileExpHash(path);
             if (window.location.hash !== newUrl) {
                 history.pushState(null, '', newUrl);
             }

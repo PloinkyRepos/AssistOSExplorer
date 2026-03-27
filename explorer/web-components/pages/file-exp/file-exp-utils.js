@@ -2,10 +2,37 @@ import { unescapeHtmlEntities } from "../../../imports.js";
 import { stripAchilesComments as stripDocumentComments } from "../../../services/document/markdownDocumentParser.js";
 import { highlightCode } from "../../../utils/highlight.js";
 
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
 export function normalizePath(pathStr) {
     if (!pathStr) return '/';
     const parts = String(pathStr).split('/').filter(Boolean);
     return '/' + parts.join('/');
+}
+
+export function buildFileExpHash(pathStr) {
+    const normalized = normalizePath(pathStr);
+    return `#file-exp${encodeURI(normalized)}`;
+}
+
+export function encodeLocalActionPathArg(pathStr) {
+    return encodeURIComponent(normalizePath(pathStr));
+}
+
+export function decodeLocalActionPathArg(value) {
+    if (typeof value !== 'string' || !value.length) {
+        return '/';
+    }
+    try {
+        return normalizePath(decodeURIComponent(value));
+    } catch (_) {
+        return normalizePath(value);
+    }
 }
 
 export function joinPath(base, name) {
@@ -248,10 +275,6 @@ export function prepareMarkdownPreviewContent(rawText) {
 
 export function renderMarkdownPreview(markdown) {
     if (!markdown) return '';
-    const escapeHtml = (value) => value
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
     const renderInline = (value) => {
         let result = value;
         result = result.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
@@ -423,7 +446,7 @@ export function renderCodePreview(content, filePath) {
     const type = getFileTypeFromPath(filePath);
     const highlighted = highlightCode(content || '', type);
     const lines = (content || '').split('\n').length || 1;
-    const lineNumbers = Array.from({ length: lines }, (_, idx) => `<span>${idx + 1}</span>`).join('');
+    const lineNumbers = Array.from({ length: lines }, (_, idx) => `<span data-line-number="${idx + 1}">${idx + 1}</span>`).join('');
     return `
         <div class="code-preview-lines">${lineNumbers}</div>
         <pre class="code-preview-code"><code class="language-${type}">${highlighted}</code></pre>
@@ -460,7 +483,7 @@ export function scrollToLine(rootElement, lineNumber) {
     const previewBody = rootElement.querySelector('.preview-body');
 
     if (linesColumn && codeColumn) {
-        const targetLine = linesColumn.querySelector(`span:nth-child(${lineNumber})`);
+        const targetLine = linesColumn.querySelector(`[data-line-number="${lineNumber}"]`);
         if (!targetLine) return false;
         const lineHeight = Number.parseFloat(getComputedStyle(linesColumn).lineHeight)
             || Number.parseFloat(getComputedStyle(codeColumn).lineHeight)

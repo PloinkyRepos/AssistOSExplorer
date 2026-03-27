@@ -11,6 +11,7 @@ import {
 } from "./file-exp-utils.js";
 import { callExplorerTool } from "../../../services/infrastructure/explorerApi.js";
 import { withTimeout } from "../../utils/workspace-search-utils.js";
+import { isDpuVirtualPath, openDpuFile } from "./file-exp-dpu-provider.js";
 
 const DEFAULT_FILE_READ_TIMEOUT_MS = 12000;
 
@@ -131,8 +132,18 @@ export async function openFile(fileExp, filePath, {
             fileExp.setPreviewState({
                 previewMode: 'code',
                 mediaType: null,
-                fileLoadInfo: null
+                fileLoadInfo: null,
+                dpuSelectedObjectId: null,
+                dpuSelectedCanWrite: false,
+                dpuSelectedCanComment: false,
+                dpuSelectedCommentCount: 0,
+                dpuSelectedComments: [],
+                dpuCommentsOpen: false
             });
+            if (isDpuVirtualPath(filePath)) {
+                await openDpuFile(fileExp, filePath, { invalidate });
+                return;
+            }
             if (await tryLoadPdfPreview(fileExp, filePath)) {
                 if (invalidate) {
                     fileExp.invalidate();
@@ -248,6 +259,12 @@ export async function openFile(fileExp, filePath, {
                 selectedIsMarkdown,
                 markdownTextView: useMarkdownTextViewForHighlight,
                 documentId: null,
+                dpuSelectedObjectId: null,
+                dpuSelectedCanWrite: false,
+                dpuSelectedCanComment: false,
+                dpuSelectedCommentCount: 0,
+                dpuSelectedComments: [],
+                dpuCommentsOpen: false,
                 hasUnsavedChanges: false,
                 previewContent,
                 previewMode,

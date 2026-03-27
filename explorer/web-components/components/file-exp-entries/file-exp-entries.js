@@ -1,3 +1,5 @@
+import { isDpuManagedPath } from "../../pages/file-exp/file-exp-dpu-provider.js";
+
 const VIRTUALIZATION_THRESHOLD = 180;
 const DEFAULT_ROW_HEIGHT = 38;
 const VIRTUALIZATION_OVERSCAN = 10;
@@ -202,7 +204,16 @@ export class FileExpEntries {
         return button;
     }
 
-    createActionsCell(entryPath, type, isMenuOpen, canPasteInto) {
+    createActionsCell(entryPath, type, isMenuOpen, canPasteInto, entry = null) {
+        const isManaged = Boolean(entry?.virtualProvider === 'dpu' || isDpuManagedPath(entryPath));
+        const canWrite = isManaged ? Boolean(entry?.dpuCanWrite) : true;
+        const canCreateChildren = isManaged ? Boolean(entry?.dpuCanCreateChildren) : true;
+        const immutableRoot = isManaged ? Boolean(entry?.dpuImmutableRoot) : false;
+        const disableRename = isManaged ? (!canWrite || immutableRoot) : false;
+        const disableDelete = isManaged ? (!canWrite || immutableRoot) : false;
+        const disableCopyCut = isManaged;
+        const disableUploadHere = isManaged ? !(type === 'directory' && canCreateChildren) : false;
+        const disablePasteInto = isManaged ? true : !canPasteInto;
         const menuId = this.toMenuId(entryPath);
         const actionsCell = document.createElement('td');
         actionsCell.className = 'actions-cell col-actions';
@@ -240,6 +251,7 @@ export class FileExpEntries {
             label: 'Rename',
             entryPath,
             type,
+            disabled: disableRename,
             iconNode: createIconImage('./assets/icons/edit.svg')
         }));
         dropdown.appendChild(this.createMenuItem({
@@ -247,6 +259,7 @@ export class FileExpEntries {
             label: 'Copy',
             entryPath,
             type,
+            disabled: disableCopyCut,
             iconNode: createIconImage('./assets/icons/copy.svg')
         }));
         dropdown.appendChild(this.createMenuItem({
@@ -254,6 +267,7 @@ export class FileExpEntries {
             label: 'Cut',
             entryPath,
             type,
+            disabled: disableCopyCut,
             iconNode: createIconImage('./assets/icons/cut.svg')
         }));
 
@@ -263,6 +277,7 @@ export class FileExpEntries {
                 label: 'Upload here',
                 entryPath,
                 type,
+                disabled: disableUploadHere,
                 extraDataset: { targetPath: entryPath },
                 iconNode: createIconImage('./assets/icons/upload.svg')
             }));
@@ -271,9 +286,20 @@ export class FileExpEntries {
                 label: 'Paste into',
                 entryPath,
                 type,
-                disabled: !canPasteInto,
+                disabled: disablePasteInto,
                 extraDataset: { targetPath: entryPath },
                 iconNode: createIconImage('./assets/icons/paste.svg')
+            }));
+        }
+
+        if (isManaged && !immutableRoot && canWrite) {
+            dropdown.appendChild(this.createMenuItem({
+                action: 'openDpuPermissions',
+                label: 'Permissions',
+                entryPath,
+                type,
+                disabled: false,
+                iconNode: createIconImage('./assets/icons/keys.svg')
             }));
         }
 
@@ -283,6 +309,7 @@ export class FileExpEntries {
             entryPath,
             type,
             destructive: true,
+            disabled: disableDelete,
             iconNode: createIconImage('./assets/icons/trash-can.svg')
         }));
 
@@ -442,7 +469,8 @@ export class FileExpEntries {
                 entryPath,
                 type,
                 openMenuPath === entryPath,
-                Boolean(clipboard) && type === 'directory'
+                Boolean(clipboard) && type === 'directory',
+                entry
             );
 
             row.replaceChildren(nameCell, typeCell, sizeCell, modifiedCell, actionsCell);
@@ -493,6 +521,10 @@ export class FileExpEntries {
 
     uploadHere(...args) {
         return this.delegateAction('uploadHere', ...args);
+    }
+
+    openDpuPermissions(...args) {
+        return this.delegateAction('openDpuPermissions', ...args);
     }
 
     deleteEntry(...args) {

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseToolResult, ensureSuccess, ToolError } from '../../services/infrastructure/explorerApi.js';
+import { callAgentTool, parseToolResult, ensureSuccess, ToolError } from '../../services/infrastructure/explorerApi.js';
 
 test('parseToolResult handles content json block', () => {
     const payload = {

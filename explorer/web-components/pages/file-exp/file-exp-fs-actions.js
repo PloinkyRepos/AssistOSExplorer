@@ -1,5 +1,5 @@
 // File system related UI actions for FileExp, attached to the presenter to keep it lean.
-import { showContextPasteMenu } from "./file-exp-utils.js";
+import { buildFileExpHash, showContextPasteMenu } from "./file-exp-utils.js";
 import { callToolWithLoader } from "../../../utils/globalLoader.js";
 import { FILE_EXP_UI_ACTIONS } from "./file-exp-ui-controller.js";
 import { PREVIEW_ACTIONS } from "./file-exp-preview-controller.js";
@@ -7,9 +7,29 @@ import {
     invalidateFsMutationCaches,
     isSameOrDescendantPath
 } from "./file-exp-fs-mutation-utils.js";
+import {
+    createDpuDirectory,
+    createDpuFile,
+    deleteDpuEntry,
+    getDpuPermissionsTarget,
+    getDpuPathCapabilities,
+    invalidateDpuState,
+    isDpuManagedPath,
+    renameDpuEntry,
+    uploadDpuFiles
+} from "./file-exp-dpu-provider.js";
 
 export function attachFsActions(fileExp) {
     Object.assign(fileExp, {
+        ensureMutableFsPath(targetPath = this.state.path) {
+            const normalized = this.normalizePath(targetPath || '/');
+            if (isDpuManagedPath(normalized)) {
+                this.showStatus('Confidential workspace items are managed by DPU. Explorer filesystem actions are unavailable here.', true);
+                return false;
+            }
+            return true;
+        },
+
         resolveUploadTargetPath(targetPath = this.state.selectedPath) {
             const fallbackPath = this.state.path || '/';
             const raw = typeof targetPath === 'string' && targetPath.trim() ? targetPath.trim() : fallbackPath;
@@ -43,6 +63,59 @@ export function attachFsActions(fileExp) {
             this.openUploadPicker(element);
         },
 
+        async openDpuPermissions(element) {
+            const targetPath = this.normalizePath(element?.dataset?.entryPath || '');
+            if (!targetPath || !isDpuManagedPath(targetPath)) {
+                return;
+            }
+            this.closeActionMenu(false);
+            try {
+                const target = await getDpuPermissionsTarget(this, targetPath);
+                const result = await assistOS.UI.showModal('dpu-permissions-modal', {
+                    agent: 'explorer',
+                    kind: target.kind,
+                    id: target.id,
+                    key: target.key,
+                    path: target.path,
+                    name: target.name
+                }, true);
+                if (!result?.changed) {
+                    return;
+                }
+
+                invalidateDpuState(this, [
+                    this.state.path,
+                    this.state.selectedPath,
+                    targetPath,
+                    '/Confidential/Shared',
+                    '/Confidential/Secrets'
+                ]);
+
+                const refreshedEntries = await this.loadDirectoryContent(this.state.path);
+                if (refreshedEntries !== null) {
+                    await this.setEntries(refreshedEntries);
+                }
+
+                if (this.state.selectedPath && isDpuManagedPath(this.state.selectedPath)) {
+                    const selectedEntryStillVisible = Array.isArray(refreshedEntries)
+                        ? refreshedEntries.some((entry) => this.normalizePath(entry.path) === this.normalizePath(this.state.selectedPath))
+                        : false;
+                    if (selectedEntryStillVisible) {
+                        await this.openFile(this.state.selectedPath, {
+                            showLoader: false,
+                            invalidate: false
+                        });
+                    }
+                }
+
+                this.showStatus('Permissions updated.');
+                this.invalidate();
+            } catch (error) {
+                console.error(error);
+                this.showStatus(this.humanizeFsError(error), true);
+            }
+        },
+
         async handleUploadSelection(event) {
             const input = event?.target;
             const files = Array.from(input?.files || []);
@@ -52,27 +125,38 @@ export function attachFsActions(fileExp) {
             const uploadedPaths = [];
             try {
                 await this.withLoader(async () => {
-                    for (const file of files) {
-                        const targetPath = this.joinPath(targetDir, file.name);
-                        const response = await fetch(`/upload?path=${encodeURIComponent(targetPath)}`, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': file.type || 'application/octet-stream'
-                            },
-                            body: file
-                        });
-                        const payload = await response.json().catch(() => ({}));
-                        if (!response.ok || payload?.ok === false) {
-                            throw new Error(payload?.error || `Failed to upload ${file.name}.`);
+                    if (isDpuManagedPath(targetDir)) {
+                        const capabilities = await getDpuPathCapabilities(this, targetDir);
+                        if (!capabilities.canUpload) {
+                            throw new Error('Uploads are not allowed in this Confidential folder.');
                         }
-                        uploadedPaths.push(targetPath);
+                        const created = await uploadDpuFiles(this, targetDir, files);
+                        uploadedPaths.push(...created.map((item) => this.joinPath(targetDir, item?.name || '')).filter(Boolean));
+                    } else {
+                        if (!this.ensureMutableFsPath(targetDir)) {
+                            return;
+                        }
+                        for (const file of files) {
+                            const targetPath = this.joinPath(targetDir, file.name);
+                            const response = await fetch(`/upload?path=${encodeURIComponent(targetPath)}`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': file.type || 'application/octet-stream'
+                                },
+                                body: file
+                            });
+                            const payload = await response.json().catch(() => ({}));
+                            if (!response.ok || payload?.ok === false) {
+                                throw new Error(payload?.error || `Failed to upload ${file.name}.`);
+                            }
+                            uploadedPaths.push(targetPath);
+                        }
+                        this.bumpWorkspaceVersion?.();
+                        invalidateFsMutationCaches(this, {
+                            directories: [targetDir, this.state.path],
+                            files: uploadedPaths
+                        });
                     }
-
-                    this.bumpWorkspaceVersion?.();
-                    invalidateFsMutationCaches(this, {
-                        directories: [targetDir, this.state.path],
-                        files: uploadedPaths
-                    });
                     await this.loadDirectory(this.state.path);
                     this.showStatus(
                         uploadedPaths.length === 1
@@ -97,9 +181,18 @@ export function attachFsActions(fileExp) {
             if (!confirm(`Are you sure you want to delete ${path}?`)) return;
             try {
                 await this.withLoader(async () => {
-                    const tool = type === 'directory' ? 'delete_directory' : 'delete_file';
-                    await callToolWithLoader('explorer', tool, {path});
-                    this.bumpWorkspaceVersion?.();
+                    if (isDpuManagedPath(path)) {
+                        const capabilities = await getDpuPathCapabilities(this, path);
+                        if (!capabilities.canDelete) {
+                            throw new Error('You do not have permission to delete this Confidential item.');
+                        }
+                        await deleteDpuEntry(this, path);
+                    } else {
+                        if (!this.ensureMutableFsPath(path)) return;
+                        const tool = type === 'directory' ? 'delete_directory' : 'delete_file';
+                        await callToolWithLoader('explorer', tool, {path});
+                        this.bumpWorkspaceVersion?.();
+                    }
                     this.showStatus(`Successfully deleted ${path}`);
 
                     if (isSameOrDescendantPath(this, this.state.selectedPath, path)) {
@@ -122,7 +215,7 @@ export function attachFsActions(fileExp) {
                 });
             } catch (err) {
                 console.error(err);
-                this.showStatus(err.message || 'Failed to delete.', true);
+                this.showStatus(this.humanizeFsError(err), true);
             }
         },
 
@@ -145,13 +238,22 @@ export function attachFsActions(fileExp) {
             if (destination === source) return;
             try {
                 await this.withLoader(async () => {
-                    await callToolWithLoader('explorer', 'move_file', {source, destination});
-                    this.bumpWorkspaceVersion?.();
-                    invalidateFsMutationCaches(this, {
-                        directories: [parent, this.state.path],
-                        directoryBranches: itemType === 'directory' ? [source] : [],
-                        files: itemType === 'file' ? [source] : []
-                    });
+                    if (isDpuManagedPath(source)) {
+                        const capabilities = await getDpuPathCapabilities(this, source);
+                        if (!capabilities.canRename) {
+                            throw new Error('You do not have permission to rename this Confidential item.');
+                        }
+                        await renameDpuEntry(this, source, newName);
+                    } else {
+                        if (!this.ensureMutableFsPath(source)) return;
+                        await callToolWithLoader('explorer', 'move_file', {source, destination});
+                        this.bumpWorkspaceVersion?.();
+                        invalidateFsMutationCaches(this, {
+                            directories: [parent, this.state.path],
+                            directoryBranches: itemType === 'directory' ? [source] : [],
+                            files: itemType === 'file' ? [source] : []
+                        });
+                    }
                     const wasSelected = this.state.selectedPath === source;
                     if (this.state.clipboard?.path === source) {
                         this.state.clipboard = {...this.state.clipboard, path: destination, name: newName};
@@ -161,9 +263,13 @@ export function attachFsActions(fileExp) {
                     this.showStatus(`Renamed "${currentName}" to "${newName}".`);
                     if (wasSelected) {
                         this.state.selectedPath = destination;
-                        history.replaceState(null, '', `#file-exp${destination}`);
+                        history.replaceState(null, '', buildFileExpHash(destination));
                         if (itemType === 'file') {
-                            await this.openFile(destination);
+                            if (isDpuManagedPath(destination)) {
+                                await this.selectEntry({ dataset: { entryPath: destination, type: 'file' } });
+                            } else {
+                                await this.openFile(destination);
+                            }
                             return;
                         }
                     }
@@ -171,7 +277,7 @@ export function attachFsActions(fileExp) {
                 });
             } catch (err) {
                 console.error(err);
-                this.showStatus(err.message || 'Failed to rename entry.', true);
+                this.showStatus(this.humanizeFsError(err), true);
             }
         },
 
@@ -179,6 +285,7 @@ export function attachFsActions(fileExp) {
             const path = element?.dataset?.entryPath;
             if (!path) return;
             this.closeActionMenu(false);
+            if (!this.ensureMutableFsPath(path)) return;
             const name = path.split('/').pop();
             this.state.clipboard = {mode: 'copy', path, name, type: element.dataset.type};
             this.showStatus(`Copied "${name}" to clipboard.`);
@@ -189,6 +296,7 @@ export function attachFsActions(fileExp) {
             const path = element?.dataset?.entryPath;
             if (!path) return;
             this.closeActionMenu(false);
+            if (!this.ensureMutableFsPath(path)) return;
             const name = path.split('/').pop();
             this.state.clipboard = {mode: 'cut', path, name, type: element.dataset.type};
             this.showStatus(`Ready to move "${name}".`);
@@ -373,6 +481,9 @@ export function attachFsActions(fileExp) {
             }
             const targetPathRaw = element?.dataset?.targetPath || this.state.path;
             const targetDir = this.normalizePath(targetPathRaw);
+            if (!this.ensureMutableFsPath(targetDir) || !this.ensureMutableFsPath(clipboard.path)) {
+                return;
+            }
             const targetIsCurrentDirectory = targetDir === this.state.path;
             const sourceParent = this.parentPath(clipboard.path) || '/';
             this.closeActionMenu(false);
@@ -468,7 +579,7 @@ export function attachFsActions(fileExp) {
                     if (wasSelectedFile) {
                         this.state.selectedPath = destination;
                         const historyMethod = clipboard.mode === 'cut' ? 'replaceState' : 'pushState';
-                        history[historyMethod](null, '', `#file-exp${destination}`);
+                        history[historyMethod](null, '', buildFileExpHash(destination));
                         await this.openFile(destination);
                         pasteCompleted = true;
                         return;
@@ -490,20 +601,33 @@ export function attachFsActions(fileExp) {
         async newFile() {
             const fileName = prompt('Enter name for the new file:');
             if (!fileName || !fileName.trim()) return;
-            const newFilePath = this.joinPath(this.state.path, fileName.trim());
             try {
                 let shouldSelect = false;
+                let createdPath = null;
+                let createdType = 'file';
                 await this.withLoader(async () => {
-                    await callToolWithLoader('explorer', 'write_file', {
-                        path: newFilePath,
-                        content: ''
-                    });
-                    this.bumpWorkspaceVersion?.();
-                    this.showStatus(`Created file: ${newFilePath}`);
-                    invalidateFsMutationCaches(this, {
-                        directories: [this.state.path],
-                        files: [newFilePath]
-                    });
+                    if (isDpuManagedPath(this.state.path)) {
+                        const capabilities = await getDpuPathCapabilities(this, this.state.path);
+                        if (!capabilities.canCreateFiles) {
+                            throw new Error('New files are not allowed in this Confidential folder.');
+                        }
+                        const created = await createDpuFile(this, this.state.path, fileName.trim(), { content: '' });
+                        createdPath = this.joinPath(this.state.path, created?.name || fileName.trim());
+                        createdType = created?.type || 'file';
+                    } else {
+                        if (!this.ensureMutableFsPath(this.state.path)) return;
+                        createdPath = this.joinPath(this.state.path, fileName.trim());
+                        await callToolWithLoader('explorer', 'write_file', {
+                            path: createdPath,
+                            content: ''
+                        });
+                        this.bumpWorkspaceVersion?.();
+                        invalidateFsMutationCaches(this, {
+                            directories: [this.state.path],
+                            files: [createdPath]
+                        });
+                    }
+                    this.showStatus(`Created file: ${createdPath}`);
                     const entries = await this.loadDirectoryContent(this.state.path);
                     if (entries === null) {
                         return;
@@ -513,31 +637,40 @@ export function attachFsActions(fileExp) {
                     shouldSelect = true;
                 });
                 if (shouldSelect) {
-                    await this.selectEntry({ dataset: { entryPath: newFilePath, type: 'file' } });
+                    await this.selectEntry({ dataset: { entryPath: createdPath, type: createdType } });
                 }
             } catch (err) {
                 console.error(err);
-                this.showStatus(err.message || 'Failed to create file.', true);
+                this.showStatus(this.humanizeFsError(err), true);
             }
         },
 
         async newDirectory() {
             const dirName = prompt('Enter name for the new directory:');
             if (!dirName || !dirName.trim()) return;
-            const newDirPath = this.joinPath(this.state.path, dirName.trim());
             try {
                 await this.withLoader(async () => {
-                    await callToolWithLoader('explorer', 'create_directory', {path: newDirPath});
-                    this.bumpWorkspaceVersion?.();
+                    if (isDpuManagedPath(this.state.path)) {
+                        const capabilities = await getDpuPathCapabilities(this, this.state.path);
+                        if (!capabilities.canCreateDirectories) {
+                            throw new Error('New folders are not allowed in this Confidential location.');
+                        }
+                        await createDpuDirectory(this, this.state.path, dirName.trim());
+                    } else {
+                        if (!this.ensureMutableFsPath(this.state.path)) return;
+                        const newDirPath = this.joinPath(this.state.path, dirName.trim());
+                        await callToolWithLoader('explorer', 'create_directory', {path: newDirPath});
+                        this.bumpWorkspaceVersion?.();
+                        invalidateFsMutationCaches(this, {
+                            directories: [this.state.path]
+                        });
+                    }
                     this.showStatus(`Successfully created directory.`);
-                    invalidateFsMutationCaches(this, {
-                        directories: [this.state.path]
-                    });
                     await this.loadDirectory(this.state.path);
                 });
             } catch (err) {
                 console.error(err);
-                this.showStatus(err.message || 'Failed to create directory.', true);
+                this.showStatus(this.humanizeFsError(err), true);
             }
         }
     });

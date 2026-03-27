@@ -1,5 +1,6 @@
 import { FILE_EXP_UI_ACTIONS } from "./file-exp-ui-controller.js";
 import { PREVIEW_ACTIONS } from "./file-exp-preview-controller.js";
+import { buildFileExpHash, encodeLocalActionPathArg } from "./file-exp-utils.js";
 
 export async function loadStateFromURL(fileExp) {
     const rawPath = window.location.hash.split('#file-exp')[1] || '/';
@@ -44,7 +45,7 @@ export async function loadStateFromURL(fileExp) {
             fileExp.state.isEditing = false;
             await fileExp.setEntries(parentEntries);
             await fileExp.openFile(path);
-            const newUrl = `#file-exp${path}`;
+            const newUrl = buildFileExpHash(path);
             if (window.location.hash !== newUrl) {
                 history.pushState(null, '', newUrl);
             }
@@ -74,7 +75,7 @@ export async function loadDirectory(fileExp, path = fileExp.state.path) {
         const normalizedPath = fileExp.normalizePath(path);
         fileExp.state.path = normalizedPath;
 
-        const newUrl = `#file-exp${normalizedPath}`;
+        const newUrl = buildFileExpHash(normalizedPath);
         if (window.location.hash !== newUrl) {
             history.pushState(null, '', newUrl);
         }
@@ -128,7 +129,7 @@ export function renderBreadcrumbs(fileExp) {
 
     const rootButton = document.createElement('button');
     rootButton.textContent = '/';
-    rootButton.setAttribute('data-local-action', 'openBreadcrumb /');
+    rootButton.setAttribute('data-local-action', `openBreadcrumb ${encodeLocalActionPathArg('/')}`);
     fragment.appendChild(rootButton);
 
     if (!fileExp.state.path || fileExp.state.path === '/') {
@@ -142,7 +143,7 @@ export function renderBreadcrumbs(fileExp) {
         current += `/${segment}`;
         const btn = document.createElement('button');
         btn.textContent = `${segment} /`;
-        btn.setAttribute('data-local-action', `openBreadcrumb ${current}`);
+        btn.setAttribute('data-local-action', `openBreadcrumb ${encodeLocalActionPathArg(current)}`);
         fragment.appendChild(btn);
     });
 

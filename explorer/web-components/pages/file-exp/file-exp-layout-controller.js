@@ -2,6 +2,7 @@ import { saveColumnVisibilityPreference } from "./file-exp-state.js";
 import { renderApplicationPluginSlots } from "./file-exp-application-plugins.js";
 import { getPreviewUiState as derivePreviewUiState } from "./file-exp-preview-state.js";
 import { scrollToLine } from "./file-exp-utils.js";
+import { getDpuPathCapabilities, isDpuManagedPath } from "./file-exp-dpu-provider.js";
 
 export async function runAfterRender(fileExp, options = {}) {
     const previewLinesFallback = Number.isFinite(options.previewLines) ? options.previewLines : 400;
@@ -56,9 +57,33 @@ export async function runAfterRender(fileExp, options = {}) {
     const columnMenu = fileExp.element.querySelector('#columnVisibilityMenu');
     const toolbarMenuButton = fileExp.element.querySelector('#toolbarMenuButton');
     const toolbarMenu = fileExp.element.querySelector('#toolbarMenu');
+    const uploadButton = fileExp.element.querySelector('#uploadButton');
     const accountMenuButton = fileExp.element.querySelector('#accountMenuButton');
     const accountMenu = fileExp.element.querySelector('#accountMenu');
     const fileUploadInput = fileExp.element.querySelector('#fileUploadInput');
+    const managedByDpu = isDpuManagedPath(fileExp.state.path || '/');
+    const dpuCapabilities = managedByDpu
+        ? await getDpuPathCapabilities(fileExp, fileExp.state.path || '/')
+        : null;
+    const allowManagedUploads = Boolean(dpuCapabilities?.canUpload);
+    const allowManagedCreate = Boolean(dpuCapabilities?.canCreateFiles || dpuCapabilities?.canCreateDirectories);
+
+    if (uploadButton) {
+        uploadButton.disabled = managedByDpu ? !allowManagedUploads : false;
+        uploadButton.title = managedByDpu
+            ? (allowManagedUploads
+                ? 'Upload files to this Confidential folder'
+                : 'Uploads are not allowed in this Confidential location.')
+            : 'Upload files';
+    }
+    if (toolbarMenuButton) {
+        toolbarMenuButton.disabled = managedByDpu ? !allowManagedCreate : false;
+        toolbarMenuButton.title = managedByDpu
+            ? (allowManagedCreate
+                ? 'Create items in this Confidential folder'
+                : 'Create actions are not allowed in this Confidential location.')
+            : 'More actions';
+    }
 
     const updateToggleState = () => {
         if (!toggleListButton || !listPanel) return;

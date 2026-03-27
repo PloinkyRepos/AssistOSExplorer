@@ -3,6 +3,51 @@ export function toggleHidden(fileExp, element, hidden = true) {
     element.classList.toggle('hidden', Boolean(hidden));
 }
 
+function syncDpuCommentsHost(fileExp, refs) {
+    if (!refs?.dpuCommentPopover) return;
+    const objectId = String(fileExp.state.dpuSelectedObjectId || '');
+    const shouldMount = Boolean(objectId);
+
+    if (!shouldMount) {
+        clearMountElement(refs.dpuCommentPopover);
+        toggleHidden(fileExp, refs.dpuCommentPopover, true);
+        return;
+    }
+
+    const context = {
+        objectId,
+        path: fileExp.state.selectedPath || '',
+        open: fileExp.state.dpuCommentsOpen,
+        canComment: Boolean(fileExp.state.dpuSelectedCanComment),
+        comments: Array.isArray(fileExp.state.dpuSelectedComments) ? fileExp.state.dpuSelectedComments : []
+    };
+
+    const node = mountPresenterElement(refs.dpuCommentPopover, {
+        key: `dpu-comments-popover:${objectId}`,
+        tagName: 'dpu-comments-popover',
+        attributes: {
+            'data-presenter': 'dpu-comments-popover',
+            'data-object-id': objectId,
+            'data-path': fileExp.state.selectedPath || '',
+            'data-open': fileExp.state.dpuCommentsOpen ? 'true' : 'false'
+        }
+    });
+
+    const presenter = node?.webSkelPresenter;
+    if (presenter && typeof presenter.updateHostContext === 'function') {
+        presenter.updateHostContext(context);
+    } else if (node && typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+        window.requestAnimationFrame(() => {
+            const deferredPresenter = node.webSkelPresenter;
+            if (deferredPresenter && typeof deferredPresenter.updateHostContext === 'function') {
+                deferredPresenter.updateHostContext(context);
+            }
+        });
+    }
+
+    toggleHidden(fileExp, refs.dpuCommentPopover, !fileExp.state.dpuCommentsOpen);
+}
+
 export function createPreviewActionButton(label, action, className = 'preview-pane-action') {
     const button = document.createElement('button');
     button.type = 'button';
@@ -85,9 +130,13 @@ export function ensurePreviewDom(fileExp, previewContent) {
     const componentMount = document.createElement('div');
     componentMount.className = 'preview-component-mount hidden';
 
+    const dpuCommentPopover = document.createElement('div');
+    dpuCommentPopover.className = 'dpu-comment-popover hidden';
+
     standardPane.appendChild(filePreview);
     standardPane.appendChild(mediaPreview);
     standardPane.appendChild(componentMount);
+    standardPane.appendChild(dpuCommentPopover);
 
     const htmlSplit = document.createElement('div');
     htmlSplit.className = 'preview-split hidden';
@@ -161,6 +210,7 @@ export function ensurePreviewDom(fileExp, previewContent) {
         filePreview,
         mediaPreview,
         componentMount,
+        dpuCommentPopover,
         htmlSplit,
         codePane,
         codePaneBody,
@@ -200,6 +250,8 @@ export function renderStandardPreview(fileExp, refs, previewUiState) {
         fileExp.detachPreviewAnchorHandler();
         toggleHidden(fileExp, refs.filePreview, true);
         toggleHidden(fileExp, refs.componentMount, false);
+        clearMountElement(refs.dpuCommentPopover);
+        toggleHidden(fileExp, refs.dpuCommentPopover, true);
         if (fileExp.state.selectedIsMarkdown && fileExp.state.documentId) {
             mountPresenterElement(refs.componentMount, {
                 key: `document-view:${fileExp.state.selectedPath}:${fileExp.state.documentId}`,
@@ -227,6 +279,8 @@ export function renderStandardPreview(fileExp, refs, previewUiState) {
         fileExp.detachPreviewAnchorHandler();
         toggleHidden(fileExp, refs.filePreview, true);
         toggleHidden(fileExp, refs.componentMount, false);
+        clearMountElement(refs.dpuCommentPopover);
+        toggleHidden(fileExp, refs.dpuCommentPopover, true);
         const pathAttr = fileExp.state.selectedPath || '';
         const repoPath = fileExp.parentPath(pathAttr) || '/';
         mountPresenterElement(refs.componentMount, {
@@ -247,6 +301,8 @@ export function renderStandardPreview(fileExp, refs, previewUiState) {
         fileExp.detachPreviewAnchorHandler();
         toggleHidden(fileExp, refs.filePreview, true);
         toggleHidden(fileExp, refs.mediaPreview, false);
+        clearMountElement(refs.dpuCommentPopover);
+        toggleHidden(fileExp, refs.dpuCommentPopover, true);
         refs.mediaPreview.innerHTML = fileExp.state.previewContent || '<div class="preview-placeholder">Unable to preview PDF.</div>';
         return;
     }
@@ -255,6 +311,8 @@ export function renderStandardPreview(fileExp, refs, previewUiState) {
         fileExp.detachPreviewAnchorHandler();
         toggleHidden(fileExp, refs.filePreview, true);
         toggleHidden(fileExp, refs.mediaPreview, false);
+        clearMountElement(refs.dpuCommentPopover);
+        toggleHidden(fileExp, refs.dpuCommentPopover, true);
         const content = fileExp.state.previewContent || '<div class="preview-placeholder">Unable to preview file.</div>';
         refs.mediaPreview.innerHTML = content;
         return;
@@ -262,6 +320,7 @@ export function renderStandardPreview(fileExp, refs, previewUiState) {
 
     toggleHidden(fileExp, refs.mediaPreview, true);
     refs.mediaPreview.textContent = '';
+    syncDpuCommentsHost(fileExp, refs);
 
     if (fileExp.state.selectedIsMarkdown) {
         if (fileExp.state.markdownTextView) {
@@ -278,6 +337,7 @@ export function renderStandardPreview(fileExp, refs, previewUiState) {
             }
             fileExp.attachPreviewAnchorHandler();
         }
+        syncDpuCommentsHost(fileExp, refs);
         return;
     }
 
@@ -288,6 +348,7 @@ export function renderStandardPreview(fileExp, refs, previewUiState) {
         refs.filePreview.textContent = defaultText;
     }
     fileExp.detachPreviewAnchorHandler();
+    syncDpuCommentsHost(fileExp, refs);
 }
 
 export function renderHtmlPreview(fileExp, _refs, previewUiState, previewContent) {

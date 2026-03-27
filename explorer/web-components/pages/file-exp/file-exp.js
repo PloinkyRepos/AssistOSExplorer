@@ -2,6 +2,7 @@ import {
     normalizePath,
     joinPath,
     parentPath,
+    decodeLocalActionPathArg,
     formatBytes,
     formatDate,
     sanitizeEntryName,
@@ -43,6 +44,11 @@ import {
     renderHtmlPreview as renderHtmlPreviewImpl,
     renderPreviewPanel as renderPreviewPanelImpl
 } from "./file-exp-preview-renderer.js";
+import {
+    isDpuVirtualPath,
+    listDpuDirectory,
+    mergeDpuRootEntry
+} from "./file-exp-dpu-provider.js";
 
 const LARGE_FILE_PREVIEW_LIMIT_BYTES = 1.5 * 1024 * 1024; // ~1.5MB safety window before transport limits
 const LARGE_FILE_PREVIEW_LINES = 400;
@@ -93,6 +99,8 @@ export class FileExp {
         this.boundOutsideMenuClick = this.handleOutsideMenuClick.bind(this);
         this.boundMenuKeydown = this.handleMenuKeydown.bind(this);
         this.boundContextMenu = this.handleContextMenu.bind(this);
+        this.boundHandleDpuCommentsState = this.handleDpuCommentsState.bind(this);
+        this.boundHandleDpuCommentsClose = this.handleDpuCommentsClose.bind(this);
 
         this.caches = createFileExpCaches();
         this.inflightDirListing = new Map();
@@ -101,6 +109,8 @@ export class FileExp {
         this.tooling = createFileExpTooling();
         this.lastLoadError = null;
         this.previewDom = null;
+        this.setElementListener('file-exp-dpu-comments-state', this.element, 'dpu-comments-state', this.boundHandleDpuCommentsState);
+        this.setElementListener('file-exp-dpu-comments-close', this.element, 'dpu-comments-close', this.boundHandleDpuCommentsClose);
     }
 
     async withLoader(fn) {
@@ -244,36 +254,60 @@ export class FileExp {
     }
 
     async loadDirectoryContent(path) {
+        const normalizedPath = this.normalizePath(path);
+        if (isDpuVirtualPath(normalizedPath)) {
+            try {
+                this.lastLoadError = null;
+                const cached = this.caches.dirListing.get(this, normalizedPath);
+                if (cached) {
+                    return cached;
+                }
+                const entries = await listDpuDirectory(this, normalizedPath);
+                this.caches.dirListing.set(this, normalizedPath, entries);
+                return entries;
+            } catch (err) {
+                this.lastLoadError = err;
+                if (this.isPathNotFoundError(err)) {
+                    return null;
+                }
+                console.error(err);
+                this.showStatus(err.message || 'Failed to load confidential directory.', true);
+                return [];
+            }
+        }
         try {
             this.lastLoadError = null;
-            const cached = this.caches.dirListing.get(this, path);
+            const cached = this.caches.dirListing.get(this, normalizedPath);
             if (cached) {
                 return cached;
             }
             const globalInflight = window.__fileExpInflightDirListing || (window.__fileExpInflightDirListing = new Map());
-            if (this.inflightDirListing.has(path)) {
-                return await this.inflightDirListing.get(path);
+            if (this.inflightDirListing.has(normalizedPath)) {
+                return await this.inflightDirListing.get(normalizedPath);
             }
-            if (globalInflight.has(path)) {
-                return await globalInflight.get(path);
+            if (globalInflight.has(normalizedPath)) {
+                return await globalInflight.get(normalizedPath);
             }
             const request = (async () => {
-            const result = await this.tooling.listDirectoryDetailed(path);
+            const result = await this.tooling.listDirectoryDetailed(normalizedPath);
             const entries = parseDetailedDirectoryListing(result.text);
-            const resolved = entries.map(entry => ({
+            let resolved = entries.map(entry => ({
                 ...entry,
-                path: this.joinPath(path, entry.name)
+                path: this.joinPath(normalizedPath, entry.name)
             }));
-            this.caches.dirListing.set(this, path, resolved);
+            if (normalizedPath === '/') {
+                resolved = await mergeDpuRootEntry(this, resolved);
+            }
+            this.caches.dirListing.set(this, normalizedPath, resolved);
             return resolved;
             })();
-            this.inflightDirListing.set(path, request);
-            globalInflight.set(path, request);
+            this.inflightDirListing.set(normalizedPath, request);
+            globalInflight.set(normalizedPath, request);
             try {
                 return await request;
             } finally {
-                this.inflightDirListing.delete(path);
-                globalInflight.delete(path);
+                this.inflightDirListing.delete(normalizedPath);
+                globalInflight.delete(normalizedPath);
             }
         } catch (err) {
             this.lastLoadError = err;
@@ -559,6 +593,30 @@ export class FileExp {
         button.textContent = showBacklogPanel ? 'View as text' : 'View as backlog';
     }
 
+    renderDpuCommentActions(headerExtras, previewUiState) {
+        if (!headerExtras) return;
+        const canShow = Boolean(
+            this.state.selectedPath
+            && isDpuVirtualPath(this.state.selectedPath)
+            && this.state.dpuSelectedObjectId
+            && !this.state.isEditing
+            && !previewUiState?.showBacklogPanel
+        );
+        if (!canShow) {
+            return;
+        }
+
+        const commentsButton = document.createElement('button');
+        commentsButton.type = 'button';
+        commentsButton.className = 'secondary';
+        commentsButton.setAttribute('data-local-action', this.state.dpuCommentsOpen ? 'closeDpuComments' : 'toggleDpuComments');
+        commentsButton.textContent = this.state.dpuSelectedCommentCount > 0
+            ? `Comments (${this.state.dpuSelectedCommentCount})`
+            : (this.state.dpuSelectedCanComment ? 'Comments' : 'No comments');
+        commentsButton.disabled = !this.state.dpuSelectedCanComment && this.state.dpuSelectedCommentCount <= 0;
+        headerExtras.appendChild(commentsButton);
+    }
+
     async toggleBacklogView() {
         const transition = getNextBacklogViewToggle(this.state);
         if (transition.blocked) {
@@ -576,7 +634,35 @@ export class FileExp {
     }
 
     async openBreadcrumb(_target, path) {
-        await this.loadDirectory(path || '/');
+        await this.loadDirectory(decodeLocalActionPathArg(path));
+    }
+
+    toggleDpuComments() {
+        if (!this.state.dpuSelectedObjectId) {
+            return;
+        }
+        this.setPreviewState({ dpuCommentsOpen: !this.state.dpuCommentsOpen }, { invalidate: true });
+    }
+
+    closeDpuComments() {
+        this.setPreviewState({ dpuCommentsOpen: false }, { invalidate: true });
+    }
+
+    handleDpuCommentsState(event) {
+        const detail = event?.detail || {};
+        if (!detail.objectId || detail.objectId !== this.state.dpuSelectedObjectId) {
+            return;
+        }
+        this.setPreviewState({
+            dpuSelectedCommentCount: Number.parseInt(String(detail.commentCount ?? 0), 10) || 0,
+            dpuSelectedComments: Array.isArray(detail.comments) ? detail.comments : [],
+            dpuSelectedCanComment: detail.canComment === undefined ? this.state.dpuSelectedCanComment : Boolean(detail.canComment),
+            dpuCommentsOpen: true
+        }, { invalidate: true });
+    }
+
+    handleDpuCommentsClose() {
+        this.closeDpuComments();
     }
 
     setPreviewViewMode(_target, mode) {
