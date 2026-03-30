@@ -69,91 +69,6 @@ export function createSchemas(z) {
     key: z.string(),
     enabled: z.boolean()
   });
-  const GitInfoArgsSchema = z.object({ path: z.string() });
-  const GitStatusArgsSchema = z.object({ path: z.string() });
-  const GitDiffArgsSchema = z.object({
-    path: z.string(),
-    file: z.string(),
-    cached: z.boolean().optional().default(false),
-    ref: z.string().optional().nullable().default(null).describe('Optional base ref for diff (e.g. "HEAD"). When set, diff is working tree vs ref.')
-  });
-  const GitStageArgsSchema = z.object({
-    path: z.string(),
-    files: z.array(z.string()).optional().default([])
-  });
-  const GitUnstageArgsSchema = z.object({
-    path: z.string(),
-    files: z.array(z.string()).optional().default([])
-  });
-  const GitUntrackArgsSchema = z.object({
-    path: z.string(),
-    files: z.array(z.string()).optional().default([])
-  });
-  const GitCheckIgnoreArgsSchema = z.object({
-    path: z.string(),
-    files: z.array(z.string()).optional().default([])
-  });
-  const GitRestoreArgsSchema = z.object({
-    path: z.string(),
-    files: z.array(z.string()).optional().default([])
-  });
-  const GitConflictVersionsArgsSchema = z.object({
-    path: z.string(),
-    file: z.string()
-  });
-  const GitCheckoutConflictArgsSchema = z.object({
-    path: z.string(),
-    file: z.string(),
-    source: z.enum(['ours', 'theirs'])
-  });
-  const GitStashArgsSchema = z.object({
-    path: z.string(),
-    includeUntracked: z.boolean().optional().default(true),
-    message: z.string().optional().default('')
-  });
-  const GitStashListArgsSchema = z.object({
-    path: z.string()
-  });
-  const GitStashPopArgsSchema = z.object({
-    path: z.string(),
-    ref: z.string().optional().nullable().default(null),
-    reinstateIndex: z.boolean().optional().default(true)
-  });
-  const GitCommitArgsSchema = z.object({
-    path: z.string(),
-    message: z.string().optional().default(''),
-    amend: z.boolean().optional().default(false),
-    signoff: z.boolean().optional().default(false),
-    userName: z.string().optional().nullable().default(null),
-    userEmail: z.string().optional().nullable().default(null)
-  });
-  const GitPushArgsSchema = z.object({
-    path: z.string(),
-    remote: z.string().optional().nullable().default(null),
-    branch: z.string().optional().nullable().default(null),
-    setUpstream: z.boolean().optional().default(false),
-    token: z.string().optional().nullable().default(null).describe('Optional HTTPS Personal Access Token used for pushing non-interactively.')
-  });
-  const GitPullArgsSchema = z.object({
-    path: z.string(),
-    remote: z.string().optional().nullable().default(null),
-    branch: z.string().optional().nullable().default(null),
-    rebase: z.boolean().optional().default(false),
-    ffOnly: z.boolean().optional().default(true),
-    token: z.string().optional().nullable().default(null).describe('Optional HTTPS Personal Access Token used for pulling non-interactively.')
-  });
-  const GitDiagnoseArgsSchema = z.object({ path: z.string() });
-  const GitIdentityArgsSchema = z.object({ path: z.string() });
-  const GitSetIdentityArgsSchema = z.object({
-    path: z.string(),
-    scope: z.enum(['local', 'global']).optional().default('local'),
-    name: z.string(),
-    email: z.string()
-  });
-  const GitReposOverviewArgsSchema = z.object({
-    path: z.string(),
-    maxRepos: z.number().int().positive().max(500).optional().default(200)
-  });
 
   return {
     ReadTextFileArgsSchema,
@@ -178,26 +93,6 @@ export function createSchemas(z) {
     GetFileInfoArgsSchema,
     CollectIDEPluginsArgsSchema,
     GetPluginSettingsArgsSchema,
-    SetPluginEnabledArgsSchema,
-    GitInfoArgsSchema,
-    GitStatusArgsSchema,
-    GitDiffArgsSchema,
-    GitStageArgsSchema,
-    GitUnstageArgsSchema,
-    GitUntrackArgsSchema,
-    GitCheckIgnoreArgsSchema,
-    GitRestoreArgsSchema,
-    GitConflictVersionsArgsSchema,
-    GitCheckoutConflictArgsSchema,
-    GitStashArgsSchema,
-    GitStashListArgsSchema,
-    GitStashPopArgsSchema,
-    GitCommitArgsSchema,
-    GitPushArgsSchema,
-    GitPullArgsSchema,
-    GitDiagnoseArgsSchema,
-    GitIdentityArgsSchema,
-    GitSetIdentityArgsSchema,
-    GitReposOverviewArgsSchema
+    SetPluginEnabledArgsSchema
   };
 }

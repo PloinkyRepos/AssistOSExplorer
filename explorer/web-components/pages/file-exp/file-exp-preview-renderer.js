@@ -1,3 +1,5 @@
+import { clearOnlyOfficeEditor, renderOnlyOfficeEditor } from "../../../services/onlyoffice/onlyoffice-editor-host.js";
+
 export function toggleHidden(fileExp, element, hidden = true) {
     if (!element) return;
     element.classList.toggle('hidden', Boolean(hidden));
@@ -75,6 +77,7 @@ export function createPreviewCloseButton(action, label) {
 
 export function clearMountElement(mount) {
     if (!mount) return;
+    clearOnlyOfficeEditor(mount);
     mount.textContent = '';
     if (mount.dataset) {
         delete mount.dataset.presenterKey;
@@ -318,8 +321,29 @@ export function renderStandardPreview(fileExp, refs, previewUiState) {
         return;
     }
 
+    if (fileExp.state.previewMode === 'onlyoffice') {
+        fileExp.detachPreviewAnchorHandler();
+        toggleHidden(fileExp, refs.filePreview, true);
+        toggleHidden(fileExp, refs.mediaPreview, true);
+        clearMountElement(refs.dpuCommentPopover);
+        toggleHidden(fileExp, refs.dpuCommentPopover, true);
+        toggleHidden(fileExp, refs.componentMount, false);
+        refs.componentMount.classList.add('onlyoffice-editor-host');
+
+        if (fileExp.state.onlyOfficeConfig) {
+            renderOnlyOfficeEditor(refs.componentMount, fileExp.state.onlyOfficeConfig).catch((error) => {
+                console.error('OnlyOffice editor mount failed', error);
+                refs.componentMount.innerHTML = `<div class="preview-placeholder">${error?.message || 'OnlyOffice preview is unavailable.'}</div>`;
+            });
+        } else {
+            refs.componentMount.innerHTML = `<div class="preview-placeholder">${fileExp.state.onlyOfficeStatusText || 'OnlyOffice preview is unavailable.'}</div>`;
+        }
+        return;
+    }
+
     toggleHidden(fileExp, refs.mediaPreview, true);
     refs.mediaPreview.textContent = '';
+    refs.componentMount.classList.remove('onlyoffice-editor-host');
     syncDpuCommentsHost(fileExp, refs);
 
     if (fileExp.state.selectedIsMarkdown) {

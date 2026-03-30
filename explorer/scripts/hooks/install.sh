@@ -9,17 +9,6 @@
 set -e
 
 echo "============================================"
-echo "Installing explorer dependencies..."
+echo "Explorer runtime install hook"
 echo "============================================"
-
-if [ "${PLOINKY_RUNTIME:-}" = "bwrap" ]; then
-    echo "Running under bwrap — skipping apt-get (using host packages)"
-    command -v git >/dev/null || { echo "ERROR: git not found on host"; exit 1; }
-else
-    apt-get update && apt-get install -y git
-fi
-
-echo ""
-echo "============================================"
-echo "Explorer installation complete!"
-echo "============================================"
+echo "No additional OS packages required at container startup."

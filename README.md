@@ -21,6 +21,13 @@ The UI is built on the **WebSkel** framework, and all filesystem operations are 
 
 For a complete guide to the agent's architecture, plugin development, and advanced features, please see the **[Explorer Agent – Detailed Guide](./docs/index.html)**.
 
+Component-level documentation:
+
+- [explorer](./explorer/README.md)
+- [multimedia](./multimedia/README.md)
+- [soplang](./soplang/README.md)
+- [explorerSkillsAgent](./explorerSkillsAgent/README.md)
+
 ---
 
 ## Running with Ploinky

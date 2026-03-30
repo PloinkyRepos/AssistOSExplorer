@@ -1,6 +1,7 @@
 const APP_PLUGIN_SLOTS = Object.freeze({
     toolbar: 'file-exp:toolbar',
-    rightBar: 'file-exp:right-bar'
+    rightBar: 'file-exp:right-bar',
+    internal: 'file-exp:internal'
 });
 
 function getPluginSettingsMap() {
@@ -179,13 +180,17 @@ async function performRenderApplicationPluginSlots(fileExp) {
 
     const toolbarContainer = fileExp.element.querySelector('#fileExpToolbarPlugins');
     const rightBarContainer = fileExp.element.querySelector('#fileExpPluginBar');
+    const internalContainer = fileExp.element.querySelector('#fileExpInternalPlugins');
     const toolbarPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.toolbar);
     const rightBarPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.rightBar);
+    const internalPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.internal);
     const toolbarContext = buildPluginContext(fileExp, APP_PLUGIN_SLOTS.toolbar);
     const rightBarContext = buildPluginContext(fileExp, APP_PLUGIN_SLOTS.rightBar);
+    const internalContext = buildPluginContext(fileExp, APP_PLUGIN_SLOTS.internal);
 
     await mountSlot(toolbarContainer, APP_PLUGIN_SLOTS.toolbar, toolbarPlugins, toolbarContext);
     await mountSlot(rightBarContainer, APP_PLUGIN_SLOTS.rightBar, rightBarPlugins, rightBarContext);
+    await mountSlot(internalContainer, APP_PLUGIN_SLOTS.internal, internalPlugins, internalContext);
 }
 
 export async function renderApplicationPluginSlots(fileExp) {
@@ -220,11 +225,15 @@ export function attachApplicationPluginHost(fileExp) {
     fileExp.registerCleanup?.(() => {
         const toolbarContainer = fileExp.element?.querySelector?.('#fileExpToolbarPlugins');
         const rightBarContainer = fileExp.element?.querySelector?.('#fileExpPluginBar');
+        const internalContainer = fileExp.element?.querySelector?.('#fileExpInternalPlugins');
         if (toolbarContainer) {
             toolbarContainer.replaceChildren();
         }
         if (rightBarContainer) {
             rightBarContainer.replaceChildren();
+        }
+        if (internalContainer) {
+            internalContainer.replaceChildren();
         }
         fileExp.__appPluginRenderPromise = null;
     });

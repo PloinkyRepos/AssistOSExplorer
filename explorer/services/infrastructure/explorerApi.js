@@ -1,4 +1,5 @@
 import { callTool, callToolWithLoader } from '../../utils/globalLoader.js';
+import { getWorkspaceRoot } from '../../utils/workspaceRoot.js';
 
 export class ToolError extends Error {
     constructor(code, message, data = null) {
@@ -12,9 +13,8 @@ export class ToolError extends Error {
 const isNonEmptyString = (value) => typeof value === 'string' && value.trim().length > 0;
 const MISSING_SESSION_TEXT = 'Missing or invalid MCP session';
 let sessionPromptActive = false;
-const PATH_AGENT_NAMES = new Set(['gitAgent', 'tasksAgent']);
-let cachedReposRootAbs = '';
-let reposRootPromise = null;
+let cachedWorkspaceRootAbs = '';
+let workspaceRootPromise = null;
 
 const isMissingSessionError = (error) => {
     const message = error?.message || error?.toString?.() || '';
@@ -110,96 +110,102 @@ export function ensureSuccess(payload) {
     }
 }
 
-async function resolveReposRootAbs() {
-    if (cachedReposRootAbs) return cachedReposRootAbs;
-    if (reposRootPromise) return reposRootPromise;
-    reposRootPromise = (async () => {
-        const gitClient = window.webSkel?.appServices?.getClient?.('gitAgent');
-        if (!gitClient || typeof gitClient.callTool !== 'function') {
-            return cachedReposRootAbs;
-        }
-        const scanPaths = ['.ploinky/repos', '.'];
-        for (const scanPath of scanPaths) {
-            try {
-                const result = await gitClient.callTool('git_repos_overview', { path: scanPath });
-                const parsed = parseToolResult(result);
-                const repos = Array.isArray(parsed?.repos) ? parsed.repos : [];
-                const root = parsed?.reposRoot;
-                if (isNonEmptyString(root) && root.startsWith('/') && repos.length > 0) {
-                    cachedReposRootAbs = root.trim().replace(/\/+$/g, '');
-                    break;
-                }
-            } catch {
-                // ignore, try next path
-            }
-        }
-        reposRootPromise = null;
-        return cachedReposRootAbs;
-    })();
-    return reposRootPromise;
+function splitLines(value) {
+    if (!isNonEmptyString(value)) return [];
+    return value
+        .split(/\r?\n/)
+        .map((entry) => entry.trim())
+        .filter(Boolean);
 }
 
-function toAbsoluteRepoPath(input, reposRootAbs) {
+async function resolveWorkspaceRootAbs() {
+    if (cachedWorkspaceRootAbs) return cachedWorkspaceRootAbs;
+    if (workspaceRootPromise) return workspaceRootPromise;
+    workspaceRootPromise = (async () => {
+        const hintedRoot = String(getWorkspaceRoot() || '').trim();
+        if (hintedRoot.startsWith('/') && hintedRoot !== '/') {
+            cachedWorkspaceRootAbs = hintedRoot.replace(/\/+$/g, '');
+            return cachedWorkspaceRootAbs;
+        }
+        try {
+            const result = await callTool('explorer', 'list_allowed_directories', {});
+            const text = extractToolText(result);
+            const roots = splitLines(text).filter((entry) => !/^allowed directories:?$/i.test(entry));
+            const firstRoot = roots.find((entry) => entry.startsWith('/'));
+            if (firstRoot) {
+                cachedWorkspaceRootAbs = firstRoot.replace(/\/+$/g, '');
+            }
+        } catch {
+            // ignore and fall through with empty root
+        }
+        return cachedWorkspaceRootAbs;
+    })().finally(() => {
+        workspaceRootPromise = null;
+    });
+    return workspaceRootPromise;
+}
+
+function toAbsoluteWorkspacePath(input, workspaceRootAbs) {
     const raw = String(input || '').trim();
     if (!raw) return raw;
-    if (raw.startsWith('/.ploinky/repos')) {
-        const suffix = raw.replace(/^\/\.ploinky\/repos/, '');
-        if (!reposRootAbs) return '';
-        return `${reposRootAbs}${suffix}`;
+    if (raw.startsWith('/.ploinky/')) {
+        if (!workspaceRootAbs) return '';
+        return `${workspaceRootAbs}${raw}`;
     }
-    if (raw.startsWith('.ploinky/repos')) {
-        const suffix = raw.replace(/^\.ploinky\/repos/, '');
-        if (!reposRootAbs) return '';
-        return `${reposRootAbs}${suffix.startsWith('/') ? suffix : `/${suffix}`}`;
+    if (raw.startsWith('.ploinky/')) {
+        if (!workspaceRootAbs) return '';
+        return `${workspaceRootAbs}/${raw}`;
     }
     return raw;
 }
 
 async function normalizeAgentArgs(agentName, toolName, args) {
-    if (!PATH_AGENT_NAMES.has(agentName)) {
-        return args;
-    }
-    if (toolName === 'git_repos_overview') {
-        return args;
-    }
     const needsResolve = (() => {
         const check = (value) => typeof value === 'string' && (value.startsWith('/.ploinky/') || value.startsWith('.ploinky/'));
         if (check(args?.path) || check(args?.repoPath) || check(args?.backlogPath)) return true;
         if (Array.isArray(args?.repoPaths) && args.repoPaths.some(check)) return true;
         return false;
     })();
-    const reposRootAbs = needsResolve ? await resolveReposRootAbs() : '';
     const next = { ...(args || {}) };
+    const workspaceRootAbs = needsResolve ? await resolveWorkspaceRootAbs() : '';
+    const resolvedFieldNames = new Set();
 
     if (typeof next.path === 'string') {
-        const resolved = needsResolve ? toAbsoluteRepoPath(next.path, reposRootAbs) : next.path;
+        const resolved = needsResolve ? toAbsoluteWorkspacePath(next.path, workspaceRootAbs) : next.path;
+        if (resolved !== next.path) resolvedFieldNames.add('path');
         next.path = resolved;
     }
     if (typeof next.repoPath === 'string') {
-        const resolved = needsResolve ? toAbsoluteRepoPath(next.repoPath, reposRootAbs) : next.repoPath;
+        const resolved = needsResolve ? toAbsoluteWorkspacePath(next.repoPath, workspaceRootAbs) : next.repoPath;
+        if (resolved !== next.repoPath) resolvedFieldNames.add('repoPath');
         next.repoPath = resolved;
     }
     if (typeof next.backlogPath === 'string') {
-        const resolved = needsResolve ? toAbsoluteRepoPath(next.backlogPath, reposRootAbs) : next.backlogPath;
+        const resolved = needsResolve ? toAbsoluteWorkspacePath(next.backlogPath, workspaceRootAbs) : next.backlogPath;
+        if (resolved !== next.backlogPath) resolvedFieldNames.add('backlogPath');
         next.backlogPath = resolved;
     }
     if (Array.isArray(next.repoPaths)) {
+        const originalRepoPaths = next.repoPaths;
         next.repoPaths = needsResolve
-            ? next.repoPaths.map((entry) => toAbsoluteRepoPath(entry, reposRootAbs))
+            ? next.repoPaths.map((entry) => toAbsoluteWorkspacePath(entry, workspaceRootAbs))
             : next.repoPaths;
+        if (next.repoPaths.some((entry, index) => entry !== originalRepoPaths[index])) {
+            resolvedFieldNames.add('repoPaths');
+        }
     }
 
     const checkAbsolute = (value) => typeof value === 'string' && value.startsWith('/');
-    if (next.path && !checkAbsolute(next.path)) {
+    if (resolvedFieldNames.has('path') && next.path && !checkAbsolute(next.path)) {
         throw new ToolError('invalid_path', 'Path must be an absolute filesystem path.');
     }
-    if (next.repoPath && !checkAbsolute(next.repoPath)) {
+    if (resolvedFieldNames.has('repoPath') && next.repoPath && !checkAbsolute(next.repoPath)) {
         throw new ToolError('invalid_path', 'repoPath must be an absolute filesystem path.');
     }
-    if (next.backlogPath && !checkAbsolute(next.backlogPath)) {
+    if (resolvedFieldNames.has('backlogPath') && next.backlogPath && !checkAbsolute(next.backlogPath)) {
         throw new ToolError('invalid_path', 'backlogPath must be an absolute filesystem path.');
     }
-    if (Array.isArray(next.repoPaths) && next.repoPaths.some((entry) => entry && !checkAbsolute(entry))) {
+    if (resolvedFieldNames.has('repoPaths') && Array.isArray(next.repoPaths) && next.repoPaths.some((entry) => entry && !checkAbsolute(entry))) {
         throw new ToolError('invalid_path', 'repoPaths must be absolute filesystem paths.');
     }
 

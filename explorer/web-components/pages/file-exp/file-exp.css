@@ -427,6 +427,10 @@ main {
     align-items: center;
 }
 
+.app-plugin-internal-slot {
+    display: none;
+}
+
 .list {
     width: var(--file-exp-list-width);
     flex: 0 0 var(--file-exp-list-width);
@@ -1142,6 +1146,19 @@ th {
     display: block;
     height: 100%;
     min-height: 0;
+}
+
+.preview-component-mount.onlyoffice-editor-host {
+    border: 1px solid var(--file-exp-border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--file-exp-panel);
+}
+
+.onlyoffice-editor-frame {
+    width: 100%;
+    height: 100%;
+    min-height: 32rem;
 }
 
 .media-preview {

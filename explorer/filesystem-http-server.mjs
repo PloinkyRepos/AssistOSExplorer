@@ -20,6 +20,7 @@ import { createSchemas } from './utils/server/schemas.mjs';
 import { buildToolDefinitions } from './utils/server/tool-definitions.mjs';
 import { createToolHandlers } from './utils/server/tool-handlers.mjs';
 import { errorResponse } from './utils/server/responses.mjs';
+import { createOnlyOfficeHttpHandler } from './utils/server/onlyoffice/onlyoffice-http-routes.mjs';
 
 const { Server } = mcpServer;
 const { StreamableHTTPServerTransport } = mcpStreamHttp;
@@ -294,6 +295,13 @@ const toolHandlers = createToolHandlers({
   getAllowedDirectories: () => allowedDirectories
 });
 
+const handleOnlyOfficeHttpRequest = createOnlyOfficeHttpHandler({
+  fs,
+  workspaceRoot,
+  validatePath,
+  invalidateCachesForPath
+});
+
 const server = new Server({
   name: 'secure-filesystem-server',
   version: '0.2.0'
@@ -394,18 +402,30 @@ async function main() {
       res.end(payload);
       return;
     }
-    if (parsedUrl.pathname === '/mcp') {
-      transport.handleRequest(req, res).catch((error) => {
-        console.error('[filesystem-http] transport error:', error);
-        if (!res.headersSent) {
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ jsonrpc: '2.0', error: { code: -32603, message: 'Internal server error' }, id: null }));
-        }
-      });
-      return;
-    }
-    res.writeHead(404, { 'Content-Type': 'text/plain' });
-    res.end('Not Found');
+    handleOnlyOfficeHttpRequest(req, res, parsedUrl).then((handled) => {
+      if (handled) {
+        return;
+      }
+      if (parsedUrl.pathname === '/mcp') {
+        transport.handleRequest(req, res).catch((error) => {
+          console.error('[filesystem-http] transport error:', error);
+          if (!res.headersSent) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ jsonrpc: '2.0', error: { code: -32603, message: 'Internal server error' }, id: null }));
+          }
+        });
+        return;
+      }
+      res.writeHead(404, { 'Content-Type': 'text/plain' });
+      res.end('Not Found');
+    }).catch((error) => {
+      console.error('[filesystem-http] onlyoffice route error:', error);
+      if (!res.headersSent) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: 'Internal server error' }));
+      }
+    });
+    return;
   });
 
   httpServer.listen(PORT, () => {

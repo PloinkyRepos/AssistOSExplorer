@@ -33,6 +33,11 @@ Open:
 - Dashboard: `http://127.0.0.1:8080/dashboard`
 - File Explorer UI route: `http://127.0.0.1:8080/#file-exp/`
 
+## Documentation
+
+- [OnlyOffice Integration](./docs/onlyoffice.md)
+- [Confidential Files and DPU](./docs/confidential-files.md)
+
 ## HTML Web Preview Pathing
 
 Explorer Web Preview for `.html` files uses repo-scoped URLs generated from the selected file path:

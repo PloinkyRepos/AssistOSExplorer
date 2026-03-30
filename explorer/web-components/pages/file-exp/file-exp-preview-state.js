@@ -30,6 +30,7 @@ export function getPreviewUiState(state) {
         && (!isConfidentialVirtual || canEditDpuFile)
         && state?.previewMode !== 'media'
         && state?.previewMode !== 'pdf'
+        && state?.previewMode !== 'onlyoffice'
         && !isPdf
         && !isTruncatedPreview
         && !showBacklogPanel

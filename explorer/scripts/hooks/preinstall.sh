@@ -88,6 +88,4 @@ else
     } >> "$secrets_file"
 fi
 
-/bin/bash "$(dirname "$0")/setup-sso.sh" seed || true
-
 exit 0

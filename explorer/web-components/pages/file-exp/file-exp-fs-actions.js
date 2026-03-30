@@ -158,6 +158,14 @@ export function attachFsActions(fileExp) {
                         });
                     }
                     await this.loadDirectory(this.state.path);
+                    if (uploadedPaths.length === 1) {
+                        await this.selectEntry({
+                            dataset: {
+                                entryPath: uploadedPaths[0],
+                                type: 'file'
+                            }
+                        });
+                    }
                     this.showStatus(
                         uploadedPaths.length === 1
                             ? `Uploaded ${files[0].name}.`

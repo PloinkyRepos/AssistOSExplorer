@@ -50,11 +50,14 @@
         "default": {
             "env": [
                 "ASSISTOS_FS_ROOT",
-                "SOUL_GATEWAY_API_KEY"
+                "SOUL_GATEWAY_API_KEY",
+                "ONLYOFFICE_PUBLIC_URL",
+                "ONLYOFFICE_INTERNAL_URL",
+                "ONLYOFFICE_JWT_SECRET",
+                "ONLYOFFICE_CALLBACK_BASE_URL"
             ],
             "preinstall": "scripts/hooks/preinstall.sh",
-            "install": "/code/scripts/hooks/install.sh",
-            "hosthook_postinstall": "scripts/hooks/postinstall-sso.sh"
+            "install": "/code/scripts/hooks/install.sh"
         }
     }
 }

@@ -12,6 +12,7 @@ import {
 import { callExplorerTool } from "../../../services/infrastructure/explorerApi.js";
 import { withTimeout } from "../../utils/workspace-search-utils.js";
 import { isDpuVirtualPath, openDpuFile } from "./file-exp-dpu-provider.js";
+import { tryLoadOnlyOfficePreview } from "../../../services/onlyoffice/onlyoffice-preview-service.js";
 
 const DEFAULT_FILE_READ_TIMEOUT_MS = 12000;
 
@@ -133,6 +134,8 @@ export async function openFile(fileExp, filePath, {
                 previewMode: 'code',
                 mediaType: null,
                 fileLoadInfo: null,
+                onlyOfficeConfig: null,
+                onlyOfficeStatusText: '',
                 dpuSelectedObjectId: null,
                 dpuSelectedCanWrite: false,
                 dpuSelectedCanComment: false,
@@ -140,6 +143,9 @@ export async function openFile(fileExp, filePath, {
                 dpuSelectedComments: [],
                 dpuCommentsOpen: false
             });
+            if (await tryLoadOnlyOfficePreview(fileExp, filePath, { invalidate })) {
+                return;
+            }
             if (isDpuVirtualPath(filePath)) {
                 await openDpuFile(fileExp, filePath, { invalidate });
                 return;

@@ -725,20 +725,49 @@ function isSupportedConfidentialTextUpload(file) {
     ].some((suffix) => name.endsWith(suffix));
 }
 
+function encodeArrayBufferToBase64(buffer) {
+    const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+    if (typeof Buffer !== 'undefined') {
+        return Buffer.from(bytes).toString('base64');
+    }
+    let binary = '';
+    const chunkSize = 0x8000;
+    for (let index = 0; index < bytes.length; index += chunkSize) {
+        const chunk = bytes.subarray(index, index + chunkSize);
+        binary += String.fromCharCode(...chunk);
+    }
+    return btoa(binary);
+}
+
+export async function readConfidentialUploadPayload(file) {
+    const isTextUpload = isSupportedConfidentialTextUpload(file);
+    if (isTextUpload) {
+        return {
+            content: await file.text(),
+            mimeType: file.type || 'text/plain',
+            isBinary: false
+        };
+    }
+
+    const buffer = await file.arrayBuffer();
+    return {
+        content: encodeArrayBufferToBase64(buffer),
+        mimeType: file.type || 'application/octet-stream',
+        isBinary: true
+    };
+}
+
 export async function uploadDpuFiles(fileExp, parentPath, files = []) {
     const parentNode = await ensureDpuWritableDirectory(fileExp, parentPath);
     const created = [];
     for (const file of files) {
-        if (!isSupportedConfidentialTextUpload(file)) {
-            throw new Error(`Binary upload is not supported yet in Confidential workspace: ${file.name}`);
-        }
-        const content = await file.text();
+        const payload = await readConfidentialUploadPayload(file);
         const response = await callDpuTool('dpu_confidential_create', {
             parentId: parentNode.objectId,
             type: 'file',
             name: file.name,
-            content,
-            mimeType: file.type || 'text/plain'
+            content: payload.content,
+            mimeType: payload.mimeType
         });
         created.push(response.object || null);
     }

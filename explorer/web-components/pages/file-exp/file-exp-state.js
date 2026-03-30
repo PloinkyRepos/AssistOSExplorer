@@ -180,6 +180,8 @@ export function createFileExpState() {
         webViewPaneHidden: false,
         mediaType: null,
         fileLoadInfo: null,
+        onlyOfficeConfig: null,
+        onlyOfficeStatusText: '',
         sortBy: 'name',
         sortDir: 'asc',
         listWidth: loadListWidthPreference(),
