@@ -178,10 +178,30 @@ jobs:
           set_var SOUL_GATEWAY_API_KEY "${SOUL_GATEWAY_API_KEY:-}"
 
           # OnlyOffice public/internal service routing
+          # Write directly to .secrets because ploinky host hooks (preinstall)
+          # only receive PLOINKY_* env vars — ONLYOFFICE_* vars set via
+          # ploinky var are not visible during preinstall.
           set_var ONLYOFFICE_PUBLIC_URL "${ONLYOFFICE_PUBLIC_URL:-}"
           set_var ONLYOFFICE_INTERNAL_URL "${ONLYOFFICE_INTERNAL_URL:-}"
           set_var ONLYOFFICE_CALLBACK_BASE_URL "${ONLYOFFICE_CALLBACK_BASE_URL:-}"
           set_var ONLYOFFICE_JWT_SECRET "${ONLYOFFICE_JWT_SECRET:-}"
+
+          SECRETS_FILE="\$WORK_DIR/.ploinky/.secrets"
+          touch "\$SECRETS_FILE"
+          ensure_secret() {
+            local key="\$1" val="\$2"
+            [ -z "\$val" ] && return 0
+            if grep -q "^\${key}=" "\$SECRETS_FILE" 2>/dev/null; then
+              sed -i "s#^\${key}=.*#\${key}=\${val}#g" "\$SECRETS_FILE"
+            else
+              printf '%s\n' "\${key}=\${val}" >> "\$SECRETS_FILE"
+            fi
+          }
+          sed -i '/^ONLYOFFICE_/d' "\$SECRETS_FILE" 2>/dev/null || true
+          ensure_secret ONLYOFFICE_PUBLIC_URL "${ONLYOFFICE_PUBLIC_URL:-}"
+          ensure_secret ONLYOFFICE_INTERNAL_URL "${ONLYOFFICE_INTERNAL_URL:-}"
+          ensure_secret ONLYOFFICE_CALLBACK_BASE_URL "${ONLYOFFICE_CALLBACK_BASE_URL:-}"
+          ensure_secret ONLYOFFICE_JWT_SECRET "${ONLYOFFICE_JWT_SECRET:-}"
 
           # LLM Provider endpoints
           set_var OPENAI_AXIOLOGIC_KIRO_URL "${OPENAI_AXIOLOGIC_KIRO_URL:-}"
