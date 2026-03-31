@@ -228,7 +228,12 @@ NODE
 
     if [[ -n "$configured_public_url" ]]; then
         public_url="$configured_public_url"
-        case "$public_url" in
+        # Decide whether to manage the local container based on the internal URL
+        # (falls back to public URL). This allows a public tunnel URL (e.g.
+        # https://office.axiologic.dev) while still managing the local container
+        # when the internal URL points to localhost.
+        local check_url="${configured_internal_url:-$configured_public_url}"
+        case "$check_url" in
             http://127.0.0.1:*|https://127.0.0.1:*|http://localhost:*|https://localhost:*|http://host.containers.internal:*|https://host.containers.internal:*)
                 manage_local_service="1"
                 ;;
@@ -291,9 +296,13 @@ NODE
     fi
 
     local preferred_port="${record_host_port:-8082}"
-    if [[ -n "$configured_public_url" ]]; then
+    # Derive preferred port from internal URL first (actual container port),
+    # falling back to public URL. This avoids picking 443 when the public URL
+    # is a tunnel (e.g. https://office.axiologic.dev).
+    local port_source_url="${configured_internal_url:-$configured_public_url}"
+    if [[ -n "$port_source_url" ]]; then
         local configured_port
-        configured_port="$(node - <<'NODE' "$configured_public_url"
+        configured_port="$(node - <<'NODE' "$port_source_url"
 try {
   const parsed = new URL(process.argv[2]);
   process.stdout.write(String(Number(parsed.port || (parsed.protocol === 'https:' ? 443 : 80))));
