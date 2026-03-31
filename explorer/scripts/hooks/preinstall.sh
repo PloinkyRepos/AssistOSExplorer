@@ -14,18 +14,18 @@ workspace_root="${PLOINKY_CWD:-$PWD}"
 # Ensure the Explorer agent runs in global mode so the workspace root is mounted
 # into the container (not just the isolated agent workdir under ./agents/explorer).
 #
-# Ploinky stores enabled agents in JSON at .ploinky/agents (no extension).
+# Ploinky stores enabled agents in JSON at .ploinky/agents.json.
 # We update the record for this agent (and repo, if provided) to:
 # - runMode: global
 # - projectPath: <workspace_root>
-agents_file="${workspace_root}/.ploinky/agents"
+agents_file="${workspace_root}/.ploinky/agents.json"
 if [[ -f "$agents_file" ]]; then
     node - <<'NODE'
 const fs = require('fs');
 const path = require('path');
 
 const workspaceRoot = process.env.PLOINKY_CWD || process.cwd();
-const agentsFile = path.join(workspaceRoot, '.ploinky', 'agents');
+const agentsFile = path.join(workspaceRoot, '.ploinky', 'agents.json');
 
 const agentName = String(process.env.PLOINKY_AGENT_NAME || '').trim() || 'explorer';
 const repoName = String(process.env.PLOINKY_REPO_NAME || '').trim();
