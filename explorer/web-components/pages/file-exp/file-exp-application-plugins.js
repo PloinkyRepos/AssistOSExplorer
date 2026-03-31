@@ -4,6 +4,8 @@ const APP_PLUGIN_SLOTS = Object.freeze({
     internal: 'file-exp:internal'
 });
 
+import { sortRuntimePluginEntries } from "../../../utils/pluginUtils.core.js";
+
 function getPluginSettingsMap() {
     const settings = window.assistOS?.pluginSettings;
     if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
@@ -33,7 +35,9 @@ function getApplicationPluginsForSlot(slot) {
     const plugins = appPlugins && typeof appPlugins === 'object' && !Array.isArray(appPlugins)
         ? appPlugins[slot]
         : null;
-    return Array.isArray(plugins) ? plugins.filter((plugin) => plugin && isPluginEnabled(plugin)) : [];
+    return Array.isArray(plugins)
+        ? sortRuntimePluginEntries(plugins.filter((plugin) => plugin && isPluginEnabled(plugin)))
+        : [];
 }
 
 function encodeContext(context) {
@@ -139,6 +143,7 @@ async function mountSlot(container, slot, plugins, context) {
     };
     const existingMounts = collectExistingMounts(container);
     const seen = new Set();
+    const orderedMounts = [];
 
     for (const plugin of plugins) {
         const key = getPluginKey(plugin);
@@ -164,11 +169,19 @@ async function mountSlot(container, slot, plugins, context) {
         if (pluginElement) {
             updateMountedPluginElement(pluginElement, plugin, contextWithOrientation);
         }
+
+        orderedMounts.push(mount);
     }
 
     for (const [key, node] of existingMounts.entries()) {
         if (!seen.has(key)) {
             node.remove();
+        }
+    }
+
+    for (const node of orderedMounts) {
+        if (node && node.parentNode === container) {
+            container.appendChild(node);
         }
     }
 }

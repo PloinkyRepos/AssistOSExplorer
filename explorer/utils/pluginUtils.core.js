@@ -51,6 +51,63 @@ export function getApplicationPluginPolicyKey(entry) {
     return agent && component ? `${agent}/${component}` : '';
 }
 
+function normalizeNumericOrder(value) {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : Number.POSITIVE_INFINITY;
+}
+
+function computeStableHash(value) {
+    const input = String(value || '');
+    let hash = 2166136261;
+    for (let index = 0; index < input.length; index += 1) {
+        hash ^= input.charCodeAt(index);
+        hash = Math.imul(hash, 16777619);
+    }
+    return hash >>> 0;
+}
+
+export function getRuntimePluginOrder(entry) {
+    if (!entry || typeof entry !== 'object') {
+        return Number.POSITIVE_INFINITY;
+    }
+    return normalizeNumericOrder(
+        entry.locationOrder ?? entry.order ?? entry.sortOrder
+    );
+}
+
+export function getRuntimePluginStableKey(entry) {
+    const policyKey = getApplicationPluginPolicyKey(entry);
+    if (policyKey) {
+        return policyKey;
+    }
+    const component = isNonEmptyString(entry?.component) ? entry.component.trim() : '';
+    const label = isNonEmptyString(entry?.label) ? entry.label.trim() : '';
+    return component || label || '';
+}
+
+export function compareRuntimePluginEntries(left, right) {
+    const leftOrder = getRuntimePluginOrder(left);
+    const rightOrder = getRuntimePluginOrder(right);
+    if (leftOrder !== rightOrder) {
+        return leftOrder - rightOrder;
+    }
+
+    const leftKey = getRuntimePluginStableKey(left);
+    const rightKey = getRuntimePluginStableKey(right);
+    const hashDelta = computeStableHash(leftKey) - computeStableHash(rightKey);
+    if (hashDelta !== 0) {
+        return hashDelta;
+    }
+
+    return leftKey.localeCompare(rightKey, undefined, { sensitivity: 'base' });
+}
+
+export function sortRuntimePluginEntries(entries) {
+    return Array.isArray(entries)
+        ? [...entries].sort(compareRuntimePluginEntries)
+        : [];
+}
+
 function createEmptyRuntimePluginState() {
     return {
         [DOCUMENT_PLUGIN_CATEGORY]: Object.fromEntries(DEFAULT_DOCUMENT_PLUGIN_LOCATIONS.map((loc) => [loc, []])),
@@ -238,6 +295,10 @@ export function normalizeRuntimePlugins(runtimePlugins) {
         }
 
         bucket.push(normalizedEntry);
+    });
+
+    forEachRuntimePluginEntry(normalized, (_entry, { category, location }) => {
+        normalized[category][location] = sortRuntimePluginEntries(normalized[category][location]);
     });
 
     return normalized;

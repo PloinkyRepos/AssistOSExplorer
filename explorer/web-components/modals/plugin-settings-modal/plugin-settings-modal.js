@@ -1,4 +1,5 @@
 import { callExplorerTool, parseToolResult } from "../../../services/infrastructure/explorerApi.js";
+import { compareRuntimePluginEntries, getRuntimePluginOrder } from "../../../utils/pluginUtils.core.js";
 
 function normalizeSettingsMap(parsed) {
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
@@ -30,9 +31,11 @@ function flattenPluginsByKey(pluginBuckets) {
                     label: "",
                     tooltip: "",
                     pluginCategory: category,
-                    locations: []
+                    locations: [],
+                    locationOrder: getRuntimePluginOrder(plugin)
                 };
                 existing.pluginCategory = plugin?.pluginCategory || existing.pluginCategory || category;
+                existing.locationOrder = Math.min(existing.locationOrder, getRuntimePluginOrder(plugin));
                 existing.label = typeof plugin?.label === "string" && plugin.label.trim()
                     ? plugin.label.trim()
                     : existing.label || component;
@@ -51,7 +54,7 @@ function flattenPluginsByKey(pluginBuckets) {
             ...item,
             locations: [...item.locations].sort()
         }))
-        .sort((a, b) => a.key.localeCompare(b.key, undefined, { sensitivity: "base" }));
+        .sort((a, b) => compareRuntimePluginEntries(a, b));
 }
 
 function getCachedRuntimePlugins() {
