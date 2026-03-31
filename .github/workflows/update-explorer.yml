@@ -157,6 +157,10 @@ jobs:
           OPENAI_OPENAI_RESPONSES_URL: ${{ vars.OPENAI_OPENAI_RESPONSES_URL }}
           OPENAI_OPENAI_RESPONSES_KEY_ENV: ${{ vars.OPENAI_OPENAI_RESPONSES_KEY_ENV }}
           LLM_MODELS: ${{ vars.LLM_MODELS }}
+          ONLYOFFICE_PUBLIC_URL: ${{ vars.ONLYOFFICE_PUBLIC_URL }}
+          ONLYOFFICE_INTERNAL_URL: ${{ vars.ONLYOFFICE_INTERNAL_URL }}
+          ONLYOFFICE_CALLBACK_BASE_URL: ${{ vars.ONLYOFFICE_CALLBACK_BASE_URL }}
+          ONLYOFFICE_JWT_SECRET: ${{ secrets.ONLYOFFICE_JWT_SECRET }}
         run: |
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key "${{ env.SSH_USER }}@${{ env.SSH_HOST }}" 'bash -s' << ENVVARS
           set -eo pipefail
@@ -178,6 +182,12 @@ jobs:
           ploinky var PLOINKY_CODE_WRITABLE "1" 2>/dev/null || true
           ploinky var PLOINKY_ROUTER_URL "http://host.containers.internal:${ROUTER_PORT}" 2>/dev/null || true
           ploinky var ASSISTOS_FS_ROOT "\$WORK_DIR" 2>/dev/null || true
+
+          # OnlyOffice public/internal service routing
+          set_var ONLYOFFICE_PUBLIC_URL "${ONLYOFFICE_PUBLIC_URL:-}"
+          set_var ONLYOFFICE_INTERNAL_URL "${ONLYOFFICE_INTERNAL_URL:-}"
+          set_var ONLYOFFICE_CALLBACK_BASE_URL "${ONLYOFFICE_CALLBACK_BASE_URL:-}"
+          set_var ONLYOFFICE_JWT_SECRET "${ONLYOFFICE_JWT_SECRET:-}"
 
           # API Keys
           set_var OPENAI_API_KEY "${OPENAI_API_KEY:-}"

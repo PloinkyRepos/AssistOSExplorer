@@ -52,10 +52,22 @@
             "env": [
                 "ASSISTOS_FS_ROOT",
                 "SOUL_GATEWAY_API_KEY",
-                "ONLYOFFICE_PUBLIC_URL",
-                "ONLYOFFICE_INTERNAL_URL",
-                "ONLYOFFICE_JWT_SECRET",
-                "ONLYOFFICE_CALLBACK_BASE_URL"
+                {
+                    "name": "ONLYOFFICE_PUBLIC_URL",
+                    "required": false
+                },
+                {
+                    "name": "ONLYOFFICE_INTERNAL_URL",
+                    "required": false
+                },
+                {
+                    "name": "ONLYOFFICE_JWT_SECRET",
+                    "required": false
+                },
+                {
+                    "name": "ONLYOFFICE_CALLBACK_BASE_URL",
+                    "required": false
+                }
             ],
             "preinstall": "scripts/hooks/preinstall.sh",
             "install": "/code/scripts/hooks/install.sh"

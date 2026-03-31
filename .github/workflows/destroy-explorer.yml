@@ -69,6 +69,13 @@ jobs:
             done
           fi
 
+          ONLYOFFICE_CONTAINER="ploinky_onlyoffice_${WORKSPACE}"
+          if podman container exists "$ONLYOFFICE_CONTAINER" 2>/dev/null; then
+            echo "[destroy]   stopping $ONLYOFFICE_CONTAINER"
+            podman stop "$ONLYOFFICE_CONTAINER" 2>/dev/null || true
+            podman rm -f "$ONLYOFFICE_CONTAINER" 2>/dev/null || true
+          fi
+
           if [ -d "$WORK_DIR" ]; then
             echo "[destroy] Removing workspace contents..."
             podman unshare rm -rf \
