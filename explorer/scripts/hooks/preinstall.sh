@@ -94,6 +94,83 @@ ensure_secret_var() {
     fi
 }
 
+delete_secret_var() {
+    local name="$1"
+    node - <<'NODE' "$secrets_file" "$name"
+const fs = require('fs');
+const file = process.argv[2];
+const name = process.argv[3];
+try {
+  const lines = fs.readFileSync(file, 'utf8').split('\n');
+  const next = lines.filter((line) => !String(line).startsWith(`${name}=`));
+  fs.writeFileSync(file, next.join('\n'));
+} catch (_) {}
+NODE
+}
+
+resolve_config_var() {
+    local name="$1"
+    node - <<'NODE' "$workspace_root" "$secrets_file" "$name"
+const fs = require('fs');
+const path = require('path');
+
+const workspaceRoot = process.argv[2];
+const secretsFile = process.argv[3];
+const varName = process.argv[4];
+
+function parseEnvFile(file) {
+  const out = {};
+  try {
+    const raw = fs.readFileSync(file, 'utf8');
+    for (const line of raw.split('\n')) {
+      const trimmed = String(line || '').trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const idx = trimmed.indexOf('=');
+      if (idx <= 0) continue;
+      const key = trimmed.slice(0, idx).trim();
+      let value = trimmed.slice(idx + 1).trim();
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1);
+      }
+      out[key] = value;
+    }
+  } catch (_) {}
+  return out;
+}
+
+function readSecrets(file) {
+  return parseEnvFile(file);
+}
+
+const processValue = String(process.env[varName] || '').trim();
+if (processValue) {
+  process.stdout.write(processValue);
+  process.exit(0);
+}
+
+let current = path.resolve(workspaceRoot);
+while (true) {
+  const envFile = path.join(current, '.env');
+  const envMap = parseEnvFile(envFile);
+  const envValue = String(envMap[varName] || '').trim();
+  if (envValue) {
+    process.stdout.write(envValue);
+    process.exit(0);
+  }
+  const parent = path.dirname(current);
+  if (parent === current) break;
+  current = parent;
+}
+
+const secrets = readSecrets(secretsFile);
+const secretValue = String(secrets[varName] || '').trim();
+if (secretValue) {
+  process.stdout.write(secretValue);
+  process.exit(0);
+}
+NODE
+}
+
 ensure_onlyoffice_service() {
     if ! command -v podman >/dev/null 2>&1; then
         return 0
@@ -105,13 +182,15 @@ ensure_onlyoffice_service() {
     local service_file="${services_dir}/onlyoffice.json"
     local container_name="ploinky_onlyoffice_${workspace_name}"
     local image="docker.io/onlyoffice/documentserver:latest"
-    local resolved_jwt_secret="${ONLYOFFICE_JWT_SECRET:-onlyoffice-local-dev-secret-change-me}"
-    local callback_base_url="${ONLYOFFICE_CALLBACK_BASE_URL:-http://host.containers.internal:8080}"
     local record_host_port=""
     local record_container_name=""
     local should_recreate="0"
     local running_state="missing"
     local current_port=""
+    local configured_public_url=""
+    local configured_internal_url=""
+    local configured_callback_base_url=""
+    local configured_jwt_secret=""
 
     mkdir -p "$services_dir"
 
@@ -136,12 +215,95 @@ NODE
         fi
     fi
 
+    configured_public_url="$(resolve_config_var "ONLYOFFICE_PUBLIC_URL")"
+    configured_internal_url="$(resolve_config_var "ONLYOFFICE_INTERNAL_URL")"
+    configured_callback_base_url="$(resolve_config_var "ONLYOFFICE_CALLBACK_BASE_URL")"
+    configured_jwt_secret="$(resolve_config_var "ONLYOFFICE_JWT_SECRET")"
+
+    local public_url=""
+    local internal_url=""
+    local callback_base_url=""
+    local resolved_jwt_secret=""
+    local manage_local_service="1"
+
+    if [[ -n "$configured_public_url" ]]; then
+        public_url="$configured_public_url"
+        case "$public_url" in
+            http://127.0.0.1:*|https://127.0.0.1:*|http://localhost:*|https://localhost:*|http://host.containers.internal:*|https://host.containers.internal:*)
+                manage_local_service="1"
+                ;;
+            *)
+                manage_local_service="0"
+                ;;
+        esac
+    fi
+
+    if [[ "$manage_local_service" == "0" ]]; then
+        if [[ -n "$configured_public_url" ]]; then
+            ensure_secret_var "ONLYOFFICE_PUBLIC_URL" "$configured_public_url"
+        else
+            delete_secret_var "ONLYOFFICE_PUBLIC_URL"
+        fi
+        if [[ -n "$configured_internal_url" ]]; then
+            ensure_secret_var "ONLYOFFICE_INTERNAL_URL" "$configured_internal_url"
+        else
+            delete_secret_var "ONLYOFFICE_INTERNAL_URL"
+        fi
+        if [[ -n "$configured_callback_base_url" ]]; then
+            ensure_secret_var "ONLYOFFICE_CALLBACK_BASE_URL" "$configured_callback_base_url"
+        else
+            delete_secret_var "ONLYOFFICE_CALLBACK_BASE_URL"
+        fi
+        if [[ -n "$configured_jwt_secret" ]]; then
+            ensure_secret_var "ONLYOFFICE_JWT_SECRET" "$configured_jwt_secret"
+        else
+            delete_secret_var "ONLYOFFICE_JWT_SECRET"
+        fi
+
+        node - <<'NODE' "$service_file" "$configured_public_url" "${configured_callback_base_url:-}" "${record_container_name:-}" "$image"
+const fs = require('fs');
+const rawUrl = String(process.argv[3] || '').trim();
+const callbackBaseUrl = String(process.argv[4] || '').trim();
+const containerName = String(process.argv[5] || '').trim();
+const image = String(process.argv[6] || '').trim();
+let hostPort = 0;
+try {
+  const parsed = new URL(rawUrl);
+  hostPort = Number(parsed.port || (parsed.protocol === 'https:' ? 443 : 80));
+} catch (_) {}
+const payload = {
+  containerName: containerName || 'external',
+  image,
+  hostPort,
+  publicUrl: rawUrl,
+  apiJsUrl: rawUrl ? `${rawUrl.replace(/\/+$/g, '')}/web-apps/apps/api/documents/api.js` : '',
+  callbackBaseUrl,
+  updatedAt: new Date().toISOString()
+};
+fs.writeFileSync(process.argv[2], JSON.stringify(payload, null, 2));
+NODE
+        return 0
+    fi
+
     if podman container exists "$container_name" 2>/dev/null; then
         running_state="$(podman inspect -f '{{.State.Status}}' "$container_name" 2>/dev/null || echo missing)"
         current_port="$(podman inspect -f '{{with (index .NetworkSettings.Ports "80/tcp")}}{{(index . 0).HostPort}}{{end}}' "$container_name" 2>/dev/null || true)"
     fi
 
     local preferred_port="${record_host_port:-8082}"
+    if [[ -n "$configured_public_url" ]]; then
+        local configured_port
+        configured_port="$(node - <<'NODE' "$configured_public_url"
+try {
+  const parsed = new URL(process.argv[2]);
+  process.stdout.write(String(Number(parsed.port || (parsed.protocol === 'https:' ? 443 : 80))));
+} catch (_) {}
+NODE
+)"
+        if [[ -n "$configured_port" && "$configured_port" != "80" && "$configured_port" != "443" ]]; then
+            preferred_port="$configured_port"
+        fi
+    fi
     if [[ "$running_state" == "running" && -n "$current_port" ]]; then
         preferred_port="$current_port"
     fi
@@ -211,12 +373,15 @@ NODE
             --restart unless-stopped \
             -p "127.0.0.1:${chosen_port}:80" \
             -e "JWT_ENABLED=true" \
-            -e "JWT_SECRET=${resolved_jwt_secret}" \
+            -e "JWT_SECRET=${configured_jwt_secret:-onlyoffice-local-dev-secret-change-me}" \
             "$image" >/dev/null
     fi
 
-    local public_url="http://127.0.0.1:${chosen_port}"
-    local internal_url="http://host.containers.internal:${chosen_port}"
+    public_url="${configured_public_url:-http://127.0.0.1:${chosen_port}}"
+    internal_url="${configured_internal_url:-http://host.containers.internal:${chosen_port}}"
+    callback_base_url="${configured_callback_base_url:-http://host.containers.internal:8080}"
+    resolved_jwt_secret="${configured_jwt_secret:-onlyoffice-local-dev-secret-change-me}"
+
     ensure_secret_var "ONLYOFFICE_PUBLIC_URL" "$public_url"
     ensure_secret_var "ONLYOFFICE_INTERNAL_URL" "$internal_url"
     ensure_secret_var "ONLYOFFICE_CALLBACK_BASE_URL" "$callback_base_url"

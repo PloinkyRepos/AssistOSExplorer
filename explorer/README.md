@@ -37,6 +37,8 @@ Open:
 
 - [OnlyOffice Integration](./docs/onlyoffice.md)
 - [Confidential Files and DPU](./docs/confidential-files.md)
+- [EX01 - Explorer System Overview](./docs/specs/EX/EX01-system-overview.md)
+- [EX02 - Plugin Hosting And Dependencies](./docs/specs/EX/EX02-plugin-hosting-and-dependencies.md)
 
 ## HTML Web Preview Pathing
 
