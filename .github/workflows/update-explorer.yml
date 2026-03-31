@@ -255,6 +255,8 @@ jobs:
           mkdir -p "$WORK_DIR/logs"
           mkdir -p "$WORK_DIR/.ploinky"
           echo "[update] Restarting explorer on router port $ROUTER_PORT..."
+          echo "[debug] .secrets ONLYOFFICE entries BEFORE ploinky start:"
+          grep ONLYOFFICE "$WORK_DIR/.ploinky/.secrets" || echo "(none)"
 
           LEGACY_AGENTS_FILE="$WORK_DIR/.ploinky/agents"
           AGENTS_REGISTRY_FILE="$WORK_DIR/.ploinky/agents.json"
@@ -323,6 +325,8 @@ jobs:
 
           echo "[update] Containers:"
           podman ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | head -80
+          echo "[debug] .secrets ONLYOFFICE entries AFTER ploinky start:"
+          grep ONLYOFFICE "$WORK_DIR/.ploinky/.secrets" || echo "(none)"
           echo "[update] Restart complete."
           RESTART
 
