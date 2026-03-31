@@ -56,6 +56,8 @@ export class EditVariableTab {
         let command = this.variable.command;
         if(this.variable.conditional){
             command = `?${command}`;
+        } else if(this.variable.forceExecution){
+            command = `!${command}`;
         }
         previewInput.value = `@${this.variable.varName} ${command} ${expression}`;
         previewInput.style.height = "auto";
@@ -92,8 +94,13 @@ export class EditVariableTab {
         let expressionInput = this.element.querySelector("#expression");
         expressionInput.value = this.variable.expression;
         let conditionalCheckbox = this.element.querySelector("#conditional");
+        let forceExecutionCheckbox = this.element.querySelector("#forceExecution");
         if(this.variable.conditional){
             conditionalCheckbox.checked = true;
+            forceExecutionCheckbox.checked = false;
+        } else if(this.variable.forceExecution){
+            forceExecutionCheckbox.checked = true;
+            conditionalCheckbox.checked = false;
         }
         this.originalVarName = this.variable.varName;
         attachEventListeners(this);

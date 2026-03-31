@@ -29,6 +29,14 @@ edit-variable-tab .form-item{
     flex-direction: row;
     align-items: center;
 }
+.force-command-item{
+    flex-direction: row;
+    align-items: center;
+}
+.execution-flags{
+    display: flex;
+    gap: 16px;
+}
 .right-margin{
     margin-right: 10px;
 }
