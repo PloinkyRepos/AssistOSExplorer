@@ -2,6 +2,43 @@ import { FILE_EXP_UI_ACTIONS } from "./file-exp-ui-controller.js";
 import { PREVIEW_ACTIONS } from "./file-exp-preview-controller.js";
 import { buildFileExpHash, encodeLocalActionPathArg } from "./file-exp-utils.js";
 
+async function loadTreeContext(fileExp, targetDirectoryPath, options = {}) {
+    const { selectedPath = null, historyMode = 'push' } = options;
+    const normalizedTargetPath = fileExp.normalizePath(targetDirectoryPath || '/');
+    const treeRootPath = normalizedTargetPath === '/'
+        ? '/'
+        : (fileExp.parentPath(normalizedTargetPath) || '/');
+
+    fileExp.updateNavigationLocation(normalizedTargetPath, {
+        selectedPath,
+        resetContext: true,
+        historyMode,
+        invalidate: false
+    });
+    fileExp.state.treeRootPath = treeRootPath;
+
+    const entries = await fileExp.loadDirectoryContent(treeRootPath);
+    if (entries === null) {
+        return null;
+    }
+
+    await fileExp.setEntries(entries);
+    fileExp.renderBreadcrumbs();
+    fileExp.renderEntries();
+    if (normalizedTargetPath !== treeRootPath) {
+        const entriesPresenter = fileExp.getEntriesPresenter();
+        if (entriesPresenter && typeof entriesPresenter.revealTreeDirectory === 'function') {
+            await entriesPresenter.revealTreeDirectory(normalizedTargetPath, { preserveExisting: false });
+        } else {
+            fileExp.pendingTreeReveal = { path: normalizedTargetPath, preserveExisting: false };
+        }
+    } else {
+        fileExp.pendingTreeReveal = null;
+    }
+
+    return entries;
+}
+
 export async function loadStateFromURL(fileExp) {
     const rawPath = window.location.hash.split('#file-exp')[1] || '/';
     let path = rawPath;
@@ -40,6 +77,19 @@ export async function loadStateFromURL(fileExp) {
         }
 
         if (entry.type === 'file') {
+            if (fileExp.state.directoryViewMode === 'tree') {
+                const loaded = await loadTreeContext(fileExp, parentDir, {
+                    selectedPath: path,
+                    historyMode: 'replace'
+                });
+                if (loaded === null) {
+                    fileExp.showStatus('Path not found. Returning to root.', true);
+                    await fileExp.loadDirectory('/');
+                    return;
+                }
+                await fileExp.openFile(path);
+                return;
+            }
             fileExp.state.path = parentDir;
             fileExp.state.selectedPath = path;
             fileExp.state.isEditing = false;
@@ -73,7 +123,24 @@ export async function loadDirectory(fileExp, path = fileExp.state.path) {
             await fileExp.cancelEdit();
         }
         const normalizedPath = fileExp.normalizePath(path);
+
+        if (fileExp.state.directoryViewMode === 'tree') {
+            const entries = await loadTreeContext(fileExp, normalizedPath, {
+                historyMode: 'push'
+            });
+            if (entries === null) {
+                if (normalizedPath === '/') {
+                    fileExp.showStatus('Root directory is not accessible.', true);
+                    return;
+                }
+                fileExp.showStatus('Path not found. Returning to root.', true);
+                await fileExp.loadDirectory('/');
+            }
+            return;
+        }
+
         fileExp.state.path = normalizedPath;
+        fileExp.state.treeRootPath = normalizedPath;
 
         const newUrl = buildFileExpHash(normalizedPath);
         if (window.location.hash !== newUrl) {
@@ -106,15 +173,29 @@ export async function loadDirectory(fileExp, path = fileExp.state.path) {
 export async function refreshDirectory(fileExp) {
     await fileExp.withLoader(async () => {
         const currentPath = fileExp.state.path || '/';
-        fileExp.caches.dirListing.invalidate(fileExp, currentPath);
-        const entries = await fileExp.loadDirectoryContent(currentPath);
+        const listingPath = fileExp.state.directoryViewMode === 'tree'
+            ? (fileExp.state.treeRootPath || currentPath || '/')
+            : currentPath;
+        fileExp.caches.dirListing.invalidate(fileExp, listingPath);
+        const entries = await fileExp.loadDirectoryContent(listingPath);
         if (entries === null) {
             fileExp.showStatus('Path not found. Returning to root.', true);
             await fileExp.loadDirectory('/');
             return;
         }
         await fileExp.setEntries(entries);
-        fileExp.invalidate();
+        if (fileExp.state.directoryViewMode === 'tree') {
+            fileExp.renderEntries();
+            const entriesPresenter = fileExp.getEntriesPresenter();
+            if (entriesPresenter && typeof entriesPresenter.revealTreeDirectory === 'function') {
+                fileExp.pendingTreeReveal = null;
+                await entriesPresenter.revealTreeDirectory(currentPath, { preserveExisting: true });
+            } else {
+                fileExp.pendingTreeReveal = { path: currentPath, preserveExisting: true };
+            }
+        } else {
+            fileExp.invalidate();
+        }
     });
 
     if (String(fileExp.state.directoryFilterQuery || '').trim().length >= 2) {

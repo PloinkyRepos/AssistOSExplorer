@@ -25,11 +25,20 @@ export async function selectEntry(fileExp, element) {
     }
 
     if (type === 'file') {
-        const newUrl = buildFileExpHash(path);
-        if (window.location.hash !== newUrl) {
-            history.pushState(null, '', newUrl);
+        if (fileExp.state.directoryViewMode === 'tree') {
+            const parentDir = fileExp.parentPath(path) || '/';
+            fileExp.updateNavigationLocation(parentDir, {
+                selectedPath: path,
+                historyMode: 'push',
+                invalidate: false
+            });
+        } else {
+            const newUrl = buildFileExpHash(path);
+            if (window.location.hash !== newUrl) {
+                history.pushState(null, '', newUrl);
+            }
+            fileExp.state.selectedPath = path;
         }
-        fileExp.state.selectedPath = path;
         await fileExp.openFile(path);
         return;
     }

@@ -5,6 +5,7 @@ const DEFAULT_COLUMN_VISIBILITY = { type: false, size: false, modified: false };
 const DEFAULT_LIST_WIDTH = null;
 const DEFAULT_LIST_COLLAPSED = false;
 const DEFAULT_PREVIEW_WRAP_ENABLED = false;
+const DEFAULT_DIRECTORY_VIEW_MODE = 'list';
 
 export function loadWorkspaceVersionSeed() {
     try {
@@ -123,6 +124,24 @@ export function savePreviewWrapPreference(value) {
     }
 }
 
+export function loadDirectoryViewModePreference() {
+    try {
+        const stored = String(window.localStorage.getItem('assistosExplorerDirectoryViewMode') || '').trim().toLowerCase();
+        return stored === 'tree' ? 'tree' : DEFAULT_DIRECTORY_VIEW_MODE;
+    } catch (_) {
+        return DEFAULT_DIRECTORY_VIEW_MODE;
+    }
+}
+
+export function saveDirectoryViewModePreference(value) {
+    try {
+        const nextValue = String(value || '').trim().toLowerCase() === 'tree' ? 'tree' : 'list';
+        window.localStorage.setItem('assistosExplorerDirectoryViewMode', nextValue);
+    } catch (_) {
+        // ignore
+    }
+}
+
 export function createFileExpState() {
     const initialState = {
         path: '/',
@@ -185,7 +204,9 @@ export function createFileExpState() {
         sortBy: 'name',
         sortDir: 'asc',
         listWidth: loadListWidthPreference(),
-        listCollapsed: loadListCollapsedPreference()
+        listCollapsed: loadListCollapsedPreference(),
+        directoryViewMode: loadDirectoryViewModePreference(),
+        treeRootPath: '/'
     };
     return createStore({ initialState });
 }

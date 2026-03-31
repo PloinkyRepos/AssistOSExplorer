@@ -127,8 +127,47 @@ export class FileExpEntries {
 
     renderEntries(snapshot) {
         this.snapshot = snapshot || null;
+        this.syncTreeContext();
         this.patchRows();
         this.applyColumnVisibility(this.snapshot || this.getHostPresenter()?.state || {});
+    }
+
+    getTreeViewState() {
+        const host = this.getHostPresenter();
+        if (!host) {
+            return {
+                contextKey: '',
+                expandedPaths: new Set(),
+                childrenCache: new Map(),
+                loadingPaths: new Set()
+            };
+        }
+        if (!host.treeViewState) {
+            host.treeViewState = {
+                contextKey: '',
+                expandedPaths: new Set(),
+                childrenCache: new Map(),
+                loadingPaths: new Set()
+            };
+        }
+        return host.treeViewState;
+    }
+
+    syncTreeContext() {
+        const state = this.snapshot || this.getHostPresenter()?.state || {};
+        const treeViewState = this.getTreeViewState();
+        const contextKey = [
+            String(state?.treeRootPath || state?.path || '/'),
+            String(state?.workspaceVersion || 0),
+            String(state?.filterSpecs ? '1' : '0'),
+            String(state?.sortBy || 'name'),
+            String(state?.sortDir || 'asc')
+        ].join(':');
+        if (contextKey === treeViewState.contextKey) return;
+        treeViewState.contextKey = contextKey;
+        treeViewState.expandedPaths.clear();
+        treeViewState.childrenCache.clear();
+        treeViewState.loadingPaths.clear();
     }
 
     applyColumnVisibility(state) {
@@ -157,7 +196,7 @@ export class FileExpEntries {
         cell.className = className;
         cell.dataset.entryPath = entryPath;
         cell.dataset.type = type;
-        cell.dataset.localAction = 'selectEntry';
+        cell.dataset.localAction = options.localAction || 'selectEntry';
         if (options.isSymlink) {
             cell.dataset.symlink = 'true';
             if (options.linkTarget) {
@@ -165,6 +204,31 @@ export class FileExpEntries {
             }
         }
         if (iconClass) {
+            if (Number.isFinite(options.depth) && options.depth > 0) {
+                cell.style.setProperty('--tree-depth', String(options.depth));
+                cell.classList.add('tree-name-cell');
+            } else {
+                cell.style.removeProperty('--tree-depth');
+                cell.classList.remove('tree-name-cell');
+            }
+            if (options.showTreeToggle) {
+                const toggle = document.createElement('button');
+                toggle.type = 'button';
+                toggle.className = `tree-toggle${options.expanded ? ' expanded' : ''}`;
+                toggle.setAttribute('aria-label', options.expanded ? 'Collapse folder' : 'Expand folder');
+                toggle.setAttribute('aria-expanded', options.expanded ? 'true' : 'false');
+                toggle.disabled = Boolean(options.loading);
+                toggle.tabIndex = -1;
+                const chevron = document.createElement('span');
+                chevron.className = 'tree-toggle-chevron';
+                chevron.setAttribute('aria-hidden', 'true');
+                toggle.appendChild(chevron);
+                cell.appendChild(toggle);
+            } else if (Number.isFinite(options.depth) && options.depth >= 0) {
+                const spacer = document.createElement('span');
+                spacer.className = 'tree-toggle-spacer';
+                cell.appendChild(spacer);
+            }
             const icon = document.createElement('span');
             icon.className = 'icon';
             icon.appendChild(createEntryIcon(iconClass));
@@ -334,6 +398,23 @@ export class FileExpEntries {
         return row;
     }
 
+    createTreeStatusRow(message, parentPath, kind = 'status') {
+        const row = document.createElement('tr');
+        row.className = `tree-status-row tree-status-${kind}`;
+        row.dataset.entryPath = `${parentPath || '/'}::${kind}`;
+
+        const nameCell = document.createElement('td');
+        nameCell.className = 'col-name tree-status-cell';
+        nameCell.colSpan = 4;
+        nameCell.textContent = message;
+
+        const actionsCell = document.createElement('td');
+        actionsCell.className = 'actions-cell col-actions';
+
+        row.append(nameCell, actionsCell);
+        return row;
+    }
+
     createSpacerRow(height, position) {
         const row = document.createElement('tr');
         row.className = 'entries-virtual-spacer';
@@ -346,8 +427,10 @@ export class FileExpEntries {
         return row;
     }
 
-    shouldVirtualize(entriesCount) {
-        return Boolean(this.scrollContainer) && entriesCount >= VIRTUALIZATION_THRESHOLD;
+    shouldVirtualize(entriesCount, state) {
+        return state?.directoryViewMode !== 'tree'
+            && Boolean(this.scrollContainer)
+            && entriesCount >= VIRTUALIZATION_THRESHOLD;
     }
 
     syncVirtualViewport() {
@@ -396,22 +479,92 @@ export class FileExpEntries {
         }
     }
 
+    filterLoadedTreeEntries(entries, state, host) {
+        const filterQuery = String(state?.directoryFilterQuery || '').trim().toLowerCase();
+        const items = Array.isArray(entries) ? entries : [];
+        const filtered = filterQuery
+            ? items.filter((entry) => {
+                const name = String(entry?.name || '').toLowerCase();
+                const entryPath = String(entry?.path || '').toLowerCase();
+                return name.includes(filterQuery) || entryPath.includes(filterQuery);
+            })
+            : items;
+        return host.sortEntries(filtered);
+    }
+
+    buildTreeItems(entries, state, host, depth = 0, target = []) {
+        for (const entry of entries) {
+            const entryPath = this.toEntryPath(entry, state, host);
+            if (!entryPath) continue;
+            const type = String(entry?.type || 'file');
+            const treeViewState = this.getTreeViewState();
+            const isExpanded = type === 'directory' && treeViewState.expandedPaths.has(entryPath);
+            const isLoading = type === 'directory' && treeViewState.loadingPaths.has(entryPath);
+            target.push({
+                kind: 'entry',
+                entry,
+                entryPath,
+                type,
+                depth,
+                isExpanded,
+                isLoading
+            });
+            if (!isExpanded || type !== 'directory') continue;
+            const cachedChildren = this.getTreeViewState().childrenCache.get(entryPath);
+            if (Array.isArray(cachedChildren)) {
+                const children = this.filterLoadedTreeEntries(cachedChildren, state, host);
+                if (children.length) {
+                    this.buildTreeItems(children, state, host, depth + 1, target);
+                } else {
+                    target.push({
+                        kind: 'status',
+                        statusKind: 'empty',
+                        parentPath: entryPath,
+                        depth: depth + 1,
+                        message: 'Empty folder.'
+                    });
+                }
+            } else if (isLoading) {
+                target.push({
+                    kind: 'status',
+                    statusKind: 'loading',
+                    parentPath: entryPath,
+                    depth: depth + 1,
+                    message: 'Loading…'
+                });
+            }
+        }
+        return target;
+    }
+
     patchRows() {
         if (!this.tbody) return;
         const host = this.getHostPresenter();
         if (!host) return;
         const state = this.snapshot || host.state || {};
+        const isTreeView = state.directoryViewMode === 'tree';
         const entries = Array.isArray(state.entries) ? state.entries : [];
-        this.virtual.enabled = this.shouldVirtualize(entries.length);
+        const items = isTreeView
+            ? this.buildTreeItems(entries, state, host)
+            : entries.map((entry) => ({
+                kind: 'entry',
+                entry,
+                entryPath: this.toEntryPath(entry, state, host),
+                type: String(entry?.type || 'file'),
+                depth: 0,
+                isExpanded: false,
+                isLoading: false
+            }));
+        this.virtual.enabled = this.shouldVirtualize(items.length, state);
         this.syncVirtualViewport();
-        this.clampVirtualScroll(entries.length);
+        this.clampVirtualScroll(items.length);
         const clipboard = state.clipboard || null;
         const selectedPath = String(state.selectedPath || '');
         const openMenuPath = String(state.openMenuPath || '');
         const nextRows = new Map();
         const fragment = document.createDocumentFragment();
 
-        if (!entries.length) {
+        if (!items.length) {
             fragment.appendChild(this.createEmptyRow());
             this.rowsByPath.clear();
             this.tbody.replaceChildren(fragment);
@@ -420,10 +573,10 @@ export class FileExpEntries {
         }
 
         const windowRange = this.virtual.enabled
-            ? this.computeVirtualWindow(entries.length)
+            ? this.computeVirtualWindow(items.length)
             : {
                 startIndex: 0,
-                endIndex: entries.length,
+                endIndex: items.length,
                 topSpacerHeight: 0,
                 bottomSpacerHeight: 0
             };
@@ -433,10 +586,22 @@ export class FileExpEntries {
         }
 
         for (let index = windowRange.startIndex; index < windowRange.endIndex; index += 1) {
-            const entry = entries[index];
-            const entryPath = this.toEntryPath(entry, state, host);
+            const item = items[index];
+            if (!item) continue;
+            if (item.kind !== 'entry') {
+                const statusRow = this.createTreeStatusRow(item.message, item.parentPath, item.statusKind);
+                const statusCell = statusRow.querySelector('.tree-status-cell');
+                if (statusCell) {
+                    statusCell.style.setProperty('--tree-depth', String(item.depth || 0));
+                }
+                const rowKey = statusRow.dataset.entryPath;
+                nextRows.set(rowKey, statusRow);
+                fragment.appendChild(statusRow);
+                continue;
+            }
+
+            const { entry, entryPath, type, depth, isExpanded, isLoading } = item;
             if (!entryPath) continue;
-            const type = String(entry?.type || 'file');
             const row = this.rowsByPath.get(entryPath) || this.createRow(entryPath);
             row.dataset.entryPath = entryPath;
             row.dataset.type = type;
@@ -459,12 +624,18 @@ export class FileExpEntries {
                 : (type === 'directory' ? 'icon-folder' : 'icon-file');
             const nameCell = this.createSelectCell('col-name', entry?.name || '', entryPath, type, iconClass, {
                 isSymlink: Boolean(entry?.isSymlink),
-                linkTarget: entry?.linkTarget || ''
+                linkTarget: entry?.linkTarget || '',
+                depth,
+                localAction: isTreeView && type === 'directory' ? 'toggleTreeDirectory' : 'selectEntry',
+                showTreeToggle: isTreeView && type === 'directory',
+                expanded: isExpanded,
+                loading: isLoading
             });
-            const typeCell = this.createSelectCell('col-type', type, entryPath, type);
+            const rowLocalAction = isTreeView && type === 'directory' ? 'toggleTreeDirectory' : 'selectEntry';
+            const typeCell = this.createSelectCell('col-type', type, entryPath, type, '', { localAction: rowLocalAction });
             const sizeValue = type === 'directory' ? '—' : host.formatBytes(entry?.size);
-            const sizeCell = this.createSelectCell('col-size', sizeValue, entryPath, type);
-            const modifiedCell = this.createSelectCell('col-modified', entry?.modified ? host.formatDate(entry.modified) : '—', entryPath, type);
+            const sizeCell = this.createSelectCell('col-size', sizeValue, entryPath, type, '', { localAction: rowLocalAction });
+            const modifiedCell = this.createSelectCell('col-modified', entry?.modified ? host.formatDate(entry.modified) : '—', entryPath, type, '', { localAction: rowLocalAction });
             const actionsCell = this.createActionsCell(
                 entryPath,
                 type,
@@ -529,5 +700,103 @@ export class FileExpEntries {
 
     deleteEntry(...args) {
         return this.delegateAction('deleteEntry', ...args);
+    }
+
+    async revealTreeDirectory(entryPath, options = {}) {
+        const host = this.getHostPresenter();
+        if (!host) return;
+        const normalizedPath = host.normalizePath?.(entryPath || '/') || String(entryPath || '/');
+        const rootPath = host.normalizePath?.(host.state?.treeRootPath || '/') || String(host.state?.treeRootPath || '/');
+        const treeViewState = this.getTreeViewState();
+        if (!normalizedPath || normalizedPath === rootPath) {
+            if (!options.preserveExisting) {
+                treeViewState.expandedPaths.clear();
+                this.patchRows();
+            }
+            return;
+        }
+
+        if (!options.preserveExisting) {
+            treeViewState.expandedPaths.clear();
+        }
+        treeViewState.expandedPaths.add(normalizedPath);
+
+        if (treeViewState.childrenCache.has(normalizedPath)) {
+            this.patchRows();
+            return;
+        }
+
+        treeViewState.loadingPaths.add(normalizedPath);
+        this.patchRows();
+        try {
+            let children = await host.loadDirectoryContent(normalizedPath);
+            if (!Array.isArray(children)) {
+                children = [];
+            }
+            if (host.state?.filterSpecs) {
+                children = await host.filterEntriesForSpecs(children);
+            }
+            treeViewState.childrenCache.set(normalizedPath, host.sortEntries(children));
+        } catch (error) {
+            console.error(error);
+            treeViewState.childrenCache.set(normalizedPath, []);
+            host.showStatus?.(error?.message || 'Failed to load folder contents.', true);
+        } finally {
+            treeViewState.loadingPaths.delete(normalizedPath);
+            this.patchRows();
+        }
+    }
+
+    async toggleTreeDirectory(element) {
+        const host = this.getHostPresenter();
+        if (!host) return;
+        const state = this.snapshot || host.state || {};
+        if (state.directoryViewMode !== 'tree') {
+            return this.selectEntry(element);
+        }
+        const entryPath = host.normalizePath?.(element?.dataset?.entryPath || '') || String(element?.dataset?.entryPath || '');
+        const entryType = String(element?.dataset?.type || '');
+        const treeViewState = this.getTreeViewState();
+        if (!entryPath || entryType !== 'directory') return;
+
+        if (treeViewState.expandedPaths.has(entryPath)) {
+            treeViewState.expandedPaths.delete(entryPath);
+            this.patchRows();
+            return;
+        }
+
+        treeViewState.expandedPaths.add(entryPath);
+        if (treeViewState.childrenCache.has(entryPath)) {
+            host.updateNavigationLocation?.(entryPath, {
+                selectedPath: null,
+                resetContext: true
+            });
+            this.patchRows();
+            return;
+        }
+
+        treeViewState.loadingPaths.add(entryPath);
+        host.updateNavigationLocation?.(entryPath, {
+            selectedPath: null,
+            resetContext: true
+        });
+        this.patchRows();
+        try {
+            let children = await host.loadDirectoryContent(entryPath);
+            if (!Array.isArray(children)) {
+                children = [];
+            }
+            if (host.state?.filterSpecs) {
+                children = await host.filterEntriesForSpecs(children);
+            }
+            treeViewState.childrenCache.set(entryPath, host.sortEntries(children));
+        } catch (error) {
+            console.error(error);
+            treeViewState.childrenCache.set(entryPath, []);
+            host.showStatus?.(error?.message || 'Failed to load folder contents.', true);
+        } finally {
+            treeViewState.loadingPaths.delete(entryPath);
+            this.patchRows();
+        }
     }
 }

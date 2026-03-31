@@ -8,6 +8,7 @@ export const FILE_EXP_UI_ACTIONS = Object.freeze({
     SET_SORT: 'file-exp-ui/set-sort',
     SET_LIST_WIDTH: 'file-exp-ui/set-list-width',
     SET_LIST_COLLAPSED: 'file-exp-ui/set-list-collapsed',
+    SET_DIRECTORY_VIEW_MODE: 'file-exp-ui/set-directory-view-mode',
     SET_IS_RESIZING: 'file-exp-ui/set-is-resizing',
     SET_COLUMN_VISIBILITY: 'file-exp-ui/set-column-visibility',
     SET_HAS_UNSAVED_CHANGES: 'file-exp-ui/set-has-unsaved-changes',
@@ -151,6 +152,13 @@ export function fileExpUiReducer(state, action) {
             return {
                 changed: listCollapsed !== Boolean(state?.listCollapsed),
                 patch: { listCollapsed }
+            };
+        }
+        case FILE_EXP_UI_ACTIONS.SET_DIRECTORY_VIEW_MODE: {
+            const directoryViewMode = action.payload?.directoryViewMode === 'tree' ? 'tree' : 'list';
+            return {
+                changed: directoryViewMode !== String(state?.directoryViewMode || 'list'),
+                patch: { directoryViewMode }
             };
         }
         case FILE_EXP_UI_ACTIONS.SET_IS_RESIZING: {

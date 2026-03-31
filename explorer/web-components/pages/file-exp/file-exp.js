@@ -7,12 +7,20 @@ import {
     formatDate,
     sanitizeEntryName,
     generateCopyName,
+    buildFileExpHash,
     parseDetailedDirectoryListing,
     isMarkdownFile,
     prepareMarkdownPreviewContent,
     renderMarkdownPreview
 } from "./file-exp-utils.js";
-import { createFileExpState, saveFilterSpecsPreference, saveListWidthPreference, saveListCollapsedPreference, savePreviewWrapPreference } from "./file-exp-state.js";
+import {
+    createFileExpState,
+    saveDirectoryViewModePreference,
+    saveFilterSpecsPreference,
+    saveListWidthPreference,
+    saveListCollapsedPreference,
+    savePreviewWrapPreference
+} from "./file-exp-state.js";
 import { createFileExpTooling } from "./file-exp-tooling.js";
 import { attachSearchController } from "./file-exp-search.js";
 import { attachFsActions } from "./file-exp-fs-actions.js";
@@ -109,6 +117,13 @@ export class FileExp {
         this.tooling = createFileExpTooling();
         this.lastLoadError = null;
         this.previewDom = null;
+        this.pendingTreeReveal = null;
+        this.treeViewState = {
+            contextKey: '',
+            expandedPaths: new Set(),
+            childrenCache: new Map(),
+            loadingPaths: new Set()
+        };
         this.setElementListener('file-exp-dpu-comments-state', this.element, 'dpu-comments-state', this.boundHandleDpuCommentsState);
         this.setElementListener('file-exp-dpu-comments-close', this.element, 'dpu-comments-close', this.boundHandleDpuCommentsClose);
     }
@@ -637,6 +652,44 @@ export class FileExp {
         await this.loadDirectory(decodeLocalActionPathArg(path));
     }
 
+    updateNavigationLocation(path, options = {}) {
+        const {
+            selectedPath = undefined,
+            resetContext = false,
+            historyMode = 'push',
+            invalidate = false
+        } = options;
+        const normalizedPath = this.normalizePath(path || '/');
+        this.state.path = normalizedPath;
+
+        if (resetContext) {
+            this.dispatchUi({ type: FILE_EXP_UI_ACTIONS.RESET_DIRECTORY_CONTEXT });
+            this.dispatchPreview({ type: PREVIEW_ACTIONS.RESET });
+            this.pendingMenuFocusPath = null;
+        }
+
+        if (selectedPath !== undefined) {
+            this.state.selectedPath = selectedPath ? this.normalizePath(selectedPath) : null;
+        }
+
+        const targetPath = this.state.selectedPath || normalizedPath;
+        const newUrl = buildFileExpHash(targetPath);
+        if (window.location.hash !== newUrl) {
+            const method = historyMode === 'replace' ? 'replaceState' : 'pushState';
+            history[method](null, '', newUrl);
+        }
+
+        if (invalidate) {
+            this.invalidate();
+            return;
+        }
+
+        this.renderBreadcrumbs();
+        if (resetContext) {
+            this.refreshPreviewUi();
+        }
+    }
+
     toggleDpuComments() {
         if (!this.state.dpuSelectedObjectId) {
             return;
@@ -765,6 +818,15 @@ export class FileExp {
             payload: { listCollapsed }
         }, options);
         saveListCollapsedPreference(Boolean(this.state?.listCollapsed));
+        return result;
+    }
+
+    setDirectoryViewMode(directoryViewMode, options = {}) {
+        const result = this.dispatchUi({
+            type: FILE_EXP_UI_ACTIONS.SET_DIRECTORY_VIEW_MODE,
+            payload: { directoryViewMode }
+        }, options);
+        saveDirectoryViewModePreference(this.state?.directoryViewMode || 'list');
         return result;
     }
 

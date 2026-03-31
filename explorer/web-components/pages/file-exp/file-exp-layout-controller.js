@@ -10,6 +10,17 @@ export async function runAfterRender(fileExp, options = {}) {
     fileExp.renderBreadcrumbs();
     fileExp.renderEntries();
 
+    if (fileExp.state.directoryViewMode === 'tree' && fileExp.pendingTreeReveal) {
+        const entriesPresenter = fileExp.getEntriesPresenter();
+        const pendingReveal = fileExp.pendingTreeReveal;
+        fileExp.pendingTreeReveal = null;
+        if (entriesPresenter && typeof entriesPresenter.revealTreeDirectory === 'function') {
+            await entriesPresenter.revealTreeDirectory(pendingReveal.path, {
+                preserveExisting: Boolean(pendingReveal.preserveExisting)
+            });
+        }
+    }
+
     const previewUiState = derivePreviewUiState(fileExp.state);
     fileExp.previewHeaderController.sync(previewUiState);
 
@@ -55,6 +66,8 @@ export async function runAfterRender(fileExp, options = {}) {
     const listPanel = fileExp.element.querySelector('.list');
     const columnMenuButton = fileExp.element.querySelector('#columnVisibilityButton');
     const columnMenu = fileExp.element.querySelector('#columnVisibilityMenu');
+    const directoryViewModeButton = fileExp.element.querySelector('#directoryViewModeButton');
+    const upButton = fileExp.element.querySelector('#upButton');
     const toolbarMenuButton = fileExp.element.querySelector('#toolbarMenuButton');
     const toolbarMenu = fileExp.element.querySelector('#toolbarMenu');
     const uploadButton = fileExp.element.querySelector('#uploadButton');
@@ -91,6 +104,18 @@ export async function runAfterRender(fileExp, options = {}) {
         toggleListButton.setAttribute('aria-expanded', String(!collapsed));
         toggleListButton.setAttribute('title', collapsed ? 'Expand directory panel' : 'Collapse directory panel');
         toggleListButton.setAttribute('aria-label', collapsed ? 'Expand directory panel' : 'Collapse directory panel');
+    };
+
+    const updateDirectoryViewModeButton = () => {
+        const isTreeView = fileExp.state.directoryViewMode === 'tree';
+        if (upButton) {
+            upButton.classList.toggle('hidden', isTreeView);
+        }
+        if (!directoryViewModeButton) return;
+        directoryViewModeButton.classList.toggle('active', isTreeView);
+        directoryViewModeButton.setAttribute('aria-pressed', isTreeView ? 'true' : 'false');
+        directoryViewModeButton.setAttribute('title', isTreeView ? 'Switch to list view' : 'Switch to tree view');
+        directoryViewModeButton.setAttribute('aria-label', isTreeView ? 'Switch to list view' : 'Switch to tree view');
     };
 
     const setWorkspaceListWidth = (width) => {
@@ -148,6 +173,17 @@ export async function runAfterRender(fileExp, options = {}) {
         };
         fileExp.setElementListener('toggle-list-button', toggleListButton, 'click', onToggleListClick);
         updateToggleState();
+    }
+
+    if (directoryViewModeButton) {
+        const onDirectoryViewModeClick = () => {
+            const nextMode = fileExp.state.directoryViewMode === 'tree' ? 'list' : 'tree';
+            fileExp.setDirectoryViewMode(nextMode);
+            updateDirectoryViewModeButton();
+            fileExp.renderEntries();
+        };
+        fileExp.setElementListener('directory-view-mode-button', directoryViewModeButton, 'click', onDirectoryViewModeClick);
+        updateDirectoryViewModeButton();
     }
 
     if (columnMenuButton && columnMenu) {

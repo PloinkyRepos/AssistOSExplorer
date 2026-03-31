@@ -60,6 +60,60 @@ tr.is-symlink .col-name .icon {
     opacity: 0.9;
 }
 
+.tree-name-cell {
+    --tree-depth: 0;
+    padding-left: calc(0.5rem + (var(--tree-depth) * 1rem));
+}
+
+.tree-toggle,
+.tree-toggle-spacer {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 2px;
+}
+
+.tree-toggle {
+    border: none;
+    background: transparent;
+    color: inherit;
+    border-radius: 6px;
+    cursor: pointer;
+    padding: 0;
+}
+
+.tree-toggle:hover {
+    background: rgba(148, 163, 184, 0.18);
+}
+
+.tree-toggle:focus-visible {
+    outline: 2px solid rgba(59, 130, 246, 0.45);
+    outline-offset: 1px;
+}
+
+.tree-toggle-chevron {
+    width: 8px;
+    height: 8px;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: rotate(-45deg);
+    transition: transform 0.14s ease;
+}
+
+.tree-toggle.expanded .tree-toggle-chevron {
+    transform: rotate(45deg);
+}
+
+.tree-status-cell {
+    --tree-depth: 0;
+    padding-left: calc(1.5rem + (var(--tree-depth) * 1rem));
+    color: rgba(100, 116, 139, 0.92);
+    font-style: italic;
+}
+
 .column-hidden {
     display: none !important;
 }
