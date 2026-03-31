@@ -192,18 +192,18 @@ jobs:
           set_var ONLYOFFICE_CALLBACK_BASE_URL "${ONLYOFFICE_CALLBACK_BASE_URL:-}"
           set_var ONLYOFFICE_JWT_SECRET "${ONLYOFFICE_JWT_SECRET:-}"
 
-          # Write OnlyOffice vars directly to .secrets using sed+echo.
-          # Values are expanded by the GitHub runner shell before SSH.
-          SECRETS_FILE="\$WORK_DIR/.ploinky/.secrets"
-          if [ -f "\$SECRETS_FILE" ]; then
-            sed -i '/^ONLYOFFICE_/d' "\$SECRETS_FILE"
-            echo "ONLYOFFICE_PUBLIC_URL=${ONLYOFFICE_PUBLIC_URL:-}" >> "\$SECRETS_FILE"
-            echo "ONLYOFFICE_INTERNAL_URL=${ONLYOFFICE_INTERNAL_URL:-}" >> "\$SECRETS_FILE"
-            echo "ONLYOFFICE_CALLBACK_BASE_URL=${ONLYOFFICE_CALLBACK_BASE_URL:-}" >> "\$SECRETS_FILE"
-            echo "ONLYOFFICE_JWT_SECRET=${ONLYOFFICE_JWT_SECRET:-}" >> "\$SECRETS_FILE"
-            echo "[update] OnlyOffice vars written to .secrets"
-            grep ONLYOFFICE "\$SECRETS_FILE"
-          fi
+          # Write OnlyOffice vars to .secrets AND ~/.env (the preinstall
+          # walks up from workspace root and ~/.env takes precedence).
+          for TARGET_FILE in "\$WORK_DIR/.ploinky/.secrets" "\$HOME/.env"; do
+            if [ -f "\$TARGET_FILE" ]; then
+              sed -i '/^ONLYOFFICE_/d' "\$TARGET_FILE"
+              echo "ONLYOFFICE_PUBLIC_URL=${ONLYOFFICE_PUBLIC_URL:-}" >> "\$TARGET_FILE"
+              echo "ONLYOFFICE_INTERNAL_URL=${ONLYOFFICE_INTERNAL_URL:-}" >> "\$TARGET_FILE"
+              echo "ONLYOFFICE_CALLBACK_BASE_URL=${ONLYOFFICE_CALLBACK_BASE_URL:-}" >> "\$TARGET_FILE"
+              echo "ONLYOFFICE_JWT_SECRET=${ONLYOFFICE_JWT_SECRET:-}" >> "\$TARGET_FILE"
+              echo "[update] OnlyOffice vars written to \$TARGET_FILE"
+            fi
+          done
 
           # API Keys
           set_var OPENAI_API_KEY "${OPENAI_API_KEY:-}"
