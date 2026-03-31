@@ -370,6 +370,15 @@ NODE
         if [[ "$running_state" != "running" || "$current_port" != "$chosen_port" ]]; then
             should_recreate="1"
         fi
+        # Recreate if the JWT secret changed (container env vs configured)
+        if [[ "$should_recreate" == "0" && -n "$configured_jwt_secret" ]]; then
+            local container_jwt
+            container_jwt="$(podman inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$container_name" 2>/dev/null | grep '^JWT_SECRET=' | cut -d= -f2)"
+            if [[ -n "$container_jwt" && "$container_jwt" != "$configured_jwt_secret" ]]; then
+                echo "[preinstall] explorer: OnlyOffice JWT secret changed, recreating container..." >&2
+                should_recreate="1"
+            fi
+        fi
     else
         should_recreate="1"
     fi
