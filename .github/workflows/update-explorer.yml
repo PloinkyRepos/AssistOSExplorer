@@ -192,25 +192,33 @@ jobs:
           set_var ONLYOFFICE_CALLBACK_BASE_URL "${ONLYOFFICE_CALLBACK_BASE_URL:-}"
           set_var ONLYOFFICE_JWT_SECRET "${ONLYOFFICE_JWT_SECRET:-}"
 
+          # Write OnlyOffice vars directly to .secrets using a Node script
+          # for reliable parsing/writing (avoids sed escaping issues in heredocs).
           SECRETS_FILE="\$WORK_DIR/.ploinky/.secrets"
           if [ -f "\$SECRETS_FILE" ]; then
-            ensure_secret() {
-              local key="\$1" val="\$2"
-              [ -z "\$val" ] && return 0
-              if grep -q "^\${key}=" "\$SECRETS_FILE" 2>/dev/null; then
-                sed -i "s#^\${key}=.*#\${key}=\${val}#g" "\$SECRETS_FILE"
-              else
-                printf '%s\n' "\${key}=\${val}" >> "\$SECRETS_FILE"
-              fi
-            }
-            # Fix corrupted lines (missing newlines before KEY=)
-            sed -i 's/\([^=]\)\(ONLYOFFICE_\)/\1\n\2/g' "\$SECRETS_FILE"
-            # Remove duplicate ONLYOFFICE entries before writing fresh values
-            sed -i '/^ONLYOFFICE_/d' "\$SECRETS_FILE"
-            ensure_secret ONLYOFFICE_PUBLIC_URL "${ONLYOFFICE_PUBLIC_URL:-}"
-            ensure_secret ONLYOFFICE_INTERNAL_URL "${ONLYOFFICE_INTERNAL_URL:-}"
-            ensure_secret ONLYOFFICE_CALLBACK_BASE_URL "${ONLYOFFICE_CALLBACK_BASE_URL:-}"
-            ensure_secret ONLYOFFICE_JWT_SECRET "${ONLYOFFICE_JWT_SECRET:-}"
+            node - "\$SECRETS_FILE" <<'NODEBLOCK'
+const fs = require('fs');
+const file = process.argv[2];
+const updates = {};
+for (const [k, v] of Object.entries(process.env)) {
+  if (k.startsWith('ONLYOFFICE_') && v) updates[k] = v;
+}
+if (!Object.keys(updates).length) process.exit(0);
+let lines = fs.readFileSync(file, 'utf8').split('\n');
+// Fix corrupted lines where ONLYOFFICE_ is concatenated without newline
+lines = lines.flatMap(l => {
+  const m = l.match(/^(.+=.+?)(ONLYOFFICE_.+=.*)$/);
+  return m ? [m[1], m[2]] : [l];
+});
+// Remove all existing ONLYOFFICE_ lines
+lines = lines.filter(l => !l.match(/^ONLYOFFICE_\w+=/));
+// Add fresh entries
+for (const [k, v] of Object.entries(updates)) {
+  lines.push(k + '=' + v);
+}
+fs.writeFileSync(file, lines.join('\n') + '\n');
+NODEBLOCK
+            echo "[update] OnlyOffice vars written to .secrets"
           fi
 
           # API Keys
@@ -288,6 +296,9 @@ jobs:
           fi
 
           ploinky stop || true
+
+          # Remove preinstall markers so hooks re-run with updated code/config
+          rm -f "$WORK_DIR/.ploinky/running"/preinstall-* 2>/dev/null || true
 
           # Remove mcp-sdk markers and stopped containers so ploinky start
           # creates fresh containers with a full npm install.
