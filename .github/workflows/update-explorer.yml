@@ -192,23 +192,17 @@ jobs:
           set_var ONLYOFFICE_CALLBACK_BASE_URL "${ONLYOFFICE_CALLBACK_BASE_URL:-}"
           set_var ONLYOFFICE_JWT_SECRET "${ONLYOFFICE_JWT_SECRET:-}"
 
-          # Write OnlyOffice vars directly to .secrets. Values are passed
-          # as arguments (not process.env) because the remote shell does not
-          # inherit GitHub Actions env vars.
+          # Write OnlyOffice vars directly to .secrets using sed+echo.
+          # Values are expanded by the GitHub runner shell before SSH.
           SECRETS_FILE="\$WORK_DIR/.ploinky/.secrets"
           if [ -f "\$SECRETS_FILE" ]; then
-            node -e '
-              var fs=require("fs"),f=process.argv[1];
-              var pairs=process.argv.slice(2);
-              if(!pairs.length)process.exit(0);
-              var u={};pairs.forEach(function(p){var i=p.indexOf("=");if(i>0)u[p.slice(0,i)]=p.slice(i+1)});
-              var lines=fs.readFileSync(f,"utf8").split("\n");
-              lines=lines.reduce(function(a,l){var m=l.match(/^(.+=.+?)(ONLYOFFICE_.+=.*)$/);return m?a.concat(m[1],m[2]):a.concat(l)},[]);
-              lines=lines.filter(function(l){return!/^ONLYOFFICE_\w+=/.test(l)});
-              Object.entries(u).forEach(function(e){lines.push(e[0]+"="+e[1])});
-              fs.writeFileSync(f,lines.join("\n")+"\n");
-            ' "\$SECRETS_FILE" "ONLYOFFICE_PUBLIC_URL=${ONLYOFFICE_PUBLIC_URL:-}" "ONLYOFFICE_INTERNAL_URL=${ONLYOFFICE_INTERNAL_URL:-}" "ONLYOFFICE_CALLBACK_BASE_URL=${ONLYOFFICE_CALLBACK_BASE_URL:-}" "ONLYOFFICE_JWT_SECRET=${ONLYOFFICE_JWT_SECRET:-}"
+            sed -i '/^ONLYOFFICE_/d' "\$SECRETS_FILE"
+            echo "ONLYOFFICE_PUBLIC_URL=${ONLYOFFICE_PUBLIC_URL:-}" >> "\$SECRETS_FILE"
+            echo "ONLYOFFICE_INTERNAL_URL=${ONLYOFFICE_INTERNAL_URL:-}" >> "\$SECRETS_FILE"
+            echo "ONLYOFFICE_CALLBACK_BASE_URL=${ONLYOFFICE_CALLBACK_BASE_URL:-}" >> "\$SECRETS_FILE"
+            echo "ONLYOFFICE_JWT_SECRET=${ONLYOFFICE_JWT_SECRET:-}" >> "\$SECRETS_FILE"
             echo "[update] OnlyOffice vars written to .secrets"
+            grep ONLYOFFICE "\$SECRETS_FILE"
           fi
 
           # API Keys
