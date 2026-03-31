@@ -219,6 +219,14 @@ NODE
     configured_internal_url="$(resolve_config_var "ONLYOFFICE_INTERNAL_URL")"
     configured_callback_base_url="$(resolve_config_var "ONLYOFFICE_CALLBACK_BASE_URL")"
     configured_jwt_secret="$(resolve_config_var "ONLYOFFICE_JWT_SECRET")"
+    echo "[preinstall] resolve_config_var results:" >&2
+    echo "  ONLYOFFICE_PUBLIC_URL=$configured_public_url" >&2
+    echo "  ONLYOFFICE_INTERNAL_URL=$configured_internal_url" >&2
+    echo "  manage check will use: ${configured_internal_url:-$configured_public_url}" >&2
+    echo "  env ONLYOFFICE_PUBLIC_URL=${ONLYOFFICE_PUBLIC_URL:-<unset>}" >&2
+    echo "  secrets_file=$secrets_file" >&2
+    echo "  secrets content:" >&2
+    grep ONLYOFFICE "$secrets_file" >&2 || echo "  (no ONLYOFFICE entries)" >&2
 
     local public_url=""
     local internal_url=""
