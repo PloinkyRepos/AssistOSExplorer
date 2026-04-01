@@ -64,6 +64,13 @@ export class EditVariableTab {
         previewInput.style.height = previewInput.scrollHeight + "px";
     }
     async afterRender() {
+        if(this.variable.command && this.variable.command.startsWith("?")){
+            this.variable.conditional = true;
+            this.variable.command = this.variable.command.substring(1);
+        } else if(this.variable.command && this.variable.command.startsWith("!")){
+            this.variable.forceExecution = true;
+            this.variable.command = this.variable.command.substring(1);
+        }
         this.constructFullExpressionInitial()
         let types = await workspaceModule.getCustomTypes();
         let variableTypeOptions = [{name: "Select a type", value: ""}];

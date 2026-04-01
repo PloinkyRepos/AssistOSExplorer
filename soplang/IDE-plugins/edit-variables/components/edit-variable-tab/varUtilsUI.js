@@ -87,12 +87,23 @@ export function changePreviewValue(presenter){
 export function attachEventListeners(presenter){
     const self = presenter;
     let commandInput = self.element.querySelector("#command");
-    commandInput.addEventListener("input", event => {
-        changePreviewValue(self);
-    })
     let selectOptions = self.element.querySelector(".select-options");
     commandInput.addEventListener("input", (event) => {
         let value = event.target.value;
+        let conditionalCheckbox = self.element.querySelector("#conditional");
+        let forceExecutionCheckbox = self.element.querySelector("#forceExecution");
+        if(value.startsWith("?")){
+            conditionalCheckbox.checked = true;
+            forceExecutionCheckbox.checked = false;
+            commandInput.value = value.substring(1);
+            value = commandInput.value;
+        } else if(value.startsWith("!")){
+            forceExecutionCheckbox.checked = true;
+            conditionalCheckbox.checked = false;
+            commandInput.value = value.substring(1);
+            value = commandInput.value;
+        }
+
         let foundCommands = self.commands.filter(command => command.toLowerCase().includes(value.toLowerCase()));
         if(foundCommands.length === 0){
             commandInput.setAttribute("data-valid", false);
@@ -100,6 +111,7 @@ export function attachEventListeners(presenter){
             commandInput.setAttribute("data-valid", true);
         }
         renderSelectOptions(selectOptions, foundCommands);
+        changePreviewValue(self);
     });
     let nameInput = self.element.querySelector("#name");
     nameInput.addEventListener("input", event => {
