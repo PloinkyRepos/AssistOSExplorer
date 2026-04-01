@@ -72,7 +72,7 @@ export default class DocumentFsService {
             return {
                 id: '',
                 type: 'folder',
-                name: 'Shared'
+                name: 'Shared with me'
             };
         }
         return resolveDpuConfidentialNodeAtPath(normalizedPath, {

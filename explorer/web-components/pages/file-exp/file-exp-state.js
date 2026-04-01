@@ -156,6 +156,7 @@ export function createFileExpState() {
         documentId: null,
         dpuSelectedObjectId: null,
         dpuSelectedCanWrite: false,
+        dpuSelectedUpdatedAt: '',
         dpuSelectedCanComment: false,
         dpuSelectedCommentCount: 0,
         dpuSelectedComments: [],

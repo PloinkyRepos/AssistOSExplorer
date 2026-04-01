@@ -8,6 +8,7 @@ import {
     isSameOrDescendantPath
 } from "./file-exp-fs-mutation-utils.js";
 import {
+    DPU_SECRETS_PATH,
     createDpuDirectory,
     createDpuFile,
     deleteDpuEntry,
@@ -613,6 +614,7 @@ export function attachFsActions(fileExp) {
                 let shouldSelect = false;
                 let createdPath = null;
                 let createdType = 'file';
+                let shouldEditAfterCreate = false;
                 await this.withLoader(async () => {
                     if (isDpuManagedPath(this.state.path)) {
                         const capabilities = await getDpuPathCapabilities(this, this.state.path);
@@ -622,6 +624,7 @@ export function attachFsActions(fileExp) {
                         const created = await createDpuFile(this, this.state.path, fileName.trim(), { content: '' });
                         createdPath = this.joinPath(this.state.path, created?.name || fileName.trim());
                         createdType = created?.type || 'file';
+                        shouldEditAfterCreate = this.normalizePath(this.state.path) === DPU_SECRETS_PATH;
                     } else {
                         if (!this.ensureMutableFsPath(this.state.path)) return;
                         createdPath = this.joinPath(this.state.path, fileName.trim());
@@ -646,6 +649,9 @@ export function attachFsActions(fileExp) {
                 });
                 if (shouldSelect) {
                     await this.selectEntry({ dataset: { entryPath: createdPath, type: createdType } });
+                    if (shouldEditAfterCreate) {
+                        await this.editFile();
+                    }
                 }
             } catch (err) {
                 console.error(err);

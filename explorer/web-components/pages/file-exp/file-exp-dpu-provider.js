@@ -112,6 +112,34 @@ async function callDpuTool(toolName, args = {}) {
     return parsed;
 }
 
+export async function readDpuCurrentItemState(fileExp, targetPath) {
+    const normalizedPath = normalizeManagedPath(fileExp, targetPath);
+    const node = await resolveDpuNode(fileExp, normalizedPath);
+    if (!node) {
+        throw new Error(`Confidential resource not found: ${normalizedPath}`);
+    }
+
+    if (node.kind === 'secret') {
+        const parsed = await callDpuTool('dpu_secret_get', { key: node.key });
+        return {
+            kind: 'secret',
+            path: normalizedPath,
+            secret: parsed.secret || {}
+        };
+    }
+
+    if (node.kind === 'confidential' || node.kind === 'shared-object') {
+        const parsed = await callDpuTool('dpu_confidential_get', { id: node.objectId });
+        return {
+            kind: 'confidential',
+            path: normalizedPath,
+            object: parsed.object || {}
+        };
+    }
+
+    throw new Error(`Unsupported confidential resource: ${normalizedPath}`);
+}
+
 async function getDpuRoots(fileExp) {
     const cache = getDpuCache(fileExp);
     if (cache.roots) {
@@ -183,15 +211,33 @@ function createRootEntries(fileExp, roots = {}) {
             ...makeEntry('My Space', 'directory'),
             dpuCanWrite: true,
             dpuCanCreateChildren: true,
+            dpuCanCreateFiles: true,
+            dpuCanCreateDirectories: true,
+            dpuCanRename: false,
+            dpuCanDelete: false,
             dpuImmutableRoot: true,
             path: DPU_MY_SPACE_PATH
         },
         {
-            ...makeEntry('Shared', 'directory'),
+            ...makeEntry('Shared with me', 'directory'),
+            dpuCanWrite: false,
+            dpuCanCreateChildren: false,
+            dpuCanCreateFiles: false,
+            dpuCanCreateDirectories: false,
+            dpuCanRename: false,
+            dpuCanDelete: false,
+            dpuImmutableRoot: true,
             path: DPU_SHARED_PATH
         },
         {
             ...makeEntry('Secrets', 'directory'),
+            dpuCanWrite: true,
+            dpuCanCreateChildren: false,
+            dpuCanCreateFiles: true,
+            dpuCanCreateDirectories: false,
+            dpuCanRename: false,
+            dpuCanDelete: false,
+            dpuImmutableRoot: true,
             path: DPU_SECRETS_PATH
         }
     ];
@@ -204,14 +250,27 @@ function createSecretEntry(fileExp, secret) {
         type: 'file',
         key: secret.key,
         secretId: secret.id,
+        ownerId: secret.ownerId || '',
         role: secret.role || '',
         updatedAt: secret.updatedAt || '',
-        canWrite: Boolean(secret.canWrite)
+        canWrite: Boolean(secret.canWrite),
+        canDelete: Boolean(secret.canWrite),
+        canRename: false,
+        canCreateChildren: false,
+        canCreateFiles: false,
+        canCreateDirectories: false,
+        immutableRoot: false
     });
     return {
         ...makeEntry(secret.key, 'file', {
             modified: secret.updatedAt || null,
-            dpuCanWrite: Boolean(secret.canWrite)
+            dpuCanWrite: Boolean(secret.canWrite),
+            dpuCanRename: false,
+            dpuCanDelete: Boolean(secret.canWrite),
+            dpuCanCreateChildren: false,
+            dpuCanCreateFiles: false,
+            dpuCanCreateDirectories: false,
+            dpuImmutableRoot: false
         }),
         path: entryPath
     };
@@ -242,6 +301,10 @@ function createConfidentialEntry(fileExp, basePath, objectRecord, kind = 'confid
             modified: objectRecord.updatedAt || null,
             dpuCanWrite: canWrite,
             dpuCanCreateChildren: isDpuFolderType(objectType) && canWrite,
+            dpuCanCreateFiles: isDpuFolderType(objectType) && canWrite,
+            dpuCanCreateDirectories: isDpuFolderType(objectType) && canWrite,
+            dpuCanRename: canWrite,
+            dpuCanDelete: canWrite,
             dpuImmutableRoot: false
         }),
         path: entryPath
@@ -298,6 +361,11 @@ async function resolveSharedNode(fileExp, normalizedPath) {
 async function resolveSecretNode(fileExp, normalizedPath) {
     const cached = getIndexedNode(fileExp, normalizedPath);
     if (cached) return cached;
+
+    if (normalizedPath === DPU_SECRETS_PATH) {
+        await getDpuRoots(fileExp);
+        return getIndexedNode(fileExp, DPU_SECRETS_PATH);
+    }
 
     const secretKey = resolveDpuSecretKey(normalizedPath);
     if (!secretKey) {
@@ -414,29 +482,6 @@ export async function listDpuDirectory(fileExp, path) {
         .map((item) => createConfidentialEntry(fileExp, normalizedPath, item));
 }
 
-function buildSecretPreview(secret) {
-    if (secret.valueVisible) {
-        return String(secret.value ?? '');
-    }
-    if (secret.valueMasked) {
-        return [
-            `Key: ${secret.key}`,
-            `Owner: ${secret.ownerId || '—'}`,
-            `Role: ${secret.role || '—'}`,
-            '',
-            'Value is hidden.',
-            'You have access to this secret, but not read permission.'
-        ].join('\n');
-    }
-    return [
-        `Key: ${secret.key}`,
-        `Owner: ${secret.ownerId || '—'}`,
-        `Role: ${secret.role || '—'}`,
-        '',
-        'Value is unavailable.'
-    ].join('\n');
-}
-
 function escapeHtml(value) {
     return String(value ?? '')
         .replaceAll('&', '&amp;')
@@ -444,6 +489,70 @@ function escapeHtml(value) {
         .replaceAll('>', '&gt;')
         .replaceAll('"', '&quot;')
         .replaceAll("'", '&#39;');
+}
+
+function formatSecretTimestamp(fileExp, value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '—';
+    try {
+        return escapeHtml(fileExp.formatDate ? fileExp.formatDate(raw) : raw);
+    } catch (_) {
+        return escapeHtml(raw);
+    }
+}
+
+function buildSecretPreviewMarkup(fileExp, secret) {
+    const owner = escapeHtml(secret.ownerId || '—');
+    const role = escapeHtml(secret.role || '—');
+    const createdAt = formatSecretTimestamp(fileExp, secret.createdAt);
+    const updatedAt = formatSecretTimestamp(fileExp, secret.updatedAt);
+    const value = String(secret.value ?? '');
+    const valueVisible = Boolean(secret.valueVisible);
+    const canWrite = Boolean(secret.canWrite);
+    const valueStateLabel = valueVisible ? 'Visible' : (secret.valueMasked ? 'Hidden' : 'Unavailable');
+    const valueBody = valueVisible
+        ? `<pre class="dpu-secret-value">${escapeHtml(value)}</pre>`
+        : `<div class="dpu-secret-message">${
+            escapeHtml(
+                secret.valueMasked
+                    ? 'Value is hidden. You have access to this secret, but not read permission.'
+                    : 'Value is unavailable.'
+            )
+        }</div>`;
+    const hint = canWrite
+        ? '<div class="dpu-secret-hint">Use Edit to update the secret value.</div>'
+        : '';
+
+    return `
+        <section class="dpu-secret-card">
+            <div class="dpu-secret-meta">
+                <div class="dpu-secret-meta-item">
+                    <span class="dpu-secret-meta-label">Created</span>
+                    <span class="dpu-secret-meta-value">${createdAt}</span>
+                </div>
+                <div class="dpu-secret-meta-item">
+                    <span class="dpu-secret-meta-label">Owner</span>
+                    <span class="dpu-secret-meta-value">${owner}</span>
+                </div>
+                <div class="dpu-secret-meta-item">
+                    <span class="dpu-secret-meta-label">Role</span>
+                    <span class="dpu-secret-meta-value">${role}</span>
+                </div>
+                <div class="dpu-secret-meta-item">
+                    <span class="dpu-secret-meta-label">Updated</span>
+                    <span class="dpu-secret-meta-value">${updatedAt}</span>
+                </div>
+            </div>
+            <div class="dpu-secret-section">
+                <div class="dpu-secret-section-header">
+                    <span class="dpu-secret-section-title">Value</span>
+                    <span class="dpu-secret-value-state">${escapeHtml(valueStateLabel)}</span>
+                </div>
+                ${valueBody}
+                ${hint}
+            </div>
+        </section>
+    `;
 }
 
 export async function openDpuFile(fileExp, filePath, { invalidate = true } = {}) {
@@ -454,20 +563,21 @@ export async function openDpuFile(fileExp, filePath, { invalidate = true } = {})
     }
 
     if (node.kind === 'secret') {
-        const parsed = await callDpuTool('dpu_secret_get', { key: node.key });
-        const secret = parsed.secret || {};
-        const fileContent = buildSecretPreview(secret);
+        const snapshot = await readDpuCurrentItemState(fileExp, normalizedPath);
+        const secret = snapshot.secret || {};
+        const fileContent = Boolean(secret.valueVisible) ? String(secret.value ?? '') : '';
         fileExp.setPreviewState({
             fileContent,
-            previewContent: renderCodePreview(fileContent, `${secret.key || 'secret'}.txt`),
+            previewContent: buildSecretPreviewMarkup(fileExp, secret),
             selectedIsMarkdown: false,
-            previewMode: 'code',
+            previewMode: 'dpu-secret',
             mediaType: null,
             fileLoadInfo: null,
             markdownTextView: false,
             documentId: null,
             dpuSelectedObjectId: null,
             dpuSelectedCanWrite: Boolean(secret.canWrite),
+            dpuSelectedUpdatedAt: String(secret.updatedAt || ''),
             dpuSelectedCanComment: false,
             dpuSelectedCommentCount: 0,
             dpuSelectedComments: [],
@@ -485,8 +595,8 @@ export async function openDpuFile(fileExp, filePath, { invalidate = true } = {})
 
     if (node.kind === 'confidential' || node.kind === 'shared-object') {
         await ensureDpuCommentsComponentRegistered();
-        const parsed = await callDpuTool('dpu_confidential_get', { id: node.objectId });
-        const objectRecord = parsed.object || {};
+        const snapshot = await readDpuCurrentItemState(fileExp, normalizedPath);
+        const objectRecord = snapshot.object || {};
         const objectType = normalizeDpuObjectType(objectRecord.type, node.type);
         if (!isDpuFileType(objectType)) {
             throw new Error(`Confidential object is not a file: ${normalizedPath}`);
@@ -517,6 +627,7 @@ export async function openDpuFile(fileExp, filePath, { invalidate = true } = {})
             documentId: null,
             dpuSelectedObjectId: objectRecord.id || null,
             dpuSelectedCanWrite: Boolean(objectRecord.canWrite),
+            dpuSelectedUpdatedAt: String(objectRecord.updatedAt || ''),
             dpuSelectedCanComment: Boolean(objectRecord.canComment),
             dpuSelectedCommentCount: Number.parseInt(String(objectRecord.commentCount || 0), 10) || 0,
             dpuSelectedComments: comments,
@@ -569,6 +680,12 @@ export async function getDpuPathCapabilities(fileExp, path) {
     const canCreateDirectories = Object.prototype.hasOwnProperty.call(node, 'canCreateDirectories')
         ? Boolean(node.canCreateDirectories)
         : canCreateChildren;
+    const canRename = Object.prototype.hasOwnProperty.call(node, 'canRename')
+        ? Boolean(node.canRename)
+        : (canWrite && !immutableRoot);
+    const canDelete = Object.prototype.hasOwnProperty.call(node, 'canDelete')
+        ? Boolean(node.canDelete)
+        : (canWrite && !immutableRoot);
 
     return {
         isDpu: true,
@@ -577,8 +694,8 @@ export async function getDpuPathCapabilities(fileExp, path) {
         canCreateChildren,
         canCreateFiles,
         canCreateDirectories,
-        canRename: canWrite && !immutableRoot,
-        canDelete: canWrite && !immutableRoot,
+        canRename,
+        canDelete,
         canUpload: canCreateChildren
     };
 }
@@ -663,6 +780,9 @@ export async function createDpuFile(fileExp, parentPath, name, { content = '', m
 
 export async function renameDpuEntry(fileExp, sourcePath, newName) {
     const sourceNode = await ensureDpuWritableEntry(fileExp, sourcePath);
+    if (sourceNode?.kind === 'secret') {
+        throw new Error('Secret keys cannot be renamed.');
+    }
     const updated = await callDpuTool('dpu_confidential_update', {
         id: sourceNode.objectId,
         name: newName
@@ -673,6 +793,11 @@ export async function renameDpuEntry(fileExp, sourcePath, newName) {
 
 export async function deleteDpuEntry(fileExp, targetPath) {
     const targetNode = await ensureDpuWritableEntry(fileExp, targetPath);
+    if (targetNode?.kind === 'secret' && targetNode?.key) {
+        await callDpuTool('dpu_secret_delete', { key: targetNode.key });
+        invalidateDpuMutationState(fileExp, [targetPath, DPU_SECRETS_PATH]);
+        return true;
+    }
     await callDpuTool('dpu_confidential_delete', { id: targetNode.objectId });
     invalidateDpuMutationState(fileExp, [targetPath, fileExp.parentPath(targetPath) || '/']);
     return true;

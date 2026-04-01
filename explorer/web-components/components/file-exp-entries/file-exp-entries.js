@@ -273,8 +273,14 @@ export class FileExpEntries {
         const canWrite = isManaged ? Boolean(entry?.dpuCanWrite) : true;
         const canCreateChildren = isManaged ? Boolean(entry?.dpuCanCreateChildren) : true;
         const immutableRoot = isManaged ? Boolean(entry?.dpuImmutableRoot) : false;
-        const disableRename = isManaged ? (!canWrite || immutableRoot) : false;
-        const disableDelete = isManaged ? (!canWrite || immutableRoot) : false;
+        const canRename = isManaged
+            ? (Object.prototype.hasOwnProperty.call(entry || {}, 'dpuCanRename') ? Boolean(entry?.dpuCanRename) : (canWrite && !immutableRoot))
+            : true;
+        const canDelete = isManaged
+            ? (Object.prototype.hasOwnProperty.call(entry || {}, 'dpuCanDelete') ? Boolean(entry?.dpuCanDelete) : (canWrite && !immutableRoot))
+            : true;
+        const disableRename = !canRename;
+        const disableDelete = !canDelete;
         const disableCopyCut = isManaged;
         const disableUploadHere = isManaged ? !(type === 'directory' && canCreateChildren) : false;
         const disablePasteInto = isManaged ? true : !canPasteInto;

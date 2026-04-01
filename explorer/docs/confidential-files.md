@@ -13,6 +13,8 @@ Explorer exposes Confidential content under virtual paths:
 
 These are not normal filesystem paths. They are resolved dynamically through DPU.
 
+In the Explorer UI, `/Confidential/Shared` is displayed with the label `Shared with me`.
+
 Main path helpers live in:
 
 - [`services/dpu/dpuPaths.js`](../services/dpu/dpuPaths.js)

@@ -2,7 +2,7 @@ import { saveColumnVisibilityPreference } from "./file-exp-state.js";
 import { renderApplicationPluginSlots } from "./file-exp-application-plugins.js";
 import { getPreviewUiState as derivePreviewUiState } from "./file-exp-preview-state.js";
 import { scrollToLine } from "./file-exp-utils.js";
-import { getDpuPathCapabilities, isDpuManagedPath } from "./file-exp-dpu-provider.js";
+import { DPU_SECRETS_PATH, getDpuPathCapabilities, isDpuManagedPath } from "./file-exp-dpu-provider.js";
 
 export async function runAfterRender(fileExp, options = {}) {
     const previewLinesFallback = Number.isFinite(options.previewLines) ? options.previewLines : 400;
@@ -70,6 +70,8 @@ export async function runAfterRender(fileExp, options = {}) {
     const upButton = fileExp.element.querySelector('#upButton');
     const toolbarMenuButton = fileExp.element.querySelector('#toolbarMenuButton');
     const toolbarMenu = fileExp.element.querySelector('#toolbarMenu');
+    const newDirectoryMenuItem = fileExp.element.querySelector('#newDirectoryMenuItem');
+    const newFileMenuItem = fileExp.element.querySelector('#newFileMenuItem');
     const uploadButton = fileExp.element.querySelector('#uploadButton');
     const accountMenuButton = fileExp.element.querySelector('#accountMenuButton');
     const accountMenu = fileExp.element.querySelector('#accountMenu');
@@ -96,6 +98,29 @@ export async function runAfterRender(fileExp, options = {}) {
                 ? 'Create items in this Confidential folder'
                 : 'Create actions are not allowed in this Confidential location.')
             : 'More actions';
+    }
+    if (newDirectoryMenuItem) {
+        const allowNewDirectory = managedByDpu ? Boolean(dpuCapabilities?.canCreateDirectories) : true;
+        newDirectoryMenuItem.disabled = !allowNewDirectory;
+        newDirectoryMenuItem.classList.toggle('disabled', !allowNewDirectory);
+        newDirectoryMenuItem.title = allowNewDirectory
+            ? 'Create folder'
+            : 'Folders are not allowed in this location.';
+    }
+    if (newFileMenuItem) {
+        const allowNewFile = managedByDpu ? Boolean(dpuCapabilities?.canCreateFiles) : true;
+        const newFileLabel = fileExp.normalizePath(fileExp.state.path || '/') === DPU_SECRETS_PATH
+            ? 'New Secret'
+            : 'New File';
+        const labelNode = newFileMenuItem.querySelector('.action-menu-item-label');
+        if (labelNode) {
+            labelNode.textContent = newFileLabel;
+        }
+        newFileMenuItem.disabled = !allowNewFile;
+        newFileMenuItem.classList.toggle('disabled', !allowNewFile);
+        newFileMenuItem.title = allowNewFile
+            ? (newFileLabel === 'New Secret' ? 'Create secret' : 'Create file')
+            : 'Files are not allowed in this location.';
     }
 
     const updateToggleState = () => {

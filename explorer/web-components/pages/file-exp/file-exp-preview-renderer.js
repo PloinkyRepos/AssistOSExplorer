@@ -341,6 +341,17 @@ export function renderStandardPreview(fileExp, refs, previewUiState) {
         return;
     }
 
+    if (fileExp.state.previewMode === 'dpu-secret') {
+        fileExp.detachPreviewAnchorHandler();
+        toggleHidden(fileExp, refs.filePreview, false);
+        toggleHidden(fileExp, refs.mediaPreview, true);
+        clearMountElement(refs.dpuCommentPopover);
+        toggleHidden(fileExp, refs.dpuCommentPopover, true);
+        refs.filePreview.className = 'dpu-secret-preview';
+        refs.filePreview.innerHTML = fileExp.state.previewContent || '<div class="preview-placeholder">Secret preview is unavailable.</div>';
+        return;
+    }
+
     toggleHidden(fileExp, refs.mediaPreview, true);
     refs.mediaPreview.textContent = '';
     refs.componentMount.classList.remove('onlyoffice-editor-host');

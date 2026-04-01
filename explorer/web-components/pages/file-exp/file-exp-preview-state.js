@@ -43,6 +43,7 @@ export function getPreviewUiState(state) {
     const showTextPreview = canEdit
         && isPlainTextFile
         && !state?.selectedIsMarkdown
+        && state?.previewMode !== 'dpu-secret'
         && !(isHtml && viewMode === 'web');
 
     return {

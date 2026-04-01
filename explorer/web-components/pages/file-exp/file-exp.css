@@ -1151,6 +1151,100 @@ th {
     border-radius: 0;
 }
 
+.dpu-secret-preview {
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+    padding: 18px;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--file-exp-panel) 92%, white 8%) 0%, var(--file-exp-panel) 100%);
+}
+
+.dpu-secret-card {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    max-width: 920px;
+}
+
+.dpu-secret-meta {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+}
+
+.dpu-secret-meta-item,
+.dpu-secret-section {
+    border: 1px solid var(--file-exp-border);
+    border-radius: 12px;
+    background: var(--file-exp-panel);
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+}
+
+.dpu-secret-meta-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 14px;
+}
+
+.dpu-secret-meta-label,
+.dpu-secret-section-title,
+.dpu-secret-value-state {
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-soft);
+}
+
+.dpu-secret-meta-value {
+    font-size: 0.96rem;
+    font-weight: 600;
+    color: var(--text);
+    word-break: break-word;
+}
+
+.dpu-secret-section {
+    padding: 14px;
+}
+
+.dpu-secret-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.dpu-secret-value {
+    margin: 0;
+    padding: 14px;
+    border-radius: 10px;
+    background: var(--file-exp-subtle-surface);
+    border: 1px solid var(--file-exp-border);
+    color: var(--text);
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: "SFMono-Regular", "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 0.92rem;
+    line-height: 1.55;
+}
+
+.dpu-secret-message {
+    padding: 14px;
+    border-radius: 10px;
+    background: var(--file-exp-subtle-surface);
+    border: 1px dashed var(--file-exp-border);
+    color: var(--text-soft);
+    line-height: 1.55;
+}
+
+.dpu-secret-hint {
+    margin-top: 12px;
+    font-size: 0.88rem;
+    color: var(--text-soft);
+}
+
 .preview-pane-shell html-web-view .html-web-view-shell {
     border: none;
     border-radius: 0;
