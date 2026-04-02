@@ -1,6 +1,6 @@
 # IDE-plugins
 
-This directory is the canonical runtime plugin bundle for the `fileExplorer` repository.
+This directory is the canonical runtime plugin bundle for the `explorer` agent inside the `fileExplorer` repository.
 
 ## Scope
 
@@ -12,7 +12,7 @@ It contains:
 
 ## Runtime contract
 
-Explorer discovers plugins from `IDE-plugins/*/config.json` and treats this directory as the local plugin source for the `fileExplorer` repository.
+Explorer discovers plugins from `IDE-plugins/*/config.json` and treats this directory as the local plugin source for the `explorer` agent.
 
 ## Rules
 

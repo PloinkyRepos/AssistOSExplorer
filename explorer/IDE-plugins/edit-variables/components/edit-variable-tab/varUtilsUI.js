@@ -54,9 +54,9 @@ export function constructFullExpression(presenter){
     }
     let conditionalCheckbox = self.element.querySelector("#conditional");
     let forceExecutionCheckbox = self.element.querySelector("#forceExecution");
-    if(conditionalCheckbox.checked){
+    if(conditionalCheckbox?.checked){
         command = `?${command}`;
-    } else if(forceExecutionCheckbox.checked){
+    } else if(forceExecutionCheckbox?.checked){
         command = `!${command}`;
     }
     expression = `@${variableName} ${command} ${expression}`;
@@ -184,25 +184,39 @@ export function selectOption(presenter, option){
     let input = searchSelect.querySelector("input");
     input.value = value;
     let typeInput = self.element.querySelector(".form-item.type");
-    if(value === "new"){
-        typeInput.classList.remove("hidden");
-    } else {
-        typeInput.classList.add("hidden");
+    if(typeInput){
+        if(value === "new"){
+            typeInput.classList.remove("hidden");
+        } else {
+            typeInput.classList.add("hidden");
+        }
     }
     let conditionalCheckBoxItem = self.element.querySelector(".conditional-command-item");
     let forceExecutionCheckBoxItem = self.element.querySelector(".force-command-item");
     let conditionalCheckbox = self.element.querySelector("#conditional");
     let forceExecutionCheckbox = self.element.querySelector("#forceExecution");
     if(value === "macro" || value === "jsdef"){
-        conditionalCheckbox.checked = false;
-        forceExecutionCheckbox.checked = false;
+        if(conditionalCheckbox){
+            conditionalCheckbox.checked = false;
+        }
+        if(forceExecutionCheckbox){
+            forceExecutionCheckbox.checked = false;
+        }
         changeExpressionInputToMultiLine(self);
-        conditionalCheckBoxItem.classList.add("hidden");
-        forceExecutionCheckBoxItem.classList.add("hidden");
+        if(conditionalCheckBoxItem){
+            conditionalCheckBoxItem.classList.add("hidden");
+        }
+        if(forceExecutionCheckBoxItem){
+            forceExecutionCheckBoxItem.classList.add("hidden");
+        }
     } else {
         changeMultiLineToSingleLine(self);
-        conditionalCheckBoxItem.classList.remove("hidden");
-        forceExecutionCheckBoxItem.classList.remove("hidden");
+        if(conditionalCheckBoxItem){
+            conditionalCheckBoxItem.classList.remove("hidden");
+        }
+        if(forceExecutionCheckBoxItem){
+            forceExecutionCheckBoxItem.classList.remove("hidden");
+        }
     }
     changePreviewValue(self);
 }

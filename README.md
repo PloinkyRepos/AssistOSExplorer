@@ -24,7 +24,7 @@ For a complete guide to the agent's architecture, plugin development, and advanc
 Component-level documentation:
 
 - [explorer](./explorer/README.md)
-- [IDE-plugins](./IDE-plugins/README.md)
+- [IDE-plugins](./explorer/IDE-plugins/README.md)
 - [explorerSkillsAgent](./explorerSkillsAgent/README.md)
 
 ---

@@ -32,11 +32,11 @@ test('computeComponentBaseUrl supports workspace asset roots for dependencies', 
     const base = computeComponentBaseUrl('fileExplorer', 'add-variable', {
         ownerComponent: 'edit-variables',
         isDependency: true,
-        ownerAssetBaseUrl: '/workspace-files/.ploinky/repos/fileExplorer/IDE-plugins/edit-variables'
+        ownerAssetBaseUrl: '/workspace-files/.ploinky/repos/fileExplorer/explorer/IDE-plugins/edit-variables'
     });
     assert.equal(
         base,
-        '/workspace-files/.ploinky/repos/fileExplorer/IDE-plugins/edit-variables/components/add-variable/add-variable'
+        '/workspace-files/.ploinky/repos/fileExplorer/explorer/IDE-plugins/edit-variables/components/add-variable/add-variable'
     );
 });
 
@@ -47,13 +47,13 @@ test('resolveRuntimeAssetUrl remaps legacy absolute agent asset paths to workspa
         '/IDE-plugins/assets/icons/preview.svg',
         'icon.svg',
         {
-            assetBaseUrl: '/workspace-files/.ploinky/repos/fileExplorer/IDE-plugins/document-video-preview',
-            pluginsBaseUrl: '/workspace-files/.ploinky/repos/fileExplorer/IDE-plugins'
+            assetBaseUrl: '/workspace-files/.ploinky/repos/fileExplorer/explorer/IDE-plugins/document-video-preview',
+            pluginsBaseUrl: '/workspace-files/.ploinky/repos/fileExplorer/explorer/IDE-plugins'
         }
     );
     assert.equal(
         value,
-        '/workspace-files/.ploinky/repos/fileExplorer/IDE-plugins/assets/icons/preview.svg'
+        '/workspace-files/.ploinky/repos/fileExplorer/explorer/IDE-plugins/assets/icons/preview.svg'
     );
 });
 

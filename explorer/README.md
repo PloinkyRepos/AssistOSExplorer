@@ -35,10 +35,10 @@ Open:
 
 ## Documentation
 
-- [DS01 - Explorer System Overview](./docs/specs/DS01-system-overview.md)
-- [DS02 - Plugin Hosting And Dependencies](./docs/specs/DS02-plugin-hosting-and-dependencies.md)
-- [DS03 - Confidential Files And DPU](./docs/specs/DS03-confidential-files-and-dpu.md)
-- [DS04 - OnlyOffice Integration](./docs/specs/DS04-onlyoffice-integration.md)
+- [DS01 - Explorer System Overview](../docs/specs/DS01-system-overview.md)
+- [DS02 - Plugin Hosting And Dependencies](../docs/specs/DS02-plugin-hosting-and-dependencies.md)
+- [DS03 - Confidential Files And DPU](../docs/specs/DS03-confidential-files-and-dpu.md)
+- [DS04 - OnlyOffice Integration](../docs/specs/DS04-onlyoffice-integration.md)
 
 ## HTML Web Preview Pathing
 

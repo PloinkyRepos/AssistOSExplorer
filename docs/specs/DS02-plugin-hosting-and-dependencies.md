@@ -62,7 +62,7 @@ The architecture is intentionally split so that:
 
 The `fileExplorer` repository keeps its repository-local runtime plugins in:
 
-- `fileExplorer/IDE-plugins`
+- `fileExplorer/explorer/IDE-plugins`
 
 This is the canonical local plugin root for:
 
