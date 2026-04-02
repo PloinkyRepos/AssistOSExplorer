@@ -10,14 +10,14 @@ This guide consolidates all Explorer documentation (architecture, document model
 - **Plugin host**: Discovers `IDE-plugins/*/config.json` across enabled repos; tools are exposed to the UI grouped by `location`.
 - **Document manager**: Markdown is parsed into chapters/paragraphs with metadata and SOPLang commands.
 - **No HTTP blob endpoint in current server**: UI helpers expect `/blobs/<agent>`, but `filesystem-http-server.mjs` only exposes MCP on `/mcp` and a `/health` check.
-- **Auto-enabled deps**: Explorer manifest enables `soplang` and `multimedia` (same repo); avoid enabling duplicates manually.
+- **Bundled plugin source**: This repository now keeps its local runtime plugins under `fileExplorer/IDE-plugins`.
 - **Separate SOPLang agent**: `soplangAgent` (repo `SOPLangBuilder`) provides explicit MCP tools such as `sync_markdown_documents` and `execute_workspace_build`; it runs in its own container sharing the workspace.
 
 ---
 
 ## 2) Runtime & Routing
 
-- **Manifest**: `explorer/manifest.json` – `container: node:20-alpine`, `agent: node /code/filesystem-http-server.mjs`, `env: ["ASSISTOS_FS_ROOT"]`, `enable: ["soplang","multimedia"]`.
+- **Manifest**: `explorer/manifest.json` defines the Explorer runtime container, startup command, environment, and external dependency agents.
 - **Global mode**: `p-cli enable agent fileExplorer/explorer global` runs in the current workspace folder. First `p-cli start explorer <port>` also pins the router/static port.
 - **Router**: <a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md">Ploinky</a> router serves static UI and proxies MCP on the chosen port (e.g., 8080 → `/explorer/index.html`).
 - **Repo-scoped static exposure for docs preview**: Keep `explorer/.ploinky/repos/fileExplorer -> ../../..` versioned in git so `/.ploinky/repos/fileExplorer/docs/*` resolves on all environments.
@@ -99,7 +99,7 @@ This guide consolidates all Explorer documentation (architecture, document model
 - **Prereqs**: Node 20+, npm, active <a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md">Ploinky</a> workspace.
 - **Global run**: `p-cli enable repo fileExplorer` then `p-cli enable agent fileExplorer/explorer global`; start with `p-cli start explorer 8080` (router/UI on that port).
 - **Filesystem root**: Set `ASSISTOS_FS_ROOT` (or `MCP_FS_ROOT`) to the workspace path(s); fallback is cwd. First root is workspace root.
-- **Auto-enabled agents**: `soplang`, `multimedia` (from Explorer manifest).
+- **Bundled local plugins**: local Explorer-facing plugins are loaded from `fileExplorer/IDE-plugins`.
 - **Dependencies**: `npm install` at repo root (and `explorer/` if needed).
 - **Hot reload**: UI refresh picks up most changes; plugin `config.json` or new plugins require Explorer restart to rescan. SOPLang comment edits are re-hydrated on reload; rerun `syncMarkdownDocuments` to persist into the SOPLang store.
 - **Preview portability rule**: Do not rely on local-only symlinks like `explorer/docs`. Use the repo-scoped symlink under `explorer/.ploinky/repos/fileExplorer` so preview works consistently on clean clones.
@@ -111,7 +111,7 @@ This guide consolidates all Explorer documentation (architecture, document model
   ├─ index.html / main.js         # SPA entry
   ├─ webskel.json                 # UI components
   ├─ web-components/              # UI implementations
-  ├─ IDE-plugins/                 # Plugin location
+  ├─ ../IDE-plugins/              # Canonical local plugin bundle for the fileExplorer repo
   ├─ services/                    # Document parsing/services
   └─ utils/                       # Shared utilities
   ```
