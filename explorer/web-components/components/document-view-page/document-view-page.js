@@ -243,15 +243,17 @@ export class DocumentViewPage {
         let scriptArgs = this.element.querySelector(".script-modal");
         let buildIcon = this.element.querySelector(".build-document");
         let commentsIcon = this.element.querySelector(".comments-icon-container");
-        //this.attachTooltip(this.undoButton, "Undo");
-        //this.attachTooltip(this.redoButton, "Redo");
-        //this.attachTooltip(tasksMenu, "Tasks");
-        //this.attachTooltip(snapshotsButton, "Snapshots");
-        this.attachTooltip(this.tableOfContents, "Table of Contents");
-        this.attachTooltip(this.tableOfReferences, "References");
-        //this.attachTooltip(scriptArgs, "Run Script");
-        this.attachTooltip(commentsIcon, "Add Comment");
-        this.attachTooltip(buildIcon, "Build Document");
+        let actionsMenu = this.element.querySelector(".document-menu-container");
+        this.tableOfContents.title = "Table of Contents";
+        this.tableOfContents.setAttribute("aria-label", "Table of Contents");
+        this.tableOfReferences.title = "References";
+        this.tableOfReferences.setAttribute("aria-label", "References");
+        commentsIcon.title = "Add Comment";
+        commentsIcon.setAttribute("aria-label", "Add Comment");
+        buildIcon.title = "Build Document";
+        buildIcon.setAttribute("aria-label", "Build Document");
+        actionsMenu.title = "More Actions";
+        actionsMenu.setAttribute("aria-label", "More Actions");
         if (this.viewMode === "demo") {
             this.element.querySelector('.document-page-header')?.remove();
         }
@@ -279,19 +281,6 @@ export class DocumentViewPage {
     }
     async openSnapshotsModal(targetElement) {
         await assistOS.UI.showModal("document-snapshots-modal");
-    }
-
-    attachTooltip(containerElement, tooltip) {
-        let tooltipDiv = document.createElement("div");
-        tooltipDiv.classList.add("tooltip-name");
-        tooltipDiv.innerHTML = tooltip;
-        containerElement.appendChild(tooltipDiv);
-        containerElement.addEventListener("mouseover", async () => {
-            containerElement.querySelector(".tooltip-name").style.display = "block";
-        });
-        containerElement.addEventListener("mouseout", async () => {
-            containerElement.querySelector(".tooltip-name").style.display = "none";
-        });
     }
 
     async changeDocInfoDisplay(arrow) {

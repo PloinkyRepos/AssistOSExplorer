@@ -10,6 +10,7 @@
 }
 .close-plugin{
     width: 14px;
+    margin-left: 14px;
 }
 .icon-container.locked-item{
     background-color: var(--very-light-gray);
@@ -23,21 +24,6 @@
 .document-plugin{
     margin-right: 0 !important;
     margin-left: 15px;
-}
-.plugin-name,
-.tooltip-name{
-    color: var(--default-font-color);
-    z-index: 2;
-    top: 32px;
-    padding: 5px;
-    display: none;
-    position: absolute;
-    border: 1px solid var(--action-button-background);
-    background-color: var(--white);
-    border-radius: 5px;
-    font-size: 14px;
-    font-weight: 500;
-    width: max-content;
 }
 .document-highlight-plugin,
 .infoText-highlight-plugin,

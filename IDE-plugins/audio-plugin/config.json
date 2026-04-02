@@ -1,0 +1,11 @@
+{
+    "pluginCategory": "document",
+    "component": "audio-plugin",
+    "location": ["chapter", "paragraph"],
+    "tooltip": "Audio Plugin",
+    "icon": "/IDE-plugins/assets/icons/audio-plugin.svg",
+    "presenter": "AudioPlugin",
+    "type": "modal",
+    "autoPin": false,
+    "dependencies": []
+}

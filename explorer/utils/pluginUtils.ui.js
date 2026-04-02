@@ -192,34 +192,25 @@ async function renderPluginIcons(containerElement, type) {
             const iconContext = {icon: plugin.icon, plugin: plugin.component, type};
             const contextString = encodeURIComponent(JSON.stringify(iconContext));
             iconContainer.innerHTML = `<${plugin.iconComponent} data-context="${contextString}" data-presenter="${plugin.iconComponent}"></${plugin.iconComponent}>`;
-            attachPluginTooltip(iconContainer, plugin, type, plugin.autoPin);
+            attachPluginAction(iconContainer, plugin, type, plugin.autoPin);
             containerElement.appendChild(iconContainer);
         } else {
             const iconSrc = await getPluginIcon(plugin);
             const containerDiv = document.createElement("div");
             containerDiv.innerHTML = `<img class="pointer black-icon" loading="lazy" src="${iconSrc}" alt="icon">`;
-            attachPluginTooltip(containerDiv, plugin, type, plugin.autoPin);
+            attachPluginAction(containerDiv, plugin, type, plugin.autoPin);
             containerElement.appendChild(containerDiv);
         }
     }
 }
 
-function attachPluginTooltip(containerElement, plugin, type, autoPin = false) {
+function attachPluginAction(containerElement, plugin, type, autoPin = false) {
     containerElement.classList.add("icon-container", "plugin-circle", plugin.component, "pointer");
     containerElement.setAttribute("data-local-action", `openPlugin ${type} ${plugin.component} ${autoPin}`);
-    let tooltip = containerElement.querySelector(".plugin-name");
-    if (!tooltip) {
-        tooltip = document.createElement("div");
-        tooltip.classList.add("plugin-name");
-        tooltip.innerHTML = plugin.tooltip;
-        containerElement.appendChild(tooltip);
+    if (plugin.tooltip) {
+        containerElement.setAttribute("title", plugin.tooltip);
+        containerElement.setAttribute("aria-label", plugin.tooltip);
     }
-    containerElement.addEventListener("mouseover", async () => {
-        containerElement.querySelector(".plugin-name").style.display = "block";
-    });
-    containerElement.addEventListener("mouseout", async () => {
-        containerElement.querySelector(".plugin-name").style.display = "none";
-    });
     containerElement.addEventListener("plugin-modal-closed", () => {
         containerElement.classList.remove(`${type}-highlight-plugin`);
     });

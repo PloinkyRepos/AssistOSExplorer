@@ -9,15 +9,17 @@ document-view-page {
 
 .document-plugins-container {
     display: flex;
+    align-items: center;
+    gap: 6px;
 }
 
 .document-plugins-container .icon-container {
-    margin-right: 0;
-    margin-left: 15px;
+    margin: 0;
 }
 
 .close-plugin {
     width: 14px;
+    margin-left: 14px;
 }
 
 .icon-container.locked-item {
@@ -33,23 +35,68 @@ document-view-page {
 
 .document-plugin {
     margin-right: 0 !important;
-    margin-left: 15px;
+    margin-left: 0;
 }
 
-.plugin-name,
-.tooltip-name {
-    color: var(--default-font-color);
-    z-index: 2;
-    top: 32px;
-    padding: 5px;
-    display: none;
-    position: absolute;
-    border: 1px solid var(--action-button-background);
-    background-color: var(--white);
-    border-radius: 5px;
-    font-size: 14px;
-    font-weight: 500;
-    width: max-content;
+.document-page-header .icon-container,
+.document-page-header .document-menu-container,
+.infoText-header-section .icon-container {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    border: 1px solid rgba(28, 47, 87, 0.10);
+    background: linear-gradient(180deg, #ffffff 0%, #f6f8fc 100%);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+    transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease, background-color 140ms ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.document-page-header .icon-container:hover,
+.document-page-header .document-menu-container:hover,
+.infoText-header-section .icon-container:hover {
+    transform: translateY(-1px);
+    border-color: rgba(47, 105, 255, 0.28);
+    background: linear-gradient(180deg, #ffffff 0%, #eef4ff 100%);
+    box-shadow: 0 8px 18px rgba(47, 105, 255, 0.12);
+}
+
+.document-page-header .icon-container:active,
+.document-page-header .document-menu-container:active,
+.infoText-header-section .icon-container:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 6px rgba(47, 105, 255, 0.14);
+}
+
+.document-page-header .icon-container img,
+.document-page-header .document-menu-container img,
+.infoText-header-section .icon-container img {
+    width: 16px;
+    height: 16px;
+    object-fit: contain;
+    opacity: 0.9;
+}
+
+.document-page-header .icon-container:hover img,
+.document-page-header .document-menu-container:hover img,
+.infoText-header-section .icon-container:hover img {
+    opacity: 1;
+}
+
+.document-page-header .plugin-circle,
+.infoText-header-section .plugin-circle {
+    margin: 0;
+}
+
+.document-page-header .plugins-separator,
+.infoText-header-section .plugins-separator {
+    width: 1px;
+    height: 24px;
+    margin: 0 4px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(24, 39, 75, 0.05) 0%, rgba(24, 39, 75, 0.22) 50%, rgba(24, 39, 75, 0.05) 100%);
 }
 
 .document-highlight-plugin,
@@ -64,6 +111,18 @@ document-view-page {
 .chapter-highlight-plugin img,
 .paragraph-highlight-plugin img {
     filter: invert(1) brightness(2);
+}
+
+.document-page-header .document-highlight-plugin,
+.infoText-header-section .infoText-highlight-plugin {
+    border-color: rgba(47, 105, 255, 0.36) !important;
+    background: linear-gradient(180deg, #f4f8ff 0%, #e5efff 100%) !important;
+    box-shadow: 0 8px 18px rgba(47, 105, 255, 0.16);
+}
+
+.document-page-header .document-highlight-plugin img,
+.infoText-header-section .infoText-highlight-plugin img {
+    filter: none;
 }
 
 .options-container {
@@ -89,6 +148,27 @@ document-view-page {
     align-items: center;
     padding-bottom: 10px;
     height: 43px;
+}
+
+.infoText-header-section .right-section {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    width: auto;
+    min-width: fit-content;
+}
+
+.infoText-header-section .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.infoText-plugins-container {
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 
 .book-comment-container {
@@ -148,7 +228,8 @@ document-view-page {
     flex-direction: column;
     gap: 4px;
     margin-right: 24px;
-    width: 100%;
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
 .doc-title-label {
@@ -173,7 +254,7 @@ document-view-page {
 }
 
 .toolbar-margin {
-    margin-right: 10px;
+    margin-right: 0;
 }
 
 .infoText-input {
@@ -250,18 +331,8 @@ document-view-page {
 }
 
 .document-menu-container {
-    border-radius: 50%;
     cursor: pointer;
     position: relative;
-    width: 30px;
-    height: 30px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.document-menu-container:hover {
-    background-color: var(--very-light-gray);
 }
 
 .document-menu-dropdown {
@@ -397,7 +468,8 @@ document-view-page {
 }
 
 .action-dots {
-    width: 5px;
+    width: 14px;
+    height: 14px;
 }
 
 .task-icon {
@@ -410,8 +482,14 @@ document-view-page {
     align-items: center;
 }
 
+.document-menu-wrapper {
+    gap: 6px;
+}
+
 .menu-section {
     width: 100%;
+    gap: 14px;
+    min-width: 0;
 }
 
 .tasks-menu {

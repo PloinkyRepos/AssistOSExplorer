@@ -30,6 +30,8 @@ const buildMediaPath = (context, mediaId, extension) => {
     return `/${mediaPath}`;
 };
 
+const buildLegacyBlobPath = (mediaId) => `/blobs/explorer/${mediaId}`;
+
 /**
  * @typedef {Object} MediaClient
  * @property {(imageId: string) => Promise<string>} getImageURL
@@ -65,6 +67,38 @@ export function createMediaClient({
         await withRetry(() => callExplorerTool('create_directory', { path: directoryPath }), { retries });
     };
 
+    const legacyBlobAvailability = new Map();
+
+    const hasLegacyBlob = async (mediaId) => {
+        if (!mediaId) {
+            return false;
+        }
+        if (legacyBlobAvailability.has(mediaId)) {
+            return legacyBlobAvailability.get(mediaId);
+        }
+        try {
+            await withRetry(() => callExplorerTool('read_text_file', { path: `/blobs/${mediaId}.json` }), {
+                retries
+            });
+            legacyBlobAvailability.set(mediaId, true);
+            return true;
+        } catch (_) {
+            legacyBlobAvailability.set(mediaId, false);
+            return false;
+        }
+    };
+
+    const resolveStoredMediaUrl = async (mediaId, extension) => {
+        if (!mediaId) {
+            return '';
+        }
+        if (await hasLegacyBlob(mediaId)) {
+            return buildLegacyBlobPath(mediaId);
+        }
+        const context = getDocumentContext();
+        return buildMediaPath(context, mediaId, extension);
+    };
+
     const writeBinaryFile = async (relativePath, data) => {
         await withRetry(() => callExplorerTool('write_binary_file', {
             path: relativePath,
@@ -95,21 +129,13 @@ export function createMediaClient({
             return imageId ? `/blobs/explorer/${imageId}` : '';
         },
         async getAudioURL(audioId) {
-            if (!audioId) {
-                return '';
-            }
-            const context = getDocumentContext();
-            return buildMediaPath(context, audioId, AUDIO_FILE_EXTENSION);
+            return resolveStoredMediaUrl(audioId, AUDIO_FILE_EXTENSION);
         },
         async putAudio(uint8Array) {
             return putBinaryMedia('audio', AUDIO_FILE_EXTENSION, uint8Array);
         },
         async getVideoURL(videoId) {
-            if (!videoId) {
-                return '';
-            }
-            const context = getDocumentContext();
-            return buildMediaPath(context, videoId, VIDEO_FILE_EXTENSION);
+            return resolveStoredMediaUrl(videoId, VIDEO_FILE_EXTENSION);
         },
         async putVideo(uint8Array) {
             return putBinaryMedia('video', VIDEO_FILE_EXTENSION, uint8Array);

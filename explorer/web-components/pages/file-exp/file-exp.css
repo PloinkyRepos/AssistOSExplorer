@@ -1319,7 +1319,8 @@ th {
 }
 
 .list.collapsed .directory-filter,
-.list.collapsed .column-visibility {
+.list.collapsed .column-visibility,
+.list.collapsed #directoryViewModeButton {
     display: none !important;
 }
 

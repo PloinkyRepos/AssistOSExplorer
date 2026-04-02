@@ -1,0 +1,19 @@
+{
+    "pluginCategory": "document",
+    "component": "image-creator",
+    "location": [],
+    "tooltip": "Image Creator",
+    "icon": "/IDE-plugins/assets/icons/image.svg",
+    "iconPresenter": "SimpleStateIcon",
+    "iconComponent": "simple-state-icon",
+    "presenter": "ImageCreator",
+    "type": "embedded",
+    "autoPin": false,
+    "dependencies": [
+        {
+            "component": "simple-state-icon",
+            "presenter": "SimpleStateIcon",
+            "path": "components/simple-state-icon/simple-state-icon"
+        }
+    ]
+}

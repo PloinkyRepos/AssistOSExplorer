@@ -1,6 +1,7 @@
 import { FILE_EXP_UI_ACTIONS } from "./file-exp-ui-controller.js";
 import { PREVIEW_ACTIONS } from "./file-exp-preview-controller.js";
 import { buildFileExpHash, encodeLocalActionPathArg } from "./file-exp-utils.js";
+import { invalidateDpuState, isDpuManagedPath } from "./file-exp-dpu-provider.js";
 
 async function loadTreeContext(fileExp, targetDirectoryPath, options = {}) {
     const { selectedPath = null, historyMode = 'push' } = options;
@@ -176,7 +177,16 @@ export async function refreshDirectory(fileExp) {
         const listingPath = fileExp.state.directoryViewMode === 'tree'
             ? (fileExp.state.treeRootPath || currentPath || '/')
             : currentPath;
-        fileExp.caches.dirListing.invalidate(fileExp, listingPath);
+        const selectedPath = fileExp.normalizePath(fileExp.state.selectedPath || '');
+        const dpuRefreshTargets = [listingPath, currentPath, selectedPath].filter((targetPath) => isDpuManagedPath(targetPath));
+        if (dpuRefreshTargets.length > 0) {
+            invalidateDpuState(fileExp, dpuRefreshTargets);
+        } else {
+            fileExp.caches.dirListing.invalidate(fileExp, listingPath);
+            if (selectedPath) {
+                fileExp.caches.filePreview.invalidateForPath(selectedPath);
+            }
+        }
         const entries = await fileExp.loadDirectoryContent(listingPath);
         if (entries === null) {
             fileExp.showStatus('Path not found. Returning to root.', true);
@@ -184,6 +194,9 @@ export async function refreshDirectory(fileExp) {
             return;
         }
         await fileExp.setEntries(entries);
+        if (selectedPath && isDpuManagedPath(selectedPath)) {
+            await fileExp.openFile(selectedPath, { invalidate: false });
+        }
         if (fileExp.state.directoryViewMode === 'tree') {
             fileExp.renderEntries();
             const entriesPresenter = fileExp.getEntriesPresenter();

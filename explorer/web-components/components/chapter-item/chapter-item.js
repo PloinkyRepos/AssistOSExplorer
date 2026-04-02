@@ -222,19 +222,24 @@ export class ChapterItem {
         this.displayChapterContent();
 
         let moveChapterUp = this.element.querySelector(".move-chapter-up");
-        this.documentPresenter.attachTooltip(moveChapterUp,"Move Chapter Up");
+        moveChapterUp.title = "Move Chapter Up";
+        moveChapterUp.setAttribute("aria-label", "Move Chapter Up");
 
         let moveChapterDown = this.element.querySelector(".move-chapter-down");
-        this.documentPresenter.attachTooltip(moveChapterDown,"Move Chapter Down");
+        moveChapterDown.title = "Move Chapter Down";
+        moveChapterDown.setAttribute("aria-label", "Move Chapter Down");
 
         let insertElements = this.element.querySelector(".add-elements");
-        this.documentPresenter.attachTooltip(insertElements,"Insert Elements");
+        insertElements.title = "Insert Elements";
+        insertElements.setAttribute("aria-label", "Insert Elements");
 
         let comments = this.element.querySelector(".comment-menu");
-        this.documentPresenter.attachTooltip(comments,"Comments");
+        comments.title = "Comments";
+        comments.setAttribute("aria-label", "Comments");
 
         let deleteChapter = this.element.querySelector(".delete-chapter");
-        this.documentPresenter.attachTooltip(deleteChapter,"Delete Chapter");
+        deleteChapter.title = "Delete Chapter";
+        deleteChapter.setAttribute("aria-label", "Delete Chapter");
 
         this.changeChapterDeleteAvailability();
         UIUtils.changeCommentIndicator(this.element, this.chapter.comments.messages);

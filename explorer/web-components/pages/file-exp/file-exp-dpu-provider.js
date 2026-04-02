@@ -90,6 +90,31 @@ function resetDpuCache(fileExp) {
     };
 }
 
+function invalidateTreeViewBranches(fileExp, affectedPaths = []) {
+    const treeViewState = fileExp?.treeViewState;
+    if (!treeViewState?.childrenCache || !treeViewState?.loadingPaths) {
+        return;
+    }
+    const normalizedTargets = affectedPaths
+        .map((targetPath) => normalizeManagedPath(fileExp, targetPath))
+        .filter(Boolean);
+    if (!normalizedTargets.length) {
+        return;
+    }
+    for (const cachedPath of Array.from(treeViewState.childrenCache.keys())) {
+        const normalizedCachedPath = normalizeManagedPath(fileExp, cachedPath);
+        const shouldInvalidate = normalizedTargets.some((targetPath) => (
+            normalizedCachedPath === targetPath
+            || normalizedCachedPath.startsWith(`${targetPath}/`)
+            || targetPath.startsWith(`${normalizedCachedPath}/`)
+        ));
+        if (shouldInvalidate) {
+            treeViewState.childrenCache.delete(cachedPath);
+            treeViewState.loadingPaths.delete(cachedPath);
+        }
+    }
+}
+
 function getIndexedNode(fileExp, path) {
     const cache = getDpuCache(fileExp);
     return cache.nodesByPath.get(normalizeManagedPath(fileExp, path)) || null;
@@ -702,6 +727,7 @@ export async function getDpuPathCapabilities(fileExp, path) {
 
 function invalidateDpuMutationState(fileExp, affectedPaths = []) {
     resetDpuCache(fileExp);
+    invalidateTreeViewBranches(fileExp, affectedPaths);
     for (const targetPath of affectedPaths) {
         if (!targetPath) continue;
         fileExp.caches.dirListing.invalidate(fileExp, targetPath);

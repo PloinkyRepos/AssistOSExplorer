@@ -54,30 +54,35 @@ export class ParagraphItem {
         }
 
         let moveParagraphUp = this.element.querySelector(".move-paragraph-up");
-        this.documentPresenter.attachTooltip(moveParagraphUp,"Move Paragraph Up");
+        moveParagraphUp?.setAttribute("title", "Move Paragraph Up");
+        moveParagraphUp?.setAttribute("aria-label", "Move Paragraph Up");
 
         let moveParagraphDown = this.element.querySelector(".move-paragraph-down");
-        this.documentPresenter.attachTooltip(moveParagraphDown,"Move Paragraph Down");
+        moveParagraphDown?.setAttribute("title", "Move Paragraph Down");
+        moveParagraphDown?.setAttribute("aria-label", "Move Paragraph Down");
 
         let copyParagraph = this.element.querySelector(".copy-paragraph");
-        this.documentPresenter.attachTooltip(copyParagraph,"Copy Paragraph");
+        copyParagraph?.setAttribute("title", "Copy Paragraph");
+        copyParagraph?.setAttribute("aria-label", "Copy Paragraph");
 
         let cutParagraph = this.element.querySelector(".cut-paragraph");
-        this.documentPresenter.attachTooltip(cutParagraph,"Cut Paragraph");
+        cutParagraph?.setAttribute("title", "Cut Paragraph");
+        cutParagraph?.setAttribute("aria-label", "Cut Paragraph");
 
         let replaceParagraph = this.element.querySelector(".replace-paragraph");
-        this.documentPresenter.attachTooltip(replaceParagraph,"Replace Paragraph");
+        replaceParagraph?.setAttribute("title", "Replace Paragraph");
+        replaceParagraph?.setAttribute("aria-label", "Replace Paragraph");
 
         let insert = this.element.querySelector(".insert");
-        this.documentPresenter.attachTooltip(insert,"Insert Elements");
-
-        // let attachFiles = this.element.querySelector(".files-menu");
-        // this.documentPresenter.attachTooltip(attachFiles,"Attach Files");
+        insert?.setAttribute("title", "Insert Elements");
+        insert?.setAttribute("aria-label", "Insert Elements");
 
         let commentMenu = this.element.querySelector(".comment-menu");
-        this.documentPresenter.attachTooltip(commentMenu,"Comments");
+        commentMenu?.setAttribute("title", "Comments");
+        commentMenu?.setAttribute("aria-label", "Comments");
         let deleteParagraph = this.element.querySelector(".delete-paragraph");
-        this.documentPresenter.attachTooltip(deleteParagraph,"Delete Paragraph");
+        deleteParagraph?.setAttribute("title", "Delete Paragraph");
+        deleteParagraph?.setAttribute("aria-label", "Delete Paragraph");
 
         let paragraphText = this.element.querySelector(".paragraph-text");
         paragraphText.innerHTML = this.paragraph.text;
