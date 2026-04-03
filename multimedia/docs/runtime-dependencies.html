@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>multimedia Docs - Runtime and Dependencies</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="site-header"></div>
+
+    <main class="content content--with-sidebar">
+        <div class="doc-layout">
+            <aside class="doc-sidebar" aria-label="multimedia documentation navigation">
+                <div class="doc-sidebar__group">
+                    <p class="doc-sidebar__group-title">Documentation</p>
+                    <nav>
+                        <a href="index.html">Overview</a>
+                        <a href="architecture.html">Architecture</a>
+                        <a href="ide-plugins.html">IDE Plugins</a>
+                        <a href="media-workflows.html">Media Workflows</a>
+                        <a href="runtime-dependencies.html" aria-current="page">Runtime and Dependencies</a>
+                    </nav>
+                </div>
+                <div class="doc-sidebar__group">
+                    <p class="doc-sidebar__group-title">Specifications</p>
+                    <nav>
+                        <a href="specsLoader.html?spec=matrix.md">Design Specifications</a>
+                    </nav>
+                </div>
+            </aside>
+
+            <div class="doc-main">
+                <section class="lead">
+                    <h1>Runtime and Dependencies</h1>
+                    <p>Runtime configuration is defined in <code>multimedia/manifest.json</code>, and dependency bootstrap is centralized in <code>multimedia/scripts/install.sh</code>.</p>
+                </section>
+
+                <section>
+                    <h2>Manifest Contract</h2>
+                    <pre><code>{
+  "lite-sandbox": true,
+  "container": "node:20-bullseye",
+  "profiles": {
+    "default": {
+      "install": "/code/scripts/install.sh"
+    }
+  }
+}</code></pre>
+                    <p>The agent runs in a Node 20 container and executes the <code>default</code> profile install script at startup.</p>
+                </section>
+
+                <section>
+                    <h2>Startup Install Behavior</h2>
+                    <ul>
+                        <li>in standard container runtime: it runs <code>apt-get update && apt-get install -y git ffmpeg</code>;</li>
+                        <li>in <code>bwrap</code> runtime: it skips apt and validates tools on the host;</li>
+                        <li>if <code>git</code> is missing on the host: startup fails;</li>
+                        <li>if <code>ffmpeg</code> is missing on the host: a warning is emitted and multimedia capabilities may be limited.</li>
+                    </ul>
+                    <div class="doc-callout doc-callout--important">
+                        <p><strong>Important:</strong> FFmpeg is a runtime dependency for processing audio/video/image attachments and for the video generation skill. That is why it is installed or validated during agent startup.</p>
+                    </div>
+                </section>
+
+                <section>
+                    <h2>Operational Notes</h2>
+                    <p>For stability, treat missing <code>ffmpeg</code> as an environment issue, not a plugin bug. In bwrap mode, the recommended fix is host installation:</p>
+                    <pre><code>sudo apt install -y ffmpeg</code></pre>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <div id="site-footer"></div>
+    <script src="partials-loader.js"></script>
+</body>
+</html>
