@@ -112,9 +112,6 @@ html[theme="dark"] .arrow svg {
     filter: brightness(0) invert(1);
 }
 
-.action-box-chapter{
-    margin-right: 10px;
-}
 .ten-px-margin-left {
     margin-left: 10px;
 }

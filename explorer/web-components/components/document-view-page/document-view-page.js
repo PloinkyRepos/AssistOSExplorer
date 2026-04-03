@@ -137,7 +137,6 @@ export class DocumentViewPage {
         } else {
             switch (data) {
                 case "delete":
-                    await this.openDocumentsPage();
                     alert("The document has been deleted");
                     break;
                 case "title":
@@ -409,10 +408,6 @@ export class DocumentViewPage {
         });
     }
 
-    async openDocumentsPage() {
-        await assistOS.UI.changeToDynamicPage("documents-page", "documents-page");
-    }
-
     async saveTitle(textElement) {
         let titleText = assistOS.UI.sanitize(textElement.value);
         if (titleText !== this._document.title && titleText !== "") {
@@ -589,32 +584,6 @@ export class DocumentViewPage {
         targetElement.addEventListener("keyup", resetTimerFunction);
     }
 
-    executeDownload(targetElement, url) {
-        let a = document.createElement('a');
-        a.style.display = 'none';
-        a.href = url;
-        a.download = `${assistOS.UI.unsanitize(this._document.title)}.mp4`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        targetElement.remove();
-    }
-
-    showDownloadVideoButton(taskId, status) {
-        if (status === "completed") {
-            let downloadURL = `/documents/video/${taskId}`;
-            let downloadButton = `<button class="general-button download-video-button right-margin" data-local-action="executeDownload ${downloadURL}">Download Video</button>`
-            this.element.querySelector(".menu-section").insertAdjacentHTML("afterbegin", downloadButton);
-        }
-    }
-
-    async documentToVideo(button) {
-        let taskId = await documentModule.documentToVideo(this._document.id);
-        assistOS.watchTask(taskId)
-        this.boundShowDownloadVideoButton = this.showDownloadVideoButton.bind(this, taskId);
-        //await assistOS.NotificationRouter.subscribeToWorkspace?.(taskId, this.boundShowDownloadVideoButton);
-    }
-
     async exportDocument(targetElement) {
         await assistOS.UI.showModal("export-document-modal", {id: this._document.id, title: this._document.title});
     }
@@ -651,11 +620,6 @@ export class DocumentViewPage {
     //         this.redoButton.classList.remove("disabled");
     //     }
     // }
-
-    async lipsyncVideo(targetElement) {
-        const llmModule = assistOS.loadModule("llm")
-        const response = (await llmModule.lipsync("sync-1.6.0", {}))
-    }
 
     async openTasksModal(targetElement) {
         let newTasksBadge = this.element.querySelector(".new-tasks-badge");

@@ -1,0 +1,11 @@
+{
+    "pluginCategory": "document",
+    "component": "document-video-actions",
+    "location": ["document"],
+    "tooltip": "Document Video",
+    "icon": "/IDE-plugins/assets/icons/video.svg",
+    "presenter": "DocumentVideoActions",
+    "type": "modal",
+    "autoPin": false,
+    "dependencies": []
+}

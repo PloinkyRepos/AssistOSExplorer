@@ -23,11 +23,11 @@
     "enable": [
         "postgres",
         "keycloak",
-        "gitAgent",
-        "dpuAssistant/dpuAgent global",
-        "soplangAgent",
-        "tasksAgent",
-        "llmAssistant"
+        "soplangAgent global",
+        "tasksAgent global",
+        "llmAssistant global",
+        "multimedia global",
+        "dpuAssistant global"
     ],
     "repos": {
         "dpuAssistant": "https://github.com/PloinkyRepos/dpuAgent.git"

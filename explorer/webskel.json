@@ -67,11 +67,6 @@
       "presenterClassName": "EditVariables"
     },
     {
-      "name": "files-menu",
-      "type": "components",
-      "presenterClassName": "FilesMenu"
-    },
-    {
       "name": "table-editor",
       "type": "components",
       "presenterClassName": "TableEditor"
@@ -80,16 +75,6 @@
       "name": "list-item",
       "type": "components",
       "presenterClassName": "ListItem"
-    },
-    {
-      "name": "documents-page",
-      "type": "components",
-      "presenterClassName": "DocumentsPage"
-    },
-    {
-      "name": "document-item",
-      "type": "components",
-      "presenterClassName": "DocumentItem"
     },
     {
       "name": "application-document-item",
@@ -105,11 +90,6 @@
       "name": "add-comment",
       "type": "modals",
       "presenterClassName": "AddComment"
-    },
-    {
-      "name": "add-document-modal",
-      "type": "modals",
-      "presenterClassName": "AddDocumentModal"
     },
     {
       "name": "document-snapshots-modal",
@@ -145,16 +125,6 @@
       "name": "add-reference",
       "type": "modals",
       "presenterClassName": "AddReference"
-    },
-    {
-      "name": "insert-attachment-modal",
-      "type": "modals",
-      "presenterClassName": "InsertAttachmentModal"
-    },
-    {
-      "name": "insert-image-modal",
-      "type": "modals",
-      "presenterClassName": "InsertImageModal"
     },
     {
       "name": "file-search-modal",
