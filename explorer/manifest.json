@@ -58,8 +58,7 @@
                     "required": false
                 }
             ],
-            "preinstall": "scripts/hooks/preinstall.sh",
-            "install": "/code/scripts/hooks/install.sh"
+            "preinstall": "scripts/hooks/preinstall.sh"
         }
     }
 }
