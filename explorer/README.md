@@ -1,6 +1,6 @@
-# AssistOS Explorer (Ploinky Agent)
+# Explorer (AchillesIDE Agent)
 
-This folder contains the `explorer` agent for the Ploinky runtime.
+This folder contains the `explorer` agent for the Ploinky runtime, inside the `AchillesIDE` repository.
 
 The Explorer is an MCP HTTP server that exposes a filesystem view + utilities used by the AssistOS UI.
 
@@ -15,11 +15,11 @@ Run these commands from your workspace root (the folder you want to browse):
 
 ```bash
 # 1) Add and enable the repo (once per workspace)
-ploinky add repo AssistOSExplorer https://github.com/PloinkyRepos/AssistOSExplorer.git
-ploinky enable repo AssistOSExplorer
+ploinky add repo AchillesIDE <repo-url>
+ploinky enable repo AchillesIDE
 
 # 2) Ensure Explorer runs in GLOBAL mode (mounts workspace root in container)
-ploinky enable agent AssistOSExplorer/explorer global
+ploinky enable agent AchillesIDE/explorer global
 
 # 3) Set the filesystem root Explorer should expose
 ploinky var ASSISTOS_FS_ROOT "$PWD"
@@ -44,14 +44,8 @@ Open:
 
 Explorer Web Preview for `.html` files uses repo-scoped URLs generated from the selected file path:
 
-- Example URL: `/.ploinky/repos/fileExplorer/docs/development.html?__previewReload=1`
+- Example URL: `/.ploinky/repos/AchillesIDE/docs/development.html?__previewReload=1`
 - This avoids collisions between similarly named files in different repos.
-
-To keep this working on fresh clones/environments, the repository includes a versioned symlink:
-
-- `explorer/.ploinky/repos/fileExplorer -> ../../..`
-
-Do not replace this with a local-only symlink such as `explorer/docs`; that breaks portability and can reintroduce `404` in preview on other machines.
 
 ## Why GLOBAL mode matters
 
@@ -76,7 +70,7 @@ Explorer uses the `ASSISTOS_FS_ROOT` environment variable to decide what directo
 If you only see `agents/` in the Explorer UI:
 
 ```bash
-ploinky enable agent AssistOSExplorer/explorer global
+ploinky enable agent AchillesIDE/explorer global
 ploinky var ASSISTOS_FS_ROOT "$PWD"
 
 # Recreate the explorer container so mounts/env apply
@@ -89,7 +83,7 @@ If you prefer Docker over Podman, ensure your Ploinky workspace is configured fo
 If HTML preview returns `404` for repo-scoped paths, validate static exposure quickly:
 
 ```bash
-curl -I "http://127.0.0.1:8080/.ploinky/repos/fileExplorer/docs/development.html"
+curl -I "http://127.0.0.1:8080/.ploinky/repos/AchillesIDE/docs/development.html"
 ```
 
 Expected: `HTTP/1.1 200`.

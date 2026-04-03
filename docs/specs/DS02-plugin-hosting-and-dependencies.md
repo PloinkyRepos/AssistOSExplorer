@@ -60,9 +60,9 @@ The architecture is intentionally split so that:
 
 ### Local Plugin Bundle
 
-The `fileExplorer` repository keeps its repository-local runtime plugins in:
+The `AchillesIDE` repository keeps its repository-local runtime plugins in:
 
-- `fileExplorer/explorer/IDE-plugins`
+- `AchillesIDE/explorer/IDE-plugins`
 
 This is the canonical local plugin root for:
 
@@ -75,7 +75,7 @@ Explorer must treat this directory as the repository-local plugin source. Local 
 
 ### Plugin Inventory
 
-According to [manifest.json](/Users/adrianganga/Desktop/devWork/testExplorer/.ploinky/repos/fileExplorer/explorer/manifest.json), Explorer activates plugins such as:
+According to [manifest.json](../../explorer/manifest.json), Explorer activates plugins such as:
 
 - `git`
 - `dpu-runtime-support`
@@ -202,7 +202,7 @@ The host shell must remain deterministic even when plugin availability changes b
 
 ## Related Specs
 
-- [DS01 - Explorer System Overview](/Users/adrianganga/Desktop/devWork/testExplorer/.ploinky/repos/fileExplorer/docs/specs/DS01-system-overview.md)
-- [DS03 - Confidential Files And DPU](/Users/adrianganga/Desktop/devWork/testExplorer/.ploinky/repos/fileExplorer/docs/specs/DS03-confidential-files-and-dpu.md)
-- [gitAgent plugin spec](/Users/adrianganga/Desktop/devWork/testExplorer/.ploinky/repos/fileExplorer/gitAgent/docs/specs/GA/GA02-explorer-plugin.md)
-- [tasksAgent plugin spec](/Users/adrianganga/Desktop/devWork/testExplorer/.ploinky/repos/fileExplorer/tasksAgent/docs/specs/TA/TA02-explorer-plugin.md)
+- [DS01 - Explorer System Overview](./DS01-system-overview.md)
+- [DS03 - Confidential Files And DPU](./DS03-confidential-files-and-dpu.md)
+- [gitAgent plugin spec](../../gitAgent/docs/specs/GA/GA02-explorer-plugin.md)
+- [tasksAgent plugin spec](../../tasksAgent/docs/specs/TA/TA02-explorer-plugin.md)

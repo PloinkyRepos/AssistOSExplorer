@@ -209,5 +209,5 @@ If OnlyOffice integration fails, Explorer should:
 
 ## Related Specs
 
-- [DS01 - Explorer System Overview](/Users/adrianganga/Desktop/devWork/testExplorer/.ploinky/repos/fileExplorer/docs/specs/DS01-system-overview.md)
-- [DS03 - Confidential Files And DPU](/Users/adrianganga/Desktop/devWork/testExplorer/.ploinky/repos/fileExplorer/docs/specs/DS03-confidential-files-and-dpu.md)
+- [DS01 - Explorer System Overview](./DS01-system-overview.md)
+- [DS03 - Confidential Files And DPU](./DS03-confidential-files-and-dpu.md)

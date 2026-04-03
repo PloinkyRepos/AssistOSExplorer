@@ -10,7 +10,7 @@ This guide consolidates all Explorer documentation (architecture, document model
 - **Plugin host**: Discovers `IDE-plugins/*/config.json` across enabled repos; tools are exposed to the UI grouped by `location`.
 - **Document manager**: Markdown is parsed into chapters/paragraphs with metadata and SOPLang commands.
 - **No HTTP blob endpoint in current server**: UI helpers expect `/blobs/<agent>`, but `filesystem-http-server.mjs` only exposes MCP on `/mcp` and a `/health` check.
-- **Bundled plugin source**: This repository now keeps its local runtime plugins under `fileExplorer/explorer/IDE-plugins`.
+- **Bundled plugin source**: This repository keeps its local runtime plugins under `AchillesIDE/explorer/IDE-plugins`.
 - **Separate SOPLang agent**: `soplangAgent` (repo `SOPLangBuilder`) provides explicit MCP tools such as `sync_markdown_documents` and `execute_workspace_build`; it runs in its own container sharing the workspace.
 
 ---
@@ -18,9 +18,9 @@ This guide consolidates all Explorer documentation (architecture, document model
 ## 2) Runtime & Routing
 
 - **Manifest**: `explorer/manifest.json` defines the Explorer runtime container, startup command, environment, and external dependency agents.
-- **Global mode**: `p-cli enable agent fileExplorer/explorer global` runs in the current workspace folder. First `p-cli start explorer <port>` also pins the router/static port.
+- **Global mode**: `ploinky enable agent AchillesIDE/explorer global` runs in the current workspace folder. First `ploinky start explorer <port>` also pins the router/static port.
 - **Router**: <a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md">Ploinky</a> router serves static UI and proxies MCP on the chosen port (e.g., 8080 → `/explorer/index.html`).
-- **Repo-scoped static exposure for docs preview**: Keep `explorer/.ploinky/repos/fileExplorer -> ../../..` versioned in git so `/.ploinky/repos/fileExplorer/docs/*` resolves on all environments.
+- **Repo-scoped static exposure for docs preview**: HTML preview uses repo-scoped paths under `/.ploinky/repos/AchillesIDE/docs/*`.
 - **Allowed directories**: Derived from `ASSISTOS_FS_ROOT`/`MCP_FS_ROOT` (comma-separated). If missing, falls back to `process.cwd()`. Multiple roots → first is workspace root.
 - **Containers & workspace**: Explorer and soplangAgent containers mount the same host workspace volume; each has its own MCP endpoints.
 
@@ -38,7 +38,7 @@ This guide consolidates all Explorer documentation (architecture, document model
 ## 4) Document Model & Editing
 
 - **View/Edit modes**: Any file can be opened; Markdown gets structured document features, other text/code files use the general editor (with syntax highlighting, no document DOM).
-- **HTML Web Preview URL model**: Preview preserves repo-scoped paths generated from selected file path (e.g., `/.ploinky/repos/fileExplorer/docs/development.html?__previewReload=1`) instead of flattening to root-level `/docs/*`.
+- **HTML Web Preview URL model**: Preview preserves repo-scoped paths generated from selected file path (e.g., `/.ploinky/repos/AchillesIDE/docs/development.html?__previewReload=1`) instead of flattening to root-level `/docs/*`.
 - **Hydration**: `DocumentStore.hydrateDocumentModel` parses Markdown plus comment markers into a hierarchy (document → chapters → paragraphs).
   - Example comment markers:
     - `<!--{"achilles-ide-document": {"id": "guide", "title": "My Guide"}}-->`
@@ -97,16 +97,15 @@ This guide consolidates all Explorer documentation (architecture, document model
 ## 8) Development & Setup
 
 - **Prereqs**: Node 20+, npm, active <a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md">Ploinky</a> workspace.
-- **Global run**: `p-cli enable repo fileExplorer` then `p-cli enable agent fileExplorer/explorer global`; start with `p-cli start explorer 8080` (router/UI on that port).
+- **Global run**: `ploinky enable repo AchillesIDE` then `ploinky enable agent AchillesIDE/explorer global`; start with `ploinky start explorer 8080` (router/UI on that port).
 - **Filesystem root**: Set `ASSISTOS_FS_ROOT` (or `MCP_FS_ROOT`) to the workspace path(s); fallback is cwd. First root is workspace root.
-- **Bundled local plugins**: local Explorer-facing plugins are loaded from `fileExplorer/explorer/IDE-plugins`.
+- **Bundled local plugins**: local Explorer-facing plugins are loaded from `AchillesIDE/explorer/IDE-plugins`.
 - **Dependencies**: `npm install` at repo root (and `explorer/` if needed).
 - **Hot reload**: UI refresh picks up most changes; plugin `config.json` or new plugins require Explorer restart to rescan. SOPLang comment edits are re-hydrated on reload; rerun `syncMarkdownDocuments` to persist into the SOPLang store.
-- **Preview portability rule**: Do not rely on local-only symlinks like `explorer/docs`. Use the repo-scoped symlink under `explorer/.ploinky/repos/fileExplorer` so preview works consistently on clean clones.
+- **Preview portability rule**: use the repo-scoped static path exposed by the current repository layout. Do not document symlinks that are not present in the checkout.
 - **Repo layout (Explorer)**:
   ```
   explorer/
-  ├─ .ploinky/repos/fileExplorer -> ../../..  # repo-scoped static path bridge for web preview
   ├─ filesystem-http-server.mjs   # MCP, plugin discovery
   ├─ index.html / main.js         # SPA entry
   ├─ webskel.json                 # UI components

@@ -228,6 +228,6 @@ If a Confidential resource cannot be read or mutated, Explorer should:
 
 ## Related Specs
 
-- [DS01 - Explorer System Overview](/Users/adrianganga/Desktop/devWork/testExplorer/.ploinky/repos/fileExplorer/docs/specs/DS01-system-overview.md)
-- [DS02 - Plugin Hosting And Dependencies](/Users/adrianganga/Desktop/devWork/testExplorer/.ploinky/repos/fileExplorer/docs/specs/DS02-plugin-hosting-and-dependencies.md)
-- [DS04 - OnlyOffice Integration](/Users/adrianganga/Desktop/devWork/testExplorer/.ploinky/repos/fileExplorer/docs/specs/DS04-onlyoffice-integration.md)
+- [DS01 - Explorer System Overview](./DS01-system-overview.md)
+- [DS02 - Plugin Hosting And Dependencies](./DS02-plugin-hosting-and-dependencies.md)
+- [DS04 - OnlyOffice Integration](./DS04-onlyoffice-integration.md)

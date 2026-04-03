@@ -39,10 +39,10 @@
 
             <div class="doc-section">
                 <h2>Bootstrapping</h2>
-<pre><code>p-cli enable repo fileExplorer
-p-cli enable agent fileExplorer/explorer global
+<pre><code>ploinky enable repo AchillesIDE
+ploinky enable agent AchillesIDE/explorer global
 export ASSISTOS_FS_ROOT=&lt;workspace-root&gt;
-p-cli start explorer 8080
+ploinky start explorer 8080
 </code></pre>
                 <p>UI entrypoint: <code>http://127.0.0.1:8080/explorer/index.html</code></p>
             </div>
@@ -50,11 +50,9 @@ p-cli start explorer 8080
             <div class="doc-section">
                 <h2>Web Preview (HTML)</h2>
                 <p>HTML preview uses repo-scoped file URLs. Example:</p>
-<pre><code>/.ploinky/repos/fileExplorer/docs/development.html?__previewReload=1</code></pre>
-                <p>Required portability link (commit it):</p>
-<pre><code>explorer/.ploinky/repos/fileExplorer -&gt; ../../..</code></pre>
+<pre><code>/.ploinky/repos/AchillesIDE/docs/development.html?__previewReload=1</code></pre>
                 <p>Validation:</p>
-<pre><code>curl -I "http://127.0.0.1:8080/.ploinky/repos/fileExplorer/docs/development.html"
+<pre><code>curl -I "http://127.0.0.1:8080/.ploinky/repos/AchillesIDE/docs/development.html"
 # expected: HTTP/1.1 200
 </code></pre>
             </div>
@@ -78,7 +76,7 @@ cd explorer
 npm test
 
 # Spot-check static docs path
-curl -I "http://127.0.0.1:8080/.ploinky/repos/fileExplorer/docs/style.css"
+curl -I "http://127.0.0.1:8080/.ploinky/repos/AchillesIDE/docs/style.css"
 </code></pre>
                 <p>For full architecture/backend details, see <a href="architecture.html#development">Architecture &rarr; Development</a> and <a href="backend.html">Backend</a>.</p>
             </div>

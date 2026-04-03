@@ -76,13 +76,13 @@
                 <div class="doc-section">
                     <h2>Quick Start</h2>
                     <p>Enable the repo and agent, point the filesystem root, then start Explorer on your port of choice:</p>
-<pre><code>p-cli enable repo fileExplorer
-p-cli enable agent fileExplorer/explorer global
+<pre><code>ploinky enable repo AchillesIDE
+ploinky enable agent AchillesIDE/explorer global
 export ASSISTOS_FS_ROOT=&lt;path-to-workspace&gt;
-p-cli start explorer 8080
+ploinky start explorer 8080
 # open http://127.0.0.1:8080/explorer/index.html via the Ploinky router
 </code></pre>
-                    <p><strong>Note for HTML docs preview:</strong> repo-scoped preview paths are expected (for example <code>/.ploinky/repos/fileExplorer/docs/development.html</code>). Keep the versioned symlink <code>explorer/.ploinky/repos/fileExplorer -&gt; ../../..</code> in the repository so these paths resolve on all environments.</p>
+                    <p><strong>Note for HTML docs preview:</strong> repo-scoped preview paths are expected (for example <code>/.ploinky/repos/AchillesIDE/docs/development.html</code>).</p>
                 </div>
 
                 <div class="features" style="padding-top: 1rem;">

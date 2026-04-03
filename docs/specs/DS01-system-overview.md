@@ -133,7 +133,7 @@ This is one of the reasons Explorer must be documented as an IDE shell rather th
 
 ### Dependency Model
 
-Dependencies declared in [manifest.json](/Users/adrianganga/Desktop/devWork/testExplorer/.ploinky/repos/fileExplorer/explorer/manifest.json) include:
+Dependencies declared in [manifest.json](../../explorer/manifest.json) include:
 
 - `gitAgent`
 - `dpuAgent`
@@ -270,6 +270,6 @@ Explorer must preserve the following constraints:
 
 ## Related Specs
 
-- [DS02 - Plugin Hosting And Dependencies](/Users/adrianganga/Desktop/devWork/testExplorer/.ploinky/repos/fileExplorer/docs/specs/DS02-plugin-hosting-and-dependencies.md)
-- [DS03 - Confidential Files And DPU](/Users/adrianganga/Desktop/devWork/testExplorer/.ploinky/repos/fileExplorer/docs/specs/DS03-confidential-files-and-dpu.md)
-- [DS04 - OnlyOffice Integration](/Users/adrianganga/Desktop/devWork/testExplorer/.ploinky/repos/fileExplorer/docs/specs/DS04-onlyoffice-integration.md)
+- [DS02 - Plugin Hosting And Dependencies](./DS02-plugin-hosting-and-dependencies.md)
+- [DS03 - Confidential Files And DPU](./DS03-confidential-files-and-dpu.md)
+- [DS04 - OnlyOffice Integration](./DS04-onlyoffice-integration.md)

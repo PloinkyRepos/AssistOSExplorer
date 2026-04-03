@@ -90,9 +90,9 @@ This paragraph might have embedded commands.
                     <p>The <code>syncMarkdownDocuments</code> function is invoked through the <code>soplangAgent</code> (repo <code>SOPLangBuilder</code>) using its MCP tool <code>sync_markdown_documents</code> defined in <code>soplangAgent/mcp-config.json</code>. The execution phase is exposed separately through <code>execute_workspace_build</code>.</p>
                     <p>Setup steps from workspace root:</p>
                     <ol>
-                        <li><code>p-cli enable repo SOPLangBuilder</code></li>
-                        <li><code>p-cli enable agent SOPLangBuilder/soplangAgent global</code></li>
-                        <li>Start the agent per <a href="https://ploinky.com/cli-reference.html" target="_blank" rel="noopener noreferrer">Ploinky</a> CLI (e.g., <code>p-cli start soplangAgent</code> if not already running).</li>
+                        <li><code>ploinky enable repo AchillesIDE</code></li>
+                        <li><code>ploinky enable agent AchillesIDE/soplangAgent global</code></li>
+                        <li>Start the agent per <a href="https://ploinky.com/cli-reference.html" target="_blank" rel="noopener noreferrer">Ploinky</a> CLI (e.g., <code>ploinky start soplangAgent</code> if not already running).</li>
                         <li>Call MCP tool <code>sync_markdown_documents</code> for document sync. Call <code>execute_workspace_build</code> when you want the full SOPLang execution step. Results and plugin console output are written to <code>SOPLangBuilder/last-tool.log</code>; persistence/log/audit paths are set in <code>soplangAgent/soplang-tool.sh</code>.</li>
                     </ol>
                 </div>
