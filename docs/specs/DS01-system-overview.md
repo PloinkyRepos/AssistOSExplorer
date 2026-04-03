@@ -136,7 +136,7 @@ This is one of the reasons Explorer must be documented as an IDE shell rather th
 Dependencies declared in [manifest.json](/Users/adrianganga/Desktop/devWork/testExplorer/.ploinky/repos/fileExplorer/explorer/manifest.json) include:
 
 - `gitAgent`
-- `dpuAssistant/dpuAgent global`
+- `dpuAgent`
 - `soplangAgent`
 - `tasksAgent`
 - `llmAssistant`

@@ -24,6 +24,7 @@ For a complete guide to the agent's architecture, plugin development, and advanc
 Component-level documentation:
 
 - [explorer](./explorer/README.md)
+- [dpuAgent](./dpuAgent/README.md)
 - [gitAgent](./gitAgent/README.md)
 - [llmAssistant](./llmAssistant/README.md)
 - [soplangAgent](./soplangAgent/README.md)
