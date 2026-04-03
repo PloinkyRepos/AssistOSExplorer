@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>gitAgent Docs - Manifest and Environment</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="site-header"></div>
+
+    <main class="content content--with-sidebar">
+        <div class="doc-layout">
+            <aside class="doc-sidebar" aria-label="gitAgent documentation navigation">
+                <div class="doc-sidebar__group">
+                    <p class="doc-sidebar__group-title">Documentation</p>
+                    <nav>
+                        <a href="index.html">Overview</a>
+                        <a href="architecture.html">Architecture</a>
+                        <a href="execution-workflow.html">Tool Execution Workflow</a>
+                        <a href="mcp-tools.html">MCP Tools</a>
+                        <a href="integrations.html">Ploinky and Explorer Integration</a>
+                        <a href="configuration.html" aria-current="page">Manifest and Environment</a>
+                    </nav>
+                </div>
+                <div class="doc-sidebar__group">
+                    <p class="doc-sidebar__group-title">Specifications</p>
+                    <nav>
+                        <a href="specsLoader.html?spec=specs/matrix.md">Design Specifications</a>
+                    </nav>
+                </div>
+            </aside>
+
+            <div class="doc-main">
+                <section class="lead">
+                    <h1>Manifest and Environment</h1>
+                    <p><code>gitAgent</code> follows the <a href="https://ploinky.com/" target="_blank" rel="noopener noreferrer">Ploinky</a> manifest model and uses explicit environment variables for filesystem scope, LLM provider access, and GitHub auth integration.</p>
+                </section>
+
+                <section>
+                    <h2>Manifest</h2>
+                    <p>Main runtime configuration file: <code>gitAgent/manifest.json</code>.</p>
+                    <pre><code>{
+  "agent": "sh /code/scripts/startAgent.sh",
+  "container": "node:20-alpine",
+  "profiles": {
+    "default": {
+      "env": ["..."],
+      "install": "apk add --no-cache git openssh-client ca-certificates"
+    }
+  }
+}</code></pre>
+                    <p>The agent bootstrap script resolves workspace root and loads environment variables from process env first, then from <code>.ploinky/.secrets</code> when needed.</p>
+                </section>
+
+                <section>
+                    <h2>Core Environment Variables</h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Variable</th>
+                                <th>Usage</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>ASSISTOS_FS_ROOT</code>, <code>WORKSPACE_ROOT</code>, <code>PLOINKY_WORKSPACE_ROOT</code></td>
+                                <td>Define allowed filesystem roots for path validation in Git tools.</td>
+                            </tr>
+                            <tr>
+                                <td><code>PLOINKY_GITHUB_CLIENT_ID</code>, <code>PLOINKY_GITHUB_CLIENT_SECRET</code>, <code>PLOINKY_GITHUB_SCOPE</code></td>
+                                <td>Enable GitHub device flow behavior for auth tools.</td>
+                            </tr>
+                            <tr>
+                                <td><code>SOUL_GATEWAY_API_KEY</code> and provider API keys</td>
+                                <td>Allow LLM runtime access used by adjacent AI-assisted flows.</td>
+                            </tr>
+                            <tr>
+                                <td><code>ASSISTOS_GIT_BINARY</code> (optional)</td>
+                                <td>Overrides Git executable path detection in the Git service.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </section>
+
+                <section>
+                    <h2>Auth State and Secrets</h2>
+                    <p>GitHub auth state is persisted under workspace state files, while access tokens are stored through DPU secret APIs. Push and pull operations can read token metadata from request context or from stored auth state when token input is omitted.</p>
+                </section>
+
+                <section>
+                    <h2>Test Validation</h2>
+                    <p>Code changes should be treated as complete only after the Git agent tests pass, together with docs and specifications updates.</p>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <div id="site-footer"></div>
+    <script src="partials-loader.js"></script>
+</body>
+</html>

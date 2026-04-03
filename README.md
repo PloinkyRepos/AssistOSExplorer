@@ -24,6 +24,10 @@ For a complete guide to the agent's architecture, plugin development, and advanc
 Component-level documentation:
 
 - [explorer](./explorer/README.md)
+- [gitAgent](./gitAgent/README.md)
+- [llmAssistant](./llmAssistant/README.md)
+- [soplangAgent](./soplangAgent/README.md)
+- [tasksAgent](./tasksAgent/README.md)
 - [IDE-plugins](./explorer/IDE-plugins/README.md)
 - [explorerSkillsAgent](./explorerSkillsAgent/README.md)
 

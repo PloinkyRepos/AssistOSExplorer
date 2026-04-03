@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>gitAgent Docs - Integrations</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="site-header"></div>
+
+    <main class="content content--with-sidebar">
+        <div class="doc-layout">
+            <aside class="doc-sidebar" aria-label="gitAgent documentation navigation">
+                <div class="doc-sidebar__group">
+                    <p class="doc-sidebar__group-title">Documentation</p>
+                    <nav>
+                        <a href="index.html">Overview</a>
+                        <a href="architecture.html">Architecture</a>
+                        <a href="execution-workflow.html">Tool Execution Workflow</a>
+                        <a href="mcp-tools.html">MCP Tools</a>
+                        <a href="integrations.html" aria-current="page">Ploinky and Explorer Integration</a>
+                        <a href="configuration.html">Manifest and Environment</a>
+                    </nav>
+                </div>
+                <div class="doc-sidebar__group">
+                    <p class="doc-sidebar__group-title">Specifications</p>
+                    <nav>
+                        <a href="specsLoader.html?spec=specs/matrix.md">Design Specifications</a>
+                    </nav>
+                </div>
+            </aside>
+
+            <div class="doc-main">
+                <section class="lead">
+                    <h1>Ploinky and Explorer Integration</h1>
+                    <p><code>gitAgent</code> is integrated as a <a href="https://ploinky.com/" target="_blank" rel="noopener noreferrer">Ploinky</a> MCP agent and consumed by Explorer-facing UI flows as a backend Git mediator.</p>
+                </section>
+
+                <section>
+                    <h2>Ploinky Runtime Integration</h2>
+                    <p>Agent lifecycle is controlled by <code>gitAgent/manifest.json</code>, while tool contracts come from <code>gitAgent/mcp-config.json</code>. AgentServer executes those tool commands in workspace context and returns normalized MCP responses to clients, which keeps Git execution policy centralized in the agent.</p>
+                </section>
+
+                <section>
+                    <h2>AssistOSExplorer Integration</h2>
+                    <p>Explorer integration uses the internal <code>AssistOSExplorer</code> repository. Frontend code calls <code>callAgentTool("gitAgent", ...)</code> and relies on this agent for Git operations, conflict checks, push/pull flows, and repository overview behavior.</p>
+                    <div class="doc-callout">
+                        <p>Explorer remains the interaction surface, while <code>gitAgent</code> remains the operational boundary for Git process execution.</p>
+                    </div>
+                </section>
+
+                <section>
+                    <h2>IDE-plugins Channel</h2>
+                    <p>The folder <code>gitAgent/IDE-plugins/git-tool-button/</code> provides UI plugin bundles inserted in Explorer toolbar slot <code>file-exp:toolbar</code>. Plugin dependencies include commit modal components, repo tree, diff viewer, conflict helper, status bar, and auth prompt components.</p>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Artifact</th>
+                                <th>Role</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>IDE-plugins/git-tool-button/config.json</code></td>
+                                <td>Registers plugin metadata, toolbar location, and component dependencies.</td>
+                            </tr>
+                            <tr>
+                                <td><code>IDE-plugins/git-tool-button/git-tool-button.js</code></td>
+                                <td>Hosts button presenter and binds controller lifecycle to Explorer host context.</td>
+                            </tr>
+                            <tr>
+                                <td><code>IDE-plugins/git-tool-button/git-tool-button-controller.js</code></td>
+                                <td>Calls MCP tools via Explorer API and orchestrates autocommit/pull/push/conflict UI logic.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <div id="site-footer"></div>
+    <script src="partials-loader.js"></script>
+</body>
+</html>

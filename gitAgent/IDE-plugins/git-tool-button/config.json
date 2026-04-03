@@ -1,0 +1,64 @@
+{
+    "pluginCategory": "application",
+    "id": "git",
+    "component": "git-tool-button",
+    "location": ["file-exp:toolbar"],
+    "label": "Git",
+    "tooltip": "Git",
+    "icon": "./icon.svg",
+    "presenter": "GitToolButton",
+    "type": "embedded",
+    "autoPin": false,
+    "dependencies": [
+        {
+            "component": "git-commit-modal",
+            "presenter": "GitCommitModal",
+            "type": "modal"
+        },
+        {
+            "component": "git-stash-select-modal",
+            "presenter": "GitStashSelectModal",
+            "type": "modal"
+        },
+        {
+            "component": "git-credentials-prompt",
+            "presenter": "GitCredentialsPrompt"
+        },
+        {
+            "component": "git-ignore-prompt",
+            "presenter": "GitIgnorePrompt"
+        },
+        {
+            "component": "git-diff-viewer",
+            "presenter": "GitDiffViewer"
+        },
+        {
+            "component": "git-conflict-helper",
+            "presenter": "GitConflictHelper"
+        },
+        {
+            "component": "git-conflict-banner",
+            "presenter": "GitConflictBanner"
+        },
+        {
+            "component": "git-status-bar",
+            "presenter": "GitStatusBar"
+        },
+        {
+            "component": "git-pull-blocked-panel",
+            "presenter": "GitPullBlockedPanel"
+        },
+        {
+            "component": "git-repo-tree",
+            "presenter": "GitRepoTree"
+        },
+        {
+            "component": "git-commit-actions",
+            "presenter": "GitCommitActions"
+        },
+        {
+            "component": "git-commit-body",
+            "presenter": "GitCommitBody"
+        }
+    ]
+}

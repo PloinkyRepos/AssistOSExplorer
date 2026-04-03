@@ -1,0 +1,11 @@
+{
+    "name": "SOPLangBuilder",
+    "type": "module",
+    "scripts": {
+        "test": "node --test ./tests/*.test.mjs"
+    },
+    "dependencies": {
+        "flexsearch": "^0.7.31",
+        "soplang": "github:AssistOS-AI/soplang"
+    }
+}

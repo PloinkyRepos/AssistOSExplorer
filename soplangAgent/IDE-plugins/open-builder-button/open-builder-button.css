@@ -1,0 +1,60 @@
+open-builder-button {
+    display: inline-flex;
+    align-items: stretch;
+    justify-content: center;
+    min-width: 0;
+}
+
+open-builder-button .open-builder-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-width: 0;
+    padding: 6px 10px;
+    border: 1px solid var(--button-border, rgba(0, 0, 0, 0.14));
+    border-radius: 10px;
+    background: var(--button-background, rgba(255, 255, 255, 0.88));
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    line-height: 1;
+}
+
+open-builder-button .open-builder-button:hover {
+    background: var(--button-background-hover, rgba(255, 255, 255, 0.96));
+}
+
+open-builder-button .open-builder-button-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    flex: 0 0 auto;
+}
+
+open-builder-button .open-builder-button-icon-image {
+    width: 18px;
+    height: 18px;
+    display: block;
+}
+
+open-builder-button .open-builder-button-label {
+    display: inline-block;
+    min-width: 0;
+    white-space: nowrap;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+open-builder-button[data-host-orientation="vertical"] .open-builder-button {
+    flex-direction: column;
+    width: 100%;
+    padding: 8px 6px;
+    gap: 6px;
+}
+
+open-builder-button[data-host-orientation="vertical"] .open-builder-button-label {
+    text-align: center;
+}

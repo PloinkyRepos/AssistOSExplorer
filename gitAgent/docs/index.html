@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>gitAgent Docs - Overview</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="site-header"></div>
+
+    <main class="content content--with-sidebar">
+        <div class="doc-layout">
+            <aside class="doc-sidebar" aria-label="gitAgent documentation navigation">
+                <div class="doc-sidebar__group">
+                    <p class="doc-sidebar__group-title">Documentation</p>
+                    <nav>
+                        <a href="index.html" aria-current="page">Overview</a>
+                        <a href="architecture.html">Architecture</a>
+                        <a href="execution-workflow.html">Tool Execution Workflow</a>
+                        <a href="mcp-tools.html">MCP Tools</a>
+                        <a href="integrations.html">Ploinky and Explorer Integration</a>
+                        <a href="configuration.html">Manifest and Environment</a>
+                    </nav>
+                </div>
+                <div class="doc-sidebar__group">
+                    <p class="doc-sidebar__group-title">Specifications</p>
+                    <nav>
+                        <a href="specsLoader.html?spec=specs/matrix.md">Design Specifications</a>
+                    </nav>
+                </div>
+            </aside>
+
+            <div class="doc-main">
+                <section class="lead">
+                    <h1>gitAgent Documentation</h1>
+                    <p>This directory now lives inside the fileExplorer repository and hosts the <code>gitAgent</code> MCP agent.</p>
+                    <p>The agent is integrated in <a href="https://ploinky.com/" target="_blank" rel="noopener noreferrer">Ploinky</a> and consumed by Explorer workflows from the internal <code>AssistOSExplorer</code> repository.</p>
+                    <p>At runtime, Git functionality is exposed through MCP tools and executed by <code>gitAgent/tools/git_tool.sh</code>.</p>
+                </section>
+
+                <section class="highlight-box">
+                    <h3>Operational Role</h3>
+                    <p><code>gitAgent</code> mediates Explorer actions and Git process execution through MCP contracts declared in <code>gitAgent/mcp-config.json</code>. The agent validates repository scope against workspace roots before running commands, so Git operations stay inside approved paths.</p>
+                    <p>Remote workflows reuse the same boundary, including optional GitHub authentication flows, which keeps token handling and command execution logic out of the UI layer.</p>
+                </section>
+
+                <section>
+                    <h2>Repository Scope</h2>
+                    <p>The repository can host multiple Ploinky agents over time. The current documentation set focuses on <code>gitAgent</code> and its role as a Git intermediary for Explorer-facing flows.</p>
+                    <div class="doc-callout">
+                        <p><strong>Validation rule:</strong> run the Git agent test suite for code changes, together with docs and specification updates.</p>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <div id="site-footer"></div>
+    <script src="partials-loader.js"></script>
+</body>
+</html>

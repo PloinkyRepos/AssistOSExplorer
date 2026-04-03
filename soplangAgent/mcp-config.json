@@ -1,0 +1,143 @@
+{
+    "tools": [
+        {
+            "name": "sync_markdown_documents",
+            "title": "Sync Markdown Documents",
+            "description": "Scan workspace markdown files and synchronize structured documents into the SOPLang workspace without executing the workspace build pipeline.",
+            "command": "/code/soplang-tool.sh",
+            "cwd": "workspace",
+            "async": true,
+            "env": {
+                "TOOL_NAME": "sync_markdown_documents"
+            },
+            "inputSchema": {}
+        },
+        {
+            "name": "execute_workspace_build",
+            "title": "Execute Workspace Build",
+            "description": "Run the SOPLang workspace build pipeline after document sync. This may execute long-running skills.",
+            "command": "/code/soplang-tool.sh",
+            "cwd": "workspace",
+            "async": true,
+            "env": {
+                "TOOL_NAME": "execute_workspace_build"
+            },
+            "inputSchema": {}
+        },
+        {
+            "name": "execute_incremental_build",
+            "title": "Execute Incremental Build",
+            "description": "Run the SOPLang build only for documents changed by the last markdown sync, or for an explicit list of document IDs.",
+            "command": "/code/soplang-tool.sh",
+            "cwd": "workspace",
+            "async": true,
+            "env": {
+                "TOOL_NAME": "execute_incremental_build"
+            },
+            "inputSchema": {
+                "documentIds": {
+                    "type": "array",
+                    "description": "Optional list of document IDs to build incrementally instead of using the pending set from the last sync",
+                    "optional": true,
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        {
+            "name": "build_from_specs_markdown",
+            "title": "Build from Specs Markdown",
+            "description": "Collect SOPLang code from markdown files and build it through the SOPLang workspace.",
+            "command": "/code/soplang-tool.sh",
+            "cwd": "workspace",
+            "env": {
+                "TOOL_NAME": "build_from_specs_markdown"
+            },
+            "inputSchema": {
+                "root": {
+                    "type": "string",
+                    "description": "Optional root directory to scan instead of the detected workspace root",
+                    "optional": true
+                }
+            }
+        },
+        {
+            "name": "get_variables_with_values",
+            "title": "Get Variables with Values",
+            "description": "Return workspace SOPLang variables enriched with their resolved values.",
+            "command": "/code/soplang-tool.sh",
+            "cwd": "workspace",
+            "env": {
+                "TOOL_NAME": "get_variables_with_values"
+            },
+            "inputSchema": {}
+        },
+        {
+            "name": "get_variable_with_value",
+            "title": "Get Variable with Value",
+            "description": "Return a single SOPLang variable with its resolved value and error info.",
+            "command": "/code/soplang-tool.sh",
+            "cwd": "workspace",
+            "env": {
+                "TOOL_NAME": "get_variable_with_value"
+            },
+            "inputSchema": {
+                "documentId": {
+                    "type": "string",
+                    "description": "Document ID",
+                    "optional": false
+                },
+                "varName": {
+                    "type": "string",
+                    "description": "Variable name",
+                    "optional": false
+                }
+            }
+        },
+        {
+            "name": "get_commands",
+            "title": "Get Commands",
+            "description": "Return the registered SOPLang commands from the workspace.",
+            "command": "/code/soplang-tool.sh",
+            "cwd": "workspace",
+            "env": {
+                "TOOL_NAME": "get_commands"
+            },
+            "inputSchema": {}
+        },
+        {
+            "name": "get_types",
+            "title": "Get Custom Types",
+            "description": "Return the registered SOPLang custom types from the workspace.",
+            "command": "/code/soplang-tool.sh",
+            "cwd": "workspace",
+            "env": {
+                "TOOL_NAME": "get_types"
+            },
+            "inputSchema": {}
+        },
+        {
+            "name": "execute_skill",
+            "title": "Execute Skill",
+            "description": "Execute a discovered Achilles skill through the AchillesSkills bridge.",
+            "command": "/code/soplang-tool.sh",
+            "cwd": "workspace",
+            "env": {
+                "TOOL_NAME": "execute_skill"
+            },
+            "inputSchema": {
+                "skillName": {
+                    "type": "string",
+                    "description": "Skill name",
+                    "optional": false
+                },
+                "promptText": {
+                    "type": "string",
+                    "description": "Prompt text passed to the skill",
+                    "optional": true
+                }
+            }
+        }
+    ]
+}

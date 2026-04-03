@@ -1,0 +1,41 @@
+git-conflict-banner {
+    display: none;
+}
+
+git-conflict-banner.is-visible {
+    display: block;
+}
+
+.git-conflict-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    background: rgba(254, 242, 242, 0.85);
+    border-radius: 12px;
+    padding: 10px 12px;
+}
+
+.git-conflict-banner-title {
+    font-weight: 800;
+    color: #7f1d1d;
+}
+
+.git-conflict-banner-subtitle {
+    color: rgba(127, 29, 29, 0.8);
+    font-size: 0.9rem;
+}
+
+.git-conflict-banner-text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+@media (max-width: 700px) {
+    .git-conflict-banner {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}

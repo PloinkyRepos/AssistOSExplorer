@@ -1,0 +1,83 @@
+{
+  "tools": [
+    {
+      "name": "llm_autocomplete",
+      "title": "LLM Autocomplete",
+      "description": "Generate a code completion for the current cursor position using file context.",
+      "command": "tools/llm_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "path": { "type": "string", "optional": false },
+        "content": { "type": "string", "optional": false },
+        "cursorOffset": { "type": "number", "optional": false },
+        "language": { "type": "string", "optional": true }
+      },
+      "env": {
+        "TOOL_NAME": "llm_autocomplete"
+      }
+    },
+    {
+      "name": "git_commit_message",
+      "title": "Generate Git Commit Message",
+      "description": "Generate a Git commit message using an LLM from provided diffs.",
+      "command": "tools/llm_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "diffs": {
+          "type": "array",
+          "optional": false,
+          "items": {
+            "type": "object",
+            "properties": {
+              "repoPath": {
+                "type": "string"
+              },
+              "filePath": {
+                "type": "string"
+              },
+              "diff": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "repoPath",
+              "filePath",
+              "diff"
+            ]
+          }
+        }
+      },
+      "env": {
+        "TOOL_NAME": "git_commit_message"
+      }
+    },
+    {
+      "name": "llm_resolve_conflict",
+      "title": "Resolve Git Conflict (LLM)",
+      "description": "Resolve a git conflict by merging base/ours/theirs using an LLM.",
+      "command": "tools/llm_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "base": {
+          "type": "string",
+          "optional": true
+        },
+        "ours": {
+          "type": "string",
+          "optional": false
+        },
+        "theirs": {
+          "type": "string",
+          "optional": false
+        },
+        "source": {
+          "type": "string",
+          "optional": true
+        }
+      },
+      "env": {
+        "TOOL_NAME": "llm_resolve_conflict"
+      }
+    }
+  ]
+}

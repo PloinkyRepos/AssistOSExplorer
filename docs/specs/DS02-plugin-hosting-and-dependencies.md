@@ -202,7 +202,7 @@ The host shell must remain deterministic even when plugin availability changes b
 
 ## Related Specs
 
-- [DS01 - Explorer System Overview](/Users/adrianganga/Desktop/devWork/testExplorer/.ploinky/repos/fileExplorer/explorer/docs/specs/DS01-system-overview.md)
-- [DS03 - Confidential Files And DPU](/Users/adrianganga/Desktop/devWork/testExplorer/.ploinky/repos/fileExplorer/explorer/docs/specs/DS03-confidential-files-and-dpu.md)
-- [gitAgent plugin spec](/Users/adrianganga/Desktop/devWork/testExplorer/.ploinky/repos/gitAssistant/gitAgent/docs/specs/GA/GA02-explorer-plugin.md)
-- [tasksAgent plugin spec](/Users/adrianganga/Desktop/devWork/testExplorer/.ploinky/repos/tasksAssistant/tasksAgent/docs/specs/TA/TA02-explorer-plugin.md)
+- [DS01 - Explorer System Overview](/Users/adrianganga/Desktop/devWork/testExplorer/.ploinky/repos/fileExplorer/docs/specs/DS01-system-overview.md)
+- [DS03 - Confidential Files And DPU](/Users/adrianganga/Desktop/devWork/testExplorer/.ploinky/repos/fileExplorer/docs/specs/DS03-confidential-files-and-dpu.md)
+- [gitAgent plugin spec](/Users/adrianganga/Desktop/devWork/testExplorer/.ploinky/repos/fileExplorer/gitAgent/docs/specs/GA/GA02-explorer-plugin.md)
+- [tasksAgent plugin spec](/Users/adrianganga/Desktop/devWork/testExplorer/.ploinky/repos/fileExplorer/tasksAgent/docs/specs/TA/TA02-explorer-plugin.md)

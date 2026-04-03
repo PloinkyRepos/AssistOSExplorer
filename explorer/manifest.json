@@ -23,18 +23,14 @@
     "enable": [
         "postgres",
         "keycloak",
-        "gitAssistant/gitAgent global",
+        "gitAgent",
         "dpuAssistant/dpuAgent global",
-        "soplangBuilder/soplangAgent global",
-        "tasksAssistant/tasksAgent global",
-        "llmAssistant/llmAssistant global"
+        "soplangAgent",
+        "tasksAgent",
+        "llmAssistant"
     ],
     "repos": {
-        "soplangBuilder": "https://github.com/PloinkyRepos/SOPLangBuilder.git",
-        "gitAssistant": "https://github.com/PloinkyRepos/gitMCP.git",
-        "dpuAssistant": "https://github.com/PloinkyRepos/dpuAgent.git",
-        "tasksAssistant": "https://github.com/PloinkyRepos/tasksMCP.git",
-        "llmAssistant": "https://github.com/PloinkyRepos/llmAssistant.git"
+        "dpuAssistant": "https://github.com/PloinkyRepos/dpuAgent.git"
     },
     "applicationPlugins": {
         "git": true,

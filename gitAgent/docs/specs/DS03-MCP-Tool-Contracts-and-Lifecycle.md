@@ -1,0 +1,55 @@
+# DS03 - MCP Tool Contracts and Invocation Lifecycle
+
+## Role of This Document
+
+This document defines contract guarantees for MCP tool behavior and invocation lifecycle rules.
+
+## Contract Surface
+
+Tool names declared in `mcp-config.json` are public agent contracts. Contracts cover repository inspection, staging and restore flows, conflict handling, stash and commit flows, remote operations, identity management, and GitHub auth lifecycle operations.
+
+Each contract shall define input schema expectations and tool identity mapping through `TOOL_NAME` semantics and dispatcher resolution.
+
+## Invocation Lifecycle Rules
+
+Lifecycle Rule L1: each invocation begins by reading MCP envelope input from stdin.
+
+Lifecycle Rule L2: payload normalization shall handle expected MCP envelope shapes and extract effective input arguments.
+
+Lifecycle Rule L3: argument normalization shall enforce tool-specific requirements before operation dispatch.
+
+Lifecycle Rule L4: path arguments shall be resolved and validated against allowed roots before Git operation execution.
+
+Lifecycle Rule L5: successful operation results shall be serialized to stdout as contract output.
+
+Lifecycle Rule L6: failures shall return explicit JSON error payloads with `ok: false`.
+
+## Failure Semantics
+
+Failure Rule F1: unsupported tools fail explicitly.
+
+Failure Rule F2: missing required arguments fail explicitly.
+
+Failure Rule F3: Git subprocess failures remain attributable with normalized error messages.
+
+Failure Rule F4: timeout failures remain explicit and cannot degrade into silent partial success.
+
+## Constraints
+
+Constraint M1: contracts cannot depend on undocumented input payload fields.
+
+Constraint M2: tools cannot execute operations outside validated repository paths.
+
+Constraint M3: mixed output formats for the same contract are forbidden unless explicitly declared.
+
+## Invariants
+
+Invariant T1: tool contract identity remains explicit through declared name and dispatch mapping.
+
+Invariant T2: lifecycle stages remain ordered as parse, validate, dispatch, execute, respond.
+
+Invariant T3: remote auth helpers may enrich payloads but do not redefine contract names.
+
+## Validation Criteria
+
+Validation is satisfied when MCP clients can call declared tools with schema-compliant inputs, receive deterministic success or explicit error payloads, and observe consistent lifecycle behavior across invocations.

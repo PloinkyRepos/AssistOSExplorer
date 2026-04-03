@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>gitAgent Docs - Tool Execution Workflow</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="site-header"></div>
+
+    <main class="content content--with-sidebar">
+        <div class="doc-layout">
+            <aside class="doc-sidebar" aria-label="gitAgent documentation navigation">
+                <div class="doc-sidebar__group">
+                    <p class="doc-sidebar__group-title">Documentation</p>
+                    <nav>
+                        <a href="index.html">Overview</a>
+                        <a href="architecture.html">Architecture</a>
+                        <a href="execution-workflow.html" aria-current="page">Tool Execution Workflow</a>
+                        <a href="mcp-tools.html">MCP Tools</a>
+                        <a href="integrations.html">Ploinky and Explorer Integration</a>
+                        <a href="configuration.html">Manifest and Environment</a>
+                    </nav>
+                </div>
+                <div class="doc-sidebar__group">
+                    <p class="doc-sidebar__group-title">Specifications</p>
+                    <nav>
+                        <a href="specsLoader.html?spec=specs/matrix.md">Design Specifications</a>
+                    </nav>
+                </div>
+            </aside>
+
+            <div class="doc-main">
+                <section class="lead">
+                    <h1>Tool Execution Workflow</h1>
+                    <p>Every MCP tool invocation runs in a fresh process lifecycle started from <code>gitAgent/tools/git_tool.sh</code> and implemented in <code>git_tool.mjs</code>.</p>
+                </section>
+
+                <section>
+                    <h2>End-to-End Flow Diagram</h2>
+                    <pre><code>Explorer UI
+    |
+    | callAgentTool("gitAgent", toolName, args)
+    v
+Ploinky Router -> AgentServer (/mcp)
+    |
+    | execute command from mcp-config.json
+    v
+gitAgent/tools/git_tool.sh
+    |
+    | start Node process
+    v
+gitAgent/tools/git_tool.mjs
+    |
+    | read MCP envelope from stdin
+    | resolve TOOL_NAME + normalize args
+    | validate repo path against allowed roots
+    | create git service / auth service
+    v
+git-service / github-auth handler
+    |
+    | run git subprocess or auth workflow
+    v
+JSON result -> MCP response -> Explorer UI</code></pre>
+                </section>
+
+                <section>
+                    <h2>Detailed Stages</h2>
+                    <ol>
+                        <li><strong>Dispatch:</strong> AgentServer receives MCP tool request and runs <code>tools/git_tool.sh</code> for the tool.</li>
+                        <li><strong>Envelope parsing:</strong> <code>git_tool.mjs</code> parses stdin payload and extracts normalized input from MCP envelope variants.</li>
+                        <li><strong>Tool resolution:</strong> tool identity is resolved from <code>TOOL_NAME</code> and envelope fallback fields; unsupported names fail explicitly.</li>
+                        <li><strong>Path policy:</strong> repository path arguments are constrained to allowed roots from <code>ASSISTOS_FS_ROOT</code>, <code>WORKSPACE_ROOT</code>, or <code>PLOINKY_WORKSPACE_ROOT</code>.</li>
+                        <li><strong>Operation execution:</strong> Git tools call <code>createGitService</code>; auth tools call GitHub auth handlers.</li>
+                        <li><strong>Remote token fallback:</strong> push and pull can resolve tokens from auth metadata or stored token state.</li>
+                        <li><strong>Response emission:</strong> tool result is serialized to stdout; failures return <code>{ "ok": false, "error": ... }</code>.</li>
+                    </ol>
+                </section>
+
+                <section>
+                    <h2>Process and Safety Notes</h2>
+                    <p>The wrapper is stateless per invocation, while long-lived auth state is persisted under workspace state files and DPU-backed secret storage. Git subprocesses run with explicit timeout control and error normalization for UI-friendly diagnostics.</p>
+                    <div class="doc-callout">
+                        <p>This design keeps invocation isolation while still preserving required auth and workspace state continuity across calls.</p>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <div id="site-footer"></div>
+    <script src="partials-loader.js"></script>
+</body>
+</html>

@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>gitAgent Docs - Architecture</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="site-header"></div>
+
+    <main class="content content--with-sidebar">
+        <div class="doc-layout">
+            <aside class="doc-sidebar" aria-label="gitAgent documentation navigation">
+                <div class="doc-sidebar__group">
+                    <p class="doc-sidebar__group-title">Documentation</p>
+                    <nav>
+                        <a href="index.html">Overview</a>
+                        <a href="architecture.html" aria-current="page">Architecture</a>
+                        <a href="execution-workflow.html">Tool Execution Workflow</a>
+                        <a href="mcp-tools.html">MCP Tools</a>
+                        <a href="integrations.html">Ploinky and Explorer Integration</a>
+                        <a href="configuration.html">Manifest and Environment</a>
+                    </nav>
+                </div>
+                <div class="doc-sidebar__group">
+                    <p class="doc-sidebar__group-title">Specifications</p>
+                    <nav>
+                        <a href="specsLoader.html?spec=specs/matrix.md">Design Specifications</a>
+                    </nav>
+                </div>
+            </aside>
+
+            <div class="doc-main">
+                <section class="lead">
+                    <h1>Architecture</h1>
+                    <p><code>gitAgent</code> is the intermediary layer between Explorer UI requests and Git command execution, routed through <a href="https://ploinky.com/" target="_blank" rel="noopener noreferrer">Ploinky</a> AgentServer MCP.</p>
+                </section>
+
+                <section>
+                    <h2>Component Overview</h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Component</th>
+                                <th>Location</th>
+                                <th>Role</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>MCP contract declaration</td>
+                                <td><code>gitAgent/mcp-config.json</code></td>
+                                <td>Declares all Git tools, command entrypoint, schemas, and per-tool <code>TOOL_NAME</code>.</td>
+                            </tr>
+                            <tr>
+                                <td>Wrapper command entrypoint</td>
+                                <td><code>gitAgent/tools/git_tool.sh</code></td>
+                                <td>Starts a Node process for each tool invocation.</td>
+                            </tr>
+                            <tr>
+                                <td>Tool dispatcher</td>
+                                <td><code>gitAgent/tools/git_tool.mjs</code></td>
+                                <td>Parses MCP envelope, validates args, resolves tool operation, and emits JSON results.</td>
+                            </tr>
+                            <tr>
+                                <td>Git execution service</td>
+                                <td><code>gitAgent/lib/git-service.mjs</code></td>
+                                <td>Runs Git subprocesses with guardrails for paths, timeouts, and safe error reporting.</td>
+                            </tr>
+                            <tr>
+                                <td>GitHub auth bridge</td>
+                                <td><code>gitAgent/lib/github-auth.mjs</code></td>
+                                <td>Handles device flow, token persistence, and auth status operations for remote Git actions.</td>
+                            </tr>
+                            <tr>
+                                <td>Explorer UI plugin channel</td>
+                                <td><code>gitAgent/IDE-plugins/git-tool-button/</code></td>
+                                <td>Injects Git UI components in Explorer and calls <code>gitAgent</code> tools via MCP.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </section>
+
+                <section>
+                    <h2>Runtime Boundary</h2>
+                    <p>AgentServer executes configured tool commands from <code>mcp-config.json</code>. For this agent, the command path is <code>tools/git_tool.sh</code>. The wrapper delegates behavior to <code>git_tool.mjs</code>, which resolves tool logic and forwards execution to service functions.</p>
+                    <pre><code>{
+  "name": "git_status",
+  "command": "tools/git_tool.sh",
+  "cwd": "workspace",
+  "env": {
+    "TOOL_NAME": "git_status"
+  }
+}</code></pre>
+                </section>
+
+                <section>
+                    <h2>Intermediary Guarantee</h2>
+                    <p>Explorer never needs to execute raw shell Git commands directly. It calls MCP tools and receives normalized responses. This separation keeps Git process control, path security, and auth behavior centralized in the agent.</p>
+                    <div class="doc-callout doc-callout--important">
+                        <p>The architecture goal is operational control and contract stability, not replacing Git itself and not embedding Git runtime logic inside Explorer UI code.</p>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <div id="site-footer"></div>
+    <script src="partials-loader.js"></script>
+</body>
+</html>

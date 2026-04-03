@@ -135,11 +135,11 @@ This is one of the reasons Explorer must be documented as an IDE shell rather th
 
 Dependencies declared in [manifest.json](/Users/adrianganga/Desktop/devWork/testExplorer/.ploinky/repos/fileExplorer/explorer/manifest.json) include:
 
-- `gitAssistant/gitAgent global`
+- `gitAgent`
 - `dpuAssistant/dpuAgent global`
-- `soplangBuilder/soplangAgent global`
-- `tasksAssistant/tasksAgent global`
-- `llmAssistant/llmAssistant global`
+- `soplangAgent`
+- `tasksAgent`
+- `llmAssistant`
 - supporting services such as `postgres` and `keycloak`
 
 Explorer depends on these agents asymmetrically:
@@ -270,6 +270,6 @@ Explorer must preserve the following constraints:
 
 ## Related Specs
 
-- [DS02 - Plugin Hosting And Dependencies](/Users/adrianganga/Desktop/devWork/testExplorer/.ploinky/repos/fileExplorer/explorer/docs/specs/DS02-plugin-hosting-and-dependencies.md)
-- [DS03 - Confidential Files And DPU](/Users/adrianganga/Desktop/devWork/testExplorer/.ploinky/repos/fileExplorer/explorer/docs/specs/DS03-confidential-files-and-dpu.md)
-- [DS04 - OnlyOffice Integration](/Users/adrianganga/Desktop/devWork/testExplorer/.ploinky/repos/fileExplorer/explorer/docs/specs/DS04-onlyoffice-integration.md)
+- [DS02 - Plugin Hosting And Dependencies](/Users/adrianganga/Desktop/devWork/testExplorer/.ploinky/repos/fileExplorer/docs/specs/DS02-plugin-hosting-and-dependencies.md)
+- [DS03 - Confidential Files And DPU](/Users/adrianganga/Desktop/devWork/testExplorer/.ploinky/repos/fileExplorer/docs/specs/DS03-confidential-files-and-dpu.md)
+- [DS04 - OnlyOffice Integration](/Users/adrianganga/Desktop/devWork/testExplorer/.ploinky/repos/fileExplorer/docs/specs/DS04-onlyoffice-integration.md)
