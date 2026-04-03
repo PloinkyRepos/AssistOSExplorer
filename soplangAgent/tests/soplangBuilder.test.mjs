@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import { createSoplangBuilder, getVariablesWithValues } from "../plugins/lib/soplangBuilderCore.mjs";
 import { createAchillesSkills } from "../plugins/lib/achillesSkillsCore.mjs";
@@ -85,7 +86,7 @@ test("syncMarkdownDocuments parses achilles markers and syncs documents", async 
     assert.equal(applied[0].template.chapters[0].paragraphs[0].commands, '@set paragraph_var "x"');
 });
 
-test("syncMarkdownDocuments skips unchanged documents and executeIncrementalBuild builds only pending docs", async () => {
+test("syncMarkdownDocuments skips unchanged documents", async () => {
     const root = await makeTempDir();
     const storageRoot = path.join(root, "persist");
     const markdownPath = path.join(root, ".ploinky", "repos", "demoRepo", "README.md");
@@ -97,11 +98,6 @@ test("syncMarkdownDocuments skips unchanged documents and executeIncrementalBuil
     ].join("\n"), "utf8");
 
     const workspace = createWorkspaceStub();
-    workspace.buildOnlyForDocumentCalls = [];
-    workspace.buildOnlyForDocument = async function (docId) {
-        this.buildOnlyForDocumentCalls.push(docId);
-    };
-
     const applied = [];
     const documents = {
         async getDocument() {
@@ -125,14 +121,12 @@ test("syncMarkdownDocuments skips unchanged documents and executeIncrementalBuil
 
     const firstSync = await builder.syncMarkdownDocuments();
     const secondSync = await builder.syncMarkdownDocuments();
-    const incrementalBuild = await builder.executeIncrementalBuild();
 
     assert.deepEqual(firstSync.changedDocuments, ["demo"]);
     assert.deepEqual(secondSync.changedDocuments, []);
+    assert.deepEqual(firstSync.pendingDocuments, ["demo"]);
+    assert.deepEqual(secondSync.pendingDocuments, ["demo"]);
     assert.equal(applied.length, 1);
-    assert.deepEqual(workspace.buildOnlyForDocumentCalls, ["demo"]);
-    assert.deepEqual(incrementalBuild.builtDocuments, ["demo"]);
-    assert.deepEqual(incrementalBuild.pendingDocuments, []);
 });
 
 test("walkMarkdownFiles scans root .ploinky repos once and ignores nested .ploinky loops", async () => {
@@ -163,7 +157,6 @@ test("walkMarkdownFiles scans root .ploinky repos once and ignores nested .ploin
 test("executeWorkspaceBuild runs workspace.buildAll separately", async () => {
     const root = await makeTempDir();
     const workspace = createWorkspaceStub();
-    workspace.buildOnlyForDocument = async function () {};
     const builder = createSoplangBuilder({
         workspace,
         documents: {
@@ -183,43 +176,6 @@ test("executeWorkspaceBuild runs workspace.buildAll separately", async () => {
 
     assert.equal(workspace.buildAllCalls, 1);
     assert.deepEqual(result.errors, []);
-});
-
-test("buildFromSpecsMarkdown concatenates matrix markdown first", async () => {
-    const root = await makeTempDir();
-    await fs.writeFile(path.join(root, "matrix.md"), '<!--{"achilles-ide-document":{"id":"matrix","commands":"@set matrix \\"first\\""}}-->', "utf8");
-    await fs.writeFile(path.join(root, "feature.md"), '<!--{"achilles-ide-document":{"id":"feature","commands":"@set feature \\"second\\""}}-->', "utf8");
-
-    const workspace = createWorkspaceStub();
-    const updates = [];
-    const documents = {
-        async getDocument() {
-            return null;
-        },
-        async createDocument(id, category) {
-            return { id, category };
-        },
-        async updateDocument(...args) {
-            updates.push(args);
-        }
-    };
-
-    const builder = createSoplangBuilder({
-        workspace,
-        documents,
-        env: { SOPLANG_WORKSPACE_ROOT: root },
-        cwd: () => root,
-        buildErrorsGetter: () => []
-    });
-
-    const result = await builder.buildFromSpecsMarkdown();
-
-    assert.equal(result.filesScanned, 2);
-    assert.equal(result.matrixCodeBlocks, 1);
-    assert.equal(result.otherCodeBlocks, 1);
-    assert.equal(workspace.forceSaveCalls, 1);
-    assert.equal(workspace.buildAllCalls, 1);
-    assert.match(updates[0][5], /^@set matrix "first"\n\n@set feature "second"$/);
 });
 
 test("getVariablesWithValues enriches values and preserves errors", async () => {
@@ -269,8 +225,8 @@ test("executeSkill forwards payload through the Achilles bridge", async () => {
             FakeAgent.instance = this;
         }
 
-        async executeWithReviewMode(promptText, payload, reviewMode) {
-            this.calls.push({ promptText, payload, reviewMode });
+        async executePrompt(promptText, payload) {
+            this.calls.push({ promptText, payload });
             return { result: { ok: true, payload } };
         }
     }
@@ -284,7 +240,7 @@ test("executeSkill forwards payload through the Achilles bridge", async () => {
     const result = await bridge.executeSkill("demo", "alpha 1");
 
     assert.equal(registeredCommands.has("demo"), true);
-    assert.equal(registeredCommands.has("d"), true);
+    assert.equal(registeredCommands.has("d"), false);
     assert.deepEqual(result, {
         ok: true,
         payload: {
@@ -295,8 +251,7 @@ test("executeSkill forwards payload through the Achilles bridge", async () => {
         promptText: "alpha 1",
         payload: {
             skillName: "demo"
-        },
-        reviewMode: "none"
+        }
     });
 });
 
@@ -310,21 +265,6 @@ test("deriveInvocation maps MCP tools to plugin methods", async () => {
         pluginName: "SoplangBuilder",
         methodName: "executeWorkspaceBuild",
         params: []
-    });
-    assert.deepEqual(deriveInvocation("execute_incremental_build"), {
-        pluginName: "SoplangBuilder",
-        methodName: "executeIncrementalBuild",
-        params: []
-    });
-    assert.deepEqual(deriveInvocation("execute_incremental_build", { documentIds: ["doc-1"] }), {
-        pluginName: "SoplangBuilder",
-        methodName: "executeIncrementalBuild",
-        params: [["doc-1"]]
-    });
-    assert.deepEqual(deriveInvocation("build_from_specs_markdown", { root: "/tmp/specs" }), {
-        pluginName: "SoplangBuilder",
-        methodName: "buildFromSpecsMarkdown",
-        params: ["/tmp/specs"]
     });
     assert.deepEqual(deriveInvocation("get_variables_with_values"), {
         pluginName: "SoplangBuilder",
@@ -349,11 +289,13 @@ test("deriveInvocation maps MCP tools to plugin methods", async () => {
 });
 
 test("deriveInvocation rejects unsupported tools", async () => {
+    assert.throws(() => deriveInvocation("execute_incremental_build"), /Unsupported tool "execute_incremental_build"/);
+    assert.throws(() => deriveInvocation("build_from_specs_markdown"), /Unsupported tool "build_from_specs_markdown"/);
     assert.throws(() => deriveInvocation("unknown_tool"), /Unsupported tool "unknown_tool"/);
 });
 
 test("soplang-tool.sh fails fast when TOOL_NAME is missing", async () => {
-    const scriptPath = path.resolve(".ploinky/repos/fileExplorer/soplangAgent/soplang-tool.sh");
+    const scriptPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "soplang-tool.sh");
     const result = await new Promise((resolve) => {
         const child = spawn("sh", [scriptPath], {
             cwd: path.resolve("."),
@@ -368,6 +310,7 @@ test("soplang-tool.sh fails fast when TOOL_NAME is missing", async () => {
             stderr += String(chunk);
         });
         child.on("close", (code) => resolve({ code, stdout, stderr }));
+        child.stdin.on("error", () => {});
         child.stdin.end(JSON.stringify({ input: {} }));
     });
 
@@ -411,7 +354,6 @@ test("syncMarkdownDocuments prefers PLOINKY_CWD and scans .ploinky/repos markdow
     await fs.writeFile(path.join(root, "README.md"), "# Agent code readme\n", "utf8");
 
     const workspace = createWorkspaceStub();
-    workspace.buildOnlyForDocument = async function () {};
     const applied = [];
     const documents = {
         async getDocument() {

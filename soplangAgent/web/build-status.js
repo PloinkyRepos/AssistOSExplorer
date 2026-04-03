@@ -229,15 +229,15 @@ function getVisibleVariables() {
   return variables.filter((variable) => variable?.isActive !== false);
 }
 
-async function rebuild() {
-  const btn = document.getElementById('start-build');
+async function sync_documents() {
+  const btn = document.getElementById('sync-documents');
   btn.disabled = true;
   try {
     resetLiveLogs();
-    setBuildState(true, 'Sync markdown queued', 'Waiting for the sync task to start.');
+    setBuildState(true, 'Sync documents queued', 'Waiting for the sync task to start.');
     const result = await callTool('sync_markdown_documents', {}, {
       onTaskUpdate: createStatusUpdater(
-        'Sync variables',
+        'Sync documents',
         'Scanning workspace documents and refreshing the SOPLang workspace.'
       )
     });
@@ -260,26 +260,24 @@ async function rebuild() {
 
 async function executeBuild() {
   const btn = document.getElementById('execute-build');
-  const syncBtn = document.getElementById('start-build');
+  const syncBtn = document.getElementById('sync-documents');
   btn.disabled = true;
   syncBtn.disabled = true;
   try {
     resetLiveLogs();
-    setBuildState(true, 'Sync variables queued', 'Waiting for the sync task to start.');
+    setBuildState(true, 'Sync documents queued', 'Waiting for the sync task to start.');
     const syncResult = await callTool('sync_markdown_documents', {}, {
       onTaskUpdate: createStatusUpdater(
-        'Sync variables',
-        'Scanning workspace documents and preparing the build plan.'
+        'Sync documents',
+        'Scanning workspace documents and preparing the full build.'
       )
     });
     warnings = Array.isArray(syncResult?.warnings) ? syncResult.warnings : [];
 
-    const isFullBuild = Boolean(syncResult?.requiresFullBuild);
-    const buildToolName = isFullBuild ? 'execute_workspace_build' : 'execute_incremental_build';
-    const buildLabel = isFullBuild ? 'Full build' : 'Incremental build';
+    const buildLabel = 'Full build';
 
     setBuildState(true, `${buildLabel} queued`, 'Waiting for the build task to start.');
-    const buildResult = await callTool(buildToolName, {}, {
+    const buildResult = await callTool('execute_workspace_build', {}, {
       onTaskUpdate(task) {
         updateLiveLogsFromTask(task, buildLabel);
         const statusView = describeTaskUpdate(task, buildLabel);
@@ -459,7 +457,7 @@ document.querySelectorAll('.tab').forEach((tab) => {
   tab.addEventListener('click', () => switchTab(tab.dataset.tab));
 });
 
-document.getElementById('start-build').addEventListener('click', rebuild);
+document.getElementById('sync-documents').addEventListener('click', sync_documents);
 document.getElementById('execute-build').addEventListener('click', executeBuild);
 
 const copyLiveLogsButton = document.getElementById('copy-live-logs');

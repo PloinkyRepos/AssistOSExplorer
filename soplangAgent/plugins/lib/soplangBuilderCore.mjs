@@ -235,7 +235,6 @@ const syncMarkdownDocuments = async ({
     const changedTemplates = Object.fromEntries(
         Object.entries(docTemplates).filter(([docId]) => changedDocuments.includes(docId))
     );
-    const requiresFullBuild = !previousState.lastBuiltAt;
     const { created, warnings } = await syncDocumentTemplates(documents, changedTemplates);
     const syncedDocuments = [...created];
     const warningDocIds = new Set(
@@ -264,109 +263,8 @@ const syncMarkdownDocuments = async ({
         changedDocuments,
         unchangedDocuments,
         pendingDocuments,
-        requiresFullBuild,
         warnings,
         durationMs: Date.now() - startedAt
-    };
-};
-
-const executeIncrementalBuild = async ({
-    workspace,
-    documentIds = [],
-    fsModule,
-    pathModule,
-    env,
-    buildErrorsGetter
-}) => {
-    const startedAt = Date.now();
-    const state = await loadBuilderState({ fsModule, pathModule, env });
-    const targetDocuments = Array.isArray(documentIds) && documentIds.length
-        ? documentIds
-        : state.pendingDocuments;
-
-    if (!targetDocuments.length) {
-        return {
-            builtDocuments: [],
-            pendingDocuments: [],
-            errors: [],
-            durationMs: Date.now() - startedAt
-        };
-    }
-
-    const builtDocuments = [];
-    const executionErrors = [];
-
-    for (const docId of targetDocuments) {
-        try {
-            await workspace.buildOnlyForDocument(docId);
-            builtDocuments.push(docId);
-        } catch (error) {
-            const fallbackMessage = (() => {
-                try {
-                    return JSON.stringify(error, null, 2);
-                } catch (_) {
-                    return String(error);
-                }
-            })();
-            executionErrors.push({
-                documentId: docId,
-                message: error?.message || fallbackMessage
-            });
-        }
-    }
-
-    const builtSet = new Set(builtDocuments);
-    const pendingDocuments = state.pendingDocuments.filter((docId) => !builtSet.has(docId));
-
-    await saveBuilderState({
-        ...state,
-        pendingDocuments,
-        lastBuiltAt: new Date().toISOString(),
-        lastBuiltDocuments: builtDocuments
-    }, { fsModule, pathModule, env });
-
-    return {
-        builtDocuments,
-        pendingDocuments,
-        errors: [...executionErrors, ...buildErrorsGetter()],
-        durationMs: Date.now() - startedAt
-    };
-};
-
-const collectSpecsSoplangCode = async (files, {
-    fsModule = fs,
-    pathModule = path
-} = {}) => {
-    const soplangCodeBlocks = [];
-    const matrixSoplangCode = [];
-
-    for (const filePath of files) {
-        let content = "";
-        try {
-            content = await fsModule.readFile(filePath, "utf8");
-        } catch (err) {
-            console.warn("Failed to read file", filePath, err.message);
-            continue;
-        }
-
-        const parsedDocs = parseDocsFromMarkdown(content, filePath, { pathModule });
-        const fileName = pathModule.basename(filePath);
-        Object.values(parsedDocs).forEach((doc) => {
-            if (!doc.commands || !doc.commands.trim()) {
-                return;
-            }
-            if (fileName === "matrix.md") {
-                matrixSoplangCode.push(doc.commands.trim());
-            } else {
-                soplangCodeBlocks.push(doc.commands.trim());
-            }
-        });
-    }
-
-    return {
-        allSoplangCode: [...matrixSoplangCode, ...soplangCodeBlocks].join("\n\n"),
-        matrixSoplangCode,
-        soplangCodeBlocks
     };
 };
 
@@ -483,17 +381,6 @@ export const createSoplangBuilder = ({
             };
         },
 
-        async executeIncrementalBuild(documentIds = []) {
-            return executeIncrementalBuild({
-                workspace,
-                documentIds,
-                fsModule,
-                pathModule,
-                env,
-                buildErrorsGetter
-            });
-        },
-
         async executeWorkspaceBuild() {
             const startedAt = Date.now();
             await workspace.buildAll();
@@ -547,109 +434,6 @@ export const createSoplangBuilder = ({
 
         async getCustomTypes() {
             return workspace.getCustomTypes();
-        },
-
-        async buildFromSpecsMarkdown(root = null) {
-            const startedAt = Date.now();
-            const searchRoot = root || await resolveWorkspaceRoot();
-
-            debug.log("[buildFromSpecsMarkdown] ========== BUILD START ==========");
-            debug.log("[buildFromSpecsMarkdown] Search root directory:", searchRoot);
-            debug.log("[buildFromSpecsMarkdown] SOPLANG_WORKSPACE_ROOT env:", env.SOPLANG_WORKSPACE_ROOT || "(not set)");
-            debug.log("[buildFromSpecsMarkdown] Current working directory:", cwd());
-
-            const files = await listMarkdownFiles(searchRoot);
-            debug.log("[buildFromSpecsMarkdown] Markdown files found:", files.length);
-            if (debug.isEnabled()) {
-                files.forEach((filePath, index) => debug.log(`  [${index + 1}] ${filePath}`));
-            }
-
-            if (!files.length) {
-                debug.error("[buildFromSpecsMarkdown] No markdown files found!");
-                throw new Error(`No markdown files found under ${searchRoot}`);
-            }
-
-            const {
-                allSoplangCode,
-                matrixSoplangCode,
-                soplangCodeBlocks
-            } = await collectSpecsSoplangCode(files, {
-                fsModule,
-                pathModule
-            });
-
-            debug.log("[buildFromSpecsMarkdown] SOPLang code blocks from matrix.md:", matrixSoplangCode.length);
-            debug.log("[buildFromSpecsMarkdown] SOPLang code blocks from other files:", soplangCodeBlocks.length);
-            debug.log("[buildFromSpecsMarkdown] Total SOPLang code length:", allSoplangCode.length, "characters");
-
-            if (debug.isEnabled() && allSoplangCode.trim()) {
-                const preview = allSoplangCode.length > 2000
-                    ? `${allSoplangCode.substring(0, 2000)}\n... (truncated)`
-                    : allSoplangCode;
-                debug.log("[buildFromSpecsMarkdown] ---------- CONCATENATED SOPLANG CODE ----------");
-                debug.log(preview);
-                debug.log("[buildFromSpecsMarkdown] ---------- END SOPLANG CODE ----------");
-            }
-
-            if (!allSoplangCode.trim()) {
-                debug.error("[buildFromSpecsMarkdown] No SOPLang code found in any markdown files!");
-                throw new Error("No soplang code found in .specs markdown files");
-            }
-
-            const docId = "specs-soplang-document";
-            let docObj;
-            try {
-                docObj = await documents.getDocument(docId);
-            } catch (_) {
-                docObj = null;
-            }
-
-            const docTemplate = {
-                docId,
-                title: "Specs SOPLang Document",
-                category: "specs",
-                infoText: "Automatically generated document containing all SOPLang code from .specs markdown files",
-                commands: allSoplangCode
-            };
-
-            if (!docObj) {
-                await documents.createDocument(docId, "specs");
-            }
-
-            await documents.updateDocument(
-                docId,
-                docTemplate.title,
-                docId,
-                docTemplate.category,
-                docTemplate.infoText,
-                docTemplate.commands,
-                {}
-            );
-
-            debug.log("[buildFromSpecsMarkdown] Document updated:", docId);
-            await workspace.forceSave();
-            await workspace.buildAll();
-            await workspace.shutDown();
-
-            const buildErrors = buildErrorsGetter();
-            if (buildErrors.length > 0) {
-                debug.error("[buildFromSpecsMarkdown] Build errors detected:", buildErrors.length);
-                buildErrors.forEach((error, index) => debug.error(`  Error ${index + 1}:`, error));
-            } else {
-                debug.log("[buildFromSpecsMarkdown] ✓ No build errors");
-            }
-
-            debug.log("[buildFromSpecsMarkdown] ========== BUILD COMPLETE ==========");
-
-            return {
-                docId,
-                soplangCodeLength: allSoplangCode.length,
-                filesScanned: files.length,
-                matrixCodeBlocks: matrixSoplangCode.length,
-                otherCodeBlocks: soplangCodeBlocks.length,
-                errors: buildErrors,
-                durationMs: Date.now() - startedAt
-            };
         }
     };
 };

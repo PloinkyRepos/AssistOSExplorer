@@ -1,8 +1,9 @@
 {
     "lite-sandbox": true,
-    "container": "node:20-bullseye",
+    "container": "node:22-alpine",
     "profiles": {
         "default": {
+            "install": "/code/scripts/install.sh",
             "env": [
                 "ACHILLES_DEBUG",
                 "SOUL_GATEWAY_API_KEY"

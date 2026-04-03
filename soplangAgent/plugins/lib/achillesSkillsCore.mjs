@@ -47,35 +47,29 @@ export const createAchillesSkills = async ({
         const skills = Array.from(agent.skillCatalog.values());
 
         for (const record of skills) {
-            const commandName = record.name;
+            const skillName = typeof record.name === "string" ? record.name.trim() : "";
+            const commandName = skillName;
             if (!commandName || registered.has(commandName)) {
                 continue;
             }
 
-            debug.log("[AchillesSkills] Registering command", {
-                commandName,
-                skillName: record.name,
-                type: record.type,
-                shortName: record.shortName || ""
-            });
+            const executeSkillPrompt = async (inputValues) => {
+                await ensureAgent();
+                const promptText = Array.isArray(inputValues)
+                    ? inputValues.join(" ")
+                    : (typeof inputValues === "string" ? inputValues : "");
+                const out = await agent.executePrompt(promptText, { skillName });
+                if (out && typeof out === "object" && Object.prototype.hasOwnProperty.call(out, "result")) {
+                    return out.result;
+                }
+                return out;
+            };
 
-            workspace.registerCommand(commandName, async (inputValues, parsedCommand, currentDocId, graph, buildInstance, docPath) => {
-                    await ensureAgent();
-                    const promptText = Array.isArray(inputValues)
-                        ? inputValues.join(" ")
-                        : (typeof inputValues === "string" ? inputValues : "");
-                    const out = await agent.executeWithReviewMode(promptText, {
-                        skillName: record.name,
-                        context: {
-                            sopDocFilePath: docPath
-                        }
-                    }, "none");
-                    if (out && typeof out === "object" && Object.prototype.hasOwnProperty.call(out, "result")) {
-                        return out.result;
-                    }
-                    debug.log(`[AchillesSkills] ${commandName} executed, result: ${out}`);
-                    return out;
-                });
+            workspace.registerCommand(commandName, async (inputValues) => {
+                const out = await executeSkillPrompt(inputValues);
+                debug.log(`[AchillesSkills] ${commandName} executed, result: ${out}`);
+                return out;
+            });
 
             registered.add(commandName);
         }
@@ -107,7 +101,7 @@ export const createAchillesSkills = async ({
 
             await registerSkills();
             await ensureAgent();
-            const result = await agent.executeWithReviewMode(text, { skillName }, "none");
+            const result = await agent.executePrompt(text, { skillName });
             if (result && typeof result === "object" && Object.prototype.hasOwnProperty.call(result, "result")) {
                 return result.result;
             }

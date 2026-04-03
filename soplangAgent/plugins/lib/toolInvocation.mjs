@@ -12,28 +12,6 @@ export const deriveInvocation = (toolName, payload = {}) => {
                 methodName: "executeWorkspaceBuild",
                 params: []
             };
-        case "execute_incremental_build": {
-            const params = [];
-            if (payload.documentIds !== undefined) {
-                params.push(payload.documentIds);
-            }
-            return {
-                pluginName: "SoplangBuilder",
-                methodName: "executeIncrementalBuild",
-                params
-            };
-        }
-        case "build_from_specs_markdown": {
-            const params = [];
-            if (payload.root !== undefined) {
-                params.push(payload.root);
-            }
-            return {
-                pluginName: "SoplangBuilder",
-                methodName: "buildFromSpecsMarkdown",
-                params
-            };
-        }
         case "get_variables_with_values":
             return {
                 pluginName: "SoplangBuilder",

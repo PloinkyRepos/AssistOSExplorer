@@ -25,44 +25,6 @@
             "inputSchema": {}
         },
         {
-            "name": "execute_incremental_build",
-            "title": "Execute Incremental Build",
-            "description": "Run the SOPLang build only for documents changed by the last markdown sync, or for an explicit list of document IDs.",
-            "command": "/code/soplang-tool.sh",
-            "cwd": "workspace",
-            "async": true,
-            "env": {
-                "TOOL_NAME": "execute_incremental_build"
-            },
-            "inputSchema": {
-                "documentIds": {
-                    "type": "array",
-                    "description": "Optional list of document IDs to build incrementally instead of using the pending set from the last sync",
-                    "optional": true,
-                    "items": {
-                        "type": "string"
-                    }
-                }
-            }
-        },
-        {
-            "name": "build_from_specs_markdown",
-            "title": "Build from Specs Markdown",
-            "description": "Collect SOPLang code from markdown files and build it through the SOPLang workspace.",
-            "command": "/code/soplang-tool.sh",
-            "cwd": "workspace",
-            "env": {
-                "TOOL_NAME": "build_from_specs_markdown"
-            },
-            "inputSchema": {
-                "root": {
-                    "type": "string",
-                    "description": "Optional root directory to scan instead of the detected workspace root",
-                    "optional": true
-                }
-            }
-        },
-        {
             "name": "get_variables_with_values",
             "title": "Get Variables with Values",
             "description": "Return workspace SOPLang variables enriched with their resolved values.",
