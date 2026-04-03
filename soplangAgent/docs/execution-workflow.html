@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>soplangBuilder Docs - Tool Execution Workflow</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="site-header"></div>
+
+    <main class="content content--with-sidebar">
+        <div class="doc-layout">
+            <aside class="doc-sidebar" aria-label="soplangBuilder documentation navigation">
+                <div class="doc-sidebar__group">
+                    <p class="doc-sidebar__group-title">Documentation</p>
+                    <nav>
+                        <a href="index.html">Overview</a>
+                        <a href="architecture.html">Architecture</a>
+                        <a href="execution-workflow.html" aria-current="page">Tool Execution Workflow</a>
+                        <a href="mcp-tools.html">MCP Tools</a>
+                        <a href="integrations.html">Ploinky and Explorer Integration</a>
+                        <a href="configuration.html">Manifest and Environment</a>
+                    </nav>
+                </div>
+                <div class="doc-sidebar__group">
+                    <p class="doc-sidebar__group-title">Specifications</p>
+                    <nav>
+                        <a href="specsLoader.html?spec=matrix.md">Design Specifications</a>
+                    </nav>
+                </div>
+            </aside>
+
+            <div class="doc-main">
+                <section class="lead">
+                    <h1>Tool Execution Workflow</h1>
+                    <p>Every MCP tool call runs in a fresh process. There is no long-lived plugin instance shared between tool invocations in <a href="https://ploinky.com/" target="_blank" rel="noopener noreferrer">Ploinky</a>, and each call boots <a href="https://assistos-ai.github.io/soplang/" target="_blank" rel="noopener noreferrer">SOPLang</a> plugins again.</p>
+                </section>
+
+                <section>
+                    <h2>End-to-End Flow Diagram</h2>
+                    <pre><code>Explorer UI / MCP Browser Client
+        |
+        | callTool(name, input)
+        v
+Ploinky Router -> AgentServer (/mcp)
+        |
+        | spawn command from mcp-config.json
+        v
+/code/soplang-tool.sh (TOOL_NAME=...)
+        |
+        | read JSON payload from stdin
+        | deriveInvocation(toolName, payload)
+        v
+Node wrapper runtime
+        |
+        | register SOPLang plugins
+        | register AchillesSkills plugin
+        | register SoplangBuilder plugin
+        | discover skills and register as SOPLang commands
+        v
+targetPlugin[targetMethod](...params)
+        |
+        | optional workspace.forceSave() (tool specific)
+        | workspace.shutDown() (always at wrapper exit)
+        v
+JSON result -> MCP response -> Explorer UI</code></pre>
+                </section>
+
+                <section>
+                    <h2>Detailed Execution Stages</h2>
+                    <ol>
+                        <li><strong>Dispatch:</strong> AgentServer reads <code>soplangAgent/mcp-config.json</code> and executes <code>/code/soplang-tool.sh</code> for the selected tool.</li>
+                        <li><strong>Input bootstrap:</strong> wrapper reads stdin payload (<code>{ tool, input, metadata }</code>) and validates required env variables like <code>TOOL_NAME</code>.</li>
+                        <li><strong>Invocation mapping:</strong> tool name is mapped to plugin method by <code>plugins/lib/toolInvocation.mjs</code>.</li>
+                        <li><strong>Plugin registration:</strong> <a href="https://assistos-ai.github.io/soplang/" target="_blank" rel="noopener noreferrer">SOPLang</a> core plugins are loaded, then <code>AchillesSkills</code> and <code>SoplangBuilder</code> are registered.</li>
+                        <li><strong>Skill registration:</strong> Achilles skill catalog is discovered and each skill is registered as a <a href="https://assistos-ai.github.io/soplang/" target="_blank" rel="noopener noreferrer">SOPLang</a> command (same process lifetime).</li>
+                        <li><strong>Method execution:</strong> selected plugin method executes and returns JSON payload to stdout.</li>
+                        <li><strong>Persistence finalize:</strong> some tools call <code>workspace.forceSave()</code> during execution; wrapper then calls <code>workspace.shutDown()</code> before process exit.</li>
+                    </ol>
+                </section>
+
+                <section>
+                    <h2>Persistence Notes</h2>
+                    <p>For document sync, the core implementation performs <code>workspace.forceSave()</code> after sync to persist state updates. Independently of tool type, wrapper-level shutdown executes <code>workspace.shutDown()</code> to close persistence cleanly.</p>
+                    <div class="doc-callout">
+                        <p>This dual strategy guarantees disk persistence even when a tool mutates workspace state and exits immediately after completion.</p>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <div id="site-footer"></div>
+    <script src="partials-loader.js"></script>
+</body>
+</html>

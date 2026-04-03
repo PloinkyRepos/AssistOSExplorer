@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>tasksAssistant Docs - Overview</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="site-header"></div>
+
+    <main class="content content--with-sidebar">
+        <div class="doc-layout">
+            <aside class="doc-sidebar" aria-label="tasksAssistant documentation navigation">
+                <div class="doc-sidebar__group">
+                    <p class="doc-sidebar__group-title">Documentation</p>
+                    <nav>
+                        <a href="index.html" aria-current="page">Overview</a>
+                        <a href="architecture.html">Architecture</a>
+                        <a href="execution-workflow.html">Tool Execution Workflow</a>
+                        <a href="mcp-tools.html">MCP Tools</a>
+                        <a href="integrations.html">Ploinky and Explorer Integration</a>
+                        <a href="configuration.html">Manifest and Environment</a>
+                    </nav>
+                </div>
+                <div class="doc-sidebar__group">
+                    <p class="doc-sidebar__group-title">Specifications</p>
+                    <nav>
+                        <a href="specsLoader.html?spec=specs/matrix.md">Design Specifications</a>
+                    </nav>
+                </div>
+            </aside>
+
+            <div class="doc-main">
+                <section class="lead">
+                    <h1>tasksAgent Documentation</h1>
+                    <p>This repository currently hosts one Ploinky agent: <code>tasksAgent</code>.</p>
+                    <p>The agent is integrated in <a href="https://ploinky.com/" target="_blank" rel="noopener noreferrer">Ploinky</a> and is used by Explorer flows to manage repository backlog files through MCP tools.</p>
+                    <p>All task tools execute through <code>tasksAgent/tools/tasks_tool.sh</code>, which dispatches to <code>tasks_tool.mjs</code>.</p>
+                </section>
+
+                <section class="highlight-box">
+                    <h3>Operational Role</h3>
+                    <p><code>tasksAgent</code> mediates between Explorer task interactions and backlog-file execution through MCP tools that cover configuration, listing, retrieval, mutation, history, and reorder operations.</p>
+                    <p>The agent enforces repository path boundaries and file-extension rules before any mutation, and Explorer integration is delivered through <code>tasksAgent/IDE-plugins/tasks-tool-button/</code> as the UI entry channel.</p>
+                </section>
+
+                <section>
+                    <h2>Repository Scope</h2>
+                    <p>The repository can host multiple Ploinky agents over time. This documentation set targets the current <code>tasksAgent</code> scope and its role as the operational bridge between Explorer and backlog management.</p>
+                    <div class="doc-callout">
+                        <p><strong>Validation rule:</strong> run the tasks agent tests under <code>tasksAgent/tests</code> for code changes, together with documentation and specification updates.</p>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <div id="site-footer"></div>
+    <script src="partials-loader.js"></script>
+</body>
+</html>

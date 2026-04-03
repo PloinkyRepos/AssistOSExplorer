@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>soplangBuilder Docs - Manifest and Environment</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="site-header"></div>
+
+    <main class="content content--with-sidebar">
+        <div class="doc-layout">
+            <aside class="doc-sidebar" aria-label="soplangBuilder documentation navigation">
+                <div class="doc-sidebar__group">
+                    <p class="doc-sidebar__group-title">Documentation</p>
+                    <nav>
+                        <a href="index.html">Overview</a>
+                        <a href="architecture.html">Architecture</a>
+                        <a href="execution-workflow.html">Tool Execution Workflow</a>
+                        <a href="mcp-tools.html">MCP Tools</a>
+                        <a href="integrations.html">Ploinky and Explorer Integration</a>
+                        <a href="configuration.html" aria-current="page">Manifest and Environment</a>
+                    </nav>
+                </div>
+                <div class="doc-sidebar__group">
+                    <p class="doc-sidebar__group-title">Specifications</p>
+                    <nav>
+                        <a href="specsLoader.html?spec=matrix.md">Design Specifications</a>
+                    </nav>
+                </div>
+            </aside>
+
+            <div class="doc-main">
+                <section class="lead">
+                    <h1>Manifest and Environment</h1>
+                    <p>The agent follows the <a href="https://ploinky.com/" target="_blank" rel="noopener noreferrer">Ploinky</a> manifest standard and relies on a minimal set of environment variables for runtime behavior.</p>
+                </section>
+
+                <section>
+                    <h2>Manifest</h2>
+                    <p>Main configuration file: <code>soplangAgent/manifest.json</code>.</p>
+                    <pre><code>{
+  "lite-sandbox": true,
+  "container": "node:22-alpine",
+  "profiles": {
+    "default": {
+      "install": "/code/scripts/install.sh",
+      "env": ["ACHILLES_DEBUG", "SOUL_GATEWAY_API_KEY"]
+    }
+  }
+}</code></pre>
+                    <p>The <code>container</code> field defines the runtime image used by <a href="https://ploinky.com/" target="_blank" rel="noopener noreferrer">Ploinky</a>, <code>profiles.default.install</code> defines dependency installation, and <code>profiles.default.env</code> declares forwarded environment variables used by the agent.</p>
+                </section>
+
+                <section>
+                    <h2>Environment Variables</h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Variable</th>
+                                <th>Usage</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>SOUL_GATEWAY_API_KEY</code></td>
+                                <td>Used for LLM calls through <a href="https://assistos-ai.github.io/soplang/" target="_blank" rel="noopener noreferrer">SOPLang</a>/LLM plugin paths.</td>
+                            </tr>
+                            <tr>
+                                <td><code>ACHILLES_DEBUG</code></td>
+                                <td>Enables detailed debug logging via <code>plugins/debugLogger.mjs</code>.</td>
+                            </tr>
+                            <tr>
+                                <td><code>PERSISTENCE_FOLDER</code>, <code>LOGS_FOLDER</code>, <code>AUDIT_FOLDER</code></td>
+                                <td>Set by <code>soplang-tool.sh</code> for persistence and tool execution logs.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </section>
+
+                <section>
+                    <h2>Plugin and Command Registration</h2>
+                    <p>At invocation time, the wrapper registers <a href="https://assistos-ai.github.io/soplang/" target="_blank" rel="noopener noreferrer">SOPLang</a> plugins and then loads project plugins from <code>soplangAgent/plugins/</code>. During builder initialization, custom commands are registered (<code>load</code>, <code>createJSCode</code>, <code>store</code>), and Achilles skills are also registered as <a href="https://assistos-ai.github.io/soplang/" target="_blank" rel="noopener noreferrer">SOPLang</a> commands.</p>
+                </section>
+
+                <section>
+                    <h2>Local Skills Folder</h2>
+                    <p>The repository includes <code>soplangAgent/skills/</code> with local skill packages. These skills are discoverable and can be registered as commands through Achilles bridge, but they are not yet actively used in current Explorer workflows.</p>
+                    <div class="doc-callout">
+                        <p>This keeps future extension points ready without changing MCP API contracts.</p>
+                    </div>
+                </section>
+
+                <section>
+                    <h2>Test Validation</h2>
+                    <p>Repository validation is executed with <code>npm test</code> from <code>soplangAgent/</code>. Code changes are considered complete only after this test command passes.</p>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <div id="site-footer"></div>
+    <script src="partials-loader.js"></script>
+</body>
+</html>

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>soplangBuilder Docs - Overview</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="site-header"></div>
+
+    <main class="content content--with-sidebar">
+        <div class="doc-layout">
+            <aside class="doc-sidebar" aria-label="soplangBuilder documentation navigation">
+                <div class="doc-sidebar__group">
+                    <p class="doc-sidebar__group-title">Documentation</p>
+                    <nav>
+                        <a href="index.html" aria-current="page">Overview</a>
+                        <a href="architecture.html">Architecture</a>
+                        <a href="execution-workflow.html">Tool Execution Workflow</a>
+                        <a href="mcp-tools.html">MCP Tools</a>
+                        <a href="integrations.html">Ploinky and Explorer Integration</a>
+                        <a href="configuration.html">Manifest and Environment</a>
+                    </nav>
+                </div>
+                <div class="doc-sidebar__group">
+                    <p class="doc-sidebar__group-title">Specifications</p>
+                    <nav>
+                        <a href="specsLoader.html?spec=matrix.md">Design Specifications</a>
+                    </nav>
+                </div>
+            </aside>
+
+            <div class="doc-main">
+                <section class="lead">
+                    <h1>soplangBuilder Agent Documentation</h1>
+                    <p>This repository hosts a single agent: <code>soplangAgent</code> (published in <a href="https://ploinky.com/" target="_blank" rel="noopener noreferrer">Ploinky</a> as <code>soplangBuilder</code> integration layer).</p>
+                    <p>The agent is designed to be integrated in <a href="https://ploinky.com/" target="_blank" rel="noopener noreferrer">Ploinky</a> and consumed from Explorer-style UI flows, with current usage focused on the file explorer project in <code>.ploinky/repos/AssistOSExplorer</code>.</p>
+                    <p>At runtime the agent is exposed through MCP, and each MCP tool call is executed through <code>soplangAgent/soplang-tool.sh</code>.</p>
+                </section>
+
+                <section class="highlight-box">
+                    <h3>Operational Role</h3>
+                    <p>The agent bridges <a href="https://assistos-ai.github.io/soplang/" target="_blank" rel="noopener noreferrer">SOPLang</a> workspace APIs to MCP tools declared in <code>soplangAgent/mcp-config.json</code>, then executes those operations through a controlled wrapper path. It loads runtime plugins from <code>soplangAgent/plugins/</code>, registers commands, and makes the resulting contract available to Explorer-facing flows.</p>
+                    <p>The same boundary also includes Achilles skill discovery and command exposure, so UI actions can call a stable MCP surface while SOPLang-specific orchestration remains inside <code>soplangBuilder</code>.</p>
+                </section>
+
+                <section>
+                    <h2>Repository Scope</h2>
+                    <p>The repository intentionally keeps one agent implementation. It is not a generic multi-agent monorepo. The goal is to keep <a href="https://assistos-ai.github.io/soplang/" target="_blank" rel="noopener noreferrer">SOPLang</a> build orchestration and MCP exposure isolated and predictable for Explorer UI consumption.</p>
+                    <div class="doc-callout">
+                        <p><strong>Validation rule:</strong> run <code>npm test</code> from <code>soplangAgent/</code> for every code change, together with docs and specs updates.</p>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <div id="site-footer"></div>
+    <script src="partials-loader.js"></script>
+</body>
+</html>
