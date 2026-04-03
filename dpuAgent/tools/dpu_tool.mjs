@@ -230,7 +230,8 @@ async function main() {
 main().catch((error) => {
   writeJson({
     ok: false,
-    error: error?.message || String(error)
+    error: 'dpu_tool_failed',
+    message: error?.message || String(error)
   });
   process.exitCode = 1;
 });

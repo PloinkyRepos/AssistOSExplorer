@@ -6,6 +6,58 @@ const { Client } = mcpClient;
 
 export const GIT_GITHUB_TOKEN_SECRET_KEY = 'GIT_GITHUB_TOKEN';
 
+function safeParseJson(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeToolErrorMessage(text, fallback = 'DPU request failed.') {
+  const raw = String(text || '').trim();
+  if (!raw) return fallback;
+  const match = raw.match(/^MCP error(?:\s+-?\d+)?:\s*(.+)$/i);
+  if (match?.[1]) {
+    return match[1].trim();
+  }
+  return raw;
+}
+
+function unwrapToolPayload(name, result) {
+  const blocks = Array.isArray(result?.content) ? result.content : [];
+  const jsonBlock = blocks.find((block) => block?.type === 'json');
+  if (jsonBlock?.json && typeof jsonBlock.json === 'object') {
+    const payload = jsonBlock.json;
+    if (payload?.ok === false) {
+      throw new Error(String(payload?.message || payload?.error || `DPU request failed for ${name}.`));
+    }
+    return payload;
+  }
+
+  const textBlock = blocks.find((block) => block?.type === 'text' && typeof block.text === 'string');
+  if (textBlock?.text) {
+    const parsed = safeParseJson(textBlock.text);
+    if (parsed && typeof parsed === 'object') {
+      if (parsed?.ok === false) {
+        throw new Error(String(parsed?.message || parsed?.error || `DPU request failed for ${name}.`));
+      }
+      return parsed;
+    }
+    throw new Error(normalizeToolErrorMessage(textBlock.text, `DPU request failed for ${name}.`));
+  }
+
+  if (result?.structuredContent && typeof result.structuredContent === 'object') {
+    const payload = result.structuredContent;
+    if (payload?.ok === false) {
+      throw new Error(String(payload?.message || payload?.error || `DPU request failed for ${name}.`));
+    }
+    return payload;
+  }
+
+  throw new Error(`Invalid DPU response for ${name}.`);
+}
+
 function loadRoute(workspaceRoot, agentName) {
   const routingPath = path.join(workspaceRoot, '.ploinky', 'routing.json');
   const parsed = JSON.parse(fs.readFileSync(routingPath, 'utf8'));
@@ -64,13 +116,7 @@ export function createGitDpuClient({ workspaceRoot, authInfo }) {
   async function callTool(name, args = {}) {
     await connect();
     const result = await client.callTool({ name, arguments: args });
-    const blocks = Array.isArray(result?.content) ? result.content : [];
-    const jsonBlock = blocks.find((block) => block?.type === 'json');
-    if (jsonBlock?.json && typeof jsonBlock.json === 'object') return jsonBlock.json;
-    const textBlock = blocks.find((block) => block?.type === 'text' && typeof block.text === 'string');
-    if (textBlock?.text) return JSON.parse(textBlock.text);
-    if (result?.structuredContent && typeof result.structuredContent === 'object') return result.structuredContent;
-    throw new Error(`Invalid DPU response for ${name}.`);
+    return unwrapToolPayload(name, result);
   }
 
   async function close() {

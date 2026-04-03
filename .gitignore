@@ -8,3 +8,4 @@
 /soplangAgent/.tasksQueue
 /soplangAgent/achilles-debug.log
 /soplangAgent/last-tool.log
+*.DS_Store
