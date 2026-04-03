@@ -1,0 +1,18 @@
+<div class="modal-header">
+    <div>Document Video</div>
+    <div class="close" data-local-action="closeModal">
+        <span aria-hidden="true">&times;</span>
+    </div>
+</div>
+<div class="modal-body">
+    <div class="document-video-toolbar">
+        <button class="general-button" type="button" data-local-action="documentToVideo">Compile Video</button>
+        <button class="general-button" type="button" data-local-action="lipsyncVideo">Run Lipsync</button>
+        <button class="general-button" type="button" data-local-action="executeDownload" data-role="download-button" disabled>Download Video</button>
+    </div>
+    <div class="document-video-status" aria-live="polite">
+        <div class="document-video-status-title">Status</div>
+        <div class="document-video-status-text" data-role="status-text">No video task started yet.</div>
+        <div class="document-video-task-id" data-role="task-id"></div>
+    </div>
+</div>
