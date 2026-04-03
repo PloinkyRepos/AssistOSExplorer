@@ -1,7 +1,7 @@
 import {executorTimer, videoUtils} from "/explorer/imports.js";
 const documentModule = assistOS.loadModule("document");
 const workspaceModule = assistOS.loadModule("workspace");
-let blackScreen = new URL("../assets/images/black-screen.png", import.meta.url).href;
+let blackScreen = new URL("../../assets/black-screen.png", import.meta.url).href;
 const DEFAULT_IMAGE_SCENE_DURATION = 3;
 export class DocumentVideoPreview {
     constructor(element, invalidate) {

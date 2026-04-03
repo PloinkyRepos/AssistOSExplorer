@@ -1,6 +1,6 @@
 import {executorTimer, videoUtils} from "/explorer/imports.js";
 const workspaceModule = assistOS.loadModule("workspace");
-const blackScreen = new URL("../assets/images/black-screen.png", import.meta.url).href;
+const blackScreen = new URL("../../assets/black-screen.png", import.meta.url).href;
 
 export class ParagraphVideoPreview {
     constructor(element, invalidate) {

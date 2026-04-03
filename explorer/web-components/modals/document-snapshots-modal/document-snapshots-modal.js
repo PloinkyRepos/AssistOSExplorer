@@ -73,7 +73,7 @@ export class DocumentSnapshotsModal{
         await assistOS.UI.changeToDynamicPage("document-view-page", `document-view-page/${documentId}`);
     }
     showSnapshotsOptions(targetElement, snapshotId, snapshotDocumentId) {
-        let chapterOptions = `<action-box-snapshot data-id="${snapshotId}" data-document-id="${snapshotDocumentId}"></action-box-chapter>`;
+        let chapterOptions = `<action-box-snapshot data-id="${snapshotId}" data-document-id="${snapshotDocumentId}"></action-box-snapshot>`;
         targetElement.insertAdjacentHTML("afterbegin", chapterOptions);
         let controller = new AbortController();
         this.boundHideChapterOptions = this.hideSnapshotsOptions.bind(this, controller);

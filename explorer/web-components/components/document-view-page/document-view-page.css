@@ -454,19 +454,6 @@ document-view-page {
     cursor: pointer;
 }
 
-.document-to-video {
-    margin-left: 10px;
-}
-
-.share-video-button {
-    margin-left: 10px;
-}
-
-.document-video {
-    width: 200px;
-    height: 200px;
-}
-
 .action-dots {
     width: 14px;
     height: 14px;

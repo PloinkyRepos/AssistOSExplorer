@@ -27,7 +27,8 @@
         "dpuAssistant/dpuAgent global",
         "soplangBuilder/soplangAgent global",
         "tasksAssistant/tasksAgent global",
-        "llmAssistant/llmAssistant global"
+        "llmAssistant/llmAssistant global",
+        "multimedia global"
     ],
     "repos": {
         "soplangBuilder": "https://github.com/PloinkyRepos/SOPLangBuilder.git",
