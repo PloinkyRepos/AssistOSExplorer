@@ -5,3 +5,6 @@
 /node_modules/.package-lock.json
 /explorer/package-lock.json
 .idea
+/soplangAgent/.tasksQueue
+/soplangAgent/achilles-debug.log
+/soplangAgent/last-tool.log
