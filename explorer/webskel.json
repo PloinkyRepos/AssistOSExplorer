@@ -62,11 +62,6 @@
       "presenterClassName": "CustomSelect"
     },
     {
-      "name": "edit-variables",
-      "type": "components",
-      "presenterClassName": "EditVariables"
-    },
-    {
       "name": "table-editor",
       "type": "components",
       "presenterClassName": "TableEditor"
@@ -75,6 +70,11 @@
       "name": "list-item",
       "type": "components",
       "presenterClassName": "ListItem"
+    },
+    {
+      "name": "simple-state-icon",
+      "type": "components",
+      "presenterClassName": "SimpleStateIcon"
     },
     {
       "name": "application-document-item",
@@ -115,11 +115,6 @@
       "name": "print-document-modal",
       "type": "modals",
       "presenterClassName": "PrintDocumentModal"
-    },
-    {
-      "name": "run-script",
-      "type": "modals",
-      "presenterClassName": "RunScript"
     },
     {
       "name": "add-reference",
