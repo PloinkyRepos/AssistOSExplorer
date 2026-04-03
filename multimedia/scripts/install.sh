@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-echo "Installing soplangAgent dependencies..."
+echo "Installing multimedia dependencies..."
 
 if [ "${PLOINKY_RUNTIME:-}" = "bwrap" ]; then
     echo "Running under bwrap — skipping apt-get (using host packages)"
@@ -18,4 +18,4 @@ else
     apt-get update && apt-get install -y git ffmpeg
 fi
 
-echo "soplangAgent dependencies OK"
+echo "multimedia dependencies OK"

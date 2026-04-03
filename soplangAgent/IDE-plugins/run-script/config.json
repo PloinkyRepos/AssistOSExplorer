@@ -1,0 +1,11 @@
+{
+    "pluginCategory": "document",
+    "component": "run-script",
+    "location": ["infoText"],
+    "tooltip": "Run Script",
+    "icon": "./script.svg",
+    "presenter": "RunScript",
+    "type": "modal",
+    "autoPin": true,
+    "dependencies": []
+}
