@@ -526,27 +526,64 @@ function formatSecretTimestamp(fileExp, value) {
     }
 }
 
-function buildSecretPreviewMarkup(fileExp, secret) {
-    const owner = escapeHtml(secret.ownerId || '—');
-    const role = escapeHtml(secret.role || '—');
-    const createdAt = formatSecretTimestamp(fileExp, secret.createdAt);
-    const updatedAt = formatSecretTimestamp(fileExp, secret.updatedAt);
-    const value = String(secret.value ?? '');
-    const valueVisible = Boolean(secret.valueVisible);
-    const canWrite = Boolean(secret.canWrite);
-    const valueStateLabel = valueVisible ? 'Visible' : (secret.valueMasked ? 'Hidden' : 'Unavailable');
-    const valueBody = valueVisible
-        ? `<pre class="dpu-secret-value">${escapeHtml(value)}</pre>`
-        : `<div class="dpu-secret-message">${
-            escapeHtml(
-                secret.valueMasked
-                    ? 'Value is hidden. You have access to this secret, but not read permission.'
-                    : 'Value is unavailable.'
-            )
-        }</div>`;
-    const hint = canWrite
-        ? '<div class="dpu-secret-hint">Use Edit to update the secret value.</div>'
-        : '';
+function createSecretPreviewState(secret) {
+    const valueVisible = Boolean(secret?.valueVisible);
+    return {
+        key: String(secret?.key || ''),
+        ownerId: String(secret?.ownerId || ''),
+        role: String(secret?.role || ''),
+        createdAt: String(secret?.createdAt || ''),
+        updatedAt: String(secret?.updatedAt || ''),
+        canRead: valueVisible,
+        canWrite: Boolean(secret?.canWrite),
+        valueMaskedByPolicy: Boolean(secret?.valueMasked) && !valueVisible,
+        masked: true,
+        editing: false,
+        value: valueVisible ? String(secret?.value ?? '') : '',
+        draft: valueVisible ? String(secret?.value ?? '') : ''
+    };
+}
+
+export function buildSecretPreviewMarkup(fileExp, secretState) {
+    const owner = escapeHtml(secretState?.ownerId || '—');
+    const role = escapeHtml(secretState?.role || '—');
+    const createdAt = formatSecretTimestamp(fileExp, secretState?.createdAt);
+    const updatedAt = formatSecretTimestamp(fileExp, secretState?.updatedAt);
+    const canRead = Boolean(secretState?.canRead);
+    const canWrite = Boolean(secretState?.canWrite);
+    const editing = Boolean(secretState?.editing && canWrite);
+    const masked = Boolean(secretState?.masked);
+    const displayValue = String(secretState?.value ?? '');
+    const draftValue = String(secretState?.draft ?? displayValue);
+    const revealLabel = masked ? 'Reveal value' : 'Mask value';
+    const revealIcon = masked ? './assets/icons/eye.svg' : './assets/icons/eye-edit.svg';
+    const maskedPreview = '&bull;'.repeat(Math.max(12, Math.min(32, displayValue.length || 20)));
+    const readOnlyMessage = secretState?.valueMaskedByPolicy
+        ? 'Value is hidden. You have access to this secret, but not read permission.'
+        : 'Value is unavailable.';
+    const valueBody = editing
+        ? `
+            <div class="dpu-secret-editor">
+                <textarea class="dpu-secret-editor-input" spellcheck="false">${escapeHtml(draftValue)}</textarea>
+                <div class="dpu-secret-editor-actions">
+                    <button type="button" class="secondary" data-local-action="cancelDpuSecretInlineEdit">Cancel</button>
+                    <button type="button" data-local-action="saveDpuSecretInlineEdit">Save</button>
+                </div>
+            </div>
+        `
+        : canRead
+            ? `
+                <div
+                    class="dpu-secret-value${canWrite ? ' is-actionable' : ''}${masked ? ' is-masked' : ''}"
+                    ${canWrite ? 'tabindex="0" data-local-action="beginDpuSecretInlineEdit"' : ''}
+                    title="${canWrite ? 'Click to edit secret value' : 'Secret value'}"
+                >${masked ? maskedPreview : escapeHtml(displayValue || ' ')}</div>
+            `
+            : `
+                <div class="dpu-secret-message${canWrite ? ' is-actionable' : ''}" ${canWrite ? 'tabindex="0" data-local-action="beginDpuSecretInlineEdit" title="Click to set a new secret value"' : ''}>
+                    ${escapeHtml(canWrite ? 'Value is hidden. Click to replace it with a new value.' : readOnlyMessage)}
+                </div>
+            `;
 
     return `
         <section class="dpu-secret-card">
@@ -571,10 +608,15 @@ function buildSecretPreviewMarkup(fileExp, secret) {
             <div class="dpu-secret-section">
                 <div class="dpu-secret-section-header">
                     <span class="dpu-secret-section-title">Value</span>
-                    <span class="dpu-secret-value-state">${escapeHtml(valueStateLabel)}</span>
+                    <div class="dpu-secret-section-actions">
+                        ${canRead ? `
+                            <button type="button" class="dpu-secret-visibility-toggle" data-local-action="toggleDpuSecretMask" title="${revealLabel}" aria-label="${revealLabel}">
+                                <img src="${revealIcon}" alt="">
+                            </button>
+                        ` : ''}
+                    </div>
                 </div>
                 ${valueBody}
-                ${hint}
             </div>
         </section>
     `;
@@ -590,10 +632,10 @@ export async function openDpuFile(fileExp, filePath, { invalidate = true } = {})
     if (node.kind === 'secret') {
         const snapshot = await readDpuCurrentItemState(fileExp, normalizedPath);
         const secret = snapshot.secret || {};
-        const fileContent = Boolean(secret.valueVisible) ? String(secret.value ?? '') : '';
+        const secretState = createSecretPreviewState(secret);
         fileExp.setPreviewState({
-            fileContent,
-            previewContent: buildSecretPreviewMarkup(fileExp, secret),
+            fileContent: secretState.value,
+            previewContent: buildSecretPreviewMarkup(fileExp, secretState),
             selectedIsMarkdown: false,
             previewMode: 'dpu-secret',
             mediaType: null,
@@ -607,6 +649,7 @@ export async function openDpuFile(fileExp, filePath, { invalidate = true } = {})
             dpuSelectedCommentCount: 0,
             dpuSelectedComments: [],
             dpuCommentsOpen: false,
+            dpuSecretState: secretState,
             hasUnsavedChanges: false,
             isEditing: false
         });
@@ -657,6 +700,7 @@ export async function openDpuFile(fileExp, filePath, { invalidate = true } = {})
             dpuSelectedCommentCount: Number.parseInt(String(objectRecord.commentCount || 0), 10) || 0,
             dpuSelectedComments: comments,
             dpuCommentsOpen: false,
+            dpuSecretState: null,
             hasUnsavedChanges: false,
             isEditing: false
         });

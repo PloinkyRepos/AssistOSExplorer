@@ -17,6 +17,10 @@ function extractDpuUpdatedAt(snapshot) {
 export async function editFile(fileExp) {
     if (!fileExp?.state?.selectedPath) return;
     const selectedPath = fileExp.state.selectedPath || '';
+    if (isDpuSecretPath(selectedPath)) {
+        await fileExp.beginDpuSecretInlineEdit?.();
+        return;
+    }
     const isDpuPath = isDpuVirtualPath(selectedPath);
     if (selectedPath.endsWith('.history')) {
         fileExp.showStatus('History files are read-only.', true);

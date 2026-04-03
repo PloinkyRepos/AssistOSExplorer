@@ -865,7 +865,8 @@ th {
     color: #f8fafc;
 }
 
-.preview-header button {
+.preview-header button,
+.dpu-secret-editor-actions button {
     background: var(--accent);
     color: #fff;
     border: none;
@@ -875,22 +876,26 @@ th {
     transition: transform 0.15s ease, box-shadow 0.15s ease;
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 6px;
     font-size: 0.95rem;
 }
 
-.preview-header button.secondary {
+.preview-header button.secondary,
+.dpu-secret-editor-actions button.secondary {
     background-color: var(--bg);
     color: var(--text);
     border: 1px solid var(--border);
 }
 
-.preview-header button:hover {
+.preview-header button:hover,
+.dpu-secret-editor-actions button:hover {
     transform: translateY(-1px);
     box-shadow: 0 10px 18px rgba(37, 99, 235, 0.28);
 }
 
-.preview-header button.secondary:hover {
+.preview-header button.secondary:hover,
+.dpu-secret-editor-actions button.secondary:hover {
     background-color: var(--border);
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
@@ -1094,10 +1099,20 @@ th {
     transition: background-color 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease, border-color 0.12s ease;
 }
 
+.preview-pane-action.secondary {
+    background-color: var(--bg);
+    color: var(--text);
+    border-color: var(--border);
+}
+
 .preview-pane-action:hover {
     background-color: var(--border);
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
     transform: translateY(-1px);
+}
+
+.preview-pane-action.secondary:hover {
+    background-color: var(--border);
 }
 
 .preview-pane-action:active {
@@ -1188,8 +1203,7 @@ th {
 }
 
 .dpu-secret-meta-label,
-.dpu-secret-section-title,
-.dpu-secret-value-state {
+.dpu-secret-section-title {
     font-size: 0.78rem;
     font-weight: 700;
     letter-spacing: 0.04em;
@@ -1216,6 +1230,12 @@ th {
     margin-bottom: 12px;
 }
 
+.dpu-secret-section-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+}
+
 .dpu-secret-value {
     margin: 0;
     padding: 14px;
@@ -1228,6 +1248,88 @@ th {
     font-family: "SFMono-Regular", "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
     font-size: 0.92rem;
     line-height: 1.55;
+}
+
+.dpu-secret-value.is-actionable,
+.dpu-secret-message.is-actionable {
+    cursor: text;
+}
+
+.dpu-secret-value.is-actionable:hover,
+.dpu-secret-value.is-actionable:focus-visible,
+.dpu-secret-message.is-actionable:hover,
+.dpu-secret-message.is-actionable:focus-visible {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+    outline: none;
+}
+
+.dpu-secret-value.is-masked {
+    letter-spacing: 0.16em;
+}
+
+.dpu-secret-visibility-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border: 1px solid var(--file-exp-border);
+    border-radius: 10px;
+    background: var(--file-exp-subtle-surface);
+    cursor: pointer;
+}
+
+.dpu-secret-visibility-toggle img {
+    width: 16px;
+    height: 16px;
+    display: block;
+}
+
+.dpu-secret-visibility-toggle:hover,
+.dpu-secret-visibility-toggle:focus-visible {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+    outline: none;
+}
+
+.dpu-secret-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.dpu-secret-editor-input {
+    width: 100%;
+    min-height: 160px;
+    margin: 0;
+    padding: 14px;
+    border-radius: 10px;
+    border: 1px solid var(--accent);
+    background: var(--file-exp-subtle-surface);
+    color: var(--text);
+    font-family: "SFMono-Regular", "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 0.92rem;
+    line-height: 1.55;
+    resize: vertical;
+}
+
+.dpu-secret-editor-input:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.dpu-secret-editor-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    align-items: center;
+    margin-top: 2px;
+}
+
+.dpu-secret-editor-actions button {
+    min-width: 88px;
 }
 
 .dpu-secret-message {

@@ -36,6 +36,7 @@ export function getDirectoryResetPatch() {
         dpuSelectedCommentCount: 0,
         dpuSelectedComments: [],
         dpuCommentsOpen: false,
+        dpuSecretState: null,
         isEditing: false,
         hasUnsavedChanges: false,
         openMenuPath: null
@@ -78,6 +79,7 @@ export function fileExpUiReducer(state, action) {
                 'dpuSelectedCommentCount',
                 'dpuSelectedComments',
                 'dpuCommentsOpen',
+                'dpuSecretState',
                 'hasUnsavedChanges',
                 'isEditing'
             ]);

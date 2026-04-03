@@ -161,6 +161,7 @@ export function createFileExpState() {
         dpuSelectedCommentCount: 0,
         dpuSelectedComments: [],
         dpuCommentsOpen: false,
+        dpuSecretState: null,
         isEditing: false,
         hasUnsavedChanges: false,
         isResizing: false,

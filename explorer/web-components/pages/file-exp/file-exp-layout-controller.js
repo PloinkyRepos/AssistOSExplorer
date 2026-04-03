@@ -33,6 +33,17 @@ export async function runAfterRender(fileExp, options = {}) {
         fileExp.renderPreviewPanel(previewContent, previewUiState);
     }
 
+    const previewContentHost = fileExp.element.querySelector('.preview-content');
+    if (previewContentHost) {
+        const onSecretFieldFocusIn = (event) => {
+            const target = event?.target?.closest?.('.dpu-secret-value.is-actionable, .dpu-secret-message.is-actionable');
+            if (!target) return;
+            if (fileExp.state?.dpuSecretState?.editing) return;
+            fileExp.beginDpuSecretInlineEdit?.();
+        };
+        fileExp.setElementListener('dpu-secret-focusin', previewContentHost, 'focusin', onSecretFieldFocusIn);
+    }
+
     const pendingHighlight = fileExp.state.pendingHighlight;
     if (pendingHighlight && pendingHighlight.path === fileExp.normalizePath(fileExp.state.selectedPath || '')) {
         const didScroll = scrollToLine(fileExp.element, pendingHighlight.line);

@@ -142,7 +142,8 @@ export async function openFile(fileExp, filePath, {
                 dpuSelectedCanComment: false,
                 dpuSelectedCommentCount: 0,
                 dpuSelectedComments: [],
-                dpuCommentsOpen: false
+                dpuCommentsOpen: false,
+                dpuSecretState: null
             });
             if (await tryLoadOnlyOfficePreview(fileExp, filePath, { invalidate })) {
                 return;
@@ -273,6 +274,7 @@ export async function openFile(fileExp, filePath, {
                 dpuSelectedCommentCount: 0,
                 dpuSelectedComments: [],
                 dpuCommentsOpen: false,
+                dpuSecretState: null,
                 hasUnsavedChanges: false,
                 previewContent,
                 previewMode,

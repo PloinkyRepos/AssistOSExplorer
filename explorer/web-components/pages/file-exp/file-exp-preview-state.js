@@ -45,6 +45,7 @@ export function getPreviewUiState(state) {
         && !state?.selectedIsMarkdown
         && state?.previewMode !== 'dpu-secret'
         && !(isHtml && viewMode === 'web');
+    const showEditAction = canEdit && state?.previewMode !== 'dpu-secret';
 
     return {
         selectedPath,
@@ -59,7 +60,7 @@ export function getPreviewUiState(state) {
         showBacklogPanel,
         canToggleBacklogView: Boolean(tasksPluginEnabled && isBacklog),
         showEditingActions: Boolean(state?.isEditing),
-        showEditAction: canEdit,
+        showEditAction,
         showWrapToggle: showTextPreview,
         wrapEnabled: Boolean(state?.previewWrapEnabled),
         showMarkdownToggle: Boolean(!state?.isEditing && state?.selectedIsMarkdown && selectedPath),

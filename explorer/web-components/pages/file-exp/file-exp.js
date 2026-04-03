@@ -54,8 +54,12 @@ import {
 } from "./file-exp-preview-renderer.js";
 import {
     isDpuVirtualPath,
+    isDpuSecretPath,
     listDpuDirectory,
-    mergeDpuRootEntry
+    mergeDpuRootEntry,
+    openDpuFile,
+    readDpuCurrentItemState,
+    updateDpuSecret
 } from "./file-exp-dpu-provider.js";
 
 const LARGE_FILE_PREVIEW_LIMIT_BYTES = 1.5 * 1024 * 1024; // ~1.5MB safety window before transport limits
@@ -716,6 +720,103 @@ export class FileExp {
 
     handleDpuCommentsClose() {
         this.closeDpuComments();
+    }
+
+    toggleDpuSecretMask() {
+        const secretState = this.state.dpuSecretState;
+        if (!secretState?.canRead || secretState?.editing) {
+            return;
+        }
+        this.setPreviewState({
+            dpuSecretState: {
+                ...secretState,
+                masked: !secretState.masked
+            }
+        }, { invalidate: false });
+        this.refreshPreviewUi();
+    }
+
+    async beginDpuSecretInlineEdit() {
+        const selectedPath = this.state.selectedPath || '';
+        const secretState = this.state.dpuSecretState;
+        if (!isDpuSecretPath(selectedPath) || !secretState?.canWrite) {
+            return;
+        }
+        try {
+            await openDpuFile(this, selectedPath, { invalidate: false });
+            const refreshed = this.state.dpuSecretState;
+            if (!refreshed?.canWrite) {
+                return;
+            }
+            this.setPreviewState({
+                dpuSecretState: {
+                    ...refreshed,
+                    masked: false,
+                    editing: true,
+                    draft: String(refreshed.canRead ? refreshed.value : '')
+                }
+            }, { invalidate: false });
+            this.refreshPreviewUi();
+            window.requestAnimationFrame(() => {
+                const input = this.element?.querySelector?.('.dpu-secret-editor-input');
+                input?.focus?.();
+                const valueLength = String(input?.value || '').length;
+                if (typeof input?.setSelectionRange === 'function') {
+                    input.setSelectionRange(valueLength, valueLength);
+                }
+            });
+        } catch (error) {
+            this.showStatus(error?.message || 'Failed to load the latest secret value.', true);
+        }
+    }
+
+    cancelDpuSecretInlineEdit() {
+        const secretState = this.state.dpuSecretState;
+        if (!secretState) {
+            return;
+        }
+        this.setPreviewState({
+            dpuSecretState: {
+                ...secretState,
+                editing: false,
+                draft: String(secretState.value || ''),
+                masked: true
+            }
+        }, { invalidate: false });
+        this.refreshPreviewUi();
+    }
+
+    async saveDpuSecretInlineEdit() {
+        const selectedPath = this.state.selectedPath || '';
+        const secretState = this.state.dpuSecretState;
+        if (!isDpuSecretPath(selectedPath) || !secretState?.canWrite) {
+            return;
+        }
+        const input = this.element?.querySelector?.('.dpu-secret-editor-input');
+        const nextValue = String(input?.value ?? secretState.draft ?? '');
+        try {
+            const latestSnapshot = await readDpuCurrentItemState(this, selectedPath);
+            const latestUpdatedAt = String(latestSnapshot?.secret?.updatedAt || '');
+            const editBaselineUpdatedAt = String(this.state.dpuSelectedUpdatedAt || '');
+            if (editBaselineUpdatedAt && latestUpdatedAt && latestUpdatedAt !== editBaselineUpdatedAt) {
+                await openDpuFile(this, selectedPath, { invalidate: false });
+                throw new Error('This secret was updated by another user. Review the latest value and apply your changes again.');
+            }
+            await updateDpuSecret(this, selectedPath, { value: nextValue });
+            this.showStatus(`Successfully saved ${selectedPath}`, false);
+            await openDpuFile(this, selectedPath, { invalidate: false });
+            this.setPreviewState({
+                dpuSecretState: {
+                    ...this.state.dpuSecretState,
+                    masked: true,
+                    editing: false
+                }
+            }, { invalidate: false });
+            this.refreshPreviewUi();
+        } catch (error) {
+            console.error(error);
+            this.showStatus(error?.message || 'Failed to save secret value.', true);
+        }
     }
 
     setPreviewViewMode(_target, mode) {

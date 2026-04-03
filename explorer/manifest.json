@@ -14,14 +14,9 @@
                 "name": "Admin"
             },
             {
-                "username": "qa1",
-                "password": "qa1pass",
-                "name": "QA 1"
-            },
-            {
-                "username": "qa2",
-                "password": "qa2pass",
-                "name": "QA 2"
+                "username": "user",
+                "password": "user",
+                "name": "User"
             }
         ]
     },

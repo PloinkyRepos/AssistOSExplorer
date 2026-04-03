@@ -1,4 +1,5 @@
 import { clearOnlyOfficeEditor, renderOnlyOfficeEditor } from "../../../services/onlyoffice/onlyoffice-editor-host.js";
+import { buildSecretPreviewMarkup } from "./file-exp-dpu-provider.js";
 
 export function toggleHidden(fileExp, element, hidden = true) {
     if (!element) return;
@@ -348,7 +349,7 @@ export function renderStandardPreview(fileExp, refs, previewUiState) {
         clearMountElement(refs.dpuCommentPopover);
         toggleHidden(fileExp, refs.dpuCommentPopover, true);
         refs.filePreview.className = 'dpu-secret-preview';
-        refs.filePreview.innerHTML = fileExp.state.previewContent || '<div class="preview-placeholder">Secret preview is unavailable.</div>';
+        refs.filePreview.innerHTML = buildSecretPreviewMarkup(fileExp, fileExp.state.dpuSecretState) || '<div class="preview-placeholder">Secret preview is unavailable.</div>';
         return;
     }
 
