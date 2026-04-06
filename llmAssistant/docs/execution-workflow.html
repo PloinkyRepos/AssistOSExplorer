@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>llmAssistant Docs - Tool Execution Workflow</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="site-header"></div>
+
+    <main class="content content--with-sidebar">
+        <div class="doc-layout">
+            <aside class="doc-sidebar" aria-label="llmAssistant documentation navigation">
+                <div class="doc-sidebar__group">
+                    <p class="doc-sidebar__group-title">Documentation</p>
+                    <nav>
+                        <a href="index.html">Overview</a>
+                        <a href="architecture.html">Architecture</a>
+                        <a href="execution-workflow.html" aria-current="page">Tool Execution Workflow</a>
+                        <a href="mcp-tools.html">MCP Tools</a>
+                        <a href="integrations.html">Ploinky and Explorer Integration</a>
+                        <a href="configuration.html">Manifest and Environment</a>
+                    </nav>
+                </div>
+                <div class="doc-sidebar__group">
+                    <p class="doc-sidebar__group-title">Specifications</p>
+                    <nav>
+                        <a href="specsLoader.html?spec=specs/matrix.md">Design Specifications</a>
+                    </nav>
+                </div>
+            </aside>
+
+            <div class="doc-main">
+                <section class="lead">
+                    <h1>Tool Execution Workflow</h1>
+                    <p>Each invocation is process-isolated and starts from <code>llmAssistant/tools/llm_tool.sh</code>.</p>
+                </section>
+
+                <section>
+                    <h2>End-to-End Flow Diagram</h2>
+                    <pre><code>Explorer UI / peer agent
+    |
+    | callTool(name, arguments)
+    v
+Ploinky Router -> AgentServer (/mcp)
+    |
+    | execute command from mcp-config.json
+    v
+llmAssistant/tools/llm_tool.sh
+    |
+    | launch llm_tool.mjs
+    v
+llmAssistant/tools/llm_tool.mjs
+    |
+    | parse envelope and normalize args
+    | resolve TOOL_NAME
+    | validate required fields
+    | build prompt / helper context
+    | execute default LLM agent
+    v
+JSON result -> MCP response -> caller</code></pre>
+                </section>
+
+                <section>
+                    <h2>Lifecycle Stages</h2>
+                    <ol>
+                        <li><strong>Dispatch:</strong> tool name is mapped from MCP config through <code>TOOL_NAME</code>.</li>
+                        <li><strong>Envelope normalization:</strong> dispatcher extracts arguments from multiple MCP envelope shapes.</li>
+                        <li><strong>Input validation:</strong> tool-specific required fields are enforced before any LLM call.</li>
+                        <li><strong>Prompt shaping:</strong> context is clipped and structured according to tool semantics.</li>
+                        <li><strong>LLM execution:</strong> default Achilles LLM agent executes prompt with <code>mode: fast</code> text responses.</li>
+                        <li><strong>Output normalization:</strong> fences and wrappers are stripped and response is returned as contract payload.</li>
+                        <li><strong>Error response:</strong> failures are returned as <code>{ "ok": false, "error": ... }</code>.</li>
+                    </ol>
+                </section>
+
+                <section>
+                    <h2>Conflict Resolution Path</h2>
+                    <p><code>llm_resolve_conflict</code> first attempts deterministic merge using <code>git merge-file</code>. If conflict markers remain, it escalates to LLM resolution with explicit merge strategy prompts.</p>
+                    <div class="doc-callout">
+                        <p>This dual path reduces unnecessary model calls and preserves deterministic outcomes when possible.</p>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <div id="site-footer"></div>
+    <script src="partials-loader.js"></script>
+</body>
+</html>

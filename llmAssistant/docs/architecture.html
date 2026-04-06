@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>llmAssistant Docs - Architecture</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="site-header"></div>
+
+    <main class="content content--with-sidebar">
+        <div class="doc-layout">
+            <aside class="doc-sidebar" aria-label="llmAssistant documentation navigation">
+                <div class="doc-sidebar__group">
+                    <p class="doc-sidebar__group-title">Documentation</p>
+                    <nav>
+                        <a href="index.html">Overview</a>
+                        <a href="architecture.html" aria-current="page">Architecture</a>
+                        <a href="execution-workflow.html">Tool Execution Workflow</a>
+                        <a href="mcp-tools.html">MCP Tools</a>
+                        <a href="integrations.html">Ploinky and Explorer Integration</a>
+                        <a href="configuration.html">Manifest and Environment</a>
+                    </nav>
+                </div>
+                <div class="doc-sidebar__group">
+                    <p class="doc-sidebar__group-title">Specifications</p>
+                    <nav>
+                        <a href="specsLoader.html?spec=specs/matrix.md">Design Specifications</a>
+                    </nav>
+                </div>
+            </aside>
+
+            <div class="doc-main">
+                <section class="lead">
+                    <h1>Architecture</h1>
+                    <p><code>llmAssistant</code> is an intermediary MCP agent between client requests and default LLM-agent execution from AchillesAgentLib.</p>
+                </section>
+
+                <section>
+                    <h2>Component Overview</h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Component</th>
+                                <th>Location</th>
+                                <th>Role</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>MCP contract declaration</td>
+                                <td><code>llmAssistant/mcp-config.json</code></td>
+                                <td>Declares tool contracts, schemas, command wrapper, and <code>TOOL_NAME</code> mapping.</td>
+                            </tr>
+                            <tr>
+                                <td>Wrapper entrypoint</td>
+                                <td><code>llmAssistant/tools/llm_tool.sh</code></td>
+                                <td>Starts a new Node invocation for each tool call.</td>
+                            </tr>
+                            <tr>
+                                <td>Dispatcher runtime</td>
+                                <td><code>llmAssistant/tools/llm_tool.mjs</code></td>
+                                <td>Parses input envelope, validates args, and routes execution to helper operations.</td>
+                            </tr>
+                            <tr>
+                                <td>Commit-message helper</td>
+                                <td><code>llmAssistant/lib/git-commit-message.js</code></td>
+                                <td>Builds prompt from diffs and returns commit message text.</td>
+                            </tr>
+                            <tr>
+                                <td>Conflict-resolution helper</td>
+                                <td><code>llmAssistant/lib/git-resolve-conflict.js</code></td>
+                                <td>Attempts deterministic merge first, then LLM-assisted conflict resolution.</td>
+                            </tr>
+                            <tr>
+                                <td>Agent bootstrap</td>
+                                <td><code>llmAssistant/scripts/startAgent.sh</code></td>
+                                <td>Loads provider credentials from env or <code>.ploinky/.secrets</code> and starts AgentServer.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </section>
+
+                <section>
+                    <h2>Runtime Boundary</h2>
+                    <p>Clients consume MCP tools only. They do not call Achilles LLM runtime directly. The agent owns prompt shaping, context clipping, and output normalization for each tool contract.</p>
+                    <pre><code>{
+  "name": "llm_autocomplete",
+  "command": "tools/llm_tool.sh",
+  "cwd": "workspace",
+  "env": {
+    "TOOL_NAME": "llm_autocomplete"
+  }
+}</code></pre>
+                </section>
+
+                <section>
+                    <h2>Intermediary Guarantee</h2>
+                    <p>Explorer and other agents receive deterministic contract outputs (<code>ok</code>, payload fields, explicit errors) while internal LLM provider changes remain behind this boundary.</p>
+                    <div class="doc-callout doc-callout--important">
+                        <p>The agent is a contract-oriented orchestration layer, not a generic free-form chat endpoint.</p>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <div id="site-footer"></div>
+    <script src="partials-loader.js"></script>
+</body>
+</html>

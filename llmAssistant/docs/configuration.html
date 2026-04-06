@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>llmAssistant Docs - Manifest and Environment</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="site-header"></div>
+
+    <main class="content content--with-sidebar">
+        <div class="doc-layout">
+            <aside class="doc-sidebar" aria-label="llmAssistant documentation navigation">
+                <div class="doc-sidebar__group">
+                    <p class="doc-sidebar__group-title">Documentation</p>
+                    <nav>
+                        <a href="index.html">Overview</a>
+                        <a href="architecture.html">Architecture</a>
+                        <a href="execution-workflow.html">Tool Execution Workflow</a>
+                        <a href="mcp-tools.html">MCP Tools</a>
+                        <a href="integrations.html">Ploinky and Explorer Integration</a>
+                        <a href="configuration.html" aria-current="page">Manifest and Environment</a>
+                    </nav>
+                </div>
+                <div class="doc-sidebar__group">
+                    <p class="doc-sidebar__group-title">Specifications</p>
+                    <nav>
+                        <a href="specsLoader.html?spec=specs/matrix.md">Design Specifications</a>
+                    </nav>
+                </div>
+            </aside>
+
+            <div class="doc-main">
+                <section class="lead">
+                    <h1>Manifest and Environment</h1>
+                    <p><code>llmAssistant</code> uses manifest-driven startup with provider key loading from process environment and workspace secrets fallback.</p>
+                </section>
+
+                <section>
+                    <h2>Manifest</h2>
+                    <p>Main runtime file: <code>llmAssistant/manifest.json</code>.</p>
+                    <pre><code>{
+  "agent": "sh /code/scripts/startAgent.sh",
+  "container": "node:20-alpine",
+  "profiles": {
+    "default": {
+      "env": ["provider keys", "workspace roots"],
+      "install": "apk add --no-cache git openssh-client ca-certificates"
+    }
+  }
+}</code></pre>
+                </section>
+
+                <section>
+                    <h2>Environment Variables</h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Variable Group</th>
+                                <th>Usage</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>OPENAI_API_KEY</code>, <code>ANTHROPIC_API_KEY</code>, <code>GEMINI_API_KEY</code>, <code>MISTRAL_API_KEY</code>, <code>DEEPSEEK_API_KEY</code>, <code>OPENROUTER_API_KEY</code>, <code>SOUL_GATEWAY_API_KEY</code></td>
+                                <td>Provider credentials for default LLM runtime behavior.</td>
+                            </tr>
+                            <tr>
+                                <td><code>ASSISTOS_FS_ROOT</code>, <code>WORKSPACE_ROOT</code>, <code>PLOINKY_WORKSPACE_ROOT</code></td>
+                                <td>Workspace root context used by startup and runtime path assumptions.</td>
+                            </tr>
+                            <tr>
+                                <td><code>LLMAgentClient_DEBUG</code>, <code>LLMAgentClient_VERBOSE_DELAY</code></td>
+                                <td>Optional debug and verbose timing controls for LLM client traces.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </section>
+
+                <section>
+                    <h2>Bootstrap Behavior</h2>
+                    <p>The startup script resolves workspace root, reads keys from env first, then falls back to <code>.ploinky/.secrets</code>. This keeps deployment configuration externalized and avoids static credentials in repository code.</p>
+                </section>
+
+                <section>
+                    <h2>Test Validation</h2>
+                    <p>Code changes should be validated through the llmAssistant test suite under <code>llmAssistant/tests</code>, together with documentation and specification updates.</p>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <div id="site-footer"></div>
+    <script src="partials-loader.js"></script>
+</body>
+</html>

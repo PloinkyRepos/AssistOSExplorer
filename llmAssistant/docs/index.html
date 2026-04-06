@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>llmAssistant Docs - Overview</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="site-header"></div>
+
+    <main class="content content--with-sidebar">
+        <div class="doc-layout">
+            <aside class="doc-sidebar" aria-label="llmAssistant documentation navigation">
+                <div class="doc-sidebar__group">
+                    <p class="doc-sidebar__group-title">Documentation</p>
+                    <nav>
+                        <a href="index.html" aria-current="page">Overview</a>
+                        <a href="architecture.html">Architecture</a>
+                        <a href="execution-workflow.html">Tool Execution Workflow</a>
+                        <a href="mcp-tools.html">MCP Tools</a>
+                        <a href="integrations.html">Ploinky and Explorer Integration</a>
+                        <a href="configuration.html">Manifest and Environment</a>
+                    </nav>
+                </div>
+                <div class="doc-sidebar__group">
+                    <p class="doc-sidebar__group-title">Specifications</p>
+                    <nav>
+                        <a href="specsLoader.html?spec=specs/matrix.md">Design Specifications</a>
+                    </nav>
+                </div>
+            </aside>
+
+            <div class="doc-main">
+                <section class="lead">
+                    <h1>llmAssistant Agent Documentation</h1>
+                    <p>This repository currently hosts one Ploinky agent: <code>llmAssistant</code>.</p>
+                    <p>The agent provides LLM-backed helper tools consumed by Explorer and by other agents for code completion, commit-message generation, and conflict resolution.</p>
+                    <p>All MCP tool invocations execute through <code>llmAssistant/tools/llm_tool.sh</code> and <code>llm_tool.mjs</code>.</p>
+                </section>
+
+                <section class="highlight-box">
+                    <h3>Operational Role</h3>
+                    <p><code>llmAssistant</code> intermediates between caller requests and Achilles default LLM runtime execution by exposing a finite MCP contract from <code>llmAssistant/mcp-config.json</code>.</p>
+                    <p>The agent normalizes MCP envelopes, validates input before model execution, and returns reusable helper outputs for editor and Git workflows without leaking provider-specific details into clients.</p>
+                </section>
+
+                <section>
+                    <h2>Repository Scope</h2>
+                    <p>The repository can host multiple Ploinky agents over time. The current scope covers <code>llmAssistant</code> as the dedicated LLM helper boundary for Explorer and agent-to-agent utility flows.</p>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <div id="site-footer"></div>
+    <script src="partials-loader.js"></script>
+</body>
+</html>
