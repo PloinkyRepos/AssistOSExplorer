@@ -162,7 +162,19 @@ export function attachGitController(fileExp) {
 
     const buildStageList = (status) => {
         const { paths } = normalizeGitStatusPayload(status);
-        return Array.from(new Set([...paths.unstaged, ...paths.untracked]));
+        const ignored = new Set((Array.isArray(paths.ignored) ? paths.ignored : []).map((value) => String(value || '').trim()));
+        return Array.from(new Set([...paths.unstaged, ...paths.untracked]))
+            .filter((value) => {
+                const candidate = String(value || '').trim();
+                if (!candidate) return false;
+                if (ignored.has(candidate)) return false;
+                for (const ignoredPath of ignored.values()) {
+                    if (ignoredPath && candidate.startsWith(`${ignoredPath.replace(/\/+$/g, '')}/`)) {
+                        return false;
+                    }
+                }
+                return true;
+            });
     };
 
     const hasAnyChanges = (status) => {

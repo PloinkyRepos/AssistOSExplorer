@@ -25,6 +25,13 @@ function normalizeGitRepoRelativePath(candidate) {
   return String(candidate || '').replaceAll('\\', '/').replace(/^\.\/+/, '').replace(/\/+$/g, '');
 }
 
+function isPathWithinIgnoredPath(candidate, ignoredPath) {
+  const normalizedCandidate = normalizeGitRepoRelativePath(candidate);
+  const normalizedIgnored = normalizeGitRepoRelativePath(ignoredPath);
+  if (!normalizedCandidate || !normalizedIgnored) return false;
+  return normalizedCandidate === normalizedIgnored || normalizedCandidate.startsWith(`${normalizedIgnored}/`);
+}
+
 async function runGit(cwd, args, { timeoutMs = 20000, okCodes = [0], input = null } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(args[0], args.slice(1), {
@@ -495,14 +502,31 @@ export function createGitService({ validatePath }) {
     let addable = existing;
     if (existing.length) {
       try {
-        const ignorePayload = await gitCheckIgnore({ path: repoPath, files: existing });
-        const ignoredSet = new Set(
-          (Array.isArray(ignorePayload?.matches) ? ignorePayload.matches : [])
-            .map((entry) => normalizeGitRepoRelativePath(entry?.path))
-            .filter(Boolean)
-        );
+        const [ignorePayload, statusPayload] = await Promise.all([
+          gitCheckIgnore({ path: repoPath, files: existing }),
+          gitStatus({ path: repoPath }).catch(() => null)
+        ]);
+        const ignoredSet = new Set();
+        for (const entry of (Array.isArray(ignorePayload?.matches) ? ignorePayload.matches : [])) {
+          const normalized = normalizeGitRepoRelativePath(entry?.path);
+          if (normalized) ignoredSet.add(normalized);
+        }
+        const status = statusPayload?.status || statusPayload || {};
+        for (const entry of (Array.isArray(status?.ignored) ? status.ignored : [])) {
+          const normalized = normalizeGitRepoRelativePath(entry?.path);
+          if (normalized) ignoredSet.add(normalized);
+        }
         if (ignoredSet.size) {
-          addable = existing.filter((file) => !ignoredSet.has(normalizeGitRepoRelativePath(file)));
+          addable = existing.filter((file) => {
+            const normalized = normalizeGitRepoRelativePath(file);
+            if (!normalized) return false;
+            for (const ignoredPath of ignoredSet.values()) {
+              if (isPathWithinIgnoredPath(normalized, ignoredPath)) {
+                return false;
+              }
+            }
+            return true;
+          });
         }
       } catch {
         addable = existing;
