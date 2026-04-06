@@ -21,6 +21,10 @@ function isGitRepoRelativePath(candidate) {
   return true;
 }
 
+function normalizeGitRepoRelativePath(candidate) {
+  return String(candidate || '').replaceAll('\\', '/').replace(/^\.\/+/, '').replace(/\/+$/g, '');
+}
+
 async function runGit(cwd, args, { timeoutMs = 20000, okCodes = [0], input = null } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(args[0], args.slice(1), {
@@ -488,8 +492,24 @@ export function createGitService({ validatePath }) {
         missing.push(file);
       }
     }
+    let addable = existing;
     if (existing.length) {
-      await runGit(repoPath, [gitBinary, 'add', '-A', '--', ...existing]);
+      try {
+        const ignorePayload = await gitCheckIgnore({ path: repoPath, files: existing });
+        const ignoredSet = new Set(
+          (Array.isArray(ignorePayload?.matches) ? ignorePayload.matches : [])
+            .map((entry) => normalizeGitRepoRelativePath(entry?.path))
+            .filter(Boolean)
+        );
+        if (ignoredSet.size) {
+          addable = existing.filter((file) => !ignoredSet.has(normalizeGitRepoRelativePath(file)));
+        }
+      } catch {
+        addable = existing;
+      }
+    }
+    if (addable.length) {
+      await runGit(repoPath, [gitBinary, 'add', '-A', '--', ...addable]);
     }
     if (missing.length) {
       await runGit(repoPath, [gitBinary, 'rm', '--cached', '--ignore-unmatch', '--', ...missing]);
@@ -584,16 +604,14 @@ export function createGitService({ validatePath }) {
       [gitBinary, 'check-ignore', '-v', '-z', '--stdin'],
       { timeoutMs: 5000, okCodes: [0, 1], input }
     );
-    const records = stdout ? stdout.split('\0').filter(Boolean) : [];
+    const records = stdout ? stdout.split('\0') : [];
     const matches = [];
-    for (const record of records) {
-      const [left, pathValue] = record.split('\t');
-      if (!left || !pathValue) continue;
-      const parts = left.split(':');
-      if (parts.length < 3) continue;
-      const pattern = parts.pop();
-      const lineRaw = parts.pop();
-      const source = parts.join(':');
+    for (let i = 0; i + 3 < records.length; i += 4) {
+      const source = records[i];
+      const lineRaw = records[i + 1];
+      const pattern = records[i + 2];
+      const pathValue = records[i + 3];
+      if (!source || !pathValue) continue;
       const line = Number.parseInt(lineRaw, 10);
       matches.push({
         source,

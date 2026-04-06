@@ -23,6 +23,21 @@ const formatRepoTreeCounts = (counts = {}, { stashCount = 0, cleanLabel = 'Clean
     return parts.length ? parts.join(', ') : cleanLabel;
 };
 
+const isCommittableChangeRow = (row) => {
+    if (!row || typeof row === 'string') return true;
+    const flags = row.flags || {};
+    if (flags.ignored && !flags.staged && !flags.unstaged && !flags.untracked && !flags.conflicted) return false;
+    return Boolean(flags.staged || flags.unstaged || flags.untracked || flags.conflicted);
+};
+
+const getCommittablePaths = (repo) => {
+    const rows = Array.isArray(repo?.changesAll) ? repo.changesAll : [];
+    return rows
+        .filter((row) => isCommittableChangeRow(row))
+        .map((row) => (typeof row === 'string' ? row : String(row?.path || '')))
+        .filter(Boolean);
+};
+
 export class GitRepoTree {
     constructor(element, invalidate) {
         this.element = element;
@@ -193,6 +208,7 @@ export class GitRepoTree {
 
     toggleAllReposCheckbox(element) {
         const repoPaths = this.getDisplayedRepoOverviews()
+            .filter((repo) => getCommittablePaths(repo).length > 0)
             .map((repo) => String(repo?.path || '').trim())
             .filter(Boolean);
         if (!repoPaths.length) return;
@@ -322,9 +338,7 @@ export class GitRepoTree {
     }
 
     getRepoCheckboxState(repo) {
-        const changedPaths = Array.isArray(repo?.changesAll)
-            ? repo.changesAll.map((c) => (typeof c === 'string' ? c : String(c?.path || ''))).filter(Boolean)
-            : [];
+        const changedPaths = getCommittablePaths(repo);
         const entry = this.getSelectionEntry(repo?.path);
         const repoSelected = Boolean(entry?.prefixes?.has?.('*'));
         const selectedCount = changedPaths.reduce((acc, filePath) => acc + (this.isFileSelected(repo?.path, filePath) ? 1 : 0), 0);
@@ -535,6 +549,7 @@ export class GitRepoTree {
                 const repoCheckboxState = this.getRepoCheckboxState(repo);
                 repoCheckbox.checked = repoCheckboxState.checked;
                 repoCheckbox.indeterminate = repoCheckboxState.indeterminate;
+                repoCheckbox.disabled = getCommittablePaths(repo).length === 0;
 
                 const changesToggle = document.createElement('button');
                 changesToggle.type = 'button';
