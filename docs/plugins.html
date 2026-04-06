@@ -79,7 +79,7 @@
         <div class="content-wrapper">
             <div class="doc-section" id="discovery">
                 <h1>The Plugin System</h1>
-                <p><strong>What is a plugin in Explorer?</strong> A plugin is a <a href="https://github.com/OutfinityResearch/WebSkel/blob/master/README.md" target="_blank" rel="noopener noreferrer">WebSkel</a> UI bundle (HTML/JS/CSS + manifest) that the Explorer frontend loads dynamically to add actions or modals in context (document, paragraph, etc.). Plugins run in the browser, can call MCP tools, and ship their assets inside the repo under <code>IDE-plugins/&lt;name&gt;</code>. Each plugin declares where it appears via <code>location</code> (e.g., document/paragraph) and which component/presenter to load. Discovery is driven by manifests, not by hardcoding in the UI.</p>
+                <p><strong>What is a plugin in Explorer?</strong> A plugin is a <a href="https://github.com/OutfinityResearch/WebSkel/blob/master/README.md" target="_blank" rel="noopener noreferrer">WebSkel</a> UI bundle (HTML/JS/CSS + manifest) that the Explorer frontend loads dynamically to add actions or modals in context (document, paragraph, toolbar, preview, etc.). Plugins run in the browser, can call MCP tools, and ship their assets inside an agent-owned <code>IDE-plugins/&lt;name&gt;</code> directory. Each plugin declares where it appears via <code>location</code> and which component/presenter to load. Discovery is driven by manifests, not by hardcoding in the UI.</p>
                 <p>The <code>aggregateIdePlugins</code> function in <code>filesystem-http-server.mjs</code> discovers
                     plugins when the <code>collect_ide_plugins</code> MCP tool is called (e.g., by the UI on load). Each
                     invocation scans enabled repositories for <code>IDE-plugins/*/config.json</code> files, then merges
@@ -89,11 +89,21 @@
 
             <div class="doc-section" id="available">
                 <h2>Available plugins (in-repo)</h2>
-                <p>Discovered from <code>IDE-plugins/*/config.json</code> across the repo:</p>
+                <p>Discovered from <code>IDE-plugins/*/config.json</code> across the enabled agents in this repo:</p>
                 <div class="subsection">
+                    <p><strong>git-tool-button</strong> (<code>gitAgent</code>) — Git actions and status in the Explorer toolbar.</p>
+                    <p><strong>dpu-runtime-support</strong> (<code>dpuAgent</code>) — confidential/DPU runtime support inside Explorer flows.</p>
+                    <p><strong>dpu-comments-popover</strong> (<code>dpuAgent</code>) — DPU comments UI.</p>
+                    <p><strong>tasks-tool-button</strong> (<code>tasksAgent</code>) — backlog/task actions exposed in the IDE.</p>
+                    <p><strong>open-builder-button</strong> (<code>soplangAgent</code>) — open SOPLang builder actions from the host UI.</p>
+                    <p><strong>run-script</strong> (<code>soplangAgent</code>) — run SOPLang scripts from document context.</p>
                     <p><strong>video-plugin</strong> (modal, chapter/paragraph) — attach and configure video content.</p>
                     <p><strong>audio-plugin</strong> (modal, chapter/paragraph) — attach and configure audio content.</p>
                     <p><strong>image-plugin</strong> (modal, chapter/paragraph) — attach and configure images.</p>
+                    <p><strong>video-creator</strong> / <strong>audio-creator</strong> (<code>multimedia</code>) — generate media from document-level flows.</p>
+                    <p><strong>document-video-preview</strong> / <strong>paragraph-video-preview</strong> (<code>multimedia</code>) — render video preview affordances inline.</p>
+                    <p><strong>document-video-actions</strong> (<code>multimedia</code>) — context actions for document video workflows.</p>
+                    <p><strong>files-menu</strong> (<code>multimedia</code>) — host-side file menu extension.</p>
                     <p><strong>ffmpeg-image-to-video</strong> (modal, chapter/paragraph) — build videos from images via ffmpeg.</p>
                     <p><strong>edit-variables</strong> (embedded, document/chapter/paragraph) — manage SOPLang variables; auto-pinned with <code>add-variable</code> dependency.</p>
                 </div>
@@ -141,7 +151,7 @@
                     <code>beforeRender</code> and <code>afterRender</code> lifecycle methods.</p>
 
                 <h3>1. Create Folder</h3>
-                <p>Create a new folder for the plugin: <code>IDE-plugins/uppercase/</code></p>
+                <p>Create a new folder for the plugin inside the agent that owns the feature, for example <code>multimedia/IDE-plugins/uppercase/</code> or <code>soplangAgent/IDE-plugins/uppercase/</code>.</p>
 
                 <h3>2. <code>config.json</code></h3>
                 <pre><code>{

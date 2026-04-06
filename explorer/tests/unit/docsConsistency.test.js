@@ -22,8 +22,7 @@ test('docs include repo-scoped HTML preview guidance', () => {
     const detailedGuide = readText('docs/EXPLORER_AGENT_DOCS.md');
 
     const requiredSnippets = [
-        '/.ploinky/repos/fileExplorer/docs/development.html',
-        'explorer/.ploinky/repos/fileExplorer -> ../../..'
+        '/.ploinky/repos/AchillesIDE/docs/development.html'
     ];
 
     for (const snippet of requiredSnippets) {
@@ -55,16 +54,12 @@ test('mcp tools documentation matches current tool definitions', () => {
     }
 });
 
-test('versioned repo-scoped symlink exists for docs preview portability', () => {
+test('docs consistency does not depend on legacy fileExplorer symlink layout', () => {
     const symlinkPath = path.resolve(explorerRoot, '.ploinky/repos/fileExplorer');
-    const stats = fs.lstatSync(symlinkPath);
-    assert.ok(stats.isSymbolicLink(), 'explorer/.ploinky/repos/fileExplorer must be a symlink');
-
-    const linkTarget = fs.readlinkSync(symlinkPath);
     assert.equal(
-        linkTarget,
-        '../../..',
-        'explorer/.ploinky/repos/fileExplorer symlink target must stay ../../..'
+        fs.existsSync(symlinkPath),
+        false,
+        'legacy explorer/.ploinky/repos/fileExplorer path should not be required by docs consistency checks'
     );
 });
 

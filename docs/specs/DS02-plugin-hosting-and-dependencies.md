@@ -58,20 +58,24 @@ The architecture is intentionally split so that:
 
 ## Data Models
 
-### Local Plugin Bundle
+### Agent-Owned Plugin Bundles
 
-The `AchillesIDE` repository keeps its repository-local runtime plugins in:
+The `AchillesIDE` repository currently keeps runtime plugins in agent-owned directories such as:
 
-- `AchillesIDE/explorer/IDE-plugins`
+- `dpuAgent/IDE-plugins`
+- `gitAgent/IDE-plugins`
+- `multimedia/IDE-plugins`
+- `soplangAgent/IDE-plugins`
+- `tasksAgent/IDE-plugins`
 
-This is the canonical local plugin root for:
+Each owning agent is responsible for:
 
 - plugin manifests (`config.json`)
 - plugin assets
-- reusable plugin utilities
-- shared subcomponents used by multiple plugins
+- reusable agent-local plugin utilities
+- shared subcomponents used by its plugin set
 
-Explorer must treat this directory as the repository-local plugin source. Local plugins must not be split across secondary roots such as `multimedia/IDE-plugins` or `soplang/IDE-plugins`.
+Explorer must discover plugins across these agent-owned roots. The hosting contract is centralized in Explorer, but the plugin source code is intentionally split by ownership instead of forced into a single `explorer/IDE-plugins` directory.
 
 ### Plugin Inventory
 

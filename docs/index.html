@@ -43,7 +43,7 @@
         <div class="container">
             <div class="hero" style="padding-bottom: 2rem;">
                 <h1>Explorer Agent</h1>
-                <p class="subtitle">The Explorer agent is the backbone UI and filesystem host of the Achilles IDE, the European project building AI-driven automation and research tooling for science/industry. <br> It brings together structured documents, MCP filesystem tools, and extensible plugins in a single workspace. <br>Learn more about the <a href="https://www.achilles-project.eu/the-project/" target="_blank" rel="noopener noreferrer">Achilles project</a>.</p>
+                <p class="subtitle">The Explorer agent is the backbone UI and filesystem host of the Achilles IDE, the European project building AI-driven automation and research tooling for science/industry. <br> It brings together structured documents, MCP filesystem tools, and extensible plugins in a single workspace. <br>The current repository layout also includes tightly coupled domain agents such as <code>dpuAgent</code>, <code>gitAgent</code>, <code>llmAssistant</code>, <code>soplangAgent</code>, <code>tasksAgent</code>, and <code>multimedia</code>. <br>Learn more about the <a href="https://www.achilles-project.eu/the-project/" target="_blank" rel="noopener noreferrer">Achilles project</a>.</p>
             </div>
 
             <div class="content-wrapper">
@@ -60,7 +60,7 @@
                     </div>
                     <div class="subsection">
                         <h3>Plugins and extensibility</h3>
-                        <p>Explorer loads extensions dynamically from <code>IDE-plugins/</code> manifests. Each plugin ships HTML/JS/CSS assets, declares where it appears, and can call MCP tools or SOPLang actions to add new document or paragraph-level capabilities without hardcoding.</p>
+                        <p>Explorer loads extensions dynamically from <code>IDE-plugins/*/config.json</code> manifests discovered across enabled agents and repos. Each plugin ships HTML/JS/CSS assets, declares where it appears, and can call MCP tools or SOPLang actions to add new document or paragraph-level capabilities without hardcoding.</p>
                     </div>
                     <div class="subsection">
                         <h3>Current file explorer capabilities</h3>

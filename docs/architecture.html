@@ -61,7 +61,7 @@
                     </div>
 
                     <h2>Runtime and Routing</h2>
-                    <p>The Explorer agent's container configuration is defined in <a href="https://ploinky.com/spec-agent.html" target="_blank" rel="noopener noreferrer">manifest.json</a>. This file specifies how the container runs, including mounting the workspace and the agent library. When started with <a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md" target="_blank" rel="noopener noreferrer">Ploinky</a>, the router exposes Explorer on the chosen port (e.g. <code>8080</code> after <code>ploinky start explorer 8080</code>), serving static assets and proxying API requests to the Explorer container (see <a href="https://ploinky.com/architecture.html" target="_blank" rel="noopener noreferrer">Ploinky architecture</a> for routing details).</p>
+                        <p>The Explorer agent's container configuration is defined in <a href="https://ploinky.com/spec-agent.html" target="_blank" rel="noopener noreferrer">explorer/manifest.json</a>. This file specifies how the container runs, including mounting the workspace and enabling tightly coupled dependency agents such as <code>gitAgent</code>, <code>dpuAgent</code>, <code>soplangAgent</code>, <code>tasksAgent</code>, <code>llmAssistant</code>, and <code>multimedia</code>. When started with <a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md" target="_blank" rel="noopener noreferrer">Ploinky</a>, the router exposes Explorer on the chosen port (e.g. <code>8080</code> after <code>ploinky start explorer 8080</code>), serving static assets and proxying API requests to the Explorer container (see <a href="https://ploinky.com/architecture.html" target="_blank" rel="noopener noreferrer">Ploinky architecture</a> for routing details).</p>
 
                     <p><strong>Note:</strong> <code>soplangAgent</code> is a separate container (repo <code>SOPLangBuilder</code>) that receives MCP requests such as <code>sync_markdown_documents</code> and <code>execute_workspace_build</code> from clients such as Explorer UI or other agents. It does not rely on the Explorer backend for data access; it runs in the same workspace and can read files directly according to its own configuration.</p>
                 </div>
@@ -168,21 +168,24 @@ ploinky start explorer 8080
                     </div>
                     <div style="margin-left:1rem;margin-top:0.4rem;">
                         <h3>Context & tips</h3>
-                        <p>Global mode runs the agent in the current workspace folder (see <a href="https://ploinky.com/cli-reference.html" target="_blank" rel="noopener noreferrer">Ploinky CLI reference</a>). Repository-local runtime plugins now live under <code>AchillesIDE/explorer/IDE-plugins</code>. Restart Explorer after adding or changing plugin <code>config.json</code> so discovery reruns. If you hack locally, run <code>npm install</code> at repo root (and <code>explorer/</code> if needed); most UI/JS/CSS changes hot-reload in the browser.</p>
+                        <p>Global mode runs the agent in the current workspace folder (see <a href="https://ploinky.com/cli-reference.html" target="_blank" rel="noopener noreferrer">Ploinky CLI reference</a>). Runtime plugins are discovered from each enabled agent's <code>IDE-plugins/</code> directory, not from a single repo-level folder. In this repository they currently live under paths such as <code>dpuAgent/IDE-plugins</code>, <code>gitAgent/IDE-plugins</code>, <code>multimedia/IDE-plugins</code>, <code>soplangAgent/IDE-plugins</code>, and <code>tasksAgent/IDE-plugins</code>. Restart Explorer after adding or changing a plugin <code>config.json</code> so discovery reruns. If you hack locally, run <code>npm install</code> at repo root and in the package you are changing if needed; most UI/JS/CSS changes hot-reload in the browser.</p>
                         <p>HTML Web Preview uses repo-scoped paths (for example <code>/.ploinky/repos/AchillesIDE/docs/development.html</code>).</p>
                     </div>
                     <div style="margin-left:1rem;margin-top:0.4rem;">
                         <h3>Repo layout (visual)</h3>
 <pre><code>.../AchillesIDE/
-├─ IDE-plugins/                 # Canonical local plugin bundle
-│   └─ &lt;plugin&gt;/config.json
 ├─ explorer/
-│  ├─ filesystem-http-server.mjs   # Backend: MCP, blob service, plugin discovery
+│  ├─ filesystem-http-server.mjs   # Backend: MCP, static hosting, plugin discovery
 │  ├─ index.html / main.js         # SPA entry point
 │  ├─ webskel.json                 # Core UI components
 │  ├─ web-components/              # Component implementations
 │  ├─ services/                    # Frontend services, parsing, document store
 │  └─ utils/                       # Shared utilities
+├─ dpuAgent/IDE-plugins/        # DPU UI/runtime plugins
+├─ gitAgent/IDE-plugins/        # Git UI/runtime plugins
+├─ multimedia/IDE-plugins/      # Media creation and preview plugins
+├─ soplangAgent/IDE-plugins/    # SOPLang actions and variable editor
+└─ tasksAgent/IDE-plugins/      # Backlog/task plugins
 </code></pre>
                     </div>
                     <div style="margin-left:1rem;margin-top:0.4rem;">
