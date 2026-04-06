@@ -262,9 +262,17 @@ export function createCredentialsActions(ctx) {
             setStatusLine('Enter a token to continue.', true);
             return;
         }
-        await service.storeManualGitToken(token);
+        const tokenResponse = await service.storeManualGitToken(token);
+        const github = tokenResponse?.github || null;
 
         applyState({
+            githubAuth: github
+                ? {
+                    ...state.githubAuth,
+                    ...github,
+                    error: ''
+                }
+                : state.githubAuth,
             authPrompt: {
                 visible: false,
                 repoPath: null,
@@ -273,7 +281,9 @@ export function createCredentialsActions(ctx) {
                 authMethod
             }
         });
+        updateAuthPrompt();
         updateCommitButtons();
+        await refreshAll({ force: true });
         if (pending?.type === 'sync') {
             setStatusLine('Retrying sync…');
         } else {

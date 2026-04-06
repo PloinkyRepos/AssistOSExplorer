@@ -546,10 +546,8 @@ export class GitCommitModal {
             if (github.connected) {
                 this.clearGithubPollTimer();
                 await this.prefillCredentialsPanel();
-                const gateActive = await this.ensureCredentialsGate();
-                if (!gateActive && !this.state.repoOverviewsLoaded) {
-                    await this.refreshAll({ force: true });
-                }
+                await this.ensureCredentialsGate();
+                await this.refreshAll({ force: true });
                 this.updateAuthPrompt();
                 this.updateCommitButtons();
                 if (!silent) {
