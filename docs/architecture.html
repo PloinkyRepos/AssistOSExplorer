@@ -44,66 +44,35 @@
                 <aside class="sidebar">
                     <h3>Architecture</h3>
                     <ul>
-                        <li><a href="#runtime">Runtime & Routing</a></li>
-                        <li><a href="#backend">Backend</a></li>
-                        <li><a href="#frontend">Frontend</a></li>
-                        <li><a href="#development">Development &amp; Setup</a></li>
+                        <li><a href="#workspace-role">Workspace Role</a></li>
+                        <li><a href="#runtime-structure">Runtime Structure</a></li>
+                        <li><a href="#host-implementation">Host Implementation</a></li>
+                        <li><a href="#development">Development Context</a></li>
                     </ul>
                 </aside>
             <div class="content-wrapper">
-                <div class="doc-section" id="runtime">
+                <div class="doc-section" id="workspace-role">
                     <h1>Architecture</h1>
-                    <p>This section provides a detailed look at the technical architecture of the Explorer agent, from the containerized runtime to the frontend application.</p>
-                    <p>Explorer agent runs inside <strong><a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md" target="_blank" rel="noopener noreferrer">Ploinky</a></strong>, the workspace runtime that routes traffic to agents, serves static bundles, and manages enabled repos/agents.</p>
-                    <p>The backend also acts as the MCP tools provider: it exposes filesystem-safe operations (read/write/list/move/copy, tree, media read, allowed roots) under the Explorer agent, enforcing whitelisted roots and path resolution.</p>
+                    <p>Explorer is the static host shell of the workspace, not just another agent with a narrow tool surface. A Ploinky workspace needs one application that can own navigation, preview, editing, and runtime plugin mounting without absorbing the domain logic of Git, DPU, SOPLang, tasks, assistant flows, or media tooling. Architecture matters here because the product boundary is easy to get wrong: if Explorer becomes too thin, users end up stitching together unrelated agent surfaces; if it becomes too broad, domain rules drift into the host and become harder to maintain.</p>
+                    <p>The implemented architecture answers that tension by keeping Explorer responsible for the shared IDE shell while dependent agents keep responsibility for permissions, state, and mutations in their own domains. Explorer therefore sits at the center of the workspace experience, but it is intentionally not the owner of every operation the workspace can perform.</p>
                     <div class="architecture-diagram">
                         <img src="assets/architecture-diagram.svg" alt="Explorer high-level flow diagram">
                     </div>
-
-                    <h2>Runtime and Routing</h2>
-                        <p>The Explorer agent's container configuration is defined in <a href="https://ploinky.com/spec-agent.html" target="_blank" rel="noopener noreferrer">explorer/manifest.json</a>. This file specifies how the container runs, including mounting the workspace and enabling tightly coupled dependency agents such as <code>gitAgent</code>, <code>dpuAgent</code>, <code>soplangAgent</code>, <code>tasksAgent</code>, <code>llmAssistant</code>, and <code>multimedia</code>. When started with <a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md" target="_blank" rel="noopener noreferrer">Ploinky</a>, the router exposes Explorer on the chosen port (e.g. <code>8080</code> after <code>ploinky start explorer 8080</code>), serving static assets and proxying API requests to the Explorer container (see <a href="https://ploinky.com/architecture.html" target="_blank" rel="noopener noreferrer">Ploinky architecture</a> for routing details).</p>
-
-                    <p><strong>Note:</strong> <code>soplangAgent</code> is a separate container (repo <code>SOPLangBuilder</code>) that receives MCP requests such as <code>sync_markdown_documents</code> and <code>execute_workspace_build</code> from clients such as Explorer UI or other agents. It does not rely on the Explorer backend for data access; it runs in the same workspace and can read files directly according to its own configuration.</p>
                 </div>
 
-                <div class="doc-section" id="backend">
-                    <h2>Backend (<code>filesystem-http-server.mjs</code>)</h2>
-                    <p>The backend is a Node.js server that leverages the <code>@modelcontextprotocol/server-filesystem</code> library for its core filesystem logic. Its responsibilities are summarized below.</p>
-                    <div class="subsection">
-                        <h3>Static file server</h3>
-                        <p>Serves frontend assets (HTML, JS, CSS) and discovered plugin bundles directly from the repo tree.</p>
-                    </div>
-                    <div class="subsection">
-                        <h3>MCP tool provider</h3>
-                        <p>Exposes filesystem-safe MCP operations; other agents and the UI rely on these tools to interact with the workspace.</p>
-                    </div>
-                    <div class="subsection">
-                        <h3>Security layer</h3>
-                        <p>Enforces an allowed-directory whitelist and normalizes incoming paths via <code>resolvePathsInArgs</code> to block traversal and unauthorized access.</p>
-                    </div>
-                    <div class="subsection">
-                        <h3>Plugin discovery</h3>
-                        <p><code>aggregateIdePlugins</code> scans enabled repos for <code>IDE-plugins/*/config.json</code>, resolves assets, and returns a merged catalog to the UI.</p>
-                    </div>
-                    <div class="subsection">
-                        <h3>Blob uploads</h3>
-                        <p>In the <a href="https://ploinky.com/architecture.html" target="_blank" rel="noopener noreferrer">Ploinky architecture</a>, the router proxies <code>/blobs/&lt;agent&gt;</code> to the agent that implements blob handlers. Explorer and <code>soplangAgent</code> follow this pattern: UI helpers post to <code>/blobs/&lt;agent&gt;</code>, the router forwards to the agent, and the agent returns JSON (<code>id</code>, <code>localPath</code>, optional <code>downloadUrl</code>) for the stored payload. The shipped <code>filesystem-http-server.mjs</code> itself does not implement that endpoint, so blob-capable behavior comes from wiring the router to an agent that does.</p>
-                    </div>
+                <div class="doc-section" id="runtime-structure">
+                    <h2>Runtime Structure</h2>
+                    <p>Explorer runs inside <strong><a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md" target="_blank" rel="noopener noreferrer">Ploinky</a></strong>, which provides the router, workspace routing table, agent lifecycle, and startup orchestration. Explorer is configured as the static agent, so the router publishes its UI on the workspace port while also proxying MCP traffic to the relevant agents. The Explorer container itself is defined by <code><a href="../explorer/manifest.json">explorer/manifest.json</a></code>, which declares the runtime image, command, environment, and the dependency agents that must be enabled alongside it.</p>
+                    <p>At startup, <code>ploinky start explorer</code> applies Explorer manifest directives, starts the dependency agents declared in <code>enable[]</code> in parallel, and waits for readiness of those dependencies plus Explorer itself before reporting the workspace ready. That readiness model matters because Explorer is only useful as an IDE shell when the domain agents it surfaces are also available. The router may serve the UI, but the workspace is not treated as operational until the dependent services that back the active panels and flows have reached readiness as well.</p>
+                    <p>This runtime relationship is asymmetric. Explorer owns the host UI and filesystem-facing shell, but agents such as <code>gitAgent</code>, <code>dpuAgent</code>, <code>soplangAgent</code>, <code>tasksAgent</code>, <code>llmAssistant</code>, and <code>multimedia</code> remain separate runtime units. For example, <code>soplangAgent</code> receives its own MCP calls for document synchronization and build execution and reads the mounted workspace directly; it is not a hidden module inside the Explorer backend.</p>
                 </div>
 
-                <div class="doc-section" id="frontend">
-                    <h2>Frontend (WebSkel SPA)</h2>
-                    <p>The frontend is a Single-Page Application (SPA) located in the <code>explorer/</code> directory, built using <strong>WebSkel</strong>, a lightweight, component-based framework for building reactive web applications. More on WebSkel <a href="https://github.com/OutfinityResearch/WebSkel/blob/master/README.md" target="_blank" rel="noopener noreferrer">here</a>.</p>
-                    <div class="subsection">
-                        <h3>Navigation area</h3>
-                        <p>Users browse and select files or documents here. Components such as <code>files-menu</code> provide a hierarchical view of the workspace.</p>
-                    </div>
-                    <div class="subsection">
-                        <h3>Content / editor area</h3>
-                        <p>This is the main interactive space for viewing or editing the selected item. Structured Markdown flows through <code>document-view-page</code>; other text/code uses <code>file-editor</code> with syntax highlighting.</p>
-                    </div>
-
-                    <p>The application structure lives in <code>webskel.json</code>, which lists components, pages, and modals. Key components include:</p>
+                <div class="doc-section" id="host-implementation">
+                    <h2>Host Implementation</h2>
+                    <p>The Explorer implementation is split between the Node backend in <code><a href="../explorer/filesystem-http-server.mjs">filesystem-http-server.mjs</a></code> and the browser application built with <strong><a href="https://github.com/OutfinityResearch/WebSkel/blob/master/README.md" target="_blank" rel="noopener noreferrer">WebSkel</a></strong>. The backend serves static frontend assets, exposes filesystem-safe MCP operations, enforces allowed-directory constraints, and aggregates runtime plugin manifests from enabled agent or repo-local plugin folders. Application-category plugins are filtered through Explorer's <code>applicationPlugins</code> manifest policy before they are mounted into the browser experience.</p>
+                    <p>On the frontend side, the SPA under <code>explorer/</code> owns navigation, selection state, preview routing, editors, and runtime component loading. Structured Markdown flows through document-specific pages such as <code>document-view-page</code>, while other text and code files use the general-purpose editor components. HTML preview, media preview, and other content-aware experiences are orchestrated from the same host shell, which is why the frontend structure lives as a unified application rather than as a collection of unrelated agent UIs.</p>
+                    <p>The boundary between these two layers is operational rather than theoretical. The backend provides the constrained file and plugin catalog surface the browser needs. The frontend decides how those resources become a coherent IDE experience. Where the browser needs a domain action, it invokes the owning agent instead of reimplementing the domain logic locally. That same separation explains blob behavior as well: the Ploinky router can proxy <code>/blobs/&lt;agent&gt;</code> to an agent that implements blob handlers, but the shipped <code>filesystem-http-server.mjs</code> does not itself implement that endpoint.</p>
+                    <p>The application structure is declared in <code><a href="../explorer/webskel.json">webskel.json</a></code>, which lists the pages, components, and modals that make up the host shell. Representative components include:</p>
                     <table class="command-table">
                         <thead>
                             <tr>
@@ -142,7 +111,7 @@
                             </tr>
                             <tr>
                                 <td><code>files-menu</code></td>
-                                <td>(Inferred) Component likely responsible for displaying a browsable list of files/directories.</td>
+                                <td>Component responsible for displaying a browsable list of files and directories.</td>
                             </tr>
                             <tr>
                                 <td><code>insert-image-modal</code></td>
@@ -154,25 +123,18 @@
                 </div>
 
                 <div class="doc-section" id="development">
-                    <h2>Development & Setup</h2>
-                    <p>Explorer runs inside the Ploinky workspace. Install Node.js 20+ and npm, enable the repo and agent, and point the filesystem root before starting the service.</p>
-                    <div style="margin-left:1rem;margin-top:0.4rem;">
-                        <h3>Enable & start</h3>
-                        <p>From the Ploinky workspace root, enable the repo and global agent, set the allowed root, then start on your chosen port:</p>
+                    <h2>Development Context</h2>
+                    <p>Explorer development happens inside a Ploinky workspace, not as a standalone web app detached from the rest of the runtime. That means local changes need to be understood in the same environment where the router, dependency agents, and workspace mounts are present. Install Node.js 20+ and npm, enable the repo and global Explorer agent, and point the filesystem root to the workspace you want Explorer to expose.</p>
+                    <p>From the workspace root, the normal startup path is:</p>
 <pre><code>ploinky enable repo AchillesIDE
 ploinky enable agent AchillesIDE/explorer global
 export ASSISTOS_FS_ROOT=&lt;path-to-workspace&gt;
 ploinky start explorer 8080
-# UI via router: http://127.0.0.1:8080/explorer/index.html
+# Dashboard: http://127.0.0.1:8080/dashboard
+# Main Explorer UI: http://127.0.0.1:8080/#file-exp/
 </code></pre>
-                    </div>
-                    <div style="margin-left:1rem;margin-top:0.4rem;">
-                        <h3>Context & tips</h3>
-                        <p>Global mode runs the agent in the current workspace folder (see <a href="https://ploinky.com/cli-reference.html" target="_blank" rel="noopener noreferrer">Ploinky CLI reference</a>). Runtime plugins are discovered from each enabled agent's <code>IDE-plugins/</code> directory, not from a single repo-level folder. In this repository they currently live under paths such as <code>dpuAgent/IDE-plugins</code>, <code>gitAgent/IDE-plugins</code>, <code>multimedia/IDE-plugins</code>, <code>soplangAgent/IDE-plugins</code>, and <code>tasksAgent/IDE-plugins</code>. Restart Explorer after adding or changing a plugin <code>config.json</code> so discovery reruns. If you hack locally, run <code>npm install</code> at repo root and in the package you are changing if needed; most UI/JS/CSS changes hot-reload in the browser.</p>
-                        <p>HTML Web Preview uses repo-scoped paths (for example <code>/.ploinky/repos/AchillesIDE/docs/development.html</code>).</p>
-                    </div>
-                    <div style="margin-left:1rem;margin-top:0.4rem;">
-                        <h3>Repo layout (visual)</h3>
+                    <p>Global mode matters because Explorer is meant to mount and browse the current workspace, not only its own isolated agent workdir. Runtime plugins are discovered from enabled agent-owned <code>IDE-plugins/</code> directories in the workspace, and application plugins are filtered by Explorer's <code>applicationPlugins</code> policy from <code>explorer/manifest.json</code>. If you change a plugin <code>config.json</code> or add a new plugin, restart Explorer so discovery runs again. Most ordinary UI, JS, and CSS changes are then visible through a normal browser refresh.</p>
+                    <p>For local orientation, the repository layout relevant to the Explorer host is:</p>
 <pre><code>.../AchillesIDE/
 ├─ explorer/
 │  ├─ filesystem-http-server.mjs   # Backend: MCP, static hosting, plugin discovery
@@ -187,11 +149,7 @@ ploinky start explorer 8080
 ├─ soplangAgent/IDE-plugins/    # SOPLang actions and variable editor
 └─ tasksAgent/IDE-plugins/      # Backlog/task plugins
 </code></pre>
-                    </div>
-                    <div style="margin-left:1rem;margin-top:0.4rem;">
-                        <h3>Plugin notes</h3>
-                        <p>Discovery, manifest format, and tutorials (Uppercase paragraph, UI scaffold) live in the <a href="plugins.html">Plugins guide</a>; this section keeps setup context only.</p>
-                    </div>
+                    <p>HTML Web Preview uses repo-scoped paths such as <code>/.ploinky/repos/AchillesIDE/docs/development.html</code>. Plugin-specific authoring and manifest details are documented separately in the <a href="plugins.html">Plugins guide</a>.</p>
                 </div>
             </div>
         </div>

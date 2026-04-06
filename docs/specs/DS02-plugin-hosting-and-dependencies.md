@@ -197,8 +197,8 @@ Explorer must not:
 
 Plugin hosting behavior is primarily driven by:
 
-- Explorer `manifest.json` plugin declarations
-- enabled repositories and agents in the workspace
+- Explorer `manifest.json` application plugin policy
+- enabled agents and repo-local agent/plugin folders in the workspace
 - runtime plugin settings and activation state
 - slot ordering rules applied by the host shell
 

@@ -34,7 +34,7 @@
             <div class="doc-main">
                 <section class="lead">
                     <h1>Manifest and Environment</h1>
-                    <p><code>gitAgent</code> follows the <a href="https://ploinky.com/" target="_blank" rel="noopener noreferrer">Ploinky</a> manifest model and uses explicit environment variables for filesystem scope, LLM provider access, and GitHub auth integration.</p>
+                    <p><code>gitAgent</code> follows the <a href="https://ploinky.com/" target="_blank" rel="noopener noreferrer">Ploinky</a> manifest model and uses explicit environment variables for filesystem scope, LLM provider access, and GitHub auth integration. Container dependency installation is owned by <code>ploinky</code>, so the manifest stays focused on runtime entrypoints and environment.</p>
                 </section>
 
                 <section>
@@ -45,12 +45,11 @@
   "container": "node:20-alpine",
   "profiles": {
     "default": {
-      "env": ["..."],
-      "install": "apk add --no-cache git openssh-client ca-certificates"
+      "env": ["..."]
     }
   }
 }</code></pre>
-                    <p>The agent bootstrap script resolves workspace root and loads environment variables from process env first, then from <code>.ploinky/.secrets</code> when needed.</p>
+                    <p>The agent bootstrap script resolves workspace root and loads environment variables from process env first, then from <code>.ploinky/.secrets</code> when needed. Generic system package installation and Node dependency installation are handled by <code>ploinky</code> before the agent command starts.</p>
                 </section>
 
                 <section>

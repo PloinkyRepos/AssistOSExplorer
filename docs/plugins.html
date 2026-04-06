@@ -70,43 +70,25 @@
         <aside class="sidebar">
             <h3>Plugins</h3>
             <ul>
-                <li><a href="#discovery">Discovery</a></li>
-                <li><a href="#available">Available plugins</a></li>
-                <li><a href="#manifest">Manifest</a></li>
-                <li><a href="#example">Example Plugin</a></li>
+                <li><a href="#plugin-role">Plugin Role</a></li>
+                <li><a href="#runtime-discovery">Runtime Discovery</a></li>
+                <li><a href="#manifest">Manifest Contract</a></li>
+                <li><a href="#example">Authoring Example</a></li>
             </ul>
         </aside>
         <div class="content-wrapper">
-            <div class="doc-section" id="discovery">
-                <h1>The Plugin System</h1>
-                <p><strong>What is a plugin in Explorer?</strong> A plugin is a <a href="https://github.com/OutfinityResearch/WebSkel/blob/master/README.md" target="_blank" rel="noopener noreferrer">WebSkel</a> UI bundle (HTML/JS/CSS + manifest) that the Explorer frontend loads dynamically to add actions or modals in context (document, paragraph, toolbar, preview, etc.). Plugins run in the browser, can call MCP tools, and ship their assets inside an agent-owned <code>IDE-plugins/&lt;name&gt;</code> directory. Each plugin declares where it appears via <code>location</code> and which component/presenter to load. Discovery is driven by manifests, not by hardcoding in the UI.</p>
-                <p>The <code>aggregateIdePlugins</code> function in <code>filesystem-http-server.mjs</code> discovers
-                    plugins when the <code>collect_ide_plugins</code> MCP tool is called (e.g., by the UI on load). Each
-                    invocation scans enabled repositories for <code>IDE-plugins/*/config.json</code> files, then merges
-                    the manifests into a plugin catalog grouped by <code>location</code> and returns it to the client.
-                </p>
+            <div class="doc-section" id="plugin-role">
+                <h1>Plugins</h1>
+                <p>Explorer plugins exist so the IDE shell can grow without turning every domain capability into hardcoded host logic. The host needs ways to surface Git actions, DPU tools, SOPLang operations, media affordances, and other contextual UI without rebuilding Explorer every time one agent adds a new interaction. A plugin is the unit that makes that possible: a browser-side <a href="https://github.com/OutfinityResearch/WebSkel/blob/master/README.md" target="_blank" rel="noopener noreferrer">WebSkel</a> bundle with a manifest, assets, and a presenter that can be mounted into the Explorer UI at defined locations.</p>
+                <p>This matters architecturally because Explorer owns the shell, not the domain logic. Plugins are how domain agents project UI into that shell while keeping responsibility for their own tools and state. A plugin can open a modal, mount inline controls, or expose toolbar actions in context, but it does not change the underlying ownership rule: Explorer hosts the interaction surface, while the owning agent remains responsible for the domain operation behind it.</p>
+                <p>The important point is that Explorer does not treat “document plugins” and “application plugins” as unrelated systems. The same plugin mechanism covers both. What changes is the manifest metadata: <code>pluginCategory</code> declares whether the plugin belongs to the document-oriented runtime or the application shell, and <code>location</code> determines where it can mount. Document plugins use document locations such as <code>document</code>, <code>chapter</code>, <code>paragraph</code>, or <code>infoText</code>. Application plugins use application slots such as <code>file-exp:toolbar</code>. The runtime loader, presenter model, asset resolution, and manifest-driven discovery are otherwise shared.</p>
             </div>
 
-            <div class="doc-section" id="available">
-                <h2>Available plugins (in-repo)</h2>
-                <p>Discovered from <code>IDE-plugins/*/config.json</code> across the enabled agents in this repo:</p>
-                <div class="subsection">
-                    <p><strong>git-tool-button</strong> (<code>gitAgent</code>) — Git actions and status in the Explorer toolbar.</p>
-                    <p><strong>dpu-runtime-support</strong> (<code>dpuAgent</code>) — confidential/DPU runtime support inside Explorer flows.</p>
-                    <p><strong>dpu-comments-popover</strong> (<code>dpuAgent</code>) — DPU comments UI.</p>
-                    <p><strong>tasks-tool-button</strong> (<code>tasksAgent</code>) — backlog/task actions exposed in the IDE.</p>
-                    <p><strong>open-builder-button</strong> (<code>soplangAgent</code>) — open SOPLang builder actions from the host UI.</p>
-                    <p><strong>run-script</strong> (<code>soplangAgent</code>) — run SOPLang scripts from document context.</p>
-                    <p><strong>video-plugin</strong> (modal, chapter/paragraph) — attach and configure video content.</p>
-                    <p><strong>audio-plugin</strong> (modal, chapter/paragraph) — attach and configure audio content.</p>
-                    <p><strong>image-plugin</strong> (modal, chapter/paragraph) — attach and configure images.</p>
-                    <p><strong>video-creator</strong> / <strong>audio-creator</strong> (<code>multimedia</code>) — generate media from document-level flows.</p>
-                    <p><strong>document-video-preview</strong> / <strong>paragraph-video-preview</strong> (<code>multimedia</code>) — render video preview affordances inline.</p>
-                    <p><strong>document-video-actions</strong> (<code>multimedia</code>) — context actions for document video workflows.</p>
-                    <p><strong>files-menu</strong> (<code>multimedia</code>) — host-side file menu extension.</p>
-                    <p><strong>ffmpeg-image-to-video</strong> (modal, chapter/paragraph) — build videos from images via ffmpeg.</p>
-                    <p><strong>edit-variables</strong> (embedded, document/chapter/paragraph) — manage SOPLang variables; auto-pinned with <code>add-variable</code> dependency.</p>
-                </div>
+            <div class="doc-section" id="runtime-discovery">
+                <h2>Runtime Discovery</h2>
+                <p>Explorer discovers plugins through <code>aggregateIdePlugins</code> in <code>filesystem-http-server.mjs</code>. When the browser calls <code>collect_ide_plugins</code>, Explorer scans enabled agent or repo-local plugin folders in the workspace for <code>IDE-plugins/*/config.json</code>, resolves their assets, groups them by <code>location</code>, and returns the merged catalog to the frontend. For application-category plugins, the browser then applies Explorer's <code>applicationPlugins</code> policy before mounting them.</p>
+                <p>That discovery model means plugin registration is driven by manifests, not by a central switch statement in the host. It also means plugin availability is a runtime property of the workspace: which agents are enabled, which plugin folders exist, and which application policies are active. Explorer stays in control of slot names and mounting behavior, but plugin presence itself comes from the workspace state rather than from a compile-time bundle list.</p>
+                <p>In the current repository, the discovered catalog includes both shell-mounted and document-mounted plugins. Shell examples include application plugins such as <code>git-tool-button</code>, <code>tasks-tool-button</code>, and <code>open-builder-button</code>, which mount into application slots like <code>file-exp:toolbar</code>. Document-oriented examples include <code>video-plugin</code>, <code>audio-plugin</code>, <code>image-plugin</code>, <code>run-script</code>, and <code>edit-variables</code>, which mount in document, chapter, paragraph, or info text contexts. The mechanism is shared; only the mounting regime and policy filters differ.</p>
                 <div class="screenshot-gallery" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:1rem;margin-top:1rem;">
                     <figure style="background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:12px;padding:0.75rem;">
                         <img class="plugin-shot" data-full="./assets/plugin_image.png" src="./assets/plugin_image.png" alt="Plugin listing with icons" style="width:100%;border-radius:8px;border:1px solid var(--border-secondary);background:var(--bg-secondary);cursor:pointer;">
@@ -128,10 +110,12 @@
             </div>
 
             <div class="doc-section" id="manifest">
-                <h2>Plugin Manifest (<code>config.json</code>)</h2>
-                <p>The <code>config.json</code> file is the heart of a plugin. Here is an example from the <code>video-creator</code>
-                    plugin:</p>
+                <h2>Manifest Contract</h2>
+                <p>The plugin manifest in <code>config.json</code> is the contract between a plugin bundle and the Explorer host. It tells Explorer which component to load, which presenter to instantiate, what type of UI to mount, where that UI belongs, and which icon or tooltip to expose to the user. The host does not discover a plugin by reading its JavaScript entry point first; it discovers the manifest and uses that file as the runtime description of how the plugin should appear.</p>
+                <p>The most important structural fields are the same regardless of where the plugin mounts. Every plugin declares a <code>pluginCategory</code>, a <code>component</code>, a <code>presenter</code>, a <code>type</code>, and at least one <code>location</code>. For document-category plugins, <code>location</code> must be one of the supported document locations. For application-category plugins, <code>location</code> must be an application slot key such as <code>file-exp:toolbar</code>. Application plugins can also expose policy keys through <code>id</code>, which is how the Explorer <code>applicationPlugins</code> policy can enable or disable them at runtime.</p>
+                <p>A representative manifest from the <code>video-creator</code> plugin looks like this:</p>
                 <pre><code>{
+  "pluginCategory": "document",
   "component": "video-creator",
   "presenter": "VideoCreator",
   "type": "modal",
@@ -141,20 +125,16 @@
   "tooltip": "Create a video from a script",
   "icon": "./assets/icons/video.svg"
 }</code></pre>
-                <p>This manifest tells the Explorer to load the <code>video-creator</code> component as a modal, make it
-                    available at the "document" level, and use the specified tooltip and icon.</p>
+                <p>In practice, this tells Explorer to load the <code>video-creator</code> bundle as a modal, mount it at the document level, and decorate the entry point with the declared tooltip and icon. An application plugin follows the same pattern, but with <code>pluginCategory: "application"</code> and a shell slot location such as <code>file-exp:toolbar</code>. The host-side discovery logic remains the same.</p>
             </div>
 
             <div class="doc-section" id="example">
-                <h2>Example: "Uppercase Paragraph" Plugin</h2>
-                <p>This example demonstrates the correct structure of a WebSkel presenter, including the mandatory
-                    <code>beforeRender</code> and <code>afterRender</code> lifecycle methods.</p>
-
-                <h3>1. Create Folder</h3>
-                <p>Create a new folder for the plugin inside the agent that owns the feature, for example <code>multimedia/IDE-plugins/uppercase/</code> or <code>soplangAgent/IDE-plugins/uppercase/</code>.</p>
-
-                <h3>2. <code>config.json</code></h3>
+                <h2>Authoring Example</h2>
+                <p>The smallest useful authoring example is still a plugin that changes one paragraph through the existing document runtime, because it shows the full presenter lifecycle with minimal code. The point of the example is not the uppercase transformation itself; it is the shape of the plugin. A plugin folder lives inside the agent that owns the feature, carries its own <code>config.json</code>, HTML template, and presenter, and uses the host context plus the owning runtime APIs rather than trying to patch Explorer internals directly.</p>
+                <p>Create a new folder such as <code>multimedia/IDE-plugins/uppercase/</code> or <code>soplangAgent/IDE-plugins/uppercase/</code>, then add the files below. If you were building an application plugin instead, the same structure would apply; you would mainly change <code>pluginCategory</code> and <code>location</code> so the bundle mounts into a shell slot rather than a document slot.</p>
+                <p><strong><code>config.json</code></strong></p>
                 <pre><code>{
+  "pluginCategory": "document",
   "component": "uppercase-plugin",
   "presenter": "UppercasePlugin",
   "type": "modal",
@@ -163,7 +143,7 @@
   "icon": "./icon.svg"
 }</code></pre>
 
-                <h3>3. <code>uppercase-plugin.html</code></h3>
+                <p><strong><code>uppercase-plugin.html</code></strong></p>
                 <pre><code>&lt;div class="modal-header"&gt;
   &lt;div&gt;Uppercase Paragraph&lt;/div&gt;
   &lt;div class="close" data-local-action="closeModal"&gt;&times;&lt;/div&gt;
@@ -173,7 +153,7 @@
   &lt;button class="general-button" data-local-action="apply"&gt;Apply&lt;/button&gt;
 &lt;/div&gt;</code></pre>
 
-                <h3>4. <code>uppercase-plugin.js</code></h3>
+                <p><strong><code>uppercase-plugin.js</code></strong></p>
                 <pre><code>import { getContextualElement } from "../utils/pluginUtils.js";
 const documentModule = assistOS.loadModule("document");
 
@@ -206,6 +186,7 @@ export class UppercasePlugin {
     assistOS.UI.closeModal(this.element);
   }
 }</code></pre>
+                <p>This presenter shows the expected shape of a WebSkel-driven Explorer plugin: resolve context in <code>beforeRender()</code>, attach browser events in <code>afterRender()</code>, call into the existing document module for the real mutation, then close the modal through the host UI. That is the pattern to preserve when adding new plugins: the plugin owns its local interaction, but it still works through the host contracts and the owning runtime modules.</p>
             </div>
         </div>
     </div>

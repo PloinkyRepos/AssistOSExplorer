@@ -43,133 +43,107 @@
         <div class="container">
             <div class="hero" style="padding-bottom: 2rem;">
                 <h1>Explorer Agent</h1>
-                <p class="subtitle">The Explorer agent is the backbone UI and filesystem host of the Achilles IDE, the European project building AI-driven automation and research tooling for science/industry. <br> It brings together structured documents, MCP filesystem tools, and extensible plugins in a single workspace. <br>The current repository layout also includes tightly coupled domain agents such as <code>dpuAgent</code>, <code>gitAgent</code>, <code>llmAssistant</code>, <code>soplangAgent</code>, <code>tasksAgent</code>, and <code>multimedia</code>. <br>Learn more about the <a href="https://www.achilles-project.eu/the-project/" target="_blank" rel="noopener noreferrer">Achilles project</a>.</p>
+                <p class="subtitle">Explorer is the static workspace agent that gives a Ploinky workspace its main user-facing IDE surface. It combines filesystem access, editing, preview, and runtime plugin hosting so the rest of the workspace agents can expose their capabilities inside one application shell.</p>
             </div>
 
-            <div class="content-wrapper">
+            <div class="doc-layout">
+                <aside class="sidebar">
+                    <h3>Explorer Pages</h3>
+                    <ul>
+                        <li><a href="architecture.html">Architecture</a></li>
+                        <li><a href="documents.html">Document Model &amp; Editing</a></li>
+                        <li><a href="backend.html">Backend</a></li>
+                        <li><a href="plugins.html">Plugins</a></li>
+                    </ul>
+                    <h3 style="margin-top:1.5rem;">Companion Agents</h3>
+                    <ul>
+                        <li><a href="../dpuAgent/docs/index.html">DPU Agent</a></li>
+                        <li><a href="../gitAgent/docs/index.html">Git Agent</a></li>
+                        <li><a href="../llmAssistant/docs/index.html">LLM Assistant</a></li>
+                        <li><a href="../soplangAgent/docs/index.html">SOPLang Agent</a></li>
+                        <li><a href="../tasksAgent/docs/index.html">Tasks Agent</a></li>
+                        <li><a href="../multimedia/docs/index.html">Multimedia</a></li>
+                    </ul>
+                    <h3 style="margin-top:1.5rem;">Related Projects</h3>
+                    <ul>
+                        <li><a href="https://github.com/OutfinityResearch/WebSkel/blob/master/README.md" target="_blank" rel="noopener noreferrer">WebSkel</a></li>
+                        <li><a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md" target="_blank" rel="noopener noreferrer">Ploinky</a></li>
+                    </ul>
+                </aside>
+                <div class="content-wrapper">
                 <div class="doc-section">
-                    <h2>What is the Explorer?</h2>
-                    <p>The Explorer is a multi-faceted, containerized Node.js agent that serves as the primary UI and file management hub within the <a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md" target="_blank" rel="noopener noreferrer">Ploinky</a> workspace.</p>
-                    <div class="subsection">
-                        <h3>UI and editors</h3>
-                        <p>The <a href="https://github.com/OutfinityResearch/WebSkel/blob/master/README.md" target="_blank" rel="noopener noreferrer">WebSkel</a> interface delivers a structured Markdown editor plus a general-purpose file editor. Documents keep chapters, paragraphs, SOPLang commands, and references together, while code and config files open with syntax highlighting. Toolbars and plugin entry points adapt to what you select.</p>
-                    </div>
-                    <div class="subsection">
-                        <h3>Filesystem MCP</h3>
-                        <p>An MCP server inside Explorer enforces allowed roots and offers secure read, write, move, copy, search, and info operations against the workspace. Clients (including the UI) call it over <code>/mcp</code> so file access stays constrained.</p>
-                    </div>
-                    <div class="subsection">
-                        <h3>Plugins and extensibility</h3>
-                        <p>Explorer loads extensions dynamically from <code>IDE-plugins/*/config.json</code> manifests discovered across enabled agents and repos. Each plugin ships HTML/JS/CSS assets, declares where it appears, and can call MCP tools or SOPLang actions to add new document or paragraph-level capabilities without hardcoding.</p>
-                    </div>
-                    <div class="subsection">
-                        <h3>Current file explorer capabilities</h3>
-                        <p>The current UI includes directory navigation, contextual file actions (new/rename/copy/move/delete), directory-level filter/search, find/replace in files, Markdown preview/text toggle, media preview, HTML Web Preview (Code/Web/Split modes), backlog views for <code>.backlog</code> and <code>.history</code>, plus integrated Git status/commit workflows.</p>
-                    </div>
+                    <h2>One Surface For The Workspace</h2>
+                    <p>A Ploinky workspace needs one stable surface where a user can browse files, open documents, inspect previews, edit source, and trigger domain-specific actions without manually switching between separate agent interfaces. A plain file browser is too narrow for that role, while a domain-specific agent should not take ownership of the whole workspace shell. Explorer exists to solve that boundary: it owns the IDE shell, while agents such as <a href="../dpuAgent/docs/index.html"><code>dpuAgent</code></a>, <a href="../gitAgent/docs/index.html"><code>gitAgent</code></a>, <a href="../llmAssistant/docs/index.html"><code>llmAssistant</code></a>, <a href="../soplangAgent/docs/index.html"><code>soplangAgent</code></a>, <a href="../tasksAgent/docs/index.html"><code>tasksAgent</code></a>, and <a href="../multimedia/docs/index.html"><code>multimedia</code></a> keep ownership of their own domain logic.</p>
+                    <p>In practice, that means Explorer has to combine several responsibilities that would otherwise drift apart: filesystem navigation, content-aware preview, structured Markdown editing, general-purpose text/code editing, and runtime plugin hosting. The result is broader than a file explorer but intentionally narrower than a monolithic backend. Explorer is the host application for the workspace, not the owner of every workflow that appears inside it.</p>
                 </div>
 
                 <div class="doc-section">
-                    <h2>Prerequisites</h2>
-                    <p>Have Node.js 20+ and npm installed, and make sure a <a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md" target="_blank" rel="noopener noreferrer">Ploinky</a> workspace is running. Set <code>ASSISTOS_FS_ROOT</code> or <code>MCP_FS_ROOT</code> to your workspace path (you can provide multiple, comma-separated). Keep the <a href="https://ploinky.com/cli-reference.html" target="_blank" rel="noopener noreferrer">Ploinky CLI</a> handy to enable repos and start agents.</p>
+                    <h2>Host Shell And Boundaries</h2>
+                    <p>Explorer runs as the static agent of the workspace and serves the main web UI through the <a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md" target="_blank" rel="noopener noreferrer">Ploinky</a> router. Inside the agent, the <a href="https://github.com/OutfinityResearch/WebSkel/blob/master/README.md" target="_blank" rel="noopener noreferrer">WebSkel</a> frontend handles navigation, editing surfaces, and runtime component loading, while the Explorer backend exposes filesystem MCP tools on <code>/mcp</code> and enforces the configured allowed roots.</p>
+                    <p>That host shell is extended rather than replaced. Runtime plugins are discovered from enabled agent-owned or repo-local <code>IDE-plugins/*/config.json</code> folders in the workspace, then application-category plugins are filtered by Explorer's <code>applicationPlugins</code> policy before they are mounted into the UI. This keeps Explorer responsible for layout, routing, and shared interactions, while dependent agents remain responsible for permissions, state, and domain-specific mutations.</p>
+                    <p>The startup model follows the same separation. <code>ploinky start explorer</code> starts the dependency agents declared in <code>explorer/manifest.json -&gt; enable[]</code> in parallel, waits for readiness of every dependency plus Explorer itself, and only then reports the workspace ready. Explorer is therefore documented as ready only when the rest of the workspace functionality it depends on is also available.</p>
                 </div>
 
                 <div class="doc-section">
-                    <h2>Quick Start</h2>
-                    <p>Enable the repo and agent, point the filesystem root, then start Explorer on your port of choice:</p>
+                    <h2>Running Explorer In Practice</h2>
+                    <p>Once the workspace is running, Explorer presents a single application shell across several resource classes. Normal files and directories are browsed through the filesystem tools. Markdown can be opened in the structured document experience, where chapters, paragraphs, references, and SOPLang commands remain attached to the same source. Other text and code files use the general editor with syntax highlighting. Media, HTML, backlog data, and DPU-backed resources each route into the preview or editing mode that matches their contract.</p>
+                    <p>Everyday use is therefore organized around selection and context. Directory navigation, rename/copy/move/delete flows, find and replace, preview toggles, Git actions, and plugin entry points all adapt to the current file, document node, or virtual resource. Explorer does not implement Git, DPU, SOPLang, tasks, or assistant logic internally; it exposes those capabilities through the host UI and forwards domain work to the owning agents.</p>
+                    <p>To run the current workspace variant, enable the repo and global Explorer agent, point the filesystem root to the workspace, and start Explorer on the router port you want to use:</p>
 <pre><code>ploinky enable repo AchillesIDE
 ploinky enable agent AchillesIDE/explorer global
 export ASSISTOS_FS_ROOT=&lt;path-to-workspace&gt;
 ploinky start explorer 8080
-# open http://127.0.0.1:8080/explorer/index.html via the Ploinky router
+# dashboard: http://127.0.0.1:8080/dashboard
+# explorer UI: http://127.0.0.1:8080/#file-exp/
 </code></pre>
-                    <p><strong>Note for HTML docs preview:</strong> repo-scoped preview paths are expected (for example <code>/.ploinky/repos/AchillesIDE/docs/development.html</code>).</p>
+                    <p>Set <code>ASSISTOS_FS_ROOT</code> or <code>MCP_FS_ROOT</code> to the workspace path you want to expose. For HTML documentation preview, Explorer uses repo-scoped static paths such as <code>/.ploinky/repos/AchillesIDE/docs/development.html</code> rather than flattening files to a shared <code>/docs/</code> namespace.</p>
                 </div>
 
-                <div class="features" style="padding-top: 1rem;">
-                    <div class="feature-card">
-                        <div class="feature-icon">🏛️</div>
-                        <h3>Architecture</h3>
-                        <p>Explore the technical architecture, from the containerized runtime to the frontend application.</p>
-                        <a href="architecture.html" class="btn btn-secondary">Learn More</a>
-                    </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">📄</div>
-                        <h3>Document Management</h3>
-                        <p>Learn how Markdown files are parsed and managed as structured documents.</p>
-                        <a href="documents.html" class="btn btn-secondary">Learn More</a>
-                    </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">🧩</div>
-                        <h3>Plugins</h3>
-                        <p>Discover the plugin system, from discovery to creating your own extensions.</p>
-                        <a href="plugins.html" class="btn btn-secondary">Learn More</a>
-                    </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">🛠️</div>
-                        <h3>Backend</h3>
-                        <p>Learn how MCP enforcement works and how SOPLang runs in its own agent.</p>
-                        <a href="backend.html" class="btn btn-secondary">Explore Backend</a>
-                    </div>
+                <div class="page-links">
+                    <article class="page-link-item">
+                        <div class="page-link-icon">🏛️</div>
+                        <div class="page-link-body">
+                            <h3>Architecture</h3>
+                            <p>Host shell boundaries, runtime layers, startup model, and how Explorer fits into the workspace.</p>
+                        </div>
+                        <a href="architecture.html" class="page-link-action">Open</a>
+                    </article>
+                    <article class="page-link-item">
+                        <div class="page-link-icon">📄</div>
+                        <div class="page-link-body">
+                            <h3>Document Management</h3>
+                            <p>Structured Markdown, chapter and paragraph metadata, hydration, and document-side editing behavior.</p>
+                        </div>
+                        <a href="documents.html" class="page-link-action">Open</a>
+                    </article>
+                    <article class="page-link-item">
+                        <div class="page-link-icon">🧩</div>
+                        <div class="page-link-body">
+                            <h3>Plugins</h3>
+                            <p>Discovery, runtime mounting, ownership boundaries, and how Explorer hosts plugin UI without owning domain logic.</p>
+                        </div>
+                        <a href="plugins.html" class="page-link-action">Open</a>
+                    </article>
+                    <article class="page-link-item">
+                        <div class="page-link-icon">🛠️</div>
+                        <div class="page-link-body">
+                            <h3>Backend</h3>
+                            <p>Filesystem MCP enforcement, path constraints, and the backend responsibilities that stay inside Explorer.</p>
+                        </div>
+                        <a href="backend.html" class="page-link-action">Open</a>
+                    </article>
                 </div>
                 <div class="doc-section">
-                    <h2>Agent Documentation</h2>
-                    <p>GitHub Pages-friendly entry points for the tightly coupled agents that extend the Explorer host.</p>
-                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;margin-top:1rem;">
-                        <div class="feature-card" style="padding:1.25rem;">
-                            <h3>DPU Agent</h3>
-                            <p>Confidential files, permissions, and DPU runtime integration.</p>
-                            <a href="../dpuAgent/docs/index.html" class="btn btn-secondary">Open Docs</a>
-                        </div>
-                        <div class="feature-card" style="padding:1.25rem;">
-                            <h3>Git Agent</h3>
-                            <p>Repository status, commit flows, credentials, and Git actions.</p>
-                            <a href="../gitAgent/docs/index.html" class="btn btn-secondary">Open Docs</a>
-                        </div>
-                        <div class="feature-card" style="padding:1.25rem;">
-                            <h3>LLM Assistant</h3>
-                            <p>Assistant-driven IDE workflows and AI integration surfaces.</p>
-                            <a href="../llmAssistant/docs/index.html" class="btn btn-secondary">Open Docs</a>
-                        </div>
-                        <div class="feature-card" style="padding:1.25rem;">
-                            <h3>SOPLang Agent</h3>
-                            <p>Build flows, script execution, document sync, and variable tooling.</p>
-                            <a href="../soplangAgent/docs/index.html" class="btn btn-secondary">Open Docs</a>
-                        </div>
-                        <div class="feature-card" style="padding:1.25rem;">
-                            <h3>Tasks Agent</h3>
-                            <p>Backlog management, task UI, and Explorer integration points.</p>
-                            <a href="../tasksAgent/docs/index.html" class="btn btn-secondary">Open Docs</a>
-                        </div>
-                        <div class="feature-card" style="padding:1.25rem;">
-                            <h3>Multimedia</h3>
-                            <p>Media preview, creation plugins, and document media workflows.</p>
-                            <a href="../multimedia/docs/index.html" class="btn btn-secondary">Open Docs</a>
-                        </div>
-                    </div>
-                </div>
-                <div class="doc-section">
-                    <h2>High-Level Flow</h2>
-                    <p>The following diagram illustrates the high-level data flow of the Explorer agent:</p>
+                    <h2>Runtime Flow</h2>
+                    <p>The diagram below is the compact reference for the runtime relationship between browser, router, Explorer, and the workspace resources Explorer exposes.</p>
                     <div class="architecture-diagram">
                         <img src="assets/architecture-diagram.svg" alt="Explorer high-level flow diagram">
                     </div>
                 </div>
 
                 <div class="doc-section">
-                    <h2>Interface at a Glance</h2>
-                    <p>Explorer blends a structured Markdown editor with a general-purpose file editor so you can manage documents, media, and code in one workspace.</p>
-                    <div class="subsection">
-                        <h3>Structured Markdown</h3>
-                        <p>Chapters, paragraphs, SOPLang commands, comments, and references stay together in one view so document structure remains clear while you edit.</p>
-                    </div>
-                    <div class="subsection">
-                        <h3>File editor</h3>
-                        <p>Non-Markdown files (JS, JSON, text, etc.) open with syntax highlighting and a lightweight editing experience for quick code or config changes.</p>
-                    </div>
-                    <div class="subsection">
-                        <h3>Contextual actions</h3>
-                        <p>Toolbars and plugin entry points adapt to what you have selected, surfacing actions for documents, chapters, or paragraphs as needed.</p>
-                    </div>
+                    <h2>Representative Screens</h2>
+                    <p>These screenshots show the main interaction regimes that make Explorer broader than a plain file browser: structured Markdown work, mixed preview/text flows, and general code editing in the same shell.</p>
                     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem;margin-top:1rem;">
                         <figure style="background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:12px;padding:0.75rem;">
                             <img class="home-shot" data-full="./assets/preview_md.png" src="./assets/preview_md.png" alt="Markdown preview" style="width:100%;border-radius:8px;border:1px solid var(--border-secondary);background:var(--bg-secondary);cursor:pointer;">
@@ -184,6 +158,7 @@ ploinky start explorer 8080
                             <figcaption style="margin-top:0.5rem;font-size:0.9rem;color:var(--text-secondary);">Code editing with syntax highlighting.</figcaption>
                         </figure>
                     </div>
+                </div>
                 </div>
             </div>
         </div>

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>UI Plugin Tutorial - Ploinky Explorer</title>
+    <title>UI Plugin Tutorial - Explorer Agent</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -13,7 +13,7 @@
                 <div class="header-top">
                     <a href="index.html" class="logo">
                         <div class="logo-icon">🚀</div>
-                        <span><a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md" target="_blank" rel="noopener noreferrer">Ploinky</a> Explorer</span>
+                        <span>Explorer Agent</span>
                     </a>
                     <button class="theme-toggle" id="themeToggle">🌙</button>
                 </div>
@@ -22,10 +22,9 @@
                         <li><a href="index.html">Home</a></li>
                         <li><a href="documents.html">Document Model &amp; Editing</a></li>
                         <li><a href="architecture.html">Architecture</a></li>
+                        <li><a href="backend.html">Backend</a></li>
                         <li><a href="plugins.html">Plugins</a></li>
                         <li><a href="tutorial-ui-plugin.html" class="active">UI Plugin Tutorial</a></li>
-                        <li><a href="soplang.html">SOPLang</a></li>
-                        <li><a href="build.html">SOPLang Build</a></li>
                     </ul>
                 </nav>
             </div>
@@ -38,15 +37,16 @@
                 <aside class="sidebar">
                     <h3>UI Plugin Tutorial</h3>
                     <ul>
-                        <li><a href="architecture.html#development">Go to Development section</a></li>
+                        <li><a href="plugins.html#example">Plugin Authoring Example</a></li>
+                        <li><a href="tutorial.html">Plugin Tutorial</a></li>
                     </ul>
                 </aside>
 
                 <div class="content-wrapper">
                     <div class="doc-section">
                         <h1>UI Plugin Tutorial moved</h1>
-                        <p>The UI plugin scaffold tutorial now lives under <a href="architecture.html#development">architecture.html#development</a> alongside the core dev steps.</p>
-                        <p>Quick start: scaffold the folder, <code>npm install</code> (optional), start the global Explorer agent in <a href="https://ploinky.com/cli-reference.html" target="_blank" rel="noopener noreferrer">Ploinky</a> with <code>ploinky start explorer 8080</code>, place the plugin in an enabled repo, then restart once for re-scan.</p>
+                        <p>The maintained plugin scaffold example now lives under <a href="plugins.html#example">Plugins &rarr; Authoring Example</a>. That page reflects the current plugin manifest shape and presenter lifecycle used by Explorer.</p>
+                        <p>This page remains as a short redirect for older links. For local testing, place the plugin in an enabled repo or agent folder, start Explorer in the workspace, and restart once after adding or changing the plugin manifest so the runtime catalog is refreshed.</p>
                     </div>
                 </div>
             </div>
@@ -55,25 +55,36 @@
 
     <footer>
         <div class="container">
-            <p>&copy; 2025 Achilles Project. All rights reserved.</p>
+            <p>&copy; 2025 <a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md" target="_blank" rel="noopener noreferrer">Ploinky Project</a>. All rights reserved.</p>
         </div>
     </footer>
 
     <script>
-        // Theme toggle
         const themeToggle = document.getElementById('themeToggle');
         const body = document.body;
-        
+
+        const themes = ['light', 'dark', 'blue'];
+        const themeIcons = {
+            light: '🌙',
+            dark: '🔵',
+            blue: '☀️'
+        };
+
+        const applyTheme = (theme) => {
+            body.setAttribute('data-theme', theme);
+            localStorage.setItem('theme', theme);
+            themeToggle.textContent = themeIcons[theme];
+        };
+
         const savedTheme = localStorage.getItem('theme') || 'light';
-        body.setAttribute('data-theme', savedTheme);
-        themeToggle.textContent = savedTheme === 'dark' ? '☀️' : '🌙';
-        
+        applyTheme(savedTheme);
+
         themeToggle.addEventListener('click', () => {
             const currentTheme = body.getAttribute('data-theme');
-            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-            body.setAttribute('data-theme', newTheme);
-            localStorage.setItem('theme', newTheme);
-            themeToggle.textContent = newTheme === 'dark' ? '☀️' : '🌙';
+            const currentIndex = themes.indexOf(currentTheme);
+            const nextIndex = (currentIndex + 1) % themes.length;
+            const newTheme = themes[nextIndex];
+            applyTheme(newTheme);
         });
     </script>
 </body>

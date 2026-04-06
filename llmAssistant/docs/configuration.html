@@ -34,7 +34,7 @@
             <div class="doc-main">
                 <section class="lead">
                     <h1>Manifest and Environment</h1>
-                    <p><code>llmAssistant</code> uses manifest-driven startup with provider key loading from process environment and workspace secrets fallback.</p>
+                    <p><code>llmAssistant</code> uses manifest-driven startup with provider key loading from process environment and workspace secrets fallback. Container dependency installation is owned by <code>ploinky</code>, so the agent manifest stays focused on runtime entrypoints and required environment.</p>
                 </section>
 
                 <section>
@@ -45,8 +45,7 @@
   "container": "node:20-alpine",
   "profiles": {
     "default": {
-      "env": ["provider keys", "workspace roots"],
-      "install": "apk add --no-cache git openssh-client ca-certificates"
+      "env": ["provider keys", "workspace roots"]
     }
   }
 }</code></pre>
@@ -80,7 +79,7 @@
 
                 <section>
                     <h2>Bootstrap Behavior</h2>
-                    <p>The startup script resolves workspace root, reads keys from env first, then falls back to <code>.ploinky/.secrets</code>. This keeps deployment configuration externalized and avoids static credentials in repository code.</p>
+                    <p>The startup script resolves workspace root, reads keys from env first, then falls back to <code>.ploinky/.secrets</code>. This keeps deployment configuration externalized and avoids static credentials in repository code. System packages and Node dependency installation are handled by <code>ploinky</code> before the agent command starts, so the agent bootstrap only performs llmAssistant-specific runtime initialization.</p>
                 </section>
 
                 <section>

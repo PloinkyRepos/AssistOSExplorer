@@ -7,7 +7,7 @@ This guide consolidates all Explorer documentation (architecture, document model
 ## 1) What Explorer Is
 
 - **Containerized UI + FS MCP server**: Runs `filesystem-http-server.mjs` (Node 20-alpine) serving the <a href="https://github.com/OutfinityResearch/WebSkel/blob/master/README.md">WebSkel UI</a> and filesystem MCP tools. Allowed roots come from `ASSISTOS_FS_ROOT`/`MCP_FS_ROOT` or CLI args.
-- **Plugin host**: Discovers `IDE-plugins/*/config.json` across enabled repos; tools are exposed to the UI grouped by `location`.
+- **Plugin host**: Discovers `IDE-plugins/*/config.json` from enabled agents and repo-local agent folders in the workspace; tools are exposed to the UI grouped by `location`, then filtered by Explorer's `applicationPlugins` policy.
 - **Document manager**: Markdown is parsed into chapters/paragraphs with metadata and SOPLang commands.
 - **No HTTP blob endpoint in current server**: UI helpers expect `/blobs/<agent>`, but `filesystem-http-server.mjs` only exposes MCP on `/mcp` and a `/health` check.
 - **Plugin sources**: Runtime plugins are distributed across agent-owned `IDE-plugins/` directories such as `dpuAgent/IDE-plugins`, `gitAgent/IDE-plugins`, `multimedia/IDE-plugins`, `soplangAgent/IDE-plugins`, and `tasksAgent/IDE-plugins`.
@@ -19,7 +19,8 @@ This guide consolidates all Explorer documentation (architecture, document model
 
 - **Manifest**: `explorer/manifest.json` defines the Explorer runtime container, startup command, environment, and external dependency agents.
 - **Global mode**: `ploinky enable agent AchillesIDE/explorer global` runs in the current workspace folder. First `ploinky start explorer <port>` also pins the router/static port.
-- **Router**: <a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md">Ploinky</a> router serves static UI and proxies MCP on the chosen port (e.g., 8080 → `/explorer/index.html`).
+- **Startup readiness**: `ploinky start explorer` starts the enabled dependency agents in parallel and waits for readiness of every dependency declared in Explorer `manifest.json -> enable[]`, plus Explorer itself, before reporting the workspace ready.
+- **Router**: <a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md">Ploinky</a> router serves static UI and proxies MCP on the chosen port (e.g., dashboard on `/dashboard`, main Explorer UI on `/#file-exp/`).
 - **Repo-scoped static exposure for docs preview**: HTML preview uses repo-scoped paths under `/.ploinky/repos/AchillesIDE/docs/*`.
 - **Allowed directories**: Derived from `ASSISTOS_FS_ROOT`/`MCP_FS_ROOT` (comma-separated). If missing, falls back to `process.cwd()`. Multiple roots → first is workspace root.
 - **Containers & workspace**: Explorer and soplangAgent containers mount the same host workspace volume; each has its own MCP endpoints.
@@ -67,7 +68,7 @@ This guide consolidates all Explorer documentation (architecture, document model
 
 ## 6) Plugin System
 
-- **Discovery**: MCP tool `collect_ide_plugins` calls `aggregateIdePlugins`, scanning enabled repos for `IDE-plugins/*/config.json` on each invocation (e.g., UI load). Results are grouped by `location`.
+- **Discovery**: MCP tool `collect_ide_plugins` calls `aggregateIdePlugins`, scanning enabled agent/plugin folders in the workspace for `IDE-plugins/*/config.json` on each invocation (e.g., UI load). Results are grouped by `location`, then the browser applies `applicationPlugins` policy from `explorer/manifest.json`.
 - **Manifest example**:
   ```json
   {
@@ -97,7 +98,7 @@ This guide consolidates all Explorer documentation (architecture, document model
 ## 8) Development & Setup
 
 - **Prereqs**: Node 20+, npm, active <a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md">Ploinky</a> workspace.
-- **Global run**: `ploinky enable repo AchillesIDE` then `ploinky enable agent AchillesIDE/explorer global`; start with `ploinky start explorer 8080` (router/UI on that port).
+- **Global run**: `ploinky enable repo AchillesIDE` then `ploinky enable agent AchillesIDE/explorer global`; start with `ploinky start explorer 8080` (router/UI on that port, dashboard on `/dashboard`, main file UI on `/#file-exp/`).
 - **Filesystem root**: Set `ASSISTOS_FS_ROOT` (or `MCP_FS_ROOT`) to the workspace path(s); fallback is cwd. First root is workspace root.
 - **Bundled local plugins**: Explorer-facing plugins are loaded from the enabled agents' `IDE-plugins/` directories in this repository.
 - **Dependencies**: `npm install` at repo root (and `explorer/` if needed).

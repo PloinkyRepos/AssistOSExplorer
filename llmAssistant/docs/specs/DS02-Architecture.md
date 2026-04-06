@@ -12,7 +12,7 @@ The boundary starts at MCP tool invocation and ends at serialized tool response.
 
 The architecture is composed of contract, wrapper, dispatch, helper-domain, and bootstrap layers.
 
-The contract layer is `mcp-config.json`. The wrapper layer is `tools/llm_tool.sh`. The dispatch layer in `llm_tool.mjs` normalizes envelopes, validates args, and routes tools. Helper-domain layer uses `git-commit-message.js` and `git-resolve-conflict.js` plus autocomplete prompt builder logic. Bootstrap layer in `scripts/startAgent.sh` resolves workspace and provider credentials before AgentServer start.
+The contract layer is `mcp-config.json`. The wrapper layer is `tools/llm_tool.sh`. The dispatch layer in `llm_tool.mjs` normalizes envelopes, validates args, and routes tools. Helper-domain layer uses `git-commit-message.js` and `git-resolve-conflict.js` plus autocomplete prompt builder logic. Bootstrap layer in `scripts/startAgent.sh` resolves workspace and provider credentials before AgentServer start. Dependency installation remains outside the agent boundary and is orchestrated by `ploinky`.
 
 ## Architectural Requirements
 
@@ -27,6 +27,8 @@ Requirement A4: helper functions shall return plain contract outputs, not provid
 Requirement A5: conflict resolver shall attempt deterministic merge before LLM fallback.
 
 Requirement A6: bootstrap must support env-first and secrets-fallback provider loading.
+
+Requirement A7: manifest startup configuration shall not duplicate generic dependency installation already orchestrated by `ploinky`.
 
 ## Constraints
 

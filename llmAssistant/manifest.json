@@ -14,8 +14,7 @@
         "WORKSPACE_ROOT",
         "PLOINKY_WORKSPACE_ROOT",
         "SOUL_GATEWAY_API_KEY"
-      ],
-      "install": "apk add --no-cache git openssh-client ca-certificates"
+      ]
     }
   }
 }

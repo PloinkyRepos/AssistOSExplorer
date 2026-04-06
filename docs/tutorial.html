@@ -3,26 +3,82 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Plugin Tutorial - Achilles IDE</title>
+    <title>Plugin Tutorial - Explorer Agent</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <nav class="sidebar">
-        <h2>Achilles IDE</h2>
-        <ul>
-            <li><a href="index.html">Home</a></li>
-            <li><a href="documents.html">Document Model &amp; Editing</a></li>
-            <li><a href="architecture.html">Architecture</a></li>
-            <li><a href="plugins.html">Plugins</a></li>
-            <li><a href="tutorial.html" class="active">Plugin Tutorial</a></li>
-            <li><a href="soplang.html">SOPLang in Markdown</a></li>
-            <li><a href="build.html">SOPLang Build</a></li>
-        </ul>
-    </nav>
-    <main class="content">
-        <h1>Tutorial moved</h1>
-        <p>The full “Uppercase paragraph” tutorial now lives under <a href="architecture.html#development">architecture.html#development</a>. The latest code sample there reflects the current document module API.</p>
-        <p>Quick start: after copying the plugin, run <code>npm install</code> (optional), start the global agent in <a href="https://ploinky.com/cli-reference.html" target="_blank" rel="noopener noreferrer">Ploinky</a> (<code>ploinky start explorer 8080</code>), then restart once to refresh the catalog.</p>
+    <header>
+        <div class="container">
+            <div class="header-content">
+                <div class="header-top">
+                    <a href="index.html" class="logo">
+                        <div class="logo-icon">🚀</div>
+                        <span>Explorer Agent</span>
+                    </a>
+                    <button class="theme-toggle" id="themeToggle">🌙</button>
+                </div>
+                <nav>
+                    <ul>
+                        <li><a href="index.html">Home</a></li>
+                        <li><a href="documents.html">Document Model &amp; Editing</a></li>
+                        <li><a href="architecture.html">Architecture</a></li>
+                        <li><a href="backend.html">Backend</a></li>
+                        <li><a href="plugins.html">Plugins</a></li>
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    </header>
+    <main>
+        <div class="doc-layout">
+            <aside class="sidebar">
+                <h3>Tutorial</h3>
+                <ul>
+                    <li><a href="plugins.html#example">Authoring Example</a></li>
+                    <li><a href="tutorial-ui-plugin.html">UI Plugin Tutorial</a></li>
+                </ul>
+            </aside>
+            <div class="content-wrapper">
+                <div class="doc-section">
+                    <h1>Tutorial Moved</h1>
+                    <p>The current plugin authoring example now lives in <a href="plugins.html#example">Plugins &rarr; Authoring Example</a>. That page is the maintained source for the example plugin structure and presenter lifecycle.</p>
+                    <p>If you want the more UI-focused walkthrough, continue to <a href="tutorial-ui-plugin.html">UI Plugin Tutorial</a>. For local testing, start Explorer in the workspace and restart once after adding a new plugin manifest so the runtime catalog is refreshed.</p>
+                </div>
+            </div>
+        </div>
     </main>
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 <a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md" target="_blank" rel="noopener noreferrer">Ploinky Project</a>. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script>
+        const themeToggle = document.getElementById('themeToggle');
+        const body = document.body;
+        const themes = ['light', 'dark', 'blue'];
+        const themeIcons = {
+            light: '🌙',
+            dark: '🔵',
+            blue: '☀️'
+        };
+
+        const applyTheme = (theme) => {
+            body.setAttribute('data-theme', theme);
+            localStorage.setItem('theme', theme);
+            themeToggle.textContent = themeIcons[theme];
+        };
+
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        applyTheme(savedTheme);
+
+        themeToggle.addEventListener('click', () => {
+            const currentTheme = body.getAttribute('data-theme');
+            const currentIndex = themes.indexOf(currentTheme);
+            const nextIndex = (currentIndex + 1) % themes.length;
+            const newTheme = themes[nextIndex];
+            applyTheme(newTheme);
+        });
+    </script>
 </body>
 </html>

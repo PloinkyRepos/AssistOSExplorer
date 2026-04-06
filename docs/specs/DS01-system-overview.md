@@ -184,7 +184,7 @@ Explorer also acts as an HTTP boundary for flows where the browser cannot talk d
 
 ### Plugin Contract
 
-Application plugins are discovered through `applicationPlugins` in the manifest and mounted into Explorer slots such as `file-exp:toolbar`.
+Runtime plugins are discovered from enabled agent-owned `IDE-plugins/` directories in the workspace. Explorer then applies `applicationPlugins` from the manifest as an allow/deny policy for application-category plugins before mounting them into slots such as `file-exp:toolbar`.
 
 Plugin integration is runtime-driven rather than compile-time hardcoded. Explorer therefore has to preserve:
 
@@ -197,12 +197,13 @@ Plugin integration is runtime-driven rather than compile-time hardcoded. Explore
 
 ### Startup
 
-1. Ploinky starts the declared dependencies
+1. Ploinky applies Explorer manifest directives and starts the declared dependencies in parallel
 2. Explorer starts as the static agent
-3. The router publishes the Explorer application
-4. The runtime plugin loader activates the enabled plugins
+3. Ploinky waits for readiness of every dependency declared in `manifest.enable[]`, plus Explorer itself
+4. The router publishes the Explorer application
+5. The runtime plugin loader activates the enabled plugins
 
-Explorer startup is correct only when the user-facing application can safely rely on the dependent agents it needs for active routes and panels.
+Explorer startup is correct only when the user-facing application can safely rely on all enabled dependent agents, not only on Explorer's own port or MCP handshake.
 
 ### Navigation
 

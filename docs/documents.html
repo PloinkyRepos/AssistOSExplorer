@@ -44,36 +44,24 @@
             <aside class="sidebar">
                 <h3>Document Management</h3>
                 <ul>
-                    <li><a href="#overview">Overview</a></li>
-                    <li><a href="#data-model">Data Model</a></li>
-                    <li><a href="#persistence">Data Persistence</a></li>
-                    <li><a href="#doc-info">Document Info</a></li>
-                    <li><a href="#toc">Table of Contents</a></li>
-                    <li><a href="#comments">Comments</a></li>
-                    <li><a href="#references">References</a></li>
-                    <li><a href="#advanced-features">Advanced Features</a></li>
-                    <li><a href="#other-files">Editing Other Files</a></li>
+                    <li><a href="#document-role">Document Role</a></li>
+                    <li><a href="#document-model">Document Model</a></li>
+                    <li><a href="#document-workflows">Document Workflows</a></li>
+                    <li><a href="#other-files">Other Files In The Editor</a></li>
                 </ul>
             </aside>
             <div class="content-wrapper">
-                <div class="doc-section" id="overview">
-                    <h1>Managing and Editing .md Documents</h1>
-                    <p>A core feature of the Explorer agent is its specialized handling of Markdown (<code>.md</code>) files. Instead of treating them as plain text, Explorer parses them into a structured <strong>Document Object Model</strong> (DOM), turning them into interactive, extensible documents with a rich set of features. Any file, however, can be opened in view or edit mode: Markdown gets the structured document experience; all other text/code files use the general editor.</p>
-                    <p><strong>Editor capabilities (Markdown documents):</strong></p>
-                    <div class="subsection">
-                        <p><strong>Add/reorder chapters:</strong> Insert new chapters and rearrange them to reorder; anchors and IDs stay in sync.</p>
-                        <p><strong>Add/reorder paragraphs:</strong> Insert paragraphs within chapters and rearrange them while keeping paragraph IDs and commands aligned.</p>
-                        <p><strong>Edit titles & metadata:</strong> Update the document title/info text, chapter titles, and paragraph titles/commands without losing structure.</p>
-                        <p><strong>Delete content safely:</strong> Remove chapters or paragraphs while related metadata and comments are updated on save.</p>
-                        <p><strong>Comments & references:</strong> Add comments at document, chapter, or paragraph level and manage references inline.</p>
-                    </div>
+                <div class="doc-section" id="document-role">
+                    <h1>Document Model And Editing</h1>
+                    <p>Explorer treats Markdown differently because the workspace needs documents to behave as more than raw text. A plain editor can show headings and paragraphs, but it cannot reliably preserve document metadata, structured comments, embedded SOPLang commands, references, or chapter-level actions as first-class entities. The document model exists to solve that problem: Markdown remains the stored format, but Explorer interprets it as a structured document with stable parts that the UI and plugins can address directly.</p>
+                    <p>That is why Markdown receives a different editing regime from other files. Chapters can be inserted and reordered, paragraphs can carry their own commands and metadata, references can remain attached to the document, and document-level actions can operate on real structure rather than on fragile text conventions. Explorer still allows any file to be opened, but only Markdown enters this structured document flow; other text and code files stay in the general editor.</p>
                 </div>
 
-                <div class="doc-section" id="data-model">
-                    <h2>The Document Data Model</h2>
-                    <p>When a Markdown file is loaded, it is transformed into a rich, in-memory representation. This process, known as <strong>hydration</strong>, is handled by the <code>DocumentStore</code> service. The <code>hydrateDocumentModel</code> function enriches the document with metadata, comments, references, and other structured data, creating a hierarchical model that the UI components can interact with.</p>
-                    <p><strong>Example:</strong> A file with <code>&lt;!--{"achilles-ide-document": {"id": "guide", "title": "My Guide"}}--&gt;</code> and chapter/paragraph comments is hydrated into a document with <code>docId = "guide"</code>, chapters built from comments or headings, and paragraph records carrying <code>text</code> and <code>commands</code>.</p>
-                    <h3>Full document example</h3>
+                <div class="doc-section" id="document-model">
+                    <h2>Document Model</h2>
+                    <p>When Explorer loads a Markdown file, it hydrates the file into an in-memory document representation through the <code>DocumentStore</code> service. The important step is <code>hydrateDocumentModel</code>, which reads the visible Markdown together with the embedded <code>achilles-ide-*</code> comment markers and turns them into a document tree with document metadata, chapters, paragraphs, comments, references, commands, and other structured state. The user still sees Markdown, but the UI works against a richer model than plain text.</p>
+                    <p>That model is also the persistence contract. Markdown is not abandoned in favor of a hidden database format; the structure is encoded back into the file through metadata and commands that survive serialization. This is why SOPLang commands, document information, chapter metadata, and references can remain stable across load and save cycles. The Markdown file is both readable source and structured persistence layer.</p>
+                    <p>A representative file can look like this:</p>
 <pre><code>&lt;!-- {"achilles-ide-document":{"id":"L2RvY3VtZW50cy9kb2MubWQ=","title":"doc","infoText":"this is example document","comments":{"toc":{"collapsed":false},"tor":{"collapsed":false,"references":[{"id":"1765191283759","type":"journal","authors":"Smith, J. R., & Doe, A. B.","year":2024,"title":"The Evolving Role of Machine Learning in Predictive Modeling.","pages":"112-135","url":"International Journal of Technological Research,"},{"id":"1765191353867","type":"book","authors":"Johnson, K. T.","year":2022,"title":"Principles of Modern Data Structures and Algorithms.","publisher":"Technical Press Inc.","location":"New York, NY."}]}},"version":1,"updatedAt":"2025-12-08T11:02:37.023Z"}} --&gt;
 # Demo Document
 
@@ -109,9 +97,15 @@ This paragraph contains a command that will be parsed by the system.
 1. Smith, J. R., & Doe, A. B. (2024). The Evolving Role of Machine Learning in Predictive Modeling.. International Journal of Technological Research,
 2. Johnson, K. T. (2022). *Principles of Modern Data Structures and Algorithms.*. New York, NY.: Technical Press Inc..
 </code></pre>
-                    <div class="doc-section">
-                        <h3>Document editing views (screens)</h3>
-                        <p>Visual examples of the structured Markdown editor and general editor modes.</p>
+                    <p>In that representation, document metadata holds the title and info text, chapters keep their own identities and commands, paragraphs retain their own titles and command blocks, comments remain attached to the document node they belong to, and references stay centralized in the document metadata. The same structure also supports snapshots, tasks, and variable-oriented workflows when those features are used.</p>
+                </div>
+
+                <div class="doc-section" id="document-workflows">
+                    <h2>Document Workflows</h2>
+                    <p>Once the model is hydrated, Explorer can expose document-specific workflows that would be fragile in a plain text editor. Users can insert, reorder, rename, or delete chapters and paragraphs while keeping their structural IDs aligned. They can edit document title and info text without manually rewriting metadata blocks. They can manage comments and references in context instead of scattering them across ad hoc text conventions. And because SOPLang commands are part of the document structure, media commands and variable-oriented flows remain attached to the document nodes they belong to.</p>
+                    <p>Several UI features follow directly from that structure. The table of contents is generated from the chapter model rather than from a separate outline file. Comments belong to the document, chapter, or paragraph where they were created. References live in document metadata and are rendered through the reference UI rather than as disconnected prose. Snapshots, tasks, and variables are additional structured layers that can travel with the document rather than being bolted on through unrelated storage.</p>
+                    <p>Examples of those workflows include setting Title and Info Text in the document metadata, generating a table of contents from chapter headings and anchor IDs, storing paragraph-level comments such as “Clarify API version”, persisting a shared <code>references</code> array for citations, and carrying variables or media commands such as <code>@media_image_123 attach id "blob-id" name "hero.png"</code> directly in the document source.</p>
+                    <p>The screenshots below show the structured editing experience rather than the raw stored source:</p>
                     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;">
                         <figure style="background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:12px;padding:0.75rem;">
                             <img class="doc-shot" data-full="./assets/edit_md_add_item.png" src="./assets/edit_md_add_item.png" alt="Add item in Markdown editor" style="width:100%;border-radius:8px;border:1px solid var(--border-secondary);background:var(--bg-secondary);cursor:pointer;">
@@ -131,93 +125,12 @@ This paragraph contains a command that will be parsed by the system.
                         </figure>
                     </div>
                 </div>
-                </div>
-
-                <div class="doc-section" id="persistence">
-                    <h2>Data Persistence via Soplang Commands</h2>
-                    <p>A key architectural concept is that <strong><code>.md</code> files are a persistence layer for structured data.</strong> This is achieved by embedding <code>soplang</code> commands directly within the text, which are parsed during hydration and preserved during serialization.</p>
-                    <p><strong>Example:</strong> <code>@media_image_123 attach id "blob-id" name "hero.png"</code> embedded in a paragraph is kept verbatim in the file; the parser extracts it so the UI can render the image while the command stays in the Markdown.</p>
-                </div>
-                
-                <div class="doc-section" id="doc-info">
-                    <h2>Document Info</h2>
-                    <p>Each document contains a set of metadata that provides essential information about it. This includes the document's <strong>Title</strong> and a summary or abstract in the <strong>Info Text</strong> field. This data is managed within the document's metadata and can be edited through the UI to provide context for the document's content.</p>
-                    <p><strong>Example (metadata block):</strong></p>
-<pre><code>&lt;!-- {"achilles-ide-document":{"id":"L2RvY3VtZW50cy9kb2MubWQ=","title":"doc","infoText":"this is example document", ... }} --&gt;</code></pre>
-                    <p><strong>Example (UI):</strong> In the info pane, set Title to "Release Notes" and Info Text to "Changelog for v1.2"; these values are saved back into the document metadata.</p>
-                </div>
-
-                <div class="doc-section" id="toc">
-                    <h2>Table of Contents</h2>
-                    <p>The Explorer automatically generates a navigable <strong>Table of Contents</strong> for each document. This is handled by the <code>contents-table</code> component, which reads the document's structure from the hydrated data model.</p>
-                    <div class="subsection">
-                        <p>The table is generated from the <code>chapters</code> array in the document model and uses each chapter's <code>headingText</code> and <code>headingLevel</code> to build an interactive outline.</p>
-                        <p>Selecting an item in the Table of Contents scrolls the corresponding chapter into view.</p>
-                    </div>
-                    <p><strong>Example:</strong></p>
-<pre><code>## Table of Contents
-- [Chapter 1: Introduction](#chapter-chapter-7ee41719-ab70-4cf2-9286-2a65534c9512)
-- [Chapter 2: Advanced Features](#chapter-chapter-2)</code></pre>
-                </div>
-                
-                <div class="doc-section" id="comments">
-                    <h2>Comments</h2>
-                    <p>The IDE supports a commenting system that allows users to attach feedback to the document as a whole, or to specific chapters and paragraphs. The <code>comments-section</code> component is responsible for displaying and managing these comments.</p>
-                    <div class="subsection">
-                        <p>Comments live in the <code>comments</code> array within the metadata of the document, chapter, or paragraph they belong to, enabling collaborative review in context.</p>
-                    </div>
-                    <p><strong>Example:</strong></p>
-<pre><code>"comments": {
-  "messages": [
-    { "id": "CUZbVGCN", "userEmail": "local@example.com", "message": "demo comment" }
-  ]
-}</code></pre>
-                    <p>Add a paragraph-level comment like "Clarify API version" on the introduction; it is stored with that paragraph and shown inline in the comments panel.</p>
-                </div>
-
-                <div class="doc-section" id="references">
-                    <h2>References</h2>
-                    <p>A built-in reference management system allows you to cite sources and manage bibliographic information. The <code>references-table</code> component provides the interface for this feature.</p>
-                    <div class="subsection">
-                        <p>References are stored in a <code>references</code> array within the document metadata, so citations remain centralized and reusable across the document.</p>
-                    </div>
-                    <p><strong>Example snippet:</strong></p>
-<pre><code>## References
-1. Smith, J. R., &amp; Doe, A. B. (2024). The Evolving Role of Machine Learning in Predictive Modeling.. International Journal of Technological Research,
-2. Johnson, K. T. (2022). *Principles of Modern Data Structures and Algorithms.*. New York, NY.: Technical Press Inc..</code></pre>
-                </div>
-
-                <div class="doc-section" id="advanced-features">
-                    <h2>Advanced Features: Snapshots, Tasks, and Variables</h2>
-                    <p>The document model also supports several advanced features for automation and version control:</p>
-                    <div class="subsection">
-                        <p><strong>Snapshots & Versioning:</strong> The <code>version</code> and <code>snapshots</code> properties provide lightweight versioning; the snapshots modal lets you view or revert states.</p>
-                        <p><strong>Tasks:</strong> The <code>tasks</code> property tracks to-dos associated with a document, surfaced through the tasks modal.</p>
-                        <p><strong>Variables:</strong> The <code>variables</code> property holds dynamic data consumed by SOPLang scripts and other automations; the variable details component lets you inspect and edit them.</p>
-                    </div>
-                    <p><strong>Example:</strong> Capture a snapshot before major edits, add a task "Update diagrams" in the tasks modal, and define a variable <code>releaseVersion=1.2.0</code> for SOPLang-driven templates.</p>
-                </div>
 
                 <div class="doc-section" id="other-files">
-                    <h2>Editing Other File Types (Text, Code, etc.)</h2>
-                    <p>In addition to its specialized Markdown editor, the Explorer Agent includes a general-purpose text editor for handling other file types. This allows you to view and edit a wide range of text-based files directly within the IDE.</p>
-
-                    <h3>Supported Files:</h3>
-                    <div class="subsection">
-                        <p>Plain text files (<code>.txt</code>), code files (<code>.js</code>, <code>.html</code>, <code>.css</code>, <code>.py</code>, etc.), and configuration files (<code>.json</code>, <code>.xml</code>, <code>.yml</code>, etc.) all open in the general editor.</p>
-                    </div>
-                    <p><strong>Example:</strong> Open <code>config/app.json</code> to view or edit JSON; open <code>src/main.js</code> to edit code with syntax highlighting; both use the general editor (no document DOM).</p>
-
-                    <h3>The Key Difference: Plain Text vs. Structured Data</h3>
-                    <div class="subsection">
-                        <p><strong>Plain Text Handling:</strong> When you open a <code>.js</code> or <code>.txt</code> file, it is treated as a single block of text; no chapters or paragraphs are parsed.</p>
-                        <p><strong>No DOM or Plugin Context:</strong> Non-Markdown files do not expose the structured DOM, so paragraph-level plugins or SOPLang commands do not apply the same way.</p>
-                        <p><strong>Underlying MCP Tools:</strong> Interactions rely on filesystem MCP tools such as <code>read_text_file</code> and <code>write_file</code>, providing raw, direct file access within allowed roots.</p>
-                    </div>
-
-                    <h3>Syntax Highlighting</h3>
-                    <p>While these files are treated as plain text from a structural point of view, the editor provides a crucial presentation-layer feature: <strong>syntax highlighting</strong>. When you open a code file (e.g., <code>.js</code>, <code>.html</code>, <code>.css</code>), the editor automatically detects the language and applies color coding to keywords, strings, comments, and other language constructs.</p>
-                    <p>This feature significantly improves readability and makes it easier to work with code, but it's important to remember that this is a client-side rendering enhancement. It does not change the fact that the underlying file is treated as a simple block of text, unlike the deep structural parsing applied to <code>.md</code> files.</p>
+                    <h2>Other Files In The Editor</h2>
+                    <p>Explorer still needs to open ordinary files, so the document model is intentionally not applied to everything. Plain text files, source code, and configuration files such as <code>.txt</code>, <code>.js</code>, <code>.html</code>, <code>.css</code>, <code>.py</code>, <code>.json</code>, <code>.xml</code>, or <code>.yml</code> all use the general editor. In that mode, the file is treated as a single text resource with filesystem-backed reads and writes through the MCP layer. There are no document chapters, no paragraph-level metadata, and no structured plugin context like the one available for hydrated Markdown.</p>
+                    <p>The key distinction is therefore not whether a file is visible in the same shell, but which model Explorer applies to it. Markdown enters the structured document workflow. Other files remain raw text from a structural point of view, even when the editor adds syntax highlighting for readability. That highlighting improves comprehension for code and config work, but it does not turn those files into document objects with chapters, commands, references, or paragraph-level actions.</p>
+                    <p>Typical examples are opening <code>config/app.json</code> to edit configuration or <code>src/main.js</code> to edit code with syntax highlighting. Those interactions still happen inside Explorer, but they use the general editor rather than the document runtime.</p>
                     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin-top:1rem;">
                         <figure style="background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:12px;padding:0.75rem;">
                             <img class="doc-shot" data-full="./assets/edit_js.png" src="./assets/edit_js.png" alt="Code file in general editor" style="width:100%;border-radius:8px;border:1px solid var(--border-secondary);background:var(--bg-secondary);cursor:pointer;">

@@ -12,7 +12,7 @@ The agent boundary starts at MCP tool invocation and ends at normalized result e
 
 The architecture has a contract layer, wrapper layer, dispatch layer, Git service layer, auth layer, and UI-extension layer.
 
-The contract layer declares tools in `mcp-config.json`. The wrapper layer executes `tools/git_tool.sh` for each invocation. The dispatch layer in `git_tool.mjs` parses envelopes, validates arguments, and routes operations. The Git service layer executes subprocess commands with timeout and structured parsing. The auth layer manages GitHub device flow and token storage integration. The UI-extension layer exposes IDE plugin artifacts for Explorer.
+The contract layer declares tools in `mcp-config.json`. The wrapper layer executes `tools/git_tool.sh` for each invocation. The dispatch layer in `git_tool.mjs` parses envelopes, validates arguments, and routes operations. The Git service layer executes subprocess commands with timeout and structured parsing. The auth layer manages GitHub device flow and token storage integration. The UI-extension layer exposes IDE plugin artifacts for Explorer. Dependency installation remains outside the agent boundary and is orchestrated by `ploinky`.
 
 ## Architectural Requirements
 
@@ -27,6 +27,8 @@ Requirement A4: repository path validation shall run before any Git subprocess e
 Requirement A5: remote operations shall support token fallback from auth context or stored auth state.
 
 Requirement A6: UI integration shall use MCP calls and shall not require private runtime imports from Git services.
+
+Requirement A7: manifest startup configuration shall not duplicate generic dependency installation already orchestrated by `ploinky`.
 
 ## Constraints
 
