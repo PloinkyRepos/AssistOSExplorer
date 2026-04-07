@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>tasksAssistant Docs - Overview</title>
+    <title>tasksAgent Docs - Overview</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -11,7 +11,7 @@
 
     <main class="content content--with-sidebar">
         <div class="doc-layout">
-            <aside class="doc-sidebar" aria-label="tasksAssistant documentation navigation">
+            <aside class="doc-sidebar" aria-label="tasksAgent documentation navigation">
                 <div class="doc-sidebar__group">
                     <p class="doc-sidebar__group-title">Documentation</p>
                     <nav>
@@ -33,21 +33,18 @@
 
             <div class="doc-main">
                 <section class="lead">
-                    <h1>tasksAgent Documentation</h1>
-                    <p>This repository currently hosts one Ploinky agent: <code>tasksAgent</code>.</p>
-                    <p>The agent is integrated in <a href="https://ploinky.com/" target="_blank" rel="noopener noreferrer">Ploinky</a> and is used by Explorer flows to manage repository backlog files through MCP tools.</p>
-                    <p>All task tools execute through <code>tasksAgent/tools/tasks_tool.sh</code>, which dispatches to <code>tasks_tool.mjs</code>.</p>
+                    <h1>Backlog Operations In Explorer</h1>
+                    <p>Explorer needs structured task and backlog workflows that can mutate repository files safely, but those rules should not be distributed across buttons, modal presenters, and ad-hoc file operations in the UI.</p>
                 </section>
 
                 <section class="highlight-box">
-                    <h3>Operational Role</h3>
-                    <p><code>tasksAgent</code> mediates between Explorer task interactions and backlog-file execution through MCP tools that cover configuration, listing, retrieval, mutation, history, and reorder operations.</p>
-                    <p>The agent enforces repository path boundaries and file-extension rules before any mutation, and Explorer integration is delivered through <code>tasksAgent/IDE-plugins/tasks-tool-button/</code> as the UI entry channel.</p>
+                    <h2>Backlog Boundary For Explorer</h2>
+                    <p><code>tasksAgent</code> centralizes that responsibility behind MCP tools for configuration, listing, retrieval, mutation, history, and reorder operations. It owns repository path boundaries and file-extension rules so backlog state changes are validated before they touch the workspace.</p>
                 </section>
 
                 <section>
-                    <h2>Repository Scope</h2>
-                    <p>The repository can host multiple Ploinky agents over time. This documentation set targets the current <code>tasksAgent</code> scope and its role as the operational bridge between Explorer and backlog management.</p>
+                    <h2>How It Runs In Practice</h2>
+                    <p>Task operations execute through <code>tasksAgent/tools/tasks_tool.sh</code> and <code>tasks_tool.mjs</code>, while Explorer integration enters through <code>tasksAgent/IDE-plugins/tasks-tool-button/</code>. The UI collects intent and renders results; the agent remains responsible for file semantics and mutation workflows.</p>
                     <div class="doc-callout">
                         <p><strong>Validation rule:</strong> run the tasks agent tests under <code>tasksAgent/tests</code> for code changes, together with documentation and specification updates.</p>
                     </div>

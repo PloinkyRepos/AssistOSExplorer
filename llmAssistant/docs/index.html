@@ -33,21 +33,18 @@
 
             <div class="doc-main">
                 <section class="lead">
-                    <h1>llmAssistant Agent Documentation</h1>
-                    <p>This repository currently hosts one Ploinky agent: <code>llmAssistant</code>.</p>
-                    <p>The agent provides LLM-backed helper tools consumed by Explorer and by other agents for code completion, commit-message generation, and conflict resolution.</p>
-                    <p>All MCP tool invocations execute through <code>llmAssistant/tools/llm_tool.sh</code> and <code>llm_tool.mjs</code>.</p>
+                    <h1>Shared LLM Execution</h1>
+                    <p>Explorer and companion agents need LLM-backed help for workflows such as completion, commit-message generation, and conflict resolution, but they should not embed provider-specific logic or model invocation details in every caller.</p>
                 </section>
 
                 <section class="highlight-box">
-                    <h3>Operational Role</h3>
-                    <p><code>llmAssistant</code> intermediates between caller requests and Achilles default LLM runtime execution by exposing a finite MCP contract from <code>llmAssistant/mcp-config.json</code>.</p>
-                    <p>The agent normalizes MCP envelopes, validates input before model execution, and returns reusable helper outputs for editor and Git workflows without leaking provider-specific details into clients.</p>
+                    <h2>Shared LLM Execution Boundary</h2>
+                    <p><code>llmAssistant</code> centralizes that responsibility behind a finite MCP contract from <code>llmAssistant/mcp-config.json</code>. The agent owns request normalization, input validation, and provider-facing execution so callers consume one stable helper surface instead of reimplementing model orchestration.</p>
                 </section>
 
                 <section>
-                    <h2>Repository Scope</h2>
-                    <p>The repository can host multiple Ploinky agents over time. The current scope covers <code>llmAssistant</code> as the dedicated LLM helper boundary for Explorer and agent-to-agent utility flows.</p>
+                    <h2>How It Runs In Practice</h2>
+                    <p>All MCP tool invocations execute through <code>llmAssistant/tools/llm_tool.sh</code> and <code>llm_tool.mjs</code>. Explorer and other agents pass structured requests into that boundary and receive helper outputs that fit their local workflow, while provider-specific runtime choices remain inside <code>llmAssistant</code>.</p>
                 </section>
             </div>
         </div>

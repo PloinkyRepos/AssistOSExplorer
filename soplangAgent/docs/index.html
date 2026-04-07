@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>soplangBuilder Docs - Overview</title>
+    <title>soplangAgent Docs - Overview</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -11,7 +11,7 @@
 
     <main class="content content--with-sidebar">
         <div class="doc-layout">
-            <aside class="doc-sidebar" aria-label="soplangBuilder documentation navigation">
+            <aside class="doc-sidebar" aria-label="soplangAgent documentation navigation">
                 <div class="doc-sidebar__group">
                     <p class="doc-sidebar__group-title">Documentation</p>
                     <nav>
@@ -33,21 +33,18 @@
 
             <div class="doc-main">
                 <section class="lead">
-                    <h1>soplangBuilder Agent Documentation</h1>
-                    <p>This repository hosts a single agent: <code>soplangAgent</code> (published in <a href="https://ploinky.com/" target="_blank" rel="noopener noreferrer">Ploinky</a> as <code>soplangBuilder</code> integration layer).</p>
-                    <p>The agent is designed to be integrated in <a href="https://ploinky.com/" target="_blank" rel="noopener noreferrer">Ploinky</a> and consumed from Explorer-style UI flows, with current usage focused on the file explorer project in <code>.ploinky/repos/AssistOSExplorer</code>.</p>
-                    <p>At runtime the agent is exposed through MCP, and each MCP tool call is executed through <code>soplangAgent/soplang-tool.sh</code>.</p>
+                    <h1>SOPLang Runtime In Explorer</h1>
+                    <p>Explorer documents can trigger builds, command execution, and runtime behaviors that belong to the <a href="https://assistos-ai.github.io/soplang/" target="_blank" rel="noopener noreferrer">SOPLang</a> toolchain, but that logic should not live in the browser or be reimplemented by each UI action.</p>
                 </section>
 
                 <section class="highlight-box">
-                    <h3>Operational Role</h3>
-                    <p>The agent bridges <a href="https://assistos-ai.github.io/soplang/" target="_blank" rel="noopener noreferrer">SOPLang</a> workspace APIs to MCP tools declared in <code>soplangAgent/mcp-config.json</code>, then executes those operations through a controlled wrapper path. It loads runtime plugins from <code>soplangAgent/plugins/</code>, registers commands, and makes the resulting contract available to Explorer-facing flows.</p>
-                    <p>The same boundary also includes Achilles skill discovery and command exposure, so UI actions can call a stable MCP surface while SOPLang-specific orchestration remains inside <code>soplangBuilder</code>.</p>
+                    <h2>SOPLang Runtime Boundary</h2>
+                    <p><code>soplangAgent</code> exposes that runtime through MCP. It bridges workspace APIs and runtime plugins into a stable tool surface declared in <code>soplangAgent/mcp-config.json</code>, while command registration, build orchestration, and skill discovery remain on the agent side.</p>
                 </section>
 
                 <section>
-                    <h2>Repository Scope</h2>
-                    <p>The repository intentionally keeps one agent implementation. It is not a generic multi-agent monorepo. The goal is to keep <a href="https://assistos-ai.github.io/soplang/" target="_blank" rel="noopener noreferrer">SOPLang</a> build orchestration and MCP exposure isolated and predictable for Explorer UI consumption.</p>
+                    <h2>How It Runs In Practice</h2>
+                    <p>At runtime each MCP tool call is executed through <code>soplangAgent/soplang-tool.sh</code>. Explorer and related flows call the agent for build and execution tasks, while SOPLang-specific orchestration stays inside <code>soplangAgent</code> rather than leaking into document plugins or toolbar code.</p>
                     <div class="doc-callout">
                         <p><strong>Validation rule:</strong> run <code>npm test</code> from <code>soplangAgent/</code> for every code change, together with docs and specs updates.</p>
                     </div>

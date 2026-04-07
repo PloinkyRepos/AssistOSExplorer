@@ -33,21 +33,19 @@
 
             <div class="doc-main">
                 <section class="lead">
-                    <h1>dpuAgent Documentation</h1>
-                    <p>This repository currently hosts one Ploinky agent: <code>dpuAgent</code>.</p>
-                    <p>The agent is a confidential data plane consumed by Explorer flows. It exposes MCP tools for secrets, confidential objects, comments, and ACL enforcement.</p>
-                    <p>Tool execution is routed through <code>dpuAgent/tools/dpu_tool.sh</code> and dispatched by <code>dpu_tool.mjs</code>.</p>
+                    <h1>Confidential Data Boundary</h1>
+                    <p>Explorer needs a way to work with secrets, confidential files, comments, and access control without exposing protected values directly to the browser or scattering storage rules across multiple plugins.</p>
                 </section>
 
                 <section class="highlight-box">
-                    <h3>Operational Role</h3>
-                    <p><code>dpuAgent</code> mediates between Explorer confidential workflows and encrypted DPU storage operations, with identity-aware access checks applied before protected values or content are materialized.</p>
-                    <p>The same boundary separates metadata, ACL state, encrypted secret values, and confidential blob content, and it supports both Ploinky runtime execution and standalone MCP mode.</p>
+                    <h2>Confidential Data Boundary</h2>
+                    <p><code>dpuAgent</code> is that boundary. It mediates confidential workflows through an MCP contract that keeps metadata, ACL state, encrypted secret values, and protected content inside one runtime with identity-aware checks before materialization.</p>
+                    <p>This keeps Explorer responsible for interaction flow, while the agent owns the secure storage semantics and permission enforcement.</p>
                 </section>
 
                 <section>
-                    <h2>Repository Scope</h2>
-                    <p>The repository can host multiple agents over time. Current operational scope is centered on <code>dpuAgent</code> as the confidential runtime intermediary between Explorer and secure data storage.</p>
+                    <h2>How It Runs In Practice</h2>
+                    <p>Tool execution is routed through <code>dpuAgent/tools/dpu_tool.sh</code> and dispatched by <code>dpu_tool.mjs</code>. Explorer and other agents call the MCP surface for reads, writes, comment operations, and ACL mutations, while <code>dpuAgent</code> remains responsible for storage layout and access validation.</p>
                     <div class="doc-callout">
                         <p><strong>Validation rule:</strong> run <code>npm test</code> from <code>dpuAgent/</code> for code changes, together with documentation updates.</p>
                     </div>
