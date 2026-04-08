@@ -1,6 +1,9 @@
 import {
     isReposRootPath,
+    isAgentRepoPath,
+    getVisibleRepoOverviews,
     getAutocommitSettings,
+    getShowAgentReposSetting,
     getConflictAutoresolveSetting,
     getRememberedGitIdentity,
     getRememberedGitAuthMethod,
@@ -111,7 +114,9 @@ export function createGitCommitUI(ctx) {
         const autocommitRepos = repoOverviews
             .map((repo) => ({
                 path: repo?.path || '',
-                name: repo?.name || repo?.relativePath || repo?.path || ''
+                name: repo?.name || repo?.relativePath || repo?.path || '',
+                isAgentRepo: isAgentRepoPath(repo?.path || ''),
+                group: isAgentRepoPath(repo?.path || '') ? 'agents' : 'workspace'
             }))
             .filter((repo) => repo.path && repo.name);
         const savedRepos = Array.isArray(autocommit.repos) ? autocommit.repos : null;
@@ -123,6 +128,7 @@ export function createGitCommitUI(ctx) {
             ? draftInterval
             : Number(autocommit.intervalMinutes || 15);
         const autocommitSelected = savedRepos !== null ? savedRepos : null;
+        const showAgentRepos = Boolean(state.showAgentRepos ?? getShowAgentReposSetting());
         const autoresolveConflicts = useAutoresolveDraft
             ? Boolean(autoresolveDraft.enabled)
             : Boolean(autoresolveSaved);
@@ -186,6 +192,7 @@ export function createGitCommitUI(ctx) {
             autocommitIntervalMinutes: intervalMinutes,
             autocommitRepos,
             autocommitSelected: useDraft ? draftRepos : autocommitSelected,
+            showAgentRepos,
             autoresolveConflicts
         };
         if (options.focus) detail.focus = options.focus;
@@ -257,7 +264,7 @@ export function createGitCommitUI(ctx) {
         if (!presenter?.setState) return;
         presenter.setState({
             reposRoot: state.reposRoot || '',
-            repos: Array.isArray(state.repoOverviews) ? state.repoOverviews : [],
+            repos: getVisibleRepoOverviews(state.repoOverviews, state.showAgentRepos),
             loading: Boolean(state.repoOverviewsLoading && !state.suppressInlineLoading),
             repoTreeExpanded: state.repoTreeExpanded || {},
             repoChangesExpanded: state.repoChangesExpanded || {},

@@ -26,6 +26,7 @@ export class GitCredentialsPrompt {
             autocommitIntervalMinutes: 15,
             autocommitRepos: [],
             autocommitSelected: null,
+            showAgentRepos: false,
             autoresolveConflicts: false,
             autoresolveDirty: false
         };
@@ -56,6 +57,7 @@ export class GitCredentialsPrompt {
         this.autocommitIntervalInput = this.element.querySelector('#gitCredentialsAutocommitInterval');
         this.autocommitReposContainer = this.element.querySelector('#gitCredentialsAutocommitRepos');
         this.autocommitToggleAllInput = this.element.querySelector('#gitCredentialsAutocommitToggleAll');
+        this.showAgentReposInput = this.element.querySelector('#gitCredentialsShowAgentRepos');
         this.autoresolveInput = this.element.querySelector('#gitCredentialsAutoresolve');
         this.saveButton = this.element.querySelector('[data-local-action="saveGitCredentials"]');
         this.attachDelegatedListeners();
@@ -99,6 +101,10 @@ export class GitCredentialsPrompt {
         }
         if (target.id === 'gitCredentialsAutocommitToggleAll') {
             this.handleAutocommitToggleAllChange();
+            return;
+        }
+        if (target.id === 'gitCredentialsShowAgentRepos') {
+            this.handleShowAgentReposChange();
             return;
         }
         if (target.id === 'gitCredentialsAutoresolve') {
@@ -158,6 +164,7 @@ export class GitCredentialsPrompt {
             token,
             autocommitIntervalMinutes,
             autocommitRepos,
+            showAgentRepos: this.state.showAgentRepos,
             autoresolveConflicts
         });
     }
@@ -237,6 +244,7 @@ export class GitCredentialsPrompt {
             token: this.state.token,
             autocommitIntervalMinutes: this.state.autocommitIntervalMinutes,
             autocommitRepos: this.state.autocommitSelected,
+            showAgentRepos: this.state.showAgentRepos,
             autoresolveConflicts: this.state.autoresolveConflicts,
             credentialsDirty: true
         });
@@ -256,6 +264,7 @@ export class GitCredentialsPrompt {
             token: this.state.token,
             autocommitIntervalMinutes: this.state.autocommitIntervalMinutes,
             autocommitRepos: this.state.autocommitSelected,
+            showAgentRepos: this.state.showAgentRepos,
             autoresolveConflicts: this.state.autoresolveConflicts,
             credentialsDirty: true
         });
@@ -274,6 +283,7 @@ export class GitCredentialsPrompt {
             token,
             autocommitIntervalMinutes: this.state.autocommitIntervalMinutes,
             autocommitRepos: this.state.autocommitSelected,
+            showAgentRepos: this.state.showAgentRepos,
             autoresolveConflicts: this.state.autoresolveConflicts,
             credentialsDirty: true
         });
@@ -292,6 +302,7 @@ export class GitCredentialsPrompt {
             token: this.state.token,
             autocommitIntervalMinutes,
             autocommitRepos: this.state.autocommitSelected,
+            showAgentRepos: this.state.showAgentRepos,
             autoresolveConflicts: this.state.autoresolveConflicts,
             autocommitDirty: true
         });
@@ -312,13 +323,14 @@ export class GitCredentialsPrompt {
             token: this.state.token,
             autocommitIntervalMinutes: this.state.autocommitIntervalMinutes,
             autocommitRepos,
+            showAgentRepos: this.state.showAgentRepos,
             autoresolveConflicts: this.state.autoresolveConflicts,
             autocommitDirty: true
         });
     }
 
     handleAutocommitToggleAllChange() {
-        const repos = Array.isArray(this.state.autocommitRepos) ? this.state.autocommitRepos : [];
+        const repos = this.getVisibleAutocommitRepos();
         const checked = Boolean(this.autocommitToggleAllInput?.checked);
         const autocommitRepos = checked
             ? repos.map((repo) => String(repo?.path || '').trim()).filter(Boolean)
@@ -334,6 +346,26 @@ export class GitCredentialsPrompt {
             token: this.state.token,
             autocommitIntervalMinutes: this.state.autocommitIntervalMinutes,
             autocommitRepos,
+            showAgentRepos: this.state.showAgentRepos,
+            autoresolveConflicts: this.state.autoresolveConflicts,
+            autocommitDirty: true
+        });
+    }
+
+    handleShowAgentReposChange() {
+        const showAgentRepos = Boolean(this.showAgentReposInput?.checked);
+        this.state.showAgentRepos = showAgentRepos;
+        this.state.autocommitDirty = true;
+        this.renderAutocommitRepos();
+        this.updateValidationState();
+        this.getParentPresenter()?.handleCredentialsChange?.({
+            name: this.state.name,
+            email: this.state.email,
+            authMethod: this.state.authMethod,
+            token: this.state.token,
+            autocommitIntervalMinutes: this.state.autocommitIntervalMinutes,
+            autocommitRepos: this.state.autocommitSelected,
+            showAgentRepos,
             autoresolveConflicts: this.state.autoresolveConflicts,
             autocommitDirty: true
         });
@@ -436,6 +468,9 @@ export class GitCredentialsPrompt {
         if (Object.prototype.hasOwnProperty.call(next, 'autocommitSelected')) {
             this.state.autocommitSelected = this.normalizeRepoSelection(next.autocommitSelected);
         }
+        if (Object.prototype.hasOwnProperty.call(next, 'showAgentRepos')) {
+            this.state.showAgentRepos = Boolean(next.showAgentRepos);
+        }
         if (Object.prototype.hasOwnProperty.call(next, 'autoresolveConflicts')) {
             this.state.autoresolveConflicts = Boolean(next.autoresolveConflicts);
         }
@@ -530,6 +565,9 @@ export class GitCredentialsPrompt {
                 this.autocommitIntervalInput.value = nextValue;
             }
         }
+        if (this.showAgentReposInput) {
+            this.showAgentReposInput.checked = Boolean(this.state.showAgentRepos);
+        }
         this.updateValidationState();
         this.renderAutocommitRepos();
 
@@ -556,7 +594,12 @@ export class GitCredentialsPrompt {
             const name = String(entry.name || entry.path || '').trim();
             if (!path || !name || seen.has(path)) continue;
             seen.add(path);
-            normalized.push({ path, name });
+            normalized.push({
+                path,
+                name,
+                isAgentRepo: Boolean(entry.isAgentRepo),
+                group: String(entry.group || (Boolean(entry.isAgentRepo) ? 'agents' : 'workspace'))
+            });
         }
         return normalized;
     }
@@ -578,6 +621,11 @@ export class GitCredentialsPrompt {
             }
         }
         return selected;
+    }
+
+    getVisibleAutocommitRepos(showAgentRepos = this.state.showAgentRepos) {
+        const repos = Array.isArray(this.state.autocommitRepos) ? this.state.autocommitRepos : [];
+        return repos.filter((repo) => showAgentRepos || !repo?.isAgentRepo);
     }
 
     getSelectedAuthMethod() {
@@ -672,7 +720,7 @@ export class GitCredentialsPrompt {
 
     syncAutocommitToggleAllState() {
         if (!this.autocommitToggleAllInput) return;
-        const repos = Array.isArray(this.state.autocommitRepos) ? this.state.autocommitRepos : [];
+        const repos = this.getVisibleAutocommitRepos();
         const repoPaths = repos.map((repo) => String(repo?.path || '').trim()).filter(Boolean);
         if (!repoPaths.length) {
             this.autocommitToggleAllInput.checked = false;
@@ -691,7 +739,7 @@ export class GitCredentialsPrompt {
     renderAutocommitRepos() {
         const container = this.autocommitReposContainer;
         if (!container) return;
-        const repos = Array.isArray(this.state.autocommitRepos) ? this.state.autocommitRepos : [];
+        const repos = this.getVisibleAutocommitRepos();
         if ((!this.state.autocommitReposLoaded || this.state.autocommitReposLoading) && repos.length === 0) {
             this.syncAutocommitToggleAllState();
             container.textContent = 'Loading repositories...';
@@ -710,29 +758,42 @@ export class GitCredentialsPrompt {
             selectedList === null ? repos.map((repo) => repo.path) : selectedList
         );
         this.state.autocommitSelected = selectedList === null ? null : Array.from(selected);
+        const groups = [
+            { title: 'Workspace Repositories', repos: repos.filter((repo) => repo.group !== 'agents') },
+            { title: 'Agent Repositories', repos: repos.filter((repo) => repo.group === 'agents') }
+        ].filter((group) => group.repos.length > 0);
         const fragment = document.createDocumentFragment();
-        for (const repo of repos) {
-            const label = document.createElement('label');
-            label.className = 'autocommit-repo';
-            const row = document.createElement('div');
-            row.className = 'autocommit-repo-row';
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.checked = selected.has(repo.path);
-            checkbox.dataset.repoPath = repo.path;
-            const nameSpan = document.createElement('span');
-            nameSpan.textContent = repo.name || repo.path;
-            row.appendChild(checkbox);
-            row.appendChild(nameSpan);
+        for (const group of groups) {
+            const groupElement = document.createElement('div');
+            groupElement.className = 'autocommit-repo-group';
+            const title = document.createElement('div');
+            title.className = 'autocommit-repo-group-title';
+            title.textContent = group.title;
+            groupElement.appendChild(title);
+            for (const repo of group.repos) {
+                const label = document.createElement('label');
+                label.className = 'autocommit-repo';
+                const row = document.createElement('div');
+                row.className = 'autocommit-repo-row';
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.checked = selected.has(repo.path);
+                checkbox.dataset.repoPath = repo.path;
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = repo.name || repo.path;
+                row.appendChild(checkbox);
+                row.appendChild(nameSpan);
 
-            if (repo.path && repo.name && repo.name !== repo.path) {
-                const pathSpan = document.createElement('span');
-                pathSpan.className = 'autocommit-repo-path';
-                pathSpan.textContent = repo.path;
-                row.appendChild(pathSpan);
+                if (repo.path && repo.name && repo.name !== repo.path) {
+                    const pathSpan = document.createElement('span');
+                    pathSpan.className = 'autocommit-repo-path';
+                    pathSpan.textContent = repo.path;
+                    row.appendChild(pathSpan);
+                }
+                label.appendChild(row);
+                groupElement.appendChild(label);
             }
-            label.appendChild(row);
-            fragment.appendChild(label);
+            fragment.appendChild(groupElement);
         }
         container.appendChild(fragment);
         this.syncAutocommitToggleAllState();

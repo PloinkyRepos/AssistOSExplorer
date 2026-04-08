@@ -180,6 +180,21 @@ export function isReposRootPath(candidate, reposRoot) {
     return normalizedCandidate.endsWith(normalizedRoot);
 }
 
+export function isAgentRepoPath(candidate) {
+    const normalized = normalizeSlashes(String(candidate || '')).trim();
+    if (!normalized) return false;
+    return normalized.includes('/.ploinky/repos/') || normalized.startsWith('.ploinky/repos/');
+}
+
+export function getVisibleRepoOverviews(repos, showAgentRepos = false) {
+    const list = Array.isArray(repos) ? repos : [];
+    return list.filter((repo) => {
+        if (!repo) return false;
+        if (showAgentRepos) return true;
+        return !isAgentRepoPath(repo.path || '');
+    });
+}
+
 export function isGitAuthError(message) {
     const text = String(message || '');
     const lower = text.toLowerCase();
@@ -361,6 +376,8 @@ export function setRememberedGitAuthMethod(value) {
 const AUTOCOMMIT_ENABLED_STORAGE_KEY = 'webskel.git.autocommit.enabled';
 const AUTOCOMMIT_INTERVAL_STORAGE_KEY = 'webskel.git.autocommit.intervalMinutes';
 const AUTOCOMMIT_REPOS_STORAGE_KEY = 'webskel.git.autocommit.repos';
+const AUTOCOMMIT_SHOW_AGENT_REPOS_STORAGE_KEY = 'webskel.git.autocommit.showAgentRepos';
+const GIT_SHOW_AGENT_REPOS_STORAGE_KEY = 'webskel.git.showAgentRepos';
 const AUTORESOLVE_CONFLICTS_STORAGE_KEY = 'webskel.git.autoresolve.conflicts';
 const GIT_CONFLICT_FLAG_STORAGE_KEY = 'webskel.git.conflicts';
 const GIT_ERROR_FLAG_STORAGE_KEY = 'webskel.git.errors';
@@ -409,6 +426,34 @@ export function setAutocommitSettings({ enabled = null, intervalMinutes = null, 
             const cleaned = repos.map((entry) => String(entry || '').trim()).filter(Boolean);
             localStorage.setItem(AUTOCOMMIT_REPOS_STORAGE_KEY, JSON.stringify(cleaned));
         }
+    } catch {
+        // ignore
+    }
+}
+
+export function getShowAgentReposSetting() {
+    try {
+        const rawCurrent = localStorage.getItem(GIT_SHOW_AGENT_REPOS_STORAGE_KEY);
+        if (rawCurrent === 'true' || rawCurrent === 'false') {
+            return rawCurrent === 'true';
+        }
+        const rawLegacy = localStorage.getItem(AUTOCOMMIT_SHOW_AGENT_REPOS_STORAGE_KEY);
+        if (rawLegacy === 'true' || rawLegacy === 'false') {
+            const migrated = rawLegacy === 'true';
+            localStorage.setItem(GIT_SHOW_AGENT_REPOS_STORAGE_KEY, migrated ? 'true' : 'false');
+            localStorage.removeItem(AUTOCOMMIT_SHOW_AGENT_REPOS_STORAGE_KEY);
+            return migrated;
+        }
+    } catch {
+        // ignore
+    }
+    return false;
+}
+
+export function setShowAgentReposSetting(value) {
+    try {
+        localStorage.setItem(GIT_SHOW_AGENT_REPOS_STORAGE_KEY, value ? 'true' : 'false');
+        localStorage.removeItem(AUTOCOMMIT_SHOW_AGENT_REPOS_STORAGE_KEY);
     } catch {
         // ignore
     }

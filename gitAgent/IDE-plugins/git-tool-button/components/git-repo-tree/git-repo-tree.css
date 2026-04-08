@@ -8,14 +8,63 @@ git-repo-tree {
 
 git-repo-tree .git-repos-header {
     display: flex;
-    align-items: center;
+    align-items: start;
     justify-content: space-between;
     gap: 10px;
+    flex-direction: column;
 }
 
+git-repo-tree .git-repos-header-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    justify-content: space-between;
+}
+
+git-repo-tree .git-repo-toggle-all {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    font-weight: 700;
+    color: var(--text);
+    white-space: nowrap;
+}
+
+git-repo-tree .git-repo-toggle-all input {
+    margin: 0;
+    flex: 0 0 auto;
+}
+.filter-refresh-container{
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+}
 git-repo-tree .git-repo-filter {
-    flex: 0 1 220px;
+    width: 100%;
     min-width: 140px;
+}
+
+git-repo-tree .git-repos-refresh-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border-radius: 8px;
+    flex: 0 0 auto;
+}
+
+git-repo-tree .git-repos-refresh-button .git-settings-icon {
+    width: 16px;
+    height: 16px;
+    filter: brightness(0) saturate(100%) opacity(0.82);
+}
+
+git-repo-tree .git-repos-refresh-button:hover .git-settings-icon {
+    filter: brightness(0) saturate(100%) opacity(1);
 }
 
 git-repo-tree .git-repo-filter-input {

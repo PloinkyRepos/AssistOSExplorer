@@ -1,5 +1,5 @@
 import { parseDetailedDirectoryListing, joinPath } from "/explorer/web-components/pages/file-exp/file-exp-utils.js";
-import { parseJsonToolResult, isReposRootPath, normalizeErrorMessage } from "./git-commit-modal-utils.js";
+import { parseJsonToolResult, isReposRootPath, normalizeErrorMessage, getVisibleRepoOverviews } from "./git-commit-modal-utils.js";
 import { getRepoScanPaths, getInternalReposRoot } from "/explorer/utils/reposRoot.js";
 import {
     ensureSelectionEntry,
@@ -164,7 +164,7 @@ export function createGitCommitRepo(ctx) {
     };
 
     const getDisplayedRepoOverviews = () => {
-        const repos = Array.isArray(state.repoOverviews) ? state.repoOverviews : [];
+        const repos = getVisibleRepoOverviews(state.repoOverviews, state.showAgentRepos);
         const filtered = repos.filter((repo) => {
             if (!repo) return false;
             const counts = repo.counts || {};
@@ -243,9 +243,10 @@ export function createGitCommitRepo(ctx) {
     const renderRepoOverviews = (overviews) => {
         const presenter = getRepoTreePresenter();
         if (!presenter?.setState) return;
+        const visibleOverviews = getVisibleRepoOverviews(overviews, state.showAgentRepos);
         presenter.setState({
             reposRoot: state.reposRoot || '',
-            repos: Array.isArray(overviews) ? overviews : [],
+            repos: visibleOverviews,
             loading: Boolean(state.repoOverviewsLoading && !state.suppressInlineLoading),
             repoTreeExpanded: state.repoTreeExpanded || {},
             repoChangesExpanded: state.repoChangesExpanded || {},
@@ -394,10 +395,7 @@ export function createGitCommitRepo(ctx) {
                 state.remotes = [];
                 state.selectedRepoPath = null;
                 updateCommitButtons();
-                const branchInfo = element.querySelector('#gitBranchInfo');
-                if (branchInfo) {
-                    branchInfo.textContent = 'Multi-repo view. Select a repository to see branch/status.';
-                }
+
                 if (shouldSetStatus) {
                     setStatusLine('Select a repository from the list.');
                 }

@@ -17,21 +17,6 @@ git-commit-body.is-hidden {
     flex: 1 1 auto;
 }
 
-git-commit-body .git-repo-toggle-all {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    align-self: flex-start;
-    min-width: 0;
-    font-weight: 700;
-    color: var(--text);
-}
-
-git-commit-body .git-repo-toggle-all input {
-    margin: 0;
-    flex: 0 0 auto;
-}
-
 .git-commit {
     flex: 0 0 auto;
 }

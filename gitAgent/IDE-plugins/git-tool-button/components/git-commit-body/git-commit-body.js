@@ -54,7 +54,6 @@ export class GitCommitBody {
     beforeRender() {}
 
     afterRender() {
-        this.repoPathInput = this.element.querySelector('#gitRepoPathInput');
         this.advancedModeInput = this.element.querySelector('#gitAdvancedMode');
         this.bindEvents();
         this.bindMainResizer();
@@ -69,14 +68,6 @@ export class GitCommitBody {
 
     bindEvents() {
         if (this.boundActions) return;
-        if (this.repoPathInput) {
-            this.repoPathInput.addEventListener('keydown', (event) => {
-                if (event.key === 'Enter') {
-                    event.preventDefault();
-                    this.applyRepoPathFromInput();
-                }
-            });
-        }
         if (this.advancedModeInput) {
             this.advancedModeInput.addEventListener('change', () => {
                 this.toggleAdvancedMode();
@@ -197,17 +188,9 @@ export class GitCommitBody {
             || (Number.isFinite(fallbackPercent) && mainWidth > 0 ? Math.round((fallbackPercent / 100) * mainWidth) : null)
             || 420;
         this.applyTreeWidth(effectiveWidth);
-        if (this.repoPathInput && this.repoPathInput.value !== this.state.repoPath) {
-            this.repoPathInput.value = this.state.repoPath;
-        }
         if (this.advancedModeInput) {
             this.advancedModeInput.checked = this.state.advancedMode;
         }
-    }
-
-    applyRepoPathFromInput() {
-        const value = String(this.repoPathInput?.value || '').trim();
-        this.getParentPresenter()?.applyRepoPathFromInput?.(value);
     }
 
     refreshAction() {

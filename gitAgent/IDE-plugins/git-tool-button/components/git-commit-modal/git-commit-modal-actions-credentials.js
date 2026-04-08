@@ -9,10 +9,12 @@ import {
     getRememberedGitIdentity,
     getRememberedGitAuthMethod,
     getAutocommitSettings,
+    getShowAgentReposSetting,
     normalizeGitAuthMethod,
     setRememberedGitIdentity,
     setRememberedGitAuthMethod,
     setAutocommitSettings,
+    setShowAgentReposSetting,
     getConflictAutoresolveSetting,
     setConflictAutoresolveSetting
 } from "./git-commit-modal-utils.js";
@@ -201,6 +203,7 @@ export function createCredentialsActions(ctx) {
         const rememberedIdentity = getRememberedGitIdentity();
         const rememberedAuthMethod = getRememberedGitAuthMethod();
         const autocommit = getAutocommitSettings();
+        const showAgentRepos = getShowAgentReposSetting();
         const autoresolve = getConflictAutoresolveSetting();
         applyState({
             identityPrompt: {
@@ -221,6 +224,7 @@ export function createCredentialsActions(ctx) {
             credentialsGate: false,
             pendingAction: null,
             credentialsDirty: false,
+            showAgentRepos,
             autocommitDirty: false,
             autocommitDraft: {
                 intervalMinutes: Number(autocommit.intervalMinutes || 15),
@@ -316,6 +320,9 @@ export function createCredentialsActions(ctx) {
             email: String(payload.email ?? state.identityPrompt?.email ?? '').trim(),
             authMethod,
             token: String(payload.token ?? state.authPrompt?.token ?? '').trim(),
+            showAgentRepos: typeof payload.showAgentRepos === 'boolean'
+                ? payload.showAgentRepos
+                : Boolean(state.showAgentRepos),
             usingGithub: authMethod === 'github',
             validateOnly: Boolean(payload.validateOnly),
             autocommitIntervalMinutes: payload.autocommitIntervalMinutes,
@@ -452,7 +459,11 @@ export function createCredentialsActions(ctx) {
     };
 
     const persistSettingsOnly = (draft) => {
-        setAutocommitSettings({ intervalMinutes: draft.autocommitIntervalMinutes, repos: draft.autocommitRepos });
+        setAutocommitSettings({
+            intervalMinutes: draft.autocommitIntervalMinutes,
+            repos: draft.autocommitRepos
+        });
+        setShowAgentReposSetting(Boolean(draft.showAgentRepos));
         setConflictAutoresolveSetting(draft.autoresolveConflicts);
         try {
             window.dispatchEvent(new CustomEvent(AUTOCOMMIT_SETTINGS_CHANGED_EVENT));
@@ -460,6 +471,7 @@ export function createCredentialsActions(ctx) {
             // ignore dispatch errors
         }
         applyState({
+            showAgentRepos: Boolean(draft.showAgentRepos),
             autocommitDirty: false,
             autocommitDraft: {
                 intervalMinutes: draft.autocommitIntervalMinutes,
@@ -566,7 +578,11 @@ export function createCredentialsActions(ctx) {
             tokenSaved = true;
         }
 
-        setAutocommitSettings({ intervalMinutes: draft.autocommitIntervalMinutes, repos: draft.autocommitRepos });
+        setAutocommitSettings({
+            intervalMinutes: draft.autocommitIntervalMinutes,
+            repos: draft.autocommitRepos
+        });
+        setShowAgentReposSetting(Boolean(draft.showAgentRepos));
         setConflictAutoresolveSetting(draft.autoresolveConflicts);
         try {
             window.dispatchEvent(new CustomEvent(AUTOCOMMIT_SETTINGS_CHANGED_EVENT));
@@ -574,6 +590,7 @@ export function createCredentialsActions(ctx) {
             // ignore dispatch errors
         }
         applyState({
+            showAgentRepos: Boolean(draft.showAgentRepos),
             autocommitDirty: false,
             autocommitDraft: {
                 intervalMinutes: draft.autocommitIntervalMinutes,

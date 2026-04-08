@@ -2,7 +2,9 @@ import { createStore } from "/explorer/services/ui/store.js";
 import {
     getRememberedGitIdentity,
     getRememberedGitAuthMethod,
-    getRememberedGithubConnection
+    getRememberedGithubConnection,
+    getAutocommitSettings,
+    getShowAgentReposSetting
 } from "./git-commit-modal-utils.js";
 import { getReposRoot } from "/explorer/utils/reposRoot.js";
 
@@ -10,6 +12,8 @@ export function createGitCommitState(props = {}) {
     const rememberedIdentity = getRememberedGitIdentity();
     const rememberedAuthMethod = getRememberedGitAuthMethod();
     const rememberedGithubConnection = getRememberedGithubConnection();
+    const autocommitSettings = getAutocommitSettings();
+    const showAgentRepos = getShowAgentReposSetting();
     const reposRoot = getReposRoot();
     const initialState = {
         // Default to the multi-repo root so opening the modal immediately loads all repos under it.
@@ -20,6 +24,7 @@ export function createGitCommitState(props = {}) {
         remotes: [],
         repoInfoOk: null,
         repoOverviews: [],
+        showAgentRepos,
         repoOverviewsLoading: false,
         repoOverviewsLoaded: false,
         suppressInlineLoading: false,

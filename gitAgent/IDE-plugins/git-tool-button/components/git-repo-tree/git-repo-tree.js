@@ -62,9 +62,8 @@ export class GitRepoTree {
     afterRender() {
         this.list = this.element.querySelector('.git-repo-tree-list');
         this.filterInput = this.element.querySelector('#gitRepoFilterInput');
-        const modal = this.element.closest('git-commit-modal');
-        this.toggleAllInput = modal?.querySelector('#gitRepoToggleAllInput') || null;
-        this.toggleAllLabel = modal?.querySelector('#gitRepoToggleAllLabel') || null;
+        this.toggleAllInput = this.element.querySelector('#gitRepoToggleAllInput');
+        this.toggleAllLabel = this.element.querySelector('#gitRepoToggleAllLabel');
         this.attachDelegatedListeners();
         this.syncFilterInput();
         this.render();

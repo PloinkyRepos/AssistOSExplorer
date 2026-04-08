@@ -20,7 +20,8 @@ import {
     setRememberedGithubConnection,
     clearRememberedGithubConnection,
     normalizeGitAuthMethod,
-    setGitErrorFlag
+    setGitErrorFlag,
+    setShowAgentReposSetting
 } from "./git-commit-modal-utils.js";
 import { FILE_EXP_REFRESH_EVENT } from "/explorer/utils/appEvents.js";
 import { GIT_MODAL_CLOSED_EVENT } from "../../git-tool-button-events.js";
@@ -181,17 +182,23 @@ export class GitCommitModal {
         const prevEmail = String(this.state.identityPrompt?.email ?? '');
         const prevToken = String(this.state.authPrompt?.token ?? '');
         const prevAuthMethod = this.getEffectiveCredentialsAuthMethod();
+        const prevShowAgentRepos = Boolean(this.state.showAgentRepos);
         const nextName = String(detail.name ?? prevName);
         const nextEmail = String(detail.email ?? prevEmail);
         const nextToken = String(detail.token ?? prevToken);
         const nextAuthMethod = normalizeGitAuthMethod(detail.authMethod ?? prevAuthMethod);
+        const nextShowAgentRepos = typeof detail.showAgentRepos === 'boolean' ? detail.showAgentRepos : prevShowAgentRepos;
         const patch = {};
         if (detail.autocommitDirty) {
             patch.autocommitDirty = true;
             patch.autocommitDraft = {
                 intervalMinutes: detail.autocommitIntervalMinutes,
-                repos: Array.isArray(detail.autocommitRepos) ? detail.autocommitRepos : null
+                repos: Array.isArray(detail.autocommitRepos) ? detail.autocommitRepos : null,
+                showAgentRepos: typeof detail.showAgentRepos === 'boolean' ? detail.showAgentRepos : undefined
             };
+        }
+        if (typeof detail.showAgentRepos === 'boolean') {
+            patch.showAgentRepos = detail.showAgentRepos;
         }
         if (detail.autoresolveDirty) {
             patch.autoresolveDirty = true;
@@ -222,6 +229,10 @@ export class GitCommitModal {
             authMethod: nextAuthMethod
         };
         this.setState(patch, { silent: true });
+        if (typeof detail.showAgentRepos === 'boolean' && prevShowAgentRepos !== nextShowAgentRepos) {
+            setShowAgentReposSetting(nextShowAgentRepos);
+            this.syncStaticUI();
+        }
         this.updateIdentityPrompt();
         if (nextAuthMethod === 'github') {
             queueMicrotask(() => {
