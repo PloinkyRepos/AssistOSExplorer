@@ -4,6 +4,8 @@ const APP_PLUGIN_SLOTS = Object.freeze({
     internal: 'file-exp:internal'
 });
 
+const MOUNT_CONTRIBUTION_TYPE = 'mount';
+
 import { sortRuntimePluginEntries } from "../../../utils/pluginUtils.core.js";
 
 function getPluginSettingsMap() {
@@ -17,7 +19,9 @@ function getPluginSettingsMap() {
 function getPluginKey(plugin) {
     const agent = typeof plugin?.agent === 'string' ? plugin.agent.trim() : '';
     const component = typeof plugin?.component === 'string' ? plugin.component.trim() : '';
-    return agent && component ? `${agent}/${component}` : '';
+    const pluginId = typeof plugin?.id === 'string' ? plugin.id.trim() : '';
+    const keyPart = component || pluginId;
+    return agent && keyPart ? `${agent}/${keyPart}` : '';
 }
 
 function isPluginEnabled(plugin) {
@@ -30,13 +34,24 @@ function isPluginEnabled(plugin) {
     return !entry || entry.enabled !== false;
 }
 
-function getApplicationPluginsForSlot(slot) {
+export function getApplicationPluginsForSlot(slot, { contributionType = null } = {}) {
     const appPlugins = window.assistOS?.workspace?.appPlugins;
     const plugins = appPlugins && typeof appPlugins === 'object' && !Array.isArray(appPlugins)
         ? appPlugins[slot]
         : null;
-    return Array.isArray(plugins)
-        ? sortRuntimePluginEntries(plugins.filter((plugin) => plugin && isPluginEnabled(plugin)))
+    const filteredPlugins = Array.isArray(plugins)
+        ? plugins.filter((plugin) => {
+            if (!plugin || !isPluginEnabled(plugin)) {
+                return false;
+            }
+            if (!contributionType) {
+                return true;
+            }
+            return String(plugin.contributionType || MOUNT_CONTRIBUTION_TYPE).trim() === contributionType;
+        })
+        : [];
+    return filteredPlugins.length
+        ? sortRuntimePluginEntries(filteredPlugins)
         : [];
 }
 
@@ -194,9 +209,9 @@ async function performRenderApplicationPluginSlots(fileExp) {
     const toolbarContainer = fileExp.element.querySelector('#fileExpToolbarPlugins');
     const rightBarContainer = fileExp.element.querySelector('#fileExpPluginBar');
     const internalContainer = fileExp.element.querySelector('#fileExpInternalPlugins');
-    const toolbarPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.toolbar);
-    const rightBarPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.rightBar);
-    const internalPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.internal);
+    const toolbarPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.toolbar, { contributionType: MOUNT_CONTRIBUTION_TYPE });
+    const rightBarPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.rightBar, { contributionType: MOUNT_CONTRIBUTION_TYPE });
+    const internalPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.internal, { contributionType: MOUNT_CONTRIBUTION_TYPE });
     const toolbarContext = buildPluginContext(fileExp, APP_PLUGIN_SLOTS.toolbar);
     const rightBarContext = buildPluginContext(fileExp, APP_PLUGIN_SLOTS.rightBar);
     const internalContext = buildPluginContext(fileExp, APP_PLUGIN_SLOTS.internal);

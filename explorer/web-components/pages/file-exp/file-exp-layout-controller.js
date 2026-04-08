@@ -2,7 +2,7 @@ import { saveColumnVisibilityPreference } from "./file-exp-state.js";
 import { renderApplicationPluginSlots } from "./file-exp-application-plugins.js";
 import { getPreviewUiState as derivePreviewUiState } from "./file-exp-preview-state.js";
 import { scrollToLine } from "./file-exp-utils.js";
-import { DPU_SECRETS_PATH, getDpuPathCapabilities, isDpuManagedPath } from "./file-exp-dpu-provider.js";
+import { getDpuPathCapabilities, isDpuManagedPath } from "./file-exp-dpu-provider.js";
 
 export async function runAfterRender(fileExp, options = {}) {
     const previewLinesFallback = Number.isFinite(options.previewLines) ? options.previewLines : 400;
@@ -81,8 +81,6 @@ export async function runAfterRender(fileExp, options = {}) {
     const upButton = fileExp.element.querySelector('#upButton');
     const toolbarMenuButton = fileExp.element.querySelector('#toolbarMenuButton');
     const toolbarMenu = fileExp.element.querySelector('#toolbarMenu');
-    const newDirectoryMenuItem = fileExp.element.querySelector('#newDirectoryMenuItem');
-    const newFileMenuItem = fileExp.element.querySelector('#newFileMenuItem');
     const uploadButton = fileExp.element.querySelector('#uploadButton');
     const accountMenuButton = fileExp.element.querySelector('#accountMenuButton');
     const accountMenu = fileExp.element.querySelector('#accountMenu');
@@ -91,6 +89,7 @@ export async function runAfterRender(fileExp, options = {}) {
     const dpuCapabilities = managedByDpu
         ? await getDpuPathCapabilities(fileExp, fileExp.state.path || '/')
         : null;
+    fileExp.state.currentDpuCapabilities = dpuCapabilities;
     const allowManagedUploads = Boolean(dpuCapabilities?.canUpload);
     const allowManagedCreate = Boolean(dpuCapabilities?.canCreateFiles || dpuCapabilities?.canCreateDirectories);
 
@@ -110,29 +109,8 @@ export async function runAfterRender(fileExp, options = {}) {
                 : 'Create actions are not allowed in this Confidential location.')
             : 'More actions';
     }
-    if (newDirectoryMenuItem) {
-        const allowNewDirectory = managedByDpu ? Boolean(dpuCapabilities?.canCreateDirectories) : true;
-        newDirectoryMenuItem.disabled = !allowNewDirectory;
-        newDirectoryMenuItem.classList.toggle('disabled', !allowNewDirectory);
-        newDirectoryMenuItem.title = allowNewDirectory
-            ? 'Create folder'
-            : 'Folders are not allowed in this location.';
-    }
-    if (newFileMenuItem) {
-        const allowNewFile = managedByDpu ? Boolean(dpuCapabilities?.canCreateFiles) : true;
-        const newFileLabel = fileExp.normalizePath(fileExp.state.path || '/') === DPU_SECRETS_PATH
-            ? 'New Secret'
-            : 'New File';
-        const labelNode = newFileMenuItem.querySelector('.action-menu-item-label');
-        if (labelNode) {
-            labelNode.textContent = newFileLabel;
-        }
-        newFileMenuItem.disabled = !allowNewFile;
-        newFileMenuItem.classList.toggle('disabled', !allowNewFile);
-        newFileMenuItem.title = allowNewFile
-            ? (newFileLabel === 'New Secret' ? 'Create secret' : 'Create file')
-            : 'Files are not allowed in this location.';
-    }
+    fileExp.renderToolbarMenuItems?.();
+    await fileExp.refreshToolbarMenuItems?.();
 
     const updateToggleState = () => {
         if (!toggleListButton || !listPanel) return;
@@ -428,14 +406,6 @@ export async function runAfterRender(fileExp, options = {}) {
         btn.setAttribute('aria-sort', isActive ? (fileExp.state.sortDir === 'asc' ? 'ascending' : 'descending') : 'none');
     });
 
-    if (fileExp.state.openMenuPath) {
-        fileExp.setDocumentListener('open-menu-outside', 'click', fileExp.boundOutsideMenuClick);
-        fileExp.setDocumentListener('open-menu-keydown', 'keydown', fileExp.boundMenuKeydown);
-    } else {
-        fileExp.removeDocumentListener('open-menu-outside');
-        fileExp.removeDocumentListener('open-menu-keydown');
-    }
-
     if (fileExp.pendingMenuFocusPath && fileExp.state.openMenuPath === fileExp.pendingMenuFocusPath) {
         const menuContainer = fileExp.element.querySelector(`[data-action-menu="true"][data-entry-path="${fileExp.state.openMenuPath}"]`);
         const firstItem = menuContainer?.querySelector('.action-menu-item');
@@ -448,6 +418,7 @@ export async function runAfterRender(fileExp, options = {}) {
     }
 
     if (fileExp.state.openMenuPath) {
+        fileExp.syncOpenActionMenuTracking?.();
         fileExp.positionOpenActionMenu();
     }
 

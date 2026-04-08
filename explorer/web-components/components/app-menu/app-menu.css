@@ -1,0 +1,86 @@
+app-menu {
+    display: block;
+}
+
+app-menu .app-menu-root {
+    display: block;
+}
+
+app-menu .is-hidden {
+    display: none;
+}
+
+app-menu .app-menu-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+app-menu .app-menu-loading {
+    display: inline-flex;
+    align-items: center;
+    min-height: 36px;
+    padding: 8px 10px;
+    justify-content: center;
+}
+
+app-menu .app-menu-spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(0, 0, 0, 0.14);
+    border-top-color: rgba(0, 0, 0, 0.68);
+    border-radius: 50%;
+    animation: app-menu-spin 0.7s linear infinite;
+    flex: 0 0 auto;
+}
+
+app-menu .app-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 10px;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+app-menu .app-menu-item:hover:not(:disabled),
+app-menu .app-menu-item:focus-visible:not(:disabled) {
+    background: rgba(0, 0, 0, 0.06);
+    outline: none;
+}
+
+app-menu .app-menu-item:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
+app-menu .app-menu-item.destructive {
+    color: #a43d2f;
+}
+
+app-menu .app-menu-item-icon {
+    width: 16px;
+    height: 16px;
+    flex: 0 0 auto;
+}
+
+app-menu .app-menu-item-label {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+app-menu .app-menu-separator {
+    height: 1px;
+    margin: 4px 0;
+    background: rgba(0, 0, 0, 0.08);
+}
+
+@keyframes app-menu-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}

@@ -175,6 +175,13 @@ Explorer consumes dependent agents through:
 - MCP routes proxied by Ploinky
 - its own HTTP routes for sessions, preview, and document flows
 
+For filesystem MCP tools, Explorer must enforce a reserved-file boundary for workspace secret files:
+
+- `.secrets`
+- any file ending in `.secrets`
+
+These files are not valid Explorer filesystem resources. They must not be returned by filesystem listing, directory tree, or search operations, and direct filesystem read access to them must be denied.
+
 Explorer also acts as an HTTP boundary for flows where the browser cannot talk directly to the underlying domain model. Important examples are:
 
 - OnlyOffice session creation
@@ -220,6 +227,8 @@ Navigation is not limited to local filesystem traversal. It also covers:
 - plugin-driven route state
 - preview-specific transitions
 - transitions between selection, preview, and edit mode
+
+For local workspace navigation, Explorer must also suppress reserved secret files from visible filesystem navigation. `.secrets` and `*.secrets` are hidden from the normal file explorer surface even when they physically exist in the mounted workspace.
 
 ### Editing
 

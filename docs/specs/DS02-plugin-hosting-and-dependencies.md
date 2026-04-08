@@ -93,11 +93,29 @@ These plugins should be understood as IDE extensions mounted into Explorer, not 
 Examples of host slots used by integrations:
 
 - `file-exp:toolbar`
+- `file-exp:context-menu:file`
+- `file-exp:context-menu:directory`
+- `file-exp:new-menu`
 - preview-shell mount points
 - modal mount points
 - side-panel mount points
 
 The host slot model exists to avoid hard-coding domain UI directly inside Explorer core. Explorer owns the slot contract, while plugins own their rendered content and event behavior.
+
+### Contribution Types
+
+Explorer supports two application plugin contribution types:
+
+- `mount`: the plugin renders a WebSkel component inside a host-owned slot such as `file-exp:toolbar`
+- `menu`: the plugin contributes semantic menu items into a host-owned menu surface such as a file context menu or the `New` menu
+
+Menu contributions are not arbitrary DOM mounts. Explorer owns the rendered menu structure and interaction model, while plugins contribute:
+
+- menu item metadata
+- visibility logic
+- action execution through the owning agent
+
+When Explorer resolves plugin menu items for a concrete filesystem target, the resulting item payload must retain that target identity (`entryPath`, `entryType`, `entryName`). Action execution must use the same target context that was used for item resolution, instead of reconstructing a fresh target later from unrelated UI state.
 
 ### Ownership Model
 
@@ -132,14 +150,23 @@ Explorer provides:
 
 - stable slot names
 - mounting surfaces
+- host-owned menu surfaces
 - host layout and navigation context
 - host refresh points after mutations
 
 Plugins are expected to:
 
 - render only within approved host slots
+- contribute menu items semantically instead of injecting arbitrary menu DOM
 - call their owning agent through MCP or domain-specific host bridges
 - emit host-facing events instead of mutating host state ad hoc
+
+For filesystem-oriented menu actions, the host context must include both:
+
+- the Explorer path used by shell navigation
+- the absolute filesystem path used for dependent agent calls
+
+Plugins should consume the explicit filesystem target supplied by the host context instead of guessing the workspace root or translating Explorer paths on their own.
 
 ### Plugin-to-Agent Contract
 
@@ -167,12 +194,15 @@ Examples of acceptable host responsibilities:
 - preserving selection, URL, and preview state
 - hosting modals and side panels
 - coordinating toolbar affordances
+- rendering context menus and `New` menus while delegating domain actions to plugins or owning agents
+- showing a host-owned loading state while async menu contributions are still being resolved
 
 Examples of unacceptable host responsibilities:
 
 - reimplementing Git operations in Explorer core
 - reimplementing DPU permission logic in Explorer core
 - hard-coding task domain state into `file-exp`
+- delegating menu layout and focus behavior to plugin-specific DOM fragments
 
 ### Failure And Recovery Expectations
 
@@ -208,5 +238,5 @@ The host shell must remain deterministic even when plugin availability changes b
 
 - [DS01 - Explorer System Overview](./DS01-system-overview.md)
 - [DS03 - Confidential Files And DPU](./DS03-confidential-files-and-dpu.md)
-- [gitAgent plugin spec](../../gitAgent/docs/specs/GA/GA02-explorer-plugin.md)
-- [tasksAgent plugin spec](../../tasksAgent/docs/specs/TA/TA02-explorer-plugin.md)
+- [gitAgent plugin spec](../../gitAgent/docs/specs/DS02-explorer-plugin.md)
+- [tasksAgent plugin spec](../../tasksAgent/docs/specs/DS04-Explorer-Integration-and-IDE-Plugin-Channel.md)

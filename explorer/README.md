@@ -4,6 +4,13 @@ This folder contains the `explorer` agent for the Ploinky runtime, inside the `A
 
 The Explorer is an MCP HTTP server that exposes a filesystem view + utilities used by the AssistOS UI.
 
+Explorer reserves workspace secret files as non-browsable resources:
+
+- `.secrets`
+- any file ending in `.secrets`
+
+These files are blocked from Explorer filesystem MCP access and hidden from the normal Explorer filesystem surface.
+
 ## Requirements
 
 - A working Ploinky installation (CLI available as `ploinky`).

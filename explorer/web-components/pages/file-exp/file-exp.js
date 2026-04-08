@@ -25,6 +25,14 @@ import { createFileExpTooling } from "./file-exp-tooling.js";
 import { attachSearchController } from "./file-exp-search.js";
 import { attachFsActions } from "./file-exp-fs-actions.js";
 import { attachApplicationPluginHost } from "./file-exp-application-plugins.js";
+import {
+    FILE_EXP_MENU_SLOTS,
+    getBuiltInContextMenuItems,
+    getBuiltInNewMenuItems,
+    buildFileExpMenuContext,
+    resolveFileExpMenuItems,
+    executeFileExpMenuItem
+} from "./file-exp-menu-contributions.js";
 import { withGlobalLoader } from "../../../utils/globalLoader.js";
 import { createFileExpCaches } from "./file-exp-caches.js";
 import { createDirectoryFilterController } from "./file-exp-directory-filter.js";
@@ -99,6 +107,14 @@ export class FileExp {
         this.boundGlobalKeydown = null;
         this.boundOutsideSearchMenuClick = null;
         this.boundSortClickHandler = (event) => this.handleSortClick(event);
+        this.boundAppMenuSelect = this.handleAppMenuSelect.bind(this);
+        this.toolbarMenuItems = [];
+        this.contextMenuItemsByPath = new Map();
+        this.toolbarMenuLoadToken = 0;
+        this.contextMenuLoadToken = 0;
+        this.openActionMenuDropdown = null;
+        this.openActionMenuResizeObserver = null;
+        this.openActionMenuPositionFrame = null;
 
         attachSearchController(this);
         attachFsActions(this);
@@ -130,6 +146,7 @@ export class FileExp {
         };
         this.setElementListener('file-exp-dpu-comments-state', this.element, 'dpu-comments-state', this.boundHandleDpuCommentsState);
         this.setElementListener('file-exp-dpu-comments-close', this.element, 'dpu-comments-close', this.boundHandleDpuCommentsClose);
+        this.setElementListener('file-exp-app-menu-select', this.element, 'app-menu-select', this.boundAppMenuSelect);
     }
 
     async withLoader(fn) {
@@ -155,6 +172,7 @@ export class FileExp {
         if (entriesContainer) {
             entriesContainer.removeEventListener('contextmenu', this.boundContextMenu, true);
         }
+        this.clearOpenActionMenuTracking?.();
         this.flushCleanupCallbacks();
     }
 
@@ -270,6 +288,155 @@ export class FileExp {
         return runLayoutAfterRender(this, {
             previewLines: LARGE_FILE_PREVIEW_LINES
         });
+    }
+
+    getEntryByPath(entryPath) {
+        const normalizedTarget = this.normalizePath(entryPath || '');
+        if (!normalizedTarget) {
+            return null;
+        }
+        const entries = Array.isArray(this.state.allEntries) && this.state.allEntries.length
+            ? this.state.allEntries
+            : Array.isArray(this.state.entries)
+                ? this.state.entries
+                : [];
+        return entries.find((entry) => this.normalizePath(entry?.path || '') === normalizedTarget) || null;
+    }
+
+    getToolbarMenuItems() {
+        return Array.isArray(this.toolbarMenuItems) ? this.toolbarMenuItems : [];
+    }
+
+    getContextMenuItemsForEntry(entryPath, type, entry = null) {
+        const normalizedPath = this.normalizePath(entryPath || '');
+        const targetEntry = entry || this.getEntryByPath(normalizedPath) || null;
+        const builtInItems = getBuiltInContextMenuItems(this, {
+            ...(targetEntry || {}),
+            path: normalizedPath,
+            type: type || targetEntry?.type || 'file'
+        });
+        const cachedState = this.contextMenuItemsByPath.get(normalizedPath);
+        const cachedItems = Array.isArray(cachedState?.items) ? cachedState.items : null;
+        return cachedItems || builtInItems;
+    }
+
+    isContextMenuLoading(entryPath) {
+        const normalizedPath = this.normalizePath(entryPath || '');
+        return Boolean(this.contextMenuItemsByPath.get(normalizedPath)?.loading);
+    }
+
+    renderToolbarMenuItems() {
+        const appMenuElement = this.element?.querySelector?.('#toolbarAppMenu');
+        if (!appMenuElement) {
+            return;
+        }
+        const items = this.getToolbarMenuItems();
+        if (typeof appMenuElement.webSkelPresenter?.setItems === 'function') {
+            appMenuElement.webSkelPresenter.setItems(items);
+            return;
+        }
+        try {
+            appMenuElement.setAttribute('data-items', encodeURIComponent(JSON.stringify(items)));
+        } catch {
+            appMenuElement.setAttribute('data-items', encodeURIComponent('[]'));
+        }
+    }
+
+    async refreshToolbarMenuItems() {
+        const builtInItems = getBuiltInNewMenuItems(this);
+        this.toolbarMenuItems = builtInItems;
+        this.renderToolbarMenuItems();
+
+        const currentToken = ++this.toolbarMenuLoadToken;
+        const items = await resolveFileExpMenuItems(this, FILE_EXP_MENU_SLOTS.newMenu, null, builtInItems);
+        if (currentToken !== this.toolbarMenuLoadToken) {
+            return;
+        }
+        this.toolbarMenuItems = items;
+        this.renderToolbarMenuItems();
+    }
+
+    async refreshContextMenuItems(entryPath) {
+        const normalizedPath = this.normalizePath(entryPath || '');
+        if (!normalizedPath) {
+            return;
+        }
+        const targetEntry = this.getEntryByPath(normalizedPath) || { path: normalizedPath, type: 'file' };
+        const slot = String(targetEntry?.type || 'file') === 'directory'
+            ? FILE_EXP_MENU_SLOTS.contextDirectory
+            : FILE_EXP_MENU_SLOTS.contextFile;
+        const builtInItems = getBuiltInContextMenuItems(this, targetEntry);
+        this.contextMenuItemsByPath.set(normalizedPath, {
+            items: builtInItems,
+            loading: true
+        });
+        this.renderEntries();
+
+        const currentToken = ++this.contextMenuLoadToken;
+        const items = await resolveFileExpMenuItems(this, slot, targetEntry, builtInItems);
+        if (currentToken !== this.contextMenuLoadToken || this.state.openMenuPath !== normalizedPath) {
+            return;
+        }
+        this.contextMenuItemsByPath.set(normalizedPath, {
+            items,
+            loading: false
+        });
+        this.renderEntries();
+    }
+
+    async executeHostMenuAction(item) {
+        const dataset = {
+            entryPath: item?.entryPath || '',
+            type: item?.entryType || '',
+            targetPath: item?.targetPath || item?.entryPath || ''
+        };
+        const element = { dataset };
+        switch (item?.action) {
+            case 'newDirectory':
+                return this.newDirectory();
+            case 'newFile':
+                return this.newFile();
+            case 'renameEntry':
+                return this.renameEntry(element);
+            case 'copyEntry':
+                return this.copyEntry(element);
+            case 'cutEntry':
+                return this.cutEntry(element);
+            case 'uploadHere':
+                return this.uploadHere(element);
+            case 'pasteClipboard':
+                return this.pasteClipboard(element);
+            case 'openDpuPermissions':
+                return this.openDpuPermissions(element);
+            case 'deleteEntry':
+                return this.deleteEntry(element);
+            default:
+                return false;
+        }
+    }
+
+    async handleAppMenuSelect(event) {
+        const item = event?.detail?.item;
+        if (!item || typeof item !== 'object') {
+            return;
+        }
+        if (item.slot === FILE_EXP_MENU_SLOTS.contextFile || item.slot === FILE_EXP_MENU_SLOTS.contextDirectory) {
+            this.closeActionMenu(false);
+        }
+        if (item.source === 'plugin') {
+            const context = await buildFileExpMenuContext(
+                this,
+                item.slot,
+                item.entryPath ? {
+                    path: item.entryPath,
+                    type: item.entryType || 'file',
+                    name: item.entryName || ''
+                } : null
+            );
+            await executeFileExpMenuItem(this, item, context);
+            return;
+        }
+        await this.executeHostMenuAction(item);
     }
 
     async loadDirectoryContent(path) {

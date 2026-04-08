@@ -22,6 +22,57 @@ import {
 
 export function attachFsActions(fileExp) {
     Object.assign(fileExp, {
+        scheduleOpenActionMenuPosition() {
+            if (this.openActionMenuPositionFrame !== null) {
+                cancelAnimationFrame(this.openActionMenuPositionFrame);
+            }
+            this.openActionMenuPositionFrame = requestAnimationFrame(() => {
+                this.openActionMenuPositionFrame = null;
+                this.positionOpenActionMenu?.();
+            });
+        },
+
+        clearOpenActionMenuTracking() {
+            if (this.openActionMenuResizeObserver) {
+                this.openActionMenuResizeObserver.disconnect();
+                this.openActionMenuResizeObserver = null;
+            }
+            this.openActionMenuDropdown = null;
+            if (this.openActionMenuPositionFrame !== null) {
+                cancelAnimationFrame(this.openActionMenuPositionFrame);
+                this.openActionMenuPositionFrame = null;
+            }
+        },
+
+        syncOpenActionMenuTracking() {
+            const openPath = this.state.openMenuPath;
+            if (!openPath) {
+                this.clearOpenActionMenuTracking();
+                return;
+            }
+            const dropdown = this.element?.querySelector?.(`[data-action-menu="true"][data-entry-path="${openPath}"] .action-menu-dropdown`);
+            if (!dropdown) {
+                this.clearOpenActionMenuTracking();
+                return;
+            }
+            if (this.openActionMenuDropdown === dropdown) {
+                this.scheduleOpenActionMenuPosition();
+                return;
+            }
+
+            this.clearOpenActionMenuTracking();
+            this.openActionMenuDropdown = dropdown;
+
+            if (typeof ResizeObserver !== 'undefined') {
+                this.openActionMenuResizeObserver = new ResizeObserver(() => {
+                    this.scheduleOpenActionMenuPosition();
+                });
+                this.openActionMenuResizeObserver.observe(dropdown);
+            }
+
+            this.scheduleOpenActionMenuPosition();
+        },
+
         ensureMutableFsPath(targetPath = this.state.path) {
             const normalized = this.normalizePath(targetPath || '/');
             if (isDpuManagedPath(normalized)) {
@@ -332,10 +383,15 @@ export function attachFsActions(fileExp) {
 
         handleOutsideMenuClick(event) {
             if (!this.state.openMenuPath) return;
-            const target = event?.target;
-            if (target && this.element.contains(target)) {
-                const menu = target.closest('[data-action-menu="true"]');
-                if (menu && menu.dataset.entryPath === this.state.openMenuPath) return;
+            const openPath = this.state.openMenuPath;
+            const openContainer = this.element?.querySelector?.(`[data-action-menu="true"][data-entry-path="${openPath}"]`);
+            if (!openContainer) {
+                this.closeActionMenu();
+                return;
+            }
+            const composedPath = typeof event?.composedPath === 'function' ? event.composedPath() : [];
+            if (Array.isArray(composedPath) && composedPath.includes(openContainer)) {
+                return;
             }
             this.closeActionMenu();
         },
@@ -359,9 +415,8 @@ export function attachFsActions(fileExp) {
                 this.state.selectedPath = path;
                 this.state.selectedIsMarkdown = this.isMarkdownFile(path) && type === 'file';
                 this.closeActionMenu(false);
-                this.setOpenMenuPath(path);
                 this.pendingMenuFocusPath = path;
-                this.invalidate();
+                this.openActionMenu(path, { invalidate: true });
                 return;
             }
             if (this.state.clipboard) {
@@ -393,26 +448,39 @@ export function attachFsActions(fileExp) {
                 dropdown.style.bottom = '';
             }
             this.pendingMenuFocusPath = null;
+            this.contextMenuLoadToken += 1;
+            this.clearOpenActionMenuTracking();
+            this.removeDocumentListener?.('open-menu-outside');
+            this.removeDocumentListener?.('open-menu-keydown');
             this.setOpenMenuPath(null);
             if (shouldInvalidate) this.invalidate();
             return true;
         },
 
-        openActionMenu(path) {
+        openActionMenu(path, options = {}) {
             if (this.state.openMenuPath && this.state.openMenuPath !== path) {
                 this.closeActionMenu(false);
             }
-            this.setOpenMenuPath(path);
+            this.setDocumentListener?.('open-menu-outside', 'pointerdown', this.boundOutsideMenuClick, true);
+            this.setDocumentListener?.('open-menu-keydown', 'keydown', this.boundMenuKeydown);
+            this.setOpenMenuPath(path, { invalidate: Boolean(options?.invalidate) });
             const container = this.element?.querySelector(`[data-action-menu="true"][data-entry-path="${path}"]`);
-            if (!container) return;
-            container.classList.add('open');
-            const trigger = container.querySelector('.action-menu-trigger');
-            trigger?.setAttribute('aria-expanded', 'true');
-            this.positionOpenActionMenu?.();
-            const firstItem = container.querySelector('.action-menu-item');
-            if (firstItem) {
-                firstItem.focus({ preventScroll: true });
+            if (container) {
+                container.classList.add('open');
+                const trigger = container.querySelector('.action-menu-trigger');
+                trigger?.setAttribute('aria-expanded', 'true');
+                this.positionOpenActionMenu?.();
+                const firstItem = container.querySelector('.action-menu-item');
+                if (firstItem) {
+                    firstItem.focus({ preventScroll: true });
+                }
             }
+            this.syncOpenActionMenuTracking?.();
+            this.refreshContextMenuItems?.(path)
+                ?.catch((error) => {
+                    console.error(error);
+                    this.showStatus(error?.message || 'Failed to load menu actions.', true);
+                });
         },
 
         updateClipboardUI() {

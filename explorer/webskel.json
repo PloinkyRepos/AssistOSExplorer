@@ -12,6 +12,11 @@
       "presenterClassName": "FileExpEntries"
     },
     {
+      "name": "app-menu",
+      "type": "components",
+      "presenterClassName": "AppMenu"
+    },
+    {
       "name": "file-editor",
       "type": "components",
       "presenterClassName": "FileEditor"

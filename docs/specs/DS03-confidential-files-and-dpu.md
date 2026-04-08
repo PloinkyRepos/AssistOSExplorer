@@ -30,6 +30,7 @@ That creates a design problem:
 - treating DPU secrets as generic text files at the storage layer
 - moving ACL enforcement into Explorer
 - enabling OnlyOffice for secret resources
+- exposing local workspace `.secrets` or `*.secrets` files through the normal filesystem MCP surface
 
 ## Architecture Overview
 
@@ -114,6 +115,11 @@ Instead, it resolves the target through DPU and then uses tools such as:
 Main implementation:
 
 - [`web-components/pages/file-exp/file-exp-dpu-provider.js`](../web-components/pages/file-exp/file-exp-dpu-provider.js)
+
+This separation is also a security boundary. Secret-like local workspace files are not the same thing as DPU secrets:
+
+- DPU secrets are exposed only through the Confidential virtual model under `/Confidential/Secrets`
+- local workspace `.secrets` and `*.secrets` files are excluded from the Explorer filesystem MCP surface and hidden from normal filesystem navigation
 
 ### Write Contracts
 
@@ -216,6 +222,7 @@ Explorer must treat DPU as the authority for path existence, visibility, and mut
 - Confidential binary files must not be treated as text during upload or save.
 - DPU-backed files are virtual resources. Path existence and listing always depend on DPU responses, not direct filesystem inspection.
 - `/Confidential/Secrets` must not allow folder creation and must keep secret-specific creation semantics.
+- Local workspace `.secrets` and `*.secrets` files must never be served by Explorer filesystem MCP tools and must not appear in list, tree, or search results in the standard Explorer filesystem UI.
 
 ## Failure And Recovery Expectations
 

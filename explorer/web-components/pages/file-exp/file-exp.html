@@ -63,14 +63,7 @@
                     <span class="chevron">▾</span>
                 </button>
                 <div class="toolbar-dropdown-menu action-menu-dropdown" id="toolbarMenu" role="menu">
-                    <button id="newDirectoryMenuItem" type="button" class="toolbar-dropdown-item action-menu-item" data-local-action="newDirectory" role="menuitem">
-                        <img class="action-menu-item-icon" loading="lazy" src="./assets/icons/folder-with-letter.svg" alt="">
-                        <span class="action-menu-item-label">New Folder</span>
-                    </button>
-                    <button id="newFileMenuItem" type="button" class="toolbar-dropdown-item action-menu-item" data-local-action="newFile" role="menuitem">
-                        <img class="action-menu-item-icon" loading="lazy" src="./assets/icons/document.svg" alt="">
-                        <span class="action-menu-item-label">New File</span>
-                    </button>
+                    <app-menu id="toolbarAppMenu" data-presenter="app-menu"></app-menu>
                 </div>
             </div>
             <button id="searchInFilesButton" class="secondary" title="Find/Replace in files (content)"

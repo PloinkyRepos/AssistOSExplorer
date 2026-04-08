@@ -1,23 +1,13 @@
-import { isDpuManagedPath } from "../../pages/file-exp/file-exp-dpu-provider.js";
-
 const VIRTUALIZATION_THRESHOLD = 180;
 const DEFAULT_ROW_HEIGHT = 38;
 const VIRTUALIZATION_OVERSCAN = 10;
 
-function createIconImage(src, alt = '') {
-    const image = document.createElement('img');
-    image.className = 'action-menu-item-icon';
-    image.loading = 'lazy';
-    image.src = src;
-    image.alt = alt;
-    return image;
-}
-
-function createActionLabel(label) {
-    const span = document.createElement('span');
-    span.className = 'action-menu-item-label';
-    span.textContent = label;
-    return span;
+function encodeMenuItems(items) {
+    try {
+        return encodeURIComponent(JSON.stringify(Array.isArray(items) ? items : []));
+    } catch {
+        return encodeURIComponent('[]');
+    }
 }
 
 function createEntryIcon(iconClass) {
@@ -243,47 +233,7 @@ export class FileExpEntries {
         return cell;
     }
 
-    createMenuItem({ action, label, entryPath, type, destructive = false, disabled = false, extraDataset = null, iconNode = null }) {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = `action-menu-item${destructive ? ' destructive' : ''}${disabled ? ' disabled' : ''}`;
-        button.dataset.localAction = action;
-        button.dataset.entryPath = entryPath;
-        button.dataset.type = type;
-        if (extraDataset && typeof extraDataset === 'object') {
-            Object.entries(extraDataset).forEach(([key, value]) => {
-                button.dataset[key] = String(value);
-            });
-        }
-        button.setAttribute('role', 'menuitem');
-        if (disabled) {
-            button.setAttribute('disabled', 'true');
-        } else {
-            button.removeAttribute('disabled');
-        }
-        if (iconNode) {
-            button.appendChild(iconNode);
-        }
-        button.appendChild(createActionLabel(label));
-        return button;
-    }
-
     createActionsCell(entryPath, type, isMenuOpen, canPasteInto, entry = null) {
-        const isManaged = Boolean(entry?.virtualProvider === 'dpu' || isDpuManagedPath(entryPath));
-        const canWrite = isManaged ? Boolean(entry?.dpuCanWrite) : true;
-        const canCreateChildren = isManaged ? Boolean(entry?.dpuCanCreateChildren) : true;
-        const immutableRoot = isManaged ? Boolean(entry?.dpuImmutableRoot) : false;
-        const canRename = isManaged
-            ? (Object.prototype.hasOwnProperty.call(entry || {}, 'dpuCanRename') ? Boolean(entry?.dpuCanRename) : (canWrite && !immutableRoot))
-            : true;
-        const canDelete = isManaged
-            ? (Object.prototype.hasOwnProperty.call(entry || {}, 'dpuCanDelete') ? Boolean(entry?.dpuCanDelete) : (canWrite && !immutableRoot))
-            : true;
-        const disableRename = !canRename;
-        const disableDelete = !canDelete;
-        const disableCopyCut = isManaged;
-        const disableUploadHere = isManaged ? !(type === 'directory' && canCreateChildren) : false;
-        const disablePasteInto = isManaged ? true : !canPasteInto;
         const menuId = this.toMenuId(entryPath);
         const actionsCell = document.createElement('td');
         actionsCell.className = 'actions-cell col-actions';
@@ -315,73 +265,14 @@ export class FileExpEntries {
         dropdown.className = 'action-menu-dropdown';
         dropdown.id = menuId;
         dropdown.setAttribute('role', 'menu');
-
-        dropdown.appendChild(this.createMenuItem({
-            action: 'renameEntry',
-            label: 'Rename',
-            entryPath,
-            type,
-            disabled: disableRename,
-            iconNode: createIconImage('./assets/icons/edit.svg')
-        }));
-        dropdown.appendChild(this.createMenuItem({
-            action: 'copyEntry',
-            label: 'Copy',
-            entryPath,
-            type,
-            disabled: disableCopyCut,
-            iconNode: createIconImage('./assets/icons/copy.svg')
-        }));
-        dropdown.appendChild(this.createMenuItem({
-            action: 'cutEntry',
-            label: 'Cut',
-            entryPath,
-            type,
-            disabled: disableCopyCut,
-            iconNode: createIconImage('./assets/icons/cut.svg')
-        }));
-
-        if (type === 'directory') {
-            dropdown.appendChild(this.createMenuItem({
-                action: 'uploadHere',
-                label: 'Upload here',
-                entryPath,
-                type,
-                disabled: disableUploadHere,
-                extraDataset: { targetPath: entryPath },
-                iconNode: createIconImage('./assets/icons/upload.svg')
-            }));
-            dropdown.appendChild(this.createMenuItem({
-                action: 'pasteClipboard',
-                label: 'Paste into',
-                entryPath,
-                type,
-                disabled: disablePasteInto,
-                extraDataset: { targetPath: entryPath },
-                iconNode: createIconImage('./assets/icons/paste.svg')
-            }));
-        }
-
-        if (isManaged && !immutableRoot && canWrite) {
-            dropdown.appendChild(this.createMenuItem({
-                action: 'openDpuPermissions',
-                label: 'Permissions',
-                entryPath,
-                type,
-                disabled: false,
-                iconNode: createIconImage('./assets/icons/keys.svg')
-            }));
-        }
-
-        dropdown.appendChild(this.createMenuItem({
-            action: 'deleteEntry',
-            label: 'Delete',
-            entryPath,
-            type,
-            destructive: true,
-            disabled: disableDelete,
-            iconNode: createIconImage('./assets/icons/trash-can.svg')
-        }));
+        const host = this.getHostPresenter();
+        const menuItems = host?.getContextMenuItemsForEntry?.(entryPath, type, entry, { canPasteInto }) || [];
+        const menuLoading = Boolean(host?.isContextMenuLoading?.(entryPath));
+        const appMenu = document.createElement('app-menu');
+        appMenu.setAttribute('data-presenter', 'app-menu');
+        appMenu.setAttribute('data-items', encodeMenuItems(menuItems));
+        appMenu.setAttribute('data-loading', menuLoading ? 'true' : 'false');
+        dropdown.appendChild(appMenu);
 
         container.appendChild(trigger);
         container.appendChild(dropdown);

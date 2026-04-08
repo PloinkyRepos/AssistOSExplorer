@@ -39,6 +39,7 @@ function getParentPath(value) {
 
 export const DOCUMENT_PLUGIN_CATEGORY = 'document';
 export const APPLICATION_PLUGIN_CATEGORY = 'application';
+export const MENU_PLUGIN_CONTRIBUTION_TYPE = 'menu';
 export const DEFAULT_DOCUMENT_PLUGIN_LOCATIONS = ['document', 'chapter', 'paragraph', 'infoText'];
 
 export function getApplicationPluginPolicyKey(entry) {
@@ -226,48 +227,58 @@ export function normalizeRuntimePlugins(runtimePlugins) {
         }
 
         const agent = isNonEmptyString(entry.agent) ? entry.agent.trim() : '';
+        const contributionType = entry?.contributionType === MENU_PLUGIN_CONTRIBUTION_TYPE ? MENU_PLUGIN_CONTRIBUTION_TYPE : 'mount';
         const component = isNonEmptyString(entry.component) ? entry.component.trim() : '';
-        if (!component) {
+        if (contributionType !== MENU_PLUGIN_CONTRIBUTION_TYPE && !component) {
             return;
         }
 
         const assetRootPath = isNonEmptyString(entry.assetRootPath) ? normalizePathSegments(entry.assetRootPath) : '';
-        const assetBaseUrl = assetRootPath
+        const pluginRootUrl = assetRootPath
             ? buildWorkspaceFilesUrl(assetRootPath)
             : `/${agent}/IDE-plugins/${component}`;
+        const assetBaseUrl = pluginRootUrl;
         const pluginsBaseUrl = assetRootPath
             ? buildWorkspaceFilesUrl(getParentPath(assetRootPath))
             : `/${agent}/IDE-plugins`;
-        const baseUrl = computeComponentBaseUrl(agent, component, {
-            assetBaseUrl,
-            pluginsBaseUrl
-        });
+        const baseUrl = contributionType !== MENU_PLUGIN_CONTRIBUTION_TYPE
+            ? computeComponentBaseUrl(agent, component, {
+                assetBaseUrl,
+                pluginsBaseUrl
+            })
+            : '';
+        const menuModuleUrl = isNonEmptyString(entry.menuModule)
+            ? joinUrlSegments(pluginRootUrl, entry.menuModule)
+            : undefined;
         const normalizedEntry = {
             ...entry,
             pluginCategory: category,
+            contributionType,
             location,
             id: isNonEmptyString(entry.id) ? entry.id.trim() : undefined,
-            component,
+            component: component || undefined,
             label: isNonEmptyString(entry.label)
                 ? entry.label.trim()
                 : isNonEmptyString(entry.tooltip)
                     ? entry.tooltip.trim()
-                    : component,
-            tooltip: isNonEmptyString(entry.tooltip) ? entry.tooltip : component,
-            presenter: isNonEmptyString(entry.presenter) ? entry.presenter.trim() : undefined,
-            type: isNonEmptyString(entry.type) ? entry.type : 'embedded',
+                    : component || 'Plugin',
+            tooltip: isNonEmptyString(entry.tooltip) ? entry.tooltip : component || 'Plugin',
+            presenter: contributionType !== MENU_PLUGIN_CONTRIBUTION_TYPE && isNonEmptyString(entry.presenter) ? entry.presenter.trim() : undefined,
+            type: contributionType !== MENU_PLUGIN_CONTRIBUTION_TYPE && isNonEmptyString(entry.type) ? entry.type : 'embedded',
             autoPin: Boolean(entry.autoPin),
             agent,
-            icon: resolveRuntimeAssetUrl(agent, component, entry.icon, 'icon.svg', {
+            icon: resolveRuntimeAssetUrl(agent, component || 'plugin', entry.icon, 'icon.svg', {
                 assetBaseUrl,
                 pluginsBaseUrl
             }),
             runtime: true,
-            componentBaseUrl: baseUrl,
-            assetBaseUrl
+            componentBaseUrl: baseUrl || undefined,
+            assetBaseUrl,
+            pluginRootUrl,
+            menuModuleUrl
         };
 
-        if (Array.isArray(entry.dependencies) && entry.dependencies.length > 0) {
+        if (contributionType !== MENU_PLUGIN_CONTRIBUTION_TYPE && Array.isArray(entry.dependencies) && entry.dependencies.length > 0) {
             normalizedEntry.dependencies = entry.dependencies.map((dependency) => {
                 if (!dependency || typeof dependency !== 'object') {
                     return dependency;
@@ -315,7 +326,7 @@ export function mergeRuntimePluginsIntoAssistOS(assistOS, runtimePlugins) {
     assistOS.workspace.appPlugins = workspaceApplicationPlugins;
 
     forEachRuntimePluginEntry(runtimePlugins, (entry, { category, location }) => {
-        if (!entry || typeof entry !== 'object' || !isNonEmptyString(entry.component)) {
+        if (!entry || typeof entry !== 'object') {
             return;
         }
 
@@ -328,7 +339,8 @@ export function mergeRuntimePluginsIntoAssistOS(assistOS, runtimePlugins) {
         }
 
         const bucket = targetRegistry[location];
-        const existingIndex = bucket.findIndex((plugin) => plugin && plugin.component === entry.component);
+        const entryKey = getRuntimePluginStableKey(entry);
+        const existingIndex = bucket.findIndex((plugin) => plugin && getRuntimePluginStableKey(plugin) === entryKey);
         if (existingIndex !== -1) {
             bucket.splice(existingIndex, 1);
         }

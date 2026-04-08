@@ -22,9 +22,10 @@ export const SKIP_DIRECTORY_NAMES = new Set([
 export const DOCUMENT_PLUGIN_CATEGORY = 'document';
 export const APPLICATION_PLUGIN_CATEGORY = 'application';
 export const DEFAULT_DOCUMENT_PLUGIN_LOCATIONS = ['document', 'chapter', 'paragraph', 'infoText'];
-export const APPLICATION_PLUGIN_LOCATION_PATTERN = /^[a-z0-9-]+:[a-z0-9-]+$/i;
+export const APPLICATION_PLUGIN_LOCATION_PATTERN = /^[a-z0-9-]+(?::[a-z0-9-]+)+$/i;
 export const APPLICATION_PLUGIN_ID_PATTERN = /^[a-z][a-z0-9-]*$/i;
 const VALID_PLUGIN_TYPES = new Set(['embedded', 'modal']);
+const VALID_APPLICATION_CONTRIBUTION_TYPES = new Set(['mount', 'menu']);
 
 function isNonEmptyString(value) {
   return typeof value === 'string' && value.trim().length > 0;
@@ -104,6 +105,15 @@ function validateAndNormalizePluginConfig(parsedConfig, pluginEntryName, configP
     return null;
   }
 
+  const contributionType = pluginCategory === APPLICATION_PLUGIN_CATEGORY && isNonEmptyString(parsedConfig.contributionType)
+    ? parsedConfig.contributionType.trim()
+    : 'mount';
+
+  if (pluginCategory === APPLICATION_PLUGIN_CATEGORY && !VALID_APPLICATION_CONTRIBUTION_TYPES.has(contributionType)) {
+    console.warn(`[filesystem-http] Plugin ${configPath} has invalid contributionType "${parsedConfig.contributionType}".`);
+    return null;
+  }
+
   const locationsRaw = parsedConfig.location;
   const locations = Array.isArray(locationsRaw)
     ? locationsRaw.map((loc) => (typeof loc === 'string' ? loc.trim() : '')).filter(Boolean)
@@ -130,8 +140,8 @@ function validateAndNormalizePluginConfig(parsedConfig, pluginEntryName, configP
     }
   }
 
-  const component = isNonEmptyString(parsedConfig.component) ? parsedConfig.component.trim() : pluginEntryName;
-  if (!component) {
+  const component = isNonEmptyString(parsedConfig.component) ? parsedConfig.component.trim() : (contributionType === 'mount' ? pluginEntryName : '');
+  if (contributionType === 'mount' && !component) {
     console.warn(`[filesystem-http] Plugin ${configPath} is missing a valid component name.`);
     return null;
   }
@@ -174,7 +184,17 @@ function validateAndNormalizePluginConfig(parsedConfig, pluginEntryName, configP
     return null;
   }
 
-  if (parsedConfig.type !== undefined && !VALID_PLUGIN_TYPES.has(parsedConfig.type)) {
+  if (parsedConfig.menuModule !== undefined && !isNonEmptyString(parsedConfig.menuModule)) {
+    console.warn(`[filesystem-http] Plugin ${configPath} has an invalid menuModule.`);
+    return null;
+  }
+
+  if (contributionType === 'menu' && !isNonEmptyString(parsedConfig.menuModule)) {
+    console.warn(`[filesystem-http] Menu plugin ${configPath} must declare menuModule.`);
+    return null;
+  }
+
+  if (contributionType === 'mount' && parsedConfig.type !== undefined && !VALID_PLUGIN_TYPES.has(parsedConfig.type)) {
     console.warn(`[filesystem-http] Plugin ${configPath} has an invalid type "${parsedConfig.type}".`);
     return null;
   }
@@ -194,6 +214,7 @@ function validateAndNormalizePluginConfig(parsedConfig, pluginEntryName, configP
     pluginConfig: {
       ...parsedConfig,
       pluginCategory,
+      contributionType,
       component,
       dependencies
     }
