@@ -49,5 +49,5 @@ The repo also contains the Explorer plugin button in [IDE-plugins/tasks-tool-but
 
 ## Documentation
 
-- [TA01 - Tasks Agent Overview](./docs/specs/TA/TA01-agent-overview.md)
-- [TA02 - Explorer Plugin](./docs/specs/TA/TA02-explorer-plugin.md)
+- [DS01 - Vision](./docs/specs/DS01-Vision.md)
+- [DS04 - Explorer Integration And IDE Plugin Channel](./docs/specs/DS04-Explorer-Integration-and-IDE-Plugin-Channel.md)

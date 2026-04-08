@@ -51,4 +51,4 @@ Supported provider variables:
 
 ## Documentation
 
-- [LA01 - LLM Assistant Overview](./docs/specs/LA/LA01-agent-overview.md)
+- [DS01 - Vision](./docs/specs/DS01-Vision.md)

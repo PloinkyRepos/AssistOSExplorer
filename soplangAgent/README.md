@@ -57,4 +57,4 @@ Coverage currently includes:
 
 ## Documentation
 
-- [SA01 - SOPLang Agent Overview](./docs/specs/SA/SA01-agent-overview.md)
+- [DS01 - Vision](./docs/specs/DS01-Vision.md)
