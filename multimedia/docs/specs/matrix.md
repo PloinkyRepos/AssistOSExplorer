@@ -6,7 +6,7 @@ The specification set is focused on IDE integration contracts, media workflows, 
 
 ## Specification Set
 
-- [MM01 - Agent Overview](specsLoader.html?spec=MM01-agent-overview.md)
-- [MM02 - IDE Plugin Contracts](specsLoader.html?spec=MM02-ide-plugin-contracts.md)
-- [MM03 - Runtime Dependencies and Startup Install](specsLoader.html?spec=MM03-runtime-dependencies-and-startup.md)
-- [MM04 - FFmpeg Media Processing](specsLoader.html?spec=MM04-ffmpeg-media-processing.md)
+- [DS01 - Agent Overview](specsLoader.html?spec=DS01-agent-overview.md)
+- [DS02 - IDE Plugin Contracts](specsLoader.html?spec=DS02-ide-plugin-contracts.md)
+- [DS03 - Runtime Dependencies and Startup Install](specsLoader.html?spec=DS03-runtime-dependencies-and-startup.md)
+- [DS04 - FFmpeg Media Processing](specsLoader.html?spec=DS04-ffmpeg-media-processing.md)

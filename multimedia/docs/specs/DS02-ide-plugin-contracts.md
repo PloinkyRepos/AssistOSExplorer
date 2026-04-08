@@ -1,4 +1,4 @@
-# MM02 - IDE Plugin Contracts
+# DS02 - IDE Plugin Contracts
 
 ## Role of This Document
 
