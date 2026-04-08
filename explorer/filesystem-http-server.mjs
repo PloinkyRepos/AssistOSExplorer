@@ -7,7 +7,7 @@ import readline from 'node:readline';
 import { minimatch } from 'minimatch';
 
 import { server as mcpServer, streamHttp as mcpStreamHttp, types as mcpTypes, zod as mcpZod } from 'mcp-sdk';
-import { copyRecursive, createCacheHelpers, describeDirectoryEntry } from './utils/filesystem-utils.mjs';
+import { copyRecursive, createCacheHelpers, describeDirectoryEntry, isProtectedSecretName, isProtectedSecretPath } from './utils/filesystem-utils.mjs';
 import { aggregateIdePlugins } from './utils/ide-plugins.mjs';
 import { createTimedCache, buildCacheKey } from './utils/server/timed-cache.mjs';
 import { createStructureIndex } from './utils/server/structure-index.mjs';
@@ -100,7 +100,8 @@ let readFileWithCache = async (validPath, { skipReadForLarge = false } = {}) => 
 
 let listDirectoryDetailedWithCache = async (validPath) => {
   const entries = await fs.readdir(validPath, { withFileTypes: true });
-  return Promise.all(entries.map((entry) => describeDirectoryEntry(validPath, entry)));
+  const visibleEntries = entries.filter((entry) => !isProtectedSecretName(entry?.name));
+  return Promise.all(visibleEntries.map((entry) => describeDirectoryEntry(validPath, entry)));
 };
 
 let invalidateCachesForPath = () => {};
@@ -211,9 +212,17 @@ async function resolvePathInAllowedRoots(inputPath) {
     throw new Error(`Access denied: path traversal attempt for "${inputPath}"`);
   }
 
+  if (isProtectedSecretPath(resolvedPath)) {
+    throw new Error(`Access denied: protected file "${inputPath}"`);
+  }
+
   const canonicalPath = await resolveCanonicalPath(resolvedPath);
   if (!canonicalPath || !isPathWithinRoots(canonicalPath, roots)) {
     throw new Error(`Access denied: symlink escape attempt for "${inputPath}"`);
+  }
+
+  if (isProtectedSecretPath(canonicalPath)) {
+    throw new Error(`Access denied: protected file "${inputPath}"`);
   }
 
   return canonicalPath;

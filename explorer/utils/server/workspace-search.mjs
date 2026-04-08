@@ -19,6 +19,11 @@ export function createWorkspaceSearch({
   const BINARY_PROBE_CACHE_TTL_MS = 15000;
   const BINARY_PROBE_CACHE_MAX_ENTRIES = 4000;
   const binaryProbeCache = new Map();
+  const isProtectedSecretName = (name) => {
+    const normalized = String(name || '').trim();
+    return normalized === '.secrets' || normalized.endsWith('.secrets');
+  };
+  const isProtectedSecretPath = (targetPath) => isProtectedSecretName(path.basename(String(targetPath || '').trim()));
 
   const touchBinaryProbeCache = (filePath, entry) => {
     binaryProbeCache.delete(filePath);
@@ -358,6 +363,9 @@ export function createWorkspaceSearch({
           break;
         }
         const fullPath = path.join(currentPath, entry.name);
+        if (isProtectedSecretName(entry.name) || isProtectedSecretPath(fullPath)) {
+          continue;
+        }
         if (!isPathWithinAllowedDirectories(fullPath)) {
           continue;
         }
@@ -385,6 +393,9 @@ export function createWorkspaceSearch({
         const fullPath = path.resolve(rawPath);
         if (seenPaths.has(fullPath)) continue;
         seenPaths.add(fullPath);
+        if (isProtectedSecretPath(fullPath)) {
+          continue;
+        }
         if (!(fullPath === rootResolved || fullPath.startsWith(`${rootResolved}${path.sep}`))) {
           continue;
         }
@@ -622,6 +633,9 @@ export function createWorkspaceSearch({
           break;
         }
         const fullPath = path.join(currentPath, entry.name);
+        if (isProtectedSecretName(entry.name) || isProtectedSecretPath(fullPath)) {
+          continue;
+        }
         if (!isPathWithinAllowedDirectories(fullPath)) {
           continue;
         }
@@ -715,6 +729,7 @@ export function createWorkspaceSearch({
       for (const entry of indexed.entries || []) {
         if (!entry?.name) continue;
         const childValid = path.join(currentPath, entry.name);
+        if (isProtectedSecretName(entry.name) || isProtectedSecretPath(childValid)) continue;
         const childRel = path.relative(workspaceRoot, childValid);
         if (shouldExclude(childRel || entry.name)) continue;
         if (matches(childRel, entry.name)) {
@@ -752,6 +767,7 @@ export function createWorkspaceSearch({
       for (const entry of entries) {
         if (!entry?.name) continue;
         const childValid = path.join(currentPath, entry.name);
+        if (isProtectedSecretName(entry.name) || isProtectedSecretPath(childValid)) continue;
         const childRel = path.relative(workspaceRoot, childValid);
         if (shouldExclude(childRel || entry.name)) continue;
         if (matches(childRel, entry.name)) {

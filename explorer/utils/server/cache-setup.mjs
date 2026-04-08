@@ -1,4 +1,4 @@
-import { describeDirectoryEntry } from '../filesystem-utils.mjs';
+import { describeDirectoryEntry, isProtectedSecretName } from '../filesystem-utils.mjs';
 
 export function createCacheConfig(env) {
   return {
@@ -21,7 +21,8 @@ export function initCacheHelpers({ createCacheHelpers, readFileContent, cacheCon
 
   let listDirectoryDetailedWithCache = async (validPath) => {
     const entries = await fs.readdir(validPath, { withFileTypes: true });
-    return Promise.all(entries.map((entry) => describeDirectoryEntry(validPath, entry)));
+    const visibleEntries = entries.filter((entry) => !isProtectedSecretName(entry?.name));
+    return Promise.all(visibleEntries.map((entry) => describeDirectoryEntry(validPath, entry)));
   };
 
   let invalidateCachesForPath = () => {};

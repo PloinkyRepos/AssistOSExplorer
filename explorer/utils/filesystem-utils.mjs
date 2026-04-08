@@ -27,6 +27,16 @@ const isFreshDir = (entry, stats, ttlMs) => {
   return entry.mtimeMs === stats.mtimeMs;
 };
 
+export function isProtectedSecretName(name) {
+  const normalized = String(name || '').trim();
+  if (!normalized) return false;
+  return normalized === '.secrets' || normalized.endsWith('.secrets');
+}
+
+export function isProtectedSecretPath(targetPath) {
+  return isProtectedSecretName(path.basename(String(targetPath || '').trim()));
+}
+
 export async function describeDirectoryEntry(basePath, entry) {
   const entryPath = path.join(basePath, entry.name);
   let linkStats = null;
@@ -119,7 +129,8 @@ export function createCacheHelpers({ readFileContent, config } = {}) {
     }
 
     const entries = await fs.readdir(validPath, { withFileTypes: true });
-    const detailed = await Promise.all(entries.map((entry) => describeDirectoryEntry(validPath, entry)));
+    const visibleEntries = entries.filter((entry) => !isProtectedSecretName(entry?.name));
+    const detailed = await Promise.all(visibleEntries.map((entry) => describeDirectoryEntry(validPath, entry)));
 
     dirCache.set(validPath, { entries: detailed, mtimeMs: stats.mtimeMs, cachedAt: Date.now() });
     pruneCache(dirCache, cacheConfig.maxDirs);
