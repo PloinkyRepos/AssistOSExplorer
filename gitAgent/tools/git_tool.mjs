@@ -132,6 +132,8 @@ function normalizeArgs(toolName, args) {
     case 'git_stage_exact':
     case 'git_unstage':
     case 'git_untrack':
+    case 'git_add_ignore':
+    case 'git_remove_ignore':
     case 'git_check_ignore':
     case 'git_restore':
       requirePath();
@@ -309,6 +311,14 @@ async function main() {
         return;
       case 'git_check_ignore':
         result = await gitService.gitCheckIgnore(payload);
+        writeJson(result);
+        return;
+      case 'git_add_ignore':
+        result = await gitService.gitAddIgnore(payload);
+        writeJson(result);
+        return;
+      case 'git_remove_ignore':
+        result = await gitService.gitRemoveIgnore(payload);
         writeJson(result);
         return;
       case 'git_restore':

@@ -12,7 +12,6 @@ import { joinPath } from "/explorer/web-components/pages/file-exp/file-exp-utils
 import {
     normalizeErrorMessage,
     parseJsonToolResult,
-    normalizeSlashes,
     isReposRootPath,
     getRememberedGitIdentity,
     getRememberedGitAuthMethod,
@@ -86,16 +85,11 @@ export class GitCommitModal {
             toggleRepoAllChangesCheckbox: this.toggleRepoAllChangesCheckbox.bind(this),
             openIgnoreForFile: this.openIgnoreForFile.bind(this),
             openIgnoreForFolder: this.openIgnoreForFolder.bind(this),
-            openStopTrackingForFile: this.openStopTrackingForFile.bind(this),
             removeIgnoreForFile: this.removeIgnoreForFile.bind(this),
             rollbackFile: this.rollbackFile.bind(this),
             deleteFile: this.deleteFile.bind(this),
             saveGitCredentials: this.saveGitCredentials.bind(this),
             cancelGitCredentials: this.cancelGitCredentials.bind(this),
-            saveGitIgnore: this.saveGitIgnore.bind(this),
-            cancelGitIgnore: this.cancelGitIgnore.bind(this),
-            setIgnoreMode: this.setIgnoreMode.bind(this),
-            setIgnoreAnchor: this.setIgnoreAnchor.bind(this),
             openIgnoreForDiff: this.openIgnoreForDiff.bind(this),
             selectConflictFile: this.selectConflictFile.bind(this),
             applyConflictChoice: this.applyConflictChoice.bind(this),
@@ -114,7 +108,6 @@ export class GitCommitModal {
             syncStaticUI: this.syncStaticUI.bind(this),
             updateIdentityPrompt: this.updateIdentityPrompt.bind(this),
             updateAuthPrompt: this.updateAuthPrompt.bind(this),
-            updateIgnorePrompt: this.updateIgnorePrompt.bind(this),
             closeActionsMenu: this.closeActionsMenu.bind(this),
             getSelectedReposForBatch: () => this.getSelectedReposForBatch(),
             getPathsForCommitInRepo: this.getPathsForCommitInRepo.bind(this),
@@ -239,16 +232,6 @@ export class GitCommitModal {
                 this.ensureGithubDeviceFlow({ silent: true }).catch(() => {});
             });
         }
-    }
-
-    updateIgnorePatterns(patterns) {
-        const nextPatterns = String(patterns ?? this.state.ignorePrompt?.patterns ?? '');
-        this.setState({
-            ignorePrompt: {
-                ...this.state.ignorePrompt,
-                patterns: nextPatterns
-            }
-        }, { silent: true });
     }
 
     afterUnload() {
@@ -409,8 +392,8 @@ export class GitCommitModal {
         return true;
     }
 
-    refreshAction() {
-        this.actions.refreshConflicts();
+    async refreshAction() {
+        await withGlobalLoader(() => this.refreshAfterGitOperation());
     }
 
     clearGithubPollTimer() {
@@ -644,7 +627,7 @@ export class GitCommitModal {
         const filePath = element?.dataset?.filePath;
         if (!repoPath || !filePath) return;
         this.closeFileMenus();
-        this.actions.openGitIgnorePrompt({ repoPath, paths: [filePath], source: 'selection' });
+        void this.addIgnoreForPath(joinPath(repoPath, filePath));
     }
 
     openIgnoreForFolder(element) {
@@ -652,145 +635,57 @@ export class GitCommitModal {
         const folderPath = element?.dataset?.prefix || element?.dataset?.folderPath || '';
         if (!repoPath || !folderPath) return;
         this.closeFileMenus();
-        const normalized = folderPath.endsWith('/') ? folderPath : `${folderPath}/`;
-        const anchored = normalized.startsWith('/') ? normalized : `/${normalized}`;
-        this.actions.openGitIgnorePrompt({
-            repoPath,
-            paths: [normalized],
-            source: 'selection',
-            mode: 'file',
-            anchor: true,
-            patterns: anchored
-        });
+        const normalized = folderPath.endsWith('/') ? folderPath.slice(0, -1) : folderPath;
+        void this.addIgnoreForPath(joinPath(repoPath, normalized));
     }
 
-    openStopTrackingForFile(element) {
-        const repoPath = element?.dataset?.repoPath || null;
-        const filePath = element?.dataset?.filePath;
-        if (!repoPath || !filePath) return;
-        this.closeFileMenus();
-        this.actions.openGitIgnorePrompt({ repoPath, paths: [filePath], source: 'selection', stopTracking: true });
-    }
-
-    async removeIgnoreRuleForFile(repoPath, filePath, { retrack = false } = {}) {
-        if (!repoPath || !filePath) return { ok: false };
+    async addIgnoreForPath(fullPath) {
+        if (!fullPath) return { ok: false };
         try {
-            this.setStatusLine(retrack ? `Restoring tracking for ${filePath}...` : `Removing ignore rule for ${filePath}...`);
-            const payloadText = await this.service.gitCheckIgnore(repoPath, [filePath]);
+            this.setStatusLine('Adding to .gitignore...');
+            const payloadText = await this.service.gitAddIgnore(fullPath);
             const payload = parseJsonToolResult(payloadText) || {};
-            const matches = Array.isArray(payload.matches) ? payload.matches : [];
-            const normalizedRepo = normalizeSlashes(repoPath).replace(/\/+$/g, '');
-            const updates = new Map();
-            const blocked = new Set();
-            for (const match of matches) {
-                const sourceRaw = String(match?.source || '').trim();
-                if (!sourceRaw) continue;
-                const normalizedSource = normalizeSlashes(sourceRaw);
-                const sourcePath = normalizedSource.startsWith('/') || /^[A-Za-z]:/.test(normalizedSource)
-                    ? normalizedSource
-                    : normalizeSlashes(joinPath(normalizedRepo, normalizedSource));
-                if (!sourcePath.startsWith(`${normalizedRepo}/`) && sourcePath !== normalizedRepo) {
-                    blocked.add(sourceRaw);
-                    continue;
-                }
-                const entry = updates.get(sourcePath) || { lines: new Set(), patterns: new Set() };
-                if (Number.isFinite(match?.line)) entry.lines.add(match.line);
-                if (match?.pattern) entry.patterns.add(String(match.pattern));
-                updates.set(sourcePath, entry);
-            }
-            if (updates.size === 0) {
-                const ignorePath = `${normalizedRepo}/.gitignore`;
-                const normalized = String(filePath || '').trim().replace(/^\.\/+/, '').replace(/^\/+/, '');
-                const candidates = new Set([normalized, `/${normalized}`]);
-                const content = await this.service.readTextFile(ignorePath);
-                const lines = String(content ?? '').split(/\r?\n/);
-                const removeIndexes = new Set();
-                lines.forEach((line, idx) => {
-                    const trimmed = line.trim();
-                    if (candidates.has(trimmed)) removeIndexes.add(idx);
-                });
-                if (removeIndexes.size === 0) {
-                    this.setStatusLine(`No ignore rule found for ${filePath}.`, true);
-                    return { ok: false, removed: false };
-                }
-                const nextLines = lines.filter((_, idx) => !removeIndexes.has(idx));
-                let nextContent = nextLines.join('\n');
-                if (content && content.endsWith('\n')) {
-                    nextContent = `${nextContent}\n`;
-                } else if (nextContent && !nextContent.endsWith('\n')) {
-                    nextContent = `${nextContent}\n`;
-                }
-                await this.service.writeFile(ignorePath, nextContent);
-                const map = this.state.ignoreHints || {};
-                if (Array.isArray(map[repoPath])) {
-                    map[repoPath] = map[repoPath].filter((p) => {
-                        const cleaned = String(p || '').replace(/^\/+/, '');
-                        return cleaned !== normalized;
-                    });
-                    this.state.ignoreHints = map;
-                }
-                if (retrack) {
-                    await this.service.gitStage(repoPath, [filePath]);
-                }
-                await this.refreshAll({ force: true });
-                this.setStatusLine(retrack ? `Restored tracking for ${filePath}.` : `Removed ignore rule for ${filePath}.`);
-                return { ok: true, removed: true, blocked: false };
-            }
-            let changedFiles = 0;
-            for (const [sourcePath, entry] of updates.entries()) {
-                const content = await this.service.readTextFile(sourcePath);
-                const lines = String(content ?? '').split(/\r?\n/);
-                const removeIndexes = new Set();
-                for (const lineNo of entry.lines) {
-                    const idx = Number(lineNo) - 1;
-                    if (idx >= 0 && idx < lines.length) removeIndexes.add(idx);
-                }
-                if (removeIndexes.size === 0 && entry.patterns.size) {
-                    const patterns = Array.from(entry.patterns.values());
-                    lines.forEach((line, idx) => {
-                        const trimmed = line.trim();
-                        if (patterns.includes(trimmed)) removeIndexes.add(idx);
-                    });
-                }
-                if (removeIndexes.size === 0) continue;
-                const nextLines = lines.filter((_, idx) => !removeIndexes.has(idx));
-                let nextContent = nextLines.join('\n');
-                if (content && content.endsWith('\n')) {
-                    nextContent = `${nextContent}\n`;
-                } else if (nextContent && !nextContent.endsWith('\n')) {
-                    nextContent = `${nextContent}\n`;
-                }
-                await this.service.writeFile(sourcePath, nextContent);
-                changedFiles += 1;
-            }
-            if (!changedFiles) {
-                this.setStatusLine(`No matching .gitignore entry removed for ${filePath}.`, true);
-                return { ok: false, removed: false };
-            }
-            if (this.state.ignoreHints?.[repoPath]) {
-                const normalized = String(filePath || '').trim().replace(/^\.\/+/, '').replace(/^\/+/, '');
-                const map = { ...this.state.ignoreHints };
-                map[repoPath] = (map[repoPath] || []).filter((p) => String(p || '').replace(/^\/+/, '') !== normalized);
-                this.state.ignoreHints = map;
-            }
-            if (retrack) {
-                await this.service.gitStage(repoPath, [filePath]);
+            if (!payload.ok) {
+                throw new Error(String(payload.error || 'Failed to update .gitignore.'));
             }
             await this.refreshAll({ force: true });
-            if (blocked.size) {
-                this.setStatusLine(
-                    retrack
-                        ? `Restored local tracking rule for ${filePath}. Some global ignore rules still apply.`
-                        : `Removed ignore rule for ${filePath}. Some rules are in global ignores.`,
-                    true
-                );
-                return { ok: true, removed: true, blocked: true };
+            const added = Array.isArray(payload.added) ? payload.added : [];
+            const alreadyPresent = Array.isArray(payload.alreadyPresent) ? payload.alreadyPresent : [];
+            if (added.length) {
+                this.setStatusLine(`Added ${added[0]} to .gitignore.`);
+            } else if (alreadyPresent.length) {
+                this.setStatusLine(`${alreadyPresent[0]} is already in .gitignore.`);
+            } else {
+                this.setStatusLine('Updated .gitignore.');
             }
-            this.setStatusLine(retrack ? `Restored tracking for ${filePath}.` : `Removed ignore rule for ${filePath}.`);
-            return { ok: true, removed: true, blocked: false };
+            return payload;
         } catch (error) {
             this.setStatusLine(normalizeErrorMessage(error), true);
-            return { ok: false, removed: false, error };
+            return { ok: false };
+        }
+    }
+
+    async removeIgnoreRuleForFile(repoPath, filePath) {
+        if (!repoPath || !filePath) return { ok: false };
+        try {
+            this.setStatusLine(`Removing ignore rule for ${filePath}...`);
+            const payloadText = await this.service.gitRemoveIgnore(joinPath(repoPath, filePath));
+            const payload = parseJsonToolResult(payloadText) || {};
+            if (!payload.ok) {
+                throw new Error(String(payload.error || 'Failed to update .gitignore.'));
+            }
+            await this.refreshAll({ force: true });
+            if (payload.removed && payload.retracked) {
+                this.setStatusLine(`Removed from .gitignore and restored tracking for ${filePath}.`);
+            } else if (payload.removed) {
+                this.setStatusLine(`Removed from .gitignore for ${filePath}.`);
+            } else {
+                this.setStatusLine(`No ignore rule found for ${filePath}.`, true);
+            }
+            return payload;
+        } catch (error) {
+            this.setStatusLine(normalizeErrorMessage(error), true);
+            return { ok: false };
         }
     }
 
@@ -909,7 +804,7 @@ export class GitCommitModal {
         const isUntracked = Boolean(row?.classList?.contains('is-untracked'));
         const isIgnored = Boolean(row?.classList?.contains('is-ignored'));
         if (await this.shouldRollbackByRetracking(repoPath, filePath)) {
-            await this.removeIgnoreRuleForFile(repoPath, filePath, { retrack: true });
+            await this.removeIgnoreRuleForFile(repoPath, filePath);
             return;
         }
         if (isUntracked) {
@@ -917,7 +812,7 @@ export class GitCommitModal {
             return;
         }
         if (isIgnored) {
-            await this.removeIgnoreRuleForFile(repoPath, filePath, { retrack: true });
+            await this.removeIgnoreRuleForFile(repoPath, filePath);
             return;
         }
         try {
@@ -936,7 +831,7 @@ export class GitCommitModal {
         const repoPath = payload.repoPath || null;
         const filePath = payload.filePath;
         if (!repoPath || !filePath) return;
-        this.actions.openGitIgnorePrompt({ repoPath, paths: [filePath], source: 'selection' });
+        void this.addIgnoreForPath(joinPath(repoPath, filePath));
     }
 
     closeFileMenus() {
@@ -961,10 +856,6 @@ export class GitCommitModal {
         return this.ui.updateAuthPrompt(options);
     }
 
-    updateIgnorePrompt(options = {}) {
-        return this.ui.updateIgnorePrompt(options);
-    }
-
     async applyRepoPathFromInput(value) {
         const next = String(value || '').trim();
         if (!next) {
@@ -985,16 +876,6 @@ export class GitCommitModal {
             pendingAction: null,
             token: '',
             authMethod: getRememberedGitAuthMethod()
-        };
-        this.state.ignorePrompt = {
-            visible: false,
-            repoPath: null,
-            mode: 'file',
-            anchor: true,
-            patterns: '',
-            paths: [],
-            source: 'manual',
-            stopTracking: false
         };
         this.closeActionsMenu();
         this.syncStaticUI();
@@ -1255,10 +1136,6 @@ export class GitCommitModal {
         return this.actions.cancelGitIdentity();
     }
 
-    cancelGitIgnore() {
-        return this.actions.cancelGitIgnore();
-    }
-
     async saveGitToken(payload = {}) {
         return this.actions.saveGitToken(payload);
     }
@@ -1275,18 +1152,6 @@ export class GitCommitModal {
         const shouldClose = this.actions.cancelGitCredentials();
         if (shouldClose) this.closeCredentials();
         return shouldClose;
-    }
-
-    async saveGitIgnore(payload = {}) {
-        return this.actions.saveGitIgnore(payload);
-    }
-
-    setIgnoreMode(payload = {}) {
-        return this.actions.setIgnoreMode(payload);
-    }
-
-    setIgnoreAnchor(payload = {}) {
-        return this.actions.setIgnoreAnchor(payload);
     }
 
     async gitPushWithToken(repoPath, token) {

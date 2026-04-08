@@ -81,11 +81,9 @@ export function createGitCommitUI(ctx) {
         updatePullBlockedPanel();
         updateCommitBody();
         updateRepoTree();
-        updateIgnorePrompt();
     };
 
     const getCredentialsPromptPresenter = () => element.querySelector('git-credentials-prompt')?.webSkelPresenter || null;
-    const getIgnorePromptPresenter = () => element.querySelector('git-ignore-prompt')?.webSkelPresenter || null;
     const getConflictHelperPresenter = () => element.querySelector('git-conflict-helper')?.webSkelPresenter || null;
     const getConflictBannerPresenter = () => element.querySelector('git-conflict-banner')?.webSkelPresenter || null;
     const getCommitBodyPresenter = () => element.querySelector('git-commit-body')?.webSkelPresenter || null;
@@ -206,26 +204,6 @@ export function createGitCommitUI(ctx) {
 
     const updateAuthPrompt = (options = {}) => {
         updateCredentialsPrompt(options);
-    };
-
-    const updateIgnorePrompt = (options = {}) => {
-        const promptState = state.ignorePrompt || {};
-        const paths = Array.isArray(promptState.paths) ? promptState.paths : [];
-        const preview = paths.slice(0, 4);
-        const detail = {
-            visible: Boolean(promptState.visible),
-            repoLabel: promptState.repoPath || '',
-            patterns: promptState.patterns || '',
-            mode: promptState.mode || 'file',
-            anchor: promptState.anchor !== false,
-            count: paths.length,
-            preview,
-            source: promptState.source || 'manual',
-            stopTracking: Boolean(promptState.stopTracking)
-        };
-        if (options.focus) detail.focus = options.focus;
-        const presenter = getIgnorePromptPresenter();
-        presenter?.setState?.(detail);
     };
 
     const updateCommitBody = () => {
@@ -486,13 +464,12 @@ export function createGitCommitUI(ctx) {
         const repoOk = state.repoInfoOk !== false;
         const identityBlocking = Boolean(state.identityPrompt?.visible);
         const authBlocking = Boolean(state.authPrompt?.visible);
-        const ignoreBlocking = Boolean(state.ignorePrompt?.visible);
         const hasSelection = selectedRepos.length > 0;
         const conflictBlocking = hasConflictsForRepos(selectedRepos);
         const pullBlocked = hasPullBlockedForRepos(selectedRepos);
-        const commitAllowed = !identityBlocking && !authBlocking && !ignoreBlocking && !conflictBlocking && !pullBlocked && hasSelection && messageOk;
-        const pushAllowed = !identityBlocking && !authBlocking && !ignoreBlocking && (repoOk || hasSelection);
-        const pullAllowed = !identityBlocking && !authBlocking && !ignoreBlocking && hasSelection;
+        const commitAllowed = !identityBlocking && !authBlocking && !conflictBlocking && !pullBlocked && hasSelection && messageOk;
+        const pushAllowed = !identityBlocking && !authBlocking && (repoOk || hasSelection);
+        const pullAllowed = !identityBlocking && !authBlocking && hasSelection;
         const disabled = !commitAllowed && !pushAllowed && !pullAllowed;
         const presenter = getCommitActionsPresenter();
         if (presenter?.setState) {
@@ -560,7 +537,6 @@ export function createGitCommitUI(ctx) {
         syncStaticUI,
         updateIdentityPrompt,
         updateAuthPrompt,
-        updateIgnorePrompt,
         updateCommitButtons,
         updateCommitMessage,
         toggleActionsMenu,

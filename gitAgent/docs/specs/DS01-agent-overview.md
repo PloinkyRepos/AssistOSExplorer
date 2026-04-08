@@ -1,4 +1,4 @@
-# GA01 - Git Agent Overview
+# DS01 - Git Agent Overview
 
 ## Summary
 
@@ -69,12 +69,13 @@ Primary tools include:
 
 1. Explorer invokes `gitAgent` MCP tools for repository inspection and operations.
 2. `gitAgent` resolves and validates repository paths against the workspace.
-3. For authenticated remote operations, `gitAgent` uses:
+3. `git_info` accepts file or directory targets and returns both the repository root and the repository-relative path for the selected target.
+4. For authenticated remote operations, `gitAgent` uses:
    - `metadata.authInfo.github.accessToken` when already supplied by the caller, otherwise
    - the per-user token stored in DPU Secrets.
-4. GitHub device-flow completion writes the token into DPU and keeps only metadata in local state.
-5. Manual token save writes the token into DPU and updates local connection metadata with a non-sensitive source marker.
-6. Disconnect removes the per-user token from DPU and clears local metadata.
+5. GitHub device-flow completion writes the token into DPU and keeps only metadata in local state.
+6. Manual token save writes the token into DPU and updates local connection metadata with a non-sensitive source marker.
+7. Disconnect removes the per-user token from DPU and clears local metadata.
 
 ## Configuration
 
@@ -89,4 +90,4 @@ Relevant variables include:
 
 ## Related Specs
 
-- [GA02 - Explorer Plugin](/Users/adrianganga/Desktop/devWork/testExplorer/.ploinky/repos/fileExplorer/gitAgent/docs/specs/GA/GA02-explorer-plugin.md)
+- [DS02 - Explorer Plugin](./DS02-explorer-plugin.md)

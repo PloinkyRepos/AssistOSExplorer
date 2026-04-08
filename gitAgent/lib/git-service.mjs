@@ -25,6 +25,12 @@ function normalizeGitRepoRelativePath(candidate) {
   return String(candidate || '').replaceAll('\\', '/').replace(/^\.\/+/, '').replace(/\/+$/g, '');
 }
 
+function normalizeGitIgnorePattern(candidate, { directory = false } = {}) {
+  const normalized = normalizeGitRepoRelativePath(candidate);
+  if (!normalized) return '';
+  return directory ? `${normalized}/` : normalized;
+}
+
 function isPathWithinIgnoredPath(candidate, ignoredPath) {
   const normalizedCandidate = normalizeGitRepoRelativePath(candidate);
   const normalizedIgnored = normalizeGitRepoRelativePath(ignoredPath);
@@ -158,6 +164,10 @@ function getStopTrackingIgnoredPaths(status = {}) {
       .map((entry) => entry.path)
   );
   return Array.from(stagedDeletes).filter((file) => ignoredPaths.has(file)).sort((a, b) => a.localeCompare(b));
+}
+
+function normalizeSlashes(value) {
+  return String(value || '').replace(/\\/g, '/');
 }
 
 function extractConflictPathsFromOutput(output) {
@@ -326,44 +336,74 @@ export function createGitService({ validatePath }) {
     return repoPath;
   }
 
+  async function resolveGitTargetContext(targetPathArg) {
+    const validatedTargetPath = await validatePath(targetPathArg || '/');
+    const targetPath = await fs.realpath(validatedTargetPath);
+    const stats = await fs.lstat(targetPath);
+    const probePath = stats.isDirectory() ? targetPath : path.dirname(targetPath);
+    const gitBinary = await getGitBinary(probePath);
+    const { stdout } = await runGit(probePath, [gitBinary, 'rev-parse', '--show-toplevel'], { timeoutMs: 5000 });
+    const repoPathRaw = String(stdout || '').trim();
+    const repoPath = repoPathRaw ? await fs.realpath(repoPathRaw) : '';
+    if (!repoPath) {
+      throw new Error('Not a git repository. Set the path to a file or folder inside a git repository.');
+    }
+    const relativePath = path.relative(repoPath, targetPath).split(path.sep).join('/');
+    if (targetPath !== repoPath && (!relativePath || relativePath.startsWith('..'))) {
+      throw new Error('Target path must be inside the git repository.');
+    }
+    return {
+      targetPath,
+      probePath,
+      repoPath,
+      gitBinary,
+      stats,
+      repoRelativePath: relativePath && relativePath !== '.' ? normalizeGitRepoRelativePath(relativePath) : ''
+    };
+  }
+
 
   async function gitInfo({ path: repoPathArg }) {
-    const repoPath = await resolveRepoPath(repoPathArg);
+    let context = null;
     try {
-      const gitBinary = await getGitBinary(repoPath);
-      const inside = await runGit(repoPath, [gitBinary, 'rev-parse', '--is-inside-work-tree']);
+      context = await resolveGitTargetContext(repoPathArg);
+      const inside = await runGit(context.probePath, [context.gitBinary, 'rev-parse', '--is-inside-work-tree']);
       if (!inside.stdout.trim().startsWith('true')) {
-        return { ok: false, branch: null, upstream: null, remotes: [] };
+        return { ok: false, branch: null, upstream: null, remotes: [], repoPath: null, repoRelativePath: '' };
       }
     } catch {
-      return { ok: false, branch: null, upstream: null, remotes: [] };
+      return { ok: false, branch: null, upstream: null, remotes: [], repoPath: null, repoRelativePath: '' };
     }
 
     let branch = null;
     let upstream = null;
     let remotes = [];
     try {
-      const gitBinary = await getGitBinary(repoPath);
-      const res = await runGit(repoPath, [gitBinary, 'rev-parse', '--abbrev-ref', 'HEAD']);
+      const res = await runGit(context.probePath, [context.gitBinary, 'rev-parse', '--abbrev-ref', 'HEAD']);
       branch = res.stdout.trim() || null;
     } catch {
       branch = null;
     }
     try {
-      const gitBinary = await getGitBinary(repoPath);
-      const res = await runGit(repoPath, [gitBinary, 'rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']);
+      const res = await runGit(context.probePath, [context.gitBinary, 'rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']);
       upstream = res.stdout.trim() || null;
     } catch {
       upstream = null;
     }
     try {
-      const gitBinary = await getGitBinary(repoPath);
-      const res = await runGit(repoPath, [gitBinary, 'remote']);
+      const res = await runGit(context.probePath, [context.gitBinary, 'remote']);
       remotes = res.stdout.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
     } catch {
       remotes = [];
     }
-    return { ok: true, branch, upstream, remotes };
+    return {
+      ok: true,
+      branch,
+      upstream,
+      remotes,
+      repoPath: context.repoPath,
+      repoRelativePath: context.repoRelativePath
+    };
   }
 
   async function gitStatus({ path: repoPathArg, includeAhead = false }) {
@@ -645,6 +685,168 @@ export function createGitService({ validatePath }) {
       });
     }
     return { ok: true, matches };
+  }
+
+  async function gitAddIgnore({ path: targetPathArg }) {
+    const context = await resolveGitTargetContext(targetPathArg);
+    const pattern = normalizeGitIgnorePattern(context.repoRelativePath, { directory: context.stats.isDirectory() });
+    if (!pattern) {
+      throw new Error('Could not derive a valid .gitignore pattern for the selected path.');
+    }
+
+    const repoRelativeTarget = context.repoRelativePath;
+    const ignoreFilePath = path.join(context.repoPath, '.gitignore');
+    let currentContent = '';
+    try {
+      currentContent = await fs.readFile(ignoreFilePath, 'utf8');
+    } catch (error) {
+      if (error?.code !== 'ENOENT') {
+        throw error;
+      }
+    }
+
+    const existingPatterns = new Set(
+      String(currentContent || '')
+        .split(/\r?\n/)
+        .map((entry) => entry.trim())
+        .filter(Boolean)
+    );
+    const alreadyPresent = existingPatterns.has(pattern);
+
+    if (!alreadyPresent) {
+      const nextContent = currentContent
+        ? `${currentContent.endsWith('\n') ? currentContent : `${currentContent}\n`}${pattern}\n`
+        : `${pattern}\n`;
+      await fs.writeFile(ignoreFilePath, nextContent, 'utf8');
+    }
+
+    const { stdout: trackedOutput } = await runGit(
+      context.repoPath,
+      [context.gitBinary, 'ls-files', '-z', '--', repoRelativeTarget],
+      { timeoutMs: 5000, okCodes: [0] }
+    );
+    const trackedEntries = String(trackedOutput || '').split('\0').filter(Boolean);
+    const stopTracking = trackedEntries.length > 0;
+
+    if (stopTracking) {
+      const rmArgs = context.stats.isDirectory()
+        ? [context.gitBinary, 'rm', '-r', '-f', '--cached', '--ignore-unmatch', '--', repoRelativeTarget]
+        : [context.gitBinary, 'rm', '-f', '--cached', '--ignore-unmatch', '--', repoRelativeTarget];
+      await runGit(context.repoPath, rmArgs, { timeoutMs: 25000 });
+    }
+
+    return {
+      ok: true,
+      repoPath: context.repoPath,
+      ignorePath: ignoreFilePath,
+      added: alreadyPresent ? [] : [pattern],
+      alreadyPresent: alreadyPresent ? [pattern] : [],
+      stopTracking,
+      untrackedPaths: stopTracking ? trackedEntries : []
+    };
+  }
+
+  async function gitRemoveIgnore({ path: targetPathArg }) {
+    const context = await resolveGitTargetContext(targetPathArg);
+    const repoRelativeTarget = context.repoRelativePath;
+    const matchesPayload = await gitCheckIgnore({ path: context.repoPath, files: [repoRelativeTarget] });
+    const matches = Array.isArray(matchesPayload?.matches) ? matchesPayload.matches : [];
+    const updates = new Map();
+
+    for (const match of matches) {
+      const sourceRaw = String(match?.source || '').trim();
+      if (!sourceRaw) continue;
+      const normalizedSource = normalizeSlashes(sourceRaw);
+      const sourcePath = normalizedSource.startsWith('/') || /^[A-Za-z]:/.test(normalizedSource)
+        ? normalizedSource
+        : normalizeSlashes(path.join(context.repoPath, normalizedSource));
+      if (!sourcePath.startsWith(`${normalizeSlashes(context.repoPath)}/`) && sourcePath !== normalizeSlashes(context.repoPath)) {
+        continue;
+      }
+      const entry = updates.get(sourcePath) || { lines: new Set(), patterns: new Set() };
+      if (Number.isFinite(match?.line)) entry.lines.add(match.line);
+      if (match?.pattern) entry.patterns.add(String(match.pattern));
+      updates.set(sourcePath, entry);
+    }
+
+    const normalizeCandidate = (value) => String(value || '').trim().replace(/^\.\/+/, '').replace(/^\/+/, '');
+    if (!updates.size) {
+      const ignorePath = path.join(context.repoPath, '.gitignore');
+      let content = '';
+      try {
+        content = await fs.readFile(ignorePath, 'utf8');
+      } catch (error) {
+        if (error?.code !== 'ENOENT') throw error;
+      }
+      const normalized = normalizeCandidate(repoRelativeTarget);
+      const candidates = new Set([normalized, `/${normalized}`]);
+      if (context.stats.isDirectory()) {
+        candidates.add(`${normalized}/`);
+        candidates.add(`/${normalized}/`);
+      }
+      const lines = String(content || '').split(/\r?\n/);
+      const removeIndexes = new Set();
+      lines.forEach((line, idx) => {
+        const trimmed = line.trim();
+        if (candidates.has(trimmed)) removeIndexes.add(idx);
+      });
+      if (removeIndexes.size) {
+        updates.set(ignorePath, { lines: removeIndexes, patterns: new Set() });
+      }
+    }
+
+    if (!updates.size) {
+      return { ok: true, repoPath: context.repoPath, removed: false, retracked: false };
+    }
+
+    let changedFiles = 0;
+    for (const [sourcePath, entry] of updates.entries()) {
+      let content = '';
+      try {
+        content = await fs.readFile(sourcePath, 'utf8');
+      } catch (error) {
+        if (error?.code === 'ENOENT') continue;
+        throw error;
+      }
+      const lines = String(content || '').split(/\r?\n/);
+      const removeIndexes = new Set(
+        Array.from(entry.lines.values())
+          .map((lineNo) => Number(lineNo) - 1)
+          .filter((idx) => Number.isInteger(idx) && idx >= 0 && idx < lines.length)
+      );
+      if (!removeIndexes.size && entry.patterns.size) {
+        const patterns = Array.from(entry.patterns.values());
+        lines.forEach((line, idx) => {
+          const trimmed = line.trim();
+          if (patterns.includes(trimmed)) removeIndexes.add(idx);
+        });
+      }
+      if (!removeIndexes.size) continue;
+      const nextLines = lines.filter((_, idx) => !removeIndexes.has(idx));
+      let nextContent = nextLines.join('\n');
+      if (content && content.endsWith('\n')) {
+        nextContent = `${nextContent}\n`;
+      } else if (nextContent && !nextContent.endsWith('\n')) {
+        nextContent = `${nextContent}\n`;
+      }
+      await fs.writeFile(sourcePath, nextContent, 'utf8');
+      changedFiles += 1;
+    }
+
+    let retracked = false;
+    try {
+      await runGit(context.repoPath, [context.gitBinary, 'add', '--', repoRelativeTarget], { timeoutMs: 25000 });
+      retracked = true;
+    } catch {
+      retracked = false;
+    }
+
+    return {
+      ok: true,
+      repoPath: context.repoPath,
+      removed: changedFiles > 0,
+      retracked
+    };
   }
 
   async function gitRestore({ path: repoPathArg, files = [] }) {
@@ -1384,6 +1586,8 @@ export function createGitService({ validatePath }) {
     gitUnstage,
     gitUntrack,
     gitCheckIgnore,
+    gitAddIgnore,
+    gitRemoveIgnore,
     gitRestore,
     gitConflictVersions,
     gitCheckoutConflict,

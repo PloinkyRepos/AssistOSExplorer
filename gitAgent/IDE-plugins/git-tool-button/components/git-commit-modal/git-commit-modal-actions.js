@@ -6,7 +6,6 @@ import {
 } from "./git-commit-modal-utils.js";
 import { withGlobalLoader } from "/explorer/utils/globalLoader.js";
 import { createCredentialsActions } from "./git-commit-modal-actions-credentials.js";
-import { createIgnoreActions } from "./git-commit-modal-actions-ignore.js";
 import { createCommitMessageActions } from "./git-commit-modal-actions-commit-message.js";
 import { createConflictActions } from "./git-commit-modal-actions-conflicts.js";
 import { createGitOpsActions } from "./git-commit-modal-actions-gitops.js";
@@ -26,7 +25,6 @@ export function createGitCommitActions(ctx) {
         syncStaticUI,
         updateIdentityPrompt,
         updateAuthPrompt,
-        updateIgnorePrompt,
         closeActionsMenu,
         getSelectedReposForBatch,
         getPathsForCommitInRepo,
@@ -102,20 +100,6 @@ export function createGitCommitActions(ctx) {
         getPathsForCommitInRepo
     });
     const { generateCommitMessageForSelections, generateCommitMessage } = commitMessageActions;
-
-    const ignoreActions = createIgnoreActions({
-        getState,
-        applyState,
-        service,
-        setStatusLine,
-        updateCommitButtons,
-        updateIgnorePrompt,
-        getSelectedReposForBatch,
-        getPathsForCommitInRepo,
-        loadRepoOverviews,
-        refreshAll
-    });
-    const { openGitIgnorePrompt, setIgnoreMode, setIgnoreAnchor, cancelGitIgnore, saveGitIgnore } = ignoreActions;
 
     const credentialsActions = createCredentialsActions({
         getState,
@@ -582,17 +566,12 @@ export function createGitCommitActions(ctx) {
         showGitAuthPrompt,
         openGitTokenPrompt,
         openGitIdentityPrompt,
-        openGitIgnorePrompt,
         cancelGitToken,
         cancelGitIdentity,
         cancelGitCredentials,
-        cancelGitIgnore,
         generateCommitMessage,
         saveGitToken,
         saveGitCredentials,
-        saveGitIgnore,
-        setIgnoreMode,
-        setIgnoreAnchor,
         selectConflictFile,
         applyConflictChoice,
         saveConflictResolution,

@@ -12,7 +12,7 @@ MCP agent for Git operations inside a Ploinky workspace.
 ## Available tools
 
 - repository inspection: `git_info`, `git_status`, `git_repos_overview`, `git_identity`
-- diff and ignore inspection: `git_diff`, `git_check_ignore`
+- diff and ignore inspection: `git_diff`, `git_check_ignore`, `git_add_ignore`, `git_remove_ignore`
 - staging workflow: `git_stage`, `git_stage_exact`, `git_unstage`, `git_untrack`, `git_restore`
 - conflict workflow: `git_conflict_versions`, `git_checkout_conflict`
 - remote workflow: `git_commit`, `git_push`, `git_pull`, `git_stash`, `git_stash_pop`
@@ -50,8 +50,11 @@ Optional provider and integration variables:
 
 - `git_commit_message` depends on the default LLM runtime from `achillesAgentLib`.
 - The agent is decoupled from Explorer UI. Explorer or other clients should call Git through MCP, not through shared UI internals.
+- Explorer context menus use a separate menu contribution plugin. The menu stays host-owned in Explorer, while `gitAgent` owns actions such as `Add to .gitignore` and `Remove from .gitignore`.
+- `git_add_ignore` both appends the ignore pattern and removes already tracked paths from the Git index, including staged-but-diverged entries that require forced index removal, so ignored items stop participating in future commits unless explicitly re-added.
+- `git_remove_ignore` removes the matching ignore rule and re-adds the target to Git tracking when possible.
 
 ## Documentation
 
-- [GA01 - Git Agent Overview](./docs/specs/GA/GA01-agent-overview.md)
-- [GA02 - Explorer Plugin](./docs/specs/GA/GA02-explorer-plugin.md)
+- [DS01 - Git Agent Overview](./docs/specs/DS01-agent-overview.md)
+- [DS02 - Explorer Plugin](./docs/specs/DS02-explorer-plugin.md)

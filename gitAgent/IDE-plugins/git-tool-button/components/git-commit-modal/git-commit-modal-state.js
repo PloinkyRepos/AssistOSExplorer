@@ -87,16 +87,6 @@ export function createGitCommitState(props = {}) {
             setup: null,
             error: ''
         },
-        ignorePrompt: {
-            visible: false,
-            repoPath: null,
-            mode: 'file', // 'file' | 'folder'
-            anchor: true,
-            patterns: '',
-            paths: [],
-            source: 'manual', // 'selection' | 'untracked' | 'manual'
-            stopTracking: false
-        },
         lastStatusLine: '',
         lastStatusIsError: false
     };

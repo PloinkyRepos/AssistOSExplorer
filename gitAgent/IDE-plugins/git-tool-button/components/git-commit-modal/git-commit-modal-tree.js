@@ -262,7 +262,7 @@ export function renderRepoChangesTree(repo, {
                 ignoreItem.dataset.repoPath = repo.path;
                 ignoreItem.dataset.prefix = normalizedPrefix;
                 ignoreItem.setAttribute('data-local-action', 'openIgnoreForFolder');
-                ignoreItem.textContent = 'Add folder to .gitignore';
+                ignoreItem.textContent = 'Add to .gitignore';
                 menuList.appendChild(ignoreItem);
             } else {
                 const removeIgnoreItem = document.createElement('div');
@@ -356,32 +356,9 @@ export function renderRepoChangesTree(repo, {
                 ignoreItem.setAttribute('tabindex', '0');
                 ignoreItem.dataset.repoPath = repo.path;
                 ignoreItem.dataset.filePath = file.path;
-                if (isUntracked) {
-                    ignoreItem.setAttribute('data-local-action', 'openIgnoreForFile');
-                    ignoreItem.textContent = 'Add to .gitignore';
-                    ignoreItem.title = 'Ignore this untracked file so Git will stop showing it in status and commits.';
-                    ignoreItem.setAttribute('aria-label', 'Ignore this untracked file so Git will stop showing it in status and commits.');
-                } else {
-                    ignoreItem.setAttribute('data-local-action', 'openIgnoreForFile');
-                    ignoreItem.textContent = 'Add to .gitignore (keep tracked)';
-                    ignoreItem.title = 'Keep this file versioned in the repository, but add an ignore rule so the rule also applies to future untracked copies.';
-                    ignoreItem.setAttribute('aria-label', 'Keep this file versioned in the repository, but add an ignore rule so the rule also applies to future untracked copies.');
-                }
+                ignoreItem.setAttribute('data-local-action', 'openIgnoreForFile');
+                ignoreItem.textContent = 'Add to .gitignore';
                 menuList.appendChild(ignoreItem);
-
-                if (!isUntracked) {
-                    const stopTrackingItem = document.createElement('div');
-                    stopTrackingItem.className = 'git-file-menu-item';
-                    stopTrackingItem.setAttribute('role', 'menuitem');
-                    stopTrackingItem.setAttribute('tabindex', '0');
-                    stopTrackingItem.dataset.repoPath = repo.path;
-                    stopTrackingItem.dataset.filePath = file.path;
-                    stopTrackingItem.setAttribute('data-local-action', 'openStopTrackingForFile');
-                    stopTrackingItem.textContent = 'Stop tracking + add to .gitignore';
-                    stopTrackingItem.title = 'Remove this file from version control and add an ignore rule so future local edits stay out of Git.';
-                    stopTrackingItem.setAttribute('aria-label', 'Remove this file from version control and add an ignore rule so future local edits stay out of Git.');
-                    menuList.appendChild(stopTrackingItem);
-                }
             } else {
                 const removeIgnoreItem = document.createElement('div');
                 removeIgnoreItem.className = 'git-file-menu-item';

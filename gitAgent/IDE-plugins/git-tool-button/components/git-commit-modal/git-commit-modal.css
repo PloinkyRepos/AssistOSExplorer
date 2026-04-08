@@ -298,7 +298,20 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    margin-bottom: 6px;
+    width: 100%;
+}
+
+.git-advanced-toggle-inline {
+    order: 0;
+    margin-bottom: 2px;
+}
+
+.git-commit-actions > git-status-bar {
+    order: 1;
+}
+
+.git-commit-actions > .git-action-buttons {
+    order: 2;
 }
 
 .git-commit:not(.advanced-mode) .git-commit-row.git-commit-message {
@@ -881,12 +894,13 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
 }
 
 .git-diff-body .diff-line.add {
-    background: rgba(34, 197, 94, 0.12);
+    background: rgba(34, 197, 94, 0.3);
     width: max-content;
 }
 
 .git-diff-body .diff-line.remove {
-    background: rgba(239, 68, 68, 0.12);
+    background: rgba(239, 68, 68, 0.3);
+    width: max-content;
 }
 
 .git-diff-body .diff-line.meta {
@@ -1209,6 +1223,7 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
 
 .git-commit-message {
     margin-bottom: 4px;
+    width: 100%;
 }
 
 .git-commit-row textarea {
@@ -1241,8 +1256,9 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
 }
 
 .git-commit-actions {
-    justify-content: space-between;
     flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
 }
 
 .git-status {
@@ -1275,6 +1291,7 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
     display: flex;
     gap: 8px;
     align-items: center;
+    align-self: center;
 }
 
 .git-commit-split {

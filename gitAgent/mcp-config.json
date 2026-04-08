@@ -180,6 +180,38 @@
       }
     },
     {
+      "name": "git_add_ignore",
+      "title": "Git Add Ignore",
+      "description": "Add the selected file or directory to the repository .gitignore.",
+      "command": "tools/git_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "path": {
+          "type": "string",
+          "optional": false
+        }
+      },
+      "env": {
+        "TOOL_NAME": "git_add_ignore"
+      }
+    },
+    {
+      "name": "git_remove_ignore",
+      "title": "Git Remove Ignore",
+      "description": "Remove the selected file or directory from repository ignore rules and retrack it when possible.",
+      "command": "tools/git_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "path": {
+          "type": "string",
+          "optional": false
+        }
+      },
+      "env": {
+        "TOOL_NAME": "git_remove_ignore"
+      }
+    },
+    {
       "name": "git_restore",
       "title": "Git Restore",
       "description": "Restore files to the last commit.",

@@ -33,6 +33,8 @@ export function createGitCommitService({ callTool, callAgentTool }) {
         gitStageExact: (path, files) => callAgentTool('gitAgent', 'git_stage_exact', { path, files }),
         gitUntrack: (path, files) => callAgentTool('gitAgent', 'git_untrack', { path, files }),
         gitCheckIgnore: (path, files) => callAgentTool('gitAgent', 'git_check_ignore', { path, files }),
+        gitAddIgnore: (path) => callAgentTool('gitAgent', 'git_add_ignore', { path }),
+        gitRemoveIgnore: (path) => callAgentTool('gitAgent', 'git_remove_ignore', { path }),
         gitRestore: (path, files) => callAgentTool('gitAgent', 'git_restore', { path, files }),
         gitConflictVersions: (payload) => callAgentTool('gitAgent', 'git_conflict_versions', payload),
         gitCheckoutConflict: (payload) => callAgentTool('gitAgent', 'git_checkout_conflict', payload),

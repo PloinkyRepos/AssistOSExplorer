@@ -25,10 +25,6 @@
             "presenter": "GitCredentialsPrompt"
         },
         {
-            "component": "git-ignore-prompt",
-            "presenter": "GitIgnorePrompt"
-        },
-        {
             "component": "git-diff-viewer",
             "presenter": "GitDiffViewer"
         },

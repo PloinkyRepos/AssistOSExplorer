@@ -259,10 +259,6 @@ export class GitRepoTree {
         this.getParentPresenter()?.openIgnoreForFolder?.(element);
     }
 
-    openStopTrackingForFile(element) {
-        this.getParentPresenter()?.openStopTrackingForFile?.(element);
-    }
-
     removeIgnoreForFile(element) {
         this.getParentPresenter()?.removeIgnoreForFile?.(element);
     }

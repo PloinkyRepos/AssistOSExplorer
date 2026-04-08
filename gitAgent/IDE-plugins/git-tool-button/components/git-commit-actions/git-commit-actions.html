@@ -1,20 +1,26 @@
-<div class="git-commit-row git-commit-message">
-    <section class="commit-section">
-        <label class="git-commit-label" for="gitCommitMessage">Commit message</label>
-        <textarea id="gitCommitMessage" rows="3" placeholder="Describe your changes..." autocomplete="off"
-                  data-local-action="updateCommitMessage"></textarea>
-    </section>
-    <button
-            type="button"
-            class="icon-button git-ai-generate"
-            aria-label="Generate commit message with AI"
-            title="Generate message with AI"
-            data-local-action="generateCommitMessage"
-    >
-        <span aria-hidden="true">✦</span>
-    </button>
-</div>
 <div class="git-commit-row git-commit-actions">
+    <div class="git-advanced-toggle git-advanced-toggle-inline">
+        <label class="git-toggle git-toggle-small">
+            <input id="gitAdvancedMode" type="checkbox">
+            Advanced mode
+        </label>
+    </div>
+    <div class="git-commit-row git-commit-message">
+        <section class="commit-section">
+            <label class="git-commit-label" for="gitCommitMessage">Commit message</label>
+            <textarea id="gitCommitMessage" rows="3" placeholder="Describe your changes..." autocomplete="off"
+                      data-local-action="updateCommitMessage"></textarea>
+        </section>
+        <button
+                type="button"
+                class="icon-button git-ai-generate"
+                aria-label="Generate commit message with AI"
+                title="Generate message with AI"
+                data-local-action="generateCommitMessage"
+        >
+            <span aria-hidden="true">✦</span>
+        </button>
+    </div>
     <git-status-bar data-presenter="git-status-bar"></git-status-bar>
     <div class="git-action-buttons">
         <button type="button" class="primary git-sync-button" data-local-action="runGitAction sync">
