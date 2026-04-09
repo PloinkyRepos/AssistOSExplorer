@@ -183,6 +183,41 @@ function getStopTrackingIgnoredPaths(status = {}) {
   return Array.from(stagedDeletes).filter((file) => ignoredPaths.has(file)).sort((a, b) => a.localeCompare(b));
 }
 
+const DEFAULT_STASH_EXCLUDED_DIRS = Object.freeze([
+  'node_modules',
+  'dist',
+  'build',
+  'coverage',
+  'tmp',
+  'logs',
+  'blobs',
+  '.cache',
+  '.turbo',
+  '.parcel-cache',
+  '.mcp-cache'
+]);
+
+function isExcludedStashTarget(candidate) {
+  const normalized = normalizeGitRepoRelativePath(candidate);
+  if (!normalized) return false;
+  const segments = normalized.split('/').filter(Boolean);
+  return segments.some((segment) => DEFAULT_STASH_EXCLUDED_DIRS.includes(segment));
+}
+
+function getStashTargetPaths(status = {}) {
+  const targets = new Set();
+  const stopTrackingIgnored = new Set(getStopTrackingIgnoredPaths(status));
+  for (const bucket of ['staged', 'unstaged', 'untracked', 'conflicted']) {
+    for (const entry of (Array.isArray(status?.[bucket]) ? status[bucket] : [])) {
+      const candidate = normalizeGitRepoRelativePath(entry?.path);
+      if (candidate && !isExcludedStashTarget(candidate) && !stopTrackingIgnored.has(candidate)) {
+        targets.add(candidate);
+      }
+    }
+  }
+  return Array.from(targets).sort((a, b) => a.localeCompare(b));
+}
+
 function normalizeSlashes(value) {
   return String(value || '').replace(/\\/g, '/');
 }
@@ -224,33 +259,6 @@ function hasGitConflictOutput(output) {
   if (!text.trim()) return false;
   return /(^|\n)(CONFLICT \(|UU\s|AA\s|DD\s|DU\s|UD\s|AU\s|UA\s|both modified:|both added:|both deleted:|deleted by us:|deleted by them:|added by us:|added by them:|[^:\n]+: needs merge$)/im.test(text)
     || /\bunmerged\b/i.test(text);
-}
-
-const DEFAULT_STASH_EXCLUDED_DIRS = Object.freeze([
-  'node_modules',
-  'dist',
-  'build',
-  'coverage',
-  'tmp',
-  'logs',
-  'blobs',
-  '.cache',
-  '.turbo',
-  '.parcel-cache',
-  '.mcp-cache'
-]);
-
-function buildGitStashExcludePathspecs() {
-  const patterns = new Set(['.']);
-  for (const dir of DEFAULT_STASH_EXCLUDED_DIRS) {
-    const cleanDir = String(dir || '').trim();
-    if (!cleanDir) continue;
-    patterns.add(`:(exclude)${cleanDir}`);
-    patterns.add(`:(exclude)${cleanDir}/**`);
-    patterns.add(`:(exclude)**/${cleanDir}`);
-    patterns.add(`:(exclude)**/${cleanDir}/**`);
-  }
-  return Array.from(patterns);
 }
 
 async function listUnmergedPaths(repoPath, gitBinary) {
@@ -1008,23 +1016,24 @@ export function createGitService({ validatePath }) {
     };
 
     const beforeList = await listStash();
-    let useAll = false;
-    if (includeUntracked) {
-      try {
-        const statusPayload = await gitStatus({ path: repoPath });
-        const status = statusPayload?.status || {};
-        useAll = getStopTrackingIgnoredPaths(status).length > 0;
-      } catch {
-        useAll = false;
-      }
+    let stashTargets = [];
+    try {
+      const statusPayload = await gitStatus({ path: repoPath });
+      const status = statusPayload?.status || {};
+      stashTargets = getStashTargetPaths(status);
+    } catch {
+      stashTargets = [];
+    }
+    if (!stashTargets.length) {
+      return { ok: true, created: false, ref: null, output: 'No local changes to save', usedAll: false };
     }
     const args = [gitBinary, 'stash', 'push'];
-    if (includeUntracked) args.push(useAll ? '--all' : '-u');
+    if (includeUntracked) args.push('-u');
     const cleanMessage = String(message || '').trim();
     if (cleanMessage) {
       args.push('-m', cleanMessage);
     }
-    args.push('--', ...buildGitStashExcludePathspecs());
+    args.push('--', ...stashTargets);
     const { stdout, stderr } = await runGit(repoPath, args, { timeoutMs: 20000 });
     const output = `${stdout}\n${stderr}`.trim();
     const afterList = await listStash();
@@ -1035,7 +1044,7 @@ export function createGitService({ validatePath }) {
       const firstLine = afterList.split(/\r?\n/)[0] || '';
       ref = firstLine.split(':')[0].trim() || null;
     }
-    return { ok: true, created, ref, output, usedAll: useAll };
+    return { ok: true, created, ref, output, usedAll: false };
   }
 
   async function gitStashList({ path: repoPathArg }) {
