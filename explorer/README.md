@@ -9,6 +9,7 @@ For the general text/code editor, Explorer also owns collaborative editing safeg
 - auto-save is a user setting, default `off`, with a default interval of `10` seconds when enabled
 - the editor surface shows when auto-save is on
 - if a file changes on disk after an edit session starts, Explorer shows a warning, opens a reload confirmation popup, and blocks save until the file is reloaded
+- when a local file is only being viewed, Explorer polls lightweight file metadata for the current file and reloads the preview automatically if another user updates it
 - if the authenticated workspace session expires, Explorer shows a session-expired message and redirects to `/auth/login` with the current route in `returnTo`
 
 Explorer reserves workspace secret files as non-browsable resources:

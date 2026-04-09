@@ -71,6 +71,12 @@ import {
     readDpuCurrentItemState,
     updateDpuSecret
 } from "./file-exp-dpu-provider.js";
+import {
+    startCurrentFileViewWatch as startCurrentFileViewWatchImpl,
+    stopCurrentFileViewWatch as stopCurrentFileViewWatchImpl,
+    refreshCurrentFileViewBaseline as refreshCurrentFileViewBaselineImpl,
+    pollCurrentFileView as pollCurrentFileViewImpl
+} from "./file-exp-current-file-monitor.js";
 
 const LARGE_FILE_PREVIEW_LIMIT_BYTES = 1.5 * 1024 * 1024; // ~1.5MB safety window before transport limits
 const LARGE_FILE_PREVIEW_LINES = 400;
@@ -147,6 +153,8 @@ export class FileExp {
         this.editorAutoSaveTimer = null;
         this.editorExternalWatchTimer = null;
         this.editorExternalWatchInFlight = false;
+        this.currentFileViewWatchTimer = null;
+        this.currentFileViewWatchInFlight = false;
         this.externalModificationPromptActive = false;
 
         attachSearchController(this);
@@ -192,6 +200,7 @@ export class FileExp {
         this.previewDom = null;
         this.clearEditorAutoSaveTimer();
         this.stopEditorExternalWatch();
+        this.stopCurrentFileViewWatch();
         if (this.boundGlobalKeydown) {
             document.removeEventListener('keydown', this.boundGlobalKeydown);
         }
@@ -285,6 +294,10 @@ export class FileExp {
             window.clearTimeout(this.editorAutoSaveTimer);
             this.editorAutoSaveTimer = null;
         }
+    }
+
+    stopCurrentFileViewWatch() {
+        return stopCurrentFileViewWatchImpl(this);
     }
 
     stopEditorExternalWatch() {
@@ -397,6 +410,18 @@ export class FileExp {
         this.editorExternalWatchTimer = window.setInterval(() => {
             void this.pollEditorExternalModification();
         }, EDITOR_EXTERNAL_CHECK_INTERVAL_MS);
+    }
+
+    async refreshCurrentFileViewBaseline(pathValue = this.state.selectedPath) {
+        return refreshCurrentFileViewBaselineImpl(this, pathValue);
+    }
+
+    async pollCurrentFileView() {
+        return pollCurrentFileViewImpl(this);
+    }
+
+    startCurrentFileViewWatch() {
+        return startCurrentFileViewWatchImpl(this);
     }
 
     handleEditorBufferChange() {
@@ -759,6 +784,7 @@ export class FileExp {
     }
 
     async loadDirectory(path = this.state.path) {
+        this.stopCurrentFileViewWatch();
         return loadDirectoryImpl(this, path);
     }
 
@@ -783,6 +809,12 @@ export class FileExp {
             largeFilePreviewLines: LARGE_FILE_PREVIEW_LINES,
             ...options
         });
+        if (this.normalizePath(this.state.selectedPath || '') === this.normalizePath(filePath || '')) {
+            await this.refreshCurrentFileViewBaseline(filePath);
+            this.startCurrentFileViewWatch();
+        } else {
+            this.stopCurrentFileViewWatch();
+        }
         this.syncWebViewForPath(filePath);
         return result;
     }
@@ -962,7 +994,7 @@ export class FileExp {
     }
 
     renderEditorStatusIndicators(statusStrip, previewUiState) {
-        if (!statusStrip || !previewUiState?.showEditingActions) {
+        if (!statusStrip) {
             return;
         }
         const appendLabel = (text, className = '') => {
@@ -971,20 +1003,25 @@ export class FileExp {
             label.textContent = text;
             statusStrip.appendChild(label);
         };
-        if (this.state.editorAutoSaveEnabled) {
-            appendLabel(`Auto-save on (${normalizeEditorIntervalSeconds(this.state.editorAutoSaveIntervalSeconds, 10)}s)`);
-        }
-        if (this.state.savePending) {
-            appendLabel('Saving...');
-        } else if (this.state.hasUnsavedChanges) {
-            appendLabel('Unsaved changes', 'warning');
-        } else if (this.state.externallyModified) {
-            appendLabel('Modified externally', 'warning');
-        } else if (this.state.lastSaveError) {
-            appendLabel('Save failed', 'warning');
-        } else if (this.state.editorAutoSaveEnabled && this.state.lastEditorSaveMode === 'auto' && this.state.lastEditorSaveAt > 0) {
-            const savedAt = formatEditorTimeLabel(this.state.lastEditorSaveAt);
-            appendLabel(savedAt ? `Auto-saved ${savedAt}` : 'Auto-saved');
+        if (previewUiState?.showEditingActions) {
+            if (this.state.editorAutoSaveEnabled) {
+                appendLabel(`Auto-save on (${normalizeEditorIntervalSeconds(this.state.editorAutoSaveIntervalSeconds, 10)}s)`);
+            }
+            if (this.state.savePending) {
+                appendLabel('Saving...');
+            } else if (this.state.hasUnsavedChanges) {
+                appendLabel('Unsaved changes', 'warning');
+            } else if (this.state.externallyModified) {
+                appendLabel('Modified externally', 'warning');
+            } else if (this.state.lastSaveError) {
+                appendLabel('Save failed', 'warning');
+            } else if (this.state.editorAutoSaveEnabled && this.state.lastEditorSaveMode === 'auto' && this.state.lastEditorSaveAt > 0) {
+                const savedAt = formatEditorTimeLabel(this.state.lastEditorSaveAt);
+                appendLabel(savedAt ? `Auto-saved ${savedAt}` : 'Auto-saved');
+            }
+        } else if (this.state.lastExternalReloadAt > 0 && this.state.selectedPath) {
+            const updatedAt = formatEditorTimeLabel(this.state.lastExternalReloadAt);
+            appendLabel(updatedAt ? `Updated ${updatedAt}` : 'Updated');
         }
         if (statusStrip.children.length) {
             statusStrip.classList.remove('hidden');

@@ -209,6 +209,7 @@ export function createFileExpState() {
         lastSaveError: '',
         lastEditorSaveAt: 0,
         lastEditorSaveMode: '',
+        lastExternalReloadAt: 0,
         externallyModified: false,
         selectedFileVersionKey: '',
         selectedFileModifiedAt: '',

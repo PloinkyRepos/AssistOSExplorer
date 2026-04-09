@@ -141,6 +141,7 @@ export async function openFile(fileExp, filePath, {
                 lastSaveError: '',
                 lastEditorSaveAt: 0,
                 lastEditorSaveMode: '',
+                lastExternalReloadAt: 0,
                 selectedFileVersionKey: '',
                 selectedFileModifiedAt: '',
                 selectedFileSize: null,

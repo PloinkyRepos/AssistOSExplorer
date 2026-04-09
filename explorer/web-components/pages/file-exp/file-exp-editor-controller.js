@@ -2,6 +2,7 @@ import { PREVIEW_ACTIONS } from "./file-exp-preview-controller.js";
 import { renderCodePreview, renderMarkdownPreview } from "./file-exp-utils.js";
 import { getPreviewUiState } from "./file-exp-preview-state.js";
 import { isDpuSecretPath, isDpuVirtualPath, openDpuFile, readDpuCurrentItemState, updateDpuFile, updateDpuSecret } from "./file-exp-dpu-provider.js";
+import { startCurrentFileViewWatch, stopCurrentFileViewWatch } from "./file-exp-current-file-monitor.js";
 
 function extractDpuUpdatedAt(snapshot) {
     if (!snapshot || typeof snapshot !== 'object') return '';
@@ -83,8 +84,10 @@ export async function editFile(fileExp) {
         markdownTextView: false,
         hasUnsavedChanges: false,
         savePending: false,
-        isEditing: true
+        isEditing: true,
+        lastExternalReloadAt: 0
     });
+    stopCurrentFileViewWatch(fileExp);
     fileExp.handleEditorBufferChange?.();
     if (!isDpuPath && !fileExp.state.selectedIsMarkdown) {
         fileExp.startEditorExternalWatch?.();
@@ -224,6 +227,7 @@ export async function saveFile(fileExp, options = {}) {
             fileExp.clearEditorAutoSaveTimer?.();
             fileExp.setPreviewState({ isEditing: false }, { invalidate: false });
             fileExp.editorPresenter = null;
+            fileExp.startCurrentFileViewWatch?.();
         }
         fileExp.refreshPreviewUi();
     } catch (err) {
@@ -233,7 +237,8 @@ export async function saveFile(fileExp, options = {}) {
         fileExp.setPreviewState({
             savePending: false,
             lastSaveError: err?.message || 'Failed to save file.',
-            lastEditorSaveMode: ''
+            lastEditorSaveMode: '',
+            lastExternalReloadAt: 0
         }, { invalidate: false });
         fileExp.refreshPreviewUi();
         fileExp.showStatus(err.message || 'Failed to save file.', true);
@@ -251,6 +256,7 @@ export async function cancelEdit(fileExp) {
         lastSaveError: '',
         lastEditorSaveAt: 0,
         lastEditorSaveMode: '',
+        lastExternalReloadAt: 0,
         externallyModified: false,
         selectedFileVersionKey: '',
         selectedFileModifiedAt: '',
@@ -274,5 +280,6 @@ export async function cancelEdit(fileExp) {
         });
         return;
     }
+    startCurrentFileViewWatch(fileExp);
     fileExp.refreshPreviewUi();
 }

@@ -123,6 +123,8 @@ For the general text/code editor, Explorer must treat collaboration state as hos
 
 When the authenticated workspace session expires, Explorer must not leave the user in a broken in-app state. Session-expiry failures from the filesystem or MCP layer, including MCP HTTP `401 not_authenticated` responses, must surface a simple human session-expired message and then redirect the browser to the login URL supplied by the server, or to `/auth/login` with the current Explorer route preserved in `returnTo` when no explicit login URL is returned.
 
+For a file that is currently open in preview mode, Explorer must also monitor the current on-disk version and automatically refresh the view when another user updates that file. This monitoring must compare lightweight file metadata such as `mtimeMs` and `size`, not poll the full file content. The monitor applies only to the currently viewed local file and must stay separate from the edit-session conflict flow, where automatic reload would be unsafe.
+
 ### Resource Classes
 
 Explorer does not operate on a single resource type. It must support:
