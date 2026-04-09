@@ -5,7 +5,7 @@
 Git integrates with Explorer through two application plugin surfaces:
 
 - `git-tool-button`, mounted in `file-exp:toolbar`
-- `git-menu-contributions`, contributing semantic menu items to host-owned Explorer menus
+- `git-menu-contributions`, contributing semantic menu items to host-owned Explorer menus as part of the same logical `git` plugin
 
 ## Plugin Registration
 
@@ -20,8 +20,8 @@ According to [git-menu-contributions config](../../../IDE-plugins/git-menu-contr
 
 - `pluginCategory`: `application`
 - `contributionType`: `menu`
-- `id`: `git-menu-contributions`
-- `location`: `file-exp:context-menu:file`, `file-exp:context-menu:directory`
+- `id`: `git`
+- `location`: `file-exp:context-menu:file`, `file-exp:context-menu:directory`, `file-exp:new-menu`
 - `menuModule`: `menu-contributions.js`
 
 ## Dependency Graph
@@ -52,6 +52,7 @@ The Git plugin owns:
 - commit, pull, push, and sync flows
 - Git authentication prompts
 - conflict resolution UI
+- menu action semantics such as `New repository` in the host-owned Explorer `New` menu
 - menu action semantics such as `Add to .gitignore` and `Remove from .gitignore`
 - direct ignore actions in `git-commit-modal`, without a separate pattern-editing prompt
 
@@ -61,6 +62,12 @@ For ignore actions in Explorer context menus, the owning Git behavior is:
 - if the target is already tracked, `Add to .gitignore` removes it from the Git index, including cases where the index contains staged content that diverges from both `HEAD` and the worktree
 - `Remove from .gitignore` removes the matching ignore rule and restores tracking when possible
 - the file remains on disk in both cases
+
+For the host-owned Explorer `New` menu, the owning Git behavior is:
+
+- `New repository` asks for a repository name
+- the current Explorer directory is used as the parent path
+- execution creates a new child directory and initializes a Git repository inside it
 
 ## Behavioral Specification
 

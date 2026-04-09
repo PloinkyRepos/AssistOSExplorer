@@ -21,6 +21,26 @@
       }
     },
     {
+      "name": "git_init_repository",
+      "title": "Git Init Repository",
+      "description": "Create a new directory and initialize a Git repository inside it.",
+      "command": "tools/git_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "path": {
+          "type": "string",
+          "optional": false
+        },
+        "name": {
+          "type": "string",
+          "optional": false
+        }
+      },
+      "env": {
+        "TOOL_NAME": "git_init_repository"
+      }
+    },
+    {
       "name": "git_status",
       "title": "Git Status",
       "description": "Return git status for a repository path.",

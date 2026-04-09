@@ -5,6 +5,10 @@ async function callGitTool(name, args) {
     return parseToolResult(raw);
 }
 
+function normalizeRepositoryName(value) {
+    return String(value || '').trim();
+}
+
 function shouldOfferAddToGitignore(context) {
     if (!context || context.isConfidential) {
         return false;
@@ -27,6 +31,18 @@ function getRepoProbePath(context) {
 }
 
 export async function getMenuItems({ context, plugin }) {
+    if (context?.slot === 'file-exp:new-menu') {
+        if (context?.isConfidential || !context?.currentFsPath) {
+            return [];
+        }
+        return [{
+            id: 'git:new-repository',
+            label: 'New repository',
+            icon: plugin?.icon || '',
+            action: 'new-repository'
+        }];
+    }
+
     if (!shouldOfferAddToGitignore(context)) {
         return [];
     }
@@ -56,6 +72,31 @@ export async function getMenuItems({ context, plugin }) {
 }
 
 export async function executeMenuAction({ action, context, host }) {
+    if (action === 'new-repository') {
+        const basePath = String(context?.currentFsPath || context?.currentDirectory || context?.currentPath || '').trim();
+        if (!basePath) {
+            throw new Error('Missing target directory for repository creation.');
+        }
+        const input = window.prompt('Enter name for the new repository:');
+        if (input === null) {
+            return;
+        }
+        const repoName = normalizeRepositoryName(input);
+        if (!repoName) {
+            throw new Error('Repository name is required.');
+        }
+        const result = await callGitTool('git_init_repository', {
+            path: basePath,
+            name: repoName
+        });
+        if (!result?.ok) {
+            throw new Error(result?.error || 'Failed to create repository.');
+        }
+        host?.showStatus?.(`Created repository: ${result.name || repoName}`);
+        await host?.refreshDirectory?.();
+        return;
+    }
+
     const targetPath = String(context?.selectedFsPath || context?.selectedPath || '').trim();
     if (!targetPath) {
         throw new Error('Missing target path for gitignore action.');

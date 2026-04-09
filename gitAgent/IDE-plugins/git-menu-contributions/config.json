@@ -1,13 +1,14 @@
 {
     "pluginCategory": "application",
     "contributionType": "menu",
-    "id": "git-menu-contributions",
+    "id": "git",
     "location": [
         "file-exp:context-menu:file",
-        "file-exp:context-menu:directory"
+        "file-exp:context-menu:directory",
+        "file-exp:new-menu"
     ],
-    "label": "Git Menu Contributions",
-    "tooltip": "Git actions for File Explorer menus",
+    "label": "Git",
+    "tooltip": "Git actions for Explorer menus",
     "icon": "./icon.svg",
     "menuModule": "menu-contributions.js"
 }

@@ -112,10 +112,16 @@ function normalizeArgs(toolName, args) {
 
   switch (toolName) {
     case 'git_info':
+    case 'git_init_repository':
     case 'git_status':
     case 'git_diagnose':
     case 'git_identity':
       requirePath();
+      if (toolName === 'git_init_repository') {
+        if (!input.name || typeof input.name !== 'string') {
+          throw new Error('git_init_repository requires a "name" string.');
+        }
+      }
       if (toolName === 'git_status') {
         input.includeAhead = Boolean(input.includeAhead || false);
       }
@@ -283,6 +289,10 @@ async function main() {
         return;
       case 'git_info':
         result = await gitService.gitInfo(payload);
+        writeJson(result);
+        return;
+      case 'git_init_repository':
+        result = await gitService.gitInitRepository(payload);
         writeJson(result);
         return;
       case 'git_status':

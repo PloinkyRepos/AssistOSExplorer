@@ -31,6 +31,23 @@ function normalizeGitIgnorePattern(candidate, { directory = false } = {}) {
   return directory ? `${normalized}/` : normalized;
 }
 
+function normalizeRepositoryName(candidate) {
+  const value = String(candidate || '').trim();
+  if (!value) {
+    throw new Error('Repository name is required.');
+  }
+  if (value.includes('\0')) {
+    throw new Error('Invalid repository name.');
+  }
+  if (value === '.' || value === '..') {
+    throw new Error('Invalid repository name.');
+  }
+  if (value.includes('/') || value.includes('\\')) {
+    throw new Error('Repository name must not include path separators.');
+  }
+  return value;
+}
+
 function isPathWithinIgnoredPath(candidate, ignoredPath) {
   const normalizedCandidate = normalizeGitRepoRelativePath(candidate);
   const normalizedIgnored = normalizeGitRepoRelativePath(ignoredPath);
@@ -403,6 +420,45 @@ export function createGitService({ validatePath }) {
       remotes,
       repoPath: context.repoPath,
       repoRelativePath: context.repoRelativePath
+    };
+  }
+
+  async function gitInitRepository({ path: parentPathArg, name }) {
+    const validatedParentPath = await validatePath(parentPathArg || '/');
+    const parentPath = await fs.realpath(validatedParentPath);
+    const parentStats = await fs.lstat(parentPath);
+    if (!parentStats.isDirectory()) {
+      throw new Error('Repository parent path must be a directory.');
+    }
+
+    const repoName = normalizeRepositoryName(name);
+    const targetPath = path.join(parentPath, repoName);
+    await validatePath(targetPath);
+
+    try {
+      await fs.lstat(targetPath);
+      throw new Error(`Repository directory already exists: ${repoName}`);
+    } catch (error) {
+      if (error?.code !== 'ENOENT') {
+        throw error;
+      }
+    }
+
+    await fs.mkdir(targetPath, { recursive: false });
+    const gitBinary = await getGitBinary(parentPath);
+    try {
+      await runGit(targetPath, [gitBinary, 'init'], { timeoutMs: 20000 });
+    } catch (error) {
+      await fs.rm(targetPath, { recursive: true, force: true }).catch(() => {});
+      throw error;
+    }
+
+    const repoPath = await fs.realpath(targetPath);
+    return {
+      ok: true,
+      parentPath,
+      repoPath,
+      name: repoName
     };
   }
 
@@ -1579,6 +1635,7 @@ export function createGitService({ validatePath }) {
 
   return {
     gitInfo,
+    gitInitRepository,
     gitStatus,
     gitDiff,
     gitStage,

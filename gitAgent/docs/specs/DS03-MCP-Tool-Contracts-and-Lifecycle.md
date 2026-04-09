@@ -6,7 +6,7 @@ This document defines contract guarantees for MCP tool behavior and invocation l
 
 ## Contract Surface
 
-Tool names declared in `mcp-config.json` are public agent contracts. Contracts cover repository inspection, staging and restore flows, conflict handling, stash and commit flows, remote operations, identity management, and GitHub auth lifecycle operations.
+Tool names declared in `mcp-config.json` are public agent contracts. Contracts cover repository creation, repository inspection, staging and restore flows, conflict handling, stash and commit flows, remote operations, identity management, and GitHub auth lifecycle operations.
 
 Each contract shall define input schema expectations and tool identity mapping through `TOOL_NAME` semantics and dispatcher resolution.
 
