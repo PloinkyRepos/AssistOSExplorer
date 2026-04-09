@@ -18,6 +18,7 @@ import {
 } from "./components/git-commit-modal/git-commit-modal-utils.js";
 import { callAgentTool } from "/explorer/services/infrastructure/explorerApi.js";
 import { getReposRoot, getRepoScanPaths } from "/explorer/utils/reposRoot.js";
+import { pullWithAutoStashFlow, restoreStashFlow } from "./utils/git-auto-stash-flow.js";
 import {
     AUTOCOMMIT_SETTINGS_CHANGED_EVENT,
     AUTOCOMMIT_RESET_EVENT,
@@ -78,6 +79,15 @@ export function attachGitController(fileExp) {
         }
     };
 
+    const refreshGitSurfaces = async () => {
+        try {
+            window.dispatchEvent(new CustomEvent(FILE_EXP_REFRESH_EVENT));
+        } catch {
+            // ignore dispatch failures
+        }
+        await refreshOpenGitModals();
+    };
+
     const autocommit = {
         timerId: null,
         running: false,
@@ -129,6 +139,12 @@ export function attachGitController(fileExp) {
             return parseJsonToolResult(text);
         }
         return null;
+    };
+
+    const autoStashService = {
+        gitStatus: (repoPath) => callAgentTool('gitAgent', 'git_status', { path: repoPath }, { raw: true }),
+        gitStash: (payload) => callAgentTool('gitAgent', 'git_stash', payload, { raw: true }),
+        gitStashPop: (payload) => callAgentTool('gitAgent', 'git_stash_pop', payload, { raw: true })
     };
 
     const listRepos = async () => {
@@ -209,90 +225,46 @@ export function attachGitController(fileExp) {
     };
 
     const restoreStash = async (repoPath, stashRef) => {
-        try {
-            const popStash = async (reinstateIndex) => {
-                const request = { path: repoPath, reinstateIndex };
-                if (stashRef) request.ref = stashRef;
-                const text = await callAgentTool('gitAgent', 'git_stash_pop', request, { raw: true });
-                return parseJsonToolResult(text) || {};
-            };
-            let payload = await popStash(true);
-            let restoredWithoutIndex = false;
-            if (payload.indexConflicts) {
-                fileExp.showStatus('Could not restore staged state. Retrying stash without index...');
-                payload = await popStash(false);
-                restoredWithoutIndex = payload.ok !== false && !payload.conflicts;
+        return restoreStashFlow({
+            service: autoStashService,
+            repoPath,
+            stashRef,
+            setStatusLine: (message, isError = false) => {
+                if (message) {
+                    fileExp.showStatus(message, isError);
+                }
             }
-            if (payload.noStash) {
-                return { ok: false, conflicts: false, message: 'No stash entries found to restore.' };
-            }
-            if (payload.conflicts) {
-                return { ok: false, conflicts: true, message: 'Conflicts after restoring stashed changes.' };
-            }
-            if (payload.ok === false) {
-                return { ok: false, conflicts: false, message: payload.output || 'Failed to restore stash.' };
-            }
-            if (restoredWithoutIndex) {
-                return { ok: true, conflicts: false, message: 'Restored stashed changes without staged state.' };
-            }
-            return { ok: true, conflicts: false };
-        } catch (error) {
-            return { ok: false, conflicts: false, message: normalizeErrorMessage(error) };
-        }
+        });
+    };
+
+    const rollbackAutoStash = async (repoPath, stashRef) => {
+        fileExp.showStatus('Restoring stashed changes...');
+        const restored = await restoreStash(repoPath, stashRef);
+        await refreshGitSurfaces();
+        return restored;
     };
 
     const pullWithAutoStash = async (repoPath, token) => {
-        try {
-            const statusPayload = await getRepoStatus(repoPath);
-            const normalized = normalizeGitStatusPayload(statusPayload);
-            const changesCount = normalized.counts.staged
-                + normalized.counts.unstaged
-                + normalized.counts.untracked
-                + normalized.counts.conflicted;
-            if (changesCount === 0) {
-                await pullRepoWithToken(repoPath, token);
-                return { ok: true };
+        const result = await pullWithAutoStashFlow({
+            service: autoStashService,
+            repoPath,
+            token,
+            gitPullWithToken: pullRepoWithToken,
+            restoreStash: (nextRepoPath, nextStashRef) => rollbackAutoStash(nextRepoPath, nextStashRef),
+            setStatusLine: (message, isError = false) => {
+                if (message) {
+                    fileExp.showStatus(message, isError);
+                }
             }
-        } catch (error) {
-            return { ok: false, message: normalizeErrorMessage(error) };
+        });
+        if (result.ok) {
+            return { ok: true };
         }
-
-        let stashPayload = null;
-        try {
-            const text = await callAgentTool('gitAgent', 'git_stash', {
-                path: repoPath,
-                includeUntracked: true,
-                message: 'webskel:auto-pull'
-            }, { raw: true });
-            stashPayload = parseJsonToolResult(text) || {};
-        } catch (error) {
-            return { ok: false, message: normalizeErrorMessage(error) };
-        }
-
-        const stashCreated = Boolean(stashPayload.created);
-        const stashRef = stashPayload.ref || null;
-        if (!stashCreated) {
-            return { ok: false, message: 'Failed to stash local changes before pull.' };
-        }
-
-        try {
-            await pullRepoWithToken(repoPath, token);
-        } catch (error) {
-            const msg = humanizeGitError(normalizeErrorMessage(error), { action: 'pull' });
-            if (stashCreated) {
-                await restoreStash(repoPath, stashRef);
-            }
-            return { ok: false, message: msg };
-        }
-
-        if (stashCreated) {
-            const restored = await restoreStash(repoPath, stashRef);
-            if (!restored.ok) {
-                return { ok: false, conflicts: restored.conflicts, message: restored.message || 'Failed to restore stash.' };
-            }
-        }
-
-        return { ok: true };
+        return {
+            ok: false,
+            conflicts: Boolean(result.conflicts || result.reason === 'pull_conflicts'),
+            message: result.message || 'Pull failed.'
+        };
     };
 
     const resolveConflictContent = (payload) => {

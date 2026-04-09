@@ -1,4 +1,6 @@
-import { normalizeErrorMessage, humanizeGitError, isGitAuthError, isGitIdentityError, isGitConflictError, isGitPullBlockedError, extractGitPullBlockedFiles, parseJsonToolResult, normalizeGitStatusPayload } from "./git-commit-modal-utils.js";
+import { extractGitPullBlockedFiles } from "./git-commit-modal-utils.js";
+import { FILE_EXP_REFRESH_EVENT } from "/explorer/utils/appEvents.js";
+import { pullWithAutoStashFlow } from "../../utils/git-auto-stash-flow.js";
 
 export function createAutoStashActions(ctx) {
     const {
@@ -18,109 +20,92 @@ export function createAutoStashActions(ctx) {
         collectConflictedItems
     } = ctx;
 
-    const pullWithAutoStash = async (repoPath, token, repoPaths) => {
-        let stashPayload = null;
-        let stashCreated = false;
-        let stashRef = null;
-        let hasLocalChanges = false;
+    const rollbackAutoStash = async (repoPath, stashRef, {
+        restoreStatusLine = false,
+        failureMessage = 'Failed to restore stashed changes.'
+    } = {}) => {
+        if (!stashRef && !repoPath) {
+            return { ok: false, conflicts: false };
+        }
+        if (restoreStatusLine) {
+            setStatusLine('Restoring stashed changes...');
+        }
+        const restored = await restoreStash(repoPath, stashRef);
         try {
-            const statusText = await service.gitStatus(repoPath);
-            const statusPayload = parseJsonToolResult(statusText) || {};
-            const normalized = normalizeGitStatusPayload(statusPayload);
-            const changesCount = normalized.counts.staged
-                + normalized.counts.unstaged
-                + normalized.counts.untracked
-                + normalized.counts.conflicted;
-            hasLocalChanges = changesCount > 0;
-        } catch (error) {
-            setStatusLine(normalizeErrorMessage(error), true);
+            await loadRepoOverviews({ force: true });
+        } catch {
+            // ignore refresh failures after stash rollback
+        }
+        syncStaticUI();
+        updateCommitButtons();
+        try {
+            window.dispatchEvent(new CustomEvent(FILE_EXP_REFRESH_EVENT));
+        } catch {
+            // ignore dispatch failures
+        }
+        if (!restored.ok && failureMessage) {
+            setStatusLine(restored.message || failureMessage, true);
+        }
+        return restored;
+    };
+
+    const pullWithAutoStash = async (repoPath, token, repoPaths) => {
+        const result = await pullWithAutoStashFlow({
+            service,
+            repoPath,
+            token,
+            repoPaths,
+            gitPullWithToken,
+            restoreStash: (nextRepoPath, nextStashRef) => rollbackAutoStash(nextRepoPath, nextStashRef, {
+                restoreStatusLine: true
+            }),
+            setStatusLine
+        });
+
+        if (result.ok) return true;
+
+        if (result.reason === 'identity') {
+            await ensureGitIdentityOrPrompt(repoPath, { type: 'pull', mode: 'batch', repoPaths });
             return false;
         }
 
-        if (hasLocalChanges) {
-            setStatusLine('Local changes detected. Stashing before pull...');
-            try {
-                const text = await service.gitStash({
-                    path: repoPath,
-                    includeUntracked: true,
-                    message: 'webskel:auto-pull'
-                });
-                stashPayload = parseJsonToolResult(text) || {};
-            } catch (error) {
-                setStatusLine(normalizeErrorMessage(error), true);
+        if (result.reason === 'auth') {
+            if (!token) {
+                showGitAuthPrompt(repoPath, { type: 'pull', mode: 'batch', repoPaths }, { message: result.message });
                 return false;
             }
-
-            stashCreated = Boolean(stashPayload.created);
-            stashRef = stashPayload.ref || null;
-            if (!stashCreated) {
-                setStatusLine('Failed to stash local changes. Resolve them before pulling.', true);
-                return false;
-            }
+            setStatusLine(`${result.message} (A token is already saved. Use "Token" to update it.)`, true);
+            return false;
         }
 
-        try {
-            await gitPullWithToken(repoPath, token);
-        } catch (error) {
-            const msg = humanizeGitError(normalizeErrorMessage(error), { action: 'pull' });
-            if (isGitIdentityError(msg)) {
-                if (stashCreated) {
-                    await restoreStash(repoPath, stashRef);
-                }
-                await ensureGitIdentityOrPrompt(repoPath, { type: 'pull', mode: 'batch', repoPaths });
-                return false;
+        if (result.reason === 'pull_conflicts') {
+            if (result.stashCreated) {
+                applyState({ autoStash: { repoPath, ref: result.stashRef } }, { silent: true });
             }
-            if (isGitAuthError(msg)) {
-                if (stashCreated) {
-                    await restoreStash(repoPath, stashRef);
-                }
-                if (!token) {
-                    showGitAuthPrompt(repoPath, { type: 'pull', mode: 'batch', repoPaths }, { message: msg });
-                    return false;
-                }
-                setStatusLine(`${msg} (A token is already saved. Use "Token" to update it.)`, true);
-                return false;
+            const resolved = await handlePullConflicts(result.message, [repoPath], 'merge');
+            if (!resolved) return false;
+            if (result.stashCreated) {
+                applyState({ autoStash: null }, { silent: true });
+                const restored = await rollbackAutoStash(repoPath, result.stashRef, { restoreStatusLine: true });
+                return restored.ok;
             }
-            if (isGitConflictError(msg)) {
-                if (stashCreated) {
-                    applyState({ autoStash: { repoPath, ref: stashRef } }, { silent: true });
-                }
-                const conflictMessage = stashCreated
-                    ? 'Pull completed with conflicts. Resolve them, then restore your stashed changes.'
-                    : 'Pull completed with conflicts. Resolve them before continuing.';
-                const resolved = await handlePullConflicts(conflictMessage, [repoPath], 'merge');
-                if (!resolved) return false;
-                if (stashCreated) {
-                    applyState({ autoStash: null }, { silent: true });
-                    setStatusLine('Restoring stashed changes...');
-                    const restored = await restoreStash(repoPath, stashRef);
-                    return restored.ok;
-                }
-                return true;
-            }
-            if (isGitPullBlockedError(msg)) {
-                if (stashCreated) {
-                    await restoreStash(repoPath, stashRef);
-                }
-                const blockedFiles = extractGitPullBlockedFiles(msg);
-                applyState({ pullBlocked: blockedFiles.length ? { repoPath, files: blockedFiles } : null });
-                updateCommitButtons();
-                setStatusLine('Pull blocked: could not auto-stash your local changes.', true);
-                return false;
-            }
-            if (stashCreated) {
-                await restoreStash(repoPath, stashRef);
-            }
-            throw error;
+            return true;
         }
 
-        if (stashCreated) {
-            setStatusLine('Restoring stashed changes...');
-            const restored = await restoreStash(repoPath, stashRef);
-            if (!restored.ok) return false;
+        if (result.reason === 'pull_blocked') {
+            const blockedFiles = extractGitPullBlockedFiles(result.detailedMessage || result.message || '');
+            applyState({ pullBlocked: blockedFiles.length ? { repoPath, files: blockedFiles } : null });
+            updateCommitButtons();
+            setStatusLine(result.message, true);
+            return false;
         }
 
-        return true;
+        if (result.message) {
+            setStatusLine(result.message, true);
+            return false;
+        }
+
+        return false;
     };
 
     const maybeRestoreAutoStash = async () => {

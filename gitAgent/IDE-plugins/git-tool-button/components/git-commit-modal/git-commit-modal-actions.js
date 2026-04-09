@@ -4,6 +4,7 @@ import {
     getConflictAutoresolveSetting,
     normalizeGitStatusPayload
 } from "./git-commit-modal-utils.js";
+import { restoreStashFlow } from "../../utils/git-auto-stash-flow.js";
 import { withGlobalLoader } from "/explorer/utils/globalLoader.js";
 import { createCredentialsActions } from "./git-commit-modal-actions-credentials.js";
 import { createCommitMessageActions } from "./git-commit-modal-actions-commit-message.js";
@@ -340,32 +341,12 @@ export function createGitCommitActions(ctx) {
     };
 
     const restoreStash = async (repoPath, stashRef) => {
-        try {
-            const popStash = async (reinstateIndex) => {
-                const request = { path: repoPath, reinstateIndex };
-                if (stashRef) request.ref = stashRef;
-                const text = await service.gitStashPop(request);
-                return parseJsonToolResult(text) || {};
-            };
-
-            let payload = await popStash(true);
-            let restoredWithoutIndex = false;
-            if (payload.indexConflicts) {
-                setStatusLine('Could not restore staged state. Retrying stash without index...');
-                payload = await popStash(false);
-                restoredWithoutIndex = payload.ok !== false && !payload.conflicts;
-            }
-
-            if (payload.noStash) {
-                setStatusLine('No stash entries found to restore.', true);
-                return { ok: false, conflicts: false };
-            }
-            if (payload.conflicts) {
-                const seededConflicts = Array.isArray(payload.conflictPaths)
-                    ? payload.conflictPaths
-                        .filter(Boolean)
-                        .map((filePath) => ({ repoPath, filePath }))
-                    : [];
+        const restored = await restoreStashFlow({
+            service,
+            repoPath,
+            stashRef,
+            setStatusLine,
+            onConflicts: async ({ seededConflicts }) => {
                 const resolved = await handlePullConflicts(
                     'Conflicts after restoring stashed changes. Resolve them before continuing.',
                     [repoPath],
@@ -381,20 +362,13 @@ export function createGitCommitActions(ctx) {
                         );
                     }
                 }
-                return { ok: resolved, conflicts: !resolved };
+                return resolved;
             }
-            if (payload.ok === false) {
-                setStatusLine(payload.output || 'Failed to restore stash.', true);
-                return { ok: false, conflicts: false };
-            }
-            if (restoredWithoutIndex) {
-                setStatusLine('Restored stashed changes without staged state.');
-            }
-            return { ok: true, conflicts: false };
-        } catch (error) {
-            setStatusLine(normalizeErrorMessage(error), true);
-            return { ok: false, conflicts: false };
+        });
+        if (!restored.ok && !restored.conflicts && restored.message) {
+            setStatusLine(restored.message, true);
         }
+        return restored;
     };
 
     const encodeBase64 = (value) => {
