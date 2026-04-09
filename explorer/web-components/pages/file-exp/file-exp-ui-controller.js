@@ -39,6 +39,14 @@ export function getDirectoryResetPatch() {
         dpuSecretState: null,
         isEditing: false,
         hasUnsavedChanges: false,
+        savePending: false,
+        lastSaveError: '',
+        lastEditorSaveAt: 0,
+        lastEditorSaveMode: '',
+        externallyModified: false,
+        selectedFileVersionKey: '',
+        selectedFileModifiedAt: '',
+        selectedFileSize: null,
         openMenuPath: null
     };
 }
@@ -81,7 +89,17 @@ export function fileExpUiReducer(state, action) {
                 'dpuCommentsOpen',
                 'dpuSecretState',
                 'hasUnsavedChanges',
-                'isEditing'
+                'isEditing',
+                'savePending',
+                'lastSaveError',
+                'lastEditorSaveAt',
+                'lastEditorSaveMode',
+                'externallyModified',
+                'selectedFileVersionKey',
+                'selectedFileModifiedAt',
+                'selectedFileSize',
+                'editorAutoSaveEnabled',
+                'editorAutoSaveIntervalSeconds'
             ]);
             const patch = {};
             for (const [key, value] of Object.entries(rawPatch)) {

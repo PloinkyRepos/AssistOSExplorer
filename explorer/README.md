@@ -4,6 +4,12 @@ This folder contains the `explorer` agent for the Ploinky runtime, inside the `A
 
 The Explorer is an MCP HTTP server that exposes a filesystem view + utilities used by the AssistOS UI.
 
+For the general text/code editor, Explorer also owns collaborative editing safeguards:
+
+- auto-save is a user setting, default `off`, with a default interval of `10` seconds when enabled
+- the editor surface shows when auto-save is on
+- if a file changes on disk after an edit session starts, Explorer shows a warning, opens a reload confirmation popup, and blocks save until the file is reloaded
+
 Explorer reserves workspace secret files as non-browsable resources:
 
 - `.secrets`

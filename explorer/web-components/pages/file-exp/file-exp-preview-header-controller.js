@@ -3,6 +3,7 @@ export function createPreviewHeaderController(host) {
         const root = host?.element;
         if (!root) return null;
         return {
+            statusStrip: root.querySelector('#previewStatusStrip'),
             previewTitle: root.querySelector('.preview-title'),
             headerExtras: root.querySelector('#previewHeaderExtras'),
             editorActions: root.querySelector('#editorActions'),
@@ -85,6 +86,10 @@ export function createPreviewHeaderController(host) {
             const elements = getElements();
             if (!elements) return;
 
+            if (elements.statusStrip && elements.statusStrip.children.length) {
+                elements.statusStrip.replaceChildren();
+                elements.statusStrip.classList.add('hidden');
+            }
             if (elements.headerExtras && elements.headerExtras.children.length) {
                 elements.headerExtras.replaceChildren();
             }
@@ -97,6 +102,9 @@ export function createPreviewHeaderController(host) {
             syncWebActions(elements, previewUiState);
             syncFileName(elements);
 
+            if (typeof host.renderEditorStatusIndicators === 'function') {
+                host.renderEditorStatusIndicators(elements.statusStrip, previewUiState);
+            }
             if (previewUiState.canToggleBacklogView && typeof host.renderBacklogViewToggle === 'function') {
                 host.renderBacklogViewToggle(elements.headerExtras, previewUiState.showBacklogPanel);
             }

@@ -351,18 +351,9 @@ export async function runAfterRender(fileExp, options = {}) {
         saveButton.classList.toggle('hidden', Boolean(fileExp.state.selectedIsMarkdown));
     }
 
-    if (fileExp.state.isEditing && !fileExp.state.selectedIsMarkdown) {
-        const textarea = fileExp.element.querySelector('.code-input');
-        if (textarea) {
-            const updateDirtyFlag = () => {
-                fileExp.setHasUnsavedChanges(textarea.value !== fileExp.state.fileContent);
-            };
-            fileExp.setElementListener('editor-dirty-input', textarea, 'input', updateDirtyFlag);
-            updateDirtyFlag();
-        }
-    } else {
+    if (!(fileExp.state.isEditing && !fileExp.state.selectedIsMarkdown)) {
         fileExp.setHasUnsavedChanges(false);
-        fileExp.removeElementListener('editor-dirty-input');
+        fileExp.clearEditorAutoSaveTimer?.();
     }
 
     const cancelButton = fileExp.element.querySelector('#cancelButton');
@@ -372,7 +363,12 @@ export async function runAfterRender(fileExp, options = {}) {
 
     const previewNotice = fileExp.element.querySelector('#previewNotice');
     if (previewNotice) {
-        if (fileExp.state.fileLoadInfo?.truncated) {
+        previewNotice.classList.remove('warning');
+        if (fileExp.state.externallyModified) {
+            previewNotice.textContent = 'This file changed on disk after you started editing it. Reload the file to review the latest version before saving again.';
+            previewNotice.classList.remove('hidden');
+            previewNotice.classList.add('warning');
+        } else if (fileExp.state.fileLoadInfo?.truncated) {
             const info = fileExp.state.fileLoadInfo;
             const previewLines = info.previewLines || previewLinesFallback;
             const sizeText = Number.isFinite(info.size) ? fileExp.formatBytes(info.size) : 'large';

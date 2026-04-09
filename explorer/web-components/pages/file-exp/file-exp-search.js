@@ -193,16 +193,26 @@ export function attachSearchController(fileExp) {
 
     async function openSettingsModal(_target, tab = 'keymap') {
         const state = getState();
-        const normalizedTab = tab === 'theme' ? 'theme' : 'keymap';
+        const normalizedTab = ['keymap', 'editor', 'theme'].includes(tab) ? tab : 'keymap';
         fileExp.setSearchMenuOpen(false);
         updateSearchUI();
         const result = await assistOS.UI.createReactiveModal('settings-modal', {
             tab: normalizedTab,
             keymap: state.keymap || getKeymap(),
-            theme: getCurrentTheme()
+            theme: getCurrentTheme(),
+            editorAutoSaveEnabled: Boolean(state.editorAutoSaveEnabled),
+            editorAutoSaveIntervalSeconds: Number.isFinite(state.editorAutoSaveIntervalSeconds)
+                ? state.editorAutoSaveIntervalSeconds
+                : 10
         }, true);
         if (result?.keymap) {
             state.keymap = result.keymap;
+        }
+        if (result && Object.prototype.hasOwnProperty.call(result, 'editorAutoSaveEnabled')) {
+            fileExp.setEditorAutoSaveSettings?.(
+                Boolean(result.editorAutoSaveEnabled),
+                Number.parseInt(String(result.editorAutoSaveIntervalSeconds ?? ''), 10)
+            );
         }
     }
 
@@ -276,10 +286,6 @@ export function attachSearchController(fileExp) {
         if (typeof fileExp.bumpWorkspaceVersion === 'function') {
             fileExp.bumpWorkspaceVersion();
         }
-        if (state.isEditing && state.hasUnsavedChanges) {
-            fileExp.showStatus('Files were replaced on disk. Save or refresh to see changes.', true);
-            return;
-        }
         try {
             if (fileExp.caches?.filePreview?.invalidateForPath) {
                 changed.forEach((filePath) => fileExp.caches.filePreview.invalidateForPath(filePath));
@@ -298,6 +304,10 @@ export function attachSearchController(fileExp) {
                 });
             }
             const selectedPath = state.selectedPath ? fileExp.normalizePath(state.selectedPath) : '';
+            if (state.isEditing && selectedPath && changed.includes(selectedPath)) {
+                await fileExp.markExternalModificationDetected?.();
+                return;
+            }
             if (selectedPath && changed.includes(selectedPath)) {
                 void fileExp.openFile(state.selectedPath, {
                     showLoader: false,

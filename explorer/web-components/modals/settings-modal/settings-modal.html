@@ -7,6 +7,7 @@
 <div class="modal-body settings-modal-body">
     <div class="settings-tabs" role="tablist" aria-label="Settings tabs">
         <button type="button" class="settings-tab" data-local-action="switchTab keymap" data-tab="keymap" role="tab" aria-selected="true">Keymap</button>
+        <button type="button" class="settings-tab" data-local-action="switchTab editor" data-tab="editor" role="tab" aria-selected="false">Editor</button>
         <button type="button" class="settings-tab" data-local-action="switchTab theme" data-tab="theme" role="tab" aria-selected="false">Theme</button>
     </div>
 
@@ -15,6 +16,21 @@
             <p class="keymap-description">Focus a field and press a new shortcut. Use Backspace to clear.</p>
             <div class="keymap-list" id="keymapList"></div>
             <div class="keymap-warning" id="keymapWarning" role="status" aria-live="polite"></div>
+        </section>
+
+        <section class="settings-section hidden" data-section="editor">
+            <p class="theme-description">Configure collaborative editing behavior for the inline code editor.</p>
+            <div class="editor-settings-card">
+                <label class="editor-settings-toggle">
+                    <input type="checkbox" id="editorAutoSaveEnabled">
+                    <span>Enable auto-save</span>
+                </label>
+                <div class="editor-settings-row">
+                    <label class="editor-settings-label" for="editorAutoSaveIntervalSeconds">Auto-save interval (seconds)</label>
+                    <input type="number" class="form-input editor-settings-input" id="editorAutoSaveIntervalSeconds" min="1" step="1">
+                </div>
+                <div class="editor-settings-hint">Auto-save is off by default. When enabled, the editor saves after the configured idle interval. External file changes still block save and show a warning in the editor.</div>
+            </div>
         </section>
 
         <section class="settings-section hidden" data-section="theme">

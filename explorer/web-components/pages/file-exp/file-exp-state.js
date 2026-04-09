@@ -6,6 +6,8 @@ const DEFAULT_LIST_WIDTH = null;
 const DEFAULT_LIST_COLLAPSED = false;
 const DEFAULT_PREVIEW_WRAP_ENABLED = false;
 const DEFAULT_DIRECTORY_VIEW_MODE = 'list';
+const DEFAULT_EDITOR_AUTOSAVE_ENABLED = false;
+const DEFAULT_EDITOR_AUTOSAVE_INTERVAL_SECONDS = 10;
 
 export function loadWorkspaceVersionSeed() {
     try {
@@ -142,6 +144,45 @@ export function saveDirectoryViewModePreference(value) {
     }
 }
 
+export function loadEditorAutoSavePreference() {
+    try {
+        const stored = window.localStorage.getItem('assistosExplorerEditorAutoSaveEnabled');
+        if (stored === 'true') return true;
+        if (stored === 'false') return false;
+        return DEFAULT_EDITOR_AUTOSAVE_ENABLED;
+    } catch (_) {
+        return DEFAULT_EDITOR_AUTOSAVE_ENABLED;
+    }
+}
+
+export function saveEditorAutoSavePreference(value) {
+    try {
+        window.localStorage.setItem('assistosExplorerEditorAutoSaveEnabled', value ? 'true' : 'false');
+    } catch (_) {
+        // ignore
+    }
+}
+
+export function loadEditorAutoSaveIntervalPreference() {
+    try {
+        const raw = window.localStorage.getItem('assistosExplorerEditorAutoSaveIntervalSeconds');
+        const value = Number.parseInt(String(raw ?? ''), 10);
+        return Number.isFinite(value) && value >= 1 ? value : DEFAULT_EDITOR_AUTOSAVE_INTERVAL_SECONDS;
+    } catch (_) {
+        return DEFAULT_EDITOR_AUTOSAVE_INTERVAL_SECONDS;
+    }
+}
+
+export function saveEditorAutoSaveIntervalPreference(value) {
+    try {
+        const next = Number.parseInt(String(value ?? ''), 10);
+        const normalized = Number.isFinite(next) && next >= 1 ? next : DEFAULT_EDITOR_AUTOSAVE_INTERVAL_SECONDS;
+        window.localStorage.setItem('assistosExplorerEditorAutoSaveIntervalSeconds', String(normalized));
+    } catch (_) {
+        // ignore
+    }
+}
+
 export function createFileExpState() {
     const initialState = {
         path: '/',
@@ -164,6 +205,16 @@ export function createFileExpState() {
         dpuSecretState: null,
         isEditing: false,
         hasUnsavedChanges: false,
+        savePending: false,
+        lastSaveError: '',
+        lastEditorSaveAt: 0,
+        lastEditorSaveMode: '',
+        externallyModified: false,
+        selectedFileVersionKey: '',
+        selectedFileModifiedAt: '',
+        selectedFileSize: null,
+        editorAutoSaveEnabled: loadEditorAutoSavePreference(),
+        editorAutoSaveIntervalSeconds: loadEditorAutoSaveIntervalPreference(),
         isResizing: false,
         clipboard: null,
         openMenuPath: null,

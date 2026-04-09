@@ -14,10 +14,15 @@ export class SettingsModal {
         this.element = element;
         this.invalidate = invalidate;
         this.props = props || {};
+        const initialTab = ['keymap', 'editor', 'theme'].includes(this.props.tab) ? this.props.tab : 'keymap';
         this.state = {
-            activeTab: this.props.tab === "theme" ? "theme" : "keymap",
+            activeTab: initialTab,
             selectedTheme: this.props.theme === "dark" ? "dark" : getCurrentTheme(),
             keymap: { ...(this.props.keymap || getKeymap()) },
+            editorAutoSaveEnabled: Boolean(this.props.editorAutoSaveEnabled),
+            editorAutoSaveIntervalSeconds: Number.isFinite(this.props.editorAutoSaveIntervalSeconds)
+                ? Math.max(1, Math.round(this.props.editorAutoSaveIntervalSeconds))
+                : 10,
             hasConflicts: false
         };
         this.invalidate();
@@ -35,9 +40,12 @@ export class SettingsModal {
 
     cacheElements() {
         this.keymapSection = this.element.querySelector('[data-section="keymap"]');
+        this.editorSection = this.element.querySelector('[data-section="editor"]');
         this.themeSection = this.element.querySelector('[data-section="theme"]');
         this.listEl = this.element.querySelector("#keymapList");
         this.warningEl = this.element.querySelector("#keymapWarning");
+        this.editorAutoSaveEnabledInput = this.element.querySelector('#editorAutoSaveEnabled');
+        this.editorAutoSaveIntervalInput = this.element.querySelector('#editorAutoSaveIntervalSeconds');
         this.saveButton = this.element.querySelector('[data-local-action="saveSettings"]');
         this.resetButton = this.element.querySelector('[data-role="reset-keymap"]');
     }
@@ -53,10 +61,18 @@ export class SettingsModal {
             });
             this.element.dataset.boundSettingsModal = "true";
         }
+        if (this.editorAutoSaveEnabledInput && !this.editorAutoSaveEnabledInput.dataset.bound) {
+            this.editorAutoSaveEnabledInput.addEventListener('change', () => this.handleEditorAutoSaveToggle());
+            this.editorAutoSaveEnabledInput.dataset.bound = 'true';
+        }
+        if (this.editorAutoSaveIntervalInput && !this.editorAutoSaveIntervalInput.dataset.bound) {
+            this.editorAutoSaveIntervalInput.addEventListener('input', () => this.handleEditorAutoSaveIntervalInput());
+            this.editorAutoSaveIntervalInput.dataset.bound = 'true';
+        }
     }
 
     switchTab(_target, tab) {
-        this.state.activeTab = tab === "theme" ? "theme" : "keymap";
+        this.state.activeTab = ['keymap', 'editor', 'theme'].includes(tab) ? tab : 'keymap';
         this.updateTabUI();
     }
 
@@ -68,27 +84,20 @@ export class SettingsModal {
             tab.setAttribute("aria-selected", isActive ? "true" : "false");
         });
 
-        if (this.state.activeTab === "theme") {
-            if (this.keymapSection) {
-                this.keymapSection.classList.remove("hidden");
-                this.keymapSection.classList.add("passive");
-            }
-            if (this.themeSection) {
-                this.themeSection.classList.remove("hidden");
-            }
-        } else {
-            if (this.keymapSection) {
-                this.keymapSection.classList.remove("hidden");
-                this.keymapSection.classList.remove("passive");
-            }
-            if (this.themeSection) {
-                this.themeSection.classList.add("hidden");
-            }
-        }
+        const sections = [
+            { key: 'keymap', element: this.keymapSection },
+            { key: 'editor', element: this.editorSection },
+            { key: 'theme', element: this.themeSection }
+        ];
+        sections.forEach(({ key, element }) => {
+            if (!element) return;
+            element.classList.toggle('hidden', key !== this.state.activeTab);
+        });
 
         if (this.resetButton) {
             this.resetButton.style.display = this.state.activeTab === "keymap" ? "" : "none";
         }
+        this.syncEditorSettingsUi();
     }
 
     renderRows() {
@@ -204,6 +213,30 @@ export class SettingsModal {
         });
     }
 
+    syncEditorSettingsUi() {
+        if (this.editorAutoSaveEnabledInput) {
+            this.editorAutoSaveEnabledInput.checked = Boolean(this.state.editorAutoSaveEnabled);
+        }
+        if (this.editorAutoSaveIntervalInput) {
+            const nextValue = String(this.state.editorAutoSaveIntervalSeconds || 10);
+            if (this.editorAutoSaveIntervalInput.value !== nextValue) {
+                this.editorAutoSaveIntervalInput.value = nextValue;
+            }
+            this.editorAutoSaveIntervalInput.disabled = !this.state.editorAutoSaveEnabled;
+        }
+    }
+
+    handleEditorAutoSaveToggle() {
+        this.state.editorAutoSaveEnabled = Boolean(this.editorAutoSaveEnabledInput?.checked);
+        this.syncEditorSettingsUi();
+    }
+
+    handleEditorAutoSaveIntervalInput() {
+        const nextValue = Number.parseInt(String(this.editorAutoSaveIntervalInput?.value ?? ''), 10);
+        this.state.editorAutoSaveIntervalSeconds = Number.isFinite(nextValue) && nextValue >= 1 ? nextValue : 10;
+        this.syncEditorSettingsUi();
+    }
+
     resetDefaults() {
         this.state.keymap = { ...getDefaultKeymap() };
         this.renderRows();
@@ -213,7 +246,14 @@ export class SettingsModal {
         if (this.state.hasConflicts) return;
         const keymap = setKeymap(this.state.keymap);
         const theme = setTheme(this.state.selectedTheme);
-        this.closeModal({ keymap, theme });
+        this.closeModal({
+            keymap,
+            theme,
+            editorAutoSaveEnabled: Boolean(this.state.editorAutoSaveEnabled),
+            editorAutoSaveIntervalSeconds: Number.isFinite(this.state.editorAutoSaveIntervalSeconds)
+                ? Math.max(1, Math.round(this.state.editorAutoSaveIntervalSeconds))
+                : 10
+        });
     }
 
     closeModal(payload) {

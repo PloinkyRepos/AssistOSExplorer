@@ -16,6 +16,14 @@ export function createFileExpTooling() {
             }
             return { text: JSON.stringify(parsed ?? []) };
         },
+        async getFileInfo(path) {
+            const raw = await callExplorerTool('get_file_info', { path }, { raw: true, withLoader: false });
+            const parsed = parseToolResult(raw);
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+                throw new Error('Invalid file info payload.');
+            }
+            return parsed;
+        },
         writeFile(path, content) {
             return callTextTool('write_file', { path, content });
         }

@@ -36,19 +36,8 @@ settings-modal .settings-section {
     flex: 1 1 auto;
 }
 
-settings-modal .settings-section.passive {
-    visibility: hidden;
-    pointer-events: none;
-}
-
 settings-modal .settings-content {
     position: relative;
-}
-
-settings-modal .settings-section[data-section="theme"] {
-    position: absolute;
-    inset: 0;
-    background: var(--surface);
 }
 
 settings-modal .keymap-description,
@@ -56,6 +45,48 @@ settings-modal .theme-description {
     margin: 0;
     color: var(--text-soft);
     font-size: 0.95rem;
+}
+
+settings-modal .editor-settings-card {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-top: 12px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+}
+
+settings-modal .editor-settings-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    color: var(--text);
+}
+
+settings-modal .editor-settings-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 120px;
+    gap: 12px;
+    align-items: center;
+}
+
+settings-modal .editor-settings-label {
+    font-weight: 600;
+    color: var(--text);
+}
+
+settings-modal .editor-settings-input {
+    text-align: center;
+    font-weight: 600;
+}
+
+settings-modal .editor-settings-hint {
+    color: var(--text-soft);
+    font-size: 0.9rem;
+    line-height: 1.45;
 }
 
 settings-modal .keymap-list {
@@ -155,5 +186,9 @@ settings-modal .theme-option.active {
 
     settings-modal .theme-options {
         flex-direction: column;
+    }
+
+    settings-modal .editor-settings-row {
+        grid-template-columns: 1fr;
     }
 }

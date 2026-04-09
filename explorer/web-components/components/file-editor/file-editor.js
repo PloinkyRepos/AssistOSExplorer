@@ -23,6 +23,10 @@ export class FileEditor {
         this.boundThemeChange = this.handleThemeChange.bind(this);
     }
 
+    getFileExpPresenter() {
+        return this.element.closest('file-exp')?.webSkelPresenter || null;
+    }
+
     beforeUnload() {
         window.removeEventListener('resize', this.boundAdjustForScrollbar);
         window.removeEventListener(EXPLORER_THEME_CHANGE_EVENT, this.boundThemeChange);
@@ -142,6 +146,11 @@ export class FileEditor {
         this.updateLineNumbers();
         this.syncScroll(this.textarea, this.codeBlock.parentElement, this.lineNumbers);
         this.adjustForScrollbar();
+        const fileExp = this.getFileExpPresenter();
+        if (fileExp && typeof fileExp.setHasUnsavedChanges === 'function') {
+            fileExp.setHasUnsavedChanges(code !== String(fileExp.state?.fileContent ?? ''));
+            fileExp.handleEditorBufferChange?.();
+        }
         this.emitHtmlPreviewLiveUpdate(code);
     }
 

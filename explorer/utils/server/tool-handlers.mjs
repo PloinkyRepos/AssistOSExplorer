@@ -457,9 +457,15 @@ export function createToolHandlers({
   async function handleGetFileInfo(args) {
     const data = parseArgs(GetFileInfoArgsSchema, args, 'get_file_info');
     const validPath = await validatePath(data.path);
-    const info = await getFileStats(validPath);
-    const text = Object.entries(info).map(([key, value]) => `${key}: ${value}`).join('\n');
-    return textResponse(text);
+    const stats = await fs.stat(validPath);
+    return jsonResponse({
+      path: data.path,
+      size: stats.size,
+      modified: stats.mtime.toISOString(),
+      mtimeMs: Math.round(stats.mtimeMs),
+      isFile: stats.isFile(),
+      isDirectory: stats.isDirectory()
+    });
   }
 
   async function handleCollectIdePlugins(args) {

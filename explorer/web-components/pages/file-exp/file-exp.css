@@ -754,6 +754,32 @@ th {
     flex-direction: column;
 }
 
+.preview-status-strip {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 0.4rem 1rem 0.25rem;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+    background: color-mix(in srgb, var(--file-exp-subtle-surface) 72%, transparent);
+}
+
+.preview-status-strip.hidden {
+    display: none;
+}
+
+.preview-status-label {
+    font-size: 0.76rem;
+    line-height: 1.2;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: var(--text-soft);
+}
+
+.preview-status-label.warning {
+    color: #b45309;
+}
+
 .preview-header {
     display: flex;
     justify-content: space-between;
@@ -922,6 +948,13 @@ th {
     font-size: 0.9rem;
 }
 
+.preview-notice.warning {
+    border-style: solid;
+    border-color: rgba(217, 119, 6, 0.4);
+    background: rgba(245, 158, 11, 0.12);
+    color: #92400e;
+}
+
 .preview-notice.hidden {
     display: none;
 }
@@ -937,6 +970,16 @@ th {
     color: var(--text-soft);
     font-size: 0.85rem;
     font-weight: 600;
+}
+
+:root.theme-dark .preview-notice.warning {
+    border-color: rgba(251, 191, 36, 0.28);
+    background: rgba(245, 158, 11, 0.14);
+    color: #fcd34d;
+}
+
+:root.theme-dark .preview-status-label.warning {
+    color: #fcd34d;
 }
 
 #markdownViewActions {

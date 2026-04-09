@@ -19,7 +19,9 @@ import {
     saveFilterSpecsPreference,
     saveListWidthPreference,
     saveListCollapsedPreference,
-    savePreviewWrapPreference
+    savePreviewWrapPreference,
+    saveEditorAutoSavePreference,
+    saveEditorAutoSaveIntervalPreference
 } from "./file-exp-state.js";
 import { createFileExpTooling } from "./file-exp-tooling.js";
 import { attachSearchController } from "./file-exp-search.js";
@@ -72,6 +74,33 @@ import {
 
 const LARGE_FILE_PREVIEW_LIMIT_BYTES = 1.5 * 1024 * 1024; // ~1.5MB safety window before transport limits
 const LARGE_FILE_PREVIEW_LINES = 400;
+const EDITOR_EXTERNAL_CHECK_INTERVAL_MS = 4000;
+
+function normalizeEditorIntervalSeconds(value, fallback = 10) {
+    const parsed = Number.parseInt(String(value ?? ''), 10);
+    return Number.isFinite(parsed) && parsed >= 1 ? parsed : fallback;
+}
+
+function buildFileVersionKey(info) {
+    if (!info || typeof info !== 'object') return '';
+    const mtimeMs = Number.parseInt(String(info.mtimeMs ?? ''), 10);
+    const size = Number.parseInt(String(info.size ?? ''), 10);
+    if (!Number.isFinite(mtimeMs) || !Number.isFinite(size)) return '';
+    return `${mtimeMs}:${size}`;
+}
+
+function formatEditorTimeLabel(timestamp) {
+    if (!Number.isFinite(timestamp) || timestamp <= 0) return '';
+    try {
+        return new Intl.DateTimeFormat(undefined, {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        }).format(new Date(timestamp));
+    } catch {
+        return '';
+    }
+}
 
 export class FileExp {
     constructor(element, invalidate) {
@@ -115,6 +144,10 @@ export class FileExp {
         this.openActionMenuDropdown = null;
         this.openActionMenuResizeObserver = null;
         this.openActionMenuPositionFrame = null;
+        this.editorAutoSaveTimer = null;
+        this.editorExternalWatchTimer = null;
+        this.editorExternalWatchInFlight = false;
+        this.externalModificationPromptActive = false;
 
         attachSearchController(this);
         attachFsActions(this);
@@ -157,6 +190,8 @@ export class FileExp {
     beforeUnload() {
         this.detachPreviewAnchorHandler();
         this.previewDom = null;
+        this.clearEditorAutoSaveTimer();
+        this.stopEditorExternalWatch();
         if (this.boundGlobalKeydown) {
             document.removeEventListener('keydown', this.boundGlobalKeydown);
         }
@@ -243,6 +278,151 @@ export class FileExp {
 
     async loadStateFromURL() {
         return loadStateFromURLImpl(this);
+    }
+
+    clearEditorAutoSaveTimer() {
+        if (this.editorAutoSaveTimer) {
+            window.clearTimeout(this.editorAutoSaveTimer);
+            this.editorAutoSaveTimer = null;
+        }
+    }
+
+    stopEditorExternalWatch() {
+        if (this.editorExternalWatchTimer) {
+            window.clearInterval(this.editorExternalWatchTimer);
+            this.editorExternalWatchTimer = null;
+        }
+        this.editorExternalWatchInFlight = false;
+    }
+
+    isLocalTextEditingActive() {
+        return Boolean(
+            this.state.isEditing
+            && !this.state.selectedIsMarkdown
+            && this.state.selectedPath
+            && !isDpuVirtualPath(this.state.selectedPath)
+        );
+    }
+
+    async refreshSelectedFileVersionInfo(pathValue = this.state.selectedPath) {
+        if (!pathValue || isDpuVirtualPath(pathValue)) {
+            return null;
+        }
+        const info = await this.tooling.getFileInfo(pathValue);
+        return {
+            ...info,
+            versionKey: buildFileVersionKey(info)
+        };
+    }
+
+    async markExternalModificationDetected({ silent = false } = {}) {
+        this.clearEditorAutoSaveTimer();
+        this.stopEditorExternalWatch();
+        this.setPreviewState({
+            externallyModified: true,
+            savePending: false
+        }, { invalidate: false });
+        this.refreshPreviewUi();
+        if (!silent) {
+            this.showStatus('This file was modified externally. Reload it before saving again.', true);
+        }
+        void this.promptExternalModificationReload();
+    }
+
+    async promptExternalModificationReload() {
+        if (this.externalModificationPromptActive || !this.state.externallyModified || !this.state.selectedPath) {
+            return;
+        }
+        this.externalModificationPromptActive = true;
+        try {
+            const confirmed = await assistOS.UI.showModal('confirm-action-modal', {
+                message: 'This file was modified by another session. Reload the latest version now? Unsaved local edits from this editor will be discarded.'
+            }, true);
+            if (!confirmed) {
+                return;
+            }
+            this.clearEditorAutoSaveTimer();
+            this.stopEditorExternalWatch();
+            await this.cancelEdit();
+            await this.openFile(this.state.selectedPath, {
+                showLoader: false,
+                invalidate: false
+            });
+            this.showStatus('Reloaded the latest file version.', false);
+        } finally {
+            this.externalModificationPromptActive = false;
+        }
+    }
+
+    scheduleEditorAutoSave() {
+        this.clearEditorAutoSaveTimer();
+        if (!this.isLocalTextEditingActive()) return;
+        if (!this.state.editorAutoSaveEnabled) return;
+        if (!this.state.hasUnsavedChanges) return;
+        if (this.state.savePending || this.state.externallyModified) return;
+        const delayMs = normalizeEditorIntervalSeconds(this.state.editorAutoSaveIntervalSeconds, 10) * 1000;
+        this.editorAutoSaveTimer = window.setTimeout(() => {
+            this.editorAutoSaveTimer = null;
+            if (!this.isLocalTextEditingActive()) return;
+            if (!this.state.editorAutoSaveEnabled || !this.state.hasUnsavedChanges) return;
+            if (this.state.savePending || this.state.externallyModified) return;
+            void this.saveFile({ autoSave: true, preserveEditing: true });
+        }, delayMs);
+    }
+
+    async pollEditorExternalModification() {
+        if (this.editorExternalWatchInFlight || !this.isLocalTextEditingActive()) {
+            return;
+        }
+        const baselineVersionKey = String(this.state.selectedFileVersionKey || '');
+        if (!baselineVersionKey) return;
+        this.editorExternalWatchInFlight = true;
+        try {
+            const latest = await this.refreshSelectedFileVersionInfo(this.state.selectedPath);
+            if (!latest?.versionKey) return;
+            if (latest.versionKey !== baselineVersionKey) {
+                await this.markExternalModificationDetected();
+            }
+        } catch (error) {
+            console.warn('Failed to poll file version while editing', error);
+        } finally {
+            this.editorExternalWatchInFlight = false;
+        }
+    }
+
+    startEditorExternalWatch() {
+        this.stopEditorExternalWatch();
+        if (!this.isLocalTextEditingActive()) return;
+        if (!String(this.state.selectedFileVersionKey || '')) return;
+        this.editorExternalWatchTimer = window.setInterval(() => {
+            void this.pollEditorExternalModification();
+        }, EDITOR_EXTERNAL_CHECK_INTERVAL_MS);
+    }
+
+    handleEditorBufferChange() {
+        this.previewHeaderController?.sync(getPreviewUiState(this.state));
+        if (this.state.hasUnsavedChanges) {
+            this.scheduleEditorAutoSave();
+            return;
+        }
+        this.clearEditorAutoSaveTimer();
+    }
+
+    setEditorAutoSaveSettings(enabled, intervalSeconds) {
+        const nextEnabled = Boolean(enabled);
+        const nextIntervalSeconds = normalizeEditorIntervalSeconds(intervalSeconds, 10);
+        this.setPreviewState({
+            editorAutoSaveEnabled: nextEnabled,
+            editorAutoSaveIntervalSeconds: nextIntervalSeconds
+        }, { invalidate: false });
+        saveEditorAutoSavePreference(nextEnabled);
+        saveEditorAutoSaveIntervalPreference(nextIntervalSeconds);
+        if (!nextEnabled) {
+            this.clearEditorAutoSaveTimer();
+        } else {
+            this.scheduleEditorAutoSave();
+        }
+        this.refreshPreviewUi();
     }
 
     bumpWorkspaceVersion() {
@@ -609,8 +789,8 @@ export class FileExp {
         return editFileImpl(this);
     }
 
-    async saveFile() {
-        return saveFileImpl(this);
+    async saveFile(options = {}) {
+        return saveFileImpl(this, options);
     }
 
     async cancelEdit() {
@@ -777,6 +957,36 @@ export class FileExp {
             headerExtras.appendChild(button);
         }
         button.textContent = showBacklogPanel ? 'View as text' : 'View as backlog';
+    }
+
+    renderEditorStatusIndicators(statusStrip, previewUiState) {
+        if (!statusStrip || !previewUiState?.showEditingActions) {
+            return;
+        }
+        const appendLabel = (text, className = '') => {
+            const label = document.createElement('div');
+            label.className = `preview-status-label${className ? ` ${className}` : ''}`;
+            label.textContent = text;
+            statusStrip.appendChild(label);
+        };
+        if (this.state.editorAutoSaveEnabled) {
+            appendLabel(`Auto-save on (${normalizeEditorIntervalSeconds(this.state.editorAutoSaveIntervalSeconds, 10)}s)`);
+        }
+        if (this.state.savePending) {
+            appendLabel('Saving...');
+        } else if (this.state.hasUnsavedChanges) {
+            appendLabel('Unsaved changes', 'warning');
+        } else if (this.state.externallyModified) {
+            appendLabel('Modified externally', 'warning');
+        } else if (this.state.lastSaveError) {
+            appendLabel('Save failed', 'warning');
+        } else if (this.state.editorAutoSaveEnabled && this.state.lastEditorSaveMode === 'auto' && this.state.lastEditorSaveAt > 0) {
+            const savedAt = formatEditorTimeLabel(this.state.lastEditorSaveAt);
+            appendLabel(savedAt ? `Auto-saved ${savedAt}` : 'Auto-saved');
+        }
+        if (statusStrip.children.length) {
+            statusStrip.classList.remove('hidden');
+        }
     }
 
     renderDpuCommentActions(headerExtras, previewUiState) {

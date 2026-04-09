@@ -45,6 +45,24 @@ export async function editFile(fileExp) {
             fileExp.showStatus(error?.message || 'Failed to refresh DPU item before edit.', true);
             return;
         }
+    } else {
+        try {
+            const info = await fileExp.refreshSelectedFileVersionInfo(selectedPath);
+            fileExp.setPreviewState({
+                selectedFileVersionKey: String(info?.versionKey || ''),
+                selectedFileModifiedAt: String(info?.modified || ''),
+                selectedFileSize: Number.isFinite(info?.size) ? info.size : null,
+                externallyModified: false,
+                savePending: false,
+                lastSaveError: '',
+                lastEditorSaveAt: 0,
+                lastEditorSaveMode: ''
+            }, { invalidate: false });
+        } catch (error) {
+            console.warn('Failed to capture file version before edit', error);
+            fileExp.showStatus(error?.message || 'Failed to prepare edit session for this file.', true);
+            return;
+        }
     }
     if (fileExp.state.selectedIsMarkdown && !fileExp.state.documentId) {
         try {
@@ -64,21 +82,37 @@ export async function editFile(fileExp) {
     fileExp.setPreviewState({
         markdownTextView: false,
         hasUnsavedChanges: false,
+        savePending: false,
         isEditing: true
     });
+    fileExp.handleEditorBufferChange?.();
+    if (!isDpuPath && !fileExp.state.selectedIsMarkdown) {
+        fileExp.startEditorExternalWatch?.();
+    }
     fileExp.refreshPreviewUi();
 }
 
-export async function saveFile(fileExp) {
+export async function saveFile(fileExp, options = {}) {
     fileExp.textarea = fileExp.element.querySelector('.code-input');
     if (!fileExp.textarea) {
         return;
     }
 
+    const preserveEditing = Boolean(options?.preserveEditing);
+    const autoSave = Boolean(options?.autoSave);
     const newContent = fileExp.textarea.value;
     const selectedPath = fileExp.state.selectedPath || '';
     const isDpuPath = isDpuVirtualPath(selectedPath);
+    const isExternalModificationError = (error) => /updated externally/i.test(String(error?.message || ''));
+    if (fileExp.state.savePending) {
+        return;
+    }
     try {
+        fileExp.setPreviewState({
+            savePending: true,
+            lastSaveError: ''
+        }, { invalidate: false });
+        fileExp.refreshPreviewUi();
         if (isDpuPath) {
             if (!fileExp.state.dpuSelectedCanWrite) {
                 throw new Error('You do not have permission to save this DPU file.');
@@ -105,18 +139,44 @@ export async function saveFile(fileExp) {
                 });
             }
         } else {
+            if (fileExp.state.externallyModified) {
+                throw new Error('This file was updated externally. Reload it before saving again.');
+            }
+            const latestInfo = await fileExp.refreshSelectedFileVersionInfo(selectedPath);
+            const baselineVersionKey = String(fileExp.state.selectedFileVersionKey || '');
+            if (baselineVersionKey && latestInfo?.versionKey && latestInfo.versionKey !== baselineVersionKey) {
+                await fileExp.markExternalModificationDetected({ silent: true });
+                throw new Error('This file was updated externally. Reload it before saving again.');
+            }
             await fileExp.tooling.writeFile(fileExp.state.selectedPath, newContent);
             fileExp.bumpWorkspaceVersion?.();
             fileExp.caches.filePreview.invalidateForPath(fileExp.state.selectedPath);
             fileExp.caches.dirListing.invalidate(fileExp, fileExp.state.path);
         }
-        fileExp.showStatus(`Successfully saved ${selectedPath}`, false);
+
+        let latestSavedVersion = null;
+        if (!isDpuPath) {
+            latestSavedVersion = await fileExp.refreshSelectedFileVersionInfo(selectedPath);
+        }
+        if (!autoSave) {
+            fileExp.showStatus(`Successfully saved ${selectedPath}`, false);
+        }
         fileExp.setPreviewState({
             fileContent: newContent,
-            hasUnsavedChanges: false
-        });
+            hasUnsavedChanges: false,
+            savePending: false,
+            lastSaveError: '',
+            lastEditorSaveAt: Date.now(),
+            lastEditorSaveMode: autoSave ? 'auto' : 'manual',
+            externallyModified: false,
+            selectedFileVersionKey: String(latestSavedVersion?.versionKey || fileExp.state.selectedFileVersionKey || ''),
+            selectedFileModifiedAt: String(latestSavedVersion?.modified || fileExp.state.selectedFileModifiedAt || ''),
+            selectedFileSize: Number.isFinite(latestSavedVersion?.size) ? latestSavedVersion.size : fileExp.state.selectedFileSize
+        }, { invalidate: false });
 
         if (isDpuPath) {
+            fileExp.stopEditorExternalWatch?.();
+            fileExp.clearEditorAutoSaveTimer?.();
             fileExp.setPreviewState({ isEditing: false });
             fileExp.editorPresenter = null;
             await openDpuFile(fileExp, selectedPath, {
@@ -157,20 +217,44 @@ export async function saveFile(fileExp) {
             });
         }
 
-        fileExp.setPreviewState({ isEditing: false });
-        fileExp.editorPresenter = null;
+        if (preserveEditing) {
+            fileExp.startEditorExternalWatch?.();
+        } else {
+            fileExp.stopEditorExternalWatch?.();
+            fileExp.clearEditorAutoSaveTimer?.();
+            fileExp.setPreviewState({ isEditing: false }, { invalidate: false });
+            fileExp.editorPresenter = null;
+        }
         fileExp.refreshPreviewUi();
     } catch (err) {
-        console.error(err);
+        if (!isExternalModificationError(err)) {
+            console.error(err);
+        }
+        fileExp.setPreviewState({
+            savePending: false,
+            lastSaveError: err?.message || 'Failed to save file.',
+            lastEditorSaveMode: ''
+        }, { invalidate: false });
+        fileExp.refreshPreviewUi();
         fileExp.showStatus(err.message || 'Failed to save file.', true);
     }
 }
 
 export async function cancelEdit(fileExp) {
+    fileExp.clearEditorAutoSaveTimer?.();
+    fileExp.stopEditorExternalWatch?.();
     fileExp.setPreviewState({
         isEditing: false,
         markdownTextView: false,
-        hasUnsavedChanges: false
+        hasUnsavedChanges: false,
+        savePending: false,
+        lastSaveError: '',
+        lastEditorSaveAt: 0,
+        lastEditorSaveMode: '',
+        externallyModified: false,
+        selectedFileVersionKey: '',
+        selectedFileModifiedAt: '',
+        selectedFileSize: null
     });
     fileExp.editorPresenter = null;
     if (isDpuVirtualPath(fileExp.state.selectedPath)) {
