@@ -115,9 +115,11 @@ For document media, Explorer must preserve backward compatibility with both repo
 - visible directory context
 - selected item identity
 - preview mode and preview payload
-- editor mode and dirty state
+- editor mode, dirty state, save-pending state, and collaborative file version state
 - plugin availability and slot occupancy
 - external service session state for flows such as OnlyOffice
+
+For the general text/code editor, Explorer must treat collaboration state as host-owned UI state rather than as widget-local implementation detail. The editor therefore tracks whether auto-save is enabled, the configured idle interval, the current save-in-progress state, and whether the file changed externally after the edit session began. If the on-disk file version changes during an edit session, Explorer must surface a warning in the editor UI, open a reload confirmation modal, and block both manual save and auto-save until the file is reloaded.
 
 ### Resource Classes
 
