@@ -1,6 +1,6 @@
 import { getApplicationPluginsForSlot } from "./file-exp-application-plugins.js";
 import { DPU_SECRETS_PATH, isDpuManagedPath } from "./file-exp-dpu-provider.js";
-import { getWorkspaceRoot } from "../../../utils/workspaceRoot.js";
+import { resolveExplorerPathToFilesystemPath } from "../../../services/infrastructure/explorerApi.js";
 
 export const FILE_EXP_MENU_SLOTS = Object.freeze({
     contextFile: 'file-exp:context-menu:file',
@@ -13,18 +13,6 @@ const menuModuleCache = new Map();
 
 function normalizePath(value) {
     return String(value || '').trim();
-}
-
-function toFilesystemPath(workspaceRelativePath) {
-    const normalizedPath = normalizePath(workspaceRelativePath);
-    if (!normalizedPath || normalizedPath === '/') {
-        return getWorkspaceRoot() || '/';
-    }
-    const workspaceRoot = String(getWorkspaceRoot() || '').replace(/\/+$/g, '');
-    if (!workspaceRoot) {
-        return normalizedPath;
-    }
-    return `${workspaceRoot}${normalizedPath}`;
 }
 
 function encodeMenuPluginError(plugin, error) {
@@ -114,6 +102,7 @@ export async function buildFileExpMenuContext(fileExp, slot, target = null) {
             slot,
             currentPath,
             currentDirectory: currentPath,
+            currentFsPath: await resolveExplorerPathToFilesystemPath(currentPath),
             isConfidential: isDpuManagedPath(currentPath)
         };
     }
@@ -124,9 +113,9 @@ export async function buildFileExpMenuContext(fileExp, slot, target = null) {
     return {
         slot,
         currentPath,
-        currentFsPath: toFilesystemPath(currentPath),
+        currentFsPath: await resolveExplorerPathToFilesystemPath(currentPath),
         selectedPath: entryPath,
-        selectedFsPath: toFilesystemPath(entryPath),
+        selectedFsPath: await resolveExplorerPathToFilesystemPath(entryPath),
         selectedName: entryName,
         selectedType: entryType,
         isFile: entryType === 'file',

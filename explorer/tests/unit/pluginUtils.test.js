@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    filterRuntimePluginsByApplicationPolicy,
+    filterRuntimePluginsByPolicy,
     computeComponentBaseUrl,
     mergeRuntimePluginsIntoAssistOS,
     normalizeRuntimePlugins,
@@ -122,7 +122,7 @@ test('mergeRuntimePluginsIntoAssistOS separates document and application registr
     assert.equal(assistOS.workspace.appPlugins['file-exp:toolbar'][0].component, 'git-explorer-shell');
 });
 
-test('filterRuntimePluginsByApplicationPolicy removes disabled application plugins only', () => {
+test('filterRuntimePluginsByPolicy removes disabled plugins by stable policy key', () => {
     const runtimePlugins = {
         document: {
             paragraph: [{
@@ -152,9 +152,9 @@ test('filterRuntimePluginsByApplicationPolicy removes disabled application plugi
         }
     };
 
-    const filtered = filterRuntimePluginsByApplicationPolicy(runtimePlugins, {
-        git: false,
-        'soplang-builder': true
+    const filtered = filterRuntimePluginsByPolicy(runtimePlugins, {
+        'gitAgent/git': false,
+        'soplangAgent/soplang-builder': true
     });
 
     assert.equal(filtered.document.paragraph.length, 1);
@@ -162,7 +162,7 @@ test('filterRuntimePluginsByApplicationPolicy removes disabled application plugi
     assert.equal(filtered.application['file-exp:toolbar'][0].component, 'open-builder-button');
 });
 
-test('filterRuntimePluginsByApplicationPolicy keeps enabled internal application plugins', () => {
+test('filterRuntimePluginsByPolicy keeps enabled internal application plugins', () => {
     const runtimePlugins = {
         document: {},
         application: {
@@ -187,12 +187,42 @@ test('filterRuntimePluginsByApplicationPolicy keeps enabled internal application
         }
     };
 
-    const filtered = filterRuntimePluginsByApplicationPolicy(runtimePlugins, {
-        git: false,
-        'dpu-runtime-support': true
+    const filtered = filterRuntimePluginsByPolicy(runtimePlugins, {
+        'gitAgent/git': false,
+        'dpuAgent/dpu-runtime-support': true
     });
 
     assert.equal(filtered.application['file-exp:internal'].length, 1);
     assert.equal(filtered.application['file-exp:internal'][0].component, 'dpu-runtime-support');
     assert.equal(filtered.application['file-exp:toolbar'], undefined);
+});
+
+test('filterRuntimePluginsByPolicy removes disabled document plugins by stable policy key', () => {
+    const runtimePlugins = {
+        document: {
+            paragraph: [
+                {
+                    pluginCategory: 'document',
+                    location: 'paragraph',
+                    agent: 'multimedia',
+                    component: 'audio-plugin'
+                },
+                {
+                    pluginCategory: 'document',
+                    location: 'paragraph',
+                    agent: 'multimedia',
+                    component: 'video-plugin'
+                }
+            ]
+        },
+        application: {}
+    };
+
+    const filtered = filterRuntimePluginsByPolicy(runtimePlugins, {
+        'multimedia/audio-plugin': false,
+        'multimedia/video-plugin': true
+    });
+
+    assert.equal(filtered.document.paragraph.length, 1);
+    assert.equal(filtered.document.paragraph[0].component, 'video-plugin');
 });

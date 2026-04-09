@@ -94,12 +94,7 @@ function getPluginSettingsMap() {
 }
 
 function getPluginKey(plugin) {
-    const agent = typeof plugin?.agent === 'string' ? plugin.agent.trim() : '';
-    const component = typeof plugin?.component === 'string' ? plugin.component.trim() : '';
-    if (!agent || !component) {
-        return '';
-    }
-    return `${agent}/${component}`;
+    return getRuntimePluginPolicyKey(plugin);
 }
 
 function isPluginEnabled(plugin) {
@@ -247,3 +242,4 @@ const pluginUtils = {
 };
 
 export default pluginUtils;
+import { getRuntimePluginPolicyKey } from './pluginUtils.core.js';

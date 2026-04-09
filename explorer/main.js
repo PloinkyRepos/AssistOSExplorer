@@ -3,7 +3,7 @@ import assistosSDK, { initialiseAssistOS } from './services/assistosSDK.js';
 import { createComponentRegistry } from './services/runtime/componentRegistry.js';
 import { createRuntimePluginLoader } from './services/runtime/runtimePluginLoader.js';
 import { attachUiFallbacks } from './services/runtime/uiFallbacks.js';
-import { filterRuntimePluginsByApplicationPolicy } from './utils/pluginUtils.core.js';
+import { filterRuntimePluginsByPolicy } from './utils/pluginUtils.core.js';
 import { initializeTheme } from './utils/theme.js';
 
 const EXPLORER_AGENT_ID = 'explorer';
@@ -33,7 +33,7 @@ const normalizePluginSettings = (payload) => {
     return plugins;
 };
 
-const normalizeApplicationPluginPolicy = (payload) => {
+const normalizeRuntimePluginPolicy = (payload) => {
     const raw = payload?.applicationPlugins;
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
         return {};
@@ -77,10 +77,10 @@ async function start() {
     });
 
     const explorerManifest = await loadExplorerManifest();
-    const applicationPluginPolicy = normalizeApplicationPluginPolicy(explorerManifest);
+    const runtimePluginPolicy = normalizeRuntimePluginPolicy(explorerManifest);
     const { raw: rawRuntimePlugins, normalized: runtimePluginsRaw } = await runtimePluginLoader.fetchRuntimePlugins();
-    const runtimePlugins = filterRuntimePluginsByApplicationPolicy(runtimePluginsRaw, applicationPluginPolicy);
-    const filteredRawRuntimePlugins = filterRuntimePluginsByApplicationPolicy(rawRuntimePlugins, applicationPluginPolicy);
+    const runtimePlugins = filterRuntimePluginsByPolicy(runtimePluginsRaw, runtimePluginPolicy);
+    const filteredRawRuntimePlugins = filterRuntimePluginsByPolicy(rawRuntimePlugins, runtimePluginPolicy);
     const pluginSettingsResult = await assistosSDK.callTool(EXPLORER_AGENT_ID, 'get_plugin_settings', {});
     const pluginSettings = normalizePluginSettings(pluginSettingsResult?.json);
     const assistOS = initialiseAssistOS({
@@ -90,7 +90,7 @@ async function start() {
     assistOS.webSkel = webSkel;
     assistOS.appServices = assistosSDK;
     assistOS.explorerManifest = explorerManifest;
-    assistOS.applicationPluginPolicy = applicationPluginPolicy;
+    assistOS.applicationPluginPolicy = runtimePluginPolicy;
     assistOS.runtimePlugins = runtimePlugins;
     assistOS.rawRuntimePlugins = filteredRawRuntimePlugins || {};
     assistOS.pluginSettings = pluginSettings;

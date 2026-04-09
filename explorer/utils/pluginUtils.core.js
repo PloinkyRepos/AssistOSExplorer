@@ -42,14 +42,22 @@ export const APPLICATION_PLUGIN_CATEGORY = 'application';
 export const MENU_PLUGIN_CONTRIBUTION_TYPE = 'menu';
 export const DEFAULT_DOCUMENT_PLUGIN_LOCATIONS = ['document', 'chapter', 'paragraph', 'infoText'];
 
-export function getApplicationPluginPolicyKey(entry) {
-    const pluginId = isNonEmptyString(entry?.id) ? entry.id.trim() : '';
-    if (pluginId) {
-        return pluginId;
-    }
+export function getRuntimePluginPolicyKey(entry) {
+    const category = isNonEmptyString(entry?.pluginCategory) ? entry.pluginCategory.trim() : '';
     const agent = isNonEmptyString(entry?.agent) ? entry.agent.trim() : '';
-    const component = isNonEmptyString(entry?.component) ? entry.component.trim() : '';
-    return agent && component ? `${agent}/${component}` : '';
+    if (!agent) {
+        return '';
+    }
+    if (category === DOCUMENT_PLUGIN_CATEGORY) {
+        const component = isNonEmptyString(entry?.component) ? entry.component.trim() : '';
+        return component ? `${agent}/${component}` : '';
+    }
+    const pluginId = isNonEmptyString(entry?.id) ? entry.id.trim() : '';
+    return agent && pluginId ? `${agent}/${pluginId}` : '';
+}
+
+export function getApplicationPluginPolicyKey(entry) {
+    return getRuntimePluginPolicyKey(entry);
 }
 
 function normalizeNumericOrder(value) {
@@ -77,7 +85,7 @@ export function getRuntimePluginOrder(entry) {
 }
 
 export function getRuntimePluginStableKey(entry) {
-    const policyKey = getApplicationPluginPolicyKey(entry);
+    const policyKey = getRuntimePluginPolicyKey(entry);
     if (policyKey) {
         return policyKey;
     }
@@ -349,9 +357,9 @@ export function mergeRuntimePluginsIntoAssistOS(assistOS, runtimePlugins) {
     });
 }
 
-export function filterRuntimePluginsByApplicationPolicy(runtimePlugins, applicationPluginsPolicy) {
-    const normalizedPolicy = applicationPluginsPolicy && typeof applicationPluginsPolicy === 'object' && !Array.isArray(applicationPluginsPolicy)
-        ? applicationPluginsPolicy
+export function filterRuntimePluginsByPolicy(runtimePlugins, runtimePluginPolicy) {
+    const normalizedPolicy = runtimePluginPolicy && typeof runtimePluginPolicy === 'object' && !Array.isArray(runtimePluginPolicy)
+        ? runtimePluginPolicy
         : null;
 
     if (!normalizedPolicy) {
@@ -365,11 +373,9 @@ export function filterRuntimePluginsByApplicationPolicy(runtimePlugins, applicat
             return;
         }
 
-        if (category === APPLICATION_PLUGIN_CATEGORY) {
-            const key = getApplicationPluginPolicyKey(entry);
-            if (key && normalizedPolicy[key] === false) {
-                return;
-            }
+        const key = getRuntimePluginPolicyKey(entry);
+        if (key && normalizedPolicy[key] === false) {
+            return;
         }
 
         const bucket = ensureRuntimePluginBucket(filtered, category, location);

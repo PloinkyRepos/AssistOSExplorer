@@ -6,7 +6,7 @@ const APP_PLUGIN_SLOTS = Object.freeze({
 
 const MOUNT_CONTRIBUTION_TYPE = 'mount';
 
-import { sortRuntimePluginEntries } from "../../../utils/pluginUtils.core.js";
+import { sortRuntimePluginEntries, getRuntimePluginPolicyKey } from "../../../utils/pluginUtils.core.js";
 
 function getPluginSettingsMap() {
     const settings = window.assistOS?.pluginSettings;
@@ -17,11 +17,7 @@ function getPluginSettingsMap() {
 }
 
 function getPluginKey(plugin) {
-    const agent = typeof plugin?.agent === 'string' ? plugin.agent.trim() : '';
-    const component = typeof plugin?.component === 'string' ? plugin.component.trim() : '';
-    const pluginId = typeof plugin?.id === 'string' ? plugin.id.trim() : '';
-    const keyPart = component || pluginId;
-    return agent && keyPart ? `${agent}/${keyPart}` : '';
+    return getRuntimePluginPolicyKey(plugin);
 }
 
 function isPluginEnabled(plugin) {
@@ -244,6 +240,21 @@ export async function renderApplicationPluginSlots(fileExp) {
 
 export function attachApplicationPluginHost(fileExp) {
     const rerender = () => {
+        fileExp.toolbarMenuLoadToken = (Number(fileExp.toolbarMenuLoadToken) || 0) + 1;
+        fileExp.contextMenuLoadToken = (Number(fileExp.contextMenuLoadToken) || 0) + 1;
+        fileExp.toolbarMenuItems = [];
+        fileExp.contextMenuItemsByPath = new Map();
+        if (typeof fileExp.closeActionMenu === 'function') {
+            fileExp.closeActionMenu(false);
+        }
+        if (typeof fileExp.renderEntries === 'function') {
+            fileExp.renderEntries();
+        }
+        if (typeof fileExp.refreshToolbarMenuItems === 'function') {
+            fileExp.refreshToolbarMenuItems().catch((error) => {
+                console.error('[app-plugins] Failed to refresh toolbar menu items', error);
+            });
+        }
         renderApplicationPluginSlots(fileExp).catch((error) => {
             console.error('[app-plugins] Failed to render application plugin slots', error);
         });

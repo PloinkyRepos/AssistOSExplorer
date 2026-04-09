@@ -109,6 +109,17 @@ Explorer supports two application plugin contribution types:
 - `mount`: the plugin renders a WebSkel component inside a host-owned slot such as `file-exp:toolbar`
 - `menu`: the plugin contributes semantic menu items into a host-owned menu surface such as a file context menu or the `New` menu
 
+Workspace plugin settings must treat both contribution types as first-class configurable plugins. A `menu` contribution is not coupled to a `mount` contribution for enable or disable behavior.
+
+Runtime plugin policy keys must be explicit and stable:
+
+- application plugins use `agent/id`
+- document plugins use `agent/component`
+
+Explorer must not infer policy identity through fallback chains or ad hoc surface-specific rules.
+
+When one logical application plugin contributes multiple surfaces, those contributions must share the same application plugin `id`. For example, a toolbar mount and its menu contributions remain one plugin for policy and settings purposes.
+
 Menu contributions are not arbitrary DOM mounts. Explorer owns the rendered menu structure and interaction model, while plugins contribute:
 
 - menu item metadata
@@ -116,6 +127,8 @@ Menu contributions are not arbitrary DOM mounts. Explorer owns the rendered menu
 - action execution through the owning agent
 
 When Explorer resolves plugin menu items for a concrete filesystem target, the resulting item payload must retain that target identity (`entryPath`, `entryType`, `entryName`). Action execution must use the same target context that was used for item resolution, instead of reconstructing a fresh target later from unrelated UI state.
+
+When workspace plugin settings change, Explorer must invalidate cached menu contributions and re-resolve host-owned menu surfaces from current plugin policy instead of continuing to render stale items.
 
 ### Ownership Model
 
@@ -167,6 +180,12 @@ For filesystem-oriented menu actions, the host context must include both:
 - the absolute filesystem path used for dependent agent calls
 
 Plugins should consume the explicit filesystem target supplied by the host context instead of guessing the workspace root or translating Explorer paths on their own.
+
+For `file-exp:new-menu`, the host context must expose the current directory in both host and filesystem form:
+
+- `currentPath`
+- `currentDirectory`
+- `currentFsPath`
 
 ### Plugin-to-Agent Contract
 

@@ -159,6 +159,16 @@ function toAbsoluteWorkspacePath(input, workspaceRootAbs) {
     return raw;
 }
 
+export async function resolveExplorerPathToFilesystemPath(input) {
+    const raw = String(input || '').trim();
+    if (!raw) return raw;
+    if (!raw.startsWith('/')) return raw;
+    const workspaceRootAbs = await resolveWorkspaceRootAbs();
+    if (!workspaceRootAbs) return raw;
+    if (raw === '/') return workspaceRootAbs;
+    return `${workspaceRootAbs}${raw}`;
+}
+
 async function normalizeAgentArgs(agentName, toolName, args) {
     const needsResolve = (() => {
         const check = (value) => typeof value === 'string' && (value.startsWith('/.ploinky/') || value.startsWith('.ploinky/'));

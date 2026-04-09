@@ -1,5 +1,10 @@
 import { callExplorerTool, parseToolResult } from "../../../services/infrastructure/explorerApi.js";
-import { compareRuntimePluginEntries, getRuntimePluginOrder } from "../../../utils/pluginUtils.core.js";
+import {
+    compareRuntimePluginEntries,
+    forEachRuntimePluginEntry,
+    getRuntimePluginOrder,
+    getRuntimePluginPolicyKey
+} from "../../../utils/pluginUtils.core.js";
 
 function normalizeSettingsMap(parsed) {
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
@@ -13,45 +18,48 @@ function normalizeSettingsMap(parsed) {
 }
 
 function flattenPluginsByKey(pluginBuckets) {
-    const buckets = pluginBuckets && typeof pluginBuckets === "object" ? pluginBuckets : {};
     const items = new Map();
-    for (const [category, categoryBuckets] of Object.entries(buckets)) {
-        if (!categoryBuckets || typeof categoryBuckets !== "object" || Array.isArray(categoryBuckets)) continue;
-        for (const [location, plugins] of Object.entries(categoryBuckets)) {
-            if (!Array.isArray(plugins)) continue;
-            for (const plugin of plugins) {
-                const agent = typeof plugin?.agent === "string" && plugin.agent.trim() ? plugin.agent.trim() : "unknown";
-                const component = typeof plugin?.component === "string" && plugin.component.trim() ? plugin.component.trim() : "";
-                if (!component) continue;
-                const key = `${agent}/${component}`;
-                const existing = items.get(key) || {
-                    key,
-                    agent,
-                    component,
-                    label: "",
-                    tooltip: "",
-                    pluginCategory: category,
-                    locations: [],
-                    locationOrder: getRuntimePluginOrder(plugin)
-                };
-                existing.pluginCategory = plugin?.pluginCategory || existing.pluginCategory || category;
-                existing.locationOrder = Math.min(existing.locationOrder, getRuntimePluginOrder(plugin));
-                existing.label = typeof plugin?.label === "string" && plugin.label.trim()
-                    ? plugin.label.trim()
-                    : existing.label || component;
-                existing.tooltip = typeof plugin?.tooltip === "string" && plugin.tooltip.trim()
-                    ? plugin.tooltip.trim()
-                    : existing.tooltip || existing.label;
-                if (!existing.locations.includes(location)) {
-                    existing.locations.push(location);
-                }
-                items.set(key, existing);
-            }
+    forEachRuntimePluginEntry(pluginBuckets, (plugin, { category, location }) => {
+        const agent = typeof plugin?.agent === "string" && plugin.agent.trim() ? plugin.agent.trim() : "unknown";
+        const component = typeof plugin?.component === "string" && plugin.component.trim() ? plugin.component.trim() : "";
+        const pluginId = typeof plugin?.id === "string" && plugin.id.trim() ? plugin.id.trim() : "";
+        const key = getRuntimePluginPolicyKey(plugin);
+        if (!key) return;
+        const existing = items.get(key) || {
+            key,
+            agent,
+            component,
+            pluginId,
+            label: "",
+            tooltip: "",
+            pluginCategory: category,
+            contributionTypes: new Set(),
+            locations: [],
+            locationOrder: getRuntimePluginOrder(plugin)
+        };
+        existing.pluginCategory = plugin?.pluginCategory || existing.pluginCategory || category;
+        const contributionType = typeof plugin?.contributionType === "string" && plugin.contributionType.trim()
+            ? plugin.contributionType.trim()
+            : (category === "application" ? "mount" : "document");
+        existing.contributionTypes.add(contributionType);
+        existing.locationOrder = Math.min(existing.locationOrder, getRuntimePluginOrder(plugin));
+        existing.label = typeof plugin?.label === "string" && plugin.label.trim()
+            ? plugin.label.trim()
+            : existing.label || pluginId || component;
+        existing.tooltip = typeof plugin?.tooltip === "string" && plugin.tooltip.trim()
+            ? plugin.tooltip.trim()
+            : existing.tooltip || existing.label;
+        existing.pluginId = pluginId || existing.pluginId || "";
+        existing.component = component || existing.component || "";
+        if (!existing.locations.includes(location)) {
+            existing.locations.push(location);
         }
-    }
+        items.set(key, existing);
+    });
     return Array.from(items.values())
         .map((item) => ({
             ...item,
+            contributionTypes: Array.from(item.contributionTypes.values()).sort(),
             locations: [...item.locations].sort()
         }))
         .sort((a, b) => compareRuntimePluginEntries(a, b));
@@ -119,11 +127,12 @@ export class PluginSettingsModal {
             const enabled = this.isEnabled(item.key);
             const busy = this.state.busyKey === item.key;
             const locations = item.locations.join(", ");
+            const contributionTypes = Array.isArray(item.contributionTypes) ? item.contributionTypes.join(", ") : "";
             return `
                 <div class="plugin-settings-row">
                     <div class="plugin-settings-info">
                         <div class="plugin-settings-key">${item.label || item.component}</div>
-                        <div class="plugin-settings-meta">${item.key} · Category: ${item.pluginCategory} · Locations: ${locations}</div>
+                        <div class="plugin-settings-meta">${item.key} · Category: ${item.pluginCategory} · Types: ${contributionTypes} · Locations: ${locations}</div>
                     </div>
                     <button
                         type="button"
