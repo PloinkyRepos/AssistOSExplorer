@@ -541,7 +541,10 @@ export function attachFsActions(fileExp) {
                     return 'Operation timed out. Please try again.';
                 }
                 if (message.includes('Missing or invalid MCP session')) {
-                    return 'Session expired. Reload the app and try again.';
+                    return 'Your session has expired. Redirecting to sign in.';
+                }
+                if (message.includes('HTTP 401') && message.includes('not_authenticated')) {
+                    return 'Your session has expired. Redirecting to sign in.';
                 }
                 if (message.includes('Path is outside allowed roots')) {
                     return 'Operation blocked: path is outside the workspace.';

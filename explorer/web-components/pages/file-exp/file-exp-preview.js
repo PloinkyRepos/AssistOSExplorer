@@ -307,9 +307,16 @@ export async function openFile(fileExp, filePath, {
                 fileExp.refreshPreviewUi();
             }
         } catch (err) {
-            console.error(err);
+            if (!err?.sessionExpiredHandled) {
+                console.error(err);
+            }
             if (!suppressReadErrorStatus) {
-                fileExp.showStatus(err.message || 'Failed to read file.', true);
+                fileExp.showStatus(
+                    err?.sessionExpiredHandled
+                        ? 'Your session has expired. Redirecting to sign in...'
+                        : (err.message || 'Failed to read file.'),
+                    true
+                );
             }
         }
     };

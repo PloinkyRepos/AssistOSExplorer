@@ -21,17 +21,64 @@ const isMissingSessionError = (error) => {
     return typeof message === 'string' && message.includes(MISSING_SESSION_TEXT);
 };
 
-const handleMissingSession = async () => {
+const extractAuthErrorPayload = (error) => {
+    const message = error?.message || error?.toString?.() || '';
+    if (typeof message !== 'string' || !message.includes('HTTP 401')) {
+        return null;
+    }
+    const jsonStart = message.indexOf('{');
+    if (jsonStart === -1) {
+        return null;
+    }
+    try {
+        const parsed = JSON.parse(message.slice(jsonStart));
+        return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch {
+        return null;
+    }
+};
+
+const normalizeLoginRedirectUrl = (candidate) => {
+    const fallback = buildLoginRedirectUrl();
+    const raw = String(candidate || '').trim();
+    if (!raw) return fallback;
+    try {
+        const url = new URL(raw, window.location.origin);
+        const returnTo = url.searchParams.get('returnTo') || '';
+        if (returnTo.startsWith('/mcps/')) {
+            return fallback;
+        }
+        return url.pathname + (url.search || '') + (url.hash || '');
+    } catch {
+        return fallback;
+    }
+};
+
+const isAuthenticationExpiredError = (error) => {
+    if (isMissingSessionError(error)) return true;
+    const payload = extractAuthErrorPayload(error);
+    return payload?.error === 'not_authenticated';
+};
+
+const buildLoginRedirectUrl = () => {
+    if (typeof window === 'undefined' || !window.location) {
+        return '/auth/login';
+    }
+    const returnTo = `${window.location.pathname || '/'}${window.location.search || ''}${window.location.hash || ''}` || '/';
+    return `/auth/login?returnTo=${encodeURIComponent(returnTo)}`;
+};
+
+const handleAuthenticationExpired = async (error = null) => {
     if (sessionPromptActive) return;
     sessionPromptActive = true;
     try {
-        const confirmed = await assistOS.UI.showModal(
-            'confirm-action-modal',
-            { message: 'Session expired. Reload the app to reconnect.' },
-            true
-        );
-        if (confirmed) {
-            window.location.reload();
+        const payload = extractAuthErrorPayload(error);
+        const loginUrl = normalizeLoginRedirectUrl(payload?.login);
+        if (typeof window !== 'undefined' && typeof window.alert === 'function') {
+            window.alert('Your session has expired. Redirecting to the login page.');
+        }
+        if (typeof window !== 'undefined' && window.location) {
+            window.location.assign(loginUrl);
         }
     } finally {
         setTimeout(() => {
@@ -233,8 +280,9 @@ export async function callExplorerTool(name, args, { raw = false, withLoader = t
         ensureSuccess(result);
         return extractToolText(result);
     } catch (error) {
-        if (isMissingSessionError(error)) {
-            await handleMissingSession();
+        if (isAuthenticationExpiredError(error)) {
+            error.sessionExpiredHandled = true;
+            await handleAuthenticationExpired(error);
         }
         throw error;
     }
@@ -254,8 +302,9 @@ export async function callAgentTool(agentName, name, args, { raw = false } = {})
         ensureSuccess(result);
         return extractToolText(result);
     } catch (error) {
-        if (isMissingSessionError(error)) {
-            await handleMissingSession();
+        if (isAuthenticationExpiredError(error)) {
+            error.sessionExpiredHandled = true;
+            await handleAuthenticationExpired(error);
         }
         throw error;
     }

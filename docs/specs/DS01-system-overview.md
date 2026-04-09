@@ -121,6 +121,8 @@ For document media, Explorer must preserve backward compatibility with both repo
 
 For the general text/code editor, Explorer must treat collaboration state as host-owned UI state rather than as widget-local implementation detail. The editor therefore tracks whether auto-save is enabled, the configured idle interval, the current save-in-progress state, and whether the file changed externally after the edit session began. If the on-disk file version changes during an edit session, Explorer must surface a warning in the editor UI, open a reload confirmation modal, and block both manual save and auto-save until the file is reloaded.
 
+When the authenticated workspace session expires, Explorer must not leave the user in a broken in-app state. Session-expiry failures from the filesystem or MCP layer, including MCP HTTP `401 not_authenticated` responses, must surface a simple human session-expired message and then redirect the browser to the login URL supplied by the server, or to `/auth/login` with the current Explorer route preserved in `returnTo` when no explicit login URL is returned.
+
 ### Resource Classes
 
 Explorer does not operate on a single resource type. It must support:
