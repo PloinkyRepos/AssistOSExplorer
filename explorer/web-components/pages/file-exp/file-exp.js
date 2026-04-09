@@ -578,6 +578,8 @@ export class FileExp {
                 return this.newFile();
             case 'renameEntry':
                 return this.renameEntry(element);
+            case 'openEntryInNewTab':
+                return this.openEntryInNewTab(element);
             case 'copyEntry':
                 return this.copyEntry(element);
             case 'cutEntry':
@@ -1236,6 +1238,20 @@ export class FileExp {
             window.open(absoluteUrl, '_blank', 'noopener,noreferrer');
         } catch (_) {
             // ignore malformed URL fallback
+        }
+    }
+
+    openEntryInNewTab(element) {
+        const targetPath = this.normalizePath(element?.dataset?.entryPath || '');
+        if (!targetPath) {
+            return false;
+        }
+        try {
+            const targetUrl = new URL(buildFileExpHash(targetPath), window.location.href);
+            window.open(targetUrl.toString(), '_blank', 'noopener,noreferrer');
+            return true;
+        } catch (_) {
+            return false;
         }
     }
 

@@ -210,6 +210,20 @@ export function getBuiltInContextMenuItems(fileExp, target) {
         }
     ];
 
+    if (type === 'file') {
+        items.push({
+            id: 'host:open-in-new-tab',
+            source: 'host',
+            slot: FILE_EXP_MENU_SLOTS.contextFile,
+            action: 'openEntryInNewTab',
+            label: 'Open in new tab',
+            entryPath,
+            entryType: type,
+            icon: './assets/icons/document.svg',
+            disabled: false
+        });
+    }
+
     if (type === 'directory') {
         items.push(
             {
