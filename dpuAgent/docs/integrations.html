@@ -34,42 +34,36 @@
             <div class="doc-main">
                 <section class="lead">
                     <h1>Ploinky and Explorer Integration</h1>
-                    <p><code>dpuAgent</code> is consumed through <a href="https://ploinky.com/" target="_blank" rel="noopener noreferrer">Ploinky</a> MCP routing and used by Explorer confidential UX flows as backend authority for secure content.</p>
+                    <p>`dpuAgent` is not a standalone product surface in practice. It exists because Explorer and related plugins need a confidential backend with a stable Model Context Protocol (MCP) contract.</p>
                 </section>
 
                 <section>
-                    <h2>Ploinky Runtime Integration</h2>
-                    <p>Agent lifecycle and environment exposure are declared in <code>dpuAgent/manifest.json</code>, while the MCP surface is declared in <code>dpuAgent/mcp-config.json</code>. AgentServer executes DPU tools and returns actor-filtered responses, so caller behavior stays aligned with runtime ACL rules.</p>
+                    <h2>Integration With Ploinky</h2>
+                    <p>Ploinky hosts the agent through its manifest and exposes the tool surface defined in <code>mcp-config.json</code>. When Explorer or another caller invokes a DPU tool, the runtime executes <code>tools/dpu_tool.sh</code> and returns the serialized result of the corresponding DPU operation.</p>
                 </section>
 
                 <section>
-                    <h2>Explorer Integration Scope</h2>
-                    <p>Explorer confidential views consume DPU APIs for virtual roots such as <code>/Confidential/My Space</code>, <code>/Confidential/Shared</code>, and <code>/Confidential/Secrets</code>. Explorer UI remains presentation layer, while DPU keeps storage, ACL, and identity checks centralized.</p>
-                    <div class="doc-callout">
-                        <p>Collaborative features such as permissions and comments are backed by DPU contracts, not by local Explorer-only state.</p>
-                    </div>
+                    <h2>Integration With Explorer</h2>
+                    <p>Explorer uses DPU for the virtual confidential surface rather than for normal filesystem browsing. In code, the agent exposes the roots returned by <code>getWorkspaceRoots()</code>, including `/Confidential/My Space`, `/Confidential/Shared`, and `/Confidential/Secrets`. DPU comments and permissions are also surfaced through Explorer-side plugins instead of filesystem metadata.</p>
                 </section>
 
                 <section>
-                    <h2>IDE-plugins Channel</h2>
+                    <h2>Explorer Plugins</h2>
                     <table>
                         <thead>
                             <tr>
                                 <th>Plugin</th>
-                                <th>Location</th>
                                 <th>Role</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr>
                                 <td><code>dpu-runtime-support</code></td>
-                                <td><code>file-exp:internal</code></td>
-                                <td>Internal runtime support channel and permission modal integration.</td>
+                                <td>Explorer runtime support and permissions modal integration.</td>
                             </tr>
                             <tr>
                                 <td><code>dpu-comments-popover</code></td>
-                                <td><code>dpu:internal</code></td>
-                                <td>Comment add/delete UI bound to DPU confidential comment tools.</td>
+                                <td>Confidential comments user interface backed by <code>dpu_confidential_comment_add</code>, <code>dpu_confidential_comment_delete</code>, and <code>dpu_confidential_get</code>.</td>
                             </tr>
                         </tbody>
                     </table>

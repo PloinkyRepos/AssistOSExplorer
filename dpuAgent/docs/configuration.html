@@ -34,12 +34,17 @@
             <div class="doc-main">
                 <section class="lead">
                     <h1>Manifest and Environment</h1>
-                    <p><code>dpuAgent</code> uses a manifest-defined runtime profile and strict env-based configuration for encryption key material, workspace roots, and storage location.</p>
+                    <p>The DPU runtime is intentionally small. Most of its operational behavior comes from a short manifest and a few storage-related environment variables.</p>
+                </section>
+
+                <section>
+                    <h2>Why Configuration Matters</h2>
+                    <p>The agent only works correctly if it can find the workspace boundary, the DPU storage root, and the master key used to encrypt secrets and confidential content. Those values are not optional implementation details. They define where the agent stores its data and whether encrypted content can be read at all.</p>
                 </section>
 
                 <section>
                     <h2>Manifest</h2>
-                    <p>Main runtime file: <code>dpuAgent/manifest.json</code>.</p>
+                    <p><code>manifest.json</code> declares a single default profile on top of <code>node:20-alpine</code>. The profile forwards the workspace-root variables and DPU-specific variables into the runtime:</p>
                     <pre><code>{
   "container": "node:20-alpine",
   "profiles": {
@@ -57,39 +62,38 @@
                 </section>
 
                 <section>
-                    <h2>Core Environment Variables</h2>
+                    <h2>Environment Variables</h2>
                     <table>
                         <thead>
                             <tr>
                                 <th>Variable</th>
-                                <th>Usage</th>
+                                <th>Role</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr>
                                 <td><code>DPU_MASTER_KEY</code></td>
-                                <td>Required encryption root secret for protected values and confidential content.</td>
+                                <td>Required encryption root for secret values and confidential file content.</td>
                             </tr>
                             <tr>
                                 <td><code>DPU_DATA_ROOT</code></td>
-                                <td>Optional explicit storage root for DPU state and blobs.</td>
+                                <td>Optional explicit storage root. If missing, storage falls back next to the resolved workspace root.</td>
                             </tr>
                             <tr>
-                                <td><code>DPU_WORKSPACE_ROOT</code>, <code>ASSISTOS_FS_ROOT</code>, <code>WORKSPACE_ROOT</code></td>
-                                <td>Workspace root resolution chain used by runtime and storage defaults.</td>
+                                <td><code>DPU_WORKSPACE_ROOT</code></td>
+                                <td>Preferred workspace root for DPU resolution.</td>
+                            </tr>
+                            <tr>
+                                <td><code>ASSISTOS_FS_ROOT</code>, <code>WORKSPACE_ROOT</code></td>
+                                <td>Fallback workspace-root inputs used when <code>DPU_WORKSPACE_ROOT</code> is not set.</td>
                             </tr>
                         </tbody>
                     </table>
                 </section>
 
                 <section>
-                    <h2>Standalone Runtime</h2>
-                    <p>The standalone server entrypoint is <code>dpuAgent/server/standalone-mcp-server.mjs</code> with endpoints <code>POST /mcp</code> and <code>GET /health</code>. This mode reuses the same tool dispatch and storage layers.</p>
-                </section>
-
-                <section>
-                    <h2>Test Validation</h2>
-                    <p>Code changes should be treated as complete only after <code>npm test</code> passes in <code>dpuAgent/</code>, together with documentation updates.</p>
+                    <h2>Standalone Mode</h2>
+                    <p>The standalone entry point is <code>server/standalone-mcp-server.mjs</code>. It serves <code>POST /mcp</code> and <code>GET /health</code>, while reusing the same <code>mcp-config.json</code> and tool dispatcher as the embedded runtime.</p>
                 </section>
             </div>
         </div>

@@ -1,37 +1,42 @@
 # DPU Agent
 
-Standalone MCP agent for:
+`dpuAgent` is the confidential data service used by Explorer for `/Confidential` and for secret storage. It keeps this data outside normal filesystem flows and exposes it through Model Context Protocol (MCP) tools instead.
 
-- encrypted secret storage
-- confidential file and folder management
-- object and secret ACL enforcement
-- identity resolution through a central permissions manifest
+The agent owns three things that Explorer should not implement locally:
 
-## Standalone runtime
+- actor-aware access control
+- encrypted storage for secret values and confidential file content
+- stable virtual roots such as `/Confidential/My Space`, `/Confidential/Shared`, and `/Confidential/Secrets`
 
-The repo can run without Ploinky through:
+## Runtime
+
+`dpuAgent` can run under the Ploinky runtime or as a standalone HTTP Model Context Protocol server.
+
+Standalone entry point:
 
 ```bash
 npm install
 DPU_MASTER_KEY=... DPU_DATA_ROOT=... node ./server/standalone-mcp-server.mjs
 ```
 
-Environment variables:
-
-- `DPU_MASTER_KEY`: required master key for encrypted storage
-- `DPU_DATA_ROOT`: optional storage root for state, permissions manifest, blobs, and encrypted secrets
-- `DPU_WORKSPACE_ROOT`: optional logical workspace root
-
-Default HTTP endpoint:
+Standalone endpoints:
 
 - `POST /mcp`
 - `GET /health`
 
+Required or relevant environment variables:
+
+- `DPU_MASTER_KEY`
+- `DPU_DATA_ROOT`
+- `DPU_WORKSPACE_ROOT`
+- `ASSISTOS_FS_ROOT`
+- `WORKSPACE_ROOT`
+
 ## Documentation
 
-- [DS01 - DPU Agent Vision and Goals](./docs/specs/DS01-vision.md)
+- [DS01 - DPU Agent Overview](./docs/specs/DS01-vision.md)
 - [DS02 - Storage Architecture](./docs/specs/DS02-storage-architecture.md)
 - [DS03 - Secrets Model](./docs/specs/DS03-secrets-model.md)
-- [DS04 - Confidential Objects and Collaboration Model](./docs/specs/DS04-confidential-objects.md)
+- [DS04 - Confidential Objects Model](./docs/specs/DS04-confidential-objects.md)
 - [DS05 - Runtime and MCP Interface](./docs/specs/DS05-runtime-and-mcp.md)
-- [DS06 - Secrets Product Model](./docs/specs/DS06-secrets-product-model.md)
+- [DS06 - Explorer-Facing DPU Model](./docs/specs/DS06-secrets-product-model.md)

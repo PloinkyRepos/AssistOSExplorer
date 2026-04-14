@@ -2,82 +2,58 @@
 
 ## Summary
 
-`dpuAgent` stores confidential state in a dedicated storage root. It separates metadata, ACL state, encrypted secret values, and confidential blob payloads so that each concern has an explicit file and lifecycle.
+`dpuAgent` stores confidential state in a dedicated storage root and keeps metadata, permissions, secret values, and confidential file content in separate files or directories.
 
 ## Background / Problem Statement
 
-Secrets and confidential objects have different persistence needs:
+The DPU domain has conflicting storage requirements. Lists and navigation need lightweight metadata. Permission checks need a canonical access control list (ACL) model. Secret values and confidential file bodies need encrypted persistence. A single flat store would make those responsibilities harder to reason about and easier to misuse.
 
-- object metadata must be queryable and sortable
-- ACL state must be centrally normalized
-- secret values must not appear in plaintext on disk
-- concurrent writes must not corrupt storage
+## Storage Layout
 
-## Data Model
+By default, the storage root lives next to the resolved workspace root:
 
-### `state.json`
+```text
+.dpu-storage/
+  state.json
+  permissions.manifest.json
+  secrets.json
+  blobs/
+  .lock/
+```
 
-`state.json` is the main metadata registry. It holds:
+The layers have separate roles:
 
-- `users`
-- `secrets`
-- `objects`
-- `version`
+- `state.json` stores users, secret metadata, and confidential object metadata
+- `permissions.manifest.json` stores canonical principal identities and access control list entries
+- `secrets.json` stores encrypted secret values
+- `blobs/` stores encrypted confidential file content
+- `.lock/` is used by the file lock
 
-Secret entries here do not store plaintext values. They store identifiers and ownership metadata only.
+## Structural Separation
 
-### `permissions.manifest.json`
+`lib/dpu-store.mjs` does not write storage files directly. It relies on `lib/dpu-store-internal/storage.mjs` for:
 
-The permissions manifest is the ACL source of truth. It stores:
+- storage root resolution
+- state load and save
+- permissions manifest load and save
+- encrypted secret map handling
+- encrypted confidential blob handling
+- single-writer coordination through `withFileLock()`
 
-- canonical principal identities
-- alias buckets for identities
-- per-secret ACL maps
-- per-confidential-object ACL maps
+This keeps the domain layer focused on object rules and access control list semantics instead of persistence details.
 
-### `secrets.json`
+## Practical Operation
 
-`secrets.json` stores the secret value map as one encrypted payload. The file is not JSON-in-plaintext; it is a versioned encrypted blob with the prefix `DPUSECS1`.
+Mutating operations run inside `withLockedState()`. That helper loads `state.json` and `permissions.manifest.json`, executes the requested mutation, and persists only the files whose in-memory state was marked dirty. Confidential file bodies and secret values use their own helpers instead of being embedded in metadata objects.
 
-### `blobs/`
+Storage-root resolution is:
 
-Confidential file bodies are stored separately from metadata. File content is encrypted and written to the blob path derived from the object id.
+1. `DPU_DATA_ROOT`, if set
+2. otherwise a default `.dpu-storage` directory next to the resolved workspace root
 
-## Persistence Rules
-
-1. Metadata writes go through `withLockedState()`.
-2. `state.json` and `permissions.manifest.json` are written atomically via temp file + rename.
-3. Secret values are read and written through `readSecretsMap()` and `writeEncryptedSecretMap()`.
-4. Blob content is separate from metadata so listings do not require content reads.
-
-## Locking Model
-
-Storage writes use a directory lock `.lock` with retry and timeout semantics:
-
-- lock acquisition retries for up to 8 seconds
-- all stateful mutations happen inside the lock
-- lock removal is best-effort in `finally`
-
-This provides simple single-writer safety without an external database.
-
-## Path Resolution
-
-Storage root resolution is:
-
-1. `DPU_DATA_ROOT`
-2. default to `path.join(path.dirname(workspaceRoot), '.dpu-storage')`
-
-Workspace root resolution is:
+Workspace-root resolution is:
 
 1. `DPU_WORKSPACE_ROOT`
 2. `ASSISTOS_FS_ROOT`
 3. `WORKSPACE_ROOT`
 4. `process.cwd()`
-
-## Failure Semantics
-
-- missing storage files are treated as empty/default state
-- malformed encrypted secret storage is rejected as invalid
-- missing `DPU_MASTER_KEY` is a hard error
-- lock timeout is a hard error
-

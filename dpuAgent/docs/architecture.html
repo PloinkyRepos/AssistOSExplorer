@@ -34,71 +34,63 @@
             <div class="doc-main">
                 <section class="lead">
                     <h1>Architecture</h1>
-                    <p><code>dpuAgent</code> is a confidential storage intermediary between Explorer and encrypted DPU state. It runs under Ploinky MCP or standalone runtime mode.</p>
+                    <p>`dpuAgent` separates confidential metadata, permissions, secret values, and confidential file content so each layer can be controlled independently.</p>
                 </section>
 
                 <section>
-                    <h2>Component Overview</h2>
+                    <h2>Why The Layers Are Separate</h2>
+                    <p>Secrets and confidential objects have different operational needs. Lists and navigation need metadata that can be loaded quickly. Access control list checks need a canonical permission store. Secret values and confidential file content need encrypted persistence and should not leak into metadata files. The agent therefore keeps these concerns in separate storage files instead of collapsing everything into one general-purpose store.</p>
+                </section>
+
+                <section>
+                    <h2>Main Modules</h2>
                     <table>
                         <thead>
                             <tr>
-                                <th>Component</th>
-                                <th>Location</th>
+                                <th>Module</th>
                                 <th>Role</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr>
-                                <td>MCP contract declaration</td>
-                                <td><code>dpuAgent/mcp-config.json</code></td>
-                                <td>Defines confidential and secret tool surface and input schemas.</td>
+                                <td><code>lib/dpu-store.mjs</code></td>
+                                <td>Main domain surface for secrets, confidential objects, comments, grants, revokes, and access checks.</td>
                             </tr>
                             <tr>
-                                <td>Wrapper entrypoint</td>
-                                <td><code>dpuAgent/tools/dpu_tool.sh</code></td>
-                                <td>Starts one Node invocation for each MCP tool call.</td>
+                                <td><code>lib/dpu-store-internal/storage.mjs</code></td>
+                                <td>Storage root resolution, file locking, state load/save, encrypted secret map handling, and confidential blob helpers.</td>
                             </tr>
                             <tr>
-                                <td>Tool dispatcher</td>
-                                <td><code>dpuAgent/tools/dpu_tool.mjs</code></td>
-                                <td>Parses envelope, validates args, extracts auth info, dispatches domain functions.</td>
+                                <td><code>lib/dpu-store-internal/permissions-manifest.mjs</code></td>
+                                <td>Canonical principal identities and access control list (ACL) mutation helpers.</td>
                             </tr>
                             <tr>
-                                <td>Domain service</td>
-                                <td><code>dpuAgent/lib/dpu-store.mjs</code></td>
-                                <td>Implements secrets, confidential objects, comments, ACL grants/revokes, and checks.</td>
+                                <td><code>lib/dpu-store-internal/identity-acl.mjs</code></td>
+                                <td>Actor resolution, role checks, and actor-filtered serialization rules.</td>
                             </tr>
                             <tr>
-                                <td>Internal storage and ACL layers</td>
-                                <td><code>dpuAgent/lib/dpu-store-internal/*</code></td>
-                                <td>Maintains encrypted persistence, locking, identity normalization, and permission manifest logic.</td>
-                            </tr>
-                            <tr>
-                                <td>Explorer plugin channel</td>
-                                <td><code>dpuAgent/IDE-plugins/*</code></td>
-                                <td>Provides runtime support and comments integration components for confidential UI flows.</td>
+                                <td><code>tools/dpu_tool.mjs</code></td>
+                                <td>Model Context Protocol (MCP) tool dispatch, argument normalization, and auth envelope extraction.</td>
                             </tr>
                         </tbody>
                     </table>
                 </section>
 
                 <section>
-                    <h2>Storage Separation Model</h2>
-                    <p>DPU separates metadata, permissions, encrypted secret values, and confidential content blobs. This keeps ACL state explicit and prevents plaintext secret values from leaking into metadata registries.</p>
+                    <h2>Storage Layout</h2>
+                    <p>The storage root keeps metadata files and encrypted content in separate places:</p>
                     <pre><code>.dpu-storage/
   state.json
   permissions.manifest.json
   secrets.json
   blobs/
   .lock/</code></pre>
+                    <p><code>state.json</code> stores users, secret metadata, and confidential object metadata. <code>permissions.manifest.json</code> stores canonical access control list state. <code>secrets.json</code> stores encrypted secret values. Confidential file bodies are stored as encrypted blobs under <code>blobs/</code>.</p>
                 </section>
 
                 <section>
-                    <h2>Intermediary Boundary</h2>
-                    <p>Explorer does not own confidential persistence logic. It calls MCP tools and receives actor-filtered responses. DPU decides role visibility, access checks, and serialized outputs for each actor context.</p>
-                    <div class="doc-callout doc-callout--important">
-                        <p>Secrets and confidential objects are domain records with dedicated semantics, not normal filesystem entities.</p>
-                    </div>
+                    <h2>What Explorer Delegates</h2>
+                    <p>Explorer does not decide who can read a secret value, who can update a confidential object, or how those records are stored. It asks DPU for actor-filtered results and drives the user interface from that response. That keeps the security and storage logic in one place instead of scattering it across plugins and views.</p>
                 </section>
             </div>
         </div>

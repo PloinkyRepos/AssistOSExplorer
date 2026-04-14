@@ -1,77 +1,51 @@
-# DS04 - Confidential Objects and Collaboration Model
+# DS04 - Confidential Objects Model
 
 ## Summary
 
-Confidential objects are the file and folder model behind `/Confidential`. They support ownership, ACLs, comments, separate blob storage, and actor-aware serialization for Explorer.
+Confidential objects are the file and folder records behind Explorer’s `/Confidential` surface. They support ownership, access control lists (ACLs), encrypted file content, and comments.
 
-## Object Types
+## Background / Problem Statement
 
-Supported object types:
+Explorer needs folder-style navigation and file-style interaction for confidential content, but the underlying records still need actor-aware access control and encrypted persistence. That requires a model that feels file-like at the UI boundary without becoming a normal filesystem tree underneath.
 
-- `folder`
-- `file`
+## Object Model
 
-Objects are stored in `state.objects` and reference blob content by object id when the object is a file.
+The agent stores confidential objects in `state.objects`. Each object is either:
 
-## Virtual Roots
+- a `folder`
+- a `file`
 
-For authenticated actors, the agent exposes:
+Folder records are metadata-only. File records keep metadata in `state.objects` and store their content in encrypted blob storage addressed by object id.
 
-- `/Confidential`
-- `/Confidential/My Space`
-- `/Confidential/Shared`
-- `/Confidential/Secrets`
+The agent also maintains a per-user `My Space` root through `ensureUserRecord()`. Shared content is not a real top-level folder on disk. It is a filtered view computed from access control list visibility.
 
-These are logical roots, not filesystem directories.
+## Roles and Serialization
 
-Explorer presents `/Confidential/Shared` with the user-facing label `Shared with me`.
-
-## Confidential Roles
-
-Confidential objects use a richer collaboration model than secrets. The serialized object exposes booleans such as:
+For confidential objects, the serialized result exposes capabilities such as:
 
 - `canRead`
 - `canComment`
 - `canWrite`
 
-This allows Explorer to drive editing, preview, comments, and permission UI without inferring capabilities client-side.
+This is important because Explorer should not infer collaboration rules on its own. It should use the capabilities returned by DPU.
 
-## Content Storage
+Comments are also actor-filtered. `serializeConfidentialObject()` includes comments only when the current request asks for content and the actor is allowed to read that object.
 
-For `file` objects:
+## Practical Operation
 
-- metadata lives in `state.objects`
-- content lives in encrypted blob storage
-- content is returned only when caller has read permission and requests content
+`listConfidential()` builds views such as:
 
-For `folder` objects:
+- the user’s own `My Space`
+- the shared list
+- a nested folder listing by `parentId`
 
-- metadata only
-- no blob payload
+`getConfidentialById()` returns one confidential object with actor-filtered content and comment visibility.
 
-## Comments
+`createConfidential()`, `updateConfidential()`, and `deleteConfidential()` mutate the metadata tree and confidential blobs under the storage lock. Recursive delete removes child objects and deletes blob files for confidential files.
 
-Comments are attached to confidential objects and serialized only when comments are visible to the actor. The agent supports comment add/delete flows and uses actor identity to evaluate authoring and permission constraints.
+The `My Space` root is special in the current implementation:
 
-## Listing Modes
-
-The confidential domain supports:
-
-- actor-specific `My Space`
-- shared listing
-- nested listing by `parentId`
-
-This lets Explorer render folder navigation and shared content views without exposing raw storage internals.
-
-## ACL Management
-
-ACL state for confidential objects lives in `permissions.manifest.json`, parallel to secrets. The object owner manages grants and revokes. Explorer surfaces this through the permissions modal plugin.
-
-## Integration Notes
-
-Explorer uses the confidential APIs for:
-
-- `/Confidential` navigation
-- permissions dialogs
-- content fetch and update flows
-- comments and collaboration affordances
+- it is created or repaired automatically for authenticated users
+- it cannot be renamed directly
+- it cannot be deleted directly
+- it cannot be shared directly

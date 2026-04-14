@@ -1,92 +1,53 @@
-# DS01 - DPU Agent Vision and Goals
+# DS01 - DPU Agent Overview
 
 ## Summary
 
-`dpuAgent` is the confidential data plane for Explorer. It provides a separate storage and permissions model for secrets, confidential files, folders, comments, and identity-aware access control. It exists so confidential content is not modeled as normal workspace files and does not inherit regular filesystem semantics.
+`dpuAgent` is the confidential data service used by Explorer for secrets and for the virtual `/Confidential` surface. It exists because those records should not inherit normal filesystem behavior.
 
 ## Background / Problem Statement
 
-Explorer needs to expose `/Confidential` as a protected logical workspace with capabilities that differ from the regular filesystem:
+Explorer can browse and edit ordinary workspace files directly, but that model is not sufficient for:
 
-- encrypted secret storage
-- confidential file and folder storage
-- actor-aware ACL enforcement
-- virtual roots such as `My Space`, `Shared with me`, and `Secrets`
-- stable APIs for Explorer UI flows
+- secret values that must not be stored in plaintext metadata
+- confidential files whose content should be encrypted at rest
+- actor-aware access rules
+- virtual roots such as `My Space`, `Shared`, and `Secrets`
 
-Treating this data as ordinary files would blur ownership, permissions, and encryption boundaries.
+If these concerns were implemented as ordinary files plus ad-hoc UI logic, the permission boundary would be unclear and storage rules would be duplicated across callers.
 
 ## Goals
 
-1. Provide a standalone MCP agent for confidential storage.
-2. Keep secret values encrypted at rest.
-3. Separate metadata, ACLs, and secret values into explicit layers.
-4. Resolve actor identity consistently from auth context and claims.
-5. Expose a small, stable tool surface for Explorer and related plugins.
-6. Support both embedded Ploinky runtime and standalone local execution.
+1. Keep confidential storage behind a dedicated Model Context Protocol (MCP) boundary.
+2. Separate metadata, access control list (ACL) state, secret values, and confidential file blobs.
+3. Resolve actor identity consistently from auth context before access checks.
+4. Expose a stable tool surface for Explorer and related plugins.
+5. Support both embedded runtime hosting and standalone Model Context Protocol hosting.
 
 ## Non-Goals
 
-- General-purpose database features
-- Filesystem mirroring of confidential state
-- Public anonymous access
-- Direct plaintext secret persistence on disk
+- Acting as a general-purpose database service.
+- Mirroring confidential state into the regular workspace filesystem.
+- Exposing public anonymous access to confidential data.
 
-## Architecture Overview
+## Service Boundary
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│                           Explorer                            │
-│    /Confidential UI, permissions modal, comments, previews    │
-└──────────────────────────────┬───────────────────────────────┘
-                               │ MCP tools
-                               ▼
-┌──────────────────────────────────────────────────────────────┐
-│                         dpuAgent                              │
-│  tools/dpu_tool.mjs → lib/dpu-store.mjs → internal storage    │
-└──────────────────────────────┬───────────────────────────────┘
-                               │
-          ┌────────────────────┼────────────────────┐
-          ▼                    ▼                    ▼
-┌─────────────────┐  ┌──────────────────────┐  ┌─────────────────┐
-│ state.json       │  │ permissions.manifest │  │ secrets.json    │
-│ metadata          │  │ ACL + identity map   │  │ encrypted values│
-└─────────────────┘  └──────────────────────┘  └─────────────────┘
-                               │
-                               ▼
-                      confidential blobs directory
-```
+The agent routes all operations through `tools/dpu_tool.mjs` into `lib/dpu-store.mjs`. The store delegates persistence, permissions, and actor resolution into `lib/dpu-store-internal/`. This lets Explorer consume a domain-level contract instead of inspecting storage files or inferring access control list semantics itself.
 
-## Component Responsibilities
+In practice:
 
-| Component | Responsibility |
-|-----------|----------------|
-| `server/standalone-mcp-server.mjs` | standalone HTTP MCP runtime |
-| `tools/dpu_tool.mjs` | MCP tool dispatch and auth envelope normalization |
-| `lib/dpu-store.mjs` | domain logic for secrets, confidential objects, ACLs |
-| `lib/dpu-store-internal/storage.mjs` | persistence, encryption, file locking |
-| `lib/dpu-store-internal/permissions-manifest.mjs` | canonical principal and ACL model |
-| `IDE-plugins/dpu-runtime-support` | Explorer UI integration for permissions/runtime flows |
+- `dpu_tool.mjs` normalizes the MCP envelope and extracts `metadata.authInfo`
+- `dpu-store.mjs` implements the domain operations
+- `storage.mjs` owns the storage root, encryption helpers, and file lock
+- `permissions-manifest.mjs` owns principal normalization and access control list updates
+- `identity-acl.mjs` computes roles and actor-filtered serialization
 
-## Configuration
+## Practical Operation
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `DPU_MASTER_KEY` | master secret used to derive encryption keys | yes |
-| `DPU_DATA_ROOT` | explicit storage root | no |
-| `DPU_WORKSPACE_ROOT` | logical workspace root for resolution | no |
-| `ASSISTOS_FS_ROOT` | workspace root fallback | no |
-| `WORKSPACE_ROOT` | workspace root fallback | no |
+The agent materializes virtual roots through `getWorkspaceRoots()`, including:
 
-## Directory Layout
+- `/Confidential`
+- `/Confidential/My Space`
+- `/Confidential/Shared`
+- `/Confidential/Secrets`
 
-By default, DPU storage lives under `../.dpu-storage` relative to the workspace root:
-
-```
-.dpu-storage/
-├── state.json
-├── permissions.manifest.json
-├── secrets.json
-├── blobs/
-└── .lock/
-```
+Secrets and confidential objects are listed through separate tool families. Secret values are only materialized for actors whose role allows `read`. Confidential file content is only materialized for actors whose role allows `read`. Mutating operations run under the DPU file lock so metadata and permissions updates stay consistent.

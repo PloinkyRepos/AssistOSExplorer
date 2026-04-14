@@ -34,7 +34,12 @@
             <div class="doc-main">
                 <section class="lead">
                     <h1>MCP Tools</h1>
-                    <p>DPU contracts are declared in <code>dpuAgent/mcp-config.json</code> and routed through <code>tools/dpu_tool.sh</code>.</p>
+                    <p>The DPU tool surface is intentionally small. It groups operations by domain rather than exposing storage internals directly. Here, MCP stands for Model Context Protocol.</p>
+                </section>
+
+                <section>
+                    <h2>Why The Tool Surface Is Grouped</h2>
+                    <p>Explorer needs stable operations such as “list visible secrets” or “update this confidential object”. It does not need direct read/write access to DPU storage files. The tool surface therefore reflects the domain model: identity, secrets, confidential objects, comments, and permission checks.</p>
                 </section>
 
                 <section>
@@ -44,47 +49,41 @@
                             <tr>
                                 <th>Group</th>
                                 <th>Tools</th>
-                                <th>Purpose</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr>
                                 <td>Identity and roots</td>
                                 <td><code>dpu_whoami</code>, <code>dpu_workspace_roots</code></td>
-                                <td>Resolve actor identity and virtual confidential roots.</td>
                             </tr>
                             <tr>
-                                <td>Secrets lifecycle</td>
+                                <td>Secrets</td>
                                 <td><code>dpu_secret_list</code>, <code>dpu_secret_get</code>, <code>dpu_secret_put</code>, <code>dpu_secret_delete</code>, <code>dpu_secret_grant</code>, <code>dpu_secret_revoke</code></td>
-                                <td>Manage secret metadata, encrypted values, and ACLs.</td>
                             </tr>
                             <tr>
                                 <td>Confidential objects</td>
                                 <td><code>dpu_confidential_list</code>, <code>dpu_confidential_get</code>, <code>dpu_confidential_create</code>, <code>dpu_confidential_update</code>, <code>dpu_confidential_delete</code></td>
-                                <td>Manage confidential file/folder metadata and encrypted blob content.</td>
                             </tr>
                             <tr>
-                                <td>Comments and collaboration</td>
-                                <td><code>dpu_confidential_comment_add</code>, <code>dpu_confidential_comment_delete</code>, <code>dpu_confidential_grant</code>, <code>dpu_confidential_revoke</code></td>
-                                <td>Support object comments and collaboration ACL flows.</td>
+                                <td>Comments</td>
+                                <td><code>dpu_confidential_comment_add</code>, <code>dpu_confidential_comment_delete</code></td>
                             </tr>
                             <tr>
-                                <td>Permission check</td>
-                                <td><code>dpu_access_check</code></td>
-                                <td>Evaluate actor permission on secrets or confidential objects.</td>
+                                <td>Permission checks</td>
+                                <td><code>dpu_access_check</code>, <code>dpu_confidential_grant</code>, <code>dpu_confidential_revoke</code></td>
                             </tr>
                         </tbody>
                     </table>
                 </section>
 
                 <section>
-                    <h2>Input Contract Characteristics</h2>
-                    <p>String identifiers such as <code>key</code>, <code>id</code>, <code>principal</code>, and <code>role</code> are validated before dispatch, and enum constraints are enforced for fields such as <code>scope</code>, <code>kind</code>, and <code>permission</code>. Unsupported tool names fail early with explicit errors.</p>
+                    <h2>Input And Response Behavior</h2>
+                    <p><code>tools/dpu_tool.mjs</code> normalizes the MCP envelope, extracts <code>metadata.authInfo</code>, validates required strings and enum-like values, and only then dispatches into the domain layer. Tool responses are actor-filtered. For example, a caller may see a secret record in a list without seeing its plaintext value unless the resolved role allows <code>read</code>.</p>
                 </section>
 
                 <section>
-                    <h2>Execution Characteristics</h2>
-                    <p><code>maxParallelTasks</code> is set to <code>1</code> for controlled mutation sequencing. Responses are actor-filtered and avoid raw storage exposure, and unauthorized operations fail before secret plaintext or protected confidential content is materialized.</p>
+                    <h2>Execution Constraints</h2>
+                    <p><code>mcp-config.json</code> sets <code>maxParallelTasks</code> to <code>1</code>. Mutating operations are also serialized through the DPU file lock. This does not turn DPU into a database, but it does keep the state files and permissions manifest from being updated concurrently through competing writes.</p>
                 </section>
             </div>
         </div>

@@ -1,75 +1,42 @@
-# DS05 - Runtime and MCP Interface
+# DS05 - Runtime and Model Context Protocol Interface
 
 ## Summary
 
-`dpuAgent` exposes its domain through MCP tools defined in `mcp-config.json`. It can run as a standalone HTTP MCP server or under the Ploinky runtime, where Explorer and plugins call it through `callAgentTool(...)`.
+`dpuAgent` exposes its domain through Model Context Protocol (MCP) tools declared in `mcp-config.json`. The same contract is used whether the agent runs under Ploinky or through the standalone HTTP MCP server.
 
-## Runtime Modes
+## Background / Problem Statement
 
-### Ploinky runtime
+Explorer and related plugins need a stable way to call the confidential domain. They should not depend on internal storage files or guess how actor identity should be resolved. The runtime layer therefore needs to do two things reliably:
 
-Under Ploinky, the agent receives environment variables from the manifest profile and is started as an MCP-capable service available to Explorer.
+- normalize the incoming request envelope
+- dispatch into the domain layer with validated inputs and auth context
 
-### Standalone runtime
+## Dispatch Boundary
 
-The standalone entry point is:
+Each Model Context Protocol tool entry in `mcp-config.json` points to `tools/dpu_tool.sh`, which launches `tools/dpu_tool.mjs`. The tool dispatcher:
 
-`node ./server/standalone-mcp-server.mjs`
+1. parses the Model Context Protocol envelope
+2. extracts `metadata.authInfo`
+3. normalizes the input object
+4. validates required fields and enum-like values
+5. dispatches into `lib/dpu-store.mjs`
 
-It serves:
+In standalone mode, `server/standalone-mcp-server.mjs` loads the same `mcp-config.json`, registers the same tools, and still routes execution through the same wrapper and dispatcher.
 
-- `POST /mcp`
-- `GET /health`
+## Tool Families
 
-## Tool Dispatch
+The current tool families are:
 
-`mcp-config.json` declares tools that all delegate into `tools/dpu_tool.sh` / `tools/dpu_tool.mjs`.
+- actor identity and roots
+- secrets
+- confidential objects
+- confidential comments
+- grants, revokes, and access checks
 
-Dispatch flow:
+This is a domain surface, not a storage-debug surface. The caller asks for secret or confidential operations, not for direct reads and writes of internal DPU files.
 
-1. MCP runtime resolves the tool entry
-2. tool wrapper sets `TOOL_NAME`
-3. stdin JSON envelope is parsed
-4. auth metadata is extracted
-5. normalized args are validated
-6. corresponding function in `lib/dpu-store.mjs` is executed
+## Practical Guarantees
 
-## Auth Context
+`mcp-config.json` sets `maxParallelTasks` to `1`. Mutating operations also run under the DPU file lock. This gives the runtime a simple single-writer discipline even though the agent is file-backed.
 
-The tool layer extracts actor context from `metadata.authInfo`. That context is then normalized by the permissions manifest layer to resolve:
-
-- principal id
-- email
-- username
-- user id
-- SSO subject
-- issuer
-- roles and claims
-
-This is the basis for all ACL decisions.
-
-## Tool Surface
-
-Major groups:
-
-- actor identity: `dpu_whoami`, `dpu_workspace_roots`
-- secrets: `dpu_secret_list`, `dpu_secret_get`, `dpu_secret_put`, `dpu_secret_delete`, `dpu_secret_grant`, `dpu_secret_revoke`
-- confidential objects: `dpu_confidential_list`, `dpu_confidential_get`, `dpu_confidential_create`, `dpu_confidential_update`, `dpu_confidential_delete`
-- comments: `dpu_confidential_comment_add`, `dpu_confidential_comment_delete`
-- permission checks: `dpu_access_check`
-
-## Input Validation
-
-Validation happens before domain execution:
-
-- required string fields are enforced per tool
-- secret keys must pass secret-key normalization
-- enum-like fields are explicitly constrained
-- unsupported tool names fail immediately
-
-## Behavioral Guarantees
-
-- all mutating operations are serialized through the storage lock
-- unauthorized reads fail before plaintext secret or confidential content is materialized
-- tool responses are actor-filtered, not raw storage dumps
-
+Authorization is enforced before sensitive material is returned. In practical terms, a caller may receive an object or secret record with limited fields while the encrypted secret value or confidential file content remains hidden because the resolved role does not allow it.

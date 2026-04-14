@@ -2,89 +2,49 @@
 
 ## Summary
 
-Secrets in `dpuAgent` are modeled as metadata plus encrypted value. The metadata lives in the main state and permissions manifest. The secret value lives in an encrypted map on disk and is only returned to callers with `read` permission.
+In `dpuAgent`, a secret is not just a key-value pair. It is a metadata record, an access control list (ACL)-controlled object, and an encrypted value stored outside the metadata registry.
 
-## Goals
+## Background / Problem Statement
 
-1. Keep plaintext secret values out of `state.json`.
-2. Enforce secret ACLs through canonical principals.
-3. Distinguish operational access from value visibility.
-4. Use a storage format that can be validated and versioned.
+Secrets need two things that should not be merged casually:
 
-## Secret Key Rules
+- operational metadata that Explorer can list and inspect
+- sensitive values that should only be materialized for actors with the right role
 
-Secret keys must match environment-variable style naming:
+If the value lived directly inside the metadata record, the metadata store would stop being safe to inspect or serialize broadly.
 
-`^[A-Za-z_][A-Za-z0-9_]*$`
+## Domain Split
 
-This keeps keys stable, explicit, and easy to reference from runtime integrations.
+The secret model is split across three places:
 
-## Secret Roles
+- metadata in `state.secrets`
+- access control list state in `permissions.manifest.json`
+- encrypted values in `secrets.json`
 
-Secrets use three roles:
+The public tool surface then serializes the result according to the caller’s role instead of dumping raw storage state.
 
-- `access`: actor can operationally reference the secret
-- `read`: actor can view the secret value
-- `write`: actor can update the value and manage ACL visibility
+## Secret Keys and Roles
 
-`write` implies ACL visibility. `read` implies value visibility. `access` does not imply plaintext disclosure.
+Secret keys are normalized through `normalizeSecretKey()`. The current implementation expects environment-variable-style keys.
 
-## Storage Layout
+Secret roles are:
 
-### Metadata in `state.json`
+- `access`
+- `read`
+- `write`
 
-Each secret entry stores:
+These roles are not equivalent. An actor with `access` can be authorized operationally without seeing the plaintext value. An actor with `read` can see the value. An actor with `write` can update the value and inspect access control list details.
 
-- `id`
-- `key`
-- `ownerId`
-- timestamps
+## Practical Operation
 
-### ACL in `permissions.manifest.json`
+`putSecret()` resolves the authenticated actor, normalizes the key, creates or updates secret metadata, writes the encrypted value through `upsertSecretsFileValue()`, and returns the actor-filtered serialized secret.
 
-The manifest stores the canonical ACL map for each secret key.
-
-### Encrypted values in `secrets.json`
-
-The value map is encrypted as one payload using:
-
-- AES-256-GCM
-- per-write random IV
-- auth tag
-- key derived from `DPU_MASTER_KEY` with namespace `dpu:secret-map:`
-
-## Write Flow
-
-`putSecret()` does the following:
-
-1. resolves the authenticated actor
-2. ensures the actor has a user record
-3. normalizes and validates the key
-4. creates or updates metadata in `state.secrets`
-5. writes the value through `upsertSecretsFileValue()`
-6. returns a serialized secret filtered by actor permissions
-
-## Read Flow
-
-`getSecretByKey()` and `listSecrets()`:
-
-1. resolve actor
-2. evaluate role against manifest ACL
-3. include plaintext value only when the actor has `read`
-4. include ACL details only when the actor has `write`
-
-## Delete Flow
+`listSecrets()` and `getSecretByKey()` resolve the actor first and only expose secret entries whose role allows `access`. Plaintext value materialization only happens when the role allows `read`.
 
 `deleteSecret()` removes:
 
-- metadata from `state.secrets`
-- ACL entry from `permissions.manifest.json`
-- value from encrypted `secrets.json`
+- the metadata entry
+- the access control list entry
+- the encrypted value from `secrets.json`
 
-## Security Properties
-
-- no plaintext secret values in metadata files
-- invalid plaintext `secrets.json` is rejected
-- decryption requires `DPU_MASTER_KEY`
-- permissions are enforced before value materialization
-
+This keeps secret lifecycle state explicit instead of spreading it across Explorer-side caches or filesystem semantics.
