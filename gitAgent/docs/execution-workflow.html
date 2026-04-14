@@ -34,12 +34,12 @@
             <div class="doc-main">
                 <section class="lead">
                     <h1>Tool Execution Workflow</h1>
-                    <p>Every MCP tool invocation runs in a fresh process lifecycle started from <code>gitAgent/tools/git_tool.sh</code> and implemented in <code>git_tool.mjs</code>.</p>
+                    <p>Every Model Context Protocol (MCP) tool invocation runs in a fresh process lifecycle started from <code>gitAgent/tools/git_tool.sh</code> and implemented in <code>git_tool.mjs</code>.</p>
                 </section>
 
                 <section>
                     <h2>End-to-End Flow Diagram</h2>
-                    <pre><code>Explorer UI
+                    <pre><code>Explorer user interface (UI)
     |
     | callAgentTool("gitAgent", toolName, args)
     v
@@ -62,7 +62,7 @@ git-service / github-auth handler
     |
     | run git subprocess or auth workflow
     v
-JSON result -> MCP response -> Explorer UI</code></pre>
+JSON result -> MCP response -> Explorer user interface</code></pre>
                 </section>
 
                 <section>

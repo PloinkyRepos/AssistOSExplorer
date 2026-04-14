@@ -34,7 +34,7 @@
             <div class="doc-main">
                 <section class="lead">
                     <h1>Architecture</h1>
-                    <p><code>gitAgent</code> is the intermediary layer between Explorer UI requests and Git command execution, routed through <a href="https://ploinky.com/" target="_blank" rel="noopener noreferrer">Ploinky</a> AgentServer MCP.</p>
+                    <p><code>gitAgent</code> is the intermediary layer between Explorer user interface (UI) requests and Git command execution, routed through <a href="https://ploinky.com/" target="_blank" rel="noopener noreferrer">Ploinky</a> AgentServer over Model Context Protocol (MCP).</p>
                 </section>
 
                 <section>
@@ -49,7 +49,7 @@
                         </thead>
                         <tbody>
                             <tr>
-                                <td>MCP contract declaration</td>
+                                <td>Model Context Protocol contract declaration</td>
                                 <td><code>gitAgent/mcp-config.json</code></td>
                                 <td>Declares all Git tools, command entrypoint, schemas, and per-tool <code>TOOL_NAME</code>.</td>
                             </tr>
@@ -61,7 +61,7 @@
                             <tr>
                                 <td>Tool dispatcher</td>
                                 <td><code>gitAgent/tools/git_tool.mjs</code></td>
-                                <td>Parses MCP envelope, validates args, resolves tool operation, and emits JSON results.</td>
+                                <td>Parses Model Context Protocol envelope data, validates args, resolves tool operation, and emits JSON results.</td>
                             </tr>
                             <tr>
                                 <td>Git execution service</td>
@@ -74,9 +74,9 @@
                                 <td>Handles device flow, token persistence, and auth status operations for remote Git actions.</td>
                             </tr>
                             <tr>
-                                <td>Explorer UI plugin channel</td>
+                                <td>Explorer user interface plugin channel</td>
                                 <td><code>gitAgent/IDE-plugins/git-tool-button/</code></td>
-                                <td>Injects Git UI components in Explorer and calls <code>gitAgent</code> tools via MCP.</td>
+                                <td>Injects Git interface components in Explorer and calls <code>gitAgent</code> tools via MCP.</td>
                             </tr>
                         </tbody>
                     </table>

@@ -51,7 +51,7 @@ The Git plugin owns:
 - stage/unstage state
 - commit, pull, push, and sync flows
 - Git authentication prompts
-- conflict resolution UI
+- conflict resolution user interface (UI)
 - menu action semantics such as `New repository` in the host-owned Explorer `New` menu
 - menu action semantics such as `Add to .gitignore` and `Remove from .gitignore`
 - direct ignore actions in `git-commit-modal`, without a separate pattern-editing prompt
@@ -73,7 +73,7 @@ For the host-owned Explorer `New` menu, the owning Git behavior is:
 
 1. Explorer mounts toolbar plugins and resolves menu contributions for host-owned menu surfaces.
 2. Git UI components or Git menu modules read the current Explorer context.
-3. The Git integration calls `gitAgent` over MCP for repository operations.
+3. The Git integration calls `gitAgent` over Model Context Protocol (MCP) for repository operations.
 4. Credentials UI may capture a manual token or start GitHub device flow, but the token itself is persisted server-side in DPU Secrets.
 5. Explorer refreshes its visible state after Git operations complete.
 

@@ -6,7 +6,7 @@ This document defines mandatory operational safeguards for path policy, auth beh
 
 ## Security and Auth Scope
 
-`gitAgent` enforces repository path safety and auth-aware remote behavior. The agent accepts tool inputs from MCP clients, validates path scope, and handles GitHub auth state via device flow and secret-backed token storage.
+`gitAgent` enforces repository path safety and auth-aware remote behavior. The agent accepts tool inputs from Model Context Protocol (MCP) clients, validates path scope, and handles GitHub auth state via device flow and secret-backed token storage.
 
 ## Operational Requirements
 

@@ -1,6 +1,6 @@
 # gitAgent
 
-MCP agent for Git operations inside a Ploinky workspace.
+Model Context Protocol (MCP) agent for Git operations inside a Ploinky workspace.
 
 ## Responsibilities
 
@@ -26,7 +26,7 @@ The agent is started through [manifest.json](./manifest.json) with:
 sh /code/scripts/startAgent.sh
 ```
 
-The start script loads API keys from process env first and then falls back to `.ploinky/.secrets`.
+The start script loads application programming interface (API) keys from process env first and then falls back to `.ploinky/.secrets`.
 
 ## Environment
 
@@ -49,7 +49,7 @@ Optional provider and integration variables:
 ## Notes
 
 - `git_commit_message` depends on the default LLM runtime from `achillesAgentLib`.
-- The agent is decoupled from Explorer UI. Explorer or other clients should call Git through MCP, not through shared UI internals.
+- The agent is decoupled from the Explorer user interface (UI). Explorer or other clients should call Git through MCP, not through shared interface internals.
 - Explorer menus use a separate menu contribution plugin. The menu stays host-owned in Explorer, while `gitAgent` owns actions such as `New repository`, `Add to .gitignore`, and `Remove from .gitignore`.
 - `git_add_ignore` both appends the ignore pattern and removes already tracked paths from the Git index, including staged-but-diverged entries that require forced index removal, so ignored items stop participating in future commits unless explicitly re-added.
 - `git_remove_ignore` removes the matching ignore rule and re-adds the target to Git tracking when possible.

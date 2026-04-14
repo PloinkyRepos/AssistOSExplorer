@@ -2,15 +2,15 @@
 
 ## Summary
 
-`gitAgent` is the MCP agent responsible for workspace-scoped Git operations and for the Git user experience exposed through Explorer.
+`gitAgent` is the Model Context Protocol (MCP) agent responsible for workspace-scoped Git operations and for the Git user experience exposed through Explorer.
 
 ## Background / Problem Statement
 
-Explorer needs Git capabilities without binding the UI directly to shell commands, repository discovery rules, authentication handling, or per-repository operational logic. `gitAgent` provides that boundary.
+Explorer needs Git capabilities without binding the user interface (UI) directly to shell commands, repository discovery rules, authentication handling, or per-repository operational logic. `gitAgent` provides that boundary.
 
 ## Goals
 
-1. Expose Git operations through MCP tools that are safe to call from Explorer.
+1. Expose Git operations through Model Context Protocol (MCP) tools that are safe to call from Explorer.
 2. Restrict Git operations to valid workspace repository roots.
 3. Centralize Git authentication, repository status inspection, commit/push/pull flows, and conflict support.
 4. Keep sensitive credentials out of browser storage.
@@ -18,7 +18,7 @@ Explorer needs Git capabilities without binding the UI directly to shell command
 ## Non-Goals
 
 - Acting as a general-purpose Git client for arbitrary paths outside the workspace.
-- Moving the Git UI into Explorer core.
+- Moving the Git user interface (UI) into Explorer core.
 - Treating browser storage as a source of truth for access tokens.
 
 ## Architecture Overview
@@ -47,7 +47,7 @@ Both modes persist the effective token in DPU Secrets, not in browser `localStor
 - Browser storage may keep non-sensitive UI metadata, such as the selected auth method or GitHub profile metadata, but not the token itself.
 - Local state in `.ploinky/state/git-agent-github-auth.json` may keep non-sensitive connection metadata and pending device-flow state, but not the token value.
 
-## API Contracts
+## Application Programming Interface Contracts
 
 Primary tools include:
 

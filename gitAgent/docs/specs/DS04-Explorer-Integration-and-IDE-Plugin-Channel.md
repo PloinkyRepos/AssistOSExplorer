@@ -6,11 +6,11 @@ This document defines integration rules for Explorer-facing usage of `gitAgent` 
 
 ## Integration Position
 
-Explorer is the UI host. `gitAgent` is the backend Git intermediary. IDE plugin artifacts in `gitAgent/IDE-plugins/` are the UI extension channel that connects Explorer interactions to MCP tool calls.
+Explorer is the user interface (UI) host. `gitAgent` is the backend Git intermediary. IDE plugin artifacts in `gitAgent/IDE-plugins/` are the UI extension channel that connects Explorer interactions to Model Context Protocol (MCP) tool calls.
 
 ## Integration Requirements
 
-Requirement U1: Explorer-facing UI components shall call `gitAgent` through MCP APIs.
+Requirement U1: Explorer-facing UI components shall call `gitAgent` through MCP application programming interfaces (APIs).
 
 Requirement U2: Git operation decisions and execution shall remain in the agent backend, not in UI presenters.
 

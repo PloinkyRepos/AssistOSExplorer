@@ -2,15 +2,15 @@
 
 ## Role of This Document
 
-This document defines mandatory architecture rules for `gitAgent` as a Ploinky MCP agent.
+This document defines mandatory architecture rules for `gitAgent` as a Ploinky Model Context Protocol (MCP) agent.
 
 ## Architectural Boundary
 
-The agent boundary starts at MCP tool invocation and ends at normalized result emission to MCP clients. Explorer-side rendering, host layout, and interaction concerns remain outside this boundary. Raw Git command execution internals are encapsulated in agent services.
+The agent boundary starts at Model Context Protocol (MCP) tool invocation and ends at normalized result emission to MCP clients. Explorer-side rendering, host layout, and interaction concerns remain outside this boundary. Raw Git command execution internals are encapsulated in agent services.
 
 ## Architecture Shape
 
-The architecture has a contract layer, wrapper layer, dispatch layer, Git service layer, auth layer, and UI-extension layer.
+The architecture has a contract layer, wrapper layer, dispatch layer, Git service layer, auth layer, and user interface (UI)-extension layer.
 
 The contract layer declares tools in `mcp-config.json`. The wrapper layer executes `tools/git_tool.sh` for each invocation. The dispatch layer in `git_tool.mjs` parses envelopes, validates arguments, and routes operations. The Git service layer executes subprocess commands with timeout and structured parsing. The auth layer manages GitHub device flow and token storage integration. The UI-extension layer exposes IDE plugin artifacts for Explorer. Dependency installation remains outside the agent boundary and is orchestrated by `ploinky`.
 

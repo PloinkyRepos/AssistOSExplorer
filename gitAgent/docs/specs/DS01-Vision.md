@@ -2,11 +2,11 @@
 
 ## Role of This Document
 
-This document defines the strategic rules for `gitAgent` as a Ploinky agent that mediates between Explorer UI flows and Git command execution.
+This document defines the strategic rules for `gitAgent` as a Ploinky agent that mediates between Explorer user interface (UI) flows and Git command execution.
 
 ## Agent Context
 
-`gitAgent` is integrated in Ploinky and consumed by internal Explorer workflows. The agent is not a UI framework and not a generic shell proxy. The agent exposes a controlled MCP contract for Git capabilities and centralizes path policy, error normalization, and auth handling.
+`gitAgent` is integrated in Ploinky and consumed by internal Explorer workflows. The agent is not a UI framework and not a generic shell proxy. The agent exposes a controlled Model Context Protocol (MCP) contract for Git capabilities and centralizes path policy, error normalization, and auth handling.
 
 The repository may host multiple agents in the future. This specification set addresses the current `gitAgent` scope.
 

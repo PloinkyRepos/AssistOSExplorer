@@ -2,7 +2,7 @@
 
 ## Role of This Document
 
-This document defines contract guarantees for MCP tool behavior and invocation lifecycle rules.
+This document defines contract guarantees for Model Context Protocol (MCP) tool behavior and invocation lifecycle rules.
 
 ## Contract Surface
 
@@ -12,7 +12,7 @@ Each contract shall define input schema expectations and tool identity mapping t
 
 ## Invocation Lifecycle Rules
 
-Lifecycle Rule L1: each invocation begins by reading MCP envelope input from stdin.
+Lifecycle Rule L1: each invocation begins by reading Model Context Protocol (MCP) envelope input from stdin.
 
 Lifecycle Rule L2: payload normalization shall handle expected MCP envelope shapes and extract effective input arguments.
 
