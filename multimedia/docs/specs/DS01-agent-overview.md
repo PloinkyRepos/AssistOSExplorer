@@ -17,7 +17,7 @@ The editor needs dedicated plugins for upload, metadata editing, preview, and vi
 ## Non-Goals
 
 1. It is not a general-purpose LLM orchestration agent.
-2. It does not define a large MCP tool catalog like builder/runtime-oriented agents.
+2. It does not define a large Model Context Protocol (MCP) tool catalog like builder/runtime-oriented agents.
 
 ## Core Surfaces
 

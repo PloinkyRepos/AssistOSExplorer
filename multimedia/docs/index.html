@@ -38,12 +38,12 @@
 
                 <section class="highlight-box">
                     <h2>Media Workflow Boundary</h2>
-                    <p><code>multimedia</code> concentrates those workflows in one family of UI plugins and runtime helpers. The same boundary covers attachment management for audio, video, images, and generic files, while also exposing the image-to-video pipeline used for compiled media output.</p>
+                    <p><code>multimedia</code> concentrates those workflows in one family of user interface (UI) plugins and runtime helpers. The same boundary covers attachment management for audio, video, images, and generic files, while also exposing the image-to-video pipeline used for compiled media output.</p>
                 </section>
 
                 <section>
-                    <h2>How It Runs In Practice</h2>
-                    <p>The main surface lives in <code>multimedia/IDE-plugins/</code>, where modal and embedded components handle document, chapter, and paragraph contexts. In parallel, the <code>ffmpegImageToVideo</code> skill drives image-to-video generation. This keeps UI integration close to Explorer while media-specific processing remains inside the agent runtime.</p>
+                    <h2>Runtime Behavior</h2>
+                    <p>The main surface lives in <code>multimedia/IDE-plugins/</code>, where modal and embedded components handle document, chapter, and paragraph contexts. In parallel, the <code>ffmpegImageToVideo</code> skill drives image-to-video generation. This keeps user interface integration close to Explorer while media-specific processing remains inside the agent runtime.</p>
                     <div class="doc-callout doc-callout--important">
                         <p><strong>Critical startup dependency:</strong> on agent startup, <code>/code/scripts/install.sh</code> is executed, and <code>git</code> plus <code>ffmpeg</code> are installed in the container to support video, audio, and image workflows.</p>
                     </div>

@@ -33,7 +33,7 @@
             <div class="doc-main">
                 <section class="lead">
                     <h1>Architecture</h1>
-                    <p>The architecture is designed around Explorer UI integration and document-level media workflow management.</p>
+                    <p>The architecture is designed around Explorer user interface (UI) integration and document-level media workflow management.</p>
                 </section>
 
                 <section>
@@ -78,8 +78,8 @@
 
                 <section>
                     <h2>Execution Positioning</h2>
-                    <p>The standard flow is UI-first: a plugin is mounted in document/paragraph/chapter host contexts, reads current context data, and then uses <code>document</code>, <code>workspace</code>, or <code>llm</code> modules for operations.</p>
-                    <p>The FFmpeg skill is separated from UI plugins and runs as a media processing block, allowing reuse in automated flows that require standardized video output.</p>
+                    <p>The standard flow is user-interface-first: a plugin is mounted in document/paragraph/chapter host contexts, reads current context data, and then uses <code>document</code>, <code>workspace</code>, or <code>llm</code> modules for operations.</p>
+                    <p>The FFmpeg skill is separated from user interface plugins and runs as a media processing block, allowing reuse in automated flows that require standardized video output.</p>
                     <div class="doc-callout">
                         <p>This agent is not focused on complex LLM orchestration; its value is in specialized IDE media extensions.</p>
                     </div>
