@@ -2,7 +2,7 @@
 
 ## Role of This Document
 
-This document defines contract and lifecycle guarantees for `tasksAgent` MCP operations.
+This document defines contract and lifecycle guarantees for `tasksAgent` Model Context Protocol (MCP) operations.
 
 ## Contract Surface
 
@@ -12,7 +12,7 @@ Each contract shall define required arguments and optional controls such as filt
 
 ## Invocation Lifecycle Rules
 
-Lifecycle Rule L1: each invocation begins by reading and parsing MCP envelope input from stdin.
+Lifecycle Rule L1: each invocation begins by reading and parsing Model Context Protocol (MCP) envelope input from stdin.
 
 Lifecycle Rule L2: envelope normalization shall extract operational input from supported MCP payload shapes.
 

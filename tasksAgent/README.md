@@ -1,6 +1,6 @@
 # tasksAgent
 
-MCP agent for backlog files stored inside a workspace repository.
+Model Context Protocol (MCP) agent for backlog files stored inside a workspace repository.
 
 ## Responsibilities
 
@@ -34,7 +34,7 @@ The tool normalizes `/.ploinky/...` inputs to the real workspace path before val
 
 ## Runtime
 
-The agent uses the generic Node MCP runtime defined in [manifest.json](./manifest.json).
+The agent uses the generic Node Model Context Protocol runtime defined in [manifest.json](./manifest.json).
 
 Relevant environment variables:
 
@@ -43,9 +43,9 @@ Relevant environment variables:
 - `PLOINKY_WORKSPACE_ROOT`
 - `LOCK_FOLDER`
 
-## UI integration
+## Explorer integration
 
-The repo also contains the Explorer plugin button in [IDE-plugins/tasks-tool-button](./IDE-plugins/tasks-tool-button), which is the expected entry point for interactive task management in the Explorer UI.
+The repo also contains the Explorer plugin button in [IDE-plugins/tasks-tool-button](./IDE-plugins/tasks-tool-button), which is the expected entry point for interactive task management in the Explorer user interface (UI).
 
 ## Documentation
 

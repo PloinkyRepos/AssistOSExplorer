@@ -34,17 +34,17 @@
             <div class="doc-main">
                 <section class="lead">
                     <h1>Backlog Operations In Explorer</h1>
-                    <p>Explorer needs structured task and backlog workflows that can mutate repository files safely, but those rules should not be distributed across buttons, modal presenters, and ad-hoc file operations in the UI.</p>
+                    <p>Explorer needs structured task and backlog workflows that can mutate repository files safely, but those rules should not be distributed across buttons, modal presenters, and ad-hoc file operations in the user interface (UI).</p>
                 </section>
 
                 <section class="highlight-box">
                     <h2>Backlog Boundary For Explorer</h2>
-                    <p><code>tasksAgent</code> centralizes that responsibility behind MCP tools for configuration, listing, retrieval, mutation, history, and reorder operations. It owns repository path boundaries and file-extension rules so backlog state changes are validated before they touch the workspace.</p>
+                    <p><code>tasksAgent</code> centralizes that responsibility behind Model Context Protocol (MCP) tools for configuration, listing, retrieval, mutation, history, and reorder operations. It owns repository path boundaries and file-extension rules so backlog state changes are validated before they touch the workspace.</p>
                 </section>
 
                 <section>
-                    <h2>How It Runs In Practice</h2>
-                    <p>Task operations execute through <code>tasksAgent/tools/tasks_tool.sh</code> and <code>tasks_tool.mjs</code>, while Explorer integration enters through <code>tasksAgent/IDE-plugins/tasks-tool-button/</code>. The UI collects intent and renders results; the agent remains responsible for file semantics and mutation workflows.</p>
+                    <h2>Runtime Behavior</h2>
+                    <p>Task operations execute through <code>tasksAgent/tools/tasks_tool.sh</code> and <code>tasks_tool.mjs</code>, while Explorer integration enters through <code>tasksAgent/IDE-plugins/tasks-tool-button/</code>. The user interface collects intent and renders results; the agent remains responsible for file semantics and mutation workflows.</p>
                     <div class="doc-callout">
                         <p><strong>Validation rule:</strong> run the tasks agent tests under <code>tasksAgent/tests</code> for code changes, together with documentation and specification updates.</p>
                     </div>

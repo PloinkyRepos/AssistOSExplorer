@@ -36,7 +36,7 @@ Invariant G1: path and extension checks remain mandatory before backlog or histo
 
 Invariant G2: task mutation outcomes remain explicit and serialized in contract responses.
 
-Invariant G3: operational diagnostics remain visible to MCP clients.
+Invariant G3: operational diagnostics remain visible to Model Context Protocol (MCP) clients.
 
 ## Validation Criteria
 

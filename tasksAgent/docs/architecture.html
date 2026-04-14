@@ -34,7 +34,7 @@
             <div class="doc-main">
                 <section class="lead">
                     <h1>Architecture</h1>
-                    <p><code>tasksAgent</code> is an intermediary layer between Explorer task UI actions and repository backlog file operations, routed through <a href="https://ploinky.com/" target="_blank" rel="noopener noreferrer">Ploinky</a> MCP.</p>
+                    <p><code>tasksAgent</code> is an intermediary layer between Explorer task user interface (UI) actions and repository backlog file operations, routed through <a href="https://ploinky.com/" target="_blank" rel="noopener noreferrer">Ploinky</a> over Model Context Protocol (MCP).</p>
                 </section>
 
                 <section>
@@ -49,7 +49,7 @@
                         </thead>
                         <tbody>
                             <tr>
-                                <td>MCP tool contracts</td>
+                                <td>Model Context Protocol tool contracts</td>
                                 <td><code>tasksAgent/mcp-config.json</code></td>
                                 <td>Declares task tools, schemas, wrapper command, and per-tool <code>TOOL_NAME</code>.</td>
                             </tr>
@@ -61,7 +61,7 @@
                             <tr>
                                 <td>Dispatcher and handlers</td>
                                 <td><code>tasksAgent/tools/tasks_tool.mjs</code></td>
-                                <td>Parses MCP envelope, validates paths and arguments, executes tool logic.</td>
+                                <td>Parses Model Context Protocol envelope data, validates paths and arguments, executes tool logic.</td>
                             </tr>
                             <tr>
                                 <td>Backlog persistence bridge</td>
@@ -69,7 +69,7 @@
                                 <td>Loads, refreshes, saves, and force-saves backlog and history files.</td>
                             </tr>
                             <tr>
-                                <td>Explorer UI plugin channel</td>
+                                <td>Explorer user interface plugin channel</td>
                                 <td><code>tasksAgent/IDE-plugins/tasks-tool-button/</code></td>
                                 <td>Injects task tooling in Explorer toolbar and task modals.</td>
                             </tr>

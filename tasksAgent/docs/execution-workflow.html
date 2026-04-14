@@ -34,12 +34,12 @@
             <div class="doc-main">
                 <section class="lead">
                     <h1>Tool Execution Workflow</h1>
-                    <p>Each MCP tool call starts a new process through <code>tasksAgent/tools/tasks_tool.sh</code> and executes in <code>tasks_tool.mjs</code>.</p>
+                    <p>Each Model Context Protocol (MCP) tool call starts a new process through <code>tasksAgent/tools/tasks_tool.sh</code> and executes in <code>tasks_tool.mjs</code>.</p>
                 </section>
 
                 <section>
                     <h2>End-to-End Flow Diagram</h2>
-                    <pre><code>Explorer UI
+                    <pre><code>Explorer user interface (UI)
     |
     | callAgentTool("tasksAgent", toolName, args)
     v
@@ -59,7 +59,7 @@ tasksAgent/tools/tasks_tool.mjs
     | execute task operation
     | refresh/save/forceSave backlog state
     v
-JSON result -> MCP response -> Explorer UI</code></pre>
+JSON result -> MCP response -> Explorer user interface</code></pre>
                 </section>
 
                 <section>

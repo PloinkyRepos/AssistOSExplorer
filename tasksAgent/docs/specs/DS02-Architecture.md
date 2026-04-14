@@ -2,11 +2,11 @@
 
 ## Role of This Document
 
-This document defines mandatory architecture rules for `tasksAgent` as a Ploinky MCP agent.
+This document defines mandatory architecture rules for `tasksAgent` as a Ploinky Model Context Protocol (MCP) agent.
 
 ## Architectural Boundary
 
-The architecture boundary starts at MCP tool invocation and ends at serialized operation response. Explorer UI rendering and host interactions remain outside this boundary. Backlog file execution logic remains inside the agent.
+The architecture boundary starts at Model Context Protocol (MCP) tool invocation and ends at serialized operation response. Explorer user interface (UI) rendering and host interactions remain outside this boundary. Backlog file execution logic remains inside the agent.
 
 ## Architecture Shape
 

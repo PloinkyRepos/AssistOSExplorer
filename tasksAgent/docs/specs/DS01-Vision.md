@@ -6,17 +6,17 @@ This document defines strategic rules for `tasksAgent` as a Ploinky agent that m
 
 ## Agent Context
 
-`tasksAgent` is integrated in Ploinky and consumed by Explorer flows that need repository task management. The agent is not a UI renderer and not a generic filesystem mutation proxy. It exposes MCP contracts for backlog operations while enforcing scope and path constraints.
+`tasksAgent` is integrated in Ploinky and consumed by Explorer flows that need repository task management. The agent is not a user interface (UI) renderer and not a generic filesystem mutation proxy. It exposes Model Context Protocol (MCP) contracts for backlog operations while enforcing scope and path constraints.
 
 The repository can host additional agents over time. This specification set addresses the current `tasksAgent` behavior.
 
 ## Vision Direction
 
-The direction is to keep task-file operations behind MCP contracts and use Explorer as interaction layer only. The agent must preserve deterministic operation semantics for unchanged inputs and maintain explicit path-policy enforcement.
+The direction is to keep task-file operations behind Model Context Protocol (MCP) contracts and use Explorer as interaction layer only. The agent must preserve deterministic operation semantics for unchanged inputs and maintain explicit path-policy enforcement.
 
 ## Agent Expectations
 
-Expectation E1: supported UI clients can discover and call the same task tools through MCP.
+Expectation E1: supported user interface (UI) clients can discover and call the same task tools through MCP.
 
 Expectation E2: backlog and history operations remain constrained to repository-local paths.
 

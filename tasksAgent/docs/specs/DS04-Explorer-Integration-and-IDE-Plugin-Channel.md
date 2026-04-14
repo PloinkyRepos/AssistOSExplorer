@@ -6,7 +6,7 @@ This document defines integration rules for Explorer-facing usage of `tasksAgent
 
 ## Integration Position
 
-Explorer is UI host and interaction layer. `tasksAgent` is backend operation layer for backlog files. IDE plugin assets under `tasksAgent/IDE-plugins/tasks-tool-button/` provide the integration bridge from Explorer UI events to MCP tool calls.
+Explorer is the user interface (UI) host and interaction layer. `tasksAgent` is the backend operation layer for backlog files. IDE plugin assets under `tasksAgent/IDE-plugins/tasks-tool-button/` provide the integration bridge from Explorer UI events to Model Context Protocol (MCP) tool calls.
 
 ## Integration Requirements
 
