@@ -364,6 +364,7 @@ main {
     align-items: center;
     justify-content: flex-end;
     flex: 0 0 auto;
+    gap: 7px;
 }
 
 .path-info-dropdown {
