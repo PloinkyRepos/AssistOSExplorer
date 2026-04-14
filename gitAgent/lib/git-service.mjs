@@ -1232,11 +1232,11 @@ export function createGitService({ validatePath }) {
       isRepo = false;
     }
     if (!isRepo) {
-      const scanForRepo = async (startDir) => {
+      const scanForRepo = async (startDir, maxDepth = 3) => {
         const queue = [{ dir: startDir, depth: 0 }];
         while (queue.length) {
           const { dir, depth } = queue.shift();
-          if (depth > 3) continue;
+          if (depth > maxDepth) continue;
           try {
             await fs.stat(path.join(dir, '.git'));
             return dir;
@@ -1252,6 +1252,47 @@ export function createGitService({ validatePath }) {
         }
         return '';
       };
+
+      // Scan workspace recursively for Git repositories
+      const scanWorkspaceRecursively = async (workspaceRoot) => {
+        const queue = [{ dir: workspaceRoot, depth: 0 }];
+        const foundRepos = [];
+        
+        while (queue.length) {
+          const { dir, depth } = queue.shift();
+          if (depth > 10) continue; // Increased depth for workspace scanning
+          
+          try {
+            await fs.stat(path.join(dir, '.git'));
+            foundRepos.push(dir);
+          } catch { /* not a repo */ }
+          
+          try {
+            const children = await fs.readdir(dir, { withFileTypes: true });
+            for (const entry of children) {
+              if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
+              if (entry.name === '.git') continue;
+              if (entry.name.startsWith('.') && entry.name !== '.ploinky') continue;
+              
+              // Check if it's a symbolic link to a Git repo
+              if (entry.isSymbolicLink()) {
+                try {
+                  const realPath = await fs.realpath(path.join(dir, entry.name));
+                  const stats = await fs.stat(path.join(realPath, '.git'));
+                  if (stats.isDirectory() || stats.isFile()) {
+                    foundRepos.push(realPath);
+                  }
+                } catch { /* not a git repo */ }
+              } else {
+                queue.push({ dir: path.join(dir, entry.name), depth: depth + 1 });
+              }
+            }
+          } catch { /* skip unreadable dirs */ }
+        }
+        
+        return foundRepos;
+      };
+
       // Try scanning from the given path first, then fall back to workspace root.
       let foundRepo = await scanForRepo(repoPath);
       if (!foundRepo) {
@@ -1259,6 +1300,15 @@ export function createGitService({ validatePath }) {
           const workspaceRoot = await validatePath('.');
           if (workspaceRoot !== repoPath) {
             foundRepo = await scanForRepo(workspaceRoot);
+          }
+          
+          // For global agents: scan entire WORKSPACE_ROOT for any Git repos
+          if (!foundRepo && process.env.WORKSPACE_ROOT) {
+            const allRepos = await scanWorkspaceRecursively(process.env.WORKSPACE_ROOT);
+            if (allRepos.length > 0) {
+              // Return the first repo found, or could return all for selection
+              foundRepo = allRepos[0];
+            }
           }
         } catch { /* ignore */ }
       }
@@ -1435,7 +1485,7 @@ export function createGitService({ validatePath }) {
       }
     }
 
-    async function scanGitRepos(rootDir, { maxDepth = 4, maxRepos = limit } = {}) {
+    async function scanGitRepos(rootDir, { maxDepth = 10, maxRepos = limit } = {}) {
       const queue = [{ dir: rootDir, depth: 0 }];
       const repos = [];
       const seen = new Set();
@@ -1466,15 +1516,16 @@ export function createGitService({ validatePath }) {
           continue;
         }
         for (const entry of children) {
-          if (!entry?.isDirectory?.()) continue;
-          if (entry.name.startsWith('.')) continue;
+          if (!entry?.isDirectory?.() && !entry?.isSymbolicLink?.()) continue;
+          if (entry.name === '.git') continue;
+          if (entry.name.startsWith('.') && entry.name !== '.ploinky') continue;
           queue.push({ dir: path.join(dir, entry.name), depth: depth + 1 });
         }
       }
       return repos;
     }
 
-    const candidates = await scanGitRepos(reposRoot, { maxDepth: 4, maxRepos: limit });
+    const candidates = await scanGitRepos(reposRoot, { maxDepth: 10, maxRepos: limit });
 
     const results = [];
     const concurrency = 4;
@@ -1670,3 +1721,4 @@ export function createGitService({ validatePath }) {
     normalizeErrorMessage
   };
 }
+
