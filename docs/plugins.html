@@ -5,41 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Plugins - Explorer Agent</title>
     <link rel="stylesheet" href="style.css">
-    <style>
-        .plugin-lightbox-overlay {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(0, 0, 0, 0.8);
-            z-index: 2000;
-            align-items: center;
-            justify-content: center;
-            padding: 2rem;
-        }
-        .plugin-lightbox-overlay img {
-            max-width: 90vw;
-            max-height: 90vh;
-            border-radius: 12px;
-            border: 1px solid var(--border-primary);
-            box-shadow: var(--shadow-lg);
-            background: var(--bg-secondary);
-        }
-        .plugin-lightbox-overlay .close {
-            position: absolute;
-            top: 1.5rem;
-            right: 2rem;
-            font-size: 2rem;
-            color: #fff;
-            cursor: pointer;
-        }
-        .subsection {
-            margin-left: 1rem;
-            margin-top: 0.4rem;
-        }
-        .subsection h3 {
-            margin-bottom: 0.25rem;
-        }
-    </style>
 </head>
 <body>
 <header>
@@ -70,123 +35,142 @@
         <aside class="sidebar">
             <h3>Plugins</h3>
             <ul>
-                <li><a href="#plugin-role">Plugin Role</a></li>
-                <li><a href="#runtime-discovery">Runtime Discovery</a></li>
-                <li><a href="#manifest">Manifest Contract</a></li>
-                <li><a href="#example">Authoring Example</a></li>
+                <li><a href="#extension-model">Extension Model</a></li>
+                <li><a href="#discovery-and-policy">Discovery And Policy</a></li>
+                <li><a href="#application-plugins">Application Plugins</a></li>
+                <li><a href="#document-plugins">Document Plugins</a></li>
+                <li><a href="#runtime-flow">Runtime Flow</a></li>
+                <li><a href="#manifest-examples">Manifest Examples</a></li>
             </ul>
         </aside>
         <div class="content-wrapper">
-            <div class="doc-section" id="plugin-role">
+            <div class="doc-section" id="extension-model">
                 <h1>Plugins</h1>
-                <p>Explorer plugins exist so the IDE shell can grow without turning every domain capability into hardcoded host logic. The host needs ways to surface Git actions, DPU tools, SOPLang operations, media affordances, and other contextual UI without rebuilding Explorer every time one agent adds a new interaction. A plugin is the unit that makes that possible: a browser-side <a href="https://github.com/OutfinityResearch/WebSkel/blob/master/README.md" target="_blank" rel="noopener noreferrer">WebSkel</a> bundle with a manifest, assets, and a presenter that can be mounted into the Explorer UI at defined locations.</p>
-                <p>This matters architecturally because Explorer owns the shell, not the domain logic. Plugins are how domain agents project UI into that shell while keeping responsibility for their own tools and state. A plugin can open a modal, mount inline controls, or expose toolbar actions in context, but it does not change the underlying ownership rule: Explorer hosts the interaction surface, while the owning agent remains responsible for the domain operation behind it.</p>
-                <p>The important point is that Explorer does not treat “document plugins” and “application plugins” as unrelated systems. The same plugin mechanism covers both. What changes is the manifest metadata: <code>pluginCategory</code> declares whether the plugin belongs to the document-oriented runtime or the application shell, and <code>location</code> determines where it can mount. Document plugins use document locations such as <code>document</code>, <code>chapter</code>, <code>paragraph</code>, or <code>infoText</code>. Application plugins use application slots such as <code>file-exp:toolbar</code>. The runtime loader, presenter model, asset resolution, and manifest-driven discovery are otherwise shared.</p>
+                <p>Explorer uses plugins so the shell can surface domain features without absorbing domain logic directly into <code>file-exp</code>. Git, task management, SOPLang, multimedia previews, and DPU-backed confidential resources all need user interface (UI) affordances inside the same shell, but Explorer still has to remain the host rather than becoming the implementation site for each domain.</p>
+                <p>The architectural response is a shared runtime plugin system. A plugin is a browser bundle with a <code>config.json</code> manifest, assets, and one or more WebSkel presenters. Explorer discovers the bundle, decides where it may appear, mounts host-owned surfaces, and leaves the owning agent responsible for the domain operation behind the interaction.</p>
+                <p>This system now covers two distinct runtime families:</p>
+                <ul>
+                    <li><strong>Document plugins</strong>, which mount into document-oriented surfaces such as <code>document</code>, <code>chapter</code>, <code>paragraph</code>, and <code>infoText</code>.</li>
+                    <li><strong>Application plugins</strong>, which extend the shell itself through host slots such as <code>file-exp:toolbar</code>, <code>file-exp:context-menu:file</code>, <code>file-exp:context-menu:directory</code>, and <code>file-exp:new-menu</code>.</li>
+                </ul>
+                <p>The discovery path, manifest validation, and asset resolution are shared. What changes is the hosting regime: document plugins render into document surfaces, while application plugins either mount a component into a shell slot or contribute semantic menu items into a host-owned menu.</p>
             </div>
 
-            <div class="doc-section" id="runtime-discovery">
-                <h2>Runtime Discovery</h2>
-                <p>Explorer discovers plugins through <code>aggregateIdePlugins</code> in <code>filesystem-http-server.mjs</code>. When the browser calls <code>collect_ide_plugins</code>, Explorer scans enabled agent or repo-local plugin folders in the workspace for <code>IDE-plugins/*/config.json</code>, resolves their assets, groups them by <code>location</code>, and returns the merged catalog to the frontend. For application-category plugins, the browser then applies Explorer's <code>applicationPlugins</code> policy before mounting them.</p>
-                <p>That discovery model means plugin registration is driven by manifests, not by a central switch statement in the host. It also means plugin availability is a runtime property of the workspace: which agents are enabled, which plugin folders exist, and which application policies are active. Explorer stays in control of slot names and mounting behavior, but plugin presence itself comes from the workspace state rather than from a compile-time bundle list.</p>
-                <p>In the current repository, the discovered catalog includes both shell-mounted and document-mounted plugins. Shell examples include application plugins such as <code>git-tool-button</code>, <code>tasks-tool-button</code>, and <code>open-builder-button</code>, which mount into application slots like <code>file-exp:toolbar</code>. Document-oriented examples include <code>video-plugin</code>, <code>audio-plugin</code>, <code>image-plugin</code>, <code>run-script</code>, and <code>edit-variables</code>, which mount in document, chapter, paragraph, or info text contexts. The mechanism is shared; only the mounting regime and policy filters differ.</p>
+            <div class="doc-section" id="discovery-and-policy">
+                <h2>Discovery And Policy</h2>
+                <p>Explorer discovers runtime plugins through <code>aggregateIdePlugins</code> in <code>explorer/utils/ide-plugins.mjs</code>. When the browser calls <code>collect_ide_plugins</code>, Explorer scans agent-owned <code>IDE-plugins/*/config.json</code> folders under the workspace, validates each manifest, assigns the owning <code>agent</code>, resolves <code>assetRootPath</code>, and returns the catalog grouped by location.</p>
+                <p>Discovery is therefore workspace-driven rather than hard-coded. If an enabled agent exposes an <code>IDE-plugins</code> directory, Explorer can discover those manifests at runtime. The host still owns the allowed slot names and manifest validation, but plugin availability itself depends on the current workspace and plugin settings, not on a compile-time list inside the shell.</p>
+                <p>Policy is also now explicit. Explorer does not infer plugin identity through a chain of fallbacks. The policy key is derived from the manifest category:</p>
+                <ul>
+                    <li><code>agent/id</code> for application plugins</li>
+                    <li><code>agent/component</code> for document plugins</li>
+                </ul>
+                <p>This matters because one logical application plugin may now contribute more than one surface. The Git integration is the current example: its toolbar mount and its menu contributions both use <code>id: "git"</code>, so they are enabled or disabled as one logical plugin in workspace settings.</p>
+            </div>
+
+            <div class="doc-section" id="application-plugins">
+                <h2>Application Plugins</h2>
+                <p>Application plugins extend the shell rather than the document runtime. They currently use two contribution types:</p>
+                <ul>
+                    <li><strong><code>mount</code></strong>, where Explorer mounts a component into a host slot such as <code>file-exp:toolbar</code>, <code>file-exp:right-bar</code>, or <code>file-exp:internal</code></li>
+                    <li><strong><code>menu</code></strong>, where Explorer keeps ownership of the menu structure and lets the plugin contribute menu items semantically into <code>file-exp:context-menu:file</code>, <code>file-exp:context-menu:directory</code>, or <code>file-exp:new-menu</code></li>
+                </ul>
+                <p>The distinction is important. Menu contributions are not arbitrary fragments of injected DOM. Explorer owns the menu surface, focus behavior, loading state, and item execution context. The plugin contributes item metadata, visibility logic, and the action implementation, usually by calling its owning agent through the Explorer bridge.</p>
+                <p>This is why the old description of application plugins as “toolbar buttons” is no longer sufficient. That was true when the shell only mounted components into <code>file-exp:toolbar</code>. It is no longer true after the introduction of host-owned menu surfaces and plugin-contributed menu items.</p>
+                <p>The current Git integration shows the intended model:</p>
+                <ul>
+                    <li><code>git-tool-button</code> mounts into <code>file-exp:toolbar</code></li>
+                    <li><code>git-menu-contributions</code> contributes <code>Add to .gitignore</code>, <code>Remove from .gitignore</code>, and <code>New repository</code> into file and directory context menus and the <code>New</code> menu</li>
+                    <li>both contributions share the same logical plugin identity through <code>id: "git"</code></li>
+                </ul>
+                <p>The screenshots below show the UI surfaces plugins occupy inside the shell.</p>
                 <div class="screenshot-gallery" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:1rem;margin-top:1rem;">
                     <figure style="background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:12px;padding:0.75rem;">
-                        <img class="plugin-shot" data-full="./assets/plugin_image.png" src="./assets/plugin_image.png" alt="Plugin listing with icons" style="width:100%;border-radius:8px;border:1px solid var(--border-secondary);background:var(--bg-secondary);cursor:pointer;">
-                        <figcaption style="margin-top:0.5rem;font-size:0.9rem;color:var(--text-secondary);">Modal plugin empty data</figcaption>
+                        <img src="./assets/plugin_image.png" alt="Plugin modal with no data" style="width:100%;border-radius:8px;border:1px solid var(--border-secondary);background:var(--bg-secondary);">
+                        <figcaption style="margin-top:0.5rem;font-size:0.9rem;color:var(--text-secondary);">Modal plugin surface inside the Explorer host.</figcaption>
                     </figure>
                     <figure style="background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:12px;padding:0.75rem;">
-                        <img class="plugin-shot" data-full="./assets/plugin_image_1.png" src="./assets/plugin_image_1.png" alt="Plugin modal selection" style="width:100%;border-radius:8px;border:1px solid var(--border-secondary);background:var(--bg-secondary);cursor:pointer;">
-                        <figcaption style="margin-top:0.5rem;font-size:0.9rem;color:var(--text-secondary);">Modal plugin selection/preview.</figcaption>
+                        <img src="./assets/plugin_image_1.png" alt="Plugin modal selection and preview" style="width:100%;border-radius:8px;border:1px solid var(--border-secondary);background:var(--bg-secondary);">
+                        <figcaption style="margin-top:0.5rem;font-size:0.9rem;color:var(--text-secondary);">A plugin resolving context and presenting a document-facing action.</figcaption>
                     </figure>
                     <figure style="background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:12px;padding:0.75rem;">
-                        <img class="plugin-shot" data-full="./assets/plugin_tooltip.png" src="./assets/plugin_tooltip.png" alt="Plugin tooltip placement" style="width:100%;border-radius:8px;border:1px solid var(--border-secondary);background:var(--bg-secondary);cursor:pointer;">
-                        <figcaption style="margin-top:0.5rem;font-size:0.9rem;color:var(--text-secondary);">Tooltip and placement in UI.</figcaption>
+                        <img src="./assets/plugin_tooltip.png" alt="Plugin tooltip placement in Explorer" style="width:100%;border-radius:8px;border:1px solid var(--border-secondary);background:var(--bg-secondary);">
+                        <figcaption style="margin-top:0.5rem;font-size:0.9rem;color:var(--text-secondary);">Host-owned placement and tooltip behavior around a plugin entry point.</figcaption>
                     </figure>
                     <figure style="background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:12px;padding:0.75rem;">
-                        <img class="plugin-shot" data-full="./assets/plugin_embeded.png" src="./assets/plugin_embeded.png" alt="Embedded plugin block" style="width:100%;border-radius:8px;border:1px solid var(--border-secondary);background:var(--bg-secondary);cursor:pointer;">
-                        <figcaption style="margin-top:0.5rem;font-size:0.9rem;color:var(--text-secondary);">Embedded plugin rendered inline.</figcaption>
+                        <img src="./assets/plugin_embeded.png" alt="Embedded plugin rendered inline" style="width:100%;border-radius:8px;border:1px solid var(--border-secondary);background:var(--bg-secondary);">
+                        <figcaption style="margin-top:0.5rem;font-size:0.9rem;color:var(--text-secondary);">An embedded plugin mounted into a host-owned surface.</figcaption>
                     </figure>
                 </div>
             </div>
 
-            <div class="doc-section" id="manifest">
-                <h2>Manifest Contract</h2>
-                <p>The plugin manifest in <code>config.json</code> is the contract between a plugin bundle and the Explorer host. It tells Explorer which component to load, which presenter to instantiate, what type of UI to mount, where that UI belongs, and which icon or tooltip to expose to the user. The host does not discover a plugin by reading its JavaScript entry point first; it discovers the manifest and uses that file as the runtime description of how the plugin should appear.</p>
-                <p>The most important structural fields are the same regardless of where the plugin mounts. Every plugin declares a <code>pluginCategory</code>, a <code>component</code>, a <code>presenter</code>, a <code>type</code>, and at least one <code>location</code>. For document-category plugins, <code>location</code> must be one of the supported document locations. For application-category plugins, <code>location</code> must be an application slot key such as <code>file-exp:toolbar</code>. Application plugins can also expose policy keys through <code>id</code>, which is how the Explorer <code>applicationPlugins</code> policy can enable or disable them at runtime.</p>
-                <p>A representative manifest from the <code>video-creator</code> plugin looks like this:</p>
+            <div class="doc-section" id="document-plugins">
+                <h2>Document Plugins</h2>
+                <p>Document plugins use the same runtime discovery model, but they mount into the document-oriented surfaces that Explorer exposes to the editor and preview stack. Their policy identity is <code>agent/component</code> because the manifest is anchored on the mounted component rather than on an application plugin <code>id</code>.</p>
+                <p>Typical examples in this repository are multimedia preview and creation plugins, SOPLang document actions, and document-level tooling that appears in paragraph or chapter context. These plugins still follow the same ownership boundary: Explorer provides the host surface and context, while the owning agent or module performs the real domain mutation.</p>
+                <p>This is why document plugins and application plugins should be documented together. They are not two unrelated extension systems. They are two hosting regimes inside one runtime plugin architecture.</p>
+            </div>
+
+            <div class="doc-section" id="runtime-flow">
+                <h2>Runtime Flow</h2>
+                <p>The practical execution path is now:</p>
+                <ol>
+                    <li>Explorer scans <code>IDE-plugins/*/config.json</code> folders and validates the manifests.</li>
+                    <li>The browser loads the aggregated catalog through <code>collect_ide_plugins</code>.</li>
+                    <li>Explorer applies workspace plugin policy using the logical plugin key.</li>
+                    <li>For <code>mount</code> contributions, Explorer mounts the declared component into the host slot.</li>
+                    <li>For <code>menu</code> contributions, Explorer resolves menu items asynchronously, shows a host-owned loading state while resolution is in progress, and executes the selected action with the same target context that was used to resolve the item.</li>
+                    <li>The plugin or menu module calls the owning agent through the Explorer bridge, and Explorer refreshes the affected shell surfaces after the mutation.</li>
+                </ol>
+                <p>The key architectural point is that Explorer never yields structural ownership of the shell. It may host a toolbar mount, a modal, or a context menu, but it still owns layout, routing, menu rendering, and refresh behavior. Plugins extend those surfaces; they do not replace them.</p>
+            </div>
+
+            <div class="doc-section" id="manifest-examples">
+                <h2>Manifest Examples</h2>
+                <p><strong>Application mount contribution</strong></p>
+                <pre><code>{
+  "pluginCategory": "application",
+  "id": "git",
+  "component": "git-tool-button",
+  "location": ["file-exp:toolbar"],
+  "presenter": "GitToolButton",
+  "type": "embedded",
+  "icon": "./icon.svg"
+}</code></pre>
+
+                <p><strong>Application menu contribution for the same logical plugin</strong></p>
+                <pre><code>{
+  "pluginCategory": "application",
+  "contributionType": "menu",
+  "id": "git",
+  "location": [
+    "file-exp:context-menu:file",
+    "file-exp:context-menu:directory",
+    "file-exp:new-menu"
+  ],
+  "label": "Git",
+  "icon": "./icon.svg",
+  "menuModule": "menu-contributions.js"
+}</code></pre>
+
+                <p><strong>Document plugin contribution</strong></p>
                 <pre><code>{
   "pluginCategory": "document",
   "component": "video-creator",
   "presenter": "VideoCreator",
   "type": "modal",
-  "location": [
-    "document"
-  ],
+  "location": ["document"],
   "tooltip": "Create a video from a script",
   "icon": "./assets/icons/video.svg"
 }</code></pre>
-                <p>In practice, this tells Explorer to load the <code>video-creator</code> bundle as a modal, mount it at the document level, and decorate the entry point with the declared tooltip and icon. An application plugin follows the same pattern, but with <code>pluginCategory: "application"</code> and a shell slot location such as <code>file-exp:toolbar</code>. The host-side discovery logic remains the same.</p>
-            </div>
 
-            <div class="doc-section" id="example">
-                <h2>Authoring Example</h2>
-                <p>The smallest useful authoring example is still a plugin that changes one paragraph through the existing document runtime, because it shows the full presenter lifecycle with minimal code. The point of the example is not the uppercase transformation itself; it is the shape of the plugin. A plugin folder lives inside the agent that owns the feature, carries its own <code>config.json</code>, HTML template, and presenter, and uses the host context plus the owning runtime APIs rather than trying to patch Explorer internals directly.</p>
-                <p>Create a new folder such as <code>multimedia/IDE-plugins/uppercase/</code> or <code>soplangAgent/IDE-plugins/uppercase/</code>, then add the files below. If you were building an application plugin instead, the same structure would apply; you would mainly change <code>pluginCategory</code> and <code>location</code> so the bundle mounts into a shell slot rather than a document slot.</p>
-                <p><strong><code>config.json</code></strong></p>
-                <pre><code>{
-  "pluginCategory": "document",
-  "component": "uppercase-plugin",
-  "presenter": "UppercasePlugin",
-  "type": "modal",
-  "location": ["paragraph"],
-  "tooltip": "Uppercase paragraph",
-  "icon": "./icon.svg"
-}</code></pre>
-
-                <p><strong><code>uppercase-plugin.html</code></strong></p>
-                <pre><code>&lt;div class="modal-header"&gt;
-  &lt;div&gt;Uppercase Paragraph&lt;/div&gt;
-  &lt;div class="close" data-local-action="closeModal"&gt;&times;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class="modal-body"&gt;
-  &lt;p&gt;This will convert the paragraph with text: "&lt;strong&gt;${this.paragraph.text}&lt;/strong&gt;" to uppercase.&lt;/p&gt;
-  &lt;button class="general-button" data-local-action="apply"&gt;Apply&lt;/button&gt;
-&lt;/div&gt;</code></pre>
-
-                <p><strong><code>uppercase-plugin.js</code></strong></p>
-                <pre><code>import { getContextualElement } from "../utils/pluginUtils.js";
-const documentModule = assistOS.loadModule("document");
-
-export class UppercasePlugin {
-  constructor(element, invalidate) {
-    this.element = element;
-    this.invalidate = invalidate;
-    this.invalidate();
-  }
-
-  beforeRender() {
-    const { chapter, paragraph } = getContextualElement(this.element);
-    this.chapter = chapter;
-    this.paragraph = paragraph;
-  }
-
-  afterRender() {
-    const button = this.element.querySelector('[data-local-action="apply"]');
-    button.addEventListener("click", this.apply.bind(this));
-  }
-
-  async apply() {
-    const text = this.paragraph?.text || "";
-    await documentModule.updateParagraphText(this.chapter.id, this.paragraph.id, text.toUpperCase());
-    assistOS.UI.showToast("Paragraph updated successfully!", "success");
-    this.closeModal();
-  }
-
-  closeModal() {
-    assistOS.UI.closeModal(this.element);
-  }
-}</code></pre>
-                <p>This presenter shows the expected shape of a WebSkel-driven Explorer plugin: resolve context in <code>beforeRender()</code>, attach browser events in <code>afterRender()</code>, call into the existing document module for the real mutation, then close the modal through the host UI. That is the pattern to preserve when adding new plugins: the plugin owns its local interaction, but it still works through the host contracts and the owning runtime modules.</p>
+                <p>These examples illustrate the current rule set:</p>
+                <ul>
+                    <li>document plugins are identified by component</li>
+                    <li>application plugins are identified by <code>id</code></li>
+                    <li>multiple application surfaces for one logical plugin must share the same <code>id</code></li>
+                    <li>menu contributions describe actions semantically and do not inject their own menu structure</li>
+                </ul>
             </div>
         </div>
     </div>
@@ -197,11 +181,6 @@ export class UppercasePlugin {
         <p>&copy; 2025 <a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md" target="_blank" rel="noopener noreferrer">Ploinky Project</a>. All rights reserved.</p>
     </div>
 </footer>
-
-<div id="pluginLightbox" class="plugin-lightbox-overlay">
-    <span class="close" data-close>&times;</span>
-    <img id="pluginLightboxImage" alt="Plugin preview">
-</div>
 
 <script>
     // Theme toggle
@@ -229,22 +208,6 @@ export class UppercasePlugin {
         const nextIndex = (currentIndex + 1) % themes.length;
         const newTheme = themes[nextIndex];
         applyTheme(newTheme);
-    });
-
-    // Lightbox for plugin screenshots
-    const lightbox = document.getElementById('pluginLightbox');
-    const lightboxImg = document.getElementById('pluginLightboxImage');
-    document.querySelectorAll('.plugin-shot').forEach(img => {
-        img.addEventListener('click', () => {
-            lightboxImg.src = img.dataset.full || img.src;
-            lightbox.style.display = 'flex';
-        });
-    });
-    lightbox.addEventListener('click', (e) => {
-        if (e.target === lightbox || e.target.hasAttribute('data-close')) {
-            lightbox.style.display = 'none';
-            lightboxImg.src = '';
-        }
     });
 </script>
 </body>
