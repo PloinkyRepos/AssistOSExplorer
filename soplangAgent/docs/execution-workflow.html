@@ -34,12 +34,12 @@
             <div class="doc-main">
                 <section class="lead">
                     <h1>Tool Execution Workflow</h1>
-                    <p>Every MCP tool call runs in a fresh process. There is no long-lived plugin instance shared between tool invocations in <a href="https://ploinky.com/" target="_blank" rel="noopener noreferrer">Ploinky</a>, and each call boots <a href="https://assistos-ai.github.io/soplang/" target="_blank" rel="noopener noreferrer">SOPLang</a> plugins again.</p>
+                    <p>Every Model Context Protocol (MCP) tool call runs in a fresh process. There is no long-lived plugin instance shared between tool invocations in <a href="https://ploinky.com/" target="_blank" rel="noopener noreferrer">Ploinky</a>, and each call boots <a href="https://assistos-ai.github.io/soplang/" target="_blank" rel="noopener noreferrer">SOPLang</a> plugins again.</p>
                 </section>
 
                 <section>
                     <h2>End-to-End Flow Diagram</h2>
-                    <pre><code>Explorer UI / MCP Browser Client
+                    <pre><code>Explorer user interface (UI) / MCP Browser Client
         |
         | callTool(name, input)
         v
@@ -64,7 +64,7 @@ targetPlugin[targetMethod](...params)
         | optional workspace.forceSave() (tool specific)
         | workspace.shutDown() (always at wrapper exit)
         v
-JSON result -> MCP response -> Explorer UI</code></pre>
+JSON result -> MCP response -> Explorer user interface</code></pre>
                 </section>
 
                 <section>

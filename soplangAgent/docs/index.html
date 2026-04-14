@@ -34,16 +34,16 @@
             <div class="doc-main">
                 <section class="lead">
                     <h1>SOPLang Runtime In Explorer</h1>
-                    <p>Explorer documents can trigger builds, command execution, and runtime behaviors that belong to the <a href="https://assistos-ai.github.io/soplang/" target="_blank" rel="noopener noreferrer">SOPLang</a> toolchain, but that logic should not live in the browser or be reimplemented by each UI action.</p>
+                    <p>Explorer documents can trigger builds, command execution, and runtime behaviors that belong to the <a href="https://assistos-ai.github.io/soplang/" target="_blank" rel="noopener noreferrer">SOPLang</a> toolchain, but that logic should not live in the browser or be reimplemented by each user interface (UI) action.</p>
                 </section>
 
                 <section class="highlight-box">
                     <h2>SOPLang Runtime Boundary</h2>
-                    <p><code>soplangAgent</code> exposes that runtime through MCP. It bridges workspace APIs and runtime plugins into a stable tool surface declared in <code>soplangAgent/mcp-config.json</code>, while command registration, build orchestration, and skill discovery remain on the agent side.</p>
+                    <p><code>soplangAgent</code> exposes that runtime through Model Context Protocol (MCP). It bridges workspace application programming interfaces (APIs) and runtime plugins into a stable tool surface declared in <code>soplangAgent/mcp-config.json</code>, while command registration, build orchestration, and skill discovery remain on the agent side.</p>
                 </section>
 
                 <section>
-                    <h2>How It Runs In Practice</h2>
+                    <h2>Runtime Behavior</h2>
                     <p>At runtime each MCP tool call is executed through <code>soplangAgent/soplang-tool.sh</code>. Explorer and related flows call the agent for build and execution tasks, while SOPLang-specific orchestration stays inside <code>soplangAgent</code> rather than leaking into document plugins or toolbar code.</p>
                     <div class="doc-callout">
                         <p><strong>Validation rule:</strong> run <code>npm test</code> from <code>soplangAgent/</code> for every code change, together with docs and specs updates.</p>

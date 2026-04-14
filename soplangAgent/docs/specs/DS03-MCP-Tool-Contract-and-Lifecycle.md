@@ -2,11 +2,11 @@
 
 ## Role of This Document
 
-This document specifies what the MCP tool surface must guarantee and what each tool invocation lifecycle must enforce.
+This document specifies what the Model Context Protocol (MCP) tool surface must guarantee and what each tool invocation lifecycle must enforce.
 
 ## Contract Surface
 
-The MCP contract surface is defined by named tools, input schemas, and declared execution properties. Tool names are public agent contracts. A tool name is not an implementation hint; it is the externally visible agent operation.
+The Model Context Protocol (MCP) contract surface is defined by named tools, input schemas, and declared execution properties. Tool names are public agent contracts. A tool name is not an implementation hint; it is the externally visible agent operation.
 
 The current contract set includes document synchronization, workspace build execution, variable inspection, command and type inspection, and skill execution. Additional tools may be introduced, but existing contract semantics must remain stable for unchanged names.
 

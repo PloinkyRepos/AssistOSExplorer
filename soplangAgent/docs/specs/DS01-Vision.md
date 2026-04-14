@@ -2,11 +2,11 @@
 
 ## Role of This Document
 
-This document defines the strategic rules for soplangBuilder as a Ploinky agent intermediary between UI clients and SOPLang runtime services. It locks the purpose and the non-negotiable agent boundaries used by [DS02 - Architecture](specsLoader.html?spec=DS02-Architecture.md), [DS03 - MCP Tool Contract and Execution Lifecycle](specsLoader.html?spec=DS03-MCP-Tool-Contract-and-Lifecycle.md), and [DS04 - UI Bridge and IDE Plugin Integration](specsLoader.html?spec=DS04-UI-Bridge-and-IDE-Plugin-Integration.md).
+This document defines the strategic rules for soplangBuilder as a Ploinky agent intermediary between user interface (UI) clients and SOPLang runtime services. It locks the purpose and the non-negotiable agent boundaries used by [DS02 - Architecture](specsLoader.html?spec=DS02-Architecture.md), [DS03 - MCP Tool Contract and Execution Lifecycle](specsLoader.html?spec=DS03-MCP-Tool-Contract-and-Lifecycle.md), and [DS04 - UI Bridge and IDE Plugin Integration](specsLoader.html?spec=DS04-UI-Bridge-and-IDE-Plugin-Integration.md).
 
 ## Agent Context
 
-soplangBuilder is integrated in [Ploinky](https://ploinky.com/) and serves UI workflows that need controlled access to [SOPLang](https://assistos-ai.github.io/soplang/) capabilities. This repository is not a generic agent host and not a frontend framework. The Ploinky agent is a stable contract surface that allows UI layers to trigger workspace synchronization, build execution, skill execution, and data inspection through MCP tools.
+soplangBuilder is integrated in [Ploinky](https://ploinky.com/) and serves UI workflows that need controlled access to [SOPLang](https://assistos-ai.github.io/soplang/) capabilities. This repository is not a generic agent host and not a frontend framework. The Ploinky agent is a stable contract surface that allows UI layers to trigger workspace synchronization, build execution, skill execution, and data inspection through Model Context Protocol (MCP) tools.
 
 The current UI consumer path includes the internal AssistOSExplorer repository. A public URL is not required for this role; the requirement is reliable contract alignment with Explorer integration points.
 

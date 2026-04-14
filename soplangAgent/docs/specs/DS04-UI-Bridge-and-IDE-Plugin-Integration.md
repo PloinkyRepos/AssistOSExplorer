@@ -2,11 +2,11 @@
 
 ## Role of This Document
 
-This document defines agent rules for the UI integration role of soplangBuilder, including IDE plugin insertion and MCP communication behavior.
+This document defines agent rules for the user interface (UI) integration role of soplangBuilder, including IDE plugin insertion and Model Context Protocol (MCP) communication behavior.
 
-## UI Bridge Position
+## User Interface Bridge Position
 
-soplangBuilder exposes UI-facing extension artifacts through `IDE-plugins` and operational APIs through MCP tools. This defines a two-channel bridge. The presentation channel inserts UI components in Explorer host surfaces. The operation channel executes MCP tools against agent contracts.
+soplangBuilder exposes UI-facing extension artifacts through `IDE-plugins` and operational application programming interfaces (APIs) through MCP tools. This defines a two-channel bridge. The presentation channel inserts UI components in Explorer host surfaces. The operation channel executes MCP tools against agent contracts.
 
 The bridge must keep concerns separate: UI components trigger agent operations, while tool execution and persistence semantics remain server-side responsibilities.
 

@@ -1,6 +1,6 @@
 # soplangAgent internals
 
-This agent exposes explicit MCP tools through `mcp-config.json` and executes them through `soplang-tool.sh`.
+This agent exposes explicit Model Context Protocol (MCP) tools through `mcp-config.json` and executes them through `soplang-tool.sh`.
 
 ## Structure
 

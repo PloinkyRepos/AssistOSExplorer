@@ -6,9 +6,9 @@ This document defines the architecture for soplangBuilder as a Ploinky agent. Th
 
 ## Architectural Boundary
 
-soplangBuilder lives between [Ploinky](https://ploinky.com/) AgentServer MCP routing and [SOPLang](https://assistos-ai.github.io/soplang/) plugin/runtime services. The agent boundary starts at MCP tool invocation and ends at normalized response emission after persistence-safe finalization.
+soplangBuilder lives between [Ploinky](https://ploinky.com/) AgentServer Model Context Protocol (MCP) routing and [SOPLang](https://assistos-ai.github.io/soplang/) plugin/runtime services. The agent boundary starts at MCP tool invocation and ends at normalized response emission after persistence-safe finalization.
 
-The architecture is intentionally intermediary. UI concerns remain in Explorer/UI systems. SOPLang language semantics remain in SOPLang runtime and plugins. soplangBuilder owns orchestration, contract mapping, and lifecycle guarantees.
+The architecture is intentionally intermediary. User interface (UI) concerns remain in Explorer interface systems. SOPLang language semantics remain in SOPLang runtime and plugins. soplangBuilder owns orchestration, contract mapping, and lifecycle guarantees.
 
 ## Architecture Shape
 

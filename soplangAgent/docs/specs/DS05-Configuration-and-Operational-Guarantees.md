@@ -6,7 +6,7 @@ This document specifies the mandatory operational guarantees derived from manife
 
 ## Configuration Scope
 
-The operational scope is defined by agent manifest rules, MCP configuration, plugin registration behavior, and runtime environment variables. Configuration is not a documentation artifact only; it is the executable policy boundary for agent behavior.
+The operational scope is defined by agent manifest rules, Model Context Protocol (MCP) configuration, plugin registration behavior, and runtime environment variables. Configuration is not a documentation artifact only; it is the executable policy boundary for agent behavior.
 
 ## Operational Requirements
 
@@ -36,7 +36,7 @@ Invariant G1: configuration remains the source of truth for what operations are 
 
 Invariant G2: operational debugging capability can be enabled without changing tool contracts.
 
-Invariant G3: extension assets may grow, but intermediary agent role between UI and SOPLang remains unchanged.
+Invariant G3: extension assets may grow, but intermediary agent role between user interface (UI) flows and SOPLang remains unchanged.
 
 ## Validation Criteria
 
