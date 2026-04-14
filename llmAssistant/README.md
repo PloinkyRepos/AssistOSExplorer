@@ -1,6 +1,6 @@
 # llmAssistant
 
-MCP agent for lightweight LLM-backed coding helpers.
+Model Context Protocol (MCP) agent for lightweight LLM-backed coding helpers.
 
 ## Responsibilities
 
@@ -47,7 +47,7 @@ Supported provider variables:
 ## Notes
 
 - `llm_autocomplete` expects full file content and a cursor offset, then returns only the insertion text.
-- `git_commit_message` and `llm_resolve_conflict` are shared helpers that can be reused by Git-oriented UIs or agents.
+- `git_commit_message` and `llm_resolve_conflict` are shared helpers that can be reused by Git-oriented user interfaces or agents.
 
 ## Documentation
 

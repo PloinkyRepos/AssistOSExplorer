@@ -10,7 +10,7 @@ This document defines strategic rules for `llmAssistant` as a Ploinky agent that
 
 ## Vision Direction
 
-The direction is to keep LLM usage behind stable MCP contracts, with clear input requirements and normalized outputs. Provider-specific behavior should remain internal so callers keep a consistent interface.
+The direction is to keep LLM usage behind stable Model Context Protocol (MCP) contracts, with clear input requirements and normalized outputs. Provider-specific behavior should remain internal so callers keep a consistent interface.
 
 ## Agent Expectations
 
@@ -18,7 +18,7 @@ Expectation E1: callers can invoke the same named tools through MCP regardless o
 
 Expectation E2: helper tools produce deterministic contract shapes for success and failure.
 
-Expectation E3: prompt shaping and context clipping are controlled by the agent, not by UI glue code.
+Expectation E3: prompt shaping and context clipping are controlled by the agent, not by user interface (UI) glue code.
 
 Expectation E4: LLM-assisted operations are bounded in scope and do not become unrestricted runtime execution.
 

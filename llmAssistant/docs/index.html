@@ -39,11 +39,11 @@
 
                 <section class="highlight-box">
                     <h2>Shared LLM Execution Boundary</h2>
-                    <p><code>llmAssistant</code> centralizes that responsibility behind a finite MCP contract from <code>llmAssistant/mcp-config.json</code>. The agent owns request normalization, input validation, and provider-facing execution so callers consume one stable helper surface instead of reimplementing model orchestration.</p>
+                    <p><code>llmAssistant</code> centralizes that responsibility behind a finite Model Context Protocol (MCP) contract from <code>llmAssistant/mcp-config.json</code>. The agent owns request normalization, input validation, and provider-facing execution so callers consume one stable helper surface instead of reimplementing model orchestration.</p>
                 </section>
 
                 <section>
-                    <h2>How It Runs In Practice</h2>
+                    <h2>Runtime Behavior</h2>
                     <p>All MCP tool invocations execute through <code>llmAssistant/tools/llm_tool.sh</code> and <code>llm_tool.mjs</code>. Explorer and other agents pass structured requests into that boundary and receive helper outputs that fit their local workflow, while provider-specific runtime choices remain inside <code>llmAssistant</code>.</p>
                 </section>
             </div>

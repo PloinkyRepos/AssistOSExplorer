@@ -10,7 +10,7 @@ This document defines integration rules for how Explorer and other agents consum
 
 ## Integration Requirements
 
-Requirement U1: integrations shall call `llmAssistant` through MCP tool contracts.
+Requirement U1: integrations shall call `llmAssistant` through Model Context Protocol (MCP) tool contracts.
 
 Requirement U2: caller-side code shall not embed provider-specific request logic as a replacement for these contracts.
 
@@ -22,7 +22,7 @@ Requirement U5: integration should preserve caller independence from provider mi
 
 ## Constraints
 
-Constraint Q1: UI and peer agents cannot bypass MCP and call helper modules directly.
+Constraint Q1: user interface (UI) and peer agents cannot bypass MCP and call helper modules directly.
 
 Constraint Q2: integration-specific rendering changes cannot alter backend tool semantics.
 

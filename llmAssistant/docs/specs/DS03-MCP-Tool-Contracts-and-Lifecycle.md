@@ -2,7 +2,7 @@
 
 ## Role of This Document
 
-This document defines contract guarantees and invocation lifecycle rules for `llmAssistant` tools.
+This document defines contract guarantees and invocation lifecycle rules for `llmAssistant` Model Context Protocol (MCP) tools.
 
 ## Contract Surface
 
@@ -10,7 +10,7 @@ The public contract consists of three tools: `llm_autocomplete`, `git_commit_mes
 
 ## Lifecycle Rules
 
-Lifecycle Rule L1: each invocation starts by parsing MCP envelope input from stdin.
+Lifecycle Rule L1: each invocation starts by parsing Model Context Protocol (MCP) envelope input from stdin.
 
 Lifecycle Rule L2: input normalization shall support expected MCP envelope shapes (`input`, `arguments`, and `params` variants).
 

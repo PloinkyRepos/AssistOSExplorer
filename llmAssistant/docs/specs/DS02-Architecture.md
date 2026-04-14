@@ -2,11 +2,11 @@
 
 ## Role of This Document
 
-This document defines mandatory architecture rules for `llmAssistant` as a Ploinky MCP agent.
+This document defines mandatory architecture rules for `llmAssistant` as a Ploinky Model Context Protocol (MCP) agent.
 
 ## Architectural Boundary
 
-The boundary starts at MCP tool invocation and ends at serialized tool response. Caller UX, editor rendering, and Git UI details remain outside the boundary. LLM prompt and execution orchestration remain inside the agent.
+The boundary starts at Model Context Protocol (MCP) tool invocation and ends at serialized tool response. Caller user experience (UX), editor rendering, and Git user interface (UI) details remain outside the boundary. LLM prompt and execution orchestration remain inside the agent.
 
 ## Architecture Shape
 
