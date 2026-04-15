@@ -1523,6 +1523,7 @@ th {
     color: var(--text);
     max-width: 100%;
     word-break: break-word;
+    margin-left: 10px;
 }
 
 .markdown-preview h1,

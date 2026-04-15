@@ -5,20 +5,22 @@
     height: 100%;
     min-height: 0;
     color: var(--text);
+    font-family: var(--default-font), "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
 }
 
 .editor-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin: 5px 13px;
+    margin: var(--space-xs) var(--space-md);
 }
 
 #editor-title {
     margin: 0;
-    font-size: clamp(1rem, 1.2rem, 1.4rem);
-    font-weight: 600;
+    font-size: clamp(var(--font-lg), 1.2rem, var(--font-xl));
+    font-weight: var(--font-semibold);
     color: var(--text);
+    line-height: var(--line-normal);
 }
 
 .editor-wrapper {
@@ -27,15 +29,15 @@
     width: 100%;
     min-height: 260px;
     overflow: hidden;
-    border: 1px solid rgba(148, 163, 184, 0.24);
-    box-shadow: 0 18px 36px rgba(15, 23, 42, 0.16);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-lg);
 }
 
 .line-numbers {
-    padding: 20px 12px;
+    padding: var(--space-lg) var(--space-md);
     font-family: var(--mono-font);
-    font-size: 0.95rem;
-    line-height: 1.6;
+    font-size: var(--font-base);
+    line-height: var(--line-relaxed);
     text-align: right;
     user-select: none;
     pointer-events: none;
@@ -75,14 +77,14 @@
     position: absolute;
     inset: 0;
     margin: 0;
-    padding: 20px;
+    padding: var(--space-lg);
     border: none;
     width: 100%;
     height: 100%;
     box-sizing: border-box;
     font-family: var(--mono-font);
-    font-size: 0.95rem;
-    line-height: 1.6;
+    font-size: var(--font-base);
+    line-height: var(--line-relaxed);
     background: transparent;
     color: inherit;
     outline: none;
@@ -112,8 +114,8 @@
 
 .code-input::-webkit-scrollbar,
 .code-output::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+    width: var(--space-sm);
+    height: var(--space-sm);
 }
 
 .code-input::-webkit-scrollbar-track,
@@ -124,7 +126,7 @@
 .code-input::-webkit-scrollbar-thumb,
 .code-output::-webkit-scrollbar-thumb {
     background: rgba(148, 163, 184, 0.38);
-    border-radius: 999px;
+    border-radius: var(--radius-xl);
 }
 
 .code-input::-webkit-scrollbar-thumb:hover,

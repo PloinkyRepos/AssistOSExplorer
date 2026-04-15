@@ -2,4 +2,71 @@ confirm-action-modal .modal-body {
     display: flex;
     flex-direction: column;
     justify-content: center;
+    gap: var(--space-md);
+    padding: var(--space-md) 0;
+}
+
+confirm-action-modal .modal-title {
+    font-size: var(--font-xl);
+    font-weight: var(--font-semibold);
+    color: var(--text);
+    margin: 0;
+    line-height: var(--line-normal);
+}
+
+confirm-action-modal .modal-message {
+    font-size: var(--font-base);
+    font-weight: var(--font-regular);
+    color: var(--text-soft);
+    line-height: var(--line-normal);
+    margin: 0;
+}
+
+confirm-action-modal .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-sm);
+    margin-top: var(--space-lg);
+}
+
+confirm-action-modal .modal-footer button {
+    padding: var(--space-sm) var(--space-md);
+    border-radius: var(--radius-md);
+    font-size: var(--font-sm);
+    font-weight: var(--font-medium);
+    font-family: var(--default-font), "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+    transition: background-color var(--transition-base) ease, border-color var(--transition-base) ease, transform var(--transition-base) ease, box-shadow var(--transition-base) ease;
+}
+
+confirm-action-modal .modal-footer button.primary {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+}
+
+confirm-action-modal .modal-footer button.primary:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-lg);
+}
+
+confirm-action-modal .modal-footer button.secondary {
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+}
+
+confirm-action-modal .modal-footer button.secondary:hover {
+    background: var(--border);
+    transform: translateY(-1px);
+}
+
+.theme-dark confirm-action-modal .modal-footer button.secondary {
+    background: rgba(30, 41, 59, 0.9);
+    border-color: #475569;
+    color: #f8fafc;
+}
+
+.theme-dark confirm-action-modal .modal-footer button.secondary:hover {
+    background: #2b3a53;
+    border-color: #64748b;
 }

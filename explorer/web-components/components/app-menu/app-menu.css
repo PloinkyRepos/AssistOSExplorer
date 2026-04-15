@@ -13,22 +13,23 @@ app-menu .is-hidden {
 app-menu .app-menu-list {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: var(--space-xs);
+    padding: var(--space-sm);
 }
 
 app-menu .app-menu-loading {
     display: inline-flex;
     align-items: center;
     min-height: 36px;
-    padding: 8px 10px;
+    padding: var(--space-sm) var(--space-md);
     justify-content: center;
 }
 
 app-menu .app-menu-spinner {
     width: 14px;
     height: 14px;
-    border: 2px solid rgba(0, 0, 0, 0.14);
-    border-top-color: rgba(0, 0, 0, 0.68);
+    border: 2px solid var(--border);
+    border-top-color: var(--text);
     border-radius: 50%;
     animation: app-menu-spin 0.7s linear infinite;
     flex: 0 0 auto;
@@ -37,29 +38,41 @@ app-menu .app-menu-spinner {
 app-menu .app-menu-item {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-sm);
     width: 100%;
-    padding: 8px 10px;
+    padding: var(--space-sm) var(--space-md);
     border: 0;
     background: transparent;
     color: inherit;
     text-align: left;
     cursor: pointer;
+    border-radius: var(--radius-md);
+    font-family: var(--default-font), "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+    font-size: var(--font-sm);
+    font-weight: var(--font-regular);
+    line-height: var(--line-normal);
+    transition: background-color var(--transition-fast) ease, transform var(--transition-fast) ease;
 }
 
 app-menu .app-menu-item:hover:not(:disabled),
 app-menu .app-menu-item:focus-visible:not(:disabled) {
-    background: rgba(0, 0, 0, 0.06);
+    background: var(--file-exp-subtle-surface);
     outline: none;
+    transform: translateX(2px);
 }
 
 app-menu .app-menu-item:disabled {
-    opacity: 0.55;
+    opacity: 0.5;
     cursor: default;
 }
 
 app-menu .app-menu-item.destructive {
-    color: #a43d2f;
+    color: #dc2626;
+}
+
+app-menu .app-menu-item.destructive:hover,
+app-menu .app-menu-item.destructive:focus-visible {
+    background: rgba(220, 38, 38, 0.1);
 }
 
 app-menu .app-menu-item-icon {
@@ -75,8 +88,27 @@ app-menu .app-menu-item-label {
 
 app-menu .app-menu-separator {
     height: 1px;
-    margin: 4px 0;
-    background: rgba(0, 0, 0, 0.08);
+    margin: var(--space-xs) 0;
+    background: var(--border);
+}
+
+/* Dark mode */
+.theme-dark app-menu .app-menu-item {
+    color: var(--text);
+}
+
+.theme-dark app-menu .app-menu-item:hover:not(:disabled),
+.theme-dark app-menu .app-menu-item:focus-visible:not(:disabled) {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.theme-dark app-menu .app-menu-spinner {
+    border-color: var(--border);
+    border-top-color: var(--text);
+}
+
+.theme-dark app-menu .app-menu-separator {
+    background: var(--border);
 }
 
 @keyframes app-menu-spin {

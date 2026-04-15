@@ -7,9 +7,12 @@ file-exp-entries {
 .entry-label {
     display: inline-flex;
     align-items: center;
-    line-height: 1.2;
+    line-height: var(--line-normal);
     vertical-align: middle;
-    margin-left: 3px;
+    margin-left: var(--space-xs);
+    font-family: var(--default-font), "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+    font-size: var(--font-base);
+    font-weight: var(--font-regular);
 }
 
 .col-name .icon {
@@ -62,7 +65,7 @@ tr.is-symlink .col-name .icon {
 
 .tree-name-cell {
     --tree-depth: 0;
-    padding-left: calc(0.5rem + (var(--tree-depth) * 1rem));
+    padding-left: calc(var(--space-sm) + (var(--tree-depth) * var(--space-md)));
 }
 
 .tree-toggle,
@@ -73,24 +76,25 @@ tr.is-symlink .col-name .icon {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    margin-right: 2px;
+    margin-right: var(--space-xs);
 }
 
 .tree-toggle {
     border: none;
     background: transparent;
     color: inherit;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     cursor: pointer;
     padding: 0;
+    transition: background var(--transition-fast) ease, transform var(--transition-fast) ease;
 }
 
 .tree-toggle:hover {
-    background: rgba(148, 163, 184, 0.18);
+    background: var(--file-exp-subtle-surface);
 }
 
 .tree-toggle:focus-visible {
-    outline: 2px solid rgba(59, 130, 246, 0.45);
+    outline: 2px solid var(--accent);
     outline-offset: 1px;
 }
 
