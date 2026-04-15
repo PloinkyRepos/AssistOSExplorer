@@ -1,32 +1,33 @@
 .backlog-panel {
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    padding: 8px;
+    gap: 16px;
+    padding: 12px;
+    font-family: var(--default-font), "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
 }
 
 .backlog-header {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 4px 0 2px;
+    gap: 12px;
+    padding: 4px 0 8px;
 }
 
 .backlog-title {
     font-size: 1.1rem;
-    font-weight: 700;
+    font-weight: 600;
 }
 
 .backlog-file {
-    font-size: 1.1rem;
+    font-size: 1rem;
     color: var(--text-soft);
     flex-grow: 1;
-    font-weight: 700;
+    font-weight: 600;
 }
 
 .backlog-actions {
     display: inline-flex;
-    gap: 6px;
+    gap: 8px;
 }
 
 .backlog-panel button {
@@ -36,11 +37,13 @@
     border-radius: 8px;
     padding: 8px 14px;
     cursor: pointer;
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    font-size: 0.95rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+    font-family: inherit;
 }
 
 .backlog-panel button.secondary {
@@ -117,36 +120,45 @@
 }
 
 .backlog-filters {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(160px, 1fr));
-    gap: 8px;
-    padding: 10px 12px;
-    border: 1px solid rgba(148, 163, 184, 0.16);
-    border-radius: 14px;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(248, 250, 252, 0.9));
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 12px 16px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--file-exp-subtle-surface);
 }
 
 .theme-dark .backlog-filters {
     border-color: rgba(71, 85, 105, 0.4);
-    background: linear-gradient(180deg, rgba(17, 25, 39, 0.94), rgba(15, 23, 42, 0.96));
+    background: var(--file-exp-subtle-surface);
 }
 
 .backlog-filter-actions {
     display: flex;
     justify-content: flex-end;
     align-items: center;
-    gap: 6px;
-    grid-column: 1 / -1;
+    gap: 8px;
+    margin-left: auto;
 }
 
-.backlog-filters label,
+.backlog-filters label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 0.85rem;
+    color: var(--text-soft);
+    font-weight: 500;
+    min-width: 140px;
+}
+
 .backlog-create-grid label {
     display: flex;
     flex-direction: column;
     gap: 6px;
-    font-size: 0.8rem;
+    font-size: 0.85rem;
     color: var(--text-soft);
-    font-weight: 600;
+    font-weight: 500;
 }
 
 .backlog-filters .is-hidden {
@@ -157,28 +169,54 @@
     cursor: pointer;
 }
 
+.backlog-filters input,
+.backlog-filters select,
 .backlog-create-grid input,
 .backlog-create-grid select,
 .backlog-create-grid textarea {
-    padding: 6px 8px;
+    padding: 8px 12px;
     border-radius: 8px;
-    border: 1px solid var(--file-exp-border);
-    background: var(--file-exp-panel);
+    border: 1px solid var(--border);
+    background: var(--bg);
     color: var(--text);
+    font-size: 0.9rem;
+    font-family: inherit;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
 }
 
+.backlog-filters input:focus,
+.backlog-filters select:focus,
+.backlog-create-grid input:focus,
+.backlog-create-grid select:focus,
+.backlog-create-grid textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.theme-dark .backlog-filters input,
+.theme-dark .backlog-filters select,
 .theme-dark .backlog-create-grid input,
 .theme-dark .backlog-create-grid select,
 .theme-dark .backlog-create-grid textarea {
     background: rgba(15, 23, 42, 0.88);
     border-color: rgba(71, 85, 105, 0.55);
     color: #f8fafc;
-    box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.32);
+}
+
+.theme-dark .backlog-filters input:focus,
+.theme-dark .backlog-filters select:focus,
+.theme-dark .backlog-create-grid input:focus,
+.theme-dark .backlog-create-grid select:focus,
+.theme-dark .backlog-create-grid textarea:focus {
+    border-color: rgba(96, 165, 250, 0.6);
+    box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
 }
 
 .backlog-section-title {
-    font-weight: 700;
+    font-weight: 600;
     color: var(--text);
+    font-size: 0.95rem;
 }
 
 .backlog-create-actions {
@@ -203,16 +241,16 @@
 .backlog-list {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 12px;
 }
 
 .backlog-list-view {
     display: none;
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
     border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 8px;
+    border-radius: 12px;
+    padding: 12px;
     background: var(--file-exp-panel);
 }
 
@@ -235,29 +273,29 @@
 .backlog-list-item {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
-    border-radius: 12px;
-    border: 1px solid rgba(148, 163, 184, 0.12);
-    background: rgba(255, 255, 255, 0.7);
+    gap: 12px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--bg);
     cursor: grab;
-    transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease, transform 120ms ease;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease, transform 0.15s ease;
 }
 
 .theme-dark .backlog-list-item {
     background: rgba(15, 23, 42, 0.9);
     border-color: rgba(71, 85, 105, 0.42);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .backlog-list-item:hover {
     transform: translateY(-1px);
     box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
+    border-color: var(--accent);
 }
 
 .theme-dark .backlog-list-item:hover {
     box-shadow: 0 14px 24px rgba(2, 6, 23, 0.28);
-    border-color: rgba(96, 165, 250, 0.24);
+    border-color: rgba(96, 165, 250, 0.4);
 }
 
 .backlog-list-item:active {
@@ -270,9 +308,11 @@
 }
 
 .backlog-list-order {
-    font-weight: 700;
+    font-weight: 600;
     color: var(--text-soft);
     text-align: center;
+    font-size: 0.85rem;
+    min-width: 24px;
 }
 
 .backlog-list-desc {
@@ -281,24 +321,25 @@
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
-    line-height: 1.2;
-    max-height: 2.4em;
+    line-height: 1.4;
+    max-height: 2.8em;
     flex-grow: 1;
-    font-weight: 500;
+    font-weight: 400;
+    font-size: 0.9rem;
 }
 
 .backlog-list-status {
-    font-size: 0.7rem;
-    font-weight: 800;
+    font-size: 0.75rem;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.06em;
     color: var(--text);
     text-align: right;
     justify-self: end;
     border-radius: 999px;
-    border: 1px solid var(--file-exp-border);
-    padding: 0.3rem 0.65rem;
-    background: rgba(148, 163, 184, 0.14);
+    border: 1px solid var(--border);
+    padding: 0.35rem 0.75rem;
+    background: var(--file-exp-subtle-surface);
     white-space: nowrap;
 }
 
@@ -373,13 +414,19 @@
 }
 
 .backlog-empty {
-    padding: 12px;
+    padding: 24px 16px;
     text-align: center;
     color: var(--text-soft);
+    font-size: 0.9rem;
 }
 
 @media (max-width: 980px) {
     .backlog-filters {
-        grid-template-columns: repeat(2, minmax(140px, 1fr));
+        gap: 8px;
+        padding: 10px 12px;
+    }
+    
+    .backlog-filters label {
+        min-width: 120px;
     }
 }

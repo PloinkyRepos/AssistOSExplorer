@@ -107,7 +107,6 @@
     border-radius: 50%;
     background: var(--backlog-status-new);
     box-shadow: 0 0 0 2px var(--backlog-status-new-glow);
-    align-self: end;
     border: 1px solid rgba(255, 255, 255, 0.5);
 }
 

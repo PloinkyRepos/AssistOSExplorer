@@ -599,6 +599,8 @@ main {
 #toggleHeaderButton {
     padding: 7px 10px;
     min-width: 40px;
+    order: 999;
+    align-self: baseline;
 }
 
 #toggleHeaderButton .toggle-header-icon {
