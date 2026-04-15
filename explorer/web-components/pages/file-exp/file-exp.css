@@ -404,6 +404,11 @@ main {
     --file-exp-list-width: 40%;
 }
 
+#directoryPanel.header-collapsed .path-info,
+#directoryPanel.header-collapsed .toolbar {
+    display: none;
+}
+
 .app-plugin-bar {
     flex: 0 0 74px;
     width: 74px;
@@ -589,6 +594,23 @@ main {
     color: var(--text);
     border-radius: 10px;
     transition: background-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, color 0.15s ease;
+}
+
+#toggleHeaderButton {
+    padding: 7px 10px;
+    min-width: 40px;
+}
+
+#toggleHeaderButton .toggle-header-icon {
+    display: inline-block;
+}
+
+#directoryPanel.header-collapsed #toggleHeaderButton .collapse-icon {
+    display: none;
+}
+
+#directoryPanel:not(.header-collapsed) #toggleHeaderButton .expand-icon {
+    display: none;
 }
 
 #toggleListButton .toggle-icon {

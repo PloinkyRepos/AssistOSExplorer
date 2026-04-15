@@ -125,6 +125,8 @@ When the authenticated workspace session expires, Explorer must not leave the us
 
 For a file that is currently open in preview mode, Explorer must also monitor the current on-disk version and automatically refresh the view when another user updates that file. This monitoring must compare lightweight file metadata such as `mtimeMs` and `size`, not poll the full file content. The monitor applies only to the currently viewed local file and must stay separate from the edit-session conflict flow, where automatic reload would be unsafe.
 
+Explorer header chrome inside `file-exp` must also remain collapsible. The `path-info` and `toolbar` rows are host-owned shell chrome, not file content, so the user must be able to hide and restore them without affecting the preview header, preview actions, or document editor state. This preference must persist locally across reloads.
+
 ### Resource Classes
 
 Explorer does not operate on a single resource type. It must support:

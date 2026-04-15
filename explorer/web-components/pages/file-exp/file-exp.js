@@ -19,6 +19,7 @@ import {
     saveFilterSpecsPreference,
     saveListWidthPreference,
     saveListCollapsedPreference,
+    saveExplorerHeaderCollapsedPreference,
     savePreviewWrapPreference,
     saveEditorAutoSavePreference,
     saveEditorAutoSaveIntervalPreference
@@ -1349,6 +1350,15 @@ export class FileExp {
             payload: { listCollapsed }
         }, options);
         saveListCollapsedPreference(Boolean(this.state?.listCollapsed));
+        return result;
+    }
+
+    setExplorerHeaderCollapsed(explorerHeaderCollapsed, options = {}) {
+        const result = this.dispatchUi({
+            type: FILE_EXP_UI_ACTIONS.SET_EXPLORER_HEADER_COLLAPSED,
+            payload: { explorerHeaderCollapsed }
+        }, options);
+        saveExplorerHeaderCollapsedPreference(Boolean(this.state?.explorerHeaderCollapsed));
         return result;
     }
 

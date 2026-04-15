@@ -4,6 +4,7 @@ import { loadKeymap } from "../../../utils/keymap.js";
 const DEFAULT_COLUMN_VISIBILITY = { type: false, size: false, modified: false };
 const DEFAULT_LIST_WIDTH = null;
 const DEFAULT_LIST_COLLAPSED = false;
+const DEFAULT_EXPLORER_HEADER_COLLAPSED = false;
 const DEFAULT_PREVIEW_WRAP_ENABLED = false;
 const DEFAULT_DIRECTORY_VIEW_MODE = 'list';
 const DEFAULT_EDITOR_AUTOSAVE_ENABLED = false;
@@ -104,6 +105,25 @@ export function loadListCollapsedPreference() {
 export function saveListCollapsedPreference(value) {
     try {
         window.localStorage.setItem('assistosExplorerListCollapsed', value ? 'true' : 'false');
+    } catch (_) {
+        // ignore
+    }
+}
+
+export function loadExplorerHeaderCollapsedPreference() {
+    try {
+        const stored = window.localStorage.getItem('assistosExplorerHeaderCollapsed');
+        if (stored === 'true') return true;
+        if (stored === 'false') return false;
+        return DEFAULT_EXPLORER_HEADER_COLLAPSED;
+    } catch (_) {
+        return DEFAULT_EXPLORER_HEADER_COLLAPSED;
+    }
+}
+
+export function saveExplorerHeaderCollapsedPreference(value) {
+    try {
+        window.localStorage.setItem('assistosExplorerHeaderCollapsed', value ? 'true' : 'false');
     } catch (_) {
         // ignore
     }
@@ -259,6 +279,7 @@ export function createFileExpState() {
         sortDir: 'asc',
         listWidth: loadListWidthPreference(),
         listCollapsed: loadListCollapsedPreference(),
+        explorerHeaderCollapsed: loadExplorerHeaderCollapsedPreference(),
         directoryViewMode: loadDirectoryViewModePreference(),
         treeRootPath: '/'
     };

@@ -73,6 +73,10 @@ export async function runAfterRender(fileExp, options = {}) {
     }
 
     const toggleListButton = fileExp.element.querySelector('#toggleListButton');
+    const toggleHeaderButton = fileExp.element.querySelector('#toggleHeaderButton');
+    const directoryPanel = fileExp.element.querySelector('#directoryPanel');
+    const pathInfo = fileExp.element.querySelector('.path-info');
+    const toolbar = fileExp.element.querySelector('.toolbar');
     const workspace = fileExp.element.querySelector('.workspace');
     const listPanel = fileExp.element.querySelector('.list');
     const columnMenuButton = fileExp.element.querySelector('#columnVisibilityButton');
@@ -120,6 +124,19 @@ export async function runAfterRender(fileExp, options = {}) {
         toggleListButton.setAttribute('aria-label', collapsed ? 'Expand directory panel' : 'Collapse directory panel');
     };
 
+    const applyHeaderCollapsedState = () => {
+        if (!directoryPanel) return;
+        directoryPanel.classList.toggle('header-collapsed', Boolean(fileExp.state.explorerHeaderCollapsed));
+    };
+
+    const updateHeaderToggleState = () => {
+        if (!toggleHeaderButton || !directoryPanel) return;
+        const collapsed = directoryPanel.classList.contains('header-collapsed');
+        toggleHeaderButton.setAttribute('aria-expanded', String(!collapsed));
+        toggleHeaderButton.setAttribute('title', collapsed ? 'Show Explorer header' : 'Hide Explorer header');
+        toggleHeaderButton.setAttribute('aria-label', collapsed ? 'Show Explorer header' : 'Hide Explorer header');
+    };
+
     const updateDirectoryViewModeButton = () => {
         const isTreeView = fileExp.state.directoryViewMode === 'tree';
         if (upButton) {
@@ -158,6 +175,7 @@ export async function runAfterRender(fileExp, options = {}) {
     };
 
     applyCollapsedState();
+    applyHeaderCollapsedState();
     applySavedWidth();
     if (listPanel && !listPanel.classList.contains('collapsed')) {
         if (!fileExp.state.listWidth && listPanel.offsetWidth) {
@@ -187,6 +205,22 @@ export async function runAfterRender(fileExp, options = {}) {
         };
         fileExp.setElementListener('toggle-list-button', toggleListButton, 'click', onToggleListClick);
         updateToggleState();
+    }
+
+    if (toggleHeaderButton && directoryPanel && pathInfo && toolbar) {
+        const onToggleHeaderClick = () => {
+            const nextCollapsed = !directoryPanel.classList.contains('header-collapsed');
+            fileExp.setExplorerHeaderCollapsed(nextCollapsed);
+            fileExp.setToolbarMenuOpen(false);
+            toolbarMenu?.classList.remove('open');
+            toolbarMenuButton?.setAttribute('aria-expanded', 'false');
+            accountMenu?.classList.remove('open');
+            accountMenuButton?.setAttribute('aria-expanded', 'false');
+            applyHeaderCollapsedState();
+            updateHeaderToggleState();
+        };
+        fileExp.setElementListener('toggle-header-button', toggleHeaderButton, 'click', onToggleHeaderClick);
+        updateHeaderToggleState();
     }
 
     if (directoryViewModeButton) {
