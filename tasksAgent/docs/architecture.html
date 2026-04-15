@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>tasksAssistant Docs - Architecture</title>
+    <title>tasksAgent Docs - Architecture</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -11,7 +11,7 @@
 
     <main class="content content--with-sidebar">
         <div class="doc-layout">
-            <aside class="doc-sidebar" aria-label="tasksAssistant documentation navigation">
+            <aside class="doc-sidebar" aria-label="tasksAgent documentation navigation">
                 <div class="doc-sidebar__group">
                     <p class="doc-sidebar__group-title">Documentation</p>
                     <nav>
@@ -64,9 +64,9 @@
                                 <td>Parses Model Context Protocol envelope data, validates paths and arguments, executes tool logic.</td>
                             </tr>
                             <tr>
-                                <td>Backlog persistence bridge</td>
-                                <td><code>achillesAgentLib/BacklogManager/backlogIO.mjs</code></td>
-                                <td>Loads, refreshes, saves, and force-saves backlog and history files.</td>
+                                <td>Markdown backlog persistence</td>
+                                <td><code>tasksAgent/tools/backlog_markdown.mjs</code></td>
+                                <td>Parses and serializes `.backlog` and `.history` Markdown files with persisted task ids.</td>
                             </tr>
                             <tr>
                                 <td>Explorer user interface plugin channel</td>
@@ -79,7 +79,7 @@
 
                 <section>
                     <h2>Runtime Boundary</h2>
-                    <p>AgentServer executes task tools from MCP configuration. Each operation runs through the wrapper script, then through dispatcher logic that validates <code>repoPath</code>/<code>backlogPath</code> constraints, and then applies backlog CRUD behavior.</p>
+                    <p>AgentServer executes task tools from MCP configuration. Each operation runs through the wrapper script, then through dispatcher logic that validates <code>repoPath</code>/<code>backlogPath</code> constraints, and then applies backlog CRUD behavior through the shared Markdown persistence layer.</p>
                     <pre><code>{
   "name": "task_list",
   "command": "tools/tasks_tool.sh",

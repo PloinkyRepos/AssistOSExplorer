@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Specification Matrix - tasksAssistant Docs</title>
+    <title>Specification Matrix - tasksAgent Docs</title>
     <link rel="stylesheet" href="styles.css">
     <style>
         .page { max-width: 1280px; margin: 0 auto; padding: 24px 20px 48px; }
@@ -68,7 +68,7 @@
                     this.currentSpecSpan.textContent = this.specPath;
                     const titleMatch = markdown.match(/^#\s+(.+)$/m);
                     if (titleMatch) {
-                        document.title = `${titleMatch[1]} - tasksAssistant Docs`;
+                        document.title = `${titleMatch[1]} - tasksAgent Docs`;
                     }
                 } catch (error) {
                     this.showError(error.message);

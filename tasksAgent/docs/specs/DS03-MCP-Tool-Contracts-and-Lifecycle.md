@@ -8,7 +8,7 @@ This document defines contract and lifecycle guarantees for `tasksAgent` Model C
 
 Tool names declared in `mcp-config.json` are public contracts. The set includes config read, task list and history list, single-task read, task create/update/delete, and reorder operations.
 
-Each contract shall define required arguments and optional controls such as filtering and force-save behavior.
+Each contract shall define required arguments and optional controls such as filtering, conflict checks, and explicit mutation inputs.
 
 ## Invocation Lifecycle Rules
 
@@ -20,7 +20,7 @@ Lifecycle Rule L3: tool identity resolution shall use `TOOL_NAME` and documented
 
 Lifecycle Rule L4: argument validation shall run before task operation dispatch.
 
-Lifecycle Rule L5: path policy checks for `repoPath` and backlog/history path arguments shall execute before file IO.
+Lifecycle Rule L5: path policy checks for `repoPath` and backlog/history path arguments shall execute before any file read or write.
 
 Lifecycle Rule L6: operation output shall be serialized as JSON response payload.
 
@@ -32,7 +32,7 @@ Failure Rule F2: invalid path arguments fail explicitly.
 
 Failure Rule F3: unsupported tool names fail explicitly.
 
-Failure Rule F4: backlog IO failures return explicit error payloads and do not silently report success.
+Failure Rule F4: backlog read or write failures return explicit error payloads and do not silently report success.
 
 ## Constraints
 

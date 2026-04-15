@@ -1,6 +1,6 @@
 # tasksAgent
 
-Model Context Protocol (MCP) agent for backlog files stored inside a workspace repository.
+Model Context Protocol (MCP) agent for repository-local backlog and history files stored as Markdown.
 
 ## Responsibilities
 
@@ -9,6 +9,7 @@ Model Context Protocol (MCP) agent for backlog files stored inside a workspace r
 - read individual tasks
 - create, update, delete, and reorder tasks
 - keep backlog paths inside the selected repository root
+- persist task records in `.backlog` and `.history` Markdown files
 
 ## Available tools
 
@@ -31,6 +32,22 @@ All tools are dispatched through [tools/tasks_tool.sh](./tools/tasks_tool.sh) to
 - history files must end with `.history`
 
 The tool normalizes `/.ploinky/...` inputs to the real workspace path before validation.
+
+## Backlog format
+
+Task records are persisted as Markdown, not JSON.
+
+- `.backlog` stores active tasks
+- `.history` stores completed tasks
+- each task has a persisted `task id`
+- task order is derived from document order
+- each task persists only `description`, `options`, and `resolution`
+
+`status` is derived at runtime:
+
+- `new` when the task still has options
+- `approved` when the task has a resolution and no options
+- `done` for records already moved to `.history`
 
 ## Runtime
 

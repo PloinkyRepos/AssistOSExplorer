@@ -6,7 +6,7 @@ This document defines mandatory safeguards for backlog path policy, persistence 
 
 ## Safety and Persistence Scope
 
-`tasksAgent` processes task data from repository-local backlog files. The agent must constrain file operations to valid repository scope and preserve consistent persistence behavior through backlog IO functions.
+`tasksAgent` processes task data from repository-local backlog files. The agent must constrain file operations to valid repository scope and preserve consistent persistence behavior through the shared Markdown parser and serializer.
 
 ## Operational Requirements
 
@@ -16,9 +16,9 @@ Requirement O2: backlog paths shall be absolute, inside repository root, and use
 
 Requirement O3: history paths shall be absolute, inside repository root, and use `.history` extension.
 
-Requirement O4: task mutation operations shall use load/save/refresh semantics before reporting success.
+Requirement O4: task mutation operations shall read and write `.backlog` and `.history` files through the shared Markdown parser and serializer before reporting success.
 
-Requirement O5: force-save behavior shall remain available where mutation contracts declare `forceSave` controls.
+Requirement O5: backlog tasks shall persist an explicit `task id`, while task order shall remain the order of task blocks in the Markdown document.
 
 Requirement O6: repository validation shall run through task agent tests under `tasksAgent/tests`.
 

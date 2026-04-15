@@ -73,8 +73,7 @@
         "options": { "type": "array", "optional": true },
         "resolution": { "type": "string", "optional": true },
         "repoPath": { "type": "string", "optional": false },
-        "backlogPath": { "type": "string", "optional": false },
-        "forceSave": { "type": "boolean", "optional": true }
+        "backlogPath": { "type": "string", "optional": false }
       },
       "env": {
         "TOOL_NAME": "task_create"
@@ -95,8 +94,7 @@
         "repoPath": { "type": "string", "optional": false },
         "backlogPath": { "type": "string", "optional": false },
         "ifMatch": { "type": "string", "optional": true },
-        "force": { "type": "boolean", "optional": true },
-        "forceSave": { "type": "boolean", "optional": true }
+        "force": { "type": "boolean", "optional": true }
       },
       "env": {
         "TOOL_NAME": "task_update"
@@ -111,8 +109,7 @@
       "inputSchema": {
         "id": { "type": "string", "optional": false },
         "repoPath": { "type": "string", "optional": false },
-        "backlogPath": { "type": "string", "optional": false },
-        "forceSave": { "type": "boolean", "optional": true }
+        "backlogPath": { "type": "string", "optional": false }
       },
       "env": {
         "TOOL_NAME": "task_delete"
@@ -127,8 +124,7 @@
       "inputSchema": {
         "order": { "type": "array", "optional": false },
         "repoPath": { "type": "string", "optional": false },
-        "backlogPath": { "type": "string", "optional": false },
-        "forceSave": { "type": "boolean", "optional": true }
+        "backlogPath": { "type": "string", "optional": false }
       },
       "env": {
         "TOOL_NAME": "task_reorder"

@@ -2,40 +2,28 @@
 import fs from 'node:fs/promises';
 import fsSync from 'node:fs';
 import path from 'node:path';
-import crypto from 'node:crypto';
 import {
-  loadBacklogFile,
-  saveBacklogFile,
-  refreshBacklogFile,
-  forceSave
-} from 'achillesAgentLib/BacklogManager/backlogIO.mjs';
-import { pathToFileURL } from 'node:url';
+  createEmptyBacklogMarkdown,
+  createEmptyHistoryMarkdown,
+  createNextTaskId,
+  decorateBacklogTask as decorateBacklogTaskRecord,
+  decorateHistoryTask as decorateHistoryTaskRecord,
+  parseBacklogMarkdown,
+  parseHistoryMarkdown,
+  serializeBacklogMarkdown,
+  serializeHistoryMarkdown
+} from './backlog_markdown.mjs';
 
 const DEFAULT_CONFIG = {
   statuses: {
     'new': 'New',
     'approved': 'Approved',
     'done': 'Done'
-  },
-  defaultStatus: 'new',
-  allowCustomTags: true
+  }
 };
-
-const backlogMtimeCache = new Map();
 
 function safeParseJson(text) {
   try { return JSON.parse(text); } catch { return null; }
-}
-
-function resolveAchillesBacklogPath() {
-  try {
-    if (typeof import.meta.resolve === 'function') {
-      return import.meta.resolve('achillesAgentLib/BacklogManager/backlogIO.mjs');
-    }
-  } catch {
-    // ignore
-  }
-  return null;
 }
 
 function writeJson(value) {
@@ -148,18 +136,13 @@ function normalizeConfig(input) {
   if (statuses && (statuses.todo || statuses['in-progress'] || statuses['dev-ready'])) {
     statuses = DEFAULT_CONFIG.statuses;
   }
-  const statusKeys = Object.keys(statuses);
-  const defaultStatus = statusKeys.includes(cfg.defaultStatus) ? cfg.defaultStatus : DEFAULT_CONFIG.defaultStatus;
   return {
-    statuses,
-    defaultStatus: statusKeys.includes(defaultStatus) ? defaultStatus : statusKeys[0],
-    allowCustomTags: cfg.allowCustomTags !== false
+    statuses
   };
 }
 
 async function loadConfig() {
-  const normalized = normalizeConfig(DEFAULT_CONFIG);
-  return { config: normalized, configPath: null };
+  return normalizeConfig(DEFAULT_CONFIG);
 }
 
 async function loadBacklogIndex(root, backlogPath = '') {
@@ -247,41 +230,6 @@ async function listBacklogFiles(root) {
   return results.sort();
 }
 
-async function loadTasksCached(backlogPath) {
-  if (!backlogPath) return [];
-  let diskMtime = null;
-  try {
-    const stat = fsSync.statSync(backlogPath);
-    diskMtime = Number(stat.mtimeMs) || 0;
-  } catch {
-    diskMtime = null;
-  }
-  const cachedMtime = backlogMtimeCache.get(backlogPath);
-  if (diskMtime !== null && (cachedMtime === undefined || diskMtime > cachedMtime)) {
-    await refreshBacklogFile(backlogPath);
-    backlogMtimeCache.set(backlogPath, diskMtime);
-  }
-  let entry = await loadBacklogFile(backlogPath);
-  if (entry?.loaded && Array.isArray(entry?.tasks) && entry.tasks.length === 0) {
-    entry = await refreshBacklogFile(backlogPath);
-  }
-  if (diskMtime !== null) {
-    backlogMtimeCache.set(backlogPath, diskMtime);
-  }
-  return entry?.tasks || [];
-}
-
-async function readBacklogFromDisk(backlogPath) {
-  try {
-    const raw = await fs.readFile(backlogPath, 'utf8');
-    const parsed = safeParseJson(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.map((task) => normalizeTask(task));
-  } catch {
-    return [];
-  }
-}
-
 async function ensureBacklogFile(backlogPath) {
   if (!backlogPath) return false;
   try {
@@ -291,17 +239,54 @@ async function ensureBacklogFile(backlogPath) {
     // continue
   }
   try {
-    await fs.writeFile(backlogPath, JSON.stringify([], null, 2));
+    await fs.writeFile(backlogPath, createEmptyBacklogMarkdown(), 'utf8');
     return true;
   } catch {
     return false;
   }
 }
 
+async function ensureHistoryFile(historyPath) {
+  if (!historyPath) return false;
+  try {
+    await fs.access(historyPath);
+    return true;
+  } catch {
+    // continue
+  }
+  try {
+    await fs.writeFile(historyPath, createEmptyHistoryMarkdown(), 'utf8');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function getHistoryPathFromBacklog(backlogPath) {
+  return String(backlogPath || '').replace(/\.backlog$/i, '.history');
+}
+
+async function readMarkdownFile(filePath, { history = false } = {}) {
+  try {
+    const raw = await fs.readFile(filePath, 'utf8');
+    return history ? parseHistoryMarkdown(raw) : parseBacklogMarkdown(raw);
+  } catch {
+    return [];
+  }
+}
+
+async function writeBacklogTasks(backlogPath, tasks) {
+  await fs.writeFile(backlogPath, serializeBacklogMarkdown(tasks), 'utf8');
+}
+
+async function writeHistoryTasks(historyPath, tasks) {
+  await fs.writeFile(historyPath, serializeHistoryMarkdown(tasks), 'utf8');
+}
+
 async function loadTasks(root, backlogPath = '') {
   const resolved = backlogPath ? resolveBacklogPath(root, backlogPath) : '';
   if (resolved) {
-    const tasks = await loadTasksCached(resolved);
+    const tasks = await readMarkdownFile(resolved);
     return {
       tasks: decorateTasks(tasks, resolved),
       backlogPaths: [resolved],
@@ -315,7 +300,7 @@ async function loadTasks(root, backlogPath = '') {
   const tasks = [];
   const files = [];
   for (const filePath of backlogPaths) {
-    const fileTasks = await loadTasksCached(filePath);
+    const fileTasks = await readMarkdownFile(filePath);
     const decorated = decorateTasks(fileTasks, filePath);
     tasks.push(...decorated);
     files.push({ path: filePath, tasks: decorated });
@@ -323,35 +308,8 @@ async function loadTasks(root, backlogPath = '') {
   return { tasks, backlogPaths, files };
 }
 
-function computeStatus(task) {
-  const options = Array.isArray(task?.options) ? task.options : [];
-  const resolution = normalizeString(task?.resolution);
-  if (!options.length && resolution) return 'approved';
-  return 'new';
-}
-
-function taskHash(task, index) {
-  const normalized = normalizeTask(task);
-  const payload = {
-    index,
-    description: normalized.description,
-    options: normalized.options,
-    resolution: normalized.resolution
-  };
-  return crypto.createHash('sha1').update(JSON.stringify(payload)).digest('hex');
-}
-
 function decorateTask(task, sourcePath, index) {
-  const normalized = normalizeTask(task);
-  const position = Number.isFinite(index) ? index : 0;
-  return {
-    ...normalized,
-    id: String(position + 1),
-    order: position + 1,
-    status: computeStatus(normalized),
-    sourcePath,
-    taskHash: taskHash(normalized, position + 1)
-  };
+  return decorateBacklogTaskRecord(task, sourcePath, index);
 }
 
 function decorateTasks(tasks, sourcePath) {
@@ -360,16 +318,7 @@ function decorateTasks(tasks, sourcePath) {
 }
 
 function decorateHistoryTask(task, sourcePath, index) {
-  const normalized = normalizeTask(task);
-  const position = Number.isFinite(index) ? index : 0;
-  return {
-    ...normalized,
-    id: String(position + 1),
-    order: position + 1,
-    status: 'done',
-    sourcePath,
-    taskHash: taskHash(normalized, position + 1)
-  };
+  return decorateHistoryTaskRecord(task, sourcePath, index);
 }
 
 function decorateHistoryTasks(tasks, sourcePath) {
@@ -391,23 +340,19 @@ function normalizeTask(task) {
   }).filter((option) => option.trim());
   const resolution = normalizeString(task.resolution);
   return {
+    id: normalizeString(task.id).toUpperCase(),
     description: normalizeString(task.description),
     options,
     resolution
   };
 }
 
-async function maybeForceSave(backlogPath, args) {
-  const shouldForce = args?.forceSave !== false;
-  if (shouldForce) {
-    await forceSave(backlogPath);
-  }
-}
-
-function parseTaskIndex(id) {
-  const numeric = Number.parseInt(String(id || '').trim(), 10);
-  if (!Number.isFinite(numeric) || numeric < 1) return null;
-  return numeric - 1;
+function findTaskIndexById(tasks, id) {
+  const normalizedId = normalizeString(id).toUpperCase();
+  if (!normalizedId) return -1;
+  return Array.isArray(tasks)
+    ? tasks.findIndex((task) => normalizeString(task?.id).toUpperCase() === normalizedId)
+    : -1;
 }
 
 function matchQuery(task, query) {
@@ -451,48 +396,33 @@ async function main() {
   const root = getRepoRootFromArgs(args);
   try {
     if (toolName === 'task_config') {
-      const { config, configPath } = await loadConfig();
-      writeJson({ ok: true, config, configPath });
+      const config = await loadConfig();
+      writeJson({ ok: true, config });
       return;
     }
 
-    const { config } = await loadConfig();
+    const config = await loadConfig();
     const backlogPathRaw = args?.backlogPath ?? args?.backlog_path ?? args?.path ?? '';
     const backlogPathArg = normalizeString(backlogPathRaw);
 
     if (toolName === 'task_list') {
-      const { tasks, files } = await loadBacklogIndex(root, backlogPathArg);
       const filters = args && typeof args === 'object' ? args : {};
+      const { tasks, files } = await loadBacklogIndex(root, backlogPathArg);
       let taskList = tasks;
-      if (backlogPathArg) {
-        const sourcePath = resolveBacklogPath(root, backlogPathArg);
-        await refreshBacklogFile(sourcePath);
-        const entry = await loadBacklogFile(sourcePath);
-        const fileTasks = Array.isArray(entry?.tasks) ? entry.tasks : [];
-        taskList = decorateTasks(fileTasks, sourcePath);
-      }
       if (filters.__debug === true) {
         let fileInfo = {};
         try {
-          const stat = fsSync.statSync(backlogPathArg);
+          const debugPath = resolveBacklogPath(root, backlogPathArg);
+          const stat = fsSync.statSync(debugPath);
           fileInfo = {
             exists: true,
             size: Number(stat.size) || 0,
             mtimeMs: Number(stat.mtimeMs) || 0
           };
-          const preview = fsSync.readFileSync(backlogPathArg, 'utf8');
+          const preview = fsSync.readFileSync(debugPath, 'utf8');
           fileInfo.preview = preview.slice(0, 200);
         } catch (error) {
           fileInfo = { exists: false, error: String(error?.message || error) };
-        }
-        let loadedCount = null;
-        try {
-          const debugPath = backlogPathArg ? resolveBacklogPath(root, backlogPathArg) : backlogPathArg;
-          await refreshBacklogFile(debugPath);
-          const entry = await loadBacklogFile(debugPath);
-          loadedCount = Array.isArray(entry?.tasks) ? entry.tasks.length : null;
-        } catch (error) {
-          loadedCount = { error: String(error?.message || error) };
         }
         writeJson({
           ok: false,
@@ -503,9 +433,8 @@ async function main() {
             backlogPathArg,
             workspaceRoot: getWorkspaceRoot(),
             repoPath: normalizeString(args?.repoPath),
-            achillesBacklogIO: resolveAchillesBacklogPath(),
             backlogFile: fileInfo,
-            loadedTaskCount: loadedCount,
+            loadedTaskCount: Array.isArray(taskList) ? taskList.length : null,
             fileCount: Array.isArray(files) ? files.length : null,
             root
           }
@@ -529,10 +458,7 @@ async function main() {
         return;
       }
       const historyPath = resolveHistoryPath(root, backlogPathArg);
-      const sourcePath = historyPath.replace(/\.history$/i, '.backlog');
-      await refreshBacklogFile(sourcePath);
-      const entry = await loadBacklogFile(sourcePath);
-      const historyTasks = Array.isArray(entry?.history) ? entry.history : [];
+      const historyTasks = await readMarkdownFile(historyPath, { history: true });
       const decorated = decorateHistoryTasks(historyTasks, historyPath);
       const query = normalizeString(args?.q);
       let filtered = decorated;
@@ -553,11 +479,9 @@ async function main() {
         return;
       }
       const sourcePath = resolveBacklogPath(root, backlogPathArg);
-      await loadTasksCached(sourcePath);
-      const entry = await loadBacklogFile(sourcePath);
-      const fileTasks = entry?.tasks || [];
-      const index = parseTaskIndex(id);
-      if (index === null || index >= fileTasks.length) {
+      const fileTasks = await readMarkdownFile(sourcePath);
+      const index = findTaskIndexById(fileTasks, id);
+      if (index < 0) {
         writeJson({ ok: false, error: `Task not found: ${id}` });
         return;
       }
@@ -583,18 +507,23 @@ async function main() {
       }).filter((option) => option.trim());
       const resolution = normalizeString(args?.resolution);
       const task = normalizeTask({
+        id: '',
         description,
         options,
         resolution
       });
       const targetPath = resolveBacklogPath(root, backlogPathArg);
+      const historyPath = getHistoryPathFromBacklog(targetPath);
       await ensureBacklogFile(targetPath);
-      await loadTasksCached(targetPath);
-      const entry = await loadBacklogFile(targetPath);
-      entry.tasks.push(task);
-      await saveBacklogFile(targetPath, { tasks: entry.tasks });
-      await maybeForceSave(targetPath, args);
-      writeJson({ ok: true, task: decorateTask(task, targetPath, entry.tasks.length - 1) });
+      await ensureHistoryFile(historyPath);
+      const fileTasks = await readMarkdownFile(targetPath);
+      const nextTask = normalizeTask({
+        ...task,
+        id: createNextTaskId(fileTasks)
+      });
+      fileTasks.push(nextTask);
+      await writeBacklogTasks(targetPath, fileTasks);
+      writeJson({ ok: true, task: decorateTask(nextTask, targetPath, fileTasks.length - 1) });
       return;
     }
 
@@ -606,15 +535,30 @@ async function main() {
         return;
       }
       const sourcePath = resolveBacklogPath(root, backlogPathArg);
-      await loadTasksCached(sourcePath);
-      const entry = await loadBacklogFile(sourcePath);
-      const fileTasks = entry?.tasks || [];
-      const taskIndex = parseTaskIndex(id);
-      if (taskIndex === null || taskIndex >= fileTasks.length) {
+      const historyPath = getHistoryPathFromBacklog(sourcePath);
+      await ensureHistoryFile(historyPath);
+      const fileTasks = await readMarkdownFile(sourcePath);
+      const historyTasks = await readMarkdownFile(historyPath, { history: true });
+      const taskIndex = findTaskIndexById(fileTasks, id);
+      if (taskIndex < 0) {
         writeJson({ ok: false, error: `Task not found: ${id}` });
         return;
       }
       const task = fileTasks[taskIndex];
+      const currentDecorated = decorateTask(task, sourcePath, taskIndex);
+      const ifMatch = normalizeString(args?.ifMatch);
+      if (ifMatch && ifMatch !== normalizeString(currentDecorated.taskHash) && args?.force !== true) {
+        writeJson({
+          ok: false,
+          error: 'Task conflict detected.',
+          data: {
+            conflict: {
+              current: currentDecorated
+            }
+          }
+        });
+        return;
+      }
       if (args?.description !== undefined) task.description = normalizeString(args.description);
       if (args?.options !== undefined) {
         const rawOptions = Array.isArray(args.options) ? args.options : [];
@@ -635,26 +579,20 @@ async function main() {
       if (args?.status === 'done') {
         const resolved = normalizeString(task.resolution);
         const historyTask = normalizeTask({
+          id: task.id,
           description: task.description,
           options: [],
           resolution: resolved || 'Executed.'
         });
-        const history = Array.isArray(entry.history) ? entry.history : [];
-        history.push(historyTask);
+        historyTasks.push(historyTask);
         fileTasks.splice(taskIndex, 1);
-        if (entry) {
-          entry.tasks = fileTasks;
-          entry.history = history;
-        }
-        await saveBacklogFile(sourcePath, { tasks: fileTasks, history });
-        await maybeForceSave(sourcePath, args);
+        await writeBacklogTasks(sourcePath, fileTasks);
+        await writeHistoryTasks(historyPath, historyTasks);
         writeJson({ ok: true, done: true });
         return;
       }
       fileTasks[taskIndex] = normalizeTask(task);
-      if (entry) entry.tasks = fileTasks;
-      await saveBacklogFile(sourcePath, { tasks: fileTasks });
-      await maybeForceSave(sourcePath, args);
+      await writeBacklogTasks(sourcePath, fileTasks);
       writeJson({ ok: true, task: decorateTask(fileTasks[taskIndex], sourcePath, taskIndex) });
       return;
     }
@@ -667,19 +605,15 @@ async function main() {
         return;
       }
       const sourcePath = resolveBacklogPath(root, backlogPathArg);
-      await loadTasksCached(sourcePath);
-      const entry = await loadBacklogFile(sourcePath);
-      const fileTasks = entry?.tasks || [];
-      const index = parseTaskIndex(id);
-      if (index === null || index >= fileTasks.length) {
+      const fileTasks = await readMarkdownFile(sourcePath);
+      const index = findTaskIndexById(fileTasks, id);
+      if (index < 0) {
         writeJson({ ok: false, error: `Task not found: ${id}` });
         return;
       }
       const next = [...fileTasks];
       next.splice(index, 1);
-      if (entry) entry.tasks = next;
-      await saveBacklogFile(sourcePath, { tasks: next });
-      await maybeForceSave(sourcePath, args);
+      await writeBacklogTasks(sourcePath, next);
       writeJson({ ok: true, deleted: id });
       return;
     }
@@ -695,23 +629,19 @@ async function main() {
         return;
       }
       const sourcePath = resolveBacklogPath(root, backlogPathArg);
-      await loadTasksCached(sourcePath);
-      const entry = await loadBacklogFile(sourcePath);
-      const fileTasks = entry?.tasks || [];
-      const byIdMap = new Map(fileTasks.map((task, index) => [String(index + 1), task]));
-      const orderSet = new Set(order.map((rawId) => String(rawId || '').trim()).filter(Boolean));
+      const fileTasks = await readMarkdownFile(sourcePath);
+      const byIdMap = new Map(fileTasks.map((task) => [normalizeString(task?.id).toUpperCase(), task]));
+      const orderSet = new Set(order.map((rawId) => String(rawId || '').trim().toUpperCase()).filter(Boolean));
       const next = [];
       for (const rawId of order) {
-        const id = String(rawId || '').trim();
+        const id = String(rawId || '').trim().toUpperCase();
         const task = byIdMap.get(id);
         if (task) next.push(task);
       }
       for (const [id, task] of byIdMap.entries()) {
         if (!orderSet.has(id)) next.push(task);
       }
-      if (entry) entry.tasks = next;
-      await saveBacklogFile(sourcePath, { tasks: next });
-      await maybeForceSave(sourcePath, args);
+      await writeBacklogTasks(sourcePath, next);
       writeJson({ ok: true, tasks: decorateTasks(next, sourcePath) });
       return;
     }

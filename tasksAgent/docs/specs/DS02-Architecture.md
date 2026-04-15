@@ -10,9 +10,9 @@ The architecture boundary starts at Model Context Protocol (MCP) tool invocation
 
 ## Architecture Shape
 
-The architecture is organized into contract, wrapper, dispatch, backlog-IO, and plugin-integration layers.
+The architecture is organized into contract, wrapper, dispatch, markdown-persistence, and plugin-integration layers.
 
-The contract layer declares tools in `mcp-config.json`. The wrapper layer executes `tools/tasks_tool.sh` for each call. The dispatch layer in `tasks_tool.mjs` parses envelopes, normalizes input, and routes tool handlers. The backlog-IO layer relies on Achilles BacklogManager operations for load, refresh, save, and force-save semantics. The plugin-integration layer exposes Explorer UI extension artifacts through `IDE-plugins/tasks-tool-button`.
+The contract layer declares tools in `mcp-config.json`. The wrapper layer executes `tools/tasks_tool.sh` for each call. The dispatch layer in `tasks_tool.mjs` parses envelopes, normalizes input, and routes tool handlers. The markdown-persistence layer in `tools/backlog_markdown.mjs` parses and serializes `.backlog` and `.history` files. The plugin-integration layer exposes Explorer UI extension artifacts through `IDE-plugins/tasks-tool-button`.
 
 ## Architectural Requirements
 
@@ -24,7 +24,7 @@ Requirement A3: tool resolution shall be explicit and fail on unsupported tool n
 
 Requirement A4: repository-root and path-extension validation shall execute before file operations.
 
-Requirement A5: task mutation flows shall route through backlog persistence functions and return serialized outcomes.
+Requirement A5: task mutation flows shall route through the shared Markdown persistence functions and return serialized outcomes.
 
 Requirement A6: Explorer integration shall call MCP tools and shall not embed private backlog runtime operations.
 

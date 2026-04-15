@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>tasksAssistant Docs - Tool Execution Workflow</title>
+    <title>tasksAgent Docs - Tool Execution Workflow</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -11,7 +11,7 @@
 
     <main class="content content--with-sidebar">
         <div class="doc-layout">
-            <aside class="doc-sidebar" aria-label="tasksAssistant documentation navigation">
+            <aside class="doc-sidebar" aria-label="tasksAgent documentation navigation">
                 <div class="doc-sidebar__group">
                     <p class="doc-sidebar__group-title">Documentation</p>
                     <nav>
@@ -57,7 +57,7 @@ tasksAgent/tools/tasks_tool.mjs
     | resolve repo root from repoPath
     | validate backlog/history path constraints
     | execute task operation
-    | refresh/save/forceSave backlog state
+    | parse or serialize backlog/history markdown
     v
 JSON result -> MCP response -> Explorer user interface</code></pre>
                 </section>
@@ -70,14 +70,14 @@ JSON result -> MCP response -> Explorer user interface</code></pre>
                         <li><strong>Root resolution:</strong> repo root is validated through <code>repoPath</code> and workspace-root env variables.</li>
                         <li><strong>Path policy:</strong> <code>backlogPath</code> and <code>historyPath</code> are validated to stay inside repo root and required extensions.</li>
                         <li><strong>Operation logic:</strong> task list/get/create/update/delete/reorder/history flows are applied.</li>
-                        <li><strong>Persistence:</strong> backlog data is refreshed and saved, with optional force-save behavior where configured.</li>
+                        <li><strong>Persistence:</strong> `.backlog` and `.history` files are parsed and serialized as Markdown, with persisted task ids and document-order task ordering.</li>
                         <li><strong>Response emission:</strong> outputs are serialized as JSON; failures are returned as <code>ok: false</code> payloads.</li>
                     </ol>
                 </section>
 
                 <section>
                     <h2>Operational Notes</h2>
-                    <p>The dispatcher keeps invocation state isolated per request while using backlog IO caching and refresh logic for consistency with on-disk changes. This keeps operations predictable for concurrent Explorer interactions.</p>
+                    <p>The dispatcher keeps invocation state isolated per request while reading and writing task records through one Markdown persistence layer. This keeps operations predictable for concurrent Explorer interactions and keeps the file format human-readable.</p>
                     <div class="doc-callout">
                         <p>Path safety and explicit operation contracts are enforced before any backlog mutation is persisted.</p>
                     </div>

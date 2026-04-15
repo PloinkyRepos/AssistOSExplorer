@@ -10,6 +10,13 @@
             <label class="form-label" for="backlogModalDescription">Description</label>
             <textarea id="backlogModalDescription" class="form-input" rows="4" spellcheck="false"></textarea>
         </div>
+        <div class="modal-options form-item">
+            <div class="modal-options-header">
+                <label class="form-label">Options</label>
+                <button type="button" class="general-button subtle-button" data-local-action="addOption">Add option</button>
+            </div>
+            <div id="backlogModalOptionsList" class="modal-options-list"></div>
+        </div>
     </div>
     <div class="modal-actions">
         <button type="button" class="general-button" data-local-action="createTask">Create</button>

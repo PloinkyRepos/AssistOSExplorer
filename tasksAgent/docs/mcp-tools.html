@@ -69,12 +69,12 @@
 
                 <section>
                     <h2>Common Input Rules</h2>
-                    <p><code>repoPath</code> is required and must resolve to an existing absolute directory. <code>backlogPath</code> must be absolute, must stay inside <code>repoPath</code>, and must end in <code>.backlog</code>, while history listing applies parallel <code>.history</code> constraints. Mutation contracts can include <code>forceSave</code> controls where declared.</p>
+                    <p><code>repoPath</code> is required and must resolve to an existing absolute directory. <code>backlogPath</code> must be absolute, must stay inside <code>repoPath</code>, and must end in <code>.backlog</code>, while history listing applies parallel <code>.history</code> constraints. The file content is Markdown, not JSON, and each task keeps a persisted task id.</p>
                 </section>
 
                 <section>
                     <h2>Execution Characteristics</h2>
-                    <p>Each call is process-isolated and envelope-normalized before execution. Backlog content can be refreshed from disk to prevent stale reads, and failures always return explicit JSON payloads instead of silent success states.</p>
+                    <p>Each call is process-isolated and envelope-normalized before execution. Backlog and history content are parsed directly from Markdown on disk, and failures always return explicit JSON payloads instead of silent success states.</p>
                 </section>
             </div>
         </div>

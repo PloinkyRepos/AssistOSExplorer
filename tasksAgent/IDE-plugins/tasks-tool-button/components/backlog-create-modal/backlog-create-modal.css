@@ -15,6 +15,55 @@
     grid-column: 1 / -1;
 }
 
+.backlog-create-modal .modal-options {
+    grid-column: 1 / -1;
+}
+
+.backlog-create-modal .modal-options-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.backlog-create-modal .modal-options-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.backlog-create-modal .modal-option-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px;
+    border: 1px solid var(--border-color, #d7dce5);
+    border-radius: 10px;
+    background: var(--surface-2, #f7f8fb);
+}
+
+.backlog-create-modal .modal-option-item-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.backlog-create-modal .modal-option-label {
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.backlog-create-modal .modal-option-remove {
+    align-self: flex-end;
+}
+
+.backlog-create-modal .modal-options-empty {
+    color: var(--text-secondary, #6d7481);
+    font-size: 0.9rem;
+}
+
 @media (max-width: 720px) {
     .backlog-create-modal {
         min-width: 0;

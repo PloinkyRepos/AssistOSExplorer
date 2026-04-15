@@ -172,9 +172,15 @@ export class TasksToolButton {
 
             const fileName = rawName.endsWith('.backlog') ? rawName : `${rawName}.backlog`;
             const backlogPath = host.joinPath(currentFolder, fileName);
+            const initialBacklog = [
+                '# Backlog',
+                '',
+                '## Tasks',
+                ''
+            ].join('\n');
 
             try {
-                await host.tooling.writeFile(backlogPath, JSON.stringify([], null, 2));
+                await host.tooling.writeFile(backlogPath, initialBacklog);
                 host.bumpWorkspaceVersion?.();
             } catch {
                 host.showStatus?.('Failed to create backlog file in current folder.', true);

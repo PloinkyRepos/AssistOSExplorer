@@ -195,7 +195,7 @@ export class BacklogPanel {
         }
     }
 
-    async loadTasks() {
+    async loadTasks(options = {}) {
         if (!this.repoPath) return;
         if (!this.backlogPath) {
             this.setError('Select a .backlog or .history file to load tasks.');
@@ -217,8 +217,23 @@ export class BacklogPanel {
                 args.backlogPath = this.backlogPath;
             }
             const toolName = this.isHistory ? 'task_history_list' : 'task_list';
+            const selectedTaskId = String(
+                options.selectedTaskId
+                || this.state.tasks?.[this.state.currentIndex]?.id
+                || ''
+            ).trim();
             const payload = await this.callTasksTool(toolName, { ...args, repoPath: this.repoPath });
             this.state.tasks = Array.isArray(payload?.tasks) ? payload.tasks : [];
+            if (selectedTaskId && Array.isArray(this.state.tasks) && this.state.tasks.length) {
+                const nextIndex = this.state.tasks.findIndex((task) => String(task?.id || '').trim() === selectedTaskId);
+                if (nextIndex >= 0) {
+                    this.state.currentIndex = nextIndex;
+                } else if (this.state.currentIndex >= this.state.tasks.length) {
+                    this.state.currentIndex = Math.max(0, this.state.tasks.length - 1);
+                }
+            } else if (this.state.currentIndex >= this.state.tasks.length) {
+                this.state.currentIndex = Math.max(0, this.state.tasks.length - 1);
+            }
             this.clearError();
             this.renderTasks();
         } catch (error) {
@@ -496,6 +511,11 @@ export class BacklogPanel {
             description,
             repoPath: this.repoPath
         };
+        if (Array.isArray(payload.options)) {
+            request.options = payload.options
+                .map((option) => String(option || '').trim())
+                .filter(Boolean);
+        }
         if (this.backlogPath) {
             request.backlogPath = this.backlogPath;
         }
@@ -539,6 +559,7 @@ export class BacklogPanel {
             backlogPath: payload.sourcePath || this.backlogPath || '',
             repoPath: this.repoPath
         };
+        const selectedTaskId = String(payload?.id || '').trim();
         const silent = Boolean(payload?.silent);
         const runUpdate = async () => {
             try {
@@ -547,6 +568,9 @@ export class BacklogPanel {
                     const index = this.state.tasks.findIndex((task) => task?.id === result.task.id);
                     if (index >= 0) {
                         this.state.tasks[index] = result.task;
+                        if (this.state.currentIndex === index) {
+                            this.renderTasks();
+                        }
                     }
                 }
             } catch (error) {
@@ -567,7 +591,7 @@ export class BacklogPanel {
         }
         await withGlobalLoader(async () => {
             await runUpdate();
-            await this.loadTasks();
+            await this.loadTasks({ selectedTaskId });
         });
     }
 
@@ -586,8 +610,9 @@ export class BacklogPanel {
             return;
         }
         await withGlobalLoader(async () => {
+            let nextSelectedTaskId = String(id).trim();
             try {
-                await this.callTasksTool('task_update', {
+                const result = await this.callTasksTool('task_update', {
                     id,
                     status,
                     description: payload.description,
@@ -596,6 +621,23 @@ export class BacklogPanel {
                     backlogPath: payload.sourcePath || this.backlogPath || '',
                     repoPath: this.repoPath
                 });
+                if (result?.task && Array.isArray(this.state.tasks)) {
+                    const index = this.state.tasks.findIndex((task) => task?.id === result.task.id);
+                    if (index >= 0) {
+                        this.state.tasks[index] = result.task;
+                        this.state.currentIndex = index;
+                        this.renderTasks();
+                    }
+                } else if (status === 'done' && Array.isArray(this.state.tasks)) {
+                    const index = this.state.tasks.findIndex((task) => task?.id === id);
+                    if (index >= 0) {
+                        this.state.tasks.splice(index, 1);
+                        const fallbackTask = this.state.tasks[index] || this.state.tasks[index - 1] || null;
+                        nextSelectedTaskId = String(fallbackTask?.id || '').trim();
+                        this.state.currentIndex = Math.max(0, Math.min(index, this.state.tasks.length - 1));
+                        this.renderTasks();
+                    }
+                }
             } catch (error) {
                 if (error?.data?.conflict) {
                     await this.handleTaskConflict(error.data.conflict, payload);
@@ -603,7 +645,7 @@ export class BacklogPanel {
                 }
                 throw error;
             }
-            await this.loadTasks();
+            await this.loadTasks({ selectedTaskId: nextSelectedTaskId });
         });
     }
 
@@ -696,8 +738,8 @@ export class BacklogPanel {
             const raw = await callExplorerTool('read_text_file', { path: this.backlogPath }, { raw: true });
             const parsed = parseToolResult(raw) || {};
             const text = typeof parsed.text === 'string' ? parsed.text : '';
-            const fileName = (String(this.backlogPath).split('/').pop() || 'history').replace(/\.history$/i, '') + '.history.json';
-            const blob = new Blob([text], { type: 'application/json' });
+            const fileName = String(this.backlogPath).split('/').pop() || 'history.history';
+            const blob = new Blob([text], { type: 'text/markdown' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
