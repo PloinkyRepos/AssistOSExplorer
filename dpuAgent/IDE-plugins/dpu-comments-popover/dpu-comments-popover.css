@@ -1,11 +1,12 @@
 :host {
     position: absolute;
-    top: 16px;
-    right: 16px;
+    top: var(--space-md);
+    right: var(--space-md);
     z-index: 4;
-    width: min(440px, calc(100% - 32px));
-    max-height: calc(100% - 32px);
+    width: min(440px, calc(100% - var(--space-xl)));
+    max-height: calc(100% - var(--space-xl));
     color: var(--text);
+    font-family: var(--default-font), "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
 }
 
 :host([hidden]) {
@@ -17,9 +18,9 @@
     flex-direction: column;
     min-height: 0;
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: var(--radius-xl);
     background: var(--surface);
-    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.16);
+    box-shadow: var(--shadow-lg);
     overflow: hidden;
 }
 
@@ -27,30 +28,32 @@
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    gap: 12px;
-    padding: 12px 14px;
+    gap: var(--space-md);
+    padding: var(--space-md) var(--space-lg);
     border-bottom: 1px solid var(--border);
-    background: color-mix(in srgb, var(--surface) 82%, var(--bg) 18%);
+    background: var(--file-exp-subtle-surface);
 }
 
 .heading {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--space-xs);
     min-width: 0;
 }
 
 .title {
-    font-size: 0.9rem;
-    font-weight: 700;
+    font-size: var(--font-base);
+    font-weight: var(--font-bold);
     color: var(--text);
     letter-spacing: 0.01em;
+    line-height: var(--line-normal);
 }
 
 .subtitle {
     color: var(--text-soft);
-    font-size: 0.78rem;
-    line-height: 1.4;
+    font-size: var(--font-sm);
+    line-height: var(--line-normal);
+    font-weight: var(--font-regular);
 }
 
 .close-button {
@@ -59,17 +62,18 @@
     justify-content: center;
     width: 28px;
     height: 28px;
-    margin-top: 2px;
+    margin-top: var(--space-xs);
     border: none;
-    border-radius: 8px;
+    border-radius: var(--radius-md);
     background: transparent;
     cursor: pointer;
     opacity: 0.78;
+    transition: opacity var(--transition-base) ease, background-color var(--transition-base) ease;
 }
 
 .close-button:hover {
     opacity: 1;
-    background: color-mix(in srgb, var(--border) 65%, transparent);
+    background: var(--file-exp-subtle-surface);
 }
 
 .close-button:focus-visible {
@@ -80,7 +84,7 @@
 .close-glyph {
     display: block;
     font-size: 18px;
-    line-height: 1;
+    line-height: var(--line-tight);
     color: var(--text-soft);
 }
 
@@ -88,39 +92,42 @@
     min-height: 0;
     max-height: min(380px, calc(100vh - 280px));
     overflow: auto;
-    padding: 12px 14px;
+    padding: var(--space-md) var(--space-lg);
 }
 
 .comments-list {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: var(--space-md);
 }
 
 .comment-row {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    padding: 12px 14px;
+    gap: var(--space-sm);
+    padding: var(--space-md) var(--space-lg);
     border: 1px solid var(--border);
-    border-radius: 12px;
-    background: color-mix(in srgb, var(--surface) 78%, var(--bg) 22%);
+    border-radius: var(--radius-xl);
+    background: var(--file-exp-subtle-surface);
+    transition: border-color var(--transition-base) ease, box-shadow var(--transition-base) ease;
 }
 
 .comment-meta {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
+    gap: var(--space-md);
     flex-wrap: wrap;
     color: var(--text-soft);
-    font-size: 0.78rem;
+    font-size: var(--font-sm);
+    font-weight: var(--font-regular);
+    line-height: var(--line-normal);
 }
 
 .comment-author-row {
     display: inline-flex;
     align-items: center;
-    gap: 10px;
+    gap: var(--space-sm);
     min-width: 0;
 }
 
@@ -131,16 +138,19 @@
     width: 28px;
     height: 28px;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    background: rgba(37, 99, 235, 0.1);
     color: var(--accent);
-    font-size: 0.8rem;
-    font-weight: 700;
+    font-size: var(--font-sm);
+    font-weight: var(--font-bold);
+    line-height: var(--line-normal);
 }
 
 .comment-author {
-    font-weight: 700;
+    font-weight: var(--font-bold);
     color: var(--text);
     overflow-wrap: anywhere;
+    font-size: var(--font-base);
+    line-height: var(--line-normal);
 }
 
 .comment-date {
@@ -150,7 +160,9 @@
 .comment-message {
     white-space: pre-wrap;
     color: var(--text);
-    line-height: 1.5;
+    line-height: var(--line-relaxed);
+    font-size: var(--font-base);
+    font-weight: var(--font-regular);
 }
 
 .comment-actions {
@@ -160,43 +172,50 @@
 
 .empty {
     color: var(--text-soft);
-    font-size: 0.88rem;
-    padding: 16px;
+    font-size: var(--font-base);
+    padding: var(--space-md);
     border: 1px dashed var(--border);
-    border-radius: 12px;
-    background: color-mix(in srgb, var(--surface) 74%, var(--bg) 26%);
+    border-radius: var(--radius-xl);
+    background: var(--file-exp-subtle-surface);
+    font-weight: var(--font-regular);
+    line-height: var(--line-normal);
 }
 
 .composer {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    padding: 12px 14px 14px;
+    gap: var(--space-sm);
+    padding: var(--space-md) var(--space-lg) var(--space-lg);
     border-top: 1px solid var(--border);
-    background: color-mix(in srgb, var(--surface) 88%, var(--bg) 12%);
+    background: var(--file-exp-subtle-surface);
 }
 
 .composer-label {
-    font-size: 0.8rem;
-    font-weight: 700;
+    font-size: var(--font-sm);
+    font-weight: var(--font-bold);
     color: var(--text-soft);
+    line-height: var(--line-normal);
 }
 
 .composer-textarea {
     min-height: 104px;
     resize: vertical;
-    padding: 10px 12px;
+    padding: var(--space-sm) var(--space-md);
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius-lg);
     background: var(--bg);
     color: var(--text);
     font: inherit;
-    line-height: 1.45;
+    line-height: var(--line-relaxed);
+    font-size: var(--font-base);
+    font-weight: var(--font-regular);
+    transition: border-color var(--transition-base) ease, box-shadow var(--transition-base) ease, background-color var(--transition-base) ease;
 }
 
 .composer-textarea:focus-visible {
     outline: 2px solid var(--accent);
-    outline-offset: 1px;
+    outline-offset: 2px;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
 .composer-actions {
@@ -207,18 +226,18 @@
 .general-button {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 8px 14px;
-    font-size: 0.95rem;
-    font-weight: 600;
-    line-height: 1;
+    gap: var(--space-xs);
+    padding: var(--space-sm) var(--space-md);
+    font-size: var(--font-base);
+    font-weight: var(--font-medium);
+    line-height: var(--line-tight);
     font-family: inherit;
     color: #fff;
     background: var(--accent);
     border: none;
-    border-radius: 8px;
+    border-radius: var(--radius-md);
     cursor: pointer;
-    transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+    transition: transform var(--transition-base) ease, box-shadow var(--transition-base) ease, background-color var(--transition-base) ease, border-color var(--transition-base) ease;
 }
 
 .general-button.secondary {
@@ -229,12 +248,12 @@
 
 .general-button:hover:not(:disabled) {
     transform: translateY(-1px);
-    box-shadow: 0 10px 18px rgba(37, 99, 235, 0.28);
+    box-shadow: var(--shadow-lg);
 }
 
 .general-button.secondary:hover:not(:disabled) {
     background-color: var(--border);
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--shadow-sm);
 }
 
 .general-button:disabled,
