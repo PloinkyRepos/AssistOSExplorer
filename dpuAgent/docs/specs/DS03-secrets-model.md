@@ -30,10 +30,13 @@ Secret keys are normalized through `normalizeSecretKey()`. The current implement
 Secret roles are:
 
 - `access`
+- `write-access`
 - `read`
 - `write`
 
-These roles are not equivalent. An actor with `access` can be authorized operationally without seeing the plaintext value. An actor with `read` can see the value. An actor with `write` can update the value and inspect access control list details.
+These roles are not equivalent. An actor with `access` can be authorized operationally without seeing the plaintext value. An actor with `write-access` can update the value without seeing the current value. An actor with `read` can see the value. An actor with `write` can update the value, see the value, and inspect access control list details.
+
+When a new secret is created, the creator automatically receives the `write-access` role for that secret.
 
 ## Practical Operation
 

@@ -1,10 +1,11 @@
-const SECRET_ROLES = ['access', 'read', 'write'];
+const SECRET_ROLES = ['access', 'write-access', 'read', 'write'];
 const CONFIDENTIAL_ROLES = ['access', 'read', 'comment', 'write'];
 const ROLE_DESCRIPTIONS = Object.freeze({
     secret: {
         access: 'Can reference and use the secret operationally, without seeing its value.',
+        'write-access': 'Can update the secret value without seeing the current value.',
         read: 'Can view the secret value in the UI.',
-        write: 'Can update the secret value and manage its usage.'
+        write: 'Can update the secret value, view it, and manage its usage.'
     },
     confidential: {
         access: 'Can see that the item exists and access its record, without viewing content.',
@@ -178,6 +179,12 @@ export class DpuPermissionsModal {
         this.principalInput.addEventListener('blur', () => {
             window.setTimeout(() => this.hideIdentitySuggestions(), 120);
         });
+
+        if (this.roleSelect) {
+            this.roleSelect.addEventListener('change', () => {
+                this.grantPermission();
+            });
+        }
     }
 
     getRoleOptions() {
@@ -256,22 +263,16 @@ export class DpuPermissionsModal {
         const roleOptions = this.getRoleOptions();
         this.listEl.innerHTML = this.state.acl.map((entry) => `
             <div class="dpu-permissions-row">
-                <div class="dpu-permissions-info">
-                    <div class="dpu-permissions-principal">${escapeHtml(entry.principal)}</div>
-                    ${canManage ? `
-                        <label class="dpu-permissions-inline-editor">
-                            <span>Role</span>
-                            <select class="dpu-permissions-inline-role" ${this.state.busy ? 'disabled' : ''}>
-                                ${roleOptions.map((role) => `
-                                    <option value="${role}" ${role === entry.role ? 'selected' : ''}>${role}</option>
-                                `).join('')}
-                            </select>
-                        </label>
-                    ` : `
-                        <div class="dpu-permissions-role">Role: ${escapeHtml(entry.role)}</div>
-                    `}
-                </div>
+                <div class="dpu-permissions-principal">${escapeHtml(entry.principal)}</div>
                 ${canManage ? `
+                    <label class="dpu-permissions-inline-editor">
+                        <span>Role</span>
+                        <select class="dpu-permissions-inline-role" ${this.state.busy ? 'disabled' : ''}>
+                            ${roleOptions.map((role) => `
+                                <option value="${role}" ${role === entry.role ? 'selected' : ''}>${role}</option>
+                            `).join('')}
+                        </select>
+                    </label>
                     <div class="dpu-permissions-row-actions">
                         <button
                             type="button"
@@ -290,7 +291,9 @@ export class DpuPermissionsModal {
                             Revoke
                         </button>
                     </div>
-                ` : ''}
+                ` : `
+                    <div class="dpu-permissions-role">Role: ${escapeHtml(entry.role)}</div>
+                `}
             </div>
         `).join('');
     }
@@ -424,8 +427,8 @@ export class DpuPermissionsModal {
         });
         if (!canManage) {
             this.setStatus(
-                this.state.role === 'write'
-                    ? 'You can view current access because you have write, but only the owner can change permissions.'
+                (this.state.role === 'write' || this.state.role === 'write-access')
+                    ? 'You can view current access because you have write access, but only the owner can change permissions.'
                     : 'Only the owner can grant or revoke permissions.',
                 ''
             );

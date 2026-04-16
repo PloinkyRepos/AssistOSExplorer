@@ -89,7 +89,7 @@
     {
       "name": "dpu_secret_grant",
       "title": "DPU Secret Grant",
-      "description": "Grant Access, Read, or Write on a secret.",
+      "description": "Grant Access, Write-Access, Read, or Write on a secret.",
       "command": "tools/dpu_tool.sh",
       "cwd": "workspace",
       "inputSchema": {
@@ -104,7 +104,7 @@
         "role": {
           "type": "string",
           "optional": false,
-          "enum": ["access", "read", "write"]
+          "enum": ["access", "write-access", "read", "write"]
         }
       },
       "env": {

@@ -15,23 +15,25 @@
 
     <div class="dpu-permissions-section" id="dpuPermissionsGrantSection">
         <div class="dpu-permissions-section-title">Grant access</div>
-        <form class="dpu-permissions-form" id="dpuPermissionsForm">
-            <label class="dpu-permissions-field">
-                <span>User</span>
-                <div class="dpu-permissions-picker">
-                    <input id="dpuPermissionPrincipal" type="text" autocomplete="off" spellcheck="false" placeholder="Search user by name or username">
-                    <div class="dpu-permissions-picker-list hidden" id="dpuPermissionSuggestions" role="listbox" aria-label="User suggestions"></div>
-                </div>
-            </label>
-            <label class="dpu-permissions-field">
-                <span>Role</span>
-                <select id="dpuPermissionRole"></select>
-            </label>
+        <div class="dpu-permissions-form" id="dpuPermissionsForm">
+            <div class="dpu-permissions-form-row">
+                <label class="dpu-permissions-field dpu-permissions-user-field">
+                    <span>User</span>
+                    <div class="dpu-permissions-picker">
+                        <input id="dpuPermissionPrincipal" type="text" autocomplete="off" spellcheck="false" placeholder="Search user by name or username">
+                        <div class="dpu-permissions-picker-list hidden" id="dpuPermissionSuggestions" role="listbox" aria-label="User suggestions"></div>
+                    </div>
+                </label>
+                <label class="dpu-permissions-field dpu-permissions-role-field">
+                    <span>Role</span>
+                    <select id="dpuPermissionRole"></select>
+                </label>
+                <button type="button" class="general-button" data-local-action="grantPermission">Grant</button>
+            </div>
             <div class="dpu-permissions-legend" id="dpuPermissionsLegend"></div>
             <div class="modal-actions">
-                <button type="button" class="general-button" data-local-action="grantPermission">Grant</button>
                 <button type="button" class="gray-button" data-local-action="closeModal">Close</button>
             </div>
-        </form>
+        </div>
     </div>
 </div>

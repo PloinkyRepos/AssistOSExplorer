@@ -10,7 +10,7 @@ import {
   resolvePrincipalFromManifest
 } from './permissions-manifest.mjs';
 
-export const SECRET_ROLE_ORDER = ['access', 'read', 'write'];
+export const SECRET_ROLE_ORDER = ['access', 'write-access', 'read', 'write'];
 export const CONFIDENTIAL_ROLE_ORDER = ['access', 'read', 'comment', 'write'];
 
 export function cloneAcl(input) {
@@ -38,6 +38,14 @@ export function roleAllows(role, requiredRole, roleOrder) {
 
 export function secretRoleAllows(role, requiredRole) {
   if (requiredRole === 'comment') {
+    return false;
+  }
+  // write-access can perform write operations but not read operations
+  if (role === 'write-access' && requiredRole === 'write') {
+    return true;
+  }
+  // write-access cannot read
+  if (role === 'write-access' && requiredRole === 'read') {
     return false;
   }
   return roleAllows(role, requiredRole, SECRET_ROLE_ORDER);

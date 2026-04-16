@@ -165,7 +165,7 @@ function getSecretRole(secret, actorOrPrincipal, permissionsManifest) {
     ? canonicalizePrincipal(actorOrPrincipal.principalId)
     : canonicalizePrincipal(actorOrPrincipal);
   if (!secret || !normalizedPrincipalId) return null;
-  if (secret.ownerId === normalizedPrincipalId) return 'write';
+  if (secret.ownerId === normalizedPrincipalId) return 'write-access';
   const aclMap = getSecretAclMap(secret, permissionsManifest);
   const matchedRoles = buildActorPrincipalCandidates(actorOrPrincipal)
     .map((principal) => aclMap?.[principal])
