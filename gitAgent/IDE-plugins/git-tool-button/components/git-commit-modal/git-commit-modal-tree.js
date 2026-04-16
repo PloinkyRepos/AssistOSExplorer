@@ -56,7 +56,8 @@ export function renderRepoChangesTree(repo, {
     isFileSelected,
     getAncestorCoveringPrefix,
     getCoveringPrefix,
-    isFolderExpanded
+    isFolderExpanded,
+    initialDepth = 1
 } = {}) {
     const ignoredPaths = toArray(repo?.ignored);
     const ignoredHints = toArray(repo?.ignoredHints);
@@ -399,6 +400,6 @@ export function renderRepoChangesTree(repo, {
     };
 
     const tree = buildTree(rows);
-    root.appendChild(renderNode(tree, 1, ''));
+    root.appendChild(renderNode(tree, Number.isFinite(initialDepth) ? initialDepth : 1, ''));
     return root;
 }

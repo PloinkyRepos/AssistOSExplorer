@@ -183,7 +183,7 @@ export function isReposRootPath(candidate, reposRoot) {
 export function isAgentRepoPath(candidate) {
     const normalized = normalizeSlashes(String(candidate || '')).trim();
     if (!normalized) return false;
-    return normalized.includes('/.ploinky/repos/') || normalized.startsWith('.ploinky/repos/');
+    return normalized.includes('/.ploinky/') || normalized.startsWith('.ploinky/');
 }
 
 export function getVisibleRepoOverviews(repos, showAgentRepos = false) {

@@ -193,6 +193,21 @@ export class GitRepoTree {
         this.getParentPresenter()?.toggleRepoFolderExpanded?.(element);
     }
 
+    toggleRepoFolderCheckbox(element) {
+        const rawRepoPaths = String(element?.dataset?.repoPaths || '').trim();
+        if (!rawRepoPaths) return;
+        let repoPaths = [];
+        try {
+            const parsed = JSON.parse(rawRepoPaths);
+            repoPaths = Array.isArray(parsed) ? parsed.map((entry) => String(entry || '').trim()).filter(Boolean) : [];
+        } catch {
+            repoPaths = [];
+        }
+        if (!repoPaths.length) return;
+        const shouldSelect = Boolean(element?.checked);
+        this.getParentPresenter()?.toggleMultipleReposAllChanges?.(repoPaths, shouldSelect);
+    }
+
     toggleRepoChanges(element) {
         this.getParentPresenter()?.toggleRepoChanges?.(element);
     }
@@ -344,6 +359,33 @@ export class GitRepoTree {
         };
     }
 
+    getFolderCheckboxState(repoPaths = []) {
+        const repoList = Array.isArray(repoPaths)
+            ? repoPaths
+                .map((repoPath) => this.findRepoOverview(repoPath))
+                .filter((repo) => repo && getCommittablePaths(repo).length > 0)
+            : [];
+        if (!repoList.length) {
+            return { checked: false, indeterminate: false, disabled: true };
+        }
+
+        let checkedCount = 0;
+        let hasIndeterminate = false;
+        for (const repo of repoList) {
+            const state = this.getRepoCheckboxState(repo);
+            if (state.checked) checkedCount += 1;
+            if (state.indeterminate) hasIndeterminate = true;
+        }
+
+        const allChecked = checkedCount === repoList.length && !hasIndeterminate;
+        const anyChecked = checkedCount > 0 || hasIndeterminate;
+        return {
+            checked: allChecked,
+            indeterminate: anyChecked && !allChecked,
+            disabled: false
+        };
+    }
+
     syncToggleAllState(repos = []) {
         if (!this.toggleAllInput) return;
         const list = Array.isArray(repos) ? repos.filter((repo) => String(repo?.path || '').trim()) : [];
@@ -429,7 +471,8 @@ export class GitRepoTree {
             isFileSelected: (repoPath, filePath) => this.isFileSelected(repoPath, filePath),
             getAncestorCoveringPrefix: (repoPath, prefix) => this.getAncestorCoveringPrefix(repoPath, prefix),
             getCoveringPrefix: (repoPath, prefix) => this.getCoveringPrefix(repoPath, prefix),
-            isFolderExpanded: (repoPath, prefix) => this.isTreeFolderExpanded(repoPath, prefix)
+            isFolderExpanded: (repoPath, prefix) => this.isTreeFolderExpanded(repoPath, prefix),
+            initialDepth: 3
         });
     }
 
@@ -486,8 +529,30 @@ export class GitRepoTree {
         const activePath = this.state.selectedPath || '';
         const activeRepo = this.state.selectedRepoPath || '';
 
+        const collectRepoPaths = (node) => {
+            const repoPaths = [];
+            const stack = [node];
+            while (stack.length) {
+                const current = stack.pop();
+                for (const repo of current?.repos || []) {
+                    const repoPath = String(repo?.path || '').trim();
+                    if (repoPath) {
+                        repoPaths.push(repoPath);
+                    }
+                }
+                const children = current?.children;
+                if (children && typeof children.values === 'function') {
+                    for (const child of children.values()) {
+                        stack.push(child);
+                    }
+                }
+            }
+            return repoPaths;
+        };
+
         const renderFolder = (node, depth = 0) => {
             const folderId = node.id;
+            const descendantRepoPaths = collectRepoPaths(node);
 
             const wrapper = document.createElement('div');
             wrapper.className = 'git-repo-row';
@@ -497,7 +562,7 @@ export class GitRepoTree {
 
             const left = document.createElement('div');
             left.className = 'git-repo-row-header';
-            left.style.paddingLeft = `${Math.min(24, depth * 12)}px`;
+            left.style.paddingLeft = `${depth * 12}px`;
 
             const expandBtn = document.createElement('button');
             expandBtn.type = 'button';
@@ -506,6 +571,15 @@ export class GitRepoTree {
             expandBtn.setAttribute('data-local-action', 'toggleRepoFolderExpanded');
             const isExpanded = expandedMap[folderId] === true;
             expandBtn.textContent = isExpanded ? '▾' : '▸';
+
+            const folderCheckbox = document.createElement('input');
+            folderCheckbox.type = 'checkbox';
+            folderCheckbox.setAttribute('data-local-action', 'toggleRepoFolderCheckbox');
+            folderCheckbox.dataset.repoPaths = JSON.stringify(descendantRepoPaths);
+            const folderCheckboxState = this.getFolderCheckboxState(descendantRepoPaths);
+            folderCheckbox.checked = folderCheckboxState.checked;
+            folderCheckbox.indeterminate = folderCheckboxState.indeterminate;
+            folderCheckbox.disabled = folderCheckboxState.disabled;
 
             const label = document.createElement('div');
             label.className = 'git-folder-label';
@@ -516,14 +590,14 @@ export class GitRepoTree {
             label.textContent = `${folderId === '/' ? this.state.reposRoot : node.name} · ${summary}`;
 
             left.appendChild(expandBtn);
+            left.appendChild(folderCheckbox);
             left.appendChild(label);
 
             row.appendChild(left);
             wrapper.appendChild(row);
 
             if (!isExpanded) {
-                this.list.appendChild(wrapper);
-                return;
+                return wrapper;
             }
 
             for (const repo of node.repos || []) {
@@ -535,7 +609,7 @@ export class GitRepoTree {
 
                 const repoLeft = document.createElement('div');
                 repoLeft.className = 'git-repo-row-header';
-                repoLeft.style.paddingLeft = `${Math.min(36, (depth + 1) * 12)}px`;
+                repoLeft.style.paddingLeft = `${(depth + 1) * 12}px`;
 
                 const repoCheckbox = document.createElement('input');
                 repoCheckbox.type = 'checkbox';
@@ -599,12 +673,92 @@ export class GitRepoTree {
 
             const childNames = Array.from(node.children.keys()).sort((a, b) => a.localeCompare(b));
             for (const childName of childNames) {
-                renderFolder(node.children.get(childName), depth + 1);
+                const childNode = renderFolder(node.children.get(childName), depth + 1);
+                if (childNode) {
+                    wrapper.appendChild(childNode);
+                }
             }
 
-            this.list.appendChild(wrapper);
+            return wrapper;
         };
 
-        renderFolder(tree, 0);
+        const rootChildNames = Array.from(tree.children.keys()).sort((a, b) => a.localeCompare(b));
+        for (const childName of rootChildNames) {
+            const childNode = renderFolder(tree.children.get(childName), 1);
+            if (childNode) {
+                this.list.appendChild(childNode);
+            }
+        }
+
+        for (const repo of tree.repos || []) {
+            const repoWrapper = document.createElement('div');
+            repoWrapper.className = 'git-repo-row';
+
+            const repoRow = document.createElement('div');
+            repoRow.className = 'git-change-row';
+
+            const repoLeft = document.createElement('div');
+            repoLeft.className = 'git-repo-row-header';
+            repoLeft.style.paddingLeft = '12px';
+
+            const repoCheckbox = document.createElement('input');
+            repoCheckbox.type = 'checkbox';
+            repoCheckbox.setAttribute('data-local-action', 'toggleRepoAllChangesCheckbox');
+            repoCheckbox.dataset.repoPath = repo.path;
+            const repoCheckboxState = this.getRepoCheckboxState(repo);
+            repoCheckbox.checked = repoCheckboxState.checked;
+            repoCheckbox.indeterminate = repoCheckboxState.indeterminate;
+            repoCheckbox.disabled = getCommittablePaths(repo).length === 0;
+
+            const changesToggle = document.createElement('button');
+            changesToggle.type = 'button';
+            changesToggle.className = 'secondary git-tree-collapse';
+            changesToggle.dataset.repoPath = repo.path;
+            changesToggle.setAttribute('data-local-action', 'toggleRepoChanges');
+            const repoExpanded = this.isRepoChangesExpanded(repo.path);
+            changesToggle.textContent = repoExpanded ? '▾' : '▸';
+
+            const counts = repo.counts || { staged: 0, unstaged: 0, untracked: 0, conflicted: 0 };
+            const label = document.createElement('div');
+            label.className = 'git-change-button';
+            label.textContent = `${repo.name}${repo.branch ? ` · ${repo.branch}` : ''}`;
+            repoLeft.appendChild(changesToggle);
+            repoLeft.appendChild(repoCheckbox);
+            repoLeft.appendChild(label);
+
+            const info = document.createElement('div');
+            info.className = 'git-info-button';
+            info.setAttribute('role', 'button');
+            info.setAttribute('tabindex', '0');
+            const summary = formatRepoSummary(repo);
+            info.dataset.tooltip = summary;
+            info.setAttribute('aria-label', summary);
+            info.textContent = 'i';
+            repoLeft.appendChild(info);
+            repoRow.appendChild(repoLeft);
+
+            repoWrapper.appendChild(repoRow);
+
+            const ignoredCount = Number.isFinite(repo?.ignoredCount)
+                ? repo.ignoredCount
+                : (Array.isArray(repo?.ignored) ? repo.ignored.length : 0);
+            const hasChanges = Boolean(
+                repo?.dirty
+                || counts.staged
+                || counts.unstaged
+                || counts.untracked
+                || counts.conflicted
+                || ignoredCount
+            );
+            if (hasChanges && this.isRepoChangesExpanded(repo.path)) {
+                const changesTree = this.renderRepoChangesTree(repo);
+                if (changesTree) {
+                    this.applyActiveStyles(changesTree, activePath, activeRepo);
+                    repoWrapper.appendChild(changesTree);
+                }
+            }
+
+            this.list.appendChild(repoWrapper);
+        }
     }
 }
