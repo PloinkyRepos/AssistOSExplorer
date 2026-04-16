@@ -110,7 +110,7 @@ export function attachGitController(fileExp) {
             clearAutocommitTimer();
             return;
         }
-        if (Array.isArray(repos) && repos.length === 0) {
+        if (!Array.isArray(repos) || repos.length === 0) {
             clearAutocommitTimer();
             return;
         }
@@ -338,13 +338,12 @@ export function attachGitController(fileExp) {
         if (autocommit.running) return;
         const { repos } = getAutocommitSettings();
         if (getConflictFlag() && !isAutoresolveEnabled()) return;
-        if (Array.isArray(repos) && repos.length === 0) return;
+        if (!Array.isArray(repos) || repos.length === 0) return;
         autocommit.running = true;
         try {
             const token = '';
             const rememberedIdentity = getRememberedGitIdentity();
-            const selectedRepos = Array.isArray(repos) ? repos.filter(Boolean) : [];
-            const repoList = selectedRepos.length ? selectedRepos : await listRepos();
+            const repoList = repos.filter(Boolean);
             if (!repoList.length) return;
             let committedAny = false;
 

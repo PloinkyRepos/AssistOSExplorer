@@ -20,6 +20,12 @@ Requirement U4: plugin dependency components shall remain declarative through pl
 
 Requirement U5: asynchronous operation outcomes shall remain representable in UI state through MCP success and failure payloads.
 
+Requirement U6: Explorer selection shall be the source of truth for Git action targeting. Selecting any file or folder inside a repository shall also select that repository for repository-level actions.
+
+Requirement U7: repository-level pull actions may execute for a selected repository, but commit and push actions shall remain restricted to the selected files within each selected repository.
+
+Requirement U8: autosync/autocommit scheduling shall target only repositories explicitly chosen in autosync settings and shall not infer targets from transient tree selection.
+
 ## Constraints
 
 Constraint Q1: UI components are not allowed to bypass agent contracts and execute shell Git directly.
@@ -27,6 +33,8 @@ Constraint Q1: UI components are not allowed to bypass agent contracts and execu
 Constraint Q2: host UI refactors are not allowed to alter backend contract semantics.
 
 Constraint Q3: plugin metadata changes are not allowed to break the declared integration slot without coordinated contract updates.
+
+Constraint Q4: UI flows for identity, credentials, and pending Git retries are not allowed to infer a repository by taking the first discovered repository from overview data when no explicit selection exists.
 
 ## Invariants
 
@@ -36,6 +44,8 @@ Invariant P2: IDE plugin channel remains an integration surface, while tool cont
 
 Invariant P3: the intermediary role of `gitAgent` between Explorer intent and Git runtime remains unchanged.
 
+Invariant P4: manual selection state and autosync repository configuration remain separate sources of truth; one cannot silently substitute for the other.
+
 ## Validation Criteria
 
-Validation is satisfied when Explorer-triggered plugin actions call `gitAgent` tools successfully, tool outcomes map to UI state transitions, and Git execution behavior remains isolated from frontend internals.
+Validation is satisfied when Explorer-triggered plugin actions call `gitAgent` tools successfully, tool outcomes map to UI state transitions, repository targeting follows explicit selection rules, autosync runs only for explicitly configured repositories, and Git execution behavior remains isolated from frontend internals.

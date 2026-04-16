@@ -528,7 +528,15 @@ class h {
   }
   showLoading() {
     let e = this.defaultLoader.cloneNode(!0), t = crypto.randomUUID();
-    return e.setAttribute("data-id", t), this.loaderCount === 0 ? (document.body.appendChild(e), e.showModal()) : this.loaderCount++, t;
+    e.setAttribute("data-id", t);
+    if (this.loaderCount === 0) {
+      document.body.appendChild(e);
+      e.showModal();
+      this.loaderCount = 1;
+      return t;
+    }
+    this.loaderCount++;
+    return t;
   }
   hideLoading(e) {
     if (this.loaderCount > 1) {
@@ -542,6 +550,7 @@ class h {
       document.querySelectorAll(".spinner").forEach((n) => {
         n.close(), n.remove();
       });
+    this.loaderCount = 0;
   }
   setLoading(e) {
     this.defaultLoader.innerHTML = e, this.defaultLoader.classList.remove("spinner-default-style");

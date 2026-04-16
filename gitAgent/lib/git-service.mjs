@@ -204,18 +204,28 @@ function isExcludedStashTarget(candidate) {
   return segments.some((segment) => DEFAULT_STASH_EXCLUDED_DIRS.includes(segment));
 }
 
-function getStashTargetPaths(status = {}) {
+function getStashTargetPaths(status = {}, { includeIgnoredStopTracking = false } = {}) {
   const targets = new Set();
   const stopTrackingIgnored = new Set(getStopTrackingIgnoredPaths(status));
   for (const bucket of ['staged', 'unstaged', 'untracked', 'conflicted']) {
     for (const entry of (Array.isArray(status?.[bucket]) ? status[bucket] : [])) {
       const candidate = normalizeGitRepoRelativePath(entry?.path);
-      if (candidate && !isExcludedStashTarget(candidate) && !stopTrackingIgnored.has(candidate)) {
+      if (candidate && !stopTrackingIgnored.has(candidate)) {
         targets.add(candidate);
       }
     }
   }
-  return Array.from(targets).sort((a, b) => a.localeCompare(b));
+  if (includeIgnoredStopTracking) {
+    for (const candidate of getStopTrackingIgnoredPaths(status)) {
+      const normalized = normalizeGitRepoRelativePath(candidate);
+      if (normalized) {
+        targets.add(normalized);
+      }
+    }
+  }
+  return Array.from(targets)
+    .filter((candidate) => !isExcludedStashTarget(candidate))
+    .sort((a, b) => a.localeCompare(b));
 }
 
 function normalizeSlashes(value) {
@@ -361,6 +371,11 @@ export function createGitService({ validatePath }) {
     return repoPath;
   }
 
+  async function resolveRepoWorkTreePath(repoPathArg) {
+    const context = await resolveGitTargetContext(repoPathArg);
+    return context.repoPath;
+  }
+
   async function resolveGitTargetContext(targetPathArg) {
     const validatedTargetPath = await validatePath(targetPathArg || '/');
     const targetPath = await fs.realpath(validatedTargetPath);
@@ -471,7 +486,7 @@ export function createGitService({ validatePath }) {
   }
 
   async function gitStatus({ path: repoPathArg, includeAhead = false }) {
-    const repoPath = await resolveRepoPath(repoPathArg);
+    const repoPath = await resolveRepoWorkTreePath(repoPathArg);
     const gitBinary = await getGitBinary(repoPath);
     const { stdout } = await runGit(repoPath, [gitBinary, 'status', '--porcelain=v1', '-z', '-uall', '--ignored=matching']);
     const entries = parseStatusPorcelainV1Z(stdout);
@@ -512,7 +527,7 @@ export function createGitService({ validatePath }) {
   }
 
   async function gitStatusOverview({ path: repoPathArg, includeUntracked = false }) {
-    const repoPath = await resolveRepoPath(repoPathArg);
+    const repoPath = await resolveRepoWorkTreePath(repoPathArg);
     const gitBinary = await getGitBinary(repoPath);
     const untrackedFlag = includeUntracked ? '-uall' : '-uno';
     const { stdout } = await runGit(
@@ -539,7 +554,7 @@ export function createGitService({ validatePath }) {
   }
 
   async function gitDiff({ path: repoPathArg, file, cached = false, ref = null }) {
-    const repoPath = await resolveRepoPath(repoPathArg);
+    const repoPath = await resolveRepoWorkTreePath(repoPathArg);
     if (!isGitRepoRelativePath(file)) {
       throw new Error(`Invalid file path for git_diff: ${file}`);
     }
@@ -583,7 +598,7 @@ export function createGitService({ validatePath }) {
   }
 
   async function gitStage({ path: repoPathArg, files = [] }) {
-    const repoPath = await resolveRepoPath(repoPathArg);
+    const repoPath = await resolveRepoWorkTreePath(repoPathArg);
     const gitBinary = await getGitBinary(repoPath);
     const list = Array.isArray(files) ? files : [];
     if (!list.length) {
@@ -646,7 +661,7 @@ export function createGitService({ validatePath }) {
   }
 
   async function gitStageExact({ path: repoPathArg, files = [] }) {
-    const repoPath = await resolveRepoPath(repoPathArg);
+    const repoPath = await resolveRepoWorkTreePath(repoPathArg);
     const gitBinary = await getGitBinary(repoPath);
     const list = Array.isArray(files) ? files : [];
     for (const file of list) {
@@ -679,7 +694,7 @@ export function createGitService({ validatePath }) {
   }
 
   async function gitUnstage({ path: repoPathArg, files = [] }) {
-    const repoPath = await resolveRepoPath(repoPathArg);
+    const repoPath = await resolveRepoWorkTreePath(repoPathArg);
     const gitBinary = await getGitBinary(repoPath);
     const list = Array.isArray(files) ? files : [];
     if (!list.length) {
@@ -703,7 +718,7 @@ export function createGitService({ validatePath }) {
   }
 
   async function gitUntrack({ path: repoPathArg, files = [] }) {
-    const repoPath = await resolveRepoPath(repoPathArg);
+    const repoPath = await resolveRepoWorkTreePath(repoPathArg);
     const gitBinary = await getGitBinary(repoPath);
     const list = Array.isArray(files) ? files : [];
     if (!list.length) {
@@ -717,7 +732,7 @@ export function createGitService({ validatePath }) {
   }
 
   async function gitCheckIgnore({ path: repoPathArg, files = [] }) {
-    const repoPath = await resolveRepoPath(repoPathArg);
+    const repoPath = await resolveRepoWorkTreePath(repoPathArg);
     const gitBinary = await getGitBinary(repoPath);
     const list = Array.isArray(files) ? files : [];
     if (!list.length) {
@@ -914,7 +929,7 @@ export function createGitService({ validatePath }) {
   }
 
   async function gitRestore({ path: repoPathArg, files = [] }) {
-    const repoPath = await resolveRepoPath(repoPathArg);
+    const repoPath = await resolveRepoWorkTreePath(repoPathArg);
     const gitBinary = await getGitBinary(repoPath);
     const list = Array.isArray(files) ? files : [];
     if (list.length) {
@@ -961,7 +976,7 @@ export function createGitService({ validatePath }) {
   }
 
   async function gitConflictVersions({ path: repoPathArg, file }) {
-    const repoPath = await resolveRepoPath(repoPathArg);
+    const repoPath = await resolveRepoWorkTreePath(repoPathArg);
     if (!isGitRepoRelativePath(file)) {
       throw new Error(`Invalid file path for git_conflict_versions: ${file}`);
     }
@@ -993,7 +1008,7 @@ export function createGitService({ validatePath }) {
   }
 
   async function gitCheckoutConflict({ path: repoPathArg, file, source }) {
-    const repoPath = await resolveRepoPath(repoPathArg);
+    const repoPath = await resolveRepoWorkTreePath(repoPathArg);
     if (!isGitRepoRelativePath(file)) {
       throw new Error(`Invalid file path for git_checkout_conflict: ${file}`);
     }
@@ -1004,7 +1019,7 @@ export function createGitService({ validatePath }) {
   }
 
   async function gitStash({ path: repoPathArg, includeUntracked = true, message = '' }) {
-    const repoPath = await resolveRepoPath(repoPathArg);
+    const repoPath = await resolveRepoWorkTreePath(repoPathArg);
     const gitBinary = await getGitBinary(repoPath);
     const listStash = async () => {
       try {
@@ -1048,7 +1063,7 @@ export function createGitService({ validatePath }) {
   }
 
   async function gitStashList({ path: repoPathArg }) {
-    const repoPath = await resolveRepoPath(repoPathArg);
+    const repoPath = await resolveRepoWorkTreePath(repoPathArg);
     const gitBinary = await getGitBinary(repoPath);
     const { stdout } = await runGit(repoPath, [
       gitBinary,
@@ -1079,7 +1094,7 @@ export function createGitService({ validatePath }) {
     return { ok: true, entries };
   }
   async function gitStashPop({ path: repoPathArg, ref = null, reinstateIndex = true }) {
-    const repoPath = await resolveRepoPath(repoPathArg);
+    const repoPath = await resolveRepoWorkTreePath(repoPathArg);
     const gitBinary = await getGitBinary(repoPath);
     const args = [gitBinary, 'stash', 'pop'];
     if (reinstateIndex) args.push('--index');
@@ -1146,7 +1161,7 @@ export function createGitService({ validatePath }) {
   }
 
   async function gitCommit({ path: repoPathArg, message, amend = false, signoff = false, userName = null, userEmail = null }) {
-    const repoPath = await resolveRepoPath(repoPathArg);
+    const repoPath = await resolveRepoWorkTreePath(repoPathArg);
     const gitBinary = await getGitBinary(repoPath);
     const args = [gitBinary];
     const cleanName = userName ? String(userName).trim() : '';
@@ -1164,7 +1179,7 @@ export function createGitService({ validatePath }) {
   }
 
   async function gitPush({ path: repoPathArg, remote = null, branch = null, setUpstream = false, token = null, _meta = null, params = null }) {
-    const repoPath = await resolveRepoPath(repoPathArg);
+    const repoPath = await resolveRepoWorkTreePath(repoPathArg);
     const gitBinary = await getGitBinary(repoPath);
     const guessRemoteForPush = async () => {
       try {
@@ -1219,105 +1234,8 @@ export function createGitService({ validatePath }) {
   }
 
   async function gitPull({ path: repoPathArg, remote = null, branch = null, rebase = false, ffOnly = true, token = null, _meta = null, params = null }) {
-    let repoPath = await resolveRepoPath(repoPathArg);
+    const repoPath = await resolveRepoWorkTreePath(repoPathArg);
     const gitBinary = await getGitBinary(repoPath);
-
-    // Check if path is actually a git repo; if not, try to find the first repo underneath it
-    // or underneath the workspace root (handles non-existent .ploinky/repos paths).
-    let isRepo = false;
-    try {
-      const { stdout } = await runGit(repoPath, [gitBinary, 'rev-parse', '--is-inside-work-tree'], { timeoutMs: 5000 });
-      isRepo = (stdout || '').trim() === 'true';
-    } catch {
-      isRepo = false;
-    }
-    if (!isRepo) {
-      const scanForRepo = async (startDir, maxDepth = 3) => {
-        const queue = [{ dir: startDir, depth: 0 }];
-        while (queue.length) {
-          const { dir, depth } = queue.shift();
-          if (depth > maxDepth) continue;
-          try {
-            await fs.stat(path.join(dir, '.git'));
-            return dir;
-          } catch { /* not a repo */ }
-          try {
-            const children = await fs.readdir(dir, { withFileTypes: true });
-            for (const entry of children) {
-              if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
-              if (entry.name.startsWith('.')) continue;
-              queue.push({ dir: path.join(dir, entry.name), depth: depth + 1 });
-            }
-          } catch { /* skip unreadable dirs */ }
-        }
-        return '';
-      };
-
-      // Scan workspace recursively for Git repositories
-      const scanWorkspaceRecursively = async (workspaceRoot) => {
-        const queue = [{ dir: workspaceRoot, depth: 0 }];
-        const foundRepos = [];
-        
-        while (queue.length) {
-          const { dir, depth } = queue.shift();
-          if (depth > 10) continue; // Increased depth for workspace scanning
-          
-          try {
-            await fs.stat(path.join(dir, '.git'));
-            foundRepos.push(dir);
-          } catch { /* not a repo */ }
-          
-          try {
-            const children = await fs.readdir(dir, { withFileTypes: true });
-            for (const entry of children) {
-              if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
-              if (entry.name === '.git') continue;
-              if (entry.name.startsWith('.') && entry.name !== '.ploinky') continue;
-              
-              // Check if it's a symbolic link to a Git repo
-              if (entry.isSymbolicLink()) {
-                try {
-                  const realPath = await fs.realpath(path.join(dir, entry.name));
-                  const stats = await fs.stat(path.join(realPath, '.git'));
-                  if (stats.isDirectory() || stats.isFile()) {
-                    foundRepos.push(realPath);
-                  }
-                } catch { /* not a git repo */ }
-              } else {
-                queue.push({ dir: path.join(dir, entry.name), depth: depth + 1 });
-              }
-            }
-          } catch { /* skip unreadable dirs */ }
-        }
-        
-        return foundRepos;
-      };
-
-      // Try scanning from the given path first, then fall back to workspace root.
-      let foundRepo = await scanForRepo(repoPath);
-      if (!foundRepo) {
-        try {
-          const workspaceRoot = await validatePath('.');
-          if (workspaceRoot !== repoPath) {
-            foundRepo = await scanForRepo(workspaceRoot);
-          }
-          
-          // For global agents: scan entire WORKSPACE_ROOT for any Git repos
-          if (!foundRepo && process.env.WORKSPACE_ROOT) {
-            const allRepos = await scanWorkspaceRecursively(process.env.WORKSPACE_ROOT);
-            if (allRepos.length > 0) {
-              // Return the first repo found, or could return all for selection
-              foundRepo = allRepos[0];
-            }
-          }
-        } catch { /* ignore */ }
-      }
-      if (foundRepo) {
-        repoPath = foundRepo;
-      } else {
-        throw new Error(`Path is not a git repository and no repositories were found underneath: ${repoPath}`);
-      }
-    }
 
     const guessRemoteForPull = async () => {
       try {
@@ -1381,7 +1299,7 @@ export function createGitService({ validatePath }) {
   }
 
   async function gitDiagnose({ path: repoPathArg }) {
-    const repoPath = await resolveRepoPath(repoPathArg);
+    const repoPath = await resolveRepoWorkTreePath(repoPathArg);
     const configured = process.env.ASSISTOS_GIT_BINARY || process.env.GIT_BINARY || null;
     const envPath = process.env.PATH || null;
     const candidates = [
@@ -1424,7 +1342,7 @@ export function createGitService({ validatePath }) {
   }
 
   async function gitIdentity({ path: repoPathArg }) {
-    const repoPath = await resolveRepoPath(repoPathArg);
+    const repoPath = await resolveRepoWorkTreePath(repoPathArg);
     const gitBinary = await getGitBinary(repoPath);
 
     const getValue = async (args) => {
@@ -1458,7 +1376,7 @@ export function createGitService({ validatePath }) {
   }
 
   async function gitSetIdentity({ path: repoPathArg, scope = 'local', name, email }) {
-    const repoPath = await resolveRepoPath(repoPathArg);
+    const repoPath = await resolveRepoWorkTreePath(repoPathArg);
     const gitBinary = await getGitBinary(repoPath);
     const cleanName = normalizeGitConfigValue(name);
     const cleanEmail = normalizeGitConfigValue(email);
@@ -1485,7 +1403,7 @@ export function createGitService({ validatePath }) {
       }
     }
 
-    async function scanGitRepos(rootDir, { maxDepth = 10, maxRepos = limit } = {}) {
+    async function scanGitRepos(rootDir, { maxDepth = 4, maxRepos = limit } = {}) {
       const queue = [{ dir: rootDir, depth: 0 }];
       const repos = [];
       const seen = new Set();
@@ -1516,16 +1434,15 @@ export function createGitService({ validatePath }) {
           continue;
         }
         for (const entry of children) {
-          if (!entry?.isDirectory?.() && !entry?.isSymbolicLink?.()) continue;
-          if (entry.name === '.git') continue;
-          if (entry.name.startsWith('.') && entry.name !== '.ploinky') continue;
+          if (!entry?.isDirectory?.()) continue;
+          if (entry.name.startsWith('.')) continue;
           queue.push({ dir: path.join(dir, entry.name), depth: depth + 1 });
         }
       }
       return repos;
     }
 
-    const candidates = await scanGitRepos(reposRoot, { maxDepth: 10, maxRepos: limit });
+    const candidates = await scanGitRepos(reposRoot, { maxDepth: 4, maxRepos: limit });
 
     const results = [];
     const concurrency = 4;
@@ -1721,4 +1638,3 @@ export function createGitService({ validatePath }) {
     normalizeErrorMessage
   };
 }
-

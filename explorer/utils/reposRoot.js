@@ -1,31 +1,13 @@
+import { getWorkspaceRoot } from "./workspaceRoot.js";
+
 const normalizeSlashes = (value) => String(value || '').replace(/\\/g, '/');
 
 const stripTrailingSlash = (value) => normalizeSlashes(value).replace(/\/+$/g, '');
 
-const pickFirstRoot = (value) => {
-    if (!value || typeof value !== 'string') return '';
-    const first = value.split(',').map((part) => part.trim()).filter(Boolean)[0];
-    return first || '';
-};
-
-export function getWorkspaceRoot({ rootHint } = {}) {
-    const envRoot = pickFirstRoot(rootHint)
-        || pickFirstRoot(window?.ASSISTOS_FS_ROOT)
-        || pickFirstRoot(window?.MCP_FS_ROOT)
-        || '';
-
-    const normalizedRoot = stripTrailingSlash(envRoot);
-    if (normalizedRoot) {
-        return normalizedRoot;
-    }
-
-    return '.';
-}
-
 export function getInternalReposRoot({ rootHint } = {}) {
     const workspaceRoot = getWorkspaceRoot({ rootHint });
     const normalizedWorkspace = stripTrailingSlash(workspaceRoot);
-    if (!normalizedWorkspace || normalizedWorkspace === '.') {
+    if (!normalizedWorkspace || normalizedWorkspace === '/') {
         return '.ploinky/repos';
     }
     if (normalizedWorkspace.endsWith('/.ploinky/repos')) {
@@ -41,7 +23,7 @@ export function getRepoScanPaths({ rootHint, includeWorkspaceFallback = true } =
     ];
 
     if (includeWorkspaceFallback) {
-        candidates.push('.');
+        candidates.push(getInternalReposRoot({ rootHint }));
     }
 
     const seen = new Set();

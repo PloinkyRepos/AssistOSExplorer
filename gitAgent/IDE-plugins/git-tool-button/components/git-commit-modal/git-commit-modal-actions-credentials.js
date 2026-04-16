@@ -1,6 +1,5 @@
 import {
     normalizeErrorMessage,
-    parseJsonToolResult,
     isReposRootPath,
     isGitAuthError,
     isGitIdentityError,
@@ -18,7 +17,6 @@ import {
     getConflictAutoresolveSetting,
     setConflictAutoresolveSetting
 } from "./git-commit-modal-utils.js";
-import { getRepoScanPaths } from "/explorer/utils/reposRoot.js";
 import { AUTOCOMMIT_SETTINGS_CHANGED_EVENT } from "/explorer/utils/appEvents.js";
 
 export function createCredentialsActions(ctx) {
@@ -38,29 +36,34 @@ export function createCredentialsActions(ctx) {
         syncSelectedRepos,
         commitSelectedRepos,
         getSelectedReposForBatch,
-        reposRoot
+        getExplicitActionRepoPaths,
+        getPrimaryExplicitActionRepoPath
     } = ctx;
 
     const resolveIdentityRepoPath = async () => {
         const state = getState();
+        const explicit = typeof getPrimaryExplicitActionRepoPath === 'function'
+            ? getPrimaryExplicitActionRepoPath()
+            : '';
+        if (explicit) {
+            return explicit;
+        }
         const selectedRepo = state.selectedRepoPath;
         if (selectedRepo && !isReposRootPath(selectedRepo, state.reposRoot)) return selectedRepo;
-        if (state.repoPath && !isReposRootPath(state.repoPath, state.reposRoot)) return state.repoPath;
-        const selected = getSelectedReposForBatch();
-        if (selected.length) return selected[0];
-        const scanPaths = getRepoScanPaths({ rootHint: state.reposRoot });
-        for (const scanPath of scanPaths) {
-            if (!scanPath) continue;
-            try {
-                const payload = parseJsonToolResult(await service.gitReposOverview(scanPath)) || {};
-                const repos = Array.isArray(payload.repos) ? payload.repos : [];
-                const first = repos.map((repo) => repo?.path).find(Boolean);
-                if (first) return first;
-            } catch {
-                // ignore
-            }
-        }
         return '';
+    };
+
+    const getExplicitRepoPaths = () => {
+        if (typeof getExplicitActionRepoPaths === 'function') {
+            return getExplicitActionRepoPaths();
+        }
+        const selected = getSelectedReposForBatch();
+        if (selected.length) return selected;
+        const state = getState();
+        const selectedRepo = state.selectedRepoPath;
+        if (selectedRepo && !isReposRootPath(selectedRepo, state.reposRoot)) return [selectedRepo];
+        if (state.repoPath && !isReposRootPath(state.repoPath, state.reposRoot)) return [state.repoPath];
+        return [];
     };
 
     const getGithubIdentityFallback = (state = getState()) => {
@@ -126,14 +129,19 @@ export function createCredentialsActions(ctx) {
 
     const openGitTokenPrompt = () => {
         const state = getState();
-        showGitAuthPrompt(state.repoPath, null, { message: '', authMethod: 'token' });
+        const repoPath = getExplicitRepoPaths()[0] || null;
+        if (!repoPath) {
+            setStatusLine('Select a file, folder, or repository first.', true);
+            return;
+        }
+        showGitAuthPrompt(repoPath, null, { message: '', authMethod: 'token' });
     };
 
     const openGitIdentityPrompt = async () => {
         const state = getState();
         const repoPath = await resolveIdentityRepoPath();
         if (!repoPath) {
-            setStatusLine('Select a repository to set identity.', true);
+            setStatusLine('Select a file, folder, or repository first.', true);
             return;
         }
 
@@ -228,7 +236,7 @@ export function createCredentialsActions(ctx) {
             autocommitDirty: false,
             autocommitDraft: {
                 intervalMinutes: Number(autocommit.intervalMinutes || 15),
-                repos: Array.isArray(autocommit.repos) ? autocommit.repos : null
+                repos: Array.isArray(autocommit.repos) ? autocommit.repos : []
             },
             autoresolveDirty: false,
             autoresolveDraft: { enabled: Boolean(autoresolve) }
@@ -326,7 +334,7 @@ export function createCredentialsActions(ctx) {
             usingGithub: authMethod === 'github',
             validateOnly: Boolean(payload.validateOnly),
             autocommitIntervalMinutes: payload.autocommitIntervalMinutes,
-            autocommitRepos: Array.isArray(payload.autocommitRepos) ? payload.autocommitRepos : null,
+            autocommitRepos: Array.isArray(payload.autocommitRepos) ? payload.autocommitRepos : [],
             autoresolveConflicts: typeof payload.autoresolveConflicts === 'boolean'
                 ? payload.autoresolveConflicts
                 : getConflictAutoresolveSetting()
@@ -491,10 +499,7 @@ export function createCredentialsActions(ctx) {
             validationRepoPath = await resolveIdentityRepoPath();
         }
         if (!validationRepoPath) {
-            validationRepoPath = state.reposRoot || state.repoPath || '';
-        }
-        if (!validationRepoPath) {
-            setStatusLine('Select a repository to validate credentials.', true);
+            setStatusLine('Select a file, folder, or repository first.', true);
             return false;
         }
         if (!runtimeState.authValid) {
@@ -556,11 +561,8 @@ export function createCredentialsActions(ctx) {
                 repoPath = await resolveIdentityRepoPath();
             }
             if (!repoPath) {
-                repoPath = state.reposRoot || state.repoPath || '';
-            }
-            if (!repoPath) {
                 if (state.credentialsGate) {
-                    setStatusLine('Select a repository to set identity.', true);
+                    setStatusLine('Select a file, folder, or repository first.', true);
                     return null;
                 }
             } else {

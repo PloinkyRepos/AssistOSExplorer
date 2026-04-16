@@ -50,6 +50,35 @@ const normalizeRuntimePluginPolicy = (payload) => {
     return normalized;
 };
 
+const parseAllowedDirectories = (result) => {
+    if (Array.isArray(result?.json)) {
+        return result.json.map((entry) => String(entry || '').trim()).filter(Boolean);
+    }
+    if (typeof result?.text !== 'string') {
+        return [];
+    }
+    return result.text
+        .split(/\r?\n/)
+        .map((entry) => entry.trim())
+        .filter((entry) => entry && !/^allowed directories:?$/i.test(entry));
+};
+
+async function bootstrapWorkspaceRoot() {
+    try {
+        const result = await assistosSDK.callTool(EXPLORER_AGENT_ID, 'list_allowed_directories', {});
+        const roots = parseAllowedDirectories(result);
+        const workspaceRoot = roots.find((entry) => entry.startsWith('/')) || '';
+        if (!workspaceRoot || typeof window === 'undefined') {
+            return workspaceRoot;
+        }
+        window.ASSISTOS_FS_ROOT = workspaceRoot;
+        window.MCP_FS_ROOT = window.MCP_FS_ROOT || workspaceRoot;
+        return workspaceRoot;
+    } catch (_) {
+        return '';
+    }
+}
+
 async function loadExplorerManifest() {
     try {
         const response = await fetch('./manifest.json', { cache: 'no-cache' });
@@ -67,6 +96,7 @@ async function start() {
     initializeTheme();
     const webSkel = await WebSkel.initialise('webskel.json');
     webSkel.appServices = assistosSDK;
+    await bootstrapWorkspaceRoot();
 
     const componentRegistry = createComponentRegistry(webSkel);
     const runtimePluginLoader = createRuntimePluginLoader({

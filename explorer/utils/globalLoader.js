@@ -10,6 +10,9 @@ export async function withGlobalLoader(fn) {
 
     if (state.depth === 1) {
         state.id = webSkel.showLoading();
+        if (typeof window?.requestAnimationFrame === 'function') {
+            await new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
+        }
     }
 
     try {

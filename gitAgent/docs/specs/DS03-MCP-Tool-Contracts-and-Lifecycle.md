@@ -20,6 +20,10 @@ Lifecycle Rule L3: argument normalization shall enforce tool-specific requiremen
 
 Lifecycle Rule L4: path arguments shall be resolved and validated against allowed roots before Git operation execution.
 
+Lifecycle Rule L4.1: repository-executing tools shall resolve the repository deterministically from the provided path or from a path contained inside that repository.
+
+Lifecycle Rule L4.2: repository-executing tools are not allowed to discover a substitute repository by scanning sibling directories, descendants, or workspace roots when the provided path is not inside a Git work tree.
+
 Lifecycle Rule L5: successful operation results shall be serialized to stdout as contract output.
 
 Lifecycle Rule L6: failures shall return explicit JSON error payloads with `ok: false`.
@@ -40,6 +44,8 @@ Constraint M1: contracts cannot depend on undocumented input payload fields.
 
 Constraint M2: tools cannot execute operations outside validated repository paths.
 
+Constraint M2.1: repository discovery by recursive scan is allowed only for overview and listing contracts such as `git_repos_overview`; it is forbidden for mutating or remote-executing contracts such as pull, push, commit, stash, restore, and identity writes.
+
 Constraint M3: mixed output formats for the same contract are forbidden unless explicitly declared.
 
 ## Invariants
@@ -50,6 +56,8 @@ Invariant T2: lifecycle stages remain ordered as parse, validate, dispatch, exec
 
 Invariant T3: remote auth helpers may enrich payloads but do not redefine contract names.
 
+Invariant T4: a failed repository resolution remains a hard failure for execution contracts and cannot degrade into a best-effort operation on another repository.
+
 ## Validation Criteria
 
-Validation is satisfied when MCP clients can call declared tools with schema-compliant inputs, receive deterministic success or explicit error payloads, and observe consistent lifecycle behavior across invocations.
+Validation is satisfied when MCP clients can call declared tools with schema-compliant inputs, receive deterministic success or explicit error payloads, observe consistent lifecycle behavior across invocations, and confirm that invalid repository paths never execute against a different discovered repository.

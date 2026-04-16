@@ -14,6 +14,7 @@ Explorer owns:
 - collaborative editing safeguards for local files
 - application and document plugin hosting
 - session-expiration handling for the browser client
+- global loading overlays for long-running UI actions, which remain visible until the wrapped async workflow finishes with success or failure
 
 For the general text and code editor, the current collaboration behavior is:
 

@@ -7,7 +7,6 @@ import { createGitCommitState } from "./git-commit-modal-state.js";
 import { createGitCommitUI } from "./git-commit-modal-ui.js";
 import { callExplorerTool, callAgentTool } from "/explorer/services/infrastructure/explorerApi.js";
 import { withGlobalLoader } from "/explorer/utils/globalLoader.js";
-import { getRepoScanPaths } from "/explorer/utils/reposRoot.js";
 import { joinPath } from "/explorer/web-components/pages/file-exp/file-exp-utils.js";
 import {
     normalizeErrorMessage,
@@ -110,6 +109,8 @@ export class GitCommitModal {
             updateAuthPrompt: this.updateAuthPrompt.bind(this),
             closeActionsMenu: this.closeActionsMenu.bind(this),
             getSelectedReposForBatch: () => this.getSelectedReposForBatch(),
+            getExplicitActionRepoPaths: this.getExplicitActionRepoPaths.bind(this),
+            getPrimaryExplicitActionRepoPath: this.getPrimaryExplicitActionRepoPath.bind(this),
             getPathsForCommitInRepo: this.getPathsForCommitInRepo.bind(this),
             setCommitMessage: this.setCommitMessage.bind(this),
             clearCommitMessageInput: this.clearCommitMessageInput.bind(this),
@@ -140,6 +141,26 @@ export class GitCommitModal {
 
     getSelectedReposForBatch() {
         return this.stateStore.getSelectedReposForBatch();
+    }
+
+    getExplicitActionRepoPaths() {
+        const selectedRepos = this.getSelectedReposForBatch();
+        if (selectedRepos.length) {
+            return selectedRepos;
+        }
+        const selectedRepoPath = this.state.selectedRepoPath || '';
+        if (selectedRepoPath && !isReposRootPath(selectedRepoPath, this.state.reposRoot)) {
+            return [selectedRepoPath];
+        }
+        const repoPath = this.state.repoPath || '';
+        if (repoPath && !isReposRootPath(repoPath, this.state.reposRoot)) {
+            return [repoPath];
+        }
+        return [];
+    }
+
+    getPrimaryExplicitActionRepoPath() {
+        return this.getExplicitActionRepoPaths()[0] || '';
     }
 
     clearCommitMessageInput() {
@@ -306,41 +327,12 @@ export class GitCommitModal {
     }
 
     async resolveIdentityRepoPath() {
-        const repoPath = this.state.selectedRepoPath || this.state.repoPath || '';
-        if (repoPath && !isReposRootPath(repoPath, this.state.reposRoot)) {
-            return repoPath;
-        }
-        const fromOverviews = (this.state.repoOverviews || [])
-            .map((repo) => repo?.path)
-            .find(Boolean);
-        if (fromOverviews) return fromOverviews;
-        const scanPaths = getRepoScanPaths({ rootHint: this.state.reposRoot });
-        for (const scanPath of scanPaths) {
-            if (!scanPath) continue;
-            try {
-                const text = await this.service.gitReposOverview(scanPath);
-                const payload = parseJsonToolResult(text) || {};
-                const repos = Array.isArray(payload.repos) ? payload.repos : [];
-                const first = repos.map((repo) => repo?.path).find(Boolean);
-                if (first) return first;
-            } catch {
-                // ignore
-            }
-        }
-        return repoPath || this.state.reposRoot || '';
+        return this.getPrimaryExplicitActionRepoPath();
     }
 
     async prefillCredentialsPanel() {
         const current = this.state.identityPrompt || {};
-        let repoPath = current.repoPath || this.state.selectedRepoPath || this.state.repoPath || '';
-        if (repoPath && isReposRootPath(repoPath, this.state.reposRoot)) {
-            repoPath = '';
-        }
-        if (!repoPath) {
-            repoPath = (this.state.repoOverviews || [])
-                .map((repo) => repo?.path)
-                .find((path) => path && !isReposRootPath(path, this.state.reposRoot)) || '';
-        }
+        const repoPath = current.repoPath || this.getPrimaryExplicitActionRepoPath();
         if (!repoPath) return;
 
         const githubUser = this.state.githubAuth?.connection?.user || {};

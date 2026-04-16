@@ -50,7 +50,10 @@ Optional provider and integration variables:
 
 - `git_commit_message` depends on the default LLM runtime from `achillesAgentLib`.
 - The agent is decoupled from the Explorer user interface (UI). Explorer or other clients should call Git through MCP, not through shared interface internals.
+- Execution tools operate only on the repository explicitly resolved from the provided path. They do not scan the workspace and do not fall back to a different repository when the target path is invalid.
 - Explorer menus use a separate menu contribution plugin. The menu stays host-owned in Explorer, while `gitAgent` owns actions such as `New repository`, `Add to .gitignore`, and `Remove from .gitignore`.
+- Explorer selection semantics are strict: selecting any file or folder inside a repository selects that repository for repository-level actions, while commit and push flows remain limited to the selected files from that repository.
+- Autosync/autocommit runs only for repositories explicitly chosen in autosync settings. It does not infer targets from the current tree selection and does not default to all discovered repositories.
 - `git_add_ignore` both appends the ignore pattern and removes already tracked paths from the Git index, including staged-but-diverged entries that require forced index removal, so ignored items stop participating in future commits unless explicitly re-added.
 - `git_remove_ignore` removes the matching ignore rule and re-adds the target to Git tracking when possible.
 
