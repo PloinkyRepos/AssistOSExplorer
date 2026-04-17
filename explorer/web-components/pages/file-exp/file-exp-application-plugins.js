@@ -2,6 +2,7 @@ const APP_PLUGIN_SLOTS = Object.freeze({
     toolbar: 'file-exp:toolbar',
     rightBar: 'file-exp:right-bar',
     internal: 'file-exp:internal',
+    global: 'file-exp:global',
     accountMenu: 'file-exp:account-menu'
 });
 
@@ -76,6 +77,9 @@ function getContainerOrientation(container, slot) {
     }
     if (container?.classList?.contains('app-plugin-bar')) {
         return 'vertical';
+    }
+    if (container?.classList?.contains('app-plugin-global-slot')) {
+        return 'overlay';
     }
     return slot === APP_PLUGIN_SLOTS.toolbar ? 'horizontal' : 'vertical';
 }
@@ -208,19 +212,23 @@ async function performRenderApplicationPluginSlots(fileExp) {
     const toolbarContainer = fileExp.element.querySelector('#fileExpToolbarPlugins');
     const rightBarContainer = fileExp.element.querySelector('#fileExpPluginBar');
     const internalContainer = fileExp.element.querySelector('#fileExpInternalPlugins');
+    const globalContainer = fileExp.element.querySelector('#fileExpGlobalPlugins');
     const accountMenuContainer = fileExp.element.querySelector('#fileExpAccountMenuPlugins');
     const toolbarPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.toolbar, { contributionType: MOUNT_CONTRIBUTION_TYPE });
     const rightBarPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.rightBar, { contributionType: MOUNT_CONTRIBUTION_TYPE });
     const internalPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.internal, { contributionType: MOUNT_CONTRIBUTION_TYPE });
+    const globalPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.global, { contributionType: MOUNT_CONTRIBUTION_TYPE });
     const accountMenuPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.accountMenu, { contributionType: MOUNT_CONTRIBUTION_TYPE });
     const toolbarContext = buildPluginContext(fileExp, APP_PLUGIN_SLOTS.toolbar);
     const rightBarContext = buildPluginContext(fileExp, APP_PLUGIN_SLOTS.rightBar);
     const internalContext = buildPluginContext(fileExp, APP_PLUGIN_SLOTS.internal);
+    const globalContext = buildPluginContext(fileExp, APP_PLUGIN_SLOTS.global);
     const accountMenuContext = buildPluginContext(fileExp, APP_PLUGIN_SLOTS.accountMenu);
 
     await mountSlot(toolbarContainer, APP_PLUGIN_SLOTS.toolbar, toolbarPlugins, toolbarContext);
     await mountSlot(rightBarContainer, APP_PLUGIN_SLOTS.rightBar, rightBarPlugins, rightBarContext);
     await mountSlot(internalContainer, APP_PLUGIN_SLOTS.internal, internalPlugins, internalContext);
+    await mountSlot(globalContainer, APP_PLUGIN_SLOTS.global, globalPlugins, globalContext);
     await mountSlot(accountMenuContainer, APP_PLUGIN_SLOTS.accountMenu, accountMenuPlugins, accountMenuContext);
 }
 
@@ -272,6 +280,7 @@ export function attachApplicationPluginHost(fileExp) {
         const toolbarContainer = fileExp.element?.querySelector?.('#fileExpToolbarPlugins');
         const rightBarContainer = fileExp.element?.querySelector?.('#fileExpPluginBar');
         const internalContainer = fileExp.element?.querySelector?.('#fileExpInternalPlugins');
+        const globalContainer = fileExp.element?.querySelector?.('#fileExpGlobalPlugins');
         if (toolbarContainer) {
             toolbarContainer.replaceChildren();
         }
@@ -280,6 +289,9 @@ export function attachApplicationPluginHost(fileExp) {
         }
         if (internalContainer) {
             internalContainer.replaceChildren();
+        }
+        if (globalContainer) {
+            globalContainer.replaceChildren();
         }
         fileExp.__appPluginRenderPromise = null;
     });

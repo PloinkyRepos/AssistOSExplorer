@@ -437,6 +437,17 @@ main {
     display: none;
 }
 
+.app-plugin-global-slot {
+    position: fixed;
+    inset: 0;
+    z-index: 1400;
+    pointer-events: none;
+}
+
+.app-plugin-global-slot .app-plugin-mount {
+    pointer-events: auto;
+}
+
 .list {
     width: var(--file-exp-list-width);
     flex: 0 0 var(--file-exp-list-width);

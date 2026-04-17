@@ -89,6 +89,27 @@ test('normalizeRuntimePlugins preserves document and application buckets', () =>
     assert.equal(normalized.application['file-exp:toolbar'][0].location, 'file-exp:toolbar');
 });
 
+test('normalizeRuntimePlugins keeps global application plugin entries', () => {
+    const normalized = normalizeRuntimePlugins({
+        document: {},
+        application: {
+            'file-exp:global': [{
+                id: 'webcli-chat',
+                pluginCategory: 'application',
+                location: 'file-exp:global',
+                agent: 'webCli',
+                component: 'webcli-global-chat',
+                presenter: 'WebCliGlobalChat',
+                type: 'global'
+            }]
+        }
+    });
+
+    assert.equal(normalized.application['file-exp:global'].length, 1);
+    assert.equal(normalized.application['file-exp:global'][0].type, 'global');
+    assert.equal(normalized.application['file-exp:global'][0].component, 'webcli-global-chat');
+});
+
 test('mergeRuntimePluginsIntoAssistOS separates document and application registries', () => {
     const assistOS = {
         workspace: {

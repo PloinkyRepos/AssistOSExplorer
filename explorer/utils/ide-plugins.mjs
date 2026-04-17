@@ -24,7 +24,7 @@ export const APPLICATION_PLUGIN_CATEGORY = 'application';
 export const DEFAULT_DOCUMENT_PLUGIN_LOCATIONS = ['document', 'chapter', 'paragraph', 'infoText'];
 export const APPLICATION_PLUGIN_LOCATION_PATTERN = /^[a-z0-9-]+(?::[a-z0-9-]+)+$/i;
 export const APPLICATION_PLUGIN_ID_PATTERN = /^[a-z][a-z0-9-]*$/i;
-const VALID_PLUGIN_TYPES = new Set(['embedded', 'modal']);
+const VALID_PLUGIN_TYPES = new Set(['embedded', 'modal', 'global']);
 const VALID_APPLICATION_CONTRIBUTION_TYPES = new Set(['mount', 'menu']);
 
 function isNonEmptyString(value) {
@@ -194,8 +194,18 @@ function validateAndNormalizePluginConfig(parsedConfig, pluginEntryName, configP
     return null;
   }
 
+  if (contributionType === 'menu' && parsedConfig.type !== undefined) {
+    console.warn(`[filesystem-http] Menu plugin ${configPath} must not declare type.`);
+    return null;
+  }
+
   if (contributionType === 'mount' && parsedConfig.type !== undefined && !VALID_PLUGIN_TYPES.has(parsedConfig.type)) {
     console.warn(`[filesystem-http] Plugin ${configPath} has an invalid type "${parsedConfig.type}".`);
+    return null;
+  }
+
+  if (contributionType === 'mount' && parsedConfig.type === 'global' && pluginCategory !== APPLICATION_PLUGIN_CATEGORY) {
+    console.warn(`[filesystem-http] Plugin ${configPath} can use type "global" only for application mount contributions.`);
     return null;
   }
 

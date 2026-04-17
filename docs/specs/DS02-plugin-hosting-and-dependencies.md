@@ -93,6 +93,7 @@ These plugins should be understood as IDE extensions mounted into Explorer, not 
 Examples of host slots used by integrations:
 
 - `file-exp:toolbar`
+- `file-exp:global`
 - `file-exp:account-menu`
 - `file-exp:context-menu:file`
 - `file-exp:context-menu:directory`
@@ -109,6 +110,12 @@ Explorer supports two application plugin contribution types:
 
 - `mount`: the plugin renders a WebSkel component inside a host-owned slot such as `file-exp:toolbar`
 - `menu`: the plugin contributes semantic menu items into a host-owned menu surface such as a file context menu or the `New` menu
+
+For `mount` contributions, Explorer supports these plugin `type` values:
+
+- `embedded`: component mounted inside bounded shell containers such as toolbar or right bar
+- `modal`: component assets mounted as host-driven modal surfaces
+- `global`: component mounted in the dedicated `file-exp:global` overlay slot for persistent floating workspace affordances
 
 Workspace plugin settings must treat both contribution types as first-class configurable plugins. A `menu` contribution is not coupled to a `mount` contribution for enable or disable behavior.
 
@@ -260,5 +267,6 @@ The host shell must remain deterministic even when plugin availability changes b
 
 - [DS01 - Explorer System Overview](./DS01-system-overview.md)
 - [DS03 - Confidential Files And DPU](./DS03-confidential-files-and-dpu.md)
+- [DS05 - Global Application Plugin Surface](./DS05-global-application-plugin-surface.md)
 - [gitAgent plugin spec](../../gitAgent/docs/specs/DS02-explorer-plugin.md)
 - [tasksAgent plugin spec](../../tasksAgent/docs/specs/DS04-Explorer-Integration-and-IDE-Plugin-Channel.md)
