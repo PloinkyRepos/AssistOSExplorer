@@ -164,7 +164,7 @@ export function defaultState() {
     objects: {},
     settings: {
       audit: {
-        enabled: true
+        enabled: false
       }
     }
   };

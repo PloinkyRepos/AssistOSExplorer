@@ -56,3 +56,33 @@ test('aggregateIdePlugins rejects global type for document plugins', async () =>
         await fs.rm(workspaceRoot, { recursive: true, force: true });
     }
 });
+
+test('aggregateIdePlugins follows symlinked repos under .ploinky/repos', async () => {
+    const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'explorer-ide-plugins-workspace-'));
+    const sourceRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'explorer-ide-plugins-source-'));
+    try {
+        await writePluginConfig(sourceRoot, 'gitAgent', 'git-tool-button', {
+            pluginCategory: 'application',
+            id: 'git',
+            component: 'git-tool-button',
+            location: ['file-exp:toolbar'],
+            presenter: 'GitToolButton',
+            type: 'embedded'
+        });
+
+        const reposRoot = path.join(workspaceRoot, '.ploinky', 'repos');
+        await fs.mkdir(reposRoot, { recursive: true });
+        await fs.symlink(sourceRoot, path.join(reposRoot, 'AssistOSExplorer'));
+
+        const aggregated = await aggregateIdePlugins(workspaceRoot);
+        const toolbarPlugins = aggregated.application['file-exp:toolbar'] || [];
+
+        assert.equal(toolbarPlugins.length, 1);
+        assert.equal(toolbarPlugins[0].agent, 'gitAgent');
+        assert.equal(toolbarPlugins[0].id, 'git');
+        assert.equal(toolbarPlugins[0].component, 'git-tool-button');
+    } finally {
+        await fs.rm(workspaceRoot, { recursive: true, force: true });
+        await fs.rm(sourceRoot, { recursive: true, force: true });
+    }
+});

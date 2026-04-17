@@ -62,6 +62,40 @@ function extractAuthInfo(envelope) {
   return authInfo && typeof authInfo === 'object' ? authInfo : null;
 }
 
+function extractInvocationGrant(envelope) {
+  const metadata = envelope && typeof envelope === 'object' ? envelope.metadata : null;
+  const grant = metadata && typeof metadata === 'object' ? metadata.invocation : null;
+  return grant && typeof grant === 'object' ? grant : null;
+}
+
+function authInfoFromInvocation(grant) {
+  if (!grant || typeof grant !== 'object') return null;
+  const out = {};
+  if (grant.sub && /^agent:/i.test(grant.sub)) {
+    out.agent = {
+      principalId: grant.sub,
+      name: String(grant.sub).replace(/^agent:/i, '')
+    };
+  }
+  if (grant.user && typeof grant.user === 'object') {
+    out.user = {
+      id: String(grant.user.id || grant.user.sub || ''),
+      username: String(grant.user.username || grant.user.preferred_username || ''),
+      email: String(grant.user.email || ''),
+      roles: Array.isArray(grant.user.roles) ? [...grant.user.roles] : []
+    };
+  }
+  out.invocation = {
+    scope: Array.isArray(grant.scope) ? [...grant.scope] : [],
+    tool: String(grant.tool || ''),
+    contract: String(grant.contract || ''),
+    bindingId: String(grant.binding_id || ''),
+    workspaceId: String(grant.workspace_id || ''),
+    userContextToken: String(grant.user_context_token || '')
+  };
+  return out;
+}
+
 function getWorkspaceRoots() {
   const roots = [
     process.env.ASSISTOS_FS_ROOT,
@@ -227,7 +261,10 @@ async function main() {
   }
   const envelope = raw && raw.trim() ? safeParseJson(raw) : null;
   const args = normalizeInput(envelope || {});
-  const authInfo = extractAuthInfo(envelope || {});
+  const invocationGrant = extractInvocationGrant(envelope || {});
+  const authInfo = invocationGrant
+    ? authInfoFromInvocation(invocationGrant)
+    : extractAuthInfo(envelope || {});
   const toolName = process.env.TOOL_NAME
     || process.argv[2]
     || envelope?.tool

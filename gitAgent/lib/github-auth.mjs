@@ -4,7 +4,7 @@ import {
   getStoredGitToken,
   putStoredGitToken,
   deleteStoredGitToken
-} from './dpu-secret-client.mjs';
+} from './secret-store-client.mjs';
 
 const GITHUB_DEVICE_CODE_URL = 'https://github.com/login/device/code';
 const GITHUB_ACCESS_TOKEN_URL = 'https://github.com/login/oauth/access_token';

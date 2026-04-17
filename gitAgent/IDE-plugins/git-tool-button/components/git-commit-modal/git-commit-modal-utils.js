@@ -338,6 +338,39 @@ export function getRememberedGitIdentity() {
     }
 }
 
+export function getGithubIdentityFallback(user = {}) {
+    return {
+        name: String(user?.name || user?.login || '').trim(),
+        email: String(user?.email || '').trim()
+    };
+}
+
+export function buildPrefilledGitIdentityState({
+    identityPrompt = {},
+    repoPath = '',
+    rememberedIdentity = {},
+    githubUser = {},
+    authMethod = 'token'
+} = {}) {
+    const githubIdentity = getGithubIdentityFallback(githubUser);
+    const name = String(rememberedIdentity?.name || identityPrompt?.name || githubIdentity.name || '').trim();
+    const email = String(rememberedIdentity?.email || identityPrompt?.email || githubIdentity.email || '').trim();
+    const nextRepoPath = String(identityPrompt?.repoPath || repoPath || '').trim() || null;
+    return {
+        identityPrompt: {
+            ...identityPrompt,
+            repoPath: nextRepoPath,
+            name,
+            email
+        },
+        credentialsBaseline: {
+            name,
+            email,
+            authMethod: normalizeGitAuthMethod(authMethod)
+        }
+    };
+}
+
 export function setRememberedGitIdentity({ name = '', email = '' } = {}) {
     try {
         const trimmedName = String(name || '').trim();

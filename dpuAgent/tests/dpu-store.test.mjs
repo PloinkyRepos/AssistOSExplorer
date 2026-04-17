@@ -30,6 +30,7 @@ const {
 const previousWorkspaceRoot = process.env.DPU_WORKSPACE_ROOT;
 const previousDpuDataRoot = process.env.DPU_DATA_ROOT;
 const previousMasterKey = process.env.DPU_MASTER_KEY;
+const previousProviderBindings = process.env.PLOINKY_PROVIDER_BINDINGS_JSON;
 
 process.env.DPU_WORKSPACE_ROOT = tempWorkspaceDir;
 process.env.DPU_DATA_ROOT = tempDpuDataDir;
@@ -96,6 +97,7 @@ test.beforeEach(() => {
   fs.rmSync(tempDpuDataDir, { recursive: true, force: true });
   fs.mkdirSync(tempWorkspaceDir, { recursive: true });
   fs.mkdirSync(tempDpuDataDir, { recursive: true });
+  delete process.env.PLOINKY_PROVIDER_BINDINGS_JSON;
 });
 
 test.after(() => {
@@ -113,6 +115,11 @@ test.after(() => {
     delete process.env.DPU_MASTER_KEY;
   } else {
     process.env.DPU_MASTER_KEY = previousMasterKey;
+  }
+  if (previousProviderBindings === undefined) {
+    delete process.env.PLOINKY_PROVIDER_BINDINGS_JSON;
+  } else {
+    process.env.PLOINKY_PROVIDER_BINDINGS_JSON = previousProviderBindings;
   }
   fs.rmSync(tempWorkspaceDir, { recursive: true, force: true });
   fs.rmSync(tempDpuDataDir, { recursive: true, force: true });
@@ -158,6 +165,50 @@ test('secret values are encrypted at rest and remain readable through ACL-aware 
   const fetched = await getSecretByKey(readerAuth, { key: 'API_TOKEN' });
   assert.equal(fetched.ok, true);
   assert.equal(fetched.secret.value, 'top-secret-value');
+});
+
+test('delegated secret reads reject invocation bindings that are not registered for this provider', async () => {
+  const readerAuth = {
+    user: {
+      email: 'reader@example.com'
+    }
+  };
+  await putSecret(authInfo, { key: 'BOUND_TOKEN', value: 'bound-value' });
+  await grantSecret(authInfo, { key: 'BOUND_TOKEN', principal: 'reader@example.com', role: 'read' });
+
+  process.env.PLOINKY_PROVIDER_BINDINGS_JSON = JSON.stringify({
+    'git/gitAgent:secretStore': {
+      id: 'git/gitAgent:secretStore',
+      consumer: 'git/gitAgent',
+      consumerPrincipal: 'agent:gitAgent',
+      provider: 'dpu/dpuAgent',
+      providerPrincipal: 'agent:dpuAgent',
+      contract: 'secret-store/v1',
+      approvedScopes: ['secret:read']
+    }
+  });
+
+  const delegatedAuth = {
+    user: {
+      email: 'reader@example.com'
+    },
+    agent: {
+      principalId: 'agent:gitAgent',
+      name: 'gitAgent'
+    },
+    invocation: {
+      scope: ['secret:read'],
+      contract: 'secret-store/v1',
+      tool: 'secret_get',
+      bindingId: 'git/gitAgent:otherStore',
+      workspaceId: 'default'
+    }
+  };
+
+  await assert.rejects(
+    () => getSecretByKey(delegatedAuth, { key: 'BOUND_TOKEN' }),
+    /not registered for this provider/
+  );
 });
 
 test('plaintext secret storage is rejected', async () => {

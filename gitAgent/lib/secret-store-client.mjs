@@ -1,0 +1,310 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import { client as mcpClient, StreamableHTTPClientTransport } from 'mcp-sdk';
+
+let cachedWireSign = null;
+async function loadWireSign() {
+  if (cachedWireSign) return cachedWireSign;
+  const candidates = [
+    process.env.PLOINKY_WIRE_SIGN_MODULE,
+    '/Agent/lib/wireSign.mjs',
+    path.resolve(process.cwd(), 'Agent/lib/wireSign.mjs')
+  ].filter(Boolean);
+  for (const candidate of candidates) {
+    try {
+      cachedWireSign = await import(candidate);
+      return cachedWireSign;
+    } catch (_) {}
+  }
+  return null;
+}
+
+/**
+ * secret-store-client.mjs
+ *
+ * Generic contract client for `secret-store/v1`. It:
+ *
+ *   - routes every call through the router ("ploinky-router" from the
+ *     agent's perspective)
+ *   - signs a caller-assertion with the agent's own private key so the router
+ *     can mint a delegated invocation_token
+ *   - never hardcodes the DPU route, provider MCP tool names, or forged
+ *     x-ploinky-auth-info blobs
+ *
+ * Provider-specific MCP tool names are hidden behind a small per-operation
+ * mapping that lives inside the *provider* side, not here. Consumers only
+ * see the contract: secret_get / secret_put / secret_delete / secret_grant /
+ * secret_revoke / secret_list.
+ *
+ * Env contract (set by AgentServer/ploinky start scripts):
+ *
+ *   PLOINKY_ROUTER_URL            - e.g. http://127.0.0.1:8080
+ *   PLOINKY_AGENT_PRINCIPAL       - e.g. agent:gitAgent
+ *   PLOINKY_AGENT_PRIVATE_KEY_PEM - the agent's Ed25519 private key (PEM)
+ *   PLOINKY_AGENT_PRIVATE_KEY_PATH - alternative file-based source
+ */
+
+const { Client } = mcpClient;
+const ROUTER_AUDIENCE = 'ploinky-router';
+const CALLER_ASSERTION_HEADER = 'x-ploinky-caller-assertion';
+
+function isNonEmptyString(value) {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function readPrivateKeyPem() {
+  const inline = process.env.PLOINKY_AGENT_PRIVATE_KEY_PEM;
+  if (isNonEmptyString(inline)) return inline.trim();
+  const filePath = process.env.PLOINKY_AGENT_PRIVATE_KEY_PATH;
+  if (isNonEmptyString(filePath) && fs.existsSync(filePath)) {
+    return fs.readFileSync(filePath, 'utf8');
+  }
+  const workspaceRoot = process.env.PLOINKY_WORKSPACE_ROOT || process.env.WORKSPACE_ROOT;
+  if (isNonEmptyString(workspaceRoot)) {
+    const principal = String(process.env.PLOINKY_AGENT_PRINCIPAL || '').replace(/[^a-zA-Z0-9:_\-]/g, '_');
+    const candidate = path.join(workspaceRoot, '.ploinky', 'keys', 'agents', `${principal}.key`);
+    if (fs.existsSync(candidate)) {
+      return fs.readFileSync(candidate, 'utf8');
+    }
+  }
+  return null;
+}
+
+function resolveRouterBaseUrl() {
+  const explicit = String(process.env.PLOINKY_ROUTER_URL || '').trim();
+  if (explicit) return explicit.replace(/\/+$/, '');
+  const host = String(process.env.PLOINKY_ROUTER_HOST || '127.0.0.1').trim();
+  const port = String(process.env.PLOINKY_ROUTER_PORT || '8080').trim();
+  return `http://${host}:${port}`;
+}
+
+function resolveProviderAlias() {
+  const explicit = String(process.env.PLOINKY_SECRETSTORE_PROVIDER || '').trim();
+  if (explicit) return explicit;
+  return '';
+}
+
+function resolveConsumerPrincipal() {
+  const principal = String(process.env.PLOINKY_AGENT_PRINCIPAL || '').trim();
+  if (principal) return principal;
+  const agentName = String(process.env.AGENT_NAME || '').trim();
+  return agentName ? `agent:${agentName}` : '';
+}
+
+function readCapabilityBindings() {
+  const raw = String(process.env.PLOINKY_CAPABILITY_BINDINGS_JSON || '').trim();
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function resolveCapabilityBinding(alias) {
+  const bindings = readCapabilityBindings();
+  const entry = bindings && typeof bindings === 'object' ? bindings[alias] : null;
+  return entry && typeof entry === 'object' ? entry : null;
+}
+
+function extractUserContextTokenFromAuthInfo(authInfo) {
+  const invocation = authInfo && typeof authInfo === 'object' ? authInfo.invocation : null;
+  const token = invocation && typeof invocation === 'object' ? invocation.userContextToken : null;
+  return isNonEmptyString(token) ? token.trim() : '';
+}
+
+function safeParseJson(text) {
+  try { return JSON.parse(text); } catch { return null; }
+}
+
+function unwrapToolPayload(name, result) {
+  const blocks = Array.isArray(result?.content) ? result.content : [];
+  const jsonBlock = blocks.find((b) => b?.type === 'json');
+  if (jsonBlock?.json && typeof jsonBlock.json === 'object') {
+    const payload = jsonBlock.json;
+    if (payload?.ok === false) throw new Error(String(payload?.message || payload?.error || `${name} failed.`));
+    return payload;
+  }
+  const textBlock = blocks.find((b) => b?.type === 'text' && typeof b.text === 'string');
+  if (textBlock?.text) {
+    const parsed = safeParseJson(textBlock.text);
+    if (parsed && typeof parsed === 'object') {
+      if (parsed?.ok === false) throw new Error(String(parsed?.message || parsed?.error || `${name} failed.`));
+      return parsed;
+    }
+    throw new Error(String(textBlock.text));
+  }
+  if (result?.structuredContent && typeof result.structuredContent === 'object') {
+    if (result.structuredContent.ok === false) {
+      throw new Error(String(result.structuredContent?.message || result.structuredContent?.error || `${name} failed.`));
+    }
+    return result.structuredContent;
+  }
+  throw new Error(`Invalid response for ${name}.`);
+}
+
+function scopesForOperation(operation) {
+  switch (operation) {
+    case 'secret_get':
+    case 'secret_list':
+      return ['secret:read'];
+    case 'secret_put':
+    case 'secret_delete':
+      return ['secret:write'];
+    case 'secret_grant':
+      return ['secret:grant'];
+    case 'secret_revoke':
+      return ['secret:revoke'];
+    default:
+      return [];
+  }
+}
+
+export function createSecretStoreClient({ providerAlias, alias = 'secretStore', authInfo = null, userContextToken = '' } = {}) {
+  const routerBase = resolveRouterBaseUrl();
+  const callerPrincipal = resolveConsumerPrincipal();
+  const binding = resolveCapabilityBinding(alias);
+  const bindingId = String(binding?.id || '').trim()
+    || `${callerPrincipal.replace(/^agent:/i, '')}:${alias}`;
+
+  // Route: the router exposes agent endpoints at /mcps/<agentShortName>/mcp
+  // (see RoutingServer / handleAgentMcpRequest). The launcher injects the
+  // resolved capability binding so the consumer does not hardcode a provider.
+  const provider = providerAlias || String(binding?.provider || '').trim() || resolveProviderAlias();
+  const providerRouteName = String(binding?.providerRouteName || '').trim()
+    || provider.split('/').filter(Boolean).pop();
+  if (!providerRouteName) {
+    throw new Error(`secret-store-client: no bound provider route for alias '${alias}'`);
+  }
+  const baseUrl = `${routerBase}/mcps/${encodeURIComponent(providerRouteName)}/mcp`;
+
+  let client = null;
+  let transport = null;
+
+  async function ensureConnected(requestHeaders) {
+    transport = new StreamableHTTPClientTransport(new URL(baseUrl), requestHeaders
+      ? { requestInit: { headers: requestHeaders } }
+      : undefined);
+    client = new Client({ name: 'secret-store-client', version: '1.0.0' });
+    await client.connect(transport);
+  }
+
+  async function close() {
+    try { if (client) await client.close(); } catch {}
+    try { if (transport) await transport.close?.(); } catch {}
+    client = null;
+    transport = null;
+  }
+
+  async function callContractOperation(operation, args = {}) {
+    const bodyObject = { tool: operation, arguments: args };
+    const privatePem = readPrivateKeyPem();
+    const headers = {};
+    const forwardedUserContextToken = isNonEmptyString(userContextToken)
+      ? userContextToken.trim()
+      : extractUserContextTokenFromAuthInfo(authInfo) || process.env.PLOINKY_USER_CONTEXT_TOKEN || undefined;
+    if (privatePem && callerPrincipal) {
+      const wire = await loadWireSign();
+      if (wire?.signCallerAssertion) {
+        const { token } = wire.signCallerAssertion({
+          callerPrincipal,
+          bindingId,
+          alias,
+          tool: operation,
+          scope: scopesForOperation(operation),
+          bodyObject,
+          privatePem,
+          audience: ROUTER_AUDIENCE,
+          userContextToken: forwardedUserContextToken
+        });
+        headers[CALLER_ASSERTION_HEADER] = token;
+      }
+    }
+    await ensureConnected(Object.keys(headers).length ? headers : undefined);
+    try {
+      const result = await client.callTool({ name: operation, arguments: args });
+      return unwrapToolPayload(operation, result);
+    } finally {
+      await close();
+    }
+  }
+
+  return {
+    get(key) {
+      return callContractOperation('secret_get', { key });
+    },
+    put(key, value) {
+      return callContractOperation('secret_put', { key, value });
+    },
+    delete(key) {
+      return callContractOperation('secret_delete', { key });
+    },
+    grant(key, principal, role) {
+      return callContractOperation('secret_grant', { key, principal, role });
+    },
+    revoke(key, principal) {
+      return callContractOperation('secret_revoke', { key, principal });
+    },
+    list() {
+      return callContractOperation('secret_list', {});
+    }
+  };
+}
+
+/**
+ * Minimal per-call helper used by github-auth.mjs. Always creates a fresh
+ * client; callers do not manage lifecycle.
+ */
+export async function withSecretStoreClient(fn, options = {}) {
+  const client = createSecretStoreClient(options);
+  return fn(client);
+}
+
+export const GIT_GITHUB_TOKEN_SECRET_KEY = 'GIT_GITHUB_TOKEN';
+
+/**
+ * GitHub-token helpers that were previously in dpu-secret-client.mjs.
+ * Re-implemented as thin wrappers on top of the generic contract so gitAgent
+ * stops depending on DPU-specific routes and tool names.
+ */
+export async function getStoredGitToken({ key = GIT_GITHUB_TOKEN_SECRET_KEY, authInfo = null } = {}) {
+  try {
+    const client = createSecretStoreClient({ authInfo });
+    const payload = await client.get(key);
+    return String(payload?.secret?.value || payload?.value || '').trim();
+  } catch {
+    return '';
+  }
+}
+
+export async function putStoredGitToken({ token, key = GIT_GITHUB_TOKEN_SECRET_KEY, authInfo = null } = {}) {
+  const value = String(token || '').trim();
+  if (!value) throw new Error('Token is required.');
+  const client = createSecretStoreClient({ authInfo });
+  const payload = await client.put(key, value);
+  try {
+    await client.grant(key, resolveConsumerPrincipal(), 'read');
+  } catch { /* grant is best-effort on write */ }
+  return payload;
+}
+
+export async function deleteStoredGitToken({ key = GIT_GITHUB_TOKEN_SECRET_KEY, authInfo = null } = {}) {
+  try {
+    const client = createSecretStoreClient({ authInfo });
+    return await client.delete(key);
+  } catch {
+    return { ok: true };
+  }
+}
+
+export async function grantStoredGitTokenAccess({ key = GIT_GITHUB_TOKEN_SECRET_KEY, principal, role = 'read', authInfo = null } = {}) {
+  try {
+    const client = createSecretStoreClient({ authInfo });
+    const target = principal || resolveConsumerPrincipal();
+    return await client.grant(key, target, role);
+  } catch {
+    return { ok: false };
+  }
+}

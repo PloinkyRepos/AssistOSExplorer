@@ -5,6 +5,85 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 
+const INVOCATION_TOKEN_HEADER = 'x-ploinky-invocation';
+let cachedWireVerify = null;
+async function loadWireVerify() {
+  if (cachedWireVerify) return cachedWireVerify;
+  const candidates = [
+    process.env.PLOINKY_WIRE_VERIFY_MODULE,
+    '/Agent/lib/wireVerify.mjs',
+    path.resolve(process.cwd(), 'Agent/lib/wireVerify.mjs'),
+    path.resolve(process.cwd(), '../Agent/lib/wireVerify.mjs')
+  ].filter(Boolean);
+  for (const candidate of candidates) {
+    try {
+      const mod = await import(candidate);
+      cachedWireVerify = mod;
+      return mod;
+    } catch (_) {}
+  }
+  return null;
+}
+
+function strictSecureWire() {
+  const flag = String(process.env.PLOINKY_SECURE_WIRE_STRICT || '').trim().toLowerCase();
+  return flag === '1' || flag === 'true' || flag === 'on';
+}
+
+function readRouterPublicKeyMaterial() {
+  const jwkEnv = process.env.PLOINKY_ROUTER_PUBLIC_KEY_JWK;
+  if (jwkEnv && jwkEnv.trim()) {
+    try { return { publicKeyJwk: JSON.parse(jwkEnv) }; } catch (_) {}
+  }
+  const pemPath = process.env.PLOINKY_ROUTER_PUBLIC_KEY_PATH;
+  if (pemPath) {
+    try { return { publicPem: fs.readFileSync(pemPath, 'utf8') }; } catch (_) {}
+  }
+  for (const candidate of ['/Agent/router-session.pub', '/shared/router-session.pub']) {
+    try {
+      if (fs.existsSync(candidate)) return { publicPem: fs.readFileSync(candidate, 'utf8') };
+    } catch (_) {}
+  }
+  return null;
+}
+
+function expectedAudienceForSelf() {
+  const principal = process.env.PLOINKY_AGENT_PRINCIPAL;
+  if (principal && principal.trim()) return principal.trim();
+  const agentName = process.env.AGENT_NAME || '';
+  return agentName ? `agent:${agentName}` : '';
+}
+
+let sharedReplayCache = null;
+async function verifyInvocationFromHeaders(headers = {}, bodyObject) {
+  const raw = headers[INVOCATION_TOKEN_HEADER] || headers[INVOCATION_TOKEN_HEADER.toLowerCase()];
+  if (!raw || typeof raw !== 'string') {
+    return { ok: false, reason: 'missing invocation token' };
+  }
+  const wire = await loadWireVerify();
+  if (!wire) {
+    return { ok: false, reason: 'wire-verify module unavailable' };
+  }
+  const keyMaterial = readRouterPublicKeyMaterial();
+  if (!keyMaterial) {
+    return { ok: false, reason: 'router public key not configured' };
+  }
+  if (!sharedReplayCache) sharedReplayCache = wire.createMemoryReplayCache({ maxSize: 4096 });
+  const audience = expectedAudienceForSelf();
+  try {
+    const { payload } = wire.verifyInvocationToken(raw.trim(), {
+      routerPublicPem: keyMaterial.publicPem,
+      routerPublicKeyJwk: keyMaterial.publicKeyJwk,
+      expectedAudience: audience || undefined,
+      bodyObject,
+      replayCache: sharedReplayCache
+    });
+    return { ok: true, payload };
+  } catch (err) {
+    return { ok: false, reason: err.message || String(err) };
+  }
+}
+
 async function loadSdkDeps() {
   const { types, streamHttp, mcp, zod } = await import('mcp-sdk');
   return {
@@ -177,11 +256,32 @@ async function registerTools(server, config) {
         context = args;
         args = {};
       }
-      const authInfo = parseAuthInfo(context?.requestInfo?.headers || {});
+      const headers = context?.requestInfo?.headers || {};
+      const bodyObject = { tool: tool.name, arguments: args || {} };
+
+      // Router-signed invocation token: verify and attach the grant so the
+      // DPU store layer can enforce call-time scope.
+      const invocationResult = await verifyInvocationFromHeaders(headers, bodyObject);
+      let enrichedContext = context;
+      if (invocationResult.ok) {
+        enrichedContext = { ...context, invocation: invocationResult.payload };
+      } else if (strictSecureWire()) {
+        throw new Error(`Invocation rejected: ${invocationResult.reason}`);
+      }
+
+      // Legacy fallback: accept x-ploinky-auth-info only while secure-wire
+      // is not strictly enforced. Removed once migration completes.
+      const legacyAuthInfo = !strictSecureWire()
+        ? parseAuthInfo(headers)
+        : null;
+      if (legacyAuthInfo) {
+        enrichedContext = { ...enrichedContext, authInfo: legacyAuthInfo };
+      }
+
       const result = await executeShell(commandSpec, {
         tool: tool.name,
         input: args,
-        metadata: authInfo ? { ...context, authInfo } : context
+        metadata: enrichedContext
       });
       if (result.code !== 0) {
         throw new Error(result.stderr?.trim() || `Tool ${tool.name} failed.`);

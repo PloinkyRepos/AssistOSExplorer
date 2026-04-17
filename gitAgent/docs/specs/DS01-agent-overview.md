@@ -28,7 +28,7 @@ Explorer needs Git capabilities without binding the user interface (UI) directly
 | `tools/git_tool.sh` + `tools/git_tool.mjs` | MCP tool dispatch and request orchestration |
 | `lib/git-service.mjs` | low-level Git execution and repository operations |
 | `lib/github-auth.mjs` | GitHub device flow, auth status, metadata persistence |
-| `lib/dpu-secret-client.mjs` | per-user secret storage bridge to `dpuAgent` |
+| `lib/secret-store-client.mjs` | generic `secret-store/v1` client (router-mediated, signed caller assertion) |
 | `IDE-plugins/git-tool-button/` | Explorer-facing Git UI plugin |
 
 ## Authentication Model

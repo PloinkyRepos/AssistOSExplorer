@@ -80,6 +80,40 @@ function extractAuthInfo(envelope) {
   return authInfo && typeof authInfo === 'object' ? authInfo : null;
 }
 
+function extractInvocationGrant(envelope) {
+  const metadata = envelope && typeof envelope === 'object' ? envelope.metadata : null;
+  const grant = metadata && typeof metadata === 'object' ? metadata.invocation : null;
+  return grant && typeof grant === 'object' ? grant : null;
+}
+
+function authInfoFromInvocation(grant) {
+  if (!grant || typeof grant !== 'object') return null;
+  const out = {};
+  if (grant.sub && /^agent:/i.test(grant.sub)) {
+    out.agent = {
+      principalId: grant.sub,
+      name: String(grant.sub).replace(/^agent:/i, '')
+    };
+  }
+  if (grant.user && typeof grant.user === 'object') {
+    out.user = {
+      id: String(grant.user.id || grant.user.sub || ''),
+      username: String(grant.user.username || grant.user.preferred_username || ''),
+      email: String(grant.user.email || ''),
+      roles: Array.isArray(grant.user.roles) ? [...grant.user.roles] : []
+    };
+  }
+  out.invocation = {
+    scope: Array.isArray(grant.scope) ? [...grant.scope] : [],
+    tool: String(grant.tool || ''),
+    contract: String(grant.contract || ''),
+    bindingId: String(grant.binding_id || ''),
+    workspaceId: String(grant.workspace_id || ''),
+    userContextToken: String(grant.user_context_token || '')
+  };
+  return out;
+}
+
 function normalizeArgs(toolName, args) {
   const input = args && typeof args === 'object' ? { ...args } : {};
   const requireString = (name) => {
@@ -91,6 +125,7 @@ function normalizeArgs(toolName, args) {
   switch (toolName) {
     case 'dpu_whoami':
     case 'dpu_workspace_roots':
+    case 'secret_list':
     case 'dpu_secret_list':
     case 'dpu_audit_config_get':
     case 'dpu_audit_list':
@@ -106,21 +141,26 @@ function normalizeArgs(toolName, args) {
     case 'dpu_audit_get':
       requireString('name');
       return input;
+    case 'secret_get':
+    case 'secret_delete':
     case 'dpu_secret_get':
     case 'dpu_secret_delete':
       requireString('key');
       return input;
+    case 'secret_put':
     case 'dpu_secret_put':
       requireString('key');
       if (typeof input.value !== 'string') {
-        throw new Error('dpu_secret_put requires a "value" string.');
+        throw new Error(`${toolName} requires a "value" string.`);
       }
       return input;
+    case 'secret_grant':
     case 'dpu_secret_grant':
       requireString('key');
       requireString('principal');
       requireString('role');
       return input;
+    case 'secret_revoke':
     case 'dpu_secret_revoke':
       requireString('key');
       requireString('principal');
@@ -178,7 +218,13 @@ async function main() {
     raw = '';
   }
   const envelope = raw && raw.trim() ? safeParseJson(raw) : null;
-  const authInfo = extractAuthInfo(envelope || {});
+  // Prefer the verified invocation grant (already validated by the MCP server)
+  // over the legacy x-ploinky-auth-info blob. Fall back to the legacy blob
+  // during migration if no invocation is present.
+  const invocationGrant = extractInvocationGrant(envelope || {});
+  const authInfo = invocationGrant
+    ? authInfoFromInvocation(invocationGrant)
+    : extractAuthInfo(envelope || {});
   const toolName = process.env.TOOL_NAME;
   const args = normalizeArgs(toolName, normalizeInput(envelope || {}));
 
@@ -205,21 +251,27 @@ async function main() {
     case 'dpu_workspace_roots':
       result = await getWorkspaceRoots(authInfo);
       break;
+    case 'secret_list':
     case 'dpu_secret_list':
       result = await listSecrets(authInfo);
       break;
+    case 'secret_get':
     case 'dpu_secret_get':
       result = await getSecretByKey(authInfo, args);
       break;
+    case 'secret_put':
     case 'dpu_secret_put':
       result = await putSecret(authInfo, args);
       break;
+    case 'secret_delete':
     case 'dpu_secret_delete':
       result = await deleteSecret(authInfo, args);
       break;
+    case 'secret_grant':
     case 'dpu_secret_grant':
       result = await grantSecret(authInfo, args);
       break;
+    case 'secret_revoke':
     case 'dpu_secret_revoke':
       result = await revokeSecret(authInfo, args);
       break;

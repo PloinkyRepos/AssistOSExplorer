@@ -54,6 +54,111 @@ import {
 
 export { resolveActor };
 
+/**
+ * Contract-level scope enforcement. When authInfo carries an `invocation.scope`
+ * list, the operation must be covered by it. Supplements (not replaces) the
+ * per-secret ACL checks below.
+ */
+const OPERATION_SCOPE_MAP = {
+  secret_get: ['secret:read'],
+  secret_put: ['secret:write'],
+  secret_delete: ['secret:write'],
+  secret_grant: ['secret:grant', 'secret:write'],
+  secret_revoke: ['secret:revoke', 'secret:write'],
+  secret_list: ['secret:access', 'secret:read'],
+  secret_whoami: ['secret:access', 'secret:read']
+};
+
+let providerBindingsCache = {
+  raw: null,
+  parsed: {}
+};
+
+function extractInvocationScope(authInfo) {
+  const invocation = authInfo && typeof authInfo === 'object' ? authInfo.invocation : null;
+  if (!invocation || typeof invocation !== 'object') return null;
+  const scope = Array.isArray(invocation.scope) ? invocation.scope : [];
+  return new Set(scope.map((v) => String(v || '').trim().toLowerCase()).filter(Boolean));
+}
+
+function readProviderBindings() {
+  const raw = String(process.env.PLOINKY_PROVIDER_BINDINGS_JSON || '').trim();
+  if (providerBindingsCache.raw === raw) {
+    return providerBindingsCache.parsed;
+  }
+  let parsed = {};
+  if (raw) {
+    try {
+      const candidate = JSON.parse(raw);
+      if (candidate && typeof candidate === 'object' && !Array.isArray(candidate)) {
+        parsed = candidate;
+      }
+    } catch {
+      parsed = {};
+    }
+  }
+  providerBindingsCache = { raw, parsed };
+  return parsed;
+}
+
+function assertInvocationBindingFor(operation, authInfo) {
+  const invocation = authInfo && typeof authInfo === 'object' ? authInfo.invocation : null;
+  if (!invocation || typeof invocation !== 'object') return;
+
+  const callerPrincipal = String(authInfo?.agent?.principalId || authInfo?.agentPrincipalId || '').trim();
+  if (!/^agent:/i.test(callerPrincipal)) return;
+
+  const bindingId = String(invocation.bindingId || invocation.binding_id || '').trim();
+  if (!bindingId) {
+    throw new Error(`Invocation for ${operation} is missing a delegated binding id.`);
+  }
+
+  const providerBindings = readProviderBindings();
+  if (!providerBindings || typeof providerBindings !== 'object' || !Object.keys(providerBindings).length) {
+    return;
+  }
+
+  const binding = providerBindings[bindingId];
+  if (!binding || typeof binding !== 'object') {
+    throw new Error(`Invocation binding '${bindingId}' is not registered for this provider.`);
+  }
+
+  const bindingContract = String(binding.contract || '').trim();
+  const invocationContract = String(invocation.contract || '').trim();
+  if (bindingContract && invocationContract && bindingContract !== invocationContract) {
+    throw new Error(`Invocation contract mismatch for binding '${bindingId}'.`);
+  }
+
+  const bindingConsumerPrincipal = String(binding.consumerPrincipal || '').trim();
+  if (bindingConsumerPrincipal && bindingConsumerPrincipal !== callerPrincipal) {
+    throw new Error(`Invocation caller '${callerPrincipal}' does not match binding consumer '${bindingConsumerPrincipal}'.`);
+  }
+
+  const approvedScopes = Array.isArray(binding.approvedScopes) ? binding.approvedScopes : [];
+  if (approvedScopes.length) {
+    const allowed = new Set(approvedScopes.map((value) => String(value || '').trim().toLowerCase()).filter(Boolean));
+    const invocationScopes = Array.isArray(invocation.scope) ? invocation.scope : [];
+    const denied = invocationScopes
+      .map((value) => String(value || '').trim().toLowerCase())
+      .filter((value) => value && !allowed.has(value));
+    if (denied.length) {
+      throw new Error(`Invocation scope exceeds the provider binding for ${operation}: ${denied.join(', ')}.`);
+    }
+  }
+}
+
+function assertInvocationScopeFor(operation, authInfo) {
+  const scopes = extractInvocationScope(authInfo);
+  if (!scopes) return; // no invocation context = legacy path, fall through to ACL
+  assertInvocationBindingFor(operation, authInfo);
+  const required = OPERATION_SCOPE_MAP[operation] || [];
+  if (!required.length) return;
+  const allowed = required.some((candidate) => scopes.has(candidate));
+  if (!allowed) {
+    throw new Error(`Invocation scope does not permit ${operation}. Required one of: ${required.join(', ')}.`);
+  }
+}
+
 const AUDIT_VIEWER_ROLES = Object.freeze(['admin', 'security']);
 const AUDIT_ROOT_PATH = '/Confidential/Audit';
 
@@ -369,8 +474,10 @@ async function assertAgentSecretGrantAllowed(permissionsManifest, principalId, r
   if (!agentManifest || typeof agentManifest !== 'object') {
     throw new Error(`Agent secret grant is invalid: manifest not found for ${agentName}.`);
   }
-  const allowedRoles = Array.isArray(agentManifest?.permissions?.secrets?.allowedRoles)
-    ? agentManifest.permissions.secrets.allowedRoles
+  const declaredRoles = agentManifest?.capabilities?.dpu?.allowedRoles
+    ?? agentManifest?.permissions?.secrets?.allowedRoles;
+  const allowedRoles = Array.isArray(declaredRoles)
+    ? declaredRoles
       .map((value) => String(value || '').trim().toLowerCase())
       .filter((value) => SECRET_ROLE_ORDER.includes(value))
     : [];
@@ -809,6 +916,7 @@ export async function appendAuditClientEvent(authInfo = null, payload = {}) {
 }
 
 export async function listSecrets(authInfo = null) {
+  assertInvocationScopeFor('secret_list', authInfo);
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
     await ensureUserRecord(state, permissionsManifest, actor, ctx);
@@ -832,6 +940,7 @@ export async function listSecrets(authInfo = null) {
 }
 
 export async function getSecretByKey(authInfo = null, { key }) {
+  assertInvocationScopeFor('secret_get', authInfo);
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
     await ensureUserRecord(state, permissionsManifest, actor, ctx);
@@ -851,6 +960,7 @@ export async function getSecretByKey(authInfo = null, { key }) {
 }
 
 export async function putSecret(authInfo = null, { key, value }) {
+  assertInvocationScopeFor('secret_put', authInfo);
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
     await ensureUserRecord(state, permissionsManifest, actor, ctx);
@@ -886,6 +996,7 @@ export async function putSecret(authInfo = null, { key, value }) {
 }
 
 export async function deleteSecret(authInfo = null, { key }) {
+  assertInvocationScopeFor('secret_delete', authInfo);
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
     await ensureUserRecord(state, permissionsManifest, actor, ctx);
@@ -911,6 +1022,7 @@ export async function deleteSecret(authInfo = null, { key }) {
 }
 
 export async function grantSecret(authInfo = null, { key, principal, role }) {
+  assertInvocationScopeFor('secret_grant', authInfo);
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
     await ensureUserRecord(state, permissionsManifest, actor, ctx);
@@ -947,6 +1059,7 @@ export async function grantSecret(authInfo = null, { key, principal, role }) {
 }
 
 export async function revokeSecret(authInfo = null, { key, principal }) {
+  assertInvocationScopeFor('secret_revoke', authInfo);
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
     await ensureUserRecord(state, permissionsManifest, actor, ctx);

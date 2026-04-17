@@ -78,12 +78,14 @@
 
                 <section>
                     <h2>Input And Response Behavior</h2>
-                    <p><code>tools/dpu_tool.mjs</code> normalizes the MCP envelope, extracts <code>metadata.authInfo</code>, validates required strings and enum-like values, and only then dispatches into the domain layer. Tool responses are actor-filtered. For example, a caller may see a secret record in a list without seeing its plaintext value unless the resolved role allows <code>read</code>.</p>
+                    <p><code>tools/dpu_tool.mjs</code> normalizes the MCP envelope, prefers the verified <code>metadata.invocation</code> grant over legacy <code>metadata.authInfo</code>, validates required strings and enum-like values, and only then dispatches into the domain layer. Tool responses are actor-filtered. For example, a caller may see a secret record in a list without seeing its plaintext value unless the resolved role allows <code>read</code>.</p>
                 </section>
 
                 <section>
                     <h2>Execution Constraints</h2>
                     <p><code>mcp-config.json</code> sets <code>maxParallelTasks</code> to <code>1</code>. Mutating operations are also serialized through the DPU file lock. This does not turn DPU into a database, but it does keep the state files and permissions manifest from being updated concurrently through competing writes.</p>
+                    <p>For delegated capability calls, DPU also checks that the invocation <code>binding_id</code> belongs to the bindings registered for this provider runtime. A valid signature and audience are necessary, but they are not treated as sufficient if the binding no longer belongs to the provider.</p>
+                    <p>Audit collection starts disabled and is enabled explicitly through <code>dpu_audit_config_set</code>. Once enabled, DPU appends JSONL records for audited secret and confidential mutations.</p>
                 </section>
             </div>
         </div>
