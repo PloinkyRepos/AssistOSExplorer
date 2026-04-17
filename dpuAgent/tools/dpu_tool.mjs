@@ -1,5 +1,10 @@
 #!/usr/bin/env node
 import {
+  getAuditConfig,
+  setAuditConfig,
+  listAuditEntries,
+  getAuditEntry,
+  appendAuditClientEvent,
   getWhoAmI,
   getWorkspaceRoots,
   listSecrets,
@@ -87,6 +92,19 @@ function normalizeArgs(toolName, args) {
     case 'dpu_whoami':
     case 'dpu_workspace_roots':
     case 'dpu_secret_list':
+    case 'dpu_audit_config_get':
+    case 'dpu_audit_list':
+      return input;
+    case 'dpu_audit_event_append':
+      requireString('eventType');
+      return input;
+    case 'dpu_audit_config_set':
+      if (typeof input.enabled !== 'boolean') {
+        throw new Error('dpu_audit_config_set requires an "enabled" boolean.');
+      }
+      return input;
+    case 'dpu_audit_get':
+      requireString('name');
       return input;
     case 'dpu_secret_get':
     case 'dpu_secret_delete':
@@ -168,6 +186,21 @@ async function main() {
   switch (toolName) {
     case 'dpu_whoami':
       result = await getWhoAmI(authInfo);
+      break;
+    case 'dpu_audit_config_get':
+      result = await getAuditConfig(authInfo);
+      break;
+    case 'dpu_audit_config_set':
+      result = await setAuditConfig(authInfo, args);
+      break;
+    case 'dpu_audit_list':
+      result = await listAuditEntries(authInfo, args);
+      break;
+    case 'dpu_audit_get':
+      result = await getAuditEntry(authInfo, args);
+      break;
+    case 'dpu_audit_event_append':
+      result = await appendAuditClientEvent(authInfo, args);
       break;
     case 'dpu_workspace_roots':
       result = await getWorkspaceRoots(authInfo);

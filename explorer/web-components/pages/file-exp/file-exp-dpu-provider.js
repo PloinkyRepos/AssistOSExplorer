@@ -6,6 +6,7 @@ import {
     ToolError
 } from "../../../services/infrastructure/explorerApi.js";
 import {
+    DPU_AUDIT_PATH,
     DPU_MY_SPACE_PATH,
     DPU_ROOT_PATH,
     DPU_SECRETS_PATH,
@@ -27,6 +28,7 @@ import {
 } from "./file-exp-utils.js";
 
 export {
+    DPU_AUDIT_PATH,
     DPU_ROOT_PATH,
     DPU_MY_SPACE_PATH,
     DPU_SHARED_PATH,
@@ -203,6 +205,17 @@ async function getDpuRoots(fileExp) {
         canCreateDirectories: false,
         immutableRoot: true
     });
+    if (cache.roots?.audit?.path === DPU_AUDIT_PATH) {
+        indexNode(fileExp, DPU_AUDIT_PATH, {
+            kind: 'audit-root',
+            type: 'directory',
+            canWrite: false,
+            canCreateChildren: false,
+            canCreateFiles: false,
+            canCreateDirectories: false,
+            immutableRoot: true
+        });
+    }
     return cache.roots;
 }
 
@@ -231,7 +244,7 @@ function createRootEntries(fileExp, roots = {}) {
         canCreateDirectories: false,
         immutableRoot: true
     });
-    return [
+    const entries = [
         {
             ...makeEntry('My Space', 'directory'),
             dpuCanWrite: true,
@@ -266,6 +279,29 @@ function createRootEntries(fileExp, roots = {}) {
             path: DPU_SECRETS_PATH
         }
     ];
+    if (roots?.audit?.path === DPU_AUDIT_PATH) {
+        indexNode(fileExp, DPU_AUDIT_PATH, {
+            kind: 'audit-root',
+            type: 'directory',
+            canWrite: false,
+            canCreateChildren: false,
+            canCreateFiles: false,
+            canCreateDirectories: false,
+            immutableRoot: true
+        });
+        entries.push({
+            ...makeEntry('Audit', 'directory'),
+            dpuCanWrite: false,
+            dpuCanCreateChildren: false,
+            dpuCanCreateFiles: false,
+            dpuCanCreateDirectories: false,
+            dpuCanRename: false,
+            dpuCanDelete: false,
+            dpuImmutableRoot: true,
+            path: DPU_AUDIT_PATH
+        });
+    }
+    return entries;
 }
 
 function createSecretEntry(fileExp, secret) {
@@ -330,6 +366,37 @@ function createConfidentialEntry(fileExp, basePath, objectRecord, kind = 'confid
             dpuCanCreateDirectories: isDpuFolderType(objectType) && canWrite,
             dpuCanRename: canWrite,
             dpuCanDelete: canWrite,
+            dpuImmutableRoot: false
+        }),
+        path: entryPath
+    };
+}
+
+function createAuditEntry(fileExp, auditItem) {
+    const entryName = String(auditItem?.name || '').trim();
+    const entryPath = fileExp.joinPath(DPU_AUDIT_PATH, entryName);
+    indexNode(fileExp, entryPath, {
+        kind: 'audit-file',
+        type: 'file',
+        name: entryName,
+        updatedAt: auditItem?.updatedAt || '',
+        canWrite: false,
+        canDelete: false,
+        canRename: false,
+        canCreateChildren: false,
+        canCreateFiles: false,
+        canCreateDirectories: false,
+        immutableRoot: false
+    });
+    return {
+        ...makeEntry(entryName, 'file', {
+            modified: auditItem?.updatedAt || null,
+            dpuCanWrite: false,
+            dpuCanRename: false,
+            dpuCanDelete: false,
+            dpuCanCreateChildren: false,
+            dpuCanCreateFiles: false,
+            dpuCanCreateDirectories: false,
             dpuImmutableRoot: false
         }),
         path: entryPath
@@ -407,6 +474,28 @@ async function resolveSecretNode(fileExp, normalizedPath) {
     return getIndexedNode(fileExp, normalizedPath);
 }
 
+async function resolveAuditNode(fileExp, normalizedPath) {
+    const cached = getIndexedNode(fileExp, normalizedPath);
+    if (cached) return cached;
+    if (normalizedPath === DPU_AUDIT_PATH) {
+        await getDpuRoots(fileExp);
+        return getIndexedNode(fileExp, DPU_AUDIT_PATH);
+    }
+    const fileName = normalizedPath.slice(`${DPU_AUDIT_PATH}/`.length);
+    if (!fileName) {
+        return null;
+    }
+    const parsed = await callDpuTool('dpu_audit_list');
+    const item = Array.isArray(parsed.items)
+        ? parsed.items.find((entry) => entry?.name === fileName)
+        : null;
+    if (!item) {
+        return null;
+    }
+    createAuditEntry(fileExp, item);
+    return getIndexedNode(fileExp, normalizedPath);
+}
+
 export function isDpuVirtualPath(path) {
     return isAnyDpuVirtualPath(path);
 }
@@ -456,6 +545,9 @@ export async function resolveDpuNode(fileExp, path) {
     if (normalizedPath === DPU_SECRETS_PATH || normalizedPath.startsWith(`${DPU_SECRETS_PATH}/`)) {
         return resolveSecretNode(fileExp, normalizedPath);
     }
+    if (normalizedPath === DPU_AUDIT_PATH || normalizedPath.startsWith(`${DPU_AUDIT_PATH}/`)) {
+        return resolveAuditNode(fileExp, normalizedPath);
+    }
 
     return null;
 }
@@ -472,6 +564,12 @@ export async function listDpuDirectory(fileExp, path) {
         const parsed = await callDpuTool('dpu_secret_list');
         return (Array.isArray(parsed.secrets) ? parsed.secrets : [])
             .map((secret) => createSecretEntry(fileExp, secret));
+    }
+
+    if (normalizedPath === DPU_AUDIT_PATH) {
+        const parsed = await callDpuTool('dpu_audit_list');
+        return (Array.isArray(parsed.items) ? parsed.items : [])
+            .map((item) => createAuditEntry(fileExp, item));
     }
 
     if (normalizedPath === DPU_SHARED_PATH) {
@@ -699,6 +797,38 @@ export async function openDpuFile(fileExp, filePath, { invalidate = true } = {})
             dpuSelectedCanComment: Boolean(objectRecord.canComment),
             dpuSelectedCommentCount: Number.parseInt(String(objectRecord.commentCount || 0), 10) || 0,
             dpuSelectedComments: comments,
+            dpuCommentsOpen: false,
+            dpuSecretState: null,
+            hasUnsavedChanges: false,
+            isEditing: false
+        });
+        if (invalidate) {
+            fileExp.invalidate();
+        } else {
+            fileExp.refreshPreviewUi();
+        }
+        return;
+    }
+
+    if (node.kind === 'audit-file') {
+        const parsed = await callDpuTool('dpu_audit_get', { name: node.name });
+        const item = parsed.item || {};
+        const fileContent = String(item.content || '');
+        fileExp.setPreviewState({
+            fileContent,
+            previewContent: renderCodePreview(fileContent, item.name || node.name || 'audit.jsonl'),
+            selectedIsMarkdown: false,
+            previewMode: 'code',
+            mediaType: null,
+            fileLoadInfo: null,
+            markdownTextView: false,
+            documentId: null,
+            dpuSelectedObjectId: null,
+            dpuSelectedCanWrite: false,
+            dpuSelectedUpdatedAt: String(item.updatedAt || ''),
+            dpuSelectedCanComment: false,
+            dpuSelectedCommentCount: 0,
+            dpuSelectedComments: [],
             dpuCommentsOpen: false,
             dpuSecretState: null,
             hasUnsavedChanges: false,

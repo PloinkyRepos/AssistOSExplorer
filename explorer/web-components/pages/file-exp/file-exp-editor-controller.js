@@ -3,6 +3,7 @@ import { renderCodePreview, renderMarkdownPreview } from "./file-exp-utils.js";
 import { getPreviewUiState } from "./file-exp-preview-state.js";
 import { isDpuSecretPath, isDpuVirtualPath, openDpuFile, readDpuCurrentItemState, updateDpuFile, updateDpuSecret } from "./file-exp-dpu-provider.js";
 import { startCurrentFileViewWatch, stopCurrentFileViewWatch } from "./file-exp-current-file-monitor.js";
+import { emitAuditEvent } from "../../../services/audit/auditService.js";
 
 function extractDpuUpdatedAt(snapshot) {
     if (!snapshot || typeof snapshot !== 'object') return '';
@@ -164,6 +165,16 @@ export async function saveFile(fileExp, options = {}) {
         if (!autoSave) {
             fileExp.showStatus(`Successfully saved ${selectedPath}`, false);
         }
+        void emitAuditEvent('file.update', {
+            path: selectedPath,
+            currentPath: fileExp.normalizePath(fileExp.state.path || '/'),
+            selectedPath: fileExp.normalizePath(selectedPath),
+            metadata: {
+                autoSave,
+                preserveEditing,
+                isDpu: isDpuPath
+            }
+        });
         fileExp.setPreviewState({
             fileContent: newContent,
             hasUnsavedChanges: false,

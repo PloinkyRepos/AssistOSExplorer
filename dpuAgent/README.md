@@ -6,7 +6,7 @@ The agent owns three things that Explorer should not implement locally:
 
 - actor-aware access control
 - encrypted storage for secret values and confidential file content
-- stable virtual roots such as `/Confidential/My Space`, `/Confidential/Shared`, and `/Confidential/Secrets`
+- stable virtual roots such as `/Confidential/My Space`, `/Confidential/Shared`, `/Confidential/Secrets`, and admin-only `/Confidential/Audit`
 
 ## Runtime
 

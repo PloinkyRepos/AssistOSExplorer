@@ -78,6 +78,7 @@ import {
     refreshCurrentFileViewBaseline as refreshCurrentFileViewBaselineImpl,
     pollCurrentFileView as pollCurrentFileViewImpl
 } from "./file-exp-current-file-monitor.js";
+import { emitAuditEvent } from "../../../services/audit/auditService.js";
 
 const LARGE_FILE_PREVIEW_LIMIT_BYTES = 1.5 * 1024 * 1024; // ~1.5MB safety window before transport limits
 const LARGE_FILE_PREVIEW_LINES = 400;
@@ -171,6 +172,7 @@ export class FileExp {
         this.boundContextMenu = this.handleContextMenu.bind(this);
         this.boundHandleDpuCommentsState = this.handleDpuCommentsState.bind(this);
         this.boundHandleDpuCommentsClose = this.handleDpuCommentsClose.bind(this);
+        this.boundAuditLocalAction = this.handleAuditLocalAction.bind(this);
 
         this.caches = createFileExpCaches();
         this.inflightDirListing = new Map();
@@ -189,6 +191,7 @@ export class FileExp {
         this.setElementListener('file-exp-dpu-comments-state', this.element, 'dpu-comments-state', this.boundHandleDpuCommentsState);
         this.setElementListener('file-exp-dpu-comments-close', this.element, 'dpu-comments-close', this.boundHandleDpuCommentsClose);
         this.setElementListener('file-exp-app-menu-select', this.element, 'app-menu-select', this.boundAppMenuSelect);
+        this.setElementListener('file-exp-audit-local-action', this.element, 'click', this.boundAuditLocalAction, true);
     }
 
     async withLoader(fn) {
@@ -817,6 +820,17 @@ export class FileExp {
             this.stopCurrentFileViewWatch();
         }
         this.syncWebViewForPath(filePath);
+        if (options?.audit !== false) {
+            void emitAuditEvent('file.open', {
+                path: this.normalizePath(filePath || ''),
+                currentPath: this.normalizePath(this.state.path || '/'),
+                selectedPath: this.normalizePath(this.state.selectedPath || ''),
+                metadata: {
+                    previewMode: this.state.previewMode || '',
+                    isDpu: Boolean(isDpuVirtualPath(filePath))
+                }
+            });
+        }
         return result;
     }
 
@@ -826,6 +840,30 @@ export class FileExp {
 
     async saveFile(options = {}) {
         return saveFileImpl(this, options);
+    }
+
+    handleAuditLocalAction(event) {
+        const target = event?.target instanceof Element ? event.target.closest('[data-local-action]') : null;
+        if (!target || !this.element?.contains?.(target)) {
+            return;
+        }
+        const descriptor = String(target.getAttribute('data-local-action') || '').trim();
+        if (!descriptor) {
+            return;
+        }
+        const [action, ...args] = descriptor.split(/\s+/);
+        if (!action) {
+            return;
+        }
+        void emitAuditEvent('explorer.action', {
+            action,
+            currentPath: this.normalizePath(this.state.path || '/'),
+            selectedPath: this.normalizePath(this.state.selectedPath || ''),
+            metadata: {
+                args,
+                tagName: target.tagName.toLowerCase()
+            }
+        });
     }
 
     async cancelEdit() {

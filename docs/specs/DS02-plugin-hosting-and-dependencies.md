@@ -93,6 +93,7 @@ These plugins should be understood as IDE extensions mounted into Explorer, not 
 Examples of host slots used by integrations:
 
 - `file-exp:toolbar`
+- `file-exp:account-menu`
 - `file-exp:context-menu:file`
 - `file-exp:context-menu:directory`
 - `file-exp:new-menu`
@@ -163,6 +164,7 @@ Explorer provides:
 
 - stable slot names
 - mounting surfaces
+- host-owned account menu surfaces
 - host-owned menu surfaces
 - host layout and navigation context
 - host refresh points after mutations
@@ -213,6 +215,7 @@ Examples of acceptable host responsibilities:
 - preserving selection, URL, and preview state
 - hosting modals and side panels
 - coordinating toolbar affordances
+- mounting workspace-control plugins inside the account menu while keeping account menu structure host-owned
 - rendering context menus and `New` menus while delegating domain actions to plugins or owning agents
 - showing a host-owned loading state while async menu contributions are still being resolved
 

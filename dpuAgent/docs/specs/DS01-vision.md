@@ -49,5 +49,6 @@ The agent materializes virtual roots through `getWorkspaceRoots()`, including:
 - `/Confidential/My Space`
 - `/Confidential/Shared`
 - `/Confidential/Secrets`
+- `/Confidential/Audit` for audit viewers only
 
 Secrets and confidential objects are listed through separate tool families. Secret values are only materialized for actors whose role allows `read`. Confidential file content is only materialized for actors whose role allows `read`. Mutating operations run under the DPU file lock so metadata and permissions updates stay consistent.

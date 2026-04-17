@@ -49,7 +49,8 @@ async function reloadCurrentFileView(fileExp, pathValue, latestInfo = null) {
     await fileExp.openFile(normalizedPath, {
         showLoader: false,
         invalidate: false,
-        suppressReadErrorStatus: true
+        suppressReadErrorStatus: true,
+        audit: false
     });
     const effectiveInfo = latestInfo || await refreshCurrentFileViewBaseline(fileExp, normalizedPath);
     fileExp.setPreviewState({

@@ -13,6 +13,8 @@ Explorer owns:
 - general text and code editing
 - collaborative editing safeguards for local files
 - application and document plugin hosting
+- account-menu plugin hosting for workspace-wide controls such as DPU audit
+- client-side audit emission for Explorer actions, file open/save flows, plugin usage, and copilot autocomplete
 - session-expiration handling for the browser client
 - global loading overlays for long-running UI actions, which remain visible until the wrapped async workflow finishes with success or failure
 

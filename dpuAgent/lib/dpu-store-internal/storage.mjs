@@ -16,6 +16,7 @@ const STATE_FILENAME = 'state.json';
 const PERMISSIONS_MANIFEST_FILENAME = 'permissions.manifest.json';
 const LOCK_DIRNAME = '.lock';
 const BLOBS_DIRNAME = 'blobs';
+const AUDIT_DIRNAME = 'audit';
 const SECRETS_FILENAME = 'secrets.json';
 const PLOINKY_REPOS_DIRNAME = '.ploinky/repos';
 const CONFIDENTIAL_FILE_PREFIX = 'DPUENC1';
@@ -66,8 +67,16 @@ export function getConfidentialBlobsRoot() {
   return path.join(getDpuDataRoot(), BLOBS_DIRNAME);
 }
 
+export function getAuditRoot() {
+  return path.join(getDpuDataRoot(), AUDIT_DIRNAME);
+}
+
 export function getConfidentialBlobPath(objectId) {
   return path.join(getConfidentialBlobsRoot(), objectId);
+}
+
+export function getAuditFilePath(fileName) {
+  return path.join(getAuditRoot(), fileName);
 }
 
 function getConfiguredMasterKey() {
@@ -149,26 +158,65 @@ export async function withFileLock(task) {
 
 export function defaultState() {
   return {
-    version: 3,
+    version: 4,
     users: {},
     secrets: {},
-    objects: {}
+    objects: {},
+    settings: {
+      audit: {
+        enabled: true
+      }
+    }
   };
 }
 
 export async function loadState() {
   const state = await readJsonFile(getStateFilePath(), defaultState());
   return {
-    version: Number(state.version || 3),
+    version: Number(state.version || 4),
     users: state.users && typeof state.users === 'object' ? state.users : {},
     secrets: state.secrets && typeof state.secrets === 'object' ? state.secrets : {},
-    objects: state.objects && typeof state.objects === 'object' ? state.objects : {}
+    objects: state.objects && typeof state.objects === 'object' ? state.objects : {},
+    settings: state.settings && typeof state.settings === 'object' && !Array.isArray(state.settings)
+      ? state.settings
+      : {
+        audit: {
+          enabled: false
+        }
+      }
   };
 }
 
 export async function saveState(state) {
-  state.version = 3;
+  state.version = 4;
   await writeJsonFile(getStateFilePath(), state);
+}
+
+export async function listAuditFiles() {
+  const auditRoot = getAuditRoot();
+  if (!(await fileExists(auditRoot))) {
+    return [];
+  }
+  let entries = [];
+  try {
+    entries = await fs.readdir(auditRoot, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  return entries
+    .filter((entry) => entry?.isFile?.() && entry.name.endsWith('.jsonl'))
+    .map((entry) => entry.name)
+    .sort((left, right) => right.localeCompare(left));
+}
+
+export async function readAuditFile(fileName) {
+  return fs.readFile(getAuditFilePath(fileName), 'utf8');
+}
+
+export async function appendAuditLine(fileName, line) {
+  const targetPath = getAuditFilePath(fileName);
+  await ensureFileParentExists(targetPath);
+  await fs.appendFile(targetPath, `${String(line || '')}\n`, 'utf8');
 }
 
 export async function loadPermissionsManifest() {

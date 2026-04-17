@@ -23,6 +23,7 @@ import {
   serializeConfidentialComments
 } from './dpu-store-internal/identity-acl.mjs';
 import {
+  appendAuditLine,
   deleteSecretsFileValue,
   decryptConfidentialContent,
   ensureFileParentExists,
@@ -30,8 +31,10 @@ import {
   fileExists,
   getConfidentialBlobPath,
   loadAgentManifest,
+  listAuditFiles as listAuditStorageFiles,
   loadState,
   loadPermissionsManifest,
+  readAuditFile as readAuditStorageFile,
   readSecretsMap,
   removePathIfExists,
   saveState,
@@ -50,6 +53,9 @@ import {
 } from './dpu-store-internal/permissions-manifest.mjs';
 
 export { resolveActor };
+
+const AUDIT_VIEWER_ROLES = Object.freeze(['admin', 'security']);
+const AUDIT_ROOT_PATH = '/Confidential/Audit';
 
 async function writeEncryptedConfidentialFile(objectRecord, content) {
   const blobPath = getConfidentialBlobPath(objectRecord.id);
@@ -74,6 +80,137 @@ async function readConfidentialFile(objectRecord) {
     return decrypted;
   }
   throw new Error(`Confidential file storage is invalid for object ${objectRecord.id || ''}`.trim());
+}
+
+function normalizeAuditSettings(settings) {
+  const source = settings && typeof settings === 'object' && !Array.isArray(settings)
+    ? settings
+    : {};
+  const audit = source.audit && typeof source.audit === 'object' && !Array.isArray(source.audit)
+    ? source.audit
+    : {};
+  return {
+    audit: {
+      enabled: Boolean(audit.enabled)
+    }
+  };
+}
+
+function getAuditSettings(state) {
+  const normalized = normalizeAuditSettings(state?.settings);
+  if (!state.settings || state.settings.audit?.enabled !== normalized.audit.enabled) {
+    state.settings = normalized;
+  }
+  return normalized.audit;
+}
+
+function hasAuditViewerRole(actor) {
+  const roles = Array.isArray(actor?.roles) ? actor.roles : [];
+  const hasRole = roles.some((role) => AUDIT_VIEWER_ROLES.includes(String(role || '').trim().toLowerCase()));
+  if (hasRole) {
+    return true;
+  }
+  const username = String(actor?.username || '').trim().toLowerCase();
+  const userId = String(actor?.id || '').trim().toLowerCase();
+  const principalId = String(actor?.principalId || '').trim().toLowerCase();
+  return username === 'admin' || userId === 'local:admin' || principalId === 'user:local:admin';
+}
+
+function assertAuditViewer(actor) {
+  if (!hasAuditViewerRole(actor)) {
+    throw new Error('Access denied: audit logs require admin or security role.');
+  }
+}
+
+function sanitizeAuditMetadata(value) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (Array.isArray(value)) {
+    return value.map((entry) => sanitizeAuditMetadata(entry));
+  }
+  if (typeof value === 'object') {
+    const output = {};
+    for (const [key, entry] of Object.entries(value)) {
+      if (['content', 'value', 'draft', 'body', 'message'].includes(key)) {
+        continue;
+      }
+      output[key] = sanitizeAuditMetadata(entry);
+    }
+    return output;
+  }
+  return value;
+}
+
+function buildAuditActorPayload(actor) {
+  return {
+    principalId: actor?.principalId || '',
+    email: actor?.email || '',
+    username: actor?.username || '',
+    id: actor?.id || '',
+    roles: Array.isArray(actor?.roles) ? actor.roles : [],
+    agentPrincipalId: actor?.agentPrincipalId || '',
+    agentName: actor?.agentName || '',
+    authenticated: Boolean(actor?.authenticated)
+  };
+}
+
+function buildAuditFileEntry(fileName, content = null) {
+  return {
+    name: fileName,
+    path: `${AUDIT_ROOT_PATH}/${fileName}`,
+    type: 'file',
+    scope: 'audit',
+    content,
+    updatedAt: fileName.replace(/\.jsonl$/i, ''),
+    mimeType: 'application/x-ndjson'
+  };
+}
+
+function createAuditRecord({ actor, operation, target = {}, metadata = {}, status = 'ok', error = '' }) {
+  return {
+    timestamp: nowIso(),
+    operation: String(operation || '').trim(),
+    status: String(status || 'ok').trim(),
+    actor: buildAuditActorPayload(actor),
+    target: sanitizeAuditMetadata(target),
+    metadata: sanitizeAuditMetadata(metadata),
+    error: error ? String(error) : ''
+  };
+}
+
+async function appendAuditRecordIfEnabled(state, record, { force = false } = {}) {
+  if (!force && !getAuditSettings(state).enabled) {
+    return false;
+  }
+  const timestamp = String(record?.timestamp || nowIso());
+  const fileName = `${timestamp.slice(0, 10) || 'audit'}.jsonl`;
+  await appendAuditLine(fileName, JSON.stringify(record));
+  return true;
+}
+
+async function runAuditedMutation(state, actor, { operation, target, metadata }, worker) {
+  try {
+    const result = await worker();
+    await appendAuditRecordIfEnabled(state, createAuditRecord({
+      actor,
+      operation,
+      target,
+      metadata,
+      status: 'ok'
+    }));
+    return result;
+  } catch (error) {
+    await appendAuditRecordIfEnabled(state, createAuditRecord({
+      actor,
+      operation,
+      target,
+      metadata,
+      status: 'error',
+      error: error?.message || String(error)
+    }));
+    throw error;
+  }
 }
 
 function getSecret(state, key) {
@@ -515,30 +652,159 @@ export async function getWorkspaceRoots(authInfo = null) {
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
     const userSpace = await ensureUserRecord(state, permissionsManifest, actor, ctx);
-    return {
-      ok: true,
-      roots: {
-        confidential: {
-          path: '/Confidential',
-          type: 'virtual-root'
-        },
-        mySpace: {
-          id: userSpace.mySpaceRootId,
-          path: '/Confidential/My Space',
-          type: 'folder'
-        },
-        sharedFiles: {
-          scope: 'shared',
-          path: '/Confidential/Shared',
-          type: 'virtual-list'
-        },
-        secrets: {
-          scope: 'secrets',
-          path: '/Confidential/Secrets',
-          type: 'virtual-list'
-        }
+    const roots = {
+      confidential: {
+        path: '/Confidential',
+        type: 'virtual-root'
+      },
+      mySpace: {
+        id: userSpace.mySpaceRootId,
+        path: '/Confidential/My Space',
+        type: 'folder'
+      },
+      sharedFiles: {
+        scope: 'shared',
+        path: '/Confidential/Shared',
+        type: 'virtual-list'
+      },
+      secrets: {
+        scope: 'secrets',
+        path: '/Confidential/Secrets',
+        type: 'virtual-list'
       }
     };
+    if (hasAuditViewerRole(actor)) {
+      roots.audit = {
+        scope: 'audit',
+        path: AUDIT_ROOT_PATH,
+        type: 'virtual-list'
+      };
+    }
+    return {
+      ok: true,
+      roots
+    };
+  });
+}
+
+export async function getAuditConfig(authInfo = null) {
+  return withLockedState(async (state, permissionsManifest, ctx) => {
+    const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
+    await ensureUserRecord(state, permissionsManifest, actor, ctx);
+    const audit = getAuditSettings(state);
+    return {
+      ok: true,
+      audit: {
+        enabled: Boolean(audit.enabled),
+        canManage: hasAuditViewerRole(actor),
+        canViewFiles: hasAuditViewerRole(actor)
+      }
+    };
+  });
+}
+
+export async function setAuditConfig(authInfo = null, { enabled }) {
+  return withLockedState(async (state, permissionsManifest, ctx) => {
+    const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
+    await ensureUserRecord(state, permissionsManifest, actor, ctx);
+    assertAuditViewer(actor);
+    const audit = getAuditSettings(state);
+    audit.enabled = Boolean(enabled);
+    state.settings = {
+      ...normalizeAuditSettings(state.settings),
+      audit: {
+        enabled: audit.enabled
+      }
+    };
+    ctx.dirty = true;
+    await appendAuditRecordIfEnabled(state, createAuditRecord({
+      actor,
+      operation: 'dpu.audit.config.set',
+      target: {
+        path: AUDIT_ROOT_PATH
+      },
+      metadata: {
+        enabled: audit.enabled
+      },
+      status: 'ok'
+    }), { force: true });
+    return {
+      ok: true,
+      audit: {
+        enabled: audit.enabled,
+        canManage: true,
+        canViewFiles: true
+      }
+    };
+  });
+}
+
+export async function listAuditEntries(authInfo = null) {
+  return withLockedState(async (state, permissionsManifest, ctx) => {
+    const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
+    await ensureUserRecord(state, permissionsManifest, actor, ctx);
+    assertAuditViewer(actor);
+    const files = await listAuditStorageFiles();
+    return {
+      ok: true,
+      items: files.map((fileName) => buildAuditFileEntry(fileName))
+    };
+  });
+}
+
+export async function getAuditEntry(authInfo = null, { name }) {
+  return withLockedState(async (state, permissionsManifest, ctx) => {
+    const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
+    await ensureUserRecord(state, permissionsManifest, actor, ctx);
+    assertAuditViewer(actor);
+    const normalizedName = normalizePathSegment(name, 'name');
+    if (!normalizedName.endsWith('.jsonl')) {
+      throw new Error('Audit file name must end with .jsonl.');
+    }
+    const availableFiles = await listAuditStorageFiles();
+    if (!availableFiles.includes(normalizedName)) {
+      return { ok: false, error: `Audit file not found: ${normalizedName}` };
+    }
+    const content = await readAuditStorageFile(normalizedName);
+    return {
+      ok: true,
+      item: buildAuditFileEntry(normalizedName, content)
+    };
+  });
+}
+
+export async function appendAuditClientEvent(authInfo = null, payload = {}) {
+  return withLockedState(async (state, permissionsManifest, ctx) => {
+    const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
+    await ensureUserRecord(state, permissionsManifest, actor, ctx);
+    const eventType = normalizeName(payload.eventType, 'eventType');
+    const source = String(payload.source || 'explorer').trim() || 'explorer';
+    const target = {
+      path: String(payload.path || '').trim(),
+      targetPath: String(payload.targetPath || '').trim(),
+      pluginKey: String(payload.pluginKey || '').trim()
+    };
+    const metadata = {
+      action: String(payload.action || '').trim(),
+      language: String(payload.language || '').trim(),
+      slot: String(payload.slot || '').trim(),
+      currentPath: String(payload.currentPath || '').trim(),
+      selectedPath: String(payload.selectedPath || '').trim(),
+      prompt: payload.prompt === undefined ? undefined : String(payload.prompt || ''),
+      response: payload.response === undefined ? undefined : String(payload.response || ''),
+      metadata: payload.metadata && typeof payload.metadata === 'object' && !Array.isArray(payload.metadata)
+        ? payload.metadata
+        : {}
+    };
+    const appended = await appendAuditRecordIfEnabled(state, {
+      timestamp: nowIso(),
+      eventType,
+      source,
+      actor: buildAuditActorPayload(actor),
+      target: sanitizeAuditMetadata(target),
+      metadata: sanitizeAuditMetadata(metadata)
+    });
+    return { ok: true, appended };
   });
 }
 
@@ -546,16 +812,22 @@ export async function listSecrets(authInfo = null) {
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
     await ensureUserRecord(state, permissionsManifest, actor, ctx);
-    const secrets = [];
-    for (const secret of Object.values(state.secrets)) {
-      const role = getSecretRole(secret, actor, permissionsManifest);
-      if (!role || !secretRoleAllows(role, 'access')) {
-        continue;
+    return runAuditedMutation(state, actor, {
+      operation: 'dpu.secret.list',
+      target: { path: '/Confidential/Secrets' },
+      metadata: {}
+    }, async () => {
+      const secrets = [];
+      for (const secret of Object.values(state.secrets)) {
+        const role = getSecretRole(secret, actor, permissionsManifest);
+        if (!role || !secretRoleAllows(role, 'access')) {
+          continue;
+        }
+        secrets.push(await serializeSecret(state, permissionsManifest, secret, actor));
       }
-      secrets.push(await serializeSecret(state, permissionsManifest, secret, actor));
-    }
-    secrets.sort((a, b) => a.key.localeCompare(b.key));
-    return { ok: true, secrets };
+      secrets.sort((a, b) => a.key.localeCompare(b.key));
+      return { ok: true, secrets };
+    });
   });
 }
 
@@ -563,12 +835,18 @@ export async function getSecretByKey(authInfo = null, { key }) {
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
     await ensureUserRecord(state, permissionsManifest, actor, ctx);
-    const secret = getSecret(state, key);
-    if (!secret) {
-      return { ok: false, error: `Secret not found: ${key}` };
-    }
-    assertSecretPermission(secret, actor, 'access', permissionsManifest);
-    return { ok: true, secret: await serializeSecret(state, permissionsManifest, secret, actor) };
+    return runAuditedMutation(state, actor, {
+      operation: 'dpu.secret.get',
+      target: { path: `/Confidential/Secrets/${normalizeSecretKey(key)}`, key: normalizeSecretKey(key) },
+      metadata: {}
+    }, async () => {
+      const secret = getSecret(state, key);
+      if (!secret) {
+        return { ok: false, error: `Secret not found: ${key}` };
+      }
+      assertSecretPermission(secret, actor, 'access', permissionsManifest);
+      return { ok: true, secret: await serializeSecret(state, permissionsManifest, secret, actor) };
+    });
   });
 }
 
@@ -576,28 +854,34 @@ export async function putSecret(authInfo = null, { key, value }) {
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
     await ensureUserRecord(state, permissionsManifest, actor, ctx);
-    const normalizedKey = normalizeSecretKey(key);
-    const normalizedValue = String(value ?? '');
-    let secret = getSecret(state, normalizedKey);
-    if (secret) {
-      assertSecretPermission(secret, actor, 'write', permissionsManifest);
+    return runAuditedMutation(state, actor, {
+      operation: 'dpu.secret.put',
+      target: { path: `/Confidential/Secrets/${normalizeSecretKey(key)}`, key: normalizeSecretKey(key) },
+      metadata: {}
+    }, async () => {
+      const normalizedKey = normalizeSecretKey(key);
+      const normalizedValue = String(value ?? '');
+      let secret = getSecret(state, normalizedKey);
+      if (secret) {
+        assertSecretPermission(secret, actor, 'write', permissionsManifest);
+        secret.updatedAt = nowIso();
+      } else {
+        secret = {
+          id: randomUUID(),
+          key: normalizedKey,
+          ownerId: actor.principalId,
+          acl: {},
+          createdAt: nowIso(),
+          updatedAt: nowIso()
+        };
+        state.secrets[normalizedKey] = secret;
+        ctx.dirty = true;
+      }
+      await upsertSecretsFileValue(normalizedKey, normalizedValue);
       secret.updatedAt = nowIso();
-    } else {
-      secret = {
-        id: randomUUID(),
-        key: normalizedKey,
-        ownerId: actor.principalId,
-        acl: {},
-        createdAt: nowIso(),
-        updatedAt: nowIso()
-      };
-      state.secrets[normalizedKey] = secret;
       ctx.dirty = true;
-    }
-    await upsertSecretsFileValue(normalizedKey, normalizedValue);
-    secret.updatedAt = nowIso();
-    ctx.dirty = true;
-    return { ok: true, secret: await serializeSecret(state, permissionsManifest, secret, actor) };
+      return { ok: true, secret: await serializeSecret(state, permissionsManifest, secret, actor) };
+    });
   });
 }
 
@@ -605,18 +889,24 @@ export async function deleteSecret(authInfo = null, { key }) {
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
     await ensureUserRecord(state, permissionsManifest, actor, ctx);
-    const secret = getSecret(state, key);
-    if (!secret) {
-      return { ok: false, error: `Secret not found: ${key}` };
-    }
-    assertSecretPermission(secret, actor, 'write', permissionsManifest);
-    delete state.secrets[secret.key];
-    if (deletePermissionEntry(permissionsManifest, 'secret', secret.key)) {
-      ctx.permissionsDirty = true;
-    }
-    await deleteSecretsFileValue(secret.key);
-    ctx.dirty = true;
-    return { ok: true, deleted: true, key: secret.key };
+    return runAuditedMutation(state, actor, {
+      operation: 'dpu.secret.delete',
+      target: { path: `/Confidential/Secrets/${normalizeSecretKey(key)}`, key: normalizeSecretKey(key) },
+      metadata: {}
+    }, async () => {
+      const secret = getSecret(state, key);
+      if (!secret) {
+        return { ok: false, error: `Secret not found: ${key}` };
+      }
+      assertSecretPermission(secret, actor, 'write', permissionsManifest);
+      delete state.secrets[secret.key];
+      if (deletePermissionEntry(permissionsManifest, 'secret', secret.key)) {
+        ctx.permissionsDirty = true;
+      }
+      await deleteSecretsFileValue(secret.key);
+      ctx.dirty = true;
+      return { ok: true, deleted: true, key: secret.key };
+    });
   });
 }
 
@@ -624,29 +914,35 @@ export async function grantSecret(authInfo = null, { key, principal, role }) {
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
     await ensureUserRecord(state, permissionsManifest, actor, ctx);
-    const secret = getSecret(state, key);
-    if (!secret) {
-      return { ok: false, error: `Secret not found: ${key}` };
-    }
-    if (secret.ownerId !== actor.principalId) {
-      throw new Error('Only the secret owner can manage ACL.');
-    }
-    const normalizedRole = normalizeName(role, 'role').toLowerCase();
-    if (!SECRET_ROLE_ORDER.includes(normalizedRole)) {
-      throw new Error('Invalid secret role.');
-    }
-    const normalizedPrincipal = resolvePrincipalReference(
-      permissionsManifest,
-      normalizePrincipal(principal, 'principal')
-    );
-    await assertAgentSecretGrantAllowed(permissionsManifest, normalizedPrincipal, normalizedRole);
-    if (normalizedPrincipal !== secret.ownerId) {
-      setPermissionRole(permissionsManifest, 'secret', secret.key, normalizedPrincipal, normalizedRole);
-      secret.updatedAt = nowIso();
-      ctx.dirty = true;
-      ctx.permissionsDirty = true;
-    }
-    return { ok: true, secret: await serializeSecret(state, permissionsManifest, secret, actor) };
+    return runAuditedMutation(state, actor, {
+      operation: 'dpu.secret.grant',
+      target: { path: `/Confidential/Secrets/${normalizeSecretKey(key)}`, key: normalizeSecretKey(key) },
+      metadata: { principal, role }
+    }, async () => {
+      const secret = getSecret(state, key);
+      if (!secret) {
+        return { ok: false, error: `Secret not found: ${key}` };
+      }
+      if (secret.ownerId !== actor.principalId) {
+        throw new Error('Only the secret owner can manage ACL.');
+      }
+      const normalizedRole = normalizeName(role, 'role').toLowerCase();
+      if (!SECRET_ROLE_ORDER.includes(normalizedRole)) {
+        throw new Error('Invalid secret role.');
+      }
+      const normalizedPrincipal = resolvePrincipalReference(
+        permissionsManifest,
+        normalizePrincipal(principal, 'principal')
+      );
+      await assertAgentSecretGrantAllowed(permissionsManifest, normalizedPrincipal, normalizedRole);
+      if (normalizedPrincipal !== secret.ownerId) {
+        setPermissionRole(permissionsManifest, 'secret', secret.key, normalizedPrincipal, normalizedRole);
+        secret.updatedAt = nowIso();
+        ctx.dirty = true;
+        ctx.permissionsDirty = true;
+      }
+      return { ok: true, secret: await serializeSecret(state, permissionsManifest, secret, actor) };
+    });
   });
 }
 
@@ -654,23 +950,29 @@ export async function revokeSecret(authInfo = null, { key, principal }) {
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
     await ensureUserRecord(state, permissionsManifest, actor, ctx);
-    const secret = getSecret(state, key);
-    if (!secret) {
-      return { ok: false, error: `Secret not found: ${key}` };
-    }
-    if (secret.ownerId !== actor.principalId) {
-      throw new Error('Only the secret owner can manage ACL.');
-    }
-    const principalCandidates = buildPrincipalReferenceCandidates(principal, permissionsManifest);
-    const changed = principalCandidates.reduce((didChange, candidate) => {
-      return removePermissionRole(permissionsManifest, 'secret', secret.key, candidate) || didChange;
-    }, false);
-    if (changed) {
-      secret.updatedAt = nowIso();
-      ctx.dirty = true;
-      ctx.permissionsDirty = true;
-    }
-    return { ok: true, secret: await serializeSecret(state, permissionsManifest, secret, actor) };
+    return runAuditedMutation(state, actor, {
+      operation: 'dpu.secret.revoke',
+      target: { path: `/Confidential/Secrets/${normalizeSecretKey(key)}`, key: normalizeSecretKey(key) },
+      metadata: { principal }
+    }, async () => {
+      const secret = getSecret(state, key);
+      if (!secret) {
+        return { ok: false, error: `Secret not found: ${key}` };
+      }
+      if (secret.ownerId !== actor.principalId) {
+        throw new Error('Only the secret owner can manage ACL.');
+      }
+      const principalCandidates = buildPrincipalReferenceCandidates(principal, permissionsManifest);
+      const changed = principalCandidates.reduce((didChange, candidate) => {
+        return removePermissionRole(permissionsManifest, 'secret', secret.key, candidate) || didChange;
+      }, false);
+      if (changed) {
+        secret.updatedAt = nowIso();
+        ctx.dirty = true;
+        ctx.permissionsDirty = true;
+      }
+      return { ok: true, secret: await serializeSecret(state, permissionsManifest, secret, actor) };
+    });
   });
 }
 
@@ -678,35 +980,44 @@ export async function listConfidential(authInfo = null, { scope = 'my-space', pa
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
     const userSpace = await ensureUserRecord(state, permissionsManifest, actor, ctx);
+    return runAuditedMutation(state, actor, {
+      operation: 'dpu.confidential.list',
+      target: {
+        path: scope === 'shared' ? '/Confidential/Shared' : '/Confidential/My Space',
+        scope,
+        parentId: parentId || userSpace.mySpaceRootId
+      },
+      metadata: {}
+    }, async () => {
+      if (scope === 'shared') {
+        const items = [];
+        for (const item of sortByName(collectSharedObjects(state, permissionsManifest, actor))) {
+          items.push(await serializeConfidentialObject(state, permissionsManifest, item, actor, { includeContent: false }));
+        }
+        return { ok: true, scope: 'shared', items };
+      }
 
-    if (scope === 'shared') {
+      const resolvedParentId = isNonEmptyString(parentId) ? parentId.trim() : userSpace.mySpaceRootId;
+      const parent = getConfidentialObject(state, resolvedParentId);
+      if (!parent) {
+        return { ok: false, error: `Confidential object not found: ${resolvedParentId}` };
+      }
+      assertConfidentialPermission(state, parent, actor, 'access', permissionsManifest);
       const items = [];
-      for (const item of sortByName(collectSharedObjects(state, permissionsManifest, actor))) {
+      for (const item of sortByName(collectChildObjects(state, resolvedParentId))) {
+        const role = getConfidentialRole(state, item, actor, permissionsManifest);
+        if (!role || !confidentialRoleAllows(role, 'access')) {
+          continue;
+        }
         items.push(await serializeConfidentialObject(state, permissionsManifest, item, actor, { includeContent: false }));
       }
-      return { ok: true, scope: 'shared', items };
-    }
-
-    const resolvedParentId = isNonEmptyString(parentId) ? parentId.trim() : userSpace.mySpaceRootId;
-    const parent = getConfidentialObject(state, resolvedParentId);
-    if (!parent) {
-      return { ok: false, error: `Confidential object not found: ${resolvedParentId}` };
-    }
-    assertConfidentialPermission(state, parent, actor, 'access', permissionsManifest);
-    const items = [];
-    for (const item of sortByName(collectChildObjects(state, resolvedParentId))) {
-      const role = getConfidentialRole(state, item, actor, permissionsManifest);
-      if (!role || !confidentialRoleAllows(role, 'access')) {
-        continue;
-      }
-      items.push(await serializeConfidentialObject(state, permissionsManifest, item, actor, { includeContent: false }));
-    }
-    return {
-      ok: true,
-      scope: 'my-space',
-      parent: await serializeConfidentialObject(state, permissionsManifest, parent, actor, { includeContent: false }),
-      items
-    };
+      return {
+        ok: true,
+        scope: 'my-space',
+        parent: await serializeConfidentialObject(state, permissionsManifest, parent, actor, { includeContent: false }),
+        items
+      };
+    });
   });
 }
 
@@ -714,15 +1025,21 @@ export async function getConfidentialById(authInfo = null, { id }) {
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
     await ensureUserRecord(state, permissionsManifest, actor, ctx);
-    const objectRecord = getConfidentialObject(state, id);
-    if (!objectRecord) {
-      return { ok: false, error: `Confidential object not found: ${id}` };
-    }
-    assertConfidentialPermission(state, objectRecord, actor, 'access', permissionsManifest);
-    return {
-      ok: true,
-      object: await serializeConfidentialObject(state, permissionsManifest, objectRecord, actor, { includeContent: true })
-    };
+    return runAuditedMutation(state, actor, {
+      operation: 'dpu.confidential.get',
+      target: { id },
+      metadata: {}
+    }, async () => {
+      const objectRecord = getConfidentialObject(state, id);
+      if (!objectRecord) {
+        return { ok: false, error: `Confidential object not found: ${id}` };
+      }
+      assertConfidentialPermission(state, objectRecord, actor, 'access', permissionsManifest);
+      return {
+        ok: true,
+        object: await serializeConfidentialObject(state, permissionsManifest, objectRecord, actor, { includeContent: true })
+      };
+    });
   });
 }
 
@@ -730,43 +1047,53 @@ export async function createConfidential(authInfo = null, payload = {}) {
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
     const userSpace = await ensureUserRecord(state, permissionsManifest, actor, ctx);
-    const type = normalizeName(payload.type, 'type').toLowerCase();
-    if (!['file', 'folder'].includes(type)) {
-      throw new Error('type must be "file" or "folder".');
-    }
-    const parentId = isNonEmptyString(payload.parentId) ? payload.parentId.trim() : userSpace.mySpaceRootId;
-    const parent = getConfidentialObject(state, parentId);
-    if (!parent) {
-      return { ok: false, error: `Parent object not found: ${parentId}` };
-    }
-    if (parent.type !== 'folder') {
-      throw new Error('Parent must be a folder.');
-    }
-    assertConfidentialPermission(state, parent, actor, 'write', permissionsManifest);
-    const name = ensureUniqueSiblingName(state, parent.id, payload.name);
+    return runAuditedMutation(state, actor, {
+      operation: 'dpu.confidential.create',
+      target: {
+        parentId: payload.parentId || userSpace.mySpaceRootId,
+        type: payload.type,
+        name: payload.name
+      },
+      metadata: {}
+    }, async () => {
+      const type = normalizeName(payload.type, 'type').toLowerCase();
+      if (!['file', 'folder'].includes(type)) {
+        throw new Error('type must be "file" or "folder".');
+      }
+      const parentId = isNonEmptyString(payload.parentId) ? payload.parentId.trim() : userSpace.mySpaceRootId;
+      const parent = getConfidentialObject(state, parentId);
+      if (!parent) {
+        return { ok: false, error: `Parent object not found: ${parentId}` };
+      }
+      if (parent.type !== 'folder') {
+        throw new Error('Parent must be a folder.');
+      }
+      assertConfidentialPermission(state, parent, actor, 'write', permissionsManifest);
+      const name = ensureUniqueSiblingName(state, parent.id, payload.name);
 
-    const objectRecord = {
-      id: randomUUID(),
-      type,
-      name,
-      parentId: parent.id,
-      ownerId: parent.ownerId,
-      acl: {},
-      comments: [],
-      mimeType: type === 'file' ? String(payload.mimeType || '').trim() : '',
-      createdAt: nowIso(),
-      updatedAt: nowIso()
-    };
-    state.objects[objectRecord.id] = objectRecord;
+      const objectRecord = {
+        id: randomUUID(),
+        type,
+        name,
+        parentId: parent.id,
+        ownerId: parent.ownerId,
+        acl: {},
+        comments: [],
+        mimeType: type === 'file' ? String(payload.mimeType || '').trim() : '',
+        createdAt: nowIso(),
+        updatedAt: nowIso()
+      };
+      state.objects[objectRecord.id] = objectRecord;
 
-    if (type === 'file') {
-      await writeConfidentialFile(objectRecord, payload.content || '');
-    }
-    ctx.dirty = true;
-    return {
-      ok: true,
-      object: await serializeConfidentialObject(state, permissionsManifest, objectRecord, actor, { includeContent: true })
-    };
+      if (type === 'file') {
+        await writeConfidentialFile(objectRecord, payload.content || '');
+      }
+      ctx.dirty = true;
+      return {
+        ok: true,
+        object: await serializeConfidentialObject(state, permissionsManifest, objectRecord, actor, { includeContent: true })
+      };
+    });
   });
 }
 
@@ -774,39 +1101,49 @@ export async function updateConfidential(authInfo = null, payload = {}) {
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
     await ensureUserRecord(state, permissionsManifest, actor, ctx);
-    const objectRecord = getConfidentialObject(state, payload.id);
-    if (!objectRecord) {
-      return { ok: false, error: `Confidential object not found: ${payload.id}` };
-    }
-    if (isSystemRootObject(objectRecord)) {
-      throw new Error('My Space root cannot be renamed or edited directly.');
-    }
-    assertConfidentialPermission(state, objectRecord, actor, 'write', permissionsManifest);
-
-    if (Object.prototype.hasOwnProperty.call(payload, 'name') && isNonEmptyString(payload.name)) {
-      const nextName = ensureUniqueSiblingName(state, objectRecord.parentId || null, payload.name, objectRecord.id);
-      if (nextName !== objectRecord.name) {
-        objectRecord.name = nextName;
-        ctx.dirty = true;
+    return runAuditedMutation(state, actor, {
+      operation: 'dpu.confidential.update',
+      target: { id: payload.id },
+      metadata: {
+        rename: Object.prototype.hasOwnProperty.call(payload, 'name'),
+        contentUpdated: Object.prototype.hasOwnProperty.call(payload, 'content'),
+        mimeTypeUpdated: Object.prototype.hasOwnProperty.call(payload, 'mimeType')
       }
-    }
-
-    if (objectRecord.type === 'file') {
-      if (Object.prototype.hasOwnProperty.call(payload, 'content')) {
-        await writeConfidentialFile(objectRecord, payload.content ?? '');
+    }, async () => {
+      const objectRecord = getConfidentialObject(state, payload.id);
+      if (!objectRecord) {
+        return { ok: false, error: `Confidential object not found: ${payload.id}` };
       }
-      if (Object.prototype.hasOwnProperty.call(payload, 'mimeType')) {
-        objectRecord.mimeType = String(payload.mimeType || '').trim();
-        ctx.dirty = true;
+      if (isSystemRootObject(objectRecord)) {
+        throw new Error('My Space root cannot be renamed or edited directly.');
       }
-    }
+      assertConfidentialPermission(state, objectRecord, actor, 'write', permissionsManifest);
 
-    objectRecord.updatedAt = nowIso();
-    ctx.dirty = true;
-    return {
-      ok: true,
-      object: await serializeConfidentialObject(state, permissionsManifest, objectRecord, actor, { includeContent: true })
-    };
+      if (Object.prototype.hasOwnProperty.call(payload, 'name') && isNonEmptyString(payload.name)) {
+        const nextName = ensureUniqueSiblingName(state, objectRecord.parentId || null, payload.name, objectRecord.id);
+        if (nextName !== objectRecord.name) {
+          objectRecord.name = nextName;
+          ctx.dirty = true;
+        }
+      }
+
+      if (objectRecord.type === 'file') {
+        if (Object.prototype.hasOwnProperty.call(payload, 'content')) {
+          await writeConfidentialFile(objectRecord, payload.content ?? '');
+        }
+        if (Object.prototype.hasOwnProperty.call(payload, 'mimeType')) {
+          objectRecord.mimeType = String(payload.mimeType || '').trim();
+          ctx.dirty = true;
+        }
+      }
+
+      objectRecord.updatedAt = nowIso();
+      ctx.dirty = true;
+      return {
+        ok: true,
+        object: await serializeConfidentialObject(state, permissionsManifest, objectRecord, actor, { includeContent: true })
+      };
+    });
   });
 }
 
@@ -814,20 +1151,26 @@ export async function deleteConfidential(authInfo = null, { id }) {
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
     await ensureUserRecord(state, permissionsManifest, actor, ctx);
-    const objectRecord = getConfidentialObject(state, id);
-    if (!objectRecord) {
-      return { ok: false, error: `Confidential object not found: ${id}` };
-    }
-    if (isSystemRootObject(objectRecord)) {
-      throw new Error('My Space root cannot be deleted.');
-    }
-    assertConfidentialPermission(state, objectRecord, actor, 'write', permissionsManifest);
-    await deleteObjectRecursive(state, objectRecord.id);
-    if (deletePermissionEntry(permissionsManifest, 'confidential', objectRecord.id)) {
-      ctx.permissionsDirty = true;
-    }
-    ctx.dirty = true;
-    return { ok: true, deleted: true, id: objectRecord.id };
+    return runAuditedMutation(state, actor, {
+      operation: 'dpu.confidential.delete',
+      target: { id },
+      metadata: {}
+    }, async () => {
+      const objectRecord = getConfidentialObject(state, id);
+      if (!objectRecord) {
+        return { ok: false, error: `Confidential object not found: ${id}` };
+      }
+      if (isSystemRootObject(objectRecord)) {
+        throw new Error('My Space root cannot be deleted.');
+      }
+      assertConfidentialPermission(state, objectRecord, actor, 'write', permissionsManifest);
+      await deleteObjectRecursive(state, objectRecord.id);
+      if (deletePermissionEntry(permissionsManifest, 'confidential', objectRecord.id)) {
+        ctx.permissionsDirty = true;
+      }
+      ctx.dirty = true;
+      return { ok: true, deleted: true, id: objectRecord.id };
+    });
   });
 }
 
@@ -835,34 +1178,40 @@ export async function grantConfidential(authInfo = null, { id, principal, role }
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
     await ensureUserRecord(state, permissionsManifest, actor, ctx);
-    const objectRecord = getConfidentialObject(state, id);
-    if (!objectRecord) {
-      return { ok: false, error: `Confidential object not found: ${id}` };
-    }
-    if (isSystemRootObject(objectRecord)) {
-      throw new Error('My Space root cannot be shared directly.');
-    }
-    if (objectRecord.ownerId !== actor.principalId) {
-      throw new Error('Only the object owner can manage ACL.');
-    }
-    const normalizedRole = normalizeName(role, 'role').toLowerCase();
-    if (!CONFIDENTIAL_ROLE_ORDER.includes(normalizedRole)) {
-      throw new Error('Invalid confidential role.');
-    }
-    const normalizedPrincipal = resolvePrincipalReference(
-      permissionsManifest,
-      normalizePrincipal(principal, 'principal')
-    );
-    if (normalizedPrincipal !== objectRecord.ownerId) {
-      setPermissionRole(permissionsManifest, 'confidential', objectRecord.id, normalizedPrincipal, normalizedRole);
-      objectRecord.updatedAt = nowIso();
-      ctx.dirty = true;
-      ctx.permissionsDirty = true;
-    }
-    return {
-      ok: true,
-      object: await serializeConfidentialObject(state, permissionsManifest, objectRecord, actor, { includeContent: false })
-    };
+    return runAuditedMutation(state, actor, {
+      operation: 'dpu.confidential.grant',
+      target: { id },
+      metadata: { principal, role }
+    }, async () => {
+      const objectRecord = getConfidentialObject(state, id);
+      if (!objectRecord) {
+        return { ok: false, error: `Confidential object not found: ${id}` };
+      }
+      if (isSystemRootObject(objectRecord)) {
+        throw new Error('My Space root cannot be shared directly.');
+      }
+      if (objectRecord.ownerId !== actor.principalId) {
+        throw new Error('Only the object owner can manage ACL.');
+      }
+      const normalizedRole = normalizeName(role, 'role').toLowerCase();
+      if (!CONFIDENTIAL_ROLE_ORDER.includes(normalizedRole)) {
+        throw new Error('Invalid confidential role.');
+      }
+      const normalizedPrincipal = resolvePrincipalReference(
+        permissionsManifest,
+        normalizePrincipal(principal, 'principal')
+      );
+      if (normalizedPrincipal !== objectRecord.ownerId) {
+        setPermissionRole(permissionsManifest, 'confidential', objectRecord.id, normalizedPrincipal, normalizedRole);
+        objectRecord.updatedAt = nowIso();
+        ctx.dirty = true;
+        ctx.permissionsDirty = true;
+      }
+      return {
+        ok: true,
+        object: await serializeConfidentialObject(state, permissionsManifest, objectRecord, actor, { includeContent: false })
+      };
+    });
   });
 }
 
@@ -870,29 +1219,35 @@ export async function revokeConfidential(authInfo = null, { id, principal }) {
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
     await ensureUserRecord(state, permissionsManifest, actor, ctx);
-    const objectRecord = getConfidentialObject(state, id);
-    if (!objectRecord) {
-      return { ok: false, error: `Confidential object not found: ${id}` };
-    }
-    if (isSystemRootObject(objectRecord)) {
-      throw new Error('My Space root cannot be shared directly.');
-    }
-    if (objectRecord.ownerId !== actor.principalId) {
-      throw new Error('Only the object owner can manage ACL.');
-    }
-    const principalCandidates = buildPrincipalReferenceCandidates(principal, permissionsManifest);
-    const changed = principalCandidates.reduce((didChange, candidate) => {
-      return removePermissionRole(permissionsManifest, 'confidential', objectRecord.id, candidate) || didChange;
-    }, false);
-    if (changed) {
-      objectRecord.updatedAt = nowIso();
-      ctx.dirty = true;
-      ctx.permissionsDirty = true;
-    }
-    return {
-      ok: true,
-      object: await serializeConfidentialObject(state, permissionsManifest, objectRecord, actor, { includeContent: false })
-    };
+    return runAuditedMutation(state, actor, {
+      operation: 'dpu.confidential.revoke',
+      target: { id },
+      metadata: { principal }
+    }, async () => {
+      const objectRecord = getConfidentialObject(state, id);
+      if (!objectRecord) {
+        return { ok: false, error: `Confidential object not found: ${id}` };
+      }
+      if (isSystemRootObject(objectRecord)) {
+        throw new Error('My Space root cannot be shared directly.');
+      }
+      if (objectRecord.ownerId !== actor.principalId) {
+        throw new Error('Only the object owner can manage ACL.');
+      }
+      const principalCandidates = buildPrincipalReferenceCandidates(principal, permissionsManifest);
+      const changed = principalCandidates.reduce((didChange, candidate) => {
+        return removePermissionRole(permissionsManifest, 'confidential', objectRecord.id, candidate) || didChange;
+      }, false);
+      if (changed) {
+        objectRecord.updatedAt = nowIso();
+        ctx.dirty = true;
+        ctx.permissionsDirty = true;
+      }
+      return {
+        ok: true,
+        object: await serializeConfidentialObject(state, permissionsManifest, objectRecord, actor, { includeContent: false })
+      };
+    });
   });
 }
 
@@ -900,29 +1255,35 @@ export async function addConfidentialComment(authInfo = null, { id, message }) {
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
     await ensureUserRecord(state, permissionsManifest, actor, ctx);
-    const objectRecord = getConfidentialObject(state, id);
-    if (!objectRecord) {
-      return { ok: false, error: `Confidential object not found: ${id}` };
-    }
-    assertConfidentialPermission(state, objectRecord, actor, 'comment', permissionsManifest);
-    const normalizedMessage = normalizeName(message, 'comment message');
-    objectRecord.comments = normalizeCommentRecords(objectRecord.comments, nowIso);
-    const comment = {
-      id: randomUUID(),
-      authorPrincipal: actor.principalId,
-      userEmail: actor.email || actor.principalId,
-      message: normalizedMessage,
-      createdAt: nowIso(),
-      updatedAt: nowIso()
-    };
-    objectRecord.comments.push(comment);
-    objectRecord.updatedAt = nowIso();
-    ctx.dirty = true;
-    return {
-      ok: true,
-      comment: serializeConfidentialComments({ comments: [comment] }, actor, true, nowIso)[0],
-      object: await serializeConfidentialObject(state, permissionsManifest, objectRecord, actor, { includeContent: false })
-    };
+    return runAuditedMutation(state, actor, {
+      operation: 'dpu.confidential.comment.add',
+      target: { id },
+      metadata: {}
+    }, async () => {
+      const objectRecord = getConfidentialObject(state, id);
+      if (!objectRecord) {
+        return { ok: false, error: `Confidential object not found: ${id}` };
+      }
+      assertConfidentialPermission(state, objectRecord, actor, 'comment', permissionsManifest);
+      const normalizedMessage = normalizeName(message, 'comment message');
+      objectRecord.comments = normalizeCommentRecords(objectRecord.comments, nowIso);
+      const comment = {
+        id: randomUUID(),
+        authorPrincipal: actor.principalId,
+        userEmail: actor.email || actor.principalId,
+        message: normalizedMessage,
+        createdAt: nowIso(),
+        updatedAt: nowIso()
+      };
+      objectRecord.comments.push(comment);
+      objectRecord.updatedAt = nowIso();
+      ctx.dirty = true;
+      return {
+        ok: true,
+        comment: serializeConfidentialComments({ comments: [comment] }, actor, true, nowIso)[0],
+        object: await serializeConfidentialObject(state, permissionsManifest, objectRecord, actor, { includeContent: false })
+      };
+    });
   });
 }
 
@@ -930,31 +1291,37 @@ export async function deleteConfidentialComment(authInfo = null, { id, commentId
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
     await ensureUserRecord(state, permissionsManifest, actor, ctx);
-    const objectRecord = getConfidentialObject(state, id);
-    if (!objectRecord) {
-      return { ok: false, error: `Confidential object not found: ${id}` };
-    }
-    const role = assertConfidentialPermission(state, objectRecord, actor, 'comment', permissionsManifest);
-    const normalizedCommentId = normalizeName(commentId, 'comment id');
-    const comments = normalizeCommentRecords(objectRecord.comments, nowIso);
-    const commentIndex = comments.findIndex((entry) => entry.id === normalizedCommentId);
-    if (commentIndex < 0) {
-      return { ok: false, error: `Confidential comment not found: ${commentId}` };
-    }
-    const canDeleteAnyComments = confidentialRoleAllows(role, 'write');
-    if (!canDeleteAnyComments && comments[commentIndex].authorPrincipal !== actor.principalId) {
-      throw new Error('Only the comment author or an editor can delete this comment.');
-    }
-    comments.splice(commentIndex, 1);
-    objectRecord.comments = comments;
-    objectRecord.updatedAt = nowIso();
-    ctx.dirty = true;
-    return {
-      ok: true,
-      deleted: true,
-      commentId: normalizedCommentId,
-      object: await serializeConfidentialObject(state, permissionsManifest, objectRecord, actor, { includeContent: false })
-    };
+    return runAuditedMutation(state, actor, {
+      operation: 'dpu.confidential.comment.delete',
+      target: { id, commentId },
+      metadata: {}
+    }, async () => {
+      const objectRecord = getConfidentialObject(state, id);
+      if (!objectRecord) {
+        return { ok: false, error: `Confidential object not found: ${id}` };
+      }
+      const role = assertConfidentialPermission(state, objectRecord, actor, 'comment', permissionsManifest);
+      const normalizedCommentId = normalizeName(commentId, 'comment id');
+      const comments = normalizeCommentRecords(objectRecord.comments, nowIso);
+      const commentIndex = comments.findIndex((entry) => entry.id === normalizedCommentId);
+      if (commentIndex < 0) {
+        return { ok: false, error: `Confidential comment not found: ${commentId}` };
+      }
+      const canDeleteAnyComments = confidentialRoleAllows(role, 'write');
+      if (!canDeleteAnyComments && comments[commentIndex].authorPrincipal !== actor.principalId) {
+        throw new Error('Only the comment author or an editor can delete this comment.');
+      }
+      comments.splice(commentIndex, 1);
+      objectRecord.comments = comments;
+      objectRecord.updatedAt = nowIso();
+      ctx.dirty = true;
+      return {
+        ok: true,
+        deleted: true,
+        commentId: normalizedCommentId,
+        object: await serializeConfidentialObject(state, permissionsManifest, objectRecord, actor, { includeContent: false })
+      };
+    });
   });
 }
 

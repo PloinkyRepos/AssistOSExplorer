@@ -66,6 +66,7 @@ Explorer exposes Confidential content under virtual paths:
 - `/Confidential/My Space`
 - `/Confidential/Shared`
 - `/Confidential/Secrets`
+- `/Confidential/Audit` for audit viewers only
 
 These are not normal filesystem paths. They are resolved dynamically through DPU.
 
@@ -131,6 +132,7 @@ Main mutation tools:
 - `dpu_confidential_update`
 - `dpu_confidential_delete`
 - `dpu_secret_put`
+- `dpu_audit_config_set` for the audit plugin toggle
 
 Relevant implementation points:
 
@@ -204,6 +206,27 @@ Relevant code:
 - [`web-components/pages/file-exp/file-exp-dpu-provider.js`](../web-components/pages/file-exp/file-exp-dpu-provider.js)
 
 Explorer should expose permissions as part of the user experience without taking over ACL ownership from DPU.
+
+### Audit Behavior
+
+Explorer mounts a DPU-owned audit control plugin inside `#accountMenu`. The plugin only toggles audit collection and opens the audit viewer path. Audit data itself remains DPU-owned and is surfaced under `/Confidential/Audit` as read-only JSONL files.
+
+Explorer does not implement audit storage locally and does not infer audit visibility itself. The DPU agent decides:
+
+- whether audit logging is enabled
+- whether the current actor may manage audit configuration
+- whether the current actor may view `/Confidential/Audit`
+
+When audit logging is enabled, Explorer also emits client-side audit events through the dedicated DPU ingest tool for:
+
+- `file.open`
+- `file.update`
+- `explorer.action`
+- `plugin.used`
+- `copilot.prompt`
+- `copilot.response`
+
+These events are still stored only by DPU. Explorer is just the source of the event signal.
 
 ## Configuration
 

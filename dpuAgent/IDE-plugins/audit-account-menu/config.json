@@ -1,0 +1,12 @@
+{
+  "pluginCategory": "application",
+  "id": "dpu-audit-menu",
+  "component": "audit-account-menu",
+  "location": ["file-exp:account-menu"],
+  "label": "Audit",
+  "tooltip": "Audit controls",
+  "icon": "./icon.svg",
+  "presenter": "AuditAccountMenu",
+  "type": "embedded",
+  "autoPin": false
+}

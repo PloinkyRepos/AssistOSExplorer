@@ -1,12 +1,14 @@
 const APP_PLUGIN_SLOTS = Object.freeze({
     toolbar: 'file-exp:toolbar',
     rightBar: 'file-exp:right-bar',
-    internal: 'file-exp:internal'
+    internal: 'file-exp:internal',
+    accountMenu: 'file-exp:account-menu'
 });
 
 const MOUNT_CONTRIBUTION_TYPE = 'mount';
 
 import { sortRuntimePluginEntries, getRuntimePluginPolicyKey } from "../../../utils/pluginUtils.core.js";
+import { emitPluginMountedAudit } from "../../../services/audit/auditService.js";
 
 function getPluginSettingsMap() {
     const settings = window.assistOS?.pluginSettings;
@@ -180,6 +182,7 @@ async function mountSlot(container, slot, plugins, context) {
         if (pluginElement) {
             updateMountedPluginElement(pluginElement, plugin, contextWithOrientation);
         }
+        void emitPluginMountedAudit(key, contextWithOrientation);
 
         orderedMounts.push(mount);
     }
@@ -205,16 +208,20 @@ async function performRenderApplicationPluginSlots(fileExp) {
     const toolbarContainer = fileExp.element.querySelector('#fileExpToolbarPlugins');
     const rightBarContainer = fileExp.element.querySelector('#fileExpPluginBar');
     const internalContainer = fileExp.element.querySelector('#fileExpInternalPlugins');
+    const accountMenuContainer = fileExp.element.querySelector('#fileExpAccountMenuPlugins');
     const toolbarPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.toolbar, { contributionType: MOUNT_CONTRIBUTION_TYPE });
     const rightBarPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.rightBar, { contributionType: MOUNT_CONTRIBUTION_TYPE });
     const internalPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.internal, { contributionType: MOUNT_CONTRIBUTION_TYPE });
+    const accountMenuPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.accountMenu, { contributionType: MOUNT_CONTRIBUTION_TYPE });
     const toolbarContext = buildPluginContext(fileExp, APP_PLUGIN_SLOTS.toolbar);
     const rightBarContext = buildPluginContext(fileExp, APP_PLUGIN_SLOTS.rightBar);
     const internalContext = buildPluginContext(fileExp, APP_PLUGIN_SLOTS.internal);
+    const accountMenuContext = buildPluginContext(fileExp, APP_PLUGIN_SLOTS.accountMenu);
 
     await mountSlot(toolbarContainer, APP_PLUGIN_SLOTS.toolbar, toolbarPlugins, toolbarContext);
     await mountSlot(rightBarContainer, APP_PLUGIN_SLOTS.rightBar, rightBarPlugins, rightBarContext);
     await mountSlot(internalContainer, APP_PLUGIN_SLOTS.internal, internalPlugins, internalContext);
+    await mountSlot(accountMenuContainer, APP_PLUGIN_SLOTS.accountMenu, accountMenuPlugins, accountMenuContext);
 }
 
 export async function renderApplicationPluginSlots(fileExp) {

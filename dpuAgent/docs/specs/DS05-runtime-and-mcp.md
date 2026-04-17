@@ -42,12 +42,38 @@ When both `user` and `agent` are present, DPU keeps ownership and user-space res
 The current tool families are:
 
 - actor identity and roots
+- audit configuration and audit file access
 - secrets
 - confidential objects
 - confidential comments
 - grants, revokes, and access checks
 
 This is a domain surface, not a storage-debug surface. The caller asks for secret or confidential operations, not for direct reads and writes of internal DPU files.
+
+## Audit-Specific Contract
+
+`dpuAgent` exposes dedicated audit tools instead of treating audit logs as generic confidential files:
+
+- `dpu_audit_config_get`
+- `dpu_audit_config_set`
+- `dpu_audit_list`
+- `dpu_audit_get`
+- `dpu_audit_event_append`
+
+Audit file writes happen through two controlled paths:
+
+- internal DPU domain auditing for secret and confidential operations
+- the dedicated `dpu_audit_event_append` ingest tool for Explorer-side events such as file open, file update, plugin usage, UI actions, and copilot prompt/response
+
+Browser clients and other agents must not write audit files directly. They can only submit events through the dedicated ingest tool, and DPU remains the component that materializes JSONL files on disk.
+
+Audit viewing and audit configuration are restricted to trusted actors:
+
+- a local authenticated `admin` user
+- or actors with role `admin`
+- or actors with role `security`
+
+The runtime must enforce this before listing or reading `/Confidential/Audit` and before mutating audit configuration.
 
 ## Practical Guarantees
 

@@ -1,4 +1,5 @@
 import { callAgentTool } from "./infrastructure/explorerApi.js";
+import { emitAuditEvent } from "./audit/auditService.js";
 
 function parseJsonToolResult(toolResultText) {
     if (!toolResultText) return null;
@@ -62,6 +63,14 @@ export async function requestLlmAutocomplete({ path, content, cursorOffset, lang
         cursorOffset,
         language
     };
+    void emitAuditEvent('copilot.prompt', {
+        path,
+        language,
+        prompt: content,
+        metadata: {
+            cursorOffset
+        }
+    });
     const raw = await callAgentTool('llmAssistant', 'llm_autocomplete', payload, { raw: true });
     const parsed = parseJsonToolResult(raw) || raw;
 
@@ -71,11 +80,27 @@ export async function requestLlmAutocomplete({ path, content, cursorOffset, lang
         }
         const candidate = parsed.content || parsed.message || parsed.result;
         if (typeof candidate === 'string' && candidate.trim()) {
+            void emitAuditEvent('copilot.response', {
+                path,
+                language,
+                response: candidate,
+                metadata: {
+                    cursorOffset
+                }
+            });
             return candidate;
         }
     }
 
     if (typeof parsed === 'string' && parsed.trim()) {
+        void emitAuditEvent('copilot.response', {
+            path,
+            language,
+            response: parsed,
+            metadata: {
+                cursorOffset
+            }
+        });
         return parsed;
     }
 

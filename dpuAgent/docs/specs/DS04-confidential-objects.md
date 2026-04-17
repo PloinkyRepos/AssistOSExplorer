@@ -41,7 +41,9 @@ Comments are also actor-filtered. `serializeConfidentialObject()` includes comme
 
 `getConfidentialById()` returns one confidential object with actor-filtered content and comment visibility.
 
-`createConfidential()`, `updateConfidential()`, and `deleteConfidential()` mutate the metadata tree and confidential blobs under the storage lock. Recursive delete removes child objects and deletes blob files for confidential files.
+`createConfidential()`, `updateConfidential()`, and `deleteConfidential()` mutate the metadata tree and confidential blobs under the storage lock. Recursive delete removes child objects and deletes blob files for confidential files. All mutations are recorded in the audit log if the audit system is enabled.
+
+The `/Confidential/Audit` path is a special virtual root managed by the agent, accessible only to actors with `admin` or `security` roles. It provides read-only access to audit logs in JSONL format (see [DS07-audit-model.md](./DS07-audit-model.md)).
 
 The `My Space` root is special in the current implementation:
 

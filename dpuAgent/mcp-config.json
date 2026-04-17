@@ -13,6 +13,124 @@
       }
     },
     {
+      "name": "dpu_audit_config_get",
+      "title": "DPU Audit Config Get",
+      "description": "Return the current audit configuration and audit viewing capabilities for the current actor.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {},
+      "env": {
+        "TOOL_NAME": "dpu_audit_config_get"
+      }
+    },
+    {
+      "name": "dpu_audit_config_set",
+      "title": "DPU Audit Config Set",
+      "description": "Enable or disable DPU audit logging.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "enabled": {
+          "type": "boolean",
+          "optional": false
+        }
+      },
+      "env": {
+        "TOOL_NAME": "dpu_audit_config_set"
+      }
+    },
+    {
+      "name": "dpu_audit_list",
+      "title": "DPU Audit List",
+      "description": "List DPU audit log files visible to the current actor.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {},
+      "env": {
+        "TOOL_NAME": "dpu_audit_list"
+      }
+    },
+    {
+      "name": "dpu_audit_get",
+      "title": "DPU Audit Get",
+      "description": "Read a DPU audit log file by name.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "name": {
+          "type": "string",
+          "optional": false
+        }
+      },
+      "env": {
+        "TOOL_NAME": "dpu_audit_get"
+      }
+    },
+    {
+      "name": "dpu_audit_event_append",
+      "title": "DPU Audit Event Append",
+      "description": "Append an Explorer-side audit event to the current audit log when auditing is enabled.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "eventType": {
+          "type": "string",
+          "optional": false
+        },
+        "source": {
+          "type": "string",
+          "optional": true
+        },
+        "path": {
+          "type": "string",
+          "optional": true
+        },
+        "targetPath": {
+          "type": "string",
+          "optional": true
+        },
+        "action": {
+          "type": "string",
+          "optional": true
+        },
+        "pluginKey": {
+          "type": "string",
+          "optional": true
+        },
+        "slot": {
+          "type": "string",
+          "optional": true
+        },
+        "currentPath": {
+          "type": "string",
+          "optional": true
+        },
+        "selectedPath": {
+          "type": "string",
+          "optional": true
+        },
+        "language": {
+          "type": "string",
+          "optional": true
+        },
+        "prompt": {
+          "type": "string",
+          "optional": true
+        },
+        "response": {
+          "type": "string",
+          "optional": true
+        },
+        "metadata": {
+          "type": "object",
+          "optional": true
+        }
+      },
+      "env": {
+        "TOOL_NAME": "dpu_audit_event_append"
+      }
+    },
+    {
       "name": "dpu_workspace_roots",
       "title": "DPU Workspace Roots",
       "description": "Return the virtual Confidential roots for the current actor.",

@@ -9,6 +9,12 @@ const tempDpuDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dpu-store-data-'))
 const moduleSuffix = `?test=${Date.now()}`;
 const storeUrl = new URL('../lib/dpu-store.mjs', import.meta.url);
 const {
+  appendAuditClientEvent,
+  getAuditConfig,
+  getAuditEntry,
+  getWorkspaceRoots,
+  listAuditEntries,
+  setAuditConfig,
   addConfidentialComment,
   createConfidential,
   deleteConfidentialComment,
@@ -32,6 +38,14 @@ process.env.DPU_MASTER_KEY = 'unit-test-master-key';
 const authInfo = {
   user: {
     email: 'owner@example.com'
+  }
+};
+
+const adminAuth = {
+  user: {
+    id: 'local:admin',
+    username: 'admin',
+    email: 'admin@example.com'
   }
 };
 
@@ -65,6 +79,10 @@ function getPermissionsManifestPath() {
 
 function getPermissionsManifest() {
   return JSON.parse(fs.readFileSync(getPermissionsManifestPath(), 'utf8'));
+}
+
+function getAuditDirPath() {
+  return path.join(tempDpuDataDir, 'audit');
 }
 
 function writeAgentManifest(agentName, manifest) {
@@ -216,6 +234,15 @@ test('My Space root id is the user privateId', async () => {
   const state = getStoredState();
   assert.ok(state.objects[whoami.userSpace.privateId]);
   assert.equal(state.objects[whoami.userSpace.privateId].name, 'My Space');
+});
+
+test('workspace roots expose audit only to admin viewers', async () => {
+  const adminRoots = await getWorkspaceRoots(adminAuth);
+  const userRoots = await getWorkspaceRoots(authInfo);
+  assert.equal(adminRoots.ok, true);
+  assert.equal(adminRoots.roots.audit.path, '/Confidential/Audit');
+  assert.equal(userRoots.ok, true);
+  assert.equal(userRoots.roots.audit, undefined);
 });
 
 test('secret ACL principals are stored canonically and registry aliases keep the same principal across auth shapes', async () => {
@@ -448,6 +475,66 @@ test('agent secret grants are capped by manifest-declared allowedRoles', async (
     }),
     /not allowed to receive secret role write/
   );
+});
+
+test('audit config is manageable by local admin and writes JSONL records for DPU operations', async () => {
+  const configBefore = await getAuditConfig(adminAuth);
+  assert.equal(configBefore.ok, true);
+  assert.equal(configBefore.audit.canManage, true);
+  assert.equal(configBefore.audit.enabled, false);
+
+  const updated = await setAuditConfig(adminAuth, { enabled: true });
+  assert.equal(updated.ok, true);
+  assert.equal(updated.audit.enabled, true);
+
+  await putSecret(adminAuth, { key: 'AUDITED_SECRET', value: 'value' });
+
+  const listed = await listAuditEntries(adminAuth);
+  assert.equal(listed.ok, true);
+  assert.equal(Array.isArray(listed.items), true);
+  assert.equal(listed.items.length > 0, true);
+  assert.equal(fs.existsSync(getAuditDirPath()), true);
+
+  const latestName = listed.items[0].name;
+  const fetched = await getAuditEntry(adminAuth, { name: latestName });
+  assert.equal(fetched.ok, true);
+  assert.match(fetched.item.content, /dpu\.secret\.put/);
+  assert.match(fetched.item.content, /AUDITED_SECRET/);
+});
+
+test('audit files are not visible to non-admin users', async () => {
+  await setAuditConfig(adminAuth, { enabled: true });
+  await putSecret(adminAuth, { key: 'ADMIN_ONLY_AUDIT', value: 'value' });
+
+  await assert.rejects(
+    () => listAuditEntries({
+      user: {
+        email: 'reader@example.com',
+        username: 'reader'
+      }
+    }),
+    /audit logs require admin or security role/i
+  );
+});
+
+test('client-side audit events are appended through the dedicated ingest tool', async () => {
+  await setAuditConfig(adminAuth, { enabled: true });
+  const appended = await appendAuditClientEvent(adminAuth, {
+    eventType: 'copilot.prompt',
+    source: 'explorer',
+    path: '/src/app.js',
+    language: 'javascript',
+    prompt: 'const answer = ',
+    metadata: {
+      cursorOffset: 15
+    }
+  });
+  assert.equal(appended.ok, true);
+
+  const listed = await listAuditEntries(adminAuth);
+  const fetched = await getAuditEntry(adminAuth, { name: listed.items[0].name });
+  assert.match(fetched.item.content, /copilot\.prompt/);
+  assert.match(fetched.item.content, /const answer = /);
 });
 
 test('comment role can add annotations without write access and read role can see them', async () => {
