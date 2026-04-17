@@ -5,12 +5,6 @@
         "principalId": "agent:gitAgent",
         "agentName": "gitAgent"
     },
-    "requires": {
-        "secretStore": {
-            "contract": "secret-store/v1",
-            "maxScopes": ["secret:read", "secret:write"]
-        }
-    },
     "capabilities": {
         "dpu": {
             "allowedRoles": [

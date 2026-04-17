@@ -6,6 +6,8 @@ import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 
 const INVOCATION_TOKEN_HEADER = 'x-ploinky-invocation';
+const CALLER_ASSERTION_HEADER = 'x-ploinky-caller-assertion';
+const USER_CONTEXT_HEADER = 'x-ploinky-user-context';
 let cachedWireVerify = null;
 async function loadWireVerify() {
   if (cachedWireVerify) return cachedWireVerify;
@@ -23,11 +25,6 @@ async function loadWireVerify() {
     } catch (_) {}
   }
   return null;
-}
-
-function strictSecureWire() {
-  const flag = String(process.env.PLOINKY_SECURE_WIRE_STRICT || '').trim().toLowerCase();
-  return flag === '1' || flag === 'true' || flag === 'on';
 }
 
 function readRouterPublicKeyMaterial() {
@@ -55,6 +52,7 @@ function expectedAudienceForSelf() {
 }
 
 let sharedReplayCache = null;
+let sharedCallerReplayCache = null;
 async function verifyInvocationFromHeaders(headers = {}, bodyObject) {
   const raw = headers[INVOCATION_TOKEN_HEADER] || headers[INVOCATION_TOKEN_HEADER.toLowerCase()];
   if (!raw || typeof raw !== 'string') {
@@ -81,6 +79,107 @@ async function verifyInvocationFromHeaders(headers = {}, bodyObject) {
     return { ok: true, payload };
   } catch (err) {
     return { ok: false, reason: err.message || String(err) };
+  }
+}
+
+function readAgentPublicKeys() {
+  const raw = String(process.env.PLOINKY_AGENT_PUBLIC_KEYS_JSON || '').trim();
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function readHeaderValue(headers = {}, headerName) {
+  const direct = headers[headerName];
+  if (typeof direct === 'string' && direct.trim()) {
+    return direct.trim();
+  }
+  const lower = headers[String(headerName).toLowerCase()];
+  return typeof lower === 'string' && lower.trim() ? lower.trim() : '';
+}
+
+function buildDirectInvocationPayload({ callerAssertionPayload, userContextPayload }) {
+  const delegatedUser = userContextPayload?.user && typeof userContextPayload.user === 'object'
+    ? userContextPayload.user
+    : null;
+  return {
+    iss: 'direct-agent-wire',
+    sub: String(callerAssertionPayload?.iss || ''),
+    aud: expectedAudienceForSelf(),
+    tool: String(callerAssertionPayload?.tool || ''),
+    scope: Array.isArray(callerAssertionPayload?.scope) ? [...callerAssertionPayload.scope] : [],
+    body_hash: String(callerAssertionPayload?.body_hash || ''),
+    jti: String(callerAssertionPayload?.jti || ''),
+    iat: Number(callerAssertionPayload?.iat || 0),
+    exp: Number(callerAssertionPayload?.exp || 0),
+    user: delegatedUser ? { ...delegatedUser } : null,
+    user_context_token: ''
+  };
+}
+
+async function verifyDirectAgentRequest(headers = {}, bodyObject) {
+  const callerAssertionToken = readHeaderValue(headers, CALLER_ASSERTION_HEADER);
+  if (!callerAssertionToken) {
+    return { ok: false, reason: 'missing caller assertion' };
+  }
+  const userContextToken = readHeaderValue(headers, USER_CONTEXT_HEADER);
+  if (!userContextToken) {
+    return { ok: false, reason: 'missing user context token' };
+  }
+  const wire = await loadWireVerify();
+  if (!wire) {
+    return { ok: false, reason: 'wire-verify module unavailable' };
+  }
+  const callerPublicKeys = readAgentPublicKeys();
+  if (!sharedCallerReplayCache) {
+    sharedCallerReplayCache = wire.createMemoryReplayCache({ maxSize: 4096 });
+  }
+  try {
+    const callerAssertion = wire.verifyCallerAssertion(callerAssertionToken, {
+      resolveCallerPublicKey: (principalId) => {
+        const entry = callerPublicKeys[String(principalId || '').trim()];
+        return entry?.publicKeyJwk ? { publicKeyJwk: entry.publicKeyJwk } : null;
+      },
+      replayCache: sharedCallerReplayCache,
+      expectedAudience: expectedAudienceForSelf() || undefined,
+      bodyObject
+    });
+    const keyMaterial = readRouterPublicKeyMaterial();
+    if (!keyMaterial) {
+      return { ok: false, reason: 'router public key not configured' };
+    }
+    let userContext = null;
+    let lastError = null;
+    for (const expectedAudience of ['ploinky-agents', expectedAudienceForSelf()].filter(Boolean)) {
+      try {
+        userContext = wire.verifyJws(userContextToken, {
+          publicPem: keyMaterial.publicPem,
+          publicKeyJwk: keyMaterial.publicKeyJwk,
+          expectedAudience
+        });
+        break;
+      } catch (err) {
+        lastError = err;
+      }
+    }
+    if (!userContext) {
+      throw lastError || new Error('user context verification failed');
+    }
+    const invocation = buildDirectInvocationPayload({
+      callerAssertionPayload: callerAssertion.payload,
+      userContextPayload: userContext.payload
+    });
+    invocation.user_context_token = userContextToken;
+    return {
+      ok: true,
+      payload: invocation
+    };
+  } catch (err) {
+    return { ok: false, reason: err?.message || String(err) };
   }
 }
 
@@ -221,26 +320,6 @@ function executeShell(spec, payload) {
   });
 }
 
-function parseAuthInfo(headers = {}) {
-  const raw = headers['x-ploinky-auth-info'] || headers['X-PLOINKY-AUTH-INFO'];
-  if (!raw) {
-    return null;
-  }
-  const text = String(raw).trim();
-  if (!text) {
-    return null;
-  }
-  try {
-    return JSON.parse(text);
-  } catch {
-    try {
-      return JSON.parse(Buffer.from(text, 'base64').toString('utf8'));
-    } catch {
-      return null;
-    }
-  }
-}
-
 async function registerTools(server, config) {
   const { z } = await loadSdkDeps();
   for (const tool of Array.isArray(config.tools) ? config.tools : []) {
@@ -262,20 +341,17 @@ async function registerTools(server, config) {
       // Router-signed invocation token: verify and attach the grant so the
       // DPU store layer can enforce call-time scope.
       const invocationResult = await verifyInvocationFromHeaders(headers, bodyObject);
+      const directAuthResult = invocationResult.ok
+        ? { ok: false, reason: 'invocation already verified' }
+        : await verifyDirectAgentRequest(headers, bodyObject);
       let enrichedContext = context;
       if (invocationResult.ok) {
         enrichedContext = { ...context, invocation: invocationResult.payload };
-      } else if (strictSecureWire()) {
-        throw new Error(`Invocation rejected: ${invocationResult.reason}`);
-      }
-
-      // Legacy fallback: accept x-ploinky-auth-info only while secure-wire
-      // is not strictly enforced. Removed once migration completes.
-      const legacyAuthInfo = !strictSecureWire()
-        ? parseAuthInfo(headers)
-        : null;
-      if (legacyAuthInfo) {
-        enrichedContext = { ...enrichedContext, authInfo: legacyAuthInfo };
+      } else if (directAuthResult.ok) {
+        enrichedContext = { ...context, invocation: directAuthResult.payload };
+      } else {
+        const reasons = [invocationResult.reason, directAuthResult.reason].filter(Boolean).join('; ');
+        throw new Error(`Invocation rejected: ${reasons || 'secure wire verification failed'}`);
       }
 
       const result = await executeShell(commandSpec, {

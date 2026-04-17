@@ -23,19 +23,12 @@ async function loadWireSign() {
 /**
  * secret-store-client.mjs
  *
- * Generic contract client for `secret-store/v1`. It:
+ * DPU-aware secret client used by gitAgent. It:
  *
- *   - routes every call through the router ("ploinky-router" from the
- *     agent's perspective)
- *   - signs a caller-assertion with the agent's own private key so the router
- *     can mint a delegated invocation_token
- *   - never hardcodes the DPU route, provider MCP tool names, or forged
- *     x-ploinky-auth-info blobs
- *
- * Provider-specific MCP tool names are hidden behind a small per-operation
- * mapping that lives inside the *provider* side, not here. Consumers only
- * see the contract: secret_get / secret_put / secret_delete / secret_grant /
- * secret_revoke / secret_list.
+ *   - routes every call through the router to the configured DPU route
+ *   - signs a per-request caller assertion with gitAgent's private key
+ *   - forwards the router-issued delegated user token unchanged
+ *   - does not depend on capability bindings for Git -> DPU traffic
  *
  * Env contract (set by AgentServer/ploinky start scripts):
  *
@@ -43,11 +36,15 @@ async function loadWireSign() {
  *   PLOINKY_AGENT_PRINCIPAL       - e.g. agent:gitAgent
  *   PLOINKY_AGENT_PRIVATE_KEY_PEM - the agent's Ed25519 private key (PEM)
  *   PLOINKY_AGENT_PRIVATE_KEY_PATH - alternative file-based source
+ *   PLOINKY_DPU_ROUTE             - optional explicit DPU MCP route name
+ *   PLOINKY_DPU_PRINCIPAL         - optional explicit DPU principal id
  */
 
 const { Client } = mcpClient;
-const ROUTER_AUDIENCE = 'ploinky-router';
 const CALLER_ASSERTION_HEADER = 'x-ploinky-caller-assertion';
+const USER_CONTEXT_HEADER = 'x-ploinky-user-context';
+const DEFAULT_DPU_ROUTE = 'dpuAgent';
+const DEFAULT_DPU_PRINCIPAL = 'agent:dpuAgent';
 
 function isNonEmptyString(value) {
   return typeof value === 'string' && value.trim().length > 0;
@@ -79,10 +76,9 @@ function resolveRouterBaseUrl() {
   return `http://${host}:${port}`;
 }
 
-function resolveProviderAlias() {
-  const explicit = String(process.env.PLOINKY_SECRETSTORE_PROVIDER || '').trim();
-  if (explicit) return explicit;
-  return '';
+function resolveDpuRouteName(explicitRouteName = '') {
+  const explicit = String(explicitRouteName || process.env.PLOINKY_DPU_ROUTE || process.env.PLOINKY_SECRETSTORE_PROVIDER || '').trim();
+  return explicit || DEFAULT_DPU_ROUTE;
 }
 
 function resolveConsumerPrincipal() {
@@ -92,21 +88,9 @@ function resolveConsumerPrincipal() {
   return agentName ? `agent:${agentName}` : '';
 }
 
-function readCapabilityBindings() {
-  const raw = String(process.env.PLOINKY_CAPABILITY_BINDINGS_JSON || '').trim();
-  if (!raw) return {};
-  try {
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-function resolveCapabilityBinding(alias) {
-  const bindings = readCapabilityBindings();
-  const entry = bindings && typeof bindings === 'object' ? bindings[alias] : null;
-  return entry && typeof entry === 'object' ? entry : null;
+function resolveDpuPrincipal(explicitPrincipal = '') {
+  const value = String(explicitPrincipal || process.env.PLOINKY_DPU_PRINCIPAL || '').trim();
+  return value || DEFAULT_DPU_PRINCIPAL;
 }
 
 function extractUserContextTokenFromAuthInfo(authInfo) {
@@ -162,23 +146,12 @@ function scopesForOperation(operation) {
   }
 }
 
-export function createSecretStoreClient({ providerAlias, alias = 'secretStore', authInfo = null, userContextToken = '' } = {}) {
+export function createSecretStoreClient({ providerRouteName, providerPrincipal, authInfo = null, userContextToken = '' } = {}) {
   const routerBase = resolveRouterBaseUrl();
   const callerPrincipal = resolveConsumerPrincipal();
-  const binding = resolveCapabilityBinding(alias);
-  const bindingId = String(binding?.id || '').trim()
-    || `${callerPrincipal.replace(/^agent:/i, '')}:${alias}`;
-
-  // Route: the router exposes agent endpoints at /mcps/<agentShortName>/mcp
-  // (see RoutingServer / handleAgentMcpRequest). The launcher injects the
-  // resolved capability binding so the consumer does not hardcode a provider.
-  const provider = providerAlias || String(binding?.provider || '').trim() || resolveProviderAlias();
-  const providerRouteName = String(binding?.providerRouteName || '').trim()
-    || provider.split('/').filter(Boolean).pop();
-  if (!providerRouteName) {
-    throw new Error(`secret-store-client: no bound provider route for alias '${alias}'`);
-  }
-  const baseUrl = `${routerBase}/mcps/${encodeURIComponent(providerRouteName)}/mcp`;
+  const dpuRouteName = resolveDpuRouteName(providerRouteName);
+  const dpuPrincipal = resolveDpuPrincipal(providerPrincipal);
+  const baseUrl = `${routerBase}/mcps/${encodeURIComponent(dpuRouteName)}/mcp`;
 
   let client = null;
   let transport = null;
@@ -201,27 +174,31 @@ export function createSecretStoreClient({ providerAlias, alias = 'secretStore', 
   async function callContractOperation(operation, args = {}) {
     const bodyObject = { tool: operation, arguments: args };
     const privatePem = readPrivateKeyPem();
+    if (!privatePem || !callerPrincipal) {
+      throw new Error('secret-store-client: missing agent signing identity.');
+    }
     const headers = {};
     const forwardedUserContextToken = isNonEmptyString(userContextToken)
       ? userContextToken.trim()
       : extractUserContextTokenFromAuthInfo(authInfo) || process.env.PLOINKY_USER_CONTEXT_TOKEN || undefined;
-    if (privatePem && callerPrincipal) {
-      const wire = await loadWireSign();
-      if (wire?.signCallerAssertion) {
-        const { token } = wire.signCallerAssertion({
-          callerPrincipal,
-          bindingId,
-          alias,
-          tool: operation,
-          scope: scopesForOperation(operation),
-          bodyObject,
-          privatePem,
-          audience: ROUTER_AUDIENCE,
-          userContextToken: forwardedUserContextToken
-        });
-        headers[CALLER_ASSERTION_HEADER] = token;
-      }
+    if (!forwardedUserContextToken) {
+      throw new Error('secret-store-client: missing delegated user context token.');
     }
+    const wire = await loadWireSign();
+    if (!wire?.signCallerAssertion) {
+      throw new Error('secret-store-client: wireSign module unavailable.');
+    }
+    const { token } = wire.signCallerAssertion({
+      callerPrincipal,
+      tool: operation,
+      scope: scopesForOperation(operation),
+      bodyObject,
+      privatePem,
+      audience: dpuPrincipal,
+      userContextToken: forwardedUserContextToken
+    });
+    headers[CALLER_ASSERTION_HEADER] = token;
+    headers[USER_CONTEXT_HEADER] = forwardedUserContextToken;
     await ensureConnected(Object.keys(headers).length ? headers : undefined);
     try {
       const result = await client.callTool({ name: operation, arguments: args });

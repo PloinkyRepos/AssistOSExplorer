@@ -69,11 +69,6 @@ const OPERATION_SCOPE_MAP = {
   secret_whoami: ['secret:access', 'secret:read']
 };
 
-let providerBindingsCache = {
-  raw: null,
-  parsed: {}
-};
-
 function extractInvocationScope(authInfo) {
   const invocation = authInfo && typeof authInfo === 'object' ? authInfo.invocation : null;
   if (!invocation || typeof invocation !== 'object') return null;
@@ -81,76 +76,9 @@ function extractInvocationScope(authInfo) {
   return new Set(scope.map((v) => String(v || '').trim().toLowerCase()).filter(Boolean));
 }
 
-function readProviderBindings() {
-  const raw = String(process.env.PLOINKY_PROVIDER_BINDINGS_JSON || '').trim();
-  if (providerBindingsCache.raw === raw) {
-    return providerBindingsCache.parsed;
-  }
-  let parsed = {};
-  if (raw) {
-    try {
-      const candidate = JSON.parse(raw);
-      if (candidate && typeof candidate === 'object' && !Array.isArray(candidate)) {
-        parsed = candidate;
-      }
-    } catch {
-      parsed = {};
-    }
-  }
-  providerBindingsCache = { raw, parsed };
-  return parsed;
-}
-
-function assertInvocationBindingFor(operation, authInfo) {
-  const invocation = authInfo && typeof authInfo === 'object' ? authInfo.invocation : null;
-  if (!invocation || typeof invocation !== 'object') return;
-
-  const callerPrincipal = String(authInfo?.agent?.principalId || authInfo?.agentPrincipalId || '').trim();
-  if (!/^agent:/i.test(callerPrincipal)) return;
-
-  const bindingId = String(invocation.bindingId || invocation.binding_id || '').trim();
-  if (!bindingId) {
-    throw new Error(`Invocation for ${operation} is missing a delegated binding id.`);
-  }
-
-  const providerBindings = readProviderBindings();
-  if (!providerBindings || typeof providerBindings !== 'object' || !Object.keys(providerBindings).length) {
-    return;
-  }
-
-  const binding = providerBindings[bindingId];
-  if (!binding || typeof binding !== 'object') {
-    throw new Error(`Invocation binding '${bindingId}' is not registered for this provider.`);
-  }
-
-  const bindingContract = String(binding.contract || '').trim();
-  const invocationContract = String(invocation.contract || '').trim();
-  if (bindingContract && invocationContract && bindingContract !== invocationContract) {
-    throw new Error(`Invocation contract mismatch for binding '${bindingId}'.`);
-  }
-
-  const bindingConsumerPrincipal = String(binding.consumerPrincipal || '').trim();
-  if (bindingConsumerPrincipal && bindingConsumerPrincipal !== callerPrincipal) {
-    throw new Error(`Invocation caller '${callerPrincipal}' does not match binding consumer '${bindingConsumerPrincipal}'.`);
-  }
-
-  const approvedScopes = Array.isArray(binding.approvedScopes) ? binding.approvedScopes : [];
-  if (approvedScopes.length) {
-    const allowed = new Set(approvedScopes.map((value) => String(value || '').trim().toLowerCase()).filter(Boolean));
-    const invocationScopes = Array.isArray(invocation.scope) ? invocation.scope : [];
-    const denied = invocationScopes
-      .map((value) => String(value || '').trim().toLowerCase())
-      .filter((value) => value && !allowed.has(value));
-    if (denied.length) {
-      throw new Error(`Invocation scope exceeds the provider binding for ${operation}: ${denied.join(', ')}.`);
-    }
-  }
-}
-
 function assertInvocationScopeFor(operation, authInfo) {
   const scopes = extractInvocationScope(authInfo);
   if (!scopes) return; // no invocation context = legacy path, fall through to ACL
-  assertInvocationBindingFor(operation, authInfo);
   const required = OPERATION_SCOPE_MAP[operation] || [];
   if (!required.length) return;
   const allowed = required.some((candidate) => scopes.has(candidate));
