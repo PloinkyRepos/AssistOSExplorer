@@ -218,10 +218,12 @@ export function createGitCommitRepo(ctx) {
     const applyDefaultRepoTreeExpansion = () => {
         const repos = getDisplayedRepoOverviews();
         const expanded = { '/': true };
+        const repoChangesExpanded = { ...(state.repoChangesExpanded || {}) };
         for (const repo of repos) {
             const counts = repo?.counts || {};
             const isDirty = Boolean(repo?.dirty || counts.staged || counts.unstaged || counts.untracked || counts.conflicted);
             if (!isDirty) continue;
+            repoChangesExpanded[repo.path] = true;
             const rel = String(repo.relativePath || repo.name || '').replace(/^\/+/, '');
             const parts = rel.split('/').filter(Boolean);
             let current = '';
@@ -231,6 +233,7 @@ export function createGitCommitRepo(ctx) {
             }
         }
         state.repoTreeExpanded = expanded;
+        state.repoChangesExpanded = repoChangesExpanded;
     };
 
     const renderRepoChangesTree = (repo) => renderRepoChangesTreeInternal(repo, {
@@ -388,6 +391,17 @@ export function createGitCommitRepo(ctx) {
             await loadRepoOverviews({ force });
             await reconcileSelectedDiffWithChanges();
 
+            const unpushedRepos = (state.repoOverviews || []).filter((repo) => {
+                const ahead = Number(repo?.ahead) || 0;
+                return ahead > 0;
+            });
+
+            if (unpushedRepos.length > 0 && shouldSetStatus) {
+                const unpushedCount = unpushedRepos.length;
+                const totalUnpushed = unpushedRepos.reduce((sum, repo) => sum + (Number(repo?.ahead) || 0), 0);
+                setStatusLine(`${unpushedCount} repo(s) have ${totalUnpushed} unpushed commit(s).`);
+            }
+
             if (isReposRootPath(state.repoPath, state.reposRoot)) {
                 state.repoInfoOk = false;
                 state.branch = null;
@@ -396,7 +410,7 @@ export function createGitCommitRepo(ctx) {
                 state.selectedRepoPath = null;
                 updateCommitButtons();
 
-                if (shouldSetStatus) {
+                if (shouldSetStatus && unpushedRepos.length === 0) {
                     setStatusLine('Select a repository from the list.');
                 }
                 return;
@@ -405,14 +419,14 @@ export function createGitCommitRepo(ctx) {
             const repoInfo = await loadRepoInfo({ force });
             if (repoInfo && repoInfo.ok === false) {
                 updateCommitButtons();
-                if (shouldSetStatus) {
+                if (shouldSetStatus && unpushedRepos.length === 0) {
                     setStatusLine('Select a repository from the list.');
                 }
                 return;
             }
             await reconcileSelectedDiffWithChanges();
             updateCommitButtons();
-            if (shouldSetStatus) {
+            if (shouldSetStatus && unpushedRepos.length === 0) {
                 setStatusLine('Ready.');
             }
         } catch (error) {

@@ -38,6 +38,13 @@ const getCommittablePaths = (repo) => {
         .filter(Boolean);
 };
 
+const getUnpushedRepos = (repos) => {
+    return (Array.isArray(repos) ? repos : []).filter((repo) => {
+        const ahead = Number(repo?.ahead) || 0;
+        return ahead > 0;
+    });
+};
+
 export class GitRepoTree {
     constructor(element, invalidate) {
         this.element = element;
@@ -347,6 +354,11 @@ export class GitRepoTree {
         });
     }
 
+    getUnpushedRepos() {
+        const repos = this.getDisplayedRepoOverviews();
+        return getUnpushedRepos(repos);
+    }
+
     getRepoCheckboxState(repo) {
         const changedPaths = getCommittablePaths(repo);
         const entry = this.getSelectionEntry(repo?.path);
@@ -618,7 +630,8 @@ export class GitRepoTree {
                 const repoCheckboxState = this.getRepoCheckboxState(repo);
                 repoCheckbox.checked = repoCheckboxState.checked;
                 repoCheckbox.indeterminate = repoCheckboxState.indeterminate;
-                repoCheckbox.disabled = getCommittablePaths(repo).length === 0;
+                const aheadCount = Number(repo?.ahead) || 0;
+                repoCheckbox.disabled = getCommittablePaths(repo).length === 0 && aheadCount === 0;
 
                 const changesToggle = document.createElement('button');
                 changesToggle.type = 'button';
@@ -632,9 +645,17 @@ export class GitRepoTree {
                 const label = document.createElement('div');
                 label.className = 'git-change-button';
                 label.textContent = `${repo.name}${repo.branch ? ` · ${repo.branch}` : ''}`;
+
                 repoLeft.appendChild(changesToggle);
                 repoLeft.appendChild(repoCheckbox);
                 repoLeft.appendChild(label);
+
+                if (aheadCount > 0) {
+                    const unpushedBadge = document.createElement('span');
+                    unpushedBadge.className = 'git-repo-unpushed-badge';
+                    unpushedBadge.textContent = `${aheadCount} unpushed`;
+                    repoLeft.appendChild(unpushedBadge);
+                }
 
                 const info = document.createElement('div');
                 info.className = 'git-info-button';
@@ -708,7 +729,8 @@ export class GitRepoTree {
             const repoCheckboxState = this.getRepoCheckboxState(repo);
             repoCheckbox.checked = repoCheckboxState.checked;
             repoCheckbox.indeterminate = repoCheckboxState.indeterminate;
-            repoCheckbox.disabled = getCommittablePaths(repo).length === 0;
+            const aheadCount = Number(repo?.ahead) || 0;
+            repoCheckbox.disabled = getCommittablePaths(repo).length === 0 && aheadCount === 0;
 
             const changesToggle = document.createElement('button');
             changesToggle.type = 'button';
@@ -722,9 +744,17 @@ export class GitRepoTree {
             const label = document.createElement('div');
             label.className = 'git-change-button';
             label.textContent = `${repo.name}${repo.branch ? ` · ${repo.branch}` : ''}`;
+
             repoLeft.appendChild(changesToggle);
             repoLeft.appendChild(repoCheckbox);
             repoLeft.appendChild(label);
+
+            if (aheadCount > 0) {
+                const unpushedBadge = document.createElement('span');
+                unpushedBadge.className = 'git-repo-unpushed-badge';
+                unpushedBadge.textContent = `${aheadCount} unpushed`;
+                repoLeft.appendChild(unpushedBadge);
+            }
 
             const info = document.createElement('div');
             info.className = 'git-info-button';

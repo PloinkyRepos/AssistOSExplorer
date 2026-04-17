@@ -5,6 +5,47 @@ import { client as mcpClient, StreamableHTTPClientTransport } from 'mcp-sdk';
 const { Client } = mcpClient;
 
 export const GIT_GITHUB_TOKEN_SECRET_KEY = 'GIT_GITHUB_TOKEN';
+let cachedAgentIdentity = null;
+
+function readConfiguredAgentIdentity() {
+  if (cachedAgentIdentity) {
+    return cachedAgentIdentity;
+  }
+  const manifestUrl = new URL('../manifest.json', import.meta.url);
+  const raw = fs.readFileSync(manifestUrl, 'utf8');
+  const manifest = JSON.parse(raw);
+  const identity = manifest?.identity && typeof manifest.identity === 'object' ? manifest.identity : null;
+  const principalId = String(identity?.principalId || '').trim();
+  const agentName = String(identity?.agentName || '').trim();
+  if (!principalId || !agentName) {
+    throw new Error('gitAgent manifest.json must declare identity.principalId and identity.agentName.');
+  }
+  if (!/^agent:/i.test(principalId)) {
+    throw new Error('gitAgent manifest.json identity.principalId must use the agent: principal namespace.');
+  }
+  cachedAgentIdentity = { principalId, agentName };
+  return cachedAgentIdentity;
+}
+
+function buildGitAgentAuthInfo(authInfo = null) {
+  if (!authInfo || typeof authInfo !== 'object') {
+    return authInfo;
+  }
+  const configuredIdentity = readConfiguredAgentIdentity();
+  const agent = authInfo.agent && typeof authInfo.agent === 'object'
+    ? { ...authInfo.agent }
+    : {};
+  if (!String(agent.name || '').trim()) {
+    agent.name = configuredIdentity.agentName;
+  }
+  if (!String(agent.principalId || '').trim()) {
+    agent.principalId = configuredIdentity.principalId;
+  }
+  return {
+    ...authInfo,
+    agent
+  };
+}
 
 function safeParseJson(text) {
   try {
@@ -83,8 +124,9 @@ function getBaseUrlCandidates(route, env = process.env) {
 export function createGitDpuClient({ workspaceRoot, authInfo }) {
   const route = loadRoute(workspaceRoot, 'dpuAgent');
   const baseUrlCandidates = getBaseUrlCandidates(route);
-  const requestHeaders = authInfo
-    ? { 'x-ploinky-auth-info': Buffer.from(JSON.stringify(authInfo), 'utf8').toString('base64') }
+  const effectiveAuthInfo = buildGitAgentAuthInfo(authInfo);
+  const requestHeaders = effectiveAuthInfo
+    ? { 'x-ploinky-auth-info': Buffer.from(JSON.stringify(effectiveAuthInfo), 'utf8').toString('base64') }
     : undefined;
 
   let client = null;
@@ -138,9 +180,28 @@ export async function withGitDpuClient({ workspaceRoot, authInfo }, fn) {
   }
 }
 
+export async function grantStoredGitTokenAccess({
+  workspaceRoot,
+  authInfo,
+  key = GIT_GITHUB_TOKEN_SECRET_KEY,
+  principal,
+  role = 'read'
+} = {}) {
+  if (!authInfo || typeof authInfo !== 'object') return { ok: false };
+  const configuredIdentity = readConfiguredAgentIdentity();
+  return withGitDpuClient({ workspaceRoot, authInfo }, (client) =>
+    client.callTool('dpu_secret_grant', {
+      key,
+      principal: String(principal || configuredIdentity.principalId).trim(),
+      role
+    })
+  );
+}
+
 export async function getStoredGitToken({ workspaceRoot, authInfo, key = GIT_GITHUB_TOKEN_SECRET_KEY } = {}) {
   if (!authInfo || typeof authInfo !== 'object') return '';
   try {
+    await grantStoredGitTokenAccess({ workspaceRoot, authInfo, key }).catch(() => ({ ok: false }));
     const payload = await withGitDpuClient({ workspaceRoot, authInfo }, (client) =>
       client.callTool('dpu_secret_get', { key })
     );
@@ -156,9 +217,11 @@ export async function putStoredGitToken({ workspaceRoot, authInfo, token, key = 
   }
   const value = String(token || '').trim();
   if (!value) throw new Error('Token is required.');
-  return withGitDpuClient({ workspaceRoot, authInfo }, (client) =>
+  const payload = await withGitDpuClient({ workspaceRoot, authInfo }, (client) =>
     client.callTool('dpu_secret_put', { key, value })
   );
+  await grantStoredGitTokenAccess({ workspaceRoot, authInfo, key });
+  return payload;
 }
 
 export async function deleteStoredGitToken({ workspaceRoot, authInfo, key = GIT_GITHUB_TOKEN_SECRET_KEY } = {}) {

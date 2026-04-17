@@ -245,6 +245,7 @@ export class GitCommitModal {
         this.setState(patch, { silent: true });
         if (typeof detail.showAgentRepos === 'boolean' && prevShowAgentRepos !== nextShowAgentRepos) {
             setShowAgentReposSetting(nextShowAgentRepos);
+            this.applyDefaultRepoTreeExpansion();
             this.syncStaticUI();
         }
         this.updateIdentityPrompt();

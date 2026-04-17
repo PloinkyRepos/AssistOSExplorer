@@ -28,6 +28,8 @@ sh /code/scripts/startAgent.sh
 
 The start script loads application programming interface (API) keys from process env first and then falls back to `.ploinky/.secrets`.
 
+The same `manifest.json` also declares the agent permission identity used for DPU-backed secret access. That identity is the source of truth for the principal granted remote-token read access.
+
 ## Environment
 
 Filesystem validation uses these roots when present:

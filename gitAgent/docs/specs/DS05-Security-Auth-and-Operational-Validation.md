@@ -18,6 +18,10 @@ Requirement O3: remote Git operations shall support token propagation from auth 
 
 Requirement O4: GitHub device flow state shall persist under workspace state paths and token material shall remain in dedicated secret storage.
 
+Requirement O4a: `gitAgent/manifest.json` shall declare the agent identity and the maximum secret roles the agent may receive through `permissions.secrets.allowedRoles`.
+
+Requirement O4b: when `gitAgent` stores the GitHub token in DPU secret storage, it shall preserve user ownership on the secret and request only the concrete secret grant needed for remote Git operations. DPU remains responsible for validating that requested role against the agent manifest policy.
+
 Requirement O5: configuration and documentation shall remain aligned with `manifest.json` and `mcp-config.json`.
 
 Requirement O6: repository validation shall run through the Git agent test suite under `gitAgent/tests`.

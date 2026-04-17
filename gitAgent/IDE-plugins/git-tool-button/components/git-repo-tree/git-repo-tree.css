@@ -89,3 +89,17 @@ git-repo-tree .git-repo-filter-input:focus {
     border-color: rgba(59, 130, 246, 0.55);
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
 }
+
+git-repo-tree .git-repo-unpushed-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    margin-left: 8px;
+    border-radius: 12px;
+    background: rgba(251, 146, 60, 0.15);
+    color: #f97316;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+}

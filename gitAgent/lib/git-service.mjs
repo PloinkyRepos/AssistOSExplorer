@@ -409,15 +409,17 @@ export function createGitService({ validatePath }) {
       context = await resolveGitTargetContext(repoPathArg);
       const inside = await runGit(context.probePath, [context.gitBinary, 'rev-parse', '--is-inside-work-tree']);
       if (!inside.stdout.trim().startsWith('true')) {
-        return { ok: false, branch: null, upstream: null, remotes: [], repoPath: null, repoRelativePath: '' };
+        return { ok: false, branch: null, upstream: null, remotes: [], repoPath: null, repoRelativePath: '', ahead: 0, behind: 0 };
       }
     } catch {
-      return { ok: false, branch: null, upstream: null, remotes: [], repoPath: null, repoRelativePath: '' };
+      return { ok: false, branch: null, upstream: null, remotes: [], repoPath: null, repoRelativePath: '', ahead: 0, behind: 0 };
     }
 
     let branch = null;
     let upstream = null;
     let remotes = [];
+    let ahead = 0;
+    let behind = 0;
     try {
       const res = await runGit(context.probePath, [context.gitBinary, 'rev-parse', '--abbrev-ref', 'HEAD']);
       branch = res.stdout.trim() || null;
@@ -436,13 +438,28 @@ export function createGitService({ validatePath }) {
     } catch {
       remotes = [];
     }
+    if (upstream) {
+      try {
+        const res = await runGit(context.probePath, [context.gitBinary, 'rev-list', '--count', '--left-right', `${upstream}...HEAD`]);
+        const parts = res.stdout.trim().split(/\s+/);
+        if (parts.length === 2) {
+          behind = parseInt(parts[0], 10) || 0;
+          ahead = parseInt(parts[1], 10) || 0;
+        }
+      } catch {
+        ahead = 0;
+        behind = 0;
+      }
+    }
     return {
       ok: true,
       branch,
       upstream,
       remotes,
       repoPath: context.repoPath,
-      repoRelativePath: context.repoRelativePath
+      repoRelativePath: context.repoRelativePath,
+      ahead,
+      behind
     };
   }
 
@@ -1489,7 +1506,9 @@ export function createGitService({ validatePath }) {
               counts: { staged: 0, unstaged: 0, untracked: 0, conflicted: 0 },
               sample: { staged: [], unstaged: [], untracked: [], conflicted: [] },
               ignored: ignored.slice(0, 800).map((e) => e?.path).filter(Boolean),
-              ignoredCount: ignored.length
+              ignoredCount: ignored.length,
+              ahead: info.ahead || 0,
+              behind: info.behind || 0
             });
             continue;
           }
@@ -1590,7 +1609,9 @@ export function createGitService({ validatePath }) {
               conflicted: fullConflicted.slice(0, 8).map((e) => e?.path).filter(Boolean)
             },
             ignored: toPaths(fullIgnored, 800),
-            ignoredCount: fullIgnored.length
+            ignoredCount: fullIgnored.length,
+            ahead: info.ahead || 0,
+            behind: info.behind || 0
           });
         } catch {
           results.push({
@@ -1599,7 +1620,9 @@ export function createGitService({ validatePath }) {
             branch: info.branch || null,
             dirty: false,
             counts: { staged: 0, unstaged: 0, untracked: 0, conflicted: 0 },
-            sample: { staged: [], unstaged: [], untracked: [], conflicted: [] }
+            sample: { staged: [], unstaged: [], untracked: [], conflicted: [] },
+            ahead: info.ahead || 0,
+            behind: info.behind || 0
           });
         }
       }
