@@ -4,7 +4,7 @@ import {
   nowIso
 } from './common.mjs';
 
-const IDENTITY_ALIAS_KEYS = ['emails', 'userIds', 'usernames', 'ssoSubjects', 'issuers'];
+const IDENTITY_ALIAS_KEYS = ['emails', 'userIds', 'usernames', 'ssoSubjects', 'issuers', 'agentNames'];
 const RESOURCE_PERMISSION_KEYS = {
   secret: 'secrets',
   confidential: 'objects'
@@ -40,7 +40,8 @@ function normalizeAliasBucket(input = {}) {
     userIds: toStringList(input.userIds),
     usernames: toStringList(input.usernames),
     ssoSubjects: toStringList(input.ssoSubjects),
-    issuers: toStringList(input.issuers)
+    issuers: toStringList(input.issuers),
+    agentNames: toStringList(input.agentNames)
   };
 }
 
@@ -189,6 +190,7 @@ export function normalizePermissionsManifest(input = {}) {
 
 export function extractIdentityHints(authInfo = null) {
   const user = authInfo?.user && typeof authInfo.user === 'object' ? authInfo.user : {};
+  const agent = authInfo?.agent && typeof authInfo.agent === 'object' ? authInfo.agent : {};
   const rootClaims = authInfo?.claims && typeof authInfo.claims === 'object' ? authInfo.claims : {};
   const userClaims = user.claims && typeof user.claims === 'object' ? user.claims : {};
   const tokenClaims = authInfo?.token?.claims && typeof authInfo.token.claims === 'object' ? authInfo.token.claims : {};
@@ -220,6 +222,15 @@ export function extractIdentityHints(authInfo = null) {
     || claims.iss
     || ''
   ).trim();
+  const agentName = String(
+    agent.name
+    || agent.id
+    || ''
+  ).trim();
+  const agentPrincipalId = String(
+    agent.principalId
+    || (agentName ? `agent:${agentName}` : '')
+  ).trim();
 
   return {
     email,
@@ -227,6 +238,8 @@ export function extractIdentityHints(authInfo = null) {
     id,
     ssoSubject,
     issuer,
+    agentName,
+    agentPrincipalId,
     roles: collectRoleValues(claims, user),
     claims
   };
@@ -351,6 +364,9 @@ export function resolvePrincipalFromManifest(manifest, authInfo = null) {
         return principalId;
       }
     }
+    if (hints.agentName && Array.isArray(aliases.agentNames) && aliases.agentNames.includes(hints.agentName)) {
+      return principalId;
+    }
   }
 
   return '';
@@ -386,6 +402,9 @@ export function resolvePrincipalReference(manifest, value = '') {
     if (Array.isArray(aliases.ssoSubjects) && aliases.ssoSubjects.includes(normalizedValue)) {
       return principalId;
     }
+    if (Array.isArray(aliases.agentNames) && aliases.agentNames.includes(normalizedValue)) {
+      return principalId;
+    }
   }
 
   return canonicalValue;
@@ -418,6 +437,7 @@ export function upsertPrincipalIdentity(manifest, principalId, hints = {}) {
   changed = pushUnique(entry.aliases.usernames, hints.username) || changed;
   changed = pushUnique(entry.aliases.ssoSubjects, hints.ssoSubject) || changed;
   changed = pushUnique(entry.aliases.issuers, hints.issuer) || changed;
+  changed = pushUnique(entry.aliases.agentNames, hints.agentName) || changed;
 
   const roles = Array.isArray(hints.roles) ? hints.roles : [];
   for (const role of roles) {

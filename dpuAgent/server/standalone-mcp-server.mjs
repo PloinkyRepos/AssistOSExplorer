@@ -147,10 +147,18 @@ function parseAuthInfo(headers = {}) {
   if (!raw) {
     return null;
   }
-  try {
-    return JSON.parse(String(raw));
-  } catch {
+  const text = String(raw).trim();
+  if (!text) {
     return null;
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    try {
+      return JSON.parse(Buffer.from(text, 'base64').toString('utf8'));
+    } catch {
+      return null;
+    }
   }
 }
 

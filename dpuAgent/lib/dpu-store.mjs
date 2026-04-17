@@ -29,6 +29,7 @@ import {
   encryptConfidentialContent,
   fileExists,
   getConfidentialBlobPath,
+  loadAgentManifest,
   loadState,
   loadPermissionsManifest,
   readSecretsMap,
@@ -116,6 +117,10 @@ function buildActorPrincipalCandidates(actorOrPrincipal) {
 
   if (actorOrPrincipal && typeof actorOrPrincipal === 'object') {
     pushValue(actorOrPrincipal.principalId);
+    pushValue(actorOrPrincipal.agentPrincipalId);
+    if (isNonEmptyString(actorOrPrincipal.agentName)) {
+      pushValue(`agent:${actorOrPrincipal.agentName}`);
+    }
     pushValue(actorOrPrincipal.email);
     pushValue(actorOrPrincipal.id);
     pushValue(actorOrPrincipal.username);
@@ -165,12 +170,16 @@ function getSecretRole(secret, actorOrPrincipal, permissionsManifest) {
     ? canonicalizePrincipal(actorOrPrincipal.principalId)
     : canonicalizePrincipal(actorOrPrincipal);
   if (!secret || !normalizedPrincipalId) return null;
-  if (secret.ownerId === normalizedPrincipalId) return 'write-access';
+  const roleCandidates = [];
+  if (secret.ownerId === normalizedPrincipalId) {
+    roleCandidates.push('write-access');
+  }
   const aclMap = getSecretAclMap(secret, permissionsManifest);
   const matchedRoles = buildActorPrincipalCandidates(actorOrPrincipal)
     .map((principal) => aclMap?.[principal])
     .filter((role) => isNonEmptyString(role));
-  return pickMaxRole(matchedRoles, SECRET_ROLE_ORDER);
+  roleCandidates.push(...matchedRoles);
+  return pickMaxRole(roleCandidates, SECRET_ROLE_ORDER);
 }
 
 function getConfidentialRole(state, objectRecord, actorOrPrincipal, permissionsManifest) {
@@ -200,6 +209,37 @@ function assertSecretPermission(secret, actor, permission, permissionsManifest) 
     throw new Error(`Access denied: missing ${permission} on secret ${secret?.key || ''}`.trim());
   }
   return role;
+}
+
+async function assertAgentSecretGrantAllowed(permissionsManifest, principalId, role) {
+  const normalizedPrincipalId = canonicalizePrincipal(principalId);
+  const agentMatch = normalizedPrincipalId.match(/^agent:(.+)$/i);
+  if (!agentMatch?.[1]) {
+    return;
+  }
+  const manifestPrincipalId = resolvePrincipalReference(permissionsManifest, normalizedPrincipalId);
+  const principalEntry = permissionsManifest?.identities?.principals?.[manifestPrincipalId]
+    || permissionsManifest?.identities?.principals?.[normalizedPrincipalId]
+    || null;
+  const aliasAgentNames = Array.isArray(principalEntry?.aliases?.agentNames)
+    ? principalEntry.aliases.agentNames
+    : [];
+  const agentName = String(aliasAgentNames[0] || agentMatch[1] || '').trim();
+  if (!agentName) {
+    throw new Error(`Agent secret grant is invalid: could not resolve agent identity for ${normalizedPrincipalId}.`);
+  }
+  const agentManifest = await loadAgentManifest(agentName);
+  if (!agentManifest || typeof agentManifest !== 'object') {
+    throw new Error(`Agent secret grant is invalid: manifest not found for ${agentName}.`);
+  }
+  const allowedRoles = Array.isArray(agentManifest?.permissions?.secrets?.allowedRoles)
+    ? agentManifest.permissions.secrets.allowedRoles
+      .map((value) => String(value || '').trim().toLowerCase())
+      .filter((value) => SECRET_ROLE_ORDER.includes(value))
+    : [];
+  if (!allowedRoles.includes(role)) {
+    throw new Error(`Agent ${agentName} is not allowed to receive secret role ${role}.`);
+  }
 }
 
 function assertConfidentialPermission(state, objectRecord, actor, permission, permissionsManifest) {
@@ -336,6 +376,15 @@ async function ensureUserRecord(state, permissionsManifest, actor, ctx) {
     roles: actor.roles,
     claims: actor.claims
   }, issuer: actor.issuer }))) {
+    ctx.permissionsDirty = true;
+  }
+
+  if (
+    isNonEmptyString(actor.agentPrincipalId)
+    && upsertPrincipalIdentity(permissionsManifest, actor.agentPrincipalId, {
+      agentName: actor.agentName
+    })
+  ) {
     ctx.permissionsDirty = true;
   }
 
@@ -590,6 +639,7 @@ export async function grantSecret(authInfo = null, { key, principal, role }) {
       permissionsManifest,
       normalizePrincipal(principal, 'principal')
     );
+    await assertAgentSecretGrantAllowed(permissionsManifest, normalizedPrincipal, normalizedRole);
     if (normalizedPrincipal !== secret.ownerId) {
       setPermissionRole(permissionsManifest, 'secret', secret.key, normalizedPrincipal, normalizedRole);
       secret.updatedAt = nowIso();

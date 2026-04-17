@@ -36,7 +36,9 @@ Secret roles are:
 
 These roles are not equivalent. An actor with `access` can be authorized operationally without seeing the plaintext value. An actor with `write-access` can update the value without seeing the current value. An actor with `read` can see the value. An actor with `write` can update the value, see the value, and inspect access control list details.
 
-When a new secret is created, the creator automatically receives the `write-access` role for that secret.
+When a new secret is created, the creator is treated as having the `write-access` role for that secret through ownership resolution. This means the owner can update the secret and manage its ACL without automatically materializing the current plaintext value. Delegated principals may still receive `read` or `write` when the workflow requires value visibility.
+
+Secret ACL entries are principal-based. The same secret may therefore grant roles to user principals such as `user:local:admin` and to agent principals such as `agent:gitAgent`. Agent principals should come from the identity registry in `permissions.manifest.json`, while the maximum role an agent may receive on any secret is validated against that agent's `manifest.json -> permissions.secrets.allowedRoles`.
 
 ## Practical Operation
 

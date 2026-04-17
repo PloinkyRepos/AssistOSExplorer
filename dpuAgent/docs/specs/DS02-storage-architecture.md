@@ -24,10 +24,12 @@ By default, the storage root lives next to the resolved workspace root:
 The layers have separate roles:
 
 - `state.json` stores users, secret metadata, and confidential object metadata
-- `permissions.manifest.json` stores canonical principal identities and access control list entries
+- `permissions.manifest.json` stores canonical principal identities and access control list entries for both users and agents
 - `secrets.json` stores encrypted secret values
 - `blobs/` stores encrypted confidential file content
 - `.lock/` is used by the file lock
+
+Agent capability policy remains outside `permissions.manifest.json`. DPU resolves the target agent manifest from the workspace repository tree when it needs to validate whether an agent principal may receive a secret role such as `read` or `write`.
 
 ## Structural Separation
 

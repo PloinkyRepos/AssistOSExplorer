@@ -36,6 +36,8 @@ This means Explorer remains the presentation layer, but the DPU agent remains th
 - which records are visible
 - whether content, comments, and access control list (ACL) details should be materialized
 
+For secrets, ACL principals are not limited to end users. DPU also supports agent-scoped principals such as `agent:gitAgent`, registered in the identity manifest the same way canonical user principals are registered. This lets a system agent read or update a specific secret without changing the default owner semantics for every secret in the workspace. The agent manifest declares the roles that category of agent is allowed to receive for secrets in principle; the ACL still records which concrete secret actually granted the role.
+
 ## Practical Boundary
 
 The file-like presentation in Explorer should not be confused with normal workspace persistence. Secret values do not go through ordinary filesystem save flows. Confidential file content is not stored in the regular workspace tree. Access control list updates are DPU operations, not Explorer-local metadata changes.

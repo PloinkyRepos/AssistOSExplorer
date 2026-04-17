@@ -23,6 +23,20 @@ Each Model Context Protocol tool entry in `mcp-config.json` points to `tools/dpu
 
 In standalone mode, `server/standalone-mcp-server.mjs` loads the same `mcp-config.json`, registers the same tools, and still routes execution through the same wrapper and dispatcher.
 
+For HTTP callers, auth context is carried in the `x-ploinky-auth-info` header. The standalone server must accept both a plain JSON payload and a Base64-encoded JSON payload in that header before resolving `metadata.authInfo`. This keeps inter-agent callers compatible while preserving authenticated access checks for secret and confidential operations.
+
+The auth payload may also include optional agent context, for example:
+
+```json
+{
+  "user": { "id": "local:admin", "username": "admin" },
+  "agent": { "name": "gitAgent", "principalId": "agent:gitAgent" },
+  "sessionId": "..."
+}
+```
+
+When both `user` and `agent` are present, DPU keeps ownership and user-space resolution anchored to the authenticated user principal while access control list evaluation may match either the user principal or the agent principal. Agent identity should be configured by the calling agent manifest and then registered in `permissions.manifest.json` as a first-class principal. When DPU grants a secret role to an agent principal, it must validate the requested role against the target agent's `manifest.json -> permissions.secrets.allowedRoles`.
+
 ## Tool Families
 
 The current tool families are:

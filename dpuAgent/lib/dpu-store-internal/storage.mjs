@@ -17,6 +17,7 @@ const PERMISSIONS_MANIFEST_FILENAME = 'permissions.manifest.json';
 const LOCK_DIRNAME = '.lock';
 const BLOBS_DIRNAME = 'blobs';
 const SECRETS_FILENAME = 'secrets.json';
+const PLOINKY_REPOS_DIRNAME = '.ploinky/repos';
 const CONFIDENTIAL_FILE_PREFIX = 'DPUENC1';
 const SECRET_MAP_FILE_PREFIX = 'DPUSECS1';
 const CONFIDENTIAL_CONTEXT = 'dpu:confidential:';
@@ -39,6 +40,10 @@ export function getDpuDataRoot() {
     return path.resolve(configured);
   }
   return path.join(path.dirname(getWorkspaceRoot()), DPU_DATA_ROOT_NAME);
+}
+
+export function getPloinkyReposRoot() {
+  return path.join(getWorkspaceRoot(), PLOINKY_REPOS_DIRNAME);
 }
 
 export function getStateFilePath() {
@@ -214,6 +219,41 @@ export async function removePathIfExists(targetPath) {
 
 export async function ensureFileParentExists(filePath) {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
+}
+
+export async function findAgentManifestPath(agentName) {
+  const normalizedAgentName = String(agentName || '').trim();
+  if (!normalizedAgentName) {
+    return '';
+  }
+  const reposRoot = getPloinkyReposRoot();
+  if (!(await fileExists(reposRoot))) {
+    return '';
+  }
+  let bundles = [];
+  try {
+    bundles = await fs.readdir(reposRoot, { withFileTypes: true });
+  } catch {
+    return '';
+  }
+  for (const entry of bundles) {
+    if (!entry?.isDirectory?.()) {
+      continue;
+    }
+    const candidate = path.join(reposRoot, entry.name, normalizedAgentName, 'manifest.json');
+    if (await fileExists(candidate)) {
+      return candidate;
+    }
+  }
+  return '';
+}
+
+export async function loadAgentManifest(agentName) {
+  const manifestPath = await findAgentManifestPath(agentName);
+  if (!manifestPath) {
+    return null;
+  }
+  return readJsonFile(manifestPath, null);
 }
 
 export function serializeEncryptedConfidentialPayload(iv, authTag, ciphertext) {

@@ -67,6 +67,12 @@ function getPermissionsManifest() {
   return JSON.parse(fs.readFileSync(getPermissionsManifestPath(), 'utf8'));
 }
 
+function writeAgentManifest(agentName, manifest) {
+  const manifestPath = path.join(tempWorkspaceDir, '.ploinky', 'repos', 'TestSuite', agentName, 'manifest.json');
+  fs.mkdirSync(path.dirname(manifestPath), { recursive: true });
+  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+}
+
 test.beforeEach(() => {
   fs.rmSync(tempWorkspaceDir, { recursive: true, force: true });
   fs.rmSync(tempDpuDataDir, { recursive: true, force: true });
@@ -119,22 +125,34 @@ test('confidential files are encrypted at rest outside the workspace boundary', 
 });
 
 test('secret values are encrypted at rest and remain readable through ACL-aware APIs', async () => {
+  const readerAuth = {
+    user: {
+      email: 'reader@example.com'
+    }
+  };
   await putSecret(authInfo, { key: 'API_TOKEN', value: 'top-secret-value' });
+  await grantSecret(authInfo, { key: 'API_TOKEN', principal: 'reader@example.com', role: 'read' });
   const rawOnDisk = fs.readFileSync(getSecretsPath(), 'utf8');
 
   assert.match(rawOnDisk, /^DPUSECS1:/);
   assert.equal(rawOnDisk.includes('top-secret-value'), false);
 
-  const fetched = await getSecretByKey(authInfo, { key: 'API_TOKEN' });
+  const fetched = await getSecretByKey(readerAuth, { key: 'API_TOKEN' });
   assert.equal(fetched.ok, true);
   assert.equal(fetched.secret.value, 'top-secret-value');
 });
 
 test('plaintext secret storage is rejected', async () => {
+  const readerAuth = {
+    user: {
+      email: 'reader@example.com'
+    }
+  };
   await putSecret(authInfo, { key: 'LEGACY_TOKEN', value: 'legacy-value' });
+  await grantSecret(authInfo, { key: 'LEGACY_TOKEN', principal: 'reader@example.com', role: 'read' });
   fs.writeFileSync(getSecretsPath(), 'LEGACY_TOKEN=legacy-value\n', 'utf8');
   await assert.rejects(
-    () => getSecretByKey(authInfo, { key: 'LEGACY_TOKEN' }),
+    () => getSecretByKey(readerAuth, { key: 'LEGACY_TOKEN' }),
     /DPU secret storage is invalid/
   );
 });
@@ -316,6 +334,120 @@ test('identity registry can resolve principals from SSO claims without exposing 
   assert.equal(ssoReader.ok, true);
   assert.equal(ssoReader.secret.role, 'read');
   assert.equal(ssoReader.secret.value, 'claims-value');
+});
+
+test('secret owners keep write-access by default while manifest-registered agents can read values', async () => {
+  const ownerAuth = {
+    user: {
+      id: 'local:admin',
+      username: 'admin',
+      email: 'admin@example.com'
+    }
+  };
+
+  await putSecret(ownerAuth, { key: 'AGENT_VISIBLE_SECRET', value: 'agent-readable-value' });
+  writeAgentManifest('gitAgent', {
+    identity: {
+      principalId: 'agent:gitAgent',
+      agentName: 'gitAgent'
+    },
+    permissions: {
+      secrets: {
+        allowedRoles: ['read']
+      }
+    }
+  });
+
+  const manifest = getPermissionsManifest();
+  manifest.identities.principals['agent:gitAgent'] = {
+    aliases: {
+      emails: [],
+      userIds: [],
+      usernames: [],
+      ssoSubjects: [],
+      issuers: [],
+      agentNames: ['gitAgent']
+    },
+    claims: {
+      roles: []
+    },
+    createdAt: '2026-04-16T00:00:00.000Z',
+    updatedAt: '2026-04-16T00:00:00.000Z'
+  };
+  fs.writeFileSync(getPermissionsManifestPath(), JSON.stringify(manifest, null, 2), 'utf8');
+
+  const ownerView = await getSecretByKey(ownerAuth, { key: 'AGENT_VISIBLE_SECRET' });
+  assert.equal(ownerView.ok, true);
+  assert.equal(ownerView.secret.role, 'write-access');
+  assert.equal(ownerView.secret.value, null);
+
+  await grantSecret(ownerAuth, {
+    key: 'AGENT_VISIBLE_SECRET',
+    principal: 'gitAgent',
+    role: 'read'
+  });
+
+  const agentView = await getSecretByKey({
+    user: {
+      id: 'local:admin',
+      username: 'admin',
+      email: 'admin@example.com'
+    },
+    agent: {
+      name: 'gitAgent',
+      principalId: 'agent:gitAgent'
+    }
+  }, { key: 'AGENT_VISIBLE_SECRET' });
+
+  assert.equal(agentView.ok, true);
+  assert.equal(agentView.secret.role, 'read');
+  assert.equal(agentView.secret.value, 'agent-readable-value');
+});
+
+test('agent secret grants are capped by manifest-declared allowedRoles', async () => {
+  const ownerAuth = {
+    user: {
+      email: 'owner@example.com'
+    }
+  };
+  await putSecret(ownerAuth, { key: 'AGENT_ROLE_LIMIT', value: 'value' });
+  writeAgentManifest('gitAgent', {
+    identity: {
+      principalId: 'agent:gitAgent',
+      agentName: 'gitAgent'
+    },
+    permissions: {
+      secrets: {
+        allowedRoles: ['read']
+      }
+    }
+  });
+  const manifest = getPermissionsManifest();
+  manifest.identities.principals['agent:gitAgent'] = {
+    aliases: {
+      emails: [],
+      userIds: [],
+      usernames: [],
+      ssoSubjects: [],
+      issuers: [],
+      agentNames: ['gitAgent']
+    },
+    claims: {
+      roles: []
+    },
+    createdAt: '2026-04-17T00:00:00.000Z',
+    updatedAt: '2026-04-17T00:00:00.000Z'
+  };
+  fs.writeFileSync(getPermissionsManifestPath(), JSON.stringify(manifest, null, 2), 'utf8');
+
+  await assert.rejects(
+    () => grantSecret(ownerAuth, {
+      key: 'AGENT_ROLE_LIMIT',
+      principal: 'gitAgent',
+      role: 'write'
+    }),
+    /not allowed to receive secret role write/
+  );
 });
 
 test('comment role can add annotations without write access and read role can see them', async () => {
