@@ -6,6 +6,6 @@
     },
     "dependencies": {
         "flexsearch": "^0.7.31",
-        "soplang": "github:AssistOS-AI/soplang"
+        "soplang": "git+https://github.com/AssistOS-AI/soplang.git"
     }
 }

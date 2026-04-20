@@ -218,6 +218,50 @@ export function isGitIdentityError(message) {
     return false;
 }
 
+export function isLlmUnavailableError(message) {
+    const text = String(message || '').trim().toLowerCase();
+    if (!text) return false;
+    if (text.includes('no llm models are configured')) return true;
+    if (text.includes('no default llm agent available')) return true;
+    if (text.includes('llmconfig.json')) return true;
+    return false;
+}
+
+function basename(value) {
+    const normalized = normalizeSlashes(String(value || '')).replace(/\/+$/g, '');
+    if (!normalized) return '';
+    const parts = normalized.split('/');
+    return parts[parts.length - 1] || '';
+}
+
+export function buildFallbackCommitMessage(selections = []) {
+    const entries = Array.isArray(selections) ? selections : [];
+    const repoCount = entries.filter((entry) => entry?.repoPath).length;
+    const files = [];
+    for (const entry of entries) {
+        const list = Array.isArray(entry?.files) ? entry.files : [];
+        for (const file of list) {
+            const name = basename(file);
+            if (name) files.push(name);
+        }
+    }
+    const uniqueFiles = [...new Set(files)];
+    if (!repoCount || !uniqueFiles.length) {
+        return 'Sync selected changes';
+    }
+    if (repoCount === 1 && uniqueFiles.length === 1) {
+        return `Update ${uniqueFiles[0]}`;
+    }
+    if (repoCount === 1) {
+        return uniqueFiles.length === 2
+            ? `Update ${uniqueFiles[0]} and ${uniqueFiles[1]}`
+            : `Update ${uniqueFiles[0]} and ${uniqueFiles.length - 1} more files`;
+    }
+    return repoCount === 2
+        ? 'Sync changes across 2 repositories'
+        : `Sync changes across ${repoCount} repositories`;
+}
+
 export function isGitConflictError(message) {
     const text = String(message || '');
     const lower = text.toLowerCase();
