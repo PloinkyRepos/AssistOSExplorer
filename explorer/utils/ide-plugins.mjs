@@ -121,7 +121,7 @@ function validateAndNormalizePluginConfig(parsedConfig, pluginEntryName, configP
       ? [locationsRaw.trim()]
       : [];
 
-  if (!locations.length) {
+  if (pluginCategory === DOCUMENT_PLUGIN_CATEGORY && !locations.length) {
     console.warn(`[filesystem-http] Plugin ${configPath} does not specify a valid location; skipping.`);
     return null;
   }
@@ -133,7 +133,7 @@ function validateAndNormalizePluginConfig(parsedConfig, pluginEntryName, configP
       return null;
     }
   } else {
-    const invalidLocations = locations.filter((location) => !APPLICATION_PLUGIN_LOCATION_PATTERN.test(location));
+    const invalidLocations = locations.filter((location) => location && !APPLICATION_PLUGIN_LOCATION_PATTERN.test(location));
     if (invalidLocations.length > 0) {
       console.warn(`[filesystem-http] Plugin ${configPath} has invalid application slots: ${invalidLocations.join(', ')}`);
       return null;
@@ -219,8 +219,13 @@ function validateAndNormalizePluginConfig(parsedConfig, pluginEntryName, configP
     return null;
   }
 
+  const normalizedLocations = [...new Set(locations)];
+  const effectiveLocations = pluginCategory === APPLICATION_PLUGIN_CATEGORY && normalizedLocations.length === 0
+    ? ['']
+    : normalizedLocations;
+
   return {
-    locations: [...new Set(locations)],
+    locations: effectiveLocations,
     pluginConfig: {
       ...parsedConfig,
       pluginCategory,
@@ -346,7 +351,6 @@ export async function aggregateIdePlugins(rootDir) {
       }
 
       for (const loc of locations) {
-        if (!loc) continue;
         const bucket = ensureBucket(finalPluginConfig.pluginCategory, loc);
         bucket.push({
           ...finalPluginConfig,

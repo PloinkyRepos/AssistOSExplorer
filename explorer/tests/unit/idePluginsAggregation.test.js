@@ -86,3 +86,27 @@ test('aggregateIdePlugins follows symlinked repos under .ploinky/repos', async (
         await fs.rm(sourceRoot, { recursive: true, force: true });
     }
 });
+
+test('aggregateIdePlugins keeps application plugins with empty location for settings visibility', async () => {
+    const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'explorer-ide-plugins-'));
+    try {
+        await writePluginConfig(workspaceRoot, 'webCli', 'webcli-global-chat', {
+            pluginCategory: 'application',
+            id: 'webcli-chat',
+            component: 'webcli-global-chat',
+            location: [],
+            presenter: 'WebCliGlobalChat',
+            type: 'global'
+        });
+
+        const aggregated = await aggregateIdePlugins(workspaceRoot);
+        const hiddenLocationPlugins = aggregated.application[''];
+
+        assert.ok(Array.isArray(hiddenLocationPlugins));
+        assert.equal(hiddenLocationPlugins.length, 1);
+        assert.equal(hiddenLocationPlugins[0].agent, 'webCli');
+        assert.equal(hiddenLocationPlugins[0].id, 'webcli-chat');
+    } finally {
+        await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+});

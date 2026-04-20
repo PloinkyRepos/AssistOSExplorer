@@ -5,6 +5,102 @@ import {
     getRuntimePluginOrder,
     getRuntimePluginPolicyKey
 } from "../../../utils/pluginUtils.core.js";
+import { registerRuntimeComponent } from "../../../utils/pluginUtils.ui.js";
+
+const settingsComponentPromises = new Map();
+
+function normalizePathSegment(value) {
+    return String(value || "")
+        .replace(/\\/g, "/")
+        .replace(/^\/+/, "")
+        .replace(/\/+$/g, "")
+        .replace(/\/+/g, "/");
+}
+
+function toPascalCase(value) {
+    return String(value || "")
+        .split(/[^a-zA-Z0-9]+/)
+        .filter(Boolean)
+        .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+        .join("");
+}
+
+function resolveSettingsComponentBase(item) {
+    const settingsComponent = typeof item?.settingsComponent === "string" ? item.settingsComponent.trim() : "";
+    if (!settingsComponent) {
+        return "";
+    }
+
+    const normalizedSettings = normalizePathSegment(settingsComponent);
+    const assetRootPath = normalizePathSegment(item?.assetRootPath);
+    if (assetRootPath) {
+        return `/workspace-files/${assetRootPath}/${normalizedSettings}/${normalizedSettings}`;
+    }
+
+    const agent = typeof item?.agent === "string" ? item.agent.trim() : "";
+    const component = typeof item?.component === "string" ? item.component.trim() : "";
+    if (!agent || !component) {
+        return "";
+    }
+
+    return `/${agent}/IDE-plugins/${component}/${normalizedSettings}/${normalizedSettings}`;
+}
+
+async function fetchText(url, description) {
+    const response = await fetch(url, { cache: "no-cache" });
+    if (!response.ok) {
+        throw new Error(`${description} (${response.status})`);
+    }
+    return response.text();
+}
+
+async function ensureSettingsComponentRegistered(item) {
+    const componentName = typeof item?.settingsComponent === "string" ? item.settingsComponent.trim() : "";
+    if (!componentName) {
+        throw new Error("Plugin does not define a settings component.");
+    }
+
+    if (customElements.get(componentName)) {
+        return componentName;
+    }
+
+    if (settingsComponentPromises.has(componentName)) {
+        return settingsComponentPromises.get(componentName);
+    }
+
+    const promise = (async () => {
+        const baseUrl = resolveSettingsComponentBase(item);
+        if (!baseUrl) {
+            throw new Error(`Unable to resolve settings component path for ${componentName}.`);
+        }
+
+        const [template, css] = await Promise.all([
+            fetchText(`${baseUrl}.html`, `Failed to load settings template for ${componentName}`),
+            fetchText(`${baseUrl}.css`, `Failed to load settings stylesheet for ${componentName}`)
+        ]);
+
+        const module = await import(`${baseUrl}.js?cacheBust=${Date.now()}`);
+        const presenterClassName = Object.keys(module || {}).find((key) => typeof module[key] === "function")
+            || `${toPascalCase(componentName)}Settings`;
+
+        await registerRuntimeComponent(assistOS.webSkel, {
+            name: componentName,
+            componentType: "modals",
+            loadedTemplate: template,
+            loadedCSSs: [css],
+            presenterClassName,
+            presenterModule: module,
+            type: "modals"
+        });
+
+        return componentName;
+    })().finally(() => {
+        settingsComponentPromises.delete(componentName);
+    });
+
+    settingsComponentPromises.set(componentName, promise);
+    return promise;
+}
 
 function normalizeSettingsMap(parsed) {
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
@@ -35,7 +131,9 @@ function flattenPluginsByKey(pluginBuckets) {
             pluginCategory: category,
             contributionTypes: new Set(),
             locations: [],
-            locationOrder: getRuntimePluginOrder(plugin)
+            locationOrder: getRuntimePluginOrder(plugin),
+            settingsComponent: "",
+            assetRootPath: ""
         };
         existing.pluginCategory = plugin?.pluginCategory || existing.pluginCategory || category;
         const contributionType = typeof plugin?.contributionType === "string" && plugin.contributionType.trim()
@@ -51,6 +149,12 @@ function flattenPluginsByKey(pluginBuckets) {
             : existing.tooltip || existing.label;
         existing.pluginId = pluginId || existing.pluginId || "";
         existing.component = component || existing.component || "";
+        existing.settingsComponent = typeof plugin?.settings === "string" && plugin.settings.trim()
+            ? plugin.settings.trim()
+            : existing.settingsComponent;
+        existing.assetRootPath = typeof plugin?.assetRootPath === "string" && plugin.assetRootPath.trim()
+            ? plugin.assetRootPath.trim()
+            : existing.assetRootPath;
         if (!existing.locations.includes(location)) {
             existing.locations.push(location);
         }
@@ -86,7 +190,7 @@ export class PluginSettingsModal {
         this.state = {
             items: [],
             settings: {},
-            busyKey: "",
+            busyActionKey: "",
             status: "",
             statusType: ""
         };
@@ -125,23 +229,37 @@ export class PluginSettingsModal {
         }
         this.listEl.innerHTML = this.state.items.map((item) => {
             const enabled = this.isEnabled(item.key);
-            const busy = this.state.busyKey === item.key;
-            const locations = item.locations.join(", ");
+            const busyToggle = this.state.busyActionKey === `${item.key}::toggle`;
+            const busySettings = this.state.busyActionKey === `${item.key}::settings`;
+            const locations = item.locations.filter(Boolean).join(", ") || "(hidden)";
             const contributionTypes = Array.isArray(item.contributionTypes) ? item.contributionTypes.join(", ") : "";
+            const hasSettings = Boolean(item.settingsComponent);
             return `
                 <div class="plugin-settings-row">
                     <div class="plugin-settings-info">
                         <div class="plugin-settings-key">${item.label || item.component}</div>
                         <div class="plugin-settings-meta">${item.key} · Category: ${item.pluginCategory} · Types: ${contributionTypes} · Locations: ${locations}</div>
                     </div>
-                    <button
-                        type="button"
-                        class="plugin-settings-toggle ${enabled ? "enabled" : ""}"
-                        data-local-action="togglePlugin ${item.key}"
-                        ${busy ? "disabled" : ""}
-                    >
-                        ${enabled ? "Enabled" : "Disabled"}
-                    </button>
+                    <div class="plugin-settings-actions">
+                        ${hasSettings ? `
+                            <button
+                                type="button"
+                                class="plugin-settings-open"
+                                data-local-action="openPluginSettings ${item.key}"
+                                ${busySettings ? "disabled" : ""}
+                            >
+                                Settings
+                            </button>
+                        ` : ""}
+                        <button
+                            type="button"
+                            class="plugin-settings-toggle ${enabled ? "enabled" : ""}"
+                            data-local-action="togglePlugin ${item.key}"
+                            ${busyToggle ? "disabled" : ""}
+                        >
+                            ${enabled ? "Enabled" : "Disabled"}
+                        </button>
+                    </div>
                 </div>
             `;
         }).join("");
@@ -187,7 +305,7 @@ export class PluginSettingsModal {
     async togglePlugin(_target, key) {
         if (!key) return;
         const nextEnabled = !this.isEnabled(key);
-        this.state.busyKey = key;
+        this.state.busyActionKey = `${key}::toggle`;
         this.state.status = `Saving ${key}...`;
         this.state.statusType = "";
         this.render();
@@ -212,7 +330,44 @@ export class PluginSettingsModal {
             this.state.status = error?.message || `Failed to update ${key}.`;
             this.state.statusType = "error";
         } finally {
-            this.state.busyKey = "";
+            this.state.busyActionKey = "";
+            this.render();
+        }
+    }
+
+    async openPluginSettings(_target, key) {
+        if (!key) return;
+        const item = this.state.items.find((entry) => entry?.key === key);
+        if (!item || !item.settingsComponent) {
+            return;
+        }
+
+        this.state.busyActionKey = `${key}::settings`;
+        this.state.status = `Opening settings for ${key}...`;
+        this.state.statusType = "";
+        this.render();
+
+        try {
+            await ensureSettingsComponentRegistered(item);
+            await assistOS.UI.createReactiveModal(item.settingsComponent, {
+                plugin: {
+                    key: item.key,
+                    agent: item.agent,
+                    component: item.component,
+                    id: item.pluginId,
+                    label: item.label,
+                    tooltip: item.tooltip,
+                    settingsComponent: item.settingsComponent,
+                    assetRootPath: item.assetRootPath
+                }
+            }, true);
+            this.state.status = `${item.label || item.component} settings opened.`;
+            this.state.statusType = "";
+        } catch (error) {
+            this.state.status = error?.message || `Failed to open settings for ${key}.`;
+            this.state.statusType = "error";
+        } finally {
+            this.state.busyActionKey = "";
             this.render();
         }
     }
