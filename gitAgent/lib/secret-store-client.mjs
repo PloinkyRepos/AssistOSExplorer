@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { client as mcpClient, StreamableHTTPClientTransport } from 'mcp-sdk';
 
 let cachedWireSign = null;
 async function loadWireSign() {
@@ -40,7 +39,6 @@ async function loadWireSign() {
  *   PLOINKY_DPU_PRINCIPAL         - optional explicit DPU principal id
  */
 
-const { Client } = mcpClient;
 const CALLER_ASSERTION_HEADER = 'x-ploinky-caller-assertion';
 const USER_CONTEXT_HEADER = 'x-ploinky-user-context';
 const DEFAULT_DPU_ROUTE = 'dpuAgent';
@@ -153,24 +151,6 @@ export function createSecretStoreClient({ providerRouteName, providerPrincipal, 
   const dpuPrincipal = resolveDpuPrincipal(providerPrincipal);
   const baseUrl = `${routerBase}/mcps/${encodeURIComponent(dpuRouteName)}/mcp`;
 
-  let client = null;
-  let transport = null;
-
-  async function ensureConnected(requestHeaders) {
-    transport = new StreamableHTTPClientTransport(new URL(baseUrl), requestHeaders
-      ? { requestInit: { headers: requestHeaders } }
-      : undefined);
-    client = new Client({ name: 'secret-store-client', version: '1.0.0' });
-    await client.connect(transport);
-  }
-
-  async function close() {
-    try { if (client) await client.close(); } catch {}
-    try { if (transport) await transport.close?.(); } catch {}
-    client = null;
-    transport = null;
-  }
-
   async function callContractOperation(operation, args = {}) {
     const bodyObject = { tool: operation, arguments: args };
     const privatePem = readPrivateKeyPem();
@@ -199,13 +179,33 @@ export function createSecretStoreClient({ providerRouteName, providerPrincipal, 
     });
     headers[CALLER_ASSERTION_HEADER] = token;
     headers[USER_CONTEXT_HEADER] = forwardedUserContextToken;
-    await ensureConnected(Object.keys(headers).length ? headers : undefined);
-    try {
-      const result = await client.callTool({ name: operation, arguments: args });
-      return unwrapToolPayload(operation, result);
-    } finally {
-      await close();
+    const response = await fetch(baseUrl, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        ...headers
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: crypto.randomUUID(),
+        method: 'tools/call',
+        params: {
+          name: operation,
+          arguments: args
+        }
+      })
+    });
+    const responseText = await response.text();
+    const parsed = safeParseJson(responseText);
+    if (!response.ok) {
+      const detail = parsed?.error?.message || parsed?.error || responseText || `HTTP ${response.status}`;
+      throw new Error(String(detail));
     }
+    if (parsed?.error && typeof parsed.error === 'object') {
+      throw new Error(String(parsed.error.message || parsed.error.detail || parsed.error.code || `${operation} failed.`));
+    }
+    return unwrapToolPayload(operation, parsed?.result || parsed);
   }
 
   return {

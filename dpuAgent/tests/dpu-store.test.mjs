@@ -299,6 +299,50 @@ test('workspace roots expose audit only to admin viewers', async () => {
   assert.equal(userRoots.roots.audit, undefined);
 });
 
+test('whoami rejects delegated calls without a read/access scope', async () => {
+  const delegatedAuth = {
+    user: {
+      email: 'owner@example.com'
+    },
+    agent: {
+      principalId: 'agent:gitAgent',
+      name: 'gitAgent'
+    },
+    invocation: {
+      scope: ['secret:write'],
+      tool: 'dpu_whoami',
+      workspaceId: 'default'
+    }
+  };
+
+  await assert.rejects(
+    () => getWhoAmI(delegatedAuth),
+    /Invocation scope does not permit secret_whoami/
+  );
+});
+
+test('workspace roots reject delegated calls without a read/access scope', async () => {
+  const delegatedAuth = {
+    user: {
+      email: 'owner@example.com'
+    },
+    agent: {
+      principalId: 'agent:gitAgent',
+      name: 'gitAgent'
+    },
+    invocation: {
+      scope: ['secret:write'],
+      tool: 'dpu_workspace_roots',
+      workspaceId: 'default'
+    }
+  };
+
+  await assert.rejects(
+    () => getWorkspaceRoots(delegatedAuth),
+    /Invocation scope does not permit dpu_workspace_roots/
+  );
+});
+
 test('secret ACL principals are stored canonically and registry aliases keep the same principal across auth shapes', async () => {
   const ownerAuth = {
     user: {
@@ -417,12 +461,12 @@ test('identity registry can resolve principals from SSO claims without exposing 
   assert.equal(ssoReader.secret.value, 'claims-value');
 });
 
-test('secret owners keep write-access by default while manifest-registered agents can read values', async () => {
+test('secret owners keep write-access by default and same-agent delegated reads merge into full write access', async () => {
   const ownerAuth = {
     user: {
       id: 'local:admin',
       username: 'admin',
-      email: 'admin@example.com'
+      email: ''
     }
   };
 
@@ -472,7 +516,7 @@ test('secret owners keep write-access by default while manifest-registered agent
     user: {
       id: 'local:admin',
       username: 'admin',
-      email: 'admin@example.com'
+      email: ''
     },
     agent: {
       name: 'gitAgent',
@@ -481,8 +525,82 @@ test('secret owners keep write-access by default while manifest-registered agent
   }, { key: 'AGENT_VISIBLE_SECRET' });
 
   assert.equal(agentView.ok, true);
-  assert.equal(agentView.secret.role, 'read');
+  assert.equal(agentView.secret.role, 'write');
+  assert.equal(agentView.secret.canWrite, true);
   assert.equal(agentView.secret.value, 'agent-readable-value');
+});
+
+test('delegated owner writes still succeed after the same agent is granted read access', async () => {
+  const ownerAuth = {
+    user: {
+      id: 'local:admin',
+      username: 'admin',
+      email: ''
+    }
+  };
+
+  await putSecret(ownerAuth, { key: 'OWNER_UPDATE_SECRET', value: 'initial-value' });
+  writeAgentManifest('gitAgent', {
+    identity: {
+      principalId: 'agent:gitAgent',
+      agentName: 'gitAgent'
+    },
+    permissions: {
+      secrets: {
+        allowedRoles: ['read']
+      }
+    }
+  });
+
+  const manifest = getPermissionsManifest();
+  manifest.identities.principals['agent:gitAgent'] = {
+    aliases: {
+      emails: [],
+      userIds: [],
+      usernames: [],
+      ssoSubjects: [],
+      issuers: [],
+      agentNames: ['gitAgent']
+    },
+    claims: {
+      roles: []
+    },
+    createdAt: '2026-04-16T00:00:00.000Z',
+    updatedAt: '2026-04-16T00:00:00.000Z'
+  };
+  fs.writeFileSync(getPermissionsManifestPath(), JSON.stringify(manifest, null, 2), 'utf8');
+
+  await grantSecret(ownerAuth, {
+    key: 'OWNER_UPDATE_SECRET',
+    principal: 'gitAgent',
+    role: 'read'
+  });
+
+  const delegatedOwnerAuth = {
+    user: {
+      id: 'local:admin',
+      username: 'admin',
+      email: ''
+    },
+    agent: {
+      name: 'gitAgent',
+      principalId: 'agent:gitAgent'
+    },
+    invocation: {
+      scope: ['secret:write'],
+      tool: 'secret_put',
+      workspaceId: 'default'
+    }
+  };
+
+  const updated = await putSecret(delegatedOwnerAuth, {
+    key: 'OWNER_UPDATE_SECRET',
+    value: 'updated-value'
+  });
+  assert.equal(updated.ok, true);
+
+  const state = getStoredState();
+  assert.equal(state.secrets.OWNER_UPDATE_SECRET.ownerId, 'user:local:admin');
 });
 
 test('agent secret grants are capped by manifest-declared allowedRoles', async () => {

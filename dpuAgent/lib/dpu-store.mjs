@@ -66,7 +66,8 @@ const OPERATION_SCOPE_MAP = {
   secret_grant: ['secret:grant', 'secret:write'],
   secret_revoke: ['secret:revoke', 'secret:write'],
   secret_list: ['secret:access', 'secret:read'],
-  secret_whoami: ['secret:access', 'secret:read']
+  secret_whoami: ['secret:access', 'secret:read'],
+  dpu_workspace_roots: ['secret:access', 'secret:read']
 };
 
 function extractInvocationScope(authInfo) {
@@ -349,7 +350,36 @@ function getSecretRole(secret, actorOrPrincipal, permissionsManifest) {
     .map((principal) => aclMap?.[principal])
     .filter((role) => isNonEmptyString(role));
   roleCandidates.push(...matchedRoles);
-  return pickMaxRole(roleCandidates, SECRET_ROLE_ORDER);
+  return mergeSecretRoles(roleCandidates);
+}
+
+function mergeSecretRoles(roleCandidates = []) {
+  const normalizedRoles = new Set(
+    roleCandidates
+      .map((role) => String(role || '').trim().toLowerCase())
+      .filter((role) => SECRET_ROLE_ORDER.includes(role))
+  );
+  if (!normalizedRoles.size) {
+    return null;
+  }
+  if (normalizedRoles.has('write')) {
+    return 'write';
+  }
+  if (normalizedRoles.has('write-access') && normalizedRoles.has('read')) {
+    // Owner-style write access combined with a delegated read grant yields
+    // full read/write capability for the same actor.
+    return 'write';
+  }
+  if (normalizedRoles.has('read')) {
+    return 'read';
+  }
+  if (normalizedRoles.has('write-access')) {
+    return 'write-access';
+  }
+  if (normalizedRoles.has('access')) {
+    return 'access';
+  }
+  return null;
 }
 
 function getConfidentialRole(state, objectRecord, actorOrPrincipal, permissionsManifest) {
@@ -649,6 +679,7 @@ async function serializeConfidentialObject(state, permissionsManifest, objectRec
 
 export async function getWhoAmI(authInfo = null) {
   return withLockedState(async (state, permissionsManifest, ctx) => {
+    assertInvocationScopeFor('secret_whoami', authInfo);
     const actor = resolveActor(authInfo, permissionsManifest);
     if (!actor.authenticated) {
       return {
@@ -685,6 +716,7 @@ export async function getWhoAmI(authInfo = null) {
 
 export async function getWorkspaceRoots(authInfo = null) {
   return withLockedState(async (state, permissionsManifest, ctx) => {
+    assertInvocationScopeFor('dpu_workspace_roots', authInfo);
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
     const userSpace = await ensureUserRecord(state, permissionsManifest, actor, ctx);
     const roots = {

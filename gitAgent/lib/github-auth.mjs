@@ -405,5 +405,5 @@ export async function storeManualGitAuthToken({ workspaceRoot, authInfo, token }
     })
   };
   await saveState(workspaceRoot, nextState);
-  return buildStatusPayload(setup, nextState);
+  return buildStatusPayload(setup, nextState, { tokenStored: true });
 }

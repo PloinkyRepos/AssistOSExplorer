@@ -152,23 +152,15 @@ async function verifyDirectAgentRequest(headers = {}, bodyObject) {
     if (!keyMaterial) {
       return { ok: false, reason: 'router public key not configured' };
     }
-    let userContext = null;
-    let lastError = null;
-    for (const expectedAudience of ['ploinky-agents', expectedAudienceForSelf()].filter(Boolean)) {
-      try {
-        userContext = wire.verifyJws(userContextToken, {
-          publicPem: keyMaterial.publicPem,
-          publicKeyJwk: keyMaterial.publicKeyJwk,
-          expectedAudience
-        });
-        break;
-      } catch (err) {
-        lastError = err;
-      }
+    const callerPrincipal = String(callerAssertion?.payload?.iss || '').trim();
+    if (!callerPrincipal) {
+      return { ok: false, reason: 'caller assertion missing issuer' };
     }
-    if (!userContext) {
-      throw lastError || new Error('user context verification failed');
-    }
+    const userContext = wire.verifyJws(userContextToken, {
+      publicPem: keyMaterial.publicPem,
+      publicKeyJwk: keyMaterial.publicKeyJwk,
+      expectedAudience: callerPrincipal
+    });
     const invocation = buildDirectInvocationPayload({
       callerAssertionPayload: callerAssertion.payload,
       userContextPayload: userContext.payload
