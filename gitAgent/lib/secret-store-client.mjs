@@ -32,7 +32,7 @@ async function loadWireSign() {
  * Env contract (set by AgentServer/ploinky start scripts):
  *
  *   PLOINKY_ROUTER_URL            - e.g. http://127.0.0.1:8080
- *   PLOINKY_AGENT_PRINCIPAL       - e.g. agent:gitAgent
+ *   PLOINKY_AGENT_PRINCIPAL       - e.g. agent:AssistOSExplorer/gitAgent
  *   PLOINKY_AGENT_PRIVATE_KEY_PEM - the agent's Ed25519 private key (PEM)
  *   PLOINKY_AGENT_PRIVATE_KEY_PATH - alternative file-based source
  *   PLOINKY_DPU_ROUTE             - optional explicit DPU MCP route name
@@ -42,7 +42,7 @@ async function loadWireSign() {
 const CALLER_ASSERTION_HEADER = 'x-ploinky-caller-assertion';
 const USER_CONTEXT_HEADER = 'x-ploinky-user-context';
 const DEFAULT_DPU_ROUTE = 'dpuAgent';
-const DEFAULT_DPU_PRINCIPAL = 'agent:dpuAgent';
+const DEFAULT_DPU_PRINCIPAL = 'agent:AssistOSExplorer/dpuAgent';
 
 function isNonEmptyString(value) {
   return typeof value === 'string' && value.trim().length > 0;
@@ -75,15 +75,14 @@ function resolveRouterBaseUrl() {
 }
 
 function resolveDpuRouteName(explicitRouteName = '') {
-  const explicit = String(explicitRouteName || process.env.PLOINKY_DPU_ROUTE || process.env.PLOINKY_SECRETSTORE_PROVIDER || '').trim();
+  const explicit = String(explicitRouteName || process.env.PLOINKY_DPU_ROUTE || '').trim();
   return explicit || DEFAULT_DPU_ROUTE;
 }
 
 function resolveConsumerPrincipal() {
   const principal = String(process.env.PLOINKY_AGENT_PRINCIPAL || '').trim();
   if (principal) return principal;
-  const agentName = String(process.env.AGENT_NAME || '').trim();
-  return agentName ? `agent:${agentName}` : '';
+  throw new Error('PLOINKY_AGENT_PRINCIPAL is required and must use canonical agent:<repo>/<agent> form.');
 }
 
 function resolveDpuPrincipal(explicitPrincipal = '') {
@@ -242,9 +241,7 @@ export async function withSecretStoreClient(fn, options = {}) {
 export const GIT_GITHUB_TOKEN_SECRET_KEY = 'GIT_GITHUB_TOKEN';
 
 /**
- * GitHub-token helpers that were previously in dpu-secret-client.mjs.
- * Re-implemented as thin wrappers on top of the generic contract so gitAgent
- * stops depending on DPU-specific routes and tool names.
+ * GitHub-token helpers built on the direct Git -> DPU secret client.
  */
 export async function getStoredGitToken({ key = GIT_GITHUB_TOKEN_SECRET_KEY, authInfo = null } = {}) {
   try {

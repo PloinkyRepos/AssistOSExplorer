@@ -71,7 +71,7 @@ Primary tools include:
 2. `gitAgent` resolves and validates repository paths against the workspace.
 3. `git_info` accepts file or directory targets and returns both the repository root and the repository-relative path for the selected target.
 4. For authenticated remote operations, `gitAgent` uses:
-   - `metadata.authInfo.github.accessToken` when already supplied by the caller, otherwise
+   - `metadata.invocation -> user/github auth context` when already supplied through the verified routed invocation, otherwise
    - the per-user token stored in DPU Secrets.
 5. GitHub device-flow completion writes the token into DPU and keeps only metadata in local state.
 6. Manual token save writes the token into DPU and updates local connection metadata with a non-sensitive source marker.

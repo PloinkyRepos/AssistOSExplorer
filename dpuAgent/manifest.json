@@ -1,28 +1,5 @@
 {
   "container": "node:20-alpine",
-  "identity": {
-    "principalId": "agent:dpuAgent",
-    "agentName": "dpuAgent"
-  },
-  "provides": {
-    "secret-store/v1": {
-      "operations": [
-        "secret_get",
-        "secret_put",
-        "secret_delete",
-        "secret_grant",
-        "secret_revoke",
-        "secret_list"
-      ],
-      "supportedScopes": [
-        "secret:access",
-        "secret:read",
-        "secret:write",
-        "secret:grant",
-        "secret:revoke"
-      ]
-    }
-  },
   "runtime": {
     "resources": {
       "persistentStorage": {
@@ -33,21 +10,6 @@
         "DPU_DATA_ROOT": "{{STORAGE_CONTAINER_PATH}}",
         "DPU_WORKSPACE_ROOT": "{{WORKSPACE_ROOT}}",
         "DPU_MASTER_KEY": "{{secret:DPU_MASTER_KEY}}"
-      }
-    }
-  },
-  "capabilities": {
-    "dpu": {
-      "platform": {
-        "persistentStorage": {
-          "enabled": true,
-          "containerPath": "/dpu-data"
-        },
-        "env": {
-          "DPU_DATA_ROOT": "{{STORAGE_CONTAINER_PATH}}",
-          "DPU_WORKSPACE_ROOT": "{{WORKSPACE_ROOT}}",
-          "DPU_MASTER_KEY": "{{secret:DPU_MASTER_KEY}}"
-        }
       }
     }
   },

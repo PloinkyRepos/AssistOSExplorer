@@ -557,6 +557,42 @@
       }
     },
     {
+      "name": "dpu_agent_policy_get",
+      "title": "DPU Agent Policy Get",
+      "description": "Admin-only: return the DPU-owned secret policy for an agent principal.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "principalId": {
+          "type": "string",
+          "optional": false
+        }
+      },
+      "env": {
+        "TOOL_NAME": "dpu_agent_policy_get"
+      }
+    },
+    {
+      "name": "dpu_agent_policy_set",
+      "title": "DPU Agent Policy Set",
+      "description": "Admin-only: replace the allowed secret roles for an agent principal.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "principalId": {
+          "type": "string",
+          "optional": false
+        },
+        "allowedRoles": {
+          "type": "array",
+          "optional": false
+        }
+      },
+      "env": {
+        "TOOL_NAME": "dpu_agent_policy_set"
+      }
+    },
+    {
       "name": "dpu_access_check",
       "title": "DPU Access Check",
       "description": "Check whether the current actor has a specific permission on a secret or confidential object.",

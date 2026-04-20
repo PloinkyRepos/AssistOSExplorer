@@ -35,7 +35,7 @@ The agent routes all operations through `tools/dpu_tool.mjs` into `lib/dpu-store
 
 In practice:
 
-- `dpu_tool.mjs` normalizes the MCP envelope and extracts `metadata.authInfo`
+- `dpu_tool.mjs` normalizes the MCP envelope and extracts the verified `metadata.invocation` grant
 - `dpu-store.mjs` implements the domain operations
 - `storage.mjs` owns the storage root, encryption helpers, and file lock
 - `permissions-manifest.mjs` owns principal normalization and access control list updates

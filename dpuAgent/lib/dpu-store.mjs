@@ -30,7 +30,6 @@ import {
   encryptConfidentialContent,
   fileExists,
   getConfidentialBlobPath,
-  loadAgentManifest,
   listAuditFiles as listAuditStorageFiles,
   loadState,
   loadPermissionsManifest,
@@ -45,9 +44,11 @@ import {
 import {
   deletePermissionEntry,
   extractIdentityHints,
+  getAgentPolicy,
   getPermissionAcl,
   removePermissionRole,
   resolvePrincipalReference,
+  setAgentAllowedRoles,
   setPermissionRole,
   upsertPrincipalIdentity
 } from './dpu-store-internal/permissions-manifest.mjs';
@@ -289,9 +290,6 @@ function buildActorPrincipalCandidates(actorOrPrincipal) {
   if (actorOrPrincipal && typeof actorOrPrincipal === 'object') {
     pushValue(actorOrPrincipal.principalId);
     pushValue(actorOrPrincipal.agentPrincipalId);
-    if (isNonEmptyString(actorOrPrincipal.agentName)) {
-      pushValue(`agent:${actorOrPrincipal.agentName}`);
-    }
     pushValue(actorOrPrincipal.email);
     pushValue(actorOrPrincipal.id);
     pushValue(actorOrPrincipal.username);
@@ -411,36 +409,21 @@ function assertSecretPermission(secret, actor, permission, permissionsManifest) 
   return role;
 }
 
-async function assertAgentSecretGrantAllowed(permissionsManifest, principalId, role) {
+function assertAgentSecretGrantAllowed(permissionsManifest, principalId, role) {
   const normalizedPrincipalId = canonicalizePrincipal(principalId);
-  const agentMatch = normalizedPrincipalId.match(/^agent:(.+)$/i);
-  if (!agentMatch?.[1]) {
+  if (!/^agent:/i.test(normalizedPrincipalId)) {
     return;
   }
-  const manifestPrincipalId = resolvePrincipalReference(permissionsManifest, normalizedPrincipalId);
-  const principalEntry = permissionsManifest?.identities?.principals?.[manifestPrincipalId]
-    || permissionsManifest?.identities?.principals?.[normalizedPrincipalId]
-    || null;
-  const aliasAgentNames = Array.isArray(principalEntry?.aliases?.agentNames)
-    ? principalEntry.aliases.agentNames
-    : [];
-  const agentName = String(aliasAgentNames[0] || agentMatch[1] || '').trim();
-  if (!agentName) {
-    throw new Error(`Agent secret grant is invalid: could not resolve agent identity for ${normalizedPrincipalId}.`);
+  const policy = getAgentPolicy(permissionsManifest, normalizedPrincipalId);
+  if (!policy) {
+    throw new Error(`Agent secret grant is invalid: no DPU policy exists for ${normalizedPrincipalId}.`);
   }
-  const agentManifest = await loadAgentManifest(agentName);
-  if (!agentManifest || typeof agentManifest !== 'object') {
-    throw new Error(`Agent secret grant is invalid: manifest not found for ${agentName}.`);
-  }
-  const declaredRoles = agentManifest?.capabilities?.dpu?.allowedRoles
-    ?? agentManifest?.permissions?.secrets?.allowedRoles;
-  const allowedRoles = Array.isArray(declaredRoles)
-    ? declaredRoles
-      .map((value) => String(value || '').trim().toLowerCase())
-      .filter((value) => SECRET_ROLE_ORDER.includes(value))
+  const allowedRoles = Array.isArray(policy?.secrets?.allowedRoles)
+    ? policy.secrets.allowedRoles
     : [];
-  if (!allowedRoles.includes(role)) {
-    throw new Error(`Agent ${agentName} is not allowed to receive secret role ${role}.`);
+  const normalizedRole = String(role || '').trim().toLowerCase();
+  if (!allowedRoles.includes(normalizedRole)) {
+    throw new Error(`Agent ${normalizedPrincipalId} is not allowed to receive secret role ${normalizedRole}.`);
   }
 }
 
@@ -765,6 +748,60 @@ export async function getAuditConfig(authInfo = null) {
         enabled: Boolean(audit.enabled),
         canManage: hasAuditViewerRole(actor),
         canViewFiles: hasAuditViewerRole(actor)
+      }
+    };
+  });
+}
+
+export async function getAgentPolicyForPrincipal(authInfo = null, { principalId } = {}) {
+  return withLockedState(async (state, permissionsManifest, ctx) => {
+    const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
+    await ensureUserRecord(state, permissionsManifest, actor, ctx);
+    assertAuditViewer(actor);
+    const normalizedPrincipalId = normalizePrincipal(principalId, 'principalId');
+    if (!/^agent:/i.test(normalizedPrincipalId)) {
+      throw new Error('principalId must be an agent principal (agent:<repo>/<agent>).');
+    }
+    const policy = getAgentPolicy(permissionsManifest, normalizedPrincipalId);
+    return {
+      ok: true,
+      principalId: normalizedPrincipalId,
+      policy: policy
+        ? {
+            secrets: { allowedRoles: [...(policy.secrets?.allowedRoles || [])] },
+            updatedAt: policy.updatedAt || ''
+          }
+        : null
+    };
+  });
+}
+
+export async function setAgentPolicyAllowedRoles(authInfo = null, { principalId, allowedRoles } = {}) {
+  return withLockedState(async (state, permissionsManifest, ctx) => {
+    const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
+    await ensureUserRecord(state, permissionsManifest, actor, ctx);
+    assertAuditViewer(actor);
+    const normalizedPrincipalId = normalizePrincipal(principalId, 'principalId');
+    if (!/^agent:/i.test(normalizedPrincipalId)) {
+      throw new Error('principalId must be an agent principal (agent:<repo>/<agent>).');
+    }
+    const rolesInput = Array.isArray(allowedRoles) ? allowedRoles : [];
+    const changed = setAgentAllowedRoles(
+      permissionsManifest,
+      normalizedPrincipalId,
+      rolesInput,
+      { roleOrder: SECRET_ROLE_ORDER }
+    );
+    if (changed) {
+      ctx.permissionsDirty = true;
+    }
+    const policy = getAgentPolicy(permissionsManifest, normalizedPrincipalId);
+    return {
+      ok: true,
+      principalId: normalizedPrincipalId,
+      policy: {
+        secrets: { allowedRoles: [...(policy?.secrets?.allowedRoles || [])] },
+        updatedAt: policy?.updatedAt || ''
       }
     };
   });

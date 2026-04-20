@@ -61,7 +61,7 @@ gitAgent/tools/git_tool.mjs
     v
 git-service / github-auth handler
     |
-    | optionally call secret-store/v1 with
+    | optionally call DPU secret tools with
     | forwarded user_context_token
     |
     | run git subprocess or auth workflow
@@ -78,7 +78,7 @@ JSON result -> MCP response -> Explorer user interface</code></pre>
                         <li><strong>Path policy:</strong> repository path arguments are constrained to allowed roots from <code>ASSISTOS_FS_ROOT</code>, <code>WORKSPACE_ROOT</code>, or <code>PLOINKY_WORKSPACE_ROOT</code>.</li>
                         <li><strong>Operation execution:</strong> Git tools call <code>createGitService</code>; auth tools call GitHub auth handlers.</li>
                         <li><strong>Remote token fallback:</strong> push and pull can resolve tokens from auth metadata or stored token state.</li>
-                        <li><strong>Nested capability call:</strong> when GitHub auth or token storage needs <code>secret-store/v1</code>, the client signs a fresh caller assertion and forwards the current <code>user_context_token</code> from the verified invocation so the router can mint the next invocation grant.</li>
+                        <li><strong>Direct DPU call:</strong> when GitHub auth or token storage needs a secret operation, the client signs a fresh caller assertion (audience pinned to the canonical DPU principal <code>agent:AssistOSExplorer/dpuAgent</code>) and forwards the current <code>user_context_token</code> from the verified invocation. DPU verifies both artifacts itself.</li>
                         <li><strong>Response emission:</strong> tool result is serialized to stdout; failures return <code>{ "ok": false, "error": ... }</code>.</li>
                     </ol>
                 </section>

@@ -16,28 +16,28 @@ Explorer and related plugins need a stable way to call the confidential domain. 
 Each Model Context Protocol tool entry in `mcp-config.json` points to `tools/dpu_tool.sh`, which launches `tools/dpu_tool.mjs`. The tool dispatcher:
 
 1. parses the Model Context Protocol envelope
-2. prefers the verified `metadata.invocation` grant and falls back to `metadata.authInfo` only for legacy callers
+2. reads the verified `metadata.invocation` grant
 3. normalizes the input object
 4. validates required fields and enum-like values
 5. dispatches into `lib/dpu-store.mjs`
 
 In standalone mode, `server/standalone-mcp-server.mjs` loads the same `mcp-config.json`, registers the same tools, and still routes execution through the same wrapper and dispatcher.
 
-For routed callers, the trusted auth context is the router-issued `x-ploinky-invocation` token. The MCP runtime must verify that token before exposing delegated user or caller-agent data to the domain layer. The legacy `x-ploinky-auth-info` header remains compatibility-only and is accepted only while secure-wire strict mode is disabled.
+For routed callers, the trusted auth context is carried either by the router-issued `x-ploinky-invocation` token (first-party routed tool calls) or by the agent-signed `x-ploinky-caller-assertion` + router-signed `x-ploinky-user-context` pair (direct delegated agent calls). The MCP runtime must verify the relevant artifact before exposing delegated user or caller-agent data to the domain layer. The legacy `x-ploinky-auth-info` header has been removed.
 
 The auth payload may also include optional agent context, for example:
 
 ```json
 {
   "user": { "id": "local:admin", "username": "admin" },
-  "agent": { "name": "gitAgent", "principalId": "agent:gitAgent" },
+  "agent": { "name": "gitAgent", "principalId": "agent:AssistOSExplorer/gitAgent" },
   "sessionId": "..."
 }
 ```
 
-When both `user` and `agent` are present, DPU keeps ownership and user-space resolution anchored to the authenticated user principal while access control list evaluation may match either the user principal or the agent principal. Agent identity should be configured by the calling agent manifest and then registered in `permissions.manifest.json` as a first-class principal. When DPU grants a secret role to an agent principal, it must validate the requested role against the target agent's `manifest.json -> permissions.secrets.allowedRoles`.
+Agent principals are derived by Ploinky from the installed agent ref as `agent:<repo>/<agent>`; manifests no longer declare their own `identity` block. When both `user` and `agent` are present, DPU keeps ownership and user-space resolution anchored to the authenticated user principal while access control list evaluation may match either the user principal or the agent principal directly — short-name aliases like `agent:gitAgent` are no longer recognized.
 
-For delegated capability calls, DPU must also reject invocation bindings that are not registered for the current provider runtime. Scope validation alone is not enough. The runtime must verify that the `binding_id` named in the invocation grant belongs to one of the bindings this provider was launched to serve, and that the binding contract and consumer principal still match the grant.
+When DPU grants a secret role to an agent principal, it validates the requested role against DPU-owned policy stored in `permissions.manifest.json -> agentPolicies[<principalId>].secrets.allowedRoles`. No agent manifest is consulted. If no policy exists for the principal, the grant is rejected. Admins configure these policies through the `dpu_agent_policy_get` / `dpu_agent_policy_set` tools.
 
 ## Tool Families
 

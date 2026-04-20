@@ -44,7 +44,7 @@
 
                 <section>
                     <h2>Practical Request Flow</h2>
-                    <p>A DPU tool call starts in <code>mcp-config.json</code>, which maps the tool to <code>tools/dpu_tool.sh</code>. That wrapper launches <code>tools/dpu_tool.mjs</code>, which reads the MCP envelope from stdin, extracts <code>metadata.authInfo</code>, validates the normalized input, and dispatches into the corresponding function in <code>lib/dpu-store.mjs</code>.</p>
+                    <p>A DPU tool call starts in <code>mcp-config.json</code>, which maps the tool to <code>tools/dpu_tool.sh</code>. That wrapper launches <code>tools/dpu_tool.mjs</code>, which reads the MCP envelope from stdin, extracts the verified <code>metadata.invocation</code> grant, validates the normalized input, and dispatches into the corresponding function in <code>lib/dpu-store.mjs</code>.</p>
                     <p>Inside <code>dpu-store.mjs</code>, the actor is resolved against the permissions manifest, user state is materialized if needed, and the requested operation runs under the storage lock when it mutates state. The final response is then serialized back to the MCP caller.</p>
                 </section>
 

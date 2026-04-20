@@ -20,11 +20,13 @@ const {
   deleteConfidentialComment,
   getConfidentialById,
   getSecretByKey,
+  getAgentPolicyForPrincipal,
   getWhoAmI,
   grantSecret,
   grantConfidential,
   putSecret,
-  resolveActor
+  resolveActor,
+  setAgentPolicyAllowedRoles
 } = await import(`${storeUrl.href}${moduleSuffix}`);
 
 const previousWorkspaceRoot = process.env.DPU_WORKSPACE_ROOT;
@@ -174,7 +176,7 @@ test('delegated secret reads accept direct agent invocations without a binding i
       email: 'reader@example.com'
     },
     agent: {
-      principalId: 'agent:gitAgent',
+      principalId: 'agent:AssistOSExplorer/gitAgent',
       name: 'gitAgent'
     },
     invocation: {
@@ -198,7 +200,7 @@ test('delegated secret reads reject missing required scope', async () => {
       email: 'reader@example.com'
     },
     agent: {
-      principalId: 'agent:gitAgent',
+      principalId: 'agent:AssistOSExplorer/gitAgent',
       name: 'gitAgent'
     },
     invocation: {
@@ -305,7 +307,7 @@ test('whoami rejects delegated calls without a read/access scope', async () => {
       email: 'owner@example.com'
     },
     agent: {
-      principalId: 'agent:gitAgent',
+      principalId: 'agent:AssistOSExplorer/gitAgent',
       name: 'gitAgent'
     },
     invocation: {
@@ -327,7 +329,7 @@ test('workspace roots reject delegated calls without a read/access scope', async
       email: 'owner@example.com'
     },
     agent: {
-      principalId: 'agent:gitAgent',
+      principalId: 'agent:AssistOSExplorer/gitAgent',
       name: 'gitAgent'
     },
     invocation: {
@@ -471,27 +473,20 @@ test('secret owners keep write-access by default and same-agent delegated reads 
   };
 
   await putSecret(ownerAuth, { key: 'AGENT_VISIBLE_SECRET', value: 'agent-readable-value' });
-  writeAgentManifest('gitAgent', {
-    identity: {
-      principalId: 'agent:gitAgent',
-      agentName: 'gitAgent'
-    },
-    permissions: {
-      secrets: {
-        allowedRoles: ['read']
-      }
-    }
-  });
 
   const manifest = getPermissionsManifest();
-  manifest.identities.principals['agent:gitAgent'] = {
+  manifest.agentPolicies = manifest.agentPolicies || {};
+  manifest.agentPolicies['agent:AssistOSExplorer/gitAgent'] = {
+    secrets: { allowedRoles: ['read'] },
+    updatedAt: '2026-04-16T00:00:00.000Z'
+  };
+  manifest.identities.principals['agent:AssistOSExplorer/gitAgent'] = {
     aliases: {
       emails: [],
       userIds: [],
       usernames: [],
       ssoSubjects: [],
-      issuers: [],
-      agentNames: ['gitAgent']
+      issuers: []
     },
     claims: {
       roles: []
@@ -508,7 +503,7 @@ test('secret owners keep write-access by default and same-agent delegated reads 
 
   await grantSecret(ownerAuth, {
     key: 'AGENT_VISIBLE_SECRET',
-    principal: 'gitAgent',
+    principal: 'agent:AssistOSExplorer/gitAgent',
     role: 'read'
   });
 
@@ -520,7 +515,7 @@ test('secret owners keep write-access by default and same-agent delegated reads 
     },
     agent: {
       name: 'gitAgent',
-      principalId: 'agent:gitAgent'
+      principalId: 'agent:AssistOSExplorer/gitAgent'
     }
   }, { key: 'AGENT_VISIBLE_SECRET' });
 
@@ -540,27 +535,20 @@ test('delegated owner writes still succeed after the same agent is granted read 
   };
 
   await putSecret(ownerAuth, { key: 'OWNER_UPDATE_SECRET', value: 'initial-value' });
-  writeAgentManifest('gitAgent', {
-    identity: {
-      principalId: 'agent:gitAgent',
-      agentName: 'gitAgent'
-    },
-    permissions: {
-      secrets: {
-        allowedRoles: ['read']
-      }
-    }
-  });
 
   const manifest = getPermissionsManifest();
-  manifest.identities.principals['agent:gitAgent'] = {
+  manifest.agentPolicies = manifest.agentPolicies || {};
+  manifest.agentPolicies['agent:AssistOSExplorer/gitAgent'] = {
+    secrets: { allowedRoles: ['read'] },
+    updatedAt: '2026-04-16T00:00:00.000Z'
+  };
+  manifest.identities.principals['agent:AssistOSExplorer/gitAgent'] = {
     aliases: {
       emails: [],
       userIds: [],
       usernames: [],
       ssoSubjects: [],
-      issuers: [],
-      agentNames: ['gitAgent']
+      issuers: []
     },
     claims: {
       roles: []
@@ -572,7 +560,7 @@ test('delegated owner writes still succeed after the same agent is granted read 
 
   await grantSecret(ownerAuth, {
     key: 'OWNER_UPDATE_SECRET',
-    principal: 'gitAgent',
+    principal: 'agent:AssistOSExplorer/gitAgent',
     role: 'read'
   });
 
@@ -584,7 +572,7 @@ test('delegated owner writes still succeed after the same agent is granted read 
     },
     agent: {
       name: 'gitAgent',
-      principalId: 'agent:gitAgent'
+      principalId: 'agent:AssistOSExplorer/gitAgent'
     },
     invocation: {
       scope: ['secret:write'],
@@ -603,33 +591,27 @@ test('delegated owner writes still succeed after the same agent is granted read 
   assert.equal(state.secrets.OWNER_UPDATE_SECRET.ownerId, 'user:local:admin');
 });
 
-test('agent secret grants are capped by manifest-declared allowedRoles', async () => {
+test('agent secret grants are capped by DPU-owned agentPolicies allowedRoles', async () => {
   const ownerAuth = {
     user: {
       email: 'owner@example.com'
     }
   };
   await putSecret(ownerAuth, { key: 'AGENT_ROLE_LIMIT', value: 'value' });
-  writeAgentManifest('gitAgent', {
-    identity: {
-      principalId: 'agent:gitAgent',
-      agentName: 'gitAgent'
-    },
-    permissions: {
-      secrets: {
-        allowedRoles: ['read']
-      }
-    }
-  });
+
   const manifest = getPermissionsManifest();
-  manifest.identities.principals['agent:gitAgent'] = {
+  manifest.agentPolicies = manifest.agentPolicies || {};
+  manifest.agentPolicies['agent:AssistOSExplorer/gitAgent'] = {
+    secrets: { allowedRoles: ['read'] },
+    updatedAt: '2026-04-17T00:00:00.000Z'
+  };
+  manifest.identities.principals['agent:AssistOSExplorer/gitAgent'] = {
     aliases: {
       emails: [],
       userIds: [],
       usernames: [],
       ssoSubjects: [],
-      issuers: [],
-      agentNames: ['gitAgent']
+      issuers: []
     },
     claims: {
       roles: []
@@ -642,10 +624,70 @@ test('agent secret grants are capped by manifest-declared allowedRoles', async (
   await assert.rejects(
     () => grantSecret(ownerAuth, {
       key: 'AGENT_ROLE_LIMIT',
-      principal: 'gitAgent',
+      principal: 'agent:AssistOSExplorer/gitAgent',
       role: 'write'
     }),
     /not allowed to receive secret role write/
+  );
+});
+
+test('admin can set and then read an agent secret policy via DPU tools', async () => {
+  const setResult = await setAgentPolicyAllowedRoles(adminAuth, {
+    principalId: 'agent:AssistOSExplorer/gitAgent',
+    allowedRoles: ['read', 'write']
+  });
+  assert.equal(setResult.ok, true);
+  assert.equal(setResult.principalId, 'agent:AssistOSExplorer/gitAgent');
+  assert.deepEqual(setResult.policy.secrets.allowedRoles, ['read', 'write']);
+
+  const getResult = await getAgentPolicyForPrincipal(adminAuth, {
+    principalId: 'agent:AssistOSExplorer/gitAgent'
+  });
+  assert.equal(getResult.ok, true);
+  assert.deepEqual(getResult.policy.secrets.allowedRoles, ['read', 'write']);
+});
+
+test('non-admin callers cannot manage DPU agent policies', async () => {
+  await assert.rejects(
+    () => setAgentPolicyAllowedRoles({ user: { email: 'someone@example.com' } }, {
+      principalId: 'agent:AssistOSExplorer/gitAgent',
+      allowedRoles: ['read']
+    }),
+    /admin or security role/
+  );
+  await assert.rejects(
+    () => getAgentPolicyForPrincipal({ user: { email: 'someone@example.com' } }, {
+      principalId: 'agent:AssistOSExplorer/gitAgent'
+    }),
+    /admin or security role/
+  );
+});
+
+test('agent policy tools reject non-agent principals', async () => {
+  await assert.rejects(
+    () => setAgentPolicyAllowedRoles(adminAuth, {
+      principalId: 'user:local:admin',
+      allowedRoles: ['read']
+    }),
+    /agent principal/
+  );
+});
+
+test('agent secret grants are rejected when no DPU agent policy exists', async () => {
+  const ownerAuth = {
+    user: {
+      email: 'owner@example.com'
+    }
+  };
+  await putSecret(ownerAuth, { key: 'UNREGISTERED_AGENT_SECRET', value: 'value' });
+
+  await assert.rejects(
+    () => grantSecret(ownerAuth, {
+      key: 'UNREGISTERED_AGENT_SECRET',
+      principal: 'agent:AssistOSExplorer/gitAgent',
+      role: 'read'
+    }),
+    /no DPU policy exists/
   );
 });
 

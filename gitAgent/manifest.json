@@ -1,17 +1,6 @@
 {
     "agent": "sh /code/scripts/startAgent.sh",
     "container": "node:20-alpine",
-    "identity": {
-        "principalId": "agent:gitAgent",
-        "agentName": "gitAgent"
-    },
-    "capabilities": {
-        "dpu": {
-            "allowedRoles": [
-                "read"
-            ]
-        }
-    },
     "profiles": {
         "default": {
             "env": [

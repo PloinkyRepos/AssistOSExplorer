@@ -22,9 +22,26 @@ import {
   deleteConfidentialComment,
   grantConfidential,
   revokeConfidential,
-  accessCheck
+  accessCheck,
+  getAgentPolicyForPrincipal,
+  setAgentPolicyAllowedRoles
 } from '../lib/dpu-store.mjs';
-import { authInfoFromInvocation } from '../../shared/invocation-auth.mjs';
+
+async function loadInvocationAuth() {
+  const candidates = [
+    process.env.PLOINKY_INVOCATION_AUTH_MODULE,
+    '/Agent/lib/invocation-auth.mjs',
+    '../../shared/invocation-auth.mjs'
+  ].filter(Boolean);
+  for (const candidate of candidates) {
+    try {
+      return await import(candidate);
+    } catch (_) {}
+  }
+  throw new Error('Unable to load invocation-auth helper.');
+}
+
+const { authInfoFromInvocation } = await loadInvocationAuth();
 
 function safeParseJson(text) {
   try {
@@ -73,12 +90,6 @@ function normalizeInput(envelope) {
     break;
   }
   return current && typeof current === 'object' ? current : {};
-}
-
-function extractAuthInfo(envelope) {
-  const metadata = envelope && typeof envelope === 'object' ? envelope.metadata : null;
-  const authInfo = metadata && typeof metadata === 'object' ? metadata.authInfo : null;
-  return authInfo && typeof authInfo === 'object' ? authInfo : null;
 }
 
 function extractInvocationGrant(envelope) {
@@ -180,6 +191,15 @@ function normalizeArgs(toolName, args) {
         requireString('id');
       }
       return input;
+    case 'dpu_agent_policy_get':
+      requireString('principalId');
+      return input;
+    case 'dpu_agent_policy_set':
+      requireString('principalId');
+      if (!Array.isArray(input.allowedRoles)) {
+        throw new Error('dpu_agent_policy_set requires an "allowedRoles" array.');
+      }
+      return input;
     default:
       throw new Error(`Unsupported tool: ${toolName}`);
   }
@@ -191,13 +211,8 @@ async function main() {
     raw = '';
   }
   const envelope = raw && raw.trim() ? safeParseJson(raw) : null;
-  // Prefer the verified invocation grant (already validated by the MCP server)
-  // over the legacy x-ploinky-auth-info blob. Fall back to the legacy blob
-  // during migration if no invocation is present.
   const invocationGrant = extractInvocationGrant(envelope || {});
-  const authInfo = invocationGrant
-    ? authInfoFromInvocation(invocationGrant)
-    : extractAuthInfo(envelope || {});
+  const authInfo = invocationGrant ? authInfoFromInvocation(invocationGrant) : null;
   const toolName = process.env.TOOL_NAME;
   const args = normalizeArgs(toolName, normalizeInput(envelope || {}));
 
@@ -277,6 +292,12 @@ async function main() {
       break;
     case 'dpu_access_check':
       result = await accessCheck(authInfo, args);
+      break;
+    case 'dpu_agent_policy_get':
+      result = await getAgentPolicyForPrincipal(authInfo, args);
+      break;
+    case 'dpu_agent_policy_set':
+      result = await setAgentPolicyAllowedRoles(authInfo, args);
       break;
     default:
       throw new Error(`Unsupported tool: ${toolName || '<missing>'}`);

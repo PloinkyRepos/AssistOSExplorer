@@ -10,7 +10,22 @@ import {
   getGithubAuthAccessToken,
   storeManualGitAuthToken
 } from '../lib/github-auth.mjs';
-import { authInfoFromInvocation } from '../../shared/invocation-auth.mjs';
+
+async function loadInvocationAuth() {
+  const candidates = [
+    process.env.PLOINKY_INVOCATION_AUTH_MODULE,
+    '/Agent/lib/invocation-auth.mjs',
+    '../../shared/invocation-auth.mjs'
+  ].filter(Boolean);
+  for (const candidate of candidates) {
+    try {
+      return await import(candidate);
+    } catch (_) {}
+  }
+  throw new Error('Unable to load invocation-auth helper.');
+}
+
+const { authInfoFromInvocation } = await loadInvocationAuth();
 
 function safeParseJson(text) {
   try { return JSON.parse(text); } catch { return null; }
@@ -55,12 +70,6 @@ function normalizeInput(envelope) {
     break;
   }
   return current && typeof current === 'object' ? current : {};
-}
-
-function extractAuthInfo(envelope) {
-  const metadata = envelope && typeof envelope === 'object' ? envelope.metadata : null;
-  const authInfo = metadata && typeof metadata === 'object' ? metadata.authInfo : null;
-  return authInfo && typeof authInfo === 'object' ? authInfo : null;
 }
 
 function extractInvocationGrant(envelope) {
@@ -235,9 +244,7 @@ async function main() {
   const envelope = raw && raw.trim() ? safeParseJson(raw) : null;
   const args = normalizeInput(envelope || {});
   const invocationGrant = extractInvocationGrant(envelope || {});
-  const authInfo = invocationGrant
-    ? authInfoFromInvocation(invocationGrant)
-    : extractAuthInfo(envelope || {});
+  const authInfo = invocationGrant ? authInfoFromInvocation(invocationGrant) : null;
   const toolName = process.env.TOOL_NAME
     || process.argv[2]
     || envelope?.tool
