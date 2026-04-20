@@ -85,6 +85,35 @@ plugin-settings-modal .plugin-settings-toggle {
     transition: border-color 120ms ease, background 120ms ease, color 120ms ease, transform 120ms ease;
 }
 
+plugin-settings-modal .plugin-settings-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+plugin-settings-modal .plugin-settings-open {
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface-2, var(--surface));
+    color: var(--text);
+    min-width: 88px;
+    padding: 9px 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: border-color 120ms ease, background 120ms ease, color 120ms ease, transform 120ms ease;
+}
+
+plugin-settings-modal .plugin-settings-open:hover {
+    transform: translateY(-1px);
+    border-color: color-mix(in srgb, var(--accent) 22%, var(--border));
+}
+
+plugin-settings-modal .plugin-settings-open:disabled {
+    opacity: 0.65;
+    cursor: progress;
+    transform: none;
+}
+
 plugin-settings-modal .plugin-settings-toggle:hover {
     transform: translateY(-1px);
 }
@@ -121,5 +150,9 @@ plugin-settings-modal .plugin-settings-toggle:disabled {
 
     plugin-settings-modal .plugin-settings-toggle {
         justify-self: start;
+    }
+
+    plugin-settings-modal .plugin-settings-actions {
+        justify-content: flex-start;
     }
 }
