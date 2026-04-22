@@ -5,9 +5,6 @@
     "cli": "/bin/bash",
     "agent": "node /code/filesystem-http-server.mjs",
     "about": "AssistOS Explorer agent",
-    "repos": {
-        "webassist": "https://github.com/AssistOS-AI/webassist.git"
-    },
     "ploinky": "pwd enable",
     "pwd": {
         "users": [
@@ -32,15 +29,15 @@
         "tasksAgent global",
         "llmAssistant global",
         "multimedia global",
-        "webassist/webCli global",
-        "webassist/webAdmin global"
+        "webmeetAgent global"
     ],
     "applicationPlugins": {
         "git": true,
         "dpu-runtime-support": true,
         "dpu-audit-menu": true,
         "soplang-builder": true,
-        "tasks": true
+        "tasks": true,
+        "webmeet": true
     },
     "profiles": {
         "default": {
