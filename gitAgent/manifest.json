@@ -1,19 +1,9 @@
 {
     "agent": "sh /code/scripts/startAgent.sh",
     "container": "node:20-alpine",
-    "identity": {
-        "principalId": "agent:gitAgent",
-        "agentName": "gitAgent"
-    },
-    "permissions": {
-        "secrets": {
-            "allowedRoles": [
-                "read"
-            ]
-        }
-    },
     "profiles": {
         "default": {
+            "install": "apk add --no-cache git openssh-client ca-certificates",
             "env": [
                 "OPENAI_API_KEY",
                 "ANTHROPIC_API_KEY",
@@ -24,7 +14,8 @@
                 "ASSISTOS_FS_ROOT",
                 "WORKSPACE_ROOT",
                 "PLOINKY_WORKSPACE_ROOT",
-                "SOUL_GATEWAY_API_KEY"
+                "SOUL_GATEWAY_API_KEY",
+                "SOUL_GATEWAY_BASE_URL"
             ]
         }
     }

@@ -4,7 +4,7 @@ import {
   nowIso
 } from './common.mjs';
 
-const IDENTITY_ALIAS_KEYS = ['emails', 'userIds', 'usernames', 'ssoSubjects', 'issuers', 'agentNames'];
+const IDENTITY_ALIAS_KEYS = ['emails', 'userIds', 'usernames', 'ssoSubjects', 'issuers'];
 const RESOURCE_PERMISSION_KEYS = {
   secret: 'secrets',
   confidential: 'objects'
@@ -40,8 +40,7 @@ function normalizeAliasBucket(input = {}) {
     userIds: toStringList(input.userIds),
     usernames: toStringList(input.usernames),
     ssoSubjects: toStringList(input.ssoSubjects),
-    issuers: toStringList(input.issuers),
-    agentNames: toStringList(input.agentNames)
+    issuers: toStringList(input.issuers)
   };
 }
 
@@ -132,8 +131,95 @@ export function defaultPermissionsManifest() {
     permissions: {
       secrets: {},
       objects: {}
-    }
+    },
+    agentPolicies: {}
   };
+}
+
+function arraysEqual(a, b) {
+  if (!Array.isArray(a) || !Array.isArray(b)) return false;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
+function normalizeAllowedRoles(input, roleOrder = []) {
+  if (!Array.isArray(input)) return [];
+  const out = [];
+  const seen = new Set();
+  const whitelist = Array.isArray(roleOrder) && roleOrder.length
+    ? new Set(roleOrder.map((value) => String(value || '').trim().toLowerCase()))
+    : null;
+  for (const raw of input) {
+    const normalized = String(raw || '').trim().toLowerCase();
+    if (!normalized) continue;
+    if (whitelist && !whitelist.has(normalized)) continue;
+    if (seen.has(normalized)) continue;
+    seen.add(normalized);
+    out.push(normalized);
+  }
+  return out;
+}
+
+function normalizeAgentPolicyEntry(input = {}, roleOrder = []) {
+  const secretsInput = input?.secrets && typeof input.secrets === 'object' ? input.secrets : {};
+  const allowedRoles = normalizeAllowedRoles(secretsInput.allowedRoles, roleOrder);
+  const updatedAt = isNonEmptyString(input?.updatedAt) ? String(input.updatedAt).trim() : '';
+  return {
+    secrets: { allowedRoles },
+    updatedAt
+  };
+}
+
+export function normalizeAgentPolicies(input = {}, roleOrder = []) {
+  const out = {};
+  if (!input || typeof input !== 'object') return out;
+  for (const [principalId, entry] of Object.entries(input)) {
+    const normalizedPrincipalId = canonicalizePrincipal(principalId);
+    if (!normalizedPrincipalId) continue;
+    out[normalizedPrincipalId] = normalizeAgentPolicyEntry(entry, roleOrder);
+  }
+  return out;
+}
+
+export function getAgentPolicy(manifest, principalId) {
+  const normalized = canonicalizePrincipal(principalId);
+  if (!normalized) return null;
+  const policies = manifest?.agentPolicies;
+  if (!policies || typeof policies !== 'object') return null;
+  const entry = policies[normalized];
+  return entry && typeof entry === 'object' ? entry : null;
+}
+
+export function setAgentAllowedRoles(manifest, principalId, roles, { roleOrder = [] } = {}) {
+  const normalizedPrincipalId = canonicalizePrincipal(principalId);
+  if (!normalizedPrincipalId) return false;
+  if (!manifest.agentPolicies || typeof manifest.agentPolicies !== 'object') {
+    manifest.agentPolicies = {};
+  }
+  const normalizedRoles = normalizeAllowedRoles(roles, roleOrder);
+  const existing = manifest.agentPolicies[normalizedPrincipalId];
+  const previousRoles = Array.isArray(existing?.secrets?.allowedRoles)
+    ? existing.secrets.allowedRoles
+    : [];
+  const changed = !arraysEqual(previousRoles, normalizedRoles);
+  manifest.agentPolicies[normalizedPrincipalId] = {
+    secrets: { allowedRoles: normalizedRoles },
+    updatedAt: changed ? nowIso() : (isNonEmptyString(existing?.updatedAt) ? existing.updatedAt : nowIso())
+  };
+  return changed;
+}
+
+export function removeAgentPolicy(manifest, principalId) {
+  const normalizedPrincipalId = canonicalizePrincipal(principalId);
+  if (!normalizedPrincipalId) return false;
+  const policies = manifest?.agentPolicies;
+  if (!policies || typeof policies !== 'object') return false;
+  if (!Object.prototype.hasOwnProperty.call(policies, normalizedPrincipalId)) return false;
+  delete policies[normalizedPrincipalId];
+  return true;
 }
 
 export function normalizePermissionsManifest(input = {}) {
@@ -184,7 +270,8 @@ export function normalizePermissionsManifest(input = {}) {
     permissions: {
       secrets: normalizedSecrets,
       objects: normalizedObjects
-    }
+    },
+    agentPolicies: normalizeAgentPolicies(input?.agentPolicies)
   };
 }
 
@@ -227,10 +314,7 @@ export function extractIdentityHints(authInfo = null) {
     || agent.id
     || ''
   ).trim();
-  const agentPrincipalId = String(
-    agent.principalId
-    || (agentName ? `agent:${agentName}` : '')
-  ).trim();
+  const agentPrincipalId = String(agent.principalId || '').trim();
 
   return {
     email,
@@ -364,9 +448,6 @@ export function resolvePrincipalFromManifest(manifest, authInfo = null) {
         return principalId;
       }
     }
-    if (hints.agentName && Array.isArray(aliases.agentNames) && aliases.agentNames.includes(hints.agentName)) {
-      return principalId;
-    }
   }
 
   return '';
@@ -402,9 +483,6 @@ export function resolvePrincipalReference(manifest, value = '') {
     if (Array.isArray(aliases.ssoSubjects) && aliases.ssoSubjects.includes(normalizedValue)) {
       return principalId;
     }
-    if (Array.isArray(aliases.agentNames) && aliases.agentNames.includes(normalizedValue)) {
-      return principalId;
-    }
   }
 
   return canonicalValue;
@@ -437,7 +515,6 @@ export function upsertPrincipalIdentity(manifest, principalId, hints = {}) {
   changed = pushUnique(entry.aliases.usernames, hints.username) || changed;
   changed = pushUnique(entry.aliases.ssoSubjects, hints.ssoSubject) || changed;
   changed = pushUnique(entry.aliases.issuers, hints.issuer) || changed;
-  changed = pushUnique(entry.aliases.agentNames, hints.agentName) || changed;
 
   const roles = Array.isArray(hints.roles) ? hints.roles : [];
   for (const role of roles) {

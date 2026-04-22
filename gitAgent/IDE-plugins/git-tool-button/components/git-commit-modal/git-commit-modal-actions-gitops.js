@@ -7,6 +7,8 @@ import {
     isGitIdentityError,
     isGitConflictError,
     isGitPullBlockedError,
+    isLlmUnavailableError,
+    buildFallbackCommitMessage,
     extractGitPullBlockedFiles,
     getRememberedGitIdentity,
     getRememberedGitAuthMethod,
@@ -448,7 +450,18 @@ export function createGitOpsActions(ctx) {
                     return;
                 }
 
-                const message = await generateCommitMessageForSelections(stagedSelections);
+                let usedFallbackCommitMessage = false;
+                let message = '';
+                try {
+                    message = await generateCommitMessageForSelections(stagedSelections);
+                } catch (error) {
+                    const raw = normalizeErrorMessage(error);
+                    if (!isLlmUnavailableError(raw)) {
+                        throw error;
+                    }
+                    message = buildFallbackCommitMessage(stagedSelections);
+                    usedFallbackCommitMessage = true;
+                }
                 if (!message) {
                     setStatusLine('AI returned an empty commit message.', true);
                     dispatchAutocommitStop();
@@ -523,7 +536,8 @@ export function createGitOpsActions(ctx) {
                         pullResult.pulledRepos > 0 ? `pulled the latest changes for ${formatCount(pullResult.pulledRepos, 'repository')}` : '',
                         committedRepos > 0 ? `committed ${formatCount(committedFiles, 'file')} in ${formatCount(committedRepos, 'repository')}` : '',
                         pushedRepos > 0 ? `pushed ${formatCount(pushedCommits, 'commit')} from ${formatCount(pushedRepos, 'repository')}` : ''
-                    ]
+                    ],
+                    outro: usedFallbackCommitMessage ? 'Used a fallback commit message because no LLM model is configured.' : ''
                 }));
                 dispatchAutocommitReset();
             } catch (error) {

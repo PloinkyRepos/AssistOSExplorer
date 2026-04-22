@@ -259,6 +259,24 @@ export async function aggregateIdePlugins(rootDir) {
 
   const candidateDirsProcessed = new Set();
 
+  async function isDirectoryEntry(baseDir, entry) {
+    if (!entry) {
+      return false;
+    }
+    if (typeof entry.isDirectory === 'function' && entry.isDirectory()) {
+      return true;
+    }
+    if (!(typeof entry.isSymbolicLink === 'function' && entry.isSymbolicLink())) {
+      return false;
+    }
+    try {
+      const targetStat = await fs.stat(path.join(baseDir, entry.name));
+      return targetStat.isDirectory();
+    } catch {
+      return false;
+    }
+  }
+
   const processAgentDirectory = async (agentName, agentDir) => {
     if (!agentName || SKIP_DIRECTORY_NAMES.has(agentName)) {
       return;
@@ -291,7 +309,7 @@ export async function aggregateIdePlugins(rootDir) {
     }
 
     for (const pluginEntry of pluginEntries) {
-      if (!pluginEntry.isDirectory()) continue;
+      if (!(await isDirectoryEntry(idePluginsDir, pluginEntry))) continue;
       const pluginDir = path.join(idePluginsDir, pluginEntry.name);
       const configPath = path.join(pluginDir, 'config.json');
 
@@ -360,7 +378,7 @@ export async function aggregateIdePlugins(rootDir) {
     await processAgentDirectory(path.basename(baseDir), baseDir);
 
     for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
+      if (!(await isDirectoryEntry(baseDir, entry))) continue;
       if (SKIP_DIRECTORY_NAMES.has(entry.name)) continue;
       await processAgentDirectory(entry.name, path.join(baseDir, entry.name));
     }
@@ -382,7 +400,7 @@ export async function aggregateIdePlugins(rootDir) {
     }
 
     for (const entry of repoEntries) {
-      if (!entry.isDirectory()) continue;
+      if (!(await isDirectoryEntry(repoRoot, entry))) continue;
       if (SKIP_DIRECTORY_NAMES.has(entry.name)) continue;
       await scanAgentDirectories(path.join(repoRoot, entry.name));
     }

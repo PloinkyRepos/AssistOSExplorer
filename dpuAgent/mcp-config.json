@@ -153,6 +153,17 @@
       }
     },
     {
+      "name": "secret_list",
+      "title": "Secret List",
+      "description": "List secrets visible to the current actor.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {},
+      "env": {
+        "TOOL_NAME": "secret_list"
+      }
+    },
+    {
       "name": "dpu_secret_get",
       "title": "DPU Secret Get",
       "description": "Get a secret by key, filtered by the current actor permissions.",
@@ -166,6 +177,22 @@
       },
       "env": {
         "TOOL_NAME": "dpu_secret_get"
+      }
+    },
+    {
+      "name": "secret_get",
+      "title": "Secret Get",
+      "description": "Get a secret by key, filtered by the current actor permissions.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "key": {
+          "type": "string",
+          "optional": false
+        }
+      },
+      "env": {
+        "TOOL_NAME": "secret_get"
       }
     },
     {
@@ -189,6 +216,26 @@
       }
     },
     {
+      "name": "secret_put",
+      "title": "Secret Put",
+      "description": "Create or update a secret.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "key": {
+          "type": "string",
+          "optional": false
+        },
+        "value": {
+          "type": "string",
+          "optional": false
+        }
+      },
+      "env": {
+        "TOOL_NAME": "secret_put"
+      }
+    },
+    {
       "name": "dpu_secret_delete",
       "title": "DPU Secret Delete",
       "description": "Delete a secret by key.",
@@ -202,6 +249,22 @@
       },
       "env": {
         "TOOL_NAME": "dpu_secret_delete"
+      }
+    },
+    {
+      "name": "secret_delete",
+      "title": "Secret Delete",
+      "description": "Delete a secret by key.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "key": {
+          "type": "string",
+          "optional": false
+        }
+      },
+      "env": {
+        "TOOL_NAME": "secret_delete"
       }
     },
     {
@@ -230,6 +293,31 @@
       }
     },
     {
+      "name": "secret_grant",
+      "title": "Secret Grant",
+      "description": "Grant Access, Write-Access, Read, or Write on a secret.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "key": {
+          "type": "string",
+          "optional": false
+        },
+        "principal": {
+          "type": "string",
+          "optional": false
+        },
+        "role": {
+          "type": "string",
+          "optional": false,
+          "enum": ["access", "write-access", "read", "write"]
+        }
+      },
+      "env": {
+        "TOOL_NAME": "secret_grant"
+      }
+    },
+    {
       "name": "dpu_secret_revoke",
       "title": "DPU Secret Revoke",
       "description": "Revoke a previously granted secret role from a principal.",
@@ -247,6 +335,26 @@
       },
       "env": {
         "TOOL_NAME": "dpu_secret_revoke"
+      }
+    },
+    {
+      "name": "secret_revoke",
+      "title": "Secret Revoke",
+      "description": "Revoke a previously granted secret role from a principal.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "key": {
+          "type": "string",
+          "optional": false
+        },
+        "principal": {
+          "type": "string",
+          "optional": false
+        }
+      },
+      "env": {
+        "TOOL_NAME": "secret_revoke"
       }
     },
     {
@@ -446,6 +554,42 @@
       },
       "env": {
         "TOOL_NAME": "dpu_confidential_revoke"
+      }
+    },
+    {
+      "name": "dpu_agent_policy_get",
+      "title": "DPU Agent Policy Get",
+      "description": "Admin-only: return the DPU-owned secret policy for an agent principal.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "principalId": {
+          "type": "string",
+          "optional": false
+        }
+      },
+      "env": {
+        "TOOL_NAME": "dpu_agent_policy_get"
+      }
+    },
+    {
+      "name": "dpu_agent_policy_set",
+      "title": "DPU Agent Policy Set",
+      "description": "Admin-only: replace the allowed secret roles for an agent principal.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "principalId": {
+          "type": "string",
+          "optional": false
+        },
+        "allowedRoles": {
+          "type": "array",
+          "optional": false
+        }
+      },
+      "env": {
+        "TOOL_NAME": "dpu_agent_policy_set"
       }
     },
     {

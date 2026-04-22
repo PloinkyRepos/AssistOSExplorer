@@ -38,7 +38,7 @@ These roles are not equivalent. An actor with `access` can be authorized operati
 
 When a new secret is created, the creator is treated as having the `write-access` role for that secret through ownership resolution. This means the owner can update the secret and manage its ACL without automatically materializing the current plaintext value. Delegated principals may still receive `read` or `write` when the workflow requires value visibility.
 
-Secret ACL entries are principal-based. The same secret may therefore grant roles to user principals such as `user:local:admin` and to agent principals such as `agent:gitAgent`. Agent principals should come from the identity registry in `permissions.manifest.json`, while the maximum role an agent may receive on any secret is validated against that agent's `manifest.json -> permissions.secrets.allowedRoles`.
+Secret ACL entries are principal-based. The same secret may therefore grant roles to user principals such as `user:local:admin` and to agent principals such as `agent:AssistOSExplorer/gitAgent`. Agent principals use the canonical Ploinky-derived `agent:<repo>/<agent>` form and are recorded in the identity registry inside `permissions.manifest.json`. The maximum role an agent may receive on any secret is validated against DPU-owned policy in `permissions.manifest.json -> agentPolicies[<principalId>].secrets.allowedRoles`, not against the agent's manifest.
 
 ## Practical Operation
 

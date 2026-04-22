@@ -366,6 +366,49 @@ export function createGitService({ validatePath }) {
     return gitBinaryPromise;
   }
 
+  async function listCanonicalStashEntries(repoPath, gitBinary) {
+    const { stdout } = await runGit(repoPath, [
+      gitBinary,
+      'stash',
+      'list',
+      '--pretty=format:%gd|%H|%s'
+    ], { timeoutMs: 10000 });
+    const output = String(stdout || '').trim();
+    if (!output) return [];
+    return output
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const [refPart, oidPart, ...rest] = line.split('|');
+        return {
+          ref: String(refPart || '').trim(),
+          oid: String(oidPart || '').trim(),
+          message: rest.join('|').trim(),
+          raw: line
+        };
+      })
+      .filter((entry) => entry.ref);
+  }
+
+  async function resolveCanonicalStashRef(repoPath, gitBinary, ref) {
+    const normalized = String(ref || '').trim();
+    if (!normalized) return null;
+    if (/^stash@\{.*\}$/i.test(normalized)) {
+      return normalized;
+    }
+    if (!/^[0-9a-f]{40}$/i.test(normalized)) {
+      return normalized;
+    }
+    try {
+      const entries = await listCanonicalStashEntries(repoPath, gitBinary);
+      const match = entries.find((entry) => entry.oid.toLowerCase() === normalized.toLowerCase());
+      return match?.ref || normalized;
+    } catch {
+      return normalized;
+    }
+  }
+
   async function resolveRepoPath(repoPathArg) {
     const repoPath = await validatePath(repoPathArg || '/');
     return repoPath;
@@ -1082,40 +1125,16 @@ export function createGitService({ validatePath }) {
   async function gitStashList({ path: repoPathArg }) {
     const repoPath = await resolveRepoWorkTreePath(repoPathArg);
     const gitBinary = await getGitBinary(repoPath);
-    const { stdout } = await runGit(repoPath, [
-      gitBinary,
-      'stash',
-      'list',
-      '--date=iso',
-      '--pretty=format:%gd|%s'
-    ], { timeoutMs: 10000 });
-    const output = String(stdout || '').trim();
-    if (!output) {
-      return { ok: true, entries: [] };
-    }
-    const entries = output
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((line) => {
-        const [refPart, ...rest] = line.split('|');
-        const ref = (refPart || '').trim();
-        const dateMatch = ref.match(/\{([^}]+)\}/);
-        const date = dateMatch ? dateMatch[1].trim() : '';
-        const cleanDate = date.replace(/\s*[+-]\d{4}\s*$/, '');
-        const cleanRef = cleanDate ? ref.replace(date, cleanDate) : ref;
-        const message = rest.join('|').trim();
-        return { ref: cleanRef, date: cleanDate, message, raw: line };
-      })
-      .filter((entry) => entry.ref);
+    const entries = await listCanonicalStashEntries(repoPath, gitBinary);
     return { ok: true, entries };
   }
   async function gitStashPop({ path: repoPathArg, ref = null, reinstateIndex = true }) {
     const repoPath = await resolveRepoWorkTreePath(repoPathArg);
     const gitBinary = await getGitBinary(repoPath);
+    const canonicalRef = await resolveCanonicalStashRef(repoPath, gitBinary, ref);
     const args = [gitBinary, 'stash', 'pop'];
     if (reinstateIndex) args.push('--index');
-    if (ref) args.push(ref);
+    if (canonicalRef) args.push(canonicalRef);
     const { stdout, stderr } = await runGit(repoPath, args, { timeoutMs: 30000, okCodes: [0, 1] });
     const output = `${stdout}\n${stderr}`.trim();
     const lower = output.toLowerCase();
@@ -1156,7 +1175,7 @@ export function createGitService({ validatePath }) {
         const stopTrackingPaths = getStopTrackingIgnoredPaths(status);
         if (stopTrackingPaths.length > 0) {
           try {
-            await runGit(repoPath, [gitBinary, 'stash', 'drop', ref || 'stash@{0}'], { timeoutMs: 10000 });
+            await runGit(repoPath, [gitBinary, 'stash', 'drop', canonicalRef || 'stash@{0}'], { timeoutMs: 10000 });
           } catch {
             // The working tree is already in the desired state; dropping the stash is best-effort.
           }
@@ -1228,13 +1247,12 @@ export function createGitService({ validatePath }) {
 
     const explicitToken = token ? String(token).trim() : '';
     const metaGithubToken = getGithubAccessTokenFromMeta(_meta || (params && typeof params === 'object' ? params._meta : null) || { params });
-    const effectiveToken = explicitToken || (isGithubHttpsRemote(remoteUrl) ? metaGithubToken : '');
+    const isHttpRemote = remoteUrl.startsWith('http://') || remoteUrl.startsWith('https://');
+    const effectiveToken = isHttpRemote
+      ? (explicitToken || (isGithubHttpsRemote(remoteUrl) ? metaGithubToken : ''))
+      : '';
     let extraHeader = null;
     if (effectiveToken) {
-      const isHttp = remoteUrl.startsWith('http://') || remoteUrl.startsWith('https://');
-      if (!isHttp) {
-        throw new Error('Remote is not HTTPS; token auth is only supported for HTTPS remotes. Configure an HTTPS remote or push via SSH.');
-      }
       extraHeader = toBasicAuthHeader({ username: 'x-access-token', token: effectiveToken });
     }
 
@@ -1279,15 +1297,14 @@ export function createGitService({ validatePath }) {
 
     const explicitToken = token ? String(token).trim() : '';
     const metaGithubToken = getGithubAccessTokenFromMeta(_meta || (params && typeof params === 'object' ? params._meta : null) || { params });
-    const effectiveToken = explicitToken || (isGithubHttpsRemote(remoteUrl) ? metaGithubToken : '');
+    const isHttpRemote = remoteUrl.startsWith('http://') || remoteUrl.startsWith('https://');
+    const effectiveToken = isHttpRemote
+      ? (explicitToken || (isGithubHttpsRemote(remoteUrl) ? metaGithubToken : ''))
+      : '';
     let extraHeader = null;
     if (effectiveToken) {
       if (!remoteUrl) {
         throw new Error(`No remote '${remoteForAuth}' configured for repository at ${repoPath}. Ensure the repository has a remote configured.`);
-      }
-      const isHttp = remoteUrl.startsWith('http://') || remoteUrl.startsWith('https://');
-      if (!isHttp) {
-        throw new Error('Remote is not HTTPS; token auth is only supported for HTTPS remotes. Configure an HTTPS remote or pull via SSH.');
       }
       extraHeader = toBasicAuthHeader({ username: 'x-access-token', token: effectiveToken });
     }

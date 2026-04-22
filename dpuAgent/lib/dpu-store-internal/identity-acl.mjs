@@ -114,10 +114,8 @@ export function resolveActor(authInfo = null, permissionsManifest = null) {
     || (hints.id ? canonicalizePrincipal(`user:${hints.id}`) : '')
     || (hints.username ? canonicalizePrincipal(`user:${hints.username}`) : '')
     || (hints.ssoSubject ? canonicalizePrincipal(`sso:${hints.ssoSubject}`) : '')
-    || canonicalizePrincipal(hints.agentPrincipalId)
-    || (hints.agentName ? canonicalizePrincipal(`agent:${hints.agentName}`) : '');
-  const agentPrincipalId = canonicalizePrincipal(hints.agentPrincipalId)
-    || (hints.agentName ? canonicalizePrincipal(`agent:${hints.agentName}`) : '');
+    || canonicalizePrincipal(hints.agentPrincipalId);
+  const agentPrincipalId = canonicalizePrincipal(hints.agentPrincipalId);
   return {
     principalId,
     email: hints.email,

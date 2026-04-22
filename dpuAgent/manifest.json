@@ -1,19 +1,23 @@
 {
   "container": "node:20-alpine",
+  "runtime": {
+    "resources": {
+      "persistentStorage": {
+        "key": "dpu-data",
+        "containerPath": "/dpu-data"
+      },
+      "env": {
+        "DPU_DATA_ROOT": "{{STORAGE_CONTAINER_PATH}}",
+        "DPU_WORKSPACE_ROOT": "{{WORKSPACE_ROOT}}",
+        "DPU_MASTER_KEY": "{{secret:DPU_MASTER_KEY}}"
+      }
+    }
+  },
   "profiles": {
     "default": {
       "env": [
         "ASSISTOS_FS_ROOT",
-        "WORKSPACE_ROOT",
-        "DPU_WORKSPACE_ROOT",
-        {
-          "name": "DPU_DATA_ROOT",
-          "required": false
-        },
-        {
-          "name": "DPU_MASTER_KEY",
-          "allowSecretsFile": false
-        }
+        "WORKSPACE_ROOT"
       ]
     }
   }

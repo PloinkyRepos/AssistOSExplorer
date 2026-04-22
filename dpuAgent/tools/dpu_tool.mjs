@@ -22,8 +22,26 @@ import {
   deleteConfidentialComment,
   grantConfidential,
   revokeConfidential,
-  accessCheck
+  accessCheck,
+  getAgentPolicyForPrincipal,
+  setAgentPolicyAllowedRoles
 } from '../lib/dpu-store.mjs';
+
+async function loadInvocationAuth() {
+  const candidates = [
+    process.env.PLOINKY_INVOCATION_AUTH_MODULE,
+    '/Agent/lib/invocation-auth.mjs',
+    '../../shared/invocation-auth.mjs'
+  ].filter(Boolean);
+  for (const candidate of candidates) {
+    try {
+      return await import(candidate);
+    } catch (_) {}
+  }
+  throw new Error('Unable to load invocation-auth helper.');
+}
+
+const { authInfoFromInvocation } = await loadInvocationAuth();
 
 function safeParseJson(text) {
   try {
@@ -74,10 +92,10 @@ function normalizeInput(envelope) {
   return current && typeof current === 'object' ? current : {};
 }
 
-function extractAuthInfo(envelope) {
+function extractInvocationGrant(envelope) {
   const metadata = envelope && typeof envelope === 'object' ? envelope.metadata : null;
-  const authInfo = metadata && typeof metadata === 'object' ? metadata.authInfo : null;
-  return authInfo && typeof authInfo === 'object' ? authInfo : null;
+  const grant = metadata && typeof metadata === 'object' ? metadata.invocation : null;
+  return grant && typeof grant === 'object' ? grant : null;
 }
 
 function normalizeArgs(toolName, args) {
@@ -91,6 +109,7 @@ function normalizeArgs(toolName, args) {
   switch (toolName) {
     case 'dpu_whoami':
     case 'dpu_workspace_roots':
+    case 'secret_list':
     case 'dpu_secret_list':
     case 'dpu_audit_config_get':
     case 'dpu_audit_list':
@@ -106,21 +125,26 @@ function normalizeArgs(toolName, args) {
     case 'dpu_audit_get':
       requireString('name');
       return input;
+    case 'secret_get':
+    case 'secret_delete':
     case 'dpu_secret_get':
     case 'dpu_secret_delete':
       requireString('key');
       return input;
+    case 'secret_put':
     case 'dpu_secret_put':
       requireString('key');
       if (typeof input.value !== 'string') {
-        throw new Error('dpu_secret_put requires a "value" string.');
+        throw new Error(`${toolName} requires a "value" string.`);
       }
       return input;
+    case 'secret_grant':
     case 'dpu_secret_grant':
       requireString('key');
       requireString('principal');
       requireString('role');
       return input;
+    case 'secret_revoke':
     case 'dpu_secret_revoke':
       requireString('key');
       requireString('principal');
@@ -167,6 +191,15 @@ function normalizeArgs(toolName, args) {
         requireString('id');
       }
       return input;
+    case 'dpu_agent_policy_get':
+      requireString('principalId');
+      return input;
+    case 'dpu_agent_policy_set':
+      requireString('principalId');
+      if (!Array.isArray(input.allowedRoles)) {
+        throw new Error('dpu_agent_policy_set requires an "allowedRoles" array.');
+      }
+      return input;
     default:
       throw new Error(`Unsupported tool: ${toolName}`);
   }
@@ -178,7 +211,8 @@ async function main() {
     raw = '';
   }
   const envelope = raw && raw.trim() ? safeParseJson(raw) : null;
-  const authInfo = extractAuthInfo(envelope || {});
+  const invocationGrant = extractInvocationGrant(envelope || {});
+  const authInfo = invocationGrant ? authInfoFromInvocation(invocationGrant) : null;
   const toolName = process.env.TOOL_NAME;
   const args = normalizeArgs(toolName, normalizeInput(envelope || {}));
 
@@ -205,21 +239,27 @@ async function main() {
     case 'dpu_workspace_roots':
       result = await getWorkspaceRoots(authInfo);
       break;
+    case 'secret_list':
     case 'dpu_secret_list':
       result = await listSecrets(authInfo);
       break;
+    case 'secret_get':
     case 'dpu_secret_get':
       result = await getSecretByKey(authInfo, args);
       break;
+    case 'secret_put':
     case 'dpu_secret_put':
       result = await putSecret(authInfo, args);
       break;
+    case 'secret_delete':
     case 'dpu_secret_delete':
       result = await deleteSecret(authInfo, args);
       break;
+    case 'secret_grant':
     case 'dpu_secret_grant':
       result = await grantSecret(authInfo, args);
       break;
+    case 'secret_revoke':
     case 'dpu_secret_revoke':
       result = await revokeSecret(authInfo, args);
       break;
@@ -252,6 +292,12 @@ async function main() {
       break;
     case 'dpu_access_check':
       result = await accessCheck(authInfo, args);
+      break;
+    case 'dpu_agent_policy_get':
+      result = await getAgentPolicyForPrincipal(authInfo, args);
+      break;
+    case 'dpu_agent_policy_set':
+      result = await setAgentPolicyAllowedRoles(authInfo, args);
       break;
     default:
       throw new Error(`Unsupported tool: ${toolName || '<missing>'}`);

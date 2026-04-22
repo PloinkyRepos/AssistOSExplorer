@@ -12,6 +12,7 @@ import {
     normalizeErrorMessage,
     parseJsonToolResult,
     isReposRootPath,
+    buildPrefilledGitIdentityState,
     getRememberedGitIdentity,
     getRememberedGitAuthMethod,
     getRememberedGithubConnection,
@@ -309,6 +310,9 @@ export class GitCommitModal {
                     this.setState({ suppressInlineLoading: false }, { silent: true });
                     this.syncStaticUI();
                 }
+            } else {
+                await this.loadRepoOverviews({ force: true }).catch(() => {});
+                this.updateIdentityPrompt();
             }
         })().catch(() => {
             this.syncStaticUI();
@@ -333,26 +337,15 @@ export class GitCommitModal {
 
     async prefillCredentialsPanel() {
         const current = this.state.identityPrompt || {};
-        const repoPath = current.repoPath || this.getPrimaryExplicitActionRepoPath();
-        if (!repoPath) return;
-
-        const githubUser = this.state.githubAuth?.connection?.user || {};
-        const githubName = String(githubUser?.name || githubUser?.login || '').trim();
-        const githubEmail = String(githubUser?.email || '').trim();
-        const remembered = getRememberedGitIdentity();
-        const name = remembered.name || current.name || githubName;
-        const email = remembered.email || current.email || githubEmail;
-        this.state.identityPrompt = {
-            ...current,
-            repoPath,
-            name,
-            email
-        };
-        this.state.credentialsBaseline = {
-            name,
-            email,
-            authMethod: normalizeGitAuthMethod(this.state.authPrompt?.authMethod || getRememberedGitAuthMethod())
-        };
+        const next = buildPrefilledGitIdentityState({
+            identityPrompt: current,
+            repoPath: this.getPrimaryExplicitActionRepoPath(),
+            rememberedIdentity: getRememberedGitIdentity(),
+            githubUser: this.state.githubAuth?.connection?.user || {},
+            authMethod: this.state.authPrompt?.authMethod || getRememberedGitAuthMethod()
+        });
+        this.state.identityPrompt = next.identityPrompt;
+        this.state.credentialsBaseline = next.credentialsBaseline;
     }
 
     async ensureCredentialsGate() {

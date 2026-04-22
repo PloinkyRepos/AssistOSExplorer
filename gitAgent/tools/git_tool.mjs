@@ -11,6 +11,22 @@ import {
   storeManualGitAuthToken
 } from '../lib/github-auth.mjs';
 
+async function loadInvocationAuth() {
+  const candidates = [
+    process.env.PLOINKY_INVOCATION_AUTH_MODULE,
+    '/Agent/lib/invocation-auth.mjs',
+    '../../shared/invocation-auth.mjs'
+  ].filter(Boolean);
+  for (const candidate of candidates) {
+    try {
+      return await import(candidate);
+    } catch (_) {}
+  }
+  throw new Error('Unable to load invocation-auth helper.');
+}
+
+const { authInfoFromInvocation } = await loadInvocationAuth();
+
 function safeParseJson(text) {
   try { return JSON.parse(text); } catch { return null; }
 }
@@ -56,10 +72,10 @@ function normalizeInput(envelope) {
   return current && typeof current === 'object' ? current : {};
 }
 
-function extractAuthInfo(envelope) {
+function extractInvocationGrant(envelope) {
   const metadata = envelope && typeof envelope === 'object' ? envelope.metadata : null;
-  const authInfo = metadata && typeof metadata === 'object' ? metadata.authInfo : null;
-  return authInfo && typeof authInfo === 'object' ? authInfo : null;
+  const grant = metadata && typeof metadata === 'object' ? metadata.invocation : null;
+  return grant && typeof grant === 'object' ? grant : null;
 }
 
 function getWorkspaceRoots() {
@@ -227,7 +243,8 @@ async function main() {
   }
   const envelope = raw && raw.trim() ? safeParseJson(raw) : null;
   const args = normalizeInput(envelope || {});
-  const authInfo = extractAuthInfo(envelope || {});
+  const invocationGrant = extractInvocationGrant(envelope || {});
+  const authInfo = invocationGrant ? authInfoFromInvocation(invocationGrant) : null;
   const toolName = process.env.TOOL_NAME
     || process.argv[2]
     || envelope?.tool

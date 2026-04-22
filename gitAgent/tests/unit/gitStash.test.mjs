@@ -104,3 +104,54 @@ test('gitStash ignores stop-tracking ignored files and leaves unrelated local ar
         assert.equal(untrackedDir.isDirectory(), true);
     });
 });
+
+test('gitStashList returns stable ordinal refs and gitStashPop accepts raw stash commit ids', async () => {
+    await withTempRepo(async (repoDir) => {
+        await fs.writeFile(path.join(repoDir, 'notes.txt'), 'v1\n', 'utf8');
+
+        let result = spawnSync('git', ['add', 'notes.txt'], { cwd: repoDir, encoding: 'utf8' });
+        if (result.status !== 0) {
+            throw new Error(result.stderr || result.stdout || 'git add failed');
+        }
+        result = spawnSync('git', ['-c', 'user.name=Test User', '-c', 'user.email=test@example.com', 'commit', '-m', 'initial'], {
+            cwd: repoDir,
+            encoding: 'utf8'
+        });
+        if (result.status !== 0) {
+            throw new Error(result.stderr || result.stdout || 'git commit failed');
+        }
+
+        await fs.writeFile(path.join(repoDir, 'notes.txt'), 'v2\n', 'utf8');
+
+        const gitService = createGitService({
+            validatePath: async (value) => value
+        });
+
+        const stashed = await gitService.gitStash({
+            path: repoDir,
+            includeUntracked: true,
+            message: 'ordinal-ref-test'
+        });
+        assert.equal(stashed.ok, true);
+        assert.equal(stashed.created, true);
+        assert.equal(stashed.ref, 'stash@{0}');
+
+        const listed = await gitService.gitStashList({ path: repoDir });
+        assert.equal(listed.ok, true);
+        assert.equal(Array.isArray(listed.entries), true);
+        assert.equal(listed.entries.length, 1);
+        assert.equal(listed.entries[0].ref, 'stash@{0}');
+        assert.match(String(listed.entries[0].oid || ''), /^[0-9a-f]{40}$/i);
+
+        const popped = await gitService.gitStashPop({
+            path: repoDir,
+            ref: listed.entries[0].oid,
+            reinstateIndex: true
+        });
+        assert.equal(popped.ok, true);
+        assert.equal(popped.noStash, false);
+
+        const content = await fs.readFile(path.join(repoDir, 'notes.txt'), 'utf8');
+        assert.equal(content, 'v2\n');
+    });
+});

@@ -5,6 +5,9 @@
     "cli": "/bin/bash",
     "agent": "node /code/filesystem-http-server.mjs",
     "about": "AssistOS Explorer agent",
+    "repos": {
+        "webassist": "https://github.com/AssistOS-AI/webassist.git"
+    },
     "ploinky": "pwd enable",
     "pwd": {
         "users": [
@@ -21,29 +24,28 @@
         ]
     },
     "enable": [
-        "postgres",
-        "keycloak",
         "gitAgent global",
         "dpuAgent global",
         "soplangAgent global",
         "tasksAgent global",
         "llmAssistant global",
         "multimedia global",
-        "webmeetAgent global"
+        "webassist/webCli",
+        "webassist/webAdmin"
     ],
     "applicationPlugins": {
         "git": true,
         "dpu-runtime-support": true,
         "dpu-audit-menu": true,
         "soplang-builder": true,
-        "tasks": true,
-        "webmeet": true
+        "tasks": true
     },
     "profiles": {
         "default": {
             "env": [
                 "ASSISTOS_FS_ROOT",
                 "SOUL_GATEWAY_API_KEY",
+                "SOUL_GATEWAY_BASE_URL",
                 {
                     "name": "ONLYOFFICE_PUBLIC_URL",
                     "required": false

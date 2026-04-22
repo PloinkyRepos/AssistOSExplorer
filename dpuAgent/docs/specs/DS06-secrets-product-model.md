@@ -38,7 +38,7 @@ This means Explorer remains the presentation layer, but the DPU agent remains th
 - which records are visible
 - whether content, comments, and access control list (ACL) details should be materialized
 
-For secrets, ACL principals are not limited to end users. DPU also supports agent-scoped principals such as `agent:gitAgent`, registered in the identity manifest the same way canonical user principals are registered. This lets a system agent read or update a specific secret without changing the default owner semantics for every secret in the workspace. The agent manifest declares the roles that category of agent is allowed to receive for secrets in principle; the ACL still records which concrete secret actually granted the role.
+For secrets, ACL principals are not limited to end users. DPU also supports agent-scoped principals derived by Ploinky as `agent:<repo>/<agent>` (for example `agent:AssistOSExplorer/gitAgent`), recorded in `permissions.manifest.json` the same way canonical user principals are recorded. This lets a system agent read or update a specific secret without changing the default owner semantics for every secret in the workspace. DPU-owned `agentPolicies` (managed through `dpu_agent_policy_set`) declare the maximum roles each agent principal may receive for secrets; the ACL still records which concrete secret actually granted the role.
 
 For audit, Explorer may also submit client-side event records through the dedicated ingest tool. Typical event classes include `file.open`, `file.update`, `explorer.action`, `plugin.used`, `copilot.prompt`, and `copilot.response`. Even in that flow, DPU remains the only component that persists audit files.
 

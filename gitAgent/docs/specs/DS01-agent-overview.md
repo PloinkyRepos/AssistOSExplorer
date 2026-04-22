@@ -28,7 +28,7 @@ Explorer needs Git capabilities without binding the user interface (UI) directly
 | `tools/git_tool.sh` + `tools/git_tool.mjs` | MCP tool dispatch and request orchestration |
 | `lib/git-service.mjs` | low-level Git execution and repository operations |
 | `lib/github-auth.mjs` | GitHub device flow, auth status, metadata persistence |
-| `lib/dpu-secret-client.mjs` | per-user secret storage bridge to `dpuAgent` |
+| `lib/secret-store-client.mjs` | generic `secret-store/v1` client (router-mediated, signed caller assertion) |
 | `IDE-plugins/git-tool-button/` | Explorer-facing Git UI plugin |
 
 ## Authentication Model
@@ -71,7 +71,7 @@ Primary tools include:
 2. `gitAgent` resolves and validates repository paths against the workspace.
 3. `git_info` accepts file or directory targets and returns both the repository root and the repository-relative path for the selected target.
 4. For authenticated remote operations, `gitAgent` uses:
-   - `metadata.authInfo.github.accessToken` when already supplied by the caller, otherwise
+   - `metadata.invocation -> user/github auth context` when already supplied through the verified routed invocation, otherwise
    - the per-user token stored in DPU Secrets.
 5. GitHub device-flow completion writes the token into DPU and keeps only metadata in local state.
 6. Manual token save writes the token into DPU and updates local connection metadata with a non-sensitive source marker.
