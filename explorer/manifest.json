@@ -32,8 +32,8 @@
         "tasksAgent global",
         "llmAssistant global",
         "multimedia global",
-        "webassist/webCli global",
-        "webassist/webAdmin global"
+        "webassist/webCli",
+        "webassist/webAdmin"
     ],
     "applicationPlugins": {
         "git": true,
