@@ -24,8 +24,6 @@
         ]
     },
     "enable": [
-        "postgres",
-        "keycloak",
         "gitAgent global",
         "dpuAgent global",
         "soplangAgent global",
