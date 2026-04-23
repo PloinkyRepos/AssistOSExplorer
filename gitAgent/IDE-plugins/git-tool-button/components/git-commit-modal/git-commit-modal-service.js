@@ -51,6 +51,10 @@ export function createGitCommitService({ callTool, callAgentTool }) {
         startGithubDeviceFlow: () => callGitAuthJson('git_auth_begin'),
         pollGithubDeviceFlow: () => callGitAuthJson('git_auth_poll'),
         disconnectGithubAuth: () => callGitAuthJson('git_auth_disconnect'),
-        storeManualGitToken: (token) => callGitAuthJson('git_auth_store_token', { token })
+        storeManualGitToken: (token) => callGitAuthJson('git_auth_store_token', { token }),
+        getStoredGitToken: async () => {
+            const result = await callGitAuthJson('git_auth_status');
+            return result?.token || '';
+        }
     };
 }

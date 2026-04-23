@@ -29,6 +29,7 @@ export function createCredentialsActions(ctx) {
         updateIdentityPrompt,
         updateAuthPrompt,
         refreshAll,
+        refreshAfterGitOperation,
         pullRepos,
         pullSelectedRepos,
         push,
@@ -81,8 +82,12 @@ export function createCredentialsActions(ctx) {
             state.githubAuth?.connected
             && state.githubAuth?.connection?.source === 'github'
         );
+        const tokenStored = Boolean(state.githubAuth?.tokenStored);
         if (githubConnected && !currentToken && !state.credentialsDirty) {
             return 'github';
+        }
+        if (tokenStored && !currentToken && !state.credentialsDirty && rawAuthMethod === 'token') {
+            return 'token';
         }
         return rawAuthMethod;
     };
@@ -94,6 +99,7 @@ export function createCredentialsActions(ctx) {
     const showGitAuthPrompt = (repoPath, pendingAction, { message = '', authMethod = null } = {}) => {
         const state = getState();
         const nextAuthMethod = normalizeGitAuthMethod(authMethod || getAuthMethod());
+        const tokenStored = Boolean(state.githubAuth?.tokenStored);
         setRememberedGitAuthMethod(nextAuthMethod);
         applyState({
             pendingAction: pendingAction || null,
@@ -118,7 +124,7 @@ export function createCredentialsActions(ctx) {
                 statusMessage = 'GitHub sign-in is not available in this workspace.';
             } else if (nextAuthMethod === 'github') {
                 statusMessage = 'Authentication required. Connect GitHub to continue.';
-            } else if (state.githubAuth?.connected) {
+            } else if (tokenStored) {
                 statusMessage = 'A token is already saved. You can replace it, or switch to GitHub instead.';
             } else {
                 statusMessage = 'Authentication required. Enter a token or switch to GitHub.';
@@ -309,12 +315,14 @@ export function createCredentialsActions(ctx) {
                 if (pending.mode === 'batch') {
                     const list = Array.isArray(pending.repoPaths) ? pending.repoPaths : [];
                     await pushRepos(list, { token });
+                    await refreshAfterGitOperation({ keepStatus: true });
                 } else {
                     await push({ silent: false, token });
                 }
             } else if (pending?.type === 'pull') {
                 const list = Array.isArray(pending.repoPaths) ? pending.repoPaths : [];
                 await pullRepos(list, { token });
+                await refreshAfterGitOperation({ keepStatus: true });
             }
         } catch (error) {
             setStatusLine(normalizeErrorMessage(error), true);
@@ -358,7 +366,7 @@ export function createCredentialsActions(ctx) {
         };
     };
 
-    const getCredentialsRuntimeState = (state, draft) => {
+    const getCredentialsRuntimeState = async (state, draft) => {
         const tokenStored = Boolean(state.githubAuth?.tokenStored);
         const githubConnected = Boolean(
             state.githubAuth?.connected
@@ -370,7 +378,15 @@ export function createCredentialsActions(ctx) {
         const authRequired = Boolean(state.authPrompt?.visible);
         const emailPattern = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
         const identityValid = Boolean(draft.name && draft.email && emailPattern.test(draft.email));
-        const effectiveToken = draft.usingGithub ? null : (draft.token || null);
+        let effectiveToken = draft.usingGithub ? null : (draft.token || null);
+        if (!effectiveToken && tokenStored && !draft.usingGithub) {
+            try {
+                const storedToken = await service.getStoredGitToken();
+                effectiveToken = storedToken || null;
+            } catch {
+                effectiveToken = null;
+            }
+        }
         const authValid = draft.usingGithub
             ? Boolean(githubConnected || effectiveToken)
             : Boolean(effectiveToken || tokenStored);
@@ -648,6 +664,7 @@ export function createCredentialsActions(ctx) {
                 if (pending.mode === 'batch') {
                     const list = Array.isArray(pending.repoPaths) ? pending.repoPaths : [];
                     await pushRepos(list, { token: effectiveToken || null });
+                    await refreshAfterGitOperation({ keepStatus: true });
                 } else {
                     await push({ silent: false, token: effectiveToken || null });
                 }
@@ -655,6 +672,7 @@ export function createCredentialsActions(ctx) {
                 if (pending.mode === 'batch') {
                     const list = Array.isArray(pending.repoPaths) ? pending.repoPaths : [];
                     await pullRepos(list, { token: effectiveToken || null });
+                    await refreshAfterGitOperation({ keepStatus: true });
                 } else {
                     await pullSelectedRepos();
                 }
@@ -686,7 +704,7 @@ export function createCredentialsActions(ctx) {
             const state = getState();
             const draft = collectCredentialsDraft(state, payload);
             const baselineState = getCredentialsBaselineState(state, draft);
-            const runtimeState = getCredentialsRuntimeState(state, draft);
+            const runtimeState = await getCredentialsRuntimeState(state, draft);
 
             if (
                 !state.credentialsDirty
