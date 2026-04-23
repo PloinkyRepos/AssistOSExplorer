@@ -14,11 +14,11 @@ binding lookup and no MCP session setup.
 `lib/secret-store-client.mjs`:
 
 - resolves the DPU principal from the `PLOINKY_DPU_PRINCIPAL` env var,
-  defaulting to `agent:AssistOSExplorer/dpuAgent` (canonical
-  `agent:<repo>/<agent>` form — Ploinky derives this from the installed
-  agent ref)
+  defaulting to the sibling canonical principal derived from
+  `PLOINKY_AGENT_PRINCIPAL` (for example `agent:AchillesIDE/dpuAgent`
+  when the caller is `agent:AchillesIDE/gitAgent`)
 - requires `PLOINKY_AGENT_PRINCIPAL` to already be set to the canonical
-  caller principal (`agent:AssistOSExplorer/gitAgent` in this workspace);
+  caller principal (`agent:AchillesIDE/gitAgent` in this workspace);
   there is no short-form `agent:<agent>` fallback
 - resolves the DPU route name from `PLOINKY_DPU_ROUTE`, defaulting to
   `dpuAgent`
