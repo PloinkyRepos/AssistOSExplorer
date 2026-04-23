@@ -32,7 +32,7 @@ async function loadWireSign() {
  * Env contract (set by AgentServer/ploinky start scripts):
  *
  *   PLOINKY_ROUTER_URL            - e.g. http://127.0.0.1:8080
- *   PLOINKY_AGENT_PRINCIPAL       - e.g. agent:AssistOSExplorer/gitAgent
+ *   PLOINKY_AGENT_PRINCIPAL       - e.g. agent:AchillesIDE/gitAgent
  *   PLOINKY_AGENT_PRIVATE_KEY_PEM - the agent's Ed25519 private key (PEM)
  *   PLOINKY_AGENT_PRIVATE_KEY_PATH - alternative file-based source
  *   PLOINKY_DPU_ROUTE             - optional explicit DPU MCP route name
@@ -42,7 +42,6 @@ async function loadWireSign() {
 const CALLER_ASSERTION_HEADER = 'x-ploinky-caller-assertion';
 const USER_CONTEXT_HEADER = 'x-ploinky-user-context';
 const DEFAULT_DPU_ROUTE = 'dpuAgent';
-const DEFAULT_DPU_PRINCIPAL = 'agent:AssistOSExplorer/dpuAgent';
 
 function isNonEmptyString(value) {
   return typeof value === 'string' && value.trim().length > 0;
@@ -85,9 +84,23 @@ function resolveConsumerPrincipal() {
   throw new Error('PLOINKY_AGENT_PRINCIPAL is required and must use canonical agent:<repo>/<agent> form.');
 }
 
+function deriveSiblingAgentPrincipal(consumerPrincipal, siblingAgentName) {
+  const normalizedConsumer = String(consumerPrincipal || '').trim();
+  const normalizedSibling = String(siblingAgentName || '').trim();
+  const match = normalizedConsumer.match(/^agent:([^/]+)\/([^/]+)$/);
+  if (!match || !normalizedSibling) {
+    return '';
+  }
+  return `agent:${match[1]}/${normalizedSibling}`;
+}
+
 function resolveDpuPrincipal(explicitPrincipal = '') {
   const value = String(explicitPrincipal || process.env.PLOINKY_DPU_PRINCIPAL || '').trim();
-  return value || DEFAULT_DPU_PRINCIPAL;
+  if (value) return value;
+  const consumerPrincipal = resolveConsumerPrincipal();
+  const derived = deriveSiblingAgentPrincipal(consumerPrincipal, DEFAULT_DPU_ROUTE);
+  if (derived) return derived;
+  throw new Error('Unable to resolve DPU principal from PLOINKY_AGENT_PRINCIPAL. Set PLOINKY_DPU_PRINCIPAL explicitly.');
 }
 
 function extractUserContextTokenFromAuthInfo(authInfo) {

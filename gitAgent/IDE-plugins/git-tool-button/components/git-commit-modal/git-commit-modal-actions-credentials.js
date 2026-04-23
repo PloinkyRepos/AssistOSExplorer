@@ -682,77 +682,82 @@ export function createCredentialsActions(ctx) {
     };
 
     const saveGitCredentials = async (payload = {}) => {
-        const state = getState();
-        const draft = collectCredentialsDraft(state, payload);
-        const baselineState = getCredentialsBaselineState(state, draft);
-        const runtimeState = getCredentialsRuntimeState(state, draft);
+        try {
+            const state = getState();
+            const draft = collectCredentialsDraft(state, payload);
+            const baselineState = getCredentialsBaselineState(state, draft);
+            const runtimeState = getCredentialsRuntimeState(state, draft);
 
-        if (
-            !state.credentialsDirty
-            && !state.autocommitDirty
-            && !state.autoresolveDirty
-            && !state.credentialsGate
-            && !state.pendingAction
-            && !baselineState.hasPersistableChanges
-        ) {
-            return closeCredentialsWithoutChanges(draft);
-        }
+            if (
+                !state.credentialsDirty
+                && !state.autocommitDirty
+                && !state.autoresolveDirty
+                && !state.credentialsGate
+                && !state.pendingAction
+                && !baselineState.hasPersistableChanges
+            ) {
+                return closeCredentialsWithoutChanges(draft);
+            }
 
-        applyCredentialsDraft(state, draft);
+            applyCredentialsDraft(state, draft);
 
-        if (!ensureIdentityIsValid(state, draft, runtimeState)) {
-            return false;
-        }
+            if (!ensureIdentityIsValid(state, draft, runtimeState)) {
+                return false;
+            }
 
-        if (!ensureAuthIsReady(state, draft, runtimeState)) {
-            return false;
-        }
+            if (!ensureAuthIsReady(state, draft, runtimeState)) {
+                return false;
+            }
 
-        if (!state.credentialsValidated && !state.credentialsDirty && (state.autocommitDirty || state.autoresolveDirty) && !draft.validateOnly) {
-            return persistSettingsOnly(draft);
-        }
+            if (!state.credentialsValidated && !state.credentialsDirty && (state.autocommitDirty || state.autoresolveDirty) && !draft.validateOnly) {
+                return persistSettingsOnly(draft);
+            }
 
-        if (!runtimeState.pending?.type && !draft.validateOnly) {
+            if (!runtimeState.pending?.type && !draft.validateOnly) {
+                const persisted = await persistCredentialsDraft(state, draft, runtimeState);
+                if (!persisted) {
+                    return false;
+                }
+                const finalizeState = finalizeCredentialsSave(state, draft, runtimeState, persisted);
+                applySavedStatus(draft, runtimeState, persisted);
+                if (finalizeState.wasGate && persisted.identitySaved) {
+                    await refreshAll({ force: true });
+                }
+                return true;
+            }
+
+            if (!state.credentialsValidated && runtimeState.pending?.type && runtimeState.identityValid && runtimeState.authValid && !draft.validateOnly) {
+                applyState({ credentialsValidated: true });
+            } else if (!state.credentialsValidated && !runtimeState.authValid && !draft.validateOnly && !runtimeState.canSaveGithubSetup) {
+                applyState({ credentialsValidated: false }, { silent: true });
+            } else if (!state.credentialsValidated && !runtimeState.canSaveGithubSetup) {
+                return validateCredentialsForSave(state, draft, runtimeState);
+            }
+            if (draft.validateOnly) {
+                setStatusLine('Credentials already validated.');
+                return false;
+            }
+
             const persisted = await persistCredentialsDraft(state, draft, runtimeState);
             if (!persisted) {
                 return false;
             }
             const finalizeState = finalizeCredentialsSave(state, draft, runtimeState, persisted);
+
+            if (await resumePendingGitAction(runtimeState.pending, runtimeState.effectiveToken)) {
+                return true;
+            }
+
             applySavedStatus(draft, runtimeState, persisted);
+
             if (finalizeState.wasGate && persisted.identitySaved) {
                 await refreshAll({ force: true });
             }
             return true;
-        }
-
-        if (!state.credentialsValidated && runtimeState.pending?.type && runtimeState.identityValid && runtimeState.authValid && !draft.validateOnly) {
-            applyState({ credentialsValidated: true });
-        } else if (!state.credentialsValidated && !runtimeState.authValid && !draft.validateOnly && !runtimeState.canSaveGithubSetup) {
-            applyState({ credentialsValidated: false }, { silent: true });
-        } else if (!state.credentialsValidated && !runtimeState.canSaveGithubSetup) {
-            return validateCredentialsForSave(state, draft, runtimeState);
-        }
-        if (draft.validateOnly) {
-            setStatusLine('Credentials already validated.');
+        } catch (error) {
+            setStatusLine(normalizeErrorMessage(error) || 'Unable to save credentials.', true);
             return false;
         }
-
-        const persisted = await persistCredentialsDraft(state, draft, runtimeState);
-        if (!persisted) {
-            return false;
-        }
-        const finalizeState = finalizeCredentialsSave(state, draft, runtimeState, persisted);
-
-        if (await resumePendingGitAction(runtimeState.pending, runtimeState.effectiveToken)) {
-            return true;
-        }
-
-        applySavedStatus(draft, runtimeState, persisted);
-
-        if (finalizeState.wasGate && persisted.identitySaved) {
-            await refreshAll({ force: true });
-        }
-        return true;
     };
 
     const ensureGitIdentityOrPrompt = async (repoPath, pendingAction) => {

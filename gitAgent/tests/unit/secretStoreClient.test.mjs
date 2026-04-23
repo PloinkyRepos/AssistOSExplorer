@@ -69,10 +69,9 @@ test('secret-store client sends a direct signed tools/call request without MCP s
   const wireSignModule = fileURLToPath(new URL('../../../../ploinky/Agent/lib/wireSign.mjs', import.meta.url));
   await withEnv({
     PLOINKY_ROUTER_URL: `http://127.0.0.1:${port}`,
-    PLOINKY_AGENT_PRINCIPAL: 'agent:AssistOSExplorer/gitAgent',
+    PLOINKY_AGENT_PRINCIPAL: 'agent:AchillesIDE/gitAgent',
     PLOINKY_AGENT_PRIVATE_KEY_PATH: privateKeyPath,
     PLOINKY_WIRE_SIGN_MODULE: wireSignModule,
-    PLOINKY_DPU_PRINCIPAL: 'agent:AssistOSExplorer/dpuAgent',
     PLOINKY_DPU_ROUTE: 'dpuAgent'
   }, async () => {
     const client = createSecretStoreClient({
@@ -100,10 +99,10 @@ test('secret-store client sends a direct signed tools/call request without MCP s
 
   const verified = verifyCallerAssertion(String(request.headers['x-ploinky-caller-assertion'] || ''), {
     resolveCallerPublicKey: () => ({ publicPem }),
-    expectedAudience: 'agent:AssistOSExplorer/dpuAgent',
+    expectedAudience: 'agent:AchillesIDE/dpuAgent',
     bodyObject: { tool: 'secret_put', arguments: { key: 'API_TOKEN', value: 'secret-value' } }
   });
-  assert.equal(verified.payload.iss, 'agent:AssistOSExplorer/gitAgent');
+  assert.equal(verified.payload.iss, 'agent:AchillesIDE/gitAgent');
   assert.equal(verified.payload.user_context_token, 'user-context-token');
 });
 

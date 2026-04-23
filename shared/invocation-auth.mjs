@@ -16,6 +16,8 @@ export function authInfoFromInvocation(grant) {
     };
   }
   out.invocation = {
+    issuer: String(grant.iss || ''),
+    subject: String(grant.sub || ''),
     scope: Array.isArray(grant.scope) ? [...grant.scope] : [],
     tool: String(grant.tool || ''),
     contract: String(grant.contract || ''),

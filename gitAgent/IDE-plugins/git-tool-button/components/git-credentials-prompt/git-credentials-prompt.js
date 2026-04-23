@@ -491,6 +491,11 @@ export class GitCredentialsPrompt {
         if (this.tokenInput && this.tokenInput.value !== this.state.token) {
             this.tokenInput.value = this.state.token;
         }
+        if (this.tokenInput) {
+            this.tokenInput.placeholder = this.state.tokenStored && !this.state.token
+                ? '****'
+                : 'Enter a new token to be stored';
+        }
         if (this.tokenStoredNotice) {
             this.tokenStoredNotice.hidden = !(this.state.authMethod === 'token' && this.state.tokenStored);
         }
@@ -652,7 +657,6 @@ export class GitCredentialsPrompt {
     }
 
     canSaveCredentials() {
-        if (!this.hasValidIdentity()) return false;
         if (this.state.authMethod === 'github' && !this.state.githubConnected) {
             return Boolean(this.state.githubConfigured);
         }
@@ -699,9 +703,7 @@ export class GitCredentialsPrompt {
         }
         return '';
     }
-
     updateValidationState() {
-        const valid = this.isCredentialsValid();
         const savable = this.canSaveCredentials();
         if (this.saveButton) {
             this.saveButton.disabled = false;

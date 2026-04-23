@@ -151,7 +151,8 @@ export function createGitCommitRepo(ctx) {
         const key = `${repoPath}::${prefix}`;
         const expanded = { ...(state.treeExpandedByRepo || {}) };
         const current = isTreeFolderExpanded(repoPath, prefix);
-        expanded[key] = !current;
+        const isExpandedInUi = String(elementNode?.textContent || '').includes('▾');
+        expanded[key] = current === undefined ? !isExpandedInUi : !current;
         state.treeExpandedByRepo = expanded;
         renderRepoOverviews(state.repoOverviews);
     };

@@ -1127,11 +1127,16 @@ export class GitCommitModal {
     }
 
     async saveGitCredentials(payload = {}) {
-        const shouldClose = await this.actions.saveGitCredentials(payload);
-        if (shouldClose) {
-            this.closeCredentials();
+        try {
+            const shouldClose = await this.actions.saveGitCredentials(payload);
+            if (shouldClose) {
+                this.closeCredentials();
+            }
+            return shouldClose;
+        } catch (error) {
+            this.setStatusLine(normalizeErrorMessage(error) || 'Unable to save credentials.', true);
+            return false;
         }
-        return shouldClose;
     }
 
     cancelGitCredentials() {
