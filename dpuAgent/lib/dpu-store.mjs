@@ -984,6 +984,11 @@ export async function putSecret(authInfo = null, { key, value }) {
         state.secrets[normalizedKey] = secret;
         ctx.dirty = true;
       }
+      // Owners are represented as `write-access` by default; explicitly grant
+      // `read` so the owner can retrieve secret values in follow-up calls.
+      if (setPermissionRole(permissionsManifest, 'secret', normalizedKey, actor.principalId, 'read')) {
+        ctx.permissionsDirty = true;
+      }
       await upsertSecretsFileValue(normalizedKey, normalizedValue);
       secret.updatedAt = nowIso();
       ctx.dirty = true;

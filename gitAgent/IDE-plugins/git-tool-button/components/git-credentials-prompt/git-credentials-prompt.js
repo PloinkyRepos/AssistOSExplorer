@@ -41,6 +41,7 @@ export class GitCredentialsPrompt {
         this.emailInput = this.element.querySelector('#gitCredentialsEmail');
         this.authMethodInputs = Array.from(this.element.querySelectorAll('input[name="gitCredentialsAuthMethod"]'));
         this.tokenInput = this.element.querySelector('#gitCredentialsToken');
+        this.authAvailability = this.element.querySelector('#gitAuthAvailability');
         this.githubPanel = this.element.querySelector('#gitGithubPanel');
         this.tokenPanel = this.element.querySelector('#gitTokenPanel');
         this.tokenStoredNotice = this.element.querySelector('#gitTokenStoredNotice');
@@ -493,7 +494,7 @@ export class GitCredentialsPrompt {
         }
         if (this.tokenInput) {
             this.tokenInput.placeholder = this.state.tokenStored && !this.state.token
-                ? '****'
+                ? '********************'
                 : 'Enter a new token to be stored';
         }
         if (this.tokenStoredNotice) {
@@ -501,8 +502,18 @@ export class GitCredentialsPrompt {
         }
         if (this.tokenHint) {
             this.tokenHint.textContent = this.state.tokenStored
-                ? 'Enter a new personal access token only if you want to replace the stored one.'
+                ? 'A token is saved on backend. Leave input empty to keep it, or enter a new token to replace it.'
                 : 'Use a personal access token for HTTPS remotes when you do not want to use GitHub sign-in.';
+        }
+        if (this.authAvailability) {
+            const tokenStored = Boolean(this.state.tokenStored);
+            if (tokenStored) {
+                this.authAvailability.hidden = false;
+                this.authAvailability.textContent = 'Token exists on backend and is used for Git operations.';
+            } else {
+                this.authAvailability.hidden = true;
+                this.authAvailability.textContent = '';
+            }
         }
         if (this.githubStatus) {
             if (this.state.githubConnected) {
@@ -706,12 +717,8 @@ export class GitCredentialsPrompt {
     updateValidationState() {
         const savable = this.canSaveCredentials();
         if (this.saveButton) {
-            this.saveButton.disabled = false;
-            const message = savable
-                ? (this.state.credentialsDirty || this.state.autocommitDirty || this.state.autoresolveDirty
-                    ? ''
-                    : '')
-                : this.getValidationMessage();
+            this.saveButton.disabled = !savable;
+            const message = savable ? '' : this.getValidationMessage();
             if (message) {
                 this.saveButton.title = message;
             } else {

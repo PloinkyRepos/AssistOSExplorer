@@ -420,10 +420,11 @@ export class GitCommitModal {
 
     applyGithubAuthError(error, { silent = false } = {}) {
         const message = normalizeErrorMessage(error);
+        const prevGithubAuth = this.state.githubAuth || {};
         this.updateGithubAuthState({
-            ...this.state.githubAuth,
+            ...prevGithubAuth,
             connected: false,
-            tokenStored: false,
+            tokenStored: Boolean(prevGithubAuth.tokenStored),
             pending: null,
             error: message
         }, { silent });

@@ -77,19 +77,18 @@ export function createGitOpsActions(ctx) {
     const getAuthContext = (state = getState(), tokenOverride = null) => {
         const authMethod = getAuthMethod(state);
         const githubConnected = Boolean(state.githubAuth?.connected && state.githubAuth?.connection?.source === 'github');
-        const token = String(tokenOverride || '').trim() || String(state.authPrompt?.token || '').trim();
+        const hasOverrideToken = Boolean(String(tokenOverride || '').trim());
+        const tokenStored = Boolean(state.githubAuth?.tokenStored || hasOverrideToken);
         return {
             authMethod,
             githubConnected,
             usingGithub: authMethod === 'github',
-            token
+            tokenStored
         };
     };
 
-    const gitPushWithToken = async (repoPath, token) => {
+    const gitPushWithToken = async (repoPath, _token = null) => {
         const payload = { path: repoPath };
-        const cleanToken = String(token || '').trim();
-        if (cleanToken) payload.token = cleanToken;
         await service.gitPush(payload);
     };
 
@@ -109,10 +108,8 @@ export function createGitOpsActions(ctx) {
         }
     };
 
-    const gitPullWithToken = async (repoPath, token) => {
+    const gitPullWithToken = async (repoPath, _token = null) => {
         const payload = { path: repoPath, rebase: false, ffOnly: false };
-        const cleanToken = String(token || '').trim();
-        if (cleanToken) payload.token = cleanToken;
         await service.gitPull(payload);
     };
 
@@ -134,7 +131,7 @@ export function createGitOpsActions(ctx) {
                 continue;
             }
             try {
-                await gitPushWithToken(repoPath, auth.token);
+                await gitPushWithToken(repoPath);
                 pushedRepos += 1;
                 pushedCommits += Math.max(0, Number(ahead) || 0);
             } catch (error) {
@@ -145,7 +142,7 @@ export function createGitOpsActions(ctx) {
                         showGitAuthPrompt(repoPath, { type: 'push', mode: 'batch', repoPaths: list }, { message: human, authMethod: 'github' });
                         return { ok: false, pushedRepos, pushedCommits, skippedRepos };
                     }
-                    if (!auth.usingGithub && !auth.token) {
+                    if (!auth.usingGithub && !auth.tokenStored) {
                         showGitAuthPrompt(repoPath, { type: 'push', mode: 'batch', repoPaths: list }, { message: human, authMethod: 'token' });
                         return { ok: false, pushedRepos, pushedCommits, skippedRepos };
                     }
@@ -202,12 +199,12 @@ export function createGitOpsActions(ctx) {
                     + normalized.counts.unstaged
                     + normalized.counts.untracked) > 0;
                 if (hasLocalChanges) {
-                    const autoOk = await pullWithAutoStash(repoPath, auth.token, list);
+                    const autoOk = await pullWithAutoStash(repoPath, auth.tokenStored ? '__backend__' : '', list);
                     if (!autoOk) return { ok: false, pulledRepos };
                     pulledRepos += 1;
                     continue;
                 }
-                await gitPullWithToken(repoPath, auth.token);
+                await gitPullWithToken(repoPath);
                 pulledRepos += 1;
             } catch (error) {
                 const msg = humanizeGitError(normalizeErrorMessage(error), { action: 'pull' });
@@ -230,7 +227,7 @@ export function createGitOpsActions(ctx) {
                         );
                         return { ok: false, pulledRepos };
                     }
-                    if (!auth.usingGithub && !auth.token) {
+                    if (!auth.usingGithub && !auth.tokenStored) {
                         showGitAuthPrompt(
                             repoPath,
                             pendingAction?.type ? pendingAction : { type: 'pull', mode: 'batch', repoPaths: list },
@@ -252,7 +249,7 @@ export function createGitOpsActions(ctx) {
                     return { ok: false, pulledRepos };
                 }
                 if (isGitPullBlockedError(msg)) {
-                    const autoOk = await pullWithAutoStash(repoPath, auth.token, list);
+                    const autoOk = await pullWithAutoStash(repoPath, auth.tokenStored ? '__backend__' : '', list);
                     if (!autoOk) return { ok: false, pulledRepos };
                     pulledRepos += 1;
                     continue;
@@ -354,7 +351,7 @@ export function createGitOpsActions(ctx) {
                     if (shouldPush) {
                         const auth = getAuthContext(getState());
                         try {
-                            await gitPushWithToken(repoPath, auth.token);
+                            await gitPushWithToken(repoPath);
                             pushSummary.pushedRepos += 1;
                             pushSummary.pushedCommits += 1;
                         } catch (error) {
@@ -364,7 +361,7 @@ export function createGitOpsActions(ctx) {
                                     showGitAuthPrompt(repoPath, { type: 'push', mode: 'batch', repoPaths: [repoPath] }, { message: msg, authMethod: 'github' });
                                     return;
                                 }
-                                if (!auth.usingGithub && !auth.token) {
+                                if (!auth.usingGithub && !auth.tokenStored) {
                                     showGitAuthPrompt(repoPath, { type: 'push', mode: 'batch', repoPaths: [repoPath] }, { message: msg, authMethod: 'token' });
                                     return;
                                 }
@@ -496,7 +493,7 @@ export function createGitOpsActions(ctx) {
                 for (const repoPath of selected) {
                     try {
                         const aheadCount = Math.max(0, Number(await getAheadCountForRepo(repoPath)) || 0);
-                        await gitPushWithToken(repoPath, auth.token);
+                        await gitPushWithToken(repoPath);
                         pushedRepos += 1;
                         pushedCommits += Math.max(1, aheadCount);
                     } catch (error) {
@@ -508,7 +505,7 @@ export function createGitOpsActions(ctx) {
                                 dispatchAutocommitStop();
                                 return;
                             }
-                            if (!auth.usingGithub && !auth.token) {
+                            if (!auth.usingGithub && !auth.tokenStored) {
                                 showGitAuthPrompt(repoPath, { type: 'sync', mode: 'batch', repoPaths: selected }, { message: human, authMethod: 'token' });
                                 dispatchAutocommitStop();
                                 return;

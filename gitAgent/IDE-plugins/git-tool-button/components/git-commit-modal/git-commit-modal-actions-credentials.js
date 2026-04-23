@@ -366,7 +366,7 @@ export function createCredentialsActions(ctx) {
         };
     };
 
-    const getCredentialsRuntimeState = async (state, draft) => {
+    const getCredentialsRuntimeState = (state, draft) => {
         const tokenStored = Boolean(state.githubAuth?.tokenStored);
         const githubConnected = Boolean(
             state.githubAuth?.connected
@@ -378,18 +378,10 @@ export function createCredentialsActions(ctx) {
         const authRequired = Boolean(state.authPrompt?.visible);
         const emailPattern = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
         const identityValid = Boolean(draft.name && draft.email && emailPattern.test(draft.email));
-        let effectiveToken = draft.usingGithub ? null : (draft.token || null);
-        if (!effectiveToken && tokenStored && !draft.usingGithub) {
-            try {
-                const storedToken = await service.getStoredGitToken();
-                effectiveToken = storedToken || null;
-            } catch {
-                effectiveToken = null;
-            }
-        }
+        const hasInputToken = Boolean(String(draft.token || '').trim());
         const authValid = draft.usingGithub
-            ? Boolean(githubConnected || effectiveToken)
-            : Boolean(effectiveToken || tokenStored);
+            ? Boolean(githubConnected)
+            : Boolean(hasInputToken || tokenStored);
         const canSaveGithubSetup = draft.usingGithub
             && githubConfigured
             && !githubConnected
@@ -402,7 +394,7 @@ export function createCredentialsActions(ctx) {
             identityRequired,
             authRequired,
             identityValid,
-            effectiveToken,
+            hasInputToken,
             authValid,
             canSaveGithubSetup
         };
@@ -532,8 +524,7 @@ export function createCredentialsActions(ctx) {
             await service.gitPull({
                 path: validationRepoPath,
                 rebase: false,
-                ffOnly: false,
-                token: runtimeState.effectiveToken || null
+                ffOnly: false
             });
         } catch (error) {
             const msg = normalizeErrorMessage(error);
@@ -571,25 +562,28 @@ export function createCredentialsActions(ctx) {
     const persistCredentialsDraft = async (state, draft, runtimeState) => {
         let identitySaved = false;
         let tokenSaved = false;
-        let repoPath = state.identityPrompt?.repoPath;
-        if (runtimeState.identityValid && (runtimeState.identityRequired || runtimeState.identityValid)) {
-            if (!repoPath) {
-                repoPath = await resolveIdentityRepoPath();
-            }
-            if (!repoPath) {
-                if (state.credentialsGate) {
-                    setStatusLine('Select a file, folder, or repository first.', true);
-                    return null;
-                }
-            } else {
-                setRememberedGitIdentity({ name: draft.name, email: draft.email });
-                identitySaved = true;
-            }
+        if (runtimeState.identityValid) {
+            setRememberedGitIdentity({ name: draft.name, email: draft.email });
+            identitySaved = true;
         }
 
-        if (!draft.usingGithub && runtimeState.authValid && (runtimeState.authRequired || runtimeState.authValid)) {
-            if (runtimeState.effectiveToken) {
-                await service.storeManualGitToken(runtimeState.effectiveToken);
+        if (!draft.usingGithub && runtimeState.authValid) {
+            if (runtimeState.hasInputToken) {
+                const storeResponse = await service.storeManualGitToken(String(draft.token || '').trim());
+                let github = storeResponse?.github || null;
+                if (!github) {
+                    const statusResponse = await service.githubAuthStatus();
+                    github = statusResponse?.github || null;
+                }
+                if (github) {
+                    applyState({
+                        githubAuth: {
+                            ...state.githubAuth,
+                            ...github,
+                            error: ''
+                        }
+                    }, { silent: true });
+                }
             }
             tokenSaved = true;
         } else if (draft.usingGithub && runtimeState.authValid) {
@@ -643,7 +637,7 @@ export function createCredentialsActions(ctx) {
         return { wasGate };
     };
 
-    const resumePendingGitAction = async (pending, effectiveToken) => {
+    const resumePendingGitAction = async (pending) => {
         if (!pending?.type) return false;
         if (pending.type === 'pull') {
             setStatusLine('Retrying pull…');
@@ -659,19 +653,19 @@ export function createCredentialsActions(ctx) {
                 await commitSelectedRepos();
             } else if (pending.type === 'sync') {
                 const list = Array.isArray(pending.repoPaths) ? pending.repoPaths : null;
-                await syncSelectedRepos?.({ token: effectiveToken || null, repoPaths: list });
+                await syncSelectedRepos?.({ repoPaths: list });
             } else if (pending.type === 'push') {
                 if (pending.mode === 'batch') {
                     const list = Array.isArray(pending.repoPaths) ? pending.repoPaths : [];
-                    await pushRepos(list, { token: effectiveToken || null });
+                    await pushRepos(list);
                     await refreshAfterGitOperation({ keepStatus: true });
                 } else {
-                    await push({ silent: false, token: effectiveToken || null });
+                    await push({ silent: false });
                 }
             } else if (pending.type === 'pull') {
                 if (pending.mode === 'batch') {
                     const list = Array.isArray(pending.repoPaths) ? pending.repoPaths : [];
-                    await pullRepos(list, { token: effectiveToken || null });
+                    await pullRepos(list);
                     await refreshAfterGitOperation({ keepStatus: true });
                 } else {
                     await pullSelectedRepos();
@@ -704,7 +698,7 @@ export function createCredentialsActions(ctx) {
             const state = getState();
             const draft = collectCredentialsDraft(state, payload);
             const baselineState = getCredentialsBaselineState(state, draft);
-            const runtimeState = await getCredentialsRuntimeState(state, draft);
+            const runtimeState = getCredentialsRuntimeState(state, draft);
 
             if (
                 !state.credentialsDirty
@@ -762,7 +756,7 @@ export function createCredentialsActions(ctx) {
             }
             const finalizeState = finalizeCredentialsSave(state, draft, runtimeState, persisted);
 
-            if (await resumePendingGitAction(runtimeState.pending, runtimeState.effectiveToken)) {
+            if (await resumePendingGitAction(runtimeState.pending)) {
                 return true;
             }
 

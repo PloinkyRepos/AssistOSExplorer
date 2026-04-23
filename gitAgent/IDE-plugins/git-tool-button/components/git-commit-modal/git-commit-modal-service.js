@@ -1,6 +1,16 @@
 import { parseJsonToolResult } from "./git-commit-modal-utils.js";
 
 export function createGitCommitService({ callTool, callAgentTool }) {
+    const extractToolText = (result) => {
+        if (!result) return '';
+        if (typeof result === 'string') return result;
+        const blocks = Array.isArray(result.content) ? result.content : [];
+        const textBlock = blocks.find((block) => block?.type === 'text' && typeof block.text === 'string');
+        if (textBlock?.text) return String(textBlock.text || '').trim();
+        if (typeof result.text === 'string') return String(result.text || '').trim();
+        return '';
+    };
+
     const compact = (payload) => {
         const next = {};
         for (const [key, value] of Object.entries(payload || {})) {
@@ -9,8 +19,20 @@ export function createGitCommitService({ callTool, callAgentTool }) {
         }
         return next;
     };
+
     const callGitAuthJson = async (toolName, args = {}) => {
-        const payload = parseJsonToolResult(await callAgentTool('gitAgent', toolName, args, { raw: true })) || {};
+        const rawResult = await callAgentTool('gitAgent', toolName, args, { raw: true });
+        if (rawResult?.isError) {
+            throw new Error(extractToolText(rawResult) || 'git_auth_request_failed');
+        }
+        const payload = parseJsonToolResult(rawResult);
+        if (!payload || typeof payload !== 'object') {
+            const message = extractToolText(rawResult);
+            if (message) {
+                throw new Error(message);
+            }
+            throw new Error('git_auth_request_failed');
+        }
         if (payload?.ok === false) {
             throw new Error(String(payload?.message || payload?.error || 'git_auth_request_failed'));
         }
