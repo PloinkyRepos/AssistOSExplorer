@@ -274,7 +274,7 @@ export class GitCommitModal {
             await this.refreshGithubAuthStatus({ silent: true }).catch(() => {});
             const remembered = getRememberedGitIdentity();
             const githubUser = this.state.githubAuth?.connection?.user || {};
-            const githubName = String(githubUser?.name || githubUser?.login || '').trim();
+            const githubName = String(githubUser?.login || githubUser?.name || '').trim();
             const githubEmail = String(githubUser?.email || '').trim();
             const initialName = remembered?.name || githubName || '';
             const initialEmail = remembered?.email || githubEmail || '';
@@ -351,7 +351,7 @@ export class GitCommitModal {
     async ensureCredentialsGate() {
         const remembered = getRememberedGitIdentity();
         const githubUser = this.state.githubAuth?.connection?.user || {};
-        const githubName = String(githubUser?.name || githubUser?.login || '').trim();
+        const githubName = String(githubUser?.login || githubUser?.name || '').trim();
         const githubEmail = String(githubUser?.email || '').trim();
         const name = remembered.name || githubName || '';
         const email = remembered.email || githubEmail || '';

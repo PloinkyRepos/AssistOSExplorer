@@ -384,7 +384,7 @@ export function getRememberedGitIdentity() {
 
 export function getGithubIdentityFallback(user = {}) {
     return {
-        name: String(user?.name || user?.login || '').trim(),
+        name: String(user?.login || user?.name || '').trim(),
         email: String(user?.email || '').trim()
     };
 }

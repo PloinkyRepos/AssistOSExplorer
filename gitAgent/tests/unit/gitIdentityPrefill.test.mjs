@@ -28,11 +28,11 @@ test('buildPrefilledGitIdentityState uses GitHub identity even without an explic
         visible: true,
         repoPath: null,
         pendingAction: null,
-        name: 'Sava Daniel',
+        name: 'skutner',
         email: 'sava.dumitru.daniel@gmail.com'
     });
     assert.deepEqual(result.credentialsBaseline, {
-        name: 'Sava Daniel',
+        name: 'skutner',
         email: 'sava.dumitru.daniel@gmail.com',
         authMethod: 'github'
     });
@@ -58,6 +58,6 @@ test('buildPrefilledGitIdentityState preserves a selected repo path when present
     });
 
     assert.equal(result.identityPrompt.repoPath, '/workspace/demo-repo');
-    assert.equal(result.identityPrompt.name, 'Sava Daniel');
+    assert.equal(result.identityPrompt.name, 'skutner');
     assert.equal(result.identityPrompt.email, 'sava.dumitru.daniel@gmail.com');
 });

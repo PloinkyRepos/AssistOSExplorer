@@ -1,23 +1,4 @@
-import fs from 'node:fs';
-import path from 'node:path';
 import crypto from 'node:crypto';
-
-let cachedWireSign = null;
-async function loadWireSign() {
-  if (cachedWireSign) return cachedWireSign;
-  const candidates = [
-    process.env.PLOINKY_WIRE_SIGN_MODULE,
-    '/Agent/lib/wireSign.mjs',
-    path.resolve(process.cwd(), 'Agent/lib/wireSign.mjs')
-  ].filter(Boolean);
-  for (const candidate of candidates) {
-    try {
-      cachedWireSign = await import(candidate);
-      return cachedWireSign;
-    } catch (_) {}
-  }
-  return null;
-}
 
 /**
  * secret-store-client.mjs
@@ -25,44 +6,21 @@ async function loadWireSign() {
  * DPU-aware secret client used by gitAgent. It:
  *
  *   - routes every call through the router to the configured DPU route
- *   - signs a per-request caller assertion with gitAgent's private key
- *   - forwards the router-issued delegated user token unchanged
+ *   - forwards the router-issued invocation JWT as the caller JWT
  *   - does not depend on capability bindings for Git -> DPU traffic
  *
  * Env contract (set by AgentServer/ploinky start scripts):
  *
  *   PLOINKY_ROUTER_URL            - e.g. http://127.0.0.1:8080
- *   PLOINKY_AGENT_PRINCIPAL       - e.g. agent:AchillesIDE/gitAgent
- *   PLOINKY_AGENT_PRIVATE_KEY_PEM - the agent's Ed25519 private key (PEM)
- *   PLOINKY_AGENT_PRIVATE_KEY_PATH - alternative file-based source
+ *   PLOINKY_AGENT_PRINCIPAL       - e.g. agent:<repo>/gitAgent
  *   PLOINKY_DPU_ROUTE             - optional explicit DPU MCP route name
- *   PLOINKY_DPU_PRINCIPAL         - optional explicit DPU principal id
  */
 
-const CALLER_ASSERTION_HEADER = 'x-ploinky-caller-assertion';
-const USER_CONTEXT_HEADER = 'x-ploinky-user-context';
+const CALLER_JWT_HEADER = 'x-ploinky-caller-jwt';
 const DEFAULT_DPU_ROUTE = 'dpuAgent';
 
 function isNonEmptyString(value) {
   return typeof value === 'string' && value.trim().length > 0;
-}
-
-function readPrivateKeyPem() {
-  const inline = process.env.PLOINKY_AGENT_PRIVATE_KEY_PEM;
-  if (isNonEmptyString(inline)) return inline.trim();
-  const filePath = process.env.PLOINKY_AGENT_PRIVATE_KEY_PATH;
-  if (isNonEmptyString(filePath) && fs.existsSync(filePath)) {
-    return fs.readFileSync(filePath, 'utf8');
-  }
-  const workspaceRoot = process.env.PLOINKY_WORKSPACE_ROOT || process.env.WORKSPACE_ROOT;
-  if (isNonEmptyString(workspaceRoot)) {
-    const principal = String(process.env.PLOINKY_AGENT_PRINCIPAL || '').replace(/[^a-zA-Z0-9:_\-]/g, '_');
-    const candidate = path.join(workspaceRoot, '.ploinky', 'keys', 'agents', `${principal}.key`);
-    if (fs.existsSync(candidate)) {
-      return fs.readFileSync(candidate, 'utf8');
-    }
-  }
-  return null;
 }
 
 function resolveRouterBaseUrl() {
@@ -84,28 +42,8 @@ function resolveConsumerPrincipal() {
   throw new Error('PLOINKY_AGENT_PRINCIPAL is required and must use canonical agent:<repo>/<agent> form.');
 }
 
-function deriveSiblingAgentPrincipal(consumerPrincipal, siblingAgentName) {
-  const normalizedConsumer = String(consumerPrincipal || '').trim();
-  const normalizedSibling = String(siblingAgentName || '').trim();
-  const match = normalizedConsumer.match(/^agent:([^/]+)\/([^/]+)$/);
-  if (!match || !normalizedSibling) {
-    return '';
-  }
-  return `agent:${match[1]}/${normalizedSibling}`;
-}
-
-function resolveDpuPrincipal(explicitPrincipal = '') {
-  const value = String(explicitPrincipal || process.env.PLOINKY_DPU_PRINCIPAL || '').trim();
-  if (value) return value;
-  const consumerPrincipal = resolveConsumerPrincipal();
-  const derived = deriveSiblingAgentPrincipal(consumerPrincipal, DEFAULT_DPU_ROUTE);
-  if (derived) return derived;
-  throw new Error('Unable to resolve DPU principal from PLOINKY_AGENT_PRINCIPAL. Set PLOINKY_DPU_PRINCIPAL explicitly.');
-}
-
-function extractUserContextTokenFromAuthInfo(authInfo) {
-  const invocation = authInfo && typeof authInfo === 'object' ? authInfo.invocation : null;
-  const token = invocation && typeof invocation === 'object' ? invocation.userContextToken : null;
+function extractInvocationTokenFromAuthInfo(authInfo) {
+  const token = authInfo && typeof authInfo === 'object' ? authInfo.invocationToken : null;
   return isNonEmptyString(token) ? token.trim() : '';
 }
 
@@ -139,64 +77,24 @@ function unwrapToolPayload(name, result) {
   throw new Error(`Invalid response for ${name}.`);
 }
 
-function scopesForOperation(operation) {
-  switch (operation) {
-    case 'secret_get':
-    case 'secret_list':
-      return ['secret:read'];
-    case 'secret_put':
-    case 'secret_delete':
-      return ['secret:write'];
-    case 'secret_grant':
-      return ['secret:grant'];
-    case 'secret_revoke':
-      return ['secret:revoke'];
-    default:
-      return [];
-  }
-}
-
-export function createSecretStoreClient({ providerRouteName, providerPrincipal, authInfo = null, userContextToken = '' } = {}) {
+export function createSecretStoreClient({ providerRouteName, authInfo = null, invocationToken = '' } = {}) {
   const routerBase = resolveRouterBaseUrl();
-  const callerPrincipal = resolveConsumerPrincipal();
   const dpuRouteName = resolveDpuRouteName(providerRouteName);
-  const dpuPrincipal = resolveDpuPrincipal(providerPrincipal);
   const baseUrl = `${routerBase}/mcps/${encodeURIComponent(dpuRouteName)}/mcp`;
 
   async function callContractOperation(operation, args = {}) {
-    const bodyObject = { tool: operation, arguments: args };
-    const privatePem = readPrivateKeyPem();
-    if (!privatePem || !callerPrincipal) {
-      throw new Error('secret-store-client: missing agent signing identity.');
+    const forwardedInvocationToken = isNonEmptyString(invocationToken)
+      ? invocationToken.trim()
+      : extractInvocationTokenFromAuthInfo(authInfo) || process.env.PLOINKY_INVOCATION_TOKEN || undefined;
+    if (!forwardedInvocationToken) {
+      throw new Error('secret-store-client: missing invocation token for delegated DPU call.');
     }
-    const headers = {};
-    const forwardedUserContextToken = isNonEmptyString(userContextToken)
-      ? userContextToken.trim()
-      : extractUserContextTokenFromAuthInfo(authInfo) || process.env.PLOINKY_USER_CONTEXT_TOKEN || undefined;
-    if (!forwardedUserContextToken) {
-      throw new Error('secret-store-client: missing delegated user context token.');
-    }
-    const wire = await loadWireSign();
-    if (!wire?.signCallerAssertion) {
-      throw new Error('secret-store-client: wireSign module unavailable.');
-    }
-    const { token } = wire.signCallerAssertion({
-      callerPrincipal,
-      tool: operation,
-      scope: scopesForOperation(operation),
-      bodyObject,
-      privatePem,
-      audience: dpuPrincipal,
-      userContextToken: forwardedUserContextToken
-    });
-    headers[CALLER_ASSERTION_HEADER] = token;
-    headers[USER_CONTEXT_HEADER] = forwardedUserContextToken;
     const response = await fetch(baseUrl, {
       method: 'POST',
       headers: {
         Accept: 'application/json',
         'Content-Type': 'application/json',
-        ...headers
+        [CALLER_JWT_HEADER]: forwardedInvocationToken
       },
       body: JSON.stringify({
         jsonrpc: '2.0',

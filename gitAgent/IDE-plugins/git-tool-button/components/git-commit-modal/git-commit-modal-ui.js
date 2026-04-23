@@ -93,7 +93,7 @@ export function createGitCommitUI(ctx) {
     const getGithubIdentityFallback = () => {
         const githubUser = state.githubAuth?.connection?.user || {};
         return {
-            name: String(githubUser?.name || githubUser?.login || '').trim(),
+            name: String(githubUser?.login || githubUser?.name || '').trim(),
             email: String(githubUser?.email || '').trim()
         };
     };

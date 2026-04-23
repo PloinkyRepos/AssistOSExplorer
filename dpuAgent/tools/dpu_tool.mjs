@@ -212,7 +212,9 @@ async function main() {
   }
   const envelope = raw && raw.trim() ? safeParseJson(raw) : null;
   const invocationGrant = extractInvocationGrant(envelope || {});
-  const authInfo = invocationGrant ? authInfoFromInvocation(invocationGrant) : null;
+  const authInfo = invocationGrant
+    ? authInfoFromInvocation(invocationGrant, { invocationToken: envelope?.metadata?.invocationToken || '' })
+    : null;
   const toolName = process.env.TOOL_NAME;
   const args = normalizeArgs(toolName, normalizeInput(envelope || {}));
 

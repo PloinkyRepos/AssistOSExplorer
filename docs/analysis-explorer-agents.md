@@ -479,13 +479,14 @@ fi
 
 ```json
 "enable": [
-    "postgres",
-    "keycloak",
-    "gitAssistant/gitAgent global",
-    "dpuAssistant/dpuAgent global",
-    "soplangBuilder/soplangAgent global",
-    "tasksAssistant/tasksAgent global",
-    "llmAssistant/llmAssistant global"
+    "gitAgent global",
+    "dpuAgent global",
+    "soplangAgent global",
+    "tasksAgent global",
+    "llmAssistant global",
+    "multimedia global",
+    "webassist/webCli global",
+    "webassist/webAdmin global"
 ]
 ```
 

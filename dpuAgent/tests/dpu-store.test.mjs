@@ -463,7 +463,7 @@ test('identity registry can resolve principals from SSO claims without exposing 
   assert.equal(ssoReader.secret.value, 'claims-value');
 });
 
-test('secret owners keep write-access by default and same-agent delegated reads merge into full write access', async () => {
+test('secret owners keep full access after writes and same-agent delegated reads remain full write access', async () => {
   const ownerAuth = {
     user: {
       id: 'local:admin',
@@ -498,8 +498,8 @@ test('secret owners keep write-access by default and same-agent delegated reads 
 
   const ownerView = await getSecretByKey(ownerAuth, { key: 'AGENT_VISIBLE_SECRET' });
   assert.equal(ownerView.ok, true);
-  assert.equal(ownerView.secret.role, 'write-access');
-  assert.equal(ownerView.secret.value, null);
+  assert.equal(ownerView.secret.role, 'write');
+  assert.equal(ownerView.secret.value, 'agent-readable-value');
 
   await grantSecret(ownerAuth, {
     key: 'AGENT_VISIBLE_SECRET',

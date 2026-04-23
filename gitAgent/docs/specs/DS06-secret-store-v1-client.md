@@ -5,30 +5,20 @@ Status: implemented (2026-04-20)
 ## Summary
 
 `gitAgent` is explicitly coupled to `dpuAgent`. It uses the client at
-`lib/secret-store-client.mjs` to call DPU directly through the router
-over a single signed JSON-RPC `tools/call` per operation. No capability
-binding lookup and no MCP session setup.
+`lib/secret-store-client.mjs` to call DPU through the router over a single
+delegated JSON-RPC `tools/call` per operation. No capability binding lookup
+and no MCP session setup.
 
 ## Client behavior
 
 `lib/secret-store-client.mjs`:
 
-- resolves the DPU principal from the `PLOINKY_DPU_PRINCIPAL` env var,
-  defaulting to the sibling canonical principal derived from
-  `PLOINKY_AGENT_PRINCIPAL` (for example `agent:AchillesIDE/dpuAgent`
-  when the caller is `agent:AchillesIDE/gitAgent`)
-- requires `PLOINKY_AGENT_PRINCIPAL` to already be set to the canonical
-  caller principal (`agent:AchillesIDE/gitAgent` in this workspace);
-  there is no short-form `agent:<agent>` fallback
 - resolves the DPU route name from `PLOINKY_DPU_ROUTE`, defaulting to
   `dpuAgent`
-- signs a caller assertion with the agent's Ed25519 private key (loaded
-  from `$PLOINKY_AGENT_PRIVATE_KEY_PEM`, `$PLOINKY_AGENT_PRIVATE_KEY_PATH`,
-  or `.ploinky/keys/agents/<principal>.key`), with `aud` set to the DPU
-  principal
-- forwards the router-issued `user_context_token` extracted from the
-  current verified invocation in the `x-ploinky-user-context` header
-- submits the assertion in `x-ploinky-caller-assertion`
+- extracts the current router-issued invocation JWT from `authInfo.invocationToken`
+- forwards that JWT to the router in `X-Ploinky-Caller-JWT`
+- never mints or signs caller assertions and does not read agent private-key
+  material
 - POSTs a single JSON-RPC `tools/call` request to
   `{router}/mcps/{dpuRoute}/mcp`
 - calls only the domain operations
@@ -50,22 +40,21 @@ Exported and used by `github-auth.mjs`:
 
 ## Delegated user propagation
 
-`git_tool.mjs` reads the verified `metadata.invocation` grant. When the
-invocation carries a `user_context_token`, the secret-store client
-forwards that token unchanged. `gitAgent` never mints a user-context
-token.
+`git_tool.mjs` reads the verified `metadata.invocation` grant and preserves
+the raw `metadata.invocationToken`. The secret-store client forwards that
+token unchanged as the caller JWT. `gitAgent` never mints a DPU-audience
+invocation token.
 
 Chain of custody:
 
 - browser or first-party route authenticates the workspace user
-- router issues `user_context_token` (aud pinned to the immediate
-  downstream agent)
-- router embeds that token inside the provider-facing invocation grant
-  when calling `gitAgent`
-- `gitAgent` forwards the same token (aud now pinned to `gitAgent`) to
-  DPU via the caller assertion
-- DPU verifies the caller-assertion signature and then verifies the
-  user-context-token audience equals the caller-assertion issuer
+- router issues an invocation JWT to `gitAgent` with `aud` pinned to
+  `agent:<repo>/gitAgent`
+- `gitAgent` forwards that JWT to the router as `X-Ploinky-Caller-JWT`
+- router verifies the caller JWT and mints a fresh invocation JWT with `aud`
+  pinned to `agent:<repo>/dpuAgent`
+- DPU verifies the provider-audience JWT before exposing `metadata.invocation`
+  to domain code
 
 ## Scope contract
 
@@ -78,9 +67,9 @@ Chain of custody:
 | `secret_grant` | `secret:grant` |
 | `secret_revoke`| `secret:revoke`|
 
-Scopes are named in the caller assertion and enforced by DPU. The
-manifest no longer declares a `requires.secretStore` block; the client
-is intentionally DPU-specific.
+Scopes are named in the router-issued invocation JWT and enforced by DPU. The
+manifest no longer declares a `requires.secretStore` block; the client is
+intentionally DPU-specific.
 
 ## Agent policy
 

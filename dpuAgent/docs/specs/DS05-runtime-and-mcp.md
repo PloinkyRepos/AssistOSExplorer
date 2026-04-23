@@ -23,15 +23,15 @@ Each Model Context Protocol tool entry in `mcp-config.json` points to `tools/dpu
 
 In standalone mode, `server/standalone-mcp-server.mjs` loads the same `mcp-config.json`, registers the same tools, and still routes execution through the same wrapper and dispatcher.
 
-For routed callers, the trusted auth context is carried either by the router-issued `x-ploinky-invocation` token (first-party routed tool calls) or by the agent-signed `x-ploinky-caller-assertion` + router-signed `x-ploinky-user-context` pair (direct delegated agent calls). The MCP runtime must verify the relevant artifact before exposing delegated user or caller-agent data to the domain layer. The legacy `x-ploinky-auth-info` header has been removed.
+For routed callers, the trusted auth context is carried by a router-issued DS011 invocation JWT in the HTTP `Authorization: Bearer <jwt>` header. Direct delegated agent calls send the caller's current invocation JWT to the router as `X-Ploinky-Caller-JWT`; the router verifies it and mints a fresh provider-audience invocation JWT for DPU. The MCP runtime must verify `typ`, `iss`, `aud`, `tool`, `bh`, `exp`, and `jti` before exposing delegated user or caller-agent data to the domain layer. Legacy `x-ploinky-invocation`, `x-ploinky-caller-assertion`, `x-ploinky-user-context`, and `x-ploinky-auth-info` headers are not trusted.
 
 The auth payload may also include optional agent context, for example:
 
 ```json
 {
-  "user": { "id": "local:admin", "username": "admin" },
-  "agent": { "name": "gitAgent", "principalId": "agent:AssistOSExplorer/gitAgent" },
-  "sessionId": "..."
+  "usr": { "id": "local:admin", "username": "admin" },
+  "caller": "agent:AssistOSExplorer/gitAgent",
+  "aud": "agent:AssistOSExplorer/dpuAgent"
 }
 ```
 

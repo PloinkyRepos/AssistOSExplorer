@@ -148,7 +148,9 @@ Dependencies declared in [manifest.json](../../explorer/manifest.json) include:
 - `soplangAgent`
 - `tasksAgent`
 - `llmAssistant`
-- supporting services such as `postgres` and `keycloak`
+- `multimedia`
+- `webCli`
+- `webAdmin`
 
 Explorer depends on these agents asymmetrically:
 
