@@ -1,5 +1,4 @@
 {
-    "lite-sandbox": true,
     "container": "node:20-bullseye",
     "update": "",
     "cli": "/bin/bash",
@@ -30,7 +29,7 @@
         "tasksAgent global",
         "llmAssistant global",
         "multimedia global",
-        "webassist/webCli",
+        "webassist/webAssist",
         "webassist/webAdmin"
     ],
     "applicationPlugins": {
