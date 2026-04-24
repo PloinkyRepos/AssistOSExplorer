@@ -191,6 +191,119 @@ main {
     flex: 0 0 auto;
 }
 
+.app-plugin-tool-button {
+    width: 100%;
+    min-height: 58px;
+    margin: 0 auto;
+    border: 1px solid var(--file-exp-border, var(--border));
+    border-radius: 12px;
+    background: var(--file-exp-panel, var(--surface));
+    color: var(--text);
+    cursor: pointer;
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 8px 6px 7px;
+    transition: transform 0.14s ease, box-shadow 0.14s ease, background 0.14s ease;
+}
+
+.app-toolbar-slot .app-plugin-tool-button {
+    width: auto;
+    min-height: 0;
+    flex-direction: row;
+    gap: 8px;
+    padding: 7px 12px;
+    border-radius: 8px;
+}
+
+.app-plugin-bar .app-plugin-tool-button {
+    width: 100%;
+    min-height: 58px;
+    flex-direction: column;
+}
+
+[data-host-orientation="horizontal"] .app-plugin-tool-button {
+    width: auto;
+    min-height: 0;
+    flex-direction: row;
+    gap: 8px;
+    padding: 7px 12px;
+    border-radius: 8px;
+}
+
+[data-host-orientation="vertical"] .app-plugin-tool-button {
+    width: 100%;
+    min-height: 58px;
+    flex-direction: column;
+}
+
+.app-plugin-tool-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 18px rgba(15, 23, 42, 0.18);
+    background: var(--file-exp-subtle-surface, rgba(148, 163, 184, 0.12));
+}
+
+.app-plugin-tool-button:focus-visible {
+    outline: 2px solid rgba(37, 99, 235, 0.45);
+    outline-offset: 2px;
+}
+
+.app-plugin-tool-icon {
+    display: inline-flex;
+    width: 20px;
+    height: 20px;
+}
+
+.app-toolbar-slot .app-plugin-tool-icon {
+    width: 16px;
+    height: 16px;
+    flex: 0 0 16px;
+}
+
+[data-host-orientation="horizontal"] .app-plugin-tool-icon {
+    width: 16px;
+    height: 16px;
+    flex: 0 0 16px;
+}
+
+.app-plugin-tool-icon-image {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.app-plugin-tool-label {
+    display: block;
+    max-width: 100%;
+    width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 10px;
+    line-height: 1.1;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    text-align: center;
+}
+
+.app-toolbar-slot .app-plugin-tool-label {
+    width: auto;
+    max-width: none;
+    font-size: 0.95rem;
+    line-height: 1;
+    text-align: left;
+}
+
+[data-host-orientation="horizontal"] .app-plugin-tool-label {
+    width: auto;
+    max-width: none;
+    font-size: 0.95rem;
+    line-height: 1;
+    text-align: left;
+}
+
 .media-pdf {
     width: 100%;
     height: 100%;

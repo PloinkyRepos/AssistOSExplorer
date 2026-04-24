@@ -12,47 +12,14 @@ tasks-tool-button .tasks-tool {
 }
 
 tasks-tool-button .tasks-tool-button {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
     min-width: 0;
-    padding: 6px 10px;
-    border: 1px solid var(--button-border, rgba(0, 0, 0, 0.14));
-    border-radius: 10px;
-    background: var(--button-background, rgba(255, 255, 255, 0.88));
-    color: inherit;
     font: inherit;
-    cursor: pointer;
     line-height: 1;
 }
 
 tasks-tool-button .tasks-tool-button:hover,
 tasks-tool-button .tasks-tool-button[aria-expanded="true"] {
-    background: var(--button-background-hover, rgba(255, 255, 255, 0.96));
-}
-
-tasks-tool-button .tasks-tool-button-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 18px;
-    height: 18px;
-    flex: 0 0 auto;
-}
-
-tasks-tool-button .tasks-tool-button-icon-image {
-    width: 18px;
-    height: 18px;
-    display: block;
-}
-
-tasks-tool-button .tasks-tool-button-label {
-    display: inline-block;
-    min-width: 0;
-    white-space: nowrap;
-    font-size: 12px;
-    font-weight: 500;
+    background: var(--file-exp-subtle-surface, rgba(148, 163, 184, 0.12));
 }
 
 tasks-tool-button .tasks-tool-button-chevron {
@@ -105,13 +72,6 @@ tasks-tool-button[data-host-orientation="vertical"] .tasks-tool {
 
 tasks-tool-button[data-host-orientation="vertical"] .tasks-tool-button {
     width: 100%;
-    flex-direction: column;
-    padding: 8px 6px;
-    gap: 6px;
-}
-
-tasks-tool-button[data-host-orientation="vertical"] .tasks-tool-button-label {
-    text-align: center;
 }
 
 tasks-tool-button[data-host-orientation="vertical"] .tasks-tool-button-chevron {
