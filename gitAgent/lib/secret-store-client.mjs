@@ -42,8 +42,9 @@ function resolveConsumerPrincipal() {
   throw new Error('PLOINKY_AGENT_PRINCIPAL is required and must use canonical agent:<repo>/<agent> form.');
 }
 
-function extractInvocationTokenFromAuthInfo(authInfo) {
-  const token = authInfo && typeof authInfo === 'object' ? authInfo.invocationToken : null;
+function extractInvocationToken(authInfo) {
+  if (!authInfo || typeof authInfo !== 'object') return '';
+  const token = authInfo.invocationToken || authInfo.rawToken || '';
   return isNonEmptyString(token) ? token.trim() : '';
 }
 
@@ -85,7 +86,7 @@ export function createSecretStoreClient({ providerRouteName, authInfo = null, in
   async function callContractOperation(operation, args = {}) {
     const forwardedInvocationToken = isNonEmptyString(invocationToken)
       ? invocationToken.trim()
-      : extractInvocationTokenFromAuthInfo(authInfo) || process.env.PLOINKY_INVOCATION_TOKEN || undefined;
+      : extractInvocationToken(authInfo) || process.env.PLOINKY_INVOCATION_TOKEN || undefined;
     if (!forwardedInvocationToken) {
       throw new Error('secret-store-client: missing invocation token for delegated DPU call.');
     }
