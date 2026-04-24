@@ -311,9 +311,9 @@ main {
     font-weight: var(--font-regular);
 }
 .toolbar button {
-    background: var(--accent);
-    color: #fff;
-    border: none;
+    background-color: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
     border-radius: var(--radius-md);
     padding: var(--space-sm) var(--space-md);
     cursor: pointer;

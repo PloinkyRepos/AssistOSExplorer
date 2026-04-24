@@ -5,25 +5,6 @@ open-builder-button {
     min-width: 0;
 }
 
-open-builder-button .open-builder-button {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    min-width: 0;
-    padding: 6px 10px;
-    border: 1px solid var(--button-border, rgba(0, 0, 0, 0.14));
-    border-radius: 10px;
-    background: var(--button-background, rgba(255, 255, 255, 0.88));
-    color: inherit;
-    font: inherit;
-    cursor: pointer;
-    line-height: 1;
-}
-
-open-builder-button .open-builder-button:hover {
-    background: var(--button-background-hover, rgba(255, 255, 255, 0.96));
-}
 
 open-builder-button .open-builder-button-icon {
     display: inline-flex;
