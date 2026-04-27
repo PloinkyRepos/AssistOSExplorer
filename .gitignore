@@ -9,3 +9,7 @@
 /soplangAgent/achilles-debug.log
 /soplangAgent/last-tool.log
 *.DS_Store
+# >>> ploinky default-skills >>>
+.claude/skills/
+.agents/skills/
+# <<< ploinky default-skills <<<
