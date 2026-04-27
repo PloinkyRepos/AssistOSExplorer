@@ -36,7 +36,7 @@ These files are blocked from Explorer filesystem MCP access and hidden from the 
 ## Requirements
 
 - a working Ploinky installation, with `ploinky` available in the shell
-- a container runtime supported by Ploinky, such as Podman or Docker
+- a configured Ploinky host sandbox runtime for `lite-sandbox` agents, or a container runtime such as Podman or Docker when host sandboxing is disabled
 
 ## Running Explorer
 

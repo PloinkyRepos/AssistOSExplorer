@@ -3,8 +3,8 @@ set -e
 
 echo "Installing multimedia dependencies..."
 
-if [ "${PLOINKY_RUNTIME:-}" = "bwrap" ]; then
-    echo "Running under bwrap — skipping apt-get (using host packages)"
+if [ "${PLOINKY_RUNTIME:-}" = "bwrap" ] || [ "${PLOINKY_RUNTIME:-}" = "seatbelt" ]; then
+    echo "Running under host sandbox (${PLOINKY_RUNTIME}) - skipping apt-get (using host packages)"
     # git is required; ffmpeg is optional (only needed for multimedia processing)
     if ! command -v git >/dev/null 2>&1; then
         echo "ERROR: git not found on host"
@@ -13,6 +13,7 @@ if [ "${PLOINKY_RUNTIME:-}" = "bwrap" ]; then
     if ! command -v ffmpeg >/dev/null 2>&1; then
         echo "WARNING: ffmpeg not found on host (needed for multimedia features)"
         echo "  sudo apt install -y ffmpeg"
+        echo "  brew install ffmpeg"
     fi
 else
     apt-get update && apt-get install -y git ffmpeg

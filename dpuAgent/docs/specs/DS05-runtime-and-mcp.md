@@ -81,6 +81,8 @@ Audit collection starts disabled by default. A trusted actor must explicitly ena
 
 ## Practical Guarantees
 
+`dpuAgent/manifest.json` requests `lite-sandbox: true`, so Ploinky should prefer the host sandbox runtime for the agent when the host supports it and use the container image only when host sandboxing is disabled.
+
 `mcp-config.json` sets `maxParallelTasks` to `1`. Mutating operations also run under the DPU file lock. This gives the runtime a simple single-writer discipline even though the agent is file-backed.
 
 Authorization is enforced before sensitive material is returned. In practical terms, a caller may receive an object or secret record with limited fields while the encrypted secret value or confidential file content remains hidden because the resolved role does not allow it.

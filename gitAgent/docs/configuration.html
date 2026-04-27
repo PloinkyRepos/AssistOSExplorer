@@ -34,7 +34,7 @@
             <div class="doc-main">
                 <section class="lead">
                     <h1>Manifest and Environment</h1>
-                    <p><code>gitAgent</code> follows the <a href="https://ploinky.com/" target="_blank" rel="noopener noreferrer">Ploinky</a> manifest model and uses explicit environment variables for filesystem scope, LLM provider access, and GitHub auth integration. Container dependency installation is owned by <code>ploinky</code>, so the manifest stays focused on runtime entrypoints and environment.</p>
+                    <p><code>gitAgent</code> follows the <a href="https://ploinky.com/" target="_blank" rel="noopener noreferrer">Ploinky</a> manifest model and uses explicit environment variables for filesystem scope, LLM provider access, and GitHub auth integration. Dependency installation is owned by <code>ploinky</code>, so the manifest stays focused on runtime entrypoints and environment.</p>
                 </section>
 
                 <section>
@@ -43,13 +43,15 @@
                     <pre><code>{
   "agent": "sh /code/scripts/startAgent.sh",
   "container": "node:20-alpine",
+  "lite-sandbox": true,
   "profiles": {
     "default": {
+      "install": "host sandbox git check, container apk install",
       "env": ["..."]
     }
   }
 }</code></pre>
-                    <p>The agent bootstrap script resolves workspace root and loads environment variables from process env first, then from <code>.ploinky/.secrets</code> when needed. Generic system package installation and Node dependency installation are handled by <code>ploinky</code> before the agent command starts.</p>
+                    <p>The agent bootstrap script resolves workspace root and loads environment variables from process env first, then from <code>.ploinky/.secrets</code> when needed. In host sandbox mode, startup verifies that <code>git</code> is available on the host; in container mode, the profile installs the container Git packages when needed. Node dependency installation is handled by <code>ploinky</code> before the agent command starts.</p>
                 </section>
 
                 <section>

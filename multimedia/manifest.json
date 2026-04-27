@@ -1,5 +1,6 @@
 {
     "container": "node:20-bullseye",
+    "lite-sandbox": true,
     "profiles": {
         "default": {
             "install": "/code/scripts/install.sh"

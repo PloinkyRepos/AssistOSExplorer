@@ -47,6 +47,7 @@
                     <p><code>manifest.json</code> declares a single default profile on top of <code>node:20-alpine</code>. The profile forwards the workspace-root variables and DPU-specific variables into the runtime:</p>
                     <pre><code>{
   "container": "node:20-alpine",
+  "lite-sandbox": true,
   "profiles": {
     "default": {
       "env": [

@@ -47,14 +47,14 @@
     }
   }
 }</code></pre>
-                    <p>The agent runs in a Node 20 container and executes the <code>default</code> profile install script at startup.</p>
+                    <p>The agent runs in a Node 20 runtime and executes the <code>default</code> profile install script at startup.</p>
                 </section>
 
                 <section>
                     <h2>Startup Install Behavior</h2>
                     <ul>
                         <li>in standard container runtime: it runs <code>apt-get update && apt-get install -y git ffmpeg</code>;</li>
-                        <li>in <code>bwrap</code> runtime: it skips apt and validates tools on the host;</li>
+                        <li>in host sandbox runtime (<code>bwrap</code> on Linux, <code>seatbelt</code> on macOS): it skips apt and validates tools on the host;</li>
                         <li>if <code>git</code> is missing on the host: startup fails;</li>
                         <li>if <code>ffmpeg</code> is missing on the host: a warning is emitted and multimedia capabilities may be limited.</li>
                     </ul>
@@ -65,8 +65,9 @@
 
                 <section>
                     <h2>Operational Notes</h2>
-                    <p>For stability, treat missing <code>ffmpeg</code> as an environment issue, not a plugin bug. In bwrap mode, the recommended fix is host installation:</p>
-                    <pre><code>sudo apt install -y ffmpeg</code></pre>
+                    <p>For stability, treat missing <code>ffmpeg</code> as an environment issue, not a plugin bug. In host sandbox mode, the recommended fix is host installation:</p>
+                    <pre><code>sudo apt install -y ffmpeg
+brew install ffmpeg</code></pre>
                 </section>
             </div>
         </div>

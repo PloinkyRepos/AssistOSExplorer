@@ -26,15 +26,15 @@ Requirement R1: the install script must run at startup to prepare the multimedia
 
 Requirement R2: in container mode, the script must install `git` and `ffmpeg`.
 
-Requirement R3: in `bwrap` mode, the script must validate that `git` and `ffmpeg` are present on the host.
+Requirement R3: in host sandbox mode (`bwrap` on Linux, `seatbelt` on macOS), the script must validate that `git` and `ffmpeg` are present on the host.
 
-Requirement R4: missing `git` in `bwrap` is a blocking error; missing `ffmpeg` is an explicit warning.
+Requirement R4: missing `git` in host sandbox mode is a blocking error; missing `ffmpeg` is an explicit warning.
 
 ## Constraints
 
 Constraint C1: FFmpeg-dependent video processing features are not guaranteed when `ffmpeg` is missing from the runtime.
 
-Constraint C2: in `bwrap`, OS package installation is not managed by the agent; responsibility remains on the host.
+Constraint C2: in host sandbox mode, OS package installation is not managed by the agent; responsibility remains on the host.
 
 ## Invariants
 

@@ -42,15 +42,14 @@
                     <p>Main configuration file: <code>soplangAgent/manifest.json</code>.</p>
                     <pre><code>{
   "lite-sandbox": true,
-  "container": "node:22-alpine",
+  "container": "node:20-bullseye",
   "profiles": {
     "default": {
-      "install": "/code/scripts/install.sh",
-      "env": ["ACHILLES_DEBUG", "SOUL_GATEWAY_API_KEY"]
+      "env": ["ACHILLES_DEBUG", "SOUL_GATEWAY_API_KEY", "SOUL_GATEWAY_BASE_URL"]
     }
   }
 }</code></pre>
-                    <p>The <code>container</code> field defines the runtime image used by <a href="https://ploinky.com/" target="_blank" rel="noopener noreferrer">Ploinky</a>, <code>profiles.default.install</code> defines dependency installation, and <code>profiles.default.env</code> declares forwarded environment variables used by the agent.</p>
+                    <p>The <code>lite-sandbox</code> flag asks <a href="https://ploinky.com/" target="_blank" rel="noopener noreferrer">Ploinky</a> to prefer the host sandbox runtime when available. The <code>container</code> field remains the fallback image used when host sandboxing is disabled, and <code>profiles.default.env</code> declares forwarded environment variables used by the agent.</p>
                 </section>
 
                 <section>

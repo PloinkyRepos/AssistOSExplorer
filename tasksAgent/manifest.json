@@ -1,5 +1,6 @@
 {
   "container": "node:20-alpine",
+  "lite-sandbox": true,
   "profiles": {
     "default": {
       "env": [

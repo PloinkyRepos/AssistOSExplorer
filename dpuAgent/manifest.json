@@ -1,5 +1,6 @@
 {
   "container": "node:20-alpine",
+  "lite-sandbox": true,
   "provides": {
     "secret-store/v1": {
       "operations": [
