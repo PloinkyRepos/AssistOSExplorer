@@ -70,4 +70,4 @@ do
     export_with_fallback "$name"
 done
 
-exec sh /Agent/server/AgentServer.sh
+exec sh "${PLOINKY_AGENT_LIB_DIR:-/Agent}/server/AgentServer.sh"
