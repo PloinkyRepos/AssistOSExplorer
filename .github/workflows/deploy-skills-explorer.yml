@@ -301,7 +301,9 @@ jobs:
           fi
 
           echo "[deploy] Normalizing Ploinky workspace registry..."
-          rm -f "$WORK_DIR/.ploinky/agents"
+          if [ -f "$WORK_DIR/.ploinky/agents" ]; then
+            rm -f "$WORK_DIR/.ploinky/agents"
+          fi
           cat > "$WORK_DIR/.ploinky/agents.json" <<'JSON'
           {}
           JSON
