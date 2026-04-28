@@ -29,6 +29,7 @@
         "soplangAgent global",
         "tasksAgent global",
         "llmAssistant global",
+        "webmeetAgent global",
         "multimedia global",
         "webassist/webAssist",
         "webassist/webAdmin"
@@ -38,7 +39,8 @@
         "dpu-runtime-support": true,
         "dpu-audit-menu": true,
         "soplang-builder": true,
-        "tasks": true
+        "tasks": true,
+        "webmeet": true
     },
     "profiles": {
         "default": {
