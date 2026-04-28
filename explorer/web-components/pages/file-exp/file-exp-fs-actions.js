@@ -693,7 +693,7 @@ export function attachFsActions(fileExp) {
                             throw new Error('New files are not allowed in this Confidential folder.');
                         }
                         const created = await createDpuFile(this, this.state.path, fileName.trim(), { content: '' });
-                        createdPath = this.joinPath(this.state.path, created?.name || fileName.trim());
+                        createdPath = created?.path || this.joinPath(this.state.path, created?.key || created?.name || fileName.trim());
                         createdType = created?.type || 'file';
                         shouldEditAfterCreate = this.normalizePath(this.state.path) === DPU_SECRETS_PATH;
                     } else {
@@ -725,7 +725,9 @@ export function attachFsActions(fileExp) {
                     }
                 }
             } catch (err) {
-                console.error(err);
+                if (err?.code !== 'invalid_secret_name') {
+                    console.error(err);
+                }
                 this.showStatus(this.humanizeFsError(err), true);
             }
         },

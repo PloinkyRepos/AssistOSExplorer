@@ -159,6 +159,7 @@ test('createDpuFile creates a secret when parent path is /Confidential/Secrets',
         assert.deepEqual(created, {
             key: 'API_KEY',
             name: 'API_KEY',
+            path: `${DPU_SECRETS_PATH}/API_KEY`,
             type: 'file'
         });
         assert.deepEqual(calls, [
@@ -166,11 +167,49 @@ test('createDpuFile creates a secret when parent path is /Confidential/Secrets',
                 name: 'dpu_secret_put',
                 args: {
                     key: 'API_KEY',
+                    displayName: 'API_KEY',
                     value: 'secret-value'
                 }
             }
         ]);
         assert.ok(fileExp.invalidated.some((entry) => entry.path === DPU_SECRETS_PATH));
+    } finally {
+        restoreWindow();
+    }
+});
+
+test('createDpuFile derives a strict key while preserving secret display name', async () => {
+    const calls = [];
+    const restoreWindow = withMockDpuClient(async (name, args) => {
+        calls.push({ name, args });
+        if (name === 'dpu_secret_put') {
+            return {
+                content: [{ type: 'text', text: JSON.stringify({ ok: true, secret: { key: args.key, displayName: args.displayName, value: args.value } }) }]
+            };
+        }
+        throw new Error(`Unexpected tool: ${name}`);
+    });
+
+    try {
+        const fileExp = createFakeFileExp();
+        const created = await createDpuFile(fileExp, DPU_SECRETS_PATH, 'secret 3', { content: 'value' });
+
+        assert.deepEqual(created, {
+            key: 'secret_3',
+            name: 'secret 3',
+            path: `${DPU_SECRETS_PATH}/secret_3`,
+            type: 'file'
+        });
+        assert.deepEqual(calls, [
+            {
+                name: 'dpu_secret_put',
+                args: {
+                    key: 'secret_3',
+                    displayName: 'secret 3',
+                    value: 'value'
+                }
+            }
+        ]);
     } finally {
         restoreWindow();
     }

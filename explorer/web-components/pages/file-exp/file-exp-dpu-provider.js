@@ -39,6 +39,34 @@ function isSecretsRootPath(path) {
     return normalizeDpuPath(path) === DPU_SECRETS_PATH;
 }
 
+function normalizeSecretDisplayNameForCreate(name) {
+    const displayName = String(name || '').trim();
+    if (!displayName) {
+        throw new ToolError('invalid_secret_name', 'Secret name is required.');
+    }
+    if (displayName.includes('\0')) {
+        throw new ToolError('invalid_secret_name', 'Secret name contains an invalid null byte.');
+    }
+    if (/[\\/]/.test(displayName)) {
+        throw new ToolError('invalid_secret_name', 'Secret name cannot contain path separators.');
+    }
+    return displayName;
+}
+
+function deriveSecretKeyFromDisplayName(displayName) {
+    let key = String(displayName || '')
+        .trim()
+        .replace(/[^A-Za-z0-9_]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+    if (!key) {
+        key = 'SECRET';
+    }
+    if (/^[0-9]/.test(key)) {
+        key = `_${key}`;
+    }
+    return key;
+}
+
 function hasDpuClient() {
     return Boolean(window.webSkel?.appServices?.getClient?.('dpuAgent'));
 }
@@ -306,10 +334,12 @@ function createRootEntries(fileExp, roots = {}) {
 
 function createSecretEntry(fileExp, secret) {
     const entryPath = fileExp.joinPath(DPU_SECRETS_PATH, secret.key);
+    const displayName = String(secret.displayName || secret.key || '').trim() || secret.key;
     indexNode(fileExp, entryPath, {
         kind: 'secret',
         type: 'file',
         key: secret.key,
+        displayName,
         secretId: secret.id,
         ownerId: secret.ownerId || '',
         role: secret.role || '',
@@ -323,7 +353,7 @@ function createSecretEntry(fileExp, secret) {
         immutableRoot: false
     });
     return {
-        ...makeEntry(secret.key, 'file', {
+        ...makeEntry(displayName, 'file', {
             modified: secret.updatedAt || null,
             dpuCanWrite: Boolean(secret.canWrite),
             dpuCanRename: false,
@@ -951,15 +981,18 @@ export async function createDpuDirectory(fileExp, parentPath, name) {
 
 export async function createDpuFile(fileExp, parentPath, name, { content = '', mimeType = '' } = {}) {
     if (isSecretsRootPath(parentPath)) {
-        const normalizedKey = String(name || '').trim();
+        const displayName = normalizeSecretDisplayNameForCreate(name);
+        const normalizedKey = deriveSecretKeyFromDisplayName(displayName);
         await callDpuTool('dpu_secret_put', {
             key: normalizedKey,
+            displayName,
             value: String(content ?? '')
         });
         invalidateDpuMutationState(fileExp, [DPU_SECRETS_PATH, fileExp.joinPath(DPU_SECRETS_PATH, normalizedKey)]);
         return {
             key: normalizedKey,
-            name: normalizedKey,
+            name: displayName,
+            path: fileExp.joinPath(DPU_SECRETS_PATH, normalizedKey),
             type: 'file'
         };
     }
