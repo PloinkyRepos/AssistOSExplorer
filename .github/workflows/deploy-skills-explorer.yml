@@ -141,6 +141,11 @@ jobs:
 
           $PKG_UPDATE || true
           $PKG_INSTALL git curl jq tmux python3 ca-certificates openssl nginx || true
+          $PKG_INSTALL iptables slirp4netns fuse-overlayfs || true
+
+          sudo modprobe ip_tables 2>/dev/null || true
+          sudo modprobe iptable_nat 2>/dev/null || true
+          sudo modprobe nf_nat 2>/dev/null || true
 
           if ! command -v podman >/dev/null 2>&1; then
             echo "[deploy] Installing podman..."

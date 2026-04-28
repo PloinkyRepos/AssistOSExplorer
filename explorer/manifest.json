@@ -21,15 +21,15 @@
         ]
     },
     "enable": [
-        "gitAgent global",
-        "dpuAgent global",
-        "soplangAgent global",
-        "tasksAgent global",
-        "llmAssistant global",
-        "webmeetAgent global",
-        "multimedia global",
-        "webAssist",
-        "webAdmin"
+        "fileExplorer/gitAgent global",
+        "fileExplorer/dpuAgent global",
+        "fileExplorer/soplangAgent global",
+        "fileExplorer/tasksAgent global",
+        "fileExplorer/llmAssistant global",
+        "fileExplorer/webmeetAgent global",
+        "fileExplorer/multimedia global",
+        "fileExplorer/webAssist",
+        "fileExplorer/webAdmin"
     ],
     "applicationPlugins": {
         "git": true,
