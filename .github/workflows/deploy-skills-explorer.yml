@@ -147,21 +147,6 @@ jobs:
           sudo modprobe iptable_nat 2>/dev/null || true
           sudo modprobe nf_nat 2>/dev/null || true
 
-          if ! command -v nginx >/dev/null 2>&1; then
-            echo "[deploy] Installing nginx..."
-            if command -v dnf >/dev/null 2>&1; then
-              sudo dnf install -y --disablerepo=getpagespeed-extras --disablerepo=getpagespeed-extras-noarch nginx
-            elif command -v yum >/dev/null 2>&1; then
-              sudo yum install -y --disablerepo=getpagespeed-extras --disablerepo=getpagespeed-extras-noarch nginx
-            else
-              $PKG_INSTALL nginx
-            fi
-          fi
-          if ! command -v nginx >/dev/null 2>&1; then
-            echo "[deploy] ERROR: nginx is required for the public skills.axiologic.dev proxy"
-            exit 1
-          fi
-
           if ! command -v podman >/dev/null 2>&1; then
             echo "[deploy] Installing podman..."
             $PKG_INSTALL podman
@@ -239,8 +224,6 @@ jobs:
           ONLYOFFICE_INTERNAL_URL: ${{ vars.ONLYOFFICE_INTERNAL_URL }}
           ONLYOFFICE_CALLBACK_BASE_URL: ${{ vars.ONLYOFFICE_CALLBACK_BASE_URL }}
           ONLYOFFICE_JWT_SECRET: ${{ secrets.ONLYOFFICE_JWT_SECRET }}
-          SKILLS_TLS_CERT_PEM: ${{ secrets.SKILLS_TLS_CERT_PEM }}
-          SKILLS_TLS_KEY_PEM: ${{ secrets.SKILLS_TLS_KEY_PEM }}
         run: |
           set -euo pipefail
 
@@ -273,14 +256,6 @@ jobs:
           } > /tmp/skills_explorer_env
           chmod 600 /tmp/skills_explorer_env
 
-          if [ -n "${SKILLS_TLS_CERT_PEM:-}" ] && [ -n "${SKILLS_TLS_KEY_PEM:-}" ]; then
-            printf '%s\n' "$SKILLS_TLS_CERT_PEM" > /tmp/skills_tls_cert.pem
-            printf '%s\n' "$SKILLS_TLS_KEY_PEM" > /tmp/skills_tls_key.pem
-            chmod 600 /tmp/skills_tls_cert.pem /tmp/skills_tls_key.pem
-            scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no /tmp/skills_tls_cert.pem "${SSH_USER}@${SSH_HOST}:/tmp/skills_tls_cert.pem"
-            scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no /tmp/skills_tls_key.pem "${SSH_USER}@${SSH_HOST}:/tmp/skills_tls_key.pem"
-          fi
-
           scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no /tmp/skills_explorer_env "${SSH_USER}@${SSH_HOST}:/tmp/skills_explorer_env"
 
           ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
@@ -298,11 +273,16 @@ jobs:
           set +a
           rm -f /tmp/skills_explorer_env
 
-          WORKSPACE_ENV_FILE="$WORK_DIR/.env"
-          touch "$WORKSPACE_ENV_FILE"
-          chmod 600 "$WORKSPACE_ENV_FILE"
-          sed -i '/^PLOINKY_MASTER_KEY=/d' "$WORKSPACE_ENV_FILE"
-          printf 'PLOINKY_MASTER_KEY=%s\n' "$PLOINKY_MASTER_KEY" >> "$WORKSPACE_ENV_FILE"
+          # PLOINKY_MASTER_KEY is intentionally NOT persisted to disk — it is
+          # passed to ploinky strictly via process env (see `ploinky start` below).
+          # If a legacy in-workspace .env from older deploys still holds it, scrub
+          # the line and remove the file when nothing else remains.
+          if [ -f "$WORK_DIR/.env" ]; then
+            sed -i '/^PLOINKY_MASTER_KEY=/d' "$WORK_DIR/.env"
+            if ! grep -Eq '\S' "$WORK_DIR/.env"; then
+              rm -f "$WORK_DIR/.env"
+            fi
+          fi
 
           echo "[deploy] Stopping current workspace services if present..."
           if [ -f "$WORK_DIR/.ploinky/routing.json" ]; then
@@ -435,74 +415,6 @@ jobs:
             sleep 2
           done
 
-          echo "[deploy] Configuring nginx for $PUBLIC_URL..."
-          domain="$(node -e "console.log(new URL(process.argv[1]).hostname)" "$PUBLIC_URL")"
-          sudo mkdir -p /etc/ssl/private /etc/ssl/certs /etc/nginx/conf.d
-          if [ -f /tmp/skills_tls_cert.pem ] && [ -f /tmp/skills_tls_key.pem ]; then
-            sudo install -m 0644 /tmp/skills_tls_cert.pem /etc/ssl/certs/skills-explorer.crt
-            sudo install -m 0600 /tmp/skills_tls_key.pem /etc/ssl/private/skills-explorer.key
-            rm -f /tmp/skills_tls_cert.pem /tmp/skills_tls_key.pem
-          elif [ ! -f /etc/ssl/certs/skills-explorer.crt ] || [ ! -f /etc/ssl/private/skills-explorer.key ]; then
-            sudo openssl req -x509 -nodes -newkey rsa:2048 -sha256 -days 3650 \
-              -subj "/CN=$domain" \
-              -keyout /etc/ssl/private/skills-explorer.key \
-              -out /etc/ssl/certs/skills-explorer.crt
-          fi
-
-          sudo tee /etc/nginx/conf.d/skills-explorer.conf >/dev/null <<NGINX
-          server {
-              listen 80;
-              server_name $domain;
-              location / {
-                  proxy_pass http://127.0.0.1:${ROUTER_PORT};
-                  proxy_http_version 1.1;
-                  proxy_set_header Host \$host;
-                  proxy_set_header X-Real-IP \$remote_addr;
-                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-                  proxy_set_header X-Forwarded-Proto \$scheme;
-                  proxy_set_header Upgrade \$http_upgrade;
-                  proxy_set_header Connection "upgrade";
-                  proxy_read_timeout 3600s;
-                  proxy_send_timeout 3600s;
-              }
-          }
-
-          server {
-              listen 443 ssl http2;
-              server_name $domain;
-              ssl_certificate /etc/ssl/certs/skills-explorer.crt;
-              ssl_certificate_key /etc/ssl/private/skills-explorer.key;
-              location / {
-                  proxy_pass http://127.0.0.1:${ROUTER_PORT};
-                  proxy_http_version 1.1;
-                  proxy_set_header Host \$host;
-                  proxy_set_header X-Real-IP \$remote_addr;
-                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-                  proxy_set_header X-Forwarded-Proto https;
-                  proxy_set_header Upgrade \$http_upgrade;
-                  proxy_set_header Connection "upgrade";
-                  proxy_read_timeout 3600s;
-                  proxy_send_timeout 3600s;
-              }
-          }
-          NGINX
-
-          sudo nginx -t
-          sudo systemctl enable nginx 2>/dev/null || true
-          sudo systemctl restart nginx 2>/dev/null || sudo service nginx restart
-          sudo firewall-cmd --add-service=http --permanent 2>/dev/null || true
-          sudo firewall-cmd --add-service=https --permanent 2>/dev/null || true
-          sudo firewall-cmd --reload 2>/dev/null || true
-          sudo ufw allow 'Nginx Full' 2>/dev/null || true
-          sudo setsebool -P httpd_can_network_connect 1 2>/dev/null || true
-
-          echo "[deploy] Running local nginx proxy check..."
-          proxy_code="$(curl -k -s -o /dev/null -w '%{http_code}' --resolve "${domain}:443:127.0.0.1" "https://${domain}/dashboard" || true)"
-          if [ "$proxy_code" != "200" ] && [ "$proxy_code" != "302" ]; then
-            echo "[deploy] ERROR: local nginx proxy returned HTTP $proxy_code"
-            exit 1
-          fi
-
           echo "[deploy] Containers:"
           podman ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | head -100
           echo "[deploy] Workspace status:"
@@ -528,4 +440,4 @@ jobs:
 
       - name: Cleanup
         if: always()
-        run: rm -f ~/.ssh/deploy_key /tmp/skills_explorer_env /tmp/skills_tls_cert.pem /tmp/skills_tls_key.pem
+        run: rm -f ~/.ssh/deploy_key /tmp/skills_explorer_env

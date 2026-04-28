@@ -19,12 +19,9 @@ gh secret set ONLYOFFICE_JWT_SECRET --repo PloinkyRepos/AssistOSExplorer
 
 `PLOINKY_MASTER_KEY` must be exactly 64 hex characters. Keep it stable after the first deployment because it encrypts the Ploinky workspace secret stores and local-auth password store.
 
-If Cloudflare is configured for Full Strict origin TLS, add an origin certificate and key instead of using the workflow-generated self-signed certificate:
+## Public Access (Cloudflare Tunnel)
 
-```sh
-gh secret set SKILLS_TLS_CERT_PEM --repo PloinkyRepos/AssistOSExplorer < origin-cert.pem
-gh secret set SKILLS_TLS_KEY_PEM --repo PloinkyRepos/AssistOSExplorer < origin-key.pem
-```
+`skills.axiologic.dev` is fronted by a Cloudflare Zero Trust tunnel running as a podman container on the host. The tunnel terminates TLS at Cloudflare's edge and forwards directly to the Explorer router on `127.0.0.1:${EXPLORER_ROUTER_PORT}` (default `8097`). The workflow does **not** manage the tunnel; ingress is configured in the Cloudflare Zero Trust dashboard. To change the routing target, edit the tunnel's public hostname configuration in the dashboard rather than touching the workflow.
 
 ## GitHub Variables
 
@@ -72,12 +69,11 @@ gh workflow run deploy-skills-explorer.yml \
 The workflow:
 
 1. Connects to `SSH_USER@SSH_HOST` with `SSH_KEY`.
-2. Installs host prerequisites, Podman, Node.js, Ploinky, nginx, and OpenSSL if needed.
+2. Installs host prerequisites: Podman, Node.js, Ploinky.
 3. Writes `PLOINKY_MASTER_KEY` to the remote workspace `.env` with `0600` permissions.
 4. Adds and updates the `fileExplorer` and `webmeetInfra` Ploinky repos.
 5. Resets the Ploinky enabled-agent registry to avoid stale ambiguous repos from older deployments.
 6. Stores runtime variables through `ploinky var`.
 7. Starts `fileExplorer/explorer` on `EXPLORER_ROUTER_PORT`.
-8. Configures nginx for `skills.axiologic.dev` to proxy to the router.
-9. Verifies local router health and public `EXPLORER_PUBLIC_URL` access.
+8. Verifies local router health and public `EXPLORER_PUBLIC_URL` access (the latter goes through the Cloudflare tunnel).
 
