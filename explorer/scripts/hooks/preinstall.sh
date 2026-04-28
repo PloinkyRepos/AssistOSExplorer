@@ -6,6 +6,8 @@ set -euo pipefail
 # so the Explorer exposes the user's project instead of the agent's /code folder.
 
 workspace_root="${PLOINKY_CWD:-$PWD}"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+secrets_tool="${script_dir}/encrypted-secrets.mjs"
 
 # Ensure the Explorer agent runs in global mode so the workspace root is mounted
 # into the container (not just the isolated agent workdir under ./agents/explorer).
@@ -71,104 +73,26 @@ NODE
 fi
 
 mkdir -p .ploinky
-secrets_file=".ploinky/.secrets"
-touch "$secrets_file"
 
 # If already configured in secrets, don't overwrite.
-if grep -q '^ASSISTOS_FS_ROOT=' "$secrets_file"; then
-    :
-else
-    {
-        echo
-        echo "ASSISTOS_FS_ROOT=${workspace_root}"
-    } >> "$secrets_file"
+if [[ -z "$(node "$secrets_tool" "$workspace_root" get "ASSISTOS_FS_ROOT")" ]]; then
+    node "$secrets_tool" "$workspace_root" set "ASSISTOS_FS_ROOT" "$workspace_root"
 fi
 
 ensure_secret_var() {
     local name="$1"
     local value="$2"
-    if grep -q "^${name}=" "$secrets_file"; then
-        sed -i.bak "s#^${name}=.*#${name}=${value}#g" "$secrets_file" && rm -f "${secrets_file}.bak"
-    else
-        echo "${name}=${value}" >> "$secrets_file"
-    fi
+    node "$secrets_tool" "$workspace_root" set "$name" "$value"
 }
 
 delete_secret_var() {
     local name="$1"
-    node - <<'NODE' "$secrets_file" "$name"
-const fs = require('fs');
-const file = process.argv[2];
-const name = process.argv[3];
-try {
-  const lines = fs.readFileSync(file, 'utf8').split('\n');
-  const next = lines.filter((line) => !String(line).startsWith(`${name}=`));
-  fs.writeFileSync(file, next.join('\n'));
-} catch (_) {}
-NODE
+    node "$secrets_tool" "$workspace_root" delete "$name"
 }
 
 resolve_config_var() {
     local name="$1"
-    node - <<'NODE' "$workspace_root" "$secrets_file" "$name"
-const fs = require('fs');
-const path = require('path');
-
-const workspaceRoot = process.argv[2];
-const secretsFile = process.argv[3];
-const varName = process.argv[4];
-
-function parseEnvFile(file) {
-  const out = {};
-  try {
-    const raw = fs.readFileSync(file, 'utf8');
-    for (const line of raw.split('\n')) {
-      const trimmed = String(line || '').trim();
-      if (!trimmed || trimmed.startsWith('#')) continue;
-      const idx = trimmed.indexOf('=');
-      if (idx <= 0) continue;
-      const key = trimmed.slice(0, idx).trim();
-      let value = trimmed.slice(idx + 1).trim();
-      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-        value = value.slice(1, -1);
-      }
-      out[key] = value;
-    }
-  } catch (_) {}
-  return out;
-}
-
-function readSecrets(file) {
-  return parseEnvFile(file);
-}
-
-const processValue = String(process.env[varName] || '').trim();
-if (processValue) {
-  process.stdout.write(processValue);
-  process.exit(0);
-}
-
-let current = path.resolve(workspaceRoot);
-while (true) {
-  const envFile = path.join(current, '.env');
-  const envMap = parseEnvFile(envFile);
-  const envValue = String(envMap[varName] || '').trim();
-  if (envValue) {
-    process.stdout.write(envValue);
-    process.exit(0);
-  }
-  const parent = path.dirname(current);
-  if (parent === current) break;
-  current = parent;
-}
-
-const secrets = readSecrets(secretsFile);
-const secretValue = String(secrets[varName] || '').trim();
-if (secretValue) {
-  process.stdout.write(secretValue);
-  process.exit(0);
-}
-NODE
+    node "$secrets_tool" "$workspace_root" resolve "$name"
 }
 
 ensure_onlyoffice_service() {

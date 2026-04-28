@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Admin Settings</title>
+    <style>
+        :root {
+            color-scheme: light;
+            --bg: #f5f7fb;
+            --panel: #ffffff;
+            --text: #1f2937;
+            --muted: #667085;
+            --line: #d9dee8;
+            --accent: #2563eb;
+            --danger: #b42318;
+            --ok: #087443;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: Inter, "Segoe UI", Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+        main {
+            max-width: 1180px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 18px;
+        }
+        h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 760;
+        }
+        .agent-label {
+            color: var(--muted);
+            font-size: 13px;
+            margin-top: 4px;
+        }
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .toolbar {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr auto;
+            gap: 10px;
+            padding: 14px;
+            border-bottom: 1px solid var(--line);
+            align-items: end;
+        }
+        label {
+            display: grid;
+            gap: 5px;
+            font-size: 12px;
+            color: var(--muted);
+            font-weight: 650;
+        }
+        input {
+            width: 100%;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            padding: 9px 10px;
+            font: inherit;
+            color: var(--text);
+            background: #fff;
+        }
+        .password-field {
+            position: relative;
+            display: block;
+        }
+        .password-field input {
+            padding-right: 42px;
+        }
+        button, a.button {
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            padding: 9px 12px;
+            font: inherit;
+            font-weight: 700;
+            background: #fff;
+            color: var(--text);
+            cursor: pointer;
+            text-decoration: none;
+            white-space: nowrap;
+        }
+        button.primary {
+            border-color: var(--accent);
+            background: var(--accent);
+            color: #fff;
+        }
+        button.danger {
+            border-color: rgba(180, 35, 24, 0.28);
+            color: var(--danger);
+        }
+        .password-toggle {
+            position: absolute;
+            right: 4px;
+            top: 50%;
+            width: 32px;
+            height: 30px;
+            display: grid;
+            place-items: center;
+            padding: 0;
+            border: 0;
+            border-radius: 4px;
+            background: transparent;
+            transform: translateY(-50%);
+        }
+        .password-toggle:hover,
+        .password-toggle:focus-visible {
+            background: #f1f5f9;
+        }
+        .password-toggle img {
+            width: 18px;
+            height: 18px;
+            opacity: 0.72;
+            pointer-events: none;
+        }
+        .password-toggle[aria-pressed="true"] img {
+            opacity: 1;
+        }
+        button:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+        }
+        .status {
+            min-height: 22px;
+            padding: 10px 14px;
+            font-size: 13px;
+            color: var(--muted);
+            border-bottom: 1px solid var(--line);
+        }
+        .status.error { color: var(--danger); }
+        .status.ok { color: var(--ok); }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+        th, td {
+            border-bottom: 1px solid var(--line);
+            padding: 10px;
+            text-align: left;
+            vertical-align: top;
+            font-size: 13px;
+        }
+        th {
+            background: #f8fafc;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 750;
+        }
+        tr:last-child td { border-bottom: 0; }
+        .actions {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+        }
+        .empty {
+            padding: 22px;
+            color: var(--muted);
+            text-align: center;
+        }
+        @media (max-width: 900px) {
+            main { padding: 14px; }
+            header { align-items: flex-start; flex-direction: column; }
+            .toolbar { grid-template-columns: 1fr; }
+            table, thead, tbody, tr, th, td { display: block; }
+            thead { display: none; }
+            tr { border-bottom: 1px solid var(--line); }
+            td { border-bottom: 0; }
+            td::before {
+                content: attr(data-label);
+                display: block;
+                color: var(--muted);
+                font-size: 11px;
+                font-weight: 750;
+                margin-bottom: 4px;
+            }
+            .actions { justify-content: flex-start; flex-wrap: wrap; }
+        }
+    </style>
+</head>
+<body>
+<main>
+    <header>
+        <div>
+            <h1>Admin Settings</h1>
+            <div class="agent-label" id="agentLabel"></div>
+        </div>
+        <a class="button" href="/explorer/index.html" id="backLink">Back to Explorer</a>
+    </header>
+    <section class="panel">
+        <form class="toolbar" id="createForm">
+            <label>Username
+                <input name="username" autocomplete="off" required>
+            </label>
+            <label>Password
+                <span class="password-field">
+                    <input name="password" type="password" autocomplete="new-password" required>
+                    <button type="button" class="password-toggle" data-toggle-password aria-label="Show password" title="Show password" aria-pressed="false">
+                        <img src="../assets/icons/eye.svg" alt="">
+                    </button>
+                </span>
+            </label>
+            <label>Name
+                <input name="name" autocomplete="off">
+            </label>
+            <label>Roles
+                <input name="roles" autocomplete="off">
+            </label>
+            <button class="primary" type="submit">Add User</button>
+        </form>
+        <div class="status" id="status"></div>
+        <div id="tableHost"></div>
+    </section>
+</main>
+<script>
+(() => {
+    const pathParts = window.location.pathname.split('/').filter(Boolean);
+    const agent = pathParts[0] || 'explorer';
+    const apiBase = `/api/agents/${encodeURIComponent(agent)}/users`;
+    const status = document.getElementById('status');
+    const tableHost = document.getElementById('tableHost');
+    const createForm = document.getElementById('createForm');
+    const backLink = document.getElementById('backLink');
+    document.getElementById('agentLabel').textContent = `Agent: ${agent}`;
+    backLink.href = `/${encodeURIComponent(agent)}/index.html`;
+    backLink.textContent = `Back to ${agent}`;
+
+    let users = [];
+
+    function setStatus(message, kind = '') {
+        status.textContent = message || '';
+        status.className = `status${kind ? ` ${kind}` : ''}`;
+    }
+
+    function parseRoles(value) {
+        const roles = String(value || '')
+            .split(',')
+            .map((role) => role.trim())
+            .filter((role) => role.toLowerCase() !== 'local')
+            .filter(Boolean);
+        return Array.from(new Set(roles));
+    }
+
+    function formatRoles(roles) {
+        return Array.isArray(roles)
+            ? roles.filter((role) => String(role || '').trim().toLowerCase() !== 'local').join(', ')
+            : '';
+    }
+
+    function togglePasswordVisibility(button) {
+        const field = button.closest('.password-field');
+        const input = field?.querySelector('input');
+        if (!input) return;
+        const shouldShow = input.type === 'password';
+        input.type = shouldShow ? 'text' : 'password';
+        const label = shouldShow ? 'Hide password' : 'Show password';
+        button.setAttribute('aria-label', label);
+        button.setAttribute('aria-pressed', shouldShow ? 'true' : 'false');
+        button.title = label;
+        input.focus();
+    }
+
+    async function request(path, options = {}) {
+        const response = await fetch(path, {
+            credentials: 'include',
+            headers: {
+                Accept: 'application/json',
+                ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+            },
+            ...options,
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || payload.ok === false) {
+            throw new Error(payload.message || payload.error || `HTTP ${response.status}`);
+        }
+        return payload;
+    }
+
+    function userRow(user) {
+        const tr = document.createElement('tr');
+        tr.dataset.userId = user.id;
+        tr.innerHTML = `
+            <td data-label="Username"><input data-field="username" value="${escapeAttr(user.username)}"></td>
+            <td data-label="Name"><input data-field="name" value="${escapeAttr(user.name || '')}"></td>
+            <td data-label="Roles"><input data-field="roles" value="${escapeAttr(formatRoles(user.roles))}"></td>
+            <td data-label="Password"><span class="password-field">
+                <input data-field="password" type="password" placeholder="Leave unchanged">
+                <button type="button" class="password-toggle" data-toggle-password aria-label="Show password" title="Show password" aria-pressed="false">
+                    <img src="../assets/icons/eye.svg" alt="">
+                </button>
+            </span></td>
+            <td data-label="Actions"><div class="actions">
+                <button type="button" data-action="save">Save</button>
+                <button type="button" class="danger" data-action="delete">Delete</button>
+            </div></td>
+        `;
+        return tr;
+    }
+
+    function escapeAttr(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+    }
+
+    function render() {
+        if (!users.length) {
+            tableHost.innerHTML = '<div class="empty">No users.</div>';
+            return;
+        }
+        const table = document.createElement('table');
+        table.innerHTML = `
+            <thead>
+                <tr>
+                    <th>Username</th>
+                    <th>Name</th>
+                    <th>Roles</th>
+                    <th>Password Reset</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        `;
+        const tbody = table.querySelector('tbody');
+        users.forEach((user) => tbody.appendChild(userRow(user)));
+        tableHost.replaceChildren(table);
+    }
+
+    async function loadUsers() {
+        setStatus('Loading users...');
+        const payload = await request(apiBase);
+        users = Array.isArray(payload.users) ? payload.users : [];
+        render();
+        setStatus(`${users.length} user${users.length === 1 ? '' : 's'} loaded.`, 'ok');
+    }
+
+    createForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const data = new FormData(createForm);
+        try {
+            setStatus('Creating user...');
+            await request(apiBase, {
+                method: 'POST',
+                body: JSON.stringify({
+                    username: data.get('username'),
+                    password: data.get('password'),
+                    name: data.get('name'),
+                    roles: parseRoles(data.get('roles')),
+                }),
+            });
+            createForm.reset();
+            await loadUsers();
+        } catch (error) {
+            setStatus(error.message, 'error');
+        }
+    });
+
+    tableHost.addEventListener('click', async (event) => {
+        const button = event.target.closest('button[data-action]');
+        if (!button) return;
+        const row = button.closest('tr[data-user-id]');
+        if (!row) return;
+        const userId = row.dataset.userId;
+        const action = button.dataset.action;
+        try {
+            if (action === 'delete') {
+                setStatus('Deleting user...');
+                await request(`${apiBase}/${encodeURIComponent(userId)}`, { method: 'DELETE' });
+                await loadUsers();
+                return;
+            }
+            if (action === 'save') {
+                const body = {};
+                row.querySelectorAll('input[data-field]').forEach((input) => {
+                    if (input.dataset.field === 'roles') {
+                        body.roles = parseRoles(input.value);
+                    } else if (input.dataset.field === 'password') {
+                        if (input.value) body.password = input.value;
+                    } else {
+                        body[input.dataset.field] = input.value;
+                    }
+                });
+                setStatus('Saving user...');
+                await request(`${apiBase}/${encodeURIComponent(userId)}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify(body),
+                });
+                await loadUsers();
+            }
+        } catch (error) {
+            setStatus(error.message, 'error');
+        }
+    });
+
+    document.addEventListener('click', (event) => {
+        const button = event.target.closest('button[data-toggle-password]');
+        if (!button) return;
+        togglePasswordVisibility(button);
+    });
+
+    loadUsers().catch((error) => setStatus(error.message, 'error'));
+})();
+</script>
+</body>
+</html>
