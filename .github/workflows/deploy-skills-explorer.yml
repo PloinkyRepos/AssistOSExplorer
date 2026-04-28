@@ -1,0 +1,498 @@
+name: Deploy Skills Explorer
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'AssistOSExplorer branch to deploy'
+        required: false
+        default: 'main'
+        type: string
+      ploinky_branch:
+        description: 'Ploinky branch to use'
+        required: false
+        default: 'master'
+        type: string
+      workspace_name:
+        description: 'Workspace directory name on the remote host'
+        required: false
+        default: 'explorerWorkspace'
+        type: string
+      router_port:
+        description: 'Router port on the remote host'
+        required: false
+        default: '8097'
+        type: string
+      public_url:
+        description: 'Public Explorer URL'
+        required: false
+        default: 'https://skills.axiologic.dev'
+        type: string
+      update_ploinky:
+        description: 'Update Ploinky on the remote host before deploying'
+        required: false
+        default: true
+        type: boolean
+      clean_stale_containers:
+        description: 'Remove old containers for this workspace before starting'
+        required: false
+        default: true
+        type: boolean
+
+  push:
+    branches:
+      - main
+    paths:
+      - 'explorer/**'
+      - 'gitAgent/**'
+      - 'dpuAgent/**'
+      - 'soplangAgent/**'
+      - 'tasksAgent/**'
+      - 'llmAssistant/**'
+      - 'webmeetAgent/**'
+      - 'multimedia/**'
+      - 'webAdmin/**'
+      - 'webassist/**'
+      - '.github/workflows/deploy-skills-explorer.yml'
+
+concurrency:
+  group: deploy-skills-explorer
+  cancel-in-progress: false
+
+env:
+  SSH_USER: ${{ vars.SSH_USER || 'admin' }}
+  SSH_HOST: ${{ vars.SSH_HOST || '193.180.209.191' }}
+  WORKSPACE: ${{ inputs.workspace_name || vars.EXPLORER_WORKSPACE || 'explorerWorkspace' }}
+  ROUTER_PORT: ${{ inputs.router_port || vars.EXPLORER_ROUTER_PORT || '8097' }}
+  PUBLIC_URL: ${{ inputs.public_url || vars.EXPLORER_PUBLIC_URL || 'https://skills.axiologic.dev' }}
+  EXPLORER_BRANCH: ${{ inputs.branch || 'main' }}
+  PLOINKY_BRANCH: ${{ inputs.ploinky_branch || 'master' }}
+  UPDATE_PLOINKY: ${{ inputs.update_ploinky == '' && 'true' || inputs.update_ploinky }}
+  CLEAN_STALE_CONTAINERS: ${{ inputs.clean_stale_containers == '' && 'true' || inputs.clean_stale_containers }}
+
+jobs:
+  deploy:
+    name: Deploy or Update Explorer
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPLORER_BRANCH }}
+          fetch-depth: 0
+
+      - name: Validate GitHub configuration
+        env:
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+          PLOINKY_MASTER_KEY: ${{ secrets.PLOINKY_MASTER_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SSH_KEY:-}" ]; then
+            echo "::error::Missing required repository secret SSH_KEY"
+            exit 1
+          fi
+          if [ -z "${PLOINKY_MASTER_KEY:-}" ]; then
+            echo "::error::Missing required repository secret PLOINKY_MASTER_KEY"
+            exit 1
+          fi
+          if ! printf '%s' "$PLOINKY_MASTER_KEY" | grep -Eq '^[A-Fa-f0-9]{64}$'; then
+            echo "::error::PLOINKY_MASTER_KEY must be exactly 64 hex characters"
+            exit 1
+          fi
+          if [ -z "${SSH_HOST:-}" ] || [ -z "${SSH_USER:-}" ]; then
+            echo "::error::SSH_USER and SSH_HOST must be configured"
+            exit 1
+          fi
+
+      - name: Prepare SSH key
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ env.SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Install host prerequisites and Ploinky
+        env:
+          PLOINKY_MASTER_KEY: ${{ secrets.PLOINKY_MASTER_KEY }}
+        run: |
+          set -euo pipefail
+          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
+            -i ~/.ssh/deploy_key "${SSH_USER}@${SSH_HOST}" \
+            "PLOINKY_MASTER_KEY='$PLOINKY_MASTER_KEY' PLOINKY_BRANCH='$PLOINKY_BRANCH' UPDATE_PLOINKY='$UPDATE_PLOINKY' bash -s" << 'REMOTE'
+          set -euo pipefail
+
+          if command -v dnf >/dev/null 2>&1; then
+            PKG_INSTALL="sudo dnf install -y"
+            PKG_UPDATE="sudo dnf check-update || true"
+          elif command -v yum >/dev/null 2>&1; then
+            PKG_INSTALL="sudo yum install -y"
+            PKG_UPDATE="sudo yum check-update || true"
+          elif command -v apt-get >/dev/null 2>&1; then
+            PKG_INSTALL="sudo apt-get install -y -qq"
+            PKG_UPDATE="sudo apt-get update -qq"
+          else
+            echo "[deploy] ERROR: no supported package manager found"
+            exit 1
+          fi
+
+          $PKG_UPDATE || true
+          $PKG_INSTALL git curl jq tmux python3 ca-certificates openssl nginx || true
+
+          if ! command -v podman >/dev/null 2>&1; then
+            echo "[deploy] Installing podman..."
+            $PKG_INSTALL podman
+          fi
+
+          if ! command -v node >/dev/null 2>&1; then
+            echo "[deploy] Installing Node.js..."
+            if command -v apt-get >/dev/null 2>&1; then
+              curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+              sudo apt-get install -y nodejs
+            else
+              curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
+              $PKG_INSTALL nodejs
+            fi
+          fi
+
+          loginctl enable-linger "$(whoami)" 2>/dev/null || true
+
+          PLOINKY_DIR="$HOME/ploinky"
+          if [ ! -d "$PLOINKY_DIR/.git" ]; then
+            rm -rf "$PLOINKY_DIR"
+            git clone --branch "${PLOINKY_BRANCH:-master}" https://github.com/OutfinityResearch/ploinky.git "$PLOINKY_DIR"
+          elif [ "${UPDATE_PLOINKY:-true}" = "true" ]; then
+            cd "$PLOINKY_DIR"
+            git fetch origin
+            git checkout "${PLOINKY_BRANCH:-master}"
+            git reset --hard "origin/${PLOINKY_BRANCH:-master}"
+            git clean -fd
+          fi
+
+          cd "$PLOINKY_DIR"
+          npm install
+
+          mkdir -p "$HOME/.local/bin"
+          ln -sf "$PLOINKY_DIR/bin/ploinky" "$HOME/.local/bin/ploinky"
+          ln -sf "$PLOINKY_DIR/bin/p-cli" "$HOME/.local/bin/p-cli"
+          if ! grep -q 'ploinky/bin' "$HOME/.bashrc" 2>/dev/null; then
+            echo 'export PATH="$HOME/ploinky/bin:$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
+          fi
+
+          echo "[deploy] Host prerequisites ready."
+          node --version
+          npm --version
+          podman --version
+          REMOTE
+
+      - name: Sync workspace and runtime variables
+        env:
+          PLOINKY_MASTER_KEY: ${{ secrets.PLOINKY_MASTER_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          AXIOLOGIC_API_KEY: ${{ secrets.AXIOLOGIC_API_KEY }}
+          OPENAI_OPENCODE_KEY: ${{ secrets.OPENAI_OPENCODE_KEY }}
+          SOUL_GATEWAY_API_KEY: ${{ secrets.SOUL_GATEWAY_API_KEY }}
+          OPENAI_AXIOLOGIC_KIRO_URL: ${{ vars.OPENAI_AXIOLOGIC_KIRO_URL }}
+          OPENAI_AXIOLOGIC_KIRO_KEY_ENV: ${{ vars.OPENAI_AXIOLOGIC_KIRO_KEY_ENV }}
+          ANTHROPIC_AXIOLOGIC_ANTIGRAVITY_URL: ${{ vars.ANTHROPIC_AXIOLOGIC_ANTIGRAVITY_URL }}
+          ANTHROPIC_AXIOLOGIC_ANTIGRAVITY_KEY_ENV: ${{ vars.ANTHROPIC_AXIOLOGIC_ANTIGRAVITY_KEY_ENV }}
+          OPENAI_OPENCODE_URL: ${{ vars.OPENAI_OPENCODE_URL }}
+          OPENAI_OPENAI_RESPONSES_URL: ${{ vars.OPENAI_OPENAI_RESPONSES_URL }}
+          OPENAI_OPENAI_RESPONSES_KEY_ENV: ${{ vars.OPENAI_OPENAI_RESPONSES_KEY_ENV }}
+          LLM_MODELS: ${{ vars.LLM_MODELS }}
+          ONLYOFFICE_PUBLIC_URL: ${{ vars.ONLYOFFICE_PUBLIC_URL }}
+          ONLYOFFICE_INTERNAL_URL: ${{ vars.ONLYOFFICE_INTERNAL_URL }}
+          ONLYOFFICE_CALLBACK_BASE_URL: ${{ vars.ONLYOFFICE_CALLBACK_BASE_URL }}
+          ONLYOFFICE_JWT_SECRET: ${{ secrets.ONLYOFFICE_JWT_SECRET }}
+          SKILLS_TLS_CERT_PEM: ${{ secrets.SKILLS_TLS_CERT_PEM }}
+          SKILLS_TLS_KEY_PEM: ${{ secrets.SKILLS_TLS_KEY_PEM }}
+        run: |
+          set -euo pipefail
+
+          write_env() {
+            local name="$1"
+            local value="${!name:-}"
+            printf '%s=' "$name"
+            printf '%q\n' "$value"
+          }
+
+          {
+            write_env PLOINKY_MASTER_KEY
+            write_env OPENAI_API_KEY
+            write_env OPENROUTER_API_KEY
+            write_env AXIOLOGIC_API_KEY
+            write_env OPENAI_OPENCODE_KEY
+            write_env SOUL_GATEWAY_API_KEY
+            write_env OPENAI_AXIOLOGIC_KIRO_URL
+            write_env OPENAI_AXIOLOGIC_KIRO_KEY_ENV
+            write_env ANTHROPIC_AXIOLOGIC_ANTIGRAVITY_URL
+            write_env ANTHROPIC_AXIOLOGIC_ANTIGRAVITY_KEY_ENV
+            write_env OPENAI_OPENCODE_URL
+            write_env OPENAI_OPENAI_RESPONSES_URL
+            write_env OPENAI_OPENAI_RESPONSES_KEY_ENV
+            write_env LLM_MODELS
+            write_env ONLYOFFICE_PUBLIC_URL
+            write_env ONLYOFFICE_INTERNAL_URL
+            write_env ONLYOFFICE_CALLBACK_BASE_URL
+            write_env ONLYOFFICE_JWT_SECRET
+          } > /tmp/skills_explorer_env
+          chmod 600 /tmp/skills_explorer_env
+
+          if [ -n "${SKILLS_TLS_CERT_PEM:-}" ] && [ -n "${SKILLS_TLS_KEY_PEM:-}" ]; then
+            printf '%s\n' "$SKILLS_TLS_CERT_PEM" > /tmp/skills_tls_cert.pem
+            printf '%s\n' "$SKILLS_TLS_KEY_PEM" > /tmp/skills_tls_key.pem
+            chmod 600 /tmp/skills_tls_cert.pem /tmp/skills_tls_key.pem
+            scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no /tmp/skills_tls_cert.pem "${SSH_USER}@${SSH_HOST}:/tmp/skills_tls_cert.pem"
+            scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no /tmp/skills_tls_key.pem "${SSH_USER}@${SSH_HOST}:/tmp/skills_tls_key.pem"
+          fi
+
+          scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no /tmp/skills_explorer_env "${SSH_USER}@${SSH_HOST}:/tmp/skills_explorer_env"
+
+          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
+            -i ~/.ssh/deploy_key "${SSH_USER}@${SSH_HOST}" \
+            "WORKSPACE='$WORKSPACE' EXPLORER_BRANCH='$EXPLORER_BRANCH' ROUTER_PORT='$ROUTER_PORT' PUBLIC_URL='$PUBLIC_URL' CLEAN_STALE_CONTAINERS='$CLEAN_STALE_CONTAINERS' bash -s" << 'REMOTE'
+          set -euo pipefail
+          export PATH="$HOME/ploinky/bin:$HOME/.local/bin:$PATH"
+
+          WORK_DIR="$HOME/$WORKSPACE"
+          mkdir -p "$WORK_DIR/.ploinky/repos" "$WORK_DIR/logs"
+          cd "$WORK_DIR"
+
+          set -a
+          . /tmp/skills_explorer_env
+          set +a
+          rm -f /tmp/skills_explorer_env
+
+          WORKSPACE_ENV_FILE="$WORK_DIR/.env"
+          touch "$WORKSPACE_ENV_FILE"
+          chmod 600 "$WORKSPACE_ENV_FILE"
+          sed -i '/^PLOINKY_MASTER_KEY=/d' "$WORKSPACE_ENV_FILE"
+          printf 'PLOINKY_MASTER_KEY=%s\n' "$PLOINKY_MASTER_KEY" >> "$WORKSPACE_ENV_FILE"
+
+          echo "[deploy] Stopping current workspace services if present..."
+          if [ -f "$WORK_DIR/.ploinky/routing.json" ]; then
+            python3 - "$WORK_DIR/.ploinky/routing.json" "$ROUTER_PORT" <<'PY' || true
+          import json
+          import sys
+          path, port = sys.argv[1], int(sys.argv[2])
+          try:
+              with open(path, 'r', encoding='utf-8') as handle:
+                  data = json.load(handle)
+          except Exception:
+              data = {}
+          data['port'] = port
+          data.setdefault('routes', {})
+          with open(path, 'w', encoding='utf-8') as handle:
+              json.dump(data, handle, indent=2)
+          PY
+          fi
+          ploinky stop || true
+
+          if [ "${CLEAN_STALE_CONTAINERS:-true}" = "true" ]; then
+            echo "[deploy] Removing stale containers for workspace $WORKSPACE..."
+            podman ps -a --format '{{.Names}}' | grep "_${WORKSPACE}_" | while IFS= read -r container_name; do
+              [ -n "$container_name" ] || continue
+              podman rm -f "$container_name" 2>/dev/null || true
+            done || true
+          fi
+
+          echo "[deploy] Normalizing Ploinky workspace registry..."
+          rm -f "$WORK_DIR/.ploinky/agents"
+          cat > "$WORK_DIR/.ploinky/agents.json" <<'JSON'
+          {}
+          JSON
+          cat > "$WORK_DIR/.ploinky/enabled_repos.json" <<'JSON'
+          [
+            "fileExplorer",
+            "webmeetInfra"
+          ]
+          JSON
+          mkdir -p "$WORK_DIR/.ploinky/agents" "$WORK_DIR/.ploinky/code" "$WORK_DIR/.ploinky/skills" "$WORK_DIR/.ploinky/logs" "$WORK_DIR/.ploinky/shared" "$WORK_DIR/.ploinky/running" "$WORK_DIR/.ploinky/transcripts"
+
+          ploinky profile dev
+          ploinky sandbox disable
+
+          echo "[deploy] Syncing Ploinky repos..."
+          ploinky add repo fileExplorer https://github.com/PloinkyRepos/AssistOSExplorer.git "${EXPLORER_BRANCH:-main}" || true
+          ploinky add repo webmeetInfra https://github.com/PloinkyRepos/webmeetInfra.git main || true
+          ploinky enable repo fileExplorer
+          ploinky enable repo webmeetInfra
+
+          for repo_spec in "fileExplorer:${EXPLORER_BRANCH:-main}" "webmeetInfra:main"; do
+            repo_name="${repo_spec%%:*}"
+            repo_branch="${repo_spec#*:}"
+            repo_dir="$WORK_DIR/.ploinky/repos/$repo_name"
+            if [ -d "$repo_dir/.git" ]; then
+              git -C "$repo_dir" fetch origin
+              git -C "$repo_dir" checkout "$repo_branch"
+              git -C "$repo_dir" reset --hard "origin/$repo_branch"
+              git -C "$repo_dir" clean -fd
+              echo "[deploy] $repo_name at $(git -C "$repo_dir" rev-parse --short HEAD)"
+            fi
+          done
+
+          set_var() {
+            local name="$1"
+            local value="$2"
+            if [ -n "$value" ]; then
+              ploinky var "$name" "$value"
+              echo "[deploy] Set $name"
+            fi
+          }
+
+          set_var PLOINKY_CODE_WRITABLE "1"
+          set_var PLOINKY_ROUTER_URL "http://host.containers.internal:${ROUTER_PORT}"
+          set_var ASSISTOS_FS_ROOT "$WORK_DIR"
+          set_var WORKSPACE_ROOT "$WORK_DIR"
+          set_var PLOINKY_WORKSPACE_ROOT "$WORK_DIR"
+          set_var PLOINKY_WEBMEET_MASTER_KEY "$PLOINKY_MASTER_KEY"
+
+          set_var OPENAI_API_KEY "${OPENAI_API_KEY:-}"
+          set_var OPENROUTER_API_KEY "${OPENROUTER_API_KEY:-}"
+          set_var AXIOLOGIC_API_KEY "${AXIOLOGIC_API_KEY:-}"
+          set_var OPENAI_OPENCODE_KEY "${OPENAI_OPENCODE_KEY:-}"
+          set_var SOUL_GATEWAY_API_KEY "${SOUL_GATEWAY_API_KEY:-}"
+
+          set_var OPENAI_AXIOLOGIC_KIRO_URL "${OPENAI_AXIOLOGIC_KIRO_URL:-}"
+          set_var OPENAI_AXIOLOGIC_KIRO_KEY_ENV "${OPENAI_AXIOLOGIC_KIRO_KEY_ENV:-}"
+          set_var ANTHROPIC_AXIOLOGIC_ANTIGRAVITY_URL "${ANTHROPIC_AXIOLOGIC_ANTIGRAVITY_URL:-}"
+          set_var ANTHROPIC_AXIOLOGIC_ANTIGRAVITY_KEY_ENV "${ANTHROPIC_AXIOLOGIC_ANTIGRAVITY_KEY_ENV:-}"
+          set_var OPENAI_OPENCODE_URL "${OPENAI_OPENCODE_URL:-}"
+          set_var OPENAI_OPENAI_RESPONSES_URL "${OPENAI_OPENAI_RESPONSES_URL:-}"
+          set_var OPENAI_OPENAI_RESPONSES_KEY_ENV "${OPENAI_OPENAI_RESPONSES_KEY_ENV:-}"
+
+          set_var ONLYOFFICE_PUBLIC_URL "${ONLYOFFICE_PUBLIC_URL:-}"
+          set_var ONLYOFFICE_INTERNAL_URL "${ONLYOFFICE_INTERNAL_URL:-}"
+          set_var ONLYOFFICE_CALLBACK_BASE_URL "${ONLYOFFICE_CALLBACK_BASE_URL:-$PUBLIC_URL}"
+          set_var ONLYOFFICE_JWT_SECRET "${ONLYOFFICE_JWT_SECRET:-}"
+
+          if [ -n "${LLM_MODELS:-}" ]; then
+            IFS=';' read -ra MODEL_ENTRIES <<< "$LLM_MODELS"
+            for entry in "${MODEL_ENTRIES[@]}"; do
+              entry="$(printf '%s' "$entry" | xargs)"
+              [ -z "$entry" ] && continue
+              model_key="${entry%%=*}"
+              model_val="${entry#*=}"
+              if [ -n "$model_key" ] && [ -n "$model_val" ]; then
+                set_var "$model_key" "$model_val"
+              fi
+            done
+          fi
+
+          echo "[deploy] Starting Explorer..."
+          nohup env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" ploinky start fileExplorer/explorer "$ROUTER_PORT" > "$WORK_DIR/logs/skills-explorer-start.log" 2>&1 &
+
+          echo "[deploy] Waiting for local router..."
+          sleep 10
+          for i in $(seq 1 390); do
+            code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${ROUTER_PORT}/dashboard" || true)"
+            if [ "$code" = "200" ] || [ "$code" = "302" ]; then
+              echo "[deploy] Local router responding with HTTP $code"
+              break
+            fi
+            if [ "$i" = "390" ]; then
+              echo "[deploy] ERROR: local router did not respond in time"
+              tail -120 "$WORK_DIR/logs/skills-explorer-start.log" || true
+              exit 1
+            fi
+            sleep 2
+          done
+
+          echo "[deploy] Configuring nginx for $PUBLIC_URL..."
+          domain="$(node -e "console.log(new URL(process.argv[1]).hostname)" "$PUBLIC_URL")"
+          sudo mkdir -p /etc/ssl/private /etc/ssl/certs /etc/nginx/conf.d
+          if [ -f /tmp/skills_tls_cert.pem ] && [ -f /tmp/skills_tls_key.pem ]; then
+            sudo install -m 0644 /tmp/skills_tls_cert.pem /etc/ssl/certs/skills-explorer.crt
+            sudo install -m 0600 /tmp/skills_tls_key.pem /etc/ssl/private/skills-explorer.key
+            rm -f /tmp/skills_tls_cert.pem /tmp/skills_tls_key.pem
+          elif [ ! -f /etc/ssl/certs/skills-explorer.crt ] || [ ! -f /etc/ssl/private/skills-explorer.key ]; then
+            sudo openssl req -x509 -nodes -newkey rsa:2048 -sha256 -days 3650 \
+              -subj "/CN=$domain" \
+              -keyout /etc/ssl/private/skills-explorer.key \
+              -out /etc/ssl/certs/skills-explorer.crt
+          fi
+
+          sudo tee /etc/nginx/conf.d/skills-explorer.conf >/dev/null <<NGINX
+          server {
+              listen 80;
+              server_name $domain;
+              location / {
+                  proxy_pass http://127.0.0.1:${ROUTER_PORT};
+                  proxy_http_version 1.1;
+                  proxy_set_header Host \$host;
+                  proxy_set_header X-Real-IP \$remote_addr;
+                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto \$scheme;
+                  proxy_set_header Upgrade \$http_upgrade;
+                  proxy_set_header Connection "upgrade";
+                  proxy_read_timeout 3600s;
+                  proxy_send_timeout 3600s;
+              }
+          }
+
+          server {
+              listen 443 ssl http2;
+              server_name $domain;
+              ssl_certificate /etc/ssl/certs/skills-explorer.crt;
+              ssl_certificate_key /etc/ssl/private/skills-explorer.key;
+              location / {
+                  proxy_pass http://127.0.0.1:${ROUTER_PORT};
+                  proxy_http_version 1.1;
+                  proxy_set_header Host \$host;
+                  proxy_set_header X-Real-IP \$remote_addr;
+                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto https;
+                  proxy_set_header Upgrade \$http_upgrade;
+                  proxy_set_header Connection "upgrade";
+                  proxy_read_timeout 3600s;
+                  proxy_send_timeout 3600s;
+              }
+          }
+          NGINX
+
+          sudo nginx -t
+          sudo systemctl enable nginx 2>/dev/null || true
+          sudo systemctl restart nginx 2>/dev/null || sudo service nginx restart
+          sudo firewall-cmd --add-service=http --permanent 2>/dev/null || true
+          sudo firewall-cmd --add-service=https --permanent 2>/dev/null || true
+          sudo firewall-cmd --reload 2>/dev/null || true
+          sudo ufw allow 'Nginx Full' 2>/dev/null || true
+          sudo setsebool -P httpd_can_network_connect 1 2>/dev/null || true
+
+          echo "[deploy] Running local nginx proxy check..."
+          proxy_code="$(curl -k -s -o /dev/null -w '%{http_code}' --resolve "${domain}:443:127.0.0.1" "https://${domain}/dashboard" || true)"
+          if [ "$proxy_code" != "200" ] && [ "$proxy_code" != "302" ]; then
+            echo "[deploy] ERROR: local nginx proxy returned HTTP $proxy_code"
+            exit 1
+          fi
+
+          echo "[deploy] Containers:"
+          podman ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | head -100
+          echo "[deploy] Workspace status:"
+          env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" ploinky status || true
+          REMOTE
+
+      - name: Verify public URL
+        run: |
+          set -euo pipefail
+          echo "[deploy] Verifying ${PUBLIC_URL}/dashboard from GitHub runner..."
+          for i in $(seq 1 60); do
+            code="$(curl -L -s -o /tmp/skills-explorer-response.txt -w '%{http_code}' "${PUBLIC_URL%/}/dashboard" || true)"
+            if [ "$code" = "200" ] || [ "$code" = "302" ]; then
+              echo "[deploy] Public URL responding with HTTP $code"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "[deploy] ERROR: public URL did not become reachable"
+          echo "[deploy] Last HTTP code: ${code:-none}"
+          sed -n '1,40p' /tmp/skills-explorer-response.txt 2>/dev/null || true
+          exit 1
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/deploy_key /tmp/skills_explorer_env /tmp/skills_tls_cert.pem /tmp/skills_tls_key.pem

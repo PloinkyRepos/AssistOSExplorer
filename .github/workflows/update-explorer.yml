@@ -34,13 +34,6 @@ on:
         default: true
         type: boolean
 
-  push:
-    branches:
-      - main
-    paths:
-      - 'explorer/**'
-      - '.github/workflows/update-explorer.yml'
-
 env:
   SSH_USER: ${{ vars.SSH_USER || 'admin' }}
   SSH_HOST: ${{ vars.SSH_HOST || '193.180.209.191' }}
