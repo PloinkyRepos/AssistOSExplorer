@@ -137,6 +137,9 @@ function normalizeArgs(toolName, args) {
       if (typeof input.value !== 'string') {
         throw new Error(`${toolName} requires a "value" string.`);
       }
+      if (input.displayName !== undefined && typeof input.displayName !== 'string') {
+        throw new Error(`${toolName} requires "displayName" to be a string when provided.`);
+      }
       return input;
     case 'secret_grant':
     case 'dpu_secret_grant':

@@ -162,6 +162,23 @@ test('secret values are encrypted at rest and remain readable through ACL-aware 
   assert.equal(fetched.secret.value, 'top-secret-value');
 });
 
+test('secret put stores display names separately from strict keys', async () => {
+  const created = await putSecret(authInfo, {
+    key: 'secret_3',
+    displayName: 'secret 3',
+    value: 'named-value'
+  });
+
+  assert.equal(created.ok, true);
+  assert.equal(created.secret.key, 'secret_3');
+  assert.equal(created.secret.displayName, 'secret 3');
+
+  const fetched = await getSecretByKey(authInfo, { key: 'secret_3' });
+  assert.equal(fetched.secret.key, 'secret_3');
+  assert.equal(fetched.secret.displayName, 'secret 3');
+  assert.equal(fetched.secret.value, 'named-value');
+});
+
 test('delegated secret reads accept direct agent invocations without a binding id', async () => {
   const readerAuth = {
     user: {

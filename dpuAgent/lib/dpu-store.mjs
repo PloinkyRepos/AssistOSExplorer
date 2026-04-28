@@ -608,6 +608,7 @@ async function serializeSecret(state, permissionsManifest, secret, actor, option
   return {
     id: secret.id,
     key: secret.key,
+    displayName: secret.displayName || secret.key,
     ownerId: secret.ownerId,
     role,
     canRead,
@@ -620,6 +621,20 @@ async function serializeSecret(state, permissionsManifest, secret, actor, option
     createdAt: secret.createdAt,
     updatedAt: secret.updatedAt
   };
+}
+
+function normalizeSecretDisplayName(value, fallbackKey) {
+  const normalized = String(value ?? fallbackKey ?? '').trim();
+  if (!normalized) {
+    return fallbackKey;
+  }
+  if (normalized.includes('\0')) {
+    throw new Error('displayName contains an invalid null byte.');
+  }
+  if (/[\\/]/.test(normalized)) {
+    throw new Error('displayName cannot contain path separators.');
+  }
+  return normalized;
 }
 
 async function serializeConfidentialObject(state, permissionsManifest, objectRecord, actor, options = {}) {
@@ -956,7 +971,7 @@ export async function getSecretByKey(authInfo = null, { key }) {
   });
 }
 
-export async function putSecret(authInfo = null, { key, value }) {
+export async function putSecret(authInfo = null, { key, value, displayName }) {
   assertInvocationScopeFor('secret_put', authInfo);
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
@@ -968,14 +983,21 @@ export async function putSecret(authInfo = null, { key, value }) {
     }, async () => {
       const normalizedKey = normalizeSecretKey(key);
       const normalizedValue = String(value ?? '');
+      const normalizedDisplayName = displayName === undefined
+        ? null
+        : normalizeSecretDisplayName(displayName, normalizedKey);
       let secret = getSecret(state, normalizedKey);
       if (secret) {
         assertSecretPermission(secret, actor, 'write', permissionsManifest);
+        if (normalizedDisplayName !== null) {
+          secret.displayName = normalizedDisplayName;
+        }
         secret.updatedAt = nowIso();
       } else {
         secret = {
           id: randomUUID(),
           key: normalizedKey,
+          displayName: normalizedDisplayName || normalizedKey,
           ownerId: actor.principalId,
           acl: {},
           createdAt: nowIso(),

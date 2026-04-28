@@ -209,6 +209,10 @@
         "value": {
           "type": "string",
           "optional": false
+        },
+        "displayName": {
+          "type": "string",
+          "optional": true
         }
       },
       "env": {
@@ -229,6 +233,10 @@
         "value": {
           "type": "string",
           "optional": false
+        },
+        "displayName": {
+          "type": "string",
+          "optional": true
         }
       },
       "env": {
