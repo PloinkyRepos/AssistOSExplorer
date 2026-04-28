@@ -180,6 +180,17 @@ jobs:
           cd "$PLOINKY_DIR"
           npm install
 
+          ACHILLES_DIR="$PLOINKY_DIR/node_modules/achillesAgentLib"
+          if [ -d "$ACHILLES_DIR/.git" ]; then
+            git -C "$ACHILLES_DIR" fetch origin
+            git -C "$ACHILLES_DIR" checkout master
+            git -C "$ACHILLES_DIR" reset --hard origin/master
+            git -C "$ACHILLES_DIR" clean -fd
+          else
+            rm -rf "$ACHILLES_DIR"
+            git clone --branch master https://github.com/OutfinityResearch/achillesAgentLib.git "$ACHILLES_DIR"
+          fi
+
           mkdir -p "$HOME/.local/bin"
           ln -sf "$PLOINKY_DIR/bin/ploinky" "$HOME/.local/bin/ploinky"
           ln -sf "$PLOINKY_DIR/bin/p-cli" "$HOME/.local/bin/p-cli"
