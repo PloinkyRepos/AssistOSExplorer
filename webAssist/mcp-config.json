@@ -1,0 +1,66 @@
+{
+    "tools": [
+        {
+            "name": "web_cli_chat",
+            "title": "Web CLI Chat",
+            "description": "Execute a one-shot webAssist request in MCP mode.",
+            "command": "/code/src/index.mjs",
+            "args": ["-mcp"],
+            "cwd": "workspace",
+            "env": {
+                "TOOL_NAME": "web_cli_chat"
+            },
+            "inputSchema": {
+                "message": {
+                    "type": "string",
+                    "description": "User message sent to webAssist",
+                    "optional": false
+                },
+                "sessionId": {
+                    "type": "string",
+                    "description": "Optional session id to reuse",
+                    "optional": true
+                },
+                "json": {
+                    "type": "boolean",
+                    "description": "Return JSON output from webAssist",
+                    "optional": true
+                },
+                "dataDir": {
+                    "type": "string",
+                    "description": "Optional data directory override",
+                    "optional": true
+                },
+                "agentRoot": {
+                    "type": "string",
+                    "description": "Optional agent root override",
+                    "optional": true
+                }
+            }
+        },
+        {
+            "name": "web_cli_history",
+            "title": "Web CLI History",
+            "description": "Read persisted chat history for a webAssist session.",
+            "command": "/code/src/mcp/get-session-history.mjs",
+            "cwd": "workspace",
+            "inputSchema": {
+                "sessionId": {
+                    "type": "string",
+                    "description": "Session id used to load saved chat history",
+                    "optional": false
+                },
+                "dataDir": {
+                    "type": "string",
+                    "description": "Optional data directory override",
+                    "optional": true
+                },
+                "agentRoot": {
+                    "type": "string",
+                    "description": "Optional agent root override",
+                    "optional": true
+                }
+            }
+        }
+    ]
+}

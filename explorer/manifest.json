@@ -31,8 +31,8 @@
         "llmAssistant global",
         "webmeetAgent global",
         "multimedia global",
-        "webassist/webAssist",
-        "webassist/webAdmin"
+        "webAssist",
+        "webAdmin"
     ],
     "applicationPlugins": {
         "git": true,

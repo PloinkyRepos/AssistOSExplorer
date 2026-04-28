@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>webAdmin Docs</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --sidebar-width: 250px;
+            --sidebar-bg: #f7f8fa;
+            --sidebar-border: #e1e4e8;
+            --body-padding: 2rem;
+        }
+        html { scroll-behavior: smooth; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; line-height: 1.6; color: #24292e; background: #fff; }
+        code { background: rgba(175, 184, 193, 0.2); padding: 2px 4px; border-radius: 4px; font-size: 90%; }
+        pre { background: #f6f8fa; padding: 16px; overflow: auto; border-radius: 6px; margin-bottom: 1rem; }
+        pre code { background: none; padding: 0; font-size: 85%; }
+        a { color: #0b63ce; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        h1 { border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; margin-bottom: 1rem; }
+        h2 { border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; margin-top: 2rem; margin-bottom: 1rem; }
+        h3 { margin-top: 1.5rem; margin-bottom: 0.7rem; }
+        ul { padding-left: 20px; margin-bottom: 1rem; }
+        li { margin-bottom: 0.25em; }
+        table { border-collapse: collapse; width: 100%; margin-bottom: 1rem; }
+        th, td { border: 1px solid #dfe2e5; padding: 6px 13px; }
+        th { background: #f6f8fa; font-weight: 600; }
+
+        .layout { display: flex; min-height: 100vh; }
+        .sidebar {
+            position: fixed;
+            top: 0; left: 0;
+            bottom: 0;
+            width: var(--sidebar-width);
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--sidebar-border);
+            overflow-y: auto;
+            padding: 1.5rem;
+            z-index: 10;
+        }
+        .sidebar-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: #1a1a1a;
+        }
+        .sidebar-nav { margin-bottom: 1.5rem; }
+        .sidebar-nav label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: #666;
+            display: block;
+            margin-bottom: 0.5rem;
+        }
+        .sidebar-nav a {
+            display: block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.95rem;
+            color: #333;
+        }
+        .sidebar-nav a:hover {
+            background: rgba(175, 184, 193, 0.15);
+            text-decoration: none;
+            color: #000;
+        }
+        .sidebar-sep {
+            border-top: 1px solid var(--sidebar-border);
+            margin: 1rem 0;
+        }
+        .content {
+            margin-left: var(--sidebar-width);
+            padding: var(--body-padding);
+            max-width: 900px;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <nav class="sidebar">
+            <div class="sidebar-title">webAdmin Agent</div>
+            <div class="sidebar-nav">
+                <label>Navigation</label>
+                <a href="#overview">Overview</a>
+                <a href="#quick-start">Quick Start</a>
+                <a href="#webchat-access">Webchat Access</a>
+                <a href="#data-structure">Data Structure</a>
+                <a href="#news">news</a>
+                <a href="#statistics">statistics</a>
+                <a href="#lead-info">lead-info</a>
+                <a href="#update-lead">update-lead</a>
+                <a href="#manage-profile">manage-profile</a>
+                <a href="#manage-site-info">manage-site-info</a>
+                <a href="#manage-owner-info">manage-owner-info</a>
+                <a href="#orchestration-flow">Orchestration Flow</a>
+                <a href="#cli-parameters">CLI Parameters</a>
+                <a href="#testing">Testing</a>
+            </div>
+            <div class="sidebar-sep"></div>
+            <div class="sidebar-nav">
+                <label>Specifications</label>
+                <a href="specsLoader.html?spec=matrix.md">View Full Specs</a>
+            </div>
+        </nav>
+
+        <main class="content">
+            <h1>webAdmin Agent Documentation</h1>
+            <p>The owner-facing agent for lead lifecycle management, lead inspection, and activity reporting.</p>
+
+            <h2 id="overview">Overview</h2>
+            <p>webAdmin is an owner-facing management interface for the webAssist data system. It allows site owners to analyze leads, track visitor activity, manage profiling templates, and update site and contact information.</p>
+
+            <h2 id="quick-start">Quick Start</h2>
+            <p>webAdmin is used through the CLI. Run it directly:</p>
+            <pre><code>node webAdmin/src/index.mjs</code></pre>
+            <p>You can also send an initial message as a positional argument:</p>
+            <pre><code>node webAdmin/src/index.mjs "Show me the latest leads"</code></pre>
+            <p>Exit the interactive session by typing <code>exit</code>, <code>quit</code>, <code>:q</code>, or pressing <code>Ctrl+C</code>.</p>
+
+            <h3 id="webchat-access">Webchat Access</h3>
+            <p>webAdmin is also accessible through <code>/webchat?agent=webAdmin</code>.</p>
+
+            <h2 id="data-structure">Data Structure</h2>
+            <p>webAdmin reads data from the shared <code>data/</code> directory:</p>
+            <table>
+                <tr><th>Folder</th><th>Purpose</th></tr>
+                <tr><td><code>leads/</code></td><td>Lead files created by webAssist ({sessionId}-lead.md)</td></tr>
+                <tr><td><code>sessions/</code></td><td>Session profile and history files from webAssist</td></tr>
+                <tr><td><code>profilesInfo/</code></td><td>Visitor profiling templates</td></tr>
+                <tr><td><code>info/</code></td><td>Website information files</td></tr>
+                <tr><td><code>config/</code></td><td>Owner contact configuration (owner.md)</td></tr>
+            </table>
+
+            <h2 id="skills-and-commands">Skills and Commands</h2>
+
+            <h3 id="news">news</h3>
+            <p>List the most recent leads, sorted newest first. Default shows the latest 5 leads.</p>
+            <p><em>Example: "Show me the latest leads"</em></p>
+
+            <h3 id="statistics">statistics</h3>
+            <p>Generate performance metrics over time intervals: day, week, month, or year. Reports total sessions, total leads, and leads by profile.</p>
+            <p><em>Example: "Show statistics for this month"</em></p>
+
+            <h3 id="lead-info">lead-info</h3>
+            <p>Display comprehensive details for a specific lead, including profile, contact info, and full session history.</p>
+            <p><em>Example: "Show details for the Developer lead"</em></p>
+
+            <h3 id="update-lead">update-lead</h3>
+            <p>Change a lead's status. Allowed transitions from <code>new</code>: <code>invalid</code>, <code>contacted</code>, or <code>converted</code>.</p>
+            <p><em>Example: "Mark the latest lead as contacted"</em></p>
+
+            <h3 id="manage-profile">manage-profile</h3>
+            <p>Create or update visitor profiling templates in <code>profilesInfo/</code>. Each profile defines characteristics, interests, and qualifying criteria used by webAssist to match visitors.</p>
+            <p><em>Example: "Create a profile for Enterprise Clients"</em></p>
+
+            <h3 id="manage-site-info">manage-site-info</h3>
+            <p>Create or update website information files under <code>data/info/</code>. Use this to update the knowledge base available to webAssist.</p>
+            <p><em>Example: "Update the services information file"</em></p>
+
+            <h3 id="manage-owner-info">manage-owner-info</h3>
+            <p>Update your contact information stored in <code>data/config/owner.md</code>. Supports email, phone, calendar links, and meeting details.</p>
+            <p><em>Example: "Update my phone number to +40123456789"</em></p>
+
+            <h2 id="orchestration-flow">Orchestration Flow</h2>
+            <p>webAdmin uses the <strong>admin-flow</strong> orchestrator, which processes each owner request by selecting exactly one skill, executing it, and formatting the result in the same language as the request. No manual skill selection is needed—just describe what you need in natural language.</p>
+
+            <h2 id="cli-parameters">CLI Parameters</h2>
+            <table>
+                <tr><th>Parameter</th><th>Description</th></tr>
+                <tr><td><code>&lt;message&gt;</code></td><td>Owner message text (positional)</td></tr>
+                <tr><td><code>--session-id &lt;id&gt;</code></td><td>Reuse a specific session id</td></tr>
+                <tr><td><code>--data-dir &lt;dir&gt;</code></td><td>Override the runtime data directory</td></tr>
+                <tr><td><code>--agent-root &lt;dir&gt;</code></td><td>Override the agent root for runtime initialization</td></tr>
+                <tr><td><code>-h</code> / <code>--help</code></td><td>Print CLI usage</td></tr>
+            </table>
+
+            <h2 id="testing">Testing</h2>
+            <p>Tests are in the <code>tests/</code> directory with dedicated fixtures. Run:</p>
+            <pre><code>node tests/runAll.mjs</code></pre>
+            <p>Or run all test files directly:</p>
+            <pre><code>node --test "tests/*.test.mjs"</code></pre>
+        </main>
+    </div>
+</body>
+</html>

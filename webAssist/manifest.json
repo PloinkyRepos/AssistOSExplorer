@@ -1,0 +1,18 @@
+{
+    "container": "node:20-bullseye",
+    "lite-sandbox": true,
+    "guest": true,
+    "profiles": {
+        "default": {
+            "env": [
+                "ACHILLES_DEBUG",
+                "SOUL_GATEWAY_API_KEY",
+                "SOUL_GATEWAY_BASE_URL"
+            ]
+        }
+    },
+    "cli": "node /code/src/index.mjs",
+    "volumes": {
+        ".ploinky/repos/webassist/data": "/data"
+    }
+}
