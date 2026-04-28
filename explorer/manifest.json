@@ -5,9 +5,6 @@
     "cli": "/bin/bash",
     "agent": "node /code/filesystem-http-server.mjs",
     "about": "AssistOS Explorer agent",
-    "repos": {
-        "webassist": "https://github.com/AssistOS-AI/webassist.git"
-    },
     "ploinky": "pwd enable",
     "pwd": {
         "users": [

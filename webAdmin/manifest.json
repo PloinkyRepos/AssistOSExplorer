@@ -11,6 +11,6 @@
     },
     "cli": "node /code/src/index.mjs",
     "volumes": {
-        ".ploinky/repos/webassist/data": "/data"
+        ".ploinky/repos/AchillesIDE/data": "/data"
     }
 }
