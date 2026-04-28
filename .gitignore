@@ -8,6 +8,15 @@
 /soplangAgent/.tasksQueue
 /soplangAgent/achilles-debug.log
 /soplangAgent/last-tool.log
+/data/
+/webAssist/data/
+/webAssist/package.json
+/webAssist/package-lock.json
+/webAssist/node_modules/
+/webAdmin/data/
+/webAdmin/package.json
+/webAdmin/package-lock.json
+/webAdmin/node_modules/
 *.DS_Store
 # >>> ploinky default-skills >>>
 .claude/skills/
