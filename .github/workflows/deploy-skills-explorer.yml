@@ -140,12 +140,27 @@ jobs:
           fi
 
           $PKG_UPDATE || true
-          $PKG_INSTALL git curl jq tmux python3 ca-certificates openssl nginx || true
+          $PKG_INSTALL git curl jq tmux python3 ca-certificates openssl || true
           $PKG_INSTALL iptables slirp4netns fuse-overlayfs || true
 
           sudo modprobe ip_tables 2>/dev/null || true
           sudo modprobe iptable_nat 2>/dev/null || true
           sudo modprobe nf_nat 2>/dev/null || true
+
+          if ! command -v nginx >/dev/null 2>&1; then
+            echo "[deploy] Installing nginx..."
+            if command -v dnf >/dev/null 2>&1; then
+              sudo dnf install -y --disablerepo=getpagespeed-extras --disablerepo=getpagespeed-extras-noarch nginx
+            elif command -v yum >/dev/null 2>&1; then
+              sudo yum install -y --disablerepo=getpagespeed-extras --disablerepo=getpagespeed-extras-noarch nginx
+            else
+              $PKG_INSTALL nginx
+            fi
+          fi
+          if ! command -v nginx >/dev/null 2>&1; then
+            echo "[deploy] ERROR: nginx is required for the public skills.axiologic.dev proxy"
+            exit 1
+          fi
 
           if ! command -v podman >/dev/null 2>&1; then
             echo "[deploy] Installing podman..."
