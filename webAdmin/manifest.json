@@ -10,6 +10,9 @@
         }
     },
     "cli": "node /code/src/index.mjs",
+    "webchat": {
+        "auth": "static"
+    },
     "volumes": {
         ".ploinky/repos/AchillesIDE/data": "/data"
     }

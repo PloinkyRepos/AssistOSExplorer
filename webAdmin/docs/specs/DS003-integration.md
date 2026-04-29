@@ -17,6 +17,7 @@ The **webAdmin** agent is implemented as a Node.js CLI tool for site owners. It 
   - `SOUL_GATEWAY_API_KEY`: API key used for LLM calls through AchillesAgentLib.
   - `ACHILLES_DEBUG`: Enables AchillesAgentLib debug logging.
 - **Webchat Access**: `/webchat?agent=webAdmin`
+  - The manifest declares `"webchat": { "auth": "static" }`, so this surface reuses the static Explorer route authentication while running the `webAdmin` chat target.
 
 ## CLI Parameters
 - `<message>` (positional): Owner message text. In interactive mode it can be omitted at startup and provided turn-by-turn.
