@@ -22,8 +22,6 @@ export function authInfoFromInvocation(grant, { invocationToken = '' } = {}) {
     subject: String(grant.sub || ''),
     scope: Array.isArray(grant.scope) ? [...grant.scope] : [],
     tool: String(grant.tool || ''),
-    contract: String(grant.contract || ''),
-    bindingId: String(grant.binding_id || ''),
     workspaceId: String(grant.workspace_id || '')
   };
   out.invocationToken = String(invocationToken || '');
