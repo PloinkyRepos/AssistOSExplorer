@@ -490,7 +490,7 @@ const G = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
 }, Symbol.toStringTag, { value: "Module" }));
 class h {
   constructor() {
-    this._appContent = {}, this.appServices = {}, this._documentElement = document, this.actionRegistry = {}, this.registerListeners(), this.ResourceManager = new L(), this.defaultLoader = document.createElement("dialog"), this.loaderCount = 0, this.defaultLoader.classList.add("spinner"), this.defaultLoader.classList.add("spinner-default-style"), window.showApplicationError = async (e, t, n) => await S("show-error-modal", {
+    this._appContent = {}, this.appServices = {}, this._documentElement = document, this.actionRegistry = {}, this.registerListeners(), this.ResourceManager = new L(), this.defaultLoader = document.createElement("dialog"), this.loaderCount = 0, this.activeLoaderId = null, this.defaultLoader.classList.add("spinner"), this.defaultLoader.classList.add("spinner-default-style"), window.showApplicationError = async (e, t, n) => await S("show-error-modal", {
       title: e,
       message: t,
       technical: n
@@ -527,30 +527,48 @@ class h {
     }
   }
   showLoading() {
-    let e = this.defaultLoader.cloneNode(!0), t = crypto.randomUUID();
-    e.setAttribute("data-id", t);
+    const t = this.activeLoaderId || crypto.randomUUID();
     if (this.loaderCount === 0) {
+      let e = this.defaultLoader.cloneNode(!0);
+      e.setAttribute("data-id", t);
       document.body.appendChild(e);
       e.showModal();
+      this.activeLoaderId = t;
       this.loaderCount = 1;
       return t;
     }
     this.loaderCount++;
-    return t;
+    return this.activeLoaderId;
+  }
+  clearLoading() {
+    document.querySelectorAll(".spinner").forEach((e) => {
+      e.close(), e.remove();
+    });
+    this.loaderCount = 0;
+    this.activeLoaderId = null;
   }
   hideLoading(e) {
+    if (this.loaderCount <= 0) {
+      this.clearLoading();
+      return;
+    }
     if (this.loaderCount > 1) {
       this.loaderCount--;
       return;
     }
-    if (e) {
-      let t = document.querySelector(`[data-id = '${e}' ]`);
-      t && (t.close(), t.remove());
-    } else
-      document.querySelectorAll(".spinner").forEach((n) => {
+    const t = this.activeLoaderId || e;
+    if (t) {
+      let n = document.querySelector(`[data-id = '${t}' ]`);
+      if (n) {
         n.close(), n.remove();
-      });
+      } else {
+        this.clearLoading();
+        return;
+      }
+    } else
+      this.clearLoading();
     this.loaderCount = 0;
+    this.activeLoaderId = null;
   }
   setLoading(e) {
     this.defaultLoader.innerHTML = e, this.defaultLoader.classList.remove("spinner-default-style");
@@ -575,8 +593,13 @@ class h {
         window.history.pushState({ pageHtmlTagName: e, relativeUrlContent: a }, l.toString(), l);
       }
       await this.updateAppContent(a);
+      const child = this._appContent.querySelector(e);
+      if (child && child.renderCompletePromise) {
+        await child.renderCompletePromise;
+      }
     } catch (a) {
       console.error("Failed to change page", a);
+      await window.showApplicationError("Failed to change page", a.message || "Failed to change page.", a.stack || String(a));
     } finally {
       this.hideLoading(i);
     }
@@ -592,8 +615,14 @@ class h {
     try {
       const o = await this.fetchTextResult(e, t);
       await this.updateAppContent(o);
+      const children = this._appContent.querySelectorAll('[data-presenter]');
+      const promises = Array.from(children).map(c => c.renderCompletePromise).filter(Boolean);
+      if (promises.length) {
+        await Promise.all(promises);
+      }
     } catch (o) {
-      console.log("Failed to change page", o);
+      console.error("Failed to change page", o);
+      await window.showApplicationError("Failed to change page", o.message || "Failed to change page.", o.stack || String(o));
     } finally {
       this.hideLoading(n);
     }
@@ -631,8 +660,29 @@ class h {
       }
   }
   registerListeners() {
-    this._documentElement.addEventListener("click", this.interceptAppContentLinks.bind(this)), window.onpopstate = (e) => {
-      e.state && e.state.relativeUrlContent && this.updateAppContent(e.state.relativeUrlContent);
+    this._documentElement.addEventListener("click", this.interceptAppContentLinks.bind(this)), window.onpopstate = async (e) => {
+      const hash = window.location.hash;
+      if (hash) {
+        const hashContent = hash.substring(1);
+        const pageName = hashContent.split("/")[0].split("?")[0];
+        const knownPage = this.configs.components.find((c) => c.name === pageName);
+        if (knownPage) {
+          const existing = this._appContent.querySelector(pageName);
+          if (existing && existing.webSkelPresenter) {
+            return;
+          }
+          await this.changeToDynamicPage(pageName, hashContent, null, true);
+          return;
+        }
+      }
+      if (e.state && e.state.relativeUrlContent) {
+        await this.updateAppContent(e.state.relativeUrlContent);
+        const children = this._appContent.querySelectorAll('[data-presenter]');
+        const promises = Array.from(children).map(c => c.renderCompletePromise).filter(Boolean);
+        if (promises.length) {
+          await Promise.all(promises);
+        }
+      }
     }, this._documentElement.addEventListener("click", async (e) => {
       let t = e.target, n = !1;
       for (; t && t !== this._documentElement && !n; ) {
@@ -801,9 +851,10 @@ class h {
           if (o) {
             const i = async (a) => {
               const l = (c) => {
+                const f = c?.stack ? c.stack.split(`
+`)[1] || "" : "";
                 n.innerHTML = `Error rendering component: ${n.componentName}
-: ` + c + c.stack.split(`
-`)[1], console.error(c), n.resolveRenderComplete(), h.instance.hideLoading();
+: ` + c + f, console.error(c), n.resolveRenderComplete();
               }, d = async () => {
                 try {
                   n.resetRenderCompletePromise();
@@ -815,13 +866,16 @@ class h {
                   l(c);
                 }
               };
-              if (h.instance.showLoading(), a)
-                try {
+              const c = h.instance.showLoading();
+              try {
+                if (a)
                   await a();
-                } catch (c) {
-                  return l(c);
-                }
-              await d(), h.instance.hideLoading();
+                await d();
+              } catch (f) {
+                l(f);
+              } finally {
+                h.instance.hideLoading(c);
+              }
             }, s = new Proxy(i, {
               apply: async function(a, l, d) {
                 return n.isPresenterReady || await n.presenterReadyPromise, Reflect.apply(a, l, d);

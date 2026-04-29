@@ -143,6 +143,10 @@ export function extractToolText(payload) {
 }
 
 export function ensureSuccess(payload) {
+    if (payload && typeof payload === 'object' && payload.isError === true) {
+        const text = extractToolText(payload).trim();
+        throw new ToolError('tool_error', text || 'Tool execution failed', { payload });
+    }
     const text = extractToolText(payload);
     if (isNonEmptyString(text) && text.trim().startsWith('Error:')) {
         throw new ToolError('tool_error', text.trim().replace(/^Error:\s*/i, ''), { payload });

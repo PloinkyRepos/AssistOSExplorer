@@ -286,7 +286,7 @@ export function normalizeRuntimePlugins(runtimePlugins) {
             menuModuleUrl
         };
 
-        if (contributionType !== MENU_PLUGIN_CONTRIBUTION_TYPE && Array.isArray(entry.dependencies) && entry.dependencies.length > 0) {
+        if (Array.isArray(entry.dependencies) && entry.dependencies.length > 0) {
             normalizedEntry.dependencies = entry.dependencies.map((dependency) => {
                 if (!dependency || typeof dependency !== 'object') {
                     return dependency;
@@ -303,11 +303,11 @@ export function normalizeRuntimePlugins(runtimePlugins) {
                     agent: dependencyAgent,
                     component: dependencyName,
                     baseUrl: computeComponentBaseUrl(dependencyAgent, dependencyName, {
-                        ownerComponent: dependency.ownerComponent || component,
+                        ownerComponent: dependency.ownerComponent || component || dependencyName,
                         isDependency: true,
                         customPath: dependencyPath,
                         pluginsBaseUrl,
-                        ownerAssetBaseUrl: assetBaseUrl
+                        ownerAssetBaseUrl: contributionType === MENU_PLUGIN_CONTRIBUTION_TYPE ? '' : assetBaseUrl
                     })
                 };
             });

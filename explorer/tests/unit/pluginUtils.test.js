@@ -110,6 +110,35 @@ test('normalizeRuntimePlugins keeps global application plugin entries', () => {
     assert.equal(normalized.application['file-exp:global'][0].component, 'webcli-global-chat');
 });
 
+test('normalizeRuntimePlugins preserves dependencies for menu contributions', () => {
+    const normalized = normalizeRuntimePlugins({
+        application: {
+            'file-exp:new-menu': [{
+                pluginCategory: 'application',
+                contributionType: 'menu',
+                location: 'file-exp:new-menu',
+                id: 'git',
+                agent: 'gitAgent',
+                menuModule: 'menu-contributions.js',
+                dependencies: [{
+                    component: 'git-new-repository-modal',
+                    presenter: 'GitNewRepositoryModal',
+                    type: 'modal',
+                    ownerComponent: 'git-tool-button'
+                }]
+            }]
+        }
+    });
+
+    const entry = normalized.application['file-exp:new-menu'][0];
+    assert.equal(entry.dependencies.length, 1);
+    assert.equal(entry.dependencies[0].component, 'git-new-repository-modal');
+    assert.equal(
+        entry.dependencies[0].baseUrl,
+        '/gitAgent/IDE-plugins/git-tool-button/components/git-new-repository-modal/git-new-repository-modal'
+    );
+});
+
 test('mergeRuntimePluginsIntoAssistOS separates document and application registries', () => {
     const assistOS = {
         workspace: {

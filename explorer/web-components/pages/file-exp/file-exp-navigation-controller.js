@@ -41,81 +41,83 @@ async function loadTreeContext(fileExp, targetDirectoryPath, options = {}) {
 }
 
 export async function loadStateFromURL(fileExp) {
-    const rawPath = window.location.hash.split('#file-exp')[1] || '/';
-    let path = rawPath;
-    try {
-        path = decodeURIComponent(rawPath);
-    } catch (error) {
-        console.warn('Failed to decode file-exp path from URL:', rawPath, error);
-        path = rawPath;
-    }
-    path = fileExp.normalizePath(path);
+    await fileExp.withLoader(async () => {
+        const rawPath = window.location.hash.split('#file-exp')[1] || '/';
+        let path = rawPath;
+        try {
+            path = decodeURIComponent(rawPath);
+        } catch (error) {
+            console.warn('Failed to decode file-exp path from URL:', rawPath, error);
+            path = rawPath;
+        }
+        path = fileExp.normalizePath(path);
 
-    if (path === '/') {
-        await fileExp.loadDirectory('/');
-        return;
-    }
-
-    if (fileExp.state.isEditing) {
-        await fileExp.cancelEdit();
-    }
-
-    const parentDir = fileExp.parentPath(path) || '/';
-    const entryName = path.substring(parentDir.length).replace(/^\//, '');
-
-    try {
-        const parentEntries = await fileExp.loadDirectoryContent(parentDir);
-        if (parentEntries === null) {
-            fileExp.showStatus('Path not found. Returning to root.', true);
+        if (path === '/') {
             await fileExp.loadDirectory('/');
             return;
         }
 
-        const entry = parentEntries.find((item) => item.name === entryName);
-        if (!entry) {
-            await fileExp.loadDirectory(path);
-            return;
+        if (fileExp.state.isEditing) {
+            await fileExp.cancelEdit();
         }
 
-        if (entry.type === 'file') {
-            if (fileExp.state.directoryViewMode === 'tree') {
-                const loaded = await loadTreeContext(fileExp, parentDir, {
-                    selectedPath: path,
-                    historyMode: 'replace'
-                });
-                if (loaded === null) {
-                    fileExp.showStatus('Path not found. Returning to root.', true);
-                    await fileExp.loadDirectory('/');
-                    return;
-                }
-                await fileExp.openFile(path);
+        const parentDir = fileExp.parentPath(path) || '/';
+        const entryName = path.substring(parentDir.length).replace(/^\//, '');
+
+        try {
+            const parentEntries = await fileExp.loadDirectoryContent(parentDir);
+            if (parentEntries === null) {
+                await fileExp.loadDirectory('/');
+                fileExp.showStatus('Path not found. Returned to root.', true);
                 return;
             }
-            fileExp.state.path = parentDir;
-            fileExp.state.selectedPath = path;
-            fileExp.state.isEditing = false;
-            await fileExp.setEntries(parentEntries);
-            await fileExp.openFile(path);
-            const newUrl = buildFileExpHash(path);
-            if (window.location.hash !== newUrl) {
-                history.pushState(null, '', newUrl);
+
+            const entry = parentEntries.find((item) => item.name === entryName);
+            if (!entry) {
+                await fileExp.loadDirectory(path);
+                return;
             }
-            fileExp.invalidate();
-            return;
-        }
 
-        if (entry.type === 'directory') {
-            await fileExp.loadDirectory(path);
-            return;
-        }
+            if (entry.type === 'file') {
+                if (fileExp.state.directoryViewMode === 'tree') {
+                    const loaded = await loadTreeContext(fileExp, parentDir, {
+                        selectedPath: path,
+                        historyMode: 'replace'
+                    });
+                    if (loaded === null) {
+                        await fileExp.loadDirectory('/');
+                        fileExp.showStatus('Path not found. Returned to root.', true);
+                        return;
+                    }
+                    await fileExp.openFile(path);
+                    return;
+                }
+                fileExp.state.path = parentDir;
+                fileExp.state.selectedPath = path;
+                fileExp.state.isEditing = false;
+                await fileExp.setEntries(parentEntries);
+                await fileExp.openFile(path);
+                const newUrl = buildFileExpHash(path);
+                if (window.location.hash !== newUrl) {
+                    history.pushState(null, '', newUrl);
+                }
+                fileExp.invalidate();
+                return;
+            }
 
-        fileExp.showStatus(`Unsupported entry type for ${path}.`, true);
-        await fileExp.loadDirectory(parentDir);
-    } catch (error) {
-        console.error('Failed to load state from URL:', error);
-        fileExp.showStatus('An error occurred while loading the path. Returning to root.', true);
-        await fileExp.loadDirectory('/');
-    }
+            if (entry.type === 'directory') {
+                await fileExp.loadDirectory(path);
+                return;
+            }
+
+            fileExp.showStatus(`Unsupported entry type for ${path}.`, true);
+            await fileExp.loadDirectory(parentDir);
+        } catch (error) {
+            console.error('Failed to load state from URL:', error);
+            await fileExp.loadDirectory('/');
+            fileExp.showStatus(error?.message || 'An error occurred while loading the path. Returned to root.', true);
+        }
+    });
 }
 
 export async function loadDirectory(fileExp, path = fileExp.state.path) {
@@ -134,8 +136,8 @@ export async function loadDirectory(fileExp, path = fileExp.state.path) {
                     fileExp.showStatus('Root directory is not accessible.', true);
                     return;
                 }
-                fileExp.showStatus('Path not found. Returning to root.', true);
                 await fileExp.loadDirectory('/');
+                fileExp.showStatus('Path not found. Returned to root.', true);
             }
             return;
         }
@@ -158,8 +160,8 @@ export async function loadDirectory(fileExp, path = fileExp.state.path) {
                 fileExp.showStatus('Root directory is not accessible.', true);
                 return;
             }
-            fileExp.showStatus('Path not found. Returning to root.', true);
             await fileExp.loadDirectory('/');
+            fileExp.showStatus('Path not found. Returned to root.', true);
             return;
         }
         await fileExp.setEntries(entries);

@@ -194,6 +194,27 @@ async function start() {
     window.webSkel = webSkel;
 }
 
-start().catch((error) => {
+start().catch(async (error) => {
     console.error('[explorer] Failed to bootstrap application', error);
+    const beforeLoader = document.querySelector('#before_webskel_loader');
+    beforeLoader?.close?.();
+    beforeLoader?.remove?.();
+    window.webSkel?.clearLoading?.();
+
+    const message = error?.message || 'Explorer failed to load.';
+    const technical = error?.stack || String(error);
+    if (typeof window.showApplicationError === 'function') {
+        await window.showApplicationError('Explorer failed to load', message, technical);
+        return;
+    }
+
+    const container = document.createElement('main');
+    container.className = 'application-error';
+    container.setAttribute('role', 'alert');
+    const title = document.createElement('h1');
+    title.textContent = 'Explorer failed to load';
+    const details = document.createElement('p');
+    details.textContent = message;
+    container.append(title, details);
+    document.body.replaceChildren(container);
 });
