@@ -41,6 +41,16 @@ If Explorer should expose the whole workspace, set the filesystem root explicitl
 ploinky var ASSISTOS_FS_ROOT "$PWD"
 ```
 
+## Repo-Scoped HTML Preview
+
+Explorer serves repository files below the Ploinky repository mount. For example:
+
+- `/.ploinky/repos/AchillesIDE/docs/development.html`
+
+```bash
+curl -I "http://127.0.0.1:8080/.ploinky/repos/AchillesIDE/docs/development.html"
+```
+
 ## Documentation
 
 Repository-level documentation:

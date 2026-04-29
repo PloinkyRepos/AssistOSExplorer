@@ -1,58 +1,6 @@
 {
   "container": "node:20-alpine",
   "lite-sandbox": true,
-  "provides": {
-    "dpu-runtime/v1": {
-      "operations": [
-        "dpu_whoami",
-        "dpu_workspace_roots",
-        "dpu_secret_list",
-        "dpu_secret_get",
-        "dpu_secret_put",
-        "dpu_secret_delete",
-        "dpu_secret_grant",
-        "dpu_secret_revoke"
-      ],
-      "supportedScopes": [
-        "secret:access",
-        "secret:read",
-        "secret:write",
-        "secret:grant",
-        "secret:revoke"
-      ],
-      "operationScopes": {
-        "dpu_whoami": [
-          "secret:access",
-          "secret:read"
-        ],
-        "dpu_workspace_roots": [
-          "secret:access",
-          "secret:read"
-        ],
-        "dpu_secret_list": [
-          "secret:access",
-          "secret:read"
-        ],
-        "dpu_secret_get": [
-          "secret:read"
-        ],
-        "dpu_secret_put": [
-          "secret:write"
-        ],
-        "dpu_secret_delete": [
-          "secret:write"
-        ],
-        "dpu_secret_grant": [
-          "secret:grant",
-          "secret:write"
-        ],
-        "dpu_secret_revoke": [
-          "secret:revoke",
-          "secret:write"
-        ]
-      }
-    }
-  },
   "runtime": {
     "resources": {
       "persistentStorage": {
