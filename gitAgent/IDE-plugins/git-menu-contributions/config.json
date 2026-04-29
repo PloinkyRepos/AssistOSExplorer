@@ -10,5 +10,13 @@
     "label": "Git",
     "tooltip": "Git actions for Explorer menus",
     "icon": "./icon.svg",
-    "menuModule": "menu-contributions.js"
+    "menuModule": "menu-contributions.js",
+    "dependencies": [
+        {
+            "component": "git-new-repository-modal",
+            "presenter": "GitNewRepositoryModal",
+            "type": "modal",
+            "ownerComponent": "git-tool-button"
+        }
+    ]
 }

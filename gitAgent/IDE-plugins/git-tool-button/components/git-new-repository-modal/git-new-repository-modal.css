@@ -1,0 +1,53 @@
+dialog.modal.git-new-repository-modal-dialog {
+    width: min(520px, calc(100vw - 32px));
+}
+
+.git-new-repository-modal-body {
+    min-width: 0;
+}
+
+.git-new-repository-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.git-new-repository-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--text);
+}
+
+.git-new-repository-field span {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-soft);
+}
+
+.git-new-repository-field input {
+    width: 100%;
+    min-height: 34px;
+    box-sizing: border-box;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 7px 9px;
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+}
+
+.git-new-repository-field input:focus {
+    outline: 2px solid color-mix(in srgb, var(--accent, #4f7cff) 45%, transparent);
+    outline-offset: 1px;
+}
+
+.git-new-repository-error {
+    border: 1px solid color-mix(in srgb, #d43c3c 42%, transparent);
+    border-radius: 8px;
+    padding: 8px 10px;
+    color: #d43c3c;
+    background: color-mix(in srgb, #d43c3c 8%, transparent);
+    font-size: 12px;
+}

@@ -48,6 +48,25 @@ function normalizeRepositoryName(candidate) {
   return value;
 }
 
+function normalizeRemoteName(candidate) {
+  const value = String(candidate || 'origin').trim();
+  if (!value || value.includes('\0') || value.startsWith('-') || /\s/.test(value)) {
+    throw new Error('Invalid remote name.');
+  }
+  return value;
+}
+
+function normalizeRemoteUrl(candidate) {
+  const value = String(candidate || '').trim();
+  if (!value) {
+    throw new Error('Remote URL is required.');
+  }
+  if (value.includes('\0') || /\r|\n/.test(value)) {
+    throw new Error('Invalid remote URL.');
+  }
+  return value;
+}
+
 function isPathWithinIgnoredPath(candidate, ignoredPath) {
   const normalizedCandidate = normalizeGitRepoRelativePath(candidate);
   const normalizedIgnored = normalizeGitRepoRelativePath(ignoredPath);
@@ -506,7 +525,7 @@ export function createGitService({ validatePath }) {
     };
   }
 
-  async function gitInitRepository({ path: parentPathArg, name }) {
+  async function gitInitRepository({ path: parentPathArg, name, remote = 'origin', remoteUrl }) {
     const validatedParentPath = await validatePath(parentPathArg || '/');
     const parentPath = await fs.realpath(validatedParentPath);
     const parentStats = await fs.lstat(parentPath);
@@ -515,6 +534,8 @@ export function createGitService({ validatePath }) {
     }
 
     const repoName = normalizeRepositoryName(name);
+    const configuredRemoteUrl = normalizeRemoteUrl(remoteUrl);
+    const configuredRemoteName = normalizeRemoteName(remote || 'origin');
     const targetPath = path.join(parentPath, repoName);
     await validatePath(targetPath);
 
@@ -531,6 +552,7 @@ export function createGitService({ validatePath }) {
     const gitBinary = await getGitBinary(parentPath);
     try {
       await runGit(targetPath, [gitBinary, 'init'], { timeoutMs: 20000 });
+      await runGit(targetPath, [gitBinary, 'remote', 'add', configuredRemoteName, configuredRemoteUrl], { timeoutMs: 10000 });
     } catch (error) {
       await fs.rm(targetPath, { recursive: true, force: true }).catch(() => {});
       throw error;
@@ -541,7 +563,8 @@ export function createGitService({ validatePath }) {
       ok: true,
       parentPath,
       repoPath,
-      name: repoName
+      name: repoName,
+      remote: configuredRemoteName
     };
   }
 
@@ -621,6 +644,20 @@ export function createGitService({ validatePath }) {
     const gitBinary = await getGitBinary(repoPath);
     const baseRef = ref && typeof ref === 'string' && ref.trim() ? ref.trim() : null;
 
+    const diffAsAddedFile = async () => {
+      try {
+        const { stdout: noIndex } = await runGit(
+          repoPath,
+          [gitBinary, 'diff', '--no-index', '--', '/dev/null', file],
+          // `git diff --no-index` returns exit code 1 when differences are found (expected for new files).
+          { timeoutMs: 25000, okCodes: [0, 1] }
+        );
+        return noIndex;
+      } catch {
+        return '';
+      }
+    };
+
     // Default behavior (backwards compatible).
     if (!baseRef) {
       const args = cached ? [gitBinary, 'diff', '--cached', '--', file] : [gitBinary, 'diff', '--', file];
@@ -632,7 +669,16 @@ export function createGitService({ validatePath }) {
     // 1) working tree vs baseRef
     // 2) index vs baseRef (staged-only)
     // 3) untracked fallback via `--no-index` ("added file" diff)
-    const { stdout } = await runGit(repoPath, [gitBinary, 'diff', baseRef, '--', file], { timeoutMs: 25000 });
+    let stdout = '';
+    try {
+      const result = await runGit(repoPath, [gitBinary, 'diff', baseRef, '--', file], { timeoutMs: 25000 });
+      stdout = result.stdout;
+    } catch (error) {
+      if (String(error?.message || '').includes(`bad revision '${baseRef}'`)) {
+        return diffAsAddedFile();
+      }
+      throw error;
+    }
     if (stdout && stdout.trim()) return stdout;
     try {
       const { stdout: cachedStdout } = await runGit(
@@ -644,17 +690,21 @@ export function createGitService({ validatePath }) {
     } catch {
       // ignore
     }
+    return diffAsAddedFile();
+  }
+
+  async function gitRemoteSet({ path: repoPathArg, remote = 'origin', url }) {
+    const repoPath = await resolveRepoWorkTreePath(repoPathArg);
+    const gitBinary = await getGitBinary(repoPath);
+    const remoteName = normalizeRemoteName(remote);
+    const remoteUrl = normalizeRemoteUrl(url);
     try {
-      const { stdout: noIndex } = await runGit(
-        repoPath,
-        [gitBinary, 'diff', '--no-index', '--', '/dev/null', file],
-        // `git diff --no-index` returns exit code 1 when differences are found (expected for new files).
-        { timeoutMs: 25000, okCodes: [0, 1] }
-      );
-      return noIndex;
+      await runGit(repoPath, [gitBinary, 'remote', 'get-url', remoteName], { timeoutMs: 5000 });
+      await runGit(repoPath, [gitBinary, 'remote', 'set-url', remoteName, remoteUrl], { timeoutMs: 10000 });
     } catch {
-      return '';
+      await runGit(repoPath, [gitBinary, 'remote', 'add', remoteName, remoteUrl], { timeoutMs: 10000 });
     }
+    return { ok: true, remote: remoteName, url: remoteUrl };
   }
 
   async function gitStage({ path: repoPathArg, files = [] }) {
@@ -1081,6 +1131,11 @@ export function createGitService({ validatePath }) {
   async function gitStash({ path: repoPathArg, includeUntracked = true, message = '' }) {
     const repoPath = await resolveRepoWorkTreePath(repoPathArg);
     const gitBinary = await getGitBinary(repoPath);
+    try {
+      await runGit(repoPath, [gitBinary, 'rev-parse', 'HEAD'], { timeoutMs: 5000 });
+    } catch {
+      return { ok: true, created: false, ref: null, output: 'No commits yet. Nothing to stash.', usedAll: false };
+    }
     const listStash = async () => {
       try {
         const { stdout } = await runGit(repoPath, [gitBinary, 'stash', 'list'], { timeoutMs: 5000 });
@@ -1655,6 +1710,7 @@ export function createGitService({ validatePath }) {
     gitInitRepository,
     gitStatus,
     gitDiff,
+    gitRemoteSet,
     gitStage,
     gitStageExact,
     gitUnstage,

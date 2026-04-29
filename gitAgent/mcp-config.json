@@ -34,10 +34,42 @@
         "name": {
           "type": "string",
           "optional": false
+        },
+        "remote": {
+          "type": "string",
+          "optional": true
+        },
+        "remoteUrl": {
+          "type": "string",
+          "optional": false
         }
       },
       "env": {
         "TOOL_NAME": "git_init_repository"
+      }
+    },
+    {
+      "name": "git_remote_set",
+      "title": "Git Remote Set",
+      "description": "Add or update a repository remote URL.",
+      "command": "tools/git_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "path": {
+          "type": "string",
+          "optional": false
+        },
+        "remote": {
+          "type": "string",
+          "optional": true
+        },
+        "url": {
+          "type": "string",
+          "optional": false
+        }
+      },
+      "env": {
+        "TOOL_NAME": "git_remote_set"
       }
     },
     {

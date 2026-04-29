@@ -92,6 +92,86 @@ export function createGitOpsActions(ctx) {
         await service.gitPush(payload);
     };
 
+    const getRemoteUrl = async (repoPath) => {
+        try {
+            const infoText = await service.gitInfo(repoPath);
+            const info = parseJsonToolResult(infoText) || {};
+            return String(info.remoteUrl || info.remotes?.origin || '').trim();
+        } catch {
+            return '';
+        }
+    };
+
+    const getRepoNameFromRemote = (remoteUrl) => {
+        const url = String(remoteUrl || '').trim();
+        if (!url) return '';
+        const withoutGit = url.replace(/\.git$/, '');
+        const parts = withoutGit.split('/').filter(Boolean);
+        return parts[parts.length - 1] || '';
+    };
+
+    const getGithubOwnerAndRepo = (remoteUrl) => {
+        const url = String(remoteUrl || '').trim().replace(/\.git$/, '');
+        const httpsMatch = url.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)$/);
+        if (httpsMatch) return { owner: httpsMatch[1], repo: httpsMatch[2] };
+        const sshMatch = url.match(/^git@github\.com:([^/]+)\/([^/]+)$/);
+        if (sshMatch) return { owner: sshMatch[1], repo: sshMatch[2] };
+        return null;
+    };
+
+    const githubRepoExists = async (owner, repo) => {
+        const token = await service.getStoredGitToken?.();
+        if (!token) return false;
+        const response = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
+            method: 'HEAD',
+            headers: {
+                Accept: 'application/vnd.github+json',
+                Authorization: `Bearer ${token}`,
+                'User-Agent': 'ploinky-git-agent'
+            }
+        });
+        return response.ok;
+    };
+
+    const createGithubRepository = async (repoPath, repoName) => {
+        const token = await service.getStoredGitToken?.();
+        if (!token) {
+            throw new Error('GitHub token is required to create a remote repository.');
+        }
+        const response = await fetch('https://api.github.com/user/repos', {
+            method: 'POST',
+            headers: {
+                Accept: 'application/vnd.github+json',
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+                'User-Agent': 'ploinky-git-agent'
+            },
+            body: JSON.stringify({
+                name: repoName,
+                auto_init: false
+            })
+        });
+        if (!response.ok) {
+            const text = await response.text().catch(() => '');
+            throw new Error(text || `Failed to create repository (${response.status})`);
+        }
+        const result = await response.json();
+        return { ok: true, htmlUrl: result?.html_url || '', cloneUrl: result?.clone_url || '' };
+    };
+
+    const ensureRemoteExists = async (repoPath) => {
+        const remoteUrl = await getRemoteUrl(repoPath);
+        if (!remoteUrl) return;
+        const parsed = getGithubOwnerAndRepo(remoteUrl);
+        if (!parsed) return;
+        const exists = await githubRepoExists(parsed.owner, parsed.repo);
+        if (!exists) {
+            setStatusLine(`Remote "${parsed.repo}" not found on GitHub. Creating...`);
+            await createGithubRepository(repoPath, parsed.repo);
+            setStatusLine(`Created remote "${parsed.repo}".`);
+        }
+    };
+
     const applyGitIdentityForRepo = async (repoPath) => {
         const remembered = getRememberedGitIdentity();
         const state = getState();
@@ -131,6 +211,7 @@ export function createGitOpsActions(ctx) {
                 continue;
             }
             try {
+                await ensureRemoteExists(repoPath);
                 await gitPushWithToken(repoPath);
                 pushedRepos += 1;
                 pushedCommits += Math.max(0, Number(ahead) || 0);
@@ -189,11 +270,15 @@ export function createGitOpsActions(ctx) {
                 }
             }
             try {
-                const statusPayload = parseJsonToolResult(await service.gitStatus(repoPath)) || {};
+                const statusPayload = parseJsonToolResult(await service.gitStatus(repoPath, { includeAhead: true })) || {};
                 const normalized = normalizeGitStatusPayload(statusPayload);
                 if (normalized.counts.conflicted > 0) {
                     const resolved = await handlePullConflicts('Resolve merge conflicts before pulling.', [repoPath], conflictSource);
                     if (!resolved) return { ok: false, pulledRepos };
+                }
+                if (!statusPayload.branch) {
+                    pulledRepos += 1;
+                    continue;
                 }
                 const hasLocalChanges = (normalized.counts.staged
                     + normalized.counts.unstaged
@@ -201,6 +286,10 @@ export function createGitOpsActions(ctx) {
                 if (hasLocalChanges) {
                     const autoOk = await pullWithAutoStash(repoPath, auth.tokenStored ? '__backend__' : '', list);
                     if (!autoOk) return { ok: false, pulledRepos };
+                    pulledRepos += 1;
+                    continue;
+                }
+                if (!statusPayload.upstream) {
                     pulledRepos += 1;
                     continue;
                 }

@@ -9,6 +9,18 @@ function normalizeRepositoryName(value) {
     return String(value || '').trim();
 }
 
+async function openNewRepositoryModal(basePath) {
+    const result = await assistOS.UI.showModal('git-new-repository-modal', { basePath }, true);
+    if (!result || typeof result !== 'object') {
+        return null;
+    }
+    return {
+        name: normalizeRepositoryName(result.name),
+        remote: String(result.remote || 'origin').trim(),
+        remoteUrl: String(result.remoteUrl || '').trim()
+    };
+}
+
 function shouldOfferAddToGitignore(context) {
     if (!context || context.isConfidential) {
         return false;
@@ -77,22 +89,27 @@ export async function executeMenuAction({ action, context, host }) {
         if (!basePath) {
             throw new Error('Missing target directory for repository creation.');
         }
-        const input = window.prompt('Enter name for the new repository:');
-        if (input === null) {
+        const modalResult = await openNewRepositoryModal(basePath);
+        if (!modalResult) {
             return;
         }
-        const repoName = normalizeRepositoryName(input);
+        const repoName = modalResult.name;
         if (!repoName) {
             throw new Error('Repository name is required.');
         }
+        if (!modalResult.remoteUrl) {
+            throw new Error('Remote URL is required.');
+        }
         const result = await callGitTool('git_init_repository', {
             path: basePath,
-            name: repoName
+            name: repoName,
+            remote: modalResult.remote || 'origin',
+            remoteUrl: modalResult.remoteUrl
         });
         if (!result?.ok) {
             throw new Error(result?.error || 'Failed to create repository.');
         }
-        host?.showStatus?.(`Created repository: ${result.name || repoName}`);
+        host?.showStatus?.(`Created repository: ${result.name || repoName} with ${result.remote || modalResult.remote || 'origin'}.`);
         await host?.refreshDirectory?.();
         return;
     }

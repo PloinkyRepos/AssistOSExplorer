@@ -98,8 +98,10 @@ export async function pullWithAutoStashFlow({
     let stashCreated = false;
     let stashRef = null;
     let hasLocalChanges = false;
+    let branch = null;
+    let upstream = null;
     try {
-        const statusText = await service.gitStatus(repoPath);
+        const statusText = await service.gitStatus(repoPath, { includeAhead: true });
         const statusPayload = parseJsonToolResult(statusText) || {};
         const normalized = normalizeGitStatusPayload(statusPayload);
         const changesCount = normalized.counts.staged
@@ -107,8 +109,17 @@ export async function pullWithAutoStashFlow({
             + normalized.counts.untracked
             + normalized.counts.conflicted;
         hasLocalChanges = changesCount > 0;
+        branch = statusPayload.branch || null;
+        upstream = statusPayload.upstream || null;
     } catch (error) {
         return { ok: false, reason: 'status_error', message: normalizeErrorMessage(error) };
+    }
+
+    if (!branch) {
+        return { ok: true, reason: 'no_commits', message: 'No commits yet. Nothing to pull.' };
+    }
+    if (!upstream) {
+        return { ok: true, reason: 'no_upstream', message: 'No upstream branch configured. Nothing to pull.' };
     }
 
     if (hasLocalChanges) {
@@ -126,7 +137,7 @@ export async function pullWithAutoStashFlow({
 
         stashCreated = Boolean(stashPayload.created);
         stashRef = stashPayload.ref || null;
-        if (!stashCreated) {
+        if (!stashCreated && stashPayload.ok === false) {
             return {
                 ok: false,
                 reason: 'stash_failed',

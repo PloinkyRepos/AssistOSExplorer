@@ -137,9 +137,20 @@ function normalizeArgs(toolName, args) {
         if (!input.name || typeof input.name !== 'string') {
           throw new Error('git_init_repository requires a "name" string.');
         }
+        input.remote = input.remote ?? 'origin';
+        if (!input.remoteUrl || typeof input.remoteUrl !== 'string') {
+          throw new Error('git_init_repository requires a "remoteUrl" string.');
+        }
       }
       if (toolName === 'git_status') {
         input.includeAhead = Boolean(input.includeAhead || false);
+      }
+      return input;
+    case 'git_remote_set':
+      requirePath();
+      input.remote = input.remote ?? 'origin';
+      if (!input.url || typeof input.url !== 'string') {
+        throw new Error('git_remote_set requires a "url" string.');
       }
       return input;
     case 'git_diff':
@@ -311,6 +322,10 @@ async function main() {
         return;
       case 'git_init_repository':
         result = await gitService.gitInitRepository(payload);
+        writeJson(result);
+        return;
+      case 'git_remote_set':
+        result = await gitService.gitRemoteSet(payload);
         writeJson(result);
         return;
       case 'git_status':
