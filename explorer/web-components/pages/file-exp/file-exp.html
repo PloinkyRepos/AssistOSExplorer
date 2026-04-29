@@ -70,6 +70,16 @@
                     <app-menu id="toolbarAppMenu" data-presenter="app-menu"></app-menu>
                 </div>
             </div>
+            <div class="toolbar-dropdown">
+                <button id="pluginsMenuButton" class="secondary toolbar-menu-button" title="Plugin tools" aria-haspopup="true"
+                        aria-expanded="false">
+                    Tools
+                    <span class="chevron">▾</span>
+                </button>
+                <div class="toolbar-dropdown-menu action-menu-dropdown" id="pluginsMenu" role="menu">
+                    <div class="app-menu-list" id="fileExpToolbarPluginsDropdown" aria-label="Toolbar plugins dropdown"></div>
+                </div>
+            </div>
             <button id="searchInFilesButton" class="secondary" title="Find/Replace in files (content)"
                     data-local-action="openSearchInFiles">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"

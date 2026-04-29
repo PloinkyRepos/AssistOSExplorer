@@ -1,5 +1,6 @@
 const APP_PLUGIN_SLOTS = Object.freeze({
     toolbar: 'file-exp:toolbar',
+    toolbarPluginsDropdown: 'file-exp:toolbar-plugins-dropdown',
     rightBar: 'file-exp:right-bar',
     internal: 'file-exp:internal',
     global: 'file-exp:global',
@@ -158,6 +159,87 @@ async function mountSlot(container, slot, plugins, context) {
         ...(context || {}),
         orientation: getContainerOrientation(container, slot)
     };
+
+    // Special handling for toolbar-plugins-dropdown slot: render as simple buttons with app-menu-item classes
+    if (slot === APP_PLUGIN_SLOTS.toolbarPluginsDropdown) {
+        const existingButtons = new Map();
+        const buttonNodes = Array.from(container.querySelectorAll('button[data-app-plugin-key]'));
+        for (const node of buttonNodes) {
+            const key = node.getAttribute('data-app-plugin-key');
+            if (!key) {
+                continue;
+            }
+            if (existingButtons.has(key)) {
+                node.remove();
+                continue;
+            }
+            existingButtons.set(key, node);
+        }
+
+        const seen = new Set();
+        const orderedButtons = [];
+
+        for (const plugin of plugins) {
+            const key = getPluginKey(plugin);
+            if (!key) {
+                continue;
+            }
+            seen.add(key);
+
+            let button = existingButtons.get(key);
+            if (!button) {
+                button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'app-menu-item action-menu-item';
+                button.setAttribute('data-app-plugin-key', key);
+                button.setAttribute('role', 'menuitem');
+                button.setAttribute('title', plugin.tooltip || plugin.label || '');
+
+                const icon = document.createElement('img');
+                icon.className = 'app-menu-item-icon action-menu-item-icon';
+                icon.loading = 'lazy';
+                icon.src = plugin.icon || '';
+                icon.alt = '';
+                button.appendChild(icon);
+
+                const label = document.createElement('span');
+                label.className = 'app-menu-item-label action-menu-item-label';
+                label.textContent = plugin.label || 'Plugin';
+                button.appendChild(label);
+
+                container.appendChild(button);
+            }
+
+            // Update icon and label if they changed
+            const icon = button.querySelector('.app-menu-item-icon');
+            const label = button.querySelector('.app-menu-item-label');
+            if (icon && plugin.icon) {
+                icon.src = plugin.icon;
+            }
+            if (label && plugin.label) {
+                label.textContent = plugin.label;
+            }
+            button.setAttribute('title', plugin.tooltip || plugin.label || '');
+
+            void emitPluginMountedAudit(key, contextWithOrientation);
+            orderedButtons.push(button);
+        }
+
+        for (const [key, node] of existingButtons.entries()) {
+            if (!seen.has(key)) {
+                node.remove();
+            }
+        }
+
+        for (const node of orderedButtons) {
+            if (node && node.parentNode === container) {
+                container.appendChild(node);
+            }
+        }
+        return;
+    }
+
+    // Standard plugin mounting for other slots
     const existingMounts = collectExistingMounts(container);
     const seen = new Set();
     const orderedMounts = [];
@@ -210,22 +292,26 @@ async function performRenderApplicationPluginSlots(fileExp) {
     }
 
     const toolbarContainer = fileExp.element.querySelector('#fileExpToolbarPlugins');
+    const toolbarPluginsDropdownContainer = fileExp.element.querySelector('#fileExpToolbarPluginsDropdown');
     const rightBarContainer = fileExp.element.querySelector('#fileExpPluginBar');
     const internalContainer = fileExp.element.querySelector('#fileExpInternalPlugins');
     const globalContainer = fileExp.element.querySelector('#fileExpGlobalPlugins');
     const accountMenuContainer = fileExp.element.querySelector('#fileExpAccountMenuPlugins');
     const toolbarPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.toolbar, { contributionType: MOUNT_CONTRIBUTION_TYPE });
+    const toolbarPluginsDropdownPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.toolbarPluginsDropdown, { contributionType: MOUNT_CONTRIBUTION_TYPE });
     const rightBarPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.rightBar, { contributionType: MOUNT_CONTRIBUTION_TYPE });
     const internalPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.internal, { contributionType: MOUNT_CONTRIBUTION_TYPE });
     const globalPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.global, { contributionType: MOUNT_CONTRIBUTION_TYPE });
     const accountMenuPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.accountMenu, { contributionType: MOUNT_CONTRIBUTION_TYPE });
     const toolbarContext = buildPluginContext(fileExp, APP_PLUGIN_SLOTS.toolbar);
+    const toolbarPluginsDropdownContext = buildPluginContext(fileExp, APP_PLUGIN_SLOTS.toolbarPluginsDropdown);
     const rightBarContext = buildPluginContext(fileExp, APP_PLUGIN_SLOTS.rightBar);
     const internalContext = buildPluginContext(fileExp, APP_PLUGIN_SLOTS.internal);
     const globalContext = buildPluginContext(fileExp, APP_PLUGIN_SLOTS.global);
     const accountMenuContext = buildPluginContext(fileExp, APP_PLUGIN_SLOTS.accountMenu);
 
     await mountSlot(toolbarContainer, APP_PLUGIN_SLOTS.toolbar, toolbarPlugins, toolbarContext);
+    await mountSlot(toolbarPluginsDropdownContainer, APP_PLUGIN_SLOTS.toolbarPluginsDropdown, toolbarPluginsDropdownPlugins, toolbarPluginsDropdownContext);
     await mountSlot(rightBarContainer, APP_PLUGIN_SLOTS.rightBar, rightBarPlugins, rightBarContext);
     await mountSlot(internalContainer, APP_PLUGIN_SLOTS.internal, internalPlugins, internalContext);
     await mountSlot(globalContainer, APP_PLUGIN_SLOTS.global, globalPlugins, globalContext);
@@ -278,11 +364,15 @@ export function attachApplicationPluginHost(fileExp) {
     fileExp.setWindowListener?.('file-exp-app-plugins-settings', 'assistos:plugin-settings-updated', rerender);
     fileExp.registerCleanup?.(() => {
         const toolbarContainer = fileExp.element?.querySelector?.('#fileExpToolbarPlugins');
+        const toolbarPluginsDropdownContainer = fileExp.element?.querySelector?.('#fileExpToolbarPluginsDropdown');
         const rightBarContainer = fileExp.element?.querySelector?.('#fileExpPluginBar');
         const internalContainer = fileExp.element?.querySelector?.('#fileExpInternalPlugins');
         const globalContainer = fileExp.element?.querySelector?.('#fileExpGlobalPlugins');
         if (toolbarContainer) {
             toolbarContainer.replaceChildren();
+        }
+        if (toolbarPluginsDropdownContainer) {
+            toolbarPluginsDropdownContainer.replaceChildren();
         }
         if (rightBarContainer) {
             rightBarContainer.replaceChildren();

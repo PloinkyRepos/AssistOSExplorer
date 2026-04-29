@@ -115,6 +115,8 @@ export async function runAfterRender(fileExp, options = {}) {
     const uploadButton = fileExp.element.querySelector('#uploadButton');
     const accountMenuButton = fileExp.element.querySelector('#accountMenuButton');
     const accountMenu = fileExp.element.querySelector('#accountMenu');
+    const pluginsMenuButton = fileExp.element.querySelector('#pluginsMenuButton');
+    const pluginsMenu = fileExp.element.querySelector('#pluginsMenu');
     const fileUploadInput = fileExp.element.querySelector('#fileUploadInput');
     void refreshAdminSettingsMenuItem(fileExp);
     const managedByDpu = isDpuManagedPath(fileExp.state.path || '/');
@@ -288,10 +290,17 @@ export async function runAfterRender(fileExp, options = {}) {
             fileExp.setToolbarMenuOpen(open);
             toolbarMenu.classList.toggle('open', open);
             toolbarMenuButton.setAttribute('aria-expanded', open ? 'true' : 'false');
+            if (open) {
+                accountMenu?.classList.remove('open');
+                accountMenuButton?.setAttribute('aria-expanded', 'false');
+                pluginsMenu?.classList.remove('open');
+                pluginsMenuButton?.setAttribute('aria-expanded', 'false');
+            }
         };
         const onToolbarButtonClick = (event) => {
             event.stopPropagation();
-            setToolbarMenuOpen(!fileExp.state.toolbarMenuOpen);
+            const isOpen = toolbarMenu.classList.contains('open');
+            setToolbarMenuOpen(!isOpen);
         };
         const onToolbarMenuClick = (event) => {
             const item = event.target.closest('[role="menuitem"]');
@@ -317,6 +326,12 @@ export async function runAfterRender(fileExp, options = {}) {
         const setAccountMenuOpen = (open) => {
             accountMenu.classList.toggle('open', open);
             accountMenuButton.setAttribute('aria-expanded', open ? 'true' : 'false');
+            if (open) {
+                toolbarMenu?.classList.remove('open');
+                toolbarMenuButton?.setAttribute('aria-expanded', 'false');
+                pluginsMenu?.classList.remove('open');
+                pluginsMenuButton?.setAttribute('aria-expanded', 'false');
+            }
         };
         const onAccountButtonClick = (event) => {
             event.stopPropagation();
@@ -340,6 +355,41 @@ export async function runAfterRender(fileExp, options = {}) {
         accountMenuButton.setAttribute('aria-expanded', accountMenu.classList.contains('open') ? 'true' : 'false');
     } else {
         fileExp.removeDocumentListener('account-menu-outside');
+    }
+
+    if (pluginsMenuButton && pluginsMenu) {
+        const setPluginsMenuOpen = (open) => {
+            pluginsMenu.classList.toggle('open', open);
+            pluginsMenuButton.setAttribute('aria-expanded', open ? 'true' : 'false');
+            if (open) {
+                toolbarMenu?.classList.remove('open');
+                toolbarMenuButton?.setAttribute('aria-expanded', 'false');
+                accountMenu?.classList.remove('open');
+                accountMenuButton?.setAttribute('aria-expanded', 'false');
+            }
+        };
+        const onPluginsButtonClick = (event) => {
+            event.stopPropagation();
+            const willOpen = !pluginsMenu.classList.contains('open');
+            setPluginsMenuOpen(willOpen);
+        };
+        const onPluginsMenuClick = (event) => {
+            const item = event.target.closest('[role="menuitem"]');
+            if (item) {
+                setPluginsMenuOpen(false);
+            }
+        };
+        const onPluginsOutsideClick = (event) => {
+            if (!pluginsMenu.contains(event.target) && event.target !== pluginsMenuButton) {
+                setPluginsMenuOpen(false);
+            }
+        };
+        fileExp.setElementListener('plugins-menu-button', pluginsMenuButton, 'click', onPluginsButtonClick);
+        fileExp.setElementListener('plugins-menu-container', pluginsMenu, 'click', onPluginsMenuClick);
+        fileExp.setDocumentListener('plugins-menu-outside', 'click', onPluginsOutsideClick);
+        pluginsMenuButton.setAttribute('aria-expanded', pluginsMenu.classList.contains('open') ? 'true' : 'false');
+    } else {
+        fileExp.removeDocumentListener('plugins-menu-outside');
     }
 
     if (fileUploadInput) {

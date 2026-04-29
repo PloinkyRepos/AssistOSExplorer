@@ -2,7 +2,7 @@
     "pluginCategory": "application",
     "id": "tasks",
     "component": "tasks-tool-button",
-    "location": ["file-exp:toolbar"],
+    "location": ["file-exp:toolbar-plugins-dropdown"],
     "label": "Tasks",
     "tooltip": "Tasks",
     "icon": "./icon.svg",

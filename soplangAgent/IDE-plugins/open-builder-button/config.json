@@ -2,7 +2,7 @@
     "pluginCategory": "application",
     "id": "soplang-builder",
     "component": "open-builder-button",
-    "location": ["file-exp:toolbar"],
+    "location": ["file-exp:toolbar-plugins-dropdown"],
     "label": "Builder",
     "tooltip": "Open Builder",
     "icon": "./icon.svg",
