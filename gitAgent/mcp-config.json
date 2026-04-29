@@ -82,6 +82,10 @@
         "path": {
           "type": "string",
           "optional": false
+        },
+        "includeAhead": {
+          "type": "boolean",
+          "optional": true
         }
       },
       "env": {
