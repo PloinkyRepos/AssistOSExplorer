@@ -123,6 +123,55 @@ main {
     color: inherit;
 }
 
+.app-menu-list .app-plugin-mount {
+    width: 100%;
+    display: block;
+}
+
+.app-menu-list .app-plugin-mount > * {
+    width: 100%;
+}
+
+.app-menu-list .app-plugin-tool-button,
+[data-host-orientation="dropdown"] .app-plugin-tool-button {
+    width: 100%;
+    min-height: 0;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 10px;
+    padding: 8px 10px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    box-shadow: none;
+    transform: none;
+}
+
+.app-menu-list .app-plugin-tool-button:hover,
+.app-menu-list .app-plugin-tool-button:focus-visible,
+[data-host-orientation="dropdown"] .app-plugin-tool-button:hover,
+[data-host-orientation="dropdown"] .app-plugin-tool-button:focus-visible {
+    background: var(--file-exp-subtle-surface, rgba(148, 163, 184, 0.12));
+    box-shadow: none;
+    transform: none;
+}
+
+.app-menu-list .app-plugin-tool-icon,
+[data-host-orientation="dropdown"] .app-plugin-tool-icon {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 18px;
+}
+
+.app-menu-list .app-plugin-tool-label,
+[data-host-orientation="dropdown"] .app-plugin-tool-label {
+    width: auto;
+    max-width: none;
+    font-size: 0.95rem;
+    line-height: 1;
+    text-align: left;
+}
+
 .toolbar-submenu {
     position: relative;
 }

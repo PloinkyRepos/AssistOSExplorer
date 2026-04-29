@@ -73,6 +73,9 @@ function buildPluginContext(fileExp, slot) {
 }
 
 function getContainerOrientation(container, slot) {
+    if (slot === APP_PLUGIN_SLOTS.toolbarPluginsDropdown) {
+        return 'dropdown';
+    }
     if (container?.classList?.contains('app-toolbar-slot')) {
         return 'horizontal';
     }
@@ -160,86 +163,6 @@ async function mountSlot(container, slot, plugins, context) {
         orientation: getContainerOrientation(container, slot)
     };
 
-    // Special handling for toolbar-plugins-dropdown slot: render as simple buttons with app-menu-item classes
-    if (slot === APP_PLUGIN_SLOTS.toolbarPluginsDropdown) {
-        const existingButtons = new Map();
-        const buttonNodes = Array.from(container.querySelectorAll('button[data-app-plugin-key]'));
-        for (const node of buttonNodes) {
-            const key = node.getAttribute('data-app-plugin-key');
-            if (!key) {
-                continue;
-            }
-            if (existingButtons.has(key)) {
-                node.remove();
-                continue;
-            }
-            existingButtons.set(key, node);
-        }
-
-        const seen = new Set();
-        const orderedButtons = [];
-
-        for (const plugin of plugins) {
-            const key = getPluginKey(plugin);
-            if (!key) {
-                continue;
-            }
-            seen.add(key);
-
-            let button = existingButtons.get(key);
-            if (!button) {
-                button = document.createElement('button');
-                button.type = 'button';
-                button.className = 'app-menu-item action-menu-item';
-                button.setAttribute('data-app-plugin-key', key);
-                button.setAttribute('role', 'menuitem');
-                button.setAttribute('title', plugin.tooltip || plugin.label || '');
-
-                const icon = document.createElement('img');
-                icon.className = 'app-menu-item-icon action-menu-item-icon';
-                icon.loading = 'lazy';
-                icon.src = plugin.icon || '';
-                icon.alt = '';
-                button.appendChild(icon);
-
-                const label = document.createElement('span');
-                label.className = 'app-menu-item-label action-menu-item-label';
-                label.textContent = plugin.label || 'Plugin';
-                button.appendChild(label);
-
-                container.appendChild(button);
-            }
-
-            // Update icon and label if they changed
-            const icon = button.querySelector('.app-menu-item-icon');
-            const label = button.querySelector('.app-menu-item-label');
-            if (icon && plugin.icon) {
-                icon.src = plugin.icon;
-            }
-            if (label && plugin.label) {
-                label.textContent = plugin.label;
-            }
-            button.setAttribute('title', plugin.tooltip || plugin.label || '');
-
-            void emitPluginMountedAudit(key, contextWithOrientation);
-            orderedButtons.push(button);
-        }
-
-        for (const [key, node] of existingButtons.entries()) {
-            if (!seen.has(key)) {
-                node.remove();
-            }
-        }
-
-        for (const node of orderedButtons) {
-            if (node && node.parentNode === container) {
-                container.appendChild(node);
-            }
-        }
-        return;
-    }
-
-    // Standard plugin mounting for other slots
     const existingMounts = collectExistingMounts(container);
     const seen = new Set();
     const orderedMounts = [];
