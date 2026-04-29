@@ -21,9 +21,9 @@ and no MCP session setup.
   material
 - POSTs a single JSON-RPC `tools/call` request to
   `{router}/mcps/{dpuRoute}/mcp`
-- calls only the domain operations
-  (`secret_get`, `secret_put`, `secret_delete`, `secret_grant`,
-  `secret_revoke`, `secret_list`)
+- calls only the canonical DPU domain operations
+  (`dpu_secret_get`, `dpu_secret_put`, `dpu_secret_delete`,
+  `dpu_secret_grant`, `dpu_secret_revoke`, `dpu_secret_list`)
 
 No MCP `Client`/`Transport` setup is used. No `mcp-session-id` header is
 sent. Errors from DPU are surfaced as thrown `Error`s.
@@ -60,12 +60,12 @@ Chain of custody:
 
 | operation      | scope          |
 |----------------|----------------|
-| `secret_get`   | `secret:read`  |
-| `secret_list`  | `secret:read`  |
-| `secret_put`   | `secret:write` |
-| `secret_delete`| `secret:write` |
-| `secret_grant` | `secret:grant` |
-| `secret_revoke`| `secret:revoke`|
+| `dpu_secret_get`   | `secret:read`  |
+| `dpu_secret_list`  | `secret:read`  |
+| `dpu_secret_put`   | `secret:write` |
+| `dpu_secret_delete`| `secret:write` |
+| `dpu_secret_grant` | `secret:grant` |
+| `dpu_secret_revoke`| `secret:revoke`|
 
 Scopes are named in the router-issued invocation JWT and enforced by DPU. The
 manifest no longer declares a `requires.secretStore` block; the client is

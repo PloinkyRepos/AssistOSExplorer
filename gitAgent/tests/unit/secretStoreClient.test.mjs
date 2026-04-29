@@ -74,7 +74,7 @@ test('secret-store client forwards the invocation JWT as caller JWT without MCP 
   const request = requests[0];
   assert.equal(request.method, 'POST');
   assert.equal(request.body.method, 'tools/call');
-  assert.equal(request.body.params?.name, 'secret_put');
+  assert.equal(request.body.params?.name, 'dpu_secret_put');
   assert.deepEqual(request.body.params?.arguments, { key: 'API_TOKEN', value: 'secret-value' });
   assert.equal(typeof request.headers['mcp-session-id'], 'undefined');
   assert.equal(request.headers['x-ploinky-caller-jwt'], invocationToken);

@@ -61,13 +61,13 @@ export { resolveActor };
  * per-secret ACL checks below.
  */
 const OPERATION_SCOPE_MAP = {
-  secret_get: ['secret:read'],
-  secret_put: ['secret:write'],
-  secret_delete: ['secret:write'],
-  secret_grant: ['secret:grant', 'secret:write'],
-  secret_revoke: ['secret:revoke', 'secret:write'],
-  secret_list: ['secret:access', 'secret:read'],
-  secret_whoami: ['secret:access', 'secret:read'],
+  dpu_secret_get: ['secret:read'],
+  dpu_secret_put: ['secret:write'],
+  dpu_secret_delete: ['secret:write'],
+  dpu_secret_grant: ['secret:grant', 'secret:write'],
+  dpu_secret_revoke: ['secret:revoke', 'secret:write'],
+  dpu_secret_list: ['secret:access', 'secret:read'],
+  dpu_whoami: ['secret:access', 'secret:read'],
   dpu_workspace_roots: ['secret:access', 'secret:read']
 };
 
@@ -677,7 +677,7 @@ async function serializeConfidentialObject(state, permissionsManifest, objectRec
 
 export async function getWhoAmI(authInfo = null) {
   return withLockedState(async (state, permissionsManifest, ctx) => {
-    assertInvocationScopeFor('secret_whoami', authInfo);
+    assertInvocationScopeFor('dpu_whoami', authInfo);
     const actor = resolveActor(authInfo, permissionsManifest);
     if (!actor.authenticated) {
       return {
@@ -928,7 +928,7 @@ export async function appendAuditClientEvent(authInfo = null, payload = {}) {
 }
 
 export async function listSecrets(authInfo = null) {
-  assertInvocationScopeFor('secret_list', authInfo);
+  assertInvocationScopeFor('dpu_secret_list', authInfo);
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
     await ensureUserRecord(state, permissionsManifest, actor, ctx);
@@ -952,7 +952,7 @@ export async function listSecrets(authInfo = null) {
 }
 
 export async function getSecretByKey(authInfo = null, { key }) {
-  assertInvocationScopeFor('secret_get', authInfo);
+  assertInvocationScopeFor('dpu_secret_get', authInfo);
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
     await ensureUserRecord(state, permissionsManifest, actor, ctx);
@@ -972,7 +972,7 @@ export async function getSecretByKey(authInfo = null, { key }) {
 }
 
 export async function putSecret(authInfo = null, { key, value, displayName }) {
-  assertInvocationScopeFor('secret_put', authInfo);
+  assertInvocationScopeFor('dpu_secret_put', authInfo);
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
     await ensureUserRecord(state, permissionsManifest, actor, ctx);
@@ -1020,7 +1020,7 @@ export async function putSecret(authInfo = null, { key, value, displayName }) {
 }
 
 export async function deleteSecret(authInfo = null, { key }) {
-  assertInvocationScopeFor('secret_delete', authInfo);
+  assertInvocationScopeFor('dpu_secret_delete', authInfo);
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
     await ensureUserRecord(state, permissionsManifest, actor, ctx);
@@ -1046,7 +1046,7 @@ export async function deleteSecret(authInfo = null, { key }) {
 }
 
 export async function grantSecret(authInfo = null, { key, principal, role }) {
-  assertInvocationScopeFor('secret_grant', authInfo);
+  assertInvocationScopeFor('dpu_secret_grant', authInfo);
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
     await ensureUserRecord(state, permissionsManifest, actor, ctx);
@@ -1083,7 +1083,7 @@ export async function grantSecret(authInfo = null, { key, principal, role }) {
 }
 
 export async function revokeSecret(authInfo = null, { key, principal }) {
-  assertInvocationScopeFor('secret_revoke', authInfo);
+  assertInvocationScopeFor('dpu_secret_revoke', authInfo);
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
     await ensureUserRecord(state, permissionsManifest, actor, ctx);

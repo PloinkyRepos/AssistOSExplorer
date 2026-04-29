@@ -198,7 +198,7 @@ test('delegated secret reads accept direct agent invocations without a binding i
     },
     invocation: {
       scope: ['secret:read'],
-      tool: 'secret_get',
+      tool: 'dpu_secret_get',
       workspaceId: 'default'
     }
   };
@@ -222,14 +222,14 @@ test('delegated secret reads reject missing required scope', async () => {
     },
     invocation: {
       scope: ['secret:write'],
-      tool: 'secret_get',
+      tool: 'dpu_secret_get',
       workspaceId: 'default'
     }
   };
 
   await assert.rejects(
     () => getSecretByKey(delegatedAuth, { key: 'DIRECT_SCOPE_TOKEN' }),
-    /Invocation scope does not permit secret_get/
+    /Invocation scope does not permit dpu_secret_get/
   );
 });
 
@@ -336,7 +336,7 @@ test('whoami rejects delegated calls without a read/access scope', async () => {
 
   await assert.rejects(
     () => getWhoAmI(delegatedAuth),
-    /Invocation scope does not permit secret_whoami/
+    /Invocation scope does not permit dpu_whoami/
   );
 });
 
@@ -593,7 +593,7 @@ test('delegated owner writes still succeed after the same agent is granted read 
     },
     invocation: {
       scope: ['secret:write'],
-      tool: 'secret_put',
+      tool: 'dpu_secret_put',
       workspaceId: 'default'
     }
   };

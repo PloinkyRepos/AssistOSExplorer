@@ -7,7 +7,7 @@ import crypto from 'node:crypto';
  *
  *   - routes every call through the router to the configured DPU route
  *   - forwards the router-issued invocation JWT as the caller JWT
- *   - does not depend on capability bindings for Git -> DPU traffic
+ *   - calls the canonical DPU secret operations
  *
  * Env contract (set by AgentServer/ploinky start scripts):
  *
@@ -121,22 +121,22 @@ export function createSecretStoreClient({ providerRouteName, authInfo = null, in
 
   return {
     get(key) {
-      return callContractOperation('secret_get', { key });
+      return callContractOperation('dpu_secret_get', { key });
     },
     put(key, value) {
-      return callContractOperation('secret_put', { key, value });
+      return callContractOperation('dpu_secret_put', { key, value });
     },
     delete(key) {
-      return callContractOperation('secret_delete', { key });
+      return callContractOperation('dpu_secret_delete', { key });
     },
     grant(key, principal, role) {
-      return callContractOperation('secret_grant', { key, principal, role });
+      return callContractOperation('dpu_secret_grant', { key, principal, role });
     },
     revoke(key, principal) {
-      return callContractOperation('secret_revoke', { key, principal });
+      return callContractOperation('dpu_secret_revoke', { key, principal });
     },
     list() {
-      return callContractOperation('secret_list', {});
+      return callContractOperation('dpu_secret_list', {});
     }
   };
 }

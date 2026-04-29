@@ -109,7 +109,6 @@ function normalizeArgs(toolName, args) {
   switch (toolName) {
     case 'dpu_whoami':
     case 'dpu_workspace_roots':
-    case 'secret_list':
     case 'dpu_secret_list':
     case 'dpu_audit_config_get':
     case 'dpu_audit_list':
@@ -125,13 +124,10 @@ function normalizeArgs(toolName, args) {
     case 'dpu_audit_get':
       requireString('name');
       return input;
-    case 'secret_get':
-    case 'secret_delete':
     case 'dpu_secret_get':
     case 'dpu_secret_delete':
       requireString('key');
       return input;
-    case 'secret_put':
     case 'dpu_secret_put':
       requireString('key');
       if (typeof input.value !== 'string') {
@@ -141,13 +137,11 @@ function normalizeArgs(toolName, args) {
         throw new Error(`${toolName} requires "displayName" to be a string when provided.`);
       }
       return input;
-    case 'secret_grant':
     case 'dpu_secret_grant':
       requireString('key');
       requireString('principal');
       requireString('role');
       return input;
-    case 'secret_revoke':
     case 'dpu_secret_revoke':
       requireString('key');
       requireString('principal');
@@ -244,27 +238,21 @@ async function main() {
     case 'dpu_workspace_roots':
       result = await getWorkspaceRoots(authInfo);
       break;
-    case 'secret_list':
     case 'dpu_secret_list':
       result = await listSecrets(authInfo);
       break;
-    case 'secret_get':
     case 'dpu_secret_get':
       result = await getSecretByKey(authInfo, args);
       break;
-    case 'secret_put':
     case 'dpu_secret_put':
       result = await putSecret(authInfo, args);
       break;
-    case 'secret_delete':
     case 'dpu_secret_delete':
       result = await deleteSecret(authInfo, args);
       break;
-    case 'secret_grant':
     case 'dpu_secret_grant':
       result = await grantSecret(authInfo, args);
       break;
-    case 'secret_revoke':
     case 'dpu_secret_revoke':
       result = await revokeSecret(authInfo, args);
       break;

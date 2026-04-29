@@ -153,17 +153,6 @@
       }
     },
     {
-      "name": "secret_list",
-      "title": "Secret List",
-      "description": "List secrets visible to the current actor.",
-      "command": "tools/dpu_tool.sh",
-      "cwd": "workspace",
-      "inputSchema": {},
-      "env": {
-        "TOOL_NAME": "secret_list"
-      }
-    },
-    {
       "name": "dpu_secret_get",
       "title": "DPU Secret Get",
       "description": "Get a secret by key, filtered by the current actor permissions.",
@@ -177,22 +166,6 @@
       },
       "env": {
         "TOOL_NAME": "dpu_secret_get"
-      }
-    },
-    {
-      "name": "secret_get",
-      "title": "Secret Get",
-      "description": "Get a secret by key, filtered by the current actor permissions.",
-      "command": "tools/dpu_tool.sh",
-      "cwd": "workspace",
-      "inputSchema": {
-        "key": {
-          "type": "string",
-          "optional": false
-        }
-      },
-      "env": {
-        "TOOL_NAME": "secret_get"
       }
     },
     {
@@ -220,30 +193,6 @@
       }
     },
     {
-      "name": "secret_put",
-      "title": "Secret Put",
-      "description": "Create or update a secret.",
-      "command": "tools/dpu_tool.sh",
-      "cwd": "workspace",
-      "inputSchema": {
-        "key": {
-          "type": "string",
-          "optional": false
-        },
-        "value": {
-          "type": "string",
-          "optional": false
-        },
-        "displayName": {
-          "type": "string",
-          "optional": true
-        }
-      },
-      "env": {
-        "TOOL_NAME": "secret_put"
-      }
-    },
-    {
       "name": "dpu_secret_delete",
       "title": "DPU Secret Delete",
       "description": "Delete a secret by key.",
@@ -257,22 +206,6 @@
       },
       "env": {
         "TOOL_NAME": "dpu_secret_delete"
-      }
-    },
-    {
-      "name": "secret_delete",
-      "title": "Secret Delete",
-      "description": "Delete a secret by key.",
-      "command": "tools/dpu_tool.sh",
-      "cwd": "workspace",
-      "inputSchema": {
-        "key": {
-          "type": "string",
-          "optional": false
-        }
-      },
-      "env": {
-        "TOOL_NAME": "secret_delete"
       }
     },
     {
@@ -293,36 +226,16 @@
         "role": {
           "type": "string",
           "optional": false,
-          "enum": ["access", "write-access", "read", "write"]
+          "enum": [
+            "access",
+            "write-access",
+            "read",
+            "write"
+          ]
         }
       },
       "env": {
         "TOOL_NAME": "dpu_secret_grant"
-      }
-    },
-    {
-      "name": "secret_grant",
-      "title": "Secret Grant",
-      "description": "Grant Access, Write-Access, Read, or Write on a secret.",
-      "command": "tools/dpu_tool.sh",
-      "cwd": "workspace",
-      "inputSchema": {
-        "key": {
-          "type": "string",
-          "optional": false
-        },
-        "principal": {
-          "type": "string",
-          "optional": false
-        },
-        "role": {
-          "type": "string",
-          "optional": false,
-          "enum": ["access", "write-access", "read", "write"]
-        }
-      },
-      "env": {
-        "TOOL_NAME": "secret_grant"
       }
     },
     {
@@ -346,26 +259,6 @@
       }
     },
     {
-      "name": "secret_revoke",
-      "title": "Secret Revoke",
-      "description": "Revoke a previously granted secret role from a principal.",
-      "command": "tools/dpu_tool.sh",
-      "cwd": "workspace",
-      "inputSchema": {
-        "key": {
-          "type": "string",
-          "optional": false
-        },
-        "principal": {
-          "type": "string",
-          "optional": false
-        }
-      },
-      "env": {
-        "TOOL_NAME": "secret_revoke"
-      }
-    },
-    {
       "name": "dpu_confidential_list",
       "title": "DPU Confidential List",
       "description": "List confidential objects in My Space or Shared.",
@@ -375,7 +268,10 @@
         "scope": {
           "type": "string",
           "optional": true,
-          "enum": ["my-space", "shared"]
+          "enum": [
+            "my-space",
+            "shared"
+          ]
         },
         "parentId": {
           "type": "string",
@@ -412,7 +308,10 @@
         "type": {
           "type": "string",
           "optional": false,
-          "enum": ["file", "folder"]
+          "enum": [
+            "file",
+            "folder"
+          ]
         },
         "name": {
           "type": "string",
@@ -537,7 +436,12 @@
         "role": {
           "type": "string",
           "optional": false,
-          "enum": ["access", "read", "comment", "write"]
+          "enum": [
+            "access",
+            "read",
+            "comment",
+            "write"
+          ]
         }
       },
       "env": {
@@ -610,7 +514,10 @@
         "kind": {
           "type": "string",
           "optional": false,
-          "enum": ["secret", "confidential"]
+          "enum": [
+            "secret",
+            "confidential"
+          ]
         },
         "key": {
           "type": "string",
@@ -623,7 +530,12 @@
         "permission": {
           "type": "string",
           "optional": false,
-          "enum": ["access", "read", "comment", "write"]
+          "enum": [
+            "access",
+            "read",
+            "comment",
+            "write"
+          ]
         }
       },
       "env": {
