@@ -193,7 +193,7 @@ export function attachSearchController(fileExp) {
 
     async function openSettingsModal(_target, tab = 'keymap') {
         const state = getState();
-        const normalizedTab = ['keymap', 'editor', 'theme'].includes(tab) ? tab : 'keymap';
+        const normalizedTab = ['keymap', 'editor', 'theme', 'plugins'].includes(tab) ? tab : 'keymap';
         fileExp.setSearchMenuOpen(false);
         updateSearchUI();
         const result = await assistOS.UI.createReactiveModal('settings-modal', {
@@ -214,12 +214,6 @@ export function attachSearchController(fileExp) {
                 Number.parseInt(String(result.editorAutoSaveIntervalSeconds ?? ''), 10)
             );
         }
-    }
-
-    async function openPluginSettingsModal() {
-        fileExp.setSearchMenuOpen(false);
-        updateSearchUI();
-        await assistOS.UI.createReactiveModal('plugin-settings-modal', {}, true);
     }
 
     function closeSearchOverlays() {
@@ -385,7 +379,6 @@ export function attachSearchController(fileExp) {
         openSearchInFiles,
         openReplaceInFiles,
         openSettingsModal,
-        openPluginSettingsModal,
         closeSearchOverlays,
         openSearchResult,
         navigateToPath,

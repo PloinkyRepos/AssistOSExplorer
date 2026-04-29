@@ -9,6 +9,7 @@
         <button type="button" class="settings-tab" data-local-action="switchTab keymap" data-tab="keymap" role="tab" aria-selected="true">Keymap</button>
         <button type="button" class="settings-tab" data-local-action="switchTab editor" data-tab="editor" role="tab" aria-selected="false">Editor</button>
         <button type="button" class="settings-tab" data-local-action="switchTab theme" data-tab="theme" role="tab" aria-selected="false">Theme</button>
+        <button type="button" class="settings-tab" data-local-action="switchTab plugins" data-tab="plugins" role="tab" aria-selected="false">Plugins</button>
     </div>
 
     <div class="settings-content">
@@ -39,6 +40,12 @@
                 <button type="button" class="theme-option" data-local-action="selectTheme light" data-theme="light" role="radio" aria-checked="false">Light</button>
                 <button type="button" class="theme-option" data-local-action="selectTheme dark" data-theme="dark" role="radio" aria-checked="false">Dark</button>
             </div>
+        </section>
+
+        <section class="settings-section hidden" data-section="plugins">
+            <p class="plugin-settings-description">Enable, disable, and configure workspace plugins.</p>
+            <div class="plugin-settings-status" id="pluginSettingsStatus" role="status" aria-live="polite"></div>
+            <div class="plugin-settings-list" id="pluginSettingsList"></div>
         </section>
     </div>
 

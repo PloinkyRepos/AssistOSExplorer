@@ -135,11 +135,6 @@
       "name": "settings-modal",
       "type": "modals",
       "presenterClassName": "SettingsModal"
-    },
-    {
-      "name": "plugin-settings-modal",
-      "type": "modals",
-      "presenterClassName": "PluginSettingsModal"
     }
   ],
   "services": []
