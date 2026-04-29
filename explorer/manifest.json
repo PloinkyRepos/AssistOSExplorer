@@ -26,11 +26,15 @@
         "soplangAgent global",
         "tasksAgent global",
         "llmAssistant global",
+        "webmeetInfra/stack",
         "webmeetAgent global",
         "multimedia global",
         "webAssist",
         "webAdmin"
     ],
+    "repos": {
+        "webmeetInfra": "https://github.com/PloinkyRepos/webmeetInfra.git"
+    },
     "applicationPlugins": {
         "git": true,
         "dpu-runtime-support": true,
