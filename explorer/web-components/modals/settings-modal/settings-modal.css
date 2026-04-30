@@ -1,12 +1,37 @@
+dialog.modal.settings-modal-dialog {
+    width: min(1040px, calc(100vw - 48px));
+    min-width: 0;
+    max-width: min(1040px, calc(100vw - 48px));
+    height: min(86vh, 900px);
+    max-height: 86vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+dialog.modal.settings-modal-dialog settings-modal {
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+    flex-direction: column;
+}
+
 settings-modal .settings-modal-body {
     display: flex;
     flex-direction: column;
-    gap: 16px;
-    min-width: min(880px, 92vw);
+    flex: 1 1 auto;
+    gap: 12px;
+    min-height: 0;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    overflow: hidden;
 }
 
 settings-modal .settings-tabs {
-    display: inline-flex;
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
     gap: 8px;
     border-bottom: 1px solid var(--border);
     padding-bottom: 8px;
@@ -34,11 +59,23 @@ settings-modal .settings-section.hidden {
 }
 
 settings-modal .settings-section {
-    flex: 1 1 auto;
+    min-height: 0;
 }
 
 settings-modal .settings-content {
     position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    padding-right: 4px;
+}
+
+settings-modal .modal-actions {
+    flex: 0 0 auto;
+    margin-top: 0;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
 }
 
 settings-modal .keymap-description,
@@ -58,6 +95,24 @@ settings-modal .plugin-settings-status {
 
 settings-modal .plugin-settings-status.error {
     color: var(--file-exp-error);
+}
+
+settings-modal .users-settings-frame-shell {
+    margin-top: 4px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+    overflow: hidden;
+    min-height: 0;
+    height: clamp(360px, 58vh, 680px);
+}
+
+settings-modal .users-settings-frame {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: var(--surface);
 }
 
 settings-modal .plugin-settings-list {
@@ -214,7 +269,7 @@ settings-modal .keymap-list {
 
 settings-modal .keymap-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 360px);
     gap: 12px;
     align-items: center;
     padding: 10px 12px;
@@ -243,10 +298,13 @@ settings-modal .keymap-input-group {
     display: inline-flex;
     align-items: center;
     gap: 8px;
+    justify-content: flex-end;
+    min-width: 0;
 }
 
 settings-modal .keymap-input {
-    min-width: 160px;
+    width: min(220px, 100%);
+    min-width: 0;
     text-align: center;
     font-weight: 600;
     letter-spacing: 0.01em;
@@ -258,6 +316,7 @@ settings-modal .keymap-input:focus {
 }
 
 settings-modal .keymap-clear {
+    flex: 0 0 auto;
     padding: 6px 10px;
 }
 

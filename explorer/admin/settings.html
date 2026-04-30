@@ -3,200 +3,14 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Admin Settings</title>
-    <style>
-        :root {
-            color-scheme: light;
-            --bg: #f5f7fb;
-            --panel: #ffffff;
-            --text: #1f2937;
-            --muted: #667085;
-            --line: #d9dee8;
-            --accent: #2563eb;
-            --danger: #b42318;
-            --ok: #087443;
-        }
-        * { box-sizing: border-box; }
-        body {
-            margin: 0;
-            font-family: Inter, "Segoe UI", Arial, sans-serif;
-            background: var(--bg);
-            color: var(--text);
-        }
-        main {
-            max-width: 1180px;
-            margin: 0 auto;
-            padding: 24px;
-        }
-        header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 16px;
-            margin-bottom: 18px;
-        }
-        h1 {
-            margin: 0;
-            font-size: 24px;
-            font-weight: 760;
-        }
-        .agent-label {
-            color: var(--muted);
-            font-size: 13px;
-            margin-top: 4px;
-        }
-        .panel {
-            background: var(--panel);
-            border: 1px solid var(--line);
-            border-radius: 8px;
-            overflow: hidden;
-        }
-        .toolbar {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr 1fr auto;
-            gap: 10px;
-            padding: 14px;
-            border-bottom: 1px solid var(--line);
-            align-items: end;
-        }
-        label {
-            display: grid;
-            gap: 5px;
-            font-size: 12px;
-            color: var(--muted);
-            font-weight: 650;
-        }
-        input {
-            width: 100%;
-            border: 1px solid var(--line);
-            border-radius: 6px;
-            padding: 9px 10px;
-            font: inherit;
-            color: var(--text);
-            background: #fff;
-        }
-        .password-field {
-            position: relative;
-            display: block;
-        }
-        .password-field input {
-            padding-right: 42px;
-        }
-        button, a.button {
-            border: 1px solid var(--line);
-            border-radius: 6px;
-            padding: 9px 12px;
-            font: inherit;
-            font-weight: 700;
-            background: #fff;
-            color: var(--text);
-            cursor: pointer;
-            text-decoration: none;
-            white-space: nowrap;
-        }
-        button.primary {
-            border-color: var(--accent);
-            background: var(--accent);
-            color: #fff;
-        }
-        button.danger {
-            border-color: rgba(180, 35, 24, 0.28);
-            color: var(--danger);
-        }
-        .password-toggle {
-            position: absolute;
-            right: 4px;
-            top: 50%;
-            width: 32px;
-            height: 30px;
-            display: grid;
-            place-items: center;
-            padding: 0;
-            border: 0;
-            border-radius: 4px;
-            background: transparent;
-            transform: translateY(-50%);
-        }
-        .password-toggle:hover,
-        .password-toggle:focus-visible {
-            background: #f1f5f9;
-        }
-        .password-toggle img {
-            width: 18px;
-            height: 18px;
-            opacity: 0.72;
-            pointer-events: none;
-        }
-        .password-toggle[aria-pressed="true"] img {
-            opacity: 1;
-        }
-        button:disabled {
-            opacity: 0.55;
-            cursor: not-allowed;
-        }
-        .status {
-            min-height: 22px;
-            padding: 10px 14px;
-            font-size: 13px;
-            color: var(--muted);
-            border-bottom: 1px solid var(--line);
-        }
-        .status.error { color: var(--danger); }
-        .status.ok { color: var(--ok); }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            table-layout: fixed;
-        }
-        th, td {
-            border-bottom: 1px solid var(--line);
-            padding: 10px;
-            text-align: left;
-            vertical-align: top;
-            font-size: 13px;
-        }
-        th {
-            background: #f8fafc;
-            color: var(--muted);
-            font-size: 12px;
-            font-weight: 750;
-        }
-        tr:last-child td { border-bottom: 0; }
-        .actions {
-            display: flex;
-            gap: 8px;
-            justify-content: flex-end;
-        }
-        .empty {
-            padding: 22px;
-            color: var(--muted);
-            text-align: center;
-        }
-        @media (max-width: 900px) {
-            main { padding: 14px; }
-            header { align-items: flex-start; flex-direction: column; }
-            .toolbar { grid-template-columns: 1fr; }
-            table, thead, tbody, tr, th, td { display: block; }
-            thead { display: none; }
-            tr { border-bottom: 1px solid var(--line); }
-            td { border-bottom: 0; }
-            td::before {
-                content: attr(data-label);
-                display: block;
-                color: var(--muted);
-                font-size: 11px;
-                font-weight: 750;
-                margin-bottom: 4px;
-            }
-            .actions { justify-content: flex-start; flex-wrap: wrap; }
-        }
-    </style>
+    <title>User Access</title>
+    <link rel="stylesheet" href="./settings.css">
 </head>
 <body>
 <main>
     <header>
         <div>
-            <h1>Admin Settings</h1>
+            <h1>User Access</h1>
             <div class="agent-label" id="agentLabel"></div>
         </div>
         <a class="button" href="/explorer/index.html" id="backLink">Back to Explorer</a>
@@ -229,6 +43,8 @@
 <script>
 (() => {
     const pathParts = window.location.pathname.split('/').filter(Boolean);
+    const embedded = new URLSearchParams(window.location.search).get('embedded') === '1';
+    document.body.classList.toggle('embedded', embedded);
     const agent = pathParts[0] || 'explorer';
     const apiBase = `/api/agents/${encodeURIComponent(agent)}/users`;
     const status = document.getElementById('status');

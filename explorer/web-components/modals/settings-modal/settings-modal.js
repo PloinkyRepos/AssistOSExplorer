@@ -18,6 +18,16 @@ import {
 import { registerRuntimeComponent } from "../../../utils/pluginUtils.ui.js";
 
 const settingsComponentPromises = new Map();
+const BASE_TABS = ['keymap', 'editor', 'theme', 'plugins'];
+
+function getCurrentAgentName() {
+    try {
+        const parts = window.location.pathname.split('/').filter(Boolean);
+        return parts[0] || 'explorer';
+    } catch (_) {
+        return 'explorer';
+    }
+}
 
 function normalizePathSegment(value) {
     return String(value || "")
@@ -197,7 +207,7 @@ export class SettingsModal {
         this.element = element;
         this.invalidate = invalidate;
         this.props = props || {};
-        const initialTab = ['keymap', 'editor', 'theme', 'plugins'].includes(this.props.tab) ? this.props.tab : 'keymap';
+        const initialTab = [...BASE_TABS, 'users'].includes(this.props.tab) ? this.props.tab : 'keymap';
         this.state = {
             activeTab: initialTab,
             selectedTheme: this.props.theme === "dark" ? "dark" : getCurrentTheme(),
@@ -212,7 +222,10 @@ export class SettingsModal {
             pluginBusyActionKey: "",
             pluginStatus: "",
             pluginStatusType: "",
-            pluginDataLoaded: false
+            pluginDataLoaded: false,
+            usersAccessChecked: false,
+            usersAccess: false,
+            usersUrl: ""
         };
         this.invalidate();
     }
@@ -226,6 +239,7 @@ export class SettingsModal {
         this.renderPluginSettings();
         this.updateThemeSelection();
         this.bindEvents();
+        this.refreshUsersAccess();
         if (this.state.activeTab === "plugins" && !this.state.pluginDataLoaded) {
             await this.loadPluginSettingsData();
         }
@@ -236,6 +250,9 @@ export class SettingsModal {
         this.editorSection = this.element.querySelector('[data-section="editor"]');
         this.themeSection = this.element.querySelector('[data-section="theme"]');
         this.pluginsSection = this.element.querySelector('[data-section="plugins"]');
+        this.usersSection = this.element.querySelector('[data-section="users"]');
+        this.usersTab = this.element.querySelector('[data-admin-tab]');
+        this.usersFrame = this.element.querySelector('#usersSettingsFrame');
         this.listEl = this.element.querySelector("#keymapList");
         this.warningEl = this.element.querySelector("#keymapWarning");
         this.pluginSettingsListEl = this.element.querySelector("#pluginSettingsList");
@@ -268,7 +285,8 @@ export class SettingsModal {
     }
 
     switchTab(_target, tab) {
-        this.state.activeTab = ['keymap', 'editor', 'theme', 'plugins'].includes(tab) ? tab : 'keymap';
+        const allowedTabs = this.getAllowedTabs();
+        this.state.activeTab = allowedTabs.includes(tab) ? tab : 'keymap';
         this.updateTabUI();
         if (this.state.activeTab === "plugins" && !this.state.pluginDataLoaded) {
             this.loadPluginSettingsData().catch((error) => {
@@ -277,21 +295,35 @@ export class SettingsModal {
                 this.renderPluginSettingsStatus();
             });
         }
+        if (this.state.activeTab === "users") {
+            this.syncUsersFrame();
+        }
+    }
+
+    getAllowedTabs() {
+        return this.state.usersAccess ? [...BASE_TABS, 'users'] : BASE_TABS;
     }
 
     updateTabUI() {
+        if (!this.getAllowedTabs().includes(this.state.activeTab)) {
+            this.state.activeTab = 'keymap';
+        }
         const tabs = this.element.querySelectorAll(".settings-tab");
         tabs.forEach((tab) => {
             const isActive = tab.dataset.tab === this.state.activeTab;
             tab.classList.toggle("active", isActive);
             tab.setAttribute("aria-selected", isActive ? "true" : "false");
         });
+        if (this.usersTab) {
+            this.usersTab.hidden = !this.state.usersAccess;
+        }
 
         const sections = [
             { key: 'keymap', element: this.keymapSection },
             { key: 'editor', element: this.editorSection },
             { key: 'theme', element: this.themeSection },
-            { key: 'plugins', element: this.pluginsSection }
+            { key: 'plugins', element: this.pluginsSection },
+            { key: 'users', element: this.usersSection }
         ];
         sections.forEach(({ key, element }) => {
             if (!element) return;
@@ -302,6 +334,34 @@ export class SettingsModal {
             this.resetButton.style.display = this.state.activeTab === "keymap" ? "" : "none";
         }
         this.syncEditorSettingsUi();
+        this.syncUsersFrame();
+    }
+
+    async refreshUsersAccess() {
+        if (this.state.usersAccessChecked) return;
+        this.state.usersAccessChecked = true;
+        const agentName = getCurrentAgentName();
+        this.state.usersUrl = `/${encodeURIComponent(agentName)}/admin/settings.html?embedded=1`;
+        try {
+            const response = await fetch(`/api/agents/${encodeURIComponent(agentName)}/users`, {
+                credentials: 'include',
+                headers: { Accept: 'application/json' }
+            });
+            this.state.usersAccess = response.ok;
+        } catch (_) {
+            this.state.usersAccess = false;
+        }
+        this.updateTabUI();
+    }
+
+    syncUsersFrame() {
+        if (!this.usersFrame) return;
+        if (!this.state.usersAccess || this.state.activeTab !== "users") {
+            return;
+        }
+        if (this.usersFrame.getAttribute("src") !== this.state.usersUrl) {
+            this.usersFrame.setAttribute("src", this.state.usersUrl);
+        }
     }
 
     renderPluginSettings() {

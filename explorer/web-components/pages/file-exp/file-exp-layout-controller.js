@@ -4,33 +4,6 @@ import { getPreviewUiState as derivePreviewUiState } from "./file-exp-preview-st
 import { scrollToLine } from "./file-exp-utils.js";
 import { getDpuPathCapabilities, isDpuManagedPath } from "./file-exp-dpu-provider.js";
 
-function getCurrentAgentName() {
-    try {
-        const parts = window.location.pathname.split('/').filter(Boolean);
-        return parts[0] || 'explorer';
-    } catch (_) {
-        return 'explorer';
-    }
-}
-
-async function refreshAdminSettingsMenuItem(fileExp) {
-    const adminSettingsItem = fileExp.element.querySelector('#adminSettingsMenuItem');
-    if (!adminSettingsItem || adminSettingsItem.dataset.visibilityChecked === 'true') return;
-    const agentName = getCurrentAgentName();
-    adminSettingsItem.hidden = true;
-    adminSettingsItem.href = `/${encodeURIComponent(agentName)}/admin/settings.html`;
-    adminSettingsItem.dataset.visibilityChecked = 'true';
-    try {
-        const response = await fetch(`/api/agents/${encodeURIComponent(agentName)}/users`, {
-            credentials: 'include',
-            headers: { Accept: 'application/json' }
-        });
-        adminSettingsItem.hidden = !response.ok;
-    } catch (_) {
-        adminSettingsItem.hidden = true;
-    }
-}
-
 export async function runAfterRender(fileExp, options = {}) {
     const previewLinesFallback = Number.isFinite(options.previewLines) ? options.previewLines : 400;
 
@@ -118,7 +91,6 @@ export async function runAfterRender(fileExp, options = {}) {
     const pluginsMenuButton = fileExp.element.querySelector('#pluginsMenuButton');
     const pluginsMenu = fileExp.element.querySelector('#pluginsMenu');
     const fileUploadInput = fileExp.element.querySelector('#fileUploadInput');
-    void refreshAdminSettingsMenuItem(fileExp);
     const managedByDpu = isDpuManagedPath(fileExp.state.path || '/');
     const dpuCapabilities = managedByDpu
         ? await getDpuPathCapabilities(fileExp, fileExp.state.path || '/')

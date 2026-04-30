@@ -15,6 +15,11 @@ dialog.modal {
     max-height: 90vh;
 }
 
+dialog.modal.settings-modal-dialog{
+    min-width: 85vw;
+    height: 85vh;
+    max-height: 85vh;
+}
 .pointer {
     cursor: pointer;
 }
