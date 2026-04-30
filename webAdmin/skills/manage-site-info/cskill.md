@@ -1,7 +1,7 @@
 # manage-site-info
 
 ## Description
-Creates, updates, or displays site information markdown files under `data/info/`. Typical triggers include read/show intents (`show site info`, `display website info`, `view info file`, `read site file`), create/write intents (`add site info`, `create website info`, `write info file`, `store website details`), and update/edit intents (`update site info`, `edit website info`, `change info file`).
+Creates, updates, or reads site information markdown files under `data/info/`. It is useful for maintaining the website knowledge base that webAssist uses when answering visitors.
 
 ## Input Format
 - `promptText` contains a JSON object with:

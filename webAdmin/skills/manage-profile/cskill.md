@@ -1,7 +1,7 @@
 # manage-profile
 
 ## Description
-Lists, displays, creates, or updates profiling templates in `data/profilesInfo/` used by the website chatbot for visitor matching. Typical triggers include list intents (`list profiles`, `show profiles`, `display profiles`, `what profiles exist`), display intents (`show profile`, `display profile`, `view profile`, `open profile`), create intents (`create profile`, `add profile`, `new profile`, `define profile`), and update intents (`update profile`, `edit profile`, `modify profile`, `change profile`).
+Lists, displays, creates, or updates visitor profiling templates in `data/profilesInfo/`. It is useful for maintaining the profile catalog used by webAssist during visitor matching and qualification.
 
 ## Input Format
 - `promptText` contains a JSON object with:

@@ -1,7 +1,7 @@
 # statistics
 
 ## Description
-Computes session and lead metrics for a requested interval. Typical triggers include `statistics`, `stats`, `metrics`, `report`, `daily stats`, `weekly stats`, `monthly stats`, `yearly stats`, `how many leads`, and `how many sessions`.
+Computes performance metrics for a requested time interval. It is useful when an owner needs quantified reporting about sessions and leads over day/week/month/year windows.
 
 ## Input Format
 - `promptText` contains a JSON object with:

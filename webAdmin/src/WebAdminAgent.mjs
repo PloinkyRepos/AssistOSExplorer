@@ -41,6 +41,8 @@ function buildRuntimePrompt({ message, availableLeadIds, loadedContext, referenc
         referenceDate instanceof Date ? referenceDate.toISOString() : String(referenceDate),
         'Known lead IDs:',
         availableLeadIds.length > 0 ? availableLeadIds.join('\n') : 'No leads available yet.',
+        'Known session IDs:',
+        String(loadedContext?.combinedSessionIds ?? 'No sessions available.'),
         'Known profile templates:',
         String(loadedContext?.combinedProfiles ?? 'No profiles available.'),
         'Owner info snapshot:',

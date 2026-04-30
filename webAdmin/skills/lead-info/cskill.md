@@ -1,7 +1,7 @@
 # lead-info
 
 ## Description
-Returns lead details and related session history. Typical triggers include `lead info`, `lead details`, `show lead`, `display lead`, `open lead`, `show lead history`, `lead session`, and `lead context`.
+Returns full details for one lead, including related session profile and history context. It is useful when an owner wants to inspect a specific lead before deciding next actions.
 
 ## Input Format
 - `promptText` contains a JSON object with:

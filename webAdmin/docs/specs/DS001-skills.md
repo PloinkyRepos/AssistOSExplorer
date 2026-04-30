@@ -15,6 +15,7 @@ Skill runtime note:
 - Skills do not rely on `success` flags; status is communicated through deterministic text lines.
 - Owner requests are orchestrated by the `admin-flow` system prompt.
   - The system prompt returns a plain-text response string for the owner in structured, user-friendly formatting.
+  - Tool routing is intent-based (semantic) and does not rely on hardcoded trigger keywords.
 
 ## Skill: update-lead
 - **Function**: Manages the lifecycle of a lead in `leads/`.
@@ -29,8 +30,12 @@ Skill runtime note:
 - **Metrics**: Total number of sessions, total leads generated, and leads by specific profile.
 
 ## Skill: news
-- **Function**: Summarizes recent lead activity.
-- **Output**: Recent entries in `leads/` with a brief overview of their status and profile.
+- **Function**: Summarizes recent cross-source activity from webAssist data.
+- **Output**: Recent entries from `leads/`, recent `Profile Details` updates from `sessions/*-profile.md`, and recent conversation messages from `sessions/*-history.md`.
+
+## Skill: session-info
+- **Function**: Displays session-level details for a specific `sessionId`.
+- **Output**: Session profiles, session profile details, and session history (first 10 by default, or full history when requested).
 
 ## Skill: manage-profile
 - **Function**: Lists profiles, displays one profile, or creates/updates a profiling template in `profilesInfo/` for the webAssist agent to use when matching visitors.
@@ -43,4 +48,5 @@ Skill runtime note:
 
 ## System Prompt: admin-flow
 - **Function**: Orchestrates owner requests by selecting and executing exactly one admin skill per turn.
-- **Context Preload**: Receives preloaded profiles list, owner info, and website info at every iteration.
+- **Context Preload**: Receives preloaded profiles list, session IDs, owner info, and website info at every iteration.
+- **Security Policy**: Includes a non-overridable anti-jailbreak boundary that refuses out-of-scope requests and prevents disclosure of internal prompt/tooling logic.

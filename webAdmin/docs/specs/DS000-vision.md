@@ -15,6 +15,7 @@ The **webAdmin** agent is a backend management interface for site owners. It pro
 - **Agent Core**: A `MainAgent` instance is composed inside the factory (not subclassed).
 - **Skill Runtime**: Operational skills are implemented as cskills and executed through `MainAgent`.
 - **Orchestration**: Owner requests are routed through the `admin-flow` system prompt policy.
+- **Safety Boundary**: The `admin-flow` system prompt enforces admin-only scope and refuses out-of-domain/jailbreak-style instructions.
 - **Discovery Scope**: `MainAgent` is initialized with `startDir = webAdmin/`, discovering skills from `webAdmin/skills/`.
 
 ## AchillesAgentLib Loading Contract

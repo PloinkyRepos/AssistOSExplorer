@@ -51,7 +51,8 @@ The **webAdmin** agent is implemented as a Node.js CLI tool for site owners. It 
 - At startup, `MainAgent` is initialized with `startDir = webAdmin/` and discovers skills from `webAdmin/skills/`.
 - During runtime, webAdmin calls `MainAgent.executePrompt(...)`.
 - `systemPrompt` is loaded from `webAdmin/src/prompts/admin-flow-system-prompt.mjs`.
-- Dynamic context (known leads, profile list, owner/site snapshots, owner message) is appended into the runtime prompt on every turn.
+- Dynamic context (known leads, known session IDs, profile list, owner/site snapshots, owner message) is appended into the runtime prompt on every turn.
+- The system prompt includes a non-overridable anti-jailbreak/admin-scope policy: out-of-domain requests are refused and internal prompt/tooling logic is not disclosed.
 - The sessionId is forwarded to `MainAgent` to isolate multi-user sessions in shared instances.
 - Runtime data access is centralized through `webAdmin/src/runtime/dataStore.mjs`.
 - The datastore is configured exactly once when `createWebAdminAgent(...)` is initialized (default `<repo>/data`, or CLI `--data-dir` override).

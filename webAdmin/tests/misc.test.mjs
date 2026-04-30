@@ -6,6 +6,7 @@ import path from 'node:path';
 import { createWebAdminSandbox } from './helpers.mjs';
 import { action as leadInfoAction } from '../skills/lead-info/src/index.mjs';
 import { action as newsAction } from '../skills/news/src/index.mjs';
+import { action as sessionInfoAction } from '../skills/session-info/src/index.mjs';
 import { action as statisticsAction } from '../skills/statistics/src/index.mjs';
 import { action as updateLeadAction } from '../skills/update-lead/src/index.mjs';
 import { action as manageProfileAction } from '../skills/manage-profile/src/index.mjs';
@@ -28,7 +29,7 @@ test('lead-info skill returns parsed lead data and related session history', asy
     assert.match(result, /Needs API integration support/);
 });
 
-test('news skill returns the newest lead summaries first', async (t) => {
+test('news skill returns recent leads, profile details, and session history', async (t) => {
     const sandbox = await createWebAdminSandbox();
     t.after(async () => sandbox.cleanup());
     configureDataStore({ agentRoot: sandbox.agentRoot, dataDir: sandbox.dataDir });
@@ -49,14 +50,85 @@ test('news skill returns the newest lead summaries first', async (t) => {
 Newest lead for admin news coverage.
 `);
 
+    await fs.writeFile(path.join(sandbox.dataDir, 'sessions', 'newest-session-profile.md'), `### 1. Profile
+- Developer.md
+
+### 2. Profile Details
+- Asked for migration timeline.
+- Requested direct implementation support.
+`);
+
+    await fs.writeFile(path.join(sandbox.dataDir, 'sessions', 'newest-session-history.md'), `### 1. History
+- **User**: Can we migrate this week?
+- **Agent**: Yes, we can schedule a migration plan.
+- **User**: Please include rollout notes.
+- **Agent**: I will include rollout notes.
+`);
+
+    const result = await newsAction({
+        promptText: JSON.stringify({
+            leads: { limit: 2 },
+            profileDetails: { limit: 2 },
+            sessionHistory: { limit: 2 },
+        }),
+    });
+    assert.equal(typeof result, 'string');
+    assert.match(result, /News report ready\./);
+    assert.match(result, /Recent leads \(2\/2\):/);
+    assert.match(result, /- newest-session-lead\.md/);
+    assert.match(result, /Recent profile details \(2\/2\):/);
+    assert.match(result, /\[newest-session\] Asked for migration timeline\./);
+    assert.match(result, /Recent session history messages \(2\/2\):/);
+    assert.match(result, /\[newest-session\] Agent: I will include rollout notes\./);
+});
+
+test('session-info returns first 10 messages by default or full history when requested', async (t) => {
+    const sandbox = await createWebAdminSandbox();
+    t.after(async () => sandbox.cleanup());
+    configureDataStore({ agentRoot: sandbox.agentRoot, dataDir: sandbox.dataDir });
+
+    const historyPath = path.join(sandbox.dataDir, 'sessions', 'dev-session-history.md');
+    await fs.writeFile(historyPath, `### 1. History
+- **User**: Message 1
+- **Agent**: Message 2
+- **User**: Message 3
+- **Agent**: Message 4
+- **User**: Message 5
+- **Agent**: Message 6
+- **User**: Message 7
+- **Agent**: Message 8
+- **User**: Message 9
+- **Agent**: Message 10
+- **User**: Message 11
+- **Agent**: Message 12
+`);
+
+    const limitedResult = await sessionInfoAction({
+        promptText: JSON.stringify({ sessionId: 'dev-session' }),
+    });
+    assert.equal(typeof limitedResult, 'string');
+    assert.match(limitedResult, /Session details loaded for dev-session\./);
+    assert.match(limitedResult, /Session history \(first 10\/10 messages\):/);
+    assert.match(limitedResult, /- User: Message 1/);
+    assert.doesNotMatch(limitedResult, /Message 11/);
+
+    const fullResult = await sessionInfoAction({
+        promptText: JSON.stringify({ sessionId: 'dev-session', includeFullHistory: true }),
+    });
+    assert.equal(typeof fullResult, 'string');
+    assert.match(fullResult, /Session history \(12 total messages\):/);
+    assert.match(fullResult, /- Agent: Message 12/);
+});
+
+test('news skill rejects legacy top-level limit input', async (t) => {
+    const sandbox = await createWebAdminSandbox();
+    t.after(async () => sandbox.cleanup());
+    configureDataStore({ agentRoot: sandbox.agentRoot, dataDir: sandbox.dataDir });
+
     const result = await newsAction({
         promptText: JSON.stringify({ limit: 2 }),
     });
-    assert.equal(typeof result, 'string');
-    assert.match(result, /Retrieved 2 recent leads\./);
-    assert.match(result, /- newest-session-lead\.md/);
-    assert.match(result, /status: new/);
-    assert.match(result, /summary: Newest lead/);
+    assert.equal(result, 'news no longer accepts top-level limit. Use leads/profileDetails/sessionHistory objects.');
 });
 
 test('skills return explicit error text for invalid input payloads', async (t) => {
@@ -69,6 +141,7 @@ test('skills return explicit error text for invalid input payloads', async (t) =
         newsAction,
         statisticsAction,
         leadInfoAction,
+        sessionInfoAction,
         updateLeadAction,
         manageProfileAction,
         manageSiteInfoAction,

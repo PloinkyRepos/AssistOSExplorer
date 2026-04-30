@@ -91,6 +91,7 @@
                 <a href="#news">news</a>
                 <a href="#statistics">statistics</a>
                 <a href="#lead-info">lead-info</a>
+                <a href="#session-info">session-info</a>
                 <a href="#update-lead">update-lead</a>
                 <a href="#manage-profile">manage-profile</a>
                 <a href="#manage-site-info">manage-site-info</a>
@@ -137,8 +138,8 @@
             <h2 id="skills-and-commands">Skills and Commands</h2>
 
             <h3 id="news">news</h3>
-            <p>List the most recent leads, sorted newest first. Default shows the latest 5 leads.</p>
-            <p><em>Example: "Show me the latest leads"</em></p>
+            <p>List recent activity from webAssist data: newest leads, recent profile-detail updates, and recent conversation messages. Each category accepts its own limit and is sorted by newest first.</p>
+            <p><em>Example: "Show recent leads, profile updates, and conversation news"</em></p>
 
             <h3 id="statistics">statistics</h3>
             <p>Generate performance metrics over time intervals: day, week, month, or year. Reports total sessions, total leads, and leads by profile.</p>
@@ -147,6 +148,10 @@
             <h3 id="lead-info">lead-info</h3>
             <p>Display comprehensive details for a specific lead, including profile, contact info, and full session history.</p>
             <p><em>Example: "Show details for the Developer lead"</em></p>
+
+            <h3 id="session-info">session-info</h3>
+            <p>Display details for a specific session ID, including profiles, profile details, and conversation history. By default it returns the first 10 history messages, or full history when requested.</p>
+            <p><em>Example: "Show session info for dev-session"</em></p>
 
             <h3 id="update-lead">update-lead</h3>
             <p>Change a lead's status. Allowed transitions from <code>new</code>: <code>invalid</code>, <code>contacted</code>, or <code>converted</code>.</p>
@@ -165,7 +170,7 @@
             <p><em>Example: "Update my phone number to +40123456789"</em></p>
 
             <h2 id="orchestration-flow">Orchestration Flow</h2>
-            <p>webAdmin uses the <strong>admin-flow</strong> orchestrator, which processes each owner request by selecting exactly one skill, executing it, and formatting the result in the same language as the request. No manual skill selection is needed—just describe what you need in natural language.</p>
+            <p>webAdmin uses the <strong>admin-flow</strong> orchestrator, which processes each owner request by selecting exactly one skill, executing it, and formatting the result in the same language as the request. Runtime context includes known lead IDs, known session IDs, profiles, owner info, and website info. No manual skill selection is needed—just describe what you need in natural language.</p>
 
             <h2 id="cli-parameters">CLI Parameters</h2>
             <table>
