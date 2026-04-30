@@ -518,7 +518,9 @@ export class FileExpEntries {
 
             const iconClass = entry?.isSymlink
                 ? (type === 'directory' ? 'icon-folder-symlink' : 'icon-file-symlink')
-                : (type === 'directory' ? 'icon-folder' : 'icon-file');
+                : (entryPath === '/Confidential'
+                    ? 'icon-folder-secure'
+                    : (type === 'directory' ? 'icon-folder' : 'icon-file'));
             const nameCell = this.createSelectCell('col-name', entry?.name || '', entryPath, type, iconClass, {
                 isSymlink: Boolean(entry?.isSymlink),
                 linkTarget: entry?.linkTarget || '',

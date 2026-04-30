@@ -44,6 +44,11 @@ file-exp-entries {
     mask-image: url("./assets/icons/folder-fill.svg");
 }
 
+.entry-icon.icon-folder-secure {
+    -webkit-mask-image: url("./assets/icons/folder-secure.svg");
+    mask-image: url("./assets/icons/folder-secure.svg");
+}
+
 .entry-icon.icon-file {
     -webkit-mask-image: url("./assets/icons/file-fill.svg");
     mask-image: url("./assets/icons/file-fill.svg");
