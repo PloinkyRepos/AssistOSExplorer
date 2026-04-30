@@ -56,13 +56,24 @@ function normalizeRemoteName(candidate) {
   return value;
 }
 
-function normalizeRemoteUrl(candidate) {
+function normalizeRemoteUrl(candidate, { repositoryName = '' } = {}) {
   const value = String(candidate || '').trim();
   if (!value) {
     throw new Error('Remote URL is required.');
   }
   if (value.includes('\0') || /\r|\n/.test(value)) {
     throw new Error('Invalid remote URL.');
+  }
+  const repoName = repositoryName ? normalizeRepositoryName(repositoryName) : '';
+  if (repoName) {
+    const githubHttpsOwnerMatch = value.match(/^(https?:\/\/github\.com\/[^/\s]+)\/?$/i);
+    if (githubHttpsOwnerMatch) {
+      return `${githubHttpsOwnerMatch[1]}/${repoName}.git`;
+    }
+    const githubSshOwnerMatch = value.match(/^(git@github\.com:[^/\s]+)\/?$/i);
+    if (githubSshOwnerMatch) {
+      return `${githubSshOwnerMatch[1]}/${repoName}.git`;
+    }
   }
   return value;
 }
@@ -534,7 +545,7 @@ export function createGitService({ validatePath }) {
     }
 
     const repoName = normalizeRepositoryName(name);
-    const configuredRemoteUrl = normalizeRemoteUrl(remoteUrl);
+    const configuredRemoteUrl = normalizeRemoteUrl(remoteUrl, { repositoryName: repoName });
     const configuredRemoteName = normalizeRemoteName(remote || 'origin');
     const targetPath = path.join(parentPath, repoName);
     await validatePath(targetPath);
@@ -1272,6 +1283,27 @@ export function createGitService({ validatePath }) {
   async function gitPush({ path: repoPathArg, remote = null, branch = null, setUpstream = false, token = null, _meta = null, params = null }) {
     const repoPath = await resolveRepoWorkTreePath(repoPathArg);
     const gitBinary = await getGitBinary(repoPath);
+    const getCurrentBranch = async () => {
+      try {
+        const { stdout } = await runGit(repoPath, [gitBinary, 'branch', '--show-current'], { timeoutMs: 5000 });
+        const value = String(stdout || '').trim();
+        if (value) return value;
+      } catch {}
+      const { stdout } = await runGit(repoPath, [gitBinary, 'rev-parse', '--abbrev-ref', 'HEAD'], { timeoutMs: 5000 });
+      const value = String(stdout || '').trim();
+      if (!value || value === 'HEAD') {
+        throw new Error('Cannot push because the repository is not on a named branch.');
+      }
+      return value;
+    };
+    const getCurrentUpstream = async () => {
+      try {
+        const { stdout } = await runGit(repoPath, [gitBinary, 'rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'], { timeoutMs: 5000 });
+        return String(stdout || '').trim();
+      } catch {
+        return '';
+      }
+    };
     const guessRemoteForPush = async () => {
       try {
         const { stdout } = await runGit(repoPath, [gitBinary, 'config', '--get', 'remote.pushDefault'], { timeoutMs: 5000 });
@@ -1316,9 +1348,18 @@ export function createGitService({ validatePath }) {
       args.push('-c', `http.extraHeader=${extraHeader}`);
     }
     args.push('push');
-    if (setUpstream) args.push('--set-upstream');
-    if (remote) args.push(remote);
-    if (branch) args.push(branch);
+    const currentUpstream = await getCurrentUpstream();
+    const shouldSetUpstream = Boolean(setUpstream || !currentUpstream);
+    if (shouldSetUpstream) {
+      const branchForPush = branch || await getCurrentBranch();
+      const remoteForPush = remote || remoteForAuth;
+      args.push('--set-upstream', remoteForPush, branchForPush);
+    } else if (branch && !remote) {
+      args.push(remoteForAuth, branch);
+    } else {
+      if (remote) args.push(remote);
+      if (branch) args.push(branch);
+    }
     const { stdout, stderr } = await runGit(repoPath, args, { timeoutMs: 120000 });
     return { ok: true, stdout, stderr };
   }

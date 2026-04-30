@@ -45,14 +45,9 @@ export class GitNewRepositoryModal {
             return;
         }
         const name = this.readValue('name');
-        const remote = this.readValue('remote') || 'origin';
         const remoteUrl = this.readValue('remoteUrl');
         if (!name) {
             this.setError('Repository name is required.');
-            return;
-        }
-        if (!remote) {
-            this.setError('Remote name is required.');
             return;
         }
         if (!remoteUrl) {
@@ -60,6 +55,6 @@ export class GitNewRepositoryModal {
             return;
         }
         this.setError('');
-        assistOS.UI.closeModal(this.element, { name, remote, remoteUrl });
+        assistOS.UI.closeModal(this.element, { name, remote: 'origin', remoteUrl });
     }
 }

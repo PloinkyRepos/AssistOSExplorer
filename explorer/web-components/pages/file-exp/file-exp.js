@@ -151,7 +151,9 @@ export class FileExp {
         this.contextMenuLoadToken = 0;
         this.openActionMenuDropdown = null;
         this.openActionMenuResizeObserver = null;
+        this.openActionMenuMutationObserver = null;
         this.openActionMenuPositionFrame = null;
+        this.boundOpenActionMenuViewportChange = () => this.scheduleOpenActionMenuPosition?.();
         this.editorAutoSaveTimer = null;
         this.editorExternalWatchTimer = null;
         this.editorExternalWatchInFlight = false;

@@ -1,3 +1,23 @@
+function estimateMenuHeight(dropdown) {
+    const renderedItems = dropdown.querySelectorAll('.action-menu-item, .app-menu-item, [role="menuitem"]').length;
+    if (renderedItems > 0) {
+        return 16 + renderedItems * 40;
+    }
+    const encodedItems = dropdown.querySelector('app-menu')?.getAttribute('data-items');
+    if (encodedItems) {
+        try {
+            const parsed = JSON.parse(decodeURIComponent(encodedItems));
+            if (Array.isArray(parsed) && parsed.length) {
+                return 16 + parsed.length * 40;
+            }
+        } catch {}
+    }
+    if (dropdown.querySelector('[data-loading="true"], .app-menu-loading')) {
+        return 56;
+    }
+    return 220;
+}
+
 export function positionOpenActionMenu(fileExp) {
     const openPath = fileExp.state.openMenuPath;
     if (!openPath) return;
@@ -14,33 +34,41 @@ export function positionOpenActionMenu(fileExp) {
     dropdown.style.top = '';
     dropdown.style.right = '';
     dropdown.style.bottom = '';
+    dropdown.style.maxHeight = '';
 
     const triggerRect = trigger.getBoundingClientRect();
     const menuRect = dropdown.getBoundingClientRect();
+    const naturalMenuHeight = Math.max(menuRect.height, dropdown.scrollHeight || 0, estimateMenuHeight(dropdown));
     const spacing = 8;
     const margin = 8;
+    const viewportWidth = document.documentElement?.clientWidth || window.innerWidth;
+    const viewportHeight = document.documentElement?.clientHeight || window.innerHeight;
 
     let left = triggerRect.right - menuRect.width;
-    const maxLeft = window.innerWidth - menuRect.width - margin;
+    const maxLeft = Math.max(margin, viewportWidth - menuRect.width - margin);
     left = Math.min(Math.max(left, margin), maxLeft);
 
+    const availableBelow = Math.max(0, viewportHeight - triggerRect.bottom - spacing - margin);
+    const availableAbove = Math.max(0, triggerRect.top - spacing - margin);
+    const menuHeight = naturalMenuHeight;
+    const shouldDropUp = availableBelow < menuHeight && availableAbove > availableBelow;
+    const availableVertical = shouldDropUp ? availableAbove : availableBelow;
     let top = triggerRect.bottom + spacing;
-    let dropUp = false;
-    if (top + menuRect.height > window.innerHeight - margin) {
-        const aboveTop = triggerRect.top - menuRect.height - spacing;
-        if (aboveTop >= margin) {
-            top = aboveTop;
-            dropUp = true;
-        } else {
-            top = Math.max(margin, window.innerHeight - menuRect.height - margin);
-        }
+    let bottom = 'auto';
+
+    if (shouldDropUp) {
+        top = 'auto';
+        bottom = `${Math.max(margin, viewportHeight - triggerRect.top + spacing)}px`;
+    } else if (!(triggerRect.bottom < margin || triggerRect.top > viewportHeight - margin)) {
+        const maxTop = Math.max(margin, viewportHeight - Math.min(menuHeight, availableVertical) - margin);
+        top = Math.min(Math.max(top, margin), maxTop);
     }
 
     dropdown.style.left = `${left}px`;
-    dropdown.style.top = `${top}px`;
+    dropdown.style.top = typeof top === 'number' ? `${top}px` : top;
     dropdown.style.right = 'auto';
-    dropdown.style.bottom = 'auto';
+    dropdown.style.bottom = bottom;
+    dropdown.style.maxHeight = `${Math.max(80, Math.floor(availableVertical))}px`;
     dropdown.dataset.positioned = 'true';
-    dropdown.classList.toggle('drop-up', dropUp);
+    dropdown.classList.toggle('drop-up', shouldDropUp);
 }
-

@@ -32,11 +32,24 @@ export function attachFsActions(fileExp) {
             });
         },
 
+        scheduleOpenActionMenuPositionSettle() {
+            this.scheduleOpenActionMenuPosition();
+            requestAnimationFrame(() => {
+                this.scheduleOpenActionMenuPosition();
+            });
+        },
+
         clearOpenActionMenuTracking() {
             if (this.openActionMenuResizeObserver) {
                 this.openActionMenuResizeObserver.disconnect();
                 this.openActionMenuResizeObserver = null;
             }
+            if (this.openActionMenuMutationObserver) {
+                this.openActionMenuMutationObserver.disconnect();
+                this.openActionMenuMutationObserver = null;
+            }
+            this.removeDocumentListener?.('open-menu-scroll');
+            this.removeWindowListener?.('open-menu-resize');
             this.openActionMenuDropdown = null;
             if (this.openActionMenuPositionFrame !== null) {
                 cancelAnimationFrame(this.openActionMenuPositionFrame);
@@ -56,21 +69,38 @@ export function attachFsActions(fileExp) {
                 return;
             }
             if (this.openActionMenuDropdown === dropdown) {
-                this.scheduleOpenActionMenuPosition();
+                this.scheduleOpenActionMenuPositionSettle();
                 return;
             }
 
             this.clearOpenActionMenuTracking();
             this.openActionMenuDropdown = dropdown;
+            this.setDocumentListener?.('open-menu-scroll', 'scroll', this.boundOpenActionMenuViewportChange, {
+                capture: true,
+                passive: true
+            });
+            this.setWindowListener?.('open-menu-resize', 'resize', this.boundOpenActionMenuViewportChange, {
+                passive: true
+            });
 
             if (typeof ResizeObserver !== 'undefined') {
                 this.openActionMenuResizeObserver = new ResizeObserver(() => {
-                    this.scheduleOpenActionMenuPosition();
+                    this.scheduleOpenActionMenuPositionSettle();
                 });
                 this.openActionMenuResizeObserver.observe(dropdown);
             }
+            if (typeof MutationObserver !== 'undefined') {
+                this.openActionMenuMutationObserver = new MutationObserver(() => {
+                    this.scheduleOpenActionMenuPositionSettle();
+                });
+                this.openActionMenuMutationObserver.observe(dropdown, {
+                    attributes: true,
+                    childList: true,
+                    subtree: true
+                });
+            }
 
-            this.scheduleOpenActionMenuPosition();
+            this.scheduleOpenActionMenuPositionSettle();
         },
 
         ensureMutableFsPath(targetPath = this.state.path) {
@@ -469,7 +499,7 @@ export function attachFsActions(fileExp) {
                 container.classList.add('open');
                 const trigger = container.querySelector('.action-menu-trigger');
                 trigger?.setAttribute('aria-expanded', 'true');
-                this.positionOpenActionMenu?.();
+                this.scheduleOpenActionMenuPositionSettle?.();
                 const firstItem = container.querySelector('.action-menu-item');
                 if (firstItem) {
                     firstItem.focus({ preventScroll: true });
