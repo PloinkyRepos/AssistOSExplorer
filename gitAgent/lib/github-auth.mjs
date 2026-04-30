@@ -335,6 +335,21 @@ export async function pollGithubDeviceFlow({ workspaceRoot, authInfo } = {}) {
       await saveState(workspaceRoot, nextState);
       return buildStatusPayload(setup, nextState, { tokenStored: false });
     }
+    // No error_description means GitHub did not respond with a structured
+    // OAuth error — almost certainly a transport-level failure (TypeError:
+    // fetch failed, DNS, TLS, timeout). Without clearing pending the FE will
+    // stay stuck on the same dead user code until the natural 15-minute
+    // expiry. Reset the flow so the next beginGithubDeviceFlow mints a
+    // fresh device code instead.
+    if (!payload?.error_description) {
+      const nextState = { pending: null, connection: null };
+      await saveState(workspaceRoot, nextState);
+      return {
+        ok: false,
+        reset: true,
+        message: rawError || 'GitHub authorization request failed; please try again.'
+      };
+    }
     return {
       ok: false,
       message: payload?.error_description || rawError || 'GitHub device authorization failed.'
