@@ -1,4 +1,6 @@
 import { isDpuVirtualPath } from "./file-exp-dpu-provider.js";
+import { FILE_EXP_UI_ACTIONS } from "./file-exp-ui-controller.js";
+import { PREVIEW_ACTIONS } from "./file-exp-preview-controller.js";
 
 const CURRENT_FILE_VIEW_CHECK_INTERVAL_MS = 5000;
 
@@ -92,6 +94,16 @@ export async function pollCurrentFileView(fileExp) {
             await reloadCurrentFileView(fileExp, currentPath, latestInfo);
         }
     } catch (error) {
+        if (fileExp?.isPathNotFoundError?.(error)) {
+            if (fileExp?.normalizePath?.(fileExp.state.selectedPath || '') === fileExp?.normalizePath?.(currentPath)) {
+                stopCurrentFileViewWatch(fileExp);
+                fileExp.dispatchUi?.({ type: FILE_EXP_UI_ACTIONS.RESET_DIRECTORY_CONTEXT });
+                fileExp.dispatchPreview?.({ type: PREVIEW_ACTIONS.RESET });
+                fileExp.refreshPreviewUi?.();
+                fileExp.showStatus?.('The selected file no longer exists.', true);
+            }
+            return;
+        }
         console.warn('Failed to poll current file view', error);
     } finally {
         fileExp.currentFileViewWatchInFlight = false;

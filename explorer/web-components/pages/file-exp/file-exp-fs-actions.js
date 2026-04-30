@@ -271,6 +271,11 @@ export function attachFsActions(fileExp) {
             if (!confirm(`Are you sure you want to delete ${path}?`)) return;
             try {
                 await this.withLoader(async () => {
+                    const deletesCurrentSelection = isSameOrDescendantPath(this, this.state.selectedPath, path);
+                    if (deletesCurrentSelection) {
+                        this.stopCurrentFileViewWatch?.();
+                        this.stopEditorExternalWatch?.();
+                    }
                     if (isDpuManagedPath(path)) {
                         const capabilities = await getDpuPathCapabilities(this, path);
                         if (!capabilities.canDelete) {
@@ -285,7 +290,7 @@ export function attachFsActions(fileExp) {
                     }
                     this.showStatus(`Successfully deleted ${path}`);
 
-                    if (isSameOrDescendantPath(this, this.state.selectedPath, path)) {
+                    if (deletesCurrentSelection) {
                         this.dispatchUi({ type: FILE_EXP_UI_ACTIONS.RESET_DIRECTORY_CONTEXT });
                         this.dispatchPreview({ type: PREVIEW_ACTIONS.RESET });
                     }
@@ -295,13 +300,22 @@ export function attachFsActions(fileExp) {
                     }
 
                     const parentPath = this.parentPath(path) || '/';
+                    const nextDirectoryPath = isSameOrDescendantPath(this, this.state.path, path)
+                        ? parentPath
+                        : this.state.path;
                     invalidateFsMutationCaches(this, {
-                        directories: [this.state.path, parentPath],
+                        directories: [this.state.path, parentPath, nextDirectoryPath],
                         directoryBranches: type === 'directory' ? [path] : [],
                         files: type === 'file' ? [path] : []
                     });
 
-                    await this.loadDirectory(this.state.path);
+                    if (deletesCurrentSelection) {
+                        const newUrl = buildFileExpHash(nextDirectoryPath);
+                        if (window.location.hash !== newUrl) {
+                            history.replaceState(null, '', newUrl);
+                        }
+                    }
+                    await this.loadDirectory(nextDirectoryPath);
                 });
             } catch (err) {
                 console.error(err);
