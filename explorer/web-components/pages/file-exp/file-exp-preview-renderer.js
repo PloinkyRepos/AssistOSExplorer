@@ -292,7 +292,7 @@ export function renderStandardPreview(fileExp, refs, previewUiState) {
             tagName: 'backlog-panel',
             attributes: {
                 'data-presenter': 'backlog-panel',
-                'data-path': pathAttr,
+                'data-backlog-path': pathAttr,
                 'data-repo-path': repoPath
             }
         });

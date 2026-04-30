@@ -55,7 +55,7 @@ export class BacklogPanel {
         this.state.currentIndex = this.state.currentIndex || 0;
         this.workspaceRoot = getWorkspaceRoot();
         this.rawRepoPath = String(this.element.getAttribute('data-repo-path') || '').trim();
-        this.rawBacklogPath = String(this.element.getAttribute('data-path') || '').trim();
+        this.rawBacklogPath = String(this.element.getAttribute('data-backlog-path') || this.element.getAttribute('data-path') || '').trim();
         const isBacklogPath = this.rawBacklogPath.endsWith('.backlog') || this.rawBacklogPath.endsWith('.history');
         this.backlogPath = this.rawBacklogPath && isBacklogPath ? this.toFilesystemPath(this.rawBacklogPath) : '';
         this.isHistory = Boolean(this.rawBacklogPath && this.rawBacklogPath.endsWith('.history'));
@@ -481,13 +481,15 @@ export class BacklogPanel {
 
     prevTask() {
         if (!Array.isArray(this.state.tasks) || !this.state.tasks.length) return;
-        this.state.currentIndex = Math.max(0, this.state.currentIndex - 1);
+        const count = this.state.tasks.length;
+        this.state.currentIndex = (Number(this.state.currentIndex || 0) - 1 + count) % count;
         this.renderTasks();
     }
 
     nextTask() {
         if (!Array.isArray(this.state.tasks) || !this.state.tasks.length) return;
-        this.state.currentIndex = Math.min(this.state.tasks.length - 1, this.state.currentIndex + 1);
+        const count = this.state.tasks.length;
+        this.state.currentIndex = (Number(this.state.currentIndex || 0) + 1) % count;
         this.renderTasks();
     }
 
