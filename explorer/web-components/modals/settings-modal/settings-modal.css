@@ -78,6 +78,10 @@ settings-modal .modal-actions {
     background: var(--surface);
 }
 
+settings-modal[data-active-tab="users"] .modal-actions {
+    display: none !important;
+}
+
 settings-modal .keymap-description,
 settings-modal .theme-description,
 settings-modal .plugin-settings-description {

@@ -259,6 +259,7 @@ export class SettingsModal {
         this.pluginSettingsStatusEl = this.element.querySelector("#pluginSettingsStatus");
         this.editorAutoSaveEnabledInput = this.element.querySelector('#editorAutoSaveEnabled');
         this.editorAutoSaveIntervalInput = this.element.querySelector('#editorAutoSaveIntervalSeconds');
+        this.actionsEl = this.element.querySelector('.modal-actions');
         this.saveButton = this.element.querySelector('[data-local-action="saveSettings"]');
         this.resetButton = this.element.querySelector('[data-role="reset-keymap"]');
     }
@@ -308,6 +309,7 @@ export class SettingsModal {
         if (!this.getAllowedTabs().includes(this.state.activeTab)) {
             this.state.activeTab = 'keymap';
         }
+        this.element.dataset.activeTab = this.state.activeTab;
         const tabs = this.element.querySelectorAll(".settings-tab");
         tabs.forEach((tab) => {
             const isActive = tab.dataset.tab === this.state.activeTab;
@@ -332,6 +334,9 @@ export class SettingsModal {
 
         if (this.resetButton) {
             this.resetButton.style.display = this.state.activeTab === "keymap" ? "" : "none";
+        }
+        if (this.actionsEl) {
+            this.actionsEl.hidden = this.state.activeTab === "users";
         }
         this.syncEditorSettingsUi();
         this.syncUsersFrame();

@@ -3,19 +3,21 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>User Access</title>
+    <title>Administration</title>
+    <link rel="stylesheet" href="../plugins.css">
     <link rel="stylesheet" href="./settings.css">
 </head>
 <body>
 <main>
     <header>
         <div>
-            <h1>User Access</h1>
+            <h1>Administration</h1>
             <div class="agent-label" id="agentLabel"></div>
         </div>
-        <a class="button" href="/explorer/index.html" id="backLink">Back to Explorer</a>
+        <a class="gray-button" href="/explorer/index.html" id="backLink">Back to Explorer</a>
     </header>
     <section class="panel">
+        <div id="settingsStripHost"></div>
         <form class="toolbar" id="createForm">
             <label>Username
                 <input name="username" autocomplete="off" required>
@@ -34,7 +36,7 @@
             <label>Roles
                 <input name="roles" autocomplete="off">
             </label>
-            <button class="primary" type="submit">Add User</button>
+            <button class="general-button" type="submit">Add User</button>
         </form>
         <div class="status" id="status"></div>
         <div id="tableHost"></div>
@@ -47,8 +49,10 @@
     document.body.classList.toggle('embedded', embedded);
     const agent = pathParts[0] || 'explorer';
     const apiBase = `/api/agents/${encodeURIComponent(agent)}/users`;
+    const settingsApi = `/api/agents/${encodeURIComponent(agent)}/settings`;
     const status = document.getElementById('status');
     const tableHost = document.getElementById('tableHost');
+    const settingsStripHost = document.getElementById('settingsStripHost');
     const createForm = document.getElementById('createForm');
     const backLink = document.getElementById('backLink');
     document.getElementById('agentLabel').textContent = `Agent: ${agent}`;
@@ -56,6 +60,7 @@
     backLink.textContent = `Back to ${agent}`;
 
     let users = [];
+    let loginBrandingName = 'Login';
 
     function setStatus(message, kind = '') {
         status.textContent = message || '';
@@ -120,8 +125,8 @@
                 </button>
             </span></td>
             <td data-label="Actions"><div class="actions">
-                <button type="button" data-action="save">Save</button>
-                <button type="button" class="danger" data-action="delete">Delete</button>
+                <button type="button" class="gray-button" data-action="save">Save</button>
+                <button type="button" class="gray-button danger" data-action="delete">Delete</button>
             </div></td>
         `;
         return tr;
@@ -135,9 +140,52 @@
             .replace(/>/g, '&gt;');
     }
 
+    function renderLoginSettings() {
+        const section = document.createElement('section');
+        section.className = 'settings-strip';
+        section.innerHTML = `
+            <form class="login-branding-form" id="loginBrandingForm">
+                <label>Login branding
+                    <input name="loginBrandingName" autocomplete="off" value="${escapeAttr(loginBrandingName)}" placeholder="Login">
+                </label>
+                <button class="general-button compact-save" type="submit">Save</button>
+            </form>
+        `;
+        const form = section.querySelector('#loginBrandingForm');
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const data = new FormData(form);
+            try {
+                setStatus('Saving login branding...');
+                const payload = await request(settingsApi, {
+                    method: 'PATCH',
+                    body: JSON.stringify({
+                        loginBrandingName: data.get('loginBrandingName'),
+                    }),
+                });
+                loginBrandingName = payload.settings?.loginBrandingName || 'Login';
+                render();
+                setStatus('Login branding saved.', 'ok');
+            } catch (error) {
+                setStatus(error.message, 'error');
+            }
+        });
+        return section;
+    }
+
     function render() {
+        settingsStripHost.replaceChildren(renderLoginSettings());
+        const fragment = document.createDocumentFragment();
+        const userHeader = document.createElement('div');
+        userHeader.className = 'section-heading user-section-heading';
+        userHeader.innerHTML = '<h2>Manage users</h2>';
+        fragment.appendChild(userHeader);
         if (!users.length) {
-            tableHost.innerHTML = '<div class="empty">No users.</div>';
+            const empty = document.createElement('div');
+            empty.className = 'empty';
+            empty.textContent = 'No users.';
+            fragment.appendChild(empty);
+            tableHost.replaceChildren(fragment);
             return;
         }
         const table = document.createElement('table');
@@ -155,13 +203,18 @@
         `;
         const tbody = table.querySelector('tbody');
         users.forEach((user) => tbody.appendChild(userRow(user)));
-        tableHost.replaceChildren(table);
+        fragment.appendChild(table);
+        tableHost.replaceChildren(fragment);
     }
 
-    async function loadUsers() {
-        setStatus('Loading users...');
-        const payload = await request(apiBase);
-        users = Array.isArray(payload.users) ? payload.users : [];
+    async function loadPage() {
+        setStatus('Loading settings...');
+        const [settingsPayload, usersPayload] = await Promise.all([
+            request(settingsApi),
+            request(apiBase),
+        ]);
+        loginBrandingName = settingsPayload.settings?.loginBrandingName || 'Login';
+        users = Array.isArray(usersPayload.users) ? usersPayload.users : [];
         render();
         setStatus(`${users.length} user${users.length === 1 ? '' : 's'} loaded.`, 'ok');
     }
@@ -181,7 +234,7 @@
                 }),
             });
             createForm.reset();
-            await loadUsers();
+            await loadPage();
         } catch (error) {
             setStatus(error.message, 'error');
         }
@@ -198,7 +251,7 @@
             if (action === 'delete') {
                 setStatus('Deleting user...');
                 await request(`${apiBase}/${encodeURIComponent(userId)}`, { method: 'DELETE' });
-                await loadUsers();
+                await loadPage();
                 return;
             }
             if (action === 'save') {
@@ -217,7 +270,7 @@
                     method: 'PATCH',
                     body: JSON.stringify(body),
                 });
-                await loadUsers();
+                await loadPage();
             }
         } catch (error) {
             setStatus(error.message, 'error');
@@ -230,7 +283,7 @@
         togglePasswordVisibility(button);
     });
 
-    loadUsers().catch((error) => setStatus(error.message, 'error'));
+    loadPage().catch((error) => setStatus(error.message, 'error'));
 })();
 </script>
 </body>
