@@ -39,22 +39,6 @@ on:
         default: true
         type: boolean
 
-  push:
-    branches:
-      - main
-    paths:
-      - 'explorer/**'
-      - 'gitAgent/**'
-      - 'dpuAgent/**'
-      - 'soplangAgent/**'
-      - 'tasksAgent/**'
-      - 'llmAssistant/**'
-      - 'webmeetAgent/**'
-      - 'multimedia/**'
-      - 'webAdmin/**'
-      - 'webassist/**'
-      - '.github/workflows/deploy-skills-explorer.yml'
-
 concurrency:
   group: deploy-skills-explorer
   cancel-in-progress: false
