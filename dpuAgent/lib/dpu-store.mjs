@@ -91,6 +91,13 @@ function assertInvocationScopeFor(operation, authInfo) {
 
 const AUDIT_VIEWER_ROLES = Object.freeze(['admin', 'security']);
 const AUDIT_ROOT_PATH = '/Confidential/Audit';
+const DEFAULT_AUDIT_CAPTURE = Object.freeze({
+  dpuOperations: true,
+  fileAccess: true,
+  explorerActions: true,
+  pluginUsage: true,
+  aiActivity: false
+});
 
 async function writeEncryptedConfidentialFile(objectRecord, content) {
   const blobPath = getConfidentialBlobPath(objectRecord.id);
@@ -126,17 +133,31 @@ function normalizeAuditSettings(settings) {
     : {};
   return {
     audit: {
-      enabled: Boolean(audit.enabled)
+      enabled: Boolean(audit.enabled),
+      capture: normalizeAuditCapture(audit.capture)
     }
   };
 }
 
 function getAuditSettings(state) {
   const normalized = normalizeAuditSettings(state?.settings);
-  if (!state.settings || state.settings.audit?.enabled !== normalized.audit.enabled) {
+  if (JSON.stringify(state.settings || {}) !== JSON.stringify(normalized)) {
     state.settings = normalized;
   }
   return normalized.audit;
+}
+
+function normalizeAuditCapture(capture) {
+  const source = capture && typeof capture === 'object' && !Array.isArray(capture)
+    ? capture
+    : {};
+  const normalized = {};
+  for (const [key, defaultValue] of Object.entries(DEFAULT_AUDIT_CAPTURE)) {
+    normalized[key] = Object.prototype.hasOwnProperty.call(source, key)
+      ? Boolean(source[key])
+      : defaultValue;
+  }
+  return normalized;
 }
 
 function hasAuditViewerRole(actor) {
@@ -167,7 +188,7 @@ function sanitizeAuditMetadata(value) {
   if (typeof value === 'object') {
     const output = {};
     for (const [key, entry] of Object.entries(value)) {
-      if (['content', 'value', 'draft', 'body', 'message'].includes(key)) {
+      if (['content', 'value', 'draft', 'body', 'message', 'prompt', 'response'].includes(key)) {
         continue;
       }
       output[key] = sanitizeAuditMetadata(entry);
@@ -215,13 +236,42 @@ function createAuditRecord({ actor, operation, target = {}, metadata = {}, statu
 }
 
 async function appendAuditRecordIfEnabled(state, record, { force = false } = {}) {
-  if (!force && !getAuditSettings(state).enabled) {
-    return false;
+  if (!force) {
+    const audit = getAuditSettings(state);
+    if (!audit.enabled) {
+      return false;
+    }
+    const category = getAuditRecordCaptureCategory(record);
+    if (category && audit.capture?.[category] === false) {
+      return false;
+    }
   }
   const timestamp = String(record?.timestamp || nowIso());
   const fileName = `${timestamp.slice(0, 10) || 'audit'}.jsonl`;
   await appendAuditLine(fileName, JSON.stringify(record));
   return true;
+}
+
+function getAuditRecordCaptureCategory(record) {
+  if (record?.operation) {
+    return 'dpuOperations';
+  }
+  const eventType = String(record?.eventType || '').trim().toLowerCase();
+  const source = String(record?.source || '').trim().toLowerCase();
+  const target = record?.target && typeof record.target === 'object' ? record.target : {};
+  if (/^(ai|llm|copilot)[.:_-]/.test(eventType) || ['ai', 'llm', 'copilot'].includes(source)) {
+    return 'aiActivity';
+  }
+  if (target.pluginKey || eventType.startsWith('plugin.') || eventType.includes('.plugin.')) {
+    return 'pluginUsage';
+  }
+  if (eventType.startsWith('file.') || eventType.includes('.file.') || target.path || target.targetPath) {
+    return 'fileAccess';
+  }
+  if (source === 'explorer' || eventType.startsWith('explorer.')) {
+    return 'explorerActions';
+  }
+  return 'explorerActions';
 }
 
 async function runAuditedMutation(state, actor, { operation, target, metadata }, worker) {
@@ -761,6 +811,7 @@ export async function getAuditConfig(authInfo = null) {
       ok: true,
       audit: {
         enabled: Boolean(audit.enabled),
+        capture: normalizeAuditCapture(audit.capture),
         canManage: hasAuditViewerRole(actor),
         canViewFiles: hasAuditViewerRole(actor)
       }
@@ -822,17 +873,19 @@ export async function setAgentPolicyAllowedRoles(authInfo = null, { principalId,
   });
 }
 
-export async function setAuditConfig(authInfo = null, { enabled }) {
+export async function setAuditConfig(authInfo = null, { enabled, capture } = {}) {
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
     await ensureUserRecord(state, permissionsManifest, actor, ctx);
     assertAuditViewer(actor);
     const audit = getAuditSettings(state);
     audit.enabled = Boolean(enabled);
+    audit.capture = normalizeAuditCapture(capture ?? audit.capture);
     state.settings = {
       ...normalizeAuditSettings(state.settings),
       audit: {
-        enabled: audit.enabled
+        enabled: audit.enabled,
+        capture: audit.capture
       }
     };
     ctx.dirty = true;
@@ -843,7 +896,8 @@ export async function setAuditConfig(authInfo = null, { enabled }) {
         path: AUDIT_ROOT_PATH
       },
       metadata: {
-        enabled: audit.enabled
+        enabled: audit.enabled,
+        capture: audit.capture
       },
       status: 'ok'
     }), { force: true });
@@ -851,6 +905,7 @@ export async function setAuditConfig(authInfo = null, { enabled }) {
       ok: true,
       audit: {
         enabled: audit.enabled,
+        capture: audit.capture,
         canManage: true,
         canViewFiles: true
       }

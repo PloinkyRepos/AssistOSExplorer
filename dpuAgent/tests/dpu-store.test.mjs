@@ -717,6 +717,13 @@ test('audit config is manageable by local admin and writes JSONL records for DPU
   const updated = await setAuditConfig(adminAuth, { enabled: true });
   assert.equal(updated.ok, true);
   assert.equal(updated.audit.enabled, true);
+  assert.deepEqual(updated.audit.capture, {
+    dpuOperations: true,
+    fileAccess: true,
+    explorerActions: true,
+    pluginUsage: true,
+    aiActivity: false
+  });
 
   await putSecret(adminAuth, { key: 'AUDITED_SECRET', value: 'value' });
 
@@ -749,7 +756,12 @@ test('audit files are not visible to non-admin users', async () => {
 });
 
 test('client-side audit events are appended through the dedicated ingest tool', async () => {
-  await setAuditConfig(adminAuth, { enabled: true });
+  await setAuditConfig(adminAuth, {
+    enabled: true,
+    capture: {
+      aiActivity: true
+    }
+  });
   const appended = await appendAuditClientEvent(adminAuth, {
     eventType: 'copilot.prompt',
     source: 'explorer',
@@ -765,7 +777,23 @@ test('client-side audit events are appended through the dedicated ingest tool', 
   const listed = await listAuditEntries(adminAuth);
   const fetched = await getAuditEntry(adminAuth, { name: listed.items[0].name });
   assert.match(fetched.item.content, /copilot\.prompt/);
-  assert.match(fetched.item.content, /const answer = /);
+  assert.doesNotMatch(fetched.item.content, /const answer = /);
+});
+
+test('audit capture settings can suppress selected client event categories', async () => {
+  await setAuditConfig(adminAuth, {
+    enabled: true,
+    capture: {
+      fileAccess: false
+    }
+  });
+  const appended = await appendAuditClientEvent(adminAuth, {
+    eventType: 'file.open',
+    source: 'explorer',
+    path: '/src/app.js'
+  });
+  assert.equal(appended.ok, true);
+  assert.equal(appended.appended, false);
 });
 
 test('comment role can add annotations without write access and read role can see them', async () => {

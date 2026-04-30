@@ -120,6 +120,16 @@ function normalizeArgs(toolName, args) {
       if (typeof input.enabled !== 'boolean') {
         throw new Error('dpu_audit_config_set requires an "enabled" boolean.');
       }
+      if (input.capture !== undefined) {
+        if (!input.capture || typeof input.capture !== 'object' || Array.isArray(input.capture)) {
+          throw new Error('dpu_audit_config_set requires "capture" to be an object when provided.');
+        }
+        for (const [key, value] of Object.entries(input.capture)) {
+          if (typeof value !== 'boolean') {
+            throw new Error(`dpu_audit_config_set capture.${key} must be a boolean.`);
+          }
+        }
+      }
       return input;
     case 'dpu_audit_get':
       requireString('name');

@@ -26,13 +26,39 @@
     {
       "name": "dpu_audit_config_set",
       "title": "DPU Audit Config Set",
-      "description": "Enable or disable DPU audit logging.",
+      "description": "Enable or disable DPU audit logging and configure captured audit categories.",
       "command": "tools/dpu_tool.sh",
       "cwd": "workspace",
       "inputSchema": {
         "enabled": {
           "type": "boolean",
           "optional": false
+        },
+        "capture": {
+          "type": "object",
+          "optional": true,
+          "properties": {
+            "dpuOperations": {
+              "type": "boolean",
+              "optional": true
+            },
+            "fileAccess": {
+              "type": "boolean",
+              "optional": true
+            },
+            "explorerActions": {
+              "type": "boolean",
+              "optional": true
+            },
+            "pluginUsage": {
+              "type": "boolean",
+              "optional": true
+            },
+            "aiActivity": {
+              "type": "boolean",
+              "optional": true
+            }
+          }
         }
       },
       "env": {

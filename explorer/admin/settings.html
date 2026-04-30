@@ -16,30 +16,42 @@
         </div>
         <a class="gray-button" href="/explorer/index.html" id="backLink">Back to Explorer</a>
     </header>
-    <section class="panel">
-        <div id="settingsStripHost"></div>
-        <form class="toolbar" id="createForm">
-            <label>Username
-                <input name="username" autocomplete="off" required>
-            </label>
-            <label>Password
-                <span class="password-field">
-                    <input name="password" type="password" autocomplete="new-password" required>
-                    <button type="button" class="password-toggle" data-toggle-password aria-label="Show password" title="Show password" aria-pressed="false">
-                        <img src="../assets/icons/eye.svg" alt="">
-                    </button>
-                </span>
-            </label>
-            <label>Name
-                <input name="name" autocomplete="off">
-            </label>
-            <label>Roles
-                <input name="roles" autocomplete="off">
-            </label>
-            <button class="general-button" type="submit">Add User</button>
-        </form>
+    <section class="panel administration-panel">
+        <div class="administration-tabs" role="tablist" aria-label="Administration settings">
+            <button type="button" class="administration-tab active" data-tab="users" role="tab" aria-selected="true">Users</button>
+            <button type="button" class="administration-tab" data-tab="branding" role="tab" aria-selected="false">Branding</button>
+            <button type="button" class="administration-tab" data-tab="audit" role="tab" aria-selected="false">Audit settings</button>
+        </div>
         <div class="status" id="status"></div>
-        <div id="tableHost"></div>
+        <section class="administration-tab-panel active" data-panel="users" role="tabpanel">
+            <form class="toolbar" id="createForm">
+                <label>Username
+                    <input name="username" autocomplete="off" required>
+                </label>
+                <label>Password
+                    <span class="password-field">
+                        <input name="password" type="password" autocomplete="new-password" required>
+                        <button type="button" class="password-toggle" data-toggle-password aria-label="Show password" title="Show password" aria-pressed="false">
+                            <img src="../assets/icons/eye.svg" alt="">
+                        </button>
+                    </span>
+                </label>
+                <label>Name
+                    <input name="name" autocomplete="off">
+                </label>
+                <label>Roles
+                    <input name="roles" autocomplete="off">
+                </label>
+                <button class="general-button" type="submit">Add User</button>
+            </form>
+            <div id="tableHost"></div>
+        </section>
+        <section class="administration-tab-panel" data-panel="branding" role="tabpanel" hidden>
+            <div id="settingsStripHost"></div>
+        </section>
+        <section class="administration-tab-panel" data-panel="audit" role="tabpanel" hidden>
+            <div id="auditSettingsHost"></div>
+        </section>
     </section>
 </main>
 <script>
@@ -53,14 +65,29 @@
     const status = document.getElementById('status');
     const tableHost = document.getElementById('tableHost');
     const settingsStripHost = document.getElementById('settingsStripHost');
+    const auditSettingsHost = document.getElementById('auditSettingsHost');
     const createForm = document.getElementById('createForm');
     const backLink = document.getElementById('backLink');
+    const tabButtons = Array.from(document.querySelectorAll('.administration-tab'));
+    const tabPanels = Array.from(document.querySelectorAll('.administration-tab-panel'));
     document.getElementById('agentLabel').textContent = `Agent: ${agent}`;
     backLink.href = `/${encodeURIComponent(agent)}/index.html`;
     backLink.textContent = `Back to ${agent}`;
 
     let users = [];
     let loginBrandingName = 'Login';
+    let auditConfig = {
+        enabled: false,
+        canManage: false,
+        error: '',
+        capture: {
+            dpuOperations: true,
+            fileAccess: true,
+            explorerActions: true,
+            pluginUsage: true,
+            aiActivity: false,
+        },
+    };
 
     function setStatus(message, kind = '') {
         status.textContent = message || '';
@@ -111,6 +138,80 @@
         return payload;
     }
 
+    async function callDpuTool(name, args = {}) {
+        const services = getAppServices();
+        if (!services) {
+            throw new Error('DPU MCP client is not available in this view.');
+        }
+        if (typeof services.callTool === 'function') {
+            const result = await services.callTool('dpuAgent', name, args);
+            return normalizeToolResult(result);
+        }
+        const client = services.getClient?.('dpuAgent');
+        if (!client || typeof client.callTool !== 'function') {
+            throw new Error('DPU MCP client is not available in this view.');
+        }
+        return normalizeToolResult(await client.callTool(name, args));
+    }
+
+    function getAppServices() {
+        const candidates = [
+            () => window.webSkel?.appServices,
+            () => window.assistOS?.appServices,
+            () => window.parent?.webSkel?.appServices,
+            () => window.parent?.assistOS?.appServices,
+        ];
+        for (const resolve of candidates) {
+            try {
+                const services = resolve();
+                if (services?.callTool || services?.getClient) {
+                    return services;
+                }
+            } catch (_) {
+                // Cross-origin parent access is not available.
+            }
+        }
+        return null;
+    }
+
+    function normalizeToolResult(result) {
+        if (!result) return {};
+        if (result.json && typeof result.json === 'object') return result.json;
+        if (result.raw) return normalizeToolResult(result.raw);
+        if (result.isError) {
+            throw new Error(extractToolText(result) || 'DPU tool failed.');
+        }
+        const blocks = Array.isArray(result.content) ? result.content : Array.isArray(result.blocks) ? result.blocks : [];
+        const jsonBlock = blocks.find((block) => block?.type === 'json' && block.json !== undefined);
+        if (jsonBlock) return jsonBlock.json;
+        const text = result.text || extractToolText({ content: blocks });
+        if (text) {
+            try {
+                return JSON.parse(text);
+            } catch {
+                if (/missing or invalid mcp session/i.test(text)) {
+                    throw new Error(text);
+                }
+            }
+        }
+        return result;
+    }
+
+    function extractToolText(result) {
+        const blocks = Array.isArray(result?.content) ? result.content : Array.isArray(result?.blocks) ? result.blocks : [];
+        return blocks.find((block) => block?.type === 'text' && typeof block.text === 'string')?.text || '';
+    }
+
+    function normalizeAuditCapture(capture = {}) {
+        return {
+            dpuOperations: capture.dpuOperations !== false,
+            fileAccess: capture.fileAccess !== false,
+            explorerActions: capture.explorerActions !== false,
+            pluginUsage: capture.pluginUsage !== false,
+            aiActivity: capture.aiActivity === true,
+        };
+    }
+
     function userRow(user) {
         const tr = document.createElement('tr');
         tr.dataset.userId = user.id;
@@ -140,12 +241,26 @@
             .replace(/>/g, '&gt;');
     }
 
+    function switchAdministrationTab(tab) {
+        const normalizedTab = ['users', 'branding', 'audit'].includes(tab) ? tab : 'users';
+        tabButtons.forEach((button) => {
+            const active = button.dataset.tab === normalizedTab;
+            button.classList.toggle('active', active);
+            button.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+        tabPanels.forEach((panel) => {
+            const active = panel.dataset.panel === normalizedTab;
+            panel.classList.toggle('active', active);
+            panel.hidden = !active;
+        });
+    }
+
     function renderLoginSettings() {
         const section = document.createElement('section');
         section.className = 'settings-strip';
         section.innerHTML = `
             <form class="login-branding-form" id="loginBrandingForm">
-                <label>Login branding
+                <label>Brand name
                     <input name="loginBrandingName" autocomplete="off" value="${escapeAttr(loginBrandingName)}" placeholder="Login">
                 </label>
                 <button class="general-button compact-save" type="submit">Save</button>
@@ -173,8 +288,64 @@
         return section;
     }
 
+    function renderAuditSettings() {
+        const capture = normalizeAuditCapture(auditConfig.capture);
+        const section = document.createElement('section');
+        section.className = 'audit-settings';
+        if (auditConfig.error) {
+            section.innerHTML = `<div class="audit-settings-error">${escapeAttr(auditConfig.error)}</div>`;
+            return section;
+        }
+        section.innerHTML = `
+            <form class="audit-settings-form" id="auditSettingsForm">
+                <label class="audit-toggle">
+                    <input name="enabled" type="checkbox" ${auditConfig.enabled ? 'checked' : ''} ${auditConfig.canManage ? '' : 'disabled'}>
+                    <span>Enable audit</span>
+                </label>
+                <div class="audit-capture-grid">
+                    <label><input name="dpuOperations" type="checkbox" ${capture.dpuOperations ? 'checked' : ''} ${auditConfig.canManage ? '' : 'disabled'}> DPU operations</label>
+                    <label><input name="fileAccess" type="checkbox" ${capture.fileAccess ? 'checked' : ''} ${auditConfig.canManage ? '' : 'disabled'}> File access</label>
+                    <label><input name="explorerActions" type="checkbox" ${capture.explorerActions ? 'checked' : ''} ${auditConfig.canManage ? '' : 'disabled'}> Explorer actions</label>
+                    <label><input name="pluginUsage" type="checkbox" ${capture.pluginUsage ? 'checked' : ''} ${auditConfig.canManage ? '' : 'disabled'}> Plugin usage</label>
+                    <label><input name="aiActivity" type="checkbox" ${capture.aiActivity ? 'checked' : ''} ${auditConfig.canManage ? '' : 'disabled'}> AI activity metadata</label>
+                </div>
+                <button class="general-button compact-save" type="submit" ${auditConfig.canManage ? '' : 'disabled'}>Save</button>
+            </form>
+        `;
+        const form = section.querySelector('#auditSettingsForm');
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const data = new FormData(form);
+            try {
+                setStatus('Saving audit settings...');
+                const payload = await callDpuTool('dpu_audit_config_set', {
+                    enabled: data.get('enabled') === 'on',
+                    capture: {
+                        dpuOperations: data.get('dpuOperations') === 'on',
+                        fileAccess: data.get('fileAccess') === 'on',
+                        explorerActions: data.get('explorerActions') === 'on',
+                        pluginUsage: data.get('pluginUsage') === 'on',
+                        aiActivity: data.get('aiActivity') === 'on',
+                    },
+                });
+                auditConfig = {
+                    ...auditConfig,
+                    ...(payload.audit || {}),
+                    error: '',
+                    capture: normalizeAuditCapture(payload.audit?.capture),
+                };
+                render();
+                setStatus('Audit settings saved.', 'ok');
+            } catch (error) {
+                setStatus(error.message, 'error');
+            }
+        });
+        return section;
+    }
+
     function render() {
         settingsStripHost.replaceChildren(renderLoginSettings());
+        auditSettingsHost.replaceChildren(renderAuditSettings());
         const fragment = document.createDocumentFragment();
         const userHeader = document.createElement('div');
         userHeader.className = 'section-heading user-section-heading';
@@ -215,9 +386,27 @@
         ]);
         loginBrandingName = settingsPayload.settings?.loginBrandingName || 'Login';
         users = Array.isArray(usersPayload.users) ? usersPayload.users : [];
+        try {
+            const auditPayload = await callDpuTool('dpu_audit_config_get');
+            auditConfig = {
+                ...auditConfig,
+                ...(auditPayload.audit || {}),
+                error: '',
+                capture: normalizeAuditCapture(auditPayload.audit?.capture),
+            };
+        } catch (error) {
+            auditConfig = {
+                ...auditConfig,
+                error: error.message || 'Audit settings could not be loaded.',
+            };
+        }
         render();
-        setStatus(`${users.length} user${users.length === 1 ? '' : 's'} loaded.`, 'ok');
+        setStatus(auditConfig.error || `${users.length} user${users.length === 1 ? '' : 's'} loaded.`, auditConfig.error ? 'error' : 'ok');
     }
+
+    tabButtons.forEach((button) => {
+        button.addEventListener('click', () => switchAdministrationTab(button.dataset.tab));
+    });
 
     createForm.addEventListener('submit', async (event) => {
         event.preventDefault();
