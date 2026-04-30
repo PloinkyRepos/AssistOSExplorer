@@ -153,7 +153,6 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
 
 .git-modal button:hover:not(:disabled) {
     transform: translateY(-1px);
-    box-shadow: 0 10px 18px rgba(37, 99, 235, 0.28);
 }
 
 .git-modal button.secondary:hover:not(:disabled) {
@@ -278,9 +277,8 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
     flex: 1 1 auto;
 }
 
-/* Keep git content visible even when credentials are shown. */
-.git-modal.git-credentials-only .git-modal-content {
-    display: flex;
+.git-modal.git-credentials-open .git-modal-content {
+    display: none;
 }
 
 .git-modal.git-credentials-open .git-credentials {
