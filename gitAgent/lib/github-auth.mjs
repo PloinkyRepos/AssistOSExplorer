@@ -337,18 +337,18 @@ export async function pollGithubDeviceFlow({ workspaceRoot, authInfo } = {}) {
     }
     // No error_description means GitHub did not respond with a structured
     // OAuth error — almost certainly a transport-level failure (TypeError:
-    // fetch failed, DNS, TLS, timeout). Without clearing pending the FE will
-    // stay stuck on the same dead user code until the natural 15-minute
-    // expiry. Reset the flow so the next beginGithubDeviceFlow mints a
-    // fresh device code instead.
+    // fetch failed, DNS, TLS, timeout). Treat it the same way the
+    // expired_token / access_denied branch above does: reset to a clean
+    // state and return a successful status payload. The FE's pollGithubAuth
+    // success path will see no pending and auto-trigger a fresh
+    // ensureGithubDeviceFlow. Returning ok:false here would have ensureSuccess
+    // throw the message, the FE would catch it via applyGithubAuthError, set
+    // pending:null AND error:<msg>, and stop polling — leaving "fetch failed"
+    // pinned in the UI until manual intervention.
     if (!payload?.error_description) {
       const nextState = { pending: null, connection: null };
       await saveState(workspaceRoot, nextState);
-      return {
-        ok: false,
-        reset: true,
-        message: rawError || 'GitHub authorization request failed; please try again.'
-      };
+      return buildStatusPayload(setup, nextState, { tokenStored: false });
     }
     return {
       ok: false,
