@@ -6,6 +6,7 @@ import path from 'node:path';
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_BYTES = 12;
+const TAG_BYTES = 16;
 const MASTER_KEY_VAR = 'PLOINKY_MASTER_KEY';
 const STORAGE_SUBKEY_PURPOSE = 'storage/secrets';
 
@@ -49,8 +50,7 @@ function loadEnvFile(startDir) {
 function resolveMasterKey(workspaceRoot) {
     const raw = String(process.env[MASTER_KEY_VAR] || loadEnvFile(workspaceRoot)[MASTER_KEY_VAR] || '').trim();
     if (!raw) throw new Error(`${MASTER_KEY_VAR} is required to update .ploinky/.secrets.`);
-    if (!/^[a-fA-F0-9]{64}$/.test(raw)) throw new Error(`${MASTER_KEY_VAR} must be exactly 64 hex characters.`);
-    return Buffer.from(raw, 'hex');
+    return crypto.createHash('sha256').update(raw, 'utf8').digest();
 }
 
 function deriveStorageKey(workspaceRoot) {
@@ -76,56 +76,36 @@ function normalizeSecrets(input = {}) {
     return result;
 }
 
-function decryptWithKey(envelope, key) {
-    const iv = Buffer.from(String(envelope.iv || ''), 'base64');
-    const tag = Buffer.from(String(envelope.tag || ''), 'base64');
-    const ciphertext = Buffer.from(String(envelope.ciphertext || ''), 'base64');
-    const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
-    decipher.setAuthTag(tag);
-    const plaintext = Buffer.concat([
-        decipher.update(ciphertext),
-        decipher.final(),
-    ]).toString('utf8');
-    return plaintext;
-}
-
-function decryptEnvelope(workspaceRoot, envelope) {
-    let plaintext;
-    try {
-        plaintext = decryptWithKey(envelope, deriveStorageKey(workspaceRoot));
-    } catch (derivedError) {
-        try {
-            plaintext = decryptWithKey(envelope, resolveMasterKey(workspaceRoot));
-        } catch {
-            throw derivedError;
-        }
+function decryptPacked(workspaceRoot, packedText) {
+    const buf = Buffer.from(String(packedText || '').trim(), 'base64');
+    if (buf.length < IV_BYTES + TAG_BYTES + 1) {
+        throw new Error('Encrypted .secrets envelope is incomplete.');
     }
+    const iv = buf.subarray(0, IV_BYTES);
+    const tag = buf.subarray(IV_BYTES, IV_BYTES + TAG_BYTES);
+    const ciphertext = buf.subarray(IV_BYTES + TAG_BYTES);
+    const decipher = crypto.createDecipheriv(ALGORITHM, deriveStorageKey(workspaceRoot), iv);
+    decipher.setAuthTag(tag);
+    const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
     const payload = JSON.parse(plaintext);
     return normalizeSecrets(payload?.secrets);
 }
 
-function encryptSecrets(workspaceRoot, secrets) {
+function encryptSecretsToPacked(workspaceRoot, secrets) {
     const iv = crypto.randomBytes(IV_BYTES);
     const cipher = crypto.createCipheriv(ALGORITHM, deriveStorageKey(workspaceRoot), iv);
     const plaintext = Buffer.from(JSON.stringify({ version: 1, secrets: normalizeSecrets(secrets) }), 'utf8');
-    const ciphertext = Buffer.concat([
-        cipher.update(plaintext),
-        cipher.final(),
-    ]);
-    return {
-        version: 1,
-        alg: ALGORITHM,
-        iv: iv.toString('base64'),
-        tag: cipher.getAuthTag().toString('base64'),
-        ciphertext: ciphertext.toString('base64'),
-    };
+    const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+    const tag = cipher.getAuthTag();
+    return Buffer.concat([iv, tag, ciphertext]).toString('base64');
 }
 
 function writeSecrets(workspaceRoot, secrets) {
     const file = getSecretsFile(workspaceRoot);
     fs.mkdirSync(path.dirname(file), { recursive: true });
+    const packed = encryptSecretsToPacked(workspaceRoot, secrets);
     const temp = `${file}.${process.pid}.${Date.now()}.tmp`;
-    fs.writeFileSync(temp, `${JSON.stringify(encryptSecrets(workspaceRoot, secrets), null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
+    fs.writeFileSync(temp, `${packed}\n`, { encoding: 'utf8', mode: 0o600 });
     fs.renameSync(temp, file);
     try { fs.chmodSync(file, 0o600); } catch (_) { }
 }
@@ -133,21 +113,9 @@ function writeSecrets(workspaceRoot, secrets) {
 function readSecrets(workspaceRoot) {
     const file = getSecretsFile(workspaceRoot);
     if (!fs.existsSync(file)) return {};
-    const raw = fs.readFileSync(file, 'utf8');
-    if (!raw.trim()) {
-        writeSecrets(workspaceRoot, {});
-        return {};
-    }
-    let parsedEnvelope = null;
-    try {
-        parsedEnvelope = JSON.parse(raw);
-    } catch (_) { }
-    if (parsedEnvelope?.alg === ALGORITHM && parsedEnvelope?.iv && parsedEnvelope?.tag && parsedEnvelope?.ciphertext) {
-        return decryptEnvelope(workspaceRoot, parsedEnvelope);
-    }
-    const migrated = parseKeyValueText(raw);
-    writeSecrets(workspaceRoot, migrated);
-    return migrated;
+    const raw = fs.readFileSync(file, 'utf8').trim();
+    if (!raw) return {};
+    return decryptPacked(workspaceRoot, raw);
 }
 
 function main() {
