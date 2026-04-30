@@ -28,7 +28,8 @@ export class GitCredentialsPrompt {
             autocommitSelected: null,
             showAgentRepos: false,
             autoresolveConflicts: false,
-            autoresolveDirty: false
+            autoresolveDirty: false,
+            activeTab: 'authentication'
         };
         this.invalidate();
     }
@@ -37,6 +38,8 @@ export class GitCredentialsPrompt {
 
     afterRender() {
         this.root = this.element.querySelector('#gitCredentialsPrompt') || this.element;
+        this.tabButtons = Array.from(this.element.querySelectorAll('.git-credentials-tab'));
+        this.tabPanels = Array.from(this.element.querySelectorAll('.git-credentials-tab-panel'));
         this.nameInput = this.element.querySelector('#gitCredentialsName');
         this.emailInput = this.element.querySelector('#gitCredentialsEmail');
         this.authMethodInputs = Array.from(this.element.querySelectorAll('input[name="gitCredentialsAuthMethod"]'));
@@ -172,6 +175,11 @@ export class GitCredentialsPrompt {
 
     cancelGitCredentials() {
         this.getParentPresenter()?.cancelGitCredentials?.();
+    }
+
+    switchCredentialsTab(_target, tab) {
+        this.state.activeTab = tab === 'preferences' ? 'preferences' : 'authentication';
+        this.updateTabUi();
     }
 
     disconnectGithubAuth() {
@@ -478,8 +486,12 @@ export class GitCredentialsPrompt {
         if (Object.prototype.hasOwnProperty.call(next, 'autoresolveDirty')) {
             this.state.autoresolveDirty = Boolean(next.autoresolveDirty);
         }
+        if (Object.prototype.hasOwnProperty.call(next, 'activeTab')) {
+            this.state.activeTab = next.activeTab === 'preferences' ? 'preferences' : 'authentication';
+        }
 
         this.element.classList.toggle('is-visible', this.state.visible);
+        this.updateTabUi();
         if (this.nameInput && this.nameInput.value !== this.state.name) {
             this.nameInput.value = this.state.name;
         }
@@ -656,6 +668,19 @@ export class GitCredentialsPrompt {
         }
         if (this.tokenPanel) {
             this.tokenPanel.hidden = useGithub;
+        }
+    }
+
+    updateTabUi() {
+        const activeTab = this.state.activeTab === 'preferences' ? 'preferences' : 'authentication';
+        this.root?.setAttribute('data-active-tab', activeTab);
+        for (const button of this.tabButtons || []) {
+            const isActive = button.dataset.tab === activeTab;
+            button.classList.toggle('active', isActive);
+            button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        }
+        for (const panel of this.tabPanels || []) {
+            panel.hidden = panel.dataset.tabPanel !== activeTab;
         }
     }
 
