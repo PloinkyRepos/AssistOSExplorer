@@ -1,11 +1,11 @@
-<!-- {"achilles-ide-document":{"id":"Ly5wbG9pbmt5L3JlcG9zL0FjaGlsbGVzSURFL2V4cGxvcmVyL1JFQURNRS5tZA==","title":"README","version":1,"updatedAt":"2026-04-30T10:11:50.176Z"}} -->
+<!-- {"achilles-ide-document":{"id":"Ly5wbG9pbmt5L3JlcG9zL2ZpbGVFeHBsb3Jlci9leHBsb3Jlci9SRUFETUUubWQ=","title":"README","version":1,"updatedAt":"2026-04-30T14:08:55.299Z"}} -->
 <!-- {"achilles-ide-chapter":{"id":"chapter-32fd8318-a414-40cf-9d37-54470d2912eb","title":"Explorer","anchorId":"chapter-chapter-32fd8318-a414-40cf-9d37-54470d2912eb"}} -->
 <a id="chapter-chapter-32fd8318-a414-40cf-9d37-54470d2912eb"></a>
 # Explorer
 <!-- {"achilles-ide-paragraph":{"id":"paragraph-d298d7a0-fbc2-4c41-9735-3fd0a6e15a05","type":"markdown","title":"Paragraph 1"}} -->
 This folder contains the `explorer` agent inside the `AchillesIDE` repository.
 
-Explorer is an HTTP Model Context Protocol (MCP) server plus the main workspace user interface. It owns filesystem browsing, preview, editing, plugin hosting, and the host shell used by the other workspace agents. 
+Explorer is an HTTP Model Context Protocol (MCP) server plus the main workspace user interface. It owns filesystem browsing, preview, editing, plugin hosting, and the host shell used by the other workspace agents.  
 
 
 <!-- {"achilles-ide-chapter":{"id":"chapter-76fb6bde-b772-4a9d-9f6b-a50521445ae4","title":"Current Responsibilities","anchorId":"chapter-chapter-76fb6bde-b772-4a9d-9f6b-a50521445ae4"}} -->
