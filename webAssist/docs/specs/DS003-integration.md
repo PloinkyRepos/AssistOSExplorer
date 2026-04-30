@@ -92,7 +92,8 @@ MCP input note:
 - At startup, `MainAgent` is initialized with `startDir = webAssist/` and discovers cskills from `webAssist/skills/`.
 - During runtime, webAssist calls `MainAgent.executePrompt(...)`.
 - `systemPrompt` is loaded from `webAssist/src/prompts/visitor-flow-system-prompt.mjs` and remains static per session.
-- Dynamic context (`sessionProfile`, `currentLead`, site/profile snapshots) is appended into the runtime prompt together with `User message` on every turn.
+- Dynamic context (`sessionProfile`, `currentLead`, site/profile snapshots, recent conversation history excerpt) is appended into the runtime prompt together with `User message` on every turn.
+- The system prompt contains a non-overridable security boundary: out-of-domain requests are refused, and profiling/internal decision mechanisms are not disclosed to visitors.
 
 ## Runtime Pre/Post Modules
 - Before orchestration, webAssist runs runtime module `load-context` from `webAssist/src/runtime/load-context.mjs`.

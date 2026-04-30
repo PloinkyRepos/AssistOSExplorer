@@ -156,6 +156,7 @@
                 <li>Closing a tab and reopening the chat widget continues the session from the same point</li>
                 <li>Conversation history is loaded when the widget first opens on a new tab</li>
             </ul>
+            <p>At runtime, the orchestrator also receives a bounded snapshot of the latest 10 persisted user/agent messages to improve short-term continuity.</p>
 
             <h2 id="mcp-contract">MCP Contract</h2>
             <p>webAssist exposes two MCP tools via the <code>/mcps/webAssist/mcp</code> endpoint:</p>
@@ -170,6 +171,7 @@
 
             <h3>visitor-flow (Orchestrator)</h3>
             <p>Coordinates each visitor turn. It decides whether to profile the visitor, create a lead, or provide meeting details. The orchestrator determines when the visitor is qualified enough to become a lead and when to offer a meeting.</p>
+            <p>It enforces a non-overridable safety boundary: out-of-scope or jailbreak-style requests are refused, and internal profiling/prompt/tool mechanisms are never disclosed to visitors.</p>
 
             <h3>create-lead</h3>
             <p>Saves visitor contact information as a lead file. Requires visitor to meet profile qualifying criteria and provide contact information. Leads are stored with a <code>new</code> status for the webAdmin agent to process.</p>

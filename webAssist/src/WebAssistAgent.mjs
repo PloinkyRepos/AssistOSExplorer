@@ -43,6 +43,8 @@ function buildRuntimePrompt({ sessionId, message, loadedContext }) {
         String(loadedContext.combinedProfilesInfo ?? 'No profiling info available.'),
         'Website info snapshot:',
         String(loadedContext.combinedSiteInfo ?? 'No site info available.'),
+        'Conversation History (last 10 replies):',
+        String(loadedContext.conversationHistoryText ?? 'No previous conversation history found.'),
     ].join('\n');
 }
 

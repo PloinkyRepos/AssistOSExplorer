@@ -37,8 +37,9 @@ Persist the current visitor turn after orchestration completes, so session state
 ## Continuity Invariant
 - `updateSessionProfile(...)` persists `profileDetails` exactly as provided by `update-session-profile` payload (after de-duplication).
 - `updateSessionProfile(...)` persists `contactInformation` as structured key-value session memory.
-- Runtime appends history via `appendSessionTurn(...)` after final answer and does not depend on history loading for conversational continuity.
-- Conversational continuity is encoded in `Profile Details` by orchestrator instructions.
+- Runtime appends history via `appendSessionTurn(...)` after final answer.
+- On future turns, `load-context` may inject the most recent 10 persisted history messages as a bounded prompt snapshot.
+- Conversational continuity is still primarily encoded in `Profile Details` by orchestrator instructions.
 
 ## Datastore Source
 - `update-session` uses the datastore singleton configured at agent startup.

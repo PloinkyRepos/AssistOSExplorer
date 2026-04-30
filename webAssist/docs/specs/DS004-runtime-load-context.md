@@ -27,20 +27,22 @@ Load dynamic visitor-turn context before execution starts.
     - `contactInformation` (object)
   - `combinedSiteInfo` (string)
   - `combinedProfilesInfo` (string)
+  - `conversationHistoryText` (string)
   - `sessionProfileText` (string)
 
 ## Execution Logic
 1. Read markdown files from `data/info/`.
 2. Read markdown files from `data/profilesInfo/`.
 3. Read and parse `data/sessions/{sessionId}-profile.md` if it exists.
-4. Resolve deterministic lead file `data/leads/{sessionId}-lead.md` and parse it when present.
-5. Return dynamic context values used by the runtime prompt.
+4. Read `data/sessions/{sessionId}-history.md` when present, parse dialogue entries, and format the latest 10 messages into `conversationHistoryText`.
+5. Resolve deterministic lead file `data/leads/{sessionId}-lead.md` and parse it when present.
+6. Return dynamic context values used by the runtime prompt.
 
 ## Session Memory Rule
-- `load-context` must not load session history dialogue from `{sessionId}-history.md`.
-- Session continuity is provided through `Profile` and `Profile Details` from `{sessionId}-profile.md`.
+- `load-context` injects a bounded history excerpt from `{sessionId}-history.md` (latest 10 user/agent messages) through `conversationHistoryText`.
+- Full session history remains persisted on disk for audit/admin consumers.
+- Session continuity remains anchored in `Profile` and `Profile Details` from `{sessionId}-profile.md`.
 - Lead existence and lead metadata are provided through `currentLead` from `{sessionId}-lead.md`.
-- History files remain persisted separately by runtime for audit/admin consumers.
 
 ## Datastore Source
 - `load-context` uses the datastore singleton configured at agent startup.

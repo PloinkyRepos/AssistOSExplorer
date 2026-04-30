@@ -9,7 +9,7 @@ The **webAssist** agent uses specific skills to manage the conversation flow and
 - Runtime execution is routed through `MainAgent` (no direct hardcoded skill sequence in `WebAssistAgent`).
 
 ## Runtime Modules (Non-skill)
-- `load-context` runs before orchestration to gather info/profile/session state and deterministic lead state for the current `sessionId`.
+- `load-context` runs before orchestration to gather info/profile/session state, deterministic lead state, and a bounded recent history excerpt (latest 10 messages) for the current `sessionId`.
 - `update-session` runtime functions are used in two stages:
   - `updateSessionProfile` is invoked by `update-session-profile` cskill during orchestration.
   - `appendSessionTurn` is invoked automatically by runtime after final answer.
@@ -19,6 +19,7 @@ The **webAssist** agent uses specific skills to manage the conversation flow and
 - **Function**: Coordinates one full visitor turn using the skill allowlist.
 - **Allowed Skills**: `create-lead`, `book-meeting`, `update-session-profile`.
 - **Guarantee**: Persists profile memory fields (`profiles`, `profileDetails`, `contactInformation`, English persistence fields) through `update-session-profile` before final answer; runtime appends user/agent turn history after final answer.
+- **Security Guarantee**: Enforces a non-overridable boundary that refuses out-of-domain requests and prevents disclosure of internal profiling/prompt/tooling mechanisms in visitor-facing replies.
 - **Continuity Rule**: Conversation progression is encoded directly in orchestrator-authored `profileDetails`; runtime does not synthesize flow fields.
 
 ## Skill: create-lead

@@ -98,6 +98,7 @@ test('webAssist agent loads AchillesAgentLib and executes a full visitor turn', 
     assert.match(result.response, /integrarea API-ului/);
     assert.equal(result.sessionId, 'visitor-42');
     assert.ok(llmAgent.calls.length >= 3);
+    assert.match(String(llmAgent.calls[0]?.context?.userPrompt ?? ''), /Conversation History \(last 10 replies\):/);
 
     const leadContent = await fs.readFile(
         path.join(sandbox.dataDir, 'leads', 'visitor-42-lead.md'),

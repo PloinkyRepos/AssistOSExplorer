@@ -6,6 +6,7 @@ import {
     LEAD_FIELDS,
     LEAD_SECTIONS,
     SESSION_SECTIONS,
+    getSessionHistoryFileName,
     getSessionLeadFileName,
     getSessionProfileFileName,
 } from '../constants/datastore.mjs';
@@ -33,6 +34,35 @@ function combineMarkdownFiles(files, label) {
         .join('\n\n');
 }
 
+function formatConversationHistory(dialogueEntries, maxEntries = 10) {
+    if (!Array.isArray(dialogueEntries) || dialogueEntries.length === 0) {
+        return 'No previous conversation history found.';
+    }
+
+    const normalizedEntries = dialogueEntries
+        .map((entry) => {
+            const speaker = String(entry?.speaker ?? entry?.role ?? '').trim();
+            const message = String(entry?.message ?? '').trim();
+            if (!message) {
+                return null;
+            }
+            return {
+                speaker: speaker || 'Unknown',
+                message,
+            };
+        })
+        .filter(Boolean);
+
+    if (normalizedEntries.length === 0) {
+        return 'No previous conversation history found.';
+    }
+
+    const recentEntries = normalizedEntries.slice(-Math.max(1, maxEntries));
+    return recentEntries
+        .map(({ speaker, message }) => `- **${speaker}**: ${message}`)
+        .join('\n');
+}
+
 export async function loadContext({ sessionId }) {
     if (!sessionId) {
         throw new Error('load-context requires a sessionId.');
@@ -42,9 +72,11 @@ export async function loadContext({ sessionId }) {
     const siteInfo = await listMarkdownFiles(store, DATASTORE_TYPES.INFO);
     const profilesInfo = await listMarkdownFiles(store, DATASTORE_TYPES.PROFILES_INFO);
     const sessionProfileFileName = getSessionProfileFileName(sessionId);
+    const sessionHistoryFileName = getSessionHistoryFileName(sessionId);
     const sessionLeadFileName = getSessionLeadFileName(sessionId);
     let sessionRecord = null;
     let currentLead = null;
+    let conversationHistoryText = 'No previous conversation history found.';
     const emptyRecord = {
         profiles: [],
         profileDetails: [],
@@ -63,6 +95,7 @@ export async function loadContext({ sessionId }) {
     };
 
     const profileRecord = await readSectionMap(DATASTORE_TYPES.SESSIONS, sessionProfileFileName);
+    const historyRecord = await readSectionMap(DATASTORE_TYPES.SESSIONS, sessionHistoryFileName);
     const leadRecord = await readSectionMap(DATASTORE_TYPES.LEADS, sessionLeadFileName);
     const exists = Boolean(profileRecord);
     if (!exists) {
@@ -82,6 +115,11 @@ export async function loadContext({ sessionId }) {
                 contactInformation: store.parseKeyValue(profileRecord?.sections?.[SESSION_SECTIONS.CONTACT_INFORMATION]),
             },
         };
+    }
+
+    if (historyRecord?.sections?.[SESSION_SECTIONS.HISTORY]) {
+        const parsedHistory = store.parseDialogue(historyRecord.sections[SESSION_SECTIONS.HISTORY]);
+        conversationHistoryText = formatConversationHistory(parsedHistory, 10);
     }
 
     if (!leadRecord) {
@@ -119,6 +157,7 @@ export async function loadContext({ sessionId }) {
         },
         combinedSiteInfo: combineMarkdownFiles(siteInfo, 'Info') || 'No site info available.',
         combinedProfilesInfo: combineMarkdownFiles(profilesInfo, 'Profile') || 'No profiling info available.',
+        conversationHistoryText,
         sessionProfileText: sessionRecord.exists
             ? sessionRecord.content.trim()
             : 'No previous session profile found. This is a new session.',

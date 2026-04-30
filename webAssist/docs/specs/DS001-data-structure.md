@@ -60,7 +60,8 @@ A chronological log of the interaction:
 - **User**: [Input text]
 - **Agent**: [Response text]
 
-History remains persisted for audit and admin-side analysis, but it is not loaded into webAssist orchestration context during runtime turns.
+History remains fully persisted for audit and admin-side analysis.
+At runtime, `load-context` reads this file and injects only the most recent 10 dialogue messages (user/agent entries) into orchestration context as a bounded `Conversation History (last 10 replies)` snapshot.
 
 ## Lead File Lookup Rule
 - Lead files are deterministic per session: `{sessionId}-lead.md` in `leads/`.

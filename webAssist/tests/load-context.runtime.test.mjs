@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createWebAssistSandbox } from './helpers.mjs';
-import { updateSessionProfile } from '../src/runtime/update-session.mjs';
+import { appendSessionTurn, updateSessionProfile } from '../src/runtime/update-session.mjs';
 import { loadContext } from '../src/runtime/load-context.mjs';
 import { configureDataStore } from '../src/runtime/dataStore.mjs';
 import { action as createLeadAction } from '../skills/create-lead/src/index.mjs';
@@ -29,6 +29,36 @@ test('load-context.runtime loads info, profile definitions, and parsed session s
             summary: 'Qualified developer profile.',
         }),
     });
+    await appendSessionTurn({
+        sessionId: 'sess1',
+        userMessage: 'First user message',
+        agentResponse: 'First agent response',
+    });
+    await appendSessionTurn({
+        sessionId: 'sess1',
+        userMessage: 'Second user message',
+        agentResponse: 'Second agent response',
+    });
+    await appendSessionTurn({
+        sessionId: 'sess1',
+        userMessage: 'Third user message',
+        agentResponse: 'Third agent response',
+    });
+    await appendSessionTurn({
+        sessionId: 'sess1',
+        userMessage: 'Fourth user message',
+        agentResponse: 'Fourth agent response',
+    });
+    await appendSessionTurn({
+        sessionId: 'sess1',
+        userMessage: 'Fifth user message',
+        agentResponse: 'Fifth agent response',
+    });
+    await appendSessionTurn({
+        sessionId: 'sess1',
+        userMessage: 'Sixth user message',
+        agentResponse: 'Sixth agent response',
+    });
 
     const result = await loadContext({
         sessionId: 'sess1',
@@ -50,6 +80,10 @@ test('load-context.runtime loads info, profile definitions, and parsed session s
     assert.match(result.combinedProfilesInfo, /Profile: Developer/);
     assert.doesNotMatch(result.sessionProfileText, /Tell me about your API/);
     assert.match(result.sessionProfileText, /Session Profile/);
+    assert.doesNotMatch(result.conversationHistoryText, /First user message/);
+    assert.doesNotMatch(result.conversationHistoryText, /First agent response/);
+    assert.match(result.conversationHistoryText, /\*\*User\*\*: Second user message/);
+    assert.match(result.conversationHistoryText, /\*\*Agent\*\*: Sixth agent response/);
 
     const missingSessionResult = await loadContext({
         sessionId: 'new-session',
@@ -61,4 +95,5 @@ test('load-context.runtime loads info, profile definitions, and parsed session s
         missingSessionResult.sessionProfileText,
         /No previous session profile found/
     );
+    assert.equal(missingSessionResult.conversationHistoryText, 'No previous conversation history found.');
 });
