@@ -342,7 +342,6 @@ jobs:
           }
 
           set_var PLOINKY_CODE_WRITABLE "1"
-          set_var PLOINKY_ROUTER_URL "http://host.containers.internal:${ROUTER_PORT}"
           set_var ASSISTOS_FS_ROOT "$WORK_DIR"
           set_var WORKSPACE_ROOT "$WORK_DIR"
           set_var PLOINKY_WORKSPACE_ROOT "$WORK_DIR"

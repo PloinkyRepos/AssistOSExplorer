@@ -252,7 +252,6 @@ jobs:
 
           # Configure defaults
           ploinky var PLOINKY_CODE_WRITABLE "1" || true
-          ploinky var PLOINKY_ROUTER_URL "http://host.containers.internal:${ROUTER_PORT}" || true
           ploinky var ASSISTOS_FS_ROOT "$WORK_DIR" || true
 
           mkdir -p "$WORK_DIR/logs"

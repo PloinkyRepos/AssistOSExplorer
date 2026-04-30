@@ -173,7 +173,6 @@ jobs:
 
           # Infrastructure variables (must match deploy-explorer.yml)
           ploinky var PLOINKY_CODE_WRITABLE "1" 2>/dev/null || true
-          ploinky var PLOINKY_ROUTER_URL "http://host.containers.internal:${ROUTER_PORT}" 2>/dev/null || true
           ploinky var ASSISTOS_FS_ROOT "\$WORK_DIR" 2>/dev/null || true
 
           # OnlyOffice public/internal service routing
