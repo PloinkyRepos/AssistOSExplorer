@@ -8,7 +8,7 @@ This guide consolidates all Explorer documentation (architecture, document model
 
 - **Containerized UI + FS MCP server**: Runs `filesystem-http-server.mjs` (Node 20-alpine) serving the <a href="https://github.com/OutfinityResearch/WebSkel/blob/master/README.md">WebSkel UI</a> and filesystem MCP tools. Allowed roots come from `ASSISTOS_FS_ROOT`/`MCP_FS_ROOT` or CLI args.
 - **Plugin host**: Discovers `IDE-plugins/*/config.json` from enabled agents and repo-local agent folders in the workspace; tools are exposed to the UI grouped by `location`, then filtered by Explorer's `applicationPlugins` policy.
-- **Document manager**: Markdown is parsed into chapters/paragraphs with metadata and SOPLang commands.
+- **Markdown and document manager**: ordinary `.md` files use Explorer's embedded TinyMDE source editor by default. SOPLang-aware structured document editing remains available through an explicit `Edit SOPLang Tags` action when a Markdown document needs Achilles metadata, document nodes, commands, variables, or related structured workflows.
 - **No HTTP blob endpoint in current server**: UI helpers expect `/blobs/<agent>`, but `filesystem-http-server.mjs` only exposes MCP on `/mcp` and a `/health` check.
 - **Plugin sources**: Runtime plugins are distributed across agent-owned `IDE-plugins/` directories such as `dpuAgent/IDE-plugins`, `gitAgent/IDE-plugins`, `multimedia/IDE-plugins`, `soplangAgent/IDE-plugins`, and `tasksAgent/IDE-plugins`.
 - **Separate SOPLang agent**: `soplangAgent` (repo `SOPLangBuilder`) provides explicit MCP tools such as `sync_markdown_documents` and `execute_workspace_build`; it runs in its own container sharing the workspace.
@@ -36,11 +36,13 @@ This guide consolidates all Explorer documentation (architecture, document model
 
 ---
 
-## 4) Document Model & Editing
+## 4) Markdown, Document Model & Editing
 
-- **View/Edit modes**: Any file can be opened; Markdown gets structured document features, other text/code files use the general editor (with syntax highlighting, no document DOM).
+- **View/Edit modes**: Any file can be opened. Ordinary Markdown source editing is the default `.md` edit path and uses the embedded TinyMDE editor. Other text/code files use the general editor. The structured document editor is reserved for explicit SOPLang tag editing.
+- **Markdown source editing**: The `markdown-editor` WebSkel component vendors TinyMDE under `explorer/assets/vendor/tiny-mde/`. It is initialized as a textarea-linked editor so TinyMDE mirrors editor content into the textarea that Explorer save flows already read. WebSkel re-renders component `innerHTML` on invalidation, so the Markdown editor presenter must initialize TinyMDE idempotently and discard stale editor references after unload.
+- **SOPLang tag editing**: The `Edit SOPLang Tags` action hydrates a Markdown file into the document runtime and opens `document-view-page` for structured Achilles/SOPLang metadata, commands, references, variables, media tags, and node-level editing.
 - **HTML Web Preview URL model**: Preview preserves repo-scoped paths generated from selected file path (e.g., `/.ploinky/repos/AchillesIDE/docs/development.html?__previewReload=1`) instead of flattening to root-level `/docs/*`.
-- **Hydration**: `DocumentStore.hydrateDocumentModel` parses Markdown plus comment markers into a hierarchy (document → chapters → paragraphs).
+- **Hydration**: `DocumentStore.hydrateDocumentModel` parses Markdown plus comment markers into a hierarchy (document → chapters → paragraphs) only for the structured SOPLang/document editing path.
   - Example comment markers:
     - `<!--{"achilles-ide-document": {"id": "guide", "title": "My Guide"}}-->`
     - `<!--{"achilles-ide-chapter": {"title": "Intro"}}-->`
@@ -59,9 +61,9 @@ This guide consolidates all Explorer documentation (architecture, document model
 ## 5) SOPLang Usage in Documents
 
 - **Embed code**: Use fenced ` ```soplang ` blocks for scripts.
-- **Achilles comments**: `achilles-ide-document/chapter/paragraph` markers map Markdown to the model and keep commands in sync.
+- **Achilles comments**: `achilles-ide-document/chapter/paragraph` markers map Markdown to the structured model and keep commands in sync when the user explicitly opens SOPLang tag editing.
 - **Variables & media**: Commands like `@set doc_owner "alice@company.com"` or `@media_image_123 attach id "abcd" name "diagram.png"` live in the Markdown and are parsed on hydration.
-- **Execution**: UI actions can run SOPLang blocks via soplangAgent; outputs/variable updates flow back into the model. Reload to re-hydrate after edits.
+- **Execution**: UI actions can run SOPLang blocks via soplangAgent; outputs/variable updates flow back into the structured model. Reload or reopen SOPLang tag editing to re-hydrate after raw Markdown source edits.
 - **Flow fit**: Documents + SOPLang commands define structure; the build pipeline (below) persists them via soplangAgent.
 
 ---
@@ -102,7 +104,7 @@ This guide consolidates all Explorer documentation (architecture, document model
 - **Filesystem root**: Set `ASSISTOS_FS_ROOT` (or `MCP_FS_ROOT`) to the workspace path(s); fallback is cwd. First root is workspace root.
 - **Bundled local plugins**: Explorer-facing plugins are loaded from the enabled agents' `IDE-plugins/` directories in this repository.
 - **Dependencies**: `npm install` at repo root (and `explorer/` if needed).
-- **Hot reload**: UI refresh picks up most changes; plugin `config.json` or new plugins require Explorer restart to rescan. SOPLang comment edits are re-hydrated on reload; rerun `syncMarkdownDocuments` to persist into the SOPLang store.
+- **Hot reload**: UI refresh picks up most changes; plugin `config.json` or new plugins require Explorer restart to rescan. Raw Markdown edits save the file directly. SOPLang comment edits are re-hydrated when the structured editor is opened or reloaded; rerun `syncMarkdownDocuments` to persist into the SOPLang store.
 - **Preview portability rule**: use the repo-scoped static path exposed by the current repository layout. Do not document symlinks that are not present in the checkout.
 - **Repo layout (Explorer)**:
   ```
@@ -132,4 +134,4 @@ This guide consolidates all Explorer documentation (architecture, document model
 
 - Blob uploads: UI utilities target `/blobs/<agent>`, but the current Explorer server does not implement this HTTP endpoint. Plan workflows accordingly (or add server support if needed).
 - MCP isolation: Call Explorer and soplangAgent independently; do not route SOPLang MCP calls through Explorer.
-- View vs. edit: All files support both; structured features apply only to Markdown. Syntax highlighting is presentation only for code/text files.
+- View vs. edit: All files support both. Ordinary `.md` editing is Markdown source editing; structured features apply only when the user opens SOPLang tag editing. Syntax highlighting is presentation only for code/text files.

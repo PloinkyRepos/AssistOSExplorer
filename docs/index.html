@@ -76,7 +76,7 @@
                 <div class="doc-section">
                     <h2>One Surface For The Workspace</h2>
                     <p>A Ploinky workspace needs one stable surface where a user can browse files, open documents, inspect previews, edit source, and trigger domain-specific actions without manually switching between separate agent interfaces. A plain file browser is too narrow for that role, while a domain-specific agent should not take ownership of the whole workspace shell. Explorer exists to solve that boundary: it owns the IDE shell, while agents such as <a href="../dpuAgent/docs/index.html"><code>dpuAgent</code></a>, <a href="../gitAgent/docs/index.html"><code>gitAgent</code></a>, <a href="../llmAssistant/docs/index.html"><code>llmAssistant</code></a>, <a href="../soplangAgent/docs/index.html"><code>soplangAgent</code></a>, <a href="../tasksAgent/docs/index.html"><code>tasksAgent</code></a>, <a href="../multimedia/docs/index.html"><code>multimedia</code></a>, <a href="../webAdmin/docs/index.html"><code>webAdmin</code></a>, and <a href="../webAssist/docs/index.html"><code>webAssist</code></a> keep ownership of their own domain logic.</p>
-                    <p>In practice, that means Explorer has to combine several responsibilities that would otherwise drift apart: filesystem navigation, content-aware preview, structured Markdown editing, general-purpose text/code editing, and runtime plugin hosting. The result is broader than a file explorer but intentionally narrower than a monolithic backend. Explorer is the host application for the workspace, not the owner of every workflow that appears inside it.</p>
+                    <p>In practice, that means Explorer has to combine several responsibilities that would otherwise drift apart: filesystem navigation, content-aware preview, normal Markdown source editing, explicit SOPLang tag editing for structured documents, general-purpose text/code editing, and runtime plugin hosting. The result is broader than a file explorer but intentionally narrower than a monolithic backend. Explorer is the host application for the workspace, not the owner of every workflow that appears inside it.</p>
                 </div>
 
                 <div class="doc-section">
@@ -88,7 +88,7 @@
 
                 <div class="doc-section">
                     <h2>Running Explorer In Practice</h2>
-                    <p>Once the workspace is running, Explorer presents a single application shell across several resource classes. Normal files and directories are browsed through the filesystem tools. Markdown can be opened in the structured document experience, where chapters, paragraphs, references, and SOPLang commands remain attached to the same source. Other text and code files use the general editor with syntax highlighting. Media, HTML, backlog data, and DPU-backed resources each route into the preview or editing mode that matches their contract.</p>
+                    <p>Once the workspace is running, Explorer presents a single application shell across several resource classes. Normal files and directories are browsed through the filesystem tools. Markdown opens as readable preview and edits as normal Markdown source by default through the embedded editor. When a document needs Achilles/SOPLang metadata, chapters, paragraphs, references, variables, or commands, the user enters that structured workflow through the explicit SOPLang tag editing action. Other text and code files use the general editor with syntax highlighting. Media, HTML, backlog data, and DPU-backed resources each route into the preview or editing mode that matches their contract.</p>
                     <p>Everyday use is therefore organized around selection and context. Directory navigation, rename/copy/move/delete flows, find and replace, preview toggles, Git actions, and plugin entry points all adapt to the current file, document node, or virtual resource. Explorer does not implement Git, DPU, SOPLang, tasks, or assistant logic internally; it exposes those capabilities through the host UI and forwards domain work to the owning agents.</p>
                     <p>To run the current workspace variant, enable the repo and global Explorer agent, point the filesystem root to the workspace, and start Explorer on the router port you want to use:</p>
 <pre><code>ploinky enable repo AchillesIDE
@@ -114,7 +114,7 @@ ploinky start explorer 8080
                         <div class="page-link-icon">📄</div>
                         <div class="page-link-body">
                             <h3>Document Management</h3>
-                            <p>Structured Markdown, chapter and paragraph metadata, hydration, and document-side editing behavior.</p>
+                            <p>Markdown source editing, structured SOPLang tag editing, hydration, and document-side behavior.</p>
                         </div>
                         <a href="documents.html" class="page-link-action">Open</a>
                     </article>
@@ -145,7 +145,7 @@ ploinky start explorer 8080
 
                 <div class="doc-section">
                     <h2>Representative Screens</h2>
-                    <p>These screenshots show the main interaction regimes that make Explorer broader than a plain file browser: structured Markdown work, mixed preview/text flows, and general code editing in the same shell.</p>
+                    <p>These screenshots show the main interaction regimes that make Explorer broader than a plain file browser: Markdown preview and editing, structured SOPLang document work, mixed preview/text flows, and general code editing in the same shell.</p>
                     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem;margin-top:1rem;">
                         <figure style="background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:12px;padding:0.75rem;">
                             <img class="home-shot" data-full="./assets/preview_md.png" src="./assets/preview_md.png" alt="Markdown preview" style="width:100%;border-radius:8px;border:1px solid var(--border-secondary);background:var(--bg-secondary);cursor:pointer;">

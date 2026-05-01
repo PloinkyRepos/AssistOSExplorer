@@ -88,7 +88,7 @@ Explorer groups its behavior into a small number of high-level areas:
 |---|---|
 | navigation shell | path state, list/tree rendering, breadcrumbs, URL sync |
 | preview shell | text preview, media preview, document preview, OnlyOffice, DPU secret preview |
-| editing shell | code editing, text editing, DPU-backed editing, save and refresh workflows |
+| editing shell | code editing, text editing, Markdown source editing, DPU-backed editing, save and refresh workflows |
 | action system | contextual actions, toolbar actions, upload, delete, rename, secret-specific flows |
 | plugin system | application plugin discovery, slot mounting, settings-driven enable/disable |
 | server integration | HTTP routes, tokenized document flows, OnlyOffice callback flow, MCP bridging |
@@ -120,6 +120,10 @@ For document media, Explorer must preserve backward compatibility with both repo
 - external service session state for flows such as OnlyOffice
 
 For the general text/code editor, Explorer must treat collaboration state as host-owned UI state rather than as widget-local implementation detail. The editor therefore tracks whether auto-save is enabled, the configured idle interval, the current save-in-progress state, and whether the file changed externally after the edit session began. If the on-disk file version changes during an edit session, Explorer must surface a warning in the editor UI, open a reload confirmation modal, and block both manual save and auto-save until the file is reloaded.
+
+Markdown editing has two explicit modes. The default `Edit` action for `.md` files must open a normal Markdown source editor, currently implemented with the embedded TinyMDE component. This editor participates in the same save, dirty-state, conflict, refresh, and DPU-backed write flows as other text resources. It must not implicitly hydrate the SOPLang document model.
+
+SOPLang-aware Markdown editing must remain an explicit action. When the user selects `Edit SOPLang Tags`, Explorer may hydrate the selected Markdown file through the document runtime and open the structured document UI for Achilles metadata, chapters, paragraphs, commands, variables, references, media tags, and related document-node workflows. This keeps ordinary Markdown editing lightweight while preserving the structured document capability for files that need it.
 
 When the authenticated workspace session expires, Explorer must not leave the user in a broken in-app state. Session-expiry failures from the filesystem or MCP layer, including MCP HTTP `401 not_authenticated` responses, must surface a simple human session-expired message and then redirect the browser to the login URL supplied by the server, or to `/auth/login` with the current Explorer route preserved in `returnTo` when no explicit login URL is returned.
 
@@ -245,6 +249,7 @@ For local workspace navigation, Explorer must also suppress reserved secret file
 Explorer supports multiple editing classes:
 
 - plain text and code editing
+- Markdown source editing
 - document editing
 - DPU-backed file editing
 - DPU secret value editing

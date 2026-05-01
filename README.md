@@ -1,4 +1,4 @@
-<!-- {"achilles-ide-document":{"id":"Ly5wbG9pbmt5L3JlcG9zL2ZpbGVFeHBsb3Jlci9SRUFETUUubWQ=","title":"README","version":1,"updatedAt":"2026-04-29T15:36:48.430Z"}} -->
+<!-- {"achilles-ide-document":{"id":"Ly5wbG9pbmt5L3JlcG9zL2ZpbGVFeHBsb3Jlci9SRUFETUUubWQ=","title":"README","version":1,"updatedAt":"2026-05-01T08:00:24.000Z"}} -->
 <!-- {"achilles-ide-chapter":{"id":"chapter-2b41c910-2fc9-438c-a615-dac2bc563f42","title":"AchillesIDE","anchorId":"chapter-chapter-2b41c910-2fc9-438c-a615-dac2bc563f42"}} -->
 <a id="chapter-chapter-2b41c910-2fc9-438c-a615-dac2bc563f42"></a>
 # AchillesIDE
@@ -15,12 +15,15 @@ Explorer is the main user-facing surface. It exposes filesystem navigation, prev
 This repository is organized around one host shell and several agent boundaries:
 
 - `explorer` owns routing, filesystem access, preview, editing, and plugin hosting
+- `explorer` owns normal Markdown source editing for `.md` files through the embedded TinyMDE editor
 - `dpuAgent` owns confidential data and secret storage
 - `gitAgent` owns workspace Git operations
 - `llmAssistant` owns shared LLM-backed helper contracts
 - `soplangAgent` owns SOPLang build and execution orchestration
 - `tasksAgent` owns backlog file operations
 - `multimedia` owns media-oriented IDE plugin workflows 
+
+Markdown has two explicit edit modes in the Explorer UI. The default `Edit` action opens ordinary `.md` files as Markdown source, backed by Explorer filesystem or DPU save flows. SOPLang-aware document editing remains available through the dedicated `Edit SOPLang Tags` action and is used only when the user wants to edit Achilles/SOPLang metadata, document nodes, commands, variables, or related structured tags.
 
 
 <!-- {"achilles-ide-chapter":{"id":"chapter-e807b655-0b94-43fc-9204-72c66a6083a1","title":"Running Explorer","anchorId":"chapter-chapter-e807b655-0b94-43fc-9204-72c66a6083a1"}} -->
@@ -96,4 +99,3 @@ curl -s -X POST http://127.0.0.1:8080/mcps/explorer/mcp \
   -H 'Content-Type: application/json' \
   -d '{ "tool": "list_directory", "path": "/" }'
 ```
-

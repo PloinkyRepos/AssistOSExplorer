@@ -1,4 +1,4 @@
-<!-- {"achilles-ide-document":{"id":"Ly5wbG9pbmt5L3JlcG9zL2ZpbGVFeHBsb3Jlci9leHBsb3Jlci9SRUFETUUubWQ=","title":"README","version":1,"updatedAt":"2026-04-30T14:08:55.299Z"}} -->
+<!-- {"achilles-ide-document":{"id":"Ly5wbG9pbmt5L3JlcG9zL2ZpbGVFeHBsb3Jlci9leHBsb3Jlci9SRUFETUUubWQ=","title":"README","version":1,"updatedAt":"2026-05-01T08:00:24.000Z"}} -->
 <!-- {"achilles-ide-chapter":{"id":"chapter-32fd8318-a414-40cf-9d37-54470d2912eb","title":"Explorer","anchorId":"chapter-chapter-32fd8318-a414-40cf-9d37-54470d2912eb"}} -->
 <a id="chapter-chapter-32fd8318-a414-40cf-9d37-54470d2912eb"></a>
 # Explorer
@@ -17,6 +17,8 @@ Explorer owns:
 - filesystem MCP access within configured workspace roots
 - host routing and preview selection
 - general text and code editing
+- normal Markdown source editing for `.md` files through the embedded TinyMDE editor
+- explicit SOPLang tag editing for Markdown documents that need Achilles/SOPLang metadata workflows
 - collaborative editing safeguards for local files
 - application and document plugin hosting
 - account-menu plugin hosting for workspace-wide controls such as DPU audit
@@ -31,6 +33,13 @@ For the general text and code editor, the current collaboration behavior is:
 - if a file changes on disk after an edit session starts, Explorer warns the user, opens a reload confirmation popup, and blocks save until the file is reloaded
 - if a local file is only being viewed, Explorer polls lightweight file metadata for the current file and reloads the preview automatically if another user updates it
 - if the authenticated workspace session expires, Explorer shows a session-expired message and redirects to `/auth/login` with the current route in `returnTo`
+
+For Markdown files, Explorer uses two distinct editing paths:
+
+- `Edit` opens the file as normal Markdown source using the embedded TinyMDE editor. The editor is bound to the same save, dirty-state, conflict, and DPU-backed update flows as other editable text resources.
+- `Edit SOPLang Tags` opens the structured document editor for Achilles/SOPLang metadata, document nodes, commands, variables, media tags, references, and other structured document workflows.
+
+The default `.md` edit path must not implicitly hydrate the full SOPLang document model. Structured SOPLang editing is an explicit user action so ordinary Markdown files remain ordinary editable Markdown.
 
 Explorer also reserves workspace secret files as non-browsable resources:
 
@@ -134,4 +143,3 @@ curl -I "http://127.0.0.1:8080/.ploinky/repos/AchillesIDE/docs/development.html"
 Expected result:
 
 - `HTTP/1.1 200`
-

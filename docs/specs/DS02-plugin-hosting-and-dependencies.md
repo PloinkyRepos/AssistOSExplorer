@@ -144,11 +144,13 @@ When workspace plugin settings change, Explorer must invalidate cached menu cont
 |---|---|---|
 | `gitAgent` | toolbar slot, host refresh, repo context | Git workflows, commit modal, repo tree, credentials |
 | `dpuAgent` | confidential navigation shell, preview host | storage, ACL, comments, confidential object logic |
-| `soplangAgent` | host actions and document context | build logic, markdown sync, skills bridge |
+| `soplangAgent` | explicit SOPLang tag-edit action and document context | build logic, markdown sync, skills bridge |
 | `tasksAgent` | toolbar slot and document context | backlog CRUD, conflict handling, task UI |
 | `llmAssistant` | generic host invocation points | autocomplete, commit message, conflict resolution |
 
 This ownership table is an architectural guardrail. If Explorer starts duplicating domain behavior from these agents, the design has drifted.
+
+Ordinary `.md` source editing is not a `soplangAgent` responsibility. Explorer owns the default Markdown editor surface and its save lifecycle. `soplangAgent` participates only when the user enters SOPLang-aware workflows such as tag editing, document synchronization, build execution, variables, or command processing.
 
 ### Ordering Model
 
