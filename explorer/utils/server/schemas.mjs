@@ -49,6 +49,12 @@ export function createSchemas(z) {
     paths: z.array(z.string()).optional().default([]),
     workspaceVersion: z.number().int().nonnegative().optional().default(0)
   });
+  const SearchTextStatusArgsSchema = z.object({
+    jobId: z.string()
+  });
+  const SearchTextCancelArgsSchema = z.object({
+    jobId: z.string()
+  });
   const ReplaceTextArgsSchema = z.object({
     path: z.string(),
     query: z.string(),
@@ -89,6 +95,8 @@ export function createSchemas(z) {
     CopyFileArgsSchema,
     SearchFilesArgsSchema,
     SearchTextArgsSchema,
+    SearchTextStatusArgsSchema,
+    SearchTextCancelArgsSchema,
     ReplaceTextArgsSchema,
     GetFileInfoArgsSchema,
     CollectIDEPluginsArgsSchema,

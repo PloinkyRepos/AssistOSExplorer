@@ -12,13 +12,115 @@ dialog {
     max-width: 95vw;
 }
 
+dialog.file-search-modal-dialog {
+    width: min(1100px, 92vw);
+    height: 88vh;
+    max-width: 96vw;
+    max-height: 92vh;
+    min-width: 760px;
+    min-height: 520px;
+    overflow: hidden;
+}
+
+dialog.file-search-modal-dialog.file-search-positioned {
+    position: fixed;
+    margin: 0;
+}
+
+dialog.file-search-modal-dialog.is-fullscreen {
+    left: 0 !important;
+    top: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    max-width: 100vw !important;
+    max-height: 100vh !important;
+    border-radius: 0 !important;
+}
+
+dialog.file-search-modal-dialog.is-fullscreen .file-search-resize-handle {
+    display: none;
+}
+
+.file-search-resize-handle {
+    position: absolute;
+    z-index: 30;
+    background: transparent;
+}
+
+.file-search-resize-handle:hover {
+    background: rgba(37, 99, 235, 0.10);
+}
+
+.file-search-resize-handle.n {
+    top: -3px;
+    left: 8px;
+    right: 8px;
+    height: 6px;
+    cursor: ns-resize;
+}
+
+.file-search-resize-handle.s {
+    bottom: -3px;
+    left: 8px;
+    right: 8px;
+    height: 6px;
+    cursor: ns-resize;
+}
+
+.file-search-resize-handle.e {
+    top: 8px;
+    right: -3px;
+    bottom: 8px;
+    width: 6px;
+    cursor: ew-resize;
+}
+
+.file-search-resize-handle.w {
+    top: 8px;
+    left: -3px;
+    bottom: 8px;
+    width: 6px;
+    cursor: ew-resize;
+}
+
+.file-search-resize-handle.ne {
+    top: -3px;
+    right: -3px;
+    width: 12px;
+    height: 12px;
+    cursor: nesw-resize;
+}
+
+.file-search-resize-handle.nw {
+    top: -3px;
+    left: -3px;
+    width: 12px;
+    height: 12px;
+    cursor: nwse-resize;
+}
+
+.file-search-resize-handle.se {
+    bottom: -3px;
+    right: -3px;
+    width: 12px;
+    height: 12px;
+    cursor: nwse-resize;
+}
+
+.file-search-resize-handle.sw {
+    bottom: -3px;
+    left: -3px;
+    width: 12px;
+    height: 12px;
+    cursor: nesw-resize;
+}
+
 dialog::backdrop {
     background: rgba(15, 23, 42, 0.5);
     backdrop-filter: blur(2px);
 }
 
 .search-modal {
-    width: min(980px, 95vw);
     background: var(--file-exp-panel);
     border: 1px solid var(--file-exp-border);
     border-radius: var(--radius-xl);
@@ -26,6 +128,8 @@ dialog::backdrop {
     display: flex;
     flex-direction: column;
     color: inherit;
+    width: 100%;
+    height: 100%;
 }
 
 .search-modal-header {
@@ -60,6 +164,7 @@ dialog::backdrop {
     display: flex;
     flex-direction: column;
     gap: var(--space-md);
+    height: 100%;
 }
 
 .search-mode-switch {
@@ -129,6 +234,7 @@ dialog::backdrop {
 
 .search-overlay.open {
     display: block;
+    height: 100%;
 }
 
 .search-overlay-card {
@@ -138,7 +244,8 @@ dialog::backdrop {
     box-shadow: 0 12px 24px rgba(15, 23, 42, 0.12);
     display: flex;
     flex-direction: column;
-    max-height: 80vh;
+    width: 100%;
+    height: 100%;
 }
 
 .search-overlay-header {
@@ -328,7 +435,7 @@ dialog::backdrop {
     overflow-y: auto;
     background: var(--surface);
     min-height: 180px;
-    max-height: 480px;
+    max-height: 375px;
     display: flex;
     flex-direction: column;
     gap: 3px;
@@ -479,6 +586,18 @@ dialog::backdrop {
     cursor: pointer;
     font-size: 1rem;
     color: inherit;
+}
+
+.search-modal-header-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.search-settings-icon {
+    width: 20px;
+    height: 20px;
+    display: block;
 }
 
 @media (max-width: 720px) {

@@ -75,6 +75,8 @@ export function createToolHandlers({
     CopyFileArgsSchema,
     SearchFilesArgsSchema,
     SearchTextArgsSchema,
+    SearchTextStatusArgsSchema,
+    SearchTextCancelArgsSchema,
     ReplaceTextArgsSchema,
     GetFileInfoArgsSchema,
     CollectIDEPluginsArgsSchema,
@@ -83,6 +85,36 @@ export function createToolHandlers({
   } = schemas;
   const inflightSearchFiles = new Map();
   const inflightSearchText = new Map();
+  const searchTextJobs = new Map();
+  let searchTextJobIdSeq = 0;
+
+  function createSearchTextJob(cacheKey) {
+    const id = `search_job_${++searchTextJobIdSeq}_${Date.now()}`;
+    const job = {
+      id,
+      status: 'running',
+      createdAt: Date.now(),
+      results: [],
+      truncated: false,
+      timedOut: false,
+      error: null,
+      cacheKey
+    };
+    searchTextJobs.set(id, job);
+    return job;
+  }
+
+  function cleanupSearchTextJobs() {
+    const now = Date.now();
+    const maxAgeMs = 5 * 60 * 1000;
+    for (const [id, job] of searchTextJobs) {
+      if (now - job.createdAt > maxAgeMs) {
+        searchTextJobs.delete(id);
+      }
+    }
+  }
+  setInterval(cleanupSearchTextJobs, 60 * 1000);
+
   const pluginSettingsPath = path.join(workspaceRoot, '.ploinky', 'explorer-plugin-settings.json');
 
   async function readPluginSettings() {
@@ -412,32 +444,83 @@ export function createToolHandlers({
       paths: scopedPaths,
       workspaceVersion: data.workspaceVersion
     });
+
     const cached = searchTextCache.get(cacheKey);
     if (cached) {
-      return textResponse(cached);
+      const job = createSearchTextJob(cacheKey);
+      try {
+        const parsed = JSON.parse(cached);
+        job.results = parsed.results || [];
+        job.truncated = parsed.truncated;
+        job.timedOut = parsed.timedOut;
+        job.status = 'completed';
+      } catch (_) {
+        job.status = 'error';
+        job.error = 'Failed to parse cached results.';
+      }
+      return jsonResponse({ jobId: job.id, status: job.status });
     }
-    let pending = inflightSearchText.get(cacheKey);
-    if (!pending) {
-      pending = (async () => {
+
+    const job = createSearchTextJob(cacheKey);
+
+    (async () => {
+      try {
         const searchArgs = scopedPaths.length > 0
           ? { ...data, paths: scopedPaths }
           : data;
+
+        const onProgress = (results, truncated, timedOut) => {
+          job.results = results;
+          job.truncated = truncated;
+          job.timedOut = timedOut;
+        };
+
         const { results, truncated, timedOut } = await searchTextWithinWorkspace(validPath, searchArgs, {
           maxBytesPerFile: MAX_TEXT_SEARCH_FILE_BYTES,
-          timeoutMs: SEARCH_TEXT_TIMEOUT_MS
+          timeoutMs: SEARCH_TEXT_TIMEOUT_MS,
+          onProgress
         });
+
         const payload = { results, truncated, timedOut: Boolean(timedOut) };
         const text = JSON.stringify(payload);
         searchTextCache.set(cacheKey, text);
-        return text;
-      })()
-        .finally(() => {
-          inflightSearchText.delete(cacheKey);
-        });
-      inflightSearchText.set(cacheKey, pending);
+        job.results = results;
+        job.truncated = truncated;
+        job.timedOut = timedOut;
+        job.status = timedOut ? 'timed_out' : 'completed';
+      } catch (error) {
+        job.status = 'error';
+        job.error = error?.message || 'Search failed.';
+      }
+    })();
+
+    return jsonResponse({ jobId: job.id, status: 'running' });
+  }
+
+  async function handleSearchTextStatus(args) {
+    const data = parseArgs(SearchTextStatusArgsSchema, args, 'search_text_status');
+    const job = searchTextJobs.get(data.jobId);
+    if (!job) {
+      return jsonResponse({ status: 'not_found', error: 'Job not found or expired.' });
     }
-    const text = await pending;
-    return textResponse(text);
+    return jsonResponse({
+      jobId: job.id,
+      status: job.status,
+      results: job.results,
+      truncated: job.truncated,
+      timedOut: job.timedOut,
+      error: job.error
+    });
+  }
+
+  async function handleCancelSearchText(args) {
+    const data = parseArgs(SearchTextCancelArgsSchema, args, 'search_text_cancel');
+    const job = searchTextJobs.get(data.jobId);
+    if (!job) {
+      return jsonResponse({ ok: false, error: 'Job not found or expired.' });
+    }
+    job.status = 'cancelled';
+    return jsonResponse({ ok: true, jobId: job.id });
   }
 
   async function handleReplaceText(args) {
@@ -523,6 +606,8 @@ export function createToolHandlers({
     copy_file: handleCopyFile,
     search_files: handleSearchFiles,
     search_text: handleSearchText,
+    search_text_status: handleSearchTextStatus,
+    search_text_cancel: handleCancelSearchText,
     replace_text: handleReplaceText,
     get_file_info: handleGetFileInfo,
     collect_ide_plugins: handleCollectIdePlugins,

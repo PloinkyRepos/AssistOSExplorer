@@ -33,6 +33,8 @@ export class FileSearchModal {
         this.searchInFilesRequestTimeoutMs = SEARCH_REQUEST_TIMEOUT_MS;
         this.replaceInFilesRequestTimeoutMs = REPLACE_REQUEST_TIMEOUT_MS;
         this.searchInFilesRequestId = 0;
+        this.searchInFilesJobId = null;
+        this.searchInFilesPollTimer = null;
         this.searchInFilesFileBatchSize = SEARCH_RESULTS_FILE_BATCH;
         this.searchInFilesMatchBatchSize = SEARCH_RESULTS_MATCH_BATCH;
         this.searchResultsAutoExpandThresholdPx = SEARCH_RESULTS_AUTO_EXPAND_THRESHOLD_PX;
@@ -81,6 +83,7 @@ export class FileSearchModal {
 
     beforeUnload() {
         this.searchInFilesRequestId += 1;
+        this.cancelSearchInFilesJob();
         if (this.state.searchByNameTimer) {
             clearTimeout(this.state.searchByNameTimer);
             this.state.searchByNameTimer = null;
@@ -232,6 +235,7 @@ export class FileSearchModal {
         this.syncUIFromState();
         this.bindEvents();
         this.runInitialSearch();
+        this.ensureDialogResizable();
     }
 
     getEventTargetElement(event) {
@@ -593,7 +597,16 @@ export class FileSearchModal {
         const selected = this.state.selectedMatchIds instanceof Set ? this.state.selectedMatchIds : new Set();
         const totalMatches = matches.length;
         const selectedCount = selected.size;
-        if (this.state.searchInFilesLoading) {
+        if (this.state.searchInFilesError) {
+            status.textContent = this.state.searchInFilesError;
+            status.classList.add('error');
+            return;
+        }
+        if (!this.state.searchInFilesQuery.trim()) {
+            status.textContent = 'Search the workspace for text.';
+            return;
+        }
+        if (this.state.searchInFilesLoading && files.length === 0) {
             status.classList.add('loading');
             status.innerHTML = '';
             const spinner = document.createElement('span');
@@ -615,15 +628,6 @@ export class FileSearchModal {
             status.appendChild(text);
             return;
         }
-        if (this.state.searchInFilesError) {
-            status.textContent = this.state.searchInFilesError;
-            status.classList.add('error');
-            return;
-        }
-        if (!this.state.searchInFilesQuery.trim()) {
-            status.textContent = 'Search the workspace for text.';
-            return;
-        }
         if (!files.length) {
             status.textContent = 'No matches found.';
             return;
@@ -642,15 +646,22 @@ export class FileSearchModal {
         const timedOutNote = this.state.searchInFilesTimedOut ? ' • timed out' : '';
         const refreshingNote = this.state.searchInFilesRefreshing ? ' • refreshing' : '';
         const selectedNote = totalMatches ? ` • ${selectedCount}/${totalMatches} selected` : '';
+
         const visibilityNote = remainingFiles > 0
             ? ` • showing ${visibleFiles.length}/${files.length} files`
             : '';
-        status.textContent = `${files.length} file${files.length === 1 ? '' : 's'}, ${totalMatches} match${totalMatches === 1 ? '' : 'es'}${truncatedNote}${selectedNote}${visibilityNote}${timedOutNote}${refreshingNote}`;
+
+        // Show spinner inline when loading with partial results
+        if (this.state.searchInFilesLoading || this.state.searchInFilesRefreshing) {
+            status.classList.add('loading');
+            const loadingText = this.state.searchInFilesRefreshing ? 'refreshing' : 'searching';
+            status.innerHTML = `<span class="search-spinner"></span><span>${files.length} file${files.length === 1 ? '' : 's'}, ${totalMatches} match${totalMatches === 1 ? '' : 'es'}${selectedNote}${visibilityNote}${truncatedNote}${timedOutNote} • ${loadingText}...</span>`;
+        } else {
+            status.textContent = `${files.length} file${files.length === 1 ? '' : 's'}, ${totalMatches} match${totalMatches === 1 ? '' : 'es'}${selectedNote}${visibilityNote}${truncatedNote}${timedOutNote}${refreshingNote}`;
+        }
+
         if (this.state.searchInFilesTruncated) {
             status.classList.add('strong');
-        }
-        if (this.state.searchInFilesRefreshing) {
-            status.classList.add('loading');
         }
 
         const selectionBar = document.createElement('div');
@@ -872,6 +883,135 @@ export class FileSearchModal {
 
     closeModal(payload) {
         assistOS.UI.closeModal(this.element, this.buildClosePayload(payload));
+    }
+
+    getDialogElement() {
+        return this.element?.closest?.('dialog') || null;
+    }
+
+    ensureDialogPositioning() {
+        const dialog = this.getDialogElement();
+        if (!dialog) return null;
+        if (dialog.dataset.fileSearchPositioned === 'true') return dialog;
+        const rect = dialog.getBoundingClientRect();
+        dialog.style.left = `${rect.left}px`;
+        dialog.style.top = `${rect.top}px`;
+        dialog.classList.add('file-search-positioned');
+        dialog.dataset.fileSearchPositioned = 'true';
+        dialog.dataset.fileSearchUserSized = 'false';
+        return dialog;
+    }
+
+    startResize(event, dir) {
+        const dialog = this.ensureDialogPositioning();
+        if (!dialog) return;
+        if (dialog.classList.contains('is-fullscreen')) return;
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        const startRect = dialog.getBoundingClientRect();
+        const startX = event.clientX;
+        const startY = event.clientY;
+        const minW = 760;
+        const minH = 520;
+
+        const onMove = (e) => {
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+
+            let left = startRect.left;
+            let top = startRect.top;
+            let width = startRect.width;
+            let height = startRect.height;
+
+            if (dir.includes('e')) width = startRect.width + dx;
+            if (dir.includes('s')) height = startRect.height + dy;
+            if (dir.includes('w')) {
+                width = startRect.width - dx;
+                left = startRect.left + dx;
+            }
+            if (dir.includes('n')) {
+                height = startRect.height - dy;
+                top = startRect.top + dy;
+            }
+
+            width = Math.max(minW, width);
+            height = Math.max(minH, height);
+
+            if (dir.includes('w') && width === minW) {
+                left = startRect.right - minW;
+            }
+            if (dir.includes('n') && height === minH) {
+                top = startRect.bottom - minH;
+            }
+
+            dialog.style.left = `${left}px`;
+            dialog.style.top = `${top}px`;
+            dialog.style.width = `${width}px`;
+            dialog.style.height = `${height}px`;
+            dialog.dataset.fileSearchUserSized = 'true';
+        };
+
+        const onUp = () => {
+            window.removeEventListener('pointermove', onMove, true);
+            window.removeEventListener('pointerup', onUp, true);
+        };
+
+        window.addEventListener('pointermove', onMove, true);
+        window.addEventListener('pointerup', onUp, true);
+    }
+
+    ensureDialogResizable() {
+        const dialog = this.getDialogElement();
+        if (!dialog) return;
+        if (dialog.dataset.fileSearchResizable === 'true') return;
+
+        const host = this.element.querySelector('.search-modal') || this.element;
+        const handles = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
+        for (const dir of handles) {
+            const handle = document.createElement('div');
+            handle.className = `file-search-resize-handle ${dir}`;
+            handle.dataset.dir = dir;
+            handle.addEventListener('pointerdown', (event) => this.startResize(event, dir));
+            host.appendChild(handle);
+        }
+        dialog.dataset.fileSearchResizable = 'true';
+    }
+
+    toggleFullscreen() {
+        const dialog = this.ensureDialogPositioning();
+        if (!dialog) return;
+
+        const isNowFullscreen = !dialog.classList.contains('is-fullscreen');
+        if (isNowFullscreen) {
+            const rect = dialog.getBoundingClientRect();
+            this._dialogPrevState = {
+                left: rect.left,
+                top: rect.top,
+                width: rect.width,
+                height: rect.height,
+                userSized: dialog.dataset.fileSearchUserSized === 'true'
+            };
+            dialog.classList.add('is-fullscreen');
+            return;
+        }
+
+        dialog.classList.remove('is-fullscreen');
+        const prev = this._dialogPrevState;
+        if (prev) {
+            dialog.style.left = `${prev.left}px`;
+            dialog.style.top = `${prev.top}px`;
+            if (prev.userSized) {
+                dialog.style.width = `${prev.width}px`;
+                dialog.style.height = `${prev.height}px`;
+                dialog.dataset.fileSearchUserSized = 'true';
+            } else {
+                dialog.style.removeProperty('width');
+                dialog.style.removeProperty('height');
+                dialog.dataset.fileSearchUserSized = 'false';
+            }
+        }
     }
 }
 

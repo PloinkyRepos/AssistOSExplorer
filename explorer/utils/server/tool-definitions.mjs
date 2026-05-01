@@ -17,6 +17,8 @@ export function buildToolDefinitions(zodToJsonSchema, schemas) {
     CopyFileArgsSchema,
     SearchFilesArgsSchema,
     SearchTextArgsSchema,
+    SearchTextStatusArgsSchema,
+    SearchTextCancelArgsSchema,
     ReplaceTextArgsSchema,
     GetFileInfoArgsSchema,
     CollectIDEPluginsArgsSchema,
@@ -112,8 +114,18 @@ export function buildToolDefinitions(zodToJsonSchema, schemas) {
     },
     {
       name: 'search_text',
-      description: 'Search for text matches inside files under a path.',
+      description: 'Start a background text search in files under a path. Returns a jobId for polling.',
       inputSchema: zodToJsonSchema(SearchTextArgsSchema)
+    },
+    {
+      name: 'search_text_status',
+      description: 'Poll the status and results of a background text search job.',
+      inputSchema: zodToJsonSchema(SearchTextStatusArgsSchema)
+    },
+    {
+      name: 'search_text_cancel',
+      description: 'Cancel a running background text search job.',
+      inputSchema: zodToJsonSchema(SearchTextCancelArgsSchema)
     },
     {
       name: 'replace_text',

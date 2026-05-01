@@ -4,11 +4,11 @@ import {
     groupSearchMatchesByFileDetailed,
     mergeSearchMatchesByPaths,
     normalizeSearchTextMatches,
-    parseToolJsonPayload,
-    withTimeout
+    parseToolJsonPayload
 } from "../../utils/workspace-search-utils.js";
 
 const SEARCH_DEBOUNCE_MS = 200;
+const SEARCH_JOB_POLL_INTERVAL_MS = 500;
 
 function normalizePathList(paths = []) {
     return Array.from(new Set(
@@ -224,6 +224,169 @@ export const fileSearchModalSearchMethods = {
         }
     },
 
+    stopSearchInFilesPolling() {
+        if (this.searchInFilesPollTimer) {
+            clearTimeout(this.searchInFilesPollTimer);
+            this.searchInFilesPollTimer = null;
+        }
+        this.searchInFilesJobId = null;
+    },
+
+    async cancelSearchInFilesJob() {
+        if (this.searchInFilesJobId) {
+            try {
+                await this.callTool("explorer", "search_text_cancel", { jobId: this.searchInFilesJobId });
+            } catch (error) {
+                console.warn("Failed to cancel search job", error);
+            }
+        }
+        this.stopSearchInFilesPolling();
+    },
+
+    async pollSearchInFilesStatus({
+        requestId,
+        cacheKey,
+        preserveSelection = false,
+        mergeWithCurrent = false,
+        scopedPaths = [],
+        hasScopedPaths = false
+    }) {
+        if (requestId !== this.searchInFilesRequestId) {
+            return;
+        }
+        if (!this.searchInFilesJobId) {
+            return;
+        }
+
+        try {
+            const result = await this.callTool("explorer", "search_text_status", { jobId: this.searchInFilesJobId });
+            const payload = parseToolJsonPayload(result);
+
+            if (requestId !== this.searchInFilesRequestId) {
+                return;
+            }
+
+            const status = payload?.status;
+            const isRunning = status === "running";
+            const isCompleted = status === "completed" || status === "timed_out";
+
+            if (payload?.results && payload.results.length > 0) {
+                const results = payload.results;
+                const normalizedMatches = normalizeSearchTextMatches(results);
+                const timedOut = Boolean(payload?.timedOut);
+                const truncated = Boolean(payload?.truncated);
+
+                if (mergeWithCurrent && hasScopedPaths) {
+                    const merged = mergeSearchMatchesByPaths({
+                        currentMatches: this.state.searchInFilesResults,
+                        refreshedMatches: normalizedMatches,
+                        refreshedPaths: scopedPaths
+                    });
+                    this.setSearchInFilesMatches(merged, {
+                        truncated: Boolean(this.state.searchInFilesTruncated) || truncated,
+                        preserveSelection,
+                        timedOut: Boolean(this.state.searchInFilesTimedOut) || timedOut
+                    });
+                } else {
+                    this.setSearchInFilesMatches(normalizedMatches, {
+                        truncated,
+                        preserveSelection,
+                        timedOut
+                    });
+                }
+
+                this.renderSearchInFilesResults();
+                this.updateReplaceButtons();
+            }
+
+            if (isRunning) {
+                this.searchInFilesPollTimer = setTimeout(() => {
+                    this.pollSearchInFilesStatus({
+                        requestId,
+                        cacheKey,
+                        preserveSelection,
+                        mergeWithCurrent,
+                        scopedPaths,
+                        hasScopedPaths
+                    });
+                }, SEARCH_JOB_POLL_INTERVAL_MS);
+                return;
+            }
+
+            this.stopSearchInFilesPolling();
+
+            if (status === "not_found" || status === "cancelled") {
+                this.state.searchInFilesLoading = false;
+                this.state.searchInFilesRefreshing = false;
+                this.renderSearchInFilesResults();
+                return;
+            }
+
+            if (status === "error") {
+                this.state.searchInFilesError = payload?.error || "Search failed.";
+                this.state.searchInFilesResults = [];
+                this.state.searchInFilesFileResults = [];
+                this.state.searchInFilesTruncated = false;
+                this.state.searchInFilesTimedOut = false;
+                this.state.selectedMatchIds = new Set();
+                this.resetSearchInFilesProgressiveWindow();
+                this.state.searchInFilesLoading = false;
+                this.state.searchInFilesRefreshing = false;
+                this.renderSearchInFilesResults();
+                this.updateReplaceButtons();
+                return;
+            }
+
+            if (isCompleted) {
+                const results = payload?.results || [];
+                const normalizedMatches = normalizeSearchTextMatches(results);
+                const timedOut = Boolean(payload?.timedOut);
+                const truncated = Boolean(payload?.truncated);
+
+                if (mergeWithCurrent && hasScopedPaths) {
+                    const merged = mergeSearchMatchesByPaths({
+                        currentMatches: this.state.searchInFilesResults,
+                        refreshedMatches: normalizedMatches,
+                        refreshedPaths: scopedPaths
+                    });
+                    this.setSearchInFilesMatches(merged, {
+                        truncated: Boolean(this.state.searchInFilesTruncated) || truncated,
+                        preserveSelection,
+                        timedOut: Boolean(this.state.searchInFilesTimedOut) || timedOut
+                    });
+                } else {
+                    this.setSearchInFilesMatches(normalizedMatches, {
+                        truncated,
+                        preserveSelection,
+                        timedOut
+                    });
+                }
+
+                this.setCachedSearchInFilesResult(cacheKey, {
+                    matches: normalizedMatches,
+                    truncated,
+                    timedOut
+                });
+            }
+
+            this.state.searchInFilesLoading = false;
+            this.state.searchInFilesRefreshing = false;
+            this.renderSearchInFilesResults();
+            this.updateReplaceButtons();
+        } catch (error) {
+            if (requestId !== this.searchInFilesRequestId) {
+                return;
+            }
+            console.error("search_text_status poll failed", error);
+            this.stopSearchInFilesPolling();
+            this.state.searchInFilesError = error?.message || "Search status check failed.";
+            this.state.searchInFilesLoading = false;
+            this.state.searchInFilesRefreshing = false;
+            this.renderSearchInFilesResults();
+            this.updateReplaceButtons();
+        }
+    },
+
     async runSearchInFiles({
         paths = [],
         preserveSelection = false,
@@ -247,6 +410,9 @@ export const fileSearchModalSearchMethods = {
         const scopedPaths = normalizePathList(paths);
         const hasScopedPaths = scopedPaths.length > 0;
         const requestId = ++this.searchInFilesRequestId;
+
+        this.cancelSearchInFilesJob();
+
         this.state.searchInFilesLoading = !refreshOnly;
         this.state.searchInFilesRefreshing = Boolean(refreshOnly);
         this.state.searchInFilesError = null;
@@ -255,6 +421,7 @@ export const fileSearchModalSearchMethods = {
             this.state.searchInFilesTimedOut = false;
         }
         this.renderSearchInFilesResults();
+
         try {
             const cacheKey = this.buildSearchInFilesCacheKey({ paths: scopedPaths });
             const cached = skipCache ? null : this.getCachedSearchInFilesResult(cacheKey);
@@ -278,6 +445,10 @@ export const fileSearchModalSearchMethods = {
                         timedOut: Boolean(cached.timedOut)
                     });
                 }
+                this.state.searchInFilesLoading = false;
+                this.state.searchInFilesRefreshing = false;
+                this.renderSearchInFilesResults();
+                this.updateReplaceButtons();
                 return { fromCache: true, timedOut: Boolean(cached.timedOut) };
             }
 
@@ -294,51 +465,56 @@ export const fileSearchModalSearchMethods = {
             if (hasScopedPaths) {
                 searchArgs.paths = scopedPaths;
             }
-            const result = await withTimeout(
-                () => this.callTool("explorer", "search_text", searchArgs),
-                {
-                    timeoutMs: this.searchInFilesRequestTimeoutMs,
-                    timeoutMessage: `Search timed out after ${Math.ceil(this.searchInFilesRequestTimeoutMs / 1000)}s.`
-                }
-            );
+
+            const result = await this.callTool("explorer", "search_text", searchArgs);
+
             if (requestId !== this.searchInFilesRequestId) {
                 return null;
             }
+
             const payload = parseToolJsonPayload(result);
-            const normalizedMatches = normalizeSearchTextMatches(payload?.results || []);
-            const timedOut = Boolean(payload?.timedOut);
-            if (mergeWithCurrent && hasScopedPaths) {
-                const merged = mergeSearchMatchesByPaths({
-                    currentMatches: this.state.searchInFilesResults,
-                    refreshedMatches: normalizedMatches,
-                    refreshedPaths: scopedPaths
-                });
-                this.setSearchInFilesMatches(merged, {
-                    truncated: Boolean(this.state.searchInFilesTruncated) || Boolean(payload?.truncated),
+            const jobId = payload?.jobId;
+            const initialStatus = payload?.status;
+
+            if (!jobId) {
+                this.state.searchInFilesError = "Invalid search response: missing jobId.";
+                this.state.searchInFilesLoading = false;
+                this.state.searchInFilesRefreshing = false;
+                this.renderSearchInFilesResults();
+                this.updateReplaceButtons();
+                return { error: new Error("Missing jobId") };
+            }
+
+            this.searchInFilesJobId = jobId;
+
+            if (initialStatus === "completed" || initialStatus === "timed_out") {
+                await this.pollSearchInFilesStatus({
+                    requestId,
+                    cacheKey,
                     preserveSelection,
-                    timedOut: Boolean(this.state.searchInFilesTimedOut) || timedOut
+                    mergeWithCurrent,
+                    scopedPaths,
+                    hasScopedPaths
                 });
             } else {
-                this.setSearchInFilesMatches(normalizedMatches, {
-                    truncated: Boolean(payload?.truncated),
-                    preserveSelection,
-                    timedOut
-                });
+                this.searchInFilesPollTimer = setTimeout(() => {
+                    this.pollSearchInFilesStatus({
+                        requestId,
+                        cacheKey,
+                        preserveSelection,
+                        mergeWithCurrent,
+                        scopedPaths,
+                        hasScopedPaths
+                    });
+                }, SEARCH_JOB_POLL_INTERVAL_MS);
             }
-            this.setCachedSearchInFilesResult(cacheKey, {
-                matches: normalizedMatches,
-                truncated: Boolean(payload?.truncated),
-                timedOut
-            });
-            return { timedOut };
+
+            return { jobId };
         } catch (error) {
             if (requestId !== this.searchInFilesRequestId) {
                 return null;
             }
             console.error("search_text failed", error);
-            if (refreshOnly) {
-                return { error };
-            }
             this.state.searchInFilesError = error?.message || "Search failed.";
             this.state.searchInFilesResults = [];
             this.state.searchInFilesFileResults = [];
@@ -346,15 +522,11 @@ export const fileSearchModalSearchMethods = {
             this.state.searchInFilesTimedOut = false;
             this.state.selectedMatchIds = new Set();
             this.resetSearchInFilesProgressiveWindow();
-            return { error };
-        } finally {
-            if (requestId !== this.searchInFilesRequestId) {
-                return;
-            }
             this.state.searchInFilesLoading = false;
             this.state.searchInFilesRefreshing = false;
             this.renderSearchInFilesResults();
             this.updateReplaceButtons();
+            return { error };
         }
     },
 

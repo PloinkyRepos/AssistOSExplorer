@@ -220,6 +220,7 @@ export function createWorkspaceSearch({
   async function searchTextWithinWorkspace(rootPath, options, config = {}) {
     const maxBytesPerFile = config.maxBytesPerFile || maxTextSearchFileBytes;
     const timeoutMs = Number.isFinite(config.timeoutMs) && config.timeoutMs > 0 ? config.timeoutMs : 0;
+    const onProgress = typeof config.onProgress === 'function' ? config.onProgress : null;
     const startedAt = Date.now();
     const caseSensitive = Boolean(options.caseSensitive);
     const maxResults = options.maxResults || 2000;
@@ -228,11 +229,22 @@ export function createWorkspaceSearch({
     let truncated = false;
     let timedOut = false;
     let stop = false;
+    let lastProgressAt = 0;
+    const progressIntervalMs = 300;
+
     const hasTimedOut = () => timeoutMs > 0 && (Date.now() - startedAt) >= timeoutMs;
     const markTimedOut = () => {
       timedOut = true;
       truncated = true;
       stop = true;
+    };
+    const emitProgress = () => {
+      if (!onProgress) return;
+      const now = Date.now();
+      if (now - lastProgressAt >= progressIntervalMs) {
+        onProgress(results.slice(), truncated, timedOut);
+        lastProgressAt = now;
+      }
     };
 
     if (!isPathWithinAllowedDirectories(rootPath)) {
@@ -341,6 +353,7 @@ export function createWorkspaceSearch({
         if (handle) {
           await handle.close();
         }
+        emitProgress();
       }
     };
 
