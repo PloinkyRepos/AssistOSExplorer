@@ -8,7 +8,6 @@ git-conflict-helper.is-visible {
 
 .git-conflict-helper {
     border: 1px solid color-mix(in srgb, var(--file-exp-error) 28%, var(--file-exp-border));
-    background: color-mix(in srgb, var(--file-exp-panel) 86%, var(--file-exp-error) 14%);
     border-radius: 14px;
     padding: 12px 14px;
     display: flex;
@@ -53,22 +52,19 @@ git-conflict-helper.is-visible {
 }
 
 .git-conflict-helper-file {
-    text-align: left;
-    border: 1px solid var(--file-exp-border);
-    background: var(--file-exp-panel);
+    background: transparent !important;
     border-radius: 10px;
     padding: 8px 10px;
     font-weight: 600;
     color: var(--text) !important;
     cursor: pointer;
     transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+    justify-content: left !important;
 }
 
 .git-conflict-helper-file.active {
-    background: var(--accent);
-    border-color: color-mix(in srgb, var(--accent) 72%, white 28%);
-    color: #fff !important;
-    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.24);
+    background: transparent;
+    color:var(--accent) !important;
 }
 
 .git-conflict-helper-file:hover,

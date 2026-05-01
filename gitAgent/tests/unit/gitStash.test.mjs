@@ -105,6 +105,54 @@ test('gitStash ignores stop-tracking ignored files and leaves unrelated local ar
     });
 });
 
+test('gitStash handles staged deletions without treating deleted files as existing pathspecs', async () => {
+    await withTempRepo(async (repoDir) => {
+        await fs.mkdir(path.join(repoDir, 'folder 11'), { recursive: true });
+        await fs.writeFile(path.join(repoDir, 'folder 11', 'team 11.backlog'), 'v1\n', 'utf8');
+        await fs.writeFile(path.join(repoDir, 'notes.txt'), 'v1\n', 'utf8');
+
+        let result = spawnSync('git', ['add', 'folder 11/team 11.backlog', 'notes.txt'], { cwd: repoDir, encoding: 'utf8' });
+        if (result.status !== 0) {
+            throw new Error(result.stderr || result.stdout || 'git add failed');
+        }
+        result = spawnSync('git', ['-c', 'user.name=Test User', '-c', 'user.email=test@example.com', 'commit', '-m', 'initial'], {
+            cwd: repoDir,
+            encoding: 'utf8'
+        });
+        if (result.status !== 0) {
+            throw new Error(result.stderr || result.stdout || 'git commit failed');
+        }
+
+        result = spawnSync('git', ['rm', 'folder 11/team 11.backlog'], { cwd: repoDir, encoding: 'utf8' });
+        if (result.status !== 0) {
+            throw new Error(result.stderr || result.stdout || 'git rm failed');
+        }
+        await fs.writeFile(path.join(repoDir, 'notes.txt'), 'v2\n', 'utf8');
+        await fs.writeFile(path.join(repoDir, 'new file.txt'), 'new\n', 'utf8');
+        await fs.mkdir(path.join(repoDir, 'node_modules'), { recursive: true });
+        await fs.writeFile(path.join(repoDir, 'node_modules', 'dep.js'), 'module.exports = 1;\n', 'utf8');
+
+        const gitService = createGitService({
+            validatePath: async (value) => value
+        });
+
+        const stashed = await gitService.gitStash({
+            path: repoDir,
+            includeUntracked: true,
+            message: 'webskel:auto-pull'
+        });
+
+        assert.equal(stashed.ok, true);
+        assert.equal(stashed.created, true);
+        assert.equal(stashed.usedAll, true);
+        assert.match(String(stashed.output || ''), /Saved working directory|Saved local changes/i);
+
+        result = spawnSync('git', ['status', '--porcelain=v1', '-uall'], { cwd: repoDir, encoding: 'utf8' });
+        assert.equal(result.status, 0);
+        assert.equal(result.stdout.trim(), '?? node_modules/dep.js');
+    });
+});
+
 test('gitStashList returns stable ordinal refs and gitStashPop accepts raw stash commit ids', async () => {
     await withTempRepo(async (repoDir) => {
         await fs.writeFile(path.join(repoDir, 'notes.txt'), 'v1\n', 'utf8');

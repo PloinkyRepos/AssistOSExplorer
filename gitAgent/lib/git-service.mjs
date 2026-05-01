@@ -258,6 +258,27 @@ function getStashTargetPaths(status = {}, { includeIgnoredStopTracking = false }
     .sort((a, b) => a.localeCompare(b));
 }
 
+function hasPathspecUnsafeStagedDeletion(status = {}) {
+  const stopTrackingIgnored = new Set(getStopTrackingIgnoredPaths(status));
+  return (Array.isArray(status.staged) ? status.staged : [])
+    .some((entry) => entry?.path && entry.x === 'D' && !stopTrackingIgnored.has(entry.path));
+}
+
+function getBroadStashPathspecs(status = {}) {
+  const pathspecs = ['.'];
+  for (const segment of DEFAULT_STASH_EXCLUDED_DIRS) {
+    pathspecs.push(`:(exclude,glob)${segment}/**`);
+    pathspecs.push(`:(exclude,glob)**/${segment}/**`);
+  }
+  for (const candidate of getStopTrackingIgnoredPaths(status)) {
+    const normalized = normalizeGitRepoRelativePath(candidate);
+    if (normalized) {
+      pathspecs.push(`:(exclude)${normalized}`);
+    }
+  }
+  return pathspecs;
+}
+
 function normalizeSlashes(value) {
   return String(value || '').replace(/\\/g, '/');
 }
@@ -1158,12 +1179,17 @@ export function createGitService({ validatePath }) {
 
     const beforeList = await listStash();
     let stashTargets = [];
+    let useBroadPathspec = false;
+    let status = {};
     try {
       const statusPayload = await gitStatus({ path: repoPath });
-      const status = statusPayload?.status || {};
+      status = statusPayload?.status || {};
       stashTargets = getStashTargetPaths(status);
+      useBroadPathspec = hasPathspecUnsafeStagedDeletion(status);
     } catch {
       stashTargets = [];
+      status = {};
+      useBroadPathspec = false;
     }
     if (!stashTargets.length) {
       return { ok: true, created: false, ref: null, output: 'No local changes to save', usedAll: false };
@@ -1174,7 +1200,7 @@ export function createGitService({ validatePath }) {
     if (cleanMessage) {
       args.push('-m', cleanMessage);
     }
-    args.push('--', ...stashTargets);
+    args.push('--', ...(useBroadPathspec ? getBroadStashPathspecs(status) : stashTargets));
     const { stdout, stderr } = await runGit(repoPath, args, { timeoutMs: 20000 });
     const output = `${stdout}\n${stderr}`.trim();
     const afterList = await listStash();
@@ -1185,7 +1211,7 @@ export function createGitService({ validatePath }) {
       const firstLine = afterList.split(/\r?\n/)[0] || '';
       ref = firstLine.split(':')[0].trim() || null;
     }
-    return { ok: true, created, ref, output, usedAll: false };
+    return { ok: true, created, ref, output, usedAll: useBroadPathspec };
   }
 
   async function gitStashList({ path: repoPathArg }) {
