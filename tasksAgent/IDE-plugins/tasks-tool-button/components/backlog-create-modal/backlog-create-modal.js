@@ -58,7 +58,7 @@ export class BacklogCreateModal {
         if (!Array.isArray(this.state.options) || this.state.options.length === 0) {
             const emptyState = document.createElement('div');
             emptyState.className = 'modal-options-empty';
-            emptyState.textContent = 'No options yet.';
+            emptyState.textContent = 'No options yet — click "Add option" to define choices.';
             this.optionsList.appendChild(emptyState);
             return;
         }
@@ -77,17 +77,18 @@ export class BacklogCreateModal {
 
             const removeButton = document.createElement('button');
             removeButton.type = 'button';
-            removeButton.className = 'general-button subtle-button modal-option-remove';
+            removeButton.className = 'modal-option-remove';
             removeButton.dataset.optionRemoveIndex = String(index);
             removeButton.textContent = 'Remove';
 
             const textarea = document.createElement('textarea');
             textarea.id = `backlogModalOption${index}`;
-            textarea.className = 'form-input backlog-option-input';
-            textarea.rows = 3;
+            textarea.className = 'backlog-option-input';
+            textarea.rows = 2;
             textarea.spellcheck = false;
             textarea.dataset.optionIndex = String(index);
             textarea.value = String(value || '');
+            textarea.placeholder = `Description for option ${index + 1}`;
 
             header.append(label, removeButton);
             item.append(header, textarea);
@@ -105,11 +106,23 @@ export class BacklogCreateModal {
         requestAnimationFrame(() => {
             const nextInput = this.element.querySelector(`#backlogModalOption${nextIndex}`);
             nextInput?.focus();
+            nextInput?.select?.();
         });
     }
 
     removeOption(optionIndex) {
         if (!Array.isArray(this.state.options)) return;
+        const item = this.element.querySelector(`[data-option-remove-index="${optionIndex}"]`)?.closest('.modal-option-item');
+        if (item) {
+            item.style.transition = 'opacity 0.15s ease, transform 0.15s ease';
+            item.style.opacity = '0';
+            item.style.transform = 'translateX(-8px)';
+            setTimeout(() => {
+                this.state.options.splice(optionIndex, 1);
+                this.renderOptionRows();
+            }, 150);
+            return;
+        }
         this.state.options.splice(optionIndex, 1);
         this.renderOptionRows();
     }
@@ -117,7 +130,11 @@ export class BacklogCreateModal {
     createTask() {
         const description = String(this.descInput?.value || '').trim();
         if (!description) {
-            alert('Description is required.');
+            this.descInput?.focus?.();
+            this.descInput?.classList?.add?.('input-invalid');
+            setTimeout(() => {
+                this.descInput?.classList?.remove?.('input-invalid');
+            }, 2000);
             return;
         }
         const options = (Array.isArray(this.state.options) ? this.state.options : [])
