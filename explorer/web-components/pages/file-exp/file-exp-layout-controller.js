@@ -432,17 +432,17 @@ export async function runAfterRender(fileExp, options = {}) {
 
     const saveButton = fileExp.element.querySelector('#saveButton');
     if (saveButton) {
-        saveButton.classList.toggle('hidden', Boolean(fileExp.state.selectedIsMarkdown));
+        saveButton.classList.toggle('hidden', Boolean(fileExp.state.selectedIsMarkdown && fileExp.state.documentId));
     }
 
-    if (!(fileExp.state.isEditing && !fileExp.state.selectedIsMarkdown)) {
+    if (!fileExp.state.isEditing) {
         fileExp.setHasUnsavedChanges(false);
         fileExp.clearEditorAutoSaveTimer?.();
     }
 
     const cancelButton = fileExp.element.querySelector('#cancelButton');
     if (cancelButton) {
-        cancelButton.textContent = fileExp.state.selectedIsMarkdown ? 'Close' : 'Cancel';
+        cancelButton.textContent = fileExp.state.selectedIsMarkdown && fileExp.state.documentId ? 'Close' : 'Cancel';
     }
 
     const previewNotice = fileExp.element.querySelector('#previewNotice');

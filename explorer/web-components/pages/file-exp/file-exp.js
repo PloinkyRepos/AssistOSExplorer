@@ -51,7 +51,7 @@ import { createDomListenerRegistry } from "../../../utils/domListenerRegistry.js
 import { runAfterRender as runLayoutAfterRender } from "./file-exp-layout-controller.js";
 import { loadStateFromURL as loadStateFromURLImpl, loadDirectory as loadDirectoryImpl, refreshDirectory as refreshDirectoryImpl, renderBreadcrumbs as renderBreadcrumbsImpl, goUpDirectory as goUpDirectoryImpl } from "./file-exp-navigation-controller.js";
 import { selectEntry as selectEntryImpl, handleSortClick as handleSortClickImpl } from "./file-exp-selection-controller.js";
-import { editFile as editFileImpl, saveFile as saveFileImpl, cancelEdit as cancelEditImpl } from "./file-exp-editor-controller.js";
+import { editFile as editFileImpl, editSoplangMarkdown as editSoplangMarkdownImpl, saveFile as saveFileImpl, cancelEdit as cancelEditImpl } from "./file-exp-editor-controller.js";
 import {
     toggleHidden as toggleHiddenImpl,
     createPreviewActionButton as createPreviewActionButtonImpl,
@@ -317,7 +317,6 @@ export class FileExp {
     isLocalTextEditingActive() {
         return Boolean(
             this.state.isEditing
-            && !this.state.selectedIsMarkdown
             && this.state.selectedPath
             && !isDpuVirtualPath(this.state.selectedPath)
         );
@@ -840,6 +839,10 @@ export class FileExp {
         return editFileImpl(this);
     }
 
+    async editSoplangMarkdown() {
+        return editSoplangMarkdownImpl(this);
+    }
+
     async saveFile(options = {}) {
         return saveFileImpl(this, options);
     }
@@ -962,12 +965,12 @@ export class FileExp {
 
         const saveButton = this.element?.querySelector?.('#saveButton');
         if (saveButton) {
-            saveButton.classList.toggle('hidden', Boolean(this.state.selectedIsMarkdown));
+            saveButton.classList.toggle('hidden', Boolean(this.state.selectedIsMarkdown && this.state.documentId));
         }
 
         const cancelButton = this.element?.querySelector?.('#cancelButton');
         if (cancelButton) {
-            cancelButton.textContent = this.state.selectedIsMarkdown ? 'Close' : 'Cancel';
+            cancelButton.textContent = this.state.selectedIsMarkdown && this.state.documentId ? 'Close' : 'Cancel';
         }
 
         const previewNotice = this.element?.querySelector?.('#previewNotice');

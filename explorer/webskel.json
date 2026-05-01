@@ -22,6 +22,11 @@
       "presenterClassName": "FileEditor"
     },
     {
+      "name": "markdown-editor",
+      "type": "components",
+      "presenterClassName": "MarkdownEditor"
+    },
+    {
       "name": "html-web-view",
       "type": "components",
       "presenterClassName": "HtmlWebView"

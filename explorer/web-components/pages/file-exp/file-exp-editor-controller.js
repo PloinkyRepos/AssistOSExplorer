@@ -66,22 +66,8 @@ export async function editFile(fileExp) {
             return;
         }
     }
-    if (fileExp.state.selectedIsMarkdown && !fileExp.state.documentId) {
-        try {
-            const documentModule = window.assistOS?.loadModule?.('document');
-            if (documentModule) {
-                const doc = await documentModule.loadDocument(fileExp.state.selectedPath);
-                fileExp.setPreviewState({ documentId: doc?.id ?? null });
-                if (doc?.id && window.assistOS?.workspace) {
-                    window.assistOS.workspace.currentDocumentId = doc.id;
-                    window.assistOS.workspace.currentDocumentPath = fileExp.state.selectedPath;
-                }
-            }
-        } catch (error) {
-            console.warn('Failed to prepare document editor', error);
-        }
-    }
     fileExp.setPreviewState({
+        documentId: null,
         markdownTextView: false,
         hasUnsavedChanges: false,
         savePending: false,
@@ -90,10 +76,50 @@ export async function editFile(fileExp) {
     });
     stopCurrentFileViewWatch(fileExp);
     fileExp.handleEditorBufferChange?.();
-    if (!isDpuPath && !fileExp.state.selectedIsMarkdown) {
+    if (!isDpuPath) {
         fileExp.startEditorExternalWatch?.();
     }
     fileExp.refreshPreviewUi();
+}
+
+export async function editSoplangMarkdown(fileExp) {
+    if (!fileExp?.state?.selectedPath || !fileExp.state.selectedIsMarkdown) {
+        fileExp?.showStatus?.('Select a Markdown file first.', true);
+        return;
+    }
+    const selectedPath = fileExp.state.selectedPath || '';
+    if (selectedPath.endsWith('.history')) {
+        fileExp.showStatus('History files are read-only.', true);
+        return;
+    }
+    if (fileExp.state.fileLoadInfo?.truncated) {
+        fileExp.showStatus('SOPLang tag editing is disabled for large files.', true);
+        return;
+    }
+    try {
+        const documentModule = window.assistOS?.loadModule?.('document');
+        if (!documentModule) {
+            throw new Error('Document module is not available.');
+        }
+        const doc = await documentModule.loadDocument(selectedPath);
+        fileExp.setPreviewState({
+            documentId: doc?.id ?? null,
+            markdownTextView: false,
+            hasUnsavedChanges: false,
+            savePending: false,
+            isEditing: true,
+            lastExternalReloadAt: 0
+        });
+        if (doc?.id && window.assistOS?.workspace) {
+            window.assistOS.workspace.currentDocumentId = doc.id;
+            window.assistOS.workspace.currentDocumentPath = selectedPath;
+        }
+        stopCurrentFileViewWatch(fileExp);
+        fileExp.refreshPreviewUi();
+    } catch (error) {
+        console.warn('Failed to prepare SOPLang tag editor', error);
+        fileExp.showStatus(error?.message || 'Failed to open SOPLang tag editor.', true);
+    }
 }
 
 export async function saveFile(fileExp, options = {}) {
@@ -203,21 +229,9 @@ export async function saveFile(fileExp, options = {}) {
             const previewSource = fileExp.prepareMarkdownPreviewContent(newContent);
             fileExp.setPreviewState({
                 previewContent: renderMarkdownPreview(previewSource),
-                markdownTextView: false
+                markdownTextView: false,
+                documentId: null
             });
-            try {
-                const documentModule = window.assistOS?.loadModule?.('document');
-                if (documentModule) {
-                    const doc = await documentModule.loadDocument(fileExp.state.selectedPath);
-                    fileExp.setPreviewState({ documentId: doc?.id ?? null });
-                    if (doc?.id) {
-                        window.assistOS.workspace.currentDocumentId = doc.id;
-                        window.assistOS.workspace.currentDocumentPath = fileExp.state.selectedPath;
-                    }
-                }
-            } catch (docError) {
-                console.warn('Failed to refresh document after save', docError);
-            }
         } else {
             fileExp.setPreviewState({
                 previewContent: renderCodePreview(newContent, fileExp.state.selectedPath)

@@ -11,6 +11,7 @@ export function createPreviewHeaderController(host) {
             editingActions: root.querySelector('#editingActions'),
             markdownViewActions: root.querySelector('#markdownViewActions'),
             toggleMarkdownViewButton: root.querySelector('#toggleMarkdownViewButton'),
+            soplangMarkdownEditButton: root.querySelector('#soplangMarkdownEditButton'),
             webViewActions: root.querySelector('#webViewActions'),
             showCodeViewButton: root.querySelector('#showCodeViewButton'),
             showWebViewButton: root.querySelector('#showWebViewButton'),
@@ -39,7 +40,7 @@ export function createPreviewHeaderController(host) {
     };
 
     const syncMarkdownActions = (elements, previewUiState) => {
-        const { markdownViewActions, toggleMarkdownViewButton } = elements;
+        const { markdownViewActions, toggleMarkdownViewButton, soplangMarkdownEditButton } = elements;
         if (!markdownViewActions || !toggleMarkdownViewButton) return;
         if (!previewUiState.showMarkdownToggle) {
             markdownViewActions.classList.add('hidden');
@@ -47,6 +48,7 @@ export function createPreviewHeaderController(host) {
         }
         markdownViewActions.classList.remove('hidden');
         toggleMarkdownViewButton.textContent = host.state.markdownTextView ? 'View as preview' : 'View as text';
+        soplangMarkdownEditButton?.classList.toggle('hidden', !previewUiState.showSoplangMarkdownEditAction);
     };
 
     const syncWebActions = (elements, previewUiState) => {

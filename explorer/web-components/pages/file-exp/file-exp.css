@@ -1221,7 +1221,18 @@ th {
     font-weight: 600;
 }
 
-#toggleMarkdownViewButton {
+#markdownViewActions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+#markdownViewActions.hidden {
+    display: none;
+}
+
+#toggleMarkdownViewButton,
+#soplangMarkdownEditButton {
     display: inline-flex;
     align-items: center;
     gap: 6px;

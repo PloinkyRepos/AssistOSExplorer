@@ -266,6 +266,15 @@ export function renderStandardPreview(fileExp, refs, previewUiState) {
                     documentId: fileExp.state.documentId
                 }
             });
+        } else if (fileExp.state.selectedIsMarkdown) {
+            mountPresenterElement(refs.componentMount, {
+                key: `markdown-editor:${fileExp.state.selectedPath}`,
+                tagName: 'markdown-editor',
+                attributes: {
+                    'data-presenter': 'markdown-editor',
+                    'data-file-path': fileExp.state.selectedPath
+                }
+            });
         } else {
             mountPresenterElement(refs.componentMount, {
                 key: `file-editor:${fileExp.state.selectedPath}`,
