@@ -12,6 +12,7 @@ import { action as updateLeadAction } from '../skills/update-lead/src/index.mjs'
 import { action as manageProfileAction } from '../skills/manage-profile/src/index.mjs';
 import { action as manageSiteInfoAction } from '../skills/manage-site-info/src/index.mjs';
 import { action as manageOwnerInfoAction } from '../skills/manage-owner-info/src/index.mjs';
+import { action as archiveAction } from '../skills/archive/src/index.mjs';
 import { configureDataStore } from '../src/runtime/dataStore.mjs';
 
 test('lead-info skill returns parsed lead data and related session history', async (t) => {
@@ -146,6 +147,7 @@ test('skills return explicit error text for invalid input payloads', async (t) =
         manageProfileAction,
         manageSiteInfoAction,
         manageOwnerInfoAction,
+        archiveAction,
     ];
 
     for (const execute of skillActions) {

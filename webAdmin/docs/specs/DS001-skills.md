@@ -46,6 +46,9 @@ Skill runtime note:
 ## Skill: manage-owner-info
 - **Function**: Creates or updates `data/config/owner.md` with owner contact information.
 
+## Skill: archive
+- **Function**: Moves session (`*-profile.md`, `*-history.md`) and/or lead (`*-lead.md`) files into `data/archive/` so they no longer appear in active reports.
+
 ## System Prompt: admin-flow
 - **Function**: Orchestrates owner requests by selecting and executing exactly one admin skill per turn.
 - **Context Preload**: Receives preloaded profiles list, session IDs, owner info, and website info at every iteration.

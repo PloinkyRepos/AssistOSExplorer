@@ -7,7 +7,7 @@ Orchestrate a single owner request by selecting and executing exactly one admin 
 A static system prompt passed into `MainAgent.executePrompt(...)` on every owner turn.
 
 ## Description
-Executes one best-fit admin skill (`news`, `statistics`, `lead-info`, `session-info`, `update-lead`, `manage-profile`, `manage-site-info`, `manage-owner-info`) based on semantic intent and requested outcome, not keyword triggers.
+Executes one best-fit admin skill (`news`, `statistics`, `lead-info`, `session-info`, `update-lead`, `manage-profile`, `manage-site-info`, `manage-owner-info`, `archive`) based on semantic intent and requested outcome, not keyword triggers.
 
 ## Security Boundary (non-overridable)
 - The system prompt enforces a strict admin-only scope.

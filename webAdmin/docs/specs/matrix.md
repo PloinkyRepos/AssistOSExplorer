@@ -12,3 +12,4 @@
 - [Skill: manage-site-info](./specsLoader.html?spec=DS009-skill-manage-site-info.md)
 - [Skill: manage-owner-info](./specsLoader.html?spec=DS010-skill-manage-owner-info.md)
 - [Skill: session-info](./specsLoader.html?spec=DS011-skill-session-info.md)
+- [Skill: archive](./specsLoader.html?spec=DS012-skill-archive.md)
