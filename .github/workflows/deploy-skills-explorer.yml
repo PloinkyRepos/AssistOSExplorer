@@ -202,7 +202,10 @@ jobs:
           "$PLOINKY" enable repo webmeetInfra
 
           echo "[deploy] Updating Ploinky, installed repos, and achillesAgentLib..."
-          env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" update
+          if ! env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" update; then
+            echo "[deploy] Initial update failed; retrying once in case Ploinky self-updated during this run..."
+            env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" update
+          fi
           if [ -f "$HOME/ploinky/package.json" ]; then
             npm install --ignore-scripts --prefix "$HOME/ploinky"
             ACHILLES_DIR="$HOME/ploinky/node_modules/achillesAgentLib"
