@@ -8,11 +8,6 @@ on:
         required: false
         default: 'main'
         type: string
-      ploinky_branch:
-        description: 'Ploinky branch to use'
-        required: false
-        default: 'master'
-        type: string
       workspace_name:
         description: 'Workspace directory name on the remote host'
         required: false
@@ -28,16 +23,11 @@ on:
         required: false
         default: 'https://skills.axiologic.dev'
         type: string
-      update_ploinky:
-        description: 'Update Ploinky on the remote host before deploying'
+      profile:
+        description: 'Ploinky profile to use. Defaults to vars.PLOINKY_PROFILE, then dev.'
         required: false
-        default: true
-        type: boolean
-      clean_stale_containers:
-        description: 'Remove old containers for this workspace before starting'
-        required: false
-        default: true
-        type: boolean
+        default: ''
+        type: string
 
 concurrency:
   group: deploy-skills-explorer
@@ -50,9 +40,7 @@ env:
   ROUTER_PORT: ${{ inputs.router_port || vars.EXPLORER_ROUTER_PORT || '8097' }}
   PUBLIC_URL: ${{ inputs.public_url || vars.EXPLORER_PUBLIC_URL || 'https://skills.axiologic.dev' }}
   EXPLORER_BRANCH: ${{ inputs.branch || 'main' }}
-  PLOINKY_BRANCH: ${{ inputs.ploinky_branch || 'master' }}
-  UPDATE_PLOINKY: ${{ inputs.update_ploinky == '' && 'true' || inputs.update_ploinky }}
-  CLEAN_STALE_CONTAINERS: ${{ inputs.clean_stale_containers == '' && 'true' || inputs.clean_stale_containers }}
+  PLOINKY_PROFILE: ${{ inputs.profile || vars.PLOINKY_PROFILE || 'dev' }}
 
 jobs:
   deploy:
@@ -62,12 +50,6 @@ jobs:
       contents: read
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ env.EXPLORER_BRANCH }}
-          fetch-depth: 0
-
       - name: Validate GitHub configuration
         env:
           SSH_KEY: ${{ secrets.SSH_KEY }}
@@ -99,115 +81,28 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H "${{ env.SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
 
-      - name: Install host prerequisites and Ploinky
+      - name: Deploy workspace
         env:
           PLOINKY_MASTER_KEY: ${{ secrets.PLOINKY_MASTER_KEY }}
-        run: |
-          set -euo pipefail
-          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
-            -i ~/.ssh/deploy_key "${SSH_USER}@${SSH_HOST}" \
-            "PLOINKY_MASTER_KEY='$PLOINKY_MASTER_KEY' PLOINKY_BRANCH='$PLOINKY_BRANCH' UPDATE_PLOINKY='$UPDATE_PLOINKY' bash -s" << 'REMOTE'
-          set -euo pipefail
-
-          if command -v dnf >/dev/null 2>&1; then
-            PKG_INSTALL="sudo dnf install -y"
-            PKG_UPDATE="sudo dnf check-update || true"
-          elif command -v yum >/dev/null 2>&1; then
-            PKG_INSTALL="sudo yum install -y"
-            PKG_UPDATE="sudo yum check-update || true"
-          elif command -v apt-get >/dev/null 2>&1; then
-            PKG_INSTALL="sudo apt-get install -y -qq"
-            PKG_UPDATE="sudo apt-get update -qq"
-          else
-            echo "[deploy] ERROR: no supported package manager found"
-            exit 1
-          fi
-
-          $PKG_UPDATE || true
-          $PKG_INSTALL git curl jq tmux python3 ca-certificates openssl || true
-          $PKG_INSTALL iptables slirp4netns fuse-overlayfs || true
-
-          sudo modprobe ip_tables 2>/dev/null || true
-          sudo modprobe iptable_nat 2>/dev/null || true
-          sudo modprobe nf_nat 2>/dev/null || true
-
-          if ! command -v podman >/dev/null 2>&1; then
-            echo "[deploy] Installing podman..."
-            $PKG_INSTALL podman
-          fi
-
-          if ! command -v node >/dev/null 2>&1; then
-            echo "[deploy] Installing Node.js..."
-            if command -v apt-get >/dev/null 2>&1; then
-              curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-              sudo apt-get install -y nodejs
-            else
-              curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
-              $PKG_INSTALL nodejs
-            fi
-          fi
-
-          loginctl enable-linger "$(whoami)" 2>/dev/null || true
-
-          PLOINKY_DIR="$HOME/ploinky"
-          if [ ! -d "$PLOINKY_DIR/.git" ]; then
-            rm -rf "$PLOINKY_DIR"
-            git clone --branch "${PLOINKY_BRANCH:-master}" https://github.com/OutfinityResearch/ploinky.git "$PLOINKY_DIR"
-          elif [ "${UPDATE_PLOINKY:-true}" = "true" ]; then
-            cd "$PLOINKY_DIR"
-            git fetch origin
-            git checkout "${PLOINKY_BRANCH:-master}"
-            git reset --hard "origin/${PLOINKY_BRANCH:-master}"
-            git clean -fd
-          fi
-
-          cd "$PLOINKY_DIR"
-          npm install
-
-          ACHILLES_DIR="$PLOINKY_DIR/node_modules/achillesAgentLib"
-          if [ -d "$ACHILLES_DIR/.git" ]; then
-            git -C "$ACHILLES_DIR" fetch origin
-            git -C "$ACHILLES_DIR" checkout master
-            git -C "$ACHILLES_DIR" reset --hard origin/master
-            git -C "$ACHILLES_DIR" clean -fd
-          else
-            rm -rf "$ACHILLES_DIR"
-            git clone --branch master https://github.com/OutfinityResearch/achillesAgentLib.git "$ACHILLES_DIR"
-          fi
-
-          mkdir -p "$HOME/.local/bin"
-          ln -sf "$PLOINKY_DIR/bin/ploinky" "$HOME/.local/bin/ploinky"
-          ln -sf "$PLOINKY_DIR/bin/p-cli" "$HOME/.local/bin/p-cli"
-          if ! grep -q 'ploinky/bin' "$HOME/.bashrc" 2>/dev/null; then
-            echo 'export PATH="$HOME/ploinky/bin:$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
-          fi
-
-          echo "[deploy] Host prerequisites ready."
-          node --version
-          npm --version
-          podman --version
-          REMOTE
-
-      - name: Sync workspace and runtime variables
-        env:
-          PLOINKY_MASTER_KEY: ${{ secrets.PLOINKY_MASTER_KEY }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          AXIOLOGIC_API_KEY: ${{ secrets.AXIOLOGIC_API_KEY }}
-          OPENAI_OPENCODE_KEY: ${{ secrets.OPENAI_OPENCODE_KEY }}
           SOUL_GATEWAY_API_KEY: ${{ secrets.SOUL_GATEWAY_API_KEY }}
-          OPENAI_AXIOLOGIC_KIRO_URL: ${{ vars.OPENAI_AXIOLOGIC_KIRO_URL }}
-          OPENAI_AXIOLOGIC_KIRO_KEY_ENV: ${{ vars.OPENAI_AXIOLOGIC_KIRO_KEY_ENV }}
-          ANTHROPIC_AXIOLOGIC_ANTIGRAVITY_URL: ${{ vars.ANTHROPIC_AXIOLOGIC_ANTIGRAVITY_URL }}
-          ANTHROPIC_AXIOLOGIC_ANTIGRAVITY_KEY_ENV: ${{ vars.ANTHROPIC_AXIOLOGIC_ANTIGRAVITY_KEY_ENV }}
-          OPENAI_OPENCODE_URL: ${{ vars.OPENAI_OPENCODE_URL }}
-          OPENAI_OPENAI_RESPONSES_URL: ${{ vars.OPENAI_OPENAI_RESPONSES_URL }}
-          OPENAI_OPENAI_RESPONSES_KEY_ENV: ${{ vars.OPENAI_OPENAI_RESPONSES_KEY_ENV }}
-          LLM_MODELS: ${{ vars.LLM_MODELS }}
+          SOUL_GATEWAY_BASE_URL: ${{ vars.SOUL_GATEWAY_BASE_URL }}
           ONLYOFFICE_PUBLIC_URL: ${{ vars.ONLYOFFICE_PUBLIC_URL }}
           ONLYOFFICE_INTERNAL_URL: ${{ vars.ONLYOFFICE_INTERNAL_URL }}
           ONLYOFFICE_CALLBACK_BASE_URL: ${{ vars.ONLYOFFICE_CALLBACK_BASE_URL }}
           ONLYOFFICE_JWT_SECRET: ${{ secrets.ONLYOFFICE_JWT_SECRET }}
+          WEBMEET_PUBLIC_LIVEKIT_URL: ${{ vars.WEBMEET_PUBLIC_LIVEKIT_URL }}
+          WEBMEET_LIVEKIT_URL: ${{ vars.WEBMEET_LIVEKIT_URL }}
+          WEBMEET_LIVEKIT_API_KEY: ${{ vars.WEBMEET_LIVEKIT_API_KEY }}
+          WEBMEET_LIVEKIT_API_SECRET: ${{ secrets.WEBMEET_LIVEKIT_API_SECRET }}
+          WEBMEET_EGRESS_URL: ${{ vars.WEBMEET_EGRESS_URL }}
+          WEBMEET_LIVEKIT_USE_EXTERNAL_IP: ${{ vars.WEBMEET_LIVEKIT_USE_EXTERNAL_IP }}
+          WEBMEET_LIVEKIT_NODE_IP: ${{ vars.WEBMEET_LIVEKIT_NODE_IP }}
+          WEBMEET_TURN_EXTERNAL_IP: ${{ vars.WEBMEET_TURN_EXTERNAL_IP }}
+          WEBMEET_TURN_REALM: ${{ vars.WEBMEET_TURN_REALM }}
+          WEBMEET_TURN_USER: ${{ vars.WEBMEET_TURN_USER }}
+          WEBMEET_TURN_PASSWORD: ${{ secrets.WEBMEET_TURN_PASSWORD }}
+          WEBMEET_TURN_MIN_PORT: ${{ vars.WEBMEET_TURN_MIN_PORT }}
+          WEBMEET_TURN_MAX_PORT: ${{ vars.WEBMEET_TURN_MAX_PORT }}
         run: |
           set -euo pipefail
 
@@ -220,23 +115,25 @@ jobs:
 
           {
             write_env PLOINKY_MASTER_KEY
-            write_env OPENAI_API_KEY
-            write_env OPENROUTER_API_KEY
-            write_env AXIOLOGIC_API_KEY
-            write_env OPENAI_OPENCODE_KEY
             write_env SOUL_GATEWAY_API_KEY
-            write_env OPENAI_AXIOLOGIC_KIRO_URL
-            write_env OPENAI_AXIOLOGIC_KIRO_KEY_ENV
-            write_env ANTHROPIC_AXIOLOGIC_ANTIGRAVITY_URL
-            write_env ANTHROPIC_AXIOLOGIC_ANTIGRAVITY_KEY_ENV
-            write_env OPENAI_OPENCODE_URL
-            write_env OPENAI_OPENAI_RESPONSES_URL
-            write_env OPENAI_OPENAI_RESPONSES_KEY_ENV
-            write_env LLM_MODELS
+            write_env SOUL_GATEWAY_BASE_URL
             write_env ONLYOFFICE_PUBLIC_URL
             write_env ONLYOFFICE_INTERNAL_URL
             write_env ONLYOFFICE_CALLBACK_BASE_URL
             write_env ONLYOFFICE_JWT_SECRET
+            write_env WEBMEET_PUBLIC_LIVEKIT_URL
+            write_env WEBMEET_LIVEKIT_URL
+            write_env WEBMEET_LIVEKIT_API_KEY
+            write_env WEBMEET_LIVEKIT_API_SECRET
+            write_env WEBMEET_EGRESS_URL
+            write_env WEBMEET_LIVEKIT_USE_EXTERNAL_IP
+            write_env WEBMEET_LIVEKIT_NODE_IP
+            write_env WEBMEET_TURN_EXTERNAL_IP
+            write_env WEBMEET_TURN_REALM
+            write_env WEBMEET_TURN_USER
+            write_env WEBMEET_TURN_PASSWORD
+            write_env WEBMEET_TURN_MIN_PORT
+            write_env WEBMEET_TURN_MAX_PORT
           } > /tmp/skills_explorer_env
           chmod 600 /tmp/skills_explorer_env
 
@@ -244,12 +141,41 @@ jobs:
 
           ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
             -i ~/.ssh/deploy_key "${SSH_USER}@${SSH_HOST}" \
-            "WORKSPACE='$WORKSPACE' EXPLORER_BRANCH='$EXPLORER_BRANCH' ROUTER_PORT='$ROUTER_PORT' PUBLIC_URL='$PUBLIC_URL' CLEAN_STALE_CONTAINERS='$CLEAN_STALE_CONTAINERS' bash -s" << 'REMOTE'
+            "WORKSPACE='$WORKSPACE' EXPLORER_BRANCH='$EXPLORER_BRANCH' ROUTER_PORT='$ROUTER_PORT' PUBLIC_URL='$PUBLIC_URL' PLOINKY_PROFILE='$PLOINKY_PROFILE' bash -s" << 'REMOTE'
           set -euo pipefail
-          export PATH="$HOME/ploinky/bin:$HOME/.local/bin:$PATH"
+
+          resolve_ploinky() {
+            if command -v ploinky >/dev/null 2>&1; then
+              command -v ploinky
+              return 0
+            fi
+            if [ -x "$HOME/.local/bin/ploinky" ]; then
+              printf '%s\n' "$HOME/.local/bin/ploinky"
+              return 0
+            fi
+            if [ -x "$HOME/ploinky/bin/ploinky" ]; then
+              printf '%s\n' "$HOME/ploinky/bin/ploinky"
+              return 0
+            fi
+            return 1
+          }
+
+          PLOINKY="$(resolve_ploinky)" || {
+            echo "[deploy] ERROR: ploinky is not installed on the remote host."
+            echo "[deploy] Run the Provision Skills Explorer Host workflow first."
+            exit 1
+          }
+
+          for tool in git node npm podman curl python3; do
+            if ! command -v "$tool" >/dev/null 2>&1; then
+              echo "[deploy] ERROR: missing required tool '$tool'."
+              echo "[deploy] Run the Provision Skills Explorer Host workflow first."
+              exit 1
+            fi
+          done
 
           WORK_DIR="$HOME/$WORKSPACE"
-          mkdir -p "$WORK_DIR/.ploinky/repos" "$WORK_DIR/logs"
+          mkdir -p "$WORK_DIR/logs"
           cd "$WORK_DIR"
 
           set -a
@@ -257,10 +183,8 @@ jobs:
           set +a
           rm -f /tmp/skills_explorer_env
 
-          # PLOINKY_MASTER_KEY is intentionally NOT persisted to disk — it is
-          # passed to ploinky strictly via process env (see `ploinky start` below).
-          # If a legacy in-workspace .env from older deploys still holds it, scrub
-          # the line and remove the file when nothing else remains.
+          # PLOINKY_MASTER_KEY is intentionally NOT persisted to disk. If a
+          # legacy in-workspace .env still holds it, scrub that one line.
           if [ -f "$WORK_DIR/.env" ]; then
             sed -i '/^PLOINKY_MASTER_KEY=/d' "$WORK_DIR/.env"
             if ! grep -Eq '\S' "$WORK_DIR/.env"; then
@@ -269,55 +193,26 @@ jobs:
           fi
 
           echo "[deploy] Stopping current workspace services if present..."
-          if [ -f "$WORK_DIR/.ploinky/routing.json" ]; then
-            python3 - "$WORK_DIR/.ploinky/routing.json" "$ROUTER_PORT" <<'PY' || true
-          import json
-          import sys
-          path, port = sys.argv[1], int(sys.argv[2])
-          try:
-              with open(path, 'r', encoding='utf-8') as handle:
-                  data = json.load(handle)
-          except Exception:
-              data = {}
-          data['port'] = port
-          data.setdefault('routes', {})
-          with open(path, 'w', encoding='utf-8') as handle:
-              json.dump(data, handle, indent=2)
-          PY
+          env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" stop || true
+
+          echo "[deploy] Ensuring Ploinky repos are installed and enabled..."
+          "$PLOINKY" add repo fileExplorer https://github.com/PloinkyRepos/AssistOSExplorer.git "${EXPLORER_BRANCH:-main}" || true
+          "$PLOINKY" add repo webmeetInfra https://github.com/PloinkyRepos/webmeetInfra.git main || true
+          "$PLOINKY" enable repo fileExplorer
+          "$PLOINKY" enable repo webmeetInfra
+
+          echo "[deploy] Updating Ploinky, installed repos, and achillesAgentLib..."
+          env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" update
+          if [ -f "$HOME/ploinky/package.json" ]; then
+            npm install --ignore-scripts --prefix "$HOME/ploinky"
+            ACHILLES_DIR="$HOME/ploinky/node_modules/achillesAgentLib"
+            if [ -d "$ACHILLES_DIR/.git" ]; then
+              git -C "$ACHILLES_DIR" pull --rebase --autostash
+            else
+              rm -rf "$ACHILLES_DIR"
+              git clone https://github.com/OutfinityResearch/achillesAgentLib.git "$ACHILLES_DIR"
+            fi
           fi
-          ploinky stop || true
-
-          if [ "${CLEAN_STALE_CONTAINERS:-true}" = "true" ]; then
-            echo "[deploy] Removing stale containers for workspace $WORKSPACE..."
-            podman ps -a --format '{{.Names}}' | grep "_${WORKSPACE}_" | while IFS= read -r container_name; do
-              [ -n "$container_name" ] || continue
-              podman rm -f "$container_name" 2>/dev/null || true
-            done || true
-          fi
-
-          echo "[deploy] Normalizing Ploinky workspace registry..."
-          if [ -f "$WORK_DIR/.ploinky/agents" ]; then
-            rm -f "$WORK_DIR/.ploinky/agents"
-          fi
-          cat > "$WORK_DIR/.ploinky/agents.json" <<'JSON'
-          {}
-          JSON
-          cat > "$WORK_DIR/.ploinky/enabled_repos.json" <<'JSON'
-          [
-            "fileExplorer",
-            "webmeetInfra"
-          ]
-          JSON
-          mkdir -p "$WORK_DIR/.ploinky/agents" "$WORK_DIR/.ploinky/code" "$WORK_DIR/.ploinky/skills" "$WORK_DIR/.ploinky/logs" "$WORK_DIR/.ploinky/shared" "$WORK_DIR/.ploinky/running" "$WORK_DIR/.ploinky/transcripts"
-
-          ploinky profile dev
-          ploinky sandbox disable
-
-          echo "[deploy] Syncing Ploinky repos..."
-          ploinky add repo fileExplorer https://github.com/PloinkyRepos/AssistOSExplorer.git "${EXPLORER_BRANCH:-main}" || true
-          ploinky add repo webmeetInfra https://github.com/PloinkyRepos/webmeetInfra.git main || true
-          ploinky enable repo fileExplorer
-          ploinky enable repo webmeetInfra
 
           for repo_spec in "fileExplorer:${EXPLORER_BRANCH:-main}" "webmeetInfra:main"; do
             repo_name="${repo_spec%%:*}"
@@ -332,11 +227,14 @@ jobs:
             fi
           done
 
+          "$PLOINKY" profile "${PLOINKY_PROFILE:-dev}"
+          "$PLOINKY" sandbox disable
+
           set_var() {
             local name="$1"
             local value="$2"
             if [ -n "$value" ]; then
-              ploinky var "$name" "$value"
+              "$PLOINKY" var "$name" "$value"
               echo "[deploy] Set $name"
             fi
           }
@@ -347,40 +245,30 @@ jobs:
           set_var PLOINKY_WORKSPACE_ROOT "$WORK_DIR"
           set_var PLOINKY_WEBMEET_MASTER_KEY "$PLOINKY_MASTER_KEY"
 
-          set_var OPENAI_API_KEY "${OPENAI_API_KEY:-}"
-          set_var OPENROUTER_API_KEY "${OPENROUTER_API_KEY:-}"
-          set_var AXIOLOGIC_API_KEY "${AXIOLOGIC_API_KEY:-}"
-          set_var OPENAI_OPENCODE_KEY "${OPENAI_OPENCODE_KEY:-}"
           set_var SOUL_GATEWAY_API_KEY "${SOUL_GATEWAY_API_KEY:-}"
-
-          set_var OPENAI_AXIOLOGIC_KIRO_URL "${OPENAI_AXIOLOGIC_KIRO_URL:-}"
-          set_var OPENAI_AXIOLOGIC_KIRO_KEY_ENV "${OPENAI_AXIOLOGIC_KIRO_KEY_ENV:-}"
-          set_var ANTHROPIC_AXIOLOGIC_ANTIGRAVITY_URL "${ANTHROPIC_AXIOLOGIC_ANTIGRAVITY_URL:-}"
-          set_var ANTHROPIC_AXIOLOGIC_ANTIGRAVITY_KEY_ENV "${ANTHROPIC_AXIOLOGIC_ANTIGRAVITY_KEY_ENV:-}"
-          set_var OPENAI_OPENCODE_URL "${OPENAI_OPENCODE_URL:-}"
-          set_var OPENAI_OPENAI_RESPONSES_URL "${OPENAI_OPENAI_RESPONSES_URL:-}"
-          set_var OPENAI_OPENAI_RESPONSES_KEY_ENV "${OPENAI_OPENAI_RESPONSES_KEY_ENV:-}"
+          set_var SOUL_GATEWAY_BASE_URL "${SOUL_GATEWAY_BASE_URL:-}"
 
           set_var ONLYOFFICE_PUBLIC_URL "${ONLYOFFICE_PUBLIC_URL:-}"
           set_var ONLYOFFICE_INTERNAL_URL "${ONLYOFFICE_INTERNAL_URL:-}"
           set_var ONLYOFFICE_CALLBACK_BASE_URL "${ONLYOFFICE_CALLBACK_BASE_URL:-$PUBLIC_URL}"
           set_var ONLYOFFICE_JWT_SECRET "${ONLYOFFICE_JWT_SECRET:-}"
 
-          if [ -n "${LLM_MODELS:-}" ]; then
-            IFS=';' read -ra MODEL_ENTRIES <<< "$LLM_MODELS"
-            for entry in "${MODEL_ENTRIES[@]}"; do
-              entry="$(printf '%s' "$entry" | xargs)"
-              [ -z "$entry" ] && continue
-              model_key="${entry%%=*}"
-              model_val="${entry#*=}"
-              if [ -n "$model_key" ] && [ -n "$model_val" ]; then
-                set_var "$model_key" "$model_val"
-              fi
-            done
-          fi
+          set_var WEBMEET_PUBLIC_LIVEKIT_URL "${WEBMEET_PUBLIC_LIVEKIT_URL:-}"
+          set_var WEBMEET_LIVEKIT_URL "${WEBMEET_LIVEKIT_URL:-}"
+          set_var WEBMEET_LIVEKIT_API_KEY "${WEBMEET_LIVEKIT_API_KEY:-}"
+          set_var WEBMEET_LIVEKIT_API_SECRET "${WEBMEET_LIVEKIT_API_SECRET:-}"
+          set_var WEBMEET_EGRESS_URL "${WEBMEET_EGRESS_URL:-}"
+          set_var WEBMEET_LIVEKIT_USE_EXTERNAL_IP "${WEBMEET_LIVEKIT_USE_EXTERNAL_IP:-}"
+          set_var WEBMEET_LIVEKIT_NODE_IP "${WEBMEET_LIVEKIT_NODE_IP:-}"
+          set_var WEBMEET_TURN_EXTERNAL_IP "${WEBMEET_TURN_EXTERNAL_IP:-}"
+          set_var WEBMEET_TURN_REALM "${WEBMEET_TURN_REALM:-}"
+          set_var WEBMEET_TURN_USER "${WEBMEET_TURN_USER:-}"
+          set_var WEBMEET_TURN_PASSWORD "${WEBMEET_TURN_PASSWORD:-}"
+          set_var WEBMEET_TURN_MIN_PORT "${WEBMEET_TURN_MIN_PORT:-}"
+          set_var WEBMEET_TURN_MAX_PORT "${WEBMEET_TURN_MAX_PORT:-}"
 
           echo "[deploy] Starting Explorer..."
-          nohup env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" ploinky start fileExplorer/explorer "$ROUTER_PORT" > "$WORK_DIR/logs/skills-explorer-start.log" 2>&1 &
+          nohup env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" start fileExplorer/explorer "$ROUTER_PORT" > "$WORK_DIR/logs/skills-explorer-start.log" 2>&1 &
 
           echo "[deploy] Waiting for local router..."
           sleep 10
@@ -401,7 +289,7 @@ jobs:
           echo "[deploy] Containers:"
           podman ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | head -100
           echo "[deploy] Workspace status:"
-          env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" ploinky status || true
+          env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" status || true
           REMOTE
 
       - name: Verify public URL

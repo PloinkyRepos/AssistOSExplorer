@@ -34,15 +34,10 @@ Workspace roots:
 - `WORKSPACE_ROOT`
 - `PLOINKY_WORKSPACE_ROOT`
 
-Supported provider variables:
+Supported LLM gateway variables:
 
-- `OPENAI_API_KEY`
-- `ANTHROPIC_API_KEY`
-- `GEMINI_API_KEY`
-- `MISTRAL_API_KEY`
-- `DEEPSEEK_API_KEY`
-- `OPENROUTER_API_KEY`
 - `SOUL_GATEWAY_API_KEY`
+- `SOUL_GATEWAY_BASE_URL`
 
 ## Notes
 

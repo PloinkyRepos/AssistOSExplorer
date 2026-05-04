@@ -342,14 +342,10 @@ Explorer caches workspace roots and node metadata. Calls DPU tools via `callAgen
 | `SOUL_GATEWAY_API_KEY` | Explorer, gitAgent, soplangAgent, llmAssistant | `~/work/.env` → `.ploinky/.secrets` |
 | `ONLYOFFICE_JWT_SECRET` | Explorer (OnlyOffice document editor) | Generated/configured in preinstall.sh → `.ploinky/.secrets` |
 | `DPU_MASTER_KEY` | dpuAgent | Auto-generated via `ensurePersistentSecret()` → `.ploinky/.secrets` |
-| `OPENAI_API_KEY` | gitAgent, llmAssistant | Not needed when using soul_gateway |
-| `ANTHROPIC_API_KEY` | gitAgent, llmAssistant | Not needed when using soul_gateway |
-| `GEMINI_API_KEY` | gitAgent, llmAssistant | Not needed when using soul_gateway |
-| Other LLM API keys | gitAgent, llmAssistant | Not needed when using soul_gateway |
 | `PLOINKY_GITHUB_CLIENT_ID/SECRET` | gitAgent (GitHub OAuth) | `.ploinky/.secrets` |
 | `ASSISTOS_FS_ROOT` | All agents | Not a secret — filesystem path |
 
-**Key insight:** When `SOUL_GATEWAY_API_KEY` is set, agents use the Soul Gateway for all LLM calls (auto-discovery). Individual provider API keys (`OPENAI_API_KEY`, etc.) become unnecessary.
+**Key insight:** Agents use Soul Gateway for LLM calls. Individual provider API keys are obsolete for this deployment and should not be stored as GitHub Actions secrets or workspace variables.
 
 ### Current Storage & Distribution Flow
 
@@ -497,8 +493,8 @@ fi
 | Agent | Required Env Vars | Secrets |
 |-------|-------------------|---------|
 | Explorer | ASSISTOS_FS_ROOT, SOUL_GATEWAY_API_KEY | ONLYOFFICE_JWT_SECRET (optional) |
-| gitAgent | ASSISTOS_FS_ROOT | SOUL_GATEWAY_API_KEY, LLM keys (optional via soul_gateway) |
+| gitAgent | ASSISTOS_FS_ROOT | SOUL_GATEWAY_API_KEY |
 | dpuAgent | ASSISTOS_FS_ROOT, DPU_MASTER_KEY | DPU_MASTER_KEY |
 | soplangAgent | SOUL_GATEWAY_API_KEY | — |
 | tasksAgent | ASSISTOS_FS_ROOT | — |
-| llmAssistant | ASSISTOS_FS_ROOT | SOUL_GATEWAY_API_KEY, LLM keys (optional via soul_gateway) |
+| llmAssistant | ASSISTOS_FS_ROOT | SOUL_GATEWAY_API_KEY |

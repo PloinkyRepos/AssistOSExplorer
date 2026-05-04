@@ -1,0 +1,121 @@
+name: Provision Skills Explorer Host
+
+on:
+  workflow_dispatch:
+
+env:
+  SSH_USER: ${{ vars.SSH_USER || 'admin' }}
+  SSH_HOST: ${{ vars.SSH_HOST || '193.180.209.191' }}
+
+jobs:
+  provision:
+    name: Provision Remote Host
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Validate GitHub configuration
+        env:
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SSH_KEY:-}" ]; then
+            echo "::error::Missing required repository secret SSH_KEY"
+            exit 1
+          fi
+          if [ -z "${SSH_HOST:-}" ] || [ -z "${SSH_USER:-}" ]; then
+            echo "::error::SSH_USER and SSH_HOST must be configured"
+            exit 1
+          fi
+
+      - name: Prepare SSH key
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ env.SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Install host prerequisites and Ploinky
+        run: |
+          set -euo pipefail
+          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
+            -i ~/.ssh/deploy_key "${SSH_USER}@${SSH_HOST}" bash -s << 'REMOTE'
+          set -euo pipefail
+
+          if command -v dnf >/dev/null 2>&1; then
+            pkg_update() { sudo dnf check-update || true; }
+            pkg_install() { sudo dnf install -y "$@"; }
+          elif command -v yum >/dev/null 2>&1; then
+            pkg_update() { sudo yum check-update || true; }
+            pkg_install() { sudo yum install -y "$@"; }
+          elif command -v apt-get >/dev/null 2>&1; then
+            pkg_update() { sudo apt-get update -qq; }
+            pkg_install() { sudo apt-get install -y -qq "$@"; }
+          else
+            echo "[provision] ERROR: no supported package manager found"
+            exit 1
+          fi
+
+          pkg_update || true
+          pkg_install git curl jq tmux python3 ca-certificates openssl || true
+          pkg_install iptables slirp4netns fuse-overlayfs || true
+
+          sudo modprobe ip_tables 2>/dev/null || true
+          sudo modprobe iptable_nat 2>/dev/null || true
+          sudo modprobe nf_nat 2>/dev/null || true
+
+          if ! command -v podman >/dev/null 2>&1; then
+            echo "[provision] Installing podman..."
+            pkg_install podman
+          fi
+
+          if ! command -v node >/dev/null 2>&1; then
+            echo "[provision] Installing Node.js..."
+            if command -v apt-get >/dev/null 2>&1; then
+              curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+              sudo apt-get install -y nodejs
+            else
+              curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
+              pkg_install nodejs
+            fi
+          fi
+
+          loginctl enable-linger "$(whoami)" 2>/dev/null || true
+
+          PLOINKY_DIR="$HOME/ploinky"
+          if [ ! -d "$PLOINKY_DIR/.git" ]; then
+            rm -rf "$PLOINKY_DIR"
+            git clone https://github.com/OutfinityResearch/ploinky.git "$PLOINKY_DIR"
+          fi
+
+          cd "$PLOINKY_DIR"
+          git pull --rebase --autostash
+          npm install --ignore-scripts
+
+          ACHILLES_DIR="$PLOINKY_DIR/node_modules/achillesAgentLib"
+          if [ -d "$ACHILLES_DIR/.git" ]; then
+            git -C "$ACHILLES_DIR" pull --rebase --autostash
+          else
+            rm -rf "$ACHILLES_DIR"
+            git clone https://github.com/OutfinityResearch/achillesAgentLib.git "$ACHILLES_DIR"
+          fi
+
+          mkdir -p "$HOME/.local/bin"
+          ln -sf "$PLOINKY_DIR/bin/ploinky" "$HOME/.local/bin/ploinky"
+          ln -sf "$PLOINKY_DIR/bin/p-cli" "$HOME/.local/bin/p-cli"
+          if ! grep -q 'ploinky/bin' "$HOME/.bashrc" 2>/dev/null; then
+            echo 'export PATH="$HOME/.local/bin:$HOME/ploinky/bin:$PATH"' >> "$HOME/.bashrc"
+          fi
+
+          echo "[provision] Host prerequisites ready."
+          node --version
+          npm --version
+          podman --version
+          "$HOME/.local/bin/ploinky" --version || true
+          REMOTE
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/deploy_key

@@ -9,12 +9,10 @@ Create or update these repository secrets in `PloinkyRepos/AssistOSExplorer`.
 ```sh
 gh secret set SSH_KEY --repo PloinkyRepos/AssistOSExplorer < ~/.ssh/skills-explorer-deploy
 gh secret set PLOINKY_MASTER_KEY --repo PloinkyRepos/AssistOSExplorer --body "$(openssl rand -hex 32)"
-gh secret set OPENAI_API_KEY --repo PloinkyRepos/AssistOSExplorer
-gh secret set OPENROUTER_API_KEY --repo PloinkyRepos/AssistOSExplorer
-gh secret set AXIOLOGIC_API_KEY --repo PloinkyRepos/AssistOSExplorer
-gh secret set OPENAI_OPENCODE_KEY --repo PloinkyRepos/AssistOSExplorer
 gh secret set SOUL_GATEWAY_API_KEY --repo PloinkyRepos/AssistOSExplorer
 gh secret set ONLYOFFICE_JWT_SECRET --repo PloinkyRepos/AssistOSExplorer
+gh secret set WEBMEET_LIVEKIT_API_SECRET --repo PloinkyRepos/AssistOSExplorer
+gh secret set WEBMEET_TURN_PASSWORD --repo PloinkyRepos/AssistOSExplorer
 ```
 
 `PLOINKY_MASTER_KEY` must be exactly 64 hex characters. Keep it stable after the first deployment because it encrypts the Ploinky workspace secret stores and local-auth password store.
@@ -33,27 +31,32 @@ gh variable set SSH_HOST --repo PloinkyRepos/AssistOSExplorer --body 193.180.209
 gh variable set EXPLORER_WORKSPACE --repo PloinkyRepos/AssistOSExplorer --body explorerWorkspace
 gh variable set EXPLORER_ROUTER_PORT --repo PloinkyRepos/AssistOSExplorer --body 8097
 gh variable set EXPLORER_PUBLIC_URL --repo PloinkyRepos/AssistOSExplorer --body https://skills.axiologic.dev
+gh variable set PLOINKY_PROFILE --repo PloinkyRepos/AssistOSExplorer --body prod
 gh variable set ONLYOFFICE_PUBLIC_URL --repo PloinkyRepos/AssistOSExplorer --body https://office.axiologic.dev
 gh variable set ONLYOFFICE_INTERNAL_URL --repo PloinkyRepos/AssistOSExplorer --body http://127.0.0.1:8082
 gh variable set ONLYOFFICE_CALLBACK_BASE_URL --repo PloinkyRepos/AssistOSExplorer --body https://skills.axiologic.dev
+gh variable set WEBMEET_PUBLIC_LIVEKIT_URL --repo PloinkyRepos/AssistOSExplorer --body wss://livekit.skills.axiologic.dev
+gh variable set WEBMEET_LIVEKIT_URL --repo PloinkyRepos/AssistOSExplorer --body http://webmeetLivekitServer:7880
+gh variable set WEBMEET_LIVEKIT_API_KEY --repo PloinkyRepos/AssistOSExplorer --body webmeet
+gh variable set WEBMEET_EGRESS_URL --repo PloinkyRepos/AssistOSExplorer --body http://webmeetLivekitEgress:7980
+gh variable set WEBMEET_LIVEKIT_USE_EXTERNAL_IP --repo PloinkyRepos/AssistOSExplorer --body true
+gh variable set WEBMEET_LIVEKIT_NODE_IP --repo PloinkyRepos/AssistOSExplorer --body 193.180.209.191
+gh variable set WEBMEET_TURN_EXTERNAL_IP --repo PloinkyRepos/AssistOSExplorer --body 193.180.209.191
+gh variable set WEBMEET_TURN_REALM --repo PloinkyRepos/AssistOSExplorer --body skills.axiologic.dev
+gh variable set WEBMEET_TURN_USER --repo PloinkyRepos/AssistOSExplorer --body webmeet
+gh variable set WEBMEET_TURN_MIN_PORT --repo PloinkyRepos/AssistOSExplorer --body 20000
+gh variable set WEBMEET_TURN_MAX_PORT --repo PloinkyRepos/AssistOSExplorer --body 20010
 ```
 
-The LLM provider URL and model variables are optional for booting Explorer, but should be present when the deployed agents need model access:
+Direct provider keys and model lists are intentionally not part of this deployment. Agents that need model access use `SOUL_GATEWAY_API_KEY` and the optional `SOUL_GATEWAY_BASE_URL`.
 
-```sh
-gh variable set OPENAI_AXIOLOGIC_KIRO_URL --repo PloinkyRepos/AssistOSExplorer --body https://kiro.axiologic.dev/v1/chat/completions
-gh variable set OPENAI_AXIOLOGIC_KIRO_KEY_ENV --repo PloinkyRepos/AssistOSExplorer --body AXIOLOGIC_API_KEY
-gh variable set ANTHROPIC_AXIOLOGIC_ANTIGRAVITY_URL --repo PloinkyRepos/AssistOSExplorer --body https://antigravity.axiologic.dev/v1/messages
-gh variable set ANTHROPIC_AXIOLOGIC_ANTIGRAVITY_KEY_ENV --repo PloinkyRepos/AssistOSExplorer --body AXIOLOGIC_API_KEY
-gh variable set OPENAI_OPENCODE_URL --repo PloinkyRepos/AssistOSExplorer --body https://opencode.ai/zen/v1/chat/completions
-gh variable set OPENAI_OPENAI_RESPONSES_URL --repo PloinkyRepos/AssistOSExplorer --body https://api.openai.com/v1/responses
-gh variable set OPENAI_OPENAI_RESPONSES_KEY_ENV --repo PloinkyRepos/AssistOSExplorer --body OPENAI_API_KEY
-gh variable set LLM_MODELS --repo PloinkyRepos/AssistOSExplorer --body '<semicolon-separated model definitions>'
-```
+## Provision Host
+
+Run `Provision Skills Explorer Host` only when the remote host needs OS packages, Node.js, Podman, Ploinky, or `achillesAgentLib` installed or refreshed.
 
 ## Deploy Or Update
 
-Run the `Deploy Skills Explorer` workflow from GitHub Actions. The same workflow is safe for fresh deploys and updates:
+Run the `Deploy Skills Explorer` workflow for normal updates:
 
 ```sh
 gh workflow run deploy-skills-explorer.yml \
@@ -62,18 +65,16 @@ gh workflow run deploy-skills-explorer.yml \
   -f workspace_name=explorerWorkspace \
   -f router_port=8097 \
   -f public_url=https://skills.axiologic.dev \
-  -f update_ploinky=true \
-  -f clean_stale_containers=true
+  -f profile=prod
 ```
 
 The workflow:
 
 1. Connects to `SSH_USER@SSH_HOST` with `SSH_KEY`.
-2. Installs host prerequisites: Podman, Node.js, Ploinky.
-3. Writes `PLOINKY_MASTER_KEY` to the remote workspace `.env` with `0600` permissions.
-4. Adds and updates the `fileExplorer` and `webmeetInfra` Ploinky repos.
-5. Resets the Ploinky enabled-agent registry to avoid stale ambiguous repos from older deployments.
+2. Resolves the installed `ploinky` binary and verifies required host tools are already present.
+3. Stops the current workspace if it is running.
+4. Adds/enables the `fileExplorer` and `webmeetInfra` repos through Ploinky commands.
+5. Runs `ploinky update` so Ploinky updates the workspace repos and local Ploinky dependencies.
 6. Stores runtime variables through `ploinky var`.
 7. Starts `fileExplorer/explorer` on `EXPLORER_ROUTER_PORT`.
-8. Verifies local router health and public `EXPLORER_PUBLIC_URL` access (the latter goes through the Cloudflare tunnel).
-
+8. Verifies local router health and public `EXPLORER_PUBLIC_URL` access through the Cloudflare tunnel.
