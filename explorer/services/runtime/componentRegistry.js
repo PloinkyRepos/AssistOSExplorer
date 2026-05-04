@@ -1,6 +1,5 @@
 import {
     computeComponentBaseUrl,
-    fetchOptionalText,
     fetchTextOrThrow,
     scopeCssToComponent
 } from '../../utils/pluginUtils.core.js';
@@ -38,30 +37,24 @@ export function createComponentRegistry(webSkel) {
     const fetchComponentAssets = async (meta) => {
         const componentBase = resolveBaseUrl(meta);
         const safeBase = componentBase.replace(/\/+/g, '/');
-        const presenterRequested = isNonEmptyString(meta.presenterName);
-        const [template, css, presenterSource] = await Promise.all([
+        const [template, css] = await Promise.all([
             fetchTextOrThrow(`${safeBase}.html`, `[runtime-plugins] Failed to load template for ${meta.componentName}`),
-            fetchTextOrThrow(`${safeBase}.css`, `[runtime-plugins] Failed to load stylesheet for ${meta.componentName}`),
-            presenterRequested ? fetchOptionalText(`${safeBase}.js`) : Promise.resolve('')
+            fetchTextOrThrow(`${safeBase}.css`, `[runtime-plugins] Failed to load stylesheet for ${meta.componentName}`)
         ]);
 
         return {
             template,
             css,
-            presenterSource,
             safeBase
         };
     };
 
-    const importPresenterModule = async (meta, safeBase, presenterSource) => {
-        if (!presenterSource || !presenterSource.trim()) {
-            return null;
-        }
+    const importPresenterModule = async (meta, safeBase) => {
         if (!isNonEmptyString(meta.presenterName)) {
             return null;
         }
         try {
-            const module = await import(/* webpackIgnore: true */ `${safeBase}.js?cacheBust=${Date.now()}`);
+            const module = await import(/* webpackIgnore: true */ `${safeBase}.js`);
             return module;
         } catch (error) {
             console.error(`[runtime-plugins] Failed to import presenter for ${meta.componentName}:`, error);
@@ -83,7 +76,7 @@ export function createComponentRegistry(webSkel) {
         const scopedCss = componentType === 'modals'
             ? assets.css
             : scopeCssToComponent(assets.css, meta.componentName);
-        const presenterModuleInstance = await importPresenterModule(meta, assets.safeBase, assets.presenterSource);
+        const presenterModuleInstance = await importPresenterModule(meta, assets.safeBase);
 
         const component = {
             name: meta.componentName,
@@ -91,7 +84,7 @@ export function createComponentRegistry(webSkel) {
             loadedTemplate: assets.template,
             loadedCSS: scopedCss,
             presenterClassName: isNonEmptyString(meta.presenterName) ? meta.presenterName.trim() : undefined,
-            presenterModule: assets.presenterSource,
+            presenterModule: presenterModuleInstance,
             agent: meta.agent
         };
 
