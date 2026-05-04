@@ -16,7 +16,13 @@
                 "WORKSPACE_ROOT",
                 "PLOINKY_WORKSPACE_ROOT",
                 "SOUL_GATEWAY_API_KEY",
-                "SOUL_GATEWAY_BASE_URL"
+                "SOUL_GATEWAY_BASE_URL",
+                "PLOINKY_ROUTER_URL",
+                "PLOINKY_ROUTER_HOST",
+                "PLOINKY_ROUTER_PORT",
+                "PLOINKY_AGENT_PRINCIPAL",
+                "PLOINKY_DPU_ROUTE",
+                "PLOINKY_INVOCATION_TOKEN"
             ]
         }
     }
