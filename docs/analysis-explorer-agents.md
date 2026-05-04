@@ -1,6 +1,6 @@
 # AssistOS Explorer — Agent Architecture Analysis
 
-> Date: 2026-04-02 | Scope: gitAgent, dpuAgent, secrets management
+> Date: 2026-04-02 | Scope: gitAgent, dpuAgent, secrets management 
 
 ---
 
