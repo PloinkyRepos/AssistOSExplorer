@@ -184,6 +184,26 @@ function pickReadableTextColor(backgroundHex, dark = '#0f172a', light = '#f8fafc
 }
 
 const BROWSER_STORAGE_KEY = 'webassist-global-chat:sessionId';
+const VISITOR_STORAGE_KEY = 'webassist-global-chat:visitorId';
+
+function generateVisitorId() {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return `visitor-${crypto.randomUUID()}`;
+    }
+    const timestamp = Date.now().toString(36);
+    const random = Math.random().toString(36).slice(2, 10);
+    return `visitor-${timestamp}-${random}`;
+}
+
+function loadOrCreateVisitorId(storageKey) {
+    const existing = loadSessionId(storageKey);
+    if (existing) {
+        return existing;
+    }
+    const created = generateVisitorId();
+    persistSessionId(storageKey, created);
+    return created;
+}
 
 class WebAssistMcpChatClient {
     constructor(options = {}) {
@@ -191,6 +211,7 @@ class WebAssistMcpChatClient {
         this.endpoint = options.endpoint || '/mcps/webAssist/mcp';
         this.chatToolName = options.chatToolName || 'web_cli_chat';
         this.historyToolName = options.historyToolName || 'web_cli_history';
+        this.registerVisitorToolName = options.registerVisitorToolName || 'register-visitor';
         this.validateTools = options.validateTools === true;
         this.mcpClient = null;
         this.mcpClientPromise = null;
@@ -297,6 +318,31 @@ class WebAssistMcpChatClient {
             history: Array.isArray(parsed.history) ? parsed.history : [],
         };
     }
+
+    async registerVisitor(visitorId) {
+        const normalizedVisitorId = normalizeString(visitorId);
+        if (!normalizedVisitorId) {
+            throw new Error('Missing visitorId for visitor registration.');
+        }
+
+        const client = await this.ensureMcpClient();
+        await this.ensureNamedToolAvailable(client, this.registerVisitorToolName);
+
+        const toolResult = await client.callTool(this.registerVisitorToolName, {
+            visitorId: normalizedVisitorId,
+        });
+        const toolText = extractToolText(toolResult);
+        const parsed = tryParseJsonPayload(toolText);
+        if (!parsed || typeof parsed !== 'object') {
+            return { ok: false };
+        }
+
+        return {
+            ok: parsed.ok === true,
+            visitorId: normalizeString(parsed.visitorId, normalizedVisitorId),
+            logFile: normalizeString(parsed.logFile),
+        };
+    }
 }
 
 function mountChatSurface(rootNode, options = {}) {
@@ -325,6 +371,7 @@ function mountChatSurface(rootNode, options = {}) {
     const validateTools = options.validateTools === true;
     const endpoint = '/mcps/webAssist/mcp';
     const storageKey = BROWSER_STORAGE_KEY;
+    const visitorStorageKey = VISITOR_STORAGE_KEY;
     const chatClient = new WebAssistMcpChatClient({ validateTools, endpoint });
 
     const theme = normalizeTheme(query.get('theme'));
@@ -383,7 +430,19 @@ function mountChatSurface(rootNode, options = {}) {
 
     let isPending = false;
     let sessionId = loadSessionId(storageKey);
+    let visitorId = loadSessionId(visitorStorageKey);
     let hydratedHistorySessionId = '';
+
+    async function registerVisitorActivity() {
+        if (!visitorId) {
+            return;
+        }
+        try {
+            await chatClient.registerVisitor(visitorId);
+        } catch {
+            // Ignore telemetry failures.
+        }
+    }
 
     function appendMessage(role, text) {
         const wrapper = document.createElement('div');
@@ -521,6 +580,11 @@ function mountChatSurface(rootNode, options = {}) {
     launcherEl?.addEventListener('click', onOpenPanel);
     closeEl?.addEventListener('click', onClosePanel);
     void hydrateHistoryFromSession();
+
+    if (!visitorId) {
+        visitorId = loadOrCreateVisitorId(visitorStorageKey);
+        void registerVisitorActivity();
+    }
 
     return () => {
         inputEl.removeEventListener('input', onInput);

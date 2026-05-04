@@ -12,6 +12,16 @@ test('statistics filters sessions and leads by the requested interval', async (t
     t.after(async () => sandbox.cleanup());
     configureDataStore({ agentRoot: sandbox.agentRoot, dataDir: sandbox.dataDir });
 
+    await fs.writeFile(
+        path.join(sandbox.dataDir, 'visitors.log'),
+        [
+            JSON.stringify({ timestamp: '2026-04-06T10:00:00.000Z', visitorId: 'visitor-a', source: 'web-assist-chat', version: 1 }),
+            JSON.stringify({ timestamp: '2026-04-02T10:00:00.000Z', visitorId: 'visitor-b', source: 'web-assist-chat', version: 1 }),
+            JSON.stringify({ timestamp: '2025-01-02T10:00:00.000Z', visitorId: 'visitor-legacy', source: 'web-assist-chat', version: 1 }),
+        ].join('\n') + '\n',
+        'utf8'
+    );
+
     const referenceDate = new Date('2026-04-06T12:00:00.000Z');
     await fs.utimes(
         path.join(sandbox.dataDir, 'sessions', 'dev-session-profile.md'),
@@ -31,8 +41,13 @@ test('statistics filters sessions and leads by the requested interval', async (t
     });
     assert.equal(typeof result, 'string');
     assert.match(result, /Statistics computed for interval month\./);
+    assert.match(result, /Total Unique Visitors: 3/);
+    assert.match(result, /Visitors in Interval: 2/);
+    assert.match(result, /Visitors Today: 1/);
+    assert.match(result, /Visitors This Week: 2/);
     assert.match(result, /Total Sessions: 1/);
     assert.match(result, /Total Leads: 1/);
+    assert.match(result, /Lead Conversion \(Leads\/Visitors\): 50\.0%/);
     assert.match(result, /- Developer: 1/);
     assert.doesNotMatch(result, /EnterpriseClient/);
 });

@@ -1,7 +1,18 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+
 import {
     getDataStore,
+    getConfiguredDataDir,
 } from '../../../src/runtime/dataStore.mjs';
-import { DATASTORE_TYPES, LEAD_FIELDS, LEAD_SECTIONS, SESSION_FILE_SUFFIX } from '../../../src/constants/datastore.mjs';
+import {
+    DATASTORE_TYPES,
+    LEAD_FIELDS,
+    LEAD_SECTIONS,
+    SESSION_FILE_SUFFIX,
+} from '../../../src/constants/datastore.mjs';
+
+const VISITORS_LOG_FILE = 'visitors.log';
 
 function parseTimestamp(value) {
     if (!value) {
@@ -47,6 +58,34 @@ function isTimestampWithinWindow(timestamp, window) {
     return timestamp >= window.start.getTime() && timestamp <= window.end.getTime();
 }
 
+function parseVisitorEvent(rawLine) {
+    if (!rawLine) {
+        return null;
+    }
+    let parsed;
+    try {
+        parsed = JSON.parse(rawLine);
+    } catch {
+        return null;
+    }
+    if (!parsed || typeof parsed !== 'object') {
+        return null;
+    }
+    const visitorId = String(parsed.visitorId ?? '').trim();
+    if (!visitorId) {
+        return null;
+    }
+    const timestamp = parseTimestamp(String(parsed.timestamp ?? '').trim());
+    if (timestamp === null) {
+        return null;
+    }
+
+    return {
+        visitorId,
+        timestamp,
+    };
+}
+
 function parseInput(promptText) {
     let parsed;
     try {
@@ -81,6 +120,9 @@ export async function action({ promptText, referenceDate = new Date() }) {
         return message;
     }
 
+    const dayWindow = getIntervalStart('day', referenceDate);
+    const weekWindow = getIntervalStart('week', referenceDate);
+
     const sessionListing = await store.listFiles(DATASTORE_TYPES.SESSIONS);
     const sessionProfileFiles = sessionListing.files
         .filter((fileName) => fileName.endsWith(`-${SESSION_FILE_SUFFIX.PROFILE}`));
@@ -113,13 +155,57 @@ export async function action({ promptText, referenceDate = new Date() }) {
         }
     }
 
+    const allVisitors = new Set();
+    const intervalVisitors = new Set();
+    const visitorsToday = new Set();
+    const visitorsThisWeek = new Set();
+
+    const visitorsLogPath = path.join(getConfiguredDataDir(), VISITORS_LOG_FILE);
+    try {
+        const content = await fs.readFile(visitorsLogPath, 'utf8');
+        const lines = content.split(/\r?\n/);
+        for (const line of lines) {
+            const event = parseVisitorEvent(line.trim());
+            if (!event) {
+                continue;
+            }
+
+            allVisitors.add(event.visitorId);
+
+            if (isTimestampWithinWindow(event.timestamp, window)) {
+                intervalVisitors.add(event.visitorId);
+            }
+
+            if (isTimestampWithinWindow(event.timestamp, dayWindow)) {
+                visitorsToday.add(event.visitorId);
+            }
+
+            if (isTimestampWithinWindow(event.timestamp, weekWindow)) {
+                visitorsThisWeek.add(event.visitorId);
+            }
+        }
+    } catch (error) {
+        if (!error || error.code !== 'ENOENT') {
+            throw error;
+        }
+    }
+
+    const conversionRate = intervalVisitors.size > 0
+        ? ((totalLeads / intervalVisitors.size) * 100).toFixed(1)
+        : '0.0';
+
     const lines = [
         `Statistics computed for interval ${interval}.`,
         `Interval: ${interval}`,
         `Window Start: ${window.start.toISOString()}`,
         `Window End: ${window.end.toISOString()}`,
+        `Total Unique Visitors: ${allVisitors.size}`,
+        `Visitors in Interval: ${intervalVisitors.size}`,
+        `Visitors Today: ${visitorsToday.size}`,
+        `Visitors This Week: ${visitorsThisWeek.size}`,
         `Total Sessions: ${totalSessions}`,
         `Total Leads: ${totalLeads}`,
+        `Lead Conversion (Leads/Visitors): ${conversionRate}%`,
         'Leads By Profile:',
     ];
     const profileEntries = Object.entries(leadsByProfile).sort((left, right) => left[0].localeCompare(right[0]));

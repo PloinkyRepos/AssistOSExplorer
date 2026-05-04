@@ -61,6 +61,30 @@
                     "optional": true
                 }
             }
+        },
+        {
+            "name": "register-visitor",
+            "title": "Register Visitor",
+            "description": "Register or update visitor analytics when chat widget loads.",
+            "command": "/code/src/mcp/register-visitor.mjs",
+            "cwd": "workspace",
+            "inputSchema": {
+                "visitorId": {
+                    "type": "string",
+                    "description": "Unique browser visitor id",
+                    "optional": false
+                },
+                "dataDir": {
+                    "type": "string",
+                    "description": "Optional data directory override",
+                    "optional": true
+                },
+                "agentRoot": {
+                    "type": "string",
+                    "description": "Optional agent root override",
+                    "optional": true
+                }
+            }
         }
     ]
 }
