@@ -1,6 +1,6 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { RecursiveSkilledAgent } from "achillesAgentLib";
+import { MainAgent } from "achillesAgentLib";
 import { createAchillesSkills } from "./lib/achillesSkillsCore.mjs";
 import debug from "./debugLogger.mjs";
 
@@ -13,7 +13,7 @@ async function AchillesSkills() {
         : path.resolve(pluginDir, "..");
     return createAchillesSkills({
         workspace,
-        AgentClass: RecursiveSkilledAgent,
+        AgentClass: MainAgent,
         startDir
     });
 }

@@ -23,28 +23,21 @@ export const createAchillesSkills = async ({
             return agent;
         }
 
-        debug.log("[AchillesSkills] Initializing RecursiveSkilledAgent", {
+        debug.log("[AchillesSkills] Initializing MainAgent", {
             startDir,
-            searchUpwards: false,
             workspaceRoot: process.env.PLOINKY_WORKSPACE_ROOT || "(not set)"
         });
 
         agent = new AgentClass({
             startDir,
-            searchUpwards: false
         });
-
-        if (Array.isArray(agent.pendingPreparations) && agent.pendingPreparations.length) {
-            await Promise.allSettled(agent.pendingPreparations);
-            agent.pendingPreparations = [];
-        }
 
         return agent;
     };
 
     const registerSkills = async () => {
         await ensureAgent();
-        const skills = Array.from(agent.skillCatalog.values());
+        const skills = agent.getSkills();
 
         for (const record of skills) {
             const skillName = typeof record.name === "string" ? record.name.trim() : "";
@@ -53,12 +46,12 @@ export const createAchillesSkills = async ({
                 continue;
             }
 
-            const executeSkillPrompt = async (inputValues) => {
+            const executeSkill = async (inputValues) => {
                 await ensureAgent();
                 const promptText = Array.isArray(inputValues)
                     ? inputValues.join(" ")
                     : (typeof inputValues === "string" ? inputValues : "");
-                const out = await agent.executePrompt(promptText, { skillName });
+                const out = await agent.executeSkill(skillName, promptText);
                 if (out && typeof out === "object" && Object.prototype.hasOwnProperty.call(out, "result")) {
                     return out.result;
                 }
@@ -66,7 +59,7 @@ export const createAchillesSkills = async ({
             };
 
             workspace.registerCommand(commandName, async (inputValues) => {
-                const out = await executeSkillPrompt(inputValues);
+                const out = await executeSkill(inputValues);
                 debug.log(`[AchillesSkills] ${commandName} executed, result: ${out}`);
                 return out;
             });
@@ -101,7 +94,7 @@ export const createAchillesSkills = async ({
 
             await registerSkills();
             await ensureAgent();
-            const result = await agent.executePrompt(text, { skillName });
+            const result = await agent.executeSkill(skillName, text);
             if (result && typeof result === "object" && Object.prototype.hasOwnProperty.call(result, "result")) {
                 return result.result;
             }
