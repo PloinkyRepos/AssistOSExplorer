@@ -113,11 +113,30 @@ export async function action({ promptText }) {
     const files = Array.isArray(payload.files) ? payload.files : null;
     if (files && files.length > 0) {
         let index = 1;
+        const readResults = [];
         for (const entry of files) {
             const fileName = sanitizeName(entry?.name)
                 || deriveNameFromContent(entry?.promptText || entry?.content, index);
-            const content = typeof entry?.content === 'string' ? entry.content : '';
-            const result = await writeInfoFile(store, dataDir, fileName, content);
+            if (!fileName) {
+                index += 1;
+                continue;
+            }
+            const hasContent = typeof entry?.content === 'string' && entry.content.trim();
+            if (!hasContent) {
+                try {
+                    const result = await readInfoFile(store, fileName);
+                    readResults.push(result);
+                } catch (error) {
+                    if (error && error.code === 'ENOENT') {
+                        readResults.push({ fileName: `${fileName}.md`, content: '*File not found*' });
+                    } else {
+                        throw error;
+                    }
+                }
+                index += 1;
+                continue;
+            }
+            const result = await writeInfoFile(store, dataDir, fileName, entry.content);
             if (result.created) {
                 created.push(result.fileName);
             } else {
@@ -125,15 +144,36 @@ export async function action({ promptText }) {
             }
             index += 1;
         }
-        const total = created.length + updated.length;
-        const lines = [`Processed ${total} site info file${total === 1 ? '' : 's'}.`];
-        if (created.length > 0) {
-            lines.push('Created:');
-            lines.push(...created.map((fileName) => `- ${fileName}`));
+        if (readResults.length > 0 && created.length === 0 && updated.length === 0) {
+            const lines = readResults.map((r) => [
+                `# ${r.fileName}`,
+                '',
+                r.content.trim(),
+            ].join('\n'));
+            return lines.join('\n\n---\n\n');
         }
-        if (updated.length > 0) {
-            lines.push('Updated:');
-            lines.push(...updated.map((fileName) => `- ${fileName}`));
+        const total = created.length + updated.length;
+        const readCount = readResults.length;
+        const lines = [];
+        if (readCount > 0) {
+            lines.push(`Read ${readCount} site info file${readCount === 1 ? '' : 's'}.`);
+            lines.push('');
+            lines.push(...readResults.map((r) => [
+                `# ${r.fileName}`,
+                '',
+                r.content.trim(),
+            ].join('\n')));
+        }
+        if (total > 0) {
+            lines.push(`Processed ${total} site info file${total === 1 ? '' : 's'}.`);
+            if (created.length > 0) {
+                lines.push('Created:');
+                lines.push(...created.map((fileName) => `- ${fileName}`));
+            }
+            if (updated.length > 0) {
+                lines.push('Updated:');
+                lines.push(...updated.map((fileName) => `- ${fileName}`));
+            }
         }
         return lines.join('\n');
     }
