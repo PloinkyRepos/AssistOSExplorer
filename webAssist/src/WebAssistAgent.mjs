@@ -79,7 +79,7 @@ export async function createWebAssistAgent({
         agentRoot: resolvedAgentRoot,
         dataDir: resolvedDataDir,
         mainAgent,
-        async handleMessage({ sessionId, message, mode = 'plan' }) {
+        async handleMessage({ sessionId, message, mode = 'fast' }) {
             if (!sessionId) {
                 throw new Error('webAssist.handleMessage requires a sessionId.');
             }
