@@ -3,6 +3,7 @@
 import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 import readline from 'node:readline';
+import { Writable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 
 import { createWebAdminAgent } from './WebAdminAgent.mjs';
@@ -118,9 +119,11 @@ async function runInteractive(agent, state) {
         });
     }
 
+    const isTTY = process.stdin.isTTY;
+    const rlOutput = isTTY ? process.stdout : new Writable({ write(chunk, encoding, callback) { callback(); } });
     const rl = readline.createInterface({
         input: process.stdin,
-        output: process.stdout,
+        output: rlOutput,
         prompt: 'you> ',
     });
     let isClosing = false;
@@ -142,8 +145,8 @@ async function runInteractive(agent, state) {
 
         processingChain = processingChain.then(async () => {
             if (!message) {
-                if (!isClosing) {
-                    rl.prompt();
+                if (!isClosing && isTTY) {
+                    process.stdout.write('you> ');
                 }
                 return;
             }
@@ -156,8 +159,8 @@ async function runInteractive(agent, state) {
                 sessionId: state.sessionId,
                 message,
             });
-            if (!isClosing) {
-                rl.prompt();
+            if (!isClosing && isTTY) {
+                process.stdout.write('you> ');
             }
         });
     };
@@ -186,7 +189,7 @@ async function runInteractive(agent, state) {
         scheduleFlush();
     });
 
-    rl.prompt();
+    if (isTTY) process.stdout.write('you> ');
     await new Promise((resolve) => rl.once('close', resolve));
     flushPendingLines();
     await processingChain;
