@@ -150,6 +150,14 @@ async function start() {
 
         wrapComponentOpener('showModal');
         wrapComponentOpener('createReactiveModal');
+
+        const originalChangeToDynamicPage = webSkel.changeToDynamicPage;
+        if (typeof originalChangeToDynamicPage === 'function') {
+            webSkel.changeToDynamicPage = async (componentName, ...args) => {
+                await ensureComponentRegistered(componentName);
+                return originalChangeToDynamicPage.call(webSkel, componentName, ...args);
+            };
+        }
     };
 
     installRuntimeComponentGuards();
@@ -187,7 +195,7 @@ async function start() {
         url = 'file-exp';
     }
 
-    const loadedRuntimeComponents = await runtimePluginLoader.loadComponents(runtimePlugins);
+    const loadedRuntimeComponents = await runtimePluginLoader.loadComponents(runtimePlugins, { includeDependencies: false });
     assistOS.runtimePluginComponents = loadedRuntimeComponents;
 
     await webSkel.changeToDynamicPage(pageName || 'file-exp', url || 'file-exp');
