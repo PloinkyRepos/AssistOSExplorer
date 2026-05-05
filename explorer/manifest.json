@@ -26,6 +26,7 @@
         "soplangAgent global",
         "tasksAgent global",
         "llmAssistant global",
+        "AchillesCLI/achilles-cli global",
         "webmeetInfra/stack",
         "webmeetAgent global",
         "multimedia global",
