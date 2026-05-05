@@ -21,6 +21,25 @@ gh secret set WEBMEET_TURN_PASSWORD --repo PloinkyRepos/AssistOSExplorer
 
 `skills.axiologic.dev` is fronted by a Cloudflare Zero Trust tunnel running as a podman container on the host. The tunnel terminates TLS at Cloudflare's edge and forwards directly to the Explorer router on `127.0.0.1:${EXPLORER_ROUTER_PORT}` (default `8097`). The workflow does **not** manage the tunnel; ingress is configured in the Cloudflare Zero Trust dashboard. To change the routing target, edit the tunnel's public hostname configuration in the dashboard rather than touching the workflow.
 
+## LiveKit Public Access
+
+WebMeet uses a separate public LiveKit endpoint:
+
+```text
+wss://livekit-skills.axiologic.dev
+```
+
+Current production routing uses a DNS-only A record for `livekit-skills.axiologic.dev` pointing to `193.180.209.191`. TLS is terminated by nginx on the host, and nginx proxies WebSocket/API traffic to LiveKit on `127.0.0.1:7880`. The GitHub workflows do not currently provision or update this nginx/certbot setup.
+
+If this DNS-only/nginx path remains in use, keep the Let's Encrypt renewal hook aligned with nginx:
+
+```sh
+ssh -i ~/demo_private_key.pem admin@193.180.209.191 \
+  "printf '%s\n' '#!/bin/sh' 'systemctl reload nginx' | sudo tee /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh >/dev/null && sudo chmod 0755 /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh && sudo rm -f /etc/letsencrypt/renewal-hooks/deploy/reload-caddy.sh"
+```
+
+If `livekit-skills.axiologic.dev` is moved back behind Cloudflare/Tunnel, retest WebMeet before removing nginx/certbot because the final client-side subscription fix has not been A/B tested against the old signaling path.
+
 ## GitHub Variables
 
 Create or update these repository variables.
@@ -35,11 +54,11 @@ gh variable set PLOINKY_PROFILE --repo PloinkyRepos/AssistOSExplorer --body prod
 gh variable set ONLYOFFICE_PUBLIC_URL --repo PloinkyRepos/AssistOSExplorer --body https://office.axiologic.dev
 gh variable set ONLYOFFICE_INTERNAL_URL --repo PloinkyRepos/AssistOSExplorer --body http://127.0.0.1:8082
 gh variable set ONLYOFFICE_CALLBACK_BASE_URL --repo PloinkyRepos/AssistOSExplorer --body https://skills.axiologic.dev
-gh variable set WEBMEET_PUBLIC_LIVEKIT_URL --repo PloinkyRepos/AssistOSExplorer --body wss://livekit.skills.axiologic.dev
+gh variable set WEBMEET_PUBLIC_LIVEKIT_URL --repo PloinkyRepos/AssistOSExplorer --body wss://livekit-skills.axiologic.dev
 gh variable set WEBMEET_LIVEKIT_URL --repo PloinkyRepos/AssistOSExplorer --body http://webmeetLivekitServer:7880
 gh variable set WEBMEET_LIVEKIT_API_KEY --repo PloinkyRepos/AssistOSExplorer --body webmeet
 gh variable set WEBMEET_EGRESS_URL --repo PloinkyRepos/AssistOSExplorer --body http://webmeetLivekitEgress:7980
-gh variable set WEBMEET_LIVEKIT_USE_EXTERNAL_IP --repo PloinkyRepos/AssistOSExplorer --body true
+gh variable set WEBMEET_LIVEKIT_USE_EXTERNAL_IP --repo PloinkyRepos/AssistOSExplorer --body false
 gh variable set WEBMEET_LIVEKIT_NODE_IP --repo PloinkyRepos/AssistOSExplorer --body 193.180.209.191
 gh variable set WEBMEET_TURN_EXTERNAL_IP --repo PloinkyRepos/AssistOSExplorer --body 193.180.209.191
 gh variable set WEBMEET_TURN_REALM --repo PloinkyRepos/AssistOSExplorer --body skills.axiologic.dev
