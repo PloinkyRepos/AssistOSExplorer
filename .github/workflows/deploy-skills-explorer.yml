@@ -101,6 +101,7 @@ jobs:
           WEBMEET_TURN_REALM: ${{ vars.WEBMEET_TURN_REALM }}
           WEBMEET_TURN_USER: ${{ vars.WEBMEET_TURN_USER }}
           WEBMEET_TURN_PASSWORD: ${{ secrets.WEBMEET_TURN_PASSWORD }}
+          WEBMEET_ICE_TRANSPORT_POLICY: ${{ vars.WEBMEET_ICE_TRANSPORT_POLICY }}
           WEBMEET_TURN_MIN_PORT: ${{ vars.WEBMEET_TURN_MIN_PORT }}
           WEBMEET_TURN_MAX_PORT: ${{ vars.WEBMEET_TURN_MAX_PORT }}
         run: |
@@ -132,6 +133,7 @@ jobs:
             write_env WEBMEET_TURN_REALM
             write_env WEBMEET_TURN_USER
             write_env WEBMEET_TURN_PASSWORD
+            write_env WEBMEET_ICE_TRANSPORT_POLICY
             write_env WEBMEET_TURN_MIN_PORT
             write_env WEBMEET_TURN_MAX_PORT
           } > /tmp/skills_explorer_env
@@ -267,6 +269,7 @@ jobs:
           set_var WEBMEET_TURN_REALM "${WEBMEET_TURN_REALM:-}"
           set_var WEBMEET_TURN_USER "${WEBMEET_TURN_USER:-}"
           set_var WEBMEET_TURN_PASSWORD "${WEBMEET_TURN_PASSWORD:-}"
+          set_var WEBMEET_ICE_TRANSPORT_POLICY "${WEBMEET_ICE_TRANSPORT_POLICY:-relay}"
           set_var WEBMEET_TURN_MIN_PORT "${WEBMEET_TURN_MIN_PORT:-}"
           set_var WEBMEET_TURN_MAX_PORT "${WEBMEET_TURN_MAX_PORT:-}"
 

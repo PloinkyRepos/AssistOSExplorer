@@ -1,6 +1,6 @@
 # WebMeet Debugging Handoff
 
-Last updated: 2026-05-05, after LiveKit connect `rtcConfig` deploy run `25372146487`.
+Last updated: 2026-05-05, after the production TURN relay policy change.
 
 This handoff is for continuing the WebMeet screen-sharing and microphone debugging on `skills.axiologic.dev`.
 
@@ -71,6 +71,22 @@ Implemented Part 1 fix:
   username: webmeet
   credential: present
   ```
+
+Retest after `13274d5`:
+
+- `chrome://webrtc-internals` now shows both STUN and TURN URLs in the peer connection config, so the browser receives the TURN config.
+- ICE still selected direct LiveKit media candidates, for example browser-to-`193.180.209.191:7892` and browser-to-`193.180.209.191:7884`.
+- The publisher showed an outbound screen-share RTP stream plus `remote-inbound-rtp`, meaning LiveKit was receiving at least one screen-share RTP stream from the publisher.
+- The receiver still had no `inbound-rtp kind=video` entry, only data channels and transport/candidate stats, so the remote browser still was not receiving a video downtrack.
+- A corrected `turnutils_uclient` test from the coturn container to `193.180.209.191:3478` authenticated successfully, allocated relays on the `20000+` range, and reported 0% packet loss. Coturn itself is usable.
+
+Current candidate fix:
+
+- `WEBMEET_ICE_TRANSPORT_POLICY` was added.
+- `default` and `dev` profiles keep `all`.
+- `prod` defaults to `relay`, and the deploy workflow sets `WEBMEET_ICE_TRANSPORT_POLICY` to `${WEBMEET_ICE_TRANSPORT_POLICY:-relay}`.
+- The next production deploy should make new browser peer connections show `iceTransportPolicy: relay` and selected `relay` candidates in `chrome://webrtc-internals`.
+- If forced relay still fails, the likely problem is no longer the direct LiveKit UDP media path and the next focus should be LiveKit subscription/downtrack negotiation for the screen-share publication.
 
 ## Important Commit Hygiene
 
@@ -573,7 +589,8 @@ Current state:
 - Production deploy run 25372146487 succeeded.
 - Remote repo on skills.axiologic.dev is at 13274d5.
 - Part 1 TURN wiring has been implemented, pushed, and deployed. Commit 13274d5 is the important correction because it passes `rtcConfig` to `room.connect(...)`.
-- Browser retest after 13274d5 is still needed.
+- Browser retest after 13274d5 showed TURN URLs are now present in the browser config, but ICE still selected direct LiveKit UDP candidates and the receiver still had no inbound video RTP.
+- A follow-up change adds `WEBMEET_ICE_TRANSPORT_POLICY` and defaults production to `relay` so the next deployment tests the TURN relay path.
 - Three temporary client-side debugging commits were tried and reverted:
   - 9278950 reverted by 84e780a
   - ec81621 reverted by 2e87af9
@@ -583,6 +600,7 @@ Current state:
 - Public LiveKit host is https://livekit-skills.axiologic.dev and the browser joins via wss://livekit-skills.axiologic.dev.
 - Previous remote browser console showed intermittent 502/CORS failures on /rtc/v1/validate during LiveKit connection attempts.
 - Production findings indicate the browser was not receiving TURN servers even though Coturn is running.
+- Latest production findings indicate the browser now receives TURN servers, but direct UDP is still selected unless the new relay policy is deployed.
 
 Goal:
 Find and fix the production-only cause. Prioritize remote LiveKit reachability, proxy/WebSocket/TLS behavior, ICE candidate advertisement, UDP/TCP media ports, TURN config, and differences between local dev profile and remote prod profile.
@@ -611,6 +629,7 @@ Suggested first checks:
    WEBMEET_LIVEKIT_USE_EXTERNAL_IP
    WEBMEET_LIVEKIT_NODE_IP
    WEBMEET_TURN_EXTERNAL_IP
+   WEBMEET_ICE_TRANSPORT_POLICY
    exposed LiveKit ports 7880, 7881, 7882-7892/udp
 6. From the browser receiver, verify whether chrome://webrtc-internals has inbound-rtp video. If not, focus on LiveKit not forwarding media or the browser not receiving usable ICE candidates.
 7. Check the reverse proxy / DNS / edge config for livekit-skills.axiologic.dev. Confirm WebSocket upgrade and /rtc/v1/validate are forwarded to LiveKit without intermittent 502 or missing CORS headers.
