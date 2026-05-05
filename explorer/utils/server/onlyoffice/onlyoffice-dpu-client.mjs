@@ -1,201 +1,119 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { client as mcpClient, StreamableHTTPClientTransport } from 'mcp-sdk';
 
-const { Client } = mcpClient;
-const INVOCATION_TTL_SECONDS = 60;
-const INVOCATION_IAT_BACKDATE_SECONDS = 30;
-const DEFAULT_INVOCATION_SCOPES = Object.freeze([
-  'secret:read',
-  'secret:write',
-  'secret:access',
-  'secret:grant',
-  'secret:revoke'
-]);
+const CALLER_JWT_HEADER = 'x-ploinky-caller-jwt';
+const DEFAULT_DPU_ROUTE = 'dpuAgent';
 
-function base64url(value) {
-  return Buffer.from(value).toString('base64url');
-}
-
-function base64urlJson(value) {
-  return base64url(JSON.stringify(value));
-}
-
-function canonicalJson(value) {
-  if (value === null || typeof value !== 'object') {
-    return JSON.stringify(value ?? null);
+function safeParseJson(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
   }
-  if (Array.isArray(value)) {
-    return `[${value.map(canonicalJson).join(',')}]`;
-  }
-  const keys = Object.keys(value).sort();
-  return `{${keys.map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
 }
 
-function bodyHashForRequest(bodyObject) {
-  return crypto.createHash('sha256').update(canonicalJson(bodyObject ?? {}), 'utf8').digest('base64url');
+function normalizeBaseUrl(value) {
+  return String(value || '').trim().replace(/\/+$/, '');
 }
 
-function signHmacJwt({ payload, secret }) {
-  const header = base64urlJson({ alg: 'HS256', typ: 'JWT' });
-  const body = base64urlJson(payload);
-  const signingInput = `${header}.${body}`;
-  const signature = crypto.createHmac('sha256', secret).update(signingInput).digest('base64url');
-  return `${signingInput}.${signature}`;
-}
-
-function normalizeAuthUser(authInfo) {
-  const user = authInfo && typeof authInfo === 'object' ? authInfo.user : null;
-  if (!user || typeof user !== 'object') return null;
-  return {
-    sub: String(user.id || ''),
-    id: String(user.id || ''),
-    email: String(user.email || ''),
-    username: String(user.username || user.name || user.email || ''),
-    roles: Array.isArray(user.roles) ? [...user.roles] : []
-  };
-}
-
-function buildDpuInvocationHeaders(route, toolName, args, authInfo, env = process.env) {
-  const wireSecret = String(env.PLOINKY_WIRE_SECRET || '').trim();
-  if (!wireSecret) return {};
-
-  const now = Math.floor(Date.now() / 1000);
-  const iat = now - INVOCATION_IAT_BACKDATE_SECONDS;
-  const exp = now + INVOCATION_TTL_SECONDS;
-  const providerPrincipal = `agent:${String(route?.repo || '').trim()}/${String(route?.agent || '').trim()}`;
-  const callerPrincipal = String(env.PLOINKY_AGENT_PRINCIPAL || env.AGENT_NAME || 'agent:explorer').trim();
-  const user = normalizeAuthUser(authInfo);
-  const bodyObject = { tool: toolName, arguments: args || {} };
-  const token = signHmacJwt({
-    payload: {
-      typ: 'invocation',
-      iss: 'ploinky-router',
-      aud: providerPrincipal,
-      sub: String(user?.id || user?.sub || ''),
-      caller: callerPrincipal,
-      tool: String(toolName),
-      scope: DEFAULT_INVOCATION_SCOPES,
-      bh: bodyHashForRequest(bodyObject),
-      usr: user,
-      jti: crypto.randomBytes(16).toString('base64url'),
-      iat,
-      exp
-    },
-    secret: Buffer.from(wireSecret, 'hex')
-  });
-  return { authorization: `Bearer ${token}` };
-}
-
-function loadDpuRoute(workspaceRoot) {
+function loadRouting(workspaceRoot) {
   const routingPath = path.join(workspaceRoot, '.ploinky', 'routing.json');
-  const parsed = JSON.parse(fs.readFileSync(routingPath, 'utf8'));
-  const route = parsed?.routes?.dpuAgent || null;
-  const port = Number(route?.hostPort);
-  if (!Number.isFinite(port) || port <= 0) {
-    throw new Error('DPU route is not configured in .ploinky/routing.json.');
-  }
-  return route;
+  return JSON.parse(fs.readFileSync(routingPath, 'utf8'));
 }
 
-export function getDpuBaseUrlCandidates(route, env = process.env) {
-  const port = Number(route?.hostPort);
-  const configuredHost = String(env.ONLYOFFICE_DPU_HOST || '').trim();
-  const hosts = [
-    configuredHost,
-    '127.0.0.1',
-    'host.containers.internal'
-  ].filter(Boolean);
-
-  return [...new Set(hosts)].map((host) => `http://${host}:${port}/mcp`);
+function resolveDpuRouteName(env = process.env) {
+  const configured = String(env.PLOINKY_DPU_ROUTE || env.ONLYOFFICE_DPU_ROUTE || '').trim();
+  return configured || DEFAULT_DPU_ROUTE;
 }
 
-export function createOnlyOfficeDpuClient({ workspaceRoot, authInfo }) {
-  const route = loadDpuRoute(workspaceRoot);
-  const baseUrlCandidates = getDpuBaseUrlCandidates(route);
-  let client = null;
-  let transport = null;
-  let activeBaseUrl = '';
-
-  async function connect(requestHeaders = undefined) {
-    if (client && transport) {
-      return;
-    }
-    let lastError = null;
-    for (const baseUrl of baseUrlCandidates) {
-      const nextTransport = new StreamableHTTPClientTransport(
-        new URL(baseUrl),
-        requestHeaders ? { requestInit: { headers: requestHeaders } } : undefined
-      );
-      const nextClient = new Client({ name: 'explorer-onlyoffice', version: '1.0.0' });
-      try {
-        await nextClient.connect(nextTransport);
-        transport = nextTransport;
-        client = nextClient;
-        activeBaseUrl = baseUrl;
-        return;
-      } catch (error) {
-        lastError = error;
-        try {
-          await nextClient.close();
-        } catch {
-          // ignore close errors
-        }
-        try {
-          await nextTransport.close?.();
-        } catch {
-          // ignore close errors
-        }
-      }
-    }
-    throw lastError || new Error(`Could not connect to DPU MCP route via ${baseUrlCandidates.join(', ')}.`);
+export function resolveOnlyOfficeRouterBaseUrl({ routing = {}, env = process.env } = {}) {
+  const configured = normalizeBaseUrl(env.PLOINKY_ROUTER_URL);
+  if (configured) {
+    return configured;
   }
+  const host = String(env.PLOINKY_ROUTER_HOST || '127.0.0.1').trim();
+  const port = String(env.PLOINKY_ROUTER_PORT || routing?.port || '8080').trim();
+  return `http://${host}:${port}`;
+}
+
+export function getDpuRouterMcpUrl({ routing = {}, env = process.env } = {}) {
+  const routeName = resolveDpuRouteName(env);
+  return `${resolveOnlyOfficeRouterBaseUrl({ routing, env })}/mcps/${encodeURIComponent(routeName)}/mcp`;
+}
+
+function extractInvocationToken(authInfo = null, env = process.env) {
+  const direct = authInfo && typeof authInfo === 'object'
+    ? String(authInfo.invocationToken || authInfo.rawToken || '').trim()
+    : '';
+  if (direct) {
+    return direct;
+  }
+  return String(env.PLOINKY_INVOCATION_TOKEN || '').trim();
+}
+
+function unwrapToolPayload(name, result) {
+  const blocks = Array.isArray(result?.content) ? result.content : [];
+  const jsonBlock = blocks.find((block) => block?.type === 'json');
+  if (jsonBlock?.json && typeof jsonBlock.json === 'object') {
+    return jsonBlock.json;
+  }
+  const textBlock = blocks.find((block) => block?.type === 'text' && typeof block.text === 'string');
+  if (textBlock?.text) {
+    const parsed = safeParseJson(textBlock.text);
+    if (parsed && typeof parsed === 'object') {
+      return parsed;
+    }
+    throw new Error(textBlock.text);
+  }
+  if (result?.structuredContent && typeof result.structuredContent === 'object') {
+    return result.structuredContent;
+  }
+  throw new Error(`Invalid DPU response for ${name}.`);
+}
+
+export function createOnlyOfficeDpuClient({ workspaceRoot, authInfo, env = process.env }) {
+  const routing = loadRouting(workspaceRoot);
+  const baseUrl = getDpuRouterMcpUrl({ routing, env });
+  const invocationToken = extractInvocationToken(authInfo, env);
 
   async function callTool(name, args = {}) {
-    await close();
-    const requestHeaders = buildDpuInvocationHeaders(route, name, args, authInfo);
-    await connect(requestHeaders);
-    const result = await client.callTool({ name, arguments: args });
-    const blocks = Array.isArray(result?.content) ? result.content : [];
-    const textBlock = blocks.find((block) => block?.type === 'text' && typeof block.text === 'string');
-    if (result?.isError) {
-      throw new Error(textBlock?.text || `DPU call failed: ${name}`);
+    if (!invocationToken) {
+      throw new Error('OnlyOffice DPU calls require a router-issued invocation token.');
     }
-    const jsonBlock = blocks.find((block) => block?.type === 'json');
-    if (jsonBlock?.json && typeof jsonBlock.json === 'object') {
-      return jsonBlock.json;
-    }
-    if (textBlock?.text) {
-      return JSON.parse(textBlock.text);
-    }
-    if (result?.structuredContent && typeof result.structuredContent === 'object') {
-      return result.structuredContent;
-    }
-    throw new Error(`Invalid DPU response for ${name}.`);
-  }
 
-  async function close() {
-    try {
-      if (client) {
-        await client.close();
-      }
-    } catch {
-      // ignore close errors
+    const response = await fetch(baseUrl, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        [CALLER_JWT_HEADER]: invocationToken
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: crypto.randomUUID(),
+        method: 'tools/call',
+        params: {
+          name,
+          arguments: args
+        }
+      })
+    });
+    const responseText = await response.text();
+    const parsed = safeParseJson(responseText);
+    if (!response.ok) {
+      const detail = parsed?.error?.message || parsed?.error || responseText || `HTTP ${response.status}`;
+      throw new Error(String(detail));
     }
-    try {
-      await transport?.close?.();
-    } catch {
-      // ignore close errors
+    if (parsed?.error && typeof parsed.error === 'object') {
+      throw new Error(String(parsed.error.message || parsed.error.detail || parsed.error.code || `${name} failed.`));
     }
-    client = null;
-    transport = null;
-    activeBaseUrl = '';
+    return unwrapToolPayload(name, parsed?.result || parsed);
   }
 
   return {
     callTool,
-    close,
-    getBaseUrl: () => activeBaseUrl
+    close: async () => {},
+    getBaseUrl: () => baseUrl
   };
 }
