@@ -52,7 +52,7 @@ export function createRuntimePluginLoader({
         }
     };
 
-    const scheduleComponents = (runtimePlugins) => {
+    const scheduleComponents = (runtimePlugins, { includeDependencies = true } = {}) => {
         const scheduled = new Map();
         const scheduleComponent = (meta) => {
             const componentName = meta?.componentName;
@@ -88,7 +88,7 @@ export function createRuntimePluginLoader({
                 baseUrl: plugin.componentBaseUrl,
                 componentType: plugin.type === 'modal' ? 'modals' : 'components'
             });
-            if (Array.isArray(plugin.dependencies)) {
+            if (includeDependencies && Array.isArray(plugin.dependencies)) {
                 for (const dependency of plugin.dependencies) {
                     if (!dependency || typeof dependency !== 'object') {
                         continue;
@@ -110,8 +110,8 @@ export function createRuntimePluginLoader({
         return scheduled;
     };
 
-    const loadComponents = async (runtimePlugins) => {
-        const scheduled = scheduleComponents(runtimePlugins);
+    const loadComponents = async (runtimePlugins, options = {}) => {
+        const scheduled = scheduleComponents(runtimePlugins, options);
         const entries = Array.from(scheduled.entries());
         if (!entries.length) {
             return new Map();
@@ -147,10 +147,24 @@ export function createRuntimePluginLoader({
         }
 
         const plugins = runtimePlugins || cachedNormalizedPlugins || (await fetchRuntimePlugins()).normalized;
-        const scheduled = scheduleComponents(plugins);
-        const meta = Array.from(scheduled.values()).find((entry) => entry.componentName === componentName.trim());
+        const scheduled = scheduleComponents(plugins, { includeDependencies: true });
+        const requestedComponentName = componentName.trim();
+        const meta = Array.from(scheduled.values()).find((entry) => entry.componentName === requestedComponentName);
         if (!meta) {
             return null;
+        }
+
+        if (meta.isDependency && isNonEmptyString(meta.ownerComponent)) {
+            const relatedEntries = Array.from(scheduled.values()).filter((entry) => (
+                entry.agent === meta.agent
+                && (
+                    entry.componentName === requestedComponentName
+                    || entry.componentName === meta.ownerComponent
+                    || entry.ownerComponent === meta.ownerComponent
+                )
+            ));
+            await Promise.all(relatedEntries.map((entry) => componentRegistry.loadComponent(entry)));
+            return componentRegistry.getCachedComponent(meta) || componentRegistry.loadComponent(meta);
         }
 
         return componentRegistry.loadComponent(meta);
