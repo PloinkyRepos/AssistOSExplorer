@@ -171,7 +171,7 @@ jobs:
             fi
           }
 
-          # Infrastructure variables (must match deploy-explorer.yml)
+          # Infrastructure variables (must match deploy-skills-explorer.yml)
           ploinky var PLOINKY_CODE_WRITABLE "1" 2>/dev/null || true
           ploinky var ASSISTOS_FS_ROOT "\$WORK_DIR" 2>/dev/null || true
 

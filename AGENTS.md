@@ -174,7 +174,6 @@ Deployment and remote admin workflows live in `.github/workflows/`:
 - `provision-skills-explorer-host.yml`
 - `deploy-skills-explorer.yml`
 - `remote-skills-status.yml`
-- `deploy-explorer.yml`
 - `update-explorer.yml`
 - `destroy-explorer.yml`
 
