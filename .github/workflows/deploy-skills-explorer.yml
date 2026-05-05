@@ -194,6 +194,24 @@ jobs:
             fi
           fi
 
+          repair_encrypted_secrets_file() {
+            local secrets_file="$WORK_DIR/.ploinky/.secrets"
+            [ -f "$secrets_file" ] || return 0
+            local line_count
+            line_count="$(wc -l < "$secrets_file" | tr -d '[:space:]')"
+            if [ "${line_count:-0}" -gt 1 ] && tail -n +2 "$secrets_file" | grep -Eq '^[A-Za-z_][A-Za-z0-9_]*='; then
+              local backup_file="$secrets_file.corrupt-$(date +%Y%m%d%H%M%S)"
+              local temp_file="$secrets_file.repair.$$"
+              cp -p "$secrets_file" "$backup_file"
+              head -n 1 "$backup_file" > "$temp_file"
+              chmod 600 "$temp_file"
+              mv "$temp_file" "$secrets_file"
+              echo "[deploy] Repaired encrypted .ploinky/.secrets by removing a plaintext trailer; backup: $backup_file"
+            fi
+          }
+
+          repair_encrypted_secrets_file
+
           echo "[deploy] Stopping current workspace services if present..."
           env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" stop || true
 
@@ -239,7 +257,7 @@ jobs:
             local name="$1"
             local value="$2"
             if [ -n "$value" ]; then
-              "$PLOINKY" var "$name" "$value"
+              env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" var "$name" "$value"
               echo "[deploy] Set $name"
             fi
           }
