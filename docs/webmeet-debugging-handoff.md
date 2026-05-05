@@ -1,6 +1,6 @@
 # WebMeet Debugging Handoff
 
-Last updated: 2026-05-05, after the production TURN relay policy change.
+Last updated: 2026-05-05, after backing off forced TURN relay.
 
 This handoff is for continuing the WebMeet screen-sharing and microphone debugging on `skills.axiologic.dev`.
 
@@ -80,17 +80,17 @@ Retest after `13274d5`:
 - The receiver still had no `inbound-rtp kind=video` entry, only data channels and transport/candidate stats, so the remote browser still was not receiving a video downtrack.
 - A corrected `turnutils_uclient` test from the coturn container to `193.180.209.191:3478` authenticated successfully, allocated relays on the `20000+` range, and reported 0% packet loss. Coturn itself is usable.
 
-Current deployed relay fix:
+Forced relay test result:
 
 - `WEBMEET_ICE_TRANSPORT_POLICY` was added.
-- `default` and `dev` profiles keep `all`.
-- `prod` defaults to `relay`, and the deploy workflow sets `WEBMEET_ICE_TRANSPORT_POLICY` to `${WEBMEET_ICE_TRANSPORT_POLICY:-relay}`.
+- `default`, `dev`, and `prod` profiles now default to `all`.
 - Production deploy run `25372702377` completed successfully at commit `7f699c0`.
 - Remote verification after deploy confirmed the `webmeetAgent` container has `WEBMEET_ICE_TRANSPORT_POLICY=relay`.
 - A throwaway join payload generated inside the container returned `rtcConfig.iceTransportPolicy: "relay"` with STUN plus TURN URLs and a present TURN credential.
-- The next browser retest should use hard refreshes or new incognito/private windows so tabs do not reuse a pre-deploy session object.
-- New browser peer connections should show `iceTransportPolicy: relay` and selected `relay` candidates in `chrome://webrtc-internals`.
-- If forced relay still fails, the likely problem is no longer the direct LiveKit UDP media path and the next focus should be LiveKit subscription/downtrack negotiation for the screen-share publication.
+- The user then hit a peer-connection establishment failure. LiveKit logs showed relay candidates but the connection closed before it became usable.
+- Forced relay is therefore too strict for production right now. Keep TURN available as a fallback, but do not force relay globally.
+- The next deploy should return `WEBMEET_ICE_TRANSPORT_POLICY=all`.
+- The next focus should be LiveKit subscription/downtrack negotiation for the screen-share publication, plus separate TURN reachability testing if relay support is still needed.
 
 ## Important Commit Hygiene
 
@@ -594,7 +594,7 @@ Current state:
 - Remote repo on skills.axiologic.dev is at 7f699c0.
 - Part 1 TURN wiring has been implemented, pushed, and deployed. Commit 13274d5 is the important correction because it passes `rtcConfig` to `room.connect(...)`.
 - Browser retest after 13274d5 showed TURN URLs are now present in the browser config, but ICE still selected direct LiveKit UDP candidates and the receiver still had no inbound video RTP.
-- Commit 7f699c0 adds `WEBMEET_ICE_TRANSPORT_POLICY`, defaults production to `relay`, and deploys that setting to test the TURN relay path.
+- Commit 7f699c0 added `WEBMEET_ICE_TRANSPORT_POLICY` and forced production relay as a test. That caused peer-connection establishment failures, so the current code backs production off to `all` while keeping TURN configured.
 - Three temporary client-side debugging commits were tried and reverted:
   - 9278950 reverted by 84e780a
   - ec81621 reverted by 2e87af9
@@ -604,7 +604,7 @@ Current state:
 - Public LiveKit host is https://livekit-skills.axiologic.dev and the browser joins via wss://livekit-skills.axiologic.dev.
 - Previous remote browser console showed intermittent 502/CORS failures on /rtc/v1/validate during LiveKit connection attempts.
 - Production findings indicate the browser was not receiving TURN servers even though Coturn is running.
-- Latest production findings indicate the browser now receives TURN servers, but direct UDP is still selected unless the new relay policy is deployed.
+- Latest production findings indicate the browser now receives TURN servers, but forced relay caused peer-connection establishment failures. Production should use `all` while the screen-share downtrack issue is debugged.
 
 Goal:
 Find and fix the production-only cause. Prioritize remote LiveKit reachability, proxy/WebSocket/TLS behavior, ICE candidate advertisement, UDP/TCP media ports, TURN config, and differences between local dev profile and remote prod profile.
