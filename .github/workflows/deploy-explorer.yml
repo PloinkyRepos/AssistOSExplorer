@@ -151,10 +151,16 @@ jobs:
           ONLYOFFICE_INTERNAL_URL: ${{ vars.ONLYOFFICE_INTERNAL_URL }}
           ONLYOFFICE_CALLBACK_BASE_URL: ${{ vars.ONLYOFFICE_CALLBACK_BASE_URL }}
           ONLYOFFICE_JWT_SECRET: ${{ secrets.ONLYOFFICE_JWT_SECRET }}
+          PLOINKY_MASTER_KEY: ${{ secrets.PLOINKY_MASTER_KEY }}
         run: |
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key "${{ env.SSH_USER }}@${{ env.SSH_HOST }}" 'bash -s' << ENVVARS
           set -eo pipefail
           export PATH="\$HOME/ploinky/bin:\$HOME/.local/bin:\$PATH"
+          export PLOINKY_MASTER_KEY="${PLOINKY_MASTER_KEY:-}"
+          if [ -z "\$PLOINKY_MASTER_KEY" ]; then
+            echo "[deploy] ERROR: PLOINKY_MASTER_KEY is required for encrypted Ploinky secrets."
+            exit 1
+          fi
 
           WORK_DIR="\$HOME/${WORKSPACE}"
           mkdir -p "\$WORK_DIR/.ploinky/repos"
@@ -178,22 +184,10 @@ jobs:
           set_var SOUL_GATEWAY_API_KEY "${SOUL_GATEWAY_API_KEY:-}"
 
           # OnlyOffice public/internal service routing
-          # Write directly to .secrets because ploinky host hooks (preinstall)
-          # only receive PLOINKY_* env vars — ONLYOFFICE_* vars set via
-          # ploinky var are not visible during preinstall.
           set_var ONLYOFFICE_PUBLIC_URL "${ONLYOFFICE_PUBLIC_URL:-}"
           set_var ONLYOFFICE_INTERNAL_URL "${ONLYOFFICE_INTERNAL_URL:-}"
           set_var ONLYOFFICE_CALLBACK_BASE_URL "${ONLYOFFICE_CALLBACK_BASE_URL:-}"
           set_var ONLYOFFICE_JWT_SECRET "${ONLYOFFICE_JWT_SECRET:-}"
-
-          # Write OnlyOffice vars directly to .secrets using sed+echo
-          SECRETS_FILE="\$WORK_DIR/.ploinky/.secrets"
-          touch "\$SECRETS_FILE"
-          sed -i '/^ONLYOFFICE_/d' "\$SECRETS_FILE"
-          echo "ONLYOFFICE_PUBLIC_URL=${ONLYOFFICE_PUBLIC_URL:-}" >> "\$SECRETS_FILE"
-          echo "ONLYOFFICE_INTERNAL_URL=${ONLYOFFICE_INTERNAL_URL:-}" >> "\$SECRETS_FILE"
-          echo "ONLYOFFICE_CALLBACK_BASE_URL=${ONLYOFFICE_CALLBACK_BASE_URL:-}" >> "\$SECRETS_FILE"
-          echo "ONLYOFFICE_JWT_SECRET=${ONLYOFFICE_JWT_SECRET:-}" >> "\$SECRETS_FILE"
 
           # LLM Provider endpoints
           set_var OPENAI_AXIOLOGIC_KIRO_URL "${OPENAI_AXIOLOGIC_KIRO_URL:-}"
@@ -226,10 +220,16 @@ jobs:
           WORKSPACE: ${{ inputs.workspace_name || vars.EXPLORER_WORKSPACE || 'explorerWorkspace' }}
           EXPLORER_BRANCH: ${{ inputs.branch || 'main' }}
           ROUTER_PORT: ${{ inputs.router_port || vars.EXPLORER_ROUTER_PORT || '8097' }}
+          PLOINKY_MASTER_KEY: ${{ secrets.PLOINKY_MASTER_KEY }}
         run: |
-          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=10 -i ~/.ssh/deploy_key "${{ env.SSH_USER }}@${{ env.SSH_HOST }}" "WORKSPACE='$WORKSPACE' EXPLORER_BRANCH='$EXPLORER_BRANCH' ROUTER_PORT='$ROUTER_PORT' bash -s" << 'DEPLOY'
+          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=10 -i ~/.ssh/deploy_key "${{ env.SSH_USER }}@${{ env.SSH_HOST }}" "WORKSPACE='$WORKSPACE' EXPLORER_BRANCH='$EXPLORER_BRANCH' ROUTER_PORT='$ROUTER_PORT' PLOINKY_MASTER_KEY='$PLOINKY_MASTER_KEY' bash -s" << 'DEPLOY'
           set -euo pipefail
           export PATH="$HOME/ploinky/bin:$HOME/.local/bin:$PATH"
+          export PLOINKY_MASTER_KEY="${PLOINKY_MASTER_KEY:-}"
+          if [ -z "$PLOINKY_MASTER_KEY" ]; then
+            echo "[deploy] ERROR: PLOINKY_MASTER_KEY is required for encrypted Ploinky secrets."
+            exit 1
+          fi
 
           WORK_DIR="$HOME/$WORKSPACE"
           mkdir -p "$WORK_DIR"
@@ -240,7 +240,6 @@ jobs:
             mkdir -p "$WORK_DIR/.ploinky/repos"
             [ -f "$WORK_DIR/.ploinky/agents" ] || echo '{}' > "$WORK_DIR/.ploinky/agents"
             [ -f "$WORK_DIR/.ploinky/enabled_repos.json" ] || echo '[]' > "$WORK_DIR/.ploinky/enabled_repos.json"
-            [ -f "$WORK_DIR/.ploinky/.secrets" ] || echo '# Ploinky secrets' > "$WORK_DIR/.ploinky/.secrets"
           fi
 
           echo "[deploy] Adding fileExplorer repo (branch: $EXPLORER_BRANCH)..."
