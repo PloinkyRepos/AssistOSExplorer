@@ -1,6 +1,6 @@
 # WebMeet Debugging Handoff
 
-Last updated: 2026-05-05, after TURN fallback deploy run `25371857230`.
+Last updated: 2026-05-05, after LiveKit connect `rtcConfig` deploy run `25372146487`.
 
 This handoff is for continuing the WebMeet screen-sharing and microphone debugging on `skills.axiologic.dev`.
 
@@ -8,8 +8,8 @@ This handoff is for continuing the WebMeet screen-sharing and microphone debuggi
 
 - Repository: `PloinkyRepos/AssistOSExplorer`
 - Branch: `main`
-- Latest deployed code commit: `912f22e695db876926d5137446e97aaac725b80a`
-- Latest deploy workflow: <https://github.com/PloinkyRepos/AssistOSExplorer/actions/runs/25371857230>
+- Latest deployed code commit: `13274d5cfd8e2eb6c48a65d39815221d0dc09494`
+- Latest deploy workflow: <https://github.com/PloinkyRepos/AssistOSExplorer/actions/runs/25372146487>
 - Deploy conclusion: `success`
 - Deployed host: `skills.axiologic.dev`
 - SSH command:
@@ -22,7 +22,7 @@ This handoff is for continuing the WebMeet screen-sharing and microphone debuggi
   ```
 - Verified on host after deploy:
   ```text
-  repo_head=912f22e
+  repo_head=13274d5
   ## main...origin/main
   ```
 - Public URL check after deploy:
@@ -59,8 +59,11 @@ Implemented Part 1 fix:
 - `webmeetAgent/manifest.json` now declares `WEBMEET_TURN_*` variables for `default`, `dev`, and `prod`.
 - `webmeetAgent/scripts/startAgent.sh` exports TURN variables from the workspace secret store when available.
 - `webmeetAgent/lib/webmeetStore.mjs` builds a session `rtcConfig` with STUN plus TURN servers when TURN host/user/password are configured.
-- `webmeetAgent/IDE-plugins/webmeet-tool-button/components/webmeet-dashboard-modal/services/rtc-config.js` now passes the session `rtcConfig` into LiveKit's `Room` options.
+- `webmeetAgent/IDE-plugins/webmeet-tool-button/components/webmeet-dashboard-modal/services/rtc-config.js` now normalizes the session `rtcConfig`.
+- `webmeetAgent/IDE-plugins/webmeet-tool-button/components/webmeet-dashboard-modal/controllers/livekit-room-controller.js` passes that config to `room.connect(url, token, { rtcConfig })`.
 - The fix was committed as `912f22e` and deployed successfully through run `25371857230`.
+- A follow-up retest still showed only STUN in `chrome://webrtc-internals`, proving that passing `rtcConfig` through the `new Room(...)` constructor was ignored by this LiveKit SDK.
+- Commit `13274d5` moved `rtcConfig` into the `room.connect(...)` options and deployed successfully through run `25372146487`.
 - Remote verification inside the `webmeetAgent` container confirmed a join payload now contains:
   ```text
   turn:193.180.209.191:3478?transport=udp
@@ -245,6 +248,8 @@ Important timing:
 - Revert commits `5980c78`, `2e87af9`, and `84e780a` were pushed and redeployed through run `25369780171`.
 - After the revert deployment, the user confirmed that local WebMeet works but remote WebMeet still does not.
 - Commit `912f22e` then wired TURN into the browser join payload and was deployed through run `25371857230`.
+- A retest after `912f22e` still showed only STUN servers in the actual peer connection.
+- Commit `13274d5` fixed the client-side handoff by passing `rtcConfig` to `room.connect(...)`; deploy run `25372146487` succeeded.
 
 ## Key Browser Evidence Before `65ced07`
 
@@ -418,7 +423,7 @@ Look for:
     ]
   }
   ```
-- `docs/webmeet-infra-architecture.md` notes that coturn exists but WebMeet does not currently inject custom TURN credentials into the browser LiveKit `rtcConfig`.
+- A post-`912f22e` retest still showed only STUN here because the browser passed `rtcConfig` to the wrong LiveKit API layer. After `13274d5`, this section should include both STUN and TURN entries after a hard refresh/rejoin.
 
 ## Potential Next Fixes
 
@@ -452,9 +457,10 @@ Look for:
    - check whether remote audio elements are attached and whether `setSinkId` fails
 
 6. For users on restrictive networks:
-   - wire coturn into the browser `rtcConfig`
+   - verify the browser now receives TURN entries in `chrome://webrtc-internals`
+   - verify whether the selected candidate pair is direct UDP, TURN UDP, or TURN TCP
    - expand UDP media port ranges if concurrent sessions grow
-   - verify firewalls allow LiveKit UDP `7882-7892` and TCP fallback `7881`
+   - verify firewalls allow LiveKit UDP `7882-7892`, TCP fallback `7881`, and TURN `3478`
 
 ## Files To Inspect First
 
@@ -563,10 +569,11 @@ Start by reading:
 - docs/webmeet-livekit-webrtc-explainer.md
 
 Current state:
-- production code is at 912f22e695db876926d5137446e97aaac725b80a.
-- Production deploy run 25371857230 succeeded.
-- Remote repo on skills.axiologic.dev is at 912f22e.
-- Part 1 TURN wiring has been implemented, pushed, and deployed. Browser retest is still needed.
+- production code is at 13274d5cfd8e2eb6c48a65d39815221d0dc09494.
+- Production deploy run 25372146487 succeeded.
+- Remote repo on skills.axiologic.dev is at 13274d5.
+- Part 1 TURN wiring has been implemented, pushed, and deployed. Commit 13274d5 is the important correction because it passes `rtcConfig` to `room.connect(...)`.
+- Browser retest after 13274d5 is still needed.
 - Three temporary client-side debugging commits were tried and reverted:
   - 9278950 reverted by 84e780a
   - ec81621 reverted by 2e87af9
