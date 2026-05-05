@@ -1,6 +1,6 @@
 # WebMeet Debugging Handoff
 
-Last updated: 2026-05-05, after revert deploy run `25369780171`, fresh local deployment in `~/work/testExplorerFresh`, and a successful local WebMeet test.
+Last updated: 2026-05-05, after TURN fallback deploy run `25371857230`.
 
 This handoff is for continuing the WebMeet screen-sharing and microphone debugging on `skills.axiologic.dev`.
 
@@ -8,8 +8,8 @@ This handoff is for continuing the WebMeet screen-sharing and microphone debuggi
 
 - Repository: `PloinkyRepos/AssistOSExplorer`
 - Branch: `main`
-- Latest pushed commit: `84e780a933e61d1896eb4a63f95f8088da278f15`
-- Latest deploy workflow: <https://github.com/PloinkyRepos/AssistOSExplorer/actions/runs/25369780171>
+- Latest deployed code commit: `912f22e695db876926d5137446e97aaac725b80a`
+- Latest deploy workflow: <https://github.com/PloinkyRepos/AssistOSExplorer/actions/runs/25371857230>
 - Deploy conclusion: `success`
 - Deployed host: `skills.axiologic.dev`
 - SSH command:
@@ -22,7 +22,7 @@ This handoff is for continuing the WebMeet screen-sharing and microphone debuggi
   ```
 - Verified on host after deploy:
   ```text
-  repo_head=84e780a
+  repo_head=912f22e
   ## main...origin/main
   ```
 - Public URL check after deploy:
@@ -60,6 +60,14 @@ Implemented Part 1 fix:
 - `webmeetAgent/scripts/startAgent.sh` exports TURN variables from the workspace secret store when available.
 - `webmeetAgent/lib/webmeetStore.mjs` builds a session `rtcConfig` with STUN plus TURN servers when TURN host/user/password are configured.
 - `webmeetAgent/IDE-plugins/webmeet-tool-button/components/webmeet-dashboard-modal/services/rtc-config.js` now passes the session `rtcConfig` into LiveKit's `Room` options.
+- The fix was committed as `912f22e` and deployed successfully through run `25371857230`.
+- Remote verification inside the `webmeetAgent` container confirmed a join payload now contains:
+  ```text
+  turn:193.180.209.191:3478?transport=udp
+  turn:193.180.209.191:3478?transport=tcp
+  username: webmeet
+  credential: present
+  ```
 
 ## Important Commit Hygiene
 
@@ -236,6 +244,7 @@ Important timing:
 - A later failed retest happened at approximately `2026-05-05 12:53 Europe/Bucharest`, after `65ced07`.
 - Revert commits `5980c78`, `2e87af9`, and `84e780a` were pushed and redeployed through run `25369780171`.
 - After the revert deployment, the user confirmed that local WebMeet works but remote WebMeet still does not.
+- Commit `912f22e` then wired TURN into the browser join payload and was deployed through run `25371857230`.
 
 ## Key Browser Evidence Before `65ced07`
 
@@ -554,10 +563,10 @@ Start by reading:
 - docs/webmeet-livekit-webrtc-explainer.md
 
 Current state:
-- main is at 84e780a933e61d1896eb4a63f95f8088da278f15.
-- Production redeploy run 25369780171 succeeded.
-- Remote repo on skills.axiologic.dev is at 84e780a.
-- Part 1 TURN wiring has been implemented locally after 84e780a but may need commit, push, redeploy, and browser retest depending on the current branch state.
+- production code is at 912f22e695db876926d5137446e97aaac725b80a.
+- Production deploy run 25371857230 succeeded.
+- Remote repo on skills.axiologic.dev is at 912f22e.
+- Part 1 TURN wiring has been implemented, pushed, and deployed. Browser retest is still needed.
 - Three temporary client-side debugging commits were tried and reverted:
   - 9278950 reverted by 84e780a
   - ec81621 reverted by 2e87af9
