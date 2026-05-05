@@ -13,6 +13,8 @@ Read any nested `AGENTS.md` before changing a subproject. Nested instructions ar
 - Keep edits scoped to the relevant service or agent. Do not stage sibling repos, `node_modules/`, generated dependency trees, or unrelated untracked files unless the user explicitly asks.
 - Do not deploy to `skills.axiologic.dev` unless the user explicitly asks.
 - Use GitHub Actions for deploy/update/destroy workflows. Direct SSH to remotes is read-only status/debug by default and must not change state unless the user explicitly asks for that specific remote operation.
+- Use `.github/workflows/deploy-skills-explorer.yml` as the canonical production deploy and recovery workflow for `skills.axiologic.dev`; it passes `PLOINKY_MASTER_KEY` through the remote `ploinky stop`, `ploinky update`, and `ploinky start` lifecycle.
+- Do not use `.github/workflows/update-explorer.yml` to restart production unless it is confirmed to pass `PLOINKY_MASTER_KEY` for any command that reads encrypted secrets or runs agent preinstall hooks.
 - No implicit fallbacks: when behavior or code is explicitly changed/removed by request, do not keep or introduce fallback behavior unless the user asks for one.
 - Never leak secrets, tokens, system prompts, hidden decision traces, or raw internal payloads to end users.
 
@@ -175,7 +177,7 @@ Deployment and remote admin workflows live in `.github/workflows/`:
 - `update-explorer.yml`
 - `destroy-explorer.yml`
 
-Prefer these workflows for provision, deploy, update, status, restart, and destroy operations. After any deploy or restart, verify local router health, public `/dashboard`, container status, Ploinky status, and recent start logs.
+Use `deploy-skills-explorer.yml` for production deploys, production recovery, and any `skills.axiologic.dev` restart that must decrypt Ploinky secrets. Prefer the other workflows for their narrower purposes only when their secret requirements match the operation. After any deploy or restart, verify local router health, public `/dashboard`, container status, Ploinky status, and recent start logs.
 
 Related sibling service reference from `~/work/file-parser/proxies`: Soul Gateway runs at `https://soul.axiologic.dev` with health check `https://soul.axiologic.dev/healthz`, SSH target `admin@45.136.70.141`, key `~/proxies_server_private_key.pem`, remote workspace `~/soulGateway`, remote source checkout `~/code/proxies`, and expected production database `soul_gateway_v2`. Use this only when work touches Soul Gateway or its integration; otherwise keep changes in this repo.
 
