@@ -8,8 +8,8 @@ This handoff is for continuing the WebMeet screen-sharing and microphone debuggi
 
 - Repository: `PloinkyRepos/AssistOSExplorer`
 - Branch: `main`
-- Latest deployed code commit: `7f699c0`
-- Latest deploy workflow: <https://github.com/PloinkyRepos/AssistOSExplorer/actions/runs/25372702377>
+- Latest deployed code commit: `b3d3840`
+- Latest deploy workflow: <https://github.com/PloinkyRepos/AssistOSExplorer/actions/runs/25373151022>
 - Deploy conclusion: `success`
 - Deployed host: `skills.axiologic.dev`
 - SSH command:
@@ -22,7 +22,7 @@ This handoff is for continuing the WebMeet screen-sharing and microphone debuggi
   ```
 - Verified on host after deploy:
   ```text
-  repo_head=7f699c0
+  repo_head=b3d3840
   ## main...origin/main
   ```
 - Public URL check after deploy:
@@ -89,7 +89,8 @@ Forced relay test result:
 - A throwaway join payload generated inside the container returned `rtcConfig.iceTransportPolicy: "relay"` with STUN plus TURN URLs and a present TURN credential.
 - The user then hit a peer-connection establishment failure. LiveKit logs showed relay candidates but the connection closed before it became usable.
 - Forced relay is therefore too strict for production right now. Keep TURN available as a fallback, but do not force relay globally.
-- The next deploy should return `WEBMEET_ICE_TRANSPORT_POLICY=all`.
+- Commit `b3d3840` backs production off to `WEBMEET_ICE_TRANSPORT_POLICY=all`, and production deploy run `25373151022` completed successfully.
+- Remote verification after deploy confirmed the `webmeetAgent` container has `WEBMEET_ICE_TRANSPORT_POLICY=all`.
 - The next focus should be LiveKit subscription/downtrack negotiation for the screen-share publication, plus separate TURN reachability testing if relay support is still needed.
 
 ## Important Commit Hygiene
@@ -589,9 +590,9 @@ Start by reading:
 - docs/webmeet-livekit-webrtc-explainer.md
 
 Current state:
-- production code is at 7f699c0.
-- Production deploy run 25372702377 succeeded.
-- Remote repo on skills.axiologic.dev is at 7f699c0.
+- production code is at b3d3840.
+- Production deploy run 25373151022 succeeded.
+- Remote repo on skills.axiologic.dev is at b3d3840.
 - Part 1 TURN wiring has been implemented, pushed, and deployed. Commit 13274d5 is the important correction because it passes `rtcConfig` to `room.connect(...)`.
 - Browser retest after 13274d5 showed TURN URLs are now present in the browser config, but ICE still selected direct LiveKit UDP candidates and the receiver still had no inbound video RTP.
 - Commit 7f699c0 added `WEBMEET_ICE_TRANSPORT_POLICY` and forced production relay as a test. That caused peer-connection establishment failures, so the current code backs production off to `all` while keeping TURN configured.
