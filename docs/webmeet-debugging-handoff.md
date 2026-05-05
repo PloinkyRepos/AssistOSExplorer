@@ -8,8 +8,8 @@ This handoff is for continuing the WebMeet screen-sharing and microphone debuggi
 
 - Repository: `PloinkyRepos/AssistOSExplorer`
 - Branch: `main`
-- Latest deployed code commit: `13274d5cfd8e2eb6c48a65d39815221d0dc09494`
-- Latest deploy workflow: <https://github.com/PloinkyRepos/AssistOSExplorer/actions/runs/25372146487>
+- Latest deployed code commit: `7f699c0`
+- Latest deploy workflow: <https://github.com/PloinkyRepos/AssistOSExplorer/actions/runs/25372702377>
 - Deploy conclusion: `success`
 - Deployed host: `skills.axiologic.dev`
 - SSH command:
@@ -22,7 +22,7 @@ This handoff is for continuing the WebMeet screen-sharing and microphone debuggi
   ```
 - Verified on host after deploy:
   ```text
-  repo_head=13274d5
+  repo_head=7f699c0
   ## main...origin/main
   ```
 - Public URL check after deploy:
@@ -80,12 +80,16 @@ Retest after `13274d5`:
 - The receiver still had no `inbound-rtp kind=video` entry, only data channels and transport/candidate stats, so the remote browser still was not receiving a video downtrack.
 - A corrected `turnutils_uclient` test from the coturn container to `193.180.209.191:3478` authenticated successfully, allocated relays on the `20000+` range, and reported 0% packet loss. Coturn itself is usable.
 
-Current candidate fix:
+Current deployed relay fix:
 
 - `WEBMEET_ICE_TRANSPORT_POLICY` was added.
 - `default` and `dev` profiles keep `all`.
 - `prod` defaults to `relay`, and the deploy workflow sets `WEBMEET_ICE_TRANSPORT_POLICY` to `${WEBMEET_ICE_TRANSPORT_POLICY:-relay}`.
-- The next production deploy should make new browser peer connections show `iceTransportPolicy: relay` and selected `relay` candidates in `chrome://webrtc-internals`.
+- Production deploy run `25372702377` completed successfully at commit `7f699c0`.
+- Remote verification after deploy confirmed the `webmeetAgent` container has `WEBMEET_ICE_TRANSPORT_POLICY=relay`.
+- A throwaway join payload generated inside the container returned `rtcConfig.iceTransportPolicy: "relay"` with STUN plus TURN URLs and a present TURN credential.
+- The next browser retest should use hard refreshes or new incognito/private windows so tabs do not reuse a pre-deploy session object.
+- New browser peer connections should show `iceTransportPolicy: relay` and selected `relay` candidates in `chrome://webrtc-internals`.
 - If forced relay still fails, the likely problem is no longer the direct LiveKit UDP media path and the next focus should be LiveKit subscription/downtrack negotiation for the screen-share publication.
 
 ## Important Commit Hygiene
@@ -585,12 +589,12 @@ Start by reading:
 - docs/webmeet-livekit-webrtc-explainer.md
 
 Current state:
-- production code is at 13274d5cfd8e2eb6c48a65d39815221d0dc09494.
-- Production deploy run 25372146487 succeeded.
-- Remote repo on skills.axiologic.dev is at 13274d5.
+- production code is at 7f699c0.
+- Production deploy run 25372702377 succeeded.
+- Remote repo on skills.axiologic.dev is at 7f699c0.
 - Part 1 TURN wiring has been implemented, pushed, and deployed. Commit 13274d5 is the important correction because it passes `rtcConfig` to `room.connect(...)`.
 - Browser retest after 13274d5 showed TURN URLs are now present in the browser config, but ICE still selected direct LiveKit UDP candidates and the receiver still had no inbound video RTP.
-- A follow-up change adds `WEBMEET_ICE_TRANSPORT_POLICY` and defaults production to `relay` so the next deployment tests the TURN relay path.
+- Commit 7f699c0 adds `WEBMEET_ICE_TRANSPORT_POLICY`, defaults production to `relay`, and deploys that setting to test the TURN relay path.
 - Three temporary client-side debugging commits were tried and reverted:
   - 9278950 reverted by 84e780a
   - ec81621 reverted by 2e87af9
