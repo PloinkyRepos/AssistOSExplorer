@@ -517,16 +517,16 @@ The skills deployment workflow defaults to the `prod` Ploinky profile unless a w
 
 Important WebMeet variables:
 
-| Variable | Used by | Default in dev/default | Production note |
+| Variable | Used by | Development default | Production note |
 |---|---|---|---|
 | `WEBMEET_PUBLIC_LIVEKIT_URL` | Browser join payload | `ws://127.0.0.1:17880` in `dev`, `ws://127.0.0.1:7880` in `default` | Must be a browser-reachable `ws://` or `wss://` URL for public deployments. |
 | `WEBMEET_LIVEKIT_URL` | `webmeetAgent` server-side API calls | `http://webmeetLivekitServer:7880` | Should remain internal unless LiveKit is externalized. |
-| `WEBMEET_LIVEKIT_API_KEY` | LiveKit tokens and API auth | `devkey` | Required in `prod`. |
-| `WEBMEET_LIVEKIT_API_SECRET` | LiveKit tokens and API auth | `devsecretdevsecretdevsecretdevsecret` | Required in `prod`. |
+| `WEBMEET_LIVEKIT_API_KEY` | LiveKit tokens and API auth | `devkey` in the explicit `dev` profile | Required in `prod`; no development fallback in `default` or `prod`. |
+| `WEBMEET_LIVEKIT_API_SECRET` | LiveKit tokens and API auth | `devsecretdevsecretdevsecretdevsecret` in the explicit `dev` profile | Required in `prod`; no development fallback in `default` or `prod`. |
 | `WEBMEET_EGRESS_URL` | Recording metadata and runtime validation | `http://webmeetLivekitEgress:7980` | Required in `prod`. |
 | `WEBMEET_TURN_EXTERNAL_IP` | Coturn advertised external IP | `127.0.0.1` | Required in `prod`. |
-| `WEBMEET_TURN_PASSWORD` | Coturn long-term credential | `webmeet` | Required in `prod`. |
-| `PLOINKY_WEBMEET_MASTER_KEY` | Meeting payload encryption | `dev-webmeet-master-key` in `dev` and `default` | Required in `prod`; must remain stable for stored meetings to decrypt. |
+| `WEBMEET_TURN_PASSWORD` | Coturn long-term credential | `webmeet` in the explicit `dev` profile | Required in `prod`; no development fallback in `default` or `prod`. |
+| `PLOINKY_WEBMEET_MASTER_KEY` | Meeting payload encryption | `dev-webmeet-master-key` in the explicit `dev` profile | Required in `prod`; no development fallback in `default` or `prod`, and the value must remain stable for stored meetings to decrypt. |
 
 For a public URL like `https://skills.axiologic.dev`, the browser cannot use a loopback LiveKit URL unless it is running on the same host. A production-ready public WebMeet deployment needs a public LiveKit WebSocket endpoint, public RTP/TCP/UDP media routing, and TURN details wired into the client if relay is required.
 
