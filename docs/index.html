@@ -54,6 +54,7 @@
                         <li><a href="documents.html">Document Model &amp; Editing</a></li>
                         <li><a href="backend.html">Backend</a></li>
                         <li><a href="plugins.html">Plugins</a></li>
+                        <li><a href="#agent-docs-reference">Agent &amp; Ploinky Docs</a></li>
                     </ul>
                     <h3 style="margin-top:1.5rem;">Companion Agents</h3>
                     <ul>
@@ -65,11 +66,15 @@
                         <li><a href="../multimedia/docs/index.html">Multimedia</a></li>
                         <li><a href="../webAdmin/docs/index.html">Web Admin</a></li>
                         <li><a href="../webAssist/docs/index.html">Web Assist</a></li>
+                        <li><a href="../webmeetAgent/docs/index.html">WebMeet Agent</a></li>
+                        <li><a href="../webmeetInfra/docs/index.html">WebMeet Infra</a></li>
                     </ul>
                     <h3 style="margin-top:1.5rem;">Related Projects</h3>
                     <ul>
                         <li><a href="https://github.com/OutfinityResearch/WebSkel/blob/master/README.md" target="_blank" rel="noopener noreferrer">WebSkel</a></li>
-                        <li><a href="https://github.com/OutfinityResearch/ploinky/blob/master/README.md" target="_blank" rel="noopener noreferrer">Ploinky</a></li>
+                        <li><a href="../../ploinky/docs/index.html">Ploinky Docs</a></li>
+                        <li><a href="../../ploinky/docs/specs/DS005-routing-and-web-surfaces.md">Ploinky Routing Spec</a></li>
+                        <li><a href="../../ploinky/docs/specs/DS011-security-model.md">Ploinky Security Spec</a></li>
                     </ul>
                 </aside>
                 <div class="content-wrapper">
@@ -141,6 +146,41 @@ ploinky start explorer 8080
                     <div class="architecture-diagram">
                         <img src="assets/architecture-diagram.svg" alt="Explorer high-level flow diagram">
                     </div>
+                </div>
+
+                <div class="doc-section" id="agent-docs-reference">
+                    <h2>Agent And Ploinky Documentation Reference</h2>
+                    <p>This website is the documentation entry point for the AchillesIDE workspace. It must keep direct references to the local documentation for every enabled or coupled agent, plus the Ploinky runtime specifications that define routing, guest access, HTTP service declarations, secure-wire invocation, and security boundaries.</p>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Area</th>
+                                <th>Documentation References</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Explorer workspace</td>
+                                <td><a href="index.html">Explorer docs</a>, <a href="specs/matrix.md">Explorer spec matrix</a>, <a href="../explorer/AGENTS.md">Explorer agent guide</a></td>
+                            </tr>
+                            <tr>
+                                <td>Ploinky runtime</td>
+                                <td><a href="../../ploinky/docs/index.html">Ploinky docs</a>, <a href="../../ploinky/docs/specs/matrix.md">Ploinky spec matrix</a>, <a href="../../ploinky/docs/specs/DS005-routing-and-web-surfaces.md">routing and web surfaces</a>, <a href="../../ploinky/docs/specs/DS011-security-model.md">security model</a></td>
+                            </tr>
+                            <tr>
+                                <td>Workspace data and operations</td>
+                                <td><a href="../dpuAgent/docs/index.html">dpuAgent</a>, <a href="../gitAgent/docs/index.html">gitAgent</a>, <a href="../llmAssistant/docs/index.html">llmAssistant</a>, <a href="../soplangAgent/docs/index.html">soplangAgent</a>, <a href="../tasksAgent/docs/index.html">tasksAgent</a>, <a href="../multimedia/docs/index.html">multimedia</a></td>
+                            </tr>
+                            <tr>
+                                <td>Web and meeting agents</td>
+                                <td><a href="../webAdmin/docs/index.html">webAdmin</a>, <a href="../webAssist/docs/index.html">webAssist</a>, <a href="../webmeetAgent/docs/index.html">webmeetAgent</a>, <a href="../webmeetInfra/docs/index.html">webmeetInfra</a></td>
+                            </tr>
+                            <tr>
+                                <td>WebMeet infrastructure services</td>
+                                <td><a href="../webmeetInfra/stack/AGENTS.md">stack</a>, <a href="../webmeetInfra/webmeetRedis/AGENTS.md">webmeetRedis</a>, <a href="../webmeetInfra/webmeetCoturn/AGENTS.md">webmeetCoturn</a>, <a href="../webmeetInfra/webmeetLivekitServer/AGENTS.md">webmeetLivekitServer</a>, <a href="../webmeetInfra/webmeetLivekitEgress/AGENTS.md">webmeetLivekitEgress</a></td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
 
                 <div class="doc-section">
