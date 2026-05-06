@@ -19,7 +19,7 @@ const readExplorerText = (relativePath) =>
 test('docs include repo-scoped HTML preview guidance', () => {
     const rootReadme = readText('README.md');
     const explorerReadme = readExplorerText('README.md');
-    const detailedGuide = readText('docs/EXPLORER_AGENT_DOCS.md');
+    const developmentHtml = readText('docs/development.html');
 
     const requiredSnippets = [
         '/.ploinky/repos/AchillesIDE/docs/development.html'
@@ -28,7 +28,7 @@ test('docs include repo-scoped HTML preview guidance', () => {
     for (const snippet of requiredSnippets) {
         assert.ok(rootReadme.includes(snippet), `README.md missing snippet: ${snippet}`);
         assert.ok(explorerReadme.includes(snippet), `explorer/README.md missing snippet: ${snippet}`);
-        assert.ok(detailedGuide.includes(snippet), `docs/EXPLORER_AGENT_DOCS.md missing snippet: ${snippet}`);
+        assert.ok(developmentHtml.includes(snippet), `docs/development.html missing snippet: ${snippet}`);
     }
 });
 
