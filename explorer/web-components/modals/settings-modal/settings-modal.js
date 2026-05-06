@@ -18,7 +18,7 @@ import {
 import { registerRuntimeComponent } from "../../../utils/pluginUtils.ui.js";
 
 const settingsComponentPromises = new Map();
-const BASE_TABS = ['keymap', 'editor', 'theme', 'plugins'];
+const BASE_TABS = ['keymap', 'editor', 'theme', 'plugins', 'copilot'];
 
 function getCurrentAgentName() {
     try {
@@ -223,6 +223,11 @@ export class SettingsModal {
             pluginStatus: "",
             pluginStatusType: "",
             pluginDataLoaded: false,
+            copilotItems: [],
+            copilotDisabledKeys: new Set(),
+            copilotStatus: "",
+            copilotStatusType: "",
+            copilotDataLoaded: false,
             usersAccessChecked: false,
             usersAccess: false,
             usersUrl: ""
@@ -243,6 +248,9 @@ export class SettingsModal {
         if (this.state.activeTab === "plugins" && !this.state.pluginDataLoaded) {
             await this.loadPluginSettingsData();
         }
+        if (this.state.activeTab === "copilot" && !this.state.copilotDataLoaded) {
+            await this.loadCopilotSettingsData();
+        }
     }
 
     cacheElements() {
@@ -250,6 +258,7 @@ export class SettingsModal {
         this.editorSection = this.element.querySelector('[data-section="editor"]');
         this.themeSection = this.element.querySelector('[data-section="theme"]');
         this.pluginsSection = this.element.querySelector('[data-section="plugins"]');
+        this.copilotSection = this.element.querySelector('[data-section="copilot"]');
         this.usersSection = this.element.querySelector('[data-section="users"]');
         this.usersTab = this.element.querySelector('[data-admin-tab]');
         this.usersFrame = this.element.querySelector('#usersSettingsFrame');
@@ -257,6 +266,8 @@ export class SettingsModal {
         this.warningEl = this.element.querySelector("#keymapWarning");
         this.pluginSettingsListEl = this.element.querySelector("#pluginSettingsList");
         this.pluginSettingsStatusEl = this.element.querySelector("#pluginSettingsStatus");
+        this.copilotSettingsListEl = this.element.querySelector("#copilotSettingsList");
+        this.copilotSettingsStatusEl = this.element.querySelector("#copilotSettingsStatus");
         this.editorAutoSaveEnabledInput = this.element.querySelector('#editorAutoSaveEnabled');
         this.editorAutoSaveIntervalInput = this.element.querySelector('#editorAutoSaveIntervalSeconds');
         this.actionsEl = this.element.querySelector('.modal-actions');
@@ -296,6 +307,13 @@ export class SettingsModal {
                 this.renderPluginSettingsStatus();
             });
         }
+        if (this.state.activeTab === "copilot" && !this.state.copilotDataLoaded) {
+            this.loadCopilotSettingsData().catch((error) => {
+                this.state.copilotStatus = error?.message || "Failed to load Copilot skills.";
+                this.state.copilotStatusType = "error";
+                this.renderCopilotSettingsStatus();
+            });
+        }
         if (this.state.activeTab === "users") {
             this.syncUsersFrame();
         }
@@ -325,6 +343,7 @@ export class SettingsModal {
             { key: 'editor', element: this.editorSection },
             { key: 'theme', element: this.themeSection },
             { key: 'plugins', element: this.pluginsSection },
+            { key: 'copilot', element: this.copilotSection },
             { key: 'users', element: this.usersSection }
         ];
         sections.forEach(({ key, element }) => {
@@ -374,10 +393,21 @@ export class SettingsModal {
         this.renderPluginSettingsList();
     }
 
+    renderCopilotSettings() {
+        this.renderCopilotSettingsStatus();
+        this.renderCopilotSettingsList();
+    }
+
     renderPluginSettingsStatus() {
         if (!this.pluginSettingsStatusEl) return;
         this.pluginSettingsStatusEl.textContent = this.state.pluginStatus || "";
         this.pluginSettingsStatusEl.classList.toggle("error", this.state.pluginStatusType === "error");
+    }
+
+    renderCopilotSettingsStatus() {
+        if (!this.copilotSettingsStatusEl) return;
+        this.copilotSettingsStatusEl.textContent = this.state.copilotStatus || "";
+        this.copilotSettingsStatusEl.classList.toggle("error", this.state.copilotStatusType === "error");
     }
 
     renderPluginSettingsList() {
@@ -424,6 +454,34 @@ export class SettingsModal {
         }).join("");
     }
 
+    renderCopilotSettingsList() {
+        if (!this.copilotSettingsListEl) return;
+        if (!this.state.copilotItems.length) {
+            this.copilotSettingsListEl.innerHTML = `<div class="plugin-settings-empty">No Copilot skills discovered for this workspace.</div>`;
+            return;
+        }
+        this.copilotSettingsListEl.innerHTML = this.state.copilotItems.map((item) => {
+            const enabled = !this.state.copilotDisabledKeys.has(item.key);
+            return `
+                <div class="plugin-settings-row">
+                    <div class="plugin-settings-info">
+                        <div class="plugin-settings-key">${item.name}</div>
+                        <div class="plugin-settings-meta">${item.key} · Type: ${item.type || 'unknown'}${item.isInternal ? ' · Internal' : ''}</div>
+                    </div>
+                    <div class="plugin-settings-actions">
+                        <button
+                            type="button"
+                            class="plugin-settings-toggle ${enabled ? "enabled" : ""}"
+                            data-local-action="toggleCopilotSkill ${item.key}"
+                        >
+                            ${enabled ? "Enabled" : "Disabled"}
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join("");
+    }
+
     isPluginEnabled(key) {
         const entry = this.state.pluginSettings[key];
         if (!entry || typeof entry !== "object") {
@@ -460,6 +518,50 @@ export class SettingsModal {
             this.state.pluginStatusType = "error";
             this.renderPluginSettingsStatus();
         }
+    }
+
+    async loadCopilotSettingsData() {
+        this.state.copilotStatus = "Loading Copilot skills...";
+        this.state.copilotStatusType = "";
+        this.renderCopilotSettingsStatus();
+        try {
+            const payload = await callExplorerTool("list-skills", {}, { raw: true, withLoader: false });
+            const parsed = parseToolResult(payload) || {};
+            const items = Array.isArray(parsed.skills) ? parsed.skills : [];
+            this.state.copilotItems = items
+                .map((entry) => ({
+                    key: String(entry?.key || "").trim().toLowerCase(),
+                    name: String(entry?.name || "").trim(),
+                    type: String(entry?.type || "").trim(),
+                    isInternal: Boolean(entry?.isInternal),
+                }))
+                .filter((entry) => entry.key && entry.name)
+                .sort((left, right) => left.name.localeCompare(right.name));
+            this.state.copilotDisabledKeys = new Set();
+            this.state.copilotDataLoaded = true;
+            this.state.copilotStatus = this.state.copilotItems.length
+                ? `${this.state.copilotItems.length} skills loaded. Toggle state is local only.`
+                : "No Copilot skills discovered.";
+            this.state.copilotStatusType = "";
+            this.renderCopilotSettings();
+        } catch (error) {
+            this.state.copilotStatus = error?.message || "Failed to load Copilot skills.";
+            this.state.copilotStatusType = "error";
+            this.renderCopilotSettingsStatus();
+        }
+    }
+
+    toggleCopilotSkill(_target, key) {
+        const normalizedKey = String(key || "").trim().toLowerCase();
+        if (!normalizedKey) return;
+        if (this.state.copilotDisabledKeys.has(normalizedKey)) {
+            this.state.copilotDisabledKeys.delete(normalizedKey);
+        } else {
+            this.state.copilotDisabledKeys.add(normalizedKey);
+        }
+        this.state.copilotStatus = "Toggle state is local only and is not saved.";
+        this.state.copilotStatusType = "";
+        this.renderCopilotSettings();
     }
 
     async togglePlugin(_target, key) {

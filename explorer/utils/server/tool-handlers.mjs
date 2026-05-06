@@ -1,4 +1,5 @@
 import { createReadStream } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 import { jsonResponse, textResponse } from './responses.mjs';
 
 function parseArgs(schema, args, name) {
@@ -81,7 +82,8 @@ export function createToolHandlers({
     GetFileInfoArgsSchema,
     CollectIDEPluginsArgsSchema,
     GetPluginSettingsArgsSchema,
-    SetPluginEnabledArgsSchema
+    SetPluginEnabledArgsSchema,
+    ListSkillsArgsSchema
   } = schemas;
   const inflightSearchFiles = new Map();
   const inflightSearchText = new Map();
@@ -116,6 +118,123 @@ export function createToolHandlers({
   setInterval(cleanupSearchTextJobs, 60 * 1000);
 
   const pluginSettingsPath = path.join(workspaceRoot, '.ploinky', 'explorer-plugin-settings.json');
+  const achillesCliRoot = path.join(workspaceRoot, '.ploinky', 'repos', 'AchillesCLI', 'achilles-cli');
+
+  async function loadAchillesDiscoverFunctions() {
+    const modulePath = path.join(
+      achillesCliRoot,
+      'node_modules',
+      'achillesAgentLib',
+      'MainAgent',
+      'services',
+      'discoverSkills.mjs'
+    );
+    let loadedModule;
+    try {
+      loadedModule = await import(pathToFileURL(modulePath).href);
+    } catch (error) {
+      throw new Error(`Unable to load Achilles discovery module from ${modulePath}: ${error?.message || error}`);
+    }
+    if (!loadedModule || typeof loadedModule.discoverSkills !== 'function' || typeof loadedModule.discoverSkillsFromRoot !== 'function') {
+      throw new Error('Achilles discovery module is missing required exports.');
+    }
+    return loadedModule;
+  }
+
+  async function collectAchillesNodeModulesSkillRoots() {
+    const nodeModulesDir = path.join(achillesCliRoot, 'node_modules');
+    try {
+      const stat = await fs.stat(nodeModulesDir);
+      if (!stat.isDirectory()) return [];
+    } catch {
+      return [];
+    }
+    let entries = [];
+    try {
+      entries = await fs.readdir(nodeModulesDir, { withFileTypes: true });
+    } catch {
+      return [];
+    }
+    const roots = [];
+    for (const entry of entries) {
+      if (!entry?.isDirectory?.() || entry.name.startsWith('@')) {
+        continue;
+      }
+      const packageDir = path.join(nodeModulesDir, entry.name);
+      const candidates = [
+        path.join(packageDir, 'skills'),
+        path.join(packageDir, 'src', 'skills')
+      ];
+      for (const candidate of candidates) {
+        try {
+          const stat = await fs.stat(candidate);
+          if (stat.isDirectory()) {
+            roots.push(candidate);
+          }
+        } catch {
+          // ignore missing paths
+        }
+      }
+    }
+    return roots;
+  }
+
+  async function collectAchillesSkillsCatalog() {
+    const cliStat = await fs.stat(achillesCliRoot).catch(() => null);
+    if (!cliStat || !cliStat.isDirectory()) {
+      throw new Error(`Achilles CLI repository not found at ${achillesCliRoot}`);
+    }
+
+    const { discoverSkills, discoverSkillsFromRoot } = await loadAchillesDiscoverFunctions();
+    const logger = {
+      debug: () => {},
+      warn: () => {},
+      error: () => {},
+      info: () => {},
+      log: () => {}
+    };
+
+    const catalog = [];
+    const workspaceDiscovered = discoverSkills(workspaceRoot, { logger });
+    for (const record of workspaceDiscovered) {
+      record.isInternal = Boolean(record.isInternal);
+      catalog.push(record);
+    }
+
+    const internalRoots = [
+      { path: path.join(achillesCliRoot, 'src', 'skills'), isInternal: true },
+      { path: path.join(workspaceRoot, '.ploinky', 'repos', 'AchillesCLI', 'bash-skills', 'skills'), isInternal: true }
+    ];
+    const nodeModuleRoots = await collectAchillesNodeModulesSkillRoots();
+    const allRoots = [
+      ...internalRoots,
+      ...nodeModuleRoots.map((skillRoot) => ({ path: skillRoot, isInternal: false }))
+    ];
+    const seen = new Set();
+    for (const root of allRoots) {
+      const rootPath = root?.path;
+      if (!rootPath || seen.has(rootPath)) continue;
+      seen.add(rootPath);
+      let stat;
+      try {
+        stat = await fs.stat(rootPath);
+      } catch {
+        continue;
+      }
+      if (!stat.isDirectory()) continue;
+      let discovered = [];
+      try {
+        discovered = discoverSkillsFromRoot(rootPath, { logger });
+      } catch {
+        continue;
+      }
+      for (const record of discovered) {
+        record.isInternal = Boolean(root.isInternal);
+        catalog.push(record);
+      }
+    }
+    return catalog;
+  }
 
   async function readPluginSettings() {
     try {
@@ -582,6 +701,27 @@ export function createToolHandlers({
     });
   }
 
+  async function handleListSkills(args) {
+    parseArgs(ListSkillsArgsSchema, args, 'list-skills');
+    const catalog = await collectAchillesSkillsCatalog();
+
+    const skills = catalog.map((record) => ({
+      key: String(record?.name || record?.shortName || record?.descriptor?.name || '').trim().toLowerCase(),
+      name: record?.shortName || record?.name || '',
+      fullName: record?.name || '',
+      type: record?.type || '',
+      path: record?.skillDir || '',
+      isInternal: Boolean(record?.isInternal),
+      enabled: true
+    })).filter((entry) => entry.key && entry.name);
+
+    skills.sort((left, right) => left.name.localeCompare(right.name));
+
+    return jsonResponse({
+      skills
+    });
+  }
+
   async function handleListAllowedDirectories() {
     const allowed = getAllowedDirectories ? getAllowedDirectories() : [];
     return textResponse(`Allowed directories:\n${allowed.join('\n')}`);
@@ -613,6 +753,7 @@ export function createToolHandlers({
     collect_ide_plugins: handleCollectIdePlugins,
     get_plugin_settings: handleGetPluginSettings,
     set_plugin_enabled: handleSetPluginEnabled,
+    'list-skills': handleListSkills,
     list_allowed_directories: handleListAllowedDirectories
   };
 }

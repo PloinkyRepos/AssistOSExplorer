@@ -75,6 +75,7 @@ export function createSchemas(z) {
     key: z.string(),
     enabled: z.boolean()
   });
+  const ListSkillsArgsSchema = z.object({});
 
   return {
     ReadTextFileArgsSchema,
@@ -101,6 +102,7 @@ export function createSchemas(z) {
     GetFileInfoArgsSchema,
     CollectIDEPluginsArgsSchema,
     GetPluginSettingsArgsSchema,
-    SetPluginEnabledArgsSchema
+    SetPluginEnabledArgsSchema,
+    ListSkillsArgsSchema
   };
 }
