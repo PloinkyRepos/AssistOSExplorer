@@ -24,7 +24,7 @@ on:
         default: 'https://skills.axiologic.dev'
         type: string
       profile:
-        description: 'Ploinky profile to use. Defaults to vars.PLOINKY_PROFILE, then dev.'
+        description: 'Ploinky profile to use. Defaults to vars.PLOINKY_PROFILE, then prod.'
         required: false
         default: ''
         type: string
@@ -40,7 +40,7 @@ env:
   ROUTER_PORT: ${{ inputs.router_port || vars.EXPLORER_ROUTER_PORT || '8097' }}
   PUBLIC_URL: ${{ inputs.public_url || vars.EXPLORER_PUBLIC_URL || 'https://skills.axiologic.dev' }}
   EXPLORER_BRANCH: ${{ inputs.branch || 'main' }}
-  PLOINKY_PROFILE: ${{ inputs.profile || vars.PLOINKY_PROFILE || 'dev' }}
+  PLOINKY_PROFILE: ${{ inputs.profile || vars.PLOINKY_PROFILE || 'prod' }}
 
 jobs:
   deploy:
@@ -90,6 +90,7 @@ jobs:
           ONLYOFFICE_INTERNAL_URL: ${{ vars.ONLYOFFICE_INTERNAL_URL }}
           ONLYOFFICE_CALLBACK_BASE_URL: ${{ vars.ONLYOFFICE_CALLBACK_BASE_URL }}
           ONLYOFFICE_JWT_SECRET: ${{ secrets.ONLYOFFICE_JWT_SECRET }}
+          PLOINKY_WEBMEET_MASTER_KEY: ${{ secrets.PLOINKY_WEBMEET_MASTER_KEY }}
           WEBMEET_PUBLIC_LIVEKIT_URL: ${{ vars.WEBMEET_PUBLIC_LIVEKIT_URL }}
           WEBMEET_LIVEKIT_URL: ${{ vars.WEBMEET_LIVEKIT_URL }}
           WEBMEET_LIVEKIT_API_KEY: ${{ vars.WEBMEET_LIVEKIT_API_KEY }}
@@ -122,6 +123,7 @@ jobs:
             write_env ONLYOFFICE_INTERNAL_URL
             write_env ONLYOFFICE_CALLBACK_BASE_URL
             write_env ONLYOFFICE_JWT_SECRET
+            write_env PLOINKY_WEBMEET_MASTER_KEY
             write_env WEBMEET_PUBLIC_LIVEKIT_URL
             write_env WEBMEET_LIVEKIT_URL
             write_env WEBMEET_LIVEKIT_API_KEY
@@ -266,7 +268,7 @@ jobs:
           set_var ASSISTOS_FS_ROOT "$WORK_DIR"
           set_var WORKSPACE_ROOT "$WORK_DIR"
           set_var PLOINKY_WORKSPACE_ROOT "$WORK_DIR"
-          set_var PLOINKY_WEBMEET_MASTER_KEY "$PLOINKY_MASTER_KEY"
+          set_var PLOINKY_WEBMEET_MASTER_KEY "${PLOINKY_WEBMEET_MASTER_KEY:-}"
 
           set_var SOUL_GATEWAY_API_KEY "${SOUL_GATEWAY_API_KEY:-}"
           set_var SOUL_GATEWAY_BASE_URL "${SOUL_GATEWAY_BASE_URL:-}"

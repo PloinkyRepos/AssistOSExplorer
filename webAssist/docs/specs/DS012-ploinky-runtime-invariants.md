@@ -1,22 +1,22 @@
 ---
-id: DS06
+id: DS012
 title: Ploinky Runtime Invariants
 status: implemented
-owner: achilleside-team
+owner: webassist-team
 summary: Captures the Ploinky routing, authentication, guest, secure-wire, sandbox, and documentation invariants that must remain in local context when changing this agent.
 ---
 
-# DS06 - Ploinky Runtime Invariants
+# DS012 - Ploinky Runtime Invariants
 
 ## Introduction
 
-This specification makes the Ploinky runtime and security invariants local to `tasksAgent`. Future work from inside this agent directory must not rely on external memory of Ploinky core behavior; the local specs must carry the same high-level constraints that Ploinky defines in its routing and security model.
+This specification makes the Ploinky runtime and security invariants local to `webAssist`. Future work from inside this agent directory must not rely on external memory of Ploinky core behavior; the local specs must carry the same high-level constraints that Ploinky defines in its routing and security model.
 
 The authoritative upstream contracts are Ploinky `docs/specs/DS005-routing-and-web-surfaces.md` and `docs/specs/DS011-security-model.md`. This file restates only the invariants that affect this agent's implementation and documentation.
 
 ## Core Content
 
-`tasksAgent` must treat the Ploinky router as the browser and MCP trust broker. Browser surfaces, first-party MCP calls, delegated MCP calls, uploads, blobs, and manifest-declared HTTP services are expected to enter through the router so route authentication, session handling, invocation minting, and audit behavior can apply. Direct agent ports are implementation details even when they are bound to localhost.
+`webAssist` must treat the Ploinky router as the browser and MCP trust broker. Browser surfaces, first-party MCP calls, delegated MCP calls, uploads, blobs, and manifest-declared HTTP services are expected to enter through the router so route authentication, session handling, invocation minting, and audit behavior can apply. Direct agent ports are implementation details even when they are bound to localhost.
 
 Executable MCP operations must be authorized by router-minted invocation JWTs. The agent runtime may receive `PLOINKY_WIRE_SECRET`, which is the HKDF-derived invocation subkey, but it must never receive or require `PLOINKY_MASTER_KEY`. Code must not invent alternate bearer-token, client-secret, or caller-header authorization paths around the router's secure-wire model.
 
@@ -36,13 +36,13 @@ Logs and user-facing errors must not expose secrets, cookies, bearer tokens, inv
 
 Agent-local contract:
 
-- Manifest: `tasksAgent/manifest.json`
-- Role: Task/backlog file operation boundary for Explorer.
-- Authentication: Task operations must use verified invocation context and local path policy before mutation. Manifest guest: none.
-- HTTP service surface: No public HTTP service is declared; task operations are MCP-only. Manifest httpServices: none.
-- Persistent state: Backlog and history files must stay within repository-local or configured lock-folder paths. Manifest volumes: none.
+- Manifest: `webassist/manifest.json`
+- Role: Visitor-facing guest assistant and lead-conversion agent.
+- Authentication: Manifest-level `guest: true` means normal Ploinky guest policy applies; the agent must enforce visitor-only scope from roles and session context. Manifest guest: true.
+- HTTP service surface: No manifest-declared HTTP service is used for guest mode; guest access is at the agent route level. Manifest httpServices: none.
+- Persistent state: Visitor/session/lead data must remain under the configured data store and must not leak to static plugin assets or logs. Manifest volumes: {".ploinky/repos/AchillesIDE/data":"/data"}.
 - Documentation: `docs/index.html`
-- Validation: `npm test` in tasksAgent.
+- Validation: `node tests/runAll.mjs` in webAssist/webassist when visitor flow behavior changes.
 
 ## Decisions & Questions
 
@@ -58,4 +58,4 @@ Ploinky establishes who the caller is and signs the invocation path, but domain 
 
 ## Conclusion
 
-`tasksAgent` remains compatible with Ploinky only while it preserves router-mediated entry, secure-wire invocation, scoped guest behavior, explicit manifest-declared HTTP services, workspace-confined storage, redacted logging, and local domain authorization. Any source change that affects these contracts must update this specification, the local docs, and the local guide files in the same change set.
+`webAssist` remains compatible with Ploinky only while it preserves router-mediated entry, secure-wire invocation, scoped guest behavior, explicit manifest-declared HTTP services, workspace-confined storage, redacted logging, and local domain authorization. Any source change that affects these contracts must update this specification, the local docs, and the local guide files in the same change set.

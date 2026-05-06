@@ -170,6 +170,31 @@ flowchart LR
 
 `webmeetAgent` joins the `webmeet` network so it can resolve the internal LiveKit services by alias. It also gets Ploinky runtime router variables such as `PLOINKY_ROUTER_URL`, but the UI path normally enters it through the router MCP proxy, not through direct container-to-router calls.
 
+## Room Discovery And Participant Rendezvous
+
+WebMeet users do not discover rooms through LiveKit or Redis. Room discovery is an application-plane operation owned by `webmeetAgent`.
+
+For authenticated Explorer users:
+
+1. The Explorer WebMeet plugin calls `webmeet_workspace_list`.
+2. `webmeetAgent` derives the current workspace id from the workspace root and ensures a workspace JSON record under `.ploinky/webmeet/workspaces`.
+3. The plugin calls `webmeet_meeting_list` for that workspace id.
+4. `webmeetAgent` reads `.ploinky/webmeet/meetings/*.json`, filters active rooms for the current workspace, and returns room cards to the UI.
+5. Admin users can create, rename, delete, and expose guest invite links. Non-admin users can see and join active rooms returned for the workspace, but they do not receive guest invite tokens.
+
+For guests:
+
+1. An admin creates a `guest` room. `webmeetAgent` stores a random `guestToken` in the meeting record.
+2. The UI builds `/public-services/webmeet/guest?room=<meetingId>&token=<guestToken>`.
+3. Ploinky routes that path through the manifest-declared guest HTTP service with `forceGuest: true`, so the request receives a scoped guest identity even if the browser has another workspace session.
+4. `webmeet-public-proxy.mjs` verifies the router-issued `__http_service__` invocation token and only then serves the guest page and guest API calls.
+5. The guest join API verifies the room id and guest token, then creates or refreshes a guest participant identity before returning meeting state and a LiveKit participant token. Later guest state, chat, transcript, presence, and leave calls verify that participant identity against the meeting payload.
+
+Once a user joins, there are two participant views:
+
+- WebMeet presence is durable application state in the encrypted meeting payload. `joinMeeting()` and `joinGuestMeeting()` add or refresh `payload.members`, the browser sends `webmeet_meeting_presence_ping` every 10 seconds, `leaveMeeting()` removes the participant, and stale entries are removed after `PLOINKY_WEBMEET_PRESENCE_TTL_MS` or the default 30 seconds.
+- Live media presence is LiveKit room state. After `room.connect(...)`, the browser receives LiveKit participant and track events. The UI uses those events to render remote video/audio and to subscribe to published tracks. Redis supports LiveKit's internal room and node coordination, but users never query Redis to find each other.
+
 ## LiveKit Server Processing Model
 
 The LiveKit server is the real-time media SFU. It is not an application server for WebMeet chat, meetings, summaries, or durable artifacts. Its primary jobs are signaling, room membership for media sessions, track publication, track subscription, packet routing, and media-session health.
@@ -185,7 +210,7 @@ When a participant joins:
 
 Once media is active, LiveKit performs SFU work:
 
-- It terminates each browser's WebRTC connection and manages DTLS-SRTP transport encryption for that hop.
+- It terminates each browser's WebRTC connection and manages the DTLS-SRTP transport security for that hop.
 - It receives RTP/RTCP packets for published audio/video/screen tracks.
 - It tracks subscriber interest and forwards selected streams to the right participants.
 - It handles bandwidth estimation, congestion feedback, NACK/PLI retransmission requests, simulcast/SVC layer selection where available, and track mute/unmute state.
@@ -194,7 +219,54 @@ Once media is active, LiveKit performs SFU work:
 
 LiveKit normally forwards media rather than transcoding it. Browser clients encode their own microphone/camera/screen media. LiveKit chooses which encoded layers to forward and manages transport behavior, but room compositing and file encoding are handled by the separate egress worker, not by the main LiveKit server.
 
-Because end-to-end media encryption is not configured in this codebase, LiveKit is a trusted media server. Browser-to-LiveKit and LiveKit-to-browser media hops are encrypted in transit, but the SFU terminates those connections so it can route media.
+Because end-to-end media encryption is not configured in this codebase, LiveKit is a trusted media server. Browser-to-LiveKit and LiveKit-to-browser media hops are encrypted in transit by WebRTC transport security, but the SFU terminates those connections so it can route media. In practical terms: LiveKit decrypts the transport hop, can access the encoded media packets and data-channel payloads needed for SFU routing, and then re-encrypts traffic for each subscriber. It does not normally decode and re-encode the raw camera, microphone, or screen frames for ordinary room forwarding. Egress is the component that subscribes to room media, renders/composites the room, encodes an MP4, and writes it to disk.
+
+Signaling and API traffic are only encrypted in transit when the public endpoint uses `wss://` or `https://`. The current development defaults use `ws://127.0.0.1:17880` for browser signaling and `http://webmeetLivekitServer:7880` for server-side API calls on the private container network. Public deployments must terminate TLS for the browser-facing LiveKit URL.
+
+## Screen Share Flow
+
+Screen sharing is a browser media flow, not an MCP stream.
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Browser as WebMeet modal
+    participant LiveKitClient as LiveKit JS client
+    participant LiveKit as LiveKit server
+    participant Remote as Remote browsers
+    participant Egress as Egress worker
+
+    User->>Browser: Click screen share
+    Browser->>LiveKitClient: localParticipant.setScreenShareEnabled(true)
+    LiveKitClient->>Browser: Browser screen-capture permission prompt
+    Browser->>LiveKit: Publish ScreenShare video track over WebRTC
+    LiveKit->>Remote: Notify track publication and forward subscribed packets
+    Remote->>Remote: Attach remote video element
+    LiveKit-->>Egress: Forward track if recording is active
+```
+
+`webmeet-media-controller.js` keeps camera and screen share mutually exclusive in the current UI. Starting screen share first disables the camera publication when it is active; starting the camera disables screen share. The local browser captures and encodes the screen. LiveKit receives the screen-share RTP stream, forwards it to interested subscribers, and egress records it only when a room-composite recording is active.
+
+## Redis Boundary
+
+Redis is configured in both generated LiveKit files:
+
+- `webmeetLivekitServer` writes `redis.address: webmeetRedis:6379`.
+- `webmeetLivekitEgress` writes the same Redis address so egress can coordinate with the LiveKit server.
+
+With Redis configured, LiveKit uses Redis for LiveKit room data, node coordination, and message-bus behavior. Egress uses Redis messaging queues to communicate with LiveKit and to distribute work when multiple egress workers exist. In this repository's single-node bundle, Redis is still runtime infrastructure state for LiveKit and egress; it is not WebMeet's durable room store.
+
+Redis may contain short-lived LiveKit room, participant, node, routing, and egress coordination data, and the `redis-server --save 60 1` command can snapshot that runtime state to an RDB file. It must not be treated as the source of truth for:
+
+- WebMeet room lists or titles.
+- Guest invite tokens.
+- Chat history.
+- Transcript segments.
+- AI artifacts, tasks, decisions, or observer summaries.
+- Recording artifact metadata.
+- Media packets or MP4 recordings.
+
+Those application records live under `.ploinky/webmeet` and recording files live under `webmeet/recordings`.
 
 ## Ploinky Startup And Routing
 
@@ -386,7 +458,7 @@ The durable WebMeet store is under the workspace, not inside Redis:
 | `.ploinky/webmeet/jobs/failed` | Failed jobs with error messages. |
 | `webmeet/recordings` | Shared recording volume mounted into `webmeetAgent` and `webmeetLivekitEgress`. |
 
-Meeting payload encryption uses a per-meeting DEK wrapped by `PLOINKY_WEBMEET_MASTER_KEY`. If that variable is absent, `webmeetStore.mjs` falls back to `PLOINKY_MASTER_KEY` or `PLOINKY_WIRE_SECRET`. Remote deployment currently persists `PLOINKY_WEBMEET_MASTER_KEY` through `ploinky var`, using the GitHub secret `PLOINKY_MASTER_KEY` as the value.
+Meeting payload encryption uses a per-meeting DEK wrapped by `PLOINKY_WEBMEET_MASTER_KEY`. That variable is a dedicated WebMeet data key and must be injected through Ploinky encrypted variables or another explicit secret-management path. `webmeetStore.mjs` no longer uses `PLOINKY_MASTER_KEY` or `PLOINKY_WIRE_SECRET` for new meeting encryption; missing data-key configuration fails closed. A legacy decrypt-only path can unwrap records created by the older `PLOINKY_WIRE_SECRET` fallback and rewrap them with `PLOINKY_WEBMEET_MASTER_KEY` on the next meeting write.
 
 Meeting JSON writes are atomic (`temp + rename`) because multiple WebMeet tool subprocesses can touch the same meeting record concurrently.
 
@@ -441,7 +513,7 @@ Deployment hardening points:
 
 ## Configuration And Public Deployment Notes
 
-The active Ploinky profile defaults to `dev`. In the skills deployment workflow, the deploy step explicitly runs `ploinky profile dev`.
+The skills deployment workflow defaults to the `prod` Ploinky profile unless a workflow input or repository variable overrides it. Production WebMeet manifests require explicit LiveKit, TURN, and WebMeet data-encryption secrets so generated configs do not silently fall back to development credentials.
 
 Important WebMeet variables:
 
@@ -454,7 +526,7 @@ Important WebMeet variables:
 | `WEBMEET_EGRESS_URL` | Recording metadata and runtime validation | `http://webmeetLivekitEgress:7980` | Required in `prod`. |
 | `WEBMEET_TURN_EXTERNAL_IP` | Coturn advertised external IP | `127.0.0.1` | Required in `prod`. |
 | `WEBMEET_TURN_PASSWORD` | Coturn long-term credential | `webmeet` | Required in `prod`. |
-| `PLOINKY_WEBMEET_MASTER_KEY` | Meeting payload encryption | none | Must remain stable for stored meetings to decrypt. |
+| `PLOINKY_WEBMEET_MASTER_KEY` | Meeting payload encryption | `dev-webmeet-master-key` in `dev` and `default` | Required in `prod`; must remain stable for stored meetings to decrypt. |
 
 For a public URL like `https://skills.axiologic.dev`, the browser cannot use a loopback LiveKit URL unless it is running on the same host. A production-ready public WebMeet deployment needs a public LiveKit WebSocket endpoint, public RTP/TCP/UDP media routing, and TURN details wired into the client if relay is required.
 
@@ -478,7 +550,8 @@ The main rule is that WebMeet media load is not proportional to MCP/API traffic.
 
 Specific current-code constraints:
 
-- The browser creates `new Room({ adaptiveStream: true, dynacast: true })`, which helps because LiveKit can avoid forwarding unused video layers and publishers can avoid sending unneeded simulcast layers.
+- The browser creates `new Room({ audioCaptureDefaults })` and connects with `autoSubscribe: false`; WebMeet then explicitly subscribes to remote publications through connection-time and delayed subscription sweeps.
+- The current UI does not pass `adaptiveStream` or `dynacast` overrides into the LiveKit `Room` constructor. Any bandwidth adaptation comes from LiveKit's default client/server behavior and from explicit subscription choices in the UI.
 - The UI currently allows one camera or one screen share per participant; starting screen share disables camera and starting camera disables screen share. That limits per-user video tracks.
 - Custom ICE servers are returned in the join payload when TURN env vars are configured, and `buildRtcConfigForSession()` passes them to LiveKit. With `WEBMEET_ICE_TRANSPORT_POLICY=all`, TURN remains a fallback instead of forcing all traffic through coturn.
 - The single egress worker means simultaneous room-composite recordings can become the first CPU bottleneck.
@@ -547,11 +620,24 @@ Primary Explorer/WebMeet files:
 - `AssistOSExplorer/webmeetAgent/lib/webmeetStore.mjs`
 - `AssistOSExplorer/webmeetAgent/lib/webmeetQueue.mjs`
 - `AssistOSExplorer/webmeetAgent/lib/webmeetCrypto.mjs`
+- `AssistOSExplorer/webmeetAgent/server/webmeet-api.mjs`
+- `AssistOSExplorer/webmeetAgent/server/webmeet-public-proxy.mjs`
 - `AssistOSExplorer/webmeetAgent/server/webmeet-worker.mjs`
 - `AssistOSExplorer/webmeetAgent/server/validate-runtime.mjs`
 - `AssistOSExplorer/webmeetAgent/IDE-plugins/webmeet-tool-button/config.json`
+- `AssistOSExplorer/webmeetAgent/IDE-plugins/webmeet-tool-button/components/webmeet-dashboard-modal/webmeet-dashboard-modal.js`
 - `AssistOSExplorer/webmeetAgent/IDE-plugins/webmeet-tool-button/components/webmeet-dashboard-modal/controllers/livekit-room-controller.js`
+- `AssistOSExplorer/webmeetAgent/IDE-plugins/webmeet-tool-button/components/webmeet-dashboard-modal/controllers/meeting-presence-controller.js`
+- `AssistOSExplorer/webmeetAgent/IDE-plugins/webmeet-tool-button/components/webmeet-dashboard-modal/controllers/participant-layout-controller.js`
 - `AssistOSExplorer/webmeetAgent/IDE-plugins/webmeet-tool-button/components/webmeet-dashboard-modal/controllers/webmeet-media-controller.js`
 - `AssistOSExplorer/webmeetAgent/IDE-plugins/webmeet-tool-button/components/webmeet-dashboard-modal/services/rtc-config.js`
 - `AssistOSExplorer/webmeetInfra/*/manifest.json`
 - `AssistOSExplorer/webmeetInfra/*/scripts/hooks/preinstall.sh`
+
+External LiveKit references:
+
+- `https://docs.livekit.io/transport/encryption/`
+- `https://docs.livekit.io/reference/internals/livekit-sfu/`
+- `https://docs.livekit.io/home/self-hosting/distributed/`
+- `https://docs.livekit.io/home/self-hosting/egress/`
+- `https://docs.livekit.io/home/egress/composite-recording`
