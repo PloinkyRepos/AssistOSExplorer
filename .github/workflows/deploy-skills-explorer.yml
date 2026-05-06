@@ -214,8 +214,9 @@ jobs:
 
           repair_encrypted_secrets_file
 
-          echo "[deploy] Stopping current workspace services if present..."
-          env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" stop || true
+          echo "[deploy] Removing current workspace containers if present..."
+          env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" shutdown || \
+            env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" stop || true
 
           echo "[deploy] Ensuring Ploinky repos are installed and enabled..."
           "$PLOINKY" add repo fileExplorer https://github.com/PloinkyRepos/AssistOSExplorer.git "${EXPLORER_BRANCH:-main}" || true
