@@ -3,7 +3,8 @@ confirm-action-modal .modal-body {
     flex-direction: column;
     justify-content: center;
     gap: var(--space-md);
-    padding: var(--space-md) 0;
+    padding: var(--space-md);
+    max-width: 575px;
 }
 
 confirm-action-modal .modal-title {
