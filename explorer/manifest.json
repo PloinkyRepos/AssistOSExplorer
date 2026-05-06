@@ -44,6 +44,20 @@
         "tasks": true,
         "webmeet": true
     },
+    "httpServices": [
+        {
+            "externalPrefix": "/services/explorer/office/",
+            "internalPrefix": "/office/",
+            "auth": "protected",
+            "notFoundMessage": "Explorer route not found."
+        },
+        {
+            "externalPrefix": "/public-services/explorer/office/",
+            "internalPrefix": "/office/",
+            "auth": "none",
+            "notFoundMessage": "Explorer route not found."
+        }
+    ],
     "profiles": {
         "default": {
             "env": [

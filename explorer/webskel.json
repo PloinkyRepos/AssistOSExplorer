@@ -140,11 +140,6 @@
       "name": "settings-modal",
       "type": "modals",
       "presenterClassName": "SettingsModal"
-    },
-    {
-      "name": "create-room-modal",
-      "type": "modals",
-      "presenterClassName": "CreateRoomModal"
     }
   ],
   "services": []

@@ -254,13 +254,14 @@ sequenceDiagram
 
 ## WebMeet Agent Internals
 
-`webmeetAgent/scripts/startAgent.sh` starts three processes in one container:
+`webmeetAgent/scripts/startAgent.sh` starts four processes in one container:
 
 | Process | Role |
 |---|---|
 | `node /code/server/webmeet-api.mjs` | Internal HTTP API on `WEBMEET_API_PORT` (default `8791`). It mirrors the main WebMeet operations, but the Explorer plugin currently uses MCP tools instead. |
 | `node /code/server/webmeet-worker.mjs` | Polls persistent job files for `observer_refresh`, `assistant_reply`, and `scribe_finalize`. |
-| `sh /Agent/server/AgentServer.sh` | Ploinky AgentServer on port `7000`, exposing tools from `webmeetAgent/mcp-config.json`. |
+| `sh /Agent/server/AgentServer.sh` | Ploinky AgentServer on `WEBMEET_MCP_PORT` (default `7001`), exposing tools from `webmeetAgent/mcp-config.json`. |
+| `node /code/server/webmeet-public-proxy.mjs` | Ploinky-facing WebMeet front door on the assigned `PORT`. It bridges `/mcp` to the internal AgentServer for normal Ploinky routing, and serves only the guest page, guest assets, and guest-token API calls for the `webmeetAgent/manifest.json` HTTP service at `/public-services/webmeet/...`; guest HTTP calls must carry a router-issued `__http_service__` invocation token with a guest role. |
 
 Every MCP tool in `mcp-config.json` runs `tools/webmeet_tool.sh`, which launches `tools/webmeet_tool.mjs` as a fresh subprocess. Tool calls are stateless at the process level and share state through the workspace store.
 
@@ -417,7 +418,8 @@ WebMeet uses different security controls for the application plane, media plane,
 | Boundary | Protection in current code | Important limits |
 |---|---|---|
 | Browser to Ploinky MCP | Browser calls go through the authenticated Ploinky router and MCP proxy. The proxy mints invocation metadata for tool calls. | This protects WebMeet application tools, not direct browser-to-LiveKit media sockets. |
-| Ploinky to `webmeetAgent` | AgentServer verifies router-minted invocation JWTs using `PLOINKY_WIRE_SECRET`; tool subprocesses read invocation-derived user and role claims. | Tools must continue to derive authorization from invocation metadata, not from user-supplied fields. |
+| Ploinky to `webmeetAgent` | The WebMeet public proxy forwards MCP handshake and metadata methods to AgentServer, but executable MCP methods require router-minted invocation JWTs using `PLOINKY_WIRE_SECRET`; AgentServer verifies the same token before spawning tools. | Tools must continue to derive authorization from invocation metadata, not from user-supplied fields. Tool/resource metadata remains listable for router discovery. |
+| Guest invite HTTP surface | `webmeetAgent/manifest.json` declares `/public-services/webmeet/...` as a guest HTTP service, so Ploinky routes it to the WebMeet proxy as `/api/...` with `x-ploinky-auth-info.invocationToken`. The proxy verifies the token audience, `__http_service__` tool binding, body hash, and guest role before serving the guest page or proxying guest API calls. WebMeet intentionally does not use manifest-level `guest: true` like visitor-only agents such as webAssist, because guest invite users must not reach the agent's general MCP tools. | Guest users must only be routed through the WebMeet public service path. Do not expose Explorer, generic agent MCP routes, or non-guest WebMeet APIs through a public route. |
 | Admin room management | `webmeetStore.mjs` gates create, rename, and close operations with `assertAdminAuthInfo()`. | Join, chat, transcript, recording, and agent attach operations currently do not all have admin-only checks. |
 | LiveKit participant access | `webmeetAgent` signs LiveKit JWTs with `WEBMEET_LIVEKIT_API_SECRET`. Tokens are scoped to one room and grant `roomJoin`, `canPublish`, `canSubscribe`, and `canPublishData`. | Tokens currently last 8 hours. Anyone who obtains a participant token can use those grants until expiry. |
 | LiveKit server API | Egress control calls use a short-lived server JWT with `roomRecord: true` against `WEBMEET_LIVEKIT_URL`. API key/secret stay server-side. | The LiveKit API/signaling port is also the browser WebSocket endpoint. If exposed publicly, protect it with strong keys, firewalling, and TLS termination. |
