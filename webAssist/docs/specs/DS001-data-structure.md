@@ -29,7 +29,7 @@ Each session uses two files in `sessions/`:
 
 ### Profile file (`{sessionId}-profile.md`)
 #### 1. Profile
-Contains a list of filenames from `profilesInfo/` that are currently considered relevant to this session. 
+Contains a list of filenames from `profilesInfo/` that are currently considered relevant to this session.
 - **Initialization**: Can start with multiple likely profiles.
 - **Evolution**: The list is updated/narrowed down as more information is gathered from the user.
 

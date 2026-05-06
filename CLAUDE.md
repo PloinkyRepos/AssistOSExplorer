@@ -6,6 +6,14 @@ This repository hosts the AchillesIDE/Ploinky Explorer workspace. It groups the 
 
 Read any nested `AGENTS.md` before changing a subproject. Nested instructions are stricter for their local scope.
 
+## Mandatory Reading Order
+
+1. Read both top-level guidance files, `AGENTS.md` and `CLAUDE.md`; they must stay synchronized.
+2. Read `docs/index.html`, `docs/specs/matrix.md`, and `docs/specs/DS06-ploinky-runtime-invariants.md` before changing Explorer routing, auth, plugin hosting, dependencies, or workspace file behavior.
+3. Read the target agent's local `AGENTS.md` or `CLAUDE.md`.
+4. Read the target agent's `docs/specs/matrix.md` and `DS*-ploinky-runtime-invariants.md` before changing auth, guest access, MCP, HTTP services, runtime manifests, file access, logs, or data storage.
+5. Read the relevant Ploinky specs in `../ploinky/docs/specs/`, especially `DS005-routing-and-web-surfaces.md` and `DS011-security-model.md`, when a change touches router behavior, secure-wire invocation, guest sessions, manifests, or public service routes.
+
 ## Workspace Rules
 
 - This checkout is part of the multi-repo workspace at `~/work/file-parser`; check the relevant repo status/logs before editing.
@@ -110,6 +118,8 @@ Each agent can set its own default mode, but mode selection should be intentiona
 ## Documentation And Specs
 
 - Use specification-driven development for agents. Agent specs live under `docs/specs/` and use DS-style names such as `DS0XX-short-description.md` or the existing local convention.
+- The DS specifications are the source of truth for contracts and invariants. `docs/specs/DS06-ploinky-runtime-invariants.md` is the root local copy of the Ploinky runtime and security invariants for this repository.
+- Every agent directory must keep local `AGENTS.md` and `CLAUDE.md` files that reference its docs entry point, spec matrix, and local Ploinky runtime invariants spec.
 - `DS000` or `DS01`/`DS01-Vision` is the vision/overview anchor when that convention is already used. `DS02`/`DS02-Architecture` is the architecture anchor where present.
 - Specs should focus on rules, constraints, contracts, and invariants rather than implementation history.
 - HTML documentation should use a technical writing style with minimal code examples.

@@ -1,8 +1,6 @@
-# Design Specifications Matrix
+# tasksAgent Spec Matrix
 
-This page indexes the design specification set for `tasksAgent`.
-
-The set is rule-oriented and defines what the Ploinky agent must guarantee, independent of implementation details.
+This page indexes the local design specification set. The DS files are the source of truth for rules, contracts, and invariants.
 
 ## Specification Set
 
@@ -11,3 +9,4 @@ The set is rule-oriented and defines what the Ploinky agent must guarantee, inde
 - [DS03 - MCP Tool Contracts and Invocation Lifecycle](specsLoader.html?spec=DS03-MCP-Tool-Contracts-and-Lifecycle.md)
 - [DS04 - Explorer Integration and IDE Plugin Channel](specsLoader.html?spec=DS04-Explorer-Integration-and-IDE-Plugin-Channel.md)
 - [DS05 - Backlog Path Safety and Operational Validation](specsLoader.html?spec=DS05-Backlog-Path-Safety-and-Operational-Validation.md)
+- [DS06 - Ploinky Runtime Invariants](specsLoader.html?spec=DS06-ploinky-runtime-invariants.md)

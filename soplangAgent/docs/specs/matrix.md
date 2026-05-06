@@ -1,8 +1,6 @@
-# Design Specifications Matrix
+# soplangAgent Spec Matrix
 
-This page is the index for the soplangBuilder design specification set.
-
-The set is written for Ploinky-agent-level rules, constraints, and invariants. The focus is on what the agent must guarantee, independent of implementation style.
+This page indexes the local design specification set. The DS files are the source of truth for rules, contracts, and invariants.
 
 ## Specification Set
 
@@ -11,3 +9,4 @@ The set is written for Ploinky-agent-level rules, constraints, and invariants. T
 - [DS03 - MCP Tool Contract and Execution Lifecycle](specsLoader.html?spec=DS03-MCP-Tool-Contract-and-Lifecycle.md)
 - [DS04 - UI Bridge and IDE Plugin Integration](specsLoader.html?spec=DS04-UI-Bridge-and-IDE-Plugin-Integration.md)
 - [DS05 - Configuration and Operational Guarantees](specsLoader.html?spec=DS05-Configuration-and-Operational-Guarantees.md)
+- [DS06 - Ploinky Runtime Invariants](specsLoader.html?spec=DS06-ploinky-runtime-invariants.md)
