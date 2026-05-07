@@ -550,7 +550,7 @@ The main rule is that WebMeet media load is not proportional to MCP/API traffic.
 
 Specific current-code constraints:
 
-- The browser creates a LiveKit `Room` with `adaptiveStream: false` and `dynacast: false`, then connects with `autoSubscribe: true`; WebMeet also runs explicit subscription sweeps after connect and publication events as a recovery path.
+- The browser creates a LiveKit `Room` with `adaptiveStream: false` and `dynacast: false`, then connects with `autoSubscribe: true`; WebMeet also runs explicit subscription sweeps after connect and publication events as a recovery path for late publications. Already-attached tracks are not toggled off just because the browser reports the remote media track as muted before the first frame arrives.
 - Those adaptive media optimizations stay disabled because the current modal renders video elements after room events and needs remote video and screen-share downtracks to be negotiated immediately after subscription.
 - The browser sets `publishDefaults.simulcast: false`. This keeps WebMeet on a single VP8 encoding per published video track because the deployed LiveKit/Pion path can drop screen-share media when a browser advertises a partial simulcast RID/SSRC set.
 - The UI allows a participant to publish camera and screen share simultaneously. The participant card can hold multiple video elements for the same participant.

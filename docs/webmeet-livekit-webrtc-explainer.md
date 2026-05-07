@@ -398,7 +398,7 @@ For a rough mental model, each participant uploads their own microphone/camera/s
 
 Current mitigations:
 
-- The UI connects with `autoSubscribe: true`; explicit subscription sweeps still run after connect and publication events so late or stale publications are retried.
+- The UI connects with `autoSubscribe: true`; explicit subscription sweeps still run after connect and publication events so late publications are retried without toggling already-attached tracks off.
 - The UI disables `adaptiveStream` and `dynacast` in the LiveKit `Room` constructor so remote video and screen-share downtracks are negotiated immediately after subscription.
 - The UI sets `publishDefaults.simulcast: false`, so each camera or screen-share publication uses one video encoding. WebMeet keeps this conservative because the deployed LiveKit/Pion path can fail screen-share delivery when the browser advertises a partial simulcast RID/SSRC set.
 - The UI allows camera and screen share to be active at the same time for one participant. They are separate LiveKit video tracks and render as multiple media elements in that participant's card.
