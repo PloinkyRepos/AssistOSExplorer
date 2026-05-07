@@ -245,7 +245,7 @@ sequenceDiagram
     LiveKit-->>Egress: Forward track if recording is active
 ```
 
-`webmeet-media-controller.js` allows camera and screen share to be active at the same time. The local browser captures and encodes each source as a separate LiveKit video track. LiveKit receives the camera and screen-share RTP streams, forwards them to interested subscribers, and egress records them only when a room-composite recording is active. WebMeet publishes video without simulcast so LiveKit receives a single declared RTP stream for each camera or screen-share publication.
+`webmeet-media-controller.js` allows camera and screen share to be active at the same time. The local browser captures and encodes each source as a separate LiveKit video track. LiveKit receives the camera and screen-share RTP streams, forwards them to interested subscribers, and egress records them only when a room-composite recording is active. WebMeet does not set room-level `publishDefaults`; it lets the LiveKit client choose track publish defaults because custom screen-share encoding broke frame delivery in the deployed LiveKit/Pion path.
 
 ## Redis Boundary
 
@@ -552,7 +552,7 @@ Specific current-code constraints:
 
 - The browser creates a LiveKit `Room` with `adaptiveStream: false` and `dynacast: false`, then connects with `autoSubscribe: true`; WebMeet also runs explicit subscription sweeps after connect and publication events as a recovery path for late publications. Already-attached tracks are not toggled off just because the browser reports the remote media track as muted before the first frame arrives.
 - Those adaptive media optimizations stay disabled because the current modal renders video elements after room events and needs remote video and screen-share downtracks to be negotiated immediately after subscription.
-- The browser sets `publishDefaults.simulcast: false`. This keeps WebMeet on a single VP8 encoding per published video track because the deployed LiveKit/Pion path can drop screen-share media when a browser advertises a partial simulcast RID/SSRC set.
+- The browser does not set room-level `publishDefaults`. The deployed LiveKit/Pion path can fail screen-share delivery when WebMeet forces custom publish defaults for screen-share encoding.
 - The UI allows a participant to publish camera and screen share simultaneously. The participant card can hold multiple video elements for the same participant.
 - Custom ICE servers are returned in the join payload when TURN env vars are configured, and `buildRtcConfigForSession()` passes them to LiveKit. With `WEBMEET_ICE_TRANSPORT_POLICY=all`, TURN remains a fallback instead of forcing all traffic through coturn.
 - The single egress worker means simultaneous room-composite recordings can become the first CPU bottleneck.
