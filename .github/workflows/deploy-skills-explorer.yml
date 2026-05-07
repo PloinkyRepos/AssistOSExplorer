@@ -219,9 +219,9 @@ jobs:
             env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" stop || true
 
           echo "[deploy] Ensuring Ploinky repos are installed and enabled..."
-          "$PLOINKY" add repo fileExplorer https://github.com/PloinkyRepos/AssistOSExplorer.git "${EXPLORER_BRANCH:-main}" || true
+          "$PLOINKY" add repo AchillesIDE https://github.com/PloinkyRepos/AssistOSExplorer.git "${EXPLORER_BRANCH:-main}" || true
           "$PLOINKY" add repo webmeetInfra https://github.com/PloinkyRepos/webmeetInfra.git main || true
-          "$PLOINKY" enable repo fileExplorer
+          "$PLOINKY" enable repo AchillesIDE
           "$PLOINKY" enable repo webmeetInfra
 
           echo "[deploy] Updating Ploinky, installed repos, and achillesAgentLib..."
@@ -229,7 +229,7 @@ jobs:
             echo "[deploy] Initial update failed; retrying once in case Ploinky self-updated during this run..."
             if ! env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" update; then
               echo "[deploy] WARNING: broad ploinky update failed, usually because unrelated workspace repositories have broken remotes or branch tracking."
-              echo "[deploy] Continuing because this workflow explicitly resets fileExplorer and webmeetInfra before starting Explorer."
+              echo "[deploy] Continuing because this workflow explicitly resets AchillesIDE and webmeetInfra before starting Explorer."
             fi
           fi
           if [ -f "$HOME/ploinky/package.json" ]; then
@@ -243,7 +243,7 @@ jobs:
             fi
           fi
 
-          for repo_spec in "fileExplorer:${EXPLORER_BRANCH:-main}" "webmeetInfra:main"; do
+          for repo_spec in "AchillesIDE:${EXPLORER_BRANCH:-main}" "webmeetInfra:main"; do
             repo_name="${repo_spec%%:*}"
             repo_branch="${repo_spec#*:}"
             repo_dir="$WORK_DIR/.ploinky/repos/$repo_name"
@@ -256,7 +256,65 @@ jobs:
             fi
           done
 
-          "$PLOINKY" profile "${PLOINKY_PROFILE:-dev}"
+          remove_legacy_repo_state() {
+            local legacy_repo="$1"
+            echo "[deploy] Removing legacy repo state for $legacy_repo..."
+            "$PLOINKY" disable repo "$legacy_repo" || true
+            rm -rf "$WORK_DIR/.ploinky/repos/$legacy_repo"
+            node - "$legacy_repo" <<'NODE'
+          const fs = require('fs');
+          const legacyRepo = process.argv[2];
+          const readJson = (file, fallback) => {
+            try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch (_) { return fallback; }
+          };
+          const writeJson = (file, value) => fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
+
+          const sourcesPath = '.ploinky/repo_sources.json';
+          const sources = readJson(sourcesPath, {});
+          if (sources && typeof sources === 'object' && Object.prototype.hasOwnProperty.call(sources, legacyRepo)) {
+            delete sources[legacyRepo];
+            writeJson(sourcesPath, sources);
+          }
+
+          const agentsPath = '.ploinky/agents.json';
+          const agents = readJson(agentsPath, null);
+          if (agents && typeof agents === 'object') {
+            let changed = false;
+            for (const [key, record] of Object.entries(agents)) {
+              if (record && record.repoName === legacyRepo) {
+                delete agents[key];
+                changed = true;
+              }
+            }
+            if (agents._config?.static?.agent === `${legacyRepo}/explorer`) {
+              delete agents._config.static;
+              changed = true;
+            }
+            if (changed) writeJson(agentsPath, agents);
+          }
+
+          const routingPath = '.ploinky/routing.json';
+          const routing = readJson(routingPath, null);
+          if (routing && typeof routing === 'object' && routing.routes) {
+            let changed = false;
+            for (const [key, route] of Object.entries(routing.routes)) {
+              if (route && route.repo === legacyRepo) {
+                delete routing.routes[key];
+                changed = true;
+              }
+            }
+            if (routing.static?.agent === `${legacyRepo}/explorer`) {
+              delete routing.static;
+              changed = true;
+            }
+            if (changed) writeJson(routingPath, routing);
+          }
+          NODE
+          }
+
+          remove_legacy_repo_state fileExplorer
+
+          "$PLOINKY" profile "${PLOINKY_PROFILE:-prod}"
           "$PLOINKY" sandbox disable
 
           set_var() {
@@ -298,7 +356,7 @@ jobs:
           set_var WEBMEET_TURN_MAX_PORT "${WEBMEET_TURN_MAX_PORT:-}"
 
           echo "[deploy] Starting Explorer..."
-          nohup env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" start fileExplorer/explorer "$ROUTER_PORT" > "$WORK_DIR/logs/skills-explorer-start.log" 2>&1 &
+          nohup env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" start AchillesIDE/explorer "$ROUTER_PORT" > "$WORK_DIR/logs/skills-explorer-start.log" 2>&1 &
 
           echo "[deploy] Waiting for local router..."
           sleep 10
