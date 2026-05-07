@@ -40,13 +40,6 @@ flowchart TB
 
 The most important point: `webmeetAgent` does not stream audio or video. It manages meeting state and gives the browser a LiveKit URL, room name, and token. The browser streams media directly to LiveKit.
 
-## Direct Answers
-
-- Is streamed media encrypted in flight? Yes for the WebRTC media hops between each browser and LiveKit. The browser-facing LiveKit signaling/API path is encrypted only when `WEBMEET_PUBLIC_LIVEKIT_URL` uses `wss://` and the deployment terminates TLS; the development defaults use local `ws://` and internal `http://` URLs.
-- Does the LiveKit server decrypt it? Yes, in the current WebMeet configuration. End-to-end encryption is not enabled, so LiveKit terminates each WebRTC transport, can access the encoded media/data it forwards, and re-encrypts it on the outbound hop. It normally forwards encoded packets rather than decoding and compositing normal room media. The egress worker is the component that renders/composites and encodes recordings.
-- What is stored in Redis? LiveKit runtime state: room data, node coordination, message-bus data, and egress coordination queues/messages. Redis does not store WebMeet chat, transcript, guest invite tokens as product data, AI artifacts, or MP4 recordings.
-- How do users find each other? Authenticated users find rooms through `webmeetAgent` MCP room-list tools backed by `.ploinky/webmeet` JSON records. Guest users receive a room id plus guest token in an invite URL. After joining, participants see each other through LiveKit participant/track events and through WebMeet's presence list, which is updated by join, heartbeat, leave, and stale-presence cleanup.
-
 ## What LiveKit Server Is For
 
 LiveKit is the media server. In this repo it runs as `webmeetInfra/webmeetLivekitServer`.
@@ -83,33 +76,6 @@ LiveKit helps with:
 
 Without LiveKit, WebMeet would need direct browser-to-browser WebRTC connections. That becomes difficult with more participants, firewalls, NAT, recording, and bandwidth management.
 
-## How Users Find Rooms And Participants
-
-WebMeet has its own room directory. LiveKit is used only after a room has been selected and a participant token has been minted.
-
-For authenticated Explorer users:
-
-1. The WebMeet modal calls `webmeet_workspace_list`.
-2. `webmeetAgent` derives the workspace id from the current workspace root.
-3. The modal calls `webmeet_meeting_list` for that workspace.
-4. `webmeetAgent` reads the meeting JSON files under `.ploinky/webmeet/meetings`, filters active rooms for the current workspace, and returns the list.
-5. The user selects a room and joins it.
-
-For guest users:
-
-1. An admin creates a guest room.
-2. `webmeetAgent` stores a random `guestToken` in that meeting record.
-3. The admin shares `/public-services/webmeet/guest?room=<meetingId>&token=<guestToken>`.
-4. Ploinky treats the request as a scoped forced-guest HTTP service call.
-5. The WebMeet guest join API checks the room id and guest token, creates or refreshes a guest participant identity, and returns a LiveKit token. Later guest state, chat, transcript, presence, and leave calls verify that participant identity.
-
-Once joined, participants find each other in two ways:
-
-- Live media discovery comes from LiveKit room signaling. The browser receives participant, publication, subscription, mute, unmute, and disconnect events and renders tracks from those events.
-- WebMeet presence comes from the encrypted meeting payload. `joinMeeting()` adds the participant to `payload.members`, the browser sends a heartbeat every 10 seconds, `leaveMeeting()` removes the member, and stale members are removed after the configured presence TTL or the 30-second default.
-
-Redis is not part of user-facing room discovery. It is LiveKit infrastructure state.
-
 ## What The LiveKit Server Actually Does
 
 LiveKit is the middle point for every live media session. Each browser has one WebRTC session with LiveKit. Browsers do not open direct media sessions to every other browser.
@@ -136,13 +102,9 @@ During the call, LiveKit:
 
 LiveKit usually does not decode and re-encode normal room media. The browser captures and encodes media. LiveKit forwards the encoded streams and adapts which layers are sent. Recording is different: the egress worker subscribes to the room, composites a layout, encodes an MP4, and writes it to disk.
 
-In the current WebMeet codebase, LiveKit is trusted infrastructure. WebRTC encrypts media on the browser-to-LiveKit hop and on the LiveKit-to-browser hop, but LiveKit terminates those encrypted transports. Because WebMeet does not configure LiveKit end-to-end encryption in `RoomOptions`, LiveKit can access the encoded media packets and LiveKit data-channel messages it forwards. This is different from LiveKit E2EE mode, where clients add an application encryption layer and LiveKit servers cannot access media or data-channel content.
+The current WebMeet UI creates LiveKit rooms with:
 
-Signaling and API traffic are separate from WebRTC media. They are encrypted in transit only when the deployment uses TLS, such as `wss://` for the public LiveKit URL and `https://` for server APIs. The local/default WebMeet manifests use `ws://` and `http://` endpoints for development and private container-network calls.
-
-The current WebMeet UI connects to LiveKit with:
-
-- LiveKit's default client/server media behavior; WebMeet does not force adaptive stream or dynacast overrides in the room constructor.
+- LiveKit's default adaptive media behavior; WebMeet does not force adaptive stream or dynacast overrides in the room constructor.
 - `autoSubscribe: false`, followed by explicit subscription sweeps for remote publications so published tracks are subscribed deterministically.
 - optional TURN/STUN ICE servers from the join payload. `buildRtcConfigForSession()` returns a config when `session.rtcConfig.iceServers` is present, and returns `undefined` only when no custom ICE servers are configured.
 
@@ -152,7 +114,7 @@ That means coturn exists as a relay fallback when configured through `WEBMEET_TU
 
 LiveKit does not own the WebMeet product data:
 
-- It does not own or persist WebMeet's durable room directory.
+- It does not persist room lists.
 - It does not store durable chat history.
 - It does not store transcript entries.
 - It does not create meeting summaries or tasks.
@@ -212,10 +174,6 @@ flowchart TB
     Egress["LiveKit egress"] --> Redis
 ```
 
-With Redis configured, LiveKit uses it for room data, node coordination, and message-bus behavior. Egress uses Redis messaging queues to communicate with LiveKit and to distribute recording work when more than one egress worker exists. In this Ploinky bundle, Redis is still runtime infrastructure state even though there is only one LiveKit server and one egress worker.
-
-Redis can contain short-lived LiveKit room, participant, node, routing, and egress coordination data. Because `webmeetRedis` runs `redis-server --save 60 1`, Redis may also write snapshots of that runtime state. Those snapshots are not WebMeet's product database.
-
 Redis does not store:
 
 - WebMeet chat history
@@ -223,9 +181,6 @@ Redis does not store:
 - meeting artifacts
 - tasks or decisions
 - durable meeting records
-- guest invite tokens as WebMeet product state
-- MP4 recording files
-- media packets as a durable archive
 
 Those live under `.ploinky/webmeet` and are owned by `webmeetAgent`.
 
@@ -240,7 +195,6 @@ Application layer:
 - `webmeetAgent` derives user and role information from that invocation metadata.
 - Admin-only room operations are checked in `webmeetStore.mjs`.
 - Meeting payloads are encrypted at rest with AES-256-GCM using a per-meeting data key wrapped by `PLOINKY_WEBMEET_MASTER_KEY`.
-- `PLOINKY_WEBMEET_MASTER_KEY` is an explicit WebMeet data key. It is not derived from `PLOINKY_WIRE_SECRET`, and missing production configuration fails closed. Older records created by the previous wire-secret fallback can be read only for migration and are rewrapped with the explicit WebMeet key on the next write.
 
 Media layer:
 
@@ -249,8 +203,6 @@ Media layer:
 - The token is scoped to one LiveKit room and grants room join, publish, subscribe, and data-channel permissions.
 - The current participant token lifetime is 8 hours.
 - Browser media is encrypted in transit on each WebRTC hop.
-- LiveKit terminates those WebRTC hops in the current configuration, because no LiveKit E2EE options or key-distribution flow are configured.
-- LiveKit signaling/API traffic needs `wss://` or `https://` deployment wiring for TLS in transit; the local development defaults are not TLS.
 
 Recording layer:
 
@@ -266,7 +218,7 @@ Infrastructure layer:
 
 Important limits:
 
-- LiveKit is trusted infrastructure. End-to-end media/data-channel encryption is not configured, so LiveKit terminates WebRTC connections to route media and can read non-E2EE data-channel payloads.
+- LiveKit is trusted infrastructure. End-to-end media encryption is not configured, so LiveKit terminates WebRTC connections to route media.
 - Redis has no auth in the manifest and should not be publicly exposed.
 - Dev credentials are intentionally weak and must not be used for shared or public deployments.
 - TURN credentials are static in the current manifests; production must use strong secrets and firewalling.
@@ -398,8 +350,7 @@ For a rough mental model, each participant uploads their own microphone/camera/s
 
 Current mitigations:
 
-- The UI connects with `autoSubscribe: false` and then explicitly subscribes remote publications through connection-time and delayed sweeps.
-- The current UI does not pass `adaptiveStream` or `dynacast` overrides into the LiveKit `Room` constructor.
+- The UI enables `adaptiveStream` and `dynacast`.
 - The UI prevents camera and screen share from being active at the same time for one participant.
 - Chat and transcript are not sent through the media server as the source of truth.
 
@@ -432,30 +383,6 @@ sequenceDiagram
 ```
 
 After this point, audio/video does not go through the MCP tool path. It flows between the browser and LiveKit.
-
-## How Screen Sharing Works
-
-Screen sharing is just another LiveKit video track with a screen-share source. It is not uploaded to `webmeetAgent`, and the screen content is not stored in Redis.
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant UI as WebMeet modal
-    participant Browser as Browser WebRTC stack
-    participant LiveKit as LiveKit server
-    participant Remote as Remote browsers
-    participant Egress as Egress worker
-
-    User->>UI: Click screen-share button
-    UI->>Browser: localParticipant.setScreenShareEnabled(true)
-    Browser->>User: Screen/window/tab picker
-    Browser->>LiveKit: Publish ScreenShare track
-    LiveKit->>Remote: Forward subscribed screen-share packets
-    Remote->>Remote: Attach remote video element
-    LiveKit-->>Egress: Also forward track if recording is active
-```
-
-The current UI intentionally keeps camera and screen share mutually exclusive. Starting screen share disables the camera when it is active; starting the camera disables screen share. This keeps one local video source active at a time. If recording is active, the egress worker subscribes to the room and captures the screen-share track as part of the room composite.
 
 ## How Chat Differs From Media
 
@@ -490,11 +417,3 @@ The split keeps each part doing the job it is good at:
 | Browser UI | Explorer WebMeet plugin |
 
 This is why WebMeet has more than one backend process. A normal HTTP/MCP agent is fine for commands and JSON state, but live audio/video needs WebRTC media infrastructure.
-
-## External LiveKit References
-
-- Encryption overview: `https://docs.livekit.io/transport/encryption/`
-- LiveKit SFU internals: `https://docs.livekit.io/reference/internals/livekit-sfu/`
-- Distributed Redis setup: `https://docs.livekit.io/home/self-hosting/distributed/`
-- Egress service: `https://docs.livekit.io/home/self-hosting/egress/`
-- RoomComposite egress: `https://docs.livekit.io/home/egress/composite-recording`
