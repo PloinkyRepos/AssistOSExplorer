@@ -400,7 +400,7 @@ Current mitigations:
 
 - The UI connects with `autoSubscribe: true`; explicit subscription sweeps still run after connect and publication events so late or stale publications are retried.
 - The UI disables `adaptiveStream` and `dynacast` in the LiveKit `Room` constructor so remote video and screen-share downtracks are negotiated immediately after subscription.
-- After a remote video element is attached, WebMeet also checks that the element reaches frame-ready state. If the LiveKit SDK has a remote track object but the `<video>` element remains frame-empty, WebMeet performs a delayed unsubscribe/resubscribe refresh for that publication.
+- The UI sets `publishDefaults.simulcast: false`, so each camera or screen-share publication uses one video encoding. WebMeet keeps this conservative because the deployed LiveKit/Pion path can fail screen-share delivery when the browser advertises a partial simulcast RID/SSRC set.
 - The UI prevents camera and screen share from being active at the same time for one participant.
 - Chat and transcript are not sent through the media server as the source of truth.
 
@@ -456,7 +456,7 @@ sequenceDiagram
     LiveKit-->>Egress: Also forward track if recording is active
 ```
 
-The current UI intentionally keeps camera and screen share mutually exclusive. Starting screen share disables the camera when it is active; starting the camera disables screen share. This keeps one local video source active at a time. Remote browsers treat screen share as a normal subscribed video publication, with the same post-attach frame-readiness check used for camera video. If recording is active, the egress worker subscribes to the room and captures the screen-share track as part of the room composite.
+The current UI intentionally keeps camera and screen share mutually exclusive. Starting screen share disables the camera when it is active; starting the camera disables screen share. This keeps one local video source active at a time. Remote browsers treat screen share as a normal subscribed video publication. WebMeet publishes video without simulcast so LiveKit receives a single declared RTP stream for the publication. If recording is active, the egress worker subscribes to the room and captures the screen-share track as part of the room composite.
 
 ## How Chat Differs From Media
 
