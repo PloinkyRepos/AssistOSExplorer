@@ -226,10 +226,7 @@ jobs:
           echo "[deploy] Updating Ploinky, installed repos, and achillesAgentLib..."
           if ! env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" update; then
             echo "[deploy] Initial update failed; retrying once in case Ploinky self-updated during this run..."
-            if ! env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" update; then
-              echo "[deploy] WARNING: broad ploinky update failed, usually because unrelated workspace repositories have broken remotes or branch tracking."
-              echo "[deploy] Continuing because this workflow explicitly resets fileExplorer and webmeetInfra before starting Explorer."
-            fi
+            env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" update
           fi
           if [ -f "$HOME/ploinky/package.json" ]; then
             npm install --ignore-scripts --prefix "$HOME/ploinky"
