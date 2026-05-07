@@ -28,7 +28,7 @@ function parseSecretsText(raw = '') {
 }
 
 function resolveMasterKey() {
-  const raw = String(process.env.PLOINKY_MASTER_KEY || process.env.PLOINKY_WIRE_SECRET || '').trim();
+  const raw = String(process.env.PLOINKY_MASTER_KEY || '').trim();
   if (!raw) {
     return null;
   }

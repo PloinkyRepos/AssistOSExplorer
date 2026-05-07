@@ -86,7 +86,7 @@ export function createSecretStoreClient({ providerRouteName, authInfo = null, in
   async function callContractOperation(operation, args = {}) {
     const forwardedInvocationToken = isNonEmptyString(invocationToken)
       ? invocationToken.trim()
-      : extractInvocationToken(authInfo) || process.env.PLOINKY_INVOCATION_TOKEN || undefined;
+      : extractInvocationToken(authInfo) || undefined;
     if (!forwardedInvocationToken) {
       throw new Error('secret-store-client: missing invocation token for delegated DPU call.');
     }

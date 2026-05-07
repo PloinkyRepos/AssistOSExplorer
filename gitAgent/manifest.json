@@ -15,8 +15,7 @@
                 "PLOINKY_ROUTER_HOST",
                 "PLOINKY_ROUTER_PORT",
                 "PLOINKY_AGENT_PRINCIPAL",
-                "PLOINKY_DPU_ROUTE",
-                "PLOINKY_INVOCATION_TOKEN"
+                "PLOINKY_DPU_ROUTE"
             ]
         }
     }

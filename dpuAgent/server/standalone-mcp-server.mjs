@@ -41,8 +41,8 @@ function readHeaderValue(headers = {}, headerName) {
   return typeof lower === 'string' && lower.trim() ? lower.trim() : '';
 }
 
-function readWireSecret() {
-  const hex = String(process.env.PLOINKY_WIRE_SECRET || '').trim();
+function readDerivedMasterKey() {
+  const hex = String(process.env.PLOINKY_DERIVED_MASTER_KEY || '').trim();
   return hex ? Buffer.from(hex, 'hex') : null;
 }
 
@@ -59,9 +59,9 @@ async function verifyInvocationFromHeaders(headers = {}, bodyObject) {
   if (!jwt?.verifyInvocationToken) {
     return { ok: false, reason: 'jwt verify module unavailable' };
   }
-  const secret = readWireSecret();
+  const secret = readDerivedMasterKey();
   if (!secret) {
-    return { ok: false, reason: 'PLOINKY_WIRE_SECRET not configured' };
+    return { ok: false, reason: 'PLOINKY_DERIVED_MASTER_KEY not configured' };
   }
   if (!sharedReplayCache) sharedReplayCache = jwt.createMemoryReplayCache({ maxSize: 4096 });
   const audience = expectedAudienceForSelf();

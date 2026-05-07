@@ -240,7 +240,7 @@ Application layer:
 - `webmeetAgent` derives user and role information from that invocation metadata.
 - Admin-only room operations are checked in `webmeetStore.mjs`.
 - Meeting payloads are encrypted at rest with AES-256-GCM using a per-meeting data key wrapped by `PLOINKY_WEBMEET_MASTER_KEY`.
-- `PLOINKY_WEBMEET_MASTER_KEY` is an explicit WebMeet data key. It is not derived from `PLOINKY_WIRE_SECRET`, and missing production configuration fails closed. Older records created by the previous wire-secret fallback can be read only for migration and are rewrapped with the explicit WebMeet key on the next write.
+- `PLOINKY_WEBMEET_MASTER_KEY` is a WebMeet data key derived from `PLOINKY_DERIVED_MASTER_KEY` through the manifest `derive: "derived-master"` contract. Older records created before the dedicated WebMeet key can be read only for migration and are rewrapped with `PLOINKY_WEBMEET_MASTER_KEY` on the next write.
 
 Media layer:
 

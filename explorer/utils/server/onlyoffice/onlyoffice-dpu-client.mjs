@@ -49,7 +49,7 @@ function extractInvocationToken(authInfo = null, env = process.env) {
   if (direct) {
     return direct;
   }
-  return String(env.PLOINKY_INVOCATION_TOKEN || '').trim();
+  return '';
 }
 
 function unwrapToolPayload(name, result) {

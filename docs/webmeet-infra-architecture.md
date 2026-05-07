@@ -458,7 +458,7 @@ The durable WebMeet store is under the workspace, not inside Redis:
 | `.ploinky/webmeet/jobs/failed` | Failed jobs with error messages. |
 | `webmeet/recordings` | Shared recording volume mounted into `webmeetAgent` and `webmeetLivekitEgress`. |
 
-Meeting payload encryption uses a per-meeting DEK wrapped by `PLOINKY_WEBMEET_MASTER_KEY`. That variable is a dedicated WebMeet data key and must be injected through Ploinky encrypted variables or another explicit secret-management path. `webmeetStore.mjs` no longer uses `PLOINKY_MASTER_KEY` or `PLOINKY_WIRE_SECRET` for new meeting encryption; missing data-key configuration fails closed. A legacy decrypt-only path can unwrap records created by the older `PLOINKY_WIRE_SECRET` fallback and rewrap them with `PLOINKY_WEBMEET_MASTER_KEY` on the next meeting write.
+Meeting payload encryption uses a per-meeting DEK wrapped by `PLOINKY_WEBMEET_MASTER_KEY`. That variable is a WebMeet data key derived from `PLOINKY_DERIVED_MASTER_KEY` by the manifest `derive: "derived-master"` contract. `webmeetStore.mjs` never uses `PLOINKY_MASTER_KEY` for meeting encryption and does not use `PLOINKY_DERIVED_MASTER_KEY` directly for new payloads; a legacy decrypt-only path can unwrap older records created before the dedicated WebMeet key and rewrap them with `PLOINKY_WEBMEET_MASTER_KEY` on the next meeting write.
 
 Meeting JSON writes are atomic (`temp + rename`) because multiple WebMeet tool subprocesses can touch the same meeting record concurrently.
 
@@ -476,7 +476,7 @@ sequenceDiagram
     Router->>Proxy: ensure user session and resolve target route
     Proxy->>Proxy: mint invocation JWT for tool name and body
     Proxy->>Agent: tools/call with Authorization: Bearer JWT
-    Agent->>Agent: verify PLOINKY_WIRE_SECRET, audience, body, tool
+    Agent->>Agent: verify PLOINKY_DERIVED_MASTER_KEY, audience, body, tool
     Agent->>Tool: spawn with invocation metadata
     Tool->>Tool: extract user/roles from invocation
 ```
@@ -490,7 +490,7 @@ WebMeet uses different security controls for the application plane, media plane,
 | Boundary | Protection in current code | Important limits |
 |---|---|---|
 | Browser to Ploinky MCP | Browser calls go through the authenticated Ploinky router and MCP proxy. The proxy mints invocation metadata for tool calls. | This protects WebMeet application tools, not direct browser-to-LiveKit media sockets. |
-| Ploinky to `webmeetAgent` | The WebMeet public proxy forwards MCP handshake and metadata methods to AgentServer, but executable MCP methods require router-minted invocation JWTs using `PLOINKY_WIRE_SECRET`; AgentServer verifies the same token before spawning tools. | Tools must continue to derive authorization from invocation metadata, not from user-supplied fields. Tool/resource metadata remains listable for router discovery. |
+| Ploinky to `webmeetAgent` | The WebMeet public proxy forwards MCP handshake and metadata methods to AgentServer, but executable MCP methods require router-minted invocation JWTs using `PLOINKY_DERIVED_MASTER_KEY`; AgentServer verifies the same token before spawning tools. | Tools must continue to derive authorization from invocation metadata, not from user-supplied fields. Tool/resource metadata remains listable for router discovery. |
 | Guest invite HTTP surface | `webmeetAgent/manifest.json` declares `/public-services/webmeet/...` as a guest HTTP service, so Ploinky routes it to the WebMeet proxy as `/api/...` with `x-ploinky-auth-info.invocationToken`. The proxy verifies the token audience, `__http_service__` tool binding, body hash, and guest role before serving the guest page or proxying guest API calls. WebMeet intentionally does not use manifest-level `guest: true` like visitor-only agents such as webAssist, because guest invite users must not reach the agent's general MCP tools. | Guest users must only be routed through the WebMeet public service path. Do not expose Explorer, generic agent MCP routes, or non-guest WebMeet APIs through a public route. |
 | Admin room management | `webmeetStore.mjs` gates create, rename, and close operations with `assertAdminAuthInfo()`. | Join, chat, transcript, recording, and agent attach operations currently do not all have admin-only checks. |
 | LiveKit participant access | `webmeetAgent` signs LiveKit JWTs with `WEBMEET_LIVEKIT_API_SECRET`. Tokens are scoped to one room and grant `roomJoin`, `canPublish`, `canSubscribe`, and `canPublishData`. | Tokens currently last 8 hours. Anyone who obtains a participant token can use those grants until expiry. |
@@ -506,14 +506,14 @@ Deployment hardening points:
 - Use `wss://` for `WEBMEET_PUBLIC_LIVEKIT_URL` on public deployments.
 - Keep `WEBMEET_LIVEKIT_URL` internal when possible.
 - Do not expose Redis or egress health/control surfaces publicly.
-- Replace dev credentials (`devkey`, `devsecret...`, TURN `webmeet:webmeet`) in any shared environment.
+- Do not override derived LiveKit or TURN credentials with shared test values in any shared environment.
 - Firewall LiveKit UDP/TCP media ranges and TURN relay ranges intentionally.
 - Configure and verify TURN details in the browser LiveKit `rtcConfig` before relying on coturn for hostile NAT/firewall environments.
-- Keep `PLOINKY_WEBMEET_MASTER_KEY`, `WEBMEET_LIVEKIT_API_SECRET`, `WEBMEET_TURN_PASSWORD`, and Ploinky wire secrets out of logs and client payloads.
+- Keep `PLOINKY_DERIVED_MASTER_KEY`, `PLOINKY_WEBMEET_MASTER_KEY`, `WEBMEET_LIVEKIT_API_SECRET`, and `WEBMEET_TURN_PASSWORD` out of logs and client payloads.
 
 ## Configuration And Public Deployment Notes
 
-The skills deployment workflow defaults to the `prod` Ploinky profile unless a workflow input or repository variable overrides it. Production WebMeet manifests require explicit LiveKit, TURN, and WebMeet data-encryption secrets so generated configs do not silently fall back to development credentials.
+The skills deployment workflow defaults to the `prod` Ploinky profile unless a workflow input or repository variable overrides it. Production WebMeet manifests derive LiveKit, TURN, and WebMeet data-encryption secrets from `PLOINKY_DERIVED_MASTER_KEY` so generated configs do not silently fall back to development credentials.
 
 Important WebMeet variables:
 
@@ -521,12 +521,12 @@ Important WebMeet variables:
 |---|---|---|---|
 | `WEBMEET_PUBLIC_LIVEKIT_URL` | Browser join payload | `ws://127.0.0.1:17880` in `dev`, `ws://127.0.0.1:7880` in `default` | Must be a browser-reachable `ws://` or `wss://` URL for public deployments. |
 | `WEBMEET_LIVEKIT_URL` | `webmeetAgent` server-side API calls | `http://webmeetLivekitServer:7880` | Should remain internal unless LiveKit is externalized. |
-| `WEBMEET_LIVEKIT_API_KEY` | LiveKit tokens and API auth | `devkey` in the explicit `dev` profile | Required in `prod`; no development fallback in `default` or `prod`. |
-| `WEBMEET_LIVEKIT_API_SECRET` | LiveKit tokens and API auth | `devsecretdevsecretdevsecretdevsecret` in the explicit `dev` profile | Required in `prod`; no development fallback in `default` or `prod`. |
+| `WEBMEET_LIVEKIT_API_KEY` | LiveKit tokens and API auth | Derived from `PLOINKY_DERIVED_MASTER_KEY` | Derived in every profile; no development credential fallback. |
+| `WEBMEET_LIVEKIT_API_SECRET` | LiveKit tokens and API auth | Derived from `PLOINKY_DERIVED_MASTER_KEY` | Derived in every profile; no development credential fallback. |
 | `WEBMEET_EGRESS_URL` | Recording metadata and runtime validation | `http://webmeetLivekitEgress:7980` | Required in `prod`. |
 | `WEBMEET_TURN_EXTERNAL_IP` | Coturn advertised external IP | `127.0.0.1` | Required in `prod`. |
-| `WEBMEET_TURN_PASSWORD` | Coturn long-term credential | `webmeet` in the explicit `dev` profile | Required in `prod`; no development fallback in `default` or `prod`. |
-| `PLOINKY_WEBMEET_MASTER_KEY` | Meeting payload encryption | `dev-webmeet-master-key` in the explicit `dev` profile | Required in `prod`; no development fallback in `default` or `prod`, and the value must remain stable for stored meetings to decrypt. |
+| `WEBMEET_TURN_PASSWORD` | Coturn long-term credential | Derived from `PLOINKY_DERIVED_MASTER_KEY` | Derived in every profile; no development credential fallback. |
+| `PLOINKY_WEBMEET_MASTER_KEY` | Meeting payload encryption | Derived from `PLOINKY_DERIVED_MASTER_KEY` | Derived in every profile; the derivation label must remain stable for stored meetings to decrypt. |
 
 For a public URL like `https://skills.axiologic.dev`, the browser cannot use a loopback LiveKit URL unless it is running on the same host. A production-ready public WebMeet deployment needs a public LiveKit WebSocket endpoint, public RTP/TCP/UDP media routing, and TURN details wired into the client if relay is required.
 

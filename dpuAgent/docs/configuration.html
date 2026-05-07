@@ -39,23 +39,30 @@
 
                 <section>
                     <h2>Why Configuration Matters</h2>
-                    <p>The agent only works correctly if it can find the workspace boundary, the DPU storage root, and the master key used to encrypt secrets and confidential content. Those values are not optional implementation details. They define where the agent stores its data and whether encrypted content can be read at all.</p>
+                    <p>The agent only works correctly if it can find the workspace boundary, the DPU storage root, and the master key used to encrypt secrets and confidential content. In Ploinky, the DPU master key is derived from <code>PLOINKY_DERIVED_MASTER_KEY</code> through the manifest runtime-resource contract, so it remains stable without manual secret configuration.</p>
                 </section>
 
                 <section>
                     <h2>Manifest</h2>
-                    <p><code>manifest.json</code> declares a single default profile on top of <code>node:20-alpine</code>. The profile forwards the workspace-root variables and DPU-specific variables into the runtime:</p>
+                    <p><code>manifest.json</code> declares a single default profile on top of <code>node:20-alpine</code>. Runtime resources provide persistent storage and derive the DPU key:</p>
                     <pre><code>{
   "container": "node:20-alpine",
   "lite-sandbox": true,
+  "runtime": {
+    "resources": {
+      "persistentStorage": { "key": "dpu-data", "containerPath": "/dpu-data" },
+      "env": {
+        "DPU_DATA_ROOT": "{{STORAGE_CONTAINER_PATH}}",
+        "DPU_WORKSPACE_ROOT": "{{WORKSPACE_ROOT}}",
+        "DPU_MASTER_KEY": "{{derivedMasterSecret:DPU_MASTER_KEY}}"
+      }
+    }
+  },
   "profiles": {
     "default": {
       "env": [
         "ASSISTOS_FS_ROOT",
-        "WORKSPACE_ROOT",
-        "DPU_WORKSPACE_ROOT",
-        { "name": "DPU_DATA_ROOT", "required": false },
-        { "name": "DPU_MASTER_KEY", "allowSecretsFile": false }
+        "WORKSPACE_ROOT"
       ]
     }
   }
@@ -74,7 +81,7 @@
                         <tbody>
                             <tr>
                                 <td><code>DPU_MASTER_KEY</code></td>
-                                <td>Required encryption root for secret values and confidential file content.</td>
+                                <td>Encryption root for secret values and confidential file content, derived from <code>PLOINKY_DERIVED_MASTER_KEY</code> through <code>{{derivedMasterSecret:DPU_MASTER_KEY}}</code>.</td>
                             </tr>
                             <tr>
                                 <td><code>DPU_DATA_ROOT</code></td>

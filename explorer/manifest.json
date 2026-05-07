@@ -74,7 +74,8 @@
                 },
                 {
                     "name": "ONLYOFFICE_JWT_SECRET",
-                    "required": false
+                    "required": false,
+                    "derive": "derived-master"
                 },
                 {
                     "name": "ONLYOFFICE_CALLBACK_BASE_URL",

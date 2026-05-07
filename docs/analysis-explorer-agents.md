@@ -8,7 +8,7 @@
 
 1. [Git Agent — User Identity for Commits](#1-git-agent--user-identity-for-commits)
 2. [DPU Agent — Full Code Review](#2-dpu-agent--full-code-review)
-3. [Secrets Management — MASTER_SECRET Feasibility](#3-secrets-management--master_secret-feasibility)
+3. [Secrets Management — Derived Master Feasibility](#3-secrets-management--derived-master-feasibility)
 
 ---
 
@@ -333,15 +333,15 @@ Explorer caches workspace roots and node metadata. Calls DPU tools via `callAgen
 
 ---
 
-## 3. Secrets Management — MASTER_SECRET Feasibility
+## 3. Secrets Management — Derived Master Feasibility
 
 ### Current Secrets Inventory
 
 | Secret | Used By | Source |
 |--------|---------|--------|
 | `SOUL_GATEWAY_API_KEY` | Explorer, gitAgent, soplangAgent, llmAssistant | `~/work/.env` → `.ploinky/.secrets` |
-| `ONLYOFFICE_JWT_SECRET` | Explorer (OnlyOffice document editor) | Generated/configured in preinstall.sh → `.ploinky/.secrets` |
-| `DPU_MASTER_KEY` | dpuAgent | Auto-generated via `ensurePersistentSecret()` → `.ploinky/.secrets` |
+| `ONLYOFFICE_JWT_SECRET` | Explorer (OnlyOffice document editor) | Derived from `PLOINKY_DERIVED_MASTER_KEY` via manifest `derive: "derived-master"` |
+| `DPU_MASTER_KEY` | dpuAgent | Derived from `PLOINKY_DERIVED_MASTER_KEY` via `{{derivedMasterSecret:DPU_MASTER_KEY}}` |
 | `PLOINKY_GITHUB_CLIENT_ID/SECRET` | gitAgent (GitHub OAuth) | `.ploinky/.secrets` |
 | `ASSISTOS_FS_ROOT` | All agents | Not a secret — filesystem path |
 
@@ -368,9 +368,10 @@ process.env                      ← Agent runtime access
 2. `.ploinky/.secrets` (workspace file)
 3. `.env` file (walked up from cwd)
 
-**Auto-generation** (`secretVars.js:88-120`):
-- `ensurePersistentSecret(name)` checks all sources, generates random value if none found
-- Currently used for `DPU_MASTER_KEY`
+**Derived agent-owned secrets**:
+- Ploinky injects `PLOINKY_DERIVED_MASTER_KEY`, derived from `PLOINKY_MASTER_KEY`.
+- Workspace-owned agent secrets use manifest `derive: "derived-master"` or `{{derivedMasterSecret:...}}`.
+- `DPU_MASTER_KEY` and `ONLYOFFICE_JWT_SECRET` are derived values, not random `.secrets` entries.
 
 ### The Derivation Pattern Already Exists
 
@@ -387,80 +388,40 @@ getConfidentialMasterKey()  // SHA256("dpu:confidential:" + DPU_MASTER_KEY)
 getSecretMapMasterKey()     // SHA256("dpu:secret-map:" + DPU_MASTER_KEY)
 ```
 
-This exact pattern can be generalized: `SHA256(namespace + MASTER_SECRET)` → per-purpose derived keys.
+This pattern is now centralized in Ploinky with HKDF-SHA256 and domain-separated labels instead of ad hoc SHA-256 concatenation.
 
-### Proposed 2-Secret Architecture
+### Current 2-Secret Architecture
 
 **`~/work/.env`:**
 ```bash
 SOUL_GATEWAY_API_KEY=sk-soul-...   # API access to soul-gateway
-MASTER_SECRET=<64-char-hex>        # Derives all other secrets
+PLOINKY_MASTER_KEY=<64-char-hex>   # Derives PLOINKY_DERIVED_MASTER_KEY and workspace subkeys
 ```
 
 **Derivation scheme:**
 ```bash
-ONLYOFFICE_JWT_SECRET = SHA256("onlyoffice:jwt:" + MASTER_SECRET)
-DPU_MASTER_KEY        = SHA256("dpu:master:" + MASTER_SECRET)
-# Future secrets follow same pattern with unique namespaces
-```
-
-### What Needs to Change
-
-| File | Change |
-|------|--------|
-| `explorer/scripts/hooks/preinstall.sh` | Add `derive_secret()` function; compute ONLYOFFICE_JWT_SECRET from MASTER_SECRET before launching OnlyOffice container |
-| `explorer/manifest.json` | Make ONLYOFFICE_JWT_SECRET optional (already is); add MASTER_SECRET as optional |
-| `ploinky/cli/services/docker/agentServiceManager.js` (~line 331) | Derive DPU_MASTER_KEY from MASTER_SECRET instead of auto-generating |
-| `ploinky/cli/services/secretVars.js` | Add `deriveMasterSecret(namespace, master)` utility |
-
-**Derivation in preinstall.sh:**
-```bash
-derive_secret() {
-  local namespace="$1" master="$2"
-  echo -n "${namespace}${master}" | sha256sum | awk '{print $1}'
-}
-
-MASTER_SECRET="$(resolve_config_var 'MASTER_SECRET')"
-if [ -n "$MASTER_SECRET" ]; then
-  ONLYOFFICE_JWT_SECRET="$(derive_secret 'onlyoffice:jwt:' "$MASTER_SECRET")"
-  DPU_MASTER_KEY="$(derive_secret 'dpu:master:' "$MASTER_SECRET")"
-  ensure_secret_var ONLYOFFICE_JWT_SECRET "$ONLYOFFICE_JWT_SECRET"
-  ensure_secret_var DPU_MASTER_KEY "$DPU_MASTER_KEY"
-fi
+PLOINKY_DERIVED_MASTER_KEY = HKDF(PLOINKY_MASTER_KEY, "ploinky/derived-master/v1")
+ONLYOFFICE_JWT_SECRET      = HKDF(PLOINKY_DERIVED_MASTER_KEY, "ploinky/agent-secret/AssistOSExplorer/explorer/ONLYOFFICE_JWT_SECRET/v1")
+DPU_MASTER_KEY             = HKDF(PLOINKY_DERIVED_MASTER_KEY, "ploinky/agent-secret/AssistOSExplorer/dpuAgent/DPU_MASTER_KEY/v1")
 ```
 
 ### Feasibility Assessment
 
-**YES, it's feasible.** The codebase already has:
+**Implemented in Ploinky.** The codebase now has:
 1. The derivation pattern (DPU storage.mjs)
 2. The secret injection pipeline (secretInjector.js → agentServiceManager.js)
-3. The preinstall hook architecture for computing secrets before agent startup
-4. Optional env var support in manifests (ONLYOFFICE_JWT_SECRET is already optional)
+3. Host lifecycle hook env resolution for manifest-derived values
+4. Manifest support for `derive: "derived-master"` and `{{derivedMasterSecret:...}}`
 
 ### Risks & Trade-offs
 
 | Risk | Severity | Mitigation |
 |------|----------|------------|
-| Single point of compromise (MASTER_SECRET → all derived secrets) | High | Accept for single-deployment; for multi-tenant, add deployment-specific namespace component |
-| No key rotation support | Medium | Re-derive all secrets on MASTER_SECRET change; DPU data would need re-encryption |
-| Breaking change for existing deployments | Medium | Support both modes: if explicit secret exists, use it; if not, derive from MASTER_SECRET |
+| Single point of compromise (`PLOINKY_MASTER_KEY` → all derived secrets) | High | Accept for single-deployment; for multi-tenant, add deployment-specific namespace component |
+| No key rotation support | Medium | Re-derive all secrets on master-key change; DPU data would need re-encryption |
+| Breaking change for existing deployments | Medium | Migrate stored data under stable derivation labels; do not reintroduce explicit overrides for workspace-owned agent secrets |
 | OnlyOffice container needs JWT at startup time | Low | Already solved — preinstall.sh runs before container creation |
 | Multiple workspaces share derived secrets | Low | Add workspace path hash to namespace if isolation needed |
-
-### Migration Strategy
-
-**Phase 1 — Dual Mode:**
-- If MASTER_SECRET present → derive secrets
-- If explicit secrets present → use them (backwards compatible)
-- Log which mode is active
-
-**Phase 2 — Default to Derivation:**
-- Auto-generate MASTER_SECRET if missing
-- Only use explicit secrets as overrides
-
-**Phase 3 — Simplify:**
-- Remove individual secret support (except SOUL_GATEWAY_API_KEY)
-- Document MASTER_SECRET as the only required secret
 
 ### Effort Estimate
 
