@@ -943,13 +943,12 @@ export class GitCommitModal {
     }
 
     async openConflictHelper() {
-        const hadConflicts = this.hasAnyConflicts();
         const priorStatus = {
             text: this.state.lastStatusLine,
             isError: this.state.lastStatusIsError
         };
         this.state.conflictFocus = true;
-        if (!hadConflicts && typeof this.actions.refreshConflicts === 'function') {
+        if (typeof this.actions.refreshConflicts === 'function') {
             try {
                 await this.actions.refreshConflicts();
             } finally {

@@ -59,6 +59,8 @@ export function createGitCommitState(props = {}) {
             selected: null,
             ours: '',
             theirs: '',
+            oursConflictRanges: [],
+            theirsConflictRanges: [],
             choice: '',
             status: '',
             loading: false,

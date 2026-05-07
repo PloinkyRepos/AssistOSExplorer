@@ -115,6 +115,16 @@ git-conflict-helper.is-visible {
     line-height: 1.5;
 }
 
+.git-conflict-helper-line {
+    display: block;
+    min-height: 1.5em;
+    padding: 0 4px;
+}
+
+.git-conflict-helper-line.is-conflict {
+    background: color-mix(in srgb, var(--file-exp-error) 18%, transparent);
+}
+
 .git-conflict-helper-footer {
     display: flex;
     align-items: center;

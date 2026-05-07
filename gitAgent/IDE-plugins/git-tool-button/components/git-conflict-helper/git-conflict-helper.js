@@ -8,6 +8,8 @@ export class GitConflictHelper {
             selected: null,
             ours: '',
             theirs: '',
+            oursConflictRanges: [],
+            theirsConflictRanges: [],
             choice: '',
             status: '',
             loading: false,
@@ -86,6 +88,12 @@ export class GitConflictHelper {
         if (Object.prototype.hasOwnProperty.call(next, 'theirs')) {
             this.state.theirs = String(next.theirs || '');
         }
+        if (Array.isArray(next.oursConflictRanges)) {
+            this.state.oursConflictRanges = next.oursConflictRanges;
+        }
+        if (Array.isArray(next.theirsConflictRanges)) {
+            this.state.theirsConflictRanges = next.theirsConflictRanges;
+        }
         if (Object.prototype.hasOwnProperty.call(next, 'choice')) {
             this.state.choice = String(next.choice || '');
         }
@@ -118,10 +126,18 @@ export class GitConflictHelper {
         }
         const source = (this.state.source || '').toLowerCase();
         if (this.oursNode) {
-            this.oursNode.textContent = this.state.loading ? 'Loading local version...' : (this.state.ours || '');
+            this.renderContent(
+                this.oursNode,
+                this.state.loading ? 'Loading local version...' : (this.state.ours || ''),
+                this.state.loading ? [] : this.state.oursConflictRanges
+            );
         }
         if (this.theirsNode) {
-            this.theirsNode.textContent = this.state.loading ? 'Loading remote version...' : (this.state.theirs || '');
+            this.renderContent(
+                this.theirsNode,
+                this.state.loading ? 'Loading remote version...' : (this.state.theirs || ''),
+                this.state.loading ? [] : this.state.theirsConflictRanges
+            );
         }
         if (this.oursTitle || this.theirsTitle) {
             if (this.oursTitle) this.oursTitle.textContent = 'Local (ours)';
@@ -149,6 +165,29 @@ export class GitConflictHelper {
             const canSave = Boolean(this.state.choice) && !this.state.loading;
             this.saveButton.disabled = !canSave;
             this.saveButton.classList.toggle('is-ready', canSave);
+        }
+    }
+
+    renderContent(node, text, ranges = []) {
+        node.textContent = '';
+        const lines = String(text || '').split('\n');
+        const highlighted = new Set();
+        for (const range of ranges || []) {
+            const start = Number(range?.start);
+            const end = Number(range?.end);
+            if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
+            for (let index = Math.max(0, start); index <= Math.min(lines.length - 1, end); index += 1) {
+                highlighted.add(index);
+            }
+        }
+        for (let index = 0; index < lines.length; index += 1) {
+            const line = document.createElement('span');
+            line.className = 'git-conflict-helper-line';
+            if (highlighted.has(index)) {
+                line.classList.add('is-conflict');
+            }
+            line.textContent = lines[index] || ' ';
+            node.appendChild(line);
         }
     }
 

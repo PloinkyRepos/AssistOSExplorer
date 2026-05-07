@@ -1136,6 +1136,35 @@ export function createGitService({ validatePath }) {
     const base = await readStage(1);
     const ours = await readStage(2);
     const theirs = await readStage(3);
+    const conflict = await (async () => {
+      if (base.error || ours.error || theirs.error) return '';
+      let tempDir = '';
+      try {
+        tempDir = await fs.mkdtemp(path.join('/tmp', 'git-conflict-preview-'));
+        const basePath = path.join(tempDir, 'base');
+        const oursPath = path.join(tempDir, 'ours');
+        const theirsPath = path.join(tempDir, 'theirs');
+        await fs.writeFile(basePath, base.content, 'utf8');
+        await fs.writeFile(oursPath, ours.content, 'utf8');
+        await fs.writeFile(theirsPath, theirs.content, 'utf8');
+        const { stdout } = await runGit(
+          tempDir,
+          [gitBinary, 'merge-file', '-p', oursPath, basePath, theirsPath],
+          { timeoutMs: 20000, okCodes: [0, 1] }
+        );
+        return stdout || '';
+      } catch {
+        return '';
+      } finally {
+        if (tempDir) {
+          try {
+            await fs.rm(tempDir, { recursive: true, force: true });
+          } catch {
+            // Ignore temporary preview cleanup errors.
+          }
+        }
+      }
+    })();
 
     return {
       ok: true,
@@ -1143,6 +1172,7 @@ export function createGitService({ validatePath }) {
       base: base.content,
       ours: ours.content,
       theirs: theirs.content,
+      conflict,
       baseError: base.error,
       oursError: ours.error,
       theirsError: theirs.error
