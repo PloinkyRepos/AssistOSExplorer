@@ -142,7 +142,7 @@ Signaling and API traffic are separate from WebRTC media. They are encrypted in 
 
 The current WebMeet UI connects to LiveKit with:
 
-- LiveKit's default client/server media behavior; WebMeet does not force adaptive stream or dynacast overrides in the room constructor.
+- `adaptiveStream: false` and `dynacast: false`, so LiveKit does not defer or pause video downtracks based on SDK visibility heuristics. WebMeet keeps this explicit because the UI renders media elements after room events and relies on immediate remote track subscription, especially for screen share.
 - `autoSubscribe: false`, followed by explicit subscription sweeps for remote publications so published tracks are subscribed deterministically.
 - optional TURN/STUN ICE servers from the join payload. `buildRtcConfigForSession()` returns a config when `session.rtcConfig.iceServers` is present, and returns `undefined` only when no custom ICE servers are configured.
 
@@ -399,7 +399,7 @@ For a rough mental model, each participant uploads their own microphone/camera/s
 Current mitigations:
 
 - The UI connects with `autoSubscribe: false` and then explicitly subscribes remote publications through connection-time and delayed sweeps.
-- The current UI does not pass `adaptiveStream` or `dynacast` overrides into the LiveKit `Room` constructor.
+- The UI disables `adaptiveStream` and `dynacast` in the LiveKit `Room` constructor so remote video and screen-share downtracks are negotiated immediately after explicit subscription.
 - The UI prevents camera and screen share from being active at the same time for one participant.
 - Chat and transcript are not sent through the media server as the source of truth.
 
