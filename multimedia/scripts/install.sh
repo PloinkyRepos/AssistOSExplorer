@@ -16,7 +16,11 @@ if [ "${PLOINKY_RUNTIME:-}" = "bwrap" ] || [ "${PLOINKY_RUNTIME:-}" = "seatbelt"
         echo "  brew install ffmpeg"
     fi
 else
-    apt-get update && apt-get install -y git ffmpeg
+    if ! command -v git >/dev/null 2>&1 || ! command -v ffmpeg >/dev/null 2>&1; then
+        apt-get update && apt-get install -y git ffmpeg
+    else
+        echo "git and ffmpeg already present - skipping install"
+    fi
 fi
 
 echo "multimedia dependencies OK"
