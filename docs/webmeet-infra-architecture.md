@@ -245,7 +245,7 @@ sequenceDiagram
     LiveKit-->>Egress: Forward track if recording is active
 ```
 
-`webmeet-media-controller.js` keeps camera and screen share mutually exclusive in the current UI. Starting screen share first disables the camera publication when it is active; starting the camera disables screen share. The local browser captures and encodes the screen. LiveKit receives the screen-share RTP stream, forwards it to interested subscribers, and egress records it only when a room-composite recording is active. WebMeet publishes video without simulcast so LiveKit receives a single declared RTP stream for each camera or screen-share publication.
+`webmeet-media-controller.js` allows camera and screen share to be active at the same time. The local browser captures and encodes each source as a separate LiveKit video track. LiveKit receives the camera and screen-share RTP streams, forwards them to interested subscribers, and egress records them only when a room-composite recording is active. WebMeet publishes video without simulcast so LiveKit receives a single declared RTP stream for each camera or screen-share publication.
 
 ## Redis Boundary
 
@@ -553,7 +553,7 @@ Specific current-code constraints:
 - The browser creates a LiveKit `Room` with `adaptiveStream: false` and `dynacast: false`, then connects with `autoSubscribe: true`; WebMeet also runs explicit subscription sweeps after connect and publication events as a recovery path.
 - Those adaptive media optimizations stay disabled because the current modal renders video elements after room events and needs remote video and screen-share downtracks to be negotiated immediately after subscription.
 - The browser sets `publishDefaults.simulcast: false`. This keeps WebMeet on a single VP8 encoding per published video track because the deployed LiveKit/Pion path can drop screen-share media when a browser advertises a partial simulcast RID/SSRC set.
-- The UI currently allows one camera or one screen share per participant; starting screen share disables camera and starting camera disables screen share. That limits per-user video tracks.
+- The UI allows a participant to publish camera and screen share simultaneously. The participant card can hold multiple video elements for the same participant.
 - Custom ICE servers are returned in the join payload when TURN env vars are configured, and `buildRtcConfigForSession()` passes them to LiveKit. With `WEBMEET_ICE_TRANSPORT_POLICY=all`, TURN remains a fallback instead of forcing all traffic through coturn.
 - The single egress worker means simultaneous room-composite recordings can become the first CPU bottleneck.
 - The single LiveKit node has no documented horizontal scaling or external load balancer in this repo.
