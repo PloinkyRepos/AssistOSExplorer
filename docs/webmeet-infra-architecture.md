@@ -513,7 +513,7 @@ Deployment hardening points:
 
 ## Configuration And Public Deployment Notes
 
-The skills deployment workflow defaults to the `prod` Ploinky profile unless a workflow input or repository variable overrides it. Production WebMeet manifests derive LiveKit, TURN, and WebMeet data-encryption secrets from `PLOINKY_DERIVED_MASTER_KEY` so generated configs do not silently fall back to development credentials.
+The skills deployment workflow defaults to the `prod` Ploinky profile unless a workflow input or repository variable overrides it. Production WebMeet manifests derive LiveKit, TURN, and WebMeet data-encryption secrets from `PLOINKY_DERIVED_MASTER_KEY` so generated configs do not silently fall back to development credentials. LiveKit and TURN credentials use shared logical derivation identities so `webmeetAgent`, `webmeetLivekitServer`, `webmeetLivekitEgress`, and `webmeetCoturn` agree on the same key material.
 
 Important WebMeet variables:
 
