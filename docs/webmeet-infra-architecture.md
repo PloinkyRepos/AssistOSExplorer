@@ -524,11 +524,14 @@ Important WebMeet variables:
 | `WEBMEET_LIVEKIT_API_KEY` | LiveKit tokens and API auth | Derived from `PLOINKY_DERIVED_MASTER_KEY` | Derived in every profile; no development credential fallback. |
 | `WEBMEET_LIVEKIT_API_SECRET` | LiveKit tokens and API auth | Derived from `PLOINKY_DERIVED_MASTER_KEY` | Derived in every profile; no development credential fallback. |
 | `WEBMEET_EGRESS_URL` | Recording metadata and runtime validation | `http://webmeetLivekitEgress:7980` | Required in `prod`. |
+| `WEBMEET_LIVEKIT_FORCE_TCP` | LiveKit media transport policy | `false` | Keep `false` when LiveKit UDP media ports are directly reachable. Set `true` only for tunnel/proxy topologies where UDP media is unavailable. |
 | `WEBMEET_TURN_EXTERNAL_IP` | Coturn advertised external IP | `127.0.0.1` | Required in `prod`. |
 | `WEBMEET_TURN_PASSWORD` | Coturn long-term credential | Derived from `PLOINKY_DERIVED_MASTER_KEY` | Derived in every profile; no development credential fallback. |
 | `PLOINKY_WEBMEET_MASTER_KEY` | Meeting payload encryption | Derived from `PLOINKY_DERIVED_MASTER_KEY` | Derived in every profile; the derivation label must remain stable for stored meetings to decrypt. |
 
 For a public URL like `https://skills.axiologic.dev`, the browser cannot use a loopback LiveKit URL unless it is running on the same host. A production-ready public WebMeet deployment needs a public LiveKit WebSocket endpoint, public RTP/TCP/UDP media routing, and TURN details wired into the client if relay is required.
+
+When `livekit-skills.axiologic.dev` is served by Nginx on the LiveKit host, use Nginx only for HTTPS/WebSocket signaling to LiveKit `7880/tcp`. WebRTC media should reach the LiveKit host candidates directly on `7882-7892/udp`, with `7881/tcp` left open as fallback. In Cloudflare DNS, the LiveKit hostname must not be a Cloudflare Tunnel public hostname for this topology; use a direct `A` record to the LiveKit host and keep it DNS-only unless there is an explicit reason to proxy signaling separately from media.
 
 ## Capacity And Bottleneck Analysis
 
