@@ -225,8 +225,6 @@ Key files changed:
 
 - `docs/specs/DS06-ploinky-runtime-invariants.md`
 - `docs/analysis-explorer-agents.md`
-- `docs/webmeet-infra-architecture.md`
-- `docs/webmeet-livekit-webrtc-explainer.md`
 - `dpuAgent/manifest.json`
 - `dpuAgent/server/standalone-mcp-server.mjs`
 - `explorer/manifest.json`
@@ -253,13 +251,16 @@ Commit: `3798af7` `Share WebMeet derived media secrets`
 
 Key files changed:
 
-- `docs/webmeet-infra-architecture.md`
 - `webmeetAgent/manifest.json`
 
 Purpose:
 
 - Ensure `webmeetAgent` derives LiveKit/TURN/WebMeet data keys with logical derivation labels that match `webmeetInfra`.
 - Prevent server/token credential mismatch.
+
+Current spec home:
+
+- `webmeetAgent/docs/specs/DS10-livekit-media-runtime.md` now carries the WebMeet LiveKit, WebRTC, public topology, and derived-media-secret contracts that were formerly split across root-level WebMeet docs.
 
 #### Deployment workflow no longer injects derived secrets
 
@@ -552,7 +553,7 @@ Expected passing result:
 - Receiver `videos[0].readyState` is `4`.
 - Receiver `videos[0].videoWidth` and `videoHeight` are non-zero.
 - Receiver inbound RTP has increasing `framesDecoded`.
-- Receiver remote candidate protocol is `tcp` on `193.180.209.191:7881`.
+- Receiver remote candidate protocol is `udp` on `193.180.209.191:7882-7892` for the current direct-UDP production topology.
 
 ## Remote Verification Commands
 
@@ -623,7 +624,7 @@ Risks:
 Recommended next tasks:
 
 1. Add a committed WebMeet screen-share Playwright smoke test that redacts sensitive data by design.
-2. Keep the production Cloudflare Tunnel limitation documented in the deploy docs and WebMeet architecture docs.
+2. Keep the production Cloudflare Tunnel limitation documented in `webmeetAgent/docs/specs/DS10-livekit-media-runtime.md`.
 3. Decide whether direct UDP media exposure is acceptable long term, or whether to use TURN/TLS on `443`.
 4. If scaling WebMeet usage, load test LiveKit with direct UDP and a wider media port range before relying on it for larger meetings.
 5. Keep the derived-secret invariant strict. Do not reintroduce manual LiveKit/TURN fallback credentials.
