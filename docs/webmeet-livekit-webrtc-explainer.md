@@ -143,7 +143,7 @@ Signaling and API traffic are separate from WebRTC media. They are encrypted in 
 The current WebMeet UI connects to LiveKit with:
 
 - `adaptiveStream: false` and `dynacast: false`, so LiveKit does not defer or pause video downtracks based on SDK visibility heuristics. WebMeet keeps this explicit because the UI renders media elements after room events and relies on immediate remote track subscription, especially for screen share.
-- `autoSubscribe: false`, followed by explicit subscription sweeps for remote publications so published tracks are subscribed deterministically.
+- `autoSubscribe: true`, with explicit subscription sweeps kept as a recovery path for late publications, reconnects, and stale subscribed publications.
 - optional TURN/STUN ICE servers from the join payload. `buildRtcConfigForSession()` returns a config when `session.rtcConfig.iceServers` is present, and returns `undefined` only when no custom ICE servers are configured.
 
 That means coturn exists as a relay fallback when configured through `WEBMEET_TURN_*` variables. With `WEBMEET_ICE_TRANSPORT_POLICY=all`, browsers may still choose direct LiveKit media candidates when those work.
@@ -398,8 +398,8 @@ For a rough mental model, each participant uploads their own microphone/camera/s
 
 Current mitigations:
 
-- The UI connects with `autoSubscribe: false` and then explicitly subscribes remote publications through connection-time and delayed sweeps.
-- The UI disables `adaptiveStream` and `dynacast` in the LiveKit `Room` constructor so remote video and screen-share downtracks are negotiated immediately after explicit subscription.
+- The UI connects with `autoSubscribe: true`; explicit subscription sweeps still run after connect and publication events so late or stale publications are retried.
+- The UI disables `adaptiveStream` and `dynacast` in the LiveKit `Room` constructor so remote video and screen-share downtracks are negotiated immediately after subscription.
 - The UI prevents camera and screen share from being active at the same time for one participant.
 - Chat and transcript are not sent through the media server as the source of truth.
 

@@ -550,8 +550,8 @@ The main rule is that WebMeet media load is not proportional to MCP/API traffic.
 
 Specific current-code constraints:
 
-- The browser creates a LiveKit `Room` with `adaptiveStream: false` and `dynacast: false`, then connects with `autoSubscribe: false`; WebMeet explicitly subscribes to remote publications through connection-time and delayed subscription sweeps.
-- Those adaptive media optimizations stay disabled because the current modal renders video elements after room events and needs remote video and screen-share downtracks to be negotiated immediately after explicit subscription.
+- The browser creates a LiveKit `Room` with `adaptiveStream: false` and `dynacast: false`, then connects with `autoSubscribe: true`; WebMeet also runs explicit subscription sweeps after connect and publication events as a recovery path.
+- Those adaptive media optimizations stay disabled because the current modal renders video elements after room events and needs remote video and screen-share downtracks to be negotiated immediately after subscription.
 - The UI currently allows one camera or one screen share per participant; starting screen share disables camera and starting camera disables screen share. That limits per-user video tracks.
 - Custom ICE servers are returned in the join payload when TURN env vars are configured, and `buildRtcConfigForSession()` passes them to LiveKit. With `WEBMEET_ICE_TRANSPORT_POLICY=all`, TURN remains a fallback instead of forcing all traffic through coturn.
 - The single egress worker means simultaneous room-composite recordings can become the first CPU bottleneck.
