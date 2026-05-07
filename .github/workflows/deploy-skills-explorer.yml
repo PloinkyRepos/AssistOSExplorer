@@ -170,7 +170,7 @@ jobs:
             exit 1
           }
 
-          for tool in git node npm podman curl python3; do
+          for tool in git node npm podman curl; do
             if ! command -v "$tool" >/dev/null 2>&1; then
               echo "[deploy] ERROR: missing required tool '$tool'."
               echo "[deploy] Run the Provision Skills Explorer Host workflow first."
@@ -186,33 +186,6 @@ jobs:
           . /tmp/skills_explorer_env
           set +a
           rm -f /tmp/skills_explorer_env
-
-          # PLOINKY_MASTER_KEY is intentionally NOT persisted to disk. If a
-          # legacy in-workspace .env still holds it, scrub that one line.
-          if [ -f "$WORK_DIR/.env" ]; then
-            sed -i '/^PLOINKY_MASTER_KEY=/d' "$WORK_DIR/.env"
-            if ! grep -Eq '\S' "$WORK_DIR/.env"; then
-              rm -f "$WORK_DIR/.env"
-            fi
-          fi
-
-          repair_encrypted_secrets_file() {
-            local secrets_file="$WORK_DIR/.ploinky/.secrets"
-            [ -f "$secrets_file" ] || return 0
-            local line_count
-            line_count="$(wc -l < "$secrets_file" | tr -d '[:space:]')"
-            if [ "${line_count:-0}" -gt 1 ] && tail -n +2 "$secrets_file" | grep -Eq '^[A-Za-z_][A-Za-z0-9_]*='; then
-              local backup_file="$secrets_file.corrupt-$(date +%Y%m%d%H%M%S)"
-              local temp_file="$secrets_file.repair.$$"
-              cp -p "$secrets_file" "$backup_file"
-              head -n 1 "$backup_file" > "$temp_file"
-              chmod 600 "$temp_file"
-              mv "$temp_file" "$secrets_file"
-              echo "[deploy] Repaired encrypted .ploinky/.secrets by removing a plaintext trailer; backup: $backup_file"
-            fi
-          }
-
-          repair_encrypted_secrets_file
 
           echo "[deploy] Removing current workspace containers if present..."
           env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" shutdown || \
@@ -255,64 +228,6 @@ jobs:
               echo "[deploy] $repo_name at $(git -C "$repo_dir" rev-parse --short HEAD)"
             fi
           done
-
-          remove_legacy_repo_state() {
-            local legacy_repo="$1"
-            echo "[deploy] Removing legacy repo state for $legacy_repo..."
-            "$PLOINKY" disable repo "$legacy_repo" || true
-            rm -rf "$WORK_DIR/.ploinky/repos/$legacy_repo"
-            node - "$legacy_repo" <<'NODE'
-          const fs = require('fs');
-          const legacyRepo = process.argv[2];
-          const readJson = (file, fallback) => {
-            try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch (_) { return fallback; }
-          };
-          const writeJson = (file, value) => fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
-
-          const sourcesPath = '.ploinky/repo_sources.json';
-          const sources = readJson(sourcesPath, {});
-          if (sources && typeof sources === 'object' && Object.prototype.hasOwnProperty.call(sources, legacyRepo)) {
-            delete sources[legacyRepo];
-            writeJson(sourcesPath, sources);
-          }
-
-          const agentsPath = '.ploinky/agents.json';
-          const agents = readJson(agentsPath, null);
-          if (agents && typeof agents === 'object') {
-            let changed = false;
-            for (const [key, record] of Object.entries(agents)) {
-              if (record && record.repoName === legacyRepo) {
-                delete agents[key];
-                changed = true;
-              }
-            }
-            if (agents._config?.static?.agent === `${legacyRepo}/explorer`) {
-              delete agents._config.static;
-              changed = true;
-            }
-            if (changed) writeJson(agentsPath, agents);
-          }
-
-          const routingPath = '.ploinky/routing.json';
-          const routing = readJson(routingPath, null);
-          if (routing && typeof routing === 'object' && routing.routes) {
-            let changed = false;
-            for (const [key, route] of Object.entries(routing.routes)) {
-              if (route && route.repo === legacyRepo) {
-                delete routing.routes[key];
-                changed = true;
-              }
-            }
-            if (routing.static?.agent === `${legacyRepo}/explorer`) {
-              delete routing.static;
-              changed = true;
-            }
-            if (changed) writeJson(routingPath, routing);
-          }
-          NODE
-          }
-
-          remove_legacy_repo_state fileExplorer
 
           "$PLOINKY" profile "${PLOINKY_PROFILE:-prod}"
           "$PLOINKY" sandbox disable
