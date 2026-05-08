@@ -63,6 +63,29 @@ UDP canary against the host-network LiveKit passed.
 
 `force_tcp` can stay `false` for the current production topology. Keep `WEBMEET_LIVEKIT_FORCE_TCP=true` available as the documented rollback knob if a future host or podman/netavark change reintroduces a UDP regression.
 
+### LiveKit Version Pinning (2026-05-08)
+
+After the canary, the LiveKit container was pinned to a specific tag instead of `:latest`. Three coordinated changes:
+
+1. `OutfinityResearch/ploinky` `59af4a2` `Expand env references in manifest container field`:
+   - New helper `resolveManifestImage(manifest, profileConfig, options)` in `cli/services/secretVars.js`. Expands `${VAR}` references in `manifest.container` against the agent's manifest env (via `buildEnvMap`, which decrypts `.ploinky/.secrets`) with a fallback to `process.env`. Throws a clear error if the var is unresolved. Falls back gracefully (no env expansion) when the master key is unavailable, so non-templated manifests still work in any context.
+   - `cli/services/docker/agentServiceManager.js`: both `image = manifest.container || …` sites now call `resolveManifestImage`.
+2. `webmeetInfra` `7875fd3` `Pin LiveKit container version via WEBMEET_LIVEKIT_VERSION`:
+   - `webmeetLivekitServer/manifest.json` `container` is now `docker.io/livekit/livekit-server:${WEBMEET_LIVEKIT_VERSION}`. Each profile declares `WEBMEET_LIVEKIT_VERSION` in its env block with default `v1.11.0` (currently equivalent to the `:latest` digest on docker hub).
+3. `AssistOSExplorer` `c5dab1e` `Plumb WEBMEET_LIVEKIT_VERSION through deploy workflow`:
+   - `.github/workflows/deploy-skills-explorer.yml` adds a `livekit_version` workflow_dispatch input and the `WEBMEET_LIVEKIT_VERSION` env mapping. Override precedence: input → repo var → manifest default. Repo var `WEBMEET_LIVEKIT_VERSION=v1.11.0` is set.
+
+Verified by deploy run `25550483444` (`success`):
+
+- `git -C ~/ploinky rev-parse --short HEAD` → `59af4a2`.
+- `podman inspect <livekit> --format '{{.Config.Image}}'` → `docker.io/livekit/livekit-server:v1.11.0`.
+- `podman exec <livekit> /livekit-server --version` → `livekit-server version 1.11.0`.
+
+To bump LiveKit:
+1. Pick a tag from `https://hub.docker.com/r/livekit/livekit-server/tags`.
+2. Either set `WEBMEET_LIVEKIT_VERSION` repo var, or pass `livekit_version` to a manual workflow run.
+3. Trigger the deploy workflow. The Ploinky patch resolves the new tag at agent start time.
+
 ### Real-Browser Verification (Safari)
 
 After the harness pass, the user manually verified screen share from a real Safari session against `https://skills.axiologic.dev`. First attempt against the pre-existing `test` room failed — Safari console showed CORS-style errors on `https://livekit-skills.axiologic.dev/rtc/v1/validate` (`Access-Control-Allow-Origin … Status code: 404`, then `403`). LiveKit logs revealed the actual response was `401 "no permissions to access the room"` — the JWT did not have grants for the LiveKit room ID currently mapped to `test`. The container had been recreated at 09:54:50 UTC, resetting the in-memory room mapping, so Mircea's stale invitation/token referenced a now-stale LiveKit room name.
