@@ -25,9 +25,9 @@ LiveKit, Nginx, and Certbot images all reference an `${VAR}` tag whose default l
 - Nginx and certbot manifests both use `${WEBMEET_NGINX_VERSION}` and `${WEBMEET_CERTBOT_VERSION}` (`WI 4684944`).
 - DS003 in Ploinky records the contract: `PL d57fb31`.
 
-### 3. The deploy workflow performs no host-system mutations
+### 3. The deploy workflow performs no host-system mutations beyond the documented Ploinky self-update
 
-`deploy-skills-explorer.yml` runs only `ssh + ploinky ...` commands. It does not `systemctl stop/disable`, does not `cp /etc/letsencrypt …`, and does not touch any path outside the workspace. Host-side preparation is a documented one-time operator step.
+`deploy-skills-explorer.yml` runs `ssh + ploinky ...` commands plus a documented Ploinky self-update of the host checkout at `$HOME/ploinky` (run-time `ploinky update`, plus `npm install --ignore-scripts --prefix "$HOME/ploinky"` and a refresh of `$HOME/ploinky/node_modules/achillesAgentLib` via `git pull` or re-clone). It does not `systemctl stop/disable`, does not `cp /etc/letsencrypt …`, and does not touch any other path outside the workspace. Host-side preparation (free `:80`/`:443`, rootless sysctl, DNS) is a documented one-time operator step. The plaintext `/tmp/skills_explorer_env` env file is wrapped in a remote-side `trap … EXIT` so it is removed even on early exit.
 
 - Removed the `systemctl` loop and cert-staging block: `AE e32ff4e` `Drop host-service teardown and cert-staging from deploy workflow`.
 - Documented host prerequisites: `AE a73d12a` `Document host prerequisites for the cutover` (lists the three preconditions: `:80`/`:443` free, rootless-podman sysctl lowered, DNS A-record).
@@ -37,9 +37,9 @@ LiveKit, Nginx, and Certbot images all reference an `${VAR}` tag whose default l
 
 `webmeetLivekitNginx` and `webmeetLivekitCertbot` ship in production deployments only. They are not chained into dev/default workspaces.
 
-- Per-profile `enable` in Ploinky: `PL 2a45432` `Add per-profile enable and readiness none` (workspaceDependencyGraph merges `manifest.profiles[active].enable` into the dep walk).
+- Per-profile `enable` in Ploinky: `PL 2a45432` `Add per-profile enable and readiness none` (workspaceDependencyGraph merges `manifest.profiles[active].enable` into the dep walk and now rethrows on dependency resolution failure so missing/misnamed profile dependencies fail-closed instead of being logged and ignored).
 - Stack manifest chains nginx only in prod: `WI 8edf7f5` and `WI 0056a6a` (`stack/manifest.json` adds `profiles.prod.enable: ["webmeetLivekitNginx"]` plus an empty `profiles.default` to satisfy the schema).
-- Nginx and certbot manifests carry only the `default` profile — explicit enable in non-prod fails fast with a clear error: `WI 514ebbd`.
+- Nginx and certbot preinstall scripts enforce a prod-only guard at the top of `scripts/hooks/preinstall.sh`: if `PLOINKY_PROFILE != "prod"` the hook prints a clear error and exits non-zero before any cert or nginx config is generated. The agent manifests still carry only the `default` profile to satisfy the Ploinky schema, but the guard makes explicit `ploinky enable agent webmeetInfra/webmeetLivekitNginx` (and same for `webmeetLivekitCertbot`) fail fast in dev/qa/default.
 - DS003 in Ploinky documents per-profile `enable`: `PL 2a45432`.
 
 ### 5. Cert lifecycle is workspace-owned
@@ -94,7 +94,7 @@ Every code change in this session has a corresponding spec update. No undocument
 
 These are one-time, persisted, outside Ploinky's lifecycle. They are now listed as required preparation in the cutover plan above.
 
-- `sudo systemctl disable --now nginx caddy certbot-renew.timer` (free `:80` and `:443`).
+- `sudo systemctl disable --now nginx caddy certbot.timer` (free `:80` and `:443`).
 - `echo "net.ipv4.ip_unprivileged_port_start = 80" | sudo tee /etc/sysctl.d/99-rootless-low-ports.conf && sudo sysctl -p ...` (allow rootless podman containers to bind low ports).
 
 ### GitHub repo vars created or updated this session
@@ -223,7 +223,7 @@ One-time operator preparation on a Linux host migrating from a host-managed stac
 
 ```bash
 # 1. Free the privileged ports
-sudo systemctl disable --now nginx caddy certbot-renew.timer 2>/dev/null || true
+sudo systemctl disable --now nginx caddy certbot.timer 2>/dev/null || true
 
 # 2. Allow rootless containers to bind low ports
 echo "net.ipv4.ip_unprivileged_port_start = 80" | sudo tee /etc/sysctl.d/99-rootless-low-ports.conf
@@ -239,7 +239,7 @@ After that, `:80` and `:443` are free, the kernel permits the rootless agent to 
 Profile semantics:
 
 - **prod** — chains nginx + certbot via `stack`'s `profiles.prod.enable`. Required for the production deployment.
-- **default**, **dev** — do not chain nginx + certbot. The agent manifests declare only a `prod` profile, so explicit `ploinky enable agent webmeetInfra/webmeetLivekitNginx` while in another profile fails with a clear "profile 'X' not found" error.
+- **default**, **dev** — do not chain nginx + certbot. The agent manifests carry only a `default` profile (Ploinky requires a `default` profile to exist), so the per-profile `enable` chaining never fires outside prod. As a defense-in-depth guard, both `webmeetLivekitNginx/scripts/hooks/preinstall.sh` and `webmeetLivekitCertbot/scripts/hooks/preinstall.sh` check `$PLOINKY_PROFILE` and exit with a clear error unless it is `prod`. So explicit `ploinky enable agent webmeetInfra/webmeetLivekitNginx` while in another profile fails fast at preinstall time.
 
 Cloudflared is **not** disabled by the workflow. It runs as a non-Ploinky podman container (see "Cloudflared — deliberate Ploinky exception" above) and serves `skills.axiologic.dev` independently of these agents.
 
@@ -258,7 +258,13 @@ sudo systemctl enable --now nginx
 sudo systemctl enable --now certbot.timer
 ```
 
-Then push a commit that removes `webmeetInfra/webmeetLivekitNginx` from `stack/manifest.json` `profiles.prod.enable` and redeploy. Cert files in `/etc/letsencrypt/` are preserved by the staging step (copy, not move).
+Then push a commit that removes `webmeetInfra/webmeetLivekitNginx` from `stack/manifest.json` `profiles.prod.enable` and redeploy.
+
+Cert preservation note: the deploy workflow no longer stages or copies `/etc/letsencrypt/` (the cert-staging block was removed in `AE e32ff4e`). Workspace-issued certs live in `~/<workspace>/.ploinky/data/webmeetTls/letsencrypt/` and are owned by the `webmeetLivekitCertbot` agent's mounted volume. To preserve them across a rollback to host-managed services, run a one-time operator copy from the workspace volume into the host's `/etc/letsencrypt/` before re-enabling host certbot:
+
+```bash
+sudo cp -a ~/<workspace>/.ploinky/data/webmeetTls/letsencrypt/. /etc/letsencrypt/
+```
 
 ### Real-Browser Verification (Safari)
 

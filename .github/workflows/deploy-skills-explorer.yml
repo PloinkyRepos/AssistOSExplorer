@@ -28,6 +28,11 @@ on:
         required: false
         default: ''
         type: string
+      livekit_version:
+        description: 'LiveKit container image tag override. Falls back to vars.WEBMEET_LIVEKIT_VERSION, then manifest default.'
+        required: false
+        default: ''
+        type: string
 
 concurrency:
   group: deploy-skills-explorer
@@ -165,6 +170,8 @@ jobs:
             -i ~/.ssh/deploy_key "${SSH_USER}@${SSH_HOST}" \
             "WORKSPACE='$WORKSPACE' EXPLORER_BRANCH='$EXPLORER_BRANCH' ROUTER_PORT='$ROUTER_PORT' PUBLIC_URL='$PUBLIC_URL' PLOINKY_PROFILE='$PLOINKY_PROFILE' bash -s" << 'REMOTE'
           set -euo pipefail
+          # Ensure the plaintext env file is removed even if a later step exits non-zero.
+          trap 'rm -f /tmp/skills_explorer_env' EXIT
 
           resolve_ploinky() {
             if command -v ploinky >/dev/null 2>&1; then
