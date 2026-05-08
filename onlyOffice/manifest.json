@@ -1,0 +1,91 @@
+{
+    "container": "docker.io/onlyoffice/documentserver:${ONLYOFFICE_VERSION}",
+    "entrypoint": "/bin/bash",
+    "start": "/app/ds/run-document-server.sh",
+    "about": "OnlyOffice Document Server (delegated office editor for Explorer).",
+    "readiness": {
+        "protocol": "tcp"
+    },
+    "volumes": {
+        ".ploinky/data/onlyOffice/log": "/var/log/onlyoffice",
+        ".ploinky/data/onlyOffice/data": "/var/www/onlyoffice/Data",
+        ".ploinky/data/onlyOffice/lib": "/var/lib/onlyoffice",
+        ".ploinky/data/onlyOffice/postgresql": "/var/lib/postgresql",
+        ".ploinky/data/onlyOffice/rabbitmq": "/var/lib/rabbitmq",
+        ".ploinky/data/onlyOffice/redis": "/var/lib/redis"
+    },
+    "profiles": {
+        "default": {
+            "preinstall": "scripts/hooks/preinstall.sh",
+            "env": [
+                {
+                    "name": "ONLYOFFICE_VERSION",
+                    "required": false,
+                    "default": "9.3.1"
+                },
+                {
+                    "name": "JWT_ENABLED",
+                    "required": false,
+                    "default": "true"
+                },
+                {
+                    "name": "JWT_SECRET",
+                    "required": true,
+                    "derive": "derived-master",
+                    "deriveRepoName": "AchillesIDE",
+                    "deriveAgentName": "explorer",
+                    "deriveName": "ONLYOFFICE_JWT_SECRET"
+                }
+            ],
+            "ports": ["127.0.0.1:8082:80"]
+        },
+        "dev": {
+            "preinstall": "scripts/hooks/preinstall.sh",
+            "env": [
+                {
+                    "name": "ONLYOFFICE_VERSION",
+                    "required": false,
+                    "default": "9.3.1"
+                },
+                {
+                    "name": "JWT_ENABLED",
+                    "required": false,
+                    "default": "true"
+                },
+                {
+                    "name": "JWT_SECRET",
+                    "required": true,
+                    "derive": "derived-master",
+                    "deriveRepoName": "AchillesIDE",
+                    "deriveAgentName": "explorer",
+                    "deriveName": "ONLYOFFICE_JWT_SECRET"
+                }
+            ],
+            "ports": ["127.0.0.1:18082:80"]
+        },
+        "prod": {
+            "preinstall": "scripts/hooks/preinstall.sh",
+            "env": [
+                {
+                    "name": "ONLYOFFICE_VERSION",
+                    "required": false,
+                    "default": "9.3.1"
+                },
+                {
+                    "name": "JWT_ENABLED",
+                    "required": false,
+                    "default": "true"
+                },
+                {
+                    "name": "JWT_SECRET",
+                    "required": true,
+                    "derive": "derived-master",
+                    "deriveRepoName": "AchillesIDE",
+                    "deriveAgentName": "explorer",
+                    "deriveName": "ONLYOFFICE_JWT_SECRET"
+                }
+            ],
+            "ports": ["127.0.0.1:8082:80"]
+        }
+    }
+}

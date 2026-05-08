@@ -30,6 +30,7 @@
         "webmeetInfra/stack",
         "webmeetAgent global",
         "multimedia global",
+        "onlyOffice",
         "webAssist",
         "webAdmin"
     ],
@@ -74,7 +75,7 @@
                 },
                 {
                     "name": "ONLYOFFICE_JWT_SECRET",
-                    "required": false,
+                    "required": true,
                     "derive": "derived-master"
                 },
                 {

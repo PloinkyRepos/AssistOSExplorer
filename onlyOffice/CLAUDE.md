@@ -2,7 +2,7 @@
 
 ## Scope
 
-OnlyOffice owns the target runtime boundary for the workspace OnlyOffice Document Server integration. The implementation must become a Ploinky-managed agent; until that migration is complete, any raw host-managed Document Server container is a temporary compatibility shim only.
+OnlyOffice owns the runtime boundary for the workspace OnlyOffice Document Server integration. The implementation is a Ploinky-managed agent (`manifest.json`); the previous raw host-managed Document Server container started by Explorer's preinstall is no longer used and is removed by this agent's own preinstall hook on first start.
 
 ## Mandatory Reading Order
 
@@ -14,10 +14,18 @@ OnlyOffice owns the target runtime boundary for the workspace OnlyOffice Documen
 ## Repository Rules
 
 - The DS specifications are the source of truth for local contracts and invariants.
-- OnlyOffice Document Server must be owned by a Ploinky agent in the target architecture.
-- Explorer remains the office-session and storage bridge; it must not own the Document Server lifecycle after migration.
+- OnlyOffice Document Server is owned by the Ploinky `onlyOffice` agent declared in `manifest.json`.
+- Explorer is the office-session and storage bridge; it does not own the Document Server lifecycle.
 - Keep generated secrets derived through Ploinky runtime contracts and never log JWT secrets, document tokens, callback tokens, or file contents.
 - Update `AGENTS.md` and `CLAUDE.md` together so coding agents receive the same local context.
+
+## Key Paths
+
+- `manifest.json`
+- `scripts/hooks/preinstall.sh`
+- `docs/specs/DS01-ploinky-agent-invariant.md`
+- `../docs/specs/DS04-onlyoffice-integration.md`
+- `../docs/specs/DS06-ploinky-runtime-invariants.md`
 
 ## Validation
 

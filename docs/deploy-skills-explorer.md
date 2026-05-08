@@ -15,7 +15,7 @@ gh secret set WEBMEET_TURN_PASSWORD --repo PloinkyRepos/AssistOSExplorer
 ```
 
 `PLOINKY_MASTER_KEY` must be exactly 64 hex characters. Keep it stable after the first deployment because it encrypts the Ploinky workspace secret stores and local-auth password store.
-`ONLYOFFICE_JWT_SECRET` is not configured as a GitHub secret for the managed Document Server. Explorer derives it through the Ploinky manifest, and the host preinstall hook computes the same derived value before starting or recreating the OnlyOffice container.
+`ONLYOFFICE_JWT_SECRET` is not configured as a GitHub secret for the managed Document Server. Explorer derives `ONLYOFFICE_JWT_SECRET` through its Ploinky manifest, and the `onlyOffice` Ploinky agent derives its container `JWT_SECRET` from the same `AchillesIDE/explorer/ONLYOFFICE_JWT_SECRET` identity. Explorer's host preinstall hook no longer computes or injects the Document Server secret.
 
 ## Public Access (Cloudflare Tunnel)
 
@@ -92,8 +92,8 @@ The workflow:
 1. Connects to `SSH_USER@SSH_HOST` with `SSH_KEY`.
 2. Resolves the installed `ploinky` binary and verifies required host tools are already present.
 3. Stops the current workspace if it is running.
-4. Adds/enables the `fileExplorer` and `webmeetInfra` repos through Ploinky commands.
+4. Adds/enables the `AchillesIDE` and `webmeetInfra` repos through Ploinky commands.
 5. Runs `ploinky update` so Ploinky updates the workspace repos and local Ploinky dependencies.
 6. Stores runtime variables through `ploinky var`.
-7. Starts `fileExplorer/explorer` on `EXPLORER_ROUTER_PORT`.
-8. Verifies local router health and public `EXPLORER_PUBLIC_URL` access through the Cloudflare tunnel.
+7. Starts `AchillesIDE/explorer` on `EXPLORER_ROUTER_PORT`.
+8. Verifies local router health, OnlyOffice `api.js` through `ONLYOFFICE_INTERNAL_URL`, public `EXPLORER_PUBLIC_URL` access through the Cloudflare tunnel, and browser-visible OnlyOffice `api.js` when `ONLYOFFICE_PUBLIC_URL` is configured.

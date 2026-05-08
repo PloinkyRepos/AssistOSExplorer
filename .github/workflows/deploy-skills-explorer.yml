@@ -323,6 +323,23 @@ jobs:
             sleep 2
           done
 
+          ONLYOFFICE_API_BASE="${ONLYOFFICE_INTERNAL_URL:-http://127.0.0.1:8082}"
+          echo "[deploy] Verifying OnlyOffice api.js through ${ONLYOFFICE_API_BASE%/}..."
+          for i in $(seq 1 120); do
+            code="$(curl -s -o /dev/null -w '%{http_code}' "${ONLYOFFICE_API_BASE%/}/web-apps/apps/api/documents/api.js" || true)"
+            if [ "$code" = "200" ]; then
+              echo "[deploy] OnlyOffice api.js responding with HTTP $code"
+              break
+            fi
+            if [ "$i" = "120" ]; then
+              echo "[deploy] ERROR: OnlyOffice api.js did not respond in time"
+              echo "[deploy] Last HTTP code: ${code:-none}"
+              tail -120 "$WORK_DIR/logs/skills-explorer-start.log" || true
+              exit 1
+            fi
+            sleep 2
+          done
+
           echo "[deploy] Containers:"
           podman ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | head -100
           echo "[deploy] Workspace status:"
@@ -330,6 +347,8 @@ jobs:
           REMOTE
 
       - name: Verify public URL
+        env:
+          ONLYOFFICE_PUBLIC_URL: ${{ vars.ONLYOFFICE_PUBLIC_URL }}
         run: |
           set -euo pipefail
           echo "[deploy] Verifying ${PUBLIC_URL}/dashboard from GitHub runner..."
@@ -337,14 +356,33 @@ jobs:
             code="$(curl -L -s -o /tmp/skills-explorer-response.txt -w '%{http_code}' "${PUBLIC_URL%/}/dashboard" || true)"
             if [ "$code" = "200" ] || [ "$code" = "302" ]; then
               echo "[deploy] Public URL responding with HTTP $code"
-              exit 0
+              break
+            fi
+            if [ "$i" = "60" ]; then
+              echo "[deploy] ERROR: public URL did not become reachable"
+              echo "[deploy] Last HTTP code: ${code:-none}"
+              sed -n '1,40p' /tmp/skills-explorer-response.txt 2>/dev/null || true
+              exit 1
             fi
             sleep 5
           done
-          echo "[deploy] ERROR: public URL did not become reachable"
-          echo "[deploy] Last HTTP code: ${code:-none}"
-          sed -n '1,40p' /tmp/skills-explorer-response.txt 2>/dev/null || true
-          exit 1
+
+          if [ -n "${ONLYOFFICE_PUBLIC_URL:-}" ]; then
+            echo "[deploy] Verifying OnlyOffice public api.js from GitHub runner..."
+            for i in $(seq 1 60); do
+              code="$(curl -L -s -o /tmp/onlyoffice-public-api.js -w '%{http_code}' "${ONLYOFFICE_PUBLIC_URL%/}/web-apps/apps/api/documents/api.js" || true)"
+              if [ "$code" = "200" ]; then
+                echo "[deploy] OnlyOffice public api.js responding with HTTP $code"
+                exit 0
+              fi
+              if [ "$i" = "60" ]; then
+                echo "[deploy] ERROR: OnlyOffice public api.js did not become reachable"
+                echo "[deploy] Last HTTP code: ${code:-none}"
+                exit 1
+              fi
+              sleep 5
+            done
+          fi
 
       - name: Cleanup
         if: always()

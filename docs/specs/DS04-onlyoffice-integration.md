@@ -176,7 +176,7 @@ Explorer expects these environment variables:
 - `ONLYOFFICE_CALLBACK_BASE_URL`
   Public base used to generate Explorer callback and document URLs for OnlyOffice
 - `ONLYOFFICE_JWT_SECRET`
-  Shared signing secret used to sign the OnlyOffice editor config. In the target architecture, the Ploinky-managed OnlyOffice agent and Explorer both receive the value derived from the same `ONLYOFFICE_JWT_SECRET` manifest label. During the temporary compatibility-shim period, the Explorer host preinstall hook may compute the same value from `PLOINKY_DERIVED_MASTER_KEY`, or from `PLOINKY_MASTER_KEY` before the derived key has been injected into a runtime container, and use it only to keep the raw sidecar aligned until the agent migration lands.
+  Shared signing secret used to sign the OnlyOffice editor config. Explorer declares this env as a required Ploinky-derived value. The Ploinky-managed `onlyOffice` agent (`onlyOffice/manifest.json`) declares required `JWT_SECRET` with `derive: "derived-master"`, `deriveRepoName: "AchillesIDE"`, `deriveAgentName: "explorer"`, `deriveName: "ONLYOFFICE_JWT_SECRET"` so that Document Server's `JWT_SECRET` and Explorer's `ONLYOFFICE_JWT_SECRET` env entries resolve to the same hex value at runtime without any cross-agent coordination beyond the manifests themselves. Explorer no longer derives this secret in its preinstall hook.
 
 The distinction between public and internal URLs is architectural, not cosmetic. Explorer needs both because the browser and the backend do not necessarily reach OnlyOffice through the same network path.
 
@@ -184,16 +184,17 @@ The distinction between public and internal URLs is architectural, not cosmetic.
 
 OnlyOffice integration is correct only when all of the following are true:
 
-- the Document Server is owned by a Ploinky-managed OnlyOffice agent; raw host-managed Podman sidecars started by Explorer hooks are a temporary compatibility shim and are not the target production architecture
+- the Document Server is owned by the Ploinky-managed `onlyOffice` agent (see `onlyOffice/docs/specs/DS01-ploinky-agent-invariant.md`)
 - the browser can load `api.js` from `ONLYOFFICE_PUBLIC_URL`
 - Explorer can reach the internal document server endpoint when callback processing requires it
 - OnlyOffice can reach Explorer's public callback and document routes
 - the JWT secret is aligned between Explorer and OnlyOffice
 - the selected resource resolves to a supported content class
 
-Explorer does not own the OnlyOffice Document Server lifecycle. In the target architecture, the Document Server is provisioned by the `onlyOffice` Ploinky agent and the `ONLYOFFICE_*` variables are injected by the surrounding runtime. Any Explorer hook that starts or recreates a raw OnlyOffice sidecar is a temporary migration or emergency rollback shim, not compliant steady state.
+Explorer does not own the OnlyOffice Document Server lifecycle. The Document Server is provisioned by the `onlyOffice` Ploinky agent. The `ONLYOFFICE_*` variables flow into Explorer either from the deploy workflow (`set_var ONLYOFFICE_PUBLIC_URL ...` and siblings) or from the `onlyOffice` agent's preinstall hook which writes local-dev defaults if the vars are not already set. Explorer's preinstall hook no longer creates, recreates, or mutates the Document Server container.
 
 `api.js` is provided by the OnlyOffice Document Server itself, not by the Explorer repo.
+Ploinky TCP readiness for the `onlyOffice` agent is only the startup gate; acceptance validation must still load `api.js` from the configured internal and browser-visible URLs before the Office editor path is considered healthy.
 
 ## Failure And Recovery Expectations
 

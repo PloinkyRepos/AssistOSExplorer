@@ -8,7 +8,7 @@
 <body>
     <main>
         <h1>OnlyOffice Documentation</h1>
-        <p>OnlyOffice documents the target Ploinky-managed boundary for the workspace Document Server integration.</p>
+        <p>OnlyOffice is the Ploinky-managed agent that owns the workspace Document Server. The agent declares its image (pinned via <code>${ONLYOFFICE_VERSION}</code>), derived JWT secret, internal port, readiness probe, and persistent storage in <code>manifest.json</code>. Explorer remains the office-session and storage bridge.</p>
         <p>The DS specifications are the source of truth for runtime ownership, secret derivation, readiness, and Explorer integration.</p>
         <ul>
             <li><a href="specs/matrix.md">Specification matrix</a></li>
