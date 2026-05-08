@@ -110,13 +110,24 @@ Files added:
 
 ### Phase 2b — Pure Ploinky Cutover
 
-The deploy workflow runs no host-side `systemctl` or `cp /etc/letsencrypt` commands. The contract for any host targeted by `deploy-skills-explorer.yml` is: **no non-Ploinky service may be holding `:80` or `:443`** before the deploy starts. Migrating from a previous host-managed Nginx is a one-time operator step:
+The deploy workflow runs no host-side `systemctl` or `cp /etc/letsencrypt` commands. The contract for any host targeted by `deploy-skills-explorer.yml` is:
+
+1. **Nothing else is holding `:80` or `:443`.** Migrating from a previous host-managed Nginx is a one-time operator step (below).
+2. **The kernel allows rootless binds to low ports.** `net.ipv4.ip_unprivileged_port_start` must be ≤ `80` for the rootless-podman containers (`webmeetLivekitNginx` runs as `nobody` in its user namespace). On rootful-podman hosts this is automatic.
+3. **DNS for `WEBMEET_TLS_HOSTNAME` resolves to the host's public IP** as a direct A record (not behind a TCP/UDP-incompatible tunnel — see "Cloudflared — deliberate Ploinky exception" above).
+
+One-time operator preparation on a Linux host migrating from a host-managed stack:
 
 ```bash
-sudo systemctl disable --now nginx caddy certbot-renew.timer
+# 1. Free the privileged ports
+sudo systemctl disable --now nginx caddy certbot-renew.timer 2>/dev/null || true
+
+# 2. Allow rootless containers to bind low ports
+echo "net.ipv4.ip_unprivileged_port_start = 80" | sudo tee /etc/sysctl.d/99-rootless-low-ports.conf
+sudo sysctl -p /etc/sysctl.d/99-rootless-low-ports.conf
 ```
 
-After that, `:80` and `:443` are free, and Ploinky owns the full stack:
+After that, `:80` and `:443` are free, the kernel permits the rootless agent to bind them, and Ploinky owns the full stack:
 
 - With profile `prod`, `webmeetInfra/stack` chains in `webmeetInfra/webmeetLivekitNginx` (per-profile `enable`), which chains LiveKit and the certbot renewal worker.
 - The certbot agent is a dependency of the nginx agent. On first start with `WEBMEET_CERTBOT_AUTO_ISSUE=true`, certbot uses `--standalone` to bind `:80` briefly and complete the ACME HTTP-01 challenge, then exits standalone mode. Subsequent renewals use `--webroot` once the nginx agent is up and serving the webroot path.
