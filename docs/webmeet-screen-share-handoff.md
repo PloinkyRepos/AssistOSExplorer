@@ -1,6 +1,6 @@
 # WebMeet Screen Share Handoff
 
-Date: 2026-05-07
+Date: 2026-05-08
 
 This handoff summarizes the WebMeet deployment, secret-derivation, LiveKit, and remote screen-share work completed across the `AssistOSExplorer` repository and the nested `webmeetInfra` repository. It is intended for another code agent to continue from the current state without rediscovering the same failure modes.
 
@@ -9,9 +9,9 @@ This handoff summarizes the WebMeet deployment, secret-derivation, LiveKit, and 
 Production URL:
 
 - Explorer: `https://skills.axiologic.dev`
-- LiveKit public signaling hostname: `https://livekit-skills.axiologic.dev`
+- LiveKit public signaling URL: `wss://livekit-skills.axiologic.dev`
 
-`skills.axiologic.dev` can remain behind Cloudflare Tunnel. `livekit-skills.axiologic.dev` should resolve directly to the LiveKit/Nginx host for the direct-UDP topology. Cloudflare Tunnel public hostnames proxy HTTP/HTTPS/WebSocket traffic, but they do not provide a general public UDP media proxy for WebRTC.
+`skills.axiologic.dev` can remain behind Cloudflare Tunnel. `livekit-skills.axiologic.dev` currently resolves directly to the LiveKit/Nginx host for browser-facing LiveKit signaling and LiveKit TCP media fallback. Cloudflare Tunnel public hostnames proxy HTTP/HTTPS/WebSocket traffic, but they do not provide a general public UDP media proxy for WebRTC.
 
 Remote host:
 
@@ -22,9 +22,9 @@ Remote host:
 
 Production was deployed through GitHub Actions, not by direct mutation over SSH.
 
-Current deployed commits after the UDP migration deploy:
+Current deployed commits after the latest production deploy:
 
-- `AssistOSExplorer`: `8ec9d2c` (`Fix WebMeet video track attachment`)
+- `AssistOSExplorer`: `d097617` (`Avoid eager WebMeet video recovery`)
 - `webmeetInfra`: `f123a45` (`Allow forcing LiveKit TCP media`)
 
 Generated LiveKit config on production was verified as:
@@ -37,13 +37,13 @@ rtc:
   port_range_start: 7882
   port_range_end: 7892
   use_external_ip: false
-  force_tcp: false
+  force_tcp: true
   node_ip: 193.180.209.191
 ```
 
 Repository variables set for production:
 
-- `WEBMEET_LIVEKIT_FORCE_TCP=false`
+- `WEBMEET_LIVEKIT_FORCE_TCP=true`
 - `WEBMEET_LIVEKIT_LOG_LEVEL=info`
 
 Required GitHub secrets remain secret-only and must not be printed:
@@ -54,14 +54,14 @@ Required GitHub secrets remain secret-only and must not be printed:
 
 ## High-Level Outcome
 
-The remote black-screen screen-share issue is fixed.
+The remote black-screen screen-share issue is fixed in the current production configuration by forcing LiveKit media over TCP.
 
-Final Playwright browser smoke against `https://skills.axiologic.dev`:
+Final three-user Playwright browser smoke against `https://skills.axiologic.dev`:
 
-- Artifact directory: `/tmp/webmeet-screen-diag-1778163087790`
-- Test room: `diag-1778163087790`
+- Artifact directory: `/tmp/webmeet-screen-diag-1778230127397`
+- Test room: `diag-1778230127397`
 - Admin account published a screen share.
-- Daniel account received, decoded, and displayed the screen share.
+- Daniel and Mircea accounts joined with the admin password, received, decoded, and displayed the screen share.
 - Daniel receiver video state:
   - `readyState: 4`
   - `videoWidth: 1280`
@@ -69,18 +69,22 @@ Final Playwright browser smoke against `https://skills.axiologic.dev`:
   - `framesDecoded: 147`
   - `framesReceived: 147`
   - `keyFramesDecoded: 1`
-  - `packetsLost: 0`
-- Admin publisher stats:
-  - `framesEncoded: 149`
-  - `keyFramesEncoded: 2`
-  - `bytesSent: 978040`
-- Selected receiver media candidate:
+  - `bytesReceived: 952697`
+- Mircea receiver video state:
+  - `readyState: 4`
+  - `videoWidth: 1280`
+  - `videoHeight: 720`
+  - `framesDecoded: 147`
+  - `framesReceived: 147`
+  - `keyFramesDecoded: 1`
+  - `bytesReceived: 952697`
+- Selected receiver media candidate for both receivers:
   - `candidateType: host`
-  - `protocol: udp`
+  - `protocol: tcp`
   - `address: 193.180.209.191`
-  - `port: 7892`
+  - `port: 7881`
 
-LiveKit media now works over direct UDP to the host while signaling continues through the configured public LiveKit URL. The temporary TCP workaround was removed after verifying UDP candidate selection and decoded receiver frames.
+The latest `force_tcp=false` production canary failed even after `livekit-skills.axiologic.dev` was moved off the Cloudflare Tunnel and through the host/Nginx path. Browsers selected direct UDP host candidates on `193.180.209.191:7882-7892`, but receivers saw almost no media bytes and decoded no frames. Forcing TCP selected `193.180.209.191:7881` and both receivers decoded the screen share.
 
 ## Issues Found
 
@@ -144,26 +148,28 @@ Validation:
 
 Symptoms on production:
 
-- Both accounts could log in and join a room.
+- Multiple accounts could log in and join a room.
 - Admin could start screen share.
-- Daniel saw a signaled/subscribed track, but the video stayed black.
-- Daniel receiver initially had `videoWidth: 0`, `videoHeight: 0`, `readyState: 0`, or almost no inbound RTP.
+- Daniel and Mircea saw signaled/subscribed tracks, but the video stayed black in the UDP canary.
+- Receivers had `videoWidth: 0`, `videoHeight: 0`, `readyState: 0`, a live attached track, and almost no inbound RTP.
 - Local deployment worked, so the problem was topology/environment-specific.
 
 Evidence gathered:
 
 - Browser-side diagnostics showed the receiver had a track element but did not decode useful frames.
-- LiveKit debug logs showed repeated PLI/keyframe requests and keyframe seeder timeout.
-- UDP ports were mapped on the container, but the deployment was behind Cloudflare Tunnel.
-- Browser ICE candidate stats before the TCP fix selected UDP/direct media candidates.
+- The final failed UDP canary selected direct UDP host candidates on `193.180.209.191:7882-7892`.
+- Daniel and Mircea each received only about 1.3 KB on the nominated UDP candidate pair and had no inbound decoded video frames.
+- Admin local preview was healthy and the publisher encoded frames, so capture and publishing were not dead.
+- The dashboard subscription recovery path resubscribed and reattached remote video tracks, but media still did not arrive over UDP.
+- The forced-TCP run selected TCP host candidates on `193.180.209.191:7881` and both receivers decoded `1280x720` video frames.
 
 Root cause:
 
-- Signaling worked through Cloudflare Tunnel because it is HTTPS/WebSocket traffic.
-- WebRTC media is a separate ICE/SRTP media plane.
-- LiveKit default behavior preferred UDP media ports.
-- Cloudflare Tunnel public hostnames do not proxy arbitrary UDP media from browsers to the origin.
-- Result: room signaling succeeded, but the media path could not reliably deliver the screen-share keyframes needed by subscribers.
+- Signaling and room subscription are healthy.
+- The production UDP media path is currently unreliable for this WebMeet path even when direct UDP host candidates are selected.
+- Nginx only handles LiveKit HTTPS/WebSocket signaling; it does not proxy WebRTC UDP media.
+- Forcing LiveKit media to TCP bypasses the failing UDP path and delivers screen-share frames reliably through the exposed LiveKit TCP media port.
+- The remaining UDP question is below the dashboard and token layers: host firewall, provider filtering, NAT, local/client network behavior, or LiveKit UDP handling should be investigated with packet-level diagnostics before returning production to UDP.
 
 Important Cloudflare documentation:
 
@@ -176,13 +182,15 @@ Important Cloudflare documentation:
 Fix:
 
 - Added configurable LiveKit `rtc.force_tcp`.
-- Set production `WEBMEET_LIVEKIT_FORCE_TCP=true`.
+- Set production `WEBMEET_LIVEKIT_FORCE_TCP=true` and left it enabled after the final three-user smoke passed.
 - Deployed through `.github/workflows/deploy-skills-explorer.yml`.
 
 Relevant commits:
 
 - `webmeetInfra` `f123a45` `Allow forcing LiveKit TCP media`
 - `AssistOSExplorer` `8e1a4fd` `Pass LiveKit TCP media setting during deploy`
+- `AssistOSExplorer` `6662e3a` `Refresh stuck WebMeet screen share downtracks`
+- `AssistOSExplorer` `d097617` `Avoid eager WebMeet video recovery`
 
 ### 4. Screen-share publish behavior had regressed since the known-good commit
 
@@ -282,11 +290,11 @@ Commit: `51d61ce` `Stabilize WebMeet screen sharing`
 
 Key files:
 
-- `webmeetAgent/web/public/assets/controllers/livekit-room-controller.js`
-- `webmeetAgent/web/public/assets/controllers/media-settings-methods.js`
-- `webmeetAgent/web/public/assets/controllers/room-session-methods.js`
-- `webmeetAgent/web/public/assets/controllers/webmeet-media-controller.js`
-- `webmeetAgent/web/public/assets/services/media-diagnostics.js`
+- `webmeetAgent/IDE-plugins/webmeet-tool-button/components/webmeet-dashboard-modal/controllers/livekit-room-controller.js`
+- `webmeetAgent/IDE-plugins/webmeet-tool-button/components/webmeet-dashboard-modal/controllers/media-settings-methods.js`
+- `webmeetAgent/IDE-plugins/webmeet-tool-button/components/webmeet-dashboard-modal/controllers/room-session-methods.js`
+- `webmeetAgent/IDE-plugins/webmeet-tool-button/components/webmeet-dashboard-modal/controllers/webmeet-media-controller.js`
+- `webmeetAgent/IDE-plugins/webmeet-tool-button/components/webmeet-dashboard-modal/services/media-diagnostics.js`
 - `webmeetAgent/docs/specs/DS08-room-types.md`
 
 Behavior:
@@ -301,12 +309,32 @@ Commit: `1279d55` `Avoid duplicate WebMeet video attachments`
 
 Key file:
 
-- `webmeetAgent/web/public/assets/controllers/room-session-methods.js`
+- `webmeetAgent/IDE-plugins/webmeet-tool-button/components/webmeet-dashboard-modal/controllers/room-session-methods.js`
 
 Behavior:
 
 - If a subscribed track with the same `trackSid` already has an element, skip duplicate attachment.
 - Prevents repeated replacement of an otherwise valid video element.
+
+#### Bounded remote-video recovery
+
+Commits:
+
+- `6662e3a` `Refresh stuck WebMeet screen share downtracks`
+- `d097617` `Avoid eager WebMeet video recovery`
+
+Key files:
+
+- `webmeetAgent/IDE-plugins/webmeet-tool-button/components/webmeet-dashboard-modal/controllers/room-session-methods.js`
+- `webmeetAgent/docs/specs/DS10-livekit-media-runtime.md`
+- `webmeetAgent/docs/index.html`
+
+Behavior:
+
+- Adds a bounded remote-video recovery path for subscribed video publications whose attached element remains without decoded frames after the readiness window.
+- Recovery detaches the stale element and toggles the LiveKit publication subscription off/on, capped at two attempts per publication.
+- The follow-up commit prevents disconnected stale element timers from firing and avoids eager recovery during the normal first-frame wait.
+- Final production smoke with `force_tcp=true` did not need recovery; the remote video reached `loadedmetadata`, `playing`, and readiness checks stayed `true`.
 
 #### LiveKit diagnostic log level deploy variable
 
@@ -406,7 +434,7 @@ rtc:
   force_tcp: ${force_tcp}
 ```
 
-Current production value is `false`.
+Current production value is `true`.
 
 ## Deployment Actions Run
 
@@ -418,6 +446,21 @@ Production deploys used GitHub Actions workflow:
 
 Relevant successful runs:
 
+- `25545810338`
+  - Deployed `AssistOSExplorer` `6662e3a`
+  - Kept `force_tcp: false`
+  - Three-user remote browser test still failed over UDP
+  - Artifact: `/tmp/webmeet-screen-diag-1778229427940`
+- `25546092158`
+  - Deployed `AssistOSExplorer` `6662e3a`
+  - Set `force_tcp: true`
+  - Three-user remote browser test passed over TCP `193.180.209.191:7881`
+  - Artifact: `/tmp/webmeet-screen-diag-1778229831655`
+- `25546306752`
+  - Deployed `AssistOSExplorer` `d097617`
+  - Kept `force_tcp: true`
+  - Final three-user remote browser test passed over TCP `193.180.209.191:7881`
+  - Artifact: `/tmp/webmeet-screen-diag-1778230127397`
 - `25499187100`
   - Deployed `AssistOSExplorer` `8e1a4fd`
   - Deployed `webmeetInfra` `f123a45`
@@ -434,7 +477,7 @@ Relevant successful runs:
 - `25501046519`
   - Deployed `8ec9d2c` video attachment fix
   - Kept `force_tcp: false`
-  - Final browser smoke decoded and displayed screen share over UDP
+  - Browser smoke decoded and displayed screen share over UDP at that point, but later three-user tests reproduced the UDP failure
 
 Earlier deploy runs during diagnosis:
 
@@ -450,16 +493,19 @@ Earlier deploy runs during diagnosis:
 
 ## Browser Test Harness
 
-Temporary harness path:
+Temporary harness paths:
 
 ```text
 /tmp/webmeet-playwright/diag.mjs
+/tmp/webmeet-playwright/diag3.mjs
 ```
+
+The current final harness is `diag3.mjs`. The older `diag.mjs` is still useful for two-user checks.
 
 The harness:
 
-- Opens two headless browser contexts.
-- Logs in as `daniel` and `admin`.
+- Opens isolated headless browser contexts.
+- Logs in as `admin`, `daniel`, and, for `diag3.mjs`, `mircea`.
 - Uses password from `WEBMEET_TEST_PASSWORD`.
 - Creates/joins a diagnostic room.
 - Starts screen share from admin using fake media/display capture.
@@ -472,7 +518,7 @@ Run command:
 ```bash
 WEBMEET_TEST_PASSWORD=admin \
 WEBMEET_BASE_URL=https://skills.axiologic.dev \
-node /tmp/webmeet-playwright/diag.mjs
+node /tmp/webmeet-playwright/diag3.mjs
 ```
 
 Useful artifact checks:
@@ -553,7 +599,7 @@ Expected passing result:
 - Receiver `videos[0].readyState` is `4`.
 - Receiver `videos[0].videoWidth` and `videoHeight` are non-zero.
 - Receiver inbound RTP has increasing `framesDecoded`.
-- Receiver remote candidate protocol is `udp` on `193.180.209.191:7882-7892` for the current direct-UDP production topology.
+- Receiver remote candidate protocol is `tcp` on `193.180.209.191:7881` for the current production topology.
 
 ## Remote Verification Commands
 
@@ -587,23 +633,23 @@ ssh -i ~/demo_private_key.pem -o StrictHostKeyChecking=no admin@193.180.209.191 
 
 Only use the LiveKit log command for diagnosis. Avoid printing SDP, ICE credentials, JWTs, API keys, or raw request payloads.
 
-## Why TCP Fixed The Cloudflare Tunnel Deployment
+## Why TCP Is The Current Production Fix
 
 LiveKit has two planes:
 
 - Signaling: HTTPS/WebSocket. This works through Cloudflare Tunnel.
 - Media: WebRTC ICE/SRTP. By default this prefers UDP. Cloudflare Tunnel public hostnames do not proxy arbitrary browser UDP media to the origin.
 
-Before the fix, the room could join and tracks could be signaled, but subscribers could not receive usable screen-share keyframes over the UDP media path. LiveKit debug logs showed repeated keyframe requests and timeout.
+Before the fix, the room could join and tracks could be signaled, but subscribers could not receive usable screen-share keyframes over the UDP media path. The latest failed UDP canary happened after `livekit-skills.axiologic.dev` was moved to direct DNS/Nginx signaling: receivers selected direct UDP host candidates but still received almost no media and decoded no frames.
 
-The temporary `rtc.force_tcp: true` workaround proved that the issue was transport-related. After routing LiveKit signaling through the host Nginx path and setting `WEBMEET_LIVEKIT_FORCE_TCP=false`, browsers selected direct UDP host candidates on `193.180.209.191:7882-7892`, and the receiver decoded and displayed frames.
+`rtc.force_tcp: true` proved that the issue is transport-related and below the WebMeet dashboard/subscription layer. With TCP forced, browsers selected the LiveKit TCP media candidate on `193.180.209.191:7881`, and both receivers decoded and displayed frames.
 
 Tradeoffs:
 
-- TCP is more reliable through this topology.
+- TCP is currently more reliable through this topology.
 - TCP can add latency under packet loss due to retransmission and head-of-line blocking.
 - Screen share tolerates this better than low-latency camera/audio.
-- For higher scale or lower latency, the cleaner architecture is direct LiveKit UDP/TCP media exposure outside Cloudflare Tunnel, or a TURN/TLS relay on port `443`.
+- For higher scale or lower latency, investigate why direct UDP host candidates are not carrying subscriber media before returning production to `force_tcp=false`. A TURN/TLS relay on port `443` is another controlled fallback path for restrictive networks.
 
 ## Remaining Risks And Follow-Ups
 
@@ -611,34 +657,36 @@ Known fixed:
 
 - Fresh deployment no longer requires manually configured LiveKit API key/secret.
 - Local LiveKit invalid API key mismatch was fixed by shared derived media secrets.
-- Remote screen-share black receiver was first worked around by forcing TCP media, then moved back to direct UDP after Nginx/direct-host signaling and the UI attachment regression were verified.
+- Remote screen-share black receiver is fixed in production by forcing TCP media.
 - LiveKit production log level is back to `info`.
 
 Risks:
 
-- UDP media depends on direct reachability to `193.180.209.191:7882-7892/udp`.
+- Production currently depends on LiveKit TCP media at `193.180.209.191:7881`.
+- UDP media on `193.180.209.191:7882-7892/udp` currently negotiates but fails to deliver usable subscriber video in the three-user remote test.
 - Signaling can be proxied by Nginx, but normal HTTP reverse proxying does not carry WebRTC UDP media.
 - The browser diagnostic harness is temporary under `/tmp`. If this test should be reusable, move it into a committed test location and scrub any environment-specific assumptions.
-- If production topology changes back to a pure tunnel/proxy setup without direct UDP reachability, reassess whether `WEBMEET_LIVEKIT_FORCE_TCP=true` is needed again.
+- If production topology changes back to a pure tunnel/proxy setup, keep `WEBMEET_LIVEKIT_FORCE_TCP=true` unless another tested media path is available.
 
 Recommended next tasks:
 
 1. Add a committed WebMeet screen-share Playwright smoke test that redacts sensitive data by design.
 2. Keep the production Cloudflare Tunnel limitation documented in `webmeetAgent/docs/specs/DS10-livekit-media-runtime.md`.
-3. Decide whether direct UDP media exposure is acceptable long term, or whether to use TURN/TLS on `443`.
-4. If scaling WebMeet usage, load test LiveKit with direct UDP and a wider media port range before relying on it for larger meetings.
-5. Keep the derived-secret invariant strict. Do not reintroduce manual LiveKit/TURN fallback credentials.
+3. Investigate the UDP failure with packet-level host/network diagnostics before attempting another `force_tcp=false` canary.
+4. Decide whether forced TCP is acceptable long term, whether direct UDP can be made reliable, or whether to use TURN/TLS on `443`.
+5. If scaling WebMeet usage, load test LiveKit with the current TCP media path and any future UDP path before relying on it for larger meetings.
+6. Keep the derived-secret invariant strict. Do not reintroduce manual LiveKit/TURN fallback credentials.
 
 ## Recovery Checklist
 
 If screen share regresses:
 
 1. Confirm production is on the expected commits.
-2. Confirm generated LiveKit config has `force_tcp: false` for the Nginx/direct-UDP topology.
-3. Confirm GitHub repo variable `WEBMEET_LIVEKIT_FORCE_TCP` is `false`.
+2. Confirm generated LiveKit config has `force_tcp: true` for the current production topology.
+3. Confirm GitHub repo variable `WEBMEET_LIVEKIT_FORCE_TCP` is `true`.
 4. Confirm Cloudflare DNS sends `livekit-skills.axiologic.dev` directly to the LiveKit/Nginx host, not to a Tunnel public hostname.
-5. Run the two-browser harness and inspect Daniel receiver `framesDecoded`.
-6. Inspect candidate stats. Passing production should select `udp` to `193.180.209.191:7882-7892`.
+5. Run the three-browser harness and inspect Daniel and Mircea receiver `framesDecoded`.
+6. Inspect candidate stats. Passing production should select `tcp` to `193.180.209.191:7881`.
 7. Temporarily set `WEBMEET_LIVEKIT_LOG_LEVEL=debug`, redeploy, capture LiveKit logs, then reset it to `info` and redeploy again.
 8. Do not print secrets, JWTs, SDP blobs, ICE credentials, or raw request payloads in logs or handoff notes.
 
