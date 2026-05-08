@@ -108,30 +108,37 @@ Files added:
 - Ploinky patch: `cli/services/docker/agentServiceManager.js` now honors `manifest.entrypoint` (emits `--entrypoint <value>` before the image arg). DS003 records the field.
 - Deploy workflow plumbs `WEBMEET_TLS_HOSTNAME`, `WEBMEET_TLS_HTTPS_PORT`, `WEBMEET_TLS_HTTP_PORT`, `WEBMEET_LIVEKIT_UPSTREAM`, `WEBMEET_NGINX_VERSION`, `WEBMEET_CERT_EMAIL`, `WEBMEET_CERTBOT_VERSION`, `WEBMEET_CERTBOT_AUTO_ISSUE`, `WEBMEET_CERTBOT_RENEW_INTERVAL_SECONDS`. GitHub repo vars set: `WEBMEET_TLS_HOSTNAME=livekit-skills.axiologic.dev`, `WEBMEET_CERT_EMAIL=admin@axiologic.dev`, `WEBMEET_LIVEKIT_UPSTREAM=http://127.0.0.1:7880`.
 
-### Phase 2b — Cutover Plan (not executed)
+### Phase 2b — Cutover Wired Into The Deploy Workflow
 
-When the operator decides to cut over from the host-system Nginx + certbot timer to the Ploinky-managed pair:
+The cutover from host Nginx + system certbot to the Ploinky-managed pair is now part of `deploy-skills-explorer.yml`. Each deploy run does the following on the remote host before `ploinky shutdown`:
 
-1. **Stage cert data into the workspace volume.** SSH to the host once and copy `/etc/letsencrypt/` into the workspace path:
-   ```bash
-   sudo cp -a /etc/letsencrypt/. ~/explorerWorkspace/.ploinky/data/webmeetTls/letsencrypt/
-   sudo chown -R admin:admin ~/explorerWorkspace/.ploinky/data/webmeetTls
-   mkdir -p ~/explorerWorkspace/.ploinky/data/webmeetTls/webroot
-   ```
-2. **Wire the agents into the dependency graph.** Add `webmeetInfra/webmeetLivekitNginx` to `webmeetAgent/manifest.json` `enable` (it pulls in LiveKit and certbot through their own `enable` lists). Commit + push.
-3. **Stop and disable host Nginx + system certbot, then trigger the deploy in one window.** Either as a single SSH session before the workflow runs, or wrapped into the deploy workflow as an explicit "cutover" mode:
-   ```bash
-   sudo systemctl stop nginx && sudo systemctl disable nginx
-   sudo systemctl stop certbot.timer && sudo systemctl disable certbot.timer
-   ```
-4. **Trigger the deploy workflow.** The agents will bind 80/443 directly on the host; Ploinky's readiness probe will hit them at `127.0.0.1:443`.
-5. **Validate.**
-   - `curl -fsSI https://livekit-skills.axiologic.dev/` should return `200` or a LiveKit-defined response with valid TLS.
-   - 3-user Playwright harness: daniel + mircea decode frames as before.
-   - `podman logs <webmeetLivekitCertbot>` shows the renew loop ticking; cert is a no-op until <30 days from expiry.
-6. **Rollback path.** If the agents fail to start, set the workflow input `livekit_version` to fall back if image pinning is at fault, or restart host nginx (`sudo systemctl start nginx`) and disable the new agents in `webmeetAgent`'s enable list. The cert files in `/etc/letsencrypt/` are preserved (we copied, not moved).
+1. **Disable conflicting host services.** For `nginx`, `caddy`, `certbot.timer`, `certbot.service`: if active, `sudo systemctl stop`; if enabled, `sudo systemctl disable`. Idempotent — once disabled, subsequent deploys are no-ops.
+2. **Stage TLS data into the Ploinky volume.** If `~/explorerWorkspace/.ploinky/data/webmeetTls/letsencrypt/live/` does not exist and `/etc/letsencrypt/live/` does, `cp -a` the host's existing cert tree into the workspace volume. Runs once on the first cutover deploy; subsequent deploys skip because `live/` is already present.
+3. **Bring up Ploinky agents.** With profile `prod`, `webmeetInfra/stack` chains in `webmeetInfra/webmeetLivekitNginx` (per-profile `enable`), which chains LiveKit and the certbot renewal worker. Nginx binds host `:80` and `:443` directly; the certbot agent runs the renew loop and shares `/etc/letsencrypt` with nginx.
 
-The cutover is documented but not executed in this session — host Nginx and the system certbot timer remain the active TLS terminator until the operator runs the steps above.
+Profile semantics:
+
+- **prod** — chains nginx + certbot via `stack`'s `profiles.prod.enable`. Required for the production deployment.
+- **default**, **dev** — do not chain nginx + certbot. The agent manifests declare only a `prod` profile, so explicit `ploinky enable agent webmeetInfra/webmeetLivekitNginx` while in another profile fails with a clear "profile 'X' not found" error.
+
+Cloudflared is **not** disabled by the workflow. It runs as a non-Ploinky podman container (see "Cloudflared — deliberate Ploinky exception" above) and serves `skills.axiologic.dev` independently of these agents.
+
+Validation after a successful cutover deploy:
+
+- `curl -fsSI https://livekit-skills.axiologic.dev/` returns a LiveKit-defined response with valid TLS.
+- 3-user Playwright harness: daniel + mircea decode frames as before (UDP path unchanged).
+- `podman ps` shows `webmeetLivekitNginx` and `webmeetLivekitCertbot` `Up`.
+- `podman logs <webmeetLivekitCertbot>` shows the renew-loop heartbeat; renewals are no-ops until <30 days from expiry.
+- `systemctl is-active nginx caddy certbot.timer` should all return `inactive` or `failed` (no longer running).
+
+Rollback path: re-enable the host services and revert the `stack` manifest (`profiles.prod.enable`):
+
+```bash
+sudo systemctl enable --now nginx
+sudo systemctl enable --now certbot.timer
+```
+
+Then push a commit that removes `webmeetInfra/webmeetLivekitNginx` from `stack/manifest.json` `profiles.prod.enable` and redeploy. Cert files in `/etc/letsencrypt/` are preserved by the staging step (copy, not move).
 
 ### Real-Browser Verification (Safari)
 
