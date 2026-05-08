@@ -4,6 +4,109 @@ Date: 2026-05-08
 
 This handoff summarizes the WebMeet deployment, secret-derivation, LiveKit, and remote screen-share work completed across the `AssistOSExplorer` repository, the nested `webmeetInfra` repository, and the `OutfinityResearch/ploinky` runtime. It is intended for another code agent to continue from the current state without rediscovering the same failure modes.
 
+## Invariants Enforced (2026-05-08 Session)
+
+The work below was driven by a small set of invariants. Each invariant lists the commits that made it durable. Commit SHAs are short (7-char) and scoped to repos: `OutfinityResearch/ploinky` (PL), `PloinkyRepos/webmeetInfra` (WI), `PloinkyRepos/AssistOSExplorer` (AE).
+
+### 1. Every long-running service is a Ploinky agent
+
+The deployment owns no host-system Nginx, Caddy, or certbot timer. Cloudflared is the single documented exception (see "Cloudflared — deliberate Ploinky exception" later in this doc). Enforcement:
+
+- New TLS terminator agent: `WI 4684944` `Add Ploinky-managed Nginx + Certbot agents for LiveKit TLS` (manifests, preinstall scripts, AGENTS/CLAUDE files for `webmeetLivekitNginx` and `webmeetLivekitCertbot`).
+- DS specs for the new agents: `WI 4684944` adds `DS008-livekit-nginx-agent.md` and `DS009-livekit-certbot-agent.md`; `WI 7c2add8` updates `DS003`/`DS004`/`DS006`.
+- Cloudflared exception is recorded in the Cloudflared section of this doc and in `webmeetAgent/docs/specs/DS10` (`AE e2346fe`).
+
+### 2. Container images are pinned, never `:latest`
+
+LiveKit, Nginx, and Certbot images all reference an `${VAR}` tag whose default lives in the manifest and whose override lives in a workspace var or a workflow input.
+
+- Ploinky env-templating in `manifest.container`: `PL 59af4a2` `Expand env references in manifest container field` and `PL 5e1e4f4` `Resolve manifest image defaults without secrets decryption` (so defaults survive contexts where the encrypted secret store is unreachable).
+- LiveKit version pin: `WI 7875fd3` `Pin LiveKit container version via WEBMEET_LIVEKIT_VERSION`, plus `AE c5dab1e` `Plumb WEBMEET_LIVEKIT_VERSION through deploy workflow` (adds `livekit_version` workflow input).
+- Nginx and certbot manifests both use `${WEBMEET_NGINX_VERSION}` and `${WEBMEET_CERTBOT_VERSION}` (`WI 4684944`).
+- DS003 in Ploinky records the contract: `PL d57fb31`.
+
+### 3. The deploy workflow performs no host-system mutations
+
+`deploy-skills-explorer.yml` runs only `ssh + ploinky ...` commands. It does not `systemctl stop/disable`, does not `cp /etc/letsencrypt …`, and does not touch any path outside the workspace. Host-side preparation is a documented one-time operator step.
+
+- Removed the `systemctl` loop and cert-staging block: `AE e32ff4e` `Drop host-service teardown and cert-staging from deploy workflow`.
+- Documented host prerequisites: `AE a73d12a` `Document host prerequisites for the cutover` (lists the three preconditions: `:80`/`:443` free, rootless-podman sysctl lowered, DNS A-record).
+- DS008 records the rootless-podman sysctl requirement: `WI daca8d6`.
+
+### 4. Profile-conditional dependencies (TLS terminator only in prod)
+
+`webmeetLivekitNginx` and `webmeetLivekitCertbot` ship in production deployments only. They are not chained into dev/default workspaces.
+
+- Per-profile `enable` in Ploinky: `PL 2a45432` `Add per-profile enable and readiness none` (workspaceDependencyGraph merges `manifest.profiles[active].enable` into the dep walk).
+- Stack manifest chains nginx only in prod: `WI 8edf7f5` and `WI 0056a6a` (`stack/manifest.json` adds `profiles.prod.enable: ["webmeetLivekitNginx"]` plus an empty `profiles.default` to satisfy the schema).
+- Nginx and certbot manifests carry only the `default` profile — explicit enable in non-prod fails fast with a clear error: `WI 514ebbd`.
+- DS003 in Ploinky documents per-profile `enable`: `PL 2a45432`.
+
+### 5. Cert lifecycle is workspace-owned
+
+`/etc/letsencrypt` lives at `~/<workspace>/.ploinky/data/webmeetTls/letsencrypt/` (mounted into both nginx and certbot agents). The certbot agent issues new certs and writes renewed ones; the nginx agent watches the file and reloads on rotation.
+
+- Volume mounts and shared dir layout: `WI 4684944`.
+- Standalone-first issuance, webroot for renewals (resolves the bootstrap deadlock between "nginx waits for cert" and "certbot needs nginx for HTTP-01"): `WI bc59aba` `Issue first cert via certbot standalone, renew via webroot`.
+- DS009 documents the contract: `WI 7c2add8`, `WI bc59aba`.
+
+### 6. Manifest references that fail to resolve fail loudly
+
+`${VAR}` in `manifest.container` raises a clear, named error if no value is found in the manifest env, ploinky vars, process env, or manifest defaults. Silent default to a wrong image is forbidden.
+
+- `PL 59af4a2`, refined by `PL 5e1e4f4`.
+
+### 7. UDP media on the SFU hits real client addresses, not bridge IPs
+
+LiveKit runs on host networking so podman bridge UDP source-NAT cannot rewrite client addresses to bridge-internal IPs.
+
+- Ploinky `network.mode: "host"` support: `PL fc4bed3`.
+- LiveKit manifest moved to host network: `WI 8b0dc9f` `Run LiveKit on host network`, refined by `WI f2fd9b1` `Restore LiveKit ports for readiness probe`.
+- Sibling agents repointed to `host.containers.internal`: `WI 8b0dc9f` (egress preinstall) plus repo var `WEBMEET_LIVEKIT_URL=http://host.containers.internal:7880`.
+- DS003 (webmeetInfra) and DS10 (webmeetAgent) document the contract: `WI 7c2add8`, `AE e2346fe`.
+
+### 8. Worker agents that bind no port don't block readiness
+
+Agents like the certbot renewal worker advertise `readiness.protocol: "none"` so Ploinky's readiness gate considers them ready as soon as the container starts; the dep wave still tracks them.
+
+- Ploinky support: `PL 2a45432`.
+- Certbot manifest declares `readiness.protocol: "none"`: `WI 8edf7f5`.
+- DS007 (Ploinky) records the contract.
+
+### 9. Container `ENTRYPOINT` is overridable per manifest
+
+Upstream images with CLI-style entrypoints (e.g. `certbot/certbot`) can run a workspace-supplied start script via `manifest.entrypoint`.
+
+- Ploinky support: `PL 4dda5e9` `Support manifest entrypoint override`.
+- Certbot manifest sets `entrypoint: "/bin/sh"`: `WI 4684944`.
+- DS003 (Ploinky) records the field.
+
+### 10. Behavioral changes ship with DS spec updates in the same change
+
+Every code change in this session has a corresponding spec update. No undocumented runtime behavior was introduced.
+
+- Ploinky DS003, DS004, DS007 updated alongside the runtime patches: `PL d57fb31`, `PL 2a45432`.
+- webmeetInfra DS003, DS004, DS006, DS008, DS009 created or updated: `WI 7c2add8`, `WI 4684944`, `WI bc59aba`, `WI daca8d6`.
+- webmeetAgent DS10 refreshed: `AE e2346fe`.
+- Handoff updated at every milestone: `AE 4c4d719`, `AE 1106265`, `AE 8eca8b4`, `AE 38fc3d2`, `AE 651df05`, `AE e32ff4e`, `AE a73d12a`.
+
+### Operator prerequisites this session installed on the production host
+
+These are one-time, persisted, outside Ploinky's lifecycle. They are now listed as required preparation in the cutover plan above.
+
+- `sudo systemctl disable --now nginx caddy certbot-renew.timer` (free `:80` and `:443`).
+- `echo "net.ipv4.ip_unprivileged_port_start = 80" | sudo tee /etc/sysctl.d/99-rootless-low-ports.conf && sudo sysctl -p ...` (allow rootless podman containers to bind low ports).
+
+### GitHub repo vars created or updated this session
+
+- `WEBMEET_LIVEKIT_FORCE_TCP=false` (UDP path proven; rollback knob)
+- `WEBMEET_LIVEKIT_URL=http://host.containers.internal:7880`
+- `WEBMEET_LIVEKIT_VERSION=v1.11.0`
+- `WEBMEET_TLS_HOSTNAME=livekit-skills.axiologic.dev`
+- `WEBMEET_CERT_EMAIL=research@axiologic.net`
+- `WEBMEET_LIVEKIT_UPSTREAM=http://127.0.0.1:7880`
+- `WEBMEET_CERTBOT_AUTO_ISSUE=true`
+
 ## Latest Investigation: Why UDP Failed And The Host-Network Fix
 
 A second investigation pass on 2026-05-08 narrowed the UDP failure beyond "unreliable transport" to a specific podman bridge interaction. The summary below replaces the previous "topology-related, suspect host firewall/MTU" framing.
