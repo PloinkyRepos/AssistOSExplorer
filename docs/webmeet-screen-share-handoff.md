@@ -109,6 +109,28 @@ These are one-time, persisted, outside Ploinky's lifecycle. They are now listed 
 - `WEBMEET_LIVEKIT_UPSTREAM=http://127.0.0.1:7880`
 - `WEBMEET_CERTBOT_AUTO_ISSUE=true`
 
+## OnlyOffice JWT Drift Follow-Up
+
+After the WebMeet work, opening `/Confidential/My Space/test.doc` as `daniel` produced the OnlyOffice error `The document security token is not correctly formed`. The Explorer-to-DPU path was healthy: `/services/explorer/office/session` returned `200`, the generated config included a document URL and callback URL, and the tokenized document URL returned `200 application/msword` through `Explorer -> Ploinky router -> dpuAgent`.
+
+Root cause: OnlyOffice Document Server is still running as a raw host-managed Podman sidecar named `ploinky_onlyoffice_explorerWorkspace`, created by Explorer's host preinstall hook. Because it is not a Ploinky agent, Ploinky injected the derived `ONLYOFFICE_JWT_SECRET` into Explorer but did not own/inject the sidecar's `JWT_SECRET`. The first repair aligned the derivation label; the second repair taught the host hook to derive the same value from `PLOINKY_MASTER_KEY` when `PLOINKY_DERIVED_MASTER_KEY` is not yet available in the host preinstall context.
+
+Relevant `AssistOSExplorer` commits:
+
+- `d74a9bb` `Align OnlyOffice JWT secret derivation`
+- `8e3dff2` `Derive OnlyOffice JWT in host hook`
+- `fda30b0` `Record OnlyOffice agent invariant`
+
+Production validation after deploy run `25558779323`:
+
+- Remote AchillesIDE checkout: `fda30b0`
+- Explorer container secret present: yes
+- OnlyOffice sidecar secret present: yes
+- Explorer `ONLYOFFICE_JWT_SECRET` equals OnlyOffice `JWT_SECRET`: yes, verified without printing either value
+- Headless `daniel` smoke for `/Confidential/My Space/test.doc`: Office session `200`, tokenized document fetch `200 application/msword`, `DocsAPI.DocEditor` present, OnlyOffice editor iframe present, and no security-token error text
+
+This is a functional repair, not the final architecture. The current raw `ploinky_onlyoffice_explorerWorkspace` sidecar remains a temporary compatibility shim and violates the target invariant that every long-running workspace service is a Ploinky agent. The next implementation pass should move Document Server lifecycle ownership into a real `onlyOffice` Ploinky agent.
+
 ## Latest Investigation: Why UDP Failed And The Host-Network Fix
 
 A second investigation pass on 2026-05-08 narrowed the UDP failure beyond "unreliable transport" to a specific podman bridge interaction. The summary below replaces the previous "topology-related, suspect host firewall/MTU" framing.
