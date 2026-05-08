@@ -2,7 +2,56 @@
 
 Date: 2026-05-08
 
-This handoff summarizes the WebMeet deployment, secret-derivation, LiveKit, and remote screen-share work completed across the `AssistOSExplorer` repository and the nested `webmeetInfra` repository. It is intended for another code agent to continue from the current state without rediscovering the same failure modes.
+This handoff summarizes the WebMeet deployment, secret-derivation, LiveKit, and remote screen-share work completed across the `AssistOSExplorer` repository, the nested `webmeetInfra` repository, and the `OutfinityResearch/ploinky` runtime. It is intended for another code agent to continue from the current state without rediscovering the same failure modes.
+
+## Latest Investigation: Why UDP Failed And The Host-Network Fix
+
+A second investigation pass on 2026-05-08 narrowed the UDP failure beyond "unreliable transport" to a specific podman bridge interaction. The summary below replaces the previous "topology-related, suspect host firewall/MTU" framing.
+
+### Evidence
+
+Comparison of the failed UDP canary `/tmp/webmeet-screen-diag-1778229427940` against the passing TCP run `/tmp/webmeet-screen-diag-1778230127397`:
+
+- TCP-pass receivers (daniel, mircea): `inbound-rtp video framesDecoded = 147`, `bytesReceived ≈ 953 KB`, nominated remote candidate `tcp 193.180.209.191:7881`. Healthy media.
+- UDP-fail receivers: nominated UDP host candidate selected, ICE state `succeeded`, RTT ≈ 0.054 s, but `bytesReceived ≈ 1.39 KB / packetsReceived = 11` and `inbound-rtp` array empty. Browser-side dashboard subscribed and attached the track; LiveKit sent no usable subscriber SRTP.
+- UDP-fail publisher (admin): `outbound-rtp video bytesSent = 293 KB`, `framesEncoded = 81`, `keyFramesEncoded = 15`, `pliCount = 14`. Uplink and PLI feedback worked. Subscriber downlink did not.
+- Smoking gun: every UDP-fail PeerConnection (admin, daniel, mircea) reports a `prflx udp 10.89.0.100:<port>` peer-reflexive local candidate. `10.89.0.0/24` is the podman `webmeet` bridge subnet and `10.89.0.108` is the LiveKit container IP. LiveKit's STUN binding response advertised the browser's source as `10.89.0.100`, i.e., the bridge-internal address used by podman's UDP port-forwarding path.
+
+### Root Cause (Inferred From The Evidence Above)
+
+The LiveKit container ran on the podman `webmeet` bridge with `0.0.0.0:7882-7892:7882-7892/udp` published. Inbound UDP from a browser was DNAT'd to the container at the kernel layer, but the source IP visible inside the container was rewritten to a bridge-local address (`10.89.0.100`). LiveKit's ICE library learned the remote peer at that bridge IP. When LiveKit then originated SRTP forwards toward each subscriber, the kernel routed those packets from `10.89.0.108` to `10.89.0.100` inside the bridge subnet — they never traversed the host's external interface and never reached the real browser.
+
+ICE/STUN keepalives (small, infrequent) survived because the kernel reverses conntrack on responses, so the browser kept seeing the candidate-pair as `succeeded`. The publisher path also survived because uplink media is browser-initiated and the kernel handles RTCP back via the same reverse-conntrack path. Only the subscriber downlink — fresh SFU-initiated outbound UDP — was sent to the wrong destination and silently dropped.
+
+TCP works because libwebrtc reuses the established TCP socket for both directions; the destination-address artifact does not affect TCP byte flow.
+
+### Fix Applied
+
+Move LiveKit out of podman's bridge networking so it binds directly on the host network namespace and sees real client addresses. Three coordinated changes:
+
+1. `OutfinityResearch/ploinky` `fc4bed3` `Support host network mode in agent manifests`:
+   - Recognizes `manifest.network.mode: "host"`. Emits `--network host`, skips named-network creation, network aliases, and `-p` port publishing for that container. Other branches unchanged.
+   - File: `cli/services/docker/agentServiceManager.js`.
+2. `webmeetInfra` `8b0dc9f` `Run LiveKit on host network`:
+   - `webmeetLivekitServer/manifest.json`: replace `network.name: "webmeet"` with `network.mode: "host"`. Drop the per-profile `ports` lists. LiveKit now binds 7880, 7881, 7882-7892/udp directly on the host.
+   - `webmeetLivekitServer/scripts/hooks/preinstall.sh`: write the LiveKit Redis address from `WEBMEET_LIVEKIT_REDIS_ADDRESS` (default `127.0.0.1:6379`) since LiveKit is host-net and reaches Redis through the published `6379` port.
+   - `webmeetLivekitEgress/scripts/hooks/preinstall.sh`: write `ws_url` from `WEBMEET_LIVEKIT_INTERNAL_WS_URL` (default `ws://host.containers.internal:7880`). Egress is still on the `webmeet` bridge and reaches host-net LiveKit through the host gateway. Redis address is overridable via `WEBMEET_EGRESS_REDIS_ADDRESS` (default unchanged).
+3. `AssistOSExplorer`: GitHub repo var `WEBMEET_LIVEKIT_URL` updated from `http://webmeetLivekitServer:7880` to `http://host.containers.internal:7880` so `webmeetAgent` (on the bridge) reaches LiveKit's HTTP API through the host gateway.
+
+The Coturn agent and Redis agent stay on the bridge. Coturn is unused in the canary path. Redis publishes 6379 on the host, which is now what host-net LiveKit consumes.
+
+### Production Ploinky Update
+
+Production ploinky lives in `~/ploinky/` on the deploy host as a git checkout of `outfinityresearch/ploinky` `master`. The deploy workflow runs `ploinky update` which calls `updatePloinkySelf` → `pullGitRepo` (`git pull --rebase --autostash`). Pushing the host-network patch to `master` is sufficient — the next deploy run picks it up automatically.
+
+### Canary And Verification Steps For The Next UDP Run
+
+1. Confirm `OutfinityResearch/ploinky` master is at the host-network commit and `webmeetInfra` main is at the LiveKit-host commit.
+2. Set GitHub repo var `WEBMEET_LIVEKIT_FORCE_TCP=false` (UDP canary).
+3. Trigger `.github/workflows/deploy-skills-explorer.yml`.
+4. Verify on the host: `podman inspect <livekit container> --format '{{.HostConfig.NetworkMode}}'` returns `host`, and `ss -lnup | grep -E '7882|7892'` shows LiveKit listening on the host's network namespace.
+5. Run the 3-user harness; expect daniel and mircea `framesDecoded > 0`, selected remote candidate `udp 193.180.209.191:<7882-7892>`, no `prflx 10.89.0.x` candidate.
+6. If the canary fails, revert `WEBMEET_LIVEKIT_FORCE_TCP=true` immediately and capture artifacts.
 
 ## Current Production State
 
