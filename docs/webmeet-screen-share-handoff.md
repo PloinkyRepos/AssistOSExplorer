@@ -16,6 +16,8 @@ The deployment owns no host-system Nginx, Caddy, or certbot timer. Cloudflared i
 - DS specs for the new agents: `WI 4684944` adds `DS008-livekit-nginx-agent.md` and `DS009-livekit-certbot-agent.md`; `WI 7c2add8` updates `DS003`/`DS004`/`DS006`.
 - Cloudflared exception is recorded in the Cloudflared section of this doc and in `webmeetAgent/docs/specs/DS10` (`AE e2346fe`).
 
+Follow-up invariant recorded after the OnlyOffice JWT drift incident: the same long-running-service rule applies to OnlyOffice Document Server. OnlyOffice must be represented by a Ploinky-managed agent that owns its image, env, generated JWT secret, readiness, profiles, and persistent storage. The current raw `ploinky_onlyoffice_<workspace>` host hook sidecar is a temporary compatibility shim only; it is not the target production architecture. The durable spec is `onlyOffice/docs/specs/DS01-ploinky-agent-invariant.md`.
+
 ### 2. Container images are pinned, never `:latest`
 
 LiveKit, Nginx, and Certbot images all reference an `${VAR}` tag whose default lives in the manifest and whose override lives in a workspace var or a workflow input.

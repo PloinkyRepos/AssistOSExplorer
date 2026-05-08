@@ -176,7 +176,7 @@ Explorer expects these environment variables:
 - `ONLYOFFICE_CALLBACK_BASE_URL`
   Public base used to generate Explorer callback and document URLs for OnlyOffice
 - `ONLYOFFICE_JWT_SECRET`
-  Shared signing secret used to sign the OnlyOffice editor config. For the Ploinky-managed Document Server, Explorer derives this value with the same `ONLYOFFICE_JWT_SECRET` manifest label used by the Explorer runtime, then starts or recreates the OnlyOffice container with that exact secret. The host preinstall hook can compute the same value from `PLOINKY_DERIVED_MASTER_KEY`, or from `PLOINKY_MASTER_KEY` before the derived key has been injected into a runtime container.
+  Shared signing secret used to sign the OnlyOffice editor config. In the target architecture, the Ploinky-managed OnlyOffice agent and Explorer both receive the value derived from the same `ONLYOFFICE_JWT_SECRET` manifest label. During the temporary compatibility-shim period, the Explorer host preinstall hook may compute the same value from `PLOINKY_DERIVED_MASTER_KEY`, or from `PLOINKY_MASTER_KEY` before the derived key has been injected into a runtime container, and use it only to keep the raw sidecar aligned until the agent migration lands.
 
 The distinction between public and internal URLs is architectural, not cosmetic. Explorer needs both because the browser and the backend do not necessarily reach OnlyOffice through the same network path.
 
@@ -184,13 +184,14 @@ The distinction between public and internal URLs is architectural, not cosmetic.
 
 OnlyOffice integration is correct only when all of the following are true:
 
+- the Document Server is owned by a Ploinky-managed OnlyOffice agent; raw host-managed Podman sidecars started by Explorer hooks are a temporary compatibility shim and are not the target production architecture
 - the browser can load `api.js` from `ONLYOFFICE_PUBLIC_URL`
 - Explorer can reach the internal document server endpoint when callback processing requires it
 - OnlyOffice can reach Explorer's public callback and document routes
 - the JWT secret is aligned between Explorer and OnlyOffice
 - the selected resource resolves to a supported content class
 
-Explorer does not provision OnlyOffice itself. OnlyOffice must already be available in the target environment, and the `ONLYOFFICE_*` variables must be injected by the surrounding runtime or external orchestration.
+Explorer does not own the OnlyOffice Document Server lifecycle. In the target architecture, the Document Server is provisioned by the `onlyOffice` Ploinky agent and the `ONLYOFFICE_*` variables are injected by the surrounding runtime. Any Explorer hook that starts or recreates a raw OnlyOffice sidecar is a temporary migration or emergency rollback shim, not compliant steady state.
 
 `api.js` is provided by the OnlyOffice Document Server itself, not by the Explorer repo.
 
@@ -213,3 +214,4 @@ If OnlyOffice integration fails, Explorer should:
 
 - [DS01 - Explorer System Overview](./DS01-system-overview.md)
 - [DS03 - Confidential Files And DPU](./DS03-confidential-files-and-dpu.md)
+- [OnlyOffice DS01 - Ploinky Agent Invariant](../../onlyOffice/docs/specs/DS01-ploinky-agent-invariant.md)
