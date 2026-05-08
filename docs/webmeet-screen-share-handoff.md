@@ -108,13 +108,19 @@ Files added:
 - Ploinky patch: `cli/services/docker/agentServiceManager.js` now honors `manifest.entrypoint` (emits `--entrypoint <value>` before the image arg). DS003 records the field.
 - Deploy workflow plumbs `WEBMEET_TLS_HOSTNAME`, `WEBMEET_TLS_HTTPS_PORT`, `WEBMEET_TLS_HTTP_PORT`, `WEBMEET_LIVEKIT_UPSTREAM`, `WEBMEET_NGINX_VERSION`, `WEBMEET_CERT_EMAIL`, `WEBMEET_CERTBOT_VERSION`, `WEBMEET_CERTBOT_AUTO_ISSUE`, `WEBMEET_CERTBOT_RENEW_INTERVAL_SECONDS`. GitHub repo vars set: `WEBMEET_TLS_HOSTNAME=livekit-skills.axiologic.dev`, `WEBMEET_CERT_EMAIL=admin@axiologic.dev`, `WEBMEET_LIVEKIT_UPSTREAM=http://127.0.0.1:7880`.
 
-### Phase 2b — Cutover Wired Into The Deploy Workflow
+### Phase 2b — Pure Ploinky Cutover
 
-The cutover from host Nginx + system certbot to the Ploinky-managed pair is now part of `deploy-skills-explorer.yml`. Each deploy run does the following on the remote host before `ploinky shutdown`:
+The deploy workflow runs no host-side `systemctl` or `cp /etc/letsencrypt` commands. The contract for any host targeted by `deploy-skills-explorer.yml` is: **no non-Ploinky service may be holding `:80` or `:443`** before the deploy starts. Migrating from a previous host-managed Nginx is a one-time operator step:
 
-1. **Disable conflicting host services.** For `nginx`, `caddy`, `certbot.timer`, `certbot.service`: if active, `sudo systemctl stop`; if enabled, `sudo systemctl disable`. Idempotent — once disabled, subsequent deploys are no-ops.
-2. **Stage TLS data into the Ploinky volume.** If `~/explorerWorkspace/.ploinky/data/webmeetTls/letsencrypt/live/` does not exist and `/etc/letsencrypt/live/` does, `cp -a` the host's existing cert tree into the workspace volume. Runs once on the first cutover deploy; subsequent deploys skip because `live/` is already present.
-3. **Bring up Ploinky agents.** With profile `prod`, `webmeetInfra/stack` chains in `webmeetInfra/webmeetLivekitNginx` (per-profile `enable`), which chains LiveKit and the certbot renewal worker. Nginx binds host `:80` and `:443` directly; the certbot agent runs the renew loop and shares `/etc/letsencrypt` with nginx.
+```bash
+sudo systemctl disable --now nginx caddy certbot-renew.timer
+```
+
+After that, `:80` and `:443` are free, and Ploinky owns the full stack:
+
+- With profile `prod`, `webmeetInfra/stack` chains in `webmeetInfra/webmeetLivekitNginx` (per-profile `enable`), which chains LiveKit and the certbot renewal worker.
+- The certbot agent is a dependency of the nginx agent. On first start with `WEBMEET_CERTBOT_AUTO_ISSUE=true`, certbot uses `--standalone` to bind `:80` briefly and complete the ACME HTTP-01 challenge, then exits standalone mode. Subsequent renewals use `--webroot` once the nginx agent is up and serving the webroot path.
+- Nginx binds host `:80` and `:443` directly. Its `start.sh` waits for the cert file to exist, then runs nginx and watches the cert file for rotations.
 
 Profile semantics:
 

@@ -205,27 +205,6 @@ jobs:
           set +a
           rm -f /tmp/skills_explorer_env
 
-          echo "[deploy] Disabling host services that conflict with Ploinky-managed equivalents..."
-          for svc in nginx.service caddy.service certbot.timer certbot.service certbot-renew.timer certbot-renew.service; do
-            if systemctl is-active --quiet "$svc" 2>/dev/null; then
-              echo "[deploy] stopping $svc"
-              sudo -n systemctl stop "$svc" || true
-            fi
-            if systemctl is-enabled --quiet "$svc" 2>/dev/null; then
-              echo "[deploy] disabling $svc"
-              sudo -n systemctl disable "$svc" || true
-            fi
-          done
-
-          echo "[deploy] Staging WebMeet TLS data into Ploinky workspace volume..."
-          TLS_DATA="$WORK_DIR/.ploinky/data/webmeetTls"
-          mkdir -p "$TLS_DATA/letsencrypt" "$TLS_DATA/webroot"
-          if [ ! -d "$TLS_DATA/letsencrypt/live" ] && [ -d /etc/letsencrypt/live ]; then
-            echo "[deploy] copying /etc/letsencrypt into $TLS_DATA/letsencrypt (one-time stage)"
-            sudo -n cp -a /etc/letsencrypt/. "$TLS_DATA/letsencrypt/" || true
-            sudo -n chown -R "$(id -u)":"$(id -g)" "$TLS_DATA" || true
-          fi
-
           echo "[deploy] Removing current workspace containers if present..."
           env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" shutdown || \
             env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" stop || true
