@@ -86,6 +86,53 @@ To bump LiveKit:
 2. Either set `WEBMEET_LIVEKIT_VERSION` repo var, or pass `livekit_version` to a manual workflow run.
 3. Trigger the deploy workflow. The Ploinky patch resolves the new tag at agent start time.
 
+### Cloudflared — deliberate Ploinky exception
+
+`cloudflared` runs on the deployment host as a plain podman container with `--network=host`, `RestartPolicy=always`, and the tunnel token baked into its start arguments. It serves the Cloudflare Tunnel for `skills.axiologic.dev`. It is **not** a Ploinky agent and is not managed by the deploy workflow. This is a deliberate exception to the workspace invariant that long-running services are Ploinky agents, for two reasons:
+
+1. **Ingress decoupled from the agent lifecycle.** Cloudflared is the public ingress for the Explorer dashboard. Re-creating it on every Ploinky deploy would interrupt every `skills.axiologic.dev` user for 5–30 seconds while the new container registers with Cloudflare's edge. Keeping it outside Ploinky means deploys that touch only the application or the WebMeet stack do not flap the public ingress.
+2. **Tunnel registration is semi-stateful.** Restarting too rapidly (for example during a deploy that retries) can trip Cloudflare's anti-flap logic. The current `RestartPolicy=always` lets it self-recover from process crashes without coupling its uptime to Ploinky operations.
+
+The token is stored in the container's start args on the host. Rotating it is an out-of-band operation (`podman rm cloudflared && podman run …` with the new token from the Cloudflare dashboard). LiveKit's hostname `livekit-skills.axiologic.dev` does not flow through cloudflared; that hostname is a direct DNS-only A record to the host because Cloudflare Tunnel cannot proxy WebRTC UDP media (see "Why TCP Is The Current Production Fix" earlier in this doc).
+
+### Phase 2a — Nginx + Certbot Agents (built, dormant)
+
+Two new Ploinky agents have been added to `webmeetInfra` so the LiveKit TLS terminator and cert renewal can move off the host system into the Ploinky lifecycle. They are **not yet wired into the workspace dependency graph** — the manifests exist and the deploy workflow plumbs their vars, but nothing in `webmeetAgent` enables them. This is intentional: enabling them while host Nginx still owns 443/80 would cause a port-binding conflict and a failed deploy.
+
+Files added:
+
+- `webmeetInfra/webmeetLivekitNginx/` — `nginx:${WEBMEET_NGINX_VERSION}` container, `network.mode: "host"`, generated `livekit.conf` + `start.sh` (cert-watch reload loop). Profiles: `default`/`prod` bind 80/443; `dev` binds 18080/18443.
+- `webmeetInfra/webmeetLivekitCertbot/` — `certbot/certbot:${WEBMEET_CERTBOT_VERSION}` container with `entrypoint: "/bin/sh"`, generated `start.sh` running a 12h `certbot renew` loop. Auto-issue gated behind `WEBMEET_CERTBOT_AUTO_ISSUE=true`.
+- Shared volumes: `.ploinky/data/webmeetTls/letsencrypt` and `.ploinky/data/webmeetTls/webroot`.
+- Specs: `webmeetInfra/docs/specs/DS008-livekit-nginx-agent.md`, `DS009-livekit-certbot-agent.md`. Matrix updated.
+- Ploinky patch: `cli/services/docker/agentServiceManager.js` now honors `manifest.entrypoint` (emits `--entrypoint <value>` before the image arg). DS003 records the field.
+- Deploy workflow plumbs `WEBMEET_TLS_HOSTNAME`, `WEBMEET_TLS_HTTPS_PORT`, `WEBMEET_TLS_HTTP_PORT`, `WEBMEET_LIVEKIT_UPSTREAM`, `WEBMEET_NGINX_VERSION`, `WEBMEET_CERT_EMAIL`, `WEBMEET_CERTBOT_VERSION`, `WEBMEET_CERTBOT_AUTO_ISSUE`, `WEBMEET_CERTBOT_RENEW_INTERVAL_SECONDS`. GitHub repo vars set: `WEBMEET_TLS_HOSTNAME=livekit-skills.axiologic.dev`, `WEBMEET_CERT_EMAIL=admin@axiologic.dev`, `WEBMEET_LIVEKIT_UPSTREAM=http://127.0.0.1:7880`.
+
+### Phase 2b — Cutover Plan (not executed)
+
+When the operator decides to cut over from the host-system Nginx + certbot timer to the Ploinky-managed pair:
+
+1. **Stage cert data into the workspace volume.** SSH to the host once and copy `/etc/letsencrypt/` into the workspace path:
+   ```bash
+   sudo cp -a /etc/letsencrypt/. ~/explorerWorkspace/.ploinky/data/webmeetTls/letsencrypt/
+   sudo chown -R admin:admin ~/explorerWorkspace/.ploinky/data/webmeetTls
+   mkdir -p ~/explorerWorkspace/.ploinky/data/webmeetTls/webroot
+   ```
+2. **Wire the agents into the dependency graph.** Add `webmeetInfra/webmeetLivekitNginx` to `webmeetAgent/manifest.json` `enable` (it pulls in LiveKit and certbot through their own `enable` lists). Commit + push.
+3. **Stop and disable host Nginx + system certbot, then trigger the deploy in one window.** Either as a single SSH session before the workflow runs, or wrapped into the deploy workflow as an explicit "cutover" mode:
+   ```bash
+   sudo systemctl stop nginx && sudo systemctl disable nginx
+   sudo systemctl stop certbot.timer && sudo systemctl disable certbot.timer
+   ```
+4. **Trigger the deploy workflow.** The agents will bind 80/443 directly on the host; Ploinky's readiness probe will hit them at `127.0.0.1:443`.
+5. **Validate.**
+   - `curl -fsSI https://livekit-skills.axiologic.dev/` should return `200` or a LiveKit-defined response with valid TLS.
+   - 3-user Playwright harness: daniel + mircea decode frames as before.
+   - `podman logs <webmeetLivekitCertbot>` shows the renew loop ticking; cert is a no-op until <30 days from expiry.
+6. **Rollback path.** If the agents fail to start, set the workflow input `livekit_version` to fall back if image pinning is at fault, or restart host nginx (`sudo systemctl start nginx`) and disable the new agents in `webmeetAgent`'s enable list. The cert files in `/etc/letsencrypt/` are preserved (we copied, not moved).
+
+The cutover is documented but not executed in this session — host Nginx and the system certbot timer remain the active TLS terminator until the operator runs the steps above.
+
 ### Real-Browser Verification (Safari)
 
 After the harness pass, the user manually verified screen share from a real Safari session against `https://skills.axiologic.dev`. First attempt against the pre-existing `test` room failed — Safari console showed CORS-style errors on `https://livekit-skills.axiologic.dev/rtc/v1/validate` (`Access-Control-Allow-Origin … Status code: 404`, then `403`). LiveKit logs revealed the actual response was `401 "no permissions to access the room"` — the JWT did not have grants for the LiveKit room ID currently mapped to `test`. The container had been recreated at 09:54:50 UTC, resetting the in-memory room mapping, so Mircea's stale invitation/token referenced a now-stale LiveKit room name.
