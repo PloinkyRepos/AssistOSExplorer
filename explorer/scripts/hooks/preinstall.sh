@@ -95,6 +95,57 @@ resolve_config_var() {
     node "$secrets_tool" "$workspace_root" resolve "$name"
 }
 
+derive_manifest_secret() {
+    local name="$1"
+node - <<'NODE' "$name"
+const crypto = require('crypto');
+
+const name = String(process.argv[2] || '').trim();
+const derivedMasterHex = String(process.env.PLOINKY_DERIVED_MASTER_KEY || '').trim();
+if (!name || !/^[A-Fa-f0-9]+$/.test(derivedMasterHex) || derivedMasterHex.length % 2 !== 0) {
+    process.exit(0);
+}
+
+function normalizePart(value, fallback) {
+    const normalized = String(value || '').trim().replace(/[^A-Za-z0-9_.:/-]/g, '_');
+    return normalized || fallback;
+}
+
+const repoName = normalizePart(process.env.PLOINKY_REPO_NAME, 'unknown-repo');
+const agentName = normalizePart(process.env.PLOINKY_AGENT_NAME, 'unknown-agent');
+const secretName = normalizePart(name, '');
+if (!secretName) {
+    process.exit(0);
+}
+
+const info = Buffer.from([
+    'ploinky/agent-secret',
+    repoName,
+    agentName,
+    secretName,
+    'v1',
+].join('/'), 'utf8');
+const secret = Buffer.from(crypto.hkdfSync(
+    'sha256',
+    Buffer.from(derivedMasterHex, 'hex'),
+    Buffer.alloc(0),
+    info,
+    32,
+)).toString('hex');
+process.stdout.write(secret);
+NODE
+}
+
+resolve_onlyoffice_jwt_secret() {
+    local derived
+    derived="$(derive_manifest_secret "ONLYOFFICE_JWT_SECRET")"
+    if [[ -n "$derived" ]]; then
+        printf '%s' "$derived"
+        return 0
+    fi
+    resolve_config_var "ONLYOFFICE_JWT_SECRET"
+}
+
 ensure_onlyoffice_service() {
     if ! command -v podman >/dev/null 2>&1; then
         return 0
@@ -142,7 +193,7 @@ NODE
     configured_public_url="$(resolve_config_var "ONLYOFFICE_PUBLIC_URL")"
     configured_internal_url="$(resolve_config_var "ONLYOFFICE_INTERNAL_URL")"
     configured_callback_base_url="$(resolve_config_var "ONLYOFFICE_CALLBACK_BASE_URL")"
-    configured_jwt_secret="$(resolve_config_var "ONLYOFFICE_JWT_SECRET")"
+    configured_jwt_secret="$(resolve_onlyoffice_jwt_secret)"
 
     local public_url=""
     local internal_url=""

@@ -10,12 +10,12 @@ Create or update these repository secrets in `PloinkyRepos/AssistOSExplorer`.
 gh secret set SSH_KEY --repo PloinkyRepos/AssistOSExplorer < ~/.ssh/skills-explorer-deploy
 gh secret set PLOINKY_MASTER_KEY --repo PloinkyRepos/AssistOSExplorer --body "$(openssl rand -hex 32)"
 gh secret set SOUL_GATEWAY_API_KEY --repo PloinkyRepos/AssistOSExplorer
-gh secret set ONLYOFFICE_JWT_SECRET --repo PloinkyRepos/AssistOSExplorer
 gh secret set WEBMEET_LIVEKIT_API_SECRET --repo PloinkyRepos/AssistOSExplorer
 gh secret set WEBMEET_TURN_PASSWORD --repo PloinkyRepos/AssistOSExplorer
 ```
 
 `PLOINKY_MASTER_KEY` must be exactly 64 hex characters. Keep it stable after the first deployment because it encrypts the Ploinky workspace secret stores and local-auth password store.
+`ONLYOFFICE_JWT_SECRET` is not configured as a GitHub secret for the managed Document Server. Explorer derives it through the Ploinky manifest and the preinstall hook starts or recreates the OnlyOffice container with the same derived value.
 
 ## Public Access (Cloudflare Tunnel)
 

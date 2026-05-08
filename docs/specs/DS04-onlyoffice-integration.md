@@ -176,7 +176,7 @@ Explorer expects these environment variables:
 - `ONLYOFFICE_CALLBACK_BASE_URL`
   Public base used to generate Explorer callback and document URLs for OnlyOffice
 - `ONLYOFFICE_JWT_SECRET`
-  Shared signing secret used to sign the OnlyOffice editor config
+  Shared signing secret used to sign the OnlyOffice editor config. For the Ploinky-managed Document Server, Explorer derives this value from `PLOINKY_DERIVED_MASTER_KEY` with the same `ONLYOFFICE_JWT_SECRET` manifest label used by the Explorer runtime, then starts or recreates the OnlyOffice container with that exact secret.
 
 The distinction between public and internal URLs is architectural, not cosmetic. Explorer needs both because the browser and the backend do not necessarily reach OnlyOffice through the same network path.
 
