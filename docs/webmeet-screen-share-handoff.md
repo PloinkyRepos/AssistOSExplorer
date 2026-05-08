@@ -44,14 +44,25 @@ The Coturn agent and Redis agent stay on the bridge. Coturn is unused in the can
 
 Production ploinky lives in `~/ploinky/` on the deploy host as a git checkout of `outfinityresearch/ploinky` `master`. The deploy workflow runs `ploinky update` which calls `updatePloinkySelf` → `pullGitRepo` (`git pull --rebase --autostash`). Pushing the host-network patch to `master` is sufficient — the next deploy run picks it up automatically.
 
-### Canary And Verification Steps For The Next UDP Run
+### Canary Result (2026-05-08)
 
-1. Confirm `OutfinityResearch/ploinky` master is at the host-network commit and `webmeetInfra` main is at the LiveKit-host commit.
-2. Set GitHub repo var `WEBMEET_LIVEKIT_FORCE_TCP=false` (UDP canary).
-3. Trigger `.github/workflows/deploy-skills-explorer.yml`.
-4. Verify on the host: `podman inspect <livekit container> --format '{{.HostConfig.NetworkMode}}'` returns `host`, and `ss -lnup | grep -E '7882|7892'` shows LiveKit listening on the host's network namespace.
-5. Run the 3-user harness; expect daniel and mircea `framesDecoded > 0`, selected remote candidate `udp 193.180.209.191:<7882-7892>`, no `prflx 10.89.0.x` candidate.
-6. If the canary fails, revert `WEBMEET_LIVEKIT_FORCE_TCP=true` immediately and capture artifacts.
+UDP canary against the host-network LiveKit passed.
+
+- Deploy run: `25549152328` (`success`).
+- Artifact directory: `/tmp/webmeet-screen-diag-1778234126356`.
+- Production has `WEBMEET_LIVEKIT_FORCE_TCP=false`. Generated `livekit.yaml` shows `force_tcp: false`, `node_ip: 193.180.209.191`. LiveKit container `NetworkMode=host`, listening on `*:7880` and `*:7881` directly on the host.
+- Daniel and Mircea: `videoWidth=1280`, `videoHeight=720`, `readyState=4`, `framesDecoded=148`, `keyFramesDecoded=1`, `bytesReceived ≈ 952 KB`. Selected remote candidate `udp 193.180.209.191:7882` (daniel) and `udp 193.180.209.191:7883` (mircea).
+- Admin (publisher): `framesEncoded=149`, `keyFramesEncoded=2`, `pliCount=1`. Selected remote candidate `udp 193.180.209.191:7888`.
+- No `prflx 10.89.0.x` peer-reflexive local candidate on any peer connection — the podman bridge src-NAT artifact is gone.
+
+`force_tcp` can stay `false` for the current production topology. Keep `WEBMEET_LIVEKIT_FORCE_TCP=true` available as the documented rollback knob if a future host or podman/netavark change reintroduces a UDP regression.
+
+### Recovery / Rollback
+
+If the host-network LiveKit becomes unhealthy:
+
+1. Set `WEBMEET_LIVEKIT_FORCE_TCP=true` and redeploy. TCP path on `193.180.209.191:7881` remains the proven fallback.
+2. To revert to bridge networking: change `webmeetLivekitServer/manifest.json` `network` from `{"mode":"host"}` back to `{"name":"webmeet","aliases":["webmeetLivekitServer"]}`, restore `redis.address: webmeetRedis:6379` in the preinstall, and revert the `WEBMEET_LIVEKIT_URL` GitHub var to `http://webmeetLivekitServer:7880`. The Ploinky host-network code path stays in place for other agents.
 
 ## Current Production State
 
