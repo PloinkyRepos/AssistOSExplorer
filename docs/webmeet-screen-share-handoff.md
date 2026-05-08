@@ -32,13 +32,19 @@ Move LiveKit out of podman's bridge networking so it binds directly on the host 
 1. `OutfinityResearch/ploinky` `fc4bed3` `Support host network mode in agent manifests`:
    - Recognizes `manifest.network.mode: "host"`. Emits `--network host`, skips named-network creation, network aliases, and `-p` port publishing for that container. Other branches unchanged.
    - File: `cli/services/docker/agentServiceManager.js`.
-2. `webmeetInfra` `8b0dc9f` `Run LiveKit on host network`:
-   - `webmeetLivekitServer/manifest.json`: replace `network.name: "webmeet"` with `network.mode: "host"`. Drop the per-profile `ports` lists. LiveKit now binds 7880, 7881, 7882-7892/udp directly on the host.
+2. `webmeetInfra` `8b0dc9f` `Run LiveKit on host network` and `f2fd9b1` `Restore LiveKit ports for readiness probe`:
+   - `webmeetLivekitServer/manifest.json`: replace `network.name: "webmeet"` with `network.mode: "host"`. The first commit dropped `ports` entirely, which broke Ploinky's readiness probe (it fell back to a random `127.0.0.1:<random>:7000` AgentServer mapping and then probed `127.0.0.1:<random>` while LiveKit was bound to `:7880` — `ECONNREFUSED` for 600s). The second commit restores the `ports` declarations so Ploinky knows the primary port; the patched runtime strips `-p` emission in host mode but uses the declarations as probe metadata.
    - `webmeetLivekitServer/scripts/hooks/preinstall.sh`: write the LiveKit Redis address from `WEBMEET_LIVEKIT_REDIS_ADDRESS` (default `127.0.0.1:6379`) since LiveKit is host-net and reaches Redis through the published `6379` port.
    - `webmeetLivekitEgress/scripts/hooks/preinstall.sh`: write `ws_url` from `WEBMEET_LIVEKIT_INTERNAL_WS_URL` (default `ws://host.containers.internal:7880`). Egress is still on the `webmeet` bridge and reaches host-net LiveKit through the host gateway. Redis address is overridable via `WEBMEET_EGRESS_REDIS_ADDRESS` (default unchanged).
-3. `AssistOSExplorer`: GitHub repo var `WEBMEET_LIVEKIT_URL` updated from `http://webmeetLivekitServer:7880` to `http://host.containers.internal:7880` so `webmeetAgent` (on the bridge) reaches LiveKit's HTTP API through the host gateway.
+3. `AssistOSExplorer`: GitHub repo var `WEBMEET_LIVEKIT_URL` updated from `http://webmeetLivekitServer:7880` to `http://host.containers.internal:7880` so `webmeetAgent` (on the bridge) reaches LiveKit's HTTP API through the host gateway. GitHub repo var `WEBMEET_LIVEKIT_FORCE_TCP` flipped to `false` to canary the UDP path.
 
 The Coturn agent and Redis agent stay on the bridge. Coturn is unused in the canary path. Redis publishes 6379 on the host, which is now what host-net LiveKit consumes.
+
+### Deploy Sequence That Worked
+
+The first canary deploy (`25548406247`) failed at the readiness probe because the manifest had no `ports` declared (Ploinky auto-allocated a random AgentServer port and probed it while LiveKit was on `:7880`). The container started healthy on host network — only the workspace's readiness gate timed out. The second deploy (`25549152328`) added the probe metadata fix and completed `success`.
+
+Subsequent deploys do not need both commits — they are already on `main`. A future regression of "deploy failure: webmeetLivekitServer not ready, ECONNREFUSED" should look first at whether the LiveKit manifest still declares `ports` and whether `agentServiceManager.js` line ~1124 (`if (manifestPorts.length === 0)`) is taking the random-port fallback.
 
 ### Production Ploinky Update
 
@@ -56,6 +62,17 @@ UDP canary against the host-network LiveKit passed.
 - No `prflx 10.89.0.x` peer-reflexive local candidate on any peer connection — the podman bridge src-NAT artifact is gone.
 
 `force_tcp` can stay `false` for the current production topology. Keep `WEBMEET_LIVEKIT_FORCE_TCP=true` available as the documented rollback knob if a future host or podman/netavark change reintroduces a UDP regression.
+
+### Real-Browser Verification (Safari)
+
+After the harness pass, the user manually verified screen share from a real Safari session against `https://skills.axiologic.dev`. First attempt against the pre-existing `test` room failed — Safari console showed CORS-style errors on `https://livekit-skills.axiologic.dev/rtc/v1/validate` (`Access-Control-Allow-Origin … Status code: 404`, then `403`). LiveKit logs revealed the actual response was `401 "no permissions to access the room"` — the JWT did not have grants for the LiveKit room ID currently mapped to `test`. The container had been recreated at 09:54:50 UTC, resetting the in-memory room mapping, so Mircea's stale invitation/token referenced a now-stale LiveKit room name.
+
+Resolution: re-login and re-join refreshed the token against the new mapping; screen share then worked end-to-end on UDP.
+
+Diagnostic tip if a similar 401/CORS-shaped failure recurs:
+- `OPTIONS https://livekit-skills.axiologic.dev/rtc/v1/validate` → `204` confirms Caddy preflight is fine.
+- `curl http://127.0.0.1:7880/rtc/validate` from the host returns `401` for an unauthenticated request, confirming the endpoint is reachable.
+- LiveKit container logs (`grep validate`) show the real HTTP status and error string.
 
 ### Recovery / Rollback
 
@@ -82,12 +99,31 @@ Remote host:
 
 Production was deployed through GitHub Actions, not by direct mutation over SSH.
 
-Current deployed commits after the latest production deploy:
+Current deployed commits after the latest production deploy (run `25549152328`):
 
-- `AssistOSExplorer`: `d097617` (`Avoid eager WebMeet video recovery`)
-- `webmeetInfra`: `f123a45` (`Allow forcing LiveKit TCP media`)
+- `AssistOSExplorer`: `1106265` (`Record passing UDP canary on host-network LiveKit`)
+- `webmeetInfra`: `f2fd9b1` (`Restore LiveKit ports for readiness probe`)
+- `OutfinityResearch/ploinky` on host: `fc4bed3` (`Support host network mode in agent manifests`)
 
-Generated LiveKit config on production was verified as:
+Generated LiveKit config on production is now:
+
+```yaml
+logging:
+  level: info
+rtc:
+  tcp_port: 7881
+  port_range_start: 7882
+  port_range_end: 7892
+  use_external_ip: false
+  force_tcp: false
+  node_ip: 193.180.209.191
+redis:
+  address: 127.0.0.1:6379
+keys:
+  <redacted>: <redacted>
+```
+
+The previous `force_tcp: true` config block (kept here for historical comparison) was:
 
 ```yaml
 logging:
@@ -103,8 +139,12 @@ rtc:
 
 Repository variables set for production:
 
-- `WEBMEET_LIVEKIT_FORCE_TCP=true`
+- `WEBMEET_LIVEKIT_FORCE_TCP=false` (UDP path proven on host-network LiveKit)
 - `WEBMEET_LIVEKIT_LOG_LEVEL=info`
+- `WEBMEET_LIVEKIT_URL=http://host.containers.internal:7880` (`webmeetAgent` reaches host-net LiveKit through the host gateway)
+- `WEBMEET_LIVEKIT_NODE_IP=193.180.209.191`
+- `WEBMEET_LIVEKIT_USE_EXTERNAL_IP=false`
+- `WEBMEET_PUBLIC_LIVEKIT_URL=wss://livekit-skills.axiologic.dev`
 
 Required GitHub secrets remain secret-only and must not be printed:
 
