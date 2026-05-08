@@ -15,7 +15,7 @@ gh secret set WEBMEET_TURN_PASSWORD --repo PloinkyRepos/AssistOSExplorer
 ```
 
 `PLOINKY_MASTER_KEY` must be exactly 64 hex characters. Keep it stable after the first deployment because it encrypts the Ploinky workspace secret stores and local-auth password store.
-`ONLYOFFICE_JWT_SECRET` is not configured as a GitHub secret for the managed Document Server. Explorer derives it through the Ploinky manifest and the preinstall hook starts or recreates the OnlyOffice container with the same derived value.
+`ONLYOFFICE_JWT_SECRET` is not configured as a GitHub secret for the managed Document Server. Explorer derives it through the Ploinky manifest, and the host preinstall hook computes the same derived value before starting or recreating the OnlyOffice container.
 
 ## Public Access (Cloudflare Tunnel)
 

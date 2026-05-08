@@ -102,7 +102,8 @@ const crypto = require('crypto');
 
 const name = String(process.argv[2] || '').trim();
 const derivedMasterHex = String(process.env.PLOINKY_DERIVED_MASTER_KEY || '').trim();
-if (!name || !/^[A-Fa-f0-9]+$/.test(derivedMasterHex) || derivedMasterHex.length % 2 !== 0) {
+const masterSeed = String(process.env.PLOINKY_MASTER_KEY || '').trim();
+if (!name) {
     process.exit(0);
 }
 
@@ -111,10 +112,31 @@ function normalizePart(value, fallback) {
     return normalized || fallback;
 }
 
+function deriveDerivedMasterKey() {
+    if (/^[A-Fa-f0-9]+$/.test(derivedMasterHex) && derivedMasterHex.length % 2 === 0) {
+        return Buffer.from(derivedMasterHex, 'hex');
+    }
+    if (!masterSeed) {
+        return null;
+    }
+    const masterBytes = crypto.createHash('sha256').update(masterSeed, 'utf8').digest();
+    return Buffer.from(crypto.hkdfSync(
+        'sha256',
+        masterBytes,
+        Buffer.alloc(0),
+        Buffer.from('ploinky/derived-master/v1', 'utf8'),
+        32,
+    ));
+}
+
 const repoName = normalizePart(process.env.PLOINKY_REPO_NAME, 'unknown-repo');
 const agentName = normalizePart(process.env.PLOINKY_AGENT_NAME, 'unknown-agent');
 const secretName = normalizePart(name, '');
 if (!secretName) {
+    process.exit(0);
+}
+const derivedMaster = deriveDerivedMasterKey();
+if (!derivedMaster) {
     process.exit(0);
 }
 
@@ -127,7 +149,7 @@ const info = Buffer.from([
 ].join('/'), 'utf8');
 const secret = Buffer.from(crypto.hkdfSync(
     'sha256',
-    Buffer.from(derivedMasterHex, 'hex'),
+    derivedMaster,
     Buffer.alloc(0),
     info,
     32,
