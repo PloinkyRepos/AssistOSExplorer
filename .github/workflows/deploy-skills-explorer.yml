@@ -206,16 +206,14 @@ jobs:
           rm -f /tmp/skills_explorer_env
 
           echo "[deploy] Disabling host services that conflict with Ploinky-managed equivalents..."
-          for svc in nginx caddy certbot.timer certbot.service; do
-            if systemctl list-unit-files --type=service --type=timer 2>/dev/null | awk '{print $1}' | grep -Fxq "$svc"; then
-              if systemctl is-active --quiet "$svc"; then
-                echo "[deploy] stopping $svc"
-                sudo -n systemctl stop "$svc" || true
-              fi
-              if systemctl is-enabled --quiet "$svc" 2>/dev/null; then
-                echo "[deploy] disabling $svc"
-                sudo -n systemctl disable "$svc" || true
-              fi
+          for svc in nginx.service caddy.service certbot.timer certbot.service certbot-renew.timer certbot-renew.service; do
+            if systemctl is-active --quiet "$svc" 2>/dev/null; then
+              echo "[deploy] stopping $svc"
+              sudo -n systemctl stop "$svc" || true
+            fi
+            if systemctl is-enabled --quiet "$svc" 2>/dev/null; then
+              echo "[deploy] disabling $svc"
+              sudo -n systemctl disable "$svc" || true
             fi
           done
 
