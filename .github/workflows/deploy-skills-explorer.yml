@@ -126,6 +126,9 @@ jobs:
           write_env() {
             local name="$1"
             local value="${!name:-}"
+            if [ "$name" != "PLOINKY_MASTER_KEY" ] && [ -z "$value" ]; then
+              return 0
+            fi
             printf '%s=' "$name"
             printf '%q\n' "$value"
           }

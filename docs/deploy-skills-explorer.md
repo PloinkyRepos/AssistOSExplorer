@@ -43,6 +43,7 @@ If `livekit-skills.axiologic.dev` is moved back behind Cloudflare/Tunnel, retest
 ## GitHub Variables
 
 Create or update these repository variables. WebMeet topology variables are optional overrides: the `prod` manifest profiles already carry the Axiologic production defaults for the public LiveKit URL, internal LiveKit API URL, egress URL, TLS hostname/email, TURN realm, and TURN hostname. Keep the variables below when intentionally overriding the profile defaults from GitHub Actions.
+The deploy workflow omits blank optional variables from the remote environment so empty repository variables do not shadow manifest profile defaults.
 
 ```sh
 gh variable set SSH_USER --repo PloinkyRepos/AssistOSExplorer --body admin
