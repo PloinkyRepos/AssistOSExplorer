@@ -42,7 +42,7 @@ If `livekit-skills.axiologic.dev` is moved back behind Cloudflare/Tunnel, retest
 
 ## GitHub Variables
 
-Create or update these repository variables.
+Create or update these repository variables. WebMeet topology variables are optional overrides: the `prod` manifest profiles already carry the Axiologic production defaults for the public LiveKit URL, internal LiveKit API URL, egress URL, TLS hostname/email, TURN realm, and TURN hostname. Keep the variables below when intentionally overriding the profile defaults from GitHub Actions.
 
 ```sh
 gh variable set SSH_USER --repo PloinkyRepos/AssistOSExplorer --body admin
@@ -56,11 +56,10 @@ gh variable set ONLYOFFICE_INTERNAL_URL --repo PloinkyRepos/AssistOSExplorer --b
 gh variable set ONLYOFFICE_CALLBACK_BASE_URL --repo PloinkyRepos/AssistOSExplorer --body https://skills.axiologic.dev
 gh variable set WEBMEET_PUBLIC_LIVEKIT_URL --repo PloinkyRepos/AssistOSExplorer --body wss://livekit-skills.axiologic.dev
 gh variable set WEBMEET_LIVEKIT_URL --repo PloinkyRepos/AssistOSExplorer --body http://host.containers.internal:7880
-gh variable set WEBMEET_LIVEKIT_API_KEY --repo PloinkyRepos/AssistOSExplorer --body webmeet
 gh variable set WEBMEET_EGRESS_URL --repo PloinkyRepos/AssistOSExplorer --body http://webmeetLivekitEgress:7980
 gh variable set WEBMEET_LIVEKIT_USE_EXTERNAL_IP --repo PloinkyRepos/AssistOSExplorer --body false
 gh variable set WEBMEET_LIVEKIT_NODE_IP --repo PloinkyRepos/AssistOSExplorer --body 193.180.209.191
-gh variable set WEBMEET_TURN_EXTERNAL_IP --repo PloinkyRepos/AssistOSExplorer --body 193.180.209.191
+gh variable set WEBMEET_TURN_HOST --repo PloinkyRepos/AssistOSExplorer --body livekit-skills.axiologic.dev
 gh variable set WEBMEET_TURN_REALM --repo PloinkyRepos/AssistOSExplorer --body skills.axiologic.dev
 gh variable set WEBMEET_TURN_USER --repo PloinkyRepos/AssistOSExplorer --body webmeet
 gh variable set WEBMEET_TURN_MIN_PORT --repo PloinkyRepos/AssistOSExplorer --body 20000
@@ -68,6 +67,8 @@ gh variable set WEBMEET_TURN_MAX_PORT --repo PloinkyRepos/AssistOSExplorer --bod
 ```
 
 Direct provider keys and model lists are intentionally not part of this deployment. Agents that need model access use `SOUL_GATEWAY_API_KEY` and the optional `SOUL_GATEWAY_BASE_URL`.
+
+Set `WEBMEET_TURN_EXTERNAL_IP` only when coturn must use an explicit public IP instead of resolving `WEBMEET_TURN_HOST` at startup.
 
 ## Provision Host
 
@@ -94,6 +95,6 @@ The workflow:
 3. Stops the current workspace if it is running.
 4. Adds/enables the `AchillesIDE` and `webmeetInfra` repos through Ploinky commands.
 5. Runs `ploinky update` so Ploinky updates the workspace repos and local Ploinky dependencies.
-6. Stores runtime variables through `ploinky var`.
+6. Stores configured runtime variable overrides through `ploinky var`.
 7. Starts `AchillesIDE/explorer` on `EXPLORER_ROUTER_PORT`.
 8. Verifies local router health, OnlyOffice `api.js` through `ONLYOFFICE_INTERNAL_URL`, public `EXPLORER_PUBLIC_URL` access through the Cloudflare tunnel, and browser-visible OnlyOffice `api.js` when `ONLYOFFICE_PUBLIC_URL` is configured.
