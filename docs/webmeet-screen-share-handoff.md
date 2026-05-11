@@ -358,6 +358,18 @@ ploinky start explorer
 
 This is the required scratch deployment smoke for the non-production profile: destroy the previous workspace state, remove every file and dotfile inside the workspace directory, and start Explorer from a blank directory so Ploinky reclones and rebuilds the dependency graph.
 
+Fresh-workspace smoke result from `/Users/danielsava/work/testExplorerFresh` on 2026-05-11:
+
+- `ploinky destroy` removed the previous router and 17 workspace containers.
+- `find . -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +` left the workspace directory empty except for `.` and `..`.
+- `ploinky start explorer` completed successfully and launched the router/dashboard at `http://127.0.0.1:8080/dashboard`.
+- Re-cloned agent commits: `AchillesIDE 3f39022`, `webmeetInfra 9285369`.
+- `webmeetLivekitServer` passed readiness immediately on `17880` and was running with `127.0.0.1:17880-17881->17880-17881/tcp` plus `127.0.0.1:17882-17892->17882-17892/udp`.
+- Generated LiveKit config used `port: 17880` and `redis.address: webmeetRedis:6379`.
+- Generated egress config used `ws_url: ws://webmeetLivekitServer:17880` and `redis.address: webmeetRedis:6379`.
+- `curl http://127.0.0.1:17880/` returned `HTTP 200`; `curl http://127.0.0.1:8080/dashboard` returned `HTTP 302` to the expected auth flow.
+- `ploinky status` showed the router listening on `127.0.0.1:8080` and all expected Explorer/WebMeet dependency containers running, including `webmeetLivekitServer`, `webmeetLivekitEgress`, `webmeetAgent`, and `explorer`.
+
 **Not verified on 2026-05-11**: production. The Ploinky patch is local; the production `~/ploinky/` checkout has not been updated. A production deploy that depends on per-profile `network` must not proceed until the PL runtime patch is committed, pushed, and present on the production host. Once that is true, the LiveKit container should still come up under host networking because the `prod` profile retains `network.mode: "host"`.
 
 **Not verified**: end-to-end RTC media flow in dev (multi-browser). The single-machine path should work because `node_ip: 127.0.0.1` is advertised and the UDP `17882-17892` range is bridge-published symmetrically, but multi-device LAN dev would need `WEBMEET_LIVEKIT_NODE_IP` overridden. Outside the readiness-probe scope of this fix; flag for a follow-up if it ever surfaces.
