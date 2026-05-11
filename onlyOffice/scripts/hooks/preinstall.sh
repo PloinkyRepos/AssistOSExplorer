@@ -61,11 +61,19 @@ esac
 set_default_var() {
     local name="$1"
     local default_value="$2"
+    local current_value=""
+    local echo_output=""
     if [ -z "$default_value" ]; then
         return 0
     fi
-    # ploinky echo prints the resolved value or errors if the var is unset.
-    if ! ploinky echo "$name" >/dev/null 2>&1; then
+    # `ploinky echo NAME` prints `NAME=` for unset vars, so parse the value.
+    # Empty is invalid for these URLs and should be treated as unset.
+    echo_output="$(ploinky echo "$name" 2>/dev/null || true)"
+    current_value="$(printf '%s\n' "$echo_output" | awk -v key="$name" '
+        index($0, key "=") == 1 { value = substr($0, length(key) + 2) }
+        END { print value }
+    ')"
+    if [ -z "$current_value" ]; then
         if ! ploinky var "$name" "$default_value" >/dev/null 2>&1; then
             echo "[onlyOffice/preinstall] warning: could not set default ${name}" >&2
         fi

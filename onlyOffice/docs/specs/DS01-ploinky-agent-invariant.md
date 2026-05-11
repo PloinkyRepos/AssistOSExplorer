@@ -21,7 +21,7 @@ The OnlyOffice agent manifest (`onlyOffice/manifest.json`) owns:
 - profile-specific ports, env defaults, and lifecycle hooks
 - bind-mounted persistent storage under `.ploinky/data/onlyOffice/` for `log`, `data`, `lib`, `postgresql`, `rabbitmq`, and `redis` volumes
 
-Explorer remains the office-session and storage bridge. Explorer does not start, stop, or mutate the Document Server container directly. Explorer consumes `ONLYOFFICE_PUBLIC_URL`, `ONLYOFFICE_INTERNAL_URL`, `ONLYOFFICE_CALLBACK_BASE_URL`, and `ONLYOFFICE_JWT_SECRET` through Ploinky-managed env (deploy-workflow vars in production; defaulted by `onlyOffice/scripts/hooks/preinstall.sh` for local dev).
+Explorer remains the office-session and storage bridge. Explorer does not start, stop, or mutate the Document Server container directly. Explorer consumes `ONLYOFFICE_PUBLIC_URL`, `ONLYOFFICE_INTERNAL_URL`, `ONLYOFFICE_CALLBACK_BASE_URL`, and `ONLYOFFICE_JWT_SECRET` through Ploinky-managed env (deploy-workflow vars in production; defaulted by `onlyOffice/scripts/hooks/preinstall.sh` for local dev). The local-dev defaults must be written when the resolved variable is missing or resolves to an empty string, because `ploinky echo NAME` may print `NAME=` while still exiting successfully for unset variables.
 
 ## Disallowed State
 

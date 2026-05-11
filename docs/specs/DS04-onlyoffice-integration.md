@@ -191,7 +191,7 @@ OnlyOffice integration is correct only when all of the following are true:
 - the JWT secret is aligned between Explorer and OnlyOffice
 - the selected resource resolves to a supported content class
 
-Explorer does not own the OnlyOffice Document Server lifecycle. The Document Server is provisioned by the `onlyOffice` Ploinky agent. The `ONLYOFFICE_*` variables flow into Explorer either from the deploy workflow (`set_var ONLYOFFICE_PUBLIC_URL ...` and siblings) or from the `onlyOffice` agent's preinstall hook which writes local-dev defaults if the vars are not already set. Explorer's preinstall hook no longer creates, recreates, or mutates the Document Server container.
+Explorer does not own the OnlyOffice Document Server lifecycle. The Document Server is provisioned by the `onlyOffice` Ploinky agent. The `ONLYOFFICE_*` variables flow into Explorer either from the deploy workflow (`set_var ONLYOFFICE_PUBLIC_URL ...` and siblings) or from the `onlyOffice` agent's preinstall hook which writes local-dev defaults if the vars are not already set or resolve to an empty value. Explorer's preinstall hook no longer creates, recreates, or mutates the Document Server container.
 
 `api.js` is provided by the OnlyOffice Document Server itself, not by the Explorer repo.
 Ploinky TCP readiness for the `onlyOffice` agent is only the startup gate; acceptance validation must still load `api.js` from the configured internal and browser-visible URLs before the Office editor path is considered healthy.
