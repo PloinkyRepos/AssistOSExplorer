@@ -196,6 +196,8 @@ Explorer does not own the OnlyOffice Document Server lifecycle. The Document Ser
 `api.js` is provided by the OnlyOffice Document Server itself, not by the Explorer repo.
 Ploinky TCP readiness for the `onlyOffice` agent is only the startup gate; acceptance validation must still load `api.js` from the configured internal and browser-visible URLs before the Office editor path is considered healthy.
 
+The `onlyOffice` agent must not bind-mount the Document Server image's internal PostgreSQL, RabbitMQ, or Redis data directories in local rootless Podman workspaces. Those services run as image-owned non-root users, and host bind mounts can appear as root-owned directories inside the container, preventing PostgreSQL from initializing and leaving the browser-visible `api.js` endpoint unavailable. The agent may bind-mount the Document Server `log`, `Data`, and `/var/lib/onlyoffice` paths that are part of the Explorer integration contract.
+
 ## Failure And Recovery Expectations
 
 If OnlyOffice integration fails, Explorer should:

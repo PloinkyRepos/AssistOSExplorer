@@ -15,10 +15,7 @@ fi
 mkdir -p \
     "${data_root}/log" \
     "${data_root}/data" \
-    "${data_root}/lib" \
-    "${data_root}/postgresql" \
-    "${data_root}/rabbitmq" \
-    "${data_root}/redis"
+    "${data_root}/lib"
 
 if command -v podman >/dev/null 2>&1; then
     # Pull before removing the legacy sidecar so a bad tag or registry outage

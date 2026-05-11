@@ -9,10 +9,7 @@
     "volumes": {
         ".ploinky/data/onlyOffice/log": "/var/log/onlyoffice",
         ".ploinky/data/onlyOffice/data": "/var/www/onlyoffice/Data",
-        ".ploinky/data/onlyOffice/lib": "/var/lib/onlyoffice",
-        ".ploinky/data/onlyOffice/postgresql": "/var/lib/postgresql",
-        ".ploinky/data/onlyOffice/rabbitmq": "/var/lib/rabbitmq",
-        ".ploinky/data/onlyOffice/redis": "/var/lib/redis"
+        ".ploinky/data/onlyOffice/lib": "/var/lib/onlyoffice"
     },
     "profiles": {
         "default": {

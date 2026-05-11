@@ -19,7 +19,7 @@ The OnlyOffice agent manifest (`onlyOffice/manifest.json`) owns:
 - explicit runtime startup through `entrypoint: "/bin/bash"` and `start: "/app/ds/run-document-server.sh"` so Ploinky runs the image's Document Server process rather than the implicit AgentServer
 - `readiness.protocol: "tcp"`, probed on the published host port; deployment validation must still fetch `api.js` because TCP readiness proves the port is open, not that the editor API has fully warmed
 - profile-specific ports, env defaults, and lifecycle hooks
-- bind-mounted persistent storage under `.ploinky/data/onlyOffice/` for `log`, `data`, `lib`, `postgresql`, `rabbitmq`, and `redis` volumes
+- bind-mounted persistent storage under `.ploinky/data/onlyOffice/` for Document Server `log`, `data`, and `lib` paths only. Internal service-owned PostgreSQL, RabbitMQ, and Redis data directories must not be bind-mounted in local rootless Podman workspaces because the image starts those services as non-root users and root-owned host bind mounts can prevent initialization.
 
 Explorer remains the office-session and storage bridge. Explorer does not start, stop, or mutate the Document Server container directly. Explorer consumes `ONLYOFFICE_PUBLIC_URL`, `ONLYOFFICE_INTERNAL_URL`, `ONLYOFFICE_CALLBACK_BASE_URL`, and `ONLYOFFICE_JWT_SECRET` through Ploinky-managed env (deploy-workflow vars in production; defaulted by `onlyOffice/scripts/hooks/preinstall.sh` for local dev). The local-dev defaults must be written when the resolved variable is missing or resolves to an empty string, because `ploinky echo NAME` may print `NAME=` while still exiting successfully for unset variables.
 
@@ -34,7 +34,7 @@ Ploinky dependency graph
   -> onlyOffice agent (this directory)
     -> docker.io/onlyoffice/documentserver:${ONLYOFFICE_VERSION}
     -> JWT_SECRET derived from AchillesIDE/explorer/ONLYOFFICE_JWT_SECRET
-    -> bind-mounted volumes under .ploinky/data/onlyOffice/
+    -> bind-mounted Document Server volumes under .ploinky/data/onlyOffice/
   -> explorer agent
     -> /services/explorer/office/session
     -> /public-services/explorer/office/document/<token>
@@ -46,13 +46,13 @@ The Document Server image is pinned to `9.3.1` by default, matching the Docker t
 
 ## Migration Notes
 
-The previous raw `ploinky_onlyoffice_<workspace>` sidecar used anonymous podman volumes for `/var/www/onlyoffice/Data`, `/var/lib/onlyoffice`, `/var/lib/postgresql`, `/var/lib/rabbitmq`, `/var/lib/redis`, and `/var/log/onlyoffice`. The new agent uses bind mounts under `.ploinky/data/onlyOffice/`, so on the first start with the new agent these volumes start empty.
+The previous raw `ploinky_onlyoffice_<workspace>` sidecar used anonymous podman volumes for `/var/www/onlyoffice/Data`, `/var/lib/onlyoffice`, `/var/lib/postgresql`, `/var/lib/rabbitmq`, `/var/lib/redis`, and `/var/log/onlyoffice`. The new agent bind-mounts only `/var/www/onlyoffice/Data`, `/var/lib/onlyoffice`, and `/var/log/onlyoffice` under `.ploinky/data/onlyOffice/`; the image owns its internal PostgreSQL, RabbitMQ, and Redis directories inside the container so rootless Podman ownership mapping cannot block those services from booting.
 
 Practical consequences:
 
-- in-progress collaborative editing sessions held by the legacy sidecar's internal databases are cut off when the legacy container is removed
+- in-progress collaborative editing sessions held by the legacy sidecar's internal databases are cut off when the legacy container is removed or recreated
 - OnlyOffice rebuilds its document key registry on demand the next time a user opens a document, so steady-state editing recovers without operator intervention
-- if an operator needs to preserve in-progress state across the migration, they must `podman volume export` the legacy named volumes before the next deploy and rehydrate them into the new bind paths
+- if an operator needs to preserve in-progress internal database state across the migration, they must snapshot the legacy sidecar before the next deploy and accept that the current local agent contract treats internal database state as container-owned runtime state
 
 The agent does not encode that operator-driven volume migration; it removes the legacy container only after the target image preflight succeeds, so the new agent can bind port `8082` without making an image-pull failure destructive.
 
