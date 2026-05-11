@@ -55,7 +55,7 @@ gh variable set ONLYOFFICE_PUBLIC_URL --repo PloinkyRepos/AssistOSExplorer --bod
 gh variable set ONLYOFFICE_INTERNAL_URL --repo PloinkyRepos/AssistOSExplorer --body http://127.0.0.1:8082
 gh variable set ONLYOFFICE_CALLBACK_BASE_URL --repo PloinkyRepos/AssistOSExplorer --body https://skills.axiologic.dev
 gh variable set WEBMEET_PUBLIC_LIVEKIT_URL --repo PloinkyRepos/AssistOSExplorer --body wss://livekit-skills.axiologic.dev
-gh variable set WEBMEET_LIVEKIT_URL --repo PloinkyRepos/AssistOSExplorer --body http://webmeetLivekitServer:7880
+gh variable set WEBMEET_LIVEKIT_URL --repo PloinkyRepos/AssistOSExplorer --body http://host.containers.internal:7880
 gh variable set WEBMEET_LIVEKIT_API_KEY --repo PloinkyRepos/AssistOSExplorer --body webmeet
 gh variable set WEBMEET_EGRESS_URL --repo PloinkyRepos/AssistOSExplorer --body http://webmeetLivekitEgress:7980
 gh variable set WEBMEET_LIVEKIT_USE_EXTERNAL_IP --repo PloinkyRepos/AssistOSExplorer --body false

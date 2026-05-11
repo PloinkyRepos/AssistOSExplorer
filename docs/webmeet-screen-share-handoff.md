@@ -60,12 +60,13 @@ LiveKit, Nginx, and Certbot images all reference an `${VAR}` tag whose default l
 
 ### 7. UDP media on the SFU hits real client addresses, not bridge IPs
 
-LiveKit runs on host networking so podman bridge UDP source-NAT cannot rewrite client addresses to bridge-internal IPs.
+In the `prod` profile LiveKit runs on host networking so podman bridge UDP source-NAT cannot rewrite client addresses to bridge-internal IPs. The `default` and `dev` profiles stay on the `webmeet` bridge (see the 2026-05-11 section below) because (a) a single-machine developer setup never reproduces the multi-client SRTP downlink failure mode and (b) macOS podman cannot expose host-network container ports to the workstation, so any dev hitting `--network host` would be unreachable from the workspace's own readiness probe and from a local browser.
 
 - Ploinky `network.mode: "host"` support: `PL fc4bed3`.
-- LiveKit manifest moved to host network: `WI 8b0dc9f` `Run LiveKit on host network`, refined by `WI f2fd9b1` `Restore LiveKit ports for readiness probe`.
-- Sibling agents repointed to `host.containers.internal`: `WI 8b0dc9f` (egress preinstall) plus repo var `WEBMEET_LIVEKIT_URL=http://host.containers.internal:7880`.
-- DS003 (webmeetInfra) and DS10 (webmeetAgent) document the contract: `WI 7c2add8`, `AE e2346fe`.
+- Ploinky per-profile `network` override (so the same manifest selects host or bridge per profile): see the 2026-05-11 section.
+- LiveKit manifest moved to host network: `WI 8b0dc9f` `Run LiveKit on host network`, refined by `WI f2fd9b1` `Restore LiveKit ports for readiness probe`. Subsequently scoped to the `prod` profile only on 2026-05-11 (see below).
+- Sibling agents repointed to `host.containers.internal`: `WI 8b0dc9f` (egress preinstall) plus repo var `WEBMEET_LIVEKIT_URL=http://host.containers.internal:7880`. This wiring is correct for the `prod` profile where LiveKit is on host net; non-prod profiles reach LiveKit through its bridge alias `webmeetLivekitServer:7880`.
+- DS003 (webmeetInfra) and DS10 (webmeetAgent) document the contract: `WI 7c2add8`, `AE e2346fe`; webmeetInfra DS003 updated on 2026-05-11 for the per-profile split.
 
 ### 8. Worker agents that bind no port don't block readiness
 
@@ -306,7 +307,69 @@ Diagnostic tip if a similar 401/CORS-shaped failure recurs:
 If the host-network LiveKit becomes unhealthy:
 
 1. Set `WEBMEET_LIVEKIT_FORCE_TCP=true` and redeploy. TCP path on `193.180.209.191:7881` remains the proven fallback.
-2. To revert to bridge networking: change `webmeetLivekitServer/manifest.json` `network` from `{"mode":"host"}` back to `{"name":"webmeet","aliases":["webmeetLivekitServer"]}`, restore `redis.address: webmeetRedis:6379` in the preinstall, and revert the `WEBMEET_LIVEKIT_URL` GitHub var to `http://webmeetLivekitServer:7880`. The Ploinky host-network code path stays in place for other agents.
+2. To revert to bridge networking in production: in `webmeetLivekitServer/manifest.json`, remove `"network": {"mode": "host"}` from the `prod` profile and add `"network": {"name": "webmeet", "aliases": ["webmeetLivekitServer"]}` (mirroring the current `default` and `dev` profiles), add `WEBMEET_LIVEKIT_REDIS_ADDRESS` with default `webmeetRedis:6379` to the `prod` env, and revert the `WEBMEET_LIVEKIT_URL` GitHub var to `http://webmeetLivekitServer:7880`. The Ploinky host-network code path stays in place for other agents, and the per-profile `network` override (see DS003) is what lets prod and dev select different namespaces from the same manifest.
+
+## Dev Profile Fix For macOS Hosts (2026-05-11)
+
+A fresh local Ploinky workspace (`~/work/testExplorerFresh`) on macOS could not bring `webmeetLivekitServer` past the readiness gate when starting Explorer through `ploinky start explorer 8080`. The readiness loop reported `still waiting (Ns/600s): port not open yet, last probe=ECONNREFUSED` against port `17880` for the full 600s window and the rest of the dependency wave never started.
+
+### Failure chain (observed and inferred)
+
+1. **Observed**: the LiveKit container existed as `Exited (0)` in `podman ps -a`; its tail logs read `unable to connect to redis: dial tcp 127.0.0.1:6379: connect: connection refused`.
+2. **Observed**: the workspace's active profile was `dev` (`.ploinky/agents.json`), `webmeetRedis` dev profile publishes `127.0.0.1:16379->6379/tcp`, and the `webmeetLivekitServer/scripts/hooks/preinstall.sh` dev branch only overrode the LiveKit signal/RTC ports — it left `redis_address` at the top-level shell default `127.0.0.1:6379`, which is unused in dev. Generated `livekit.yaml` consequently wrote `redis.address: 127.0.0.1:6379`.
+3. **Inferred**: with `network.mode: "host"` declared at the manifest root, LiveKit joined the podman VM's network namespace; `127.0.0.1:6379` on the VM had nothing listening (Redis was published on `127.0.0.1:16379`), so LiveKit exited before opening port `17880`, and the readiness probe correctly observed `ECONNREFUSED` for the entire timeout window.
+4. **Observed**: even after a one-line fix that pointed LiveKit at `127.0.0.1:16379` and confirmed LiveKit was bound to `*:17880` inside the VM (`podman machine ssh -- ss -ltnp`, `podman machine ssh -- curl http://127.0.0.1:17880/` → `HTTP 200`), `curl http://127.0.0.1:17880/` from macOS still returned `Connection refused`. Reason (inferred from `ploinky/cli/services/docker/agentServiceManager.js:740-769`): `--network host` on macOS podman joins the podman VM's network namespace rather than the macOS host's, and the runtime explicitly strips `-p` publishing for host-mode agents, so podman-machine has no published port to forward into macOS. Host-mode LiveKit is fundamentally unreachable from the macOS workstation, which is what the readiness probe and a developer's browser both consume.
+
+### Fix applied
+
+Three coordinated changes across `outfinityresearch/ploinky` (PL), `PloinkyRepos/webmeetInfra` (WI), and `PloinkyRepos/AssistOSExplorer` (AE). The WI and AE changes are agent-side repository changes. The PL runtime changes are intentionally separate and must not be pushed with the agent commits.
+
+1. **PL — per-profile `network` override.** `cli/services/docker/agentServiceManager.js:734-744`: the runtime now reads `profileConfig.network` first and falls back to `manifest.network`. This mirrors how `ports`, `env`, and `enable` already specialize per profile (PL `2a45432`) and lets a single manifest declare host networking in `prod` and bridge networking in `dev`/`default` without forking. DS003 (`docs/specs/DS003-agent-manifest-and-registry.md`) gained a paragraph on per-profile `network` and an extension of Question #3 explaining the macOS rationale.
+
+2. **WI — `webmeetLivekitServer` manifest restructure.**
+   - Removed the root-level `network.mode: "host"`.
+   - `prod` profile now declares `"network": {"mode": "host"}` (production UDP/SRC-NAT fix preserved unchanged; see invariant #7 above).
+   - `default` and `dev` profiles now declare `"network": {"name": "webmeet", "aliases": ["webmeetLivekitServer"]}`, joining the same bridge that already hosts `webmeetRedis` and `webmeetCoturn`.
+   - `dev` profile `ports` switched from asymmetric `["17880:7880", "17881:17881", "17882-17892:17882-17892/udp"]` to symmetric `["17880:17880", "17881:17881", "17882-17892:17882-17892/udp"]` so the host port equals the container port for every entry; the dev preinstall already shifts LiveKit to bind `17880`/`17881`/`17882-17892` inside the container, and the symmetric `-p` mappings publish those same ports to macOS.
+   - `default` and `dev` env arrays now declare `WEBMEET_LIVEKIT_REDIS_ADDRESS` with default `webmeetRedis:6379` (sibling container alias on the `webmeet` bridge). `prod` intentionally does not declare this var so the preinstall's hardcoded `127.0.0.1:6379` default applies on host networking, exactly as before.
+   - `scripts/hooks/preinstall.sh`: the dev branch comment was refreshed; the line that hardcoded a `127.0.0.1:16379` Redis fallback (added briefly during diagnosis on 2026-05-11) was removed, because the manifest env now drives the per-profile default. The preinstall continues to shift LiveKit's bind ports to the `17xxx` range in dev so the dev workspace can run alongside a default-profile workspace without port collisions.
+   - DS003 (`webmeetInfra/docs/specs/DS003-livekit-server-agent.md`) rewrote the network/Redis paragraphs and added Question #4 explaining why `default` and `dev` deliberately do not also use host networking.
+
+3. **AE — handoff and dev expectations.** This document (this section), `webmeetAgent/manifest.json`, and `webmeetAgent/docs/specs/DS10-livekit-media-runtime.md` now describe the profile-specific LiveKit internal URLs. `dev` uses `http://webmeetLivekitServer:17880` for server-side LiveKit API calls; `default` uses `http://webmeetLivekitServer:7880`; `prod` keeps the operator-provided host-gateway URL.
+
+### Verification (commands actually run on 2026-05-11)
+
+Local-only verification against `~/work/testExplorerFresh` (no production touch):
+
+- `podman ps --filter name=webmeetLivekitServer`: `Up` with `127.0.0.1:17880-17881->17880-17881/tcp, 127.0.0.1:17882-17892->17882-17892/udp`.
+- `podman logs`: `connecting to redis ... addr: webmeetRedis:6379` (resolved by container DNS on the `webmeet` bridge) and `starting LiveKit server portHttp: 17880, version: 1.11.0`. No retry loop.
+- `curl http://127.0.0.1:17880/` from the macOS host: `HTTP 200`.
+- `curl http://127.0.0.1:8080/dashboard` from the macOS host: `HTTP 200`.
+- `ploinky start webmeetInfra/webmeetLivekitServer` from the workspace: completed without any `still waiting … ECONNREFUSED` lines (i.e., the readiness gate now passes).
+
+Fresh-workspace smoke procedure for this fix:
+
+```bash
+cd ~/work/testExplorerFresh
+ploinky destroy
+find . -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+ploinky start explorer
+```
+
+This is the required scratch deployment smoke for the non-production profile: destroy the previous workspace state, remove every file and dotfile inside the workspace directory, and start Explorer from a blank directory so Ploinky reclones and rebuilds the dependency graph.
+
+**Not verified on 2026-05-11**: production. The Ploinky patch is local; the production `~/ploinky/` checkout has not been updated. A production deploy that depends on per-profile `network` must not proceed until the PL runtime patch is committed, pushed, and present on the production host. Once that is true, the LiveKit container should still come up under host networking because the `prod` profile retains `network.mode: "host"`.
+
+**Not verified**: end-to-end RTC media flow in dev (multi-browser). The single-machine path should work because `node_ip: 127.0.0.1` is advertised and the UDP `17882-17892` range is bridge-published symmetrically, but multi-device LAN dev would need `WEBMEET_LIVEKIT_NODE_IP` overridden. Outside the readiness-probe scope of this fix; flag for a follow-up if it ever surfaces.
+
+### Regression-watch checklist for future "LiveKit not ready" on macOS
+
+If a developer on macOS sees the readiness gate stall on `webmeetLivekitServer` again, look first at:
+
+1. Did anyone reintroduce `network.mode: "host"` at the manifest root (or inside the `dev`/`default` profile)? On macOS that mode is unreachable from the workstation.
+2. Did anyone change the `dev` profile `ports` back to the asymmetric `17880:7880` form? If the host:container ports stop matching what the preinstall binds inside the container, the bridge mapping forwards to a port LiveKit is not listening on.
+3. Is `WEBMEET_LIVEKIT_REDIS_ADDRESS` still resolved to the bridge alias in the generated `.ploinky/agents/webmeetLivekitServer/livekit.yaml`? On bridge networking `127.0.0.1:6379` and `127.0.0.1:16379` are both wrong — they refer to the container's own loopback, not the workstation's or Redis's container.
+4. Did Ploinky lose the per-profile `network` read? `agentServiceManager.js` line ~734 must prefer `profileConfig.network` over the manifest root; without that, the manifest restructure silently falls back to slirp4netns and Redis becomes unreachable by container alias.
 
 ## Current Production State
 
