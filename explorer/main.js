@@ -2,7 +2,6 @@ import WebSkel from './WebSkel/webskel.mjs';
 import assistosSDK, { initialiseAssistOS } from './services/assistosSDK.js';
 import { createComponentRegistry } from './services/runtime/componentRegistry.js';
 import { createRuntimePluginLoader } from './services/runtime/runtimePluginLoader.js';
-import { attachUiFallbacks } from './services/runtime/uiFallbacks.js';
 import { filterRuntimePluginsByPolicy } from './utils/pluginUtils.core.js';
 import { initializeTheme } from './utils/theme.js';
 
@@ -165,8 +164,6 @@ async function start() {
     if (typeof window !== 'undefined') {
         window.UI = webSkel;
     }
-
-    attachUiFallbacks(webSkel);
 
     webSkel.setLoading(`
         <div class="spinner-container">

@@ -97,25 +97,7 @@ const buildUIHelpers = () => {
         customTrim,
         reverseQuerySelector,
         async showModal(name, payload = {}, expectResult = false) {
-            switch (name) {
-                case 'confirm-action-modal': {
-                    const message = payload?.message ?? 'Are you sure?';
-                    const confirmed = typeof window !== 'undefined'
-                        ? window.confirm(message)
-                        : true;
-                    return expectResult ? confirmed : undefined;
-                }
-                case 'add-comment': {
-                    if (typeof window === 'undefined') {
-                        return expectResult ? '' : undefined;
-                    }
-                    const result = window.prompt('Enter comment', '');
-                    return expectResult ? result : undefined;
-                }
-                default:
-                    console.warn(`[assistOS] Modal "${name}" is not implemented in the local shim.`);
-                    return expectResult ? null : undefined;
-            }
+            throw new Error(`Modal "${name}" requires a WebSkel UI instance.`);
         },
         closeModal() {
             // Intentionally left blank for local shim

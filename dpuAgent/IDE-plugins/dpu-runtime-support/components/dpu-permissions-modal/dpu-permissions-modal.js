@@ -77,7 +77,7 @@ async function fetchLocalUsers(agentName = '') {
     if (!safeAgent) {
         return [];
     }
-    const response = await fetch(`/auth/local-users?agent=${encodeURIComponent(safeAgent)}`, {
+    const response = await fetch(`/api/agents/${encodeURIComponent(safeAgent)}/users`, {
         credentials: 'include',
         headers: {
             Accept: 'application/json'
