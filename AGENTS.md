@@ -161,6 +161,8 @@ http://127.0.0.1:8080/mcps/explorer/mcp
 - `soplangAgent/`: `npm test`
 - `gitAgent/`: `node --test gitAgent/tests/unit/*.test.mjs`
 - For startup, restart, routing, or container lifecycle changes, also validate through the relevant Ploinky workflow or smoke path.
+- For cross-agent browser regressions, follow `docs/regression/headless-browser-regression.md`. Run the relevant headless cases when touching GitHub auth, DPU Confidential files, OnlyOffice, Git sync, account/session behavior, WebMeet rooms, LiveKit media, chat, or screen sharing.
+- Keep browser traces, OAuth storage state, generated test workspaces, media captures, and regression artifacts out of tracked source. Use `.ploinky/test-artifacts/...` or another ignored path.
 
 ## Remotes And Deployment
 
