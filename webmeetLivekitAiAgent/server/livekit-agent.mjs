@@ -1,12 +1,17 @@
 import { fileURLToPath } from 'node:url';
 
 import * as livekitAgents from '@livekit/agents';
+import { AudioStream, RoomEvent, TrackKind, TrackSource } from '@livekit/rtc-node';
 
 const AGENT_NAME = String(process.env.WEBMEET_LIVEKIT_AGENT_NAME || 'webmeet-agent').trim() || 'webmeet-agent';
 const DISPLAY_NAME = String(process.env.WEBMEET_AGENT_NAME || 'WebMeetAgent').trim() || 'WebMeetAgent';
 const API_PORT = Number.parseInt(process.env.WEBMEET_API_PORT || '8791', 10);
 const API_BASE_URL = String(process.env.WEBMEET_AGENT_API_URL || `http://webmeetAgent:${API_PORT}`).replace(/\/+$/g, '');
-
+const STT_URL = String(process.env.WEBMEET_STT_URL || '').trim();
+const INTERNAL_TOKEN = String(process.env.WEBMEET_AGENT_INTERNAL_TOKEN || '').trim();
+const SCRIBE_CHUNK_SECONDS = Math.max(3, Number.parseInt(process.env.WEBMEET_SCRIBE_CHUNK_SECONDS || '8', 10) || 8);
+const SCRIBE_SAMPLE_RATE = 16_000;
+const SCRIBE_CHANNELS = 1;
 function normalizeLiveKitWsUrl(value) {
     const raw = String(value || '').trim().replace(/\/+$/g, '');
     if (!raw) return '';
@@ -94,6 +99,248 @@ async function persistAgentChat({ meetingId, authorId, message }) {
     };
 }
 
+function isAudioTrack(track) {
+    return track?.kind === TrackKind.KIND_AUDIO
+        || String(track?.kind || '').toLowerCase().includes('audio');
+}
+
+function isMicrophonePublication(publication) {
+    return publication?.source === TrackSource.SOURCE_MICROPHONE
+        || String(publication?.source || '').toLowerCase().includes('microphone');
+}
+
+function isAudioPublication(publication) {
+    return publication?.kind === TrackKind.KIND_AUDIO
+        || isAudioTrack(publication?.track)
+        || String(publication?.kind || '').toLowerCase().includes('audio');
+}
+
+function getParticipantName(participant) {
+    return String(participant?.name || participant?.identity || 'Participant').trim() || 'Participant';
+}
+
+function int16ToBuffer(data) {
+    return Buffer.from(data.buffer, data.byteOffset, data.byteLength);
+}
+
+function createWavBuffer(chunks, sampleRate = SCRIBE_SAMPLE_RATE, channels = SCRIBE_CHANNELS) {
+    const pcm = Buffer.concat(chunks);
+    const header = Buffer.alloc(44);
+    const byteRate = sampleRate * channels * 2;
+    header.write('RIFF', 0);
+    header.writeUInt32LE(36 + pcm.length, 4);
+    header.write('WAVE', 8);
+    header.write('fmt ', 12);
+    header.writeUInt32LE(16, 16);
+    header.writeUInt16LE(1, 20);
+    header.writeUInt16LE(channels, 22);
+    header.writeUInt32LE(sampleRate, 24);
+    header.writeUInt32LE(byteRate, 28);
+    header.writeUInt16LE(channels * 2, 32);
+    header.writeUInt16LE(16, 34);
+    header.write('data', 36);
+    header.writeUInt32LE(pcm.length, 40);
+    return Buffer.concat([header, pcm]);
+}
+
+async function transcribeAudioChunk(wavBuffer, metadata = {}) {
+    if (!STT_URL) {
+        throw new Error('STT is not configured.');
+    }
+    const form = new FormData();
+    form.append('file', new Blob([wavBuffer], { type: 'audio/wav' }), 'webmeet-scribe.wav');
+    form.append('model', 'whisper-1');
+    form.append('response_format', 'json');
+    for (const [key, value] of Object.entries({
+        meetingId: metadata.meetingId,
+        participantIdentity: metadata.participantIdentity,
+        participantName: metadata.participantName,
+        startedAt: metadata.startedAt,
+        endedAt: metadata.endedAt
+    })) {
+        const text = String(value || '').trim();
+        if (text) {
+            form.append(key, text);
+        }
+    }
+    const response = await fetch(STT_URL, {
+        method: 'POST',
+        body: form
+    });
+    const text = await response.text();
+    let parsed = null;
+    try {
+        parsed = text ? JSON.parse(text) : null;
+    } catch {
+        parsed = null;
+    }
+    if (!response.ok) {
+        throw new Error(parsed?.detail || parsed?.error || text || `STT request failed: ${response.status}`);
+    }
+    return String(parsed?.text || text || '').trim();
+}
+
+async function persistTranscriptSegment({ meetingId, speakerId, speakerName, text, startedAt, endedAt }) {
+    if (!INTERNAL_TOKEN) {
+        throw new Error('WebMeet internal agent token is not configured.');
+    }
+    const response = await fetch(`${API_BASE_URL}/internal/meetings/${encodeURIComponent(meetingId)}/transcript`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${INTERNAL_TOKEN}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            speakerId,
+            speakerName,
+            text,
+            startedAt,
+            endedAt
+        })
+    });
+    if (!response.ok) {
+        const body = await response.text();
+        throw new Error(body || `Failed to persist transcript: ${response.status}`);
+    }
+}
+
+function getTrackKey(track, participant, publication = null) {
+    return [
+        String(participant?.identity || '').trim(),
+        String(track?.sid || publication?.trackSid || publication?.sid || '').trim() || 'audio'
+    ].join(':');
+}
+
+function startScribeTrackPipeline(metadata, track, participant, publication, cleanupTasks, activeTrackKeys) {
+    const meetingId = String(metadata.meetingId || '').trim();
+    const participantIdentity = String(participant?.identity || '').trim();
+    if (!meetingId || !participantIdentity || !isAudioTrack(track)) return;
+    const trackKey = getTrackKey(track, participant, publication);
+    if (activeTrackKeys.has(trackKey)) return;
+    activeTrackKeys.add(trackKey);
+    const stream = new AudioStream(track, {
+        sampleRate: SCRIBE_SAMPLE_RATE,
+        numChannels: SCRIBE_CHANNELS
+    });
+    let cancelled = false;
+    const cleanup = async () => {
+        cancelled = true;
+        try { await stream.cancel(); } catch (_) {}
+    };
+    cleanupTasks.add(cleanup);
+
+    void (async () => {
+        let chunks = [];
+        let samples = 0;
+        let startedAt = new Date().toISOString();
+        const maxSamples = SCRIBE_SAMPLE_RATE * SCRIBE_CHUNK_SECONDS;
+        const flushChunk = async () => {
+            if (!chunks.length) return;
+            const endedAt = new Date().toISOString();
+            const wav = createWavBuffer(chunks);
+            chunks = [];
+            samples = 0;
+            const text = await transcribeAudioChunk(wav, {
+                meetingId,
+                participantIdentity,
+                participantName: getParticipantName(participant),
+                startedAt,
+                endedAt
+            });
+            if (text) {
+                await persistTranscriptSegment({
+                    meetingId,
+                    speakerId: participantIdentity,
+                    speakerName: getParticipantName(participant),
+                    text,
+                    startedAt,
+                    endedAt
+                });
+            }
+            startedAt = new Date().toISOString();
+        };
+        try {
+            for await (const frame of stream) {
+                if (cancelled) break;
+                if (!frame?.data?.length) continue;
+                chunks.push(int16ToBuffer(frame.data));
+                samples += Number(frame.samplesPerChannel || (frame.data.length / Math.max(1, frame.channels || SCRIBE_CHANNELS)));
+                if (samples < maxSamples) continue;
+                await flushChunk();
+            }
+            if (!cancelled) {
+                await flushChunk();
+            }
+        } catch (error) {
+            console.error('WebMeet scribe pipeline failed:', error instanceof Error ? error.message : String(error));
+        } finally {
+            activeTrackKeys.delete(trackKey);
+            cleanupTasks.delete(cleanup);
+            try { await stream.cancel(); } catch (_) {}
+        }
+    })();
+}
+
+function startScribeAgent(ctx, metadata) {
+    const room = ctx.room;
+    const cleanupTasks = new Set();
+    const activeTrackKeys = new Set();
+    const ensurePublicationSubscribed = (publication) => {
+        if (!isAudioPublication(publication) || !isMicrophonePublication(publication) || typeof publication?.setSubscribed !== 'function') return;
+        try {
+            const result = publication.setSubscribed(true);
+            if (result && typeof result.catch === 'function') {
+                result.catch(() => {});
+            }
+        } catch (_) {}
+    };
+    const handleTrackSubscribed = (track, publication, participant) => {
+        const localIdentity = String(room?.localParticipant?.identity || '').trim();
+        const participantIdentity = String(participant?.identity || '').trim();
+        if (participantIdentity && participantIdentity === localIdentity) return;
+        startScribeTrackPipeline(metadata, track, participant, publication, cleanupTasks, activeTrackKeys);
+    };
+    const handleTrackPublished = (publication, participant) => {
+        if (!isAudioPublication(publication) || !isMicrophonePublication(publication)) return;
+        ensurePublicationSubscribed(publication);
+        if (publication?.track) {
+            handleTrackSubscribed(publication.track, publication, participant);
+        }
+    };
+    const handleParticipantConnected = (participant) => {
+        const publications = participant?.trackPublications?.values?.();
+        if (!publications) return;
+        for (const publication of publications) {
+            handleTrackPublished(publication, participant);
+        }
+    };
+    const syncExistingTracks = () => {
+        const participants = room?.remoteParticipants?.values?.();
+        if (!participants) return;
+        for (const participant of participants) {
+            const publications = participant?.trackPublications?.values?.();
+            if (!publications) continue;
+            for (const publication of publications) {
+                handleTrackPublished(publication, participant);
+            }
+        }
+    };
+    room.on(RoomEvent.TrackSubscribed, handleTrackSubscribed);
+    room.on(RoomEvent.TrackPublished, handleTrackPublished);
+    room.on(RoomEvent.ParticipantConnected, handleParticipantConnected);
+    const rescanTimer = setInterval(syncExistingTracks, 1000);
+    return {
+        syncExistingTracks,
+        cleanup: async () => {
+            try { room.off?.(RoomEvent.TrackSubscribed, handleTrackSubscribed); } catch (_) {}
+            try { room.off?.(RoomEvent.TrackPublished, handleTrackPublished); } catch (_) {}
+            try { room.off?.(RoomEvent.ParticipantConnected, handleParticipantConnected); } catch (_) {}
+            clearInterval(rescanTimer);
+            await Promise.allSettled(Array.from(cleanupTasks, (cleanup) => cleanup()));
+        }
+    };
+}
+
 async function publishWebMeetChat(room, meetingId, chatMessage) {
     const payload = new TextEncoder().encode(JSON.stringify({
         type: 'chat',
@@ -136,7 +383,11 @@ export default livekitAgents.defineAgent({
         room.on('dataReceived', (payload, participant) => {
             void handleChatPayload(ctx, metadata, payload, participant);
         });
+        const scribeController = metadata.agentType === 'scribe'
+            ? startScribeAgent(ctx, metadata)
+            : null;
         await ctx.connect();
+        scribeController?.syncExistingTracks();
         if (typeof room.localParticipant?.setAttributes === 'function') {
             await room.localParticipant.setAttributes({
                 webmeetAgent: 'true',
@@ -156,6 +407,7 @@ export default livekitAgents.defineAgent({
                 ctx.addShutdownCallback(async () => finish());
             }
         });
+        await scribeController?.cleanup?.();
     }
 });
 

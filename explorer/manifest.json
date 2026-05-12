@@ -28,6 +28,7 @@
         "llmAssistant global",
         "AchillesCLI/achilles-cli global",
         "webmeetInfra/stack",
+        "webmeetStt",
         "webmeetAgent global",
         "multimedia global",
         "onlyOffice",
