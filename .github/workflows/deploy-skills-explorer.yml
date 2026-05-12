@@ -8,11 +8,6 @@ on:
         required: false
         default: 'main'
         type: string
-      ploinky_branch:
-        description: 'Ploinky branch to deploy. Defaults to vars.PLOINKY_BRANCH, then master.'
-        required: false
-        default: ''
-        type: string
       workspace_name:
         description: 'Workspace directory name on the remote host'
         required: false
@@ -50,8 +45,6 @@ env:
   ROUTER_PORT: ${{ inputs.router_port || vars.EXPLORER_ROUTER_PORT || '8097' }}
   PUBLIC_URL: ${{ inputs.public_url || vars.EXPLORER_PUBLIC_URL || 'https://skills.axiologic.dev' }}
   EXPLORER_BRANCH: ${{ inputs.branch || 'main' }}
-  PLOINKY_BRANCH: ${{ inputs.ploinky_branch || vars.PLOINKY_BRANCH || 'master' }}
-  PLOINKY_REPO_URL: ${{ vars.PLOINKY_REPO_URL || 'https://github.com/OutfinityResearch/ploinky.git' }}
   PLOINKY_PROFILE: ${{ inputs.profile || vars.PLOINKY_PROFILE || 'prod' }}
 
 jobs:
@@ -180,58 +173,12 @@ jobs:
 
           ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
             -i ~/.ssh/deploy_key "${SSH_USER}@${SSH_HOST}" \
-            "WORKSPACE='$WORKSPACE' EXPLORER_BRANCH='$EXPLORER_BRANCH' PLOINKY_BRANCH='$PLOINKY_BRANCH' PLOINKY_REPO_URL='$PLOINKY_REPO_URL' ROUTER_PORT='$ROUTER_PORT' PUBLIC_URL='$PUBLIC_URL' PLOINKY_PROFILE='$PLOINKY_PROFILE' bash -s" << 'REMOTE'
+            "WORKSPACE='$WORKSPACE' EXPLORER_BRANCH='$EXPLORER_BRANCH' ROUTER_PORT='$ROUTER_PORT' PUBLIC_URL='$PUBLIC_URL' PLOINKY_PROFILE='$PLOINKY_PROFILE' bash -s" << 'REMOTE'
           set -euo pipefail
           # Ensure the plaintext env file is removed even if a later step exits non-zero.
           trap 'rm -f /tmp/skills_explorer_env' EXIT
 
-          PLOINKY_ROOT_DIR="$HOME/ploinky"
-
-          sync_ploinky_checkout() {
-            local repo_url="${PLOINKY_REPO_URL:-https://github.com/OutfinityResearch/ploinky.git}"
-            local branch="${PLOINKY_BRANCH:-master}"
-
-            echo "[deploy] Syncing Ploinky ${repo_url} (${branch})..."
-            if [ -d "$PLOINKY_ROOT_DIR/.git" ]; then
-              git -C "$PLOINKY_ROOT_DIR" fetch origin --prune
-              if ! git -C "$PLOINKY_ROOT_DIR" show-ref --verify --quiet "refs/remotes/origin/$branch"; then
-                echo "[deploy] ERROR: Ploinky branch origin/$branch was not found."
-                exit 1
-              fi
-              git -C "$PLOINKY_ROOT_DIR" checkout -B "$branch" "origin/$branch"
-              git -C "$PLOINKY_ROOT_DIR" reset --hard "origin/$branch"
-              git -C "$PLOINKY_ROOT_DIR" clean -fd
-            elif [ -e "$PLOINKY_ROOT_DIR" ]; then
-              echo "[deploy] ERROR: $PLOINKY_ROOT_DIR exists but is not a git checkout."
-              exit 1
-            else
-              git clone --branch "$branch" "$repo_url" "$PLOINKY_ROOT_DIR"
-            fi
-            echo "[deploy] Ploinky at $(git -C "$PLOINKY_ROOT_DIR" rev-parse --short HEAD)"
-          }
-
-          install_ploinky_dependencies() {
-            if [ ! -f "$PLOINKY_ROOT_DIR/package.json" ]; then
-              return 0
-            fi
-
-            echo "[deploy] Installing Ploinky dependencies..."
-            npm install --ignore-scripts --prefix "$PLOINKY_ROOT_DIR"
-
-            local achilles_dir="$PLOINKY_ROOT_DIR/node_modules/achillesAgentLib"
-            if [ -d "$achilles_dir/.git" ]; then
-              git -C "$achilles_dir" pull --rebase --autostash
-            else
-              rm -rf "$achilles_dir"
-              git clone https://github.com/OutfinityResearch/achillesAgentLib.git "$achilles_dir"
-            fi
-          }
-
           resolve_ploinky() {
-            if [ -x "$PLOINKY_ROOT_DIR/bin/ploinky" ]; then
-              printf '%s\n' "$PLOINKY_ROOT_DIR/bin/ploinky"
-              return 0
-            fi
             if command -v ploinky >/dev/null 2>&1; then
               command -v ploinky
               return 0
@@ -247,6 +194,12 @@ jobs:
             return 1
           }
 
+          PLOINKY="$(resolve_ploinky)" || {
+            echo "[deploy] ERROR: ploinky is not installed on the remote host."
+            echo "[deploy] Run the Provision Skills Explorer Host workflow first."
+            exit 1
+          }
+
           for tool in git node npm podman curl; do
             if ! command -v "$tool" >/dev/null 2>&1; then
               echo "[deploy] ERROR: missing required tool '$tool'."
@@ -254,15 +207,6 @@ jobs:
               exit 1
             fi
           done
-
-          sync_ploinky_checkout
-          install_ploinky_dependencies
-
-          PLOINKY="$(resolve_ploinky)" || {
-            echo "[deploy] ERROR: ploinky is not installed on the remote host."
-            echo "[deploy] Run the Provision Skills Explorer Host workflow first."
-            exit 1
-          }
 
           WORK_DIR="$HOME/$WORKSPACE"
           mkdir -p "$WORK_DIR/logs"
@@ -283,15 +227,11 @@ jobs:
           "$PLOINKY" enable repo AchillesIDE
           "$PLOINKY" enable repo webmeetInfra
 
-          echo "[deploy] Updating Ploinky, installed repos, and achillesAgentLib..."
+          echo "[deploy] Updating Ploinky, Achilles dependencies, and installed repos..."
           if ! env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" update; then
             echo "[deploy] Initial update failed; retrying once in case Ploinky self-updated during this run..."
-            if ! env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" update; then
-              echo "[deploy] WARNING: broad ploinky update failed, usually because unrelated workspace repositories have broken remotes or branch tracking."
-              echo "[deploy] Continuing because this workflow explicitly resets AchillesIDE and webmeetInfra before starting Explorer."
-            fi
+            env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" update
           fi
-          install_ploinky_dependencies
 
           for repo_spec in "AchillesIDE:${EXPLORER_BRANCH:-main}" "webmeetInfra:main"; do
             repo_name="${repo_spec%%:*}"
