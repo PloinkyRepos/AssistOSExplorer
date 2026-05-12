@@ -65,6 +65,24 @@
           "name": "WEBMEET_AGENT_API_URL",
           "required": false,
           "default": "http://webmeetAgent:8791"
+        },
+        {
+          "name": "WEBMEET_STT_URL",
+          "required": false,
+          "default": "http://webmeetStt:9000/v1/audio/transcriptions"
+        },
+        {
+          "name": "WEBMEET_AGENT_INTERNAL_TOKEN",
+          "required": false,
+          "derive": "derived-master",
+          "deriveRepoName": "webmeet",
+          "deriveAgentName": "shared-agent",
+          "deriveName": "internal-token"
+        },
+        {
+          "name": "WEBMEET_SCRIBE_CHUNK_SECONDS",
+          "required": false,
+          "default": "8"
         }
       ]
     },
@@ -114,6 +132,24 @@
           "name": "WEBMEET_AGENT_API_URL",
           "required": false,
           "default": "http://webmeetAgent:8791"
+        },
+        {
+          "name": "WEBMEET_STT_URL",
+          "required": false,
+          "default": "http://webmeetStt:9000/v1/audio/transcriptions"
+        },
+        {
+          "name": "WEBMEET_AGENT_INTERNAL_TOKEN",
+          "required": false,
+          "derive": "derived-master",
+          "deriveRepoName": "webmeet",
+          "deriveAgentName": "shared-agent",
+          "deriveName": "internal-token"
+        },
+        {
+          "name": "WEBMEET_SCRIBE_CHUNK_SECONDS",
+          "required": false,
+          "default": "8"
         }
       ]
     },
@@ -163,6 +199,24 @@
           "name": "WEBMEET_AGENT_API_URL",
           "required": false,
           "default": "http://webmeetAgent:8791"
+        },
+        {
+          "name": "WEBMEET_STT_URL",
+          "required": false,
+          "default": "http://webmeetStt:9000/v1/audio/transcriptions"
+        },
+        {
+          "name": "WEBMEET_AGENT_INTERNAL_TOKEN",
+          "required": false,
+          "derive": "derived-master",
+          "deriveRepoName": "webmeet",
+          "deriveAgentName": "shared-agent",
+          "deriveName": "internal-token"
+        },
+        {
+          "name": "WEBMEET_SCRIBE_CHUNK_SECONDS",
+          "required": false,
+          "default": "8"
         }
       ]
     }

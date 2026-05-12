@@ -10,7 +10,7 @@
     <main>
         <h1>WebMeet LiveKit AI Agent Documentation</h1>
         <p>This optional Ploinky agent owns the self-hosted LiveKit Agents worker for WebMeet AI participants. It may launch through a no-wait dependency edge so fresh WebMeet startup can continue while the native LiveKit worker dependency tree prepares in the background.</p>
-        <p>The DS specifications are the source of truth for runtime ownership, dependencies, LiveKit credential derivation, and the operator steps required to enable AI dispatch.</p>
+        <p>The worker also owns scribe runtime integration with the internal WebMeet STT service and WebMeet transcript API. The DS specifications are the source of truth for runtime ownership, dependencies, credential derivation, and the operator steps required to enable AI dispatch.</p>
         <ul>
             <li><a href="specs/matrix.md">Raw specification matrix</a></li>
         </ul>

@@ -19,6 +19,8 @@ The `webmeetLivekitAiAgent` manifest owns:
 - the shared WebMeet LiveKit API key and secret derivation labels used by `webmeetAgent`, `webmeetLivekitServer`, and `webmeetLivekitEgress`
 - default LiveKit internal URLs for `default`, `dev`, and `prod` profiles
 - `WEBMEET_AGENT_API_URL=http://webmeetAgent:8791`, so agent chat persistence goes through the WebMeet API container on the `webmeet` network
+- `WEBMEET_STT_URL=http://webmeetStt:9000/v1/audio/transcriptions`, so scribe jobs use the internal WebMeet STT service without operator configuration
+- `WEBMEET_AGENT_INTERNAL_TOKEN`, derived with the same shared WebMeet agent-secret identity as `webmeetAgent`, so scribe transcript writes can use the WebMeet internal API without a manual secret
 
 `webmeetAgent/manifest.json` may include the worker through a `no-wait` enable edge so fresh Explorer startup can launch dependency preparation in the background without gating WebMeet readiness. Explorer and WebMeet must remain usable if the background launch is still running or fails.
 
