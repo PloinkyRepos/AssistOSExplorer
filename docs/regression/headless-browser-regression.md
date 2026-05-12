@@ -186,9 +186,13 @@ Steps:
 10. Collect WebRTC stats from `window.__e2ePeerConnections` in both pages and assert outbound and inbound RTP packet counters increase over two consecutive samples.
 11. Send chat message `chat-from-owner-<run-id>` from context A and assert it appears in context B.
 12. Send chat message `chat-from-member-<run-id>` from context B and assert it appears in context A.
-13. Start screen sharing from context A.
-14. Assert context A shows a local screen-share state and context B receives a new remote screen-share track or a second remote video stream with increasing inbound video frames.
-15. Stop screen sharing, leave the room from both contexts, and delete the test room if the UI exposes room deletion.
+13. As an admin, attach the LiveKit assistant agent (`assistant_on_mention` / `on_mention`) and assert the response includes a real LiveKit participant with `kind=AGENT` and WebMeet attributes for meeting id, agent type, and mode.
+14. Send an `@WebMeetAgent` chat mention and record whether the worker responds; a missing response is a provider/configuration failure, not proof of successful dispatch.
+15. As an admin, attach the LiveKit scribe agent (`scribe` / `post_event`) while at least one microphone is publishing a speech-like test audio file.
+16. Poll `webmeet_transcript_list` until at least one scribe-sourced transcript segment is persisted for the meeting.
+17. Start screen sharing from context A.
+18. Assert context A shows a local screen-share state and context B receives a new remote screen-share track or a second remote video stream with increasing inbound video frames.
+19. Stop screen sharing, leave the room from both contexts, and delete the test room if the UI exposes room deletion.
 
 Pass criteria:
 
@@ -196,6 +200,8 @@ Pass criteria:
 - Two different authenticated Explorer accounts can join the same room.
 - Camera media flows both directions.
 - Chat delivery is visible in both contexts.
+- Assistant and scribe attachments create real LiveKit `AGENT` participants, not store-only simulated presence.
+- The scribe attachment produces persisted transcript segments from microphone audio.
 - Screen sharing either succeeds and produces a remote track, or is explicitly skipped because the browser capture environment does not support headless display capture.
 
 ## Reporting

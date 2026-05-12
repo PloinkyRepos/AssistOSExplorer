@@ -31,6 +31,8 @@ wss://livekit-skills.axiologic.dev
 
 Current production routing uses a DNS-only A record for `livekit-skills.axiologic.dev` pointing to `193.180.209.191`. TLS is terminated by nginx on the host, and nginx proxies WebSocket/API traffic to LiveKit on `127.0.0.1:7880`. The GitHub workflows do not currently provision or update this nginx/certbot setup.
 
+The optional `webmeetLivekitAiAgent` worker runs on the host network in the `prod` profile so its server-side WebRTC connection uses the same host-network topology as LiveKit. Its manifest supplies a separate `WEBMEET_LIVEKIT_AGENT_URL` default of `http://127.0.0.1:7880`; do not point it at the bridge-only `WEBMEET_LIVEKIT_URL` unless the worker network topology changes too.
+
 If this DNS-only/nginx path remains in use, keep the Let's Encrypt renewal hook aligned with nginx:
 
 ```sh

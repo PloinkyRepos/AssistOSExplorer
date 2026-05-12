@@ -20,8 +20,9 @@ function normalizeLiveKitWsUrl(value) {
     return raw;
 }
 
-if (!process.env.LIVEKIT_URL && process.env.WEBMEET_LIVEKIT_URL) {
-    process.env.LIVEKIT_URL = normalizeLiveKitWsUrl(process.env.WEBMEET_LIVEKIT_URL);
+const workerLiveKitUrl = process.env.WEBMEET_LIVEKIT_AGENT_URL || process.env.WEBMEET_LIVEKIT_URL;
+if (!process.env.LIVEKIT_URL && workerLiveKitUrl) {
+    process.env.LIVEKIT_URL = normalizeLiveKitWsUrl(workerLiveKitUrl);
 }
 if (!process.env.LIVEKIT_API_KEY && process.env.WEBMEET_LIVEKIT_API_KEY) {
     process.env.LIVEKIT_API_KEY = process.env.WEBMEET_LIVEKIT_API_KEY;

@@ -17,12 +17,14 @@ The `webmeetLivekitAiAgent` manifest owns:
 - `readiness.protocol: "none"` because the worker is long-running and does not expose an HTTP or MCP readiness port
 - `@livekit/agents`, `@livekit/rtc-node`, and `achillesAgentLib` dependencies through this agent's `package.json`
 - the shared WebMeet LiveKit API key and secret derivation labels used by `webmeetAgent`, `webmeetLivekitServer`, and `webmeetLivekitEgress`
-- default LiveKit internal URLs for `default`, `dev`, and `prod` profiles
-- `WEBMEET_AGENT_API_URL=http://webmeetAgent:8791`, so agent chat persistence goes through the WebMeet API container on the `webmeet` network
-- `WEBMEET_STT_URL=http://webmeetStt:9000/v1/audio/transcriptions`, so scribe jobs use the internal WebMeet STT service without operator configuration
+- default LiveKit internal URLs for `default`, `dev`, and `prod` profiles, including `WEBMEET_LIVEKIT_AGENT_URL` so the worker can use a topology-specific signaling URL without changing the shared WebMeet API URL
+- `WEBMEET_AGENT_API_URL=http://webmeetAgent:8791` in bridge-networked `default` and `dev`, and `WEBMEET_AGENT_API_URL=http://127.0.0.1:18791` in host-networked `prod`, so agent chat and transcript persistence go through the WebMeet API container without exposing a public route
+- `WEBMEET_STT_URL=http://webmeetStt:9000/v1/audio/transcriptions` in bridge-networked `default` and `dev`, and `WEBMEET_STT_URL=http://127.0.0.1:19000/v1/audio/transcriptions` in host-networked `prod`, so scribe jobs use the internal WebMeet STT service without operator configuration
 - `WEBMEET_AGENT_INTERNAL_TOKEN`, derived with the same shared WebMeet agent-secret identity as `webmeetAgent`, so scribe transcript writes can use the WebMeet internal API without a manual secret
 
 `webmeetAgent/manifest.json` may include the worker through a `no-wait` enable edge so fresh Explorer startup can launch dependency preparation in the background without gating WebMeet readiness. Explorer and WebMeet must remain usable if the background launch is still running or fails.
+
+In the `prod` profile, the worker uses `network.mode: "host"` because production LiveKit also runs on the host network to avoid the WebRTC bridge UDP source-NAT failure. The base `webmeetAgent` prod profile must publish its public proxy and internal API on localhost-only ports so the host-network worker can persist chat and transcript segments while browser and MCP access still goes through Ploinky routing.
 
 When an admin attaches an AI participant, `webmeetAgent` creates LiveKit dispatches for `WEBMEET_LIVEKIT_AGENT_NAME`; this agent must be running with the same name so it can accept those dispatches and appear as a real LiveKit `AGENT` participant.
 
@@ -38,3 +40,4 @@ An acceptable runtime validation must prove that:
 - dependency wave output for the default Explorer graph does not include a `webmeetAgent` npm install for `@livekit/agents`
 - when `webmeetLivekitAiAgent` is launched through the no-wait edge, Ploinky prepares the worker's dependency cache under that agent name and records background status/logs
 - an admin attach creates a LiveKit dispatch that is accepted by the worker, and a real LiveKit `AGENT` participant appears with WebMeet attributes for meeting id, agent type, and mode
+- an admin scribe attach creates a real LiveKit `AGENT` participant and produces transcript segments from room microphone audio through `webmeetStt`

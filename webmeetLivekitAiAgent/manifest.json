@@ -13,6 +13,7 @@
   },
   "enable": [
     "webmeetInfra/stack",
+    "webmeetStt",
     "webmeetAgent global"
   ],
   "repos": {
@@ -26,6 +27,11 @@
         "LLMAgentClient_VERBOSE_DELAY",
         {
           "name": "WEBMEET_LIVEKIT_URL",
+          "required": false,
+          "default": "http://webmeetLivekitServer:7880"
+        },
+        {
+          "name": "WEBMEET_LIVEKIT_AGENT_URL",
           "required": false,
           "default": "http://webmeetLivekitServer:7880"
         },
@@ -97,6 +103,11 @@
           "default": "http://webmeetLivekitServer:17880"
         },
         {
+          "name": "WEBMEET_LIVEKIT_AGENT_URL",
+          "required": false,
+          "default": "http://webmeetLivekitServer:17880"
+        },
+        {
           "name": "WEBMEET_LIVEKIT_API_KEY",
           "required": false,
           "derive": "derived-master",
@@ -154,6 +165,9 @@
       ]
     },
     "prod": {
+      "network": {
+        "mode": "host"
+      },
       "env": [
         "SOUL_GATEWAY_API_KEY",
         "LLMAgentClient_DEBUG",
@@ -162,6 +176,11 @@
           "name": "WEBMEET_LIVEKIT_URL",
           "required": false,
           "default": "http://host.containers.internal:7880"
+        },
+        {
+          "name": "WEBMEET_LIVEKIT_AGENT_URL",
+          "required": false,
+          "default": "http://127.0.0.1:7880"
         },
         {
           "name": "WEBMEET_LIVEKIT_API_KEY",
@@ -198,12 +217,12 @@
         {
           "name": "WEBMEET_AGENT_API_URL",
           "required": false,
-          "default": "http://webmeetAgent:8791"
+          "default": "http://127.0.0.1:18791"
         },
         {
           "name": "WEBMEET_STT_URL",
           "required": false,
-          "default": "http://webmeetStt:9000/v1/audio/transcriptions"
+          "default": "http://127.0.0.1:19000/v1/audio/transcriptions"
         },
         {
           "name": "WEBMEET_AGENT_INTERNAL_TOKEN",
