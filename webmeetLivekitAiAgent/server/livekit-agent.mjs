@@ -5,7 +5,7 @@ import * as livekitAgents from '@livekit/agents';
 const AGENT_NAME = String(process.env.WEBMEET_LIVEKIT_AGENT_NAME || 'webmeet-agent').trim() || 'webmeet-agent';
 const DISPLAY_NAME = String(process.env.WEBMEET_AGENT_NAME || 'WebMeetAgent').trim() || 'WebMeetAgent';
 const API_PORT = Number.parseInt(process.env.WEBMEET_API_PORT || '8791', 10);
-const API_BASE_URL = String(process.env.WEBMEET_AGENT_API_URL || `http://127.0.0.1:${API_PORT}`).replace(/\/+$/g, '');
+const API_BASE_URL = String(process.env.WEBMEET_AGENT_API_URL || `http://webmeetAgent:${API_PORT}`).replace(/\/+$/g, '');
 
 function normalizeLiveKitWsUrl(value) {
     const raw = String(value || '').trim().replace(/\/+$/g, '');

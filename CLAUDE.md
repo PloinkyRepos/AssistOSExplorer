@@ -2,7 +2,7 @@
 
 ## Scope
 
-This repository hosts the AchillesIDE/Ploinky Explorer workspace. It groups the user-facing `explorer` shell with coupled agents and surfaces, including `dpuAgent`, `gitAgent`, `llmAssistant`, `soplangAgent`, `tasksAgent`, `multimedia`, `webmeetAgent`, and `webassist`.
+This repository hosts the AchillesIDE/Ploinky Explorer workspace. It groups the user-facing `explorer` shell with coupled agents and surfaces, including `dpuAgent`, `gitAgent`, `llmAssistant`, `soplangAgent`, `tasksAgent`, `multimedia`, `webmeetAgent`, `webmeetLivekitAiAgent`, and `webassist`.
 
 Read any nested `AGENTS.md` before changing a subproject. Nested instructions are stricter for their local scope.
 
@@ -41,7 +41,7 @@ Read any nested `AGENTS.md` before changing a subproject. Nested instructions ar
 - `llmAssistant/` owns shared LLM-backed helper contracts.
 - `soplangAgent/` owns SOPLang build and execution orchestration.
 - `tasksAgent/` owns backlog file operations.
-- `multimedia/`, `webmeetAgent/`, `webmeetInfra/`, and `webassist/` own their domain-specific IDE and agent workflows.
+- `multimedia/`, `webmeetAgent/`, `webmeetLivekitAiAgent/`, `webmeetInfra/`, and `webassist/` own their domain-specific IDE and agent workflows.
 - `shared/` contains shared runtime utilities.
 - `docs/` and each agent's `docs/specs/` capture user-facing documentation and design specifications.
 

@@ -1,0 +1,170 @@
+{
+  "agent": "node /code/server/livekit-agent.mjs",
+  "container": "node:20",
+  "about": "Optional LiveKit AI worker for WebMeet rooms.",
+  "readiness": {
+    "protocol": "none"
+  },
+  "network": {
+    "name": "webmeet",
+    "aliases": [
+      "webmeetLivekitAiAgent"
+    ]
+  },
+  "enable": [
+    "webmeetInfra/stack",
+    "webmeetAgent global"
+  ],
+  "repos": {
+    "webmeetInfra": "https://github.com/PloinkyRepos/webmeetInfra.git"
+  },
+  "profiles": {
+    "default": {
+      "env": [
+        "SOUL_GATEWAY_API_KEY",
+        "LLMAgentClient_DEBUG",
+        "LLMAgentClient_VERBOSE_DELAY",
+        {
+          "name": "WEBMEET_LIVEKIT_URL",
+          "required": false,
+          "default": "http://webmeetLivekitServer:7880"
+        },
+        {
+          "name": "WEBMEET_LIVEKIT_API_KEY",
+          "required": false,
+          "derive": "derived-master",
+          "deriveRepoName": "webmeet",
+          "deriveAgentName": "shared-livekit",
+          "deriveName": "api-key",
+          "deriveBytes": 16
+        },
+        {
+          "name": "WEBMEET_LIVEKIT_API_SECRET",
+          "required": false,
+          "derive": "derived-master",
+          "deriveRepoName": "webmeet",
+          "deriveAgentName": "shared-livekit",
+          "deriveName": "api-secret"
+        },
+        {
+          "name": "WEBMEET_LIVEKIT_AGENT_NAME",
+          "required": false,
+          "default": "webmeet-agent"
+        },
+        {
+          "name": "WEBMEET_LIVEKIT_AGENT_LOG_LEVEL",
+          "required": false,
+          "default": "info"
+        },
+        {
+          "name": "WEBMEET_AGENT_NAME",
+          "required": false,
+          "default": "WebMeetAgent"
+        },
+        {
+          "name": "WEBMEET_AGENT_API_URL",
+          "required": false,
+          "default": "http://webmeetAgent:8791"
+        }
+      ]
+    },
+    "dev": {
+      "env": [
+        "SOUL_GATEWAY_API_KEY",
+        "LLMAgentClient_DEBUG",
+        "LLMAgentClient_VERBOSE_DELAY",
+        {
+          "name": "WEBMEET_LIVEKIT_URL",
+          "required": false,
+          "default": "http://webmeetLivekitServer:17880"
+        },
+        {
+          "name": "WEBMEET_LIVEKIT_API_KEY",
+          "required": false,
+          "derive": "derived-master",
+          "deriveRepoName": "webmeet",
+          "deriveAgentName": "shared-livekit",
+          "deriveName": "api-key",
+          "deriveBytes": 16
+        },
+        {
+          "name": "WEBMEET_LIVEKIT_API_SECRET",
+          "required": false,
+          "derive": "derived-master",
+          "deriveRepoName": "webmeet",
+          "deriveAgentName": "shared-livekit",
+          "deriveName": "api-secret"
+        },
+        {
+          "name": "WEBMEET_LIVEKIT_AGENT_NAME",
+          "required": false,
+          "default": "webmeet-agent"
+        },
+        {
+          "name": "WEBMEET_LIVEKIT_AGENT_LOG_LEVEL",
+          "required": false,
+          "default": "info"
+        },
+        {
+          "name": "WEBMEET_AGENT_NAME",
+          "required": false,
+          "default": "WebMeetAgent"
+        },
+        {
+          "name": "WEBMEET_AGENT_API_URL",
+          "required": false,
+          "default": "http://webmeetAgent:8791"
+        }
+      ]
+    },
+    "prod": {
+      "env": [
+        "SOUL_GATEWAY_API_KEY",
+        "LLMAgentClient_DEBUG",
+        "LLMAgentClient_VERBOSE_DELAY",
+        {
+          "name": "WEBMEET_LIVEKIT_URL",
+          "required": false,
+          "default": "http://host.containers.internal:7880"
+        },
+        {
+          "name": "WEBMEET_LIVEKIT_API_KEY",
+          "required": true,
+          "derive": "derived-master",
+          "deriveRepoName": "webmeet",
+          "deriveAgentName": "shared-livekit",
+          "deriveName": "api-key",
+          "deriveBytes": 16
+        },
+        {
+          "name": "WEBMEET_LIVEKIT_API_SECRET",
+          "required": true,
+          "derive": "derived-master",
+          "deriveRepoName": "webmeet",
+          "deriveAgentName": "shared-livekit",
+          "deriveName": "api-secret"
+        },
+        {
+          "name": "WEBMEET_LIVEKIT_AGENT_NAME",
+          "required": false,
+          "default": "webmeet-agent"
+        },
+        {
+          "name": "WEBMEET_LIVEKIT_AGENT_LOG_LEVEL",
+          "required": false,
+          "default": "info"
+        },
+        {
+          "name": "WEBMEET_AGENT_NAME",
+          "required": false,
+          "default": "WebMeetAgent"
+        },
+        {
+          "name": "WEBMEET_AGENT_API_URL",
+          "required": false,
+          "default": "http://webmeetAgent:8791"
+        }
+      ]
+    }
+  }
+}
