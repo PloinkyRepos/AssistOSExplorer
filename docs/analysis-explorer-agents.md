@@ -442,8 +442,7 @@ DPU_MASTER_KEY             = HKDF(PLOINKY_DERIVED_MASTER_KEY, "ploinky/agent-sec
     "tasksAgent global",
     "llmAssistant global",
     "multimedia global",
-    "webassist/webCli global",
-    "webassist/webAdmin global"
+    "webassist/webCli global"
 ]
 ```
 
