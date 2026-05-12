@@ -29,4 +29,4 @@
 
 ## Validation
 
-At minimum, validate syntax for `server/livekit-agent.mjs` and JSON manifests. Runtime validation for this optional worker requires enabling this agent, setting `WEBMEET_LIVEKIT_AGENT_ENABLED=true` for `webmeetAgent`, starting WebMeet, and confirming an admin-dispatched LiveKit `AGENT` participant appears in a room.
+At minimum, validate syntax for `server/livekit-agent.mjs` and JSON manifests. Runtime validation for this optional worker requires starting WebMeet with this agent running and confirming an admin-dispatched LiveKit `AGENT` participant appears in a room.

@@ -24,14 +24,7 @@ The `webmeetLivekitAiAgent` manifest owns:
 
 `webmeetAgent/manifest.json` may include the worker through a `no-wait` enable edge so fresh Explorer startup can launch dependency preparation in the background without gating WebMeet readiness. Explorer and WebMeet must remain usable if the background launch is still running or fails.
 
-Operators who need AI participants must still opt in to dispatch explicitly:
-
-```bash
-ploinky var WEBMEET_LIVEKIT_AGENT_ENABLED true
-ploinky start explorer 8080
-```
-
-`WEBMEET_LIVEKIT_AGENT_ENABLED` remains a `webmeetAgent` dispatch guard. It prevents admin attach requests from waiting on a worker that the operator did not enable. When the guard is true, `webmeetAgent` creates LiveKit dispatches for `WEBMEET_LIVEKIT_AGENT_NAME`; this agent must be running with the same name so it can accept those dispatches and appear as a real LiveKit `AGENT` participant.
+When an admin attaches an AI participant, `webmeetAgent` creates LiveKit dispatches for `WEBMEET_LIVEKIT_AGENT_NAME`; this agent must be running with the same name so it can accept those dispatches and appear as a real LiveKit `AGENT` participant.
 
 ## Disallowed State
 
