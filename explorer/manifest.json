@@ -31,8 +31,7 @@
         "webmeetAgent global",
         "multimedia global",
         "onlyOffice",
-        "webAssist",
-        "webAdmin"
+        "webAssist"
     ],
     "repos": {
         "webmeetInfra": "https://github.com/PloinkyRepos/webmeetInfra.git"
