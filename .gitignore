@@ -13,6 +13,8 @@
 /webAssist/package.json
 /webAssist/package-lock.json
 /webAssist/node_modules/
+/webmeetAgent/node_modules/
+/webmeetLivekitAiAgent/node_modules/
 *.DS_Store
 # >>> ploinky default-skills >>>
 .claude/skills/
