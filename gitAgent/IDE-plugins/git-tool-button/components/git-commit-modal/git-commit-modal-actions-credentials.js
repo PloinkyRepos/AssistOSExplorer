@@ -116,7 +116,10 @@ export function createCredentialsActions(ctx) {
                 authMethod: nextAuthMethod
             }
         });
-        updateAuthPrompt(nextAuthMethod === 'token' ? { focus: 'token' } : {});
+        updateAuthPrompt({ 
+            focus: nextAuthMethod === 'token' ? 'token' : undefined,
+            activeTab: 'authentication'
+        });
         updateCommitButtons();
         let statusMessage = message;
         if (!statusMessage) {
@@ -617,6 +620,7 @@ export function createCredentialsActions(ctx) {
 
     const finalizeCredentialsSave = (state, draft, runtimeState, persisted) => {
         const wasGate = state.credentialsGate;
+        const gateCleared = persisted.identitySaved && persisted.tokenSaved && state.credentialsGate;
         applyState({
             identityPrompt: persisted.identitySaved
                 ? { visible: false, repoPath: null, pendingAction: null, name: '', email: '' }
@@ -630,7 +634,7 @@ export function createCredentialsActions(ctx) {
                     authMethod: draft.authMethod
                 }
                 : state.authPrompt,
-            credentialsGate: persisted.identitySaved && state.credentialsGate ? false : state.credentialsGate,
+            credentialsGate: gateCleared ? false : state.credentialsGate,
             credentialsOpen: state.credentialsOpen && !state.credentialsGate ? false : state.credentialsOpen
         });
         updateCommitButtons();
@@ -774,33 +778,54 @@ export function createCredentialsActions(ctx) {
 
     const ensureGitIdentityOrPrompt = async (repoPath, pendingAction) => {
         if (!repoPath) return false;
+        const state = getState();
         const remembered = getRememberedGitIdentity();
-        if (remembered.name && remembered.email) {
+        
+        const github = state.githubAuth || {};
+        const githubUser = github.connection?.user || {};
+        const githubName = String(githubUser?.login || githubUser?.name || '').trim();
+        const githubEmail = String(githubUser?.email || '').trim();
+        const name = remembered.name || githubName || '';
+        const email = remembered.email || githubEmail || '';
+        const hasIdentity = Boolean(name && email);
+
+        const authMethod = normalizeGitAuthMethod(state.authPrompt?.authMethod || getRememberedGitAuthMethod());
+        const githubConnected = Boolean(github.connected && github.connection?.source === 'github');
+        const tokenStored = Boolean(github.tokenStored);
+        const hasAuth = authMethod === 'github' ? githubConnected : tokenStored;
+
+        if (hasIdentity && hasAuth) {
             return true;
         }
-        const state = getState();
-        const stateGithubIdentity = getGithubIdentityFallback(state);
-        const name = remembered.name || state.identityPrompt?.name || stateGithubIdentity.name;
-        const email = remembered.email || state.identityPrompt?.email || stateGithubIdentity.email;
+
         applyState({
             identityPrompt: {
+                ...state.identityPrompt,
                 visible: true,
                 repoPath,
                 pendingAction: pendingAction || null,
                 name,
                 email
             },
+            authPrompt: {
+                ...state.authPrompt,
+                visible: !hasAuth,
+                authMethod
+            },
             pendingAction: pendingAction || null
         });
-        updateIdentityPrompt({ focus: !name ? 'name' : (!email ? 'email' : 'name') });
+
+        updateIdentityPrompt({ 
+            focus: !name ? 'name' : (!email ? 'email' : (authMethod === 'token' && !tokenStored ? 'token' : 'name')),
+            activeTab: 'authentication'
+        });
         updateCommitButtons();
-        const githubConnected = Boolean(state.githubAuth?.connected);
-        setStatusLine(
-            githubConnected
-                ? 'Set name/email to continue.'
-                : 'Set name/email and connect GitHub or add a token to continue.',
-            true
-        );
+        
+        let statusMsg = 'Set name, email and authentication to continue.';
+        if (!hasIdentity && hasAuth) statusMsg = 'Set name and email to continue.';
+        if (hasIdentity && !hasAuth) statusMsg = authMethod === 'github' ? 'Connect GitHub to continue.' : 'Enter a token to continue.';
+        
+        setStatusLine(statusMsg, true);
         return false;
     };
 

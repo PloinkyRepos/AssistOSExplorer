@@ -148,8 +148,10 @@ async function saveState(workspaceRoot, state) {
 function buildStatusPayload(setup, state, extras = {}) {
   const pending = sanitizePending(state?.pending);
   const connection = sanitizeConnection(state?.connection);
-  const connected = Boolean(connection && (connection.user?.login || connection.user?.name || connection.scope || connection.source));
   const tokenStored = Boolean(extras?.tokenStored);
+  const hasProfile = Boolean(connection && (connection.user?.login || connection.user?.name || connection.scope || connection.source));
+  const connected = tokenStored && hasProfile;
+
   return {
     ok: true,
     configured: Boolean(setup?.configured),
@@ -230,6 +232,13 @@ export async function getGithubAuthStatus({ workspaceRoot, authInfo } = {}) {
   const setup = await getGithubSetup(workspaceRoot);
   const state = await loadState(workspaceRoot);
   const storedToken = await getStoredGitToken({ workspaceRoot, authInfo });
+
+  // Sync state: if we think we are connected but DPU has no token, clear the local profile.
+  if (state.connection && !storedToken) {
+    state.connection = null;
+    await saveState(workspaceRoot, state);
+  }
+
   const nextState = state?.connection
     ? { ...state, connection: { ...state.connection, accessToken: storedToken } }
     : state;

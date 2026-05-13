@@ -194,6 +194,7 @@ export function createGitCommitUI(ctx) {
             autoresolveConflicts
         };
         if (options.focus) detail.focus = options.focus;
+        if (options.activeTab) detail.activeTab = options.activeTab;
         const presenter = getCredentialsPromptPresenter();
         presenter?.setState?.(detail);
     };

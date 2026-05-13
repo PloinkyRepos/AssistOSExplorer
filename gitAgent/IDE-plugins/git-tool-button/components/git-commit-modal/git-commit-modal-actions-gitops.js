@@ -308,27 +308,13 @@ export function createGitOpsActions(ctx) {
                     return { ok: false, pulledRepos };
                 }
                 if (isGitAuthError(msg)) {
-                    if (auth.usingGithub && !auth.githubConnected) {
-                        showGitAuthPrompt(
-                            repoPath,
-                            pendingAction?.type ? pendingAction : { type: 'pull', mode: 'batch', repoPaths: list },
-                            { message: msg, authMethod: 'github' }
-                        );
-                        return { ok: false, pulledRepos };
-                    }
-                    if (!auth.usingGithub && !auth.tokenStored) {
-                        showGitAuthPrompt(
-                            repoPath,
-                            pendingAction?.type ? pendingAction : { type: 'pull', mode: 'batch', repoPaths: list },
-                            { message: msg, authMethod: 'token' }
-                        );
-                        return { ok: false, pulledRepos };
-                    }
-                    setStatusLine(
-                        auth.usingGithub
-                            ? `${msg} (Reconnect GitHub or switch to Token.)`
-                            : `${msg} (Use Token to update credentials or switch to GitHub.)`,
-                        true
+                    showGitAuthPrompt(
+                        repoPath,
+                        pendingAction?.type ? pendingAction : { type: 'pull', mode: 'batch', repoPaths: list },
+                        { 
+                            message: `${msg} (${auth.usingGithub ? 'Reconnect GitHub or switch to Token.' : 'Use Token to update credentials or switch to GitHub.'})`, 
+                            authMethod: auth.authMethod 
+                        }
                     );
                     return { ok: false, pulledRepos };
                 }

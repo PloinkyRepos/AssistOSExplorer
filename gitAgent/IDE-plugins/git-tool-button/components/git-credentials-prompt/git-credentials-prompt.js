@@ -396,7 +396,17 @@ export class GitCredentialsPrompt {
             autoresolveDirty: true
         });
     }
+
+    switchTab(tabName) {
+        const nextTab = String(tabName || '').trim().toLowerCase();
+        if (nextTab === 'preferences' || nextTab === 'authentication') {
+            this.state.activeTab = nextTab;
+            this.updateTabUi();
+        }
+    }
+
     handleTokenKeydown(event) {
+
         if (event.key === 'Enter') {
             event.preventDefault();
             this.saveGitCredentials();
