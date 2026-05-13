@@ -228,7 +228,10 @@ export async function saveFile(fileExp, options = {}) {
         if (fileExp.state.selectedIsMarkdown) {
             const previewSource = fileExp.prepareMarkdownPreviewContent(newContent);
             fileExp.setPreviewState({
-                previewContent: renderMarkdownPreview(previewSource),
+                previewContent: renderMarkdownPreview(previewSource, {
+                    sourcePath: fileExp.state.selectedPath,
+                    buildResourceUrl: (path) => fileExp.buildWebViewUrl(path)
+                }),
                 markdownTextView: false,
                 documentId: null
             });

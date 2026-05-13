@@ -1,5 +1,6 @@
 import { clearOnlyOfficeEditor, renderOnlyOfficeEditor } from "../../../services/onlyoffice/onlyoffice-editor-host.js";
 import { buildSecretPreviewMarkup } from "./file-exp-dpu-provider.js";
+import { renderMarkdownDiagrams } from "./file-exp-utils.js";
 
 export function toggleHidden(fileExp, element, hidden = true) {
     if (!element) return;
@@ -377,6 +378,7 @@ export function renderStandardPreview(fileExp, refs, previewUiState) {
             if (fileExp.state.selectedPath) {
                 const content = typeof fileExp.state.previewContent === 'string' ? fileExp.state.previewContent : '';
                 refs.filePreview.innerHTML = content;
+                void renderMarkdownDiagrams(refs.filePreview);
             } else {
                 refs.filePreview.textContent = defaultText;
             }

@@ -266,7 +266,10 @@ export async function openFile(fileExp, filePath, {
             const selectedIsMarkdown = fileExp.isMarkdownFile(filePath);
             const useMarkdownTextViewForHighlight = Boolean(hasPendingForFile && selectedIsMarkdown);
             const previewContent = selectedIsMarkdown
-                ? (renderMarkdownPreview(fileExp.prepareMarkdownPreviewContent(fileContent) || '') || '')
+                ? (renderMarkdownPreview(fileExp.prepareMarkdownPreviewContent(fileContent) || '', {
+                    sourcePath: filePath,
+                    buildResourceUrl: (path) => fileExp.buildWebViewUrl(path)
+                }) || '')
                 : renderCodePreview(fileContent, filePath);
             const previewMode = selectedIsMarkdown ? 'markdown' : 'code';
 

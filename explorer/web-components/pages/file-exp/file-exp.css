@@ -2050,6 +2050,41 @@ th {
     text-decoration: underline;
 }
 
+.markdown-preview .markdown-image,
+.markdown-preview .markdown-svg,
+.markdown-preview .mermaid {
+    display: block;
+    max-width: 100%;
+    margin: 1rem 0;
+}
+
+.markdown-preview .markdown-image {
+    height: auto;
+    border: 1px solid var(--file-exp-border);
+    border-radius: 6px;
+    background: var(--file-exp-panel);
+}
+
+.markdown-preview .markdown-svg svg,
+.markdown-preview .mermaid svg {
+    display: block;
+    max-width: 100%;
+    height: auto;
+}
+
+.markdown-preview .mermaid {
+    overflow-x: auto;
+    padding: 0.75rem;
+    border: 1px solid var(--file-exp-border);
+    border-radius: 6px;
+    background: var(--file-exp-panel);
+}
+
+.markdown-preview .mermaid-error {
+    white-space: pre-wrap;
+    font-family: var(--mono-font);
+}
+
 .preview-content document-view-page {
     display: block;
     height: 100%;

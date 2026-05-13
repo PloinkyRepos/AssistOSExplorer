@@ -269,6 +269,8 @@ Explorer preview behavior is content-aware. The preview shell may render:
 
 Preview is therefore part of the IDE surface, not an auxiliary convenience feature.
 
+Markdown preview must render common documentation visuals directly in the preview pane. Linked images, including SVG files resolved relative to the Markdown file, must display as images. Trusted inline SVG blocks must render as SVG after sanitization. Fenced `mermaid` blocks must render as diagrams when the browser can load the Mermaid renderer, with the source block left visible only as a fallback when rendering fails.
+
 ## Configuration
 
 ### Required / Relevant Environment

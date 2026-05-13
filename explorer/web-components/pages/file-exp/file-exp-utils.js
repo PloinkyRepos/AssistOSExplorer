@@ -274,9 +274,62 @@ export function prepareMarkdownPreviewContent(rawText) {
 }
 
 export function renderMarkdownPreview(markdown) {
+    const options = arguments.length > 1 && arguments[1] && typeof arguments[1] === 'object' ? arguments[1] : {};
     if (!markdown) return '';
+    const resolveResourceUrl = (value) => {
+        const raw = String(value || '').trim();
+        if (!raw) return '';
+        if (/^(?:https?:|data:|blob:|mailto:|#)/i.test(raw) || raw.startsWith('//')) return raw;
+        if (raw.startsWith('/')) {
+            return typeof options.buildResourceUrl === 'function'
+                ? options.buildResourceUrl(raw)
+                : raw;
+        }
+        const sourcePath = String(options.sourcePath || '').replace(/\\/g, '/');
+        const baseParts = sourcePath.split('/').filter(Boolean);
+        if (baseParts.length) baseParts.pop();
+        for (const part of raw.replace(/\\/g, '/').split('/')) {
+            if (!part || part === '.') continue;
+            if (part === '..') {
+                baseParts.pop();
+                continue;
+            }
+            baseParts.push(part);
+        }
+        const normalized = `/${baseParts.join('/')}`;
+        return typeof options.buildResourceUrl === 'function'
+            ? options.buildResourceUrl(normalized)
+            : normalized;
+    };
+    const sanitizeSvgMarkup = (value) => {
+        const raw = String(value || '').trim();
+        if (!raw || !/^<svg[\s>]/i.test(raw)) return '';
+        if (typeof DOMParser === 'undefined') return '';
+        const doc = new DOMParser().parseFromString(raw, 'image/svg+xml');
+        const parserError = doc.querySelector('parsererror');
+        const svg = doc.documentElement;
+        if (parserError || !svg || svg.tagName.toLowerCase() !== 'svg') return '';
+        svg.querySelectorAll('script, foreignObject, iframe, object, embed').forEach((node) => node.remove());
+        svg.querySelectorAll('*').forEach((node) => {
+            for (const attr of Array.from(node.attributes || [])) {
+                const name = attr.name || '';
+                const value = String(attr.value || '').trim();
+                if (/^on/i.test(name) || /^javascript:/i.test(value)) {
+                    node.removeAttribute(name);
+                }
+            }
+        });
+        if (!svg.getAttribute('role')) svg.setAttribute('role', 'img');
+        return svg.outerHTML;
+    };
     const renderInline = (value) => {
         let result = value;
+        result = result.replace(/!\[([^\]]*)]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g, (match, alt, src, title) => {
+            const safeSrc = escapeHtml(resolveResourceUrl(src));
+            const safeAlt = escapeHtml(alt);
+            const titleAttr = title ? ` title="${escapeHtml(title)}"` : '';
+            return `<img class="markdown-image" src="${safeSrc}" alt="${safeAlt}"${titleAttr} loading="lazy">`;
+        });
         result = result.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
         result = result.replace(/(\*|_)([^*_]+?)\1/g, '<em>$2</em>');
         result = result.replace(/`([^`]+?)`/g, '<code>$1</code>');
@@ -296,6 +349,7 @@ export function renderMarkdownPreview(markdown) {
     let activeList = null;
     let inCodeBlock = false;
     let codeLanguage = '';
+    let codeBlockLines = [];
     let paragraphBuffer = [];
 
     const flushParagraph = () => {
@@ -321,6 +375,22 @@ export function renderMarkdownPreview(markdown) {
             html.push('<ul>');
         }
         activeList = { type };
+    };
+    const flushCodeBlock = () => {
+        const language = String(codeLanguage || '').trim().toLowerCase();
+        const rawCode = codeBlockLines.join('\n');
+        if (language === 'mermaid') {
+            html.push(`<div class="mermaid">${escapeHtml(rawCode)}</div>`);
+        } else if (language === 'svg' || /^\s*<svg[\s>]/i.test(rawCode)) {
+            const svg = sanitizeSvgMarkup(rawCode);
+            html.push(svg ? `<div class="markdown-svg">${svg}</div>` : `<pre><code>${escapeHtml(rawCode)}</code></pre>`);
+        } else {
+            const langClass = codeLanguage ? ` class="language-${escapeHtml(codeLanguage)}"` : '';
+            html.push(`<pre><code${langClass}>${escapeHtml(rawCode)}</code></pre>`);
+        }
+        inCodeBlock = false;
+        codeLanguage = '';
+        codeBlockLines = [];
     };
 
     const isTableRow = (line) => {
@@ -350,22 +420,19 @@ export function renderMarkdownPreview(markdown) {
 
         if (line.trim().startsWith('```')) {
             if (inCodeBlock) {
-                html.push('</code></pre>');
-                inCodeBlock = false;
-                codeLanguage = '';
+                flushCodeBlock();
             } else {
                 flushParagraph();
                 closeActiveList();
                 inCodeBlock = true;
                 codeLanguage = line.trim().slice(3).trim();
-                const langClass = codeLanguage ? ` class="language-${escapeHtml(codeLanguage)}"` : '';
-                html.push(`<pre><code${langClass}>`);
+                codeBlockLines = [];
             }
             continue;
         }
 
         if (inCodeBlock) {
-            html.push(`${escapeHtml(rawLine)}\n`);
+            codeBlockLines.push(rawLine);
             continue;
         }
 
@@ -393,6 +460,19 @@ export function renderMarkdownPreview(markdown) {
                 .join('');
 
             html.push(`<table class="markdown-table"><thead><tr>${headerHtml}</tr></thead>${bodyRows.length ? `<tbody>${bodyHtml}</tbody>` : ''}</table>`);
+            continue;
+        }
+
+        if (/^\s*<svg[\s>]/i.test(rawLine)) {
+            flushParagraph();
+            closeActiveList();
+            const svgLines = [rawLine];
+            while (idx + 1 < lines.length && !/<\/svg>\s*$/i.test(lines[idx])) {
+                idx += 1;
+                svgLines.push(lines[idx]);
+            }
+            const svg = sanitizeSvgMarkup(svgLines.join('\n'));
+            html.push(svg ? `<div class="markdown-svg">${svg}</div>` : `<pre><code>${escapeHtml(svgLines.join('\n'))}</code></pre>`);
             continue;
         }
 
@@ -434,12 +514,44 @@ export function renderMarkdownPreview(markdown) {
     }
 
     if (inCodeBlock) {
-        html.push('</code></pre>');
+        flushCodeBlock();
     }
     closeActiveList();
     flushParagraph();
 
     return html.join('\n');
+}
+
+let mermaidModulePromise = null;
+
+async function loadMermaidModule() {
+    if (!mermaidModulePromise) {
+        mermaidModulePromise = import('https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs')
+            .then((module) => module.default || module);
+    }
+    return mermaidModulePromise;
+}
+
+export async function renderMarkdownDiagrams(rootElement) {
+    if (!rootElement) return;
+    const nodes = Array.from(rootElement.querySelectorAll('.mermaid:not([data-processed="true"])'));
+    if (!nodes.length) return;
+    try {
+        const mermaid = await loadMermaidModule();
+        const isDark = document.documentElement?.classList?.contains('theme-dark');
+        mermaid.initialize({
+            startOnLoad: false,
+            securityLevel: 'strict',
+            theme: isDark ? 'dark' : 'default'
+        });
+        await mermaid.run({ nodes });
+    } catch (error) {
+        nodes.forEach((node) => {
+            node.dataset.processed = 'true';
+            node.classList.add('mermaid-error');
+        });
+        console.warn('Mermaid rendering failed:', error);
+    }
 }
 
 export function renderCodePreview(content, filePath) {
