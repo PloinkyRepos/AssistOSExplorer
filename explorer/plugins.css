@@ -167,6 +167,20 @@ dialog.modal.settings-modal-dialog{
     border: 1px solid var(--border);
 }
 
+.theme-dark .general-button.secondary,
+.theme-dark .gray-button {
+    background-color: #1f2a3d;
+    border-color: #475569;
+    color: #f8fafc;
+}
+
+.theme-dark .general-button.secondary:hover:not(:disabled),
+.theme-dark .gray-button:hover:not(:disabled) {
+    background-color: #2b3a53;
+    border-color: #64748b;
+    box-shadow: 0 8px 16px rgba(2, 6, 23, 0.45);
+}
+
 .general-button:hover:not(:disabled) {
     transform: translateY(-1px);
     box-shadow: 0 10px 18px rgba(37, 99, 235, 0.28);
