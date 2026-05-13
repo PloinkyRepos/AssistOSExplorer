@@ -14,7 +14,7 @@ with all required setup performed via hooks declared in `@AssistOSExplorer/explo
 
 - Manifest: `AssistOSExplorer/explorer/manifest.json`
   - `agent`: `node /code/filesystem-http-server.mjs`
-  - `container`: `node:20-bullseye`
+  - `container`: `node:24.15.0-bullseye`
   - `start`: `sleep infinity`
   - `profiles.default.install`: `apt-get update && apt-get install -y git`
   - `profiles.default.env`: includes `ASSISTOS_FS_ROOT`

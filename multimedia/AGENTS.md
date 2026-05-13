@@ -29,7 +29,7 @@ multimedia owns IDE plugins and media-processing helpers for document audio, vid
 
 ## Runtime Defaults
 
-Uses `node:20-bullseye`, `lite-sandbox: true`, and `scripts/install.sh` for FFmpeg readiness.
+Uses `node:24.15.0-bullseye`, `lite-sandbox: true`, and `scripts/install.sh` for FFmpeg readiness.
 
 ## Key Paths
 

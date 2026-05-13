@@ -11,7 +11,7 @@ The agent uses this manifest:
 ```json
 {
   "lite-sandbox": true,
-  "container": "node:20-bullseye",
+  "container": "node:24.15.0-bullseye",
   "profiles": {
     "default": {
       "install": "/code/scripts/install.sh"

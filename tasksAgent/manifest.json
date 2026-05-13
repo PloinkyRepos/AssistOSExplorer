@@ -1,5 +1,5 @@
 {
-  "container": "node:20-alpine",
+  "container": "node:24.15.0-alpine",
   "lite-sandbox": true,
   "profiles": {
     "default": {

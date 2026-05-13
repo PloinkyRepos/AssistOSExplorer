@@ -29,7 +29,7 @@ dpuAgent owns the confidential data service used by Explorer for `/Confidential`
 
 ## Runtime Defaults
 
-Uses `node:20-alpine`, `lite-sandbox: true`, and runtime persistent storage mounted at `/dpu-data`.
+Uses `node:24.15.0-alpine`, `lite-sandbox: true`, and runtime persistent storage mounted at `/dpu-data`.
 
 ## Key Paths
 

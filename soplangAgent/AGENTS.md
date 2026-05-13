@@ -29,7 +29,7 @@ soplangAgent mediates Explorer and UI requests to SOPLang build, execution, plug
 
 ## Runtime Defaults
 
-Uses `node:20-bullseye`, `lite-sandbox: true`, and Achilles/SOPLang runtime helpers.
+Uses `node:24.15.0-bullseye`, `lite-sandbox: true`, and Achilles/SOPLang runtime helpers.
 
 ## Key Paths
 
