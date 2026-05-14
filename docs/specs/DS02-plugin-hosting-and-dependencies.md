@@ -97,12 +97,21 @@ Examples of host slots used by integrations:
 - `file-exp:account-menu`
 - `file-exp:context-menu:file`
 - `file-exp:context-menu:directory`
+- `file-exp:copilot-launch-extension`
 - `file-exp:new-menu`
 - preview-shell mount points
 - modal mount points
 - side-panel mount points
 
 The host slot model exists to avoid hard-coding domain UI directly inside Explorer core. Explorer owns the slot contract, while plugins own their rendered content and event behavior.
+
+`file-exp:copilot-launch-extension` is a metadata slot, not a visible UI
+mount. Agent-owned plugins may use it to contribute extra query parameters for
+the normal Copilot WebChat launcher. The Copilot launcher consumes those
+parameters generically; Explorer core must not hard-code the contributing
+agent, tag names, or downstream tool names. Domain-specific chat routing must
+remain in the contributing agent and in the selected Copilot agent's generic
+launch/configuration handling.
 
 ### Contribution Types
 
