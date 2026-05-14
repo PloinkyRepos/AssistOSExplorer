@@ -229,7 +229,6 @@ export class GitRepoTree {
 
     toggleAllReposCheckbox(element) {
         const repoPaths = this.getDisplayedRepoOverviews()
-            .filter((repo) => getCommittablePaths(repo).length > 0)
             .map((repo) => String(repo?.path || '').trim())
             .filter(Boolean);
         if (!repoPaths.length) return;
@@ -375,7 +374,7 @@ export class GitRepoTree {
         const repoList = Array.isArray(repoPaths)
             ? repoPaths
                 .map((repoPath) => this.findRepoOverview(repoPath))
-                .filter((repo) => repo && getCommittablePaths(repo).length > 0)
+                .filter((repo) => repo?.path)
             : [];
         if (!repoList.length) {
             return { checked: false, indeterminate: false, disabled: true };
@@ -631,7 +630,7 @@ export class GitRepoTree {
                 repoCheckbox.checked = repoCheckboxState.checked;
                 repoCheckbox.indeterminate = repoCheckboxState.indeterminate;
                 const aheadCount = Number(repo?.ahead) || 0;
-                repoCheckbox.disabled = getCommittablePaths(repo).length === 0 && aheadCount === 0;
+                repoCheckbox.disabled = !repo?.path;
 
                 const changesToggle = document.createElement('button');
                 changesToggle.type = 'button';
@@ -730,7 +729,7 @@ export class GitRepoTree {
             repoCheckbox.checked = repoCheckboxState.checked;
             repoCheckbox.indeterminate = repoCheckboxState.indeterminate;
             const aheadCount = Number(repo?.ahead) || 0;
-            repoCheckbox.disabled = getCommittablePaths(repo).length === 0 && aheadCount === 0;
+            repoCheckbox.disabled = !repo?.path;
 
             const changesToggle = document.createElement('button');
             changesToggle.type = 'button';

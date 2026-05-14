@@ -66,7 +66,7 @@
                             <tr>
                                 <td>Git execution service</td>
                                 <td><code>gitAgent/lib/git-service.mjs</code></td>
-                                <td>Runs Git subprocesses with guardrails for paths, timeouts, and safe error reporting.</td>
+                                <td>Composes focused operation modules from <code>gitAgent/lib/git/</code>; command execution, validation, working tree operations, stash/conflict handling, remote operations, and identity management stay in separate files.</td>
                             </tr>
                             <tr>
                                 <td>GitHub auth bridge</td>

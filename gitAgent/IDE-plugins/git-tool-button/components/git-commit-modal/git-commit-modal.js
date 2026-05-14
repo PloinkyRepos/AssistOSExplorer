@@ -272,26 +272,7 @@ export class GitCommitModal {
         this.dialog.ensureDialogResizable();
         (async () => {
             await this.refreshGithubAuthStatus({ silent: true }).catch(() => {});
-            const remembered = getRememberedGitIdentity();
-            const githubUser = this.state.githubAuth?.connection?.user || {};
-            const githubName = String(githubUser?.login || githubUser?.name || '').trim();
-            const githubEmail = String(githubUser?.email || '').trim();
-            const initialName = remembered?.name || githubName || '';
-            const initialEmail = remembered?.email || githubEmail || '';
-            const hasIdentity = Boolean(initialName && initialEmail);
-            if (!hasIdentity) {
-                this.setState({
-                    credentialsGate: true,
-                    identityPrompt: {
-                        ...this.state.identityPrompt,
-                        visible: true,
-                        repoPath: this.state.selectedRepoPath || this.state.repoPath || '',
-                        pendingAction: null,
-                        name: initialName,
-                        email: initialEmail
-                    }
-                }, { silent: true });
-            }
+            
             this.syncStaticUI();
             const gateActive = await this.ensureCredentialsGate();
             if (!gateActive) {
@@ -350,31 +331,62 @@ export class GitCommitModal {
 
     async ensureCredentialsGate() {
         const remembered = getRememberedGitIdentity();
-        const githubUser = this.state.githubAuth?.connection?.user || {};
+        const github = this.state.githubAuth || {};
+        const githubUser = github.connection?.user || {};
         const githubName = String(githubUser?.login || githubUser?.name || '').trim();
         const githubEmail = String(githubUser?.email || '').trim();
         const name = remembered.name || githubName || '';
         const email = remembered.email || githubEmail || '';
-        if (name && email) {
+        const hasIdentity = Boolean(name && email);
+
+        const authMethod = normalizeGitAuthMethod(this.state.authPrompt?.authMethod || getRememberedGitAuthMethod());
+        const githubConnected = Boolean(github.connected && github.connection?.source === 'github');
+        const tokenStored = Boolean(github.tokenStored);
+        const hasAuth = authMethod === 'github' ? githubConnected : tokenStored;
+
+        if (hasIdentity && hasAuth) {
             if (this.state.credentialsGate) {
                 this.state.credentialsGate = false;
                 this.syncStaticUI();
             }
             return false;
         }
+
         const repoPath = await this.resolveIdentityRepoPath();
         this.state.credentialsGate = true;
         this.state.identityPrompt = {
+            ...this.state.identityPrompt,
             visible: true,
             repoPath,
             pendingAction: null,
             name,
             email
         };
+        this.state.authPrompt = {
+            ...this.state.authPrompt,
+            visible: !hasAuth,
+            authMethod
+        };
+        
         this.syncStaticUI();
-        this.updateIdentityPrompt({ focus: !name ? 'name' : (!email ? 'email' : 'name') });
+        
+        // Ensure the credentials prompt shows the 'authentication' tab
+        const presenter = this.ui.getCredentialsPromptPresenter?.();
+        if (presenter && typeof presenter.switchTab === 'function') {
+            presenter.switchTab('authentication');
+        }
+
+        this.updateIdentityPrompt({ 
+            focus: !name ? 'name' : (!email ? 'email' : (authMethod === 'token' && !tokenStored ? 'token' : 'name')),
+            activeTab: 'authentication'
+        });
         this.updateCommitButtons();
-        this.setStatusLine('Set name and email to continue.', true);
+        
+        let statusMsg = 'Set name, email and authentication to continue.';
+        if (!hasIdentity && hasAuth) statusMsg = 'Set name and email to continue.';
+        if (hasIdentity && !hasAuth) statusMsg = authMethod === 'github' ? 'Connect GitHub to continue.' : 'Enter a token to continue.';
+        
+        this.setStatusLine(statusMsg, true);
         return true;
     }
 

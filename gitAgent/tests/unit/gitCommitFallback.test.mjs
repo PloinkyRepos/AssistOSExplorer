@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+    humanizeGitError,
+    isGitAuthError,
     isLlmUnavailableError,
     buildFallbackCommitMessage
 } from '../../IDE-plugins/git-tool-button/components/git-commit-modal/git-commit-modal-utils.js';
@@ -13,6 +15,15 @@ test('isLlmUnavailableError matches missing model configuration failures', () =>
     );
     assert.equal(isLlmUnavailableError('No default LLM agent available.'), true);
     assert.equal(isLlmUnavailableError('Authentication failed.'), false);
+});
+
+test('missing GitHub token for remote creation is treated as an auth error', () => {
+    const message = 'GitHub authentication is required to create the remote repository.';
+    assert.equal(isGitAuthError(message), true);
+    assert.equal(
+        humanizeGitError(message, { action: 'push' }),
+        'Authentication required. Connect GitHub or enter your token to create the remote repository.'
+    );
 });
 
 test('buildFallbackCommitMessage uses specific filenames for a single repo selection', () => {

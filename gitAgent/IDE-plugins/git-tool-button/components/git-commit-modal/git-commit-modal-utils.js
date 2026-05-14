@@ -19,6 +19,9 @@ export function humanizeGitError(message, { action = null } = {}) {
     if (lower.includes('terminal prompts disabled') || lower.includes('could not read username')) {
         return 'Authentication required. Open Git settings and connect GitHub or enter your token.';
     }
+    if (lower.includes('github authentication is required to create the remote repository')) {
+        return 'Authentication required. Connect GitHub or enter your token to create the remote repository.';
+    }
     if (lower.includes('could not read password')) {
         return 'Authentication required. Open Git settings and connect GitHub or enter your token.';
     }
@@ -205,6 +208,7 @@ export function isGitAuthError(message) {
     if (lower.includes('fatal: authentication')) return true;
     if (lower.includes('http basic: access denied')) return true;
     if (lower.includes('permission denied')) return true;
+    if (lower.includes('github authentication is required to create the remote repository')) return true;
     return false;
 }
 

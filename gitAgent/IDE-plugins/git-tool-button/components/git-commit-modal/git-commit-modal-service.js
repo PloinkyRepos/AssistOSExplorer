@@ -50,6 +50,7 @@ export function createGitCommitService({ callTool, callAgentTool }) {
         gitStatus: (path, options = {}) => callAgentTool('gitAgent', 'git_status', { path, ...options }),
         gitPush: (payload) => callAgentTool('gitAgent', 'git_push', payload),
         gitPull: (payload) => callAgentTool('gitAgent', 'git_pull', payload),
+        gitRemoteSet: (payload) => callAgentTool('gitAgent', 'git_remote_set', payload),
         gitSetIdentity: (payload) => callAgentTool('gitAgent', 'git_set_identity', payload),
         gitStage: (path, files) => callAgentTool('gitAgent', 'git_stage', { path, files }),
         gitStageExact: (path, files) => callAgentTool('gitAgent', 'git_stage_exact', { path, files }),
