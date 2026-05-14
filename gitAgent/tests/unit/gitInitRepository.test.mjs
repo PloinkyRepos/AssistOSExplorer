@@ -99,6 +99,23 @@ test('gitInitRepository derives the GitHub repository URL from the local reposit
     });
 });
 
+test('gitInitRepository stores canonical GitHub repository URLs', async () => {
+    await withTempWorkspace(async (workspaceDir) => {
+        const gitService = createGitService({
+            validatePath: async (value) => value
+        });
+
+        const result = await gitService.gitInitRepository({
+            path: workspaceDir,
+            name: 'canonical-repo',
+            remoteUrl: 'https://github.com/AssistosTest/canonical-repo.git/'
+        });
+
+        assert.equal(result.ok, true);
+        assert.equal(runGit(result.repoPath, ['remote', 'get-url', 'origin']), 'https://github.com/AssistosTest/canonical-repo.git');
+    });
+});
+
 test('gitDiff handles HEAD in a new repository without commits', async () => {
     await withTempWorkspace(async (workspaceDir) => {
         const gitService = createGitService({

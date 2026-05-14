@@ -15,6 +15,11 @@ import {
     normalizeGitAuthMethod,
     normalizeGitStatusPayload
 } from "./git-commit-modal-utils.js";
+import {
+    getGithubRepositoryApiUrl,
+    getGithubRepositoryCreateUrl,
+    parseGithubRepositoryRemote
+} from "./github-remote-utils.js";
 import { withGlobalLoader } from "/explorer/utils/globalLoader.js";
 
 export function createGitOpsActions(ctx) {
@@ -87,9 +92,22 @@ export function createGitOpsActions(ctx) {
         };
     };
 
+    const assertGithubTokenAvailableForRemoteCreate = async () => {
+        const token = await service.getStoredGitToken?.();
+        if (!token) {
+            throw new Error('GitHub authentication is required to create the remote repository.');
+        }
+        return token;
+    };
+
     const gitPushWithToken = async (repoPath, _token = null) => {
         const payload = { path: repoPath };
         await service.gitPush(payload);
+    };
+
+    const gitPushAfterEnsuringRemote = async (repoPath) => {
+        await ensureRemoteExists(repoPath);
+        await gitPushWithToken(repoPath);
     };
 
     const getRemoteUrl = async (repoPath) => {
@@ -103,26 +121,17 @@ export function createGitOpsActions(ctx) {
     };
 
     const getRepoNameFromRemote = (remoteUrl) => {
-        const url = String(remoteUrl || '').trim();
-        if (!url) return '';
-        const withoutGit = url.replace(/\.git$/, '');
-        const parts = withoutGit.split('/').filter(Boolean);
-        return parts[parts.length - 1] || '';
+        return parseGithubRepositoryRemote(remoteUrl)?.repo || '';
     };
 
     const getGithubOwnerAndRepo = (remoteUrl) => {
-        const url = String(remoteUrl || '').trim().replace(/\.git$/, '');
-        const httpsMatch = url.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)$/);
-        if (httpsMatch) return { owner: httpsMatch[1], repo: httpsMatch[2] };
-        const sshMatch = url.match(/^git@github\.com:([^/]+)\/([^/]+)$/);
-        if (sshMatch) return { owner: sshMatch[1], repo: sshMatch[2] };
-        return null;
+        return parseGithubRepositoryRemote(remoteUrl);
     };
 
     const githubRepoExists = async (owner, repo) => {
         const token = await service.getStoredGitToken?.();
         if (!token) return false;
-        const response = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
+        const response = await fetch(getGithubRepositoryApiUrl(owner, repo), {
             method: 'HEAD',
             headers: {
                 Accept: 'application/vnd.github+json',
@@ -133,12 +142,42 @@ export function createGitOpsActions(ctx) {
         return response.ok;
     };
 
-    const createGithubRepository = async (repoPath, repoName) => {
-        const token = await service.getStoredGitToken?.();
-        if (!token) {
-            throw new Error('GitHub token is required to create a remote repository.');
+    const getAuthenticatedGithubLogin = async (token) => {
+        const response = await fetch('https://api.github.com/user', {
+            method: 'GET',
+            headers: {
+                Accept: 'application/vnd.github+json',
+                Authorization: `Bearer ${token}`,
+                'User-Agent': 'ploinky-git-agent'
+            }
+        });
+        if (!response.ok) {
+            throw new Error('GitHub authentication is required to create the remote repository.');
         }
-        const response = await fetch('https://api.github.com/user/repos', {
+        const payload = await response.json().catch(() => ({}));
+        const login = String(payload?.login || '').trim();
+        if (!login) {
+            throw new Error('GitHub authentication did not return an account login.');
+        }
+        return login;
+    };
+
+    const readGithubErrorMessage = async (response) => {
+        const text = await response.text().catch(() => '');
+        if (!text) return '';
+        try {
+            const payload = JSON.parse(text);
+            return String(payload?.message || text).trim();
+        } catch {
+            return text.trim();
+        }
+    };
+
+    const createGithubRepository = async (owner, repoName) => {
+        const token = await assertGithubTokenAvailableForRemoteCreate();
+        const login = await getAuthenticatedGithubLogin(token);
+        const createUrl = getGithubRepositoryCreateUrl(owner, login);
+        const response = await fetch(createUrl, {
             method: 'POST',
             headers: {
                 Accept: 'application/vnd.github+json',
@@ -152,8 +191,8 @@ export function createGitOpsActions(ctx) {
             })
         });
         if (!response.ok) {
-            const text = await response.text().catch(() => '');
-            throw new Error(text || `Failed to create repository (${response.status})`);
+            const message = await readGithubErrorMessage(response);
+            throw new Error(message || `Cannot create GitHub repository ${owner}/${repoName} (${response.status}).`);
         }
         const result = await response.json();
         return { ok: true, htmlUrl: result?.html_url || '', cloneUrl: result?.clone_url || '' };
@@ -164,11 +203,15 @@ export function createGitOpsActions(ctx) {
         if (!remoteUrl) return;
         const parsed = getGithubOwnerAndRepo(remoteUrl);
         if (!parsed) return;
+        if (parsed.canonicalUrl && remoteUrl !== parsed.canonicalUrl) {
+            await service.gitRemoteSet?.({ path: repoPath, remote: 'origin', url: parsed.canonicalUrl });
+        }
         const exists = await githubRepoExists(parsed.owner, parsed.repo);
         if (!exists) {
-            setStatusLine(`Remote "${parsed.repo}" not found on GitHub. Creating...`);
-            await createGithubRepository(repoPath, parsed.repo);
-            setStatusLine(`Created remote "${parsed.repo}".`);
+            await assertGithubTokenAvailableForRemoteCreate();
+            setStatusLine(`Remote "${parsed.owner}/${parsed.repo}" not found on GitHub. Creating...`);
+            await createGithubRepository(parsed.owner, parsed.repo);
+            setStatusLine(`Created remote "${parsed.owner}/${parsed.repo}".`);
         }
     };
 
@@ -193,7 +236,7 @@ export function createGitOpsActions(ctx) {
         await service.gitPull(payload);
     };
 
-    const pushRepos = async (repoPaths, { token = null } = {}) => {
+    const pushRepos = async (repoPaths, { token = null, allowNoop = false, showNoopStatus = true } = {}) => {
         const state = getState();
         const list = Array.isArray(repoPaths) ? repoPaths.filter(Boolean) : [];
         if (!list.length) {
@@ -211,8 +254,7 @@ export function createGitOpsActions(ctx) {
                 continue;
             }
             try {
-                await ensureRemoteExists(repoPath);
-                await gitPushWithToken(repoPath);
+                await gitPushAfterEnsuringRemote(repoPath);
                 pushedRepos += 1;
                 pushedCommits += Math.max(0, Number(ahead) || 0);
             } catch (error) {
@@ -239,8 +281,10 @@ export function createGitOpsActions(ctx) {
             }
         }
         if (pushedRepos === 0 && list.length) {
-            setStatusLine('Nothing to push. Selected repositories are up to date.');
-            return { ok: false, pushedRepos, pushedCommits, skippedRepos };
+            if (showNoopStatus) {
+                setStatusLine('Nothing to push. Selected repositories are up to date.');
+            }
+            return { ok: Boolean(allowNoop), pushedRepos, pushedCommits, skippedRepos };
         }
         return { ok: true, pushedRepos, pushedCommits, skippedRepos };
     };
@@ -426,7 +470,7 @@ export function createGitOpsActions(ctx) {
                     if (shouldPush) {
                         const auth = getAuthContext(getState());
                         try {
-                            await gitPushWithToken(repoPath);
+                            await gitPushAfterEnsuringRemote(repoPath);
                             pushSummary.pushedRepos += 1;
                             pushSummary.pushedCommits += 1;
                         } catch (error) {
@@ -504,7 +548,7 @@ export function createGitOpsActions(ctx) {
                 }
 
                 if (!stagedSelections.length) {
-                    const pushSummary = await pushRepos(selected);
+                    const pushSummary = await pushRepos(selected, { allowNoop: true, showNoopStatus: false });
                     if (!pushSummary?.ok) {
                         applyState({ pendingAction: null }, { silent: true });
                         dispatchAutocommitReset();
@@ -568,7 +612,7 @@ export function createGitOpsActions(ctx) {
                 for (const repoPath of selected) {
                     try {
                         const aheadCount = Math.max(0, Number(await getAheadCountForRepo(repoPath)) || 0);
-                        await gitPushWithToken(repoPath);
+                        await gitPushAfterEnsuringRemote(repoPath);
                         pushedRepos += 1;
                         pushedCommits += Math.max(1, aheadCount);
                     } catch (error) {

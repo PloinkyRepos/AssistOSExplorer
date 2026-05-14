@@ -68,6 +68,9 @@ For the host-owned Explorer `New` menu, the owning Git behavior is:
 - `New repository` asks for a repository name
 - the current Explorer directory is used as the parent path
 - execution creates a new child directory and initializes a Git repository inside it
+- GitHub repository remotes are stored in canonical clone form, such as `https://github.com/owner/name.git`
+- if a later push needs to create a missing GitHub remote repository, Git authentication must be requested before the GitHub create call is attempted
+- GitHub remote creation must target the owner encoded in the remote URL: use the authenticated user's repository endpoint only when that owner matches the authenticated login, otherwise use the organization repository endpoint for that owner
 
 ## Behavioral Specification
 
