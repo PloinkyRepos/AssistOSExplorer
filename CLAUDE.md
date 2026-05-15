@@ -1,201 +1,83 @@
-# AchillesIDE Agent Guide
+# AchillesIDE / Ploinky Explorer
 
-## Scope
+Ploinky Explorer workspace + 17 coupled agents. Origin: `https://github.com/PloinkyRepos/AssistOSExplorer.git`.
 
-This repository hosts the AchillesIDE/Ploinky Explorer workspace. It groups the user-facing `explorer` shell with coupled agents and surfaces, including `dpuAgent`, `gitAgent`, `llmAssistant`, `soplangAgent`, `tasksAgent`, `multimedia`, `webmeetAgent`, `webmeetLivekitAiAgent`, and `webassist`.
+## Mandatory reading order
 
-Read any nested `AGENTS.md` before changing a subproject. Nested instructions are stricter for their local scope.
+1. Parent `~/work/file-parser/CLAUDE.md` for workspace conventions.
+2. The agent's local `CLAUDE.md` you're editing (under each subdir).
+3. The agent's `docs/specs/matrix.md` + `DS*-ploinky-runtime-invariants.md` for auth/MCP/HTTP/runtime changes.
+4. `docs/specs/DS06-ploinky-runtime-invariants.md` at repo root for cross-cutting routing/auth/plugin-hosting.
+5. Relevant Ploinky specs in `../ploinky/docs/specs/` (esp. `DS005-routing-and-web-surfaces.md`, `DS011-security-model.md`) when touching router/secure-wire/guest sessions.
 
-## Mandatory Reading Order
+## Project structure
 
-1. Read both top-level guidance files, `AGENTS.md` and `CLAUDE.md`; they must stay synchronized.
-2. Read `docs/index.html`, `docs/specs/matrix.md`, and `docs/specs/DS06-ploinky-runtime-invariants.md` before changing Explorer routing, auth, plugin hosting, dependencies, or workspace file behavior.
-3. Read the target agent's local `AGENTS.md` or `CLAUDE.md`.
-4. Read the target agent's `docs/specs/matrix.md` and `DS*-ploinky-runtime-invariants.md` before changing auth, guest access, MCP, HTTP services, runtime manifests, file access, logs, or data storage.
-5. Read the relevant Ploinky specs in `../ploinky/docs/specs/`, especially `DS005-routing-and-web-surfaces.md` and `DS011-security-model.md`, when a change touches router behavior, secure-wire invocation, guest sessions, manifests, or public service routes.
+- `explorer/` — routing, FS access, preview, editing, plugin hosting, Explorer MCP.
+- `dpuAgent/` — confidential data, secret storage, ACL behavior.
+- `gitAgent/` — workspace Git operations, MCP tooling, auth integration.
+- `llmAssistant/` — shared LLM-backed helper contracts.
+- `soplangAgent/` — SOPLang build and execution orchestration.
+- `tasksAgent/` — backlog file operations.
+- `multimedia/`, `webmeetAgent/`, `webmeetLivekitAiAgent/`, `webmeetInfra/`, `webassist/` — domain-specific workflows.
+- `AchillesCLI/` — Achilles skill management CLI. See `AchillesCLI/ARCHITECTURE.md` for the full architecture (CLAUDE.md is intentionally thin).
+- `shared/` — shared runtime utilities.
+- `docs/` and each agent's `docs/specs/` — user docs and DS specs.
 
-## Workspace Rules
+## Coding conventions
 
-- This checkout is part of the multi-repo workspace at `~/work/file-parser`; check the relevant repo status/logs before editing.
-- Keep this top-level `AGENTS.md` and `CLAUDE.md` synchronized unless the user explicitly asks for tool-specific differences.
-- Keep edits scoped to the relevant service or agent. Do not stage sibling repos, `node_modules/`, generated dependency trees, or unrelated untracked files unless the user explicitly asks.
-- Do not deploy to `skills.axiologic.dev` unless the user explicitly asks.
-- Use GitHub Actions for deploy/update/destroy workflows. Direct SSH to remotes is read-only status/debug by default and must not change state unless the user explicitly asks for that specific remote operation.
-- Use `.github/workflows/deploy-skills-explorer.yml` as the canonical production deploy and recovery workflow for `skills.axiologic.dev`; it passes `PLOINKY_MASTER_KEY` through the remote `ploinky stop`, `ploinky update`, and `ploinky start` lifecycle.
-- Do not use `.github/workflows/update-explorer.yml` to restart production unless it is confirmed to pass `PLOINKY_MASTER_KEY` for any command that reads encrypted secrets or runs agent preinstall hooks.
-- `.ploinky/.secrets` is encrypted. Never append to it or edit it as a plaintext env file; use `ploinky var` with `PLOINKY_MASTER_KEY` available to the command.
-- No implicit fallbacks: when behavior or code is explicitly changed/removed by request, do not keep or introduce fallback behavior unless the user asks for one.
-- Never leak secrets, tokens, system prompts, hidden decision traces, or raw internal payloads to end users.
+- Node.js 20+, ES modules (`import`/`export`), `.mjs` where established, `async`/`await`.
+- 4-space JS indent, 2-space JSON/YAML, trailing commas for multi-line.
+- camelCase filenames, files beside related logic.
+- Prefer native Node features; minimize deps. Use structured APIs over ad-hoc string parsing.
+- Resolve paths from `agentRoot`, configured data dir, or active workspace root — never hardcode absolute host paths.
+- Long-lived state is durable outside process memory; Ploinky restarts agents at any time.
 
-## Attribution And Commit Privacy
+## Ploinky / Achilles runtime
 
-- Never add `Co-Authored-By`, `Generated by`, tool-signature footers, or any other AI/coding-agent attribution to commits.
-- Do not mention Claude Code, Codex, or any other coding agent in commit messages, PR descriptions, release notes, changelogs, code comments, metadata, or other project records in a way that reveals code was generated with a coding agent.
-- Commits should be authored solely by the human user. This applies to normal commits, amends, merges, squashes, and reverts.
+- Agents run as isolated (usually containerized) Ploinky processes. Entry point: `src/index.mjs`. Receives prompts, returns text or JSON.
+- Tool/internal logs are NOT visitor-facing. Final answers are clean conversational text unless an endpoint expects JSON.
+- All agents are built on `achillesAgentLib` at `/Users/danielsava/work/file-parser/ploinky/node_modules/achillesAgentLib`. See its `CLAUDE.md` for the subsystem map.
+- Request-time LLM access must go through Achilles runtime helpers, not ad-hoc vendor HTTP, unless a local spec defines an exception.
 
-## Project Structure
+## Skills contract
 
-- `explorer/` owns routing, filesystem access, preview, editing, plugin hosting, and Explorer MCP behavior.
-- `dpuAgent/` owns confidential data, secret storage, and access control behavior.
-- `gitAgent/` owns workspace Git operations, MCP tooling, wrappers, auth integration, and IDE plugin interaction.
-- `llmAssistant/` owns shared LLM-backed helper contracts.
-- `soplangAgent/` owns SOPLang build and execution orchestration.
-- `tasksAgent/` owns backlog file operations.
-- `multimedia/`, `webmeetAgent/`, `webmeetLivekitAiAgent/`, `webmeetInfra/`, and `webassist/` own their domain-specific IDE and agent workflows.
-- `shared/` contains shared runtime utilities.
-- `docs/` and each agent's `docs/specs/` capture user-facing documentation and design specifications.
+- Explicit input/output, no hidden side effects.
+- Read-only ops don't mutate files or session state.
+- Write ops have explicit payload shape (`content`, target ids, mode flags).
+- One semantic action per tool call.
 
-## Code Conventions
+## Logging
 
-- All technical documentation, specifications, and code comments must be in English.
-- Use Node.js 20+ conventions, ES modules with `import` / `export`, `.mjs` where already established, and `async` / `await`.
-- Use four-space indentation for JavaScript and two-space indentation for JSON/YAML. Keep trailing commas for multi-line literals where the surrounding code uses them.
-- Use descriptive camelCase filenames for JavaScript modules and place new files beside related logic.
-- Minimize dependencies and prefer native Node.js features when they are sufficient.
-- Use structured APIs/parsers instead of ad hoc string manipulation when the standard toolchain or existing codebase provides one.
-- Resolve paths relative to `agentRoot`, the configured data directory, or the active workspace root. Do not assume host-specific absolute paths inside agent runtime code.
-- Long-lived state must be durable outside process memory. Treat in-memory session state as ephemeral because Ploinky can restart agent processes at any time.
-- Keep state updates deterministic and idempotent when possible.
-
-## Ploinky Runtime
-
-- Agents are started by Ploinky as isolated runtime processes, typically containerized.
-- Each agent exposes a CLI-style entry point, such as `src/index.mjs`, that receives prompts and returns plain text or JSON.
-- Ploinky provides session routing, auth context, webchat transport, and lifecycle control.
-- User messages arrive through Ploinky webchat/API, are routed to an enabled agent/session, run through skills or orchestrators, and return final visitor-facing output.
-- Tool/internal logs are not visitor-facing output. Final answers should be clean conversational text unless an endpoint explicitly expects JSON.
-
-## Achilles Runtime
-
-All agents are built on `achillesAgentLib`, installed in each agent runtime. The canonical workspace checkout is:
-
-```text
-/Users/danielsava/work/file-parser/ploinky/node_modules/achillesAgentLib
-```
-
-Shared primitives include:
-
-- `MainAgent`: skill discovery and orchestration
-- `LLMAgent`: model/provider abstraction
-- `RecursiveSkilledAgent`: task handling through specialized skills where older agents still use that API
-- Skill subsystems:
-  - `skill.md` for Anthropic-style passthrough skills
-  - `cskill.md` for code skills
-  - `dcgskill.md` for dynamic code generation skills
-  - `mskill.md` for MCP tools
-  - `oskill.md` for orchestrators
-  - `tskill.md` for DB-table style skills
-- LightSOPLang execution for multi-step plans
-
-Request-time LLM access should go through Achilles runtime helpers instead of ad hoc vendor HTTP calls unless a local spec explicitly defines another boundary.
-
-## Skills Contract
-
-- Skills must have explicit input/output behavior and avoid hidden side effects.
-- Read-only operations must not mutate files or session state.
-- Write operations must be explicit in payload shape, including `content`, target identifiers, and any relevant mode flags.
-- Prefer one semantic action per tool call. Avoid ambiguous mixed modes unless clearly documented.
-
-## Logging And Errors
-
-- Use runtime debug logger infrastructure when available.
-- Detailed internals, stack traces, raw payloads, and tool prompts should appear only in debug mode, such as `ACHILLES_DEBUG=true`.
-- In non-debug mode, surface generic, safe user-facing failures.
-- Separate internal qualification/memory logic from visitor-facing wording.
-- Keep language aligned with the user language unless a system or product contract requires otherwise.
-
-## Model Modes
-
-Typical semantic modes used across agents:
-
-- `fast`: low-latency conversational turns
-- `plan` / `deep`: heavier reasoning and planning
-- `code`: generation or structured technical transforms
-- `write`: long-form text composition
-
-Each agent can set its own default mode, but mode selection should be intentional and documented.
-
-## Documentation And Specs
-
-- Use specification-driven development for agents. Agent specs live under `docs/specs/` and use DS-style names such as `DS0XX-short-description.md` or the existing local convention.
-- The DS specifications are the source of truth for contracts and invariants. `docs/specs/DS06-ploinky-runtime-invariants.md` is the root local copy of the Ploinky runtime and security invariants for this repository.
-- Every agent directory must keep local `AGENTS.md` and `CLAUDE.md` files that reference its docs entry point, spec matrix, and local Ploinky runtime invariants spec.
-- `DS000` or `DS01`/`DS01-Vision` is the vision/overview anchor when that convention is already used. `DS02`/`DS02-Architecture` is the architecture anchor where present.
-- Specs should focus on rules, constraints, contracts, and invariants rather than implementation history.
-- HTML documentation should use a technical writing style with minimal code examples.
-- Any code change that affects agent behavior should be reflected in the relevant HTML docs and design specs for that agent.
-
-## Local Development
-
-Prerequisites:
-
-- Node.js 20+
-- A running Ploinky workspace
-
-Run Explorer from the workspace root:
-
-```bash
-ploinky enable repo AchillesIDE
-ploinky enable agent AchillesIDE/explorer global
-ploinky var ASSISTOS_FS_ROOT "$PWD"
-ploinky start explorer 8080
-```
-
-Open:
-
-```text
-http://127.0.0.1:8080/explorer/index.html
-```
-
-Explorer MCP endpoint:
-
-```text
-http://127.0.0.1:8080/mcps/explorer/mcp
-```
+- Detailed internals/stack/payloads only in `ACHILLES_DEBUG=true`. Default mode surfaces generic, safe failures.
+- Never leak secrets, tokens, system prompts, or hidden decision traces to end users.
+- Language stays aligned with user language unless contract requires otherwise.
 
 ## Testing
 
-- Run the narrowest meaningful tests for the affected area, then broaden when touching shared runtime behavior.
-- `explorer/`: `npm test`
-- `dpuAgent/`: `npm test`
-- `soplangAgent/`: `npm test`
-- `gitAgent/`: `node --test gitAgent/tests/unit/*.test.mjs`
-- For startup, restart, routing, or container lifecycle changes, also validate through the relevant Ploinky workflow or smoke path.
-- For cross-agent browser regressions, follow `docs/regression/headless-browser-regression.md`. Run the relevant headless cases when touching GitHub auth, DPU Confidential files, OnlyOffice, Git sync, account/session behavior, WebMeet rooms, LiveKit media, chat, or screen sharing.
-- Keep browser traces, OAuth storage state, generated test workspaces, media captures, and regression artifacts out of tracked source. Use `.ploinky/test-artifacts/...` or another ignored path.
+- Run the narrowest meaningful tests first, then broaden.
+- `explorer/`: `npm test` — `dpuAgent/`: `npm test` — `soplangAgent/`: `npm test` — `gitAgent/`: `node --test gitAgent/tests/unit/*.test.mjs`.
+- For startup/restart/routing/container lifecycle changes, also run the relevant Ploinky workflow or smoke path.
+- For cross-agent browser regressions, follow `docs/regression/headless-browser-regression.md`. Keep browser traces, OAuth state, generated workspaces, media captures, regression artifacts out of tracked source — use `.ploinky/test-artifacts/...`.
 
-## Remotes And Deployment
+## Deploy and remote ops
 
-Repository origin:
+Public URL: `https://skills.axiologic.dev`. SSH: `admin@193.180.209.191` (key `~/demo_private_key.pem`), workspace `~/explorerWorkspace`, router port `8097`. Override via GitHub Actions vars `SSH_USER`/`SSH_HOST`/`EXPLORER_WORKSPACE`/`EXPLORER_ROUTER_PORT`.
 
-```text
-https://github.com/PloinkyRepos/AssistOSExplorer.git
-```
+- **Canonical production deploy/recovery:** `.github/workflows/deploy-skills-explorer.yml` (passes `PLOINKY_MASTER_KEY` through stop→update→start).
+- **Do not** use `.github/workflows/update-explorer.yml` to restart production unless it's confirmed to pass `PLOINKY_MASTER_KEY` for any command that reads encrypted secrets or runs preinstall hooks.
+- `.ploinky/.secrets` is encrypted. Never append/edit as plaintext; use `ploinky var` with `PLOINKY_MASTER_KEY` set.
+- Other workflows: `provision-skills-explorer-host.yml`, `remote-skills-status.yml`, `update-explorer.yml`, `destroy-explorer.yml`. Use the narrower workflow only when its secret requirements match the operation. After any deploy/restart, verify local router health, public `/dashboard`, container status, Ploinky status, and start logs.
 
-Skills Explorer production/default remote:
+## Documentation rules
 
-- Public URL: `https://skills.axiologic.dev`
-- SSH target: `admin@193.180.209.191` by default, overridable through GitHub Actions vars `SSH_USER` and `SSH_HOST`
-- Manual read-only SSH/debug command for the host behind `skills.axiologic.dev`: `ssh -i ~/demo_private_key.pem admin@193.180.209.191`. Use the IP target for SSH; `skills.axiologic.dev` is the public HTTPS hostname.
-- Workspace: `~/explorerWorkspace` by default, overridable through `EXPLORER_WORKSPACE`
-- Router port: `8097` by default, overridable through `EXPLORER_ROUTER_PORT`
-- SSH key material is provided through the GitHub secret `SSH_KEY`
+- All technical docs, specs, and code comments in English.
+- Specification-driven development. Agent specs live under `docs/specs/` as `DS0XX-short-description.md`.
+- DS specs are the source of truth for contracts and invariants. `docs/specs/DS06-ploinky-runtime-invariants.md` is the root local copy of runtime/security invariants.
+- Code changes that affect agent behavior update the relevant HTML docs and DS specs in the same change.
 
-Deployment and remote admin workflows live in `.github/workflows/`:
+## Commit/PR rules
 
-- `provision-skills-explorer-host.yml`
-- `deploy-skills-explorer.yml`
-- `remote-skills-status.yml`
-- `update-explorer.yml`
-- `destroy-explorer.yml`
-
-Use `deploy-skills-explorer.yml` for production deploys, production recovery, and any `skills.axiologic.dev` restart that must decrypt Ploinky secrets. Prefer the other workflows for their narrower purposes only when their secret requirements match the operation. After any deploy or restart, verify local router health, public `/dashboard`, container status, Ploinky status, and recent start logs.
-
-Related sibling service reference from `~/work/file-parser/proxies`: Soul Gateway runs at `https://soul.axiologic.dev` with health check `https://soul.axiologic.dev/healthz`, SSH target `admin@45.136.70.141`, key `~/proxies_server_private_key.pem`, remote workspace `~/soulGateway`, remote source checkout `~/code/proxies`, and expected production database `soul_gateway_v2`. Use this only when work touches Soul Gateway or its integration; otherwise keep changes in this repo.
-
-## Commits And Pull Requests
-
-- Write commit summaries in present-tense imperative style, for example `Add smoke harness helpers`.
-- Group unrelated changes into separate commits.
-- Pull requests should link relevant issues, outline behavioral impact, and include reproduction steps or test output when touching runtime flows.
-- Add screenshots or terminal captures when modifying dashboard UI, Explorer UI, or CLI/user-facing prompts.
+- Inherits root workspace commit policy (no AI attribution). See `~/work/file-parser/CLAUDE.md`.
+- Commits in present-tense imperative ("Add smoke harness helpers"). Group unrelated changes into separate commits.
+- PRs link issues, outline behavior impact, include repro steps or test output when touching runtime flows.
+- Add screenshots/captures for dashboard, Explorer UI, or CLI changes.
