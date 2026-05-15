@@ -51,7 +51,7 @@
                 <p>This system now covers two distinct runtime families:</p>
                 <ul>
                     <li><strong>Document plugins</strong>, which mount into document-oriented surfaces such as <code>document</code>, <code>chapter</code>, <code>paragraph</code>, and <code>infoText</code>.</li>
-                    <li><strong>Application plugins</strong>, which extend the shell itself through host slots such as <code>file-exp:toolbar</code>, <code>file-exp:context-menu:file</code>, <code>file-exp:context-menu:directory</code>, and <code>file-exp:new-menu</code>.</li>
+                    <li><strong>Application plugins</strong>, which extend the shell itself through host slots such as <code>file-exp:toolbar</code>, <code>file-exp:context-menu:file</code>, <code>file-exp:context-menu:directory</code>, <code>file-exp:copilot-launch-extension</code>, and <code>file-exp:new-menu</code>.</li>
                 </ul>
                 <p>The discovery path, manifest validation, and asset resolution are shared. What changes is the hosting regime: document plugins render into document surfaces, while application plugins either mount a component into a shell slot or contribute semantic menu items into a host-owned menu.</p>
             </div>
@@ -76,6 +76,7 @@
                     <li><strong><code>menu</code></strong>, where Explorer keeps ownership of the menu structure and lets the plugin contribute menu items semantically into <code>file-exp:context-menu:file</code>, <code>file-exp:context-menu:directory</code>, or <code>file-exp:new-menu</code></li>
                 </ul>
                 <p>The distinction is important. Menu contributions are not arbitrary fragments of injected DOM. Explorer owns the menu surface, focus behavior, loading state, and item execution context. The plugin contributes item metadata, visibility logic, and the action implementation, usually by calling its owning agent through the Explorer bridge.</p>
+                <p>The <code>file-exp:copilot-launch-extension</code> slot is intentionally different: it is a metadata slot consumed by the normal Copilot WebChat launcher. Agent-owned plugins can use it to add generic launch query parameters without adding a second context-menu item or hard-coding domain behavior into Explorer core.</p>
                 <p>This is why the old description of application plugins as “toolbar buttons” is no longer sufficient. That was true when the shell only mounted components into <code>file-exp:toolbar</code>. It is no longer true after the introduction of host-owned menu surfaces and plugin-contributed menu items.</p>
                 <p>The current Git integration shows the intended model:</p>
                 <ul>

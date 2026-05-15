@@ -29,7 +29,7 @@ tasksAgent exposes backlog and task-file workflows to Explorer through MCP tools
 
 ## Runtime Defaults
 
-Uses `node:20-alpine`, `lite-sandbox: true`, and workspace path environment variables.
+Uses `node:24.15.0-alpine`, `lite-sandbox: true`, and workspace path environment variables.
 
 ## Key Paths
 

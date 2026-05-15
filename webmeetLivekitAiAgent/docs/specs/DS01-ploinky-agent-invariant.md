@@ -12,7 +12,7 @@ Fresh Explorer and WebMeet startup must not require the self-hosted AI worker de
 
 The `webmeetLivekitAiAgent` manifest owns:
 
-- the `node:20` runtime for the LiveKit Agents worker
+- the `node:24.15.0` runtime for the LiveKit Agents worker
 - the worker command `node /code/server/livekit-agent.mjs`
 - `readiness.protocol: "none"` because the worker is long-running and does not expose an HTTP or MCP readiness port
 - `@livekit/agents`, `@livekit/rtc-node`, and `achillesAgentLib` dependencies through this agent's `package.json`
