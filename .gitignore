@@ -15,6 +15,11 @@
 /webAssist/node_modules/
 /webmeetAgent/node_modules/
 /webmeetLivekitAiAgent/node_modules/
+/.agents/
+/AchillesCLI/
+/webassist/
+/webmeetInfra/
+/docs/prompts/onlyoffice-ploinky-agent-conversion.md
 *.DS_Store
 # >>> ploinky default-skills >>>
 .claude/skills/
