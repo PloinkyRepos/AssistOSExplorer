@@ -4,6 +4,10 @@
 /package-lock.json
 /node_modules/.package-lock.json
 /explorer/package-lock.json
+/tests/smoke/node_modules/
+/tests/smoke/test-results/
+/tests/smoke/playwright-report/
+/.ploinky/test-artifacts/
 .idea
 /soplangAgent/.tasksQueue
 /soplangAgent/achilles-debug.log

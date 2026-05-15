@@ -1,0 +1,15 @@
+{
+  "name": "@ploinky/assistosexplorer-smoke",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "test:quick": "playwright test --grep-invert @external",
+    "test:full": "SMOKE_GITHUB=1 SMOKE_ONLYOFFICE=1 SMOKE_WEBMEET_MEDIA=1 SMOKE_WEBMEET_SCREEN=1 SMOKE_OPEN_INTERPRETER=1 playwright test",
+    "install:browsers": "playwright install chromium",
+    "show-report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.60.0"
+  }
+}

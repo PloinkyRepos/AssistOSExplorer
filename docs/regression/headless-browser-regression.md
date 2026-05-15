@@ -27,6 +27,17 @@ Keep browser traces, videos, screenshots, OAuth storage state, and generated tes
 
 ## Browser Harness
 
+The maintainable Playwright suite lives in `tests/smoke/`. Use it for the automated baseline before or after any manual exploration:
+
+```bash
+cd tests/smoke
+npm ci
+npm run install:browsers
+SMOKE_BASE_URL=http://127.0.0.1:8080 npm test
+```
+
+The suite records traces, videos, screenshots, browser console events, failed requests, and upload/session evidence outside tracked source. See `tests/smoke/README.md` for flags such as `SMOKE_OPEN_INTERPRETER=1`, `SMOKE_WEBMEET_MEDIA=1`, `SMOKE_ONLYOFFICE=1`, and `SMOKE_GITHUB=1`.
+
 Use Playwright Chromium or the Codex browser automation surface with an isolated browser context per Explorer account. For media tests, launch Chromium with fake media devices:
 
 ```js
