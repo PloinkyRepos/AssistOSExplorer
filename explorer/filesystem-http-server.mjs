@@ -21,6 +21,8 @@ import { buildToolDefinitions } from './utils/server/tool-definitions.mjs';
 import { createToolHandlers } from './utils/server/tool-handlers.mjs';
 import { errorResponse } from './utils/server/responses.mjs';
 import { createOnlyOfficeHttpHandler } from './utils/server/onlyoffice/onlyoffice-http-routes.mjs';
+import { createAvatarSettingsHttpHandler } from './utils/server/avatar-settings/avatar-settings-http-routes.mjs';
+import { createAxiFaceAssetsHttpHandler } from './utils/server/avatar-settings/axi-face-runtime.mjs';
 
 const { Server } = mcpServer;
 const { StreamableHTTPServerTransport } = mcpStreamHttp;
@@ -86,6 +88,13 @@ const workspaceRoot = allowedDirectories.length > 0 ? allowedDirectories[0] : pa
 if (allowedDirectories.length > 1) {
   console.warn(`[filesystem-http] Multiple allowed directories found, using the first one as workspace root: ${workspaceRoot}`);
 }
+
+const handleAxiFaceAssetsHttpRequest = createAxiFaceAssetsHttpHandler({
+  fs,
+  path,
+  workspaceRoot,
+  env: process.env
+});
 
 let cacheConfig = createCacheConfig(process.env);
 
@@ -311,6 +320,12 @@ const handleOnlyOfficeHttpRequest = createOnlyOfficeHttpHandler({
   invalidateCachesForPath
 });
 
+const handleAvatarSettingsHttpRequest = createAvatarSettingsHttpHandler({
+  fs,
+  path,
+  workspaceRoot
+});
+
 const server = new Server({
   name: 'secure-filesystem-server',
   version: '0.2.0'
@@ -411,24 +426,34 @@ async function main() {
       res.end(payload);
       return;
     }
-    handleOnlyOfficeHttpRequest(req, res, parsedUrl).then((handled) => {
+    handleAvatarSettingsHttpRequest(req, res, parsedUrl).then((handled) => {
       if (handled) {
         return;
       }
-      if (parsedUrl.pathname === '/mcp') {
-        transport.handleRequest(req, res).catch((error) => {
-          console.error('[filesystem-http] transport error:', error);
-          if (!res.headersSent) {
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ jsonrpc: '2.0', error: { code: -32603, message: 'Internal server error' }, id: null }));
-          }
-        });
+      return handleAxiFaceAssetsHttpRequest(req, res, parsedUrl);
+    }).then((handled) => {
+      if (handled) {
         return;
       }
-      res.writeHead(404, { 'Content-Type': 'text/plain' });
-      res.end('Not Found');
+      return handleOnlyOfficeHttpRequest(req, res, parsedUrl);
+    }).then((handled) => {
+      if (handled) {
+        return;
+      }
+      if (parsedUrl.pathname !== '/mcp') {
+        res.writeHead(404, { 'Content-Type': 'text/plain' });
+        res.end('Not Found');
+        return;
+      }
+      transport.handleRequest(req, res).catch((error) => {
+        console.error('[filesystem-http] transport error:', error);
+        if (!res.headersSent) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ jsonrpc: '2.0', error: { code: -32603, message: 'Internal server error' }, id: null }));
+        }
+      });
     }).catch((error) => {
-      console.error('[filesystem-http] onlyoffice route error:', error);
+      console.error('[filesystem-http] http route error:', error);
       if (!res.headersSent) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ ok: false, error: 'Internal server error' }));

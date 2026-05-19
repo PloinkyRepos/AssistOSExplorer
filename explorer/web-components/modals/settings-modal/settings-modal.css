@@ -82,6 +82,10 @@ settings-modal[data-active-tab="users"] .modal-actions {
     display: none !important;
 }
 
+settings-modal[data-active-tab="avatar"] .modal-actions {
+    display: none !important;
+}
+
 settings-modal .keymap-description,
 settings-modal .theme-description,
 settings-modal .plugin-settings-description {
@@ -99,6 +103,251 @@ settings-modal .plugin-settings-status {
 
 settings-modal .plugin-settings-status.error {
     color: var(--file-exp-error);
+}
+
+settings-modal .avatar-settings-status {
+    min-height: 1.2rem;
+    margin-top: 8px;
+    color: var(--text-soft);
+    font-size: 0.9rem;
+}
+
+settings-modal .avatar-settings-status.error {
+    color: var(--file-exp-error);
+}
+
+settings-modal .avatar-settings-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+    margin-top: 14px;
+}
+
+settings-modal .avatar-settings-card {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    min-width: 0;
+    padding: 18px;
+    border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+    border-radius: 16px;
+    background:
+        linear-gradient(180deg, color-mix(in srgb, var(--surface) 94%, #ffffff 6%), var(--surface));
+    box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+    transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+settings-modal .avatar-settings-card:hover {
+    border-color: color-mix(in srgb, var(--accent) 20%, var(--border));
+    box-shadow: 0 18px 42px rgba(15, 23, 42, 0.1);
+    transform: translateY(-1px);
+}
+
+settings-modal .avatar-settings-card-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 16px;
+    align-items: center;
+}
+
+settings-modal .avatar-settings-card h3,
+settings-modal .avatar-settings-card p {
+    margin: 0;
+}
+
+settings-modal .avatar-settings-card h3 {
+    color: var(--text);
+    font-size: 1.05rem;
+    font-weight: 700;
+}
+
+settings-modal .avatar-settings-card p {
+    color: var(--text-soft);
+    font-size: 0.9rem;
+    line-height: 1.45;
+}
+
+settings-modal .avatar-preview {
+    display: grid;
+    place-items: center;
+    width: 92px;
+    height: 92px;
+    border: 1px solid color-mix(in srgb, var(--accent) 14%, var(--border));
+    border-radius: 18px;
+    background:
+        radial-gradient(circle at top, color-mix(in srgb, var(--accent) 10%, transparent), transparent 62%),
+        var(--surface-2, var(--surface));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+settings-modal .avatar-preview-fallback {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--white);
+    background: color-mix(in srgb, var(--accent) 42%, var(--surface) 58%);
+    font-size: 1.4rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+settings-modal .avatar-controls {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+settings-modal .avatar-field {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    min-width: 0;
+    padding: 12px;
+    border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--surface) 88%, var(--surface-2, var(--surface)) 12%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+settings-modal .avatar-field span,
+settings-modal .avatar-enable-toggle {
+    color: var(--text);
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+settings-modal .avatar-field input,
+settings-modal .avatar-field select {
+    width: 100%;
+    min-width: 0;
+}
+
+settings-modal .avatar-input {
+    background: var(--surface);
+    border-color: color-mix(in srgb, var(--border) 92%, transparent);
+    box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+settings-modal .avatar-input:hover {
+    border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
+}
+
+settings-modal .avatar-input:focus {
+    box-shadow:
+        0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent),
+        inset 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+settings-modal .avatar-field-checkbox {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    min-height: 56px;
+}
+
+settings-modal .avatar-checkbox-shell {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: auto;
+}
+
+settings-modal .avatar-checkbox-input {
+    appearance: auto;
+    -webkit-appearance: checkbox;
+    width: 18px;
+    height: 18px;
+    min-width: 18px;
+    margin: 0;
+    accent-color: var(--accent);
+    cursor: pointer;
+    box-shadow: none;
+}
+
+settings-modal .avatar-checkbox-input:hover {
+    transform: scale(1.03);
+}
+
+settings-modal .avatar-checkbox-input:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--accent) 24%, transparent);
+    outline-offset: 2px;
+}
+
+settings-modal .avatar-field-checkbox .avatar-checkbox-input {
+    width: 18px;
+}
+
+settings-modal .avatar-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 4px;
+}
+
+settings-modal .avatar-enable-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--surface) 88%, var(--surface-2, var(--surface)) 12%);
+}
+
+settings-modal .avatar-agent-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 4px 2px 0;
+}
+
+settings-modal .avatar-agent-button {
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface-2, var(--surface));
+    color: var(--text);
+    padding: 9px 14px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 120ms ease, background 120ms ease, color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+}
+
+settings-modal .avatar-agent-button:hover {
+    transform: translateY(-1px);
+    border-color: color-mix(in srgb, var(--accent) 24%, var(--border));
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+}
+
+settings-modal .avatar-agent-button.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+    box-shadow: 0 10px 20px rgba(37, 99, 235, 0.14);
+}
+
+settings-modal .avatar-agent-button.missing {
+    opacity: 0.72;
+    border-style: dashed;
+}
+
+.theme-dark settings-modal .avatar-settings-card {
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.24);
+}
+
+.theme-dark settings-modal .avatar-settings-card:hover {
+    box-shadow: 0 22px 48px rgba(0, 0, 0, 0.3);
+}
+
+.theme-dark settings-modal .avatar-field,
+.theme-dark settings-modal .avatar-enable-toggle {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 settings-modal .users-settings-frame-shell {
@@ -381,6 +630,11 @@ settings-modal .theme-option.active {
     }
 
     settings-modal .editor-settings-row {
+        grid-template-columns: 1fr;
+    }
+
+    settings-modal .avatar-settings-grid,
+    settings-modal .avatar-controls {
         grid-template-columns: 1fr;
     }
 }

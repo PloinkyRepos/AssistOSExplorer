@@ -13,8 +13,7 @@
   },
   "enable": [
     "webmeetInfra/stack",
-    "webmeetStt",
-    "webmeetAgent global"
+    "webmeetStt"
   ],
   "repos": {
     "webmeetInfra": "https://github.com/PloinkyRepos/webmeetInfra.git"

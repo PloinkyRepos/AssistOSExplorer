@@ -6,6 +6,7 @@ import {
 import { registerRuntimeComponent } from '../../utils/pluginUtils.ui.js';
 
 const isNonEmptyString = (value) => typeof value === 'string' && value.trim().length > 0;
+const runtimeImportCacheBust = Date.now().toString(36);
 
 export function createComponentRegistry(webSkel) {
     if (!webSkel) {
@@ -54,7 +55,8 @@ export function createComponentRegistry(webSkel) {
             return null;
         }
         try {
-            const module = await import(/* webpackIgnore: true */ `${safeBase}.js`);
+            const moduleUrl = `${safeBase}.js?runtimeImport=${encodeURIComponent(runtimeImportCacheBust)}`;
+            const module = await import(/* webpackIgnore: true */ moduleUrl);
             return module;
         } catch (error) {
             console.error(`[runtime-plugins] Failed to import presenter for ${meta.componentName}:`, error);

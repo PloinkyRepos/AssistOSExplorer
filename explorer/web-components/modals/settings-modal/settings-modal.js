@@ -8,7 +8,10 @@ import {
     normalizeShortcutString
 } from "../../../utils/keymap.js";
 import { getCurrentTheme, setTheme } from "../../../utils/theme.js";
-import { callExplorerTool, parseToolResult } from "../../../services/infrastructure/explorerApi.js";
+import {
+    callExplorerTool,
+    parseToolResult
+} from "../../../services/infrastructure/explorerApi.js";
 import {
     compareRuntimePluginEntries,
     forEachRuntimePluginEntry,
@@ -16,9 +19,44 @@ import {
     getRuntimePluginPolicyKey
 } from "../../../utils/pluginUtils.core.js";
 import { registerRuntimeComponent } from "../../../utils/pluginUtils.ui.js";
+import {
+    ensureAxiFaceLoaded,
+    getCurrentProfileAvatar,
+    normalizeAvatarConfig,
+    renderAxiFaceMarkup,
+    saveCurrentProfileAvatar
+} from "../../../services/profile-avatar-client.js";
 
 const settingsComponentPromises = new Map();
-const BASE_TABS = ['keymap', 'editor', 'theme', 'plugins', 'copilot'];
+const BASE_TABS = ['keymap', 'editor', 'theme', 'plugins', 'copilot', 'avatar'];
+const AVATAR_FIELD_DEFS = Object.freeze([
+    { key: 'generated', label: 'Generated', type: 'checkbox' },
+    { key: 'src', label: 'SVG source', type: 'text' },
+    { key: 'packSrc', label: 'Pack manifest', type: 'text' },
+    { key: 'assetMode', label: 'Asset mode', type: 'select', options: ['img', 'inline'] },
+    { key: 'style', label: 'Style', type: 'select', options: ['robot-soft', 'robot-minimal', 'sketch', 'emoji', 'terminal'] },
+    { key: 'palette', label: 'Palette', type: 'text' },
+    { key: 'complexity', label: 'Complexity', type: 'select', options: ['', 'low', 'medium', 'high'] },
+    { key: 'emotion', label: 'Emotion', type: 'select', options: ['neutral', 'idle', 'listening', 'thinking', 'speaking', 'happy', 'amused', 'confused', 'concerned', 'alert', 'sleepy'] },
+    { key: 'shape', label: 'Shape', type: 'select', options: ['circle', 'square', 'rounded', 'none'] },
+    { key: 'theme', label: 'Theme', type: 'select', options: ['auto', 'light', 'dark'] },
+    { key: 'thoughtMode', label: 'Thought mode', type: 'select', options: ['none', 'bubble', 'caption', 'ticker', 'inside'] },
+    { key: 'thought', label: 'Thought', type: 'text' },
+    { key: 'seed', label: 'Seed', type: 'text' },
+    { key: 'size', label: 'Size', type: 'text' },
+    { key: 'animated', label: 'Animated', type: 'checkbox' },
+    { key: 'listen', label: 'Listen', type: 'checkbox' },
+    { key: 'mode', label: 'Mode', type: 'select', options: ['static', 'controlled', 'event-driven', 'autonomous'] }
+]);
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+}
 
 function getCurrentAgentName() {
     try {
@@ -27,6 +65,29 @@ function getCurrentAgentName() {
     } catch (_) {
         return 'explorer';
     }
+}
+
+function defaultAvatarConfig(id, size = '72') {
+    return {
+        agentId: id,
+        generated: true,
+        src: '',
+        packSrc: '',
+        assetMode: 'img',
+        emotion: 'neutral',
+        size,
+        thought: '',
+        thoughtMode: 'none',
+        mode: 'static',
+        shape: 'circle',
+        theme: 'auto',
+        animated: true,
+        listen: false,
+        seed: id,
+        style: 'robot-soft',
+        palette: 'default',
+        complexity: ''
+    };
 }
 
 function normalizePathSegment(value) {
@@ -228,6 +289,20 @@ export class SettingsModal {
             copilotStatus: "",
             copilotStatusType: "",
             copilotDataLoaded: false,
+            avatarDataLoaded: false,
+            avatarStatus: "",
+            avatarStatusType: "",
+            avatarBusy: false,
+            avatarUser: null,
+            profileAvatar: defaultAvatarConfig('profile:current-user', '72'),
+            profileAvatarEnabled: true,
+            profileAvatarSource: null,
+            dpuProfileAvailable: true,
+            agentAvatarItems: [],
+            selectedAvatarAgentId: "",
+            selectedAgentAvatar: defaultAvatarConfig('agent', '72'),
+            selectedAgentAvatarEnabled: true,
+            canManageAgentAvatars: false,
             usersAccessChecked: false,
             usersAccess: false,
             usersUrl: ""
@@ -251,6 +326,9 @@ export class SettingsModal {
         if (this.state.activeTab === "copilot" && !this.state.copilotDataLoaded) {
             await this.loadCopilotSettingsData();
         }
+        if (this.state.activeTab === "avatar" && !this.state.avatarDataLoaded) {
+            await this.loadAvatarSettingsData();
+        }
     }
 
     cacheElements() {
@@ -259,6 +337,7 @@ export class SettingsModal {
         this.themeSection = this.element.querySelector('[data-section="theme"]');
         this.pluginsSection = this.element.querySelector('[data-section="plugins"]');
         this.copilotSection = this.element.querySelector('[data-section="copilot"]');
+        this.avatarSection = this.element.querySelector('[data-section="avatar"]');
         this.usersSection = this.element.querySelector('[data-section="users"]');
         this.usersTab = this.element.querySelector('[data-admin-tab]');
         this.usersFrame = this.element.querySelector('#usersSettingsFrame');
@@ -268,6 +347,17 @@ export class SettingsModal {
         this.pluginSettingsStatusEl = this.element.querySelector("#pluginSettingsStatus");
         this.copilotSettingsListEl = this.element.querySelector("#copilotSettingsList");
         this.copilotSettingsStatusEl = this.element.querySelector("#copilotSettingsStatus");
+        this.avatarSettingsStatusEl = this.element.querySelector("#avatarSettingsStatus");
+        this.profileAvatarPreviewEl = this.element.querySelector("#profileAvatarPreview");
+        this.agentAvatarPreviewEl = this.element.querySelector("#agentAvatarPreview");
+        this.profileAvatarControlsEl = this.element.querySelector('[data-avatar-scope="profile"]');
+        this.agentAvatarControlsEl = this.element.querySelector('[data-avatar-scope="agent"]');
+        this.agentAvatarCardEl = this.element.querySelector("#agentAvatarCard");
+        this.avatarAgentListEl = this.element.querySelector("#avatarAgentList");
+        this.profileAvatarEnabledInput = this.element.querySelector("#profileAvatarEnabled");
+        this.agentAvatarEnabledInput = this.element.querySelector("#agentAvatarEnabled");
+        this.saveProfileAvatarButton = this.element.querySelector("#saveProfileAvatarButton");
+        this.saveAgentAvatarButton = this.element.querySelector("#saveAgentAvatarButton");
         this.editorAutoSaveEnabledInput = this.element.querySelector('#editorAutoSaveEnabled');
         this.editorAutoSaveIntervalInput = this.element.querySelector('#editorAutoSaveIntervalSeconds');
         this.actionsEl = this.element.querySelector('.modal-actions');
@@ -294,6 +384,29 @@ export class SettingsModal {
             this.editorAutoSaveIntervalInput.addEventListener('input', () => this.handleEditorAutoSaveIntervalInput());
             this.editorAutoSaveIntervalInput.dataset.bound = 'true';
         }
+        if (this.profileAvatarControlsEl && !this.profileAvatarControlsEl.dataset.bound) {
+            this.profileAvatarControlsEl.addEventListener('input', () => this.handleAvatarControlsInput('profile'));
+            this.profileAvatarControlsEl.addEventListener('change', () => this.handleAvatarControlsInput('profile'));
+            this.profileAvatarControlsEl.dataset.bound = 'true';
+        }
+        if (this.agentAvatarControlsEl && !this.agentAvatarControlsEl.dataset.bound) {
+            this.agentAvatarControlsEl.addEventListener('input', () => this.handleAvatarControlsInput('agent'));
+            this.agentAvatarControlsEl.addEventListener('change', () => this.handleAvatarControlsInput('agent'));
+            this.agentAvatarControlsEl.dataset.bound = 'true';
+        }
+        if (this.agentAvatarEnabledInput && !this.agentAvatarEnabledInput.dataset.bound) {
+            this.agentAvatarEnabledInput.addEventListener('change', () => {
+                this.state.selectedAgentAvatarEnabled = Boolean(this.agentAvatarEnabledInput.checked);
+            });
+            this.agentAvatarEnabledInput.dataset.bound = 'true';
+        }
+        if (this.profileAvatarEnabledInput && !this.profileAvatarEnabledInput.dataset.bound) {
+            this.profileAvatarEnabledInput.addEventListener('change', () => {
+                this.state.profileAvatarEnabled = Boolean(this.profileAvatarEnabledInput.checked);
+                this.renderAvatarPreviews();
+            });
+            this.profileAvatarEnabledInput.dataset.bound = 'true';
+        }
     }
 
     switchTab(_target, tab) {
@@ -312,6 +425,14 @@ export class SettingsModal {
                 this.state.copilotStatus = error?.message || "Failed to load Copilot skills.";
                 this.state.copilotStatusType = "error";
                 this.renderCopilotSettingsStatus();
+            });
+        }
+        if (this.state.activeTab === "avatar") {
+            this.state.avatarDataLoaded = false;
+            this.loadAvatarSettingsData().catch((error) => {
+                this.state.avatarStatus = error?.message || "Failed to load avatar settings.";
+                this.state.avatarStatusType = "error";
+                this.renderAvatarSettings();
             });
         }
         if (this.state.activeTab === "users") {
@@ -344,6 +465,7 @@ export class SettingsModal {
             { key: 'theme', element: this.themeSection },
             { key: 'plugins', element: this.pluginsSection },
             { key: 'copilot', element: this.copilotSection },
+            { key: 'avatar', element: this.avatarSection },
             { key: 'users', element: this.usersSection }
         ];
         sections.forEach(({ key, element }) => {
@@ -355,7 +477,7 @@ export class SettingsModal {
             this.resetButton.style.display = this.state.activeTab === "keymap" ? "" : "none";
         }
         if (this.actionsEl) {
-            this.actionsEl.hidden = this.state.activeTab === "users";
+            this.actionsEl.hidden = this.state.activeTab === "users" || this.state.activeTab === "avatar";
         }
         this.syncEditorSettingsUi();
         this.syncUsersFrame();
@@ -631,6 +753,239 @@ export class SettingsModal {
         } finally {
             this.state.pluginBusyActionKey = "";
             this.renderPluginSettings();
+        }
+    }
+
+    async fetchAvatarJson(path, options = {}) {
+        const response = await fetch(`/services/explorer/avatar-settings/${path}`, {
+            credentials: 'include',
+            headers: {
+                Accept: 'application/json',
+                ...(options.body ? { 'Content-Type': 'application/json' } : {})
+            },
+            ...options
+        });
+        const parsed = await response.json().catch(() => ({}));
+        if (!response.ok || parsed.ok === false) {
+            throw new Error(parsed.error || `Avatar settings request failed (${response.status}).`);
+        }
+        return parsed;
+    }
+
+    async loadAvatarSettingsData() {
+        this.state.avatarStatus = "Loading avatar settings...";
+        this.state.avatarStatusType = "";
+        this.renderAvatarSettings();
+        await ensureAxiFaceLoaded();
+        const me = await getCurrentProfileAvatar({ force: true });
+        this.state.avatarUser = me.user || null;
+        this.state.canManageAgentAvatars = Boolean(me.user?.canManageAgents);
+        this.state.profileAvatar = normalizeAvatarConfig(me.config, me.config?.agentId || `profile:${me.user?.id || 'current-user'}`);
+        this.state.profileAvatarEnabled = me.enabled !== false;
+        this.state.profileAvatarSource = me.source || null;
+        this.state.dpuProfileAvailable = me.source?.kind !== 'error';
+        if (!this.state.dpuProfileAvailable) {
+            this.state.avatarStatus = me.source?.error || "DPU My Space is unavailable. Profile avatar cannot be saved.";
+            this.state.avatarStatusType = "error";
+        }
+        const agentsPayload = await this.fetchAvatarJson('agents');
+        this.state.canManageAgentAvatars = Boolean(agentsPayload.canManageAgents);
+        this.state.agentAvatarItems = Array.isArray(agentsPayload.agents) ? agentsPayload.agents : [];
+        const selectedAgent = this.state.agentAvatarItems.find((item) => item.id === this.state.selectedAvatarAgentId)
+            || this.state.agentAvatarItems[0]
+            || null;
+        this.state.selectedAvatarAgentId = selectedAgent?.id || "";
+        this.state.selectedAgentAvatar = normalizeAvatarConfig(selectedAgent?.config, selectedAgent?.id || 'agent');
+        this.state.selectedAgentAvatarEnabled = selectedAgent?.enabled !== false;
+        this.state.avatarDataLoaded = true;
+        if (this.state.avatarStatusType !== "error") {
+            this.state.avatarStatus = "Avatar settings loaded.";
+            this.state.avatarStatusType = "";
+        }
+        this.renderAvatarSettings();
+    }
+
+    renderAvatarSettings() {
+        this.renderAvatarStatus();
+        this.renderAvatarControls('profile');
+        this.renderAvatarControls('agent');
+        this.renderAvatarAgentList();
+        this.renderAvatarPreviews();
+        if (this.agentAvatarCardEl) {
+            this.agentAvatarCardEl.hidden = !this.state.canManageAgentAvatars;
+        }
+        if (this.agentAvatarEnabledInput) {
+            this.agentAvatarEnabledInput.checked = Boolean(this.state.selectedAgentAvatarEnabled);
+            this.agentAvatarEnabledInput.disabled = this.state.avatarBusy || !this.state.canManageAgentAvatars || !this.state.selectedAvatarAgentId;
+        }
+        if (this.profileAvatarEnabledInput) {
+            this.profileAvatarEnabledInput.checked = Boolean(this.state.profileAvatarEnabled);
+            this.profileAvatarEnabledInput.disabled = this.state.avatarBusy || !this.state.dpuProfileAvailable;
+        }
+        if (this.saveProfileAvatarButton) {
+            this.saveProfileAvatarButton.disabled = this.state.avatarBusy || !this.state.dpuProfileAvailable;
+        }
+        if (this.saveAgentAvatarButton) {
+            this.saveAgentAvatarButton.disabled = this.state.avatarBusy || !this.state.canManageAgentAvatars || !this.state.selectedAvatarAgentId;
+        }
+    }
+
+    renderAvatarStatus() {
+        if (!this.avatarSettingsStatusEl) return;
+        this.avatarSettingsStatusEl.textContent = this.state.avatarStatus || "";
+        this.avatarSettingsStatusEl.classList.toggle("error", this.state.avatarStatusType === "error");
+    }
+
+    renderAvatarControls(scope) {
+        const container = scope === 'profile' ? this.profileAvatarControlsEl : this.agentAvatarControlsEl;
+        if (!container) return;
+        const config = scope === 'profile' ? this.state.profileAvatar : this.state.selectedAgentAvatar;
+        container.innerHTML = AVATAR_FIELD_DEFS.map((field) => {
+            const value = config?.[field.key];
+            if (field.type === 'checkbox') {
+                return `
+                    <label class="avatar-field avatar-field-checkbox">
+                        <span>${escapeHtml(field.label)}</span>
+                        <span class="avatar-checkbox-shell">
+                            <input class="avatar-checkbox-input" type="checkbox" data-avatar-field="${field.key}" ${value ? 'checked' : ''}>
+                        </span>
+                    </label>
+                `;
+            }
+            if (field.type === 'select') {
+                return `
+                    <label class="avatar-field">
+                        <span>${escapeHtml(field.label)}</span>
+                        <select class="form-input avatar-input" data-avatar-field="${field.key}">
+                            ${field.options.map((option) => `<option value="${escapeHtml(option)}" ${String(value || '') === option ? 'selected' : ''}>${escapeHtml(option || 'default')}</option>`).join('')}
+                        </select>
+                    </label>
+                `;
+            }
+            return `
+                <label class="avatar-field">
+                    <span>${escapeHtml(field.label)}</span>
+                    <input class="form-input avatar-input" type="text" data-avatar-field="${field.key}" value="${escapeHtml(value || '')}">
+                </label>
+            `;
+        }).join("");
+    }
+
+    renderAvatarPreviews() {
+        if (this.profileAvatarPreviewEl) {
+            this.profileAvatarPreviewEl.innerHTML = this.state.profileAvatarEnabled
+                ? renderAxiFaceMarkup(this.state.profileAvatar)
+                : `<span class="avatar-preview-fallback">${escapeHtml(this.state.avatarUser?.username?.[0] || '?')}</span>`;
+        }
+        if (this.agentAvatarPreviewEl) {
+            this.agentAvatarPreviewEl.innerHTML = this.state.selectedAvatarAgentId
+                ? renderAxiFaceMarkup(this.state.selectedAgentAvatar)
+                : "";
+        }
+    }
+
+    renderAvatarAgentList() {
+        if (!this.avatarAgentListEl) return;
+        if (!this.state.agentAvatarItems.length) {
+            this.avatarAgentListEl.innerHTML = `<div class="plugin-settings-empty">No AI agents found in manifest.</div>`;
+            return;
+        }
+        this.avatarAgentListEl.innerHTML = this.state.agentAvatarItems.map((item) => `
+            <button
+                type="button"
+                class="avatar-agent-button ${item.id === this.state.selectedAvatarAgentId ? 'active' : ''} ${item.missing ? 'missing' : ''}"
+                data-local-action="selectAvatarAgent ${escapeHtml(item.id)}"
+            >
+                ${escapeHtml(item.label || item.id)}${item.missing ? ' (missing)' : ''}
+            </button>
+        `).join("");
+    }
+
+    readAvatarControls(scope) {
+        const container = scope === 'profile' ? this.profileAvatarControlsEl : this.agentAvatarControlsEl;
+        const current = scope === 'profile' ? this.state.profileAvatar : this.state.selectedAgentAvatar;
+        const next = { ...current };
+        container?.querySelectorAll('[data-avatar-field]').forEach((field) => {
+            const key = field.dataset.avatarField;
+            next[key] = field.type === 'checkbox' ? Boolean(field.checked) : field.value;
+        });
+        next.agentId = current.agentId;
+        return normalizeAvatarConfig(next, current.agentId);
+    }
+
+    handleAvatarControlsInput(scope) {
+        if (scope === 'profile') {
+            this.state.profileAvatar = this.readAvatarControls('profile');
+        } else {
+            this.state.selectedAgentAvatar = this.readAvatarControls('agent');
+        }
+        this.renderAvatarPreviews();
+    }
+
+    selectAvatarAgent(_target, agentId) {
+        const item = this.state.agentAvatarItems.find((entry) => entry.id === agentId);
+        if (!item) return;
+        this.state.selectedAvatarAgentId = item.id;
+        this.state.selectedAgentAvatar = normalizeAvatarConfig(item.config, item.id);
+        this.state.selectedAgentAvatarEnabled = item.enabled !== false;
+        this.renderAvatarSettings();
+    }
+
+    async saveProfileAvatar() {
+        if (this.state.avatarBusy || !this.state.dpuProfileAvailable) return;
+        this.state.avatarBusy = true;
+        this.state.avatarStatus = "Saving profile avatar...";
+        this.state.avatarStatusType = "";
+        this.renderAvatarSettings();
+        try {
+            this.state.profileAvatar = this.readAvatarControls('profile');
+            const payload = await saveCurrentProfileAvatar({
+                enabled: this.state.profileAvatarEnabled,
+                config: this.state.profileAvatar
+            });
+            this.state.profileAvatar = normalizeAvatarConfig(payload.config, this.state.profileAvatar.agentId);
+            this.state.profileAvatarEnabled = payload.enabled !== false;
+            this.state.profileAvatarSource = payload.source || null;
+            this.state.avatarStatus = "Profile avatar saved in DPU My Space.";
+            this.state.avatarStatusType = "";
+        } catch (error) {
+            this.state.avatarStatus = error?.message || "Failed to save profile avatar.";
+            this.state.avatarStatusType = "error";
+        } finally {
+            this.state.avatarBusy = false;
+            this.renderAvatarSettings();
+        }
+    }
+
+    async saveAgentAvatar() {
+        if (this.state.avatarBusy || !this.state.selectedAvatarAgentId) return;
+        this.state.avatarBusy = true;
+        this.state.avatarStatus = `Saving ${this.state.selectedAvatarAgentId} avatar...`;
+        this.state.avatarStatusType = "";
+        this.renderAvatarSettings();
+        try {
+            this.state.selectedAgentAvatar = this.readAvatarControls('agent');
+            await this.fetchAvatarJson(`agents/${encodeURIComponent(this.state.selectedAvatarAgentId)}`, {
+                method: 'PATCH',
+                body: JSON.stringify({ config: this.state.selectedAgentAvatar })
+            });
+            await this.fetchAvatarJson(`agents/${encodeURIComponent(this.state.selectedAvatarAgentId)}/visibility`, {
+                method: 'PATCH',
+                body: JSON.stringify({ enabled: this.state.selectedAgentAvatarEnabled })
+            });
+            this.state.avatarStatus = `${this.state.selectedAvatarAgentId} avatar saved.`;
+            this.state.avatarStatusType = "";
+            this.state.avatarDataLoaded = false;
+            window.dispatchEvent(new CustomEvent('assistOS:avatar-settings-updated', {
+                detail: { type: 'agent', agentId: this.state.selectedAvatarAgentId, config: this.state.selectedAgentAvatar }
+            }));
+            await this.loadAvatarSettingsData();
+        } catch (error) {
+            this.state.avatarStatus = error?.message || "Failed to save agent avatar.";
+            this.state.avatarStatusType = "error";
+        } finally {
+            this.state.avatarBusy = false;
+            this.renderAvatarSettings();
         }
     }
 

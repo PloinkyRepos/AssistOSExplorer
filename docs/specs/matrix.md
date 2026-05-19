@@ -10,3 +10,4 @@ This page indexes the local design specification set. The DS files are the sourc
 - [DS04 - OnlyOffice Integration](specsLoader.html?spec=DS04-onlyoffice-integration.md)
 - [DS05 - Global Application Plugin Surface](specsLoader.html?spec=DS05-global-application-plugin-surface.md)
 - [DS06 - Ploinky Runtime Invariants](specsLoader.html?spec=DS06-ploinky-runtime-invariants.md)
+- [DS07 - AxiFace Avatar Settings](specsLoader.html?spec=DS07-axiface-avatar-settings.md)
