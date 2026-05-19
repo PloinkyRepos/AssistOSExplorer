@@ -393,6 +393,26 @@ export function getGithubIdentityFallback(user = {}) {
     };
 }
 
+export function getEffectiveGitIdentity({
+    identityPrompt = {},
+    rememberedIdentity = null,
+    githubAuth = {}
+} = {}) {
+    const remembered = rememberedIdentity || getRememberedGitIdentity();
+    const githubConnection = githubAuth?.connection || {};
+    const githubConnected = Boolean(
+        githubAuth?.connected
+        && String(githubConnection?.source || '').trim().toLowerCase() === 'github'
+    );
+    const githubIdentity = githubConnected
+        ? getGithubIdentityFallback(githubConnection?.user || {})
+        : { name: '', email: '' };
+    return {
+        name: String(identityPrompt?.name || remembered.name || githubIdentity.name || '').trim(),
+        email: String(identityPrompt?.email || remembered.email || githubIdentity.email || '').trim()
+    };
+}
+
 export function buildPrefilledGitIdentityState({
     identityPrompt = {},
     repoPath = '',
@@ -400,9 +420,17 @@ export function buildPrefilledGitIdentityState({
     githubUser = {},
     authMethod = 'token'
 } = {}) {
-    const githubIdentity = getGithubIdentityFallback(githubUser);
-    const name = String(rememberedIdentity?.name || identityPrompt?.name || githubIdentity.name || '').trim();
-    const email = String(rememberedIdentity?.email || identityPrompt?.email || githubIdentity.email || '').trim();
+    const { name, email } = getEffectiveGitIdentity({
+        identityPrompt,
+        rememberedIdentity,
+        githubAuth: {
+            connected: true,
+            connection: {
+                source: 'github',
+                user: githubUser
+            }
+        }
+    });
     const nextRepoPath = String(identityPrompt?.repoPath || repoPath || '').trim() || null;
     return {
         identityPrompt: {

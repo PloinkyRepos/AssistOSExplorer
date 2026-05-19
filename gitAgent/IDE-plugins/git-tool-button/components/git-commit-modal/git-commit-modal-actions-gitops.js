@@ -11,6 +11,7 @@ import {
     buildFallbackCommitMessage,
     extractGitPullBlockedFiles,
     getRememberedGitIdentity,
+    getEffectiveGitIdentity,
     getRememberedGitAuthMethod,
     normalizeGitAuthMethod,
     normalizeGitStatusPayload
@@ -216,10 +217,12 @@ export function createGitOpsActions(ctx) {
     };
 
     const applyGitIdentityForRepo = async (repoPath) => {
-        const remembered = getRememberedGitIdentity();
         const state = getState();
-        const name = String(remembered.name || state.identityPrompt?.name || '').trim();
-        const email = String(remembered.email || state.identityPrompt?.email || '').trim();
+        const { name, email } = getEffectiveGitIdentity({
+            identityPrompt: state.identityPrompt,
+            rememberedIdentity: getRememberedGitIdentity(),
+            githubAuth: state.githubAuth
+        });
         if (!name || !email) {
             return false;
         }
@@ -400,9 +403,11 @@ export function createGitOpsActions(ctx) {
         if (!normalizedAfter.paths.staged.length) {
             return { ok: true, committed: false, fileCount: 0 };
         }
-        const remembered = getRememberedGitIdentity();
-        const userName = String(remembered.name || state.identityPrompt?.name || '').trim();
-        const userEmail = String(remembered.email || state.identityPrompt?.email || '').trim();
+        const { name: userName, email: userEmail } = getEffectiveGitIdentity({
+            identityPrompt: state.identityPrompt,
+            rememberedIdentity: getRememberedGitIdentity(),
+            githubAuth: state.githubAuth
+        });
         try {
             await service.gitCommit({
                 path: repoPath,
