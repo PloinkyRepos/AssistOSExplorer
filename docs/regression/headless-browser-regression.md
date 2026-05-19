@@ -188,26 +188,29 @@ Steps:
 1. Create two browser contexts: context A for `e2e-owner-<run-id>` and context B for `e2e-member-<run-id>`.
 2. Log both users in through `/dashboard`.
 3. In context A, open Explorer and press the WebMeet toolbar button.
-4. Create a room named `e2e-room-<run-id>`.
-5. Join the room as user A.
-6. In context B, open the same WebMeet surface and join `e2e-room-<run-id>`.
-7. Assert both pages show the same room name and at least two participants.
-8. Enable microphone and camera for both users.
-9. Assert each page has an active local video element and at least one remote video element with `readyState >= 2`, `videoWidth > 0`, and `videoHeight > 0`.
-10. Collect WebRTC stats from `window.__e2ePeerConnections` in both pages and assert outbound and inbound RTP packet counters increase over two consecutive samples.
-11. Send chat message `chat-from-owner-<run-id>` from context A and assert it appears in context B.
-12. Send chat message `chat-from-member-<run-id>` from context B and assert it appears in context A.
-13. As an admin, attach the LiveKit assistant agent (`assistant_on_mention` / `on_mention`) and assert the response includes a real LiveKit participant with `kind=AGENT` and WebMeet attributes for meeting id, agent type, and mode.
-14. Send an `@WebMeetAgent` chat mention and record whether the worker responds; a missing response is a provider/configuration failure, not proof of successful dispatch.
-15. As an admin, attach the LiveKit scribe agent (`scribe` / `post_event`) while at least one microphone is publishing a speech-like test audio file.
-16. Poll `webmeet_transcript_list` until at least one scribe-sourced transcript segment is persisted for the meeting.
-17. Start screen sharing from context A.
-18. Assert context A shows a local screen-share state and context B receives a new remote screen-share track or a second remote video stream with increasing inbound video frames.
-19. Stop screen sharing, leave the room from both contexts, and delete the test room if the UI exposes room deletion.
+4. Before joining, open the Settings button from the WebMeet dashboard modal header and verify the panel exposes separate `Audio & video` and `Background & privacy` sections.
+5. In context A, select `Blur background`, apply settings, then reopen Settings and verify the choice persisted before room join.
+6. Create a room named `e2e-room-<run-id>`.
+7. Join the room as user A.
+8. In context B, open the same WebMeet surface and join `e2e-room-<run-id>`.
+9. Assert both pages show the same room name and at least two participants.
+10. Enable microphone and camera for both users.
+11. Assert each page has an active local video element and at least one remote video element with `readyState >= 2`, `videoWidth > 0`, and `videoHeight > 0`.
+12. Collect WebRTC stats from `window.__e2ePeerConnections` in both pages and assert outbound and inbound RTP packet counters increase over two consecutive samples.
+13. Send chat message `chat-from-owner-<run-id>` from context A and assert it appears in context B.
+14. Send chat message `chat-from-member-<run-id>` from context B and assert it appears in context A.
+15. As an admin, attach the LiveKit assistant agent (`assistant_on_mention` / `on_mention`) and assert the response includes a real LiveKit participant with `kind=AGENT` and WebMeet attributes for meeting id, agent type, and mode.
+16. Send an `@WebMeetAgent` chat mention and record whether the worker responds; a missing response is a provider/configuration failure, not proof of successful dispatch.
+17. As an admin, attach the LiveKit scribe agent (`scribe` / `post_event`) while at least one microphone is publishing a speech-like test audio file.
+18. Poll `webmeet_transcript_list` until at least one scribe-sourced transcript segment is persisted for the meeting.
+19. Start screen sharing from context A.
+20. Assert context A shows a local screen-share state and context B receives a new remote screen-share track or a second remote video stream with increasing inbound video frames.
+21. Stop screen sharing, leave the room from both contexts, and delete the test room if the UI exposes room deletion.
 
 Pass criteria:
 
 - Room creation and join happen through the WebMeet UI, not direct service ports.
+- User-scoped settings are reachable from the dashboard header before join, and background privacy choices persist across panel reopen.
 - Two different authenticated Explorer accounts can join the same room.
 - Camera media flows both directions.
 - Chat delivery is visible in both contexts.
