@@ -3,6 +3,69 @@ import test from 'node:test';
 
 import { createParticipantProfileAvatarController } from '../../services/profileAvatar/participantAvatarController.js';
 
+function profileAvatarResponse(size) {
+    return {
+        ok: true,
+        user: {
+            id: 'local:admin',
+            username: 'admin'
+        },
+        enabled: true,
+        config: {
+            agentId: 'profile:local:admin',
+            generated: true,
+            size,
+            seed: 'profile:local:admin',
+            style: 'sketch',
+            palette: 'default'
+        },
+        fallbackLetter: 'A',
+        source: { kind: 'dpu' }
+    };
+}
+
+test('local participant avatar refresh bypasses stale cached profile data', async () => {
+    const originalFetch = globalThis.fetch;
+    let fetchCalls = 0;
+    globalThis.fetch = async () => {
+        fetchCalls += 1;
+        return {
+            ok: true,
+            async json() {
+                return profileAvatarResponse(fetchCalls === 1 ? '72' : '32');
+            }
+        };
+    };
+
+    try {
+        const controller = createParticipantProfileAvatarController({
+            getParticipantDisplayName: () => 'Admin',
+            getParticipantAvatarUserId: (participant) => participant?.kind === 'local' ? 'me' : '',
+            loadAxiFace: async () => {}
+        });
+        const view = {
+            id: 'local-admin',
+            name: 'Admin',
+            avatarUserId: 'me'
+        };
+        const participant = {
+            id: 'local-admin',
+            identity: 'local-admin',
+            displayName: 'Admin',
+            kind: 'local'
+        };
+
+        await controller.refresh(view, participant);
+        assert.equal(view.avatarConfig?.size, '72');
+
+        await controller.refresh(view, participant);
+        assert.equal(fetchCalls, 2);
+        assert.equal(view.avatarConfig?.size, '32');
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
 test('remote participants without roster projection fall back without fetching another user avatar', async () => {
     const originalFetch = globalThis.fetch;
     let fetchCalls = 0;
@@ -190,4 +253,42 @@ test('remote avatar refresh without participant keeps the existing projected ava
     assert.equal(view.avatarResolved, true);
     assert.equal(view.avatarConfig?.size, '96');
     assert.equal(view.avatarFallbackLetter, 'U');
+});
+
+test('avatar update broadcasts from another logged-in user do not refresh the local profile avatar', async () => {
+    const originalWindow = globalThis.window;
+    const listeners = new Map();
+    globalThis.window = {
+        addEventListener(name, handler) {
+            listeners.set(name, handler);
+        },
+        removeEventListener() {}
+    };
+
+    try {
+        let refreshed = false;
+        const controller = createParticipantProfileAvatarController({
+            getCurrentUserId: () => 'local:admin'
+        });
+        controller.bindUpdates(
+            () => [{
+                id: 'local-admin',
+                avatarUserId: 'me'
+            }],
+            () => {
+                refreshed = true;
+            }
+        );
+
+        listeners.get('assistOS:avatar-settings-updated')?.({
+            detail: {
+                type: 'profile',
+                userId: 'local:user'
+            }
+        });
+
+        assert.equal(refreshed, false);
+    } finally {
+        globalThis.window = originalWindow;
+    }
 });

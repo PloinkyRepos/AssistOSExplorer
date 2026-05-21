@@ -8,6 +8,7 @@ import { getFallbackLetter } from './avatarConfig.js';
 export function createParticipantProfileAvatarController({
     getParticipantDisplayName = (participant) => String(participant?.identity || 'Participant'),
     getParticipantAvatarUserId = (participant) => (participant?.kind === 'local' ? 'me' : ''),
+    getCurrentUserId = () => '',
     loadAxiFace = ensureAxiFaceLoaded
 } = {}) {
     const requestTokens = new Map();
@@ -46,7 +47,7 @@ export function createParticipantProfileAvatarController({
         try {
             const projectedAvatar = userId === 'me' ? null : getProjectedAvatar(participant);
             const avatar = projectedAvatar || (userId === 'me'
-                ? await getCurrentProfileAvatar()
+                ? await getCurrentProfileAvatar({ force: true })
                 : null);
             if (!avatar) {
                 if (userId !== 'me' && view.avatarConfig) {
@@ -90,7 +91,10 @@ export function createParticipantProfileAvatarController({
             }
         };
         const handler = (event) => {
-            refreshMatchingViews(event?.detail?.userId || '');
+            const eventUserId = String(event?.detail?.userId || '').trim();
+            const currentUserId = String(getCurrentUserId?.() || '').trim();
+            if (eventUserId && currentUserId && eventUserId !== currentUserId) return;
+            refreshMatchingViews(eventUserId);
         };
         window.addEventListener('assistOS:avatar-settings-updated', handler);
         return () => window.removeEventListener('assistOS:avatar-settings-updated', handler);
