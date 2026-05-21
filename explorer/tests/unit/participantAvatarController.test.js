@@ -221,7 +221,7 @@ test('remote roster-projected avatars are applied even when AxiFace loading is d
     }
 });
 
-test('remote avatar refresh without participant keeps the existing projected avatar instead of falling back', async () => {
+test('remote avatar refresh without participant clears stale projected avatar', async () => {
     const controller = createParticipantProfileAvatarController({
         getParticipantDisplayName: (participant) => participant?.displayName || participant?.identity || 'Participant',
         getParticipantAvatarUserId: (participant) => participant?.kind === 'local'
@@ -249,10 +249,10 @@ test('remote avatar refresh without participant keeps the existing projected ava
     });
 
     assert.equal(applied, true);
-    assert.equal(view.avatarEnabled, true);
+    assert.equal(view.avatarEnabled, false);
     assert.equal(view.avatarResolved, true);
-    assert.equal(view.avatarConfig?.size, '96');
-    assert.equal(view.avatarFallbackLetter, 'U');
+    assert.equal(view.avatarConfig, null);
+    assert.equal(view.avatarFallbackLetter, 'P');
 });
 
 test('avatar update broadcasts from another logged-in user do not refresh the local profile avatar', async () => {

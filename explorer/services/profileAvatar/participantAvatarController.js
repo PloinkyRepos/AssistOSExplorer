@@ -50,12 +50,6 @@ export function createParticipantProfileAvatarController({
                 ? await getCurrentProfileAvatar({ force: true })
                 : null);
             if (!avatar) {
-                if (userId !== 'me' && view.avatarConfig) {
-                    view.avatarEnabled = true;
-                    view.avatarResolved = true;
-                    apply(view);
-                    return;
-                }
                 applyFallback(view, participant);
                 apply(view);
                 return;
