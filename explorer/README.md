@@ -61,20 +61,27 @@ These files are blocked from Explorer filesystem MCP access and hidden from the 
 <a id="chapter-chapter-c2f7c319-3f62-419d-94a1-ce5b077d7686"></a>
 ## Running Explorer
 <!-- {"achilles-ide-paragraph":{"id":"paragraph-10915355-5907-4d23-bb64-7655ceafc615","type":"markdown","title":"Paragraph 1"}} -->
-Run these commands from the workspace root that Explorer should expose:
+For a fresh local Explorer workspace, run only the Ploinky Explorer entrypoint and let it own repository enablement, agent enablement, default variables, dependency startup, and router launch.
 
 ```bash
-ploinky add repo AchillesIDE <repo-url>
-ploinky enable repo AchillesIDE
-ploinky enable agent AchillesIDE/explorer global
-ploinky var ASSISTOS_FS_ROOT "$PWD"
-ploinky start explorer 8080
+mkdir -p ~/work/testExplorerFresh
+cd ~/work/testExplorerFresh
+ploinky destroy || true
+find . -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+ploinky start explorer
 ```
 
 Open:
 
 - dashboard: `http://127.0.0.1:8080/dashboard`
 - Explorer route: `http://127.0.0.1:8080/#file-exp/`
+
+Verify:
+
+```bash
+ploinky status
+curl -I http://127.0.0.1:8080/dashboard
+```
 
 
 <!-- {"achilles-ide-chapter":{"id":"chapter-d64db818-6438-4467-b356-34daf4b574de","title":"Why Global Mode Is Required","anchorId":"chapter-chapter-d64db818-6438-4467-b356-34daf4b574de"}} -->
@@ -86,7 +93,7 @@ Ploinky agents can run in different modes:
 - `isolated`: only the agent workdir is mounted
 - `global`: the workspace root is mounted
 
-Explorer must run in `global` mode if it should browse the whole workspace, including `.ploinky/repos` and sibling workspace directories. If Explorer runs in `isolated` mode, it will only see the mounted agent-local subset.
+Explorer must run in `global` mode if it should browse the whole workspace, including `.ploinky/repos` and sibling workspace directories. The default local `ploinky start explorer` path is responsible for applying that mode. If Explorer runs in `isolated` mode, treat it as a profile/startup regression rather than fixing the fresh deployment with manual bootstrap commands.
 
 
 <!-- {"achilles-ide-chapter":{"id":"chapter-c08998bf-a899-4282-9c25-6428fbded3f6","title":"Filesystem Root","anchorId":"chapter-chapter-c08998bf-a899-4282-9c25-6428fbded3f6"}} -->
@@ -95,8 +102,8 @@ Explorer must run in `global` mode if it should browse the whole workspace, incl
 <!-- {"achilles-ide-paragraph":{"id":"paragraph-76746b20-b599-4604-91c9-6b005951f0c0","type":"markdown","title":"Paragraph 1"}} -->
 Explorer uses `ASSISTOS_FS_ROOT` to decide what path to expose.
 
-- recommended value: the workspace root
-- example: `ploinky var ASSISTOS_FS_ROOT "$PWD"`
+- default local deployment: `ploinky start explorer` provides the workspace root through profile/default configuration
+- custom override: use a workspace variable only when intentionally diverging from the default local deployment
 
 
 <!-- {"achilles-ide-chapter":{"id":"chapter-d7219fe8-f8b2-4cd2-8ffe-4c37eb7a66a7","title":"Repo-Scoped HTML Preview","anchorId":"chapter-chapter-d7219fe8-f8b2-4cd2-8ffe-4c37eb7a66a7"}} -->
@@ -126,13 +133,15 @@ This keeps similarly named files from different repositories from colliding unde
 <a id="chapter-chapter-314577f2-f72c-47f2-bed6-8844715ad50b"></a>
 ## Troubleshooting
 <!-- {"achilles-ide-paragraph":{"id":"paragraph-404237cb-2035-4e6f-af3f-bb1011e3dfb5","type":"markdown","title":"Paragraph 1"}} -->
-If Explorer only shows `agents/`, check that it runs in `global` mode and that `ASSISTOS_FS_ROOT` points to the workspace root:
+If Explorer only shows `agents/` after a fresh local startup, first verify that the workspace was started through the default entrypoint:
 
 ```bash
-ploinky enable agent AchillesIDE/explorer global
-ploinky var ASSISTOS_FS_ROOT "$PWD"
-ploinky start explorer 8080
+ploinky destroy
+find . -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+ploinky start explorer
 ```
+
+If the problem persists after that clean startup, inspect the selected Ploinky profile, generated Explorer manifest, and router logs. Do not make manual `enable agent` or `ASSISTOS_FS_ROOT` changes part of the normal fresh deployment path.
 
 If HTML preview returns `404` for repo-scoped paths, validate static exposure directly:
 

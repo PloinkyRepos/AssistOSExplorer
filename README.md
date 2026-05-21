@@ -33,25 +33,32 @@ Markdown has two explicit edit modes in the Explorer UI. The default `Edit` acti
 Prerequisites:
 
 - Node.js 20+
-- a running Ploinky workspace
+- `ploinky` available in the shell
+- a local container runtime supported by Ploinky, such as Podman or Docker
 
-From the workspace root:
+For a fresh local Explorer workspace, let Ploinky own the bootstrap. Do not pre-enable repos, pre-enable agents, or manually set default workspace variables before startup.
 
 ```bash
-ploinky enable repo AchillesIDE
-ploinky enable agent AchillesIDE/explorer global
-ploinky start explorer 8080
+mkdir -p ~/work/testExplorerFresh
+cd ~/work/testExplorerFresh
+ploinky destroy || true
+find . -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+ploinky start explorer
 ```
 
 Open:
 
-- `http://127.0.0.1:8080/explorer/index.html`
+- dashboard: `http://127.0.0.1:8080/dashboard`
+- Explorer route: `http://127.0.0.1:8080/#file-exp/`
 
-If Explorer should expose the whole workspace, set the filesystem root explicitly:
+`ploinky start explorer` clones/enables the required repositories and agents, applies local default profile configuration, starts the dependency graph, and launches the router. After startup, verify:
 
 ```bash
-ploinky var ASSISTOS_FS_ROOT "$PWD"
+ploinky status
+curl -I http://127.0.0.1:8080/dashboard
 ```
+
+Manual `ploinky enable repo`, `ploinky enable agent`, and `ploinky var ASSISTOS_FS_ROOT` commands are not part of the normal fresh local deployment flow. Use them only for deliberate custom workspace surgery after the default `ploinky start explorer` path has been ruled out.
 
 
 <!-- {"achilles-ide-chapter":{"id":"chapter-b0a9377d-0621-4ae6-a64e-8c2fa5648cbf","title":"Repo-Scoped HTML Preview","anchorId":"chapter-chapter-b0a9377d-0621-4ae6-a64e-8c2fa5648cbf"}} -->
