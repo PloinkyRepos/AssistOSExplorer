@@ -20,9 +20,7 @@
 /webmeetAgent/node_modules/
 /webmeetLivekitAiAgent/node_modules/
 /.agents/
-/webassist/
-/webmeetInfra/
-/docs/prompts/onlyoffice-ploinky-agent-conversion.md
+/docs/prompts/*
 *.DS_Store
 # >>> ploinky default-skills >>>
 .claude/skills/
