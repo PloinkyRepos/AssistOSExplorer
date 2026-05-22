@@ -38,6 +38,17 @@ Exported and used by `github-auth.mjs`:
 - `deleteStoredGitToken({ key })`
 - `grantStoredGitTokenAccess({ key, principal, role })`
 
+When callers use the default GitHub token key, helpers derive a
+user-scoped DPU key from the routed invocation identity:
+
+- `GIT_GITHUB_TOKEN_<16-char SHA-256 suffix>` when a workspace user or
+  caller principal is available
+- legacy `GIT_GITHUB_TOKEN` only when no routed identity is available, or as a
+  read-only fallback for existing stored tokens
+
+Writes and deletes only target the scoped key. They do not overwrite or remove
+another user's legacy/global token secret.
+
 ## Delegated user propagation
 
 `git_tool.mjs` reads the verified `metadata.invocation` grant and preserves

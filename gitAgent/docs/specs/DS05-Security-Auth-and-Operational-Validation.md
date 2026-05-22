@@ -16,11 +16,11 @@ Requirement O2: repository path arguments shall be rejected when they escape all
 
 Requirement O3: remote Git operations shall support token propagation from auth metadata and stored token state.
 
-Requirement O4: GitHub device flow state shall persist under workspace state paths and token material shall remain in dedicated secret storage.
+Requirement O4: GitHub device flow state shall persist under user-scoped workspace state paths and token material shall remain in dedicated secret storage.
 
 Requirement O4a: `gitAgent/manifest.json` shall not declare an `identity` block or DPU-specific `capabilities` or `permissions.secrets.allowedRoles`. Ploinky derives the agent principal as `agent:<repo>/<agent>`, and DPU owns the agent's secret-role ceiling via `agentPolicies` in `permissions.manifest.json`.
 
-Requirement O4b: when `gitAgent` stores the GitHub token in DPU secret storage, it shall preserve user ownership on the secret and request only the concrete secret grant needed for remote Git operations. DPU validates that requested role against the DPU-owned agent policy; if no policy exists for the caller's principal, DPU rejects the grant.
+Requirement O4b: when `gitAgent` stores the GitHub token in DPU secret storage, it shall preserve user ownership on a per-routed-user secret key and request only the concrete secret grant needed for remote Git operations. DPU validates that requested role against the DPU-owned agent policy; if no policy exists for the caller's principal, DPU rejects the grant.
 
 Requirement O5: configuration and documentation shall remain aligned with `manifest.json` and `mcp-config.json`.
 

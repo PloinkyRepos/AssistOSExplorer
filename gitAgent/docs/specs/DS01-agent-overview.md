@@ -28,7 +28,7 @@ Explorer needs Git capabilities without binding the user interface (UI) directly
 | `tools/git_tool.sh` + `tools/git_tool.mjs` | MCP tool dispatch and request orchestration |
 | `lib/git-service.mjs` | low-level Git execution and repository operations |
 | `lib/github-auth.mjs` | GitHub device flow, auth status, metadata persistence |
-| `lib/secret-store-client.mjs` | DPU secret client (router-mediated, signed caller assertion) |
+| `lib/secret-store-client.mjs` | DPU secret client (router-mediated delegated calls) |
 | `IDE-plugins/git-tool-button/` | Explorer-facing Git UI plugin |
 
 ## Authentication Model
@@ -42,10 +42,10 @@ Both modes persist the effective token in DPU Secrets, not in browser `localStor
 
 ### Token persistence rules
 
-- There is a single GitHub token secret per user.
-- The secret is stored in DPU using a stable key managed by `gitAgent`.
+- There is a single GitHub token secret per routed workspace user.
+- The secret is stored in DPU using a stable user-scoped key managed by `gitAgent`.
 - Browser storage may keep non-sensitive UI metadata, such as the selected auth method or GitHub profile metadata, but not the token itself.
-- Local state in `.ploinky/state/git-agent-github-auth.json` may keep non-sensitive connection metadata and pending device-flow state, but not the token value.
+- Local state in `.ploinky/state/git-agent-github-auth-<user-hash>.json` may keep non-sensitive connection metadata and pending device-flow state, but not the token value.
 
 ## Application Programming Interface Contracts
 

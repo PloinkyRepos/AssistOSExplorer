@@ -78,14 +78,14 @@ JSON result -> MCP response -> Explorer user interface</code></pre>
                         <li><strong>Path policy:</strong> repository path arguments are constrained to allowed roots from <code>ASSISTOS_FS_ROOT</code>, <code>WORKSPACE_ROOT</code>, or <code>PLOINKY_WORKSPACE_ROOT</code>.</li>
                         <li><strong>Operation execution:</strong> Git tools call <code>createGitService</code>; auth tools call GitHub auth handlers.</li>
                         <li><strong>Remote token fallback:</strong> push and pull can resolve tokens from auth metadata or stored token state.</li>
-                        <li><strong>Direct DPU call:</strong> when GitHub auth or token storage needs a secret operation, the client signs a fresh caller assertion (audience pinned to the canonical sibling DPU principal, for example <code>agent:AchillesIDE/dpuAgent</code> when the caller is <code>agent:AchillesIDE/gitAgent</code>) and forwards the current <code>user_context_token</code> from the verified invocation. DPU verifies both artifacts itself.</li>
+                        <li><strong>Direct DPU call:</strong> when GitHub auth or token storage needs a secret operation, the client forwards the current router-issued invocation JWT as <code>X-Ploinky-Caller-JWT</code>. The router verifies that caller token and mints the DPU-audience invocation used by domain code.</li>
                         <li><strong>Response emission:</strong> tool result is serialized to stdout; failures return <code>{ "ok": false, "error": ... }</code>.</li>
                     </ol>
                 </section>
 
                 <section>
                     <h2>Process and Safety Notes</h2>
-                    <p>The wrapper is stateless per invocation, while long-lived auth state is persisted under workspace state files and capability-backed secret storage. Git subprocesses run with explicit timeout control and error normalization for UI-friendly diagnostics.</p>
+                    <p>The wrapper is stateless per invocation, while long-lived auth state is persisted under user-scoped workspace state files and DPU-backed secret storage. Git subprocesses run with explicit timeout control and error normalization for UI-friendly diagnostics.</p>
                     <div class="doc-callout">
                         <p>This design keeps invocation isolation while still preserving required auth and workspace state continuity across calls.</p>
                     </div>

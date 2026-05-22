@@ -152,26 +152,98 @@ export async function withSecretStoreClient(fn, options = {}) {
 
 export const GIT_GITHUB_TOKEN_SECRET_KEY = 'GIT_GITHUB_TOKEN';
 
+function normalizePrincipalPart(value) {
+  const normalized = String(value || '').trim();
+  return normalized || '';
+}
+
+export function resolveGitAuthPrincipal(authInfo = null) {
+  if (!authInfo || typeof authInfo !== 'object') {
+    return '';
+  }
+  const user = authInfo.user && typeof authInfo.user === 'object' ? authInfo.user : {};
+  const userId = normalizePrincipalPart(user.id);
+  if (userId) {
+    return `user:${userId}`;
+  }
+  const username = normalizePrincipalPart(user.username);
+  if (username) {
+    return `user:${username}`;
+  }
+  const email = normalizePrincipalPart(user.email).toLowerCase();
+  if (email && email.includes('@')) {
+    return email;
+  }
+  const subject = normalizePrincipalPart(authInfo.invocation?.subject);
+  if (subject && !/^agent:/i.test(subject)) {
+    return subject;
+  }
+  const agentPrincipal = normalizePrincipalPart(authInfo.agent?.principalId);
+  return agentPrincipal || '';
+}
+
+export function resolveGitAuthScopeSuffix(authInfo = null) {
+  const principal = resolveGitAuthPrincipal(authInfo);
+  if (!principal) {
+    return '';
+  }
+  return crypto
+    .createHash('sha256')
+    .update(principal)
+    .digest('hex')
+    .slice(0, 16)
+    .toUpperCase();
+}
+
+export function resolveGitTokenSecretKey({ key = GIT_GITHUB_TOKEN_SECRET_KEY, authInfo = null } = {}) {
+  const normalizedKey = String(key || '').trim() || GIT_GITHUB_TOKEN_SECRET_KEY;
+  if (normalizedKey !== GIT_GITHUB_TOKEN_SECRET_KEY) {
+    return normalizedKey;
+  }
+  const suffix = resolveGitAuthScopeSuffix(authInfo);
+  return suffix ? `${GIT_GITHUB_TOKEN_SECRET_KEY}_${suffix}` : GIT_GITHUB_TOKEN_SECRET_KEY;
+}
+
+function resolveGitTokenSecretKeyCandidates({ key = GIT_GITHUB_TOKEN_SECRET_KEY, authInfo = null } = {}) {
+  const normalizedKey = String(key || '').trim() || GIT_GITHUB_TOKEN_SECRET_KEY;
+  if (normalizedKey !== GIT_GITHUB_TOKEN_SECRET_KEY) {
+    return [normalizedKey];
+  }
+  const resolvedKey = resolveGitTokenSecretKey({ key, authInfo });
+  if (resolvedKey === GIT_GITHUB_TOKEN_SECRET_KEY) {
+    return [resolvedKey];
+  }
+  return [resolvedKey, GIT_GITHUB_TOKEN_SECRET_KEY];
+}
+
 /**
  * GitHub-token helpers built on the direct Git -> DPU secret client.
  */
 export async function getStoredGitToken({ key = GIT_GITHUB_TOKEN_SECRET_KEY, authInfo = null } = {}) {
-  try {
-    const client = createSecretStoreClient({ authInfo });
-    const payload = await client.get(key);
-    return String(payload?.secret?.value || payload?.value || '').trim();
-  } catch {
-    return '';
+  const client = createSecretStoreClient({ authInfo });
+  for (const candidateKey of resolveGitTokenSecretKeyCandidates({ key, authInfo })) {
+    try {
+      const payload = await client.get(candidateKey);
+      const value = String(payload?.secret?.value || payload?.value || '').trim();
+      if (value) {
+        return value;
+      }
+    } catch {
+      // Try the next candidate. The legacy key may be missing or owned by
+      // another workspace user in existing deployments.
+    }
   }
+  return '';
 }
 
 export async function putStoredGitToken({ token, key = GIT_GITHUB_TOKEN_SECRET_KEY, authInfo = null } = {}) {
   const value = String(token || '').trim();
   if (!value) throw new Error('Token is required.');
   const client = createSecretStoreClient({ authInfo });
-  const payload = await client.put(key, value);
+  const resolvedKey = resolveGitTokenSecretKey({ key, authInfo });
+  const payload = await client.put(resolvedKey, value);
   try {
-    await client.grant(key, resolveConsumerPrincipal(), 'read');
+    await client.grant(resolvedKey, resolveConsumerPrincipal(), 'read');
   } catch { /* grant is best-effort on write */ }
   return payload;
 }
@@ -179,7 +251,7 @@ export async function putStoredGitToken({ token, key = GIT_GITHUB_TOKEN_SECRET_K
 export async function deleteStoredGitToken({ key = GIT_GITHUB_TOKEN_SECRET_KEY, authInfo = null } = {}) {
   try {
     const client = createSecretStoreClient({ authInfo });
-    return await client.delete(key);
+    return await client.delete(resolveGitTokenSecretKey({ key, authInfo }));
   } catch {
     return { ok: true };
   }
@@ -189,7 +261,7 @@ export async function grantStoredGitTokenAccess({ key = GIT_GITHUB_TOKEN_SECRET_
   try {
     const client = createSecretStoreClient({ authInfo });
     const target = principal || resolveConsumerPrincipal();
-    return await client.grant(key, target, role);
+    return await client.grant(resolveGitTokenSecretKey({ key, authInfo }), target, role);
   } catch {
     return { ok: false };
   }
