@@ -2,6 +2,11 @@ import { fileURLToPath } from 'node:url';
 
 import * as livekitAgents from '@livekit/agents';
 import { AudioStream, RoomEvent, TrackKind, TrackSource } from '@livekit/rtc-node';
+import {
+    WEBMEET_EVENT_TYPES,
+    buildWebMeetEvent,
+    parseWebMeetEvent
+} from '../../webmeetAgent/IDE-plugins/webmeet-tool-button/components/webmeet-dashboard-modal/services/webmeet-events.js';
 
 const AGENT_NAME = String(process.env.WEBMEET_LIVEKIT_AGENT_NAME || 'webmeet-agent').trim() || 'webmeet-agent';
 const DISPLAY_NAME = String(process.env.WEBMEET_AGENT_NAME || 'WebMeetAgent').trim() || 'WebMeetAgent';
@@ -343,8 +348,7 @@ function startScribeAgent(ctx, metadata) {
 }
 
 async function publishWebMeetChat(room, meetingId, chatMessage) {
-    const payload = new TextEncoder().encode(JSON.stringify({
-        type: 'chat',
+    const payload = new TextEncoder().encode(buildWebMeetEvent(meetingId, WEBMEET_EVENT_TYPES.CHAT_REALTIME, {
         meetingId,
         message: chatMessage
     }));
@@ -355,9 +359,15 @@ async function publishWebMeetChat(room, meetingId, chatMessage) {
 }
 
 async function handleChatPayload(ctx, metadata, payload, participant) {
-    const data = safeParseJson(new TextDecoder().decode(payload));
-    if (!data || data.type !== 'chat') return;
-    const meetingId = String(metadata.meetingId || data.meetingId || '').trim();
+    let event;
+    try {
+        event = parseWebMeetEvent(new TextDecoder().decode(payload));
+    } catch {
+        return;
+    }
+    if (event.type !== WEBMEET_EVENT_TYPES.CHAT_REALTIME) return;
+    const data = event.payload;
+    const meetingId = String(metadata.meetingId || data.meetingId || event.room || '').trim();
     if (!meetingId) return;
     if (metadata.mode !== 'on_mention' && metadata.agentType !== 'assistant_on_mention') return;
     const message = String(data.message?.message || '').trim();
