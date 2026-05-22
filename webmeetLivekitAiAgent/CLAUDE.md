@@ -9,7 +9,7 @@
 1. Read the nearest parent `AGENTS.md` for workspace-wide rules.
 2. Read `docs/index.html` for the local documentation entry point.
 3. Read `docs/specs/matrix.md` and `docs/specs/DS01-ploinky-agent-invariant.md` before changing runtime ownership, manifests, dependencies, LiveKit credentials, or dispatch behavior.
-4. Read `../webmeetAgent/docs/specs/DS10-self-hosted-livekit-ai-agents.md` and `../webmeetAgent/docs/specs/DS09-ploinky-runtime-invariants.md` before changing WebMeet-facing AI dispatch behavior.
+4. Read `../webmeetAgent/docs/specs/DS005-self-hosted-livekit-ai-agents.md` and `../webmeetAgent/docs/specs/DS006-ploinky-runtime-invariants.md` before changing WebMeet-facing AI dispatch behavior.
 
 ## Repository Rules
 
@@ -25,7 +25,7 @@
 - `package.json`
 - `server/livekit-agent.mjs`
 - `docs/specs/DS01-ploinky-agent-invariant.md`
-- `../webmeetAgent/docs/specs/DS10-self-hosted-livekit-ai-agents.md`
+- `../webmeetAgent/docs/specs/DS005-self-hosted-livekit-ai-agents.md`
 
 ## Validation
 
