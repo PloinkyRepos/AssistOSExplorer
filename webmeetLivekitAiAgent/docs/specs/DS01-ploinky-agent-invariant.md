@@ -16,7 +16,7 @@ The `webmeetLivekitAiAgent` manifest owns:
 - the worker command `node /code/server/livekit-agent.mjs`
 - `readiness.protocol: "none"` because the worker is long-running and does not expose an HTTP or MCP readiness port
 - `@livekit/agents`, `@livekit/rtc-node`, and `achillesAgentLib` dependencies through this agent's `package.json`
-- the shared WebMeet LiveKit API key and secret derivation labels used by `webmeetAgent`, `webmeetLivekitServer`, and `webmeetLivekitEgress`
+- the shared WebMeet LiveKit API key and secret derivation labels used by `webmeetAgent` and the LiveKit Server / Egress services supervised by `liveKitServerAgent`
 - default LiveKit internal URLs for `default`, `dev`, and `prod` profiles, including `WEBMEET_LIVEKIT_AGENT_URL` so the worker can use a topology-specific signaling URL without changing the shared WebMeet API URL
 - `WEBMEET_AGENT_API_URL=http://webmeetAgent:8791` in bridge-networked `default` and `dev`, and `WEBMEET_AGENT_API_URL=http://127.0.0.1:18791` in host-networked `prod`, so agent chat and transcript persistence go through the WebMeet API container without exposing a public route
 - `WEBMEET_STT_URL=http://webmeetStt:9000/v1/audio/transcriptions` in bridge-networked `default` and `dev`, and `WEBMEET_STT_URL=http://127.0.0.1:19000/v1/audio/transcriptions` in host-networked `prod`, so scribe jobs use the internal WebMeet STT service without operator configuration

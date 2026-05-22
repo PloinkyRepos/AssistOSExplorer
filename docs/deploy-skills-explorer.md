@@ -10,14 +10,21 @@ Create or update these repository secrets in `PloinkyRepos/AssistOSExplorer`.
 gh secret set SSH_KEY --repo PloinkyRepos/AssistOSExplorer < ~/.ssh/skills-explorer-deploy
 gh secret set PLOINKY_MASTER_KEY --repo PloinkyRepos/AssistOSExplorer --body "$(openssl rand -hex 32)"
 gh secret set SOUL_GATEWAY_API_KEY --repo PloinkyRepos/AssistOSExplorer
-gh secret set WEBMEET_LIVEKIT_API_SECRET --repo PloinkyRepos/AssistOSExplorer
-gh secret set WEBMEET_TURN_PASSWORD --repo PloinkyRepos/AssistOSExplorer
 ```
 
 `PLOINKY_MASTER_KEY` must be exactly 64 hex characters. Keep it stable after the first deployment because it encrypts the Ploinky workspace secret stores and local-auth password store.
 `ONLYOFFICE_JWT_SECRET` is not configured as a GitHub secret for the managed Document Server. Explorer derives `ONLYOFFICE_JWT_SECRET` through its Ploinky manifest, and the `onlyOffice` Ploinky agent derives its container `JWT_SECRET` from the same `AchillesIDE/explorer/ONLYOFFICE_JWT_SECRET` identity. Explorer's host preinstall hook no longer computes or injects the Document Server secret.
+WebMeet LiveKit and TURN credentials are also manifest-derived, using the same shared derivation identity across `webmeetAgent`, `webmeetLivekitAiAgent`, and `webmeetInfra/liveKitServerAgent`; do not configure them as GitHub secrets for the deploy workflow.
 
-## Public Access (Cloudflare Tunnel)
+The `PloinkyRepos/webmeetInfra` repository also needs a Docker Hub token for the manual image publish workflow:
+
+```sh
+gh secret set DOCKERHUB_TOKEN --repo PloinkyRepos/webmeetInfra
+```
+
+The token value must stay only in GitHub Actions secrets.
+
+## Explorer Public Access
 
 `skills.axiologic.dev` is fronted by a Cloudflare Zero Trust tunnel running as a podman container on the host. The tunnel terminates TLS at Cloudflare's edge and forwards directly to the Explorer router on `127.0.0.1:${EXPLORER_ROUTER_PORT}` (default `8097`). The workflow does **not** manage the tunnel; ingress is configured in the Cloudflare Zero Trust dashboard. To change the routing target, edit the tunnel's public hostname configuration in the dashboard rather than touching the workflow.
 
@@ -29,18 +36,13 @@ WebMeet uses a separate public LiveKit endpoint:
 wss://livekit-skills.axiologic.dev
 ```
 
-Current production routing uses a DNS-only A record for `livekit-skills.axiologic.dev` pointing to `193.180.209.191`. TLS is terminated by nginx on the host, and nginx proxies WebSocket/API traffic to LiveKit on `127.0.0.1:7880`. The GitHub workflows do not currently provision or update this nginx/certbot setup.
+Production routing uses a DNS-only A record for `livekit-skills.axiologic.dev` pointing to `193.180.209.191`, not the Cloudflare tunnel. The unified `webmeetInfra/liveKitServerAgent` runs on the host network in the `prod` profile, owns ports `80` and `443`, terminates TLS with its supervised Nginx/Certbot processes, and proxies LiveKit WebSocket/API traffic to LiveKit on `127.0.0.1:7880`.
+
+The deploy workflow migrates production away from the retired split WebMeet infra agents by disabling and scrubbing `webmeetInfra/stack`, `webmeetCoturn`, `webmeetRedis`, `webmeetLivekitServer`, `webmeetLivekitEgress`, `webmeetLivekitNginx`, and `webmeetLivekitCertbot` before starting Explorer. The replacement image is pulled from Docker Hub as `docker.io/assistos/livekit-server-agent:${WEBMEET_INFRA_IMAGE_TAG}`.
 
 The optional `webmeetLivekitAiAgent` worker runs on the host network in the `prod` profile so its server-side WebRTC connection uses the same host-network topology as LiveKit. Its manifest supplies a separate `WEBMEET_LIVEKIT_AGENT_URL` default of `http://127.0.0.1:7880`; do not point it at the bridge-only `WEBMEET_LIVEKIT_URL` unless the worker network topology changes too.
 
-If this DNS-only/nginx path remains in use, keep the Let's Encrypt renewal hook aligned with nginx:
-
-```sh
-ssh -i ~/demo_private_key.pem admin@193.180.209.191 \
-  "printf '%s\n' '#!/bin/sh' 'systemctl reload nginx' | sudo tee /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh >/dev/null && sudo chmod 0755 /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh && sudo rm -f /etc/letsencrypt/renewal-hooks/deploy/reload-caddy.sh"
-```
-
-If `livekit-skills.axiologic.dev` is moved back behind Cloudflare/Tunnel, retest WebMeet before removing nginx/certbot because the final client-side subscription fix has not been A/B tested against the old signaling path.
+If `livekit-skills.axiologic.dev` is moved behind Cloudflare/Tunnel later, retest WebMeet before changing the manifest because Cloudflare Tunnel does not provide the public UDP media path used by LiveKit.
 
 ## GitHub Variables
 
@@ -59,9 +61,14 @@ gh variable set ONLYOFFICE_INTERNAL_URL --repo PloinkyRepos/AssistOSExplorer --b
 gh variable set ONLYOFFICE_CALLBACK_BASE_URL --repo PloinkyRepos/AssistOSExplorer --body https://skills.axiologic.dev
 gh variable set WEBMEET_PUBLIC_LIVEKIT_URL --repo PloinkyRepos/AssistOSExplorer --body wss://livekit-skills.axiologic.dev
 gh variable set WEBMEET_LIVEKIT_URL --repo PloinkyRepos/AssistOSExplorer --body http://host.containers.internal:7880
-gh variable set WEBMEET_EGRESS_URL --repo PloinkyRepos/AssistOSExplorer --body http://webmeetLivekitEgress:7980
+gh variable set WEBMEET_EGRESS_URL --repo PloinkyRepos/AssistOSExplorer --body http://host.containers.internal:7980
+gh variable set WEBMEET_INFRA_IMAGE_TAG --repo PloinkyRepos/AssistOSExplorer --body webmeet-infra
 gh variable set WEBMEET_LIVEKIT_USE_EXTERNAL_IP --repo PloinkyRepos/AssistOSExplorer --body false
 gh variable set WEBMEET_LIVEKIT_NODE_IP --repo PloinkyRepos/AssistOSExplorer --body 193.180.209.191
+gh variable set WEBMEET_LIVEKIT_UPSTREAM --repo PloinkyRepos/AssistOSExplorer --body http://127.0.0.1:7880
+gh variable set WEBMEET_TLS_HOSTNAME --repo PloinkyRepos/AssistOSExplorer --body livekit-skills.axiologic.dev
+gh variable set WEBMEET_CERT_EMAIL --repo PloinkyRepos/AssistOSExplorer --body research@axiologic.net
+gh variable set WEBMEET_CERTBOT_AUTO_ISSUE --repo PloinkyRepos/AssistOSExplorer --body true
 gh variable set WEBMEET_TURN_HOST --repo PloinkyRepos/AssistOSExplorer --body livekit-skills.axiologic.dev
 gh variable set WEBMEET_TURN_REALM --repo PloinkyRepos/AssistOSExplorer --body skills.axiologic.dev
 gh variable set WEBMEET_TURN_USER --repo PloinkyRepos/AssistOSExplorer --body webmeet
@@ -79,6 +86,14 @@ Run `Provision Skills Explorer Host` only when the remote host needs OS packages
 
 ## Deploy Or Update
 
+Before deploying production changes that alter `webmeetInfra/liveKitServerAgent`, publish the image from the `PloinkyRepos/webmeetInfra` repository:
+
+```sh
+gh workflow run publish-livekit-server-agent.yml \
+  --repo PloinkyRepos/webmeetInfra \
+  -f image_tag=webmeet-infra
+```
+
 Run the `Deploy Skills Explorer` workflow for normal updates:
 
 ```sh
@@ -88,7 +103,8 @@ gh workflow run deploy-skills-explorer.yml \
   -f workspace_name=explorerWorkspace \
   -f router_port=8097 \
   -f public_url=https://skills.axiologic.dev \
-  -f profile=prod
+  -f profile=prod \
+  -f webmeet_infra_image_tag=webmeet-infra
 ```
 
 The workflow:
@@ -98,6 +114,9 @@ The workflow:
 3. Stops the current workspace if it is running.
 4. Adds/enables the `AchillesIDE` and `webmeetInfra` repos through Ploinky commands.
 5. Runs `ploinky update` so Ploinky updates the workspace repos and local Ploinky dependencies.
-6. Stores configured runtime variable overrides through `ploinky var`.
-7. Starts `AchillesIDE/explorer` on `EXPLORER_ROUTER_PORT`.
-8. Verifies local router health, OnlyOffice `api.js` through `ONLYOFFICE_INTERNAL_URL`, public `EXPLORER_PUBLIC_URL` access through the Cloudflare tunnel, and browser-visible OnlyOffice `api.js` when `ONLYOFFICE_PUBLIC_URL` is configured.
+6. Hard-resets the remote Ploinky-managed repo checkouts to the requested branches.
+7. Removes retired split WebMeet infra registrations and containers before the unified agent starts.
+8. Stores configured runtime variable overrides through `ploinky var`.
+9. Pulls `docker.io/assistos/livekit-server-agent:${WEBMEET_INFRA_IMAGE_TAG}`.
+10. Starts `AchillesIDE/explorer` on `EXPLORER_ROUTER_PORT`.
+11. Verifies local router health, `liveKitServerAgent` health on `127.0.0.1:${WEBMEET_INFRA_HEALTH_PORT:-17000}`, OnlyOffice `api.js` through `ONLYOFFICE_INTERNAL_URL`, public `EXPLORER_PUBLIC_URL` access through the Cloudflare tunnel, public `WEBMEET_PUBLIC_LIVEKIT_URL`, and browser-visible OnlyOffice `api.js` when `ONLYOFFICE_PUBLIC_URL` is configured.

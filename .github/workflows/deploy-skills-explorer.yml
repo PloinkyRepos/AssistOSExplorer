@@ -28,8 +28,8 @@ on:
         required: false
         default: ''
         type: string
-      livekit_version:
-        description: 'LiveKit container image tag override. Falls back to vars.WEBMEET_LIVEKIT_VERSION, then manifest default.'
+      webmeet_infra_image_tag:
+        description: 'liveKitServerAgent image tag override. Falls back to vars.WEBMEET_INFRA_IMAGE_TAG, then webmeet-infra.'
         required: false
         default: ''
         type: string
@@ -97,24 +97,25 @@ jobs:
           WEBMEET_PUBLIC_LIVEKIT_URL: ${{ vars.WEBMEET_PUBLIC_LIVEKIT_URL }}
           WEBMEET_LIVEKIT_URL: ${{ vars.WEBMEET_LIVEKIT_URL }}
           WEBMEET_EGRESS_URL: ${{ vars.WEBMEET_EGRESS_URL }}
+          WEBMEET_INFRA_IMAGE_TAG: ${{ inputs.webmeet_infra_image_tag || vars.WEBMEET_INFRA_IMAGE_TAG || 'webmeet-infra' }}
+          WEBMEET_INFRA_HEALTH_PORT: ${{ vars.WEBMEET_INFRA_HEALTH_PORT }}
           WEBMEET_LIVEKIT_USE_EXTERNAL_IP: ${{ vars.WEBMEET_LIVEKIT_USE_EXTERNAL_IP }}
           WEBMEET_LIVEKIT_NODE_IP: ${{ vars.WEBMEET_LIVEKIT_NODE_IP }}
           WEBMEET_LIVEKIT_LOG_LEVEL: ${{ vars.WEBMEET_LIVEKIT_LOG_LEVEL }}
           WEBMEET_LIVEKIT_FORCE_TCP: ${{ vars.WEBMEET_LIVEKIT_FORCE_TCP }}
-          WEBMEET_LIVEKIT_VERSION: ${{ inputs.livekit_version || vars.WEBMEET_LIVEKIT_VERSION || '' }}
           WEBMEET_LIVEKIT_REDIS_ADDRESS: ${{ vars.WEBMEET_LIVEKIT_REDIS_ADDRESS }}
+          WEBMEET_EGRESS_REDIS_ADDRESS: ${{ vars.WEBMEET_EGRESS_REDIS_ADDRESS }}
           WEBMEET_LIVEKIT_INTERNAL_WS_URL: ${{ vars.WEBMEET_LIVEKIT_INTERNAL_WS_URL }}
           WEBMEET_TLS_HOSTNAME: ${{ vars.WEBMEET_TLS_HOSTNAME }}
           WEBMEET_TLS_HTTPS_PORT: ${{ vars.WEBMEET_TLS_HTTPS_PORT }}
           WEBMEET_TLS_HTTP_PORT: ${{ vars.WEBMEET_TLS_HTTP_PORT }}
           WEBMEET_LIVEKIT_UPSTREAM: ${{ vars.WEBMEET_LIVEKIT_UPSTREAM }}
-          WEBMEET_NGINX_VERSION: ${{ vars.WEBMEET_NGINX_VERSION }}
           WEBMEET_CERT_EMAIL: ${{ vars.WEBMEET_CERT_EMAIL }}
-          WEBMEET_CERTBOT_VERSION: ${{ vars.WEBMEET_CERTBOT_VERSION }}
           WEBMEET_CERTBOT_AUTO_ISSUE: ${{ vars.WEBMEET_CERTBOT_AUTO_ISSUE }}
           WEBMEET_CERTBOT_RENEW_INTERVAL_SECONDS: ${{ vars.WEBMEET_CERTBOT_RENEW_INTERVAL_SECONDS }}
           WEBMEET_TURN_EXTERNAL_IP: ${{ vars.WEBMEET_TURN_EXTERNAL_IP }}
           WEBMEET_TURN_HOST: ${{ vars.WEBMEET_TURN_HOST }}
+          WEBMEET_TURN_PORT: ${{ vars.WEBMEET_TURN_PORT }}
           WEBMEET_TURN_REALM: ${{ vars.WEBMEET_TURN_REALM }}
           WEBMEET_TURN_USER: ${{ vars.WEBMEET_TURN_USER }}
           WEBMEET_ICE_TRANSPORT_POLICY: ${{ vars.WEBMEET_ICE_TRANSPORT_POLICY }}
@@ -143,24 +144,25 @@ jobs:
             write_env WEBMEET_PUBLIC_LIVEKIT_URL
             write_env WEBMEET_LIVEKIT_URL
             write_env WEBMEET_EGRESS_URL
+            write_env WEBMEET_INFRA_IMAGE_TAG
+            write_env WEBMEET_INFRA_HEALTH_PORT
             write_env WEBMEET_LIVEKIT_USE_EXTERNAL_IP
             write_env WEBMEET_LIVEKIT_NODE_IP
             write_env WEBMEET_LIVEKIT_LOG_LEVEL
             write_env WEBMEET_LIVEKIT_FORCE_TCP
-            write_env WEBMEET_LIVEKIT_VERSION
             write_env WEBMEET_LIVEKIT_REDIS_ADDRESS
+            write_env WEBMEET_EGRESS_REDIS_ADDRESS
             write_env WEBMEET_LIVEKIT_INTERNAL_WS_URL
             write_env WEBMEET_TLS_HOSTNAME
             write_env WEBMEET_TLS_HTTPS_PORT
             write_env WEBMEET_TLS_HTTP_PORT
             write_env WEBMEET_LIVEKIT_UPSTREAM
-            write_env WEBMEET_NGINX_VERSION
             write_env WEBMEET_CERT_EMAIL
-            write_env WEBMEET_CERTBOT_VERSION
             write_env WEBMEET_CERTBOT_AUTO_ISSUE
             write_env WEBMEET_CERTBOT_RENEW_INTERVAL_SECONDS
             write_env WEBMEET_TURN_EXTERNAL_IP
             write_env WEBMEET_TURN_HOST
+            write_env WEBMEET_TURN_PORT
             write_env WEBMEET_TURN_REALM
             write_env WEBMEET_TURN_USER
             write_env WEBMEET_ICE_TRANSPORT_POLICY
@@ -217,6 +219,16 @@ jobs:
           set +a
           rm -f /tmp/skills_explorer_env
 
+          WEBMEET_INFRA_IMAGE_TAG="${WEBMEET_INFRA_IMAGE_TAG:-webmeet-infra}"
+          WEBMEET_INFRA_HEALTH_PORT="${WEBMEET_INFRA_HEALTH_PORT:-17000}"
+          if [ "${WEBMEET_EGRESS_URL:-}" = "http://webmeetLivekitEgress:7980" ]; then
+            echo "[deploy] Ignoring retired split-agent WEBMEET_EGRESS_URL override."
+            WEBMEET_EGRESS_URL=""
+          fi
+          if [ "${PLOINKY_PROFILE:-prod}" = "prod" ]; then
+            WEBMEET_EGRESS_URL="${WEBMEET_EGRESS_URL:-http://host.containers.internal:7980}"
+          fi
+
           echo "[deploy] Removing current workspace containers if present..."
           env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" shutdown || \
             env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" stop || true
@@ -246,6 +258,110 @@ jobs:
             fi
           done
 
+          cleanup_retired_webmeet_infra() {
+            local retired_agents=(
+              stack
+              webmeetCoturn
+              webmeetRedis
+              webmeetLivekitServer
+              webmeetLivekitEgress
+              webmeetLivekitNginx
+              webmeetLivekitCertbot
+            )
+
+            echo "[deploy] Removing retired split WebMeet infra agent registrations..."
+            for agent in "${retired_agents[@]}"; do
+              env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" disable agent "webmeetInfra/$agent" || true
+              env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" disable agent "$agent" || true
+            done
+
+            node <<'NODE'
+          const fs = require('fs');
+          const path = require('path');
+
+          const retired = new Set([
+            'stack',
+            'webmeetCoturn',
+            'webmeetRedis',
+            'webmeetLivekitServer',
+            'webmeetLivekitEgress',
+            'webmeetLivekitNginx',
+            'webmeetLivekitCertbot',
+          ]);
+          const root = process.cwd();
+
+          function splitRef(value) {
+            const text = String(value || '');
+            const parts = text.split('/');
+            return {
+              repo: parts.length > 1 ? parts[0] : '',
+              agent: parts[parts.length - 1] || text,
+            };
+          }
+
+          function readJson(filePath) {
+            try {
+              return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+            } catch (_) {
+              return null;
+            }
+          }
+
+          function writeJson(filePath, value) {
+            fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`);
+          }
+
+          const agentsPath = path.join(root, '.ploinky', 'agents.json');
+          const agents = readJson(agentsPath);
+          let agentsChanged = false;
+          if (agents && typeof agents === 'object') {
+            for (const [key, record] of Object.entries(agents)) {
+              if (key === '_config' || !record || typeof record !== 'object') continue;
+              const keyRef = splitRef(key);
+              const repo = String(record.repoName || keyRef.repo);
+              const agent = String(record.agentName || keyRef.agent);
+              if (repo === 'webmeetInfra' && retired.has(agent)) {
+                delete agents[key];
+                agentsChanged = true;
+              }
+            }
+            if (agentsChanged) {
+              writeJson(agentsPath, agents);
+            }
+          }
+
+          const routingPath = path.join(root, '.ploinky', 'routing.json');
+          const routing = readJson(routingPath);
+          let routingChanged = false;
+          if (routing && routing.routes && typeof routing.routes === 'object') {
+            for (const [key, route] of Object.entries(routing.routes)) {
+              const keyRef = splitRef(key);
+              const routeRef = splitRef(route && route.agent);
+              const agent = String(routeRef.agent || keyRef.agent);
+              const repo = String(route && route.repo || routeRef.repo || keyRef.repo);
+              if (retired.has(agent) && (!repo || repo === 'webmeetInfra')) {
+                delete routing.routes[key];
+                routingChanged = true;
+              }
+            }
+            if (routingChanged) {
+              writeJson(routingPath, routing);
+            }
+          }
+
+          console.log(`[deploy] Retired registry cleanup: agents=${agentsChanged ? 'updated' : 'unchanged'} routes=${routingChanged ? 'updated' : 'unchanged'}`);
+          NODE
+
+            local retired_pattern="^ploinky_webmeetInfra_(stack|webmeetCoturn|webmeetRedis|webmeetLivekitServer|webmeetLivekitEgress|webmeetLivekitNginx|webmeetLivekitCertbot)_${WORKSPACE}_"
+            podman ps -a --format '{{.Names}}' | grep -E "$retired_pattern" | while read -r container_name; do
+              [ -n "$container_name" ] || continue
+              echo "[deploy] Removing retired container $container_name"
+              podman rm -f "$container_name" || true
+            done || true
+          }
+
+          cleanup_retired_webmeet_infra
+
           "$PLOINKY" profile "${PLOINKY_PROFILE:-prod}"
           "$PLOINKY" sandbox disable
 
@@ -273,29 +389,33 @@ jobs:
           set_var WEBMEET_PUBLIC_LIVEKIT_URL "${WEBMEET_PUBLIC_LIVEKIT_URL:-}"
           set_var WEBMEET_LIVEKIT_URL "${WEBMEET_LIVEKIT_URL:-}"
           set_var WEBMEET_EGRESS_URL "${WEBMEET_EGRESS_URL:-}"
+          set_var WEBMEET_INFRA_IMAGE_TAG "${WEBMEET_INFRA_IMAGE_TAG:-webmeet-infra}"
+          set_var WEBMEET_INFRA_HEALTH_PORT "${WEBMEET_INFRA_HEALTH_PORT:-17000}"
           set_var WEBMEET_LIVEKIT_USE_EXTERNAL_IP "${WEBMEET_LIVEKIT_USE_EXTERNAL_IP:-}"
           set_var WEBMEET_LIVEKIT_NODE_IP "${WEBMEET_LIVEKIT_NODE_IP:-}"
           set_var WEBMEET_LIVEKIT_LOG_LEVEL "${WEBMEET_LIVEKIT_LOG_LEVEL:-}"
           set_var WEBMEET_LIVEKIT_FORCE_TCP "${WEBMEET_LIVEKIT_FORCE_TCP:-}"
-          set_var WEBMEET_LIVEKIT_VERSION "${WEBMEET_LIVEKIT_VERSION:-}"
           set_var WEBMEET_LIVEKIT_REDIS_ADDRESS "${WEBMEET_LIVEKIT_REDIS_ADDRESS:-}"
+          set_var WEBMEET_EGRESS_REDIS_ADDRESS "${WEBMEET_EGRESS_REDIS_ADDRESS:-}"
           set_var WEBMEET_LIVEKIT_INTERNAL_WS_URL "${WEBMEET_LIVEKIT_INTERNAL_WS_URL:-}"
           set_var WEBMEET_TLS_HOSTNAME "${WEBMEET_TLS_HOSTNAME:-}"
           set_var WEBMEET_TLS_HTTPS_PORT "${WEBMEET_TLS_HTTPS_PORT:-}"
           set_var WEBMEET_TLS_HTTP_PORT "${WEBMEET_TLS_HTTP_PORT:-}"
           set_var WEBMEET_LIVEKIT_UPSTREAM "${WEBMEET_LIVEKIT_UPSTREAM:-}"
-          set_var WEBMEET_NGINX_VERSION "${WEBMEET_NGINX_VERSION:-}"
           set_var WEBMEET_CERT_EMAIL "${WEBMEET_CERT_EMAIL:-}"
-          set_var WEBMEET_CERTBOT_VERSION "${WEBMEET_CERTBOT_VERSION:-}"
           set_var WEBMEET_CERTBOT_AUTO_ISSUE "${WEBMEET_CERTBOT_AUTO_ISSUE:-}"
           set_var WEBMEET_CERTBOT_RENEW_INTERVAL_SECONDS "${WEBMEET_CERTBOT_RENEW_INTERVAL_SECONDS:-}"
           set_var WEBMEET_TURN_EXTERNAL_IP "${WEBMEET_TURN_EXTERNAL_IP:-}"
           set_var WEBMEET_TURN_HOST "${WEBMEET_TURN_HOST:-}"
+          set_var WEBMEET_TURN_PORT "${WEBMEET_TURN_PORT:-}"
           set_var WEBMEET_TURN_REALM "${WEBMEET_TURN_REALM:-}"
           set_var WEBMEET_TURN_USER "${WEBMEET_TURN_USER:-}"
           set_var WEBMEET_ICE_TRANSPORT_POLICY "${WEBMEET_ICE_TRANSPORT_POLICY:-all}"
           set_var WEBMEET_TURN_MIN_PORT "${WEBMEET_TURN_MIN_PORT:-}"
           set_var WEBMEET_TURN_MAX_PORT "${WEBMEET_TURN_MAX_PORT:-}"
+
+          echo "[deploy] Pulling liveKitServerAgent image docker.io/assistos/livekit-server-agent:${WEBMEET_INFRA_IMAGE_TAG}..."
+          podman pull "docker.io/assistos/livekit-server-agent:${WEBMEET_INFRA_IMAGE_TAG}"
 
           echo "[deploy] Starting Explorer..."
           nohup env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" start AchillesIDE/explorer "$ROUTER_PORT" > "$WORK_DIR/logs/skills-explorer-start.log" 2>&1 &
@@ -310,6 +430,22 @@ jobs:
             fi
             if [ "$i" = "390" ]; then
               echo "[deploy] ERROR: local router did not respond in time"
+              tail -120 "$WORK_DIR/logs/skills-explorer-start.log" || true
+              exit 1
+            fi
+            sleep 2
+          done
+
+          echo "[deploy] Verifying liveKitServerAgent health on 127.0.0.1:${WEBMEET_INFRA_HEALTH_PORT}..."
+          for i in $(seq 1 120); do
+            code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${WEBMEET_INFRA_HEALTH_PORT}/" || true)"
+            if [ "$code" = "200" ]; then
+              echo "[deploy] liveKitServerAgent health responding with HTTP $code"
+              break
+            fi
+            if [ "$i" = "120" ]; then
+              echo "[deploy] ERROR: liveKitServerAgent health did not respond in time"
+              echo "[deploy] Last HTTP code: ${code:-none}"
               tail -120 "$WORK_DIR/logs/skills-explorer-start.log" || true
               exit 1
             fi
@@ -342,6 +478,7 @@ jobs:
       - name: Verify public URL
         env:
           ONLYOFFICE_PUBLIC_URL: ${{ vars.ONLYOFFICE_PUBLIC_URL }}
+          WEBMEET_PUBLIC_LIVEKIT_URL: ${{ vars.WEBMEET_PUBLIC_LIVEKIT_URL || 'wss://livekit-skills.axiologic.dev' }}
         run: |
           set -euo pipefail
           echo "[deploy] Verifying ${PUBLIC_URL}/dashboard from GitHub runner..."
@@ -359,6 +496,26 @@ jobs:
             fi
             sleep 5
           done
+
+          if [ -n "${WEBMEET_PUBLIC_LIVEKIT_URL:-}" ]; then
+            livekit_probe_url="${WEBMEET_PUBLIC_LIVEKIT_URL/#wss:/https:}"
+            livekit_probe_url="${livekit_probe_url/#ws:/http:}"
+            echo "[deploy] Verifying ${livekit_probe_url%/}/ from GitHub runner..."
+            for i in $(seq 1 60); do
+              code="$(curl -L -s -o /tmp/livekit-public-response.txt -w '%{http_code}' "${livekit_probe_url%/}/" || true)"
+              if [ "$code" = "200" ]; then
+                echo "[deploy] Public LiveKit endpoint responding with HTTP $code"
+                break
+              fi
+              if [ "$i" = "60" ]; then
+                echo "[deploy] ERROR: public LiveKit endpoint did not become reachable"
+                echo "[deploy] Last HTTP code: ${code:-none}"
+                sed -n '1,40p' /tmp/livekit-public-response.txt 2>/dev/null || true
+                exit 1
+              fi
+              sleep 5
+            done
+          fi
 
           if [ -n "${ONLYOFFICE_PUBLIC_URL:-}" ]; then
             echo "[deploy] Verifying OnlyOffice public api.js from GitHub runner..."

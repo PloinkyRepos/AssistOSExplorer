@@ -12,7 +12,7 @@
     ]
   },
   "enable": [
-    "webmeetInfra/stack",
+    "webmeetInfra/liveKitServerAgent",
     "webmeetStt"
   ],
   "repos": {
@@ -27,12 +27,12 @@
         {
           "name": "WEBMEET_LIVEKIT_URL",
           "required": false,
-          "default": "http://webmeetLivekitServer:7880"
+          "default": "http://liveKitServerAgent:7880"
         },
         {
           "name": "WEBMEET_LIVEKIT_AGENT_URL",
           "required": false,
-          "default": "http://webmeetLivekitServer:7880"
+          "default": "http://liveKitServerAgent:7880"
         },
         {
           "name": "WEBMEET_LIVEKIT_API_KEY",
@@ -99,12 +99,12 @@
         {
           "name": "WEBMEET_LIVEKIT_URL",
           "required": false,
-          "default": "http://webmeetLivekitServer:17880"
+          "default": "http://liveKitServerAgent:17880"
         },
         {
           "name": "WEBMEET_LIVEKIT_AGENT_URL",
           "required": false,
-          "default": "http://webmeetLivekitServer:17880"
+          "default": "http://liveKitServerAgent:17880"
         },
         {
           "name": "WEBMEET_LIVEKIT_API_KEY",

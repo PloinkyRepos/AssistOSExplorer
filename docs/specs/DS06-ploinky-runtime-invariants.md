@@ -18,6 +18,8 @@ The authoritative upstream contracts are Ploinky `docs/specs/DS005-routing-and-w
 
 `AssistOSExplorer` must treat the Ploinky router as the browser and MCP trust broker. Browser surfaces, first-party MCP calls, delegated MCP calls, uploads, blobs, and manifest-declared HTTP services are expected to enter through the router so route authentication, session handling, invocation minting, and audit behavior can apply. Direct agent ports are implementation details even when they are bound to localhost.
 
+Agent MCP sessions are ephemeral runtime state. Ploinky clients should close sessions with `DELETE /mcp` when done, and the shared `AgentServer` may reap idle sessions defensively. Idle cleanup must not close sessions that still have an open HTTP response, because long-running tool calls and SSE streams remain active until their response finishes.
+
 Executable MCP operations must be authorized by router-minted invocation JWTs. The agent runtime may receive `PLOINKY_DERIVED_MASTER_KEY`, which is the HKDF-derived agent runtime key, but it must never receive or require `PLOINKY_MASTER_KEY`. Code must not invent alternate bearer-token, client-secret, or caller-header authorization paths around the router's secure-wire model.
 
 `PLOINKY_DERIVED_MASTER_KEY` is the mandatory root for Ploinky-owned and agent-owned generated secrets. Any agent secret that is not an external provider or operator credential must be deterministically derived from `PLOINKY_DERIVED_MASTER_KEY` using a domain-separated derivation label for the repo, agent, and secret name, then injected through manifest `derive: "derived-master"` env entries, `{{derivedMasterSecret:...}}` runtime resources, or an equivalent documented runtime helper. Agents must not invent random persistent agent secrets or require manual configuration for workspace-owned LiveKit, TURN, OnlyOffice, DPU, recording, webhook, or data-encryption secrets. External third-party credentials remain explicitly configured.
@@ -46,7 +48,7 @@ Agent-local contract:
 - Documentation: `docs/index.html`
 - Validation: `npm test` in the affected agent plus Ploinky smoke tests for routing or auth changes.
 
-The documentation website at `docs/index.html` must keep direct references to the docs or agent guides for Explorer, `dpuAgent`, `gitAgent`, `llmAssistant`, `multimedia`, `onlyOffice`, `soplangAgent`, `tasksAgent`, `webAssist`, `webmeetAgent`, `webmeetLivekitAiAgent`, `webmeetInfra`, each WebMeet infrastructure service agent, and the local Ploinky docs. The Ploinky references must include `docs/specs/DS005-routing-and-web-surfaces.md` and `docs/specs/DS011-security-model.md` so future work can reach the routing and security invariants from the website.
+The documentation website at `docs/index.html` must keep direct references to the docs or agent guides for Explorer, `dpuAgent`, `gitAgent`, `llmAssistant`, `multimedia`, `onlyOffice`, `soplangAgent`, `tasksAgent`, `webAssist`, `webmeetAgent`, `webmeetLivekitAiAgent`, `webmeetInfra`, the unified `webmeetInfra/liveKitServerAgent`, and the local Ploinky docs. The Ploinky references must include `docs/specs/DS005-routing-and-web-surfaces.md` and `docs/specs/DS011-security-model.md` so future work can reach the routing and security invariants from the website.
 
 ## Decisions & Questions
 
