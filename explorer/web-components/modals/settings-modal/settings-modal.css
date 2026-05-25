@@ -372,9 +372,6 @@ settings-modal .plugin-settings-list {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    max-height: min(62vh, 720px);
-    overflow: auto;
-    padding-right: 4px;
     margin-top: 8px;
 }
 
