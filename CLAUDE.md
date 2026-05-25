@@ -38,6 +38,7 @@ Ploinky Explorer workspace + 17 coupled agents. Origin: `https://github.com/Ploi
 - Tool/internal logs are NOT visitor-facing. Final answers are clean conversational text unless an endpoint expects JSON.
 - All agents are built on `achillesAgentLib` at `/Users/danielsava/work/file-parser/ploinky/node_modules/achillesAgentLib`. See its `CLAUDE.md` for the subsystem map.
 - Request-time LLM access must go through Achilles runtime helpers, not ad-hoc vendor HTTP, unless a local spec defines an exception.
+- In the `embedded` profile, Soul Gateway runs as a sibling agent providing LLM routing for Explorer and llmAssistant. Both agents derive `SOUL_GATEWAY_API_KEY` via cross-agent `derived-master` and resolve the gateway URL through the Ploinky router. See `proxies/soul-gateway/docs/specs/DS016-embedded-mode.md` for the embedded contract.
 
 ## Skills contract
 

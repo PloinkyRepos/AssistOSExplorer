@@ -31,6 +31,8 @@ Explorer is the AchillesIDE workspace shell. It owns the routed file browser, pr
 
 Runs as the static Ploinky agent and enables coupled agents declared by `explorer/manifest.json`.
 
+In the `embedded` profile, Explorer enables Soul Gateway (`proxies/soul-gateway`) as a sibling agent. Explorer and llmAssistant derive `SOUL_GATEWAY_API_KEY` via cross-agent `derived-master` and resolve the gateway URL through the Ploinky router (`PLOINKY_ROUTER_URL`). The `soul-gateway-settings` IDE plugin provides admin-only provider/model/key management under Settings > Plugins.
+
 ## Key Paths
 
 - `manifest.json`

@@ -28,6 +28,11 @@ on:
         required: false
         default: ''
         type: string
+      proxies_branch:
+        description: 'proxies repo branch. Falls back to vars.PROXIES_BRANCH, then main.'
+        required: false
+        default: ''
+        type: string
       webmeet_infra_image_tag:
         description: 'liveKitServerAgent image tag override. Falls back to vars.WEBMEET_INFRA_IMAGE_TAG, then webmeet-infra.'
         required: false
@@ -173,9 +178,11 @@ jobs:
 
           scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no /tmp/skills_explorer_env "${SSH_USER}@${SSH_HOST}:/tmp/skills_explorer_env"
 
+          PROXIES_BRANCH="${{ inputs.proxies_branch || vars.PROXIES_BRANCH || 'main' }}"
+
           ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
             -i ~/.ssh/deploy_key "${SSH_USER}@${SSH_HOST}" \
-            "WORKSPACE='$WORKSPACE' EXPLORER_BRANCH='$EXPLORER_BRANCH' ROUTER_PORT='$ROUTER_PORT' PUBLIC_URL='$PUBLIC_URL' PLOINKY_PROFILE='$PLOINKY_PROFILE' bash -s" << 'REMOTE'
+            "WORKSPACE='$WORKSPACE' EXPLORER_BRANCH='$EXPLORER_BRANCH' PROXIES_BRANCH='$PROXIES_BRANCH' ROUTER_PORT='$ROUTER_PORT' PUBLIC_URL='$PUBLIC_URL' PLOINKY_PROFILE='$PLOINKY_PROFILE' bash -s" << 'REMOTE'
           set -euo pipefail
           # Ensure the plaintext env file is removed even if a later step exits non-zero.
           trap 'rm -f /tmp/skills_explorer_env' EXIT
@@ -236,8 +243,10 @@ jobs:
           echo "[deploy] Ensuring Ploinky repos are installed and enabled..."
           "$PLOINKY" add repo AchillesIDE https://github.com/PloinkyRepos/AssistOSExplorer.git "${EXPLORER_BRANCH:-main}" || true
           "$PLOINKY" add repo webmeetInfra https://github.com/PloinkyRepos/webmeetInfra.git main || true
+          "$PLOINKY" add repo proxies https://github.com/PloinkyRepos/proxies.git "${PROXIES_BRANCH:-main}" || true
           "$PLOINKY" enable repo AchillesIDE
           "$PLOINKY" enable repo webmeetInfra
+          "$PLOINKY" enable repo proxies
 
           echo "[deploy] Updating Ploinky, Achilles dependencies, and installed repos..."
           if ! env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" update; then
@@ -245,7 +254,7 @@ jobs:
             env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" update
           fi
 
-          for repo_spec in "AchillesIDE:${EXPLORER_BRANCH:-main}" "webmeetInfra:main"; do
+          for repo_spec in "AchillesIDE:${EXPLORER_BRANCH:-main}" "webmeetInfra:main" "proxies:${PROXIES_BRANCH:-main}"; do
             repo_name="${repo_spec%%:*}"
             repo_branch="${repo_spec#*:}"
             repo_dir="$WORK_DIR/.ploinky/repos/$repo_name"

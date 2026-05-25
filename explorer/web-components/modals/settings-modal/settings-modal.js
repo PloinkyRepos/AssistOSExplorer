@@ -214,9 +214,11 @@ function flattenPluginsByKey(pluginBuckets) {
             locations: [],
             locationOrder: getRuntimePluginOrder(plugin),
             settingsComponent: "",
-            assetRootPath: ""
+            assetRootPath: "",
+            adminOnly: false
         };
         existing.pluginCategory = plugin?.pluginCategory || existing.pluginCategory || category;
+        if (plugin?.adminOnly === true) existing.adminOnly = true;
         const contributionType = typeof plugin?.contributionType === "string" && plugin.contributionType.trim()
             ? plugin.contributionType.trim()
             : (category === "application" ? "mount" : "document");
@@ -538,7 +540,10 @@ export class SettingsModal {
             this.pluginSettingsListEl.innerHTML = `<div class="plugin-settings-empty">No plugins discovered for this workspace.</div>`;
             return;
         }
-        this.pluginSettingsListEl.innerHTML = this.state.pluginItems.map((item) => {
+        const visibleItems = this.state.usersAccess
+            ? this.state.pluginItems
+            : this.state.pluginItems.filter((item) => !item.adminOnly);
+        this.pluginSettingsListEl.innerHTML = visibleItems.map((item) => {
             const enabled = this.isPluginEnabled(item.key);
             const busyToggle = this.state.pluginBusyActionKey === `${item.key}::toggle`;
             const busySettings = this.state.pluginBusyActionKey === `${item.key}::settings`;
