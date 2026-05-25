@@ -106,10 +106,16 @@ function toPascalCase(value) {
         .join("");
 }
 
-function resolveSettingsComponentBase(item) {
+export function resolveSettingsComponentBase(item) {
     const settingsComponent = typeof item?.settingsComponent === "string" ? item.settingsComponent.trim() : "";
     if (!settingsComponent) {
         return "";
+    }
+
+    const component = typeof item?.component === "string" ? item.component.trim() : "";
+    const componentBaseUrl = typeof item?.componentBaseUrl === "string" ? item.componentBaseUrl.trim() : "";
+    if (component && settingsComponent === component && componentBaseUrl) {
+        return componentBaseUrl.replace(/\/+$/g, "");
     }
 
     const normalizedSettings = normalizePathSegment(settingsComponent);
@@ -119,7 +125,6 @@ function resolveSettingsComponentBase(item) {
     }
 
     const agent = typeof item?.agent === "string" ? item.agent.trim() : "";
-    const component = typeof item?.component === "string" ? item.component.trim() : "";
     if (!agent || !component) {
         return "";
     }
@@ -215,6 +220,7 @@ function flattenPluginsByKey(pluginBuckets) {
             locationOrder: getRuntimePluginOrder(plugin),
             settingsComponent: "",
             assetRootPath: "",
+            componentBaseUrl: "",
             adminOnly: false
         };
         existing.pluginCategory = plugin?.pluginCategory || existing.pluginCategory || category;
@@ -238,6 +244,9 @@ function flattenPluginsByKey(pluginBuckets) {
         existing.assetRootPath = typeof plugin?.assetRootPath === "string" && plugin.assetRootPath.trim()
             ? plugin.assetRootPath.trim()
             : existing.assetRootPath;
+        existing.componentBaseUrl = typeof plugin?.componentBaseUrl === "string" && plugin.componentBaseUrl.trim()
+            ? plugin.componentBaseUrl.trim()
+            : existing.componentBaseUrl;
         if (!existing.locations.includes(location)) {
             existing.locations.push(location);
         }
