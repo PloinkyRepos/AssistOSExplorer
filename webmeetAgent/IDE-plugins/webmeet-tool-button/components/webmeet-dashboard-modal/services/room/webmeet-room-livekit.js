@@ -1,10 +1,10 @@
-import { logMediaDiagnostic } from '../services/media-diagnostics.js';
+import { logMediaDiagnostic } from '../media-diagnostics.js';
 import {
     getLiveKitProfileResolution,
     getMediaQualityProfile
-} from './media-quality-profiles.js';
+} from '../../controllers/media-quality-profiles.js';
 
-export class LivekitRoomController {
+export class WebMeetRoomLiveKit {
     constructor(options = {}) {
         this.ensureLiveKitClient = options.ensureLiveKitClient;
         this.buildRtcConfigForSession = options.buildRtcConfigForSession;
