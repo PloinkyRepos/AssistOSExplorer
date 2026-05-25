@@ -105,6 +105,15 @@ gh workflow run deploy-skills-explorer.yml \
   -f public_url=https://skills.axiologic.dev \
   -f profile=prod \
   -f webmeet_infra_image_tag=webmeet-infra
+
+# Feature-branch deploy (all repos on same branch):
+gh workflow run deploy-skills-explorer.yml \
+  --repo PloinkyRepos/AssistOSExplorer \
+  --ref embedded-soul-gateway \
+  -f branch=embedded-soul-gateway \
+  -f proxies_branch=embedded-soul-gateway \
+  -f ploinky_branch=embedded-soul-gateway \
+  -f achilles_branch=embedded-soul-gateway
 ```
 
 The workflow:
@@ -112,11 +121,12 @@ The workflow:
 1. Connects to `SSH_USER@SSH_HOST` with `SSH_KEY`.
 2. Resolves the installed `ploinky` binary and verifies required host tools are already present.
 3. Stops the current workspace if it is running.
-4. Adds/enables the `AchillesIDE` and `webmeetInfra` repos through Ploinky commands.
-5. Runs `ploinky update` so Ploinky updates the workspace repos and local Ploinky dependencies.
-6. Hard-resets the remote Ploinky-managed repo checkouts to the requested branches.
-7. Removes retired split WebMeet infra registrations and containers before the unified agent starts.
-8. Stores configured runtime variable overrides through `ploinky var`.
-9. Pulls `docker.io/assistos/livekit-server-agent:${WEBMEET_INFRA_IMAGE_TAG}`.
-10. Starts `AchillesIDE/explorer` on `EXPLORER_ROUTER_PORT`.
-11. Verifies local router health, `liveKitServerAgent` health on `127.0.0.1:${WEBMEET_INFRA_HEALTH_PORT:-17000}`, OnlyOffice `api.js` through `ONLYOFFICE_INTERNAL_URL`, public `EXPLORER_PUBLIC_URL` access through the Cloudflare tunnel, public `WEBMEET_PUBLIC_LIVEKIT_URL`, and browser-visible OnlyOffice `api.js` when `ONLYOFFICE_PUBLIC_URL` is configured.
+4. Puts the Ploinky runtime checkout on `ploinky_branch` and `achillesAgentLib` on `achilles_branch`.
+5. Adds/enables the `AchillesIDE` and `webmeetInfra` repos through Ploinky commands.
+6. Runs `ploinky update` so Ploinky updates the workspace repos and local Ploinky dependencies.
+7. Hard-resets the remote Ploinky-managed repo checkouts to the requested branches.
+8. Removes retired split WebMeet infra registrations and containers before the unified agent starts.
+9. Stores configured runtime variable overrides through `ploinky var`.
+10. Pulls `docker.io/assistos/livekit-server-agent:${WEBMEET_INFRA_IMAGE_TAG}`.
+11. Starts `AchillesIDE/explorer` on `EXPLORER_ROUTER_PORT` with branch-aware flags (`--branch`, `--repo-branch`, `--branch-fallback fail`, `--reset-repos`).
+12. Verifies local router health, `liveKitServerAgent` health on `127.0.0.1:${WEBMEET_INFRA_HEALTH_PORT:-17000}`, OnlyOffice `api.js` through `ONLYOFFICE_INTERNAL_URL`, public `EXPLORER_PUBLIC_URL` access through the Cloudflare tunnel, public `WEBMEET_PUBLIC_LIVEKIT_URL`, and browser-visible OnlyOffice `api.js` when `ONLYOFFICE_PUBLIC_URL` is configured.
