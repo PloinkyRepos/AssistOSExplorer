@@ -10,9 +10,16 @@ Create or update these repository secrets in `PloinkyRepos/AssistOSExplorer`.
 gh secret set SSH_KEY --repo PloinkyRepos/AssistOSExplorer < ~/.ssh/skills-explorer-deploy
 gh secret set PLOINKY_MASTER_KEY --repo PloinkyRepos/AssistOSExplorer --body "$(openssl rand -hex 32)"
 gh secret set SOUL_GATEWAY_API_KEY --repo PloinkyRepos/AssistOSExplorer
+gh secret set LMSTUDIO_PROXY_TOKEN --repo PloinkyRepos/AssistOSExplorer
 ```
 
 `PLOINKY_MASTER_KEY` must be exactly 64 hex characters. Keep it stable after the first deployment because it encrypts the Ploinky workspace secret stores and local-auth password store.
+`LMSTUDIO_PROXY_TOKEN` is the bearer token required by the default embedded local LLM endpoint, `https://lmstudio.axiologic.dev/v1`. The deploy workflow stores it as `LOCAL_LLM_API_KEY` through `ploinky var` so Soul Gateway can create an encrypted provider account at startup. Use a `LOCAL_LLM_API_KEY` secret instead if the upstream endpoint token is not an LM Studio proxy token:
+
+```sh
+gh secret set LOCAL_LLM_API_KEY --repo PloinkyRepos/AssistOSExplorer
+```
+
 `ONLYOFFICE_JWT_SECRET` is not configured as a GitHub secret for the managed Document Server. Explorer derives `ONLYOFFICE_JWT_SECRET` through its Ploinky manifest, and the `onlyOffice` Ploinky agent derives its container `JWT_SECRET` from the same `AchillesIDE/explorer/ONLYOFFICE_JWT_SECRET` identity. Explorer's host preinstall hook no longer computes or injects the Document Server secret.
 WebMeet LiveKit and TURN credentials are also manifest-derived, using the same shared derivation identity across `webmeetAgent`, `webmeetLivekitAiAgent`, and `webmeetInfra/liveKitServerAgent`; do not configure them as GitHub secrets for the deploy workflow.
 
@@ -76,7 +83,15 @@ gh variable set WEBMEET_TURN_MIN_PORT --repo PloinkyRepos/AssistOSExplorer --bod
 gh variable set WEBMEET_TURN_MAX_PORT --repo PloinkyRepos/AssistOSExplorer --body 20010
 ```
 
-Direct provider keys and model lists are intentionally not part of this deployment. Agents that need model access use `SOUL_GATEWAY_API_KEY` and the optional `SOUL_GATEWAY_BASE_URL`.
+The default embedded Soul Gateway local provider points at the RAAS LM Studio proxy and registers only the known preloaded model. Override these only when deploying against a different OpenAI-compatible local endpoint:
+
+```sh
+gh variable set LOCAL_LLM_BASE_URL --repo PloinkyRepos/AssistOSExplorer --body https://lmstudio.axiologic.dev/v1
+gh variable set LOCAL_LLM_MODEL --repo PloinkyRepos/AssistOSExplorer --body gemma-3-12b-it
+gh variable set LOCAL_LLM_DISCOVERY_MODE --repo PloinkyRepos/AssistOSExplorer --body single
+```
+
+`LOCAL_LLM_DISCOVERY_MODE=single` avoids exposing LM Studio models that are installed but not currently loaded. Use `auto` only for endpoints that can reliably serve every model returned by `/models`. Agents still receive only the Soul Gateway workspace credential; upstream provider tokens and model bootstrap settings stay in Soul Gateway deployment configuration.
 
 Set `WEBMEET_TURN_EXTERNAL_IP` only when coturn must use an explicit public IP instead of resolving `WEBMEET_TURN_HOST` at startup.
 
