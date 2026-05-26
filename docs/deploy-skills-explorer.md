@@ -121,6 +121,8 @@ gh workflow run publish-livekit-server-agent.yml \
 
 Run the `Deploy Skills Explorer` workflow for normal updates:
 
+Normal production deploys can omit `achilles_branch`; the workflow defaults `achillesAgentLib` to `master` because that repository does not publish a `main` branch.
+
 ```sh
 gh workflow run deploy-skills-explorer.yml \
   --repo PloinkyRepos/AssistOSExplorer \

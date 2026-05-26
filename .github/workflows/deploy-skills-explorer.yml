@@ -39,7 +39,7 @@ on:
         default: ''
         type: string
       achilles_branch:
-        description: 'achillesAgentLib branch. Falls back to vars.ACHILLES_BRANCH, then main.'
+        description: 'achillesAgentLib branch. Falls back to vars.ACHILLES_BRANCH, then master.'
         required: false
         default: ''
         type: string
@@ -200,7 +200,7 @@ jobs:
 
           PROXIES_BRANCH="${{ inputs.proxies_branch || vars.PROXIES_BRANCH || 'main' }}"
           PLOINKY_BRANCH="${{ inputs.ploinky_branch || vars.PLOINKY_BRANCH || 'main' }}"
-          ACHILLES_BRANCH="${{ inputs.achilles_branch || vars.ACHILLES_BRANCH || 'main' }}"
+          ACHILLES_BRANCH="${{ inputs.achilles_branch || vars.ACHILLES_BRANCH || 'master' }}"
 
           ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
             -i ~/.ssh/deploy_key "${SSH_USER}@${SSH_HOST}" \
@@ -314,11 +314,11 @@ jobs:
             exit 1
           fi
 
-          ACHILLES_BRANCH="${ACHILLES_BRANCH:-main}"
+          ACHILLES_BRANCH="${ACHILLES_BRANCH:-master}"
           ACHILLES_DIR="$PLOINKY_DIR/node_modules/achillesAgentLib"
           if [ -d "$ACHILLES_DIR/.git" ]; then
             checkout_runtime_branch "$ACHILLES_DIR" "$ACHILLES_BRANCH" "achillesAgentLib"
-          elif [ "$ACHILLES_BRANCH" != "main" ]; then
+          elif [ "$ACHILLES_BRANCH" != "master" ]; then
             echo "[deploy] ERROR: cannot checkout achillesAgentLib branch '$ACHILLES_BRANCH'; '$ACHILLES_DIR' is not a git checkout."
             exit 1
           fi
