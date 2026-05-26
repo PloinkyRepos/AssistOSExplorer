@@ -254,8 +254,8 @@ The browser intentionally speaks to two systems.
 | Browser sends | Receiver | Path | Stored? | Purpose |
 | --- | --- | --- | --- | --- |
 | Workspace list, room list, create room, rename room, delete room | `webmeetAgent` | Explorer API `callAgentTool("webmeetAgent", ...)` to MCP, or protected `/services/webmeet/*` | Yes for mutations | Application control plane |
-| Authenticated join/leave/presence | `webmeetAgent` | MCP tools such as `webmeet_meeting_join`, `webmeet_meeting_leave`, `webmeet_meeting_presence_ping` | Yes, membership and timestamps in encrypted meeting payload | Authorize and mint LiveKit token |
-| Guest join/name/presence/chat/avatar/leave | `webmeetAgent` public proxy and API | `/public-services/webmeet/...` forced-guest HTTP route | Yes for membership/chat/events; avatar projection event is sanitized | Public invite flow |
+| Authenticated join/leave | `webmeetAgent` | MCP tools such as `webmeet_meeting_join` and `webmeet_meeting_leave` | Yes, membership in encrypted meeting payload | Authorize and mint LiveKit token |
+| Guest join/name/chat/avatar/leave | `webmeetAgent` public proxy and API | `/public-services/webmeet/...` forced-guest HTTP route | Yes for membership/chat/events; avatar projection event is sanitized | Public invite flow |
 | Chat message | `webmeetAgent` first | `webmeet_chat_send` or guest `guest-chat` API | Yes, in encrypted meeting payload | Authoritative chat write |
 | Best-effort chat notification after persistence | LiveKit server | Reliable LiveKit data channel payload with `type: "chat"` | No | Fast in-room UI update for connected clients |
 | Manual transcript and browser speech-recognition transcript | `webmeetAgent` | `webmeet_transcript_append` | Yes, in encrypted meeting payload | Transcript persistence |
@@ -278,7 +278,7 @@ Browser-to-WebMeet traffic includes:
 - MCP tool calls from authenticated Explorer users.
 - Guest public HTTP API calls from invite pages.
 - Protected HTTP API/asset requests routed through Ploinky.
-- Chat, transcript, room management, recording controls, AI controls, presence pings, and guest invite validation.
+- Chat, transcript, room management, recording controls, AI controls, and guest invite validation.
 
 ## Authenticated Join Flow
 
@@ -298,8 +298,8 @@ sequenceDiagram
     B->>L: room.connect(livekitUrl, participantToken)
     L-->>B: WebSocket signaling and room state
     B->>L: ICE, DTLS, SRTP when media is enabled
-    B->>M: presence pings while joined
-    M->>S: Update lastSeenAt and cleanup stale members
+    B->>L: ParticipantConnected/Disconnected, track, attribute, data-channel hooks
+    M->>L: ListParticipants during room-state reconciliation
 ```
 
 The participant JWT is created by `webmeetAgent` using the shared LiveKit API key and secret. The token is scoped to one LiveKit room and grants:
