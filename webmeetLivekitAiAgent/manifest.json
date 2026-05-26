@@ -40,19 +40,12 @@
         {
           "name": "WEBMEET_LIVEKIT_API_KEY",
           "required": false,
-          "derive": "derived-master",
-          "deriveRepoName": "webmeet",
-          "deriveAgentName": "shared-livekit",
-          "deriveName": "api-key",
-          "deriveBytes": 16
+          "sharedGeneratedSecret": true
         },
         {
           "name": "WEBMEET_LIVEKIT_API_SECRET",
           "required": false,
-          "derive": "derived-master",
-          "deriveRepoName": "webmeet",
-          "deriveAgentName": "shared-livekit",
-          "deriveName": "api-secret"
+          "sharedGeneratedSecret": true
         },
         {
           "name": "WEBMEET_LIVEKIT_AGENT_NAME",
@@ -82,10 +75,7 @@
         {
           "name": "WEBMEET_AGENT_INTERNAL_TOKEN",
           "required": false,
-          "derive": "derived-master",
-          "deriveRepoName": "webmeet",
-          "deriveAgentName": "shared-agent",
-          "deriveName": "internal-token"
+          "sharedGeneratedSecret": true
         },
         {
           "name": "WEBMEET_SCRIBE_CHUNK_SECONDS",
@@ -112,19 +102,12 @@
         {
           "name": "WEBMEET_LIVEKIT_API_KEY",
           "required": false,
-          "derive": "derived-master",
-          "deriveRepoName": "webmeet",
-          "deriveAgentName": "shared-livekit",
-          "deriveName": "api-key",
-          "deriveBytes": 16
+          "sharedGeneratedSecret": true
         },
         {
           "name": "WEBMEET_LIVEKIT_API_SECRET",
           "required": false,
-          "derive": "derived-master",
-          "deriveRepoName": "webmeet",
-          "deriveAgentName": "shared-livekit",
-          "deriveName": "api-secret"
+          "sharedGeneratedSecret": true
         },
         {
           "name": "WEBMEET_LIVEKIT_AGENT_NAME",
@@ -154,10 +137,7 @@
         {
           "name": "WEBMEET_AGENT_INTERNAL_TOKEN",
           "required": false,
-          "derive": "derived-master",
-          "deriveRepoName": "webmeet",
-          "deriveAgentName": "shared-agent",
-          "deriveName": "internal-token"
+          "sharedGeneratedSecret": true
         },
         {
           "name": "WEBMEET_SCRIBE_CHUNK_SECONDS",
@@ -187,19 +167,12 @@
         {
           "name": "WEBMEET_LIVEKIT_API_KEY",
           "required": true,
-          "derive": "derived-master",
-          "deriveRepoName": "webmeet",
-          "deriveAgentName": "shared-livekit",
-          "deriveName": "api-key",
-          "deriveBytes": 16
+          "sharedGeneratedSecret": true
         },
         {
           "name": "WEBMEET_LIVEKIT_API_SECRET",
           "required": true,
-          "derive": "derived-master",
-          "deriveRepoName": "webmeet",
-          "deriveAgentName": "shared-livekit",
-          "deriveName": "api-secret"
+          "sharedGeneratedSecret": true
         },
         {
           "name": "WEBMEET_LIVEKIT_AGENT_NAME",
@@ -229,10 +202,7 @@
         {
           "name": "WEBMEET_AGENT_INTERNAL_TOKEN",
           "required": false,
-          "derive": "derived-master",
-          "deriveRepoName": "webmeet",
-          "deriveAgentName": "shared-agent",
-          "deriveName": "internal-token"
+          "sharedGeneratedSecret": true
         },
         {
           "name": "WEBMEET_SCRIBE_CHUNK_SECONDS",

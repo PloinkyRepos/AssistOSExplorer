@@ -176,7 +176,7 @@ Explorer expects these environment variables:
 - `ONLYOFFICE_CALLBACK_BASE_URL`
   Public base used to generate Explorer callback and document URLs for OnlyOffice
 - `ONLYOFFICE_JWT_SECRET`
-  Shared signing secret used to sign the OnlyOffice editor config. Explorer declares this env as a required Ploinky-derived value. The Ploinky-managed `onlyOffice` agent (`onlyOffice/manifest.json`) declares required `JWT_SECRET` with `derive: "derived-master"`, `deriveRepoName: "AchillesIDE"`, `deriveAgentName: "explorer"`, `deriveName: "ONLYOFFICE_JWT_SECRET"` so that Document Server's `JWT_SECRET` and Explorer's `ONLYOFFICE_JWT_SECRET` env entries resolve to the same hex value at runtime without any cross-agent coordination beyond the manifests themselves. Explorer no longer derives this secret in its preinstall hook.
+  Shared signing secret used to sign the OnlyOffice editor config. Explorer declares this env as a required workspace-scoped generated value. The Ploinky-managed `onlyOffice` agent (`onlyOffice/manifest.json`) declares required `JWT_SECRET` with `varName: "ONLYOFFICE_JWT_SECRET"`, `sharedGeneratedSecret: true` so that Document Server's `JWT_SECRET` and Explorer's `ONLYOFFICE_JWT_SECRET` env entries resolve to the same hex value at runtime without custom derivation fields. Explorer no longer derives this secret in its preinstall hook.
 
 The distinction between public and internal URLs is architectural, not cosmetic. Explorer needs both because the browser and the backend do not necessarily reach OnlyOffice through the same network path.
 

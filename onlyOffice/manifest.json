@@ -27,11 +27,9 @@
                 },
                 {
                     "name": "JWT_SECRET",
+                    "varName": "ONLYOFFICE_JWT_SECRET",
                     "required": true,
-                    "derive": "derived-master",
-                    "deriveRepoName": "AchillesIDE",
-                    "deriveAgentName": "explorer",
-                    "deriveName": "ONLYOFFICE_JWT_SECRET"
+                    "sharedGeneratedSecret": true
                 }
             ],
             "ports": ["127.0.0.1:8082:80"]
@@ -51,11 +49,9 @@
                 },
                 {
                     "name": "JWT_SECRET",
+                    "varName": "ONLYOFFICE_JWT_SECRET",
                     "required": true,
-                    "derive": "derived-master",
-                    "deriveRepoName": "AchillesIDE",
-                    "deriveAgentName": "explorer",
-                    "deriveName": "ONLYOFFICE_JWT_SECRET"
+                    "sharedGeneratedSecret": true
                 }
             ],
             "ports": ["127.0.0.1:18082:80"]
@@ -75,11 +71,9 @@
                 },
                 {
                     "name": "JWT_SECRET",
+                    "varName": "ONLYOFFICE_JWT_SECRET",
                     "required": true,
-                    "derive": "derived-master",
-                    "deriveRepoName": "AchillesIDE",
-                    "deriveAgentName": "explorer",
-                    "deriveName": "ONLYOFFICE_JWT_SECRET"
+                    "sharedGeneratedSecret": true
                 }
             ],
             "ports": ["127.0.0.1:8082:80"]

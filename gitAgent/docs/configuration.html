@@ -54,8 +54,8 @@
     },
     "embedded": {
       "env": {
-        "SOUL_GATEWAY_API_KEY": "derived from the embedded Soul Gateway agent",
-        "SOUL_GATEWAY_BASE_URL": "cleared so Achilles derives the Ploinky router service URL"
+        "SOUL_GATEWAY_API_KEY": "workspace-scoped generated key unless explicitly supplied",
+        "SOUL_GATEWAY_BASE_URL": "empty by default; explicit keys use LLMConfig.json unless this is supplied"
       }
     }
   }
@@ -83,7 +83,7 @@
                             </tr>
                             <tr>
                                 <td><code>SOUL_GATEWAY_API_KEY</code>, <code>SOUL_GATEWAY_BASE_URL</code></td>
-                                <td>Allow LLM runtime access through Soul Gateway for adjacent AI-assisted flows. The <code>embedded</code> profile derives the workspace Soul Gateway key and clears explicit standalone base URLs so Achilles derives the active Ploinky router service URL.</td>
+                                <td>Allow LLM runtime access through Soul Gateway for adjacent AI-assisted flows. The <code>embedded</code> profile receives a workspace-generated Soul Gateway key. Achilles uses the Ploinky router service URL only when <code>PLOINKY_ENV_SOURCE_SOUL_GATEWAY_API_KEY=generated</code>; an explicit key keeps the <code>LLMConfig.json</code> gateway URL unless a base URL override is supplied.</td>
                             </tr>
                             <tr>
                                 <td><code>ASSISTOS_GIT_BINARY</code> (optional)</td>

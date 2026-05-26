@@ -14,7 +14,7 @@ The OnlyOffice agent manifest (`onlyOffice/manifest.json`) owns:
 
 - the Document Server container image, pinned via `${ONLYOFFICE_VERSION}` (no `:latest`)
 - `JWT_ENABLED=true` and required `JWT_SECRET` injected by Ploinky env resolution
-- `JWT_SECRET` derivation via `derive: "derived-master"` with `deriveRepoName: "AchillesIDE"`, `deriveAgentName: "explorer"`, `deriveName: "ONLYOFFICE_JWT_SECRET"`. This identity matches Explorer's own `ONLYOFFICE_JWT_SECRET` derivation, so both sides resolve to the same hex value without coordination beyond the manifest
+- `JWT_SECRET` injected from a workspace-scoped generated secret using `varName: "ONLYOFFICE_JWT_SECRET"`, `sharedGeneratedSecret: true`. This matches Explorer's `ONLYOFFICE_JWT_SECRET` env entry by source name, so both sides resolve to the same hex value without custom derivation fields
 - the internal container port (`80`) published on `127.0.0.1:8082` (default and `prod` profiles) or `127.0.0.1:18082` (`dev` profile)
 - explicit runtime startup through `entrypoint: "/bin/bash"` and `start: "/app/ds/run-document-server.sh"` so Ploinky runs the image's Document Server process rather than the implicit AgentServer
 - `readiness.protocol: "tcp"`, probed on the published host port; deployment validation must still fetch `api.js` because TCP readiness proves the port is open, not that the editor API has fully warmed

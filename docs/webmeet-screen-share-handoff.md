@@ -655,7 +655,7 @@ Current invariant text:
 PLOINKY_DERIVED_MASTER_KEY is the mandatory root for Ploinky-owned and agent-owned generated secrets.
 ```
 
-Agent-owned generated secrets should be derived through manifest `derive: "derived-master"`, `{{derivedMasterSecret:...}}`, or a documented runtime helper. External third-party credentials remain explicit operator configuration.
+Agent-owned generated secrets should use manifest `generatedSecret: true` or `{{generatedSecret:...}}`; cross-agent shared credentials should add `sharedGeneratedSecret: true`. External third-party credentials remain explicit operator configuration.
 
 #### Shared WebMeet media secrets
 

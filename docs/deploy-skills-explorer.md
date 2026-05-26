@@ -99,7 +99,7 @@ For manual scratch deployments that use the default RAAS LM Studio endpoint, set
 ploinky var LOCAL_LLM_API_KEY "$LMSTUDIO_PROXY_TOKEN"
 ```
 
-Do not set `SOUL_GATEWAY_BASE_URL` for embedded Explorer helper agents. Their embedded manifests derive the Soul Gateway workspace key and let Achilles resolve the route from `PLOINKY_ROUTER_URL`.
+For embedded Explorer helper agents, leave `SOUL_GATEWAY_API_KEY` unset when you want the workspace-local Soul Gateway. If `SOUL_GATEWAY_API_KEY` is supplied, Achilles treats it as an explicit standalone credential and uses the `LLMConfig.json` Soul Gateway URL unless `SOUL_GATEWAY_BASE_URL` / `SOUL_GATEWAY_URL` is also supplied.
 
 Set `WEBMEET_TURN_EXTERNAL_IP` only when coturn must use an explicit public IP instead of resolving `WEBMEET_TURN_HOST` at startup.
 

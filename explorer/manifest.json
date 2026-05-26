@@ -93,10 +93,8 @@
                 {
                     "name": "SOUL_GATEWAY_API_KEY",
                     "required": true,
-                    "derive": "derived-master",
-                    "deriveRepoName": "proxies",
-                    "deriveAgentName": "soul-gateway",
-                    "deriveName": "workspace-default-api-key"
+                    "sharedGeneratedSecret": true,
+                    "explicitOverride": true
                 },
                 {
                     "name": "SOUL_GATEWAY_BASE_URL",
@@ -117,7 +115,7 @@
                 {
                     "name": "ONLYOFFICE_JWT_SECRET",
                     "required": true,
-                    "derive": "derived-master"
+                    "sharedGeneratedSecret": true
                 },
                 {
                     "name": "ONLYOFFICE_CALLBACK_BASE_URL",
