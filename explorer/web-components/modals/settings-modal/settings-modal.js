@@ -22,32 +22,17 @@ import { registerRuntimeComponent } from "../../../utils/pluginUtils.ui.js";
 import {
     ensureAxiFaceLoaded,
     getCurrentProfileAvatar,
+    loadAxiFaceGeneratedFacePalettes,
+    loadAxiFaceGeneratedFaceStyles,
+    loadAxiFacePacks,
     normalizeAvatarConfig,
     renderAxiFaceMarkup,
     saveCurrentProfileAvatar
 } from "../../../services/profile-avatar-client.js";
 
 const settingsComponentPromises = new Map();
+let avatarSettingsComponentPromise = null;
 const BASE_TABS = ['keymap', 'editor', 'theme', 'plugins', 'copilot', 'avatar'];
-const AVATAR_FIELD_DEFS = Object.freeze([
-    { key: 'generated', label: 'Generated', type: 'checkbox' },
-    { key: 'src', label: 'SVG source', type: 'text' },
-    { key: 'packSrc', label: 'Pack manifest', type: 'text' },
-    { key: 'assetMode', label: 'Asset mode', type: 'select', options: ['img', 'inline'] },
-    { key: 'style', label: 'Style', type: 'select', options: ['robot-soft', 'robot-minimal', 'sketch', 'emoji', 'terminal'] },
-    { key: 'palette', label: 'Palette', type: 'text' },
-    { key: 'complexity', label: 'Complexity', type: 'select', options: ['', 'low', 'medium', 'high'] },
-    { key: 'emotion', label: 'Emotion', type: 'select', options: ['neutral', 'idle', 'listening', 'thinking', 'speaking', 'happy', 'amused', 'confused', 'concerned', 'alert', 'sleepy'] },
-    { key: 'shape', label: 'Shape', type: 'select', options: ['circle', 'square', 'rounded', 'none'] },
-    { key: 'theme', label: 'Theme', type: 'select', options: ['auto', 'light', 'dark'] },
-    { key: 'thoughtMode', label: 'Thought mode', type: 'select', options: ['none', 'bubble', 'caption', 'ticker', 'inside'] },
-    { key: 'thought', label: 'Thought', type: 'text' },
-    { key: 'seed', label: 'Seed', type: 'text' },
-    { key: 'size', label: 'Size', type: 'text' },
-    { key: 'animated', label: 'Animated', type: 'checkbox' },
-    { key: 'listen', label: 'Listen', type: 'checkbox' },
-    { key: 'mode', label: 'Mode', type: 'select', options: ['static', 'controlled', 'event-driven', 'autonomous'] }
-]);
 
 function escapeHtml(value) {
     return String(value ?? '')
@@ -138,6 +123,34 @@ async function fetchText(url, description) {
         throw new Error(`${description} (${response.status})`);
     }
     return response.text();
+}
+
+function getSharedAvatarSettingsComponentBaseUrl() {
+    return '/workspace-files/.ploinky/repos/AchillesIDE/shared/ui/avatar-settings-form/avatar-settings-form';
+}
+
+async function ensureAvatarSettingsFormRegistered() {
+    if (avatarSettingsComponentPromise) return avatarSettingsComponentPromise;
+    avatarSettingsComponentPromise = (async () => {
+        const baseUrl = getSharedAvatarSettingsComponentBaseUrl();
+        const [template, css, module] = await Promise.all([
+            fetchText(`${baseUrl}.html`, 'Failed to load avatar settings template'),
+            fetchText(`${baseUrl}.css`, 'Failed to load avatar settings stylesheet'),
+            import(`${baseUrl}.js?cacheBust=${Date.now()}`)
+        ]);
+        await registerRuntimeComponent(assistOS.webSkel, {
+            name: 'avatar-settings-form',
+            type: 'components',
+            loadedTemplate: template,
+            loadedCSSs: [css],
+            presenterClassName: 'AvatarSettingsForm',
+            presenterModule: module
+        });
+    })().catch((error) => {
+        avatarSettingsComponentPromise = null;
+        throw error;
+    });
+    return avatarSettingsComponentPromise;
 }
 
 async function ensureSettingsComponentRegistered(item) {
@@ -309,6 +322,10 @@ export class SettingsModal {
             profileAvatarEnabled: true,
             profileAvatarSource: null,
             dpuProfileAvailable: true,
+            activeAvatarTab: 'profile',
+            axiFacePacks: [],
+            axiFaceGeneratedFaceStyles: [],
+            axiFaceGeneratedFacePalettes: [],
             agentAvatarItems: [],
             selectedAvatarAgentId: "",
             selectedAgentAvatar: defaultAvatarConfig('agent', '72'),
@@ -361,8 +378,10 @@ export class SettingsModal {
         this.avatarSettingsStatusEl = this.element.querySelector("#avatarSettingsStatus");
         this.profileAvatarPreviewEl = this.element.querySelector("#profileAvatarPreview");
         this.agentAvatarPreviewEl = this.element.querySelector("#agentAvatarPreview");
-        this.profileAvatarControlsEl = this.element.querySelector('[data-avatar-scope="profile"]');
-        this.agentAvatarControlsEl = this.element.querySelector('[data-avatar-scope="agent"]');
+        this.profileAvatarControlsEl = this.element.querySelector('avatar-settings-form[data-avatar-scope="profile"]');
+        this.agentAvatarControlsEl = this.element.querySelector('avatar-settings-form[data-avatar-scope="agent"]');
+        this.avatarSubtabEls = Array.from(this.element.querySelectorAll('[data-avatar-tab]'));
+        this.avatarPanelEls = Array.from(this.element.querySelectorAll('[data-avatar-panel]'));
         this.agentAvatarCardEl = this.element.querySelector("#agentAvatarCard");
         this.avatarAgentListEl = this.element.querySelector("#avatarAgentList");
         this.profileAvatarEnabledInput = this.element.querySelector("#profileAvatarEnabled");
@@ -396,13 +415,11 @@ export class SettingsModal {
             this.editorAutoSaveIntervalInput.dataset.bound = 'true';
         }
         if (this.profileAvatarControlsEl && !this.profileAvatarControlsEl.dataset.bound) {
-            this.profileAvatarControlsEl.addEventListener('input', () => this.handleAvatarControlsInput('profile'));
-            this.profileAvatarControlsEl.addEventListener('change', () => this.handleAvatarControlsInput('profile'));
+            this.profileAvatarControlsEl.addEventListener('avatar-settings-change', (event) => this.handleAvatarControlsInput('profile', event));
             this.profileAvatarControlsEl.dataset.bound = 'true';
         }
         if (this.agentAvatarControlsEl && !this.agentAvatarControlsEl.dataset.bound) {
-            this.agentAvatarControlsEl.addEventListener('input', () => this.handleAvatarControlsInput('agent'));
-            this.agentAvatarControlsEl.addEventListener('change', () => this.handleAvatarControlsInput('agent'));
+            this.agentAvatarControlsEl.addEventListener('avatar-settings-change', (event) => this.handleAvatarControlsInput('agent', event));
             this.agentAvatarControlsEl.dataset.bound = 'true';
         }
         if (this.agentAvatarEnabledInput && !this.agentAvatarEnabledInput.dataset.bound) {
@@ -418,6 +435,12 @@ export class SettingsModal {
             });
             this.profileAvatarEnabledInput.dataset.bound = 'true';
         }
+    }
+
+    switchAvatarTab(_target, tab) {
+        const normalizedTab = tab === 'agent' && this.state.canManageAgentAvatars ? 'agent' : 'profile';
+        this.state.activeAvatarTab = normalizedTab;
+        this.renderAvatarSettings();
     }
 
     switchTab(_target, tab) {
@@ -790,8 +813,17 @@ export class SettingsModal {
         this.state.avatarStatus = "Loading avatar settings...";
         this.state.avatarStatusType = "";
         this.renderAvatarSettings();
+        await ensureAvatarSettingsFormRegistered();
+        const [me, generatedStyles, generatedPalettes, packs] = await Promise.all([
+            getCurrentProfileAvatar({ force: true }),
+            loadAxiFaceGeneratedFaceStyles().catch(() => []),
+            loadAxiFaceGeneratedFacePalettes().catch(() => []),
+            loadAxiFacePacks().catch(() => [])
+        ]);
         await ensureAxiFaceLoaded();
-        const me = await getCurrentProfileAvatar({ force: true });
+        this.state.axiFaceGeneratedFaceStyles = generatedStyles;
+        this.state.axiFaceGeneratedFacePalettes = generatedPalettes;
+        this.state.axiFacePacks = packs;
         this.state.avatarUser = me.user || null;
         this.state.canManageAgentAvatars = Boolean(me.user?.canManageAgents);
         this.state.profileAvatar = normalizeAvatarConfig(me.config, me.config?.agentId || `profile:${me.user?.id || 'current-user'}`);
@@ -825,8 +857,9 @@ export class SettingsModal {
         this.renderAvatarControls('agent');
         this.renderAvatarAgentList();
         this.renderAvatarPreviews();
+        this.renderAvatarTabs();
         if (this.agentAvatarCardEl) {
-            this.agentAvatarCardEl.hidden = !this.state.canManageAgentAvatars;
+            this.agentAvatarCardEl.hidden = !this.state.canManageAgentAvatars || this.state.activeAvatarTab !== 'agent';
         }
         if (this.agentAvatarEnabledInput) {
             this.agentAvatarEnabledInput.checked = Boolean(this.state.selectedAgentAvatarEnabled);
@@ -844,6 +877,26 @@ export class SettingsModal {
         }
     }
 
+    renderAvatarTabs() {
+        const canManageAgentAvatars = Boolean(this.state.canManageAgentAvatars);
+        if (!canManageAgentAvatars && this.state.activeAvatarTab === 'agent') {
+            this.state.activeAvatarTab = 'profile';
+        }
+        for (const tab of this.avatarSubtabEls || []) {
+            const key = String(tab.dataset.avatarTab || '').trim();
+            const isAgentTab = key === 'agent';
+            const active = key === this.state.activeAvatarTab;
+            tab.hidden = isAgentTab && !canManageAgentAvatars;
+            tab.classList.toggle('active', active);
+            tab.setAttribute('aria-selected', active ? 'true' : 'false');
+        }
+        for (const panel of this.avatarPanelEls || []) {
+            const key = String(panel.dataset.avatarPanel || '').trim();
+            const shouldShow = key === this.state.activeAvatarTab && (key !== 'agent' || canManageAgentAvatars);
+            panel.hidden = !shouldShow;
+        }
+    }
+
     renderAvatarStatus() {
         if (!this.avatarSettingsStatusEl) return;
         this.avatarSettingsStatusEl.textContent = this.state.avatarStatus || "";
@@ -854,35 +907,14 @@ export class SettingsModal {
         const container = scope === 'profile' ? this.profileAvatarControlsEl : this.agentAvatarControlsEl;
         if (!container) return;
         const config = scope === 'profile' ? this.state.profileAvatar : this.state.selectedAgentAvatar;
-        container.innerHTML = AVATAR_FIELD_DEFS.map((field) => {
-            const value = config?.[field.key];
-            if (field.type === 'checkbox') {
-                return `
-                    <label class="avatar-field avatar-field-checkbox">
-                        <span>${escapeHtml(field.label)}</span>
-                        <span class="avatar-checkbox-shell">
-                            <input class="avatar-checkbox-input" type="checkbox" data-avatar-field="${field.key}" ${value ? 'checked' : ''}>
-                        </span>
-                    </label>
-                `;
-            }
-            if (field.type === 'select') {
-                return `
-                    <label class="avatar-field">
-                        <span>${escapeHtml(field.label)}</span>
-                        <select class="form-input avatar-input" data-avatar-field="${field.key}">
-                            ${field.options.map((option) => `<option value="${escapeHtml(option)}" ${String(value || '') === option ? 'selected' : ''}>${escapeHtml(option || 'default')}</option>`).join('')}
-                        </select>
-                    </label>
-                `;
-            }
-            return `
-                <label class="avatar-field">
-                    <span>${escapeHtml(field.label)}</span>
-                    <input class="form-input avatar-input" type="text" data-avatar-field="${field.key}" value="${escapeHtml(value || '')}">
-                </label>
-            `;
-        }).join("");
+        container.webSkelPresenter?.setData?.({
+            value: config,
+            packs: this.state.axiFacePacks,
+            generatedStyles: this.state.axiFaceGeneratedFaceStyles,
+            palettes: this.state.axiFaceGeneratedFacePalettes,
+            disabled: this.state.avatarBusy || (scope === 'profile' && !this.state.dpuProfileAvailable),
+            showPreview: false
+        });
     }
 
     renderAvatarPreviews() {
@@ -918,20 +950,28 @@ export class SettingsModal {
     readAvatarControls(scope) {
         const container = scope === 'profile' ? this.profileAvatarControlsEl : this.agentAvatarControlsEl;
         const current = scope === 'profile' ? this.state.profileAvatar : this.state.selectedAgentAvatar;
-        const next = { ...current };
-        container?.querySelectorAll('[data-avatar-field]').forEach((field) => {
-            const key = field.dataset.avatarField;
-            next[key] = field.type === 'checkbox' ? Boolean(field.checked) : field.value;
-        });
-        next.agentId = current.agentId;
-        return normalizeAvatarConfig(next, current.agentId);
+        const next = container?.webSkelPresenter?.getConfig?.() || current;
+        return normalizeAvatarConfig({
+            ...next,
+            agentId: current.agentId,
+            seed: next.seed || current.seed || current.agentId
+        }, current.agentId);
     }
 
-    handleAvatarControlsInput(scope) {
+    handleAvatarControlsInput(scope, event = null) {
+        const nextConfig = event?.detail?.config || this.readAvatarControls(scope);
         if (scope === 'profile') {
-            this.state.profileAvatar = this.readAvatarControls('profile');
+            this.state.profileAvatar = normalizeAvatarConfig({
+                ...nextConfig,
+                agentId: this.state.profileAvatar.agentId,
+                seed: nextConfig.seed || this.state.profileAvatar.seed || this.state.profileAvatar.agentId
+            }, this.state.profileAvatar.agentId);
         } else {
-            this.state.selectedAgentAvatar = this.readAvatarControls('agent');
+            this.state.selectedAgentAvatar = normalizeAvatarConfig({
+                ...nextConfig,
+                agentId: this.state.selectedAgentAvatar.agentId,
+                seed: nextConfig.seed || this.state.selectedAgentAvatar.seed || this.state.selectedAgentAvatar.agentId
+            }, this.state.selectedAgentAvatar.agentId);
         }
         this.renderAvatarPreviews();
     }

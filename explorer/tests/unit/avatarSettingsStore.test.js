@@ -36,13 +36,16 @@ async function createTempWorkspace() {
 test('normalizes AxiFace config and rejects unknown or unsafe fields', () => {
     const config = normalizeAxiFaceConfig({
         agentId: 'agent-a',
+        sourceMode: 'pack',
         generated: true,
         emotion: 'happy',
         assetMode: 'inline',
-        src: '/avatars/face.svg'
+        packSrc: '/axi-face/packs/robot-soft/manifest.json'
     });
 
     assert.equal(config.agentId, 'agent-a');
+    assert.equal(config.sourceMode, 'pack');
+    assert.equal(config.generated, false);
     assert.equal(config.emotion, 'happy');
     assert.equal(config.assetMode, 'inline');
     assert.throws(() => normalizeAxiFaceConfig({ unknown: true }), /Unknown avatar config field/);

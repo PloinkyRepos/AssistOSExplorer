@@ -12,6 +12,8 @@ const AVATAR_SETTINGS_EVENT = 'assistOS:avatar-settings-updated';
 const AVATAR_SETTINGS_CHANNEL = 'assistOS.avatar-settings';
 const AVATAR_SETTINGS_STORAGE_KEY = 'assistOS.avatar-settings.updated';
 let axiFaceLoadPromise = null;
+let axiFaceModule = null;
+let axiFacePacksPromise = null;
 let updateListenerInstalled = false;
 let avatarBroadcastChannel = null;
 
@@ -52,6 +54,10 @@ function getCurrentAgentName() {
 
 function getAxiFaceModuleUrl() {
     return `/services/${encodeURIComponent(getCurrentAgentName())}/axi-face/src/axi-face.mjs`;
+}
+
+function getAxiFaceAssetBaseUrl() {
+    return `/services/${encodeURIComponent(getCurrentAgentName())}/axi-face`;
 }
 
 async function fetchAvatarJson(path, options = {}) {
@@ -105,14 +111,80 @@ function installUpdateListener() {
 }
 
 export async function ensureAxiFaceLoaded() {
-    if (customElements.get('axi-face')) return;
+    if (customElements.get('axi-face') && axiFaceModule) return;
     if (!axiFaceLoadPromise) {
         axiFaceLoadPromise = import(`${getAxiFaceModuleUrl()}?cacheBust=${Date.now()}`).catch((error) => {
             axiFaceLoadPromise = null;
             throw error;
         });
     }
-    await axiFaceLoadPromise;
+    axiFaceModule = await axiFaceLoadPromise;
+}
+
+function normalizeAxiFaceStringList(values = []) {
+    if (Array.isArray(values)) {
+        return values.map((value) => String(value || '').trim()).filter(Boolean);
+    }
+    if (values && typeof values === 'object') {
+        return Object.keys(values).map((value) => String(value || '').trim()).filter(Boolean);
+    }
+    return [];
+}
+
+function normalizeAxiFacePackList(packs = []) {
+    if (!Array.isArray(packs)) return [];
+    const base = getAxiFaceAssetBaseUrl();
+    return packs
+        .map((pack) => {
+            if (!pack || typeof pack !== 'object') return null;
+            const id = String(pack.id || '').trim();
+            if (!id) return null;
+            const manifestSrc = String(pack.manifestSrc || pack.packSrc || pack.src || '').trim()
+                || `${base}/packs/${encodeURIComponent(id)}/manifest.json`;
+            const resolvedManifestSrc = manifestSrc.startsWith('/axi-face/')
+                ? `${base}${manifestSrc.slice('/axi-face'.length)}`
+                : manifestSrc;
+            return {
+                id,
+                label: String(pack.label || pack.name || id).trim(),
+                type: String(pack.type || '').trim(),
+                defaultEmotion: String(pack.defaultEmotion || '').trim(),
+                emotions: Array.isArray(pack.emotions) ? pack.emotions.map((item) => String(item || '').trim()).filter(Boolean) : [],
+                manifestSrc: resolvedManifestSrc
+            };
+        })
+        .filter(Boolean);
+}
+
+export async function loadAxiFaceGeneratedFaceStyles() {
+    await ensureAxiFaceLoaded();
+    return normalizeAxiFaceStringList(axiFaceModule?.GENERATED_FACE_STYLES);
+}
+
+export async function loadAxiFaceGeneratedFacePalettes() {
+    await ensureAxiFaceLoaded();
+    return normalizeAxiFaceStringList(axiFaceModule?.listGeneratedFacePalettes?.() || axiFaceModule?.DEFAULT_GENERATED_FACE_PALETTES);
+}
+
+export async function loadAxiFacePacks() {
+    if (!axiFacePacksPromise) {
+        axiFacePacksPromise = fetch(`${getAxiFaceAssetBaseUrl()}/packs/index.json`, {
+            credentials: 'include',
+            headers: { Accept: 'application/json' }
+        })
+            .then(async (response) => {
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok || payload.ok === false) {
+                    throw new Error(payload.error || `AxiFace pack index request failed (${response.status}).`);
+                }
+                return normalizeAxiFacePackList(payload.packs);
+            })
+            .catch((error) => {
+                axiFacePacksPromise = null;
+                throw error;
+            });
+    }
+    return axiFacePacksPromise;
 }
 
 function normalizeProfileAvatarPayload(payload = {}) {

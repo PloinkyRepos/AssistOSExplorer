@@ -25,6 +25,7 @@ const ALLOWED_MODES = new Set(['static', 'controlled', 'event-driven', 'autonomo
 const ALLOWED_SHAPES = new Set(['circle', 'square', 'rounded', 'none']);
 const ALLOWED_THEMES = new Set(['light', 'dark', 'auto']);
 const ALLOWED_ASSET_MODES = new Set(['img', 'inline']);
+const ALLOWED_SOURCE_MODES = new Set(['generated', 'pack', 'svg']);
 const ALLOWED_STYLES = new Set(['robot-soft', 'robot-minimal', 'sketch', 'emoji', 'terminal']);
 const ALLOWED_COMPLEXITIES = new Set(['', 'low', 'minimal', 'medium', 'default', 'high', 'detailed']);
 
@@ -88,6 +89,8 @@ export function normalizeAxiFaceConfig(input = {}) {
     'assetMode',
     'asset-mode',
     'generated',
+    'sourceMode',
+    'source-mode',
     'seed',
     'style',
     'palette',
@@ -111,6 +114,7 @@ export function normalizeAxiFaceConfig(input = {}) {
   config.shape = normalizeEnum(input.shape, ALLOWED_SHAPES, 'circle', 'shape');
   config.theme = normalizeEnum(input.theme, ALLOWED_THEMES, 'auto', 'theme');
   config.assetMode = normalizeEnum(input.assetMode ?? input['asset-mode'], ALLOWED_ASSET_MODES, 'img', 'asset-mode');
+  config.sourceMode = normalizeEnum(input.sourceMode ?? input['source-mode'], ALLOWED_SOURCE_MODES, '', 'source-mode');
   config.generated = normalizeBoolean(input.generated ?? (!config.src && !config.packSrc));
   config.animated = input.animated === undefined ? true : normalizeBoolean(input.animated);
   config.listen = normalizeBoolean(input.listen);
@@ -122,6 +126,19 @@ export function normalizeAxiFaceConfig(input = {}) {
     throw new Error(`Invalid complexity: ${complexity}`);
   }
   config.complexity = complexity;
+  if (config.src) {
+    config.sourceMode = 'svg';
+    config.generated = false;
+    config.packSrc = '';
+  } else if (config.packSrc) {
+    config.sourceMode = 'pack';
+    config.generated = false;
+  } else {
+    config.sourceMode = config.sourceMode || (config.generated === false ? 'pack' : 'generated');
+    if (config.sourceMode === 'generated') {
+      config.generated = true;
+    }
+  }
   return config;
 }
 

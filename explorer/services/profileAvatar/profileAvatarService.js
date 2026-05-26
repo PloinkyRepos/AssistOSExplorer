@@ -8,6 +8,9 @@ export {
     ensureAxiFaceLoaded,
     getCurrentProfileAvatar,
     invalidateProfileAvatarCache,
+    loadAxiFaceGeneratedFacePalettes,
+    loadAxiFaceGeneratedFaceStyles,
+    loadAxiFacePacks,
     saveCurrentProfileAvatar
 } from './avatarApi.js';
 

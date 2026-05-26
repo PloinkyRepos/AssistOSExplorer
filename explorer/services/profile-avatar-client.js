@@ -4,6 +4,9 @@ export {
     getCurrentProfileAvatar,
     getFallbackLetter,
     invalidateProfileAvatarCache,
+    loadAxiFaceGeneratedFacePalettes,
+    loadAxiFaceGeneratedFaceStyles,
+    loadAxiFacePacks,
     normalizeAvatarConfig,
     renderAxiFaceMarkup,
     saveCurrentProfileAvatar

@@ -60,8 +60,12 @@
         <section class="settings-section hidden" data-section="avatar">
             <p class="plugin-settings-description">Configure your profile avatar and, for admins, AI agent avatars.</p>
             <div class="avatar-settings-status" id="avatarSettingsStatus" role="status" aria-live="polite"></div>
+            <div class="avatar-subtabs" role="tablist" aria-label="Avatar settings">
+                <button type="button" class="avatar-subtab active" data-local-action="switchAvatarTab profile" data-avatar-tab="profile" role="tab" aria-selected="true">My profile avatar</button>
+                <button type="button" class="avatar-subtab" data-local-action="switchAvatarTab agent" data-avatar-tab="agent" role="tab" aria-selected="false">AI agent avatars</button>
+            </div>
             <div class="avatar-settings-grid">
-                <article class="avatar-settings-card">
+                <article class="avatar-settings-card" data-avatar-panel="profile">
                     <div class="avatar-settings-card-header">
                         <div>
                             <h3>My profile avatar</h3>
@@ -69,7 +73,7 @@
                         </div>
                         <div class="avatar-preview" id="profileAvatarPreview"></div>
                     </div>
-                    <div class="avatar-controls" data-avatar-scope="profile"></div>
+                    <avatar-settings-form data-presenter="avatar-settings-form" data-avatar-scope="profile"></avatar-settings-form>
                     <div class="avatar-actions">
                         <label class="avatar-enable-toggle">
                             <input type="checkbox" id="profileAvatarEnabled">
@@ -79,7 +83,7 @@
                     </div>
                 </article>
 
-                <article class="avatar-settings-card" id="agentAvatarCard" hidden>
+                <article class="avatar-settings-card" id="agentAvatarCard" data-avatar-panel="agent" hidden>
                     <div class="avatar-settings-card-header">
                         <div>
                             <h3>AI agent avatars</h3>
@@ -88,7 +92,7 @@
                         <div class="avatar-preview" id="agentAvatarPreview"></div>
                     </div>
                     <div class="avatar-agent-list" id="avatarAgentList"></div>
-                    <div class="avatar-controls" data-avatar-scope="agent"></div>
+                    <avatar-settings-form data-presenter="avatar-settings-form" data-avatar-scope="agent"></avatar-settings-form>
                     <div class="avatar-actions">
                         <label class="avatar-enable-toggle">
                             <input type="checkbox" id="agentAvatarEnabled">

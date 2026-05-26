@@ -1,5 +1,6 @@
 const DEFAULT_CONFIG = Object.freeze({
     agentId: 'profile:current-user',
+    sourceMode: 'generated',
     generated: true,
     src: '',
     packSrc: '',
@@ -30,12 +31,33 @@ function escapeHtml(value) {
 
 export function normalizeAvatarConfig(config, fallbackId = 'profile:current-user') {
     const source = config && typeof config === 'object' ? config : {};
-    return {
+    const requestedSourceMode = ['generated', 'pack', 'svg'].includes(String(source.sourceMode || source['source-mode'] || '').trim())
+        ? String(source.sourceMode || source['source-mode']).trim()
+        : '';
+    const normalized = {
         ...DEFAULT_CONFIG,
         ...source,
         agentId: String(source.agentId || fallbackId),
         seed: String(source.seed || source.agentId || fallbackId)
     };
+    normalized.src = String(normalized.src || '').trim();
+    normalized.packSrc = String(normalized.packSrc || '').trim();
+    if (normalized.src) {
+        normalized.sourceMode = 'svg';
+        normalized.generated = false;
+        normalized.packSrc = '';
+    } else if (normalized.packSrc) {
+        normalized.sourceMode = 'pack';
+        normalized.generated = false;
+        normalized.src = '';
+    } else {
+        normalized.sourceMode = requestedSourceMode || (normalized.generated === false ? 'pack' : 'generated');
+        normalized.generated = normalized.generated !== false;
+    }
+    if (normalized.sourceMode === 'generated') {
+        normalized.generated = true;
+    }
+    return normalized;
 }
 
 export function getFallbackLetter(value) {
