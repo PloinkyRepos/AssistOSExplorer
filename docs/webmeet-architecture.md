@@ -436,7 +436,7 @@ Two different URLs matter:
 
 | Env var | Used by | Example |
 | --- | --- | --- |
-| `WEBMEET_PUBLIC_LIVEKIT_URL` | Browser LiveKit client | `ws://127.0.0.1:7880` locally, `wss://livekit-skills.axiologic.dev` in production |
+| `WEBMEET_PUBLIC_LIVEKIT_URL` | Browser LiveKit client | `ws://<detected-local-ip>:7880` locally after default preinstall seeding, `wss://livekit-skills.axiologic.dev` in production |
 | `WEBMEET_LIVEKIT_URL` | `webmeetAgent` server-side Twirp API calls | `http://liveKitServerAgent:7880` in default, `http://liveKitServerAgent:17880` in dev, `http://host.containers.internal:7880` in prod |
 
 `WEBMEET_EGRESS_URL` is present in context and is stored as recording metadata, but the recording control call itself goes to the LiveKit server Egress Twirp API. LiveKit then coordinates with the egress worker.
@@ -504,8 +504,8 @@ sequenceDiagram
 
 | Profile | LiveKit server topology | Browser URL | Server-side WebMeet URL | Egress `ws_url` |
 | --- | --- | --- | --- | --- |
-| `default` | Bridge network alias `liveKitServerAgent`, published default ports | `ws://127.0.0.1:7880` by manifest default | `http://liveKitServerAgent:7880` | `ws://liveKitServerAgent:7880` |
-| `dev` | Bridge network alias `liveKitServerAgent`, alternate ports | `ws://127.0.0.1:17880` by manifest default | `http://liveKitServerAgent:17880` | `ws://liveKitServerAgent:17880` |
+| `default` | Bridge network alias `liveKitServerAgent`, LAN-published media/TURN ports | `ws://<detected-local-ip>:7880` seeded by preinstall | `http://liveKitServerAgent:7880` | `ws://liveKitServerAgent:7880` |
+| `dev` | Bridge network alias `liveKitServerAgent`, alternate LAN-published media/TURN ports | `ws://<detected-local-ip>:17880` seeded by preinstall | `http://liveKitServerAgent:17880` | `ws://liveKitServerAgent:17880` |
 | `prod` | Host network for LiveKit server | `wss://livekit-skills.axiologic.dev` | `http://host.containers.internal:7880` from bridge-resident `webmeetAgent` | `ws://host.containers.internal:7880` |
 
 Production uses host networking for LiveKit so the SFU sees real client UDP addresses. The Nginx process supervised by `liveKitServerAgent` terminates TLS for WebSocket/HTTPS signaling on the public hostname and proxies to LiveKit `7880`. WebRTC media still needs direct media ports such as `7882-7892/udp` and TCP fallback `7881/tcp`; the TLS proxy is not the media relay.
