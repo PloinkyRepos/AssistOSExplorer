@@ -21,6 +21,7 @@ The `webmeetLivekitAiAgent` manifest owns:
 - `WEBMEET_AGENT_API_URL=http://webmeetAgent:8791` in bridge-networked `default` and `dev`, and `WEBMEET_AGENT_API_URL=http://127.0.0.1:18791` in host-networked `prod`, so agent chat and transcript persistence go through the WebMeet API container without exposing a public route
 - `WEBMEET_STT_URL=http://webmeetStt:9000/v1/audio/transcriptions` in bridge-networked `default` and `dev`, and `WEBMEET_STT_URL=http://127.0.0.1:19000/v1/audio/transcriptions` in host-networked `prod`, so scribe jobs use the internal WebMeet STT service without operator configuration
 - `WEBMEET_AGENT_INTERNAL_TOKEN`, derived with the same shared WebMeet agent-secret identity as `webmeetAgent`, so scribe transcript writes can use the WebMeet internal API without a manual secret
+- a `.ploinky/code/webmeetAgent` mount at `/webmeetAgent`, so the worker can import the canonical WebMeet event contract without moving the native LiveKit dependency tree back into `webmeetAgent`
 
 `webmeetAgent/manifest.json` may include the worker through a `no-wait` enable edge so fresh Explorer startup can launch dependency preparation in the background without gating WebMeet readiness. Explorer and WebMeet must remain usable if the background launch is still running or fails.
 
@@ -39,5 +40,6 @@ An acceptable runtime validation must prove that:
 - `ploinky start explorer` succeeds without waiting for `webmeetLivekitAiAgent`
 - dependency wave output for the default Explorer graph does not include a `webmeetAgent` npm install for `@livekit/agents`
 - when `webmeetLivekitAiAgent` is launched through the no-wait edge, Ploinky prepares the worker's dependency cache under that agent name and records background status/logs
+- the no-wait worker container stays running after startup and can resolve the shared WebMeet event contract through `/webmeetAgent`
 - an admin attach creates a LiveKit dispatch that is accepted by the worker, and a real LiveKit `AGENT` participant appears with WebMeet attributes for meeting id, agent type, and mode
 - an admin scribe attach creates a real LiveKit `AGENT` participant and produces transcript segments from room microphone audio through `webmeetStt`

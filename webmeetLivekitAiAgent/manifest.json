@@ -5,6 +5,9 @@
   "readiness": {
     "protocol": "none"
   },
+  "volumes": {
+    ".ploinky/code/webmeetAgent": "/webmeetAgent"
+  },
   "network": {
     "name": "webmeet",
     "aliases": [
