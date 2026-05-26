@@ -10,7 +10,7 @@ The agent owns three things that Explorer should not implement locally:
 
 ## Runtime
 
-`dpuAgent` can run under the Ploinky runtime or as a standalone HTTP Model Context Protocol server. Under Ploinky, `DPU_MASTER_KEY` is derived from `PLOINKY_DERIVED_MASTER_KEY` through `{{derivedMasterSecret:DPU_MASTER_KEY}}`; standalone runs must still provide `DPU_MASTER_KEY` explicitly.
+`dpuAgent` can run under the Ploinky runtime or as a standalone HTTP Model Context Protocol server. Under Ploinky, `DPU_MASTER_KEY` is a per-agent generated secret derived from `PLOINKY_DERIVED_MASTER_KEY` through `{{generatedSecret:DPU_MASTER_KEY}}`; standalone runs must still provide `DPU_MASTER_KEY` explicitly.
 
 Standalone entry point:
 

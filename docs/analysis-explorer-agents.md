@@ -341,7 +341,7 @@ Explorer caches workspace roots and node metadata. Calls DPU tools via `callAgen
 |--------|---------|--------|
 | `SOUL_GATEWAY_API_KEY` | Explorer, gitAgent, soplangAgent, llmAssistant | `~/work/.env` → `.ploinky/.secrets` |
 | `ONLYOFFICE_JWT_SECRET` | Explorer (OnlyOffice document editor) | Derived from `PLOINKY_DERIVED_MASTER_KEY` via manifest `derive: "derived-master"` |
-| `DPU_MASTER_KEY` | dpuAgent | Derived from `PLOINKY_DERIVED_MASTER_KEY` via `{{derivedMasterSecret:DPU_MASTER_KEY}}` |
+| `DPU_MASTER_KEY` | dpuAgent | Derived from `PLOINKY_DERIVED_MASTER_KEY` via `{{generatedSecret:DPU_MASTER_KEY}}` |
 | `PLOINKY_GITHUB_CLIENT_ID/SECRET` | gitAgent (GitHub OAuth) | `.ploinky/.secrets` |
 | `ASSISTOS_FS_ROOT` | All agents | Not a secret — filesystem path |
 
@@ -370,7 +370,8 @@ process.env                      ← Agent runtime access
 
 **Derived agent-owned secrets**:
 - Ploinky injects `PLOINKY_DERIVED_MASTER_KEY`, derived from `PLOINKY_MASTER_KEY`.
-- Workspace-owned agent secrets use manifest `derive: "derived-master"` or `{{derivedMasterSecret:...}}`.
+- Per-agent workspace-owned secrets use manifest `generatedSecret: true` or `{{generatedSecret:...}}`.
+- Legacy cross-agent shared credentials may still use explicit `derive: "derived-master"` entries or `{{derivedMasterSecret:...}}` templates when they must pin a logical repo, agent, or secret name different from the current agent.
 - `DPU_MASTER_KEY` and `ONLYOFFICE_JWT_SECRET` are derived values, not random `.secrets` entries.
 
 ### The Derivation Pattern Already Exists
@@ -411,7 +412,7 @@ DPU_MASTER_KEY             = HKDF(PLOINKY_DERIVED_MASTER_KEY, "ploinky/agent-sec
 1. The derivation pattern (DPU storage.mjs)
 2. The secret injection pipeline (secretInjector.js → agentServiceManager.js)
 3. Host lifecycle hook env resolution for manifest-derived values
-4. Manifest support for `derive: "derived-master"` and `{{derivedMasterSecret:...}}`
+4. Manifest support for `generatedSecret: true`, `{{generatedSecret:...}}`, and legacy explicit shared derivations through `derive: "derived-master"` or `{{derivedMasterSecret:...}}`
 
 ### Risks & Trade-offs
 

@@ -54,7 +54,7 @@
       "env": {
         "DPU_DATA_ROOT": "{{STORAGE_CONTAINER_PATH}}",
         "DPU_WORKSPACE_ROOT": "{{WORKSPACE_ROOT}}",
-        "DPU_MASTER_KEY": "{{derivedMasterSecret:DPU_MASTER_KEY}}"
+        "DPU_MASTER_KEY": "{{generatedSecret:DPU_MASTER_KEY}}"
       }
     }
   },
@@ -81,7 +81,7 @@
                         <tbody>
                             <tr>
                                 <td><code>DPU_MASTER_KEY</code></td>
-                                <td>Encryption root for secret values and confidential file content, derived from <code>PLOINKY_DERIVED_MASTER_KEY</code> through <code>{{derivedMasterSecret:DPU_MASTER_KEY}}</code>.</td>
+                                <td>Encryption root for secret values and confidential file content, a per-agent generated secret derived from <code>PLOINKY_DERIVED_MASTER_KEY</code> through <code>{{generatedSecret:DPU_MASTER_KEY}}</code>.</td>
                             </tr>
                             <tr>
                                 <td><code>DPU_DATA_ROOT</code></td>
