@@ -10,13 +10,15 @@ Create or update these repository secrets in `PloinkyRepos/AssistOSExplorer`.
 gh secret set SSH_KEY --repo PloinkyRepos/AssistOSExplorer < ~/.ssh/skills-explorer-deploy
 gh secret set PLOINKY_MASTER_KEY --repo PloinkyRepos/AssistOSExplorer --body "$(openssl rand -hex 32)"
 gh secret set SOUL_GATEWAY_API_KEY --repo PloinkyRepos/AssistOSExplorer
-gh secret set LMSTUDIO_PROXY_TOKEN --repo PloinkyRepos/AssistOSExplorer
 ```
 
 `PLOINKY_MASTER_KEY` must be exactly 64 hex characters. Keep it stable after the first deployment because it encrypts the Ploinky workspace secret stores and local-auth password store.
-`LMSTUDIO_PROXY_TOKEN` is the bearer token required by the default embedded local LLM endpoint, `https://lmstudio.axiologic.dev/v1`. The deploy workflow stores it as `LOCAL_LLM_API_KEY` through `ploinky var` so Soul Gateway can create an encrypted provider account at startup. Use a `LOCAL_LLM_API_KEY` secret instead if the upstream endpoint token is not an LM Studio proxy token:
+`SOUL_GATEWAY_API_KEY` is the production LLM credential for the standalone Soul Gateway. Leave `SOUL_GATEWAY_BASE_URL` unset for the normal production path so Achilles uses the configured `https://soul.axiologic.dev` provider URL.
+
+`LMSTUDIO_PROXY_TOKEN` is only needed for deployments that leave `SOUL_GATEWAY_API_KEY` unset and use the embedded Soul Gateway's default local LLM endpoint, `https://lmstudio.axiologic.dev/v1`. The deploy workflow stores it as `LOCAL_LLM_API_KEY` through `ploinky var` so embedded Soul Gateway can create an encrypted provider account at startup. Use a `LOCAL_LLM_API_KEY` secret instead if the upstream endpoint token is not an LM Studio proxy token:
 
 ```sh
+gh secret set LMSTUDIO_PROXY_TOKEN --repo PloinkyRepos/AssistOSExplorer
 gh secret set LOCAL_LLM_API_KEY --repo PloinkyRepos/AssistOSExplorer
 ```
 
@@ -83,7 +85,7 @@ gh variable set WEBMEET_TURN_MIN_PORT --repo PloinkyRepos/AssistOSExplorer --bod
 gh variable set WEBMEET_TURN_MAX_PORT --repo PloinkyRepos/AssistOSExplorer --body 20010
 ```
 
-The default embedded Soul Gateway local provider points at the RAAS LM Studio proxy and registers only the known preloaded model. Override these only when deploying against a different OpenAI-compatible local endpoint:
+The deploy workflow does not synthesize local LLM defaults when `SOUL_GATEWAY_API_KEY` is supplied; production should use the remote Soul Gateway at `soul.axiologic.dev`. The default embedded Soul Gateway local provider points at the RAAS LM Studio proxy and registers only the known preloaded model. Override these only when deploying without `SOUL_GATEWAY_API_KEY` or when intentionally bootstrapping an embedded local provider:
 
 ```sh
 gh variable set LOCAL_LLM_BASE_URL --repo PloinkyRepos/AssistOSExplorer --body https://lmstudio.axiologic.dev/v1
@@ -91,7 +93,7 @@ gh variable set LOCAL_LLM_MODEL --repo PloinkyRepos/AssistOSExplorer --body gemm
 gh variable set LOCAL_LLM_DISCOVERY_MODE --repo PloinkyRepos/AssistOSExplorer --body single
 ```
 
-`LOCAL_LLM_DISCOVERY_MODE=single` avoids exposing LM Studio models that are installed but not currently loaded. Use `auto` only for endpoints that can reliably serve every model returned by `/models`. Agents still receive only the Soul Gateway workspace credential; upstream provider tokens and model bootstrap settings stay in Soul Gateway deployment configuration.
+`LOCAL_LLM_DISCOVERY_MODE=single` avoids exposing LM Studio models that are installed but not currently loaded. Use `auto` only for endpoints that can reliably serve every model returned by `/models`. In standalone production mode, agents receive the explicit `SOUL_GATEWAY_API_KEY` and keep the remote Soul Gateway URL; upstream local-provider tokens are not required.
 
 For manual scratch deployments that use the default RAAS LM Studio endpoint, set the upstream token through Ploinky before starting Explorer:
 

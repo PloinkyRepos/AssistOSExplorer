@@ -248,13 +248,18 @@ jobs:
           set +a
           rm -f /tmp/skills_explorer_env
 
-          LOCAL_LLM_BASE_URL="${LOCAL_LLM_BASE_URL:-https://lmstudio.axiologic.dev/v1}"
-          LOCAL_LLM_MODEL="${LOCAL_LLM_MODEL:-gemma-3-12b-it}"
-          LOCAL_LLM_DISCOVERY_MODE="${LOCAL_LLM_DISCOVERY_MODE:-single}"
           LOCAL_LLM_API_KEY="${LOCAL_LLM_API_KEY:-${LMSTUDIO_PROXY_TOKEN:-}}"
-          if [ "$LOCAL_LLM_BASE_URL" = "https://lmstudio.axiologic.dev/v1" ] && [ -z "${LOCAL_LLM_API_KEY:-}" ]; then
-            echo "[deploy] ERROR: LMSTUDIO_PROXY_TOKEN or LOCAL_LLM_API_KEY is required for the default LOCAL_LLM_BASE_URL."
-            exit 1
+          if [ -n "${SOUL_GATEWAY_API_KEY:-}" ]; then
+            echo "[deploy] SOUL_GATEWAY_API_KEY is configured; Explorer consumers will use the standalone Soul Gateway unless SOUL_GATEWAY_BASE_URL overrides it."
+          else
+            LOCAL_LLM_BASE_URL="${LOCAL_LLM_BASE_URL:-https://lmstudio.axiologic.dev/v1}"
+            LOCAL_LLM_MODEL="${LOCAL_LLM_MODEL:-gemma-3-12b-it}"
+            LOCAL_LLM_DISCOVERY_MODE="${LOCAL_LLM_DISCOVERY_MODE:-single}"
+            if [ "$LOCAL_LLM_BASE_URL" = "https://lmstudio.axiologic.dev/v1" ] && [ -z "${LOCAL_LLM_API_KEY:-}" ]; then
+              echo "[deploy] ERROR: SOUL_GATEWAY_API_KEY is unset, so embedded Soul Gateway local LLM bootstrap is required."
+              echo "[deploy] Set LMSTUDIO_PROXY_TOKEN or LOCAL_LLM_API_KEY for the default LOCAL_LLM_BASE_URL."
+              exit 1
+            fi
           fi
 
           WEBMEET_INFRA_IMAGE_TAG="${WEBMEET_INFRA_IMAGE_TAG:-webmeet-infra}"
