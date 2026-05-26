@@ -34,7 +34,7 @@ on:
         default: ''
         type: string
       ploinky_branch:
-        description: 'Ploinky runtime branch. Falls back to vars.PLOINKY_BRANCH, then main.'
+        description: 'Ploinky runtime branch. Falls back to vars.PLOINKY_BRANCH, then master.'
         required: false
         default: ''
         type: string
@@ -199,7 +199,7 @@ jobs:
           scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no /tmp/skills_explorer_env "${SSH_USER}@${SSH_HOST}:/tmp/skills_explorer_env"
 
           PROXIES_BRANCH="${{ inputs.proxies_branch || vars.PROXIES_BRANCH || 'main' }}"
-          PLOINKY_BRANCH="${{ inputs.ploinky_branch || vars.PLOINKY_BRANCH || 'main' }}"
+          PLOINKY_BRANCH="${{ inputs.ploinky_branch || vars.PLOINKY_BRANCH || 'master' }}"
           ACHILLES_BRANCH="${{ inputs.achilles_branch || vars.ACHILLES_BRANCH || 'master' }}"
 
           ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
@@ -290,7 +290,7 @@ jobs:
             local branch="$2"
             local label="$3"
             git -C "$repo_dir" check-ref-format --branch "$branch" >/dev/null
-            git -C "$repo_dir" fetch origin
+            git -C "$repo_dir" fetch --prune origin
             if git -C "$repo_dir" show-ref --verify --quiet "refs/heads/$branch"; then
               git -C "$repo_dir" checkout "$branch"
             else
@@ -300,7 +300,7 @@ jobs:
             echo "[deploy] $label at $(git -C "$repo_dir" rev-parse --short HEAD) ($branch)"
           }
 
-          PLOINKY_BRANCH="${PLOINKY_BRANCH:-main}"
+          PLOINKY_BRANCH="${PLOINKY_BRANCH:-master}"
           PLOINKY_BIN="$(resolve_realpath "$PLOINKY")"
           PLOINKY_DIR="$(cd "$(dirname "$PLOINKY_BIN")/.." && pwd -P)"
           if [ ! -d "$PLOINKY_DIR/.git" ] && [ -d "$HOME/ploinky/.git" ]; then
@@ -309,7 +309,7 @@ jobs:
           fi
           if [ -d "$PLOINKY_DIR/.git" ]; then
             checkout_runtime_branch "$PLOINKY_DIR" "$PLOINKY_BRANCH" "Ploinky runtime"
-          elif [ "$PLOINKY_BRANCH" != "main" ]; then
+          elif [ "$PLOINKY_BRANCH" != "master" ]; then
             echo "[deploy] ERROR: cannot checkout Ploinky branch '$PLOINKY_BRANCH'; '$PLOINKY_DIR' is not a git checkout."
             exit 1
           fi
