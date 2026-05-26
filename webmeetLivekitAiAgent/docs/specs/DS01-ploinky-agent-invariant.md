@@ -23,7 +23,7 @@ The `webmeetLivekitAiAgent` manifest owns:
 - `WEBMEET_AGENT_INTERNAL_TOKEN`, derived with the same shared WebMeet agent-secret identity as `webmeetAgent`, so scribe transcript writes can use the WebMeet internal API without a manual secret
 - a `.ploinky/code/webmeetAgent` mount at `/webmeetAgent`, so the worker can import the canonical WebMeet event contract without moving the native LiveKit dependency tree back into `webmeetAgent`
 
-`webmeetAgent/manifest.json` may include the worker through a `no-wait` enable edge so fresh Explorer startup can launch dependency preparation in the background without gating WebMeet readiness. Explorer and WebMeet must remain usable if the background launch is still running or fails.
+`webmeetAgent/manifest.json` must not include the worker in the default dependency graph. Fresh Explorer and WebMeet startup must not launch `webmeetLivekitAiAgent` implicitly; stacks that need self-hosted AI participants must enable or start this agent explicitly.
 
 In the `prod` profile, the worker uses `network.mode: "host"` because production LiveKit also runs on the host network to avoid the WebRTC bridge UDP source-NAT failure. The base `webmeetAgent` prod profile must publish its public proxy and internal API on localhost-only ports so the host-network worker can persist chat and transcript segments while browser and MCP access still goes through Ploinky routing.
 
@@ -39,7 +39,7 @@ An acceptable runtime validation must prove that:
 
 - `ploinky start explorer` succeeds without waiting for `webmeetLivekitAiAgent`
 - dependency wave output for the default Explorer graph does not include a `webmeetAgent` npm install for `@livekit/agents`
-- when `webmeetLivekitAiAgent` is launched through the no-wait edge, Ploinky prepares the worker's dependency cache under that agent name and records background status/logs
-- the no-wait worker container stays running after startup and can resolve the shared WebMeet event contract through `/webmeetAgent`
+- when `webmeetLivekitAiAgent` is launched explicitly, Ploinky prepares the worker's dependency cache under that agent name and records status/logs
+- the worker container stays running after startup and can resolve the shared WebMeet event contract through `/webmeetAgent`
 - an admin attach creates a LiveKit dispatch that is accepted by the worker, and a real LiveKit `AGENT` participant appears with WebMeet attributes for meeting id, agent type, and mode
 - an admin scribe attach creates a real LiveKit `AGENT` participant and produces transcript segments from room microphone audio through `webmeetStt`

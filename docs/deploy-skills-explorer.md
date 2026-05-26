@@ -47,7 +47,7 @@ Production routing uses a DNS-only A record for `livekit-skills.axiologic.dev` p
 
 The deploy workflow migrates production away from the retired split WebMeet infra agents by disabling and scrubbing `webmeetInfra/stack`, `webmeetCoturn`, `webmeetRedis`, `webmeetLivekitServer`, `webmeetLivekitEgress`, `webmeetLivekitNginx`, and `webmeetLivekitCertbot` before starting Explorer. The replacement image is pulled from Docker Hub as `docker.io/assistos/livekit-server-agent:${WEBMEET_INFRA_IMAGE_TAG}`.
 
-The optional `webmeetLivekitAiAgent` worker runs on the host network in the `prod` profile so its server-side WebRTC connection uses the same host-network topology as LiveKit. Its manifest supplies a separate `WEBMEET_LIVEKIT_AGENT_URL` default of `http://127.0.0.1:7880`; do not point it at the bridge-only `WEBMEET_LIVEKIT_URL` unless the worker network topology changes too.
+The optional `webmeetLivekitAiAgent` worker is not launched by the default Explorer stack. If a separate worker stack enables it, the `prod` profile runs on the host network so its server-side WebRTC connection uses the same host-network topology as LiveKit. Its manifest supplies a separate `WEBMEET_LIVEKIT_AGENT_URL` default of `http://127.0.0.1:7880`; do not point it at the bridge-only `WEBMEET_LIVEKIT_URL` unless the worker network topology changes too.
 
 If `livekit-skills.axiologic.dev` is moved behind Cloudflare/Tunnel later, retest WebMeet before changing the manifest because Cloudflare Tunnel does not provide the public UDP media path used by LiveKit.
 
@@ -92,6 +92,14 @@ gh variable set LOCAL_LLM_DISCOVERY_MODE --repo PloinkyRepos/AssistOSExplorer --
 ```
 
 `LOCAL_LLM_DISCOVERY_MODE=single` avoids exposing LM Studio models that are installed but not currently loaded. Use `auto` only for endpoints that can reliably serve every model returned by `/models`. Agents still receive only the Soul Gateway workspace credential; upstream provider tokens and model bootstrap settings stay in Soul Gateway deployment configuration.
+
+For manual scratch deployments that use the default RAAS LM Studio endpoint, set the upstream token through Ploinky before starting Explorer:
+
+```sh
+ploinky var LOCAL_LLM_API_KEY "$LMSTUDIO_PROXY_TOKEN"
+```
+
+Do not set `SOUL_GATEWAY_BASE_URL` for embedded Explorer helper agents. Their embedded manifests derive the Soul Gateway workspace key and let Achilles resolve the route from `PLOINKY_ROUTER_URL`.
 
 Set `WEBMEET_TURN_EXTERNAL_IP` only when coturn must use an explicit public IP instead of resolving `WEBMEET_TURN_HOST` at startup.
 

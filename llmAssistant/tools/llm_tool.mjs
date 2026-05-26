@@ -162,7 +162,7 @@ async function llmAutocomplete({ path, content, cursorOffset, language }) {
     focus
   });
 
-  const raw = await agent.executePrompt(prompt, { mode: 'fast', responseShape: 'text' });
+  const raw = await agent.executePrompt(prompt, { model: 'fast', responseShape: 'text' });
   const completion = stripFences(raw);
   if (!completion) {
     throw new Error('LLM returned an empty completion.');

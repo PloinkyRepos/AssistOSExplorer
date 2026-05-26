@@ -4,23 +4,35 @@
   "lite-sandbox": true,
   "profiles": {
     "default": {
-      "env": [
-        "ASSISTOS_FS_ROOT",
-        "WORKSPACE_ROOT",
-        "PLOINKY_WORKSPACE_ROOT",
-        {
-          "name": "SOUL_GATEWAY_API_KEY",
+      "env": {
+        "ASSISTOS_FS_ROOT": {
+          "required": false
+        },
+        "WORKSPACE_ROOT": {
+          "required": false
+        },
+        "PLOINKY_WORKSPACE_ROOT": {
+          "required": false
+        },
+        "SOUL_GATEWAY_API_KEY": {
+          "required": false
+        },
+        "SOUL_GATEWAY_BASE_URL": {
+          "required": false
+        }
+      }
+    },
+    "embedded": {
+      "env": {
+        "SOUL_GATEWAY_API_KEY": {
           "required": true,
           "derive": "derived-master",
           "deriveRepoName": "proxies",
           "deriveAgentName": "soul-gateway",
           "deriveName": "workspace-default-api-key"
         },
-        {
-          "name": "SOUL_GATEWAY_BASE_URL",
-          "required": false
-        }
-      ]
+        "SOUL_GATEWAY_BASE_URL": ""
+      }
     }
   }
 }

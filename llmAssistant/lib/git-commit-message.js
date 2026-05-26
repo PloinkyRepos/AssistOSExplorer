@@ -64,7 +64,7 @@ export default async function gitCommitMessage(input, context = {}) {
   }
 
   const prompt = buildPrompt(diffs);
-  const raw = await agent.executePrompt(prompt, { mode: 'fast', responseShape: 'text' });
+  const raw = await agent.executePrompt(prompt, { model: 'fast', responseShape: 'text' });
   const message = stripFences(raw);
   if (!message) {
     throw new Error('AI returned an empty commit message.');

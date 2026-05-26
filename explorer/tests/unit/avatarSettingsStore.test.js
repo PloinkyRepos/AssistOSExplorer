@@ -16,9 +16,9 @@ async function createTempWorkspace() {
     await fs.writeFile(path.join(root, 'explorer/manifest.json'), JSON.stringify({
         enable: [
             'gitAgent global',
-            'llmAssistant global',
-            'webAssist',
-            'webmeetLivekitAiAgent global'
+            { agent: 'llmAssistant global', profile: 'embedded' },
+            { agent: 'webAssist', profile: 'embedded' },
+            'webmeetAgent global'
         ]
     }, null, 2));
     await fs.mkdir(path.join(root, 'llmAssistant'), { recursive: true });
@@ -55,7 +55,7 @@ test('lists AI agents from manifest and applies saved overrides', async () => {
     const store = createAvatarSettingsStore({ fs: await import('node:fs'), path, workspaceRoot });
 
     let agents = await store.listAgents();
-    assert.deepEqual(agents.map((agent) => agent.id), ['llmAssistant', 'webAssist', 'webmeetLivekitAiAgent']);
+    assert.deepEqual(agents.map((agent) => agent.id), ['llmAssistant', 'webAssist']);
     const defaultLlm = agents.find((agent) => agent.id === 'llmAssistant');
     assert.equal(defaultLlm.config.generated, true);
     assert.equal(defaultLlm.config.style, 'emoji');
@@ -92,13 +92,13 @@ test('reads manifest from Ploinky repo workspace layout', async () => {
     const manifestDir = path.join(workspaceRoot, '.ploinky/repos/AchillesIDE/explorer');
     await fs.mkdir(manifestDir, { recursive: true });
     await fs.writeFile(path.join(manifestDir, 'manifest.json'), JSON.stringify({
-        enable: ['webAssist', 'webmeetLivekitAiAgent global']
+        enable: [{ agent: 'webAssist', profile: 'embedded' }]
     }, null, 2));
 
     const store = createAvatarSettingsStore({ fs: await import('node:fs'), path, workspaceRoot });
     const agents = await store.listAgents();
 
-    assert.deepEqual(agents.map((agent) => agent.id), ['webAssist', 'webmeetLivekitAiAgent']);
+    assert.deepEqual(agents.map((agent) => agent.id), ['webAssist']);
 });
 
 test('rejects unsafe inline SVG sources during backend validation', async () => {

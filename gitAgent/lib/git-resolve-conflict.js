@@ -114,7 +114,7 @@ export default async function resolveConflict(input, context = {}) {
   }
 
   const prompt = buildPrompt({ base, ours, theirs, source });
-  const raw = await agent.executePrompt(prompt, { mode: 'fast', responseShape: 'text' });
+  const raw = await agent.executePrompt(prompt, { model: 'fast', responseShape: 'text' });
   const resolved = stripFences(raw);
   if (!resolved) {
     throw new Error('AI returned an empty resolution.');

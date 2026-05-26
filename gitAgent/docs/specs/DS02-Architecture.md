@@ -30,6 +30,8 @@ Requirement A6: UI integration shall use MCP calls and shall not require private
 
 Requirement A7: manifest startup configuration shall not duplicate generic Node dependency installation already orchestrated by `ploinky`; it may validate the host Git executable for host sandbox startup or install Git packages in container startup.
 
+Requirement A8: Git helper flows that use LLM assistance shall request the Achilles `fast` model explicitly through `executePrompt({ model: "fast" })`; legacy `mode` options are not part of the Achilles invocation contract.
+
 ## Constraints
 
 Constraint K1: invocation paths that bypass wrapper parsing and validation are forbidden.

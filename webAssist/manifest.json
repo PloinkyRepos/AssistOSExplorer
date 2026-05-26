@@ -4,11 +4,29 @@
     "guest": true,
     "profiles": {
         "default": {
-            "env": [
-                "ACHILLES_DEBUG",
-                "SOUL_GATEWAY_API_KEY",
-                "SOUL_GATEWAY_BASE_URL"
-            ]
+            "env": {
+                "ACHILLES_DEBUG": {
+                    "required": false
+                },
+                "SOUL_GATEWAY_API_KEY": {
+                    "required": false
+                },
+                "SOUL_GATEWAY_BASE_URL": {
+                    "required": false
+                }
+            }
+        },
+        "embedded": {
+            "env": {
+                "SOUL_GATEWAY_API_KEY": {
+                    "required": true,
+                    "derive": "derived-master",
+                    "deriveRepoName": "proxies",
+                    "deriveAgentName": "soul-gateway",
+                    "deriveName": "workspace-default-api-key"
+                },
+                "SOUL_GATEWAY_BASE_URL": ""
+            }
         }
     },
     "cli": "node /code/src/index.mjs",

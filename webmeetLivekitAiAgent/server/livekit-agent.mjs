@@ -72,7 +72,7 @@ async function generateMentionReply({ meetingId, userMessage }) {
         '',
         'Return plain text only.'
     ].join('\n');
-    const raw = await llmAgent.executePrompt(prompt, { mode: 'fast', responseShape: 'text' });
+    const raw = await llmAgent.executePrompt(prompt, { model: 'fast', responseShape: 'text' });
     return String(raw || '').trim().replace(/^```(?:text)?\s*/i, '').replace(/\s*```$/g, '').trim();
 }
 

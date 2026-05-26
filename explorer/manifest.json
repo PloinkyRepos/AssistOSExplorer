@@ -22,18 +22,27 @@
         ]
     },
     "enable": [
-        "gitAgent global",
+        {
+            "agent": "gitAgent global",
+            "profile": "embedded"
+        },
         "dpuAgent global",
         "soplangAgent global",
         "tasksAgent global",
-        "llmAssistant global",
+        {
+            "agent": "llmAssistant global",
+            "profile": "embedded"
+        },
         "AchillesCLI/achilles-cli global",
         "webmeetInfra/liveKitServerAgent",
         "webmeetStt",
         "webmeetAgent global",
         "multimedia global",
         "onlyOffice",
-        "webAssist",
+        {
+            "agent": "webAssist",
+            "profile": "embedded"
+        },
         {
             "agent": "proxies/soul-gateway",
             "profile": "embedded"

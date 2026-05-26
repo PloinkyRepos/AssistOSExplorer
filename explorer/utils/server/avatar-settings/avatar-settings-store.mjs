@@ -176,7 +176,9 @@ function normalizeStore(raw) {
 }
 
 function parseAgentEnableRef(entry) {
-  const raw = String(entry || '').trim();
+  const raw = isPlainObject(entry)
+    ? String(entry.agent || entry.ref || entry.name || '').trim()
+    : String(entry || '').trim();
   if (!raw) return null;
   const source = raw.split(/\s+/)[0];
   const parts = source.split('/').filter(Boolean);

@@ -30,6 +30,8 @@ Requirement A6: bootstrap must support env-first and secrets-fallback provider l
 
 Requirement A7: manifest startup configuration shall not duplicate generic dependency installation already orchestrated by `ploinky`.
 
+Requirement A8: LLM helper calls that require the low-latency local model shall request the Achilles `fast` model explicitly through `executePrompt({ model: "fast" })`; legacy `mode` options are not part of the Achilles invocation contract.
+
 ## Constraints
 
 Constraint K1: caller code cannot bypass wrapper and call helper internals directly.

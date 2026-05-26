@@ -14,7 +14,7 @@
 ## Repository Rules
 
 - The DS specifications are the source of truth for local contracts and invariants.
-- This agent is optional for WebMeet AI dispatch and may be launched through a `no-wait` manifest edge. It must not block Explorer's default dependency graph.
+- This agent is optional for WebMeet AI dispatch and must be launched explicitly by a stack that wants self-hosted AI participants. It must not be part of Explorer's default dependency graph.
 - Keep the native LiveKit Agents dependency tree in this agent's `package.json`; do not reintroduce a `webmeetAgent/package.json` for the same worker.
 - LiveKit API credentials must derive from the shared WebMeet LiveKit derivation identity.
 - Update `AGENTS.md` and `CLAUDE.md` together so coding agents receive the same local context.
