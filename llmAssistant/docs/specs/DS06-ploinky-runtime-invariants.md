@@ -38,7 +38,7 @@ Agent-local contract:
 
 - Manifest: `llmAssistant/manifest.json`
 - Role: LLM helper boundary for autocomplete, commit-message, and conflict-resolution style operations.
-- Authentication: LLM helper calls must run through verified MCP invocation context and must not leak provider credentials or raw internal prompts. Manifest guest: none. The `embedded` profile receives a workspace-scoped generated Soul Gateway key. Ploinky also injects `PLOINKY_ENV_SOURCE_SOUL_GATEWAY_API_KEY`; Achilles uses the Ploinky router service URL only when that source is `generated`. If an operator supplies `SOUL_GATEWAY_API_KEY`, Achilles keeps the `LLMConfig.json` Soul Gateway URL unless `SOUL_GATEWAY_BASE_URL` / `SOUL_GATEWAY_URL` explicitly overrides it.
+- Authentication: LLM helper calls must run through verified MCP invocation context and must not leak provider credentials or raw internal prompts. Manifest guest: none. Explorer deployments use a workspace-scoped generated Soul Gateway key and inject `PLOINKY_ENV_SOURCE_SOUL_GATEWAY_API_KEY`; Achilles uses the Ploinky router service URL when that source is `generated`. Remote production gateways are configured as providers inside the local Soul Gateway, not as replacement `SOUL_GATEWAY_API_KEY` credentials for llmAssistant.
 - HTTP service surface: No public HTTP service is declared; helper operations are MCP-only. Manifest httpServices: none.
 - Persistent state: Provider credentials remain in runtime environment or secret sources and must not be persisted by this agent. Manifest volumes: none.
 - Documentation: `docs/index.html`

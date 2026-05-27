@@ -20,8 +20,7 @@
             "env": {
                 "SOUL_GATEWAY_API_KEY": {
                     "required": true,
-                    "sharedGeneratedSecret": true,
-                    "explicitOverride": true
+                    "sharedGeneratedSecret": true
                 },
                 "SOUL_GATEWAY_BASE_URL": ""
             }

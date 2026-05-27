@@ -110,3 +110,51 @@ test('aggregateIdePlugins keeps application plugins with empty location for sett
         await fs.rm(workspaceRoot, { recursive: true, force: true });
     }
 });
+
+test('aggregateIdePlugins exposes nested Soul Gateway repo plugin as soul-gateway agent', async () => {
+    const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'explorer-ide-plugins-workspace-'));
+    try {
+        const reposRoot = path.join(workspaceRoot, '.ploinky', 'repos', 'proxies');
+        await writePluginConfig(reposRoot, 'soul-gateway', 'soul-gateway-settings', {
+            pluginCategory: 'application',
+            id: 'soul-gateway',
+            component: 'soul-gateway-settings',
+            settingsUrl: '/services/soul-gateway/management/',
+            location: [],
+            type: 'global',
+            adminOnly: true
+        });
+
+        const aggregated = await aggregateIdePlugins(workspaceRoot);
+        const settingsPlugins = aggregated.application[''] || [];
+
+        assert.equal(settingsPlugins.length, 1);
+        assert.equal(settingsPlugins[0].agent, 'soul-gateway');
+        assert.equal(settingsPlugins[0].id, 'soul-gateway');
+        assert.equal(settingsPlugins[0].adminOnly, true);
+        assert.equal(settingsPlugins[0].settingsUrl, '/services/soul-gateway/management/');
+    } finally {
+        await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+});
+
+test('aggregateIdePlugins rejects absolute plugin settings URLs', async () => {
+    const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'explorer-ide-plugins-'));
+    try {
+        await writePluginConfig(workspaceRoot, 'badSettings', 'bad-settings-link', {
+            pluginCategory: 'application',
+            id: 'bad-settings',
+            component: 'bad-settings-link',
+            settingsUrl: 'https://soul.axiologic.dev/management/',
+            location: [],
+            type: 'global'
+        });
+
+        const aggregated = await aggregateIdePlugins(workspaceRoot);
+        const settingsPlugins = aggregated.application[''] || [];
+
+        assert.equal(settingsPlugins.length, 0);
+    } finally {
+        await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+});

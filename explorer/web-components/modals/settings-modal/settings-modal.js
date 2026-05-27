@@ -117,6 +117,26 @@ export function resolveSettingsComponentBase(item) {
     return `/${agent}/IDE-plugins/${component}/${normalizedSettings}/${normalizedSettings}`;
 }
 
+export function resolvePluginSettingsUrl(item) {
+    const settingsUrl = typeof item?.settingsUrl === "string" ? item.settingsUrl.trim() : "";
+    if (!settingsUrl || !settingsUrl.startsWith("/") || settingsUrl.startsWith("//")) {
+        return "";
+    }
+    return settingsUrl;
+}
+
+export function openPluginSettingsUrl(item, win = globalThis.window) {
+    const settingsUrl = resolvePluginSettingsUrl(item);
+    if (!settingsUrl || !win || typeof win.open !== "function") {
+        return false;
+    }
+    const opened = win.open(settingsUrl, "_blank", "noopener,noreferrer");
+    if (opened) {
+        opened.opener = null;
+    }
+    return true;
+}
+
 async function fetchText(url, description) {
     const response = await fetch(url, { cache: "no-cache" });
     if (!response.ok) {
@@ -232,6 +252,7 @@ function flattenPluginsByKey(pluginBuckets) {
             locations: [],
             locationOrder: getRuntimePluginOrder(plugin),
             settingsComponent: "",
+            settingsUrl: "",
             assetRootPath: "",
             componentBaseUrl: "",
             adminOnly: false
@@ -254,6 +275,9 @@ function flattenPluginsByKey(pluginBuckets) {
         existing.settingsComponent = typeof plugin?.settings === "string" && plugin.settings.trim()
             ? plugin.settings.trim()
             : existing.settingsComponent;
+        existing.settingsUrl = typeof plugin?.settingsUrl === "string" && plugin.settingsUrl.trim()
+            ? plugin.settingsUrl.trim()
+            : existing.settingsUrl;
         existing.assetRootPath = typeof plugin?.assetRootPath === "string" && plugin.assetRootPath.trim()
             ? plugin.assetRootPath.trim()
             : existing.assetRootPath;
@@ -581,7 +605,7 @@ export class SettingsModal {
             const busySettings = this.state.pluginBusyActionKey === `${item.key}::settings`;
             const locations = item.locations.filter(Boolean).join(", ") || "(hidden)";
             const contributionTypes = Array.isArray(item.contributionTypes) ? item.contributionTypes.join(", ") : "";
-            const hasSettings = Boolean(item.settingsComponent);
+            const hasSettings = Boolean(item.settingsUrl || item.settingsComponent);
             return `
                 <div class="plugin-settings-row">
                     <div class="plugin-settings-info">
@@ -759,7 +783,7 @@ export class SettingsModal {
     async openPluginSettings(_target, key) {
         if (!key) return;
         const item = this.state.pluginItems.find((entry) => entry?.key === key);
-        if (!item || !item.settingsComponent) {
+        if (!item || (!item.settingsUrl && !item.settingsComponent)) {
             return;
         }
 
@@ -769,6 +793,15 @@ export class SettingsModal {
         this.renderPluginSettings();
 
         try {
+            if (item.settingsUrl) {
+                if (!openPluginSettingsUrl(item)) {
+                    throw new Error(`Invalid settings URL for ${key}.`);
+                }
+                this.state.pluginStatus = `${item.label || item.component} settings opened.`;
+                this.state.pluginStatusType = "";
+                return;
+            }
+
             await ensureSettingsComponentRegistered(item);
             await assistOS.UI.createReactiveModal(item.settingsComponent, {
                 plugin: {
@@ -779,6 +812,7 @@ export class SettingsModal {
                     label: item.label,
                     tooltip: item.tooltip,
                     settingsComponent: item.settingsComponent,
+                    settingsUrl: item.settingsUrl,
                     assetRootPath: item.assetRootPath
                 }
             }, true);

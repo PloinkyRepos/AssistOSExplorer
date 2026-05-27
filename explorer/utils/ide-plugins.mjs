@@ -189,6 +189,14 @@ function validateAndNormalizePluginConfig(parsedConfig, pluginEntryName, configP
     return null;
   }
 
+  const settingsUrl = parsedConfig.settingsUrl !== undefined
+    ? (isNonEmptyString(parsedConfig.settingsUrl) ? parsedConfig.settingsUrl.trim() : '')
+    : undefined;
+  if (parsedConfig.settingsUrl !== undefined && (!settingsUrl || !settingsUrl.startsWith('/') || settingsUrl.startsWith('//'))) {
+    console.warn(`[filesystem-http] Plugin ${configPath} has an invalid settingsUrl. Use a router-relative path.`);
+    return null;
+  }
+
   if (contributionType === 'menu' && !isNonEmptyString(parsedConfig.menuModule)) {
     console.warn(`[filesystem-http] Menu plugin ${configPath} must declare menuModule.`);
     return null;
@@ -231,6 +239,7 @@ function validateAndNormalizePluginConfig(parsedConfig, pluginEntryName, configP
       pluginCategory,
       contributionType,
       component,
+      ...(settingsUrl !== undefined ? { settingsUrl } : {}),
       dependencies
     }
   };

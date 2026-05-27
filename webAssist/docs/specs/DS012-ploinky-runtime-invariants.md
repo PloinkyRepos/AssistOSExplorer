@@ -38,7 +38,7 @@ Agent-local contract:
 
 - Manifest: `webassist/manifest.json`
 - Role: Visitor-facing guest assistant and lead-conversion agent.
-- Authentication: Manifest-level `guest: true` means normal Ploinky guest policy applies; the agent must enforce visitor-only scope from roles and session context. Manifest guest: true. The `embedded` profile receives a workspace-scoped generated Soul Gateway key. Achilles derives the active Ploinky router service URL only when `PLOINKY_ENV_SOURCE_SOUL_GATEWAY_API_KEY=generated`; an explicit `SOUL_GATEWAY_API_KEY` keeps the `LLMConfig.json` Soul Gateway URL unless `SOUL_GATEWAY_BASE_URL` / `SOUL_GATEWAY_URL` explicitly overrides it.
+- Authentication: Manifest-level `guest: true` means normal Ploinky guest policy applies; the agent must enforce visitor-only scope from roles and session context. Manifest guest: true. Explorer deployments use a workspace-scoped generated Soul Gateway key. Achilles derives the active Ploinky router service URL when `PLOINKY_ENV_SOURCE_SOUL_GATEWAY_API_KEY=generated`; remote production gateways are configured as providers inside the local Soul Gateway, not as replacement `SOUL_GATEWAY_API_KEY` credentials for webAssist.
 - HTTP service surface: No manifest-declared HTTP service is used for guest mode; guest access is at the agent route level. Manifest httpServices: none.
 - Persistent state: Visitor/session/lead data must remain under the configured data store and must not leak to static plugin assets or logs. Manifest volumes: {".ploinky/repos/AchillesIDE/data":"/data"}.
 - Documentation: `docs/index.html`

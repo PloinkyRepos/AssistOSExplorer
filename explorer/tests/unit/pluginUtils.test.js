@@ -247,6 +247,33 @@ test('filterRuntimePluginsByPolicy keeps enabled internal application plugins', 
     assert.equal(filtered.application['file-exp:toolbar'], undefined);
 });
 
+test('filterRuntimePluginsByPolicy keeps explicitly enabled Soul Gateway settings entry', () => {
+    const runtimePlugins = {
+        document: {},
+        application: {
+            '': [
+                {
+                    id: 'soul-gateway',
+                    pluginCategory: 'application',
+                    location: '',
+                    agent: 'soul-gateway',
+                    component: 'soul-gateway-settings',
+                    settingsUrl: '/services/soul-gateway/management/',
+                    adminOnly: true
+                }
+            ]
+        }
+    };
+
+    const filtered = filterRuntimePluginsByPolicy(runtimePlugins, {
+        'soul-gateway/soul-gateway': true
+    });
+
+    assert.equal(filtered.application[''].length, 1);
+    assert.equal(filtered.application[''][0].component, 'soul-gateway-settings');
+    assert.equal(filtered.application[''][0].settingsUrl, '/services/soul-gateway/management/');
+});
+
 test('filterRuntimePluginsByPolicy removes disabled document plugins by stable policy key', () => {
     const runtimePlugins = {
         document: {

@@ -107,7 +107,7 @@
 
             <h2 id="overview">Overview</h2>
             <p>webAssist is a visitor-facing agent designed to serve as a conversational chat assistant for website visitors. Its primary goal is to interact with visitors, understand their needs through profiling, and convert them into valuable leads for the site owner.</p>
-            <p>When Explorer starts webAssist in its embedded profile, the agent receives the workspace-generated Soul Gateway credential and lets Achilles resolve the embedded Soul Gateway route from <code>PLOINKY_ROUTER_URL</code> only when <code>PLOINKY_ENV_SOURCE_SOUL_GATEWAY_API_KEY=generated</code>. If an operator supplies <code>SOUL_GATEWAY_API_KEY</code>, Achilles keeps the configured standalone provider URL unless a base URL override is supplied.</p>
+            <p>When Explorer starts webAssist with a workspace-generated Soul Gateway credential, Achilles resolves the Soul Gateway route from <code>PLOINKY_ROUTER_URL</code> when <code>PLOINKY_ENV_SOURCE_SOUL_GATEWAY_API_KEY=generated</code>. Remote production gateways are configured as providers inside the local Soul Gateway, not as replacement webAssist credentials.</p>
 
             <h2 id="quick-start">Quick Start</h2>
             <p>webAssist can be used in two ways: as a CLI tool or embedded as a chat widget on a website.</p>

@@ -104,8 +104,10 @@ jobs:
       - name: Deploy workspace
         env:
           PLOINKY_MASTER_KEY: ${{ secrets.PLOINKY_MASTER_KEY }}
-          SOUL_GATEWAY_API_KEY: ${{ secrets.SOUL_GATEWAY_API_KEY }}
-          SOUL_GATEWAY_BASE_URL: ${{ vars.SOUL_GATEWAY_BASE_URL }}
+          SOUL_GATEWAY_PROVIDER_API_KEY: ${{ secrets.SOUL_GATEWAY_PROVIDER_API_KEY || secrets.SOUL_GATEWAY_API_KEY }}
+          SOUL_GATEWAY_PROVIDER_BASE_URL: ${{ vars.SOUL_GATEWAY_PROVIDER_BASE_URL }}
+          SOUL_GATEWAY_PROVIDER_DISCOVERY_MODE: ${{ vars.SOUL_GATEWAY_PROVIDER_DISCOVERY_MODE }}
+          SOUL_GATEWAY_PROVIDER_ALIASES: ${{ vars.SOUL_GATEWAY_PROVIDER_ALIASES }}
           LMSTUDIO_PROXY_TOKEN: ${{ secrets.LMSTUDIO_PROXY_TOKEN }}
           LOCAL_LLM_API_KEY: ${{ secrets.LOCAL_LLM_API_KEY }}
           LOCAL_LLM_BASE_URL: ${{ vars.LOCAL_LLM_BASE_URL }}
@@ -156,8 +158,10 @@ jobs:
 
           {
             write_env PLOINKY_MASTER_KEY
-            write_env SOUL_GATEWAY_API_KEY
-            write_env SOUL_GATEWAY_BASE_URL
+            write_env SOUL_GATEWAY_PROVIDER_API_KEY
+            write_env SOUL_GATEWAY_PROVIDER_BASE_URL
+            write_env SOUL_GATEWAY_PROVIDER_DISCOVERY_MODE
+            write_env SOUL_GATEWAY_PROVIDER_ALIASES
             write_env LMSTUDIO_PROXY_TOKEN
             write_env LOCAL_LLM_API_KEY
             write_env LOCAL_LLM_BASE_URL
@@ -249,14 +253,19 @@ jobs:
           rm -f /tmp/skills_explorer_env
 
           LOCAL_LLM_API_KEY="${LOCAL_LLM_API_KEY:-${LMSTUDIO_PROXY_TOKEN:-}}"
-          if [ -n "${SOUL_GATEWAY_API_KEY:-}" ]; then
-            echo "[deploy] SOUL_GATEWAY_API_KEY is configured; Explorer consumers will use the standalone Soul Gateway unless SOUL_GATEWAY_BASE_URL overrides it."
+          if [ -n "${SOUL_GATEWAY_API_KEY:-}" ] && [ -z "${SOUL_GATEWAY_PROVIDER_API_KEY:-}" ]; then
+            SOUL_GATEWAY_PROVIDER_API_KEY="$SOUL_GATEWAY_API_KEY"
+            unset SOUL_GATEWAY_API_KEY
+            echo "[deploy] Treating legacy SOUL_GATEWAY_API_KEY input as SOUL_GATEWAY_PROVIDER_API_KEY."
+          fi
+          if [ -n "${SOUL_GATEWAY_PROVIDER_API_KEY:-}" ]; then
+            echo "[deploy] Soul Gateway provider credential is configured; Explorer consumers will use the generated local gateway key and the local gateway will delegate to the Soul Gateway provider."
           else
             LOCAL_LLM_BASE_URL="${LOCAL_LLM_BASE_URL:-https://lmstudio.axiologic.dev/v1}"
             LOCAL_LLM_MODEL="${LOCAL_LLM_MODEL:-gemma-3-12b-it}"
             LOCAL_LLM_DISCOVERY_MODE="${LOCAL_LLM_DISCOVERY_MODE:-single}"
             if [ "$LOCAL_LLM_BASE_URL" = "https://lmstudio.axiologic.dev/v1" ] && [ -z "${LOCAL_LLM_API_KEY:-}" ]; then
-              echo "[deploy] ERROR: SOUL_GATEWAY_API_KEY is unset, so embedded Soul Gateway local LLM bootstrap is required."
+              echo "[deploy] ERROR: SOUL_GATEWAY_PROVIDER_API_KEY is unset, so a local LLM provider credential is required."
               echo "[deploy] Set LMSTUDIO_PROXY_TOKEN or LOCAL_LLM_API_KEY for the default LOCAL_LLM_BASE_URL."
               exit 1
             fi
@@ -471,8 +480,10 @@ jobs:
           set_var WORKSPACE_ROOT "$WORK_DIR"
           set_var PLOINKY_WORKSPACE_ROOT "$WORK_DIR"
 
-          set_var SOUL_GATEWAY_API_KEY "${SOUL_GATEWAY_API_KEY:-}"
-          set_var SOUL_GATEWAY_BASE_URL "${SOUL_GATEWAY_BASE_URL:-}"
+          set_var SOUL_GATEWAY_PROVIDER_API_KEY "${SOUL_GATEWAY_PROVIDER_API_KEY:-}"
+          set_var SOUL_GATEWAY_PROVIDER_BASE_URL "${SOUL_GATEWAY_PROVIDER_BASE_URL:-}"
+          set_var SOUL_GATEWAY_PROVIDER_DISCOVERY_MODE "${SOUL_GATEWAY_PROVIDER_DISCOVERY_MODE:-}"
+          set_var SOUL_GATEWAY_PROVIDER_ALIASES "${SOUL_GATEWAY_PROVIDER_ALIASES:-}"
           set_var LOCAL_LLM_BASE_URL "${LOCAL_LLM_BASE_URL:-}"
           set_var LOCAL_LLM_MODEL "${LOCAL_LLM_MODEL:-}"
           set_var LOCAL_LLM_DISCOVERY_MODE "${LOCAL_LLM_DISCOVERY_MODE:-}"
