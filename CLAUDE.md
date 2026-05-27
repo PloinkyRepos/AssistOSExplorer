@@ -19,7 +19,7 @@ Ploinky Explorer workspace + 17 coupled agents. Origin: `https://github.com/Ploi
 - `soplangAgent/` — SOPLang build and execution orchestration.
 - `tasksAgent/` — backlog file operations.
 - `multimedia/`, `webmeetAgent/`, `webmeetLivekitAiAgent/`, `webmeetInfra/`, `webassist/` — domain-specific workflows.
-- `AchillesCLI/` — Achilles skill management CLI. See `AchillesCLI/ARCHITECTURE.md` for the full architecture (CLAUDE.md is intentionally thin).
+- `AchillesCLI/` — Achilles skill management CLI. See `AchillesCLI/CLAUDE.md` and `AchillesCLI/docs/specs/` for local architecture and runtime contracts.
 - `shared/` — shared runtime utilities.
 - `docs/` and each agent's `docs/specs/` — user docs and DS specs.
 
