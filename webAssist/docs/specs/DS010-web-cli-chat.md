@@ -23,7 +23,7 @@ Define the active plugin contract for the Web CLI chat integration.
   - close button (`X`) in header closes panel.
 
 ## Runtime Contract
-- MCP endpoint: `/mcps/webAssist/mcp` (always; no token-based routing)
+- MCP endpoint: `/webAssist/mcp` (always; no token-based routing)
 - Tools:
   - `web_cli_chat` with `{ message, sessionId?, json: true }`
   - `web_cli_history` with `{ sessionId }`

@@ -81,7 +81,7 @@ function unwrapToolPayload(name, result) {
 export function createSecretStoreClient({ providerRouteName, authInfo = null, invocationToken = '' } = {}) {
   const routerBase = resolveRouterBaseUrl();
   const dpuRouteName = resolveDpuRouteName(providerRouteName);
-  const baseUrl = `${routerBase}/mcps/${encodeURIComponent(dpuRouteName)}/mcp`;
+  const baseUrl = `${routerBase}/${encodeURIComponent(dpuRouteName)}/mcp`;
 
   async function callContractOperation(operation, args = {}) {
     const forwardedInvocationToken = isNonEmptyString(invocationToken)

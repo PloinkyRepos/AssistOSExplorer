@@ -1,6 +1,6 @@
 import { createAgentClient } from '/MCPBrowserClient.js';
 
-const SOPLANG_MCP = '/mcps/soplangAgent/mcp';
+const SOPLANG_MCP = '/soplangAgent/mcp';
 const client = createAgentClient(SOPLANG_MCP);
 
 let warnings = [];

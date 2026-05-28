@@ -16,6 +16,8 @@ let sessionPromptActive = false;
 let cachedWorkspaceRootAbs = '';
 let workspaceRootPromise = null;
 
+const isAgentMcpReturnTo = (returnTo) => /^\/[^/]+\/mcp(?:$|[?#])/.test(returnTo);
+
 const isMissingSessionError = (error) => {
     const message = error?.message || error?.toString?.() || '';
     return typeof message === 'string' && message.includes(MISSING_SESSION_TEXT);
@@ -45,7 +47,7 @@ const normalizeLoginRedirectUrl = (candidate) => {
     try {
         const url = new URL(raw, window.location.origin);
         const returnTo = url.searchParams.get('returnTo') || '';
-        if (returnTo.startsWith('/mcps/')) {
+        if (isAgentMcpReturnTo(returnTo)) {
             return fallback;
         }
         return url.pathname + (url.search || '') + (url.hash || '');

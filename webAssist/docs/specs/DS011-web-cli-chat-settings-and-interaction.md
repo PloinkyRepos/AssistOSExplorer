@@ -138,7 +138,7 @@ Define, in full detail, what `webassist-settings` can configure and how each set
 
 ### MCP interaction contract
 - MCP client module: `/MCPBrowserClient.js`
-- Endpoint: `/mcps/webAssist/mcp` (always; no token-based routing)
+- Endpoint: `/webAssist/mcp` (always; no token-based routing)
 - Tools:
   - `web_cli_chat` with `{ message, sessionId?, json: true }`
   - `web_cli_history` with `{ sessionId }`

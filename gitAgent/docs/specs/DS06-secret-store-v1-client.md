@@ -20,7 +20,7 @@ and no MCP session setup.
 - never mints or signs caller assertions and does not read agent private-key
   material
 - POSTs a single JSON-RPC `tools/call` request to
-  `{router}/mcps/{dpuRoute}/mcp`
+  `{router}/{dpuRoute}/mcp`
 - calls only the canonical DPU domain operations
   (`dpu_secret_get`, `dpu_secret_put`, `dpu_secret_delete`,
   `dpu_secret_grant`, `dpu_secret_revoke`, `dpu_secret_list`)

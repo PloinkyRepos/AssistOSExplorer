@@ -36,7 +36,7 @@ test('OnlyOffice DPU client resolves router MCP endpoint', () => {
                 PLOINKY_DPU_ROUTE: 'dpuAgent'
             }
         }),
-        'http://router.internal:8097/mcps/dpuAgent/mcp'
+        'http://router.internal:8097/dpuAgent/mcp'
     );
 });
 
@@ -75,7 +75,7 @@ test('OnlyOffice DPU client calls DPU through router delegated MCP endpoint', as
 
         assert.equal(payload.roots.mySpace.id, 'root-1');
         assert.equal(requests.length, 1);
-        assert.equal(requests[0].url, 'http://host.containers.internal:8097/mcps/dpuAgent/mcp');
+        assert.equal(requests[0].url, 'http://host.containers.internal:8097/dpuAgent/mcp');
         assert.equal(requests[0].options.headers['x-ploinky-caller-jwt'], 'caller-token');
         assert.equal(JSON.parse(requests[0].options.body).params.name, 'dpu_workspace_roots');
     } finally {

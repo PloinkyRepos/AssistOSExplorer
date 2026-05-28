@@ -208,7 +208,7 @@ function loadOrCreateVisitorId(storageKey) {
 class WebAssistMcpChatClient {
     constructor(options = {}) {
         this.clientModuleUrl = options.clientModuleUrl || '/MCPBrowserClient.js';
-        this.endpoint = options.endpoint || '/mcps/webAssist/mcp';
+        this.endpoint = options.endpoint || '/webAssist/mcp';
         this.chatToolName = options.chatToolName || 'web_cli_chat';
         this.historyToolName = options.historyToolName || 'web_cli_history';
         this.registerVisitorToolName = options.registerVisitorToolName || 'register-visitor';
@@ -369,7 +369,7 @@ function mountChatSurface(rootNode, options = {}) {
     const subtitleText = options.subtitleText || 'Embedded preview';
     const enableLauncher = options.enableLauncher === true;
     const validateTools = options.validateTools === true;
-    const endpoint = '/mcps/webAssist/mcp';
+    const endpoint = '/webAssist/mcp';
     const storageKey = BROWSER_STORAGE_KEY;
     const visitorStorageKey = VISITOR_STORAGE_KEY;
     const chatClient = new WebAssistMcpChatClient({ validateTools, endpoint });

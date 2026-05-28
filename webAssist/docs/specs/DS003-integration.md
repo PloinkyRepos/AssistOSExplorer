@@ -34,7 +34,7 @@ The **webAssist** agent is implemented as a Node.js CLI tool with a single `sess
   - `sessionId` (required)
   - `dataDir` (optional)
   - `agentRoot` (optional)
-- **Browser MCP Invocation**: UI clients call `/mcps/webAssist/mcp` and execute tools `web_cli_chat` and `web_cli_history`; browser clients persist `sessionId` in `localStorage` for cross-tab continuity.
+- **Browser MCP Invocation**: UI clients call `/webAssist/mcp` and execute tools `web_cli_chat` and `web_cli_history`; browser clients persist `sessionId` in `localStorage` for cross-tab continuity.
 - **Session Ownership Rule (plugin MCP)**: when client omits `sessionId` on first `web_cli_chat` call, server generates one and returns it; client persists it to `localStorage` and all open tabs in the same browser reuse that `sessionId`.
 - **MCP Chat Output Contract** (`web_cli_chat`): returns compact JSON object with exactly:
   - `sessionId` (string)

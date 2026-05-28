@@ -39,7 +39,7 @@ export function resolveOnlyOfficeRouterBaseUrl({ routing = {}, env = process.env
 
 export function getDpuRouterMcpUrl({ routing = {}, env = process.env } = {}) {
   const routeName = resolveDpuRouteName(env);
-  return `${resolveOnlyOfficeRouterBaseUrl({ routing, env })}/mcps/${encodeURIComponent(routeName)}/mcp`;
+  return `${resolveOnlyOfficeRouterBaseUrl({ routing, env })}/${encodeURIComponent(routeName)}/mcp`;
 }
 
 function extractInvocationToken(authInfo = null, env = process.env) {

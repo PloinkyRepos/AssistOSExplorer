@@ -37,6 +37,7 @@ test('secret-store client forwards the invocation JWT as caller JWT without MCP 
     req.on('end', () => {
       requests.push({
         method: req.method,
+        url: req.url,
         headers: req.headers,
         body: JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}')
       });
@@ -79,6 +80,7 @@ test('secret-store client forwards the invocation JWT as caller JWT without MCP 
   assert.equal(requests.length, 1);
   const request = requests[0];
   assert.equal(request.method, 'POST');
+  assert.equal(request.url, '/dpuAgent/mcp');
   assert.equal(request.body.method, 'tools/call');
   assert.equal(request.body.params?.name, 'dpu_secret_put');
   assert.deepEqual(request.body.params?.arguments, { key: 'API_TOKEN', value: 'secret-value' });
@@ -136,6 +138,7 @@ test('putStoredGitToken writes and grants the user-scoped GitHub token key', asy
       const body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
       requests.push({
         method: req.method,
+        url: req.url,
         headers: req.headers,
         body
       });
@@ -178,6 +181,8 @@ test('putStoredGitToken writes and grants the user-scoped GitHub token key', asy
   server.close();
 
   assert.equal(requests.length, 2);
+  assert.equal(requests[0].url, '/dpuAgent/mcp');
+  assert.equal(requests[1].url, '/dpuAgent/mcp');
   assert.equal(requests[0].body.params?.name, 'dpu_secret_put');
   assert.deepEqual(requests[0].body.params?.arguments, { key: expectedKey, value: 'ghp_test' });
   assert.equal(requests[1].body.params?.name, 'dpu_secret_grant');

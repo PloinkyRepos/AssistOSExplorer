@@ -97,12 +97,12 @@ The `multimedia` agent currently documents itself through [multimedia/docs/index
 <!-- {"achilles-ide-paragraph":{"id":"paragraph-505eebf5-ce31-4320-99b7-d6d4c4286935","type":"markdown","title":"Paragraph 1"}} -->
 Explorer filesystem features are exposed through the Explorer Model Context Protocol endpoint:
 
-- `/mcps/explorer/mcp`
+- `/explorer/mcp`
 
 Example:
 
 ```bash
-curl -s -X POST http://127.0.0.1:8080/mcps/explorer/mcp \
+curl -s -X POST http://127.0.0.1:8080/explorer/mcp \
   -H 'Content-Type: application/json' \
   -d '{ "tool": "list_directory", "path": "/" }'
 ```
