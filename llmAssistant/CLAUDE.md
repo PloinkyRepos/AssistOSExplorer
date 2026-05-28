@@ -29,7 +29,7 @@ llmAssistant provides bounded LLM helper operations for Explorer and peer-agent 
 
 ## Runtime Defaults
 
-Runs `scripts/startAgent.sh` in `node:24.15.0-alpine` with `lite-sandbox: true`.
+Runs `scripts/startAgent.sh` in `docker.io/assistos/ploinky-node:24-bookworm-tools` with `lite-sandbox: true`.
 
 ## Key Paths
 

@@ -33,6 +33,13 @@ The `PloinkyRepos/webmeetInfra` repository also needs a Docker Hub token for the
 gh secret set DOCKERHUB_TOKEN --repo PloinkyRepos/webmeetInfra
 ```
 
+The shared Ploinky Node runtime image is published from `PloinkyRepos/AssistOSExplorer` to `docker.io/assistos/ploinky-node`. That workflow needs Docker Hub credentials with write access to the `assistos` organization:
+
+```sh
+gh secret set DOCKERHUB_USERNAME --repo PloinkyRepos/AssistOSExplorer
+gh secret set DOCKERHUB_TOKEN --repo PloinkyRepos/AssistOSExplorer
+```
+
 The token value must stay only in GitHub Actions secrets.
 
 ## Explorer Public Access
@@ -74,6 +81,7 @@ gh variable set WEBMEET_PUBLIC_LIVEKIT_URL --repo PloinkyRepos/AssistOSExplorer 
 gh variable set WEBMEET_LIVEKIT_URL --repo PloinkyRepos/AssistOSExplorer --body http://host.containers.internal:7880
 gh variable set WEBMEET_EGRESS_URL --repo PloinkyRepos/AssistOSExplorer --body http://host.containers.internal:7980
 gh variable set WEBMEET_INFRA_IMAGE_TAG --repo PloinkyRepos/AssistOSExplorer --body webmeet-infra
+gh variable set PLOINKY_NODE_IMAGE_TAG --repo PloinkyRepos/AssistOSExplorer --body 24-bookworm-tools
 gh variable set WEBMEET_LIVEKIT_USE_EXTERNAL_IP --repo PloinkyRepos/AssistOSExplorer --body false
 gh variable set WEBMEET_LIVEKIT_NODE_IP --repo PloinkyRepos/AssistOSExplorer --body 193.180.209.191
 gh variable set WEBMEET_LIVEKIT_UPSTREAM --repo PloinkyRepos/AssistOSExplorer --body http://127.0.0.1:7880
@@ -131,6 +139,14 @@ Run `Provision Skills Explorer Host` only when the remote host needs OS packages
 
 ## Deploy Or Update
 
+Before deploying production changes that alter the shared Node runtime image, publish it from this repository:
+
+```sh
+gh workflow run publish-ploinky-node-image.yml \
+  --repo PloinkyRepos/AssistOSExplorer \
+  -f image_tag=24-bookworm-tools
+```
+
 Before deploying production changes that alter `webmeetInfra/liveKitServerAgent`, publish the image from the `PloinkyRepos/webmeetInfra` repository:
 
 ```sh
@@ -151,7 +167,8 @@ gh workflow run deploy-skills-explorer.yml \
   -f router_port=8097 \
   -f public_url=https://skills.axiologic.dev \
   -f profile=prod \
-  -f webmeet_infra_image_tag=webmeet-infra
+  -f webmeet_infra_image_tag=webmeet-infra \
+  -f ploinky_node_image_tag=24-bookworm-tools
 
 # Feature-branch deploy (all repos on same branch):
 gh workflow run deploy-skills-explorer.yml \
@@ -174,6 +191,6 @@ The workflow:
 7. Hard-resets the remote Ploinky-managed repo checkouts to the requested branches.
 8. Removes retired split WebMeet infra registrations and containers before the unified agent starts.
 9. Stores configured runtime variable overrides through `ploinky var`.
-10. Pulls `docker.io/assistos/livekit-server-agent:${WEBMEET_INFRA_IMAGE_TAG}`.
+10. Pulls `docker.io/assistos/ploinky-node:${PLOINKY_NODE_IMAGE_TAG}` and `docker.io/assistos/livekit-server-agent:${WEBMEET_INFRA_IMAGE_TAG}` before startup, so cold deployments use published runtime images instead of ad hoc package installation.
 11. Starts `AchillesIDE/explorer` on `EXPLORER_ROUTER_PORT` with branch-aware flags (`--branch`, `--repo-branch`, `--branch-fallback fail`, `--reset-repos`).
 12. Verifies local router health, `liveKitServerAgent` health on `127.0.0.1:${WEBMEET_INFRA_HEALTH_PORT:-17000}`, OnlyOffice `api.js` through `ONLYOFFICE_INTERNAL_URL`, public `EXPLORER_PUBLIC_URL` access through the Cloudflare tunnel, public `WEBMEET_PUBLIC_LIVEKIT_URL`, and browser-visible OnlyOffice `api.js` when `ONLYOFFICE_PUBLIC_URL` is configured.

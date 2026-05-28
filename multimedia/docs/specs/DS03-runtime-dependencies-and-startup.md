@@ -11,7 +11,7 @@ The agent uses this manifest:
 ```json
 {
   "lite-sandbox": true,
-  "container": "node:24.15.0-bullseye",
+  "container": "docker.io/assistos/ploinky-node:24-bookworm-tools",
   "profiles": {
     "default": {
       "install": "/code/scripts/install.sh"
@@ -24,7 +24,7 @@ The agent uses this manifest:
 
 Requirement R1: the install script must run at startup to prepare the multimedia runtime.
 
-Requirement R2: in container mode, the script must install `git` and `ffmpeg`.
+Requirement R2: in container mode, the shared Ploinky Node image must provide `git` and `ffmpeg`, and the script must validate their presence before the agent becomes available. It may fall back to package installation only when a non-standard image is used.
 
 Requirement R3: in host sandbox mode (`bwrap` on Linux, `seatbelt` on macOS), the script must validate that `git` and `ffmpeg` are present on the host.
 

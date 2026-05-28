@@ -34,7 +34,7 @@
   <rect class="node" x="610" y="90" width="240" height="100"></rect>
   <text class="label" x="730" y="136" text-anchor="middle">Explorer Agent</text>
   <text class="muted" x="730" y="158" text-anchor="middle">
-    <tspan x="730" dy="0">Container: node:24.15.0-bullseye</tspan>
+    <tspan x="730" dy="0">Container: assistos/ploinky-node:24-bookworm-tools</tspan>
     <tspan x="730" dy="14">agent: filesystem-http-server.mjs</tspan>
   </text>
 
@@ -63,7 +63,7 @@
   <rect class="node" x="610" y="270" width="240" height="100"></rect>
   <text class="label" x="730" y="316" text-anchor="middle">soplangAgent</text>
   <text class="muted" x="730" y="338" text-anchor="middle">
-    <tspan x="730" dy="0">Container: node:24.15.0-bullseye</tspan>
+    <tspan x="730" dy="0">Container: assistos/ploinky-node:24-bookworm-tools</tspan>
     <tspan x="730" dy="14">Explicit SOPLang MCP tools</tspan>
   </text>
 

@@ -1,6 +1,6 @@
 {
   "agent": "node /code/server/livekit-agent.mjs",
-  "container": "node:24.15.0",
+  "container": "docker.io/assistos/ploinky-node:24-bookworm-tools",
   "about": "Optional LiveKit AI worker for WebMeet rooms.",
   "readiness": {
     "protocol": "none"
