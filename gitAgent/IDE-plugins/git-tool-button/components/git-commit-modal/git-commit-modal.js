@@ -270,6 +270,7 @@ export class GitCommitModal {
     afterRender() {
         this.bindEvents();
         this.dialog.ensureDialogResizable();
+        this.dialog.toggleFullscreen();
         (async () => {
             await this.refreshGithubAuthStatus({ silent: true }).catch(() => {});
             
