@@ -2,6 +2,7 @@
 import http from 'node:http';
 import { URL } from 'node:url';
 import fs from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
 import { minimatch } from 'minimatch';
@@ -177,6 +178,119 @@ function isPathWithinRoots(candidatePath, roots = getResolvedAllowedRoots()) {
     const relative = path.relative(resolvedRoot, resolvedCandidate);
     return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
   });
+}
+
+function getStaticRoot() {
+  return process.env.PLOINKY_CODE_DIR || '/code';
+}
+
+function sanitizeStaticRequestPath(requestPath) {
+  let decoded = '';
+  try {
+    decoded = decodeURIComponent(String(requestPath || '/'));
+  } catch (_) {
+    return null;
+  }
+  if (decoded.includes('\0')) return null;
+  const normalizedInput = decoded.replace(/\\/g, '/');
+  if (normalizedInput.split('/').some((part) => part === '..')) return null;
+  return path.posix.normalize(`/${normalizedInput}`).replace(/^\/+/, '');
+}
+
+function isPathInsideStaticRoot(root, candidate, { allowMissing = false } = {}) {
+  const resolvedRoot = path.resolve(root);
+  let resolvedCandidate;
+  try {
+    resolvedCandidate = allowMissing ? path.resolve(candidate) : path.resolve(candidate);
+  } catch (_) {
+    return false;
+  }
+  const relative = path.relative(resolvedRoot, resolvedCandidate);
+  return relative === '' || (!!relative && !relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+async function resolveStaticFile(requestPath) {
+  const root = getStaticRoot();
+  const rel = sanitizeStaticRequestPath(requestPath);
+  if (rel === null) return null;
+  const candidate = path.join(root, rel || 'index.html');
+  if (!isPathInsideStaticRoot(root, candidate, { allowMissing: true })) return null;
+  try {
+    const stat = await fs.stat(candidate);
+    if (stat.isDirectory()) {
+      for (const name of ['index.html', 'index.htm', 'default.html']) {
+        const indexPath = path.join(candidate, name);
+        try {
+          const indexStat = await fs.stat(indexPath);
+          if (indexStat.isFile() && isPathInsideStaticRoot(root, indexPath)) {
+            return indexPath;
+          }
+        } catch (_) {}
+      }
+      return null;
+    }
+    if (stat.isFile() && isPathInsideStaticRoot(root, candidate)) return candidate;
+  } catch (_) {
+    return null;
+  }
+  return null;
+}
+
+function getStaticMimeType(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  const types = {
+    '.html': 'text/html; charset=utf-8',
+    '.htm': 'text/html; charset=utf-8',
+    '.js': 'application/javascript',
+    '.mjs': 'application/javascript',
+    '.css': 'text/css',
+    '.json': 'application/json',
+    '.svg': 'image/svg+xml',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif',
+    '.ico': 'image/x-icon',
+    '.webp': 'image/webp',
+    '.woff2': 'font/woff2',
+    '.woff': 'font/woff',
+    '.ttf': 'font/ttf',
+    '.otf': 'font/otf',
+    '.pdf': 'application/pdf'
+  };
+  return types[ext] || 'application/octet-stream';
+}
+
+function getStaticCacheControl(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  if (['.woff2', '.woff', '.ttf', '.otf'].includes(ext)) return 'public, max-age=31536000, immutable';
+  if (['.png', '.jpg', '.jpeg', '.gif', '.ico', '.svg', '.webp'].includes(ext)) return 'public, max-age=86400';
+  if (['.js', '.mjs', '.css'].includes(ext)) return 'public, max-age=300';
+  return 'public, max-age=60';
+}
+
+async function serveStaticFile(req, res, pathname) {
+  const method = String(req.method || 'GET').toUpperCase();
+  if (method !== 'GET' && method !== 'HEAD') return false;
+  const filePath = await resolveStaticFile(pathname);
+  if (!filePath) return false;
+  const stat = await fs.stat(filePath);
+  res.writeHead(200, {
+    'Content-Type': getStaticMimeType(filePath),
+    'Content-Length': stat.size,
+    'Cache-Control': getStaticCacheControl(filePath)
+  });
+  if (method === 'HEAD') {
+    res.end();
+    return true;
+  }
+  const stream = createReadStream(filePath);
+  stream.on('error', () => {
+    if (!res.headersSent) res.writeHead(500, { 'Content-Type': 'text/plain' });
+    res.end('Internal Server Error');
+  });
+  stream.pipe(res);
+  return true;
 }
 
 async function resolveCanonicalPath(targetPath) {
@@ -436,6 +550,11 @@ async function main() {
         return;
       }
       return handleOnlyOfficeHttpRequest(req, res, parsedUrl);
+    }).then((handled) => {
+      if (handled) {
+        return;
+      }
+      return serveStaticFile(req, res, parsedUrl.pathname);
     }).then((handled) => {
       if (handled) {
         return;

@@ -180,7 +180,7 @@ These flows define Explorer's IDE behavior more accurately than a generic “ope
 
 ### Static UI Contract
 
-Explorer serves the main web application and static resources for the router.
+Explorer serves the main web application and static resources through its own `filesystem-http-server.mjs` process. Ploinky routes `/explorer/...` requests to this agent and strips the `/explorer` mount prefix before proxying. Because Explorer declares a custom `manifest.agent` command instead of using the shared `AgentServer`, `filesystem-http-server.mjs` must serve `index.html` and related assets from `PLOINKY_CODE_DIR` or `/code`, and it must reject traversal and NUL-byte path attempts before reading files.
 
 ### MCP / HTTP Integration Contract
 
