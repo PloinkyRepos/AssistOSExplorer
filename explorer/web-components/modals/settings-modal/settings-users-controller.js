@@ -1,3 +1,5 @@
+import { getCurrentTheme } from "../../../utils/theme.js";
+
 export function getCurrentAgentName(win = globalThis.window) {
     try {
         const parts = win.location.pathname.split('/').filter(Boolean);
@@ -9,7 +11,7 @@ export function getCurrentAgentName(win = globalThis.window) {
 
 export function buildUsersSettingsUrl(agentName) {
     const normalizedAgentName = String(agentName || 'explorer').trim() || 'explorer';
-    return `/${encodeURIComponent(normalizedAgentName)}/admin/settings.html?embedded=1`;
+    return `/${encodeURIComponent(normalizedAgentName)}/admin/settings.html?embedded=1&theme=${getCurrentTheme()}`;
 }
 
 export const usersController = {

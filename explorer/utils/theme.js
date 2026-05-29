@@ -46,6 +46,30 @@ export function getCurrentTheme() {
     return document.documentElement.classList.contains("theme-dark") ? "dark" : "light";
 }
 
+const PREFERS_DARK_QUERY = "(prefers-color-scheme: dark)";
+
+function matchPrefersDark() {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+        return null;
+    }
+    try {
+        return window.matchMedia(PREFERS_DARK_QUERY);
+    } catch (_) {
+        return null;
+    }
+}
+
+// Detect the theme the browser/OS is currently asking for via prefers-color-scheme.
+export function detectBrowserTheme() {
+    const query = matchPrefersDark();
+    return query && query.matches ? "dark" : "light";
+}
+
+// True when the user (or webchat) has an explicit, stored theme choice that must win over the OS.
+export function hasStoredThemePreference() {
+    return Boolean(readStorage(EXPLORER_THEME_STORAGE_KEY) || readStorage(WEBCHAT_THEME_STORAGE_KEY));
+}
+
 export function resolveInitialTheme() {
     if (typeof window === "undefined") {
         return "light";
@@ -55,12 +79,44 @@ export function resolveInitialTheme() {
         return normalizeTheme(explorerTheme);
     }
     const webchatTheme = readStorage(WEBCHAT_THEME_STORAGE_KEY);
-    return normalizeTheme(webchatTheme);
+    if (webchatTheme) {
+        return normalizeTheme(webchatTheme);
+    }
+    // No stored preference anywhere: follow the browser/OS theme as the default.
+    return detectBrowserTheme();
+}
+
+let browserThemeListenerAttached = false;
+
+// Keep following the OS theme while the user has not explicitly chosen one.
+function attachBrowserThemeListener() {
+    if (browserThemeListenerAttached) {
+        return;
+    }
+    const query = matchPrefersDark();
+    if (!query) {
+        return;
+    }
+    const handler = (event) => {
+        if (hasStoredThemePreference()) {
+            return;
+        }
+        applyTheme(event.matches ? "dark" : "light");
+        window.dispatchEvent(new CustomEvent(EXPLORER_THEME_CHANGE_EVENT, {
+            detail: { theme: getCurrentTheme(), source: "system" }
+        }));
+    };
+    if (typeof query.addEventListener === "function") {
+        query.addEventListener("change", handler);
+    }
+    browserThemeListenerAttached = true;
 }
 
 export function initializeTheme() {
     const initialTheme = resolveInitialTheme();
-    return applyTheme(initialTheme);
+    const applied = applyTheme(initialTheme);
+    attachBrowserThemeListener();
+    return applied;
 }
 
 export function setTheme(theme) {

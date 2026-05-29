@@ -14,8 +14,8 @@
 }
 
 .theme-dark .backlog-task-row {
-    background: rgba(17, 25, 39, 0.95);
-    border-color: #334155;
+    background: #191A1C;
+    border-color: #393B42;
     box-shadow: var(--shadow-xl);
 }
 

@@ -120,10 +120,10 @@ const THEME_PRESETS = Object.freeze({
         headerColor: '#0f172a'
     }),
     dark: Object.freeze({
-        chatBackground: '#0f172a',
-        userBubble: '#334155',
-        agentBubble: '#1f2937',
-        headerColor: '#111827'
+        chatBackground: '#1E1F22',
+        userBubble: '#33353B',
+        agentBubble: '#26282C',
+        headerColor: '#191A1C'
     }),
     aqua: Object.freeze({
         chatBackground: '#e6f7fb',
@@ -148,6 +148,40 @@ const THEME_PRESETS = Object.freeze({
 function normalizeTheme(value) {
     const normalized = String(value || '').trim().toLowerCase();
     return Object.prototype.hasOwnProperty.call(THEME_PRESETS, normalized) ? normalized : 'light';
+}
+
+function detectBrowserTheme() {
+    try {
+        if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+            return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+    } catch {
+        // Ignore matchMedia failures.
+    }
+    return 'light';
+}
+
+// Resolve the effective chat theme: an explicit ?theme= query param wins, then the
+// host Explorer's applied theme class, then the browser/OS preference, then light.
+function resolveChatTheme(query) {
+    const requested = query.get('theme');
+    if (requested) {
+        return normalizeTheme(requested);
+    }
+    try {
+        const root = typeof document !== 'undefined' ? document.documentElement : null;
+        if (root && root.classList) {
+            if (root.classList.contains('theme-dark')) {
+                return 'dark';
+            }
+            if (root.classList.contains('theme-light')) {
+                return 'light';
+            }
+        }
+    } catch {
+        // Ignore DOM access failures.
+    }
+    return detectBrowserTheme();
 }
 
 function normalizeHex(value, fallback) {
@@ -374,7 +408,7 @@ function mountChatSurface(rootNode, options = {}) {
     const visitorStorageKey = VISITOR_STORAGE_KEY;
     const chatClient = new WebAssistMcpChatClient({ validateTools, endpoint });
 
-    const theme = normalizeTheme(query.get('theme'));
+    const theme = resolveChatTheme(query);
     const preset = THEME_PRESETS[theme];
     const headerText = normalizeString(query.get('headerText'), 'WebAssist Assistant');
     const subtitleOverride = normalizeString(query.get('subtitleText'));

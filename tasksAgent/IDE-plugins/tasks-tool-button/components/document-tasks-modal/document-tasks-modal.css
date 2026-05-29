@@ -79,7 +79,7 @@ dialog{
 
 .theme-dark .tasks-list-container {
     border-color: rgba(71, 85, 105, 0.42);
-    background: linear-gradient(180deg, rgba(17, 25, 39, 0.98), rgba(15, 23, 42, 0.98));
+    background: linear-gradient(180deg, rgba(25, 26, 28, 0.98), rgba(30, 31, 34, 0.98));
     box-shadow: 0 24px 44px rgba(2, 6, 23, 0.42), 0 8px 22px rgba(2, 6, 23, 0.28);
 }
 

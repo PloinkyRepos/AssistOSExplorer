@@ -43,7 +43,7 @@ settings-modal .settings-tab {
     background: var(--surface);
     color: var(--text);
     font-size: 0.92rem;
-    font-weight: 600;
+    font-weight: 500;
     padding: 7px 12px;
     cursor: pointer;
 }
@@ -141,7 +141,7 @@ settings-modal .avatar-subtab {
     color: var(--text, #17202a);
     font: inherit;
     font-size: 0.88rem;
-    font-weight: 650;
+    font-weight: 550;
     cursor: pointer;
 }
 
@@ -191,7 +191,7 @@ settings-modal .avatar-settings-card p {
 settings-modal .avatar-settings-card h3 {
     color: var(--text);
     font-size: 1.05rem;
-    font-weight: 700;
+    font-weight: 600;
 }
 
 settings-modal .avatar-settings-card p {
@@ -223,14 +223,14 @@ settings-modal .avatar-preview-fallback {
     color: var(--white);
     background: color-mix(in srgb, var(--accent) 42%, var(--surface) 58%);
     font-size: 1.4rem;
-    font-weight: 700;
+    font-weight: 600;
     text-transform: uppercase;
 }
 
 settings-modal .avatar-enable-toggle {
     color: var(--text);
     font-size: 0.85rem;
-    font-weight: 600;
+    font-weight: 500;
 }
 
 settings-modal .avatar-actions {
@@ -266,7 +266,7 @@ settings-modal .avatar-agent-button {
     color: var(--text);
     padding: 9px 14px;
     font-size: 0.9rem;
-    font-weight: 600;
+    font-weight: 500;
     cursor: pointer;
     transition: border-color 120ms ease, background 120ms ease, color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
 }
@@ -281,7 +281,7 @@ settings-modal .avatar-agent-button.active {
     border-color: var(--accent);
     color: var(--accent);
     background: color-mix(in srgb, var(--accent) 12%, var(--surface));
-    box-shadow: 0 10px 20px rgba(37, 99, 235, 0.14);
+    box-shadow: 0 10px 20px rgba(var(--accent-rgb), 0.14);
 }
 
 settings-modal .avatar-agent-button.missing {
@@ -360,7 +360,7 @@ settings-modal .plugin-settings-info {
 }
 
 settings-modal .plugin-settings-key {
-    font-weight: 700;
+    font-weight: 600;
     color: var(--text);
     word-break: break-word;
 }
@@ -384,7 +384,7 @@ settings-modal .plugin-settings-open {
     color: var(--text);
     min-width: 104px;
     padding: 9px 14px;
-    font-weight: 700;
+    font-weight: 600;
     cursor: pointer;
     transition: border-color 120ms ease, background 120ms ease, color 120ms ease, transform 120ms ease;
 }
@@ -435,7 +435,7 @@ settings-modal .editor-settings-toggle {
     display: inline-flex;
     align-items: center;
     gap: 10px;
-    font-weight: 600;
+    font-weight: 500;
     color: var(--text);
 }
 
@@ -447,13 +447,13 @@ settings-modal .editor-settings-row {
 }
 
 settings-modal .editor-settings-label {
-    font-weight: 600;
+    font-weight: 500;
     color: var(--text);
 }
 
 settings-modal .editor-settings-input {
     text-align: center;
-    font-weight: 600;
+    font-weight: 500;
 }
 
 settings-modal .editor-settings-hint {
@@ -487,7 +487,7 @@ settings-modal .keymap-info {
 }
 
 settings-modal .keymap-label {
-    font-weight: 600;
+    font-weight: 500;
     color: var(--text);
 }
 
@@ -508,7 +508,7 @@ settings-modal .keymap-input {
     width: min(220px, 100%);
     min-width: 0;
     text-align: center;
-    font-weight: 600;
+    font-weight: 500;
     letter-spacing: 0.01em;
 }
 
@@ -540,7 +540,7 @@ settings-modal .theme-option {
     border-radius: 8px;
     background: var(--surface);
     color: var(--text);
-    font-weight: 600;
+    font-weight: 500;
     padding: 9px 16px;
     cursor: pointer;
 }

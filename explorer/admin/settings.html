@@ -59,6 +59,12 @@
     const pathParts = window.location.pathname.split('/').filter(Boolean);
     const embedded = new URLSearchParams(window.location.search).get('embedded') === '1';
     document.body.classList.toggle('embedded', embedded);
+    // Apply theme: explicit ?theme= param (passed by the host Explorer) wins, else the browser/OS preference.
+    const themeParam = new URLSearchParams(window.location.search).get('theme');
+    const prefersDark = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const isDarkTheme = themeParam ? themeParam.toLowerCase() === 'dark' : prefersDark;
+    document.documentElement.classList.toggle('theme-dark', isDarkTheme);
+    document.documentElement.classList.toggle('theme-light', !isDarkTheme);
     const agent = pathParts[0] || 'explorer';
     const apiBase = `/api/agents/${encodeURIComponent(agent)}/users`;
     const settingsApi = `/api/agents/${encodeURIComponent(agent)}/settings`;

@@ -54,6 +54,8 @@
     --text-soft: #4b5563;
     --accent: #2563eb;
     --accent-muted: #93c5fd;
+    /* RGB triplet of --accent, used for translucent accent tints (hover/badge/status). */
+    --accent-rgb: 37, 99, 235;
     --border: #e5e7eb;
     --border-strong: #cbd5e1;
     --file-exp-panel: var(--surface);
@@ -120,18 +122,21 @@
 }
 @media (prefers-color-scheme: dark) {
     :root {
-        --bg: #0f172a;
-        --surface: #111927;
-        --surface-dark: #111927;
-        --text: #f9fafb;
-        --text-soft: #cbd5f5;
-        --light-gray: #9ca3af;
-        --accent: #60a5fa;
-        --accent-muted: #3b82f6;
-        --border: #1f2937;
-        --file-exp-subtle-surface: rgba(255, 255, 255, 0.08);
-        --file-exp-inline-code-bg: rgba(255, 255, 255, 0.08);
-        --file-exp-code-bg: #0c1424;
+        /* WebStorm "Islands Dark" grays (gray-10 islands on a gray-30 field) with an indigo/violet brand accent. */
+        --bg: #26282C;
+        --surface: #191A1C;
+        --surface-dark: #131416;
+        --text: #CFD1D6;
+        --text-soft: #9FA2A8;
+        --light-gray: #73767C;
+        --accent: #8B5CF6;
+        --accent-muted: #6D28D9;
+        --accent-rgb: 139, 92, 246;
+        --border: #393B42;
+        --border-strong: #40434A;
+        --file-exp-subtle-surface: rgba(255, 255, 255, 0.06);
+        --file-exp-inline-code-bg: rgba(255, 255, 255, 0.07);
+        --file-exp-code-bg: #1E1F22;
         --backlog-status-new: #cbd5e1;
         --backlog-status-new-glow: rgba(203, 213, 225, 0.34);
         --backlog-status-approved: #60a5fa;
@@ -150,18 +155,21 @@
 }
 .theme-dark {
     color-scheme: dark;
-    --bg: #0f172a;
-    --surface: #111927;
-    --surface-dark: #111927;
-    --text: #f9fafb;
-    --text-soft: #cbd5f5;
-    --accent: #60a5fa;
-    --accent-muted: #3b82f6;
-    --border: #1f2937;
-    --light-gray: #9ca3af;
-    --file-exp-subtle-surface: rgba(255, 255, 255, 0.08);
-    --file-exp-inline-code-bg: rgba(255, 255, 255, 0.08);
-    --file-exp-code-bg: #0c1424;
+    /* WebStorm "Islands Dark" grays (gray-10 islands on a gray-30 field) with an indigo/violet brand accent. */
+    --bg: #26282C;
+    --surface: #191A1C;
+    --surface-dark: #131416;
+    --text: #CFD1D6;
+    --text-soft: #9FA2A8;
+    --accent: #8B5CF6;
+    --accent-muted: #6D28D9;
+    --accent-rgb: 139, 92, 246;
+    --border: #393B42;
+    --border-strong: #40434A;
+    --light-gray: #73767C;
+    --file-exp-subtle-surface: rgba(255, 255, 255, 0.06);
+    --file-exp-inline-code-bg: rgba(255, 255, 255, 0.07);
+    --file-exp-code-bg: #1E1F22;
     --backlog-status-new: #cbd5e1;
     --backlog-status-new-glow: rgba(203, 213, 225, 0.34);
     --backlog-status-approved: #60a5fa;
@@ -180,27 +188,27 @@
     --black: black;
     --white: white;
     --white-text: white;
-    --form-input-border: #BDBDBD;
-    --very-light-gray: #c2c2c299;
-    --error-modal-border: #E5E5E5;
-    --left-sidebar-background: #2C2C2C;
-    --header-font-color: #222222;
+    --form-input-border: #40434A;
+    --very-light-gray: rgba(255, 255, 255, 0.10);
+    --error-modal-border: #393B42;
+    --left-sidebar-background: #1E1F22;
+    --header-font-color: #CFD1D6;
     --strong-blue: #08C;
-    --inactive-element: #F9F9F9;
-    --action-button-background: #E9E9E9;
+    --inactive-element: #1E1F22;
+    --action-button-background: #2B2D31;
     --red: #C80001;
-    --light-gray-border: #EFEFEF;
-    --plugin-focus: #919191;
-    --document-font-color: #646464;
-    --default-font-color: #646464;
-    --form-input: #8B8B8B;
-    --option-hover: #F2F2F2;
-    --application-marketplace-background: #F8F8F8;
-    --application-marketplace-border: #DDDDDD;
-    --gray-button-background: #EDEDED;
-    --gray-button-text: #454545;
-    --gray-button-border: #CCCCCC;
-    --menu-backgroud: #F5F5F5;
+    --light-gray-border: #393B42;
+    --plugin-focus: #73767C;
+    --document-font-color: #9FA2A8;
+    --default-font-color: #9FA2A8;
+    --form-input: #73767C;
+    --option-hover: #33353B;
+    --application-marketplace-background: #1E1F22;
+    --application-marketplace-border: #393B42;
+    --gray-button-background: #2B2D31;
+    --gray-button-text: #CFD1D6;
+    --gray-button-border: #40434A;
+    --menu-backgroud: #1E1F22;
     --button-padding: 10px 20px;
     --page-padding: 20px 40px;
     --page-header-font-size: 28px;
@@ -215,6 +223,7 @@
     --text-soft: #4b5563;
     --accent: #2563eb;
     --accent-muted: #93c5fd;
+    --accent-rgb: 37, 99, 235;
     --border: #e5e7eb;
     --default-font: "Inter", sans-serif;
     --file-exp-subtle-surface: rgba(148, 163, 184, 0.12);
@@ -346,21 +355,21 @@ main {
 
 .theme-dark .toolbar button.secondary,
 .theme-dark #editingActions button.secondary {
-    background-color: #1f2a3d;
-    border-color: #475569;
-    color: #f8fafc;
+    background-color: #2B2D31;
+    border-color: #40434A;
+    color: #CFD1D6;
 }
 
 .theme-dark .toolbar button.secondary:hover,
 .theme-dark #editingActions button.secondary:hover {
-    background-color: #2b3a53;
-    border-color: #64748b;
+    background-color: #33353B;
+    border-color: #4C4F56;
     box-shadow: 0 8px 16px rgba(2, 6, 23, 0.45);
 }
 
 .theme-dark .toolbar button.secondary:focus-visible,
 .theme-dark #editingActions button.secondary:focus-visible {
-    outline: 2px solid #93c5fd;
+    outline: 2px solid var(--accent);
     outline-offset: 1px;
 }
 
@@ -395,7 +404,7 @@ main {
     transition: background 0.15s ease;
 }
 .breadcrumbs button:hover {
-    background: rgba(37, 99, 235, 0.15);
+    background: rgba(var(--accent-rgb), 0.15);
 }
 .workspace {
     display: grid;
@@ -488,10 +497,10 @@ tbody tr {
     transition: background 0.12s ease;
 }
 tbody tr:hover {
-    background: rgba(37, 99, 235, 0.1);
+    background: rgba(var(--accent-rgb), 0.1);
 }
 tbody tr.active {
-    background: rgba(37, 99, 235, 0.18);
+    background: rgba(var(--accent-rgb), 0.18);
 }
 .entry-name {
     display: flex;
@@ -510,7 +519,7 @@ tbody tr.active {
     font-weight: var(--font-medium);
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    background: rgba(37, 99, 235, 0.12);
+    background: rgba(var(--accent-rgb), 0.12);
     color: var(--accent);
     line-height: var(--line-normal);
 }
@@ -550,9 +559,9 @@ pre {
     margin-top: clamp(var(--space-md), 3vw, var(--space-lg));
     padding: var(--space-sm) var(--space-md);
     border-radius: var(--radius-xl);
-    background: rgba(37, 99, 235, 0.12);
+    background: rgba(var(--accent-rgb), 0.12);
     color: var(--text);
-    border: 1px solid rgba(37, 99, 235, 0.25);
+    border: 1px solid rgba(var(--accent-rgb), 0.25);
     display: none;
     font-size: var(--font-base);
     font-weight: var(--font-regular);
@@ -649,11 +658,11 @@ td.actions-cell {
 .action-menu-trigger:hover .action-menu-trigger-icon,
 .action-menu-trigger:focus-visible .action-menu-trigger-icon {
     transform: scale(1.05);
-    filter: drop-shadow(0 0 4px rgba(37, 99, 235, 0.25));
+    filter: drop-shadow(0 0 4px rgba(var(--accent-rgb), 0.25));
 }
 
 .action-menu-container.open .action-menu-trigger {
-    background: rgba(37, 99, 235, 0.15);
+    background: rgba(var(--accent-rgb), 0.15);
 }
 
 .theme-dark .action-menu-trigger {
@@ -772,8 +781,8 @@ td.actions-cell {
 }
 
 .theme-dark .action-menu-dropdown {
-    background: #182233;
-    border-color: #334155;
+    background: #26282C;
+    border-color: #40434A;
     box-shadow: var(--shadow-xl);
 }
 
@@ -787,7 +796,7 @@ td.actions-cell {
 
 .theme-dark .action-menu-dropdown .action-menu-item:hover,
 .theme-dark .action-menu-dropdown .action-menu-item:focus-visible {
-    background: rgba(96, 165, 250, 0.15);
+    background: rgba(var(--accent-rgb), 0.15);
     color: var(--text);
 }
 
@@ -819,15 +828,15 @@ tr.clipboard-row.clipboard-cut {
 }
 
 tr.clipboard-row.clipboard-copy {
-    background: rgba(37, 99, 235, 0.08);
+    background: rgba(var(--accent-rgb), 0.08);
 }
 
 tr.clipboard-row {
-    outline: 1px dashed rgba(37, 99, 235, 0.45);
+    outline: 1px dashed rgba(var(--accent-rgb), 0.45);
 }
 
 tr.clipboard-row.clipboard-copy.active {
-    background: rgba(37, 99, 235, 0.18);
+    background: rgba(var(--accent-rgb), 0.18);
 }
 
 dialog.modal {
@@ -848,8 +857,8 @@ dialog.modal::backdrop {
 }
 
 .theme-dark dialog.modal {
-    background: #152033;
-    border-color: #334155;
+    background: #191A1C;
+    border-color: #393B42;
     box-shadow: var(--shadow-xl);
 }
 
@@ -914,7 +923,7 @@ dialog.spinner::backdrop {
     inset: 7px;
     border-radius: 50%;
     background: linear-gradient(135deg, var(--accent), var(--accent-muted));
-    filter: drop-shadow(0 10px 24px rgba(37, 99, 235, 0.35));
+    filter: drop-shadow(0 10px 24px rgba(var(--accent-rgb), 0.35));
     opacity: 0.8;
 }
 
@@ -931,7 +940,7 @@ dialog.spinner::backdrop {
 .spinner-orbit span:nth-child(2) {
     inset: 6px;
     border-top-color: var(--strong-blue);
-    border-right-color: rgba(37, 99, 235, 0.35);
+    border-right-color: rgba(var(--accent-rgb), 0.35);
     animation-duration: 1.6s;
     animation-direction: reverse;
 }

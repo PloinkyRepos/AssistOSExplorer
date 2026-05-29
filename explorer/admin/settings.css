@@ -6,10 +6,25 @@
     --muted: #667085;
     --line: #d9dee8;
     --accent: #2563eb;
+    --accent-rgb: 37, 99, 235;
     --danger: #b42318;
     --ok: #087443;
     --border: var(--line);
     --surface: var(--panel);
+}
+
+/* Dark theme (applied via .theme-dark class from ?theme= param or prefers-color-scheme). */
+:root.theme-dark {
+    color-scheme: dark;
+    --bg: #191A1C;
+    --panel: #1E1F22;
+    --text: #CFD1D6;
+    --muted: #9FA2A8;
+    --line: #393B42;
+    --accent: #8B5CF6;
+    --accent-rgb: 139, 92, 246;
+    --danger: #F87171;
+    --ok: #34D399;
 }
 
 * {
@@ -85,7 +100,7 @@ h1 {
     gap: 24px;
     padding: 0 18px;
     border-bottom: 1px solid var(--line);
-    background: #fff;
+    background: var(--panel);
 }
 
 .administration-tabs .administration-tab {
@@ -139,7 +154,7 @@ h1 {
 }
 
 .administration-tab-panel {
-    background: #f3f6fb;
+    background: var(--bg);
 }
 
 .toolbar {
@@ -148,7 +163,7 @@ h1 {
     gap: 10px;
     padding: 14px;
     border-bottom: 1px solid var(--line);
-    background: #fff;
+    background: var(--panel);
     align-items: end;
 }
 
@@ -156,7 +171,7 @@ h1 {
 #auditSettingsHost,
 #tableHost {
     padding: 14px;
-    background: #f3f6fb;
+    background: var(--bg);
 }
 
 .settings-strip {
@@ -165,7 +180,7 @@ h1 {
     padding: 14px;
     border: 1px solid var(--line);
     border-radius: 8px;
-    background: #fff;
+    background: var(--panel);
 }
 
 .section-heading {
@@ -185,7 +200,7 @@ h1 {
 
 .user-section-heading {
     padding: 16px 14px 10px;
-    background: #fff;
+    background: var(--panel);
     border-bottom: 1px solid var(--line);
 }
 
@@ -204,7 +219,7 @@ h1 {
     padding: 14px;
     border: 1px solid var(--line);
     border-radius: 8px;
-    background: #fff;
+    background: var(--panel);
 }
 
 .audit-settings-form {
@@ -243,7 +258,7 @@ h1 {
     padding: 8px 10px;
     border: 1px solid var(--line);
     border-radius: 6px;
-    background: #fff;
+    background: var(--panel);
     color: var(--text);
     font-size: 13px;
 }
@@ -275,7 +290,7 @@ input {
     padding: 9px 10px;
     font: inherit;
     color: var(--text);
-    background: #fff;
+    background: var(--panel);
 }
 
 .password-field {
@@ -289,12 +304,12 @@ input {
 
 button:focus-visible,
 a:focus-visible {
-    outline: 2px solid rgba(37, 99, 235, 0.35);
+    outline: 2px solid rgba(var(--accent-rgb), 0.35);
     outline-offset: 2px;
 }
 
 .gray-button.danger {
-    background: #fff;
+    background: var(--panel);
     border-color: rgba(180, 35, 24, 0.28);
     color: var(--danger);
 }
@@ -324,7 +339,7 @@ a:focus-visible {
 
 .password-toggle:hover,
 .password-toggle:focus-visible {
-    background: #f1f5f9;
+    background: var(--bg);
     border-color: transparent;
     box-shadow: none;
     transform: translateY(-50%);
@@ -352,7 +367,7 @@ button:disabled {
     font-size: 13px;
     color: var(--muted);
     border-bottom: 1px solid var(--line);
-    background: #fff;
+    background: var(--panel);
 }
 
 .status.error {
@@ -379,7 +394,7 @@ td {
 }
 
 th {
-    background: #f8fafc;
+    background: var(--bg);
     color: var(--muted);
     font-size: 12px;
     font-weight: 750;

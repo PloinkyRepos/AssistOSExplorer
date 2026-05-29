@@ -255,8 +255,8 @@
 }
 
 .theme-dark .backlog-list-view {
-    border-color: #334155;
-    background: linear-gradient(180deg, rgba(17, 25, 39, 0.98), rgba(15, 23, 42, 0.96));
+    border-color: #393B42;
+    background: linear-gradient(180deg, rgba(25, 26, 28, 0.98), rgba(30, 31, 34, 0.96));
 }
 
 .backlog-list-hint {

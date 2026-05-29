@@ -62,7 +62,7 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
 }
 
 .git-resize-handle:hover {
-    background: rgba(37, 99, 235, 0.10);
+    background: rgba(var(--accent-rgb, 56, 113, 225), 0.10);
 }
 
 .git-resize-handle.n {
@@ -216,7 +216,7 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
 .git-modal input[type="text"]:focus,
 .git-modal input[type="password"]:focus,
 .git-modal textarea:focus {
-    outline: 2px solid rgba(37, 99, 235, 0.35);
+    outline: 2px solid rgba(var(--accent-rgb, 56, 113, 225), 0.35);
     outline-offset: 1px;
 }
 
@@ -418,8 +418,8 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
 }
 
 .git-repo-item:hover {
-    background: rgba(59, 130, 246, 0.12);
-    border-color: rgba(59, 130, 246, 0.25);
+    background: rgba(var(--accent-rgb, 56, 113, 225), 0.12);
+    border-color: rgba(var(--accent-rgb, 56, 113, 225), 0.25);
 }
 
 .git-repo-item-meta {
@@ -499,7 +499,7 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
 }
 
 .git-tree-file-row.active {
-    background: rgba(59, 130, 246, 0.14);
+    background: rgba(var(--accent-rgb, 56, 113, 225), 0.14);
 }
 
 .git-tree-file.active {
@@ -1345,7 +1345,7 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
 }
 
 .git-menu-item.active {
-    background: rgba(37, 99, 235, 0.10);
+    background: rgba(var(--accent-rgb, 56, 113, 225), 0.10);
 }
 
 .git-menu-separator {
