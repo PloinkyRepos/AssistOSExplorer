@@ -27,17 +27,10 @@ gh secret set LOCAL_LLM_API_KEY --repo PloinkyRepos/AssistOSExplorer
 `ONLYOFFICE_JWT_SECRET` is not configured as a GitHub secret for the managed Document Server. Explorer derives `ONLYOFFICE_JWT_SECRET` through its Ploinky manifest, and the `onlyOffice` Ploinky agent derives its container `JWT_SECRET` from the same `AchillesIDE/explorer/ONLYOFFICE_JWT_SECRET` identity. Explorer's host preinstall hook no longer computes or injects the Document Server secret.
 WebMeet LiveKit and TURN credentials are also manifest-derived, using the same shared derivation identity across `webmeetAgent`, `webmeetLivekitAiAgent`, and `webmeetInfra/liveKitServerAgent`; do not configure them as GitHub secrets for the deploy workflow.
 
-The `PloinkyRepos/webmeetInfra` repository also needs a Docker Hub token for the manual image publish workflow:
+The centralized image-build repository needs a Docker Hub token for the manual image publish workflows:
 
 ```sh
-gh secret set DOCKERHUB_TOKEN --repo PloinkyRepos/webmeetInfra
-```
-
-The shared Ploinky Node runtime image is published from `PloinkyRepos/AssistOSExplorer` to `docker.io/assistos/ploinky-node`. That workflow needs Docker Hub credentials with write access to the `assistos` organization:
-
-```sh
-gh secret set DOCKERHUB_USERNAME --repo PloinkyRepos/AssistOSExplorer
-gh secret set DOCKERHUB_TOKEN --repo PloinkyRepos/AssistOSExplorer
+gh secret set DOCKERHUB_TOKEN --repo AssistOS-AI/container-image-builds
 ```
 
 The token value must stay only in GitHub Actions secrets.
@@ -139,19 +132,20 @@ Run `Provision Skills Explorer Host` only when the remote host needs OS packages
 
 ## Deploy Or Update
 
-Before deploying production changes that alter the shared Node runtime image, publish it from this repository:
+Before deploying production changes that alter the shared Node runtime image, publish it from the centralized image-build repository:
 
 ```sh
 gh workflow run publish-ploinky-node-image.yml \
-  --repo PloinkyRepos/AssistOSExplorer \
+  --repo AssistOS-AI/container-image-builds \
   -f image_tag=24-bookworm-tools
 ```
 
-Before deploying production changes that alter `webmeetInfra/liveKitServerAgent`, publish the image from the `PloinkyRepos/webmeetInfra` repository:
+Before deploying production changes that alter `webmeetInfra/liveKitServerAgent`, publish the image from the centralized image-build repository:
 
 ```sh
 gh workflow run publish-livekit-server-agent.yml \
-  --repo PloinkyRepos/webmeetInfra \
+  --repo AssistOS-AI/container-image-builds \
+  -f source_ref=main \
   -f image_tag=webmeet-infra
 ```
 
