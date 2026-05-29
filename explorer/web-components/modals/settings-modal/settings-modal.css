@@ -86,6 +86,10 @@ settings-modal[data-active-tab="avatar"] .modal-actions {
     display: none !important;
 }
 
+settings-modal[data-active-tab="agents"] .modal-actions {
+    display: none !important;
+}
+
 settings-modal .keymap-description,
 settings-modal .theme-description,
 settings-modal .plugin-settings-description {

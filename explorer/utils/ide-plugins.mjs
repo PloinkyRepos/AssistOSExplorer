@@ -26,6 +26,9 @@ export const APPLICATION_PLUGIN_LOCATION_PATTERN = /^[a-z0-9-]+(?::[a-z0-9-]+)+$
 export const APPLICATION_PLUGIN_ID_PATTERN = /^[a-z][a-z0-9-]*$/i;
 const VALID_PLUGIN_TYPES = new Set(['embedded', 'modal', 'global']);
 const VALID_APPLICATION_CONTRIBUTION_TYPES = new Set(['mount', 'menu']);
+const AGENT_SETTING_KEY_PATTERN = /^[a-z][a-z0-9-]*$/i;
+const AGENT_SETTING_PLUGIN_KEY_PATTERN = /^[a-z0-9_.-]+\/[a-z][a-z0-9-]*$/i;
+const SETTINGS_COMPONENT_PATTERN = /^[a-z][a-z0-9]*-[a-z0-9-]*$/i;
 
 function isNonEmptyString(value) {
   return typeof value === 'string' && value.trim().length > 0;
@@ -245,12 +248,84 @@ function validateAndNormalizePluginConfig(parsedConfig, pluginEntryName, configP
   };
 }
 
+function validateAndNormalizeAgentSettings(parsedManifest, agentName, manifestPath) {
+  const rawSettings = parsedManifest?.ideSettings;
+  if (rawSettings === undefined) {
+    return [];
+  }
+  if (!Array.isArray(rawSettings)) {
+    console.warn(`[filesystem-http] Invalid ideSettings in ${manifestPath}: expected an array.`);
+    return [];
+  }
+
+  const normalized = [];
+  for (const rawSetting of rawSettings) {
+    if (!rawSetting || typeof rawSetting !== 'object' || Array.isArray(rawSetting)) {
+      console.warn(`[filesystem-http] Invalid ideSettings entry in ${manifestPath}: expected an object.`);
+      continue;
+    }
+
+    const key = isNonEmptyString(rawSetting.key) ? rawSetting.key.trim() : '';
+    if (!key || !AGENT_SETTING_KEY_PATTERN.test(key)) {
+      console.warn(`[filesystem-http] Invalid ideSettings entry in ${manifestPath}: missing or invalid key.`);
+      continue;
+    }
+
+    const label = isNonEmptyString(rawSetting.label) ? rawSetting.label.trim() : '';
+    if (!label) {
+      console.warn(`[filesystem-http] Invalid ideSettings entry "${key}" in ${manifestPath}: missing label.`);
+      continue;
+    }
+
+    const pluginKey = isNonEmptyString(rawSetting.pluginKey) ? rawSetting.pluginKey.trim() : '';
+    if (!pluginKey || !AGENT_SETTING_PLUGIN_KEY_PATTERN.test(pluginKey)) {
+      console.warn(`[filesystem-http] Invalid ideSettings entry "${key}" in ${manifestPath}: invalid pluginKey.`);
+      continue;
+    }
+
+    const scope = isNonEmptyString(rawSetting.scope) ? rawSetting.scope.trim() : 'workspace';
+    if (scope !== 'workspace') {
+      console.warn(`[filesystem-http] Invalid ideSettings entry "${key}" in ${manifestPath}: unsupported scope "${scope}".`);
+      continue;
+    }
+
+    const settingsComponent = rawSetting.settingsComponent !== undefined
+      ? (isNonEmptyString(rawSetting.settingsComponent) ? rawSetting.settingsComponent.trim() : '')
+      : '';
+    if (rawSetting.settingsComponent !== undefined && (!settingsComponent || !SETTINGS_COMPONENT_PATTERN.test(settingsComponent))) {
+      console.warn(`[filesystem-http] Invalid ideSettings entry "${key}" in ${manifestPath}: invalid settingsComponent.`);
+      continue;
+    }
+
+    const settingsUrl = rawSetting.settingsUrl !== undefined
+      ? (isNonEmptyString(rawSetting.settingsUrl) ? rawSetting.settingsUrl.trim() : '')
+      : '';
+    if (rawSetting.settingsUrl !== undefined && (!settingsUrl || !settingsUrl.startsWith('/') || settingsUrl.startsWith('//'))) {
+      console.warn(`[filesystem-http] Invalid ideSettings entry "${key}" in ${manifestPath}: invalid settingsUrl. Use a router-relative path.`);
+      continue;
+    }
+
+    normalized.push({
+      key,
+      label,
+      ownerAgent: agentName,
+      scope,
+      pluginKey,
+      ...(settingsComponent ? { settingsComponent } : {}),
+      ...(settingsUrl ? { settingsUrl } : {}),
+      adminOnly: rawSetting.adminOnly === true
+    });
+  }
+  return normalized;
+}
+
 export async function aggregateIdePlugins(rootDir) {
   if (!rootDir) throw new Error('Workspace root not configured.');
 
   const aggregated = {
     [DOCUMENT_PLUGIN_CATEGORY]: Object.create(null),
-    [APPLICATION_PLUGIN_CATEGORY]: Object.create(null)
+    [APPLICATION_PLUGIN_CATEGORY]: Object.create(null),
+    agentSettings: []
   };
   const visitedAgents = new Set();
   let pluginCount = 0;
@@ -308,6 +383,17 @@ export async function aggregateIdePlugins(rootDir) {
       return;
     }
     visitedAgents.add(agentName);
+
+    const manifestPath = path.join(agentDir, 'manifest.json');
+    try {
+      const rawManifest = await fs.readFile(manifestPath, 'utf8');
+      const parsedManifest = JSON.parse(rawManifest);
+      aggregated.agentSettings.push(...validateAndNormalizeAgentSettings(parsedManifest, agentName, manifestPath));
+    } catch (error) {
+      if (!error || typeof error !== 'object' || error.code !== 'ENOENT') {
+        console.warn(`[filesystem-http] Unable to read agent manifest ${manifestPath}:`, error instanceof Error ? error.message : String(error));
+      }
+    }
 
     let pluginEntries;
     try {
@@ -426,7 +512,7 @@ export async function aggregateIdePlugins(rootDir) {
     }
   }
 
-  for (const buckets of Object.values(aggregated)) {
+  for (const buckets of [aggregated[DOCUMENT_PLUGIN_CATEGORY], aggregated[APPLICATION_PLUGIN_CATEGORY]]) {
     for (const plugins of Object.values(buckets)) {
       plugins.sort((a, b) => {
         const aKey = (a?.component || '').toLowerCase();

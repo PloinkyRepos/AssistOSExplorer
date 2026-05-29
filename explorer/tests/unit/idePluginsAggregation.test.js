@@ -12,6 +12,12 @@ async function writePluginConfig(rootDir, agentName, pluginName, config) {
     await fs.writeFile(path.join(pluginDir, 'config.json'), JSON.stringify(config, null, 2), 'utf8');
 }
 
+async function writeAgentManifest(rootDir, agentName, manifest) {
+    const agentDir = path.join(rootDir, agentName);
+    await fs.mkdir(agentDir, { recursive: true });
+    await fs.writeFile(path.join(agentDir, 'manifest.json'), JSON.stringify(manifest, null, 2), 'utf8');
+}
+
 test('aggregateIdePlugins accepts application plugins with global type and slot', async () => {
     const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'explorer-ide-plugins-'));
     try {
@@ -133,6 +139,135 @@ test('aggregateIdePlugins exposes nested Soul Gateway repo plugin as soul-gatewa
         assert.equal(settingsPlugins[0].id, 'soul-gateway');
         assert.equal(settingsPlugins[0].adminOnly, true);
         assert.equal(settingsPlugins[0].settingsUrl, '/services/soul-gateway/management/');
+    } finally {
+        await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+});
+
+test('aggregateIdePlugins returns agentSettings from agent manifest', async () => {
+    const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'explorer-ide-plugins-'));
+    try {
+        await writeAgentManifest(workspaceRoot, 'webAssist', {
+            ideSettings: [
+                {
+                    key: 'webassist-chat',
+                    label: 'WebAssist Chat',
+                    scope: 'workspace',
+                    pluginKey: 'webAssist/webassist-chat',
+                    settingsComponent: 'webassist-settings',
+                    adminOnly: false
+                }
+            ]
+        });
+        await writePluginConfig(workspaceRoot, 'webAssist', 'web-assist-chat', {
+            pluginCategory: 'application',
+            id: 'webassist-chat',
+            component: 'web-assist-chat',
+            location: [],
+            settings: 'webassist-settings',
+            type: 'global'
+        });
+
+        const aggregated = await aggregateIdePlugins(workspaceRoot);
+
+        assert.deepEqual(aggregated.agentSettings, [
+            {
+                key: 'webassist-chat',
+                label: 'WebAssist Chat',
+                ownerAgent: 'webAssist',
+                scope: 'workspace',
+                pluginKey: 'webAssist/webassist-chat',
+                settingsComponent: 'webassist-settings',
+                adminOnly: false
+            }
+        ]);
+    } finally {
+        await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+});
+
+test('aggregateIdePlugins rejects invalid ideSettings entries', async () => {
+    const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'explorer-ide-plugins-'));
+    try {
+        await writeAgentManifest(workspaceRoot, 'badSettings', {
+            ideSettings: [
+                {
+                    label: 'Missing Key',
+                    scope: 'workspace',
+                    pluginKey: 'badSettings/missing-key',
+                    settingsComponent: 'missing-key'
+                },
+                {
+                    key: 'bad-plugin-key',
+                    label: 'Bad Plugin Key',
+                    scope: 'workspace',
+                    pluginKey: 'badSettings',
+                    settingsComponent: 'bad-plugin-key'
+                },
+                {
+                    key: 'bad-url',
+                    label: 'Bad URL',
+                    scope: 'workspace',
+                    pluginKey: 'badSettings/bad-url',
+                    settingsUrl: 'https://example.test/settings'
+                },
+                {
+                    key: 'bad-component',
+                    label: 'Bad Component',
+                    scope: 'workspace',
+                    pluginKey: 'badSettings/bad-component',
+                    settingsComponent: 'Bad Component'
+                }
+            ]
+        });
+        await writePluginConfig(workspaceRoot, 'badSettings', 'bad-settings', {
+            pluginCategory: 'application',
+            id: 'bad-settings',
+            component: 'bad-settings',
+            location: [],
+            type: 'global'
+        });
+
+        const aggregated = await aggregateIdePlugins(workspaceRoot);
+
+        assert.deepEqual(aggregated.agentSettings, []);
+    } finally {
+        await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+});
+
+test('aggregateIdePlugins returns nested Soul Gateway manifest settings', async () => {
+    const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'explorer-ide-plugins-workspace-'));
+    try {
+        const reposRoot = path.join(workspaceRoot, '.ploinky', 'repos', 'proxies');
+        await writeAgentManifest(reposRoot, 'soul-gateway', {
+            ideSettings: [
+                {
+                    key: 'soul-gateway',
+                    label: 'Soul Gateway',
+                    scope: 'workspace',
+                    pluginKey: 'soul-gateway/soul-gateway',
+                    settingsUrl: '/services/soul-gateway/management/',
+                    adminOnly: true
+                }
+            ]
+        });
+        await writePluginConfig(reposRoot, 'soul-gateway', 'soul-gateway-settings', {
+            pluginCategory: 'application',
+            id: 'soul-gateway',
+            component: 'soul-gateway-settings',
+            settingsUrl: '/services/soul-gateway/management/',
+            location: [],
+            type: 'global',
+            adminOnly: true
+        });
+
+        const aggregated = await aggregateIdePlugins(workspaceRoot);
+
+        assert.equal(aggregated.agentSettings.length, 1);
+        assert.equal(aggregated.agentSettings[0].ownerAgent, 'soul-gateway');
+        assert.equal(aggregated.agentSettings[0].pluginKey, 'soul-gateway/soul-gateway');
+        assert.equal(aggregated.agentSettings[0].settingsUrl, '/services/soul-gateway/management/');
     } finally {
         await fs.rm(workspaceRoot, { recursive: true, force: true });
     }

@@ -209,7 +209,7 @@ function parseAgentEnableRef(entry) {
 
 function isPotentialAiAgent(agentId) {
   return /(?:llm|ai|assist|assistant)/i.test(agentId)
-    || ['webAssist', 'webmeetLivekitAiAgent'].includes(agentId);
+    || ['webAssist', 'audioAgent'].includes(agentId);
 }
 
 function extractAgentAvatarDefaults(manifest) {

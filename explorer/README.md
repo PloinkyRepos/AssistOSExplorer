@@ -21,6 +21,7 @@ Explorer owns:
 - explicit SOPLang tag editing for Markdown documents that need Achilles/SOPLang metadata workflows
 - collaborative editing safeguards for local files
 - application and document plugin hosting
+- manifest-declared agent settings discovery for `Settings > Agents`
 - account-menu plugin hosting for workspace-wide controls such as DPU audit
 - client-side audit emission for Explorer actions, file open/save flows, plugin usage, and copilot autocomplete
 - session-expiration handling for the browser client

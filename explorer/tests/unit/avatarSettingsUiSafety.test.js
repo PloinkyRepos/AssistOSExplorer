@@ -5,7 +5,7 @@ import path from 'node:path';
 
 test('avatar settings escapes manifest agent ids before interpolating local actions', async () => {
     const source = await fs.readFile(
-        path.resolve(import.meta.dirname, '../../web-components/modals/settings-modal/settings-modal.js'),
+        path.resolve(import.meta.dirname, '../../web-components/modals/settings-modal/settings-avatar-controller.js'),
         'utf8'
     );
 
@@ -19,7 +19,7 @@ test('avatar settings use shared source-mode form for profile and agent avatars'
         'utf8'
     );
     const source = await fs.readFile(
-        path.resolve(import.meta.dirname, '../../web-components/modals/settings-modal/settings-modal.js'),
+        path.resolve(import.meta.dirname, '../../web-components/modals/settings-modal/settings-avatar-controller.js'),
         'utf8'
     );
 

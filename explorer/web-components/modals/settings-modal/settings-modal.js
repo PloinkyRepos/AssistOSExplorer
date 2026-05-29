@@ -9,307 +9,26 @@ import {
 } from "../../../utils/keymap.js";
 import { getCurrentTheme, setTheme } from "../../../utils/theme.js";
 import {
-    callExplorerTool,
-    parseToolResult
-} from "../../../services/infrastructure/explorerApi.js";
+    buildAgentSettingsItems
+} from "./settings-agent-model.js";
 import {
-    compareRuntimePluginEntries,
-    forEachRuntimePluginEntry,
-    getRuntimePluginOrder,
-    getRuntimePluginPolicyKey
-} from "../../../utils/pluginUtils.core.js";
-import { registerRuntimeComponent } from "../../../utils/pluginUtils.ui.js";
-import {
-    ensureAxiFaceLoaded,
-    getCurrentProfileAvatar,
-    loadAxiFaceGeneratedFacePalettes,
-    loadAxiFaceGeneratedFaceStyles,
-    loadAxiFacePacks,
-    normalizeAvatarConfig,
-    renderAxiFaceMarkup,
-    saveCurrentProfileAvatar
-} from "../../../services/profile-avatar-client.js";
+    openPluginSettingsUrl,
+    resolvePluginSettingsUrl,
+    resolveSettingsComponentBase
+} from "./settings-component-loader.js";
+import { avatarController, defaultAvatarConfig } from "./settings-avatar-controller.js";
+import { copilotController } from "./settings-copilot-controller.js";
+import { runtimeSettingsController } from "./settings-runtime-controller.js";
+import { usersController } from "./settings-users-controller.js";
 
-const settingsComponentPromises = new Map();
-let avatarSettingsComponentPromise = null;
-const BASE_TABS = ['keymap', 'editor', 'theme', 'plugins', 'copilot', 'avatar'];
+const BASE_TABS = ['keymap', 'editor', 'theme', 'plugins', 'agents', 'copilot', 'avatar'];
 
-function escapeHtml(value) {
-    return String(value ?? '')
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#39;');
-}
-
-function getCurrentAgentName() {
-    try {
-        const parts = window.location.pathname.split('/').filter(Boolean);
-        return parts[0] || 'explorer';
-    } catch (_) {
-        return 'explorer';
-    }
-}
-
-function defaultAvatarConfig(id, size = '72') {
-    return {
-        agentId: id,
-        generated: true,
-        src: '',
-        packSrc: '',
-        assetMode: 'img',
-        emotion: 'neutral',
-        size,
-        thought: '',
-        thoughtMode: 'none',
-        mode: 'static',
-        shape: 'circle',
-        theme: 'auto',
-        animated: true,
-        listen: false,
-        seed: id,
-        style: 'robot-soft',
-        palette: 'default',
-        complexity: ''
-    };
-}
-
-function normalizePathSegment(value) {
-    return String(value || "")
-        .replace(/\\/g, "/")
-        .replace(/^\/+/, "")
-        .replace(/\/+$/g, "")
-        .replace(/\/+/g, "/");
-}
-
-function toPascalCase(value) {
-    return String(value || "")
-        .split(/[^a-zA-Z0-9]+/)
-        .filter(Boolean)
-        .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
-        .join("");
-}
-
-export function resolveSettingsComponentBase(item) {
-    const settingsComponent = typeof item?.settingsComponent === "string" ? item.settingsComponent.trim() : "";
-    if (!settingsComponent) {
-        return "";
-    }
-
-    const component = typeof item?.component === "string" ? item.component.trim() : "";
-    const componentBaseUrl = typeof item?.componentBaseUrl === "string" ? item.componentBaseUrl.trim() : "";
-    if (component && settingsComponent === component && componentBaseUrl) {
-        return componentBaseUrl.replace(/\/+$/g, "");
-    }
-
-    const normalizedSettings = normalizePathSegment(settingsComponent);
-    const assetRootPath = normalizePathSegment(item?.assetRootPath);
-    if (assetRootPath) {
-        return `/workspace-files/${assetRootPath}/${normalizedSettings}/${normalizedSettings}`;
-    }
-
-    const agent = typeof item?.agent === "string" ? item.agent.trim() : "";
-    if (!agent || !component) {
-        return "";
-    }
-
-    return `/${agent}/IDE-plugins/${component}/${normalizedSettings}/${normalizedSettings}`;
-}
-
-export function resolvePluginSettingsUrl(item) {
-    const settingsUrl = typeof item?.settingsUrl === "string" ? item.settingsUrl.trim() : "";
-    if (!settingsUrl || !settingsUrl.startsWith("/") || settingsUrl.startsWith("//")) {
-        return "";
-    }
-    return settingsUrl;
-}
-
-export function openPluginSettingsUrl(item, win = globalThis.window) {
-    const settingsUrl = resolvePluginSettingsUrl(item);
-    if (!settingsUrl || !win || typeof win.open !== "function") {
-        return false;
-    }
-    const opened = win.open(settingsUrl, "_blank", "noopener,noreferrer");
-    if (opened) {
-        opened.opener = null;
-    }
-    return true;
-}
-
-async function fetchText(url, description) {
-    const response = await fetch(url, { cache: "no-cache" });
-    if (!response.ok) {
-        throw new Error(`${description} (${response.status})`);
-    }
-    return response.text();
-}
-
-function getSharedAvatarSettingsComponentBaseUrl() {
-    return '/workspace-files/.ploinky/repos/AchillesIDE/shared/ui/avatar-settings-form/avatar-settings-form';
-}
-
-async function ensureAvatarSettingsFormRegistered() {
-    if (avatarSettingsComponentPromise) return avatarSettingsComponentPromise;
-    avatarSettingsComponentPromise = (async () => {
-        const baseUrl = getSharedAvatarSettingsComponentBaseUrl();
-        const [template, css, module] = await Promise.all([
-            fetchText(`${baseUrl}.html`, 'Failed to load avatar settings template'),
-            fetchText(`${baseUrl}.css`, 'Failed to load avatar settings stylesheet'),
-            import(`${baseUrl}.js?cacheBust=${Date.now()}`)
-        ]);
-        await registerRuntimeComponent(assistOS.webSkel, {
-            name: 'avatar-settings-form',
-            type: 'components',
-            loadedTemplate: template,
-            loadedCSSs: [css],
-            presenterClassName: 'AvatarSettingsForm',
-            presenterModule: module
-        });
-    })().catch((error) => {
-        avatarSettingsComponentPromise = null;
-        throw error;
-    });
-    return avatarSettingsComponentPromise;
-}
-
-async function ensureSettingsComponentRegistered(item) {
-    const componentName = typeof item?.settingsComponent === "string" ? item.settingsComponent.trim() : "";
-    if (!componentName) {
-        throw new Error("Plugin does not define a settings component.");
-    }
-
-    if (customElements.get(componentName)) {
-        return componentName;
-    }
-
-    if (settingsComponentPromises.has(componentName)) {
-        return settingsComponentPromises.get(componentName);
-    }
-
-    const promise = (async () => {
-        const baseUrl = resolveSettingsComponentBase(item);
-        if (!baseUrl) {
-            throw new Error(`Unable to resolve settings component path for ${componentName}.`);
-        }
-
-        const [template, css] = await Promise.all([
-            fetchText(`${baseUrl}.html`, `Failed to load settings template for ${componentName}`),
-            fetchText(`${baseUrl}.css`, `Failed to load settings stylesheet for ${componentName}`)
-        ]);
-
-        const module = await import(`${baseUrl}.js?cacheBust=${Date.now()}`);
-        const presenterClassName = Object.keys(module || {}).find((key) => typeof module[key] === "function")
-            || `${toPascalCase(componentName)}Settings`;
-
-        await registerRuntimeComponent(assistOS.webSkel, {
-            name: componentName,
-            componentType: "modals",
-            loadedTemplate: template,
-            loadedCSSs: [css],
-            presenterClassName,
-            presenterModule: module,
-            type: "modals"
-        });
-
-        return componentName;
-    })().finally(() => {
-        settingsComponentPromises.delete(componentName);
-    });
-
-    settingsComponentPromises.set(componentName, promise);
-    return promise;
-}
-
-function normalizeSettingsMap(parsed) {
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-        return {};
-    }
-    const plugins = parsed.plugins;
-    if (!plugins || typeof plugins !== "object" || Array.isArray(plugins)) {
-        return {};
-    }
-    return plugins;
-}
-
-function flattenPluginsByKey(pluginBuckets) {
-    const items = new Map();
-    forEachRuntimePluginEntry(pluginBuckets, (plugin, { category, location }) => {
-        const agent = typeof plugin?.agent === "string" && plugin.agent.trim() ? plugin.agent.trim() : "unknown";
-        const component = typeof plugin?.component === "string" && plugin.component.trim() ? plugin.component.trim() : "";
-        const pluginId = typeof plugin?.id === "string" && plugin.id.trim() ? plugin.id.trim() : "";
-        const key = getRuntimePluginPolicyKey(plugin);
-        if (!key) return;
-        const existing = items.get(key) || {
-            key,
-            agent,
-            component,
-            pluginId,
-            label: "",
-            tooltip: "",
-            pluginCategory: category,
-            contributionTypes: new Set(),
-            locations: [],
-            locationOrder: getRuntimePluginOrder(plugin),
-            settingsComponent: "",
-            settingsUrl: "",
-            assetRootPath: "",
-            componentBaseUrl: "",
-            adminOnly: false
-        };
-        existing.pluginCategory = plugin?.pluginCategory || existing.pluginCategory || category;
-        if (plugin?.adminOnly === true) existing.adminOnly = true;
-        const contributionType = typeof plugin?.contributionType === "string" && plugin.contributionType.trim()
-            ? plugin.contributionType.trim()
-            : (category === "application" ? "mount" : "document");
-        existing.contributionTypes.add(contributionType);
-        existing.locationOrder = Math.min(existing.locationOrder, getRuntimePluginOrder(plugin));
-        existing.label = typeof plugin?.label === "string" && plugin.label.trim()
-            ? plugin.label.trim()
-            : existing.label || pluginId || component;
-        existing.tooltip = typeof plugin?.tooltip === "string" && plugin.tooltip.trim()
-            ? plugin.tooltip.trim()
-            : existing.tooltip || existing.label;
-        existing.pluginId = pluginId || existing.pluginId || "";
-        existing.component = component || existing.component || "";
-        existing.settingsComponent = typeof plugin?.settings === "string" && plugin.settings.trim()
-            ? plugin.settings.trim()
-            : existing.settingsComponent;
-        existing.settingsUrl = typeof plugin?.settingsUrl === "string" && plugin.settingsUrl.trim()
-            ? plugin.settingsUrl.trim()
-            : existing.settingsUrl;
-        existing.assetRootPath = typeof plugin?.assetRootPath === "string" && plugin.assetRootPath.trim()
-            ? plugin.assetRootPath.trim()
-            : existing.assetRootPath;
-        existing.componentBaseUrl = typeof plugin?.componentBaseUrl === "string" && plugin.componentBaseUrl.trim()
-            ? plugin.componentBaseUrl.trim()
-            : existing.componentBaseUrl;
-        if (!existing.locations.includes(location)) {
-            existing.locations.push(location);
-        }
-        items.set(key, existing);
-    });
-    return Array.from(items.values())
-        .map((item) => ({
-            ...item,
-            contributionTypes: Array.from(item.contributionTypes.values()).sort(),
-            locations: [...item.locations].sort()
-        }))
-        .sort((a, b) => compareRuntimePluginEntries(a, b));
-}
-
-function getCachedRuntimePlugins() {
-    const assist = typeof window !== "undefined" ? window.assistOS : null;
-    const rawPlugins = assist?.rawRuntimePlugins;
-    if (rawPlugins && typeof rawPlugins === "object" && !Array.isArray(rawPlugins)) {
-        return rawPlugins;
-    }
-    const runtimePlugins = assist?.runtimePlugins;
-    if (runtimePlugins && typeof runtimePlugins === "object" && !Array.isArray(runtimePlugins)) {
-        return runtimePlugins;
-    }
-    return null;
-}
+export {
+    buildAgentSettingsItems,
+    openPluginSettingsUrl,
+    resolvePluginSettingsUrl,
+    resolveSettingsComponentBase
+};
 
 export class SettingsModal {
     constructor(element, invalidate, props = {}) {
@@ -332,6 +51,12 @@ export class SettingsModal {
             pluginStatus: "",
             pluginStatusType: "",
             pluginDataLoaded: false,
+            agentSettingsRaw: [],
+            agentSettingsItems: [],
+            agentSettingsStatus: "",
+            agentSettingsStatusType: "",
+            agentSettingsDataLoaded: false,
+            agentSettingsBusyKey: "",
             copilotItems: [],
             copilotDisabledKeys: new Set(),
             copilotStatus: "",
@@ -369,11 +94,15 @@ export class SettingsModal {
         this.updateTabUI();
         this.renderRows();
         this.renderPluginSettings();
+        this.renderAgentSettings();
         this.updateThemeSelection();
         this.bindEvents();
         this.refreshUsersAccess();
         if (this.state.activeTab === "plugins" && !this.state.pluginDataLoaded) {
             await this.loadPluginSettingsData();
+        }
+        if (this.state.activeTab === "agents" && !this.state.agentSettingsDataLoaded) {
+            await this.loadAgentSettingsData();
         }
         if (this.state.activeTab === "copilot" && !this.state.copilotDataLoaded) {
             await this.loadCopilotSettingsData();
@@ -388,6 +117,7 @@ export class SettingsModal {
         this.editorSection = this.element.querySelector('[data-section="editor"]');
         this.themeSection = this.element.querySelector('[data-section="theme"]');
         this.pluginsSection = this.element.querySelector('[data-section="plugins"]');
+        this.agentsSection = this.element.querySelector('[data-section="agents"]');
         this.copilotSection = this.element.querySelector('[data-section="copilot"]');
         this.avatarSection = this.element.querySelector('[data-section="avatar"]');
         this.usersSection = this.element.querySelector('[data-section="users"]');
@@ -397,6 +127,8 @@ export class SettingsModal {
         this.warningEl = this.element.querySelector("#keymapWarning");
         this.pluginSettingsListEl = this.element.querySelector("#pluginSettingsList");
         this.pluginSettingsStatusEl = this.element.querySelector("#pluginSettingsStatus");
+        this.agentSettingsListEl = this.element.querySelector("#agentSettingsList");
+        this.agentSettingsStatusEl = this.element.querySelector("#agentSettingsStatus");
         this.copilotSettingsListEl = this.element.querySelector("#copilotSettingsList");
         this.copilotSettingsStatusEl = this.element.querySelector("#copilotSettingsStatus");
         this.avatarSettingsStatusEl = this.element.querySelector("#avatarSettingsStatus");
@@ -478,6 +210,13 @@ export class SettingsModal {
                 this.renderPluginSettingsStatus();
             });
         }
+        if (this.state.activeTab === "agents" && !this.state.agentSettingsDataLoaded) {
+            this.loadAgentSettingsData().catch((error) => {
+                this.state.agentSettingsStatus = error?.message || "Failed to load agent settings.";
+                this.state.agentSettingsStatusType = "error";
+                this.renderAgentSettingsStatus();
+            });
+        }
         if (this.state.activeTab === "copilot" && !this.state.copilotDataLoaded) {
             this.loadCopilotSettingsData().catch((error) => {
                 this.state.copilotStatus = error?.message || "Failed to load Copilot skills.";
@@ -522,6 +261,7 @@ export class SettingsModal {
             { key: 'editor', element: this.editorSection },
             { key: 'theme', element: this.themeSection },
             { key: 'plugins', element: this.pluginsSection },
+            { key: 'agents', element: this.agentsSection },
             { key: 'copilot', element: this.copilotSection },
             { key: 'avatar', element: this.avatarSection },
             { key: 'users', element: this.usersSection }
@@ -535,546 +275,12 @@ export class SettingsModal {
             this.resetButton.style.display = this.state.activeTab === "keymap" ? "" : "none";
         }
         if (this.actionsEl) {
-            this.actionsEl.hidden = this.state.activeTab === "users" || this.state.activeTab === "avatar";
+            this.actionsEl.hidden = this.state.activeTab === "users"
+                || this.state.activeTab === "avatar"
+                || this.state.activeTab === "agents";
         }
         this.syncEditorSettingsUi();
         this.syncUsersFrame();
-    }
-
-    async refreshUsersAccess() {
-        if (this.state.usersAccessChecked) return;
-        this.state.usersAccessChecked = true;
-        const agentName = getCurrentAgentName();
-        this.state.usersUrl = `/${encodeURIComponent(agentName)}/admin/settings.html?embedded=1`;
-        try {
-            const response = await fetch(`/api/agents/${encodeURIComponent(agentName)}/users`, {
-                credentials: 'include',
-                headers: { Accept: 'application/json' }
-            });
-            this.state.usersAccess = response.ok;
-        } catch (_) {
-            this.state.usersAccess = false;
-        }
-        this.updateTabUI();
-    }
-
-    syncUsersFrame() {
-        if (!this.usersFrame) return;
-        if (!this.state.usersAccess || this.state.activeTab !== "users") {
-            return;
-        }
-        if (this.usersFrame.getAttribute("src") !== this.state.usersUrl) {
-            this.usersFrame.setAttribute("src", this.state.usersUrl);
-        }
-    }
-
-    renderPluginSettings() {
-        this.renderPluginSettingsStatus();
-        this.renderPluginSettingsList();
-    }
-
-    renderCopilotSettings() {
-        this.renderCopilotSettingsStatus();
-        this.renderCopilotSettingsList();
-    }
-
-    renderPluginSettingsStatus() {
-        if (!this.pluginSettingsStatusEl) return;
-        this.pluginSettingsStatusEl.textContent = this.state.pluginStatus || "";
-        this.pluginSettingsStatusEl.classList.toggle("error", this.state.pluginStatusType === "error");
-    }
-
-    renderCopilotSettingsStatus() {
-        if (!this.copilotSettingsStatusEl) return;
-        this.copilotSettingsStatusEl.textContent = this.state.copilotStatus || "";
-        this.copilotSettingsStatusEl.classList.toggle("error", this.state.copilotStatusType === "error");
-    }
-
-    renderPluginSettingsList() {
-        if (!this.pluginSettingsListEl) return;
-        if (!this.state.pluginItems.length) {
-            this.pluginSettingsListEl.innerHTML = `<div class="plugin-settings-empty">No plugins discovered for this workspace.</div>`;
-            return;
-        }
-        const visibleItems = this.state.usersAccess
-            ? this.state.pluginItems
-            : this.state.pluginItems.filter((item) => !item.adminOnly);
-        this.pluginSettingsListEl.innerHTML = visibleItems.map((item) => {
-            const enabled = this.isPluginEnabled(item.key);
-            const busyToggle = this.state.pluginBusyActionKey === `${item.key}::toggle`;
-            const busySettings = this.state.pluginBusyActionKey === `${item.key}::settings`;
-            const locations = item.locations.filter(Boolean).join(", ") || "(hidden)";
-            const contributionTypes = Array.isArray(item.contributionTypes) ? item.contributionTypes.join(", ") : "";
-            const hasSettings = Boolean(item.settingsUrl || item.settingsComponent);
-            return `
-                <div class="plugin-settings-row">
-                    <div class="plugin-settings-info">
-                        <div class="plugin-settings-key">${item.label || item.component}</div>
-                        <div class="plugin-settings-meta">${item.key} · Category: ${item.pluginCategory} · Types: ${contributionTypes} · Locations: ${locations}</div>
-                    </div>
-                    <div class="plugin-settings-actions">
-                        ${hasSettings ? `
-                            <button
-                                type="button"
-                                class="plugin-settings-open"
-                                data-local-action="openPluginSettings ${item.key}"
-                                ${busySettings ? "disabled" : ""}
-                            >
-                                Settings
-                            </button>
-                        ` : ""}
-                        <button
-                            type="button"
-                            class="plugin-settings-toggle ${enabled ? "enabled" : ""}"
-                            data-local-action="togglePlugin ${item.key}"
-                            ${busyToggle ? "disabled" : ""}
-                        >
-                            ${enabled ? "Enabled" : "Disabled"}
-                        </button>
-                    </div>
-                </div>
-            `;
-        }).join("");
-    }
-
-    renderCopilotSettingsList() {
-        if (!this.copilotSettingsListEl) return;
-        if (!this.state.copilotItems.length) {
-            this.copilotSettingsListEl.innerHTML = `<div class="plugin-settings-empty">No Copilot skills discovered for this workspace.</div>`;
-            return;
-        }
-        this.copilotSettingsListEl.innerHTML = this.state.copilotItems.map((item) => {
-            const enabled = !this.state.copilotDisabledKeys.has(item.key);
-            return `
-                <div class="plugin-settings-row">
-                    <div class="plugin-settings-info">
-                        <div class="plugin-settings-key">${item.name}</div>
-                        <div class="plugin-settings-meta">${item.key} · Type: ${item.type || 'unknown'}${item.isInternal ? ' · Internal' : ''}</div>
-                    </div>
-                    <div class="plugin-settings-actions">
-                        <button
-                            type="button"
-                            class="plugin-settings-toggle ${enabled ? "enabled" : ""}"
-                            data-local-action="toggleCopilotSkill ${item.key}"
-                        >
-                            ${enabled ? "Enabled" : "Disabled"}
-                        </button>
-                    </div>
-                </div>
-            `;
-        }).join("");
-    }
-
-    isPluginEnabled(key) {
-        const entry = this.state.pluginSettings[key];
-        if (!entry || typeof entry !== "object") {
-            return true;
-        }
-        return entry.enabled !== false;
-    }
-
-    async loadPluginSettingsData() {
-        this.state.pluginStatus = "Loading plugins...";
-        this.state.pluginStatusType = "";
-        this.renderPluginSettingsStatus();
-        try {
-            let pluginsByLocation = getCachedRuntimePlugins();
-            if (!pluginsByLocation) {
-                const pluginsPayload = await callExplorerTool("collect_ide_plugins", {}, { raw: true, withLoader: false });
-                pluginsByLocation = parseToolResult(pluginsPayload) || {};
-            }
-            const settingsPayload = await callExplorerTool("get_plugin_settings", {}, { raw: true, withLoader: false });
-            const settings = normalizeSettingsMap(parseToolResult(settingsPayload));
-            this.state.pluginItems = flattenPluginsByKey(pluginsByLocation);
-            this.state.pluginSettings = settings;
-            this.state.pluginDataLoaded = true;
-            if (window.assistOS) {
-                window.assistOS.pluginSettings = settings;
-            }
-            this.state.pluginStatus = this.state.pluginItems.length
-                ? `${this.state.pluginItems.length} plugins loaded.`
-                : "No plugins discovered.";
-            this.state.pluginStatusType = "";
-            this.renderPluginSettings();
-        } catch (error) {
-            this.state.pluginStatus = error?.message || "Failed to load plugin settings.";
-            this.state.pluginStatusType = "error";
-            this.renderPluginSettingsStatus();
-        }
-    }
-
-    async loadCopilotSettingsData() {
-        this.state.copilotStatus = "Loading Copilot skills...";
-        this.state.copilotStatusType = "";
-        this.renderCopilotSettingsStatus();
-        try {
-            const payload = await callExplorerTool("list-skills", {}, { raw: true, withLoader: false });
-            const parsed = parseToolResult(payload) || {};
-            const items = Array.isArray(parsed.skills) ? parsed.skills : [];
-            this.state.copilotItems = items
-                .map((entry) => ({
-                    key: String(entry?.key || "").trim().toLowerCase(),
-                    name: String(entry?.name || "").trim(),
-                    type: String(entry?.type || "").trim(),
-                    isInternal: Boolean(entry?.isInternal),
-                }))
-                .filter((entry) => entry.key && entry.name)
-                .sort((left, right) => left.name.localeCompare(right.name));
-            this.state.copilotDisabledKeys = new Set();
-            this.state.copilotDataLoaded = true;
-            this.state.copilotStatus = this.state.copilotItems.length
-                ? `${this.state.copilotItems.length} skills loaded. Toggle state is local only.`
-                : "No Copilot skills discovered.";
-            this.state.copilotStatusType = "";
-            this.renderCopilotSettings();
-        } catch (error) {
-            this.state.copilotStatus = error?.message || "Failed to load Copilot skills.";
-            this.state.copilotStatusType = "error";
-            this.renderCopilotSettingsStatus();
-        }
-    }
-
-    toggleCopilotSkill(_target, key) {
-        const normalizedKey = String(key || "").trim().toLowerCase();
-        if (!normalizedKey) return;
-        if (this.state.copilotDisabledKeys.has(normalizedKey)) {
-            this.state.copilotDisabledKeys.delete(normalizedKey);
-        } else {
-            this.state.copilotDisabledKeys.add(normalizedKey);
-        }
-        this.state.copilotStatus = "Toggle state is local only and is not saved.";
-        this.state.copilotStatusType = "";
-        this.renderCopilotSettings();
-    }
-
-    async togglePlugin(_target, key) {
-        if (!key) return;
-        const nextEnabled = !this.isPluginEnabled(key);
-        this.state.pluginBusyActionKey = `${key}::toggle`;
-        this.state.pluginStatus = `Saving ${key}...`;
-        this.state.pluginStatusType = "";
-        this.renderPluginSettings();
-        try {
-            const payload = await callExplorerTool("set_plugin_enabled", {
-                key,
-                enabled: nextEnabled
-            }, { raw: true, withLoader: false });
-            const parsed = parseToolResult(payload) || {};
-            this.state.pluginSettings = normalizeSettingsMap(parsed.settings || { plugins: this.state.pluginSettings });
-            if (window.assistOS) {
-                window.assistOS.pluginSettings = this.state.pluginSettings;
-            }
-            if (typeof window !== "undefined") {
-                window.dispatchEvent(new CustomEvent("assistos:plugin-settings-updated", {
-                    detail: { settings: this.state.pluginSettings }
-                }));
-            }
-            this.state.pluginStatus = `${key} ${nextEnabled ? "enabled" : "disabled"} in workspace settings.`;
-            this.state.pluginStatusType = "";
-        } catch (error) {
-            this.state.pluginStatus = error?.message || `Failed to update ${key}.`;
-            this.state.pluginStatusType = "error";
-        } finally {
-            this.state.pluginBusyActionKey = "";
-            this.renderPluginSettings();
-        }
-    }
-
-    async openPluginSettings(_target, key) {
-        if (!key) return;
-        const item = this.state.pluginItems.find((entry) => entry?.key === key);
-        if (!item || (!item.settingsUrl && !item.settingsComponent)) {
-            return;
-        }
-
-        this.state.pluginBusyActionKey = `${key}::settings`;
-        this.state.pluginStatus = `Opening settings for ${key}...`;
-        this.state.pluginStatusType = "";
-        this.renderPluginSettings();
-
-        try {
-            if (item.settingsUrl) {
-                if (!openPluginSettingsUrl(item)) {
-                    throw new Error(`Invalid settings URL for ${key}.`);
-                }
-                this.state.pluginStatus = `${item.label || item.component} settings opened.`;
-                this.state.pluginStatusType = "";
-                return;
-            }
-
-            await ensureSettingsComponentRegistered(item);
-            await assistOS.UI.createReactiveModal(item.settingsComponent, {
-                plugin: {
-                    key: item.key,
-                    agent: item.agent,
-                    component: item.component,
-                    id: item.pluginId,
-                    label: item.label,
-                    tooltip: item.tooltip,
-                    settingsComponent: item.settingsComponent,
-                    settingsUrl: item.settingsUrl,
-                    assetRootPath: item.assetRootPath
-                }
-            }, true);
-            this.state.pluginStatus = `${item.label || item.component} settings opened.`;
-            this.state.pluginStatusType = "";
-        } catch (error) {
-            this.state.pluginStatus = error?.message || `Failed to open settings for ${key}.`;
-            this.state.pluginStatusType = "error";
-        } finally {
-            this.state.pluginBusyActionKey = "";
-            this.renderPluginSettings();
-        }
-    }
-
-    async fetchAvatarJson(path, options = {}) {
-        const response = await fetch(`/services/explorer/avatar-settings/${path}`, {
-            credentials: 'include',
-            headers: {
-                Accept: 'application/json',
-                ...(options.body ? { 'Content-Type': 'application/json' } : {})
-            },
-            ...options
-        });
-        const parsed = await response.json().catch(() => ({}));
-        if (!response.ok || parsed.ok === false) {
-            throw new Error(parsed.error || `Avatar settings request failed (${response.status}).`);
-        }
-        return parsed;
-    }
-
-    async loadAvatarSettingsData() {
-        this.state.avatarStatus = "Loading avatar settings...";
-        this.state.avatarStatusType = "";
-        this.renderAvatarSettings();
-        await ensureAvatarSettingsFormRegistered();
-        const [me, generatedStyles, generatedPalettes, packs] = await Promise.all([
-            getCurrentProfileAvatar({ force: true }),
-            loadAxiFaceGeneratedFaceStyles().catch(() => []),
-            loadAxiFaceGeneratedFacePalettes().catch(() => []),
-            loadAxiFacePacks().catch(() => [])
-        ]);
-        await ensureAxiFaceLoaded();
-        this.state.axiFaceGeneratedFaceStyles = generatedStyles;
-        this.state.axiFaceGeneratedFacePalettes = generatedPalettes;
-        this.state.axiFacePacks = packs;
-        this.state.avatarUser = me.user || null;
-        this.state.canManageAgentAvatars = Boolean(me.user?.canManageAgents);
-        this.state.profileAvatar = normalizeAvatarConfig(me.config, me.config?.agentId || `profile:${me.user?.id || 'current-user'}`);
-        this.state.profileAvatarEnabled = me.enabled !== false;
-        this.state.profileAvatarSource = me.source || null;
-        this.state.dpuProfileAvailable = me.source?.kind !== 'error';
-        if (!this.state.dpuProfileAvailable) {
-            this.state.avatarStatus = me.source?.error || "DPU My Space is unavailable. Profile avatar cannot be saved.";
-            this.state.avatarStatusType = "error";
-        }
-        const agentsPayload = await this.fetchAvatarJson('agents');
-        this.state.canManageAgentAvatars = Boolean(agentsPayload.canManageAgents);
-        this.state.agentAvatarItems = Array.isArray(agentsPayload.agents) ? agentsPayload.agents : [];
-        const selectedAgent = this.state.agentAvatarItems.find((item) => item.id === this.state.selectedAvatarAgentId)
-            || this.state.agentAvatarItems[0]
-            || null;
-        this.state.selectedAvatarAgentId = selectedAgent?.id || "";
-        this.state.selectedAgentAvatar = normalizeAvatarConfig(selectedAgent?.config, selectedAgent?.id || 'agent');
-        this.state.selectedAgentAvatarEnabled = selectedAgent?.enabled !== false;
-        this.state.avatarDataLoaded = true;
-        if (this.state.avatarStatusType !== "error") {
-            this.state.avatarStatus = "Avatar settings loaded.";
-            this.state.avatarStatusType = "";
-        }
-        this.renderAvatarSettings();
-    }
-
-    renderAvatarSettings() {
-        this.renderAvatarStatus();
-        this.renderAvatarControls('profile');
-        this.renderAvatarControls('agent');
-        this.renderAvatarAgentList();
-        this.renderAvatarPreviews();
-        this.renderAvatarTabs();
-        if (this.agentAvatarCardEl) {
-            this.agentAvatarCardEl.hidden = !this.state.canManageAgentAvatars || this.state.activeAvatarTab !== 'agent';
-        }
-        if (this.agentAvatarEnabledInput) {
-            this.agentAvatarEnabledInput.checked = Boolean(this.state.selectedAgentAvatarEnabled);
-            this.agentAvatarEnabledInput.disabled = this.state.avatarBusy || !this.state.canManageAgentAvatars || !this.state.selectedAvatarAgentId;
-        }
-        if (this.profileAvatarEnabledInput) {
-            this.profileAvatarEnabledInput.checked = Boolean(this.state.profileAvatarEnabled);
-            this.profileAvatarEnabledInput.disabled = this.state.avatarBusy || !this.state.dpuProfileAvailable;
-        }
-        if (this.saveProfileAvatarButton) {
-            this.saveProfileAvatarButton.disabled = this.state.avatarBusy || !this.state.dpuProfileAvailable;
-        }
-        if (this.saveAgentAvatarButton) {
-            this.saveAgentAvatarButton.disabled = this.state.avatarBusy || !this.state.canManageAgentAvatars || !this.state.selectedAvatarAgentId;
-        }
-    }
-
-    renderAvatarTabs() {
-        const canManageAgentAvatars = Boolean(this.state.canManageAgentAvatars);
-        if (!canManageAgentAvatars && this.state.activeAvatarTab === 'agent') {
-            this.state.activeAvatarTab = 'profile';
-        }
-        for (const tab of this.avatarSubtabEls || []) {
-            const key = String(tab.dataset.avatarTab || '').trim();
-            const isAgentTab = key === 'agent';
-            const active = key === this.state.activeAvatarTab;
-            tab.hidden = isAgentTab && !canManageAgentAvatars;
-            tab.classList.toggle('active', active);
-            tab.setAttribute('aria-selected', active ? 'true' : 'false');
-        }
-        for (const panel of this.avatarPanelEls || []) {
-            const key = String(panel.dataset.avatarPanel || '').trim();
-            const shouldShow = key === this.state.activeAvatarTab && (key !== 'agent' || canManageAgentAvatars);
-            panel.hidden = !shouldShow;
-        }
-    }
-
-    renderAvatarStatus() {
-        if (!this.avatarSettingsStatusEl) return;
-        this.avatarSettingsStatusEl.textContent = this.state.avatarStatus || "";
-        this.avatarSettingsStatusEl.classList.toggle("error", this.state.avatarStatusType === "error");
-    }
-
-    renderAvatarControls(scope) {
-        const container = scope === 'profile' ? this.profileAvatarControlsEl : this.agentAvatarControlsEl;
-        if (!container) return;
-        const config = scope === 'profile' ? this.state.profileAvatar : this.state.selectedAgentAvatar;
-        container.webSkelPresenter?.setData?.({
-            value: config,
-            packs: this.state.axiFacePacks,
-            generatedStyles: this.state.axiFaceGeneratedFaceStyles,
-            palettes: this.state.axiFaceGeneratedFacePalettes,
-            disabled: this.state.avatarBusy || (scope === 'profile' && !this.state.dpuProfileAvailable),
-            showPreview: false
-        });
-    }
-
-    renderAvatarPreviews() {
-        if (this.profileAvatarPreviewEl) {
-            this.profileAvatarPreviewEl.innerHTML = this.state.profileAvatarEnabled
-                ? renderAxiFaceMarkup(this.state.profileAvatar)
-                : `<span class="avatar-preview-fallback">${escapeHtml(this.state.avatarUser?.username?.[0] || '?')}</span>`;
-        }
-        if (this.agentAvatarPreviewEl) {
-            this.agentAvatarPreviewEl.innerHTML = this.state.selectedAvatarAgentId
-                ? renderAxiFaceMarkup(this.state.selectedAgentAvatar)
-                : "";
-        }
-    }
-
-    renderAvatarAgentList() {
-        if (!this.avatarAgentListEl) return;
-        if (!this.state.agentAvatarItems.length) {
-            this.avatarAgentListEl.innerHTML = `<div class="plugin-settings-empty">No AI agents found in manifest.</div>`;
-            return;
-        }
-        this.avatarAgentListEl.innerHTML = this.state.agentAvatarItems.map((item) => `
-            <button
-                type="button"
-                class="avatar-agent-button ${item.id === this.state.selectedAvatarAgentId ? 'active' : ''} ${item.missing ? 'missing' : ''}"
-                data-local-action="selectAvatarAgent ${escapeHtml(item.id)}"
-            >
-                ${escapeHtml(item.label || item.id)}${item.missing ? ' (missing)' : ''}
-            </button>
-        `).join("");
-    }
-
-    readAvatarControls(scope) {
-        const container = scope === 'profile' ? this.profileAvatarControlsEl : this.agentAvatarControlsEl;
-        const current = scope === 'profile' ? this.state.profileAvatar : this.state.selectedAgentAvatar;
-        const next = container?.webSkelPresenter?.getConfig?.() || current;
-        return normalizeAvatarConfig({
-            ...next,
-            agentId: current.agentId,
-            seed: next.seed || current.seed || current.agentId
-        }, current.agentId);
-    }
-
-    handleAvatarControlsInput(scope, event = null) {
-        const nextConfig = event?.detail?.config || this.readAvatarControls(scope);
-        if (scope === 'profile') {
-            this.state.profileAvatar = normalizeAvatarConfig({
-                ...nextConfig,
-                agentId: this.state.profileAvatar.agentId,
-                seed: nextConfig.seed || this.state.profileAvatar.seed || this.state.profileAvatar.agentId
-            }, this.state.profileAvatar.agentId);
-        } else {
-            this.state.selectedAgentAvatar = normalizeAvatarConfig({
-                ...nextConfig,
-                agentId: this.state.selectedAgentAvatar.agentId,
-                seed: nextConfig.seed || this.state.selectedAgentAvatar.seed || this.state.selectedAgentAvatar.agentId
-            }, this.state.selectedAgentAvatar.agentId);
-        }
-        this.renderAvatarPreviews();
-    }
-
-    selectAvatarAgent(_target, agentId) {
-        const item = this.state.agentAvatarItems.find((entry) => entry.id === agentId);
-        if (!item) return;
-        this.state.selectedAvatarAgentId = item.id;
-        this.state.selectedAgentAvatar = normalizeAvatarConfig(item.config, item.id);
-        this.state.selectedAgentAvatarEnabled = item.enabled !== false;
-        this.renderAvatarSettings();
-    }
-
-    async saveProfileAvatar() {
-        if (this.state.avatarBusy || !this.state.dpuProfileAvailable) return;
-        this.state.avatarBusy = true;
-        this.state.avatarStatus = "Saving profile avatar...";
-        this.state.avatarStatusType = "";
-        this.renderAvatarSettings();
-        try {
-            this.state.profileAvatar = this.readAvatarControls('profile');
-            const payload = await saveCurrentProfileAvatar({
-                enabled: this.state.profileAvatarEnabled,
-                config: this.state.profileAvatar
-            });
-            this.state.profileAvatar = normalizeAvatarConfig(payload.config, this.state.profileAvatar.agentId);
-            this.state.profileAvatarEnabled = payload.enabled !== false;
-            this.state.profileAvatarSource = payload.source || null;
-            this.state.avatarStatus = "Profile avatar saved in DPU My Space.";
-            this.state.avatarStatusType = "";
-        } catch (error) {
-            this.state.avatarStatus = error?.message || "Failed to save profile avatar.";
-            this.state.avatarStatusType = "error";
-        } finally {
-            this.state.avatarBusy = false;
-            this.renderAvatarSettings();
-        }
-    }
-
-    async saveAgentAvatar() {
-        if (this.state.avatarBusy || !this.state.selectedAvatarAgentId) return;
-        this.state.avatarBusy = true;
-        this.state.avatarStatus = `Saving ${this.state.selectedAvatarAgentId} avatar...`;
-        this.state.avatarStatusType = "";
-        this.renderAvatarSettings();
-        try {
-            this.state.selectedAgentAvatar = this.readAvatarControls('agent');
-            await this.fetchAvatarJson(`agents/${encodeURIComponent(this.state.selectedAvatarAgentId)}`, {
-                method: 'PATCH',
-                body: JSON.stringify({ config: this.state.selectedAgentAvatar })
-            });
-            await this.fetchAvatarJson(`agents/${encodeURIComponent(this.state.selectedAvatarAgentId)}/visibility`, {
-                method: 'PATCH',
-                body: JSON.stringify({ enabled: this.state.selectedAgentAvatarEnabled })
-            });
-            this.state.avatarStatus = `${this.state.selectedAvatarAgentId} avatar saved.`;
-            this.state.avatarStatusType = "";
-            this.state.avatarDataLoaded = false;
-            window.dispatchEvent(new CustomEvent('assistOS:avatar-settings-updated', {
-                detail: { type: 'agent', agentId: this.state.selectedAvatarAgentId, config: this.state.selectedAgentAvatar }
-            }));
-            await this.loadAvatarSettingsData();
-        } catch (error) {
-            this.state.avatarStatus = error?.message || "Failed to save agent avatar.";
-            this.state.avatarStatusType = "error";
-        } finally {
-            this.state.avatarBusy = false;
-            this.renderAvatarSettings();
-        }
     }
 
     renderRows() {
@@ -1237,3 +443,11 @@ export class SettingsModal {
         assistOS.UI.closeModal(this.element, payload);
     }
 }
+
+Object.assign(
+    SettingsModal.prototype,
+    runtimeSettingsController,
+    copilotController,
+    avatarController,
+    usersController
+);

@@ -37,6 +37,7 @@
         "webmeetInfra/liveKitServerAgent",
         "webmeetStt",
         "webmeetAgent global",
+        "audioAgent global",
         "multimedia global",
         "onlyOffice",
         {
@@ -56,7 +57,7 @@
         "soplang-builder": true,
         "tasks": true,
         "webmeet": true,
-        "soul-gateway/soul-gateway": true
+        "soul-gateway": true
     },
     "httpServices": [
         {

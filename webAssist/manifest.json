@@ -29,5 +29,15 @@
     "cli": "node /code/src/index.mjs",
     "volumes": {
         ".ploinky/repos/AchillesIDE/data": "/data"
-    }
+    },
+    "ideSettings": [
+        {
+            "key": "webassist-chat",
+            "label": "WebAssist Chat",
+            "scope": "workspace",
+            "pluginKey": "webAssist/webassist-chat",
+            "settingsComponent": "webassist-settings",
+            "adminOnly": false
+        }
+    ]
 }

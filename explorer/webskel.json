@@ -140,6 +140,11 @@
       "name": "settings-modal",
       "type": "modals",
       "presenterClassName": "SettingsModal"
+    },
+    {
+      "name": "soul-gateway-settings",
+      "type": "components",
+      "presenterClassName": "SoulGatewaySettings"
     }
   ],
   "services": []

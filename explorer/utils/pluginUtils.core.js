@@ -367,6 +367,9 @@ export function filterRuntimePluginsByPolicy(runtimePlugins, runtimePluginPolicy
     }
 
     const filtered = createEmptyRuntimePluginState();
+    if (Array.isArray(runtimePlugins?.agentSettings)) {
+        filtered.agentSettings = runtimePlugins.agentSettings;
+    }
 
     forEachRuntimePluginEntry(runtimePlugins, (entry, { category, location }) => {
         if (!entry || typeof entry !== 'object') {
