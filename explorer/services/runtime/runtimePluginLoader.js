@@ -5,6 +5,7 @@ import {
 } from '../../utils/pluginUtils.core.js';
 
 const isNonEmptyString = (value) => typeof value === 'string' && value.trim().length > 0;
+const isWorkspaceFilesUrl = (value) => isNonEmptyString(value) && value.trim().startsWith('/workspace-files/');
 
 export function createRuntimePluginLoader({
     agentId,
@@ -61,17 +62,24 @@ export function createRuntimePluginLoader({
                 return;
             }
             const key = `${agent.trim()}::${componentName.trim()}`;
+            const normalizedMeta = {
+                componentName: componentName.trim(),
+                presenterName: isNonEmptyString(meta.presenterName) ? meta.presenterName.trim() : undefined,
+                agent: agent.trim(),
+                ownerComponent: isNonEmptyString(meta.ownerComponent) ? meta.ownerComponent.trim() : undefined,
+                isDependency: Boolean(meta.isDependency),
+                customPath: isNonEmptyString(meta.customPath) ? meta.customPath.trim() : undefined,
+                baseUrl: isNonEmptyString(meta.baseUrl) ? meta.baseUrl.trim() : undefined,
+                componentType: meta?.componentType === 'modals' ? 'modals' : 'components'
+            };
             if (!scheduled.has(key)) {
-                scheduled.set(key, {
-                    componentName: componentName.trim(),
-                    presenterName: isNonEmptyString(meta.presenterName) ? meta.presenterName.trim() : undefined,
-                    agent: agent.trim(),
-                    ownerComponent: isNonEmptyString(meta.ownerComponent) ? meta.ownerComponent.trim() : undefined,
-                    isDependency: Boolean(meta.isDependency),
-                    customPath: isNonEmptyString(meta.customPath) ? meta.customPath.trim() : undefined,
-                    baseUrl: isNonEmptyString(meta.baseUrl) ? meta.baseUrl.trim() : undefined,
-                    componentType: meta?.componentType === 'modals' ? 'modals' : 'components'
-                });
+                scheduled.set(key, normalizedMeta);
+                return;
+            }
+
+            const existingMeta = scheduled.get(key);
+            if (!isWorkspaceFilesUrl(existingMeta?.baseUrl) && isWorkspaceFilesUrl(normalizedMeta.baseUrl)) {
+                scheduled.set(key, normalizedMeta);
             }
         };
 

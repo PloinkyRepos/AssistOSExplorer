@@ -37,6 +37,31 @@ function getParentPath(value) {
     return segments.join('/');
 }
 
+function resolveDependencyOwnerAssetBaseUrl({
+    contributionType,
+    assetRootPath,
+    assetBaseUrl,
+    pluginsBaseUrl,
+    ownerComponent,
+    component
+}) {
+    if (!isNonEmptyString(ownerComponent)) {
+        return contributionType === MENU_PLUGIN_CONTRIBUTION_TYPE ? '' : assetBaseUrl;
+    }
+
+    const normalizedOwner = ownerComponent.trim();
+    const normalizedComponent = isNonEmptyString(component) ? component.trim() : '';
+    if (contributionType !== MENU_PLUGIN_CONTRIBUTION_TYPE && normalizedOwner === normalizedComponent) {
+        return assetBaseUrl;
+    }
+
+    if (isNonEmptyString(assetRootPath) && isNonEmptyString(pluginsBaseUrl)) {
+        return joinUrlSegments(pluginsBaseUrl, normalizedOwner);
+    }
+
+    return contributionType === MENU_PLUGIN_CONTRIBUTION_TYPE ? '' : assetBaseUrl;
+}
+
 export const DOCUMENT_PLUGIN_CATEGORY = 'document';
 export const APPLICATION_PLUGIN_CATEGORY = 'application';
 export const MENU_PLUGIN_CONTRIBUTION_TYPE = 'menu';
@@ -298,16 +323,24 @@ export function normalizeRuntimePlugins(runtimePlugins) {
                         ? dependency.name
                         : '';
                 const dependencyPath = isNonEmptyString(dependency.path) ? dependency.path : dependency.directory;
+                const dependencyOwnerComponent = dependency.ownerComponent || component || dependencyName;
                 return {
                     ...dependency,
                     agent: dependencyAgent,
                     component: dependencyName,
                     baseUrl: computeComponentBaseUrl(dependencyAgent, dependencyName, {
-                        ownerComponent: dependency.ownerComponent || component || dependencyName,
+                        ownerComponent: dependencyOwnerComponent,
                         isDependency: true,
                         customPath: dependencyPath,
                         pluginsBaseUrl,
-                        ownerAssetBaseUrl: contributionType === MENU_PLUGIN_CONTRIBUTION_TYPE ? '' : assetBaseUrl
+                        ownerAssetBaseUrl: resolveDependencyOwnerAssetBaseUrl({
+                            contributionType,
+                            assetRootPath,
+                            assetBaseUrl,
+                            pluginsBaseUrl,
+                            ownerComponent: dependencyOwnerComponent,
+                            component
+                        })
                     })
                 };
             });

@@ -139,6 +139,34 @@ test('normalizeRuntimePlugins preserves dependencies for menu contributions', ()
     );
 });
 
+test('normalizeRuntimePlugins resolves menu dependencies through workspace asset roots', () => {
+    const normalized = normalizeRuntimePlugins({
+        application: {
+            'file-exp:new-menu': [{
+                pluginCategory: 'application',
+                contributionType: 'menu',
+                location: 'file-exp:new-menu',
+                id: 'git',
+                agent: 'gitAgent',
+                menuModule: 'menu-contributions.js',
+                assetRootPath: '.ploinky/repos/AchillesIDE/gitAgent/IDE-plugins/git-menu-contributions',
+                dependencies: [{
+                    component: 'git-new-repository-modal',
+                    presenter: 'GitNewRepositoryModal',
+                    type: 'modal',
+                    ownerComponent: 'git-tool-button'
+                }]
+            }]
+        }
+    });
+
+    const entry = normalized.application['file-exp:new-menu'][0];
+    assert.equal(
+        entry.dependencies[0].baseUrl,
+        '/workspace-files/.ploinky/repos/AchillesIDE/gitAgent/IDE-plugins/git-tool-button/components/git-new-repository-modal/git-new-repository-modal'
+    );
+});
+
 test('mergeRuntimePluginsIntoAssistOS separates document and application registries', () => {
     const assistOS = {
         workspace: {
