@@ -37,7 +37,6 @@
         "webmeetInfra/liveKitServerAgent",
         "webmeetStt",
         "webmeetAgent global",
-        "audioAgent global",
         "multimedia global",
         "onlyOffice",
         {
