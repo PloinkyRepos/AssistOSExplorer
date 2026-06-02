@@ -537,19 +537,19 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
 }
 
 .git-tree-file-row.is-modified .git-tree-file {
-    color: rgba(37, 99, 235, 0.95);
+    color: rgba(96, 165, 250, 0.95);
 }
 
 .git-tree-file-row.is-conflicted .git-tree-file {
-    color: #dc2626;
+    color: #DB5C5C;
 }
 
 .git-tree-file-row.is-new .git-tree-file {
-    color: rgba(22, 163, 74, 1);
+    color: rgba(115, 189, 121, 1);
 }
 
 .git-tree-file-row.is-untracked .git-tree-file {
-    color: rgba(22, 163, 74, 0.75);
+    color: rgba(115, 189, 121, 0.75);
 }
 
 .git-tree-file-row.is-ignored .git-tree-file {
@@ -708,9 +708,9 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
 .git-info-button:hover,
 .git-info-button:focus {
     background: linear-gradient(180deg, rgba(219, 234, 254, 0.96), rgba(239, 246, 255, 0.96));
-    border-color: rgba(59, 130, 246, 0.28);
-    color: #1d4ed8;
-    box-shadow: 0 8px 18px rgba(37, 99, 235, 0.16);
+    border-color: rgba(96, 165, 250, 0.28);
+    color: #60A5FA;
+    box-shadow: 0 8px 18px rgba(96, 165, 250, 0.16);
     outline: none;
 }
 
@@ -892,12 +892,12 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
 }
 
 .git-diff-body .diff-line.add {
-    background: rgba(34, 197, 94, 0.3);
+    background: rgba(115, 189, 121, 0.3);
     width: max-content;
 }
 
 .git-diff-body .diff-line.remove {
-    background: rgba(239, 68, 68, 0.3);
+    background: rgba(219, 92, 92, 0.3);
     width: max-content;
 }
 
@@ -914,11 +914,11 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
 }
 
 .git-diff-body .diff-line .chg-remove {
-    background: rgba(239, 68, 68, 0.22);
+    background: rgba(219, 92, 92, 0.22);
 }
 
 .git-diff-body .diff-line .chg-add {
-    background: rgba(34, 197, 94, 0.22);
+    background: rgba(115, 189, 121, 0.22);
 }
 
 .git-commit {

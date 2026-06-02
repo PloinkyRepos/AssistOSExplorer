@@ -123,9 +123,9 @@ task-item[data-status="done"] .task-item__status {
 
 task-item[data-status="running"] .task-item__status,
 task-item[data-status="in-progress"] .task-item__status {
-    color: #1d4ed8;
-    border-color: rgba(59, 130, 246, 0.35);
-    background: rgba(59, 130, 246, 0.16);
+    color: #60A5FA;
+    border-color: rgba(96, 165, 250, 0.35);
+    background: rgba(96, 165, 250, 0.16);
 }
 
 task-item[data-status="pending"] .task-item__status,

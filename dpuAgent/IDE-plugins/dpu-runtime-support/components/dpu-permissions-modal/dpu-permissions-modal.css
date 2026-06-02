@@ -323,7 +323,7 @@ dpu-permissions-modal .dpu-permissions-field input:focus,
 dpu-permissions-modal .dpu-permissions-field select:focus {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
 }
 
 dpu-permissions-modal .modal-actions {

@@ -311,7 +311,7 @@ dialog::backdrop {
 }
 
 .replace-status.error {
-    color: #ef4444;
+    color: #DB5C5C;
 }
 
 .search-row input[type="text"],
@@ -423,7 +423,7 @@ dialog::backdrop {
 }
 
 .search-status.error {
-    color: #ef4444;
+    color: #DB5C5C;
 }
 
 .search-status.strong {

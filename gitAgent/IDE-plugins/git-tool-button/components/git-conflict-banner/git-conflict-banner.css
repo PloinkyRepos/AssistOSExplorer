@@ -11,7 +11,7 @@ git-conflict-banner.is-visible {
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    border: 1px solid rgba(239, 68, 68, 0.25);
+    border: 1px solid rgba(219, 92, 92, 0.25);
     background: rgba(254, 242, 242, 0.85);
     border-radius: 12px;
     padding: 10px 12px;

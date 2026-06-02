@@ -86,8 +86,8 @@ git-repo-tree .git-repo-filter-input::placeholder {
 
 git-repo-tree .git-repo-filter-input:focus {
     outline: none;
-    border-color: rgba(59, 130, 246, 0.55);
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+    border-color: rgba(96, 165, 250, 0.55);
+    box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.12);
 }
 
 git-repo-tree .git-repo-unpushed-badge {

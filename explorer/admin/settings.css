@@ -21,10 +21,10 @@
     --text: #CFD1D6;
     --muted: #9FA2A8;
     --line: #393B42;
-    --accent: #8B5CF6;
-    --accent-rgb: 139, 92, 246;
-    --danger: #F87171;
-    --ok: #34D399;
+    --accent: #60A5FA;
+    --accent-rgb: 96, 165, 250;
+    --danger: #DB5C5C;
+    --ok: #73BD79;
 }
 
 * {

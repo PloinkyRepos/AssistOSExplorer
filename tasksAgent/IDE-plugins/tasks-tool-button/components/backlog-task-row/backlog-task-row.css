@@ -143,9 +143,9 @@
 }
 
 .backlog-task-status-wrap.status-approved .backlog-task-status-label {
-    border-color: rgba(59, 130, 246, 0.35);
-    background: rgba(59, 130, 246, 0.16);
-    color: #1d4ed8;
+    border-color: rgba(96, 165, 250, 0.35);
+    background: rgba(96, 165, 250, 0.16);
+    color: #60A5FA;
 }
 
 .backlog-task-status-wrap.status-test-ready .backlog-task-status-label {
@@ -313,7 +313,7 @@
 
 .theme-dark .backlog-task-textarea:focus {
     background: rgba(15, 23, 42, 0.98);
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.28), inset 0 1px 2px rgba(2, 6, 23, 0.45);
+    box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.28), inset 0 1px 2px rgba(2, 6, 23, 0.45);
 }
 
 .backlog-task-textarea::placeholder {

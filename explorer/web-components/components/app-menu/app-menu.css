@@ -67,12 +67,12 @@ app-menu .app-menu-item:disabled {
 }
 
 app-menu .app-menu-item.destructive {
-    color: #dc2626;
+    color: #DB5C5C;
 }
 
 app-menu .app-menu-item.destructive:hover,
 app-menu .app-menu-item.destructive:focus-visible {
-    background: rgba(220, 38, 38, 0.1);
+    background: rgba(219, 92, 92, 0.1);
 }
 
 app-menu .app-menu-item-icon {
