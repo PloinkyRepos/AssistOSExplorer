@@ -69,10 +69,15 @@ async function readStdinFallback() {
 }
 
 export async function getSessionHistory({
+    siteId,
     sessionId,
     agentRoot = getDefaultAgentRoot(),
     dataDir = null,
 }) {
+    const normalizedSiteId = typeof siteId === 'string' ? siteId.trim() : '';
+    if (!normalizedSiteId) {
+        throw new Error('web_cli_history requires siteId.');
+    }
     const normalizedSessionId = typeof sessionId === 'string' ? sessionId.trim() : '';
     if (!normalizedSessionId) {
         throw new Error('web_cli_history requires sessionId.');
@@ -82,6 +87,7 @@ export async function getSessionHistory({
     configureDataStore({
         agentRoot: resolvedAgentRoot,
         dataDir,
+        siteId: normalizedSiteId,
     });
 
     const store = getDataStore();
@@ -95,6 +101,7 @@ export async function getSessionHistory({
         }));
 
         return {
+            siteId: normalizedSiteId,
             sessionId: normalizedSessionId,
             exists: true,
             sessionHistoryPath: `${historyFileName}.md`,
@@ -103,6 +110,7 @@ export async function getSessionHistory({
     } catch (error) {
         if (error && error.code === 'ENOENT') {
             return {
+                siteId: normalizedSiteId,
                 sessionId: normalizedSessionId,
                 exists: false,
                 sessionHistoryPath: `${historyFileName}.md`,
@@ -119,6 +127,7 @@ async function main() {
     const input = normalizeInput(envelope || {});
 
     const result = await getSessionHistory({
+        siteId: typeof input.siteId === 'string' ? input.siteId.trim() : '',
         sessionId: typeof input.sessionId === 'string' ? input.sessionId.trim() : '',
         dataDir: typeof input.dataDir === 'string' ? input.dataDir.trim() : null,
         agentRoot: typeof input.agentRoot === 'string' ? input.agentRoot.trim() : getDefaultAgentRoot(),

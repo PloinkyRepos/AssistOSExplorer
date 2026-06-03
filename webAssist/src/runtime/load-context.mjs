@@ -3,12 +3,10 @@ import {
 } from './dataStore.mjs';
 import {
     DATASTORE_TYPES,
-    LEAD_FIELDS,
     LEAD_SECTIONS,
     SESSION_SECTIONS,
     getSessionHistoryFileName,
     getSessionLeadFileName,
-    getSessionProfileFileName,
 } from '../constants/datastore.mjs';
 
 async function listMarkdownFiles(store, type) {
@@ -63,17 +61,41 @@ function formatConversationHistory(dialogueEntries, maxEntries = 10) {
         .join('\n');
 }
 
-export async function loadContext({ sessionId }) {
+async function readConfigFile(store, fileName) {
+    try {
+        const file = await store.getFile(DATASTORE_TYPES.CONFIG, fileName);
+        return {
+            exists: true,
+            fileName: `${fileName}.md`,
+            content: file.rawMarkdown,
+        };
+    } catch (error) {
+        if (error && error.code === 'ENOENT') {
+            return {
+                exists: false,
+                fileName: `${fileName}.md`,
+                content: '',
+            };
+        }
+        throw error;
+    }
+}
+
+export async function loadContext({ siteId, sessionId }) {
+    if (!siteId) {
+        throw new Error('load-context requires a siteId.');
+    }
     if (!sessionId) {
         throw new Error('load-context requires a sessionId.');
     }
 
     const store = getDataStore();
     const siteInfo = await listMarkdownFiles(store, DATASTORE_TYPES.INFO);
-    const profilesInfo = await listMarkdownFiles(store, DATASTORE_TYPES.PROFILES_INFO);
-    const sessionProfileFileName = getSessionProfileFileName(sessionId);
+    const profiles = await listMarkdownFiles(store, DATASTORE_TYPES.PROFILES);
     const sessionHistoryFileName = getSessionHistoryFileName(sessionId);
     const sessionLeadFileName = getSessionLeadFileName(sessionId);
+    const ownerConfig = await readConfigFile(store, 'owner');
+    const policyConfig = await readConfigFile(store, 'policy');
     let sessionRecord = null;
     let currentLead = null;
     let conversationHistoryText = 'No previous conversation history found.';
@@ -81,6 +103,7 @@ export async function loadContext({ sessionId }) {
         profiles: [],
         profileDetails: [],
         contactInformation: {},
+        consent: '',
     };
 
     const readSectionMap = async (type, fileName) => {
@@ -94,10 +117,9 @@ export async function loadContext({ sessionId }) {
         }
     };
 
-    const profileRecord = await readSectionMap(DATASTORE_TYPES.SESSIONS, sessionProfileFileName);
     const historyRecord = await readSectionMap(DATASTORE_TYPES.SESSIONS, sessionHistoryFileName);
     const leadRecord = await readSectionMap(DATASTORE_TYPES.LEADS, sessionLeadFileName);
-    const exists = Boolean(profileRecord);
+    const exists = Boolean(historyRecord);
     if (!exists) {
         sessionRecord = {
             exists: false,
@@ -105,14 +127,15 @@ export async function loadContext({ sessionId }) {
             parsed: emptyRecord,
         };
     } else {
-        const combined = `--- [Session Profile: ${sessionProfileFileName}.md] ---\n${profileRecord.rawMarkdown.trim()}`;
+        const combined = `--- [Session: ${sessionHistoryFileName}.md] ---\n${historyRecord.rawMarkdown.trim()}`;
         sessionRecord = {
             exists: true,
             content: combined,
             parsed: {
-                profiles: store.parseList(profileRecord?.sections?.[SESSION_SECTIONS.PROFILE]),
-                profileDetails: store.parseList(profileRecord?.sections?.[SESSION_SECTIONS.PROFILE_DETAILS]),
-                contactInformation: store.parseKeyValue(profileRecord?.sections?.[SESSION_SECTIONS.CONTACT_INFORMATION]),
+                profiles: store.parseList(historyRecord?.sections?.[SESSION_SECTIONS.TARGET_PROFILES]),
+                profileDetails: store.parseList(historyRecord?.sections?.[SESSION_SECTIONS.PROFILE_DETAILS]),
+                contactInformation: store.parseKeyValue(historyRecord?.sections?.[SESSION_SECTIONS.CONTACT_INFORMATION]),
+                consent: String(historyRecord?.sections?.[SESSION_SECTIONS.CONSENT] ?? '').trim(),
             },
         };
     }
@@ -130,6 +153,9 @@ export async function loadContext({ sessionId }) {
             profile: '',
             sessionId: '',
             contactInfo: {},
+            consent: '',
+            matchExplanation: '',
+            contactRoute: '',
             summary: '',
         };
     } else {
@@ -138,28 +164,37 @@ export async function loadContext({ sessionId }) {
         currentLead = {
             exists: true,
             leadId: `${sessionLeadFileName}.md`,
-            status: String(leadInfo?.[LEAD_FIELDS.STATUS] ?? '').trim(),
-            profile: String(leadInfo?.[LEAD_FIELDS.PROFILE] ?? '').trim(),
-            sessionId: String(leadInfo?.[LEAD_FIELDS.SESSION_ID] ?? '').trim(),
+            status: String(leadInfo?.Status ?? '').trim(),
+            profile: String(leadInfo?.Profile ?? '').trim(),
+            sessionId: String(leadInfo?.['Session ID'] ?? '').trim(),
             contactInfo,
+            consent: String(leadRecord.sections?.[LEAD_SECTIONS.CONSENT] ?? '').trim(),
+            matchExplanation: String(leadRecord.sections?.[LEAD_SECTIONS.MATCH_EXPLANATION] ?? '').trim(),
+            contactRoute: String(leadRecord.sections?.[LEAD_SECTIONS.CONTACT_ROUTE] ?? '').trim(),
             summary: String(leadRecord.sections?.[LEAD_SECTIONS.SUMMARY] ?? '').trim(),
         };
     }
 
     return {
+        siteId,
         siteInfo,
-        profilesInfo,
+        profiles,
+        ownerConfig,
+        policyConfig,
         currentLead,
         sessionProfile: {
+            siteId,
             sessionId,
             isNewSession: !sessionRecord.exists,
             ...sessionRecord.parsed,
         },
         combinedSiteInfo: combineMarkdownFiles(siteInfo, 'Info') || 'No site info available.',
-        combinedProfilesInfo: combineMarkdownFiles(profilesInfo, 'Profile') || 'No profiling info available.',
+        combinedProfiles: combineMarkdownFiles(profiles, 'Profile') || 'No target profiles available.',
+        ownerConfigText: ownerConfig.exists ? ownerConfig.content.trim() : 'No owner contact rules available.',
+        policyText: policyConfig.exists ? policyConfig.content.trim() : 'No visitor policy available.',
         conversationHistoryText,
         sessionProfileText: sessionRecord.exists
             ? sessionRecord.content.trim()
-            : 'No previous session profile found. This is a new session.',
+            : 'No previous session record found. This is a new session.',
     };
 }

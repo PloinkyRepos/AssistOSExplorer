@@ -1,12 +1,11 @@
 #!/usr/bin/env node
 
-import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { resolveDataDir } from '../runtime/dataStore.mjs';
+import { configureDataStore, getDataStore } from '../runtime/dataStore.mjs';
 
-const VISITORS_LOG_FILE = 'visitors.log';
+const EVENTS_LOG_FILE = 'events';
 
 function getDefaultAgentRoot() {
     return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -69,41 +68,87 @@ async function readStdinFallback() {
 function normalizeVisitorId(value) {
     const raw = typeof value === 'string' ? value.trim() : '';
     if (!raw) {
-        throw new Error('register-visitor requires visitorId.');
+        throw new Error('register-events requires visitorId.');
     }
     const safe = raw.replace(/[^A-Za-z0-9._-]/g, '-').replace(/-+/g, '-');
     const normalized = safe.replace(/^[-.]+|[-.]+$/g, '');
     if (!normalized) {
-        throw new Error('register-visitor requires a valid visitorId.');
+        throw new Error('register-events requires a valid visitorId.');
     }
     return normalized;
 }
 
-export async function registerVisitor({
+function normalizeEventType(value) {
+    const raw = typeof value === 'string' ? value.trim() : '';
+    if (!raw) {
+        throw new Error('register-events requires eventType.');
+    }
+    return raw;
+}
+
+export async function registerEvent({
+    siteId,
     visitorId,
+    eventType,
+    sessionId = '',
+    referrer = '',
+    country = '',
+    openedChat = false,
+    details = {},
     agentRoot = getDefaultAgentRoot(),
     dataDir = null,
 }) {
+    if (!siteId) {
+        throw new Error('register-events requires siteId.');
+    }
     const normalizedVisitorId = normalizeVisitorId(visitorId);
+    const normalizedEventType = normalizeEventType(eventType);
     const resolvedAgentRoot = path.resolve(agentRoot);
-    const resolvedDataDir = resolveDataDir(resolvedAgentRoot, dataDir);
+    configureDataStore({
+        agentRoot: resolvedAgentRoot,
+        dataDir,
+        siteId,
+    });
+    const store = getDataStore();
     const nowIso = new Date().toISOString();
 
-    await fs.mkdir(resolvedDataDir, { recursive: true });
-    const record = {
-        timestamp: nowIso,
-        visitorId: normalizedVisitorId,
-        source: 'web-assist-chat',
-        version: 1,
+    const entryFields = {
+        'Event Type': normalizedEventType,
+        'Visitor ID': normalizedVisitorId,
+        Timestamp: nowIso,
     };
 
-    await fs.appendFile(path.join(resolvedDataDir, VISITORS_LOG_FILE), `${JSON.stringify(record)}\n`, 'utf8');
+    if (sessionId) {
+        entryFields['Session ID'] = String(sessionId).trim();
+    }
+    if (typeof referrer === 'string' && referrer.trim()) {
+        entryFields.Referrer = referrer.trim();
+    }
+    if (typeof country === 'string' && country.trim()) {
+        entryFields.Country = country.trim();
+    }
+    if (normalizedEventType === 'visit' || normalizedEventType === 'chat-start') {
+        entryFields['Opened Chat'] = openedChat === true ? 'yes' : 'no';
+    }
+    if (details && typeof details === 'object' && !Array.isArray(details)) {
+        for (const [key, value] of Object.entries(details)) {
+            entryFields[String(key)] = String(value ?? '');
+        }
+    }
+
+    await store.appendToFile('visits', EVENTS_LOG_FILE, {
+        sections: {
+            'Event Entry': store.renderKeyValue(entryFields),
+        },
+    });
 
     return {
         ok: true,
+        siteId,
         visitorId: normalizedVisitorId,
-        logFile: VISITORS_LOG_FILE,
-        lastVisit: nowIso,
+        eventType: normalizedEventType,
+        logPath: `visits/${EVENTS_LOG_FILE}.md`,
+        timestamp: nowIso,
     };
 }
 
@@ -112,8 +157,15 @@ async function main() {
     const envelope = rawInput && rawInput.trim() ? safeParseJson(rawInput) : null;
     const input = normalizeInput(envelope || {});
 
-    const result = await registerVisitor({
+    const result = await registerEvent({
+        siteId: typeof input.siteId === 'string' ? input.siteId.trim() : '',
         visitorId: input.visitorId,
+        eventType: typeof input.eventType === 'string' ? input.eventType.trim() : '',
+        sessionId: typeof input.sessionId === 'string' ? input.sessionId.trim() : '',
+        referrer: typeof input.referrer === 'string' ? input.referrer.trim() : '',
+        country: typeof input.country === 'string' ? input.country.trim() : '',
+        openedChat: input.openedChat === true,
+        details: input.details && typeof input.details === 'object' ? input.details : {},
         dataDir: typeof input.dataDir === 'string' ? input.dataDir.trim() : null,
         agentRoot: typeof input.agentRoot === 'string' ? input.agentRoot.trim() : getDefaultAgentRoot(),
     });

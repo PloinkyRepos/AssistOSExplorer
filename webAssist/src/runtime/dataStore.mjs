@@ -2,24 +2,51 @@ import path from 'node:path';
 
 import { MarkdownDataStore } from 'achillesAgentLib';
 
+let configuredDataRoot = null;
 let configuredDataDir = null;
+let configuredSiteId = null;
 let dataStoreInstance = null;
 
 export function resolveDataDir(agentRoot, explicitDataDir = null) {
     return explicitDataDir
         ? path.resolve(explicitDataDir)
-        : path.resolve(agentRoot, '..', 'data');
+        : path.join(process.cwd(), 'data');
 }
 
-export function configureDataStore({ agentRoot, dataDir = null } = {}) {
-    if (!agentRoot) {
-        throw new Error('configureDataStore requires agentRoot.');
+export function normalizeSiteId(value) {
+    const raw = typeof value === 'string' ? value.trim() : '';
+    if (!raw) {
+        throw new Error('siteId is required.');
     }
 
-    const resolvedDataDir = resolveDataDir(agentRoot, dataDir);
+    const normalized = raw.replace(/[^A-Za-z0-9._-]/g, '-').replace(/-+/g, '-').replace(/^[-.]+|[-.]+$/g, '');
+    if (!normalized) {
+        throw new Error('siteId must be a valid site identifier.');
+    }
+    return normalized;
+}
+
+export function resolveSiteDataDir(dataRoot, siteId) {
+    return path.join(path.resolve(dataRoot), 'sites', normalizeSiteId(siteId));
+}
+
+export function configureDataStore({ agentRoot = null, dataDir = null, siteId } = {}) {
+    const resolvedDataRoot = resolveDataDir(agentRoot, dataDir);
+    const normalizedSiteId = normalizeSiteId(siteId);
+    const resolvedDataDir = resolveSiteDataDir(resolvedDataRoot, normalizedSiteId);
+
+    configuredDataRoot = resolvedDataRoot;
     configuredDataDir = resolvedDataDir;
+    configuredSiteId = normalizedSiteId;
     dataStoreInstance = new MarkdownDataStore({ dataDir: resolvedDataDir });
     return dataStoreInstance;
+}
+
+export function getConfiguredDataRoot() {
+    if (!configuredDataRoot) {
+        throw new Error('Datastore is not configured. Call configureDataStore first.');
+    }
+    return configuredDataRoot;
 }
 
 export function getConfiguredDataDir() {
@@ -27,6 +54,13 @@ export function getConfiguredDataDir() {
         throw new Error('Datastore is not configured. Call configureDataStore first.');
     }
     return configuredDataDir;
+}
+
+export function getConfiguredSiteId() {
+    if (!configuredSiteId) {
+        throw new Error('Datastore is not configured. Call configureDataStore first.');
+    }
+    return configuredSiteId;
 }
 
 export function getDataStore() {

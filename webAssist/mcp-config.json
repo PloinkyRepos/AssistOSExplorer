@@ -11,6 +11,11 @@
                 "TOOL_NAME": "web_cli_chat"
             },
             "inputSchema": {
+                "siteId": {
+                    "type": "string",
+                    "description": "Website scope id",
+                    "optional": false
+                },
                 "message": {
                     "type": "string",
                     "description": "User message sent to webAssist",
@@ -45,6 +50,11 @@
             "command": "/code/src/mcp/get-session-history.mjs",
             "cwd": "workspace",
             "inputSchema": {
+                "siteId": {
+                    "type": "string",
+                    "description": "Website scope id",
+                    "optional": false
+                },
                 "sessionId": {
                     "type": "string",
                     "description": "Session id used to load saved chat history",
@@ -63,16 +73,51 @@
             }
         },
         {
-            "name": "register-visitor",
-            "title": "Register Visitor",
-            "description": "Register or update visitor analytics when chat widget loads.",
-            "command": "/code/src/mcp/register-visitor.mjs",
+            "name": "register-events",
+            "title": "Register Events",
+            "description": "Register site-scoped events (visit, chat-start, message, consent, lead-notification) to the append-only events log.",
+            "command": "/code/src/mcp/register-events.mjs",
             "cwd": "workspace",
             "inputSchema": {
+                "siteId": {
+                    "type": "string",
+                    "description": "Website scope id",
+                    "optional": false
+                },
                 "visitorId": {
                     "type": "string",
                     "description": "Unique browser visitor id",
                     "optional": false
+                },
+                "eventType": {
+                    "type": "string",
+                    "description": "Event type: visit, chat-start, message, consent, lead-notification",
+                    "optional": false
+                },
+                "sessionId": {
+                    "type": "string",
+                    "description": "Optional session id",
+                    "optional": true
+                },
+                "referrer": {
+                    "type": "string",
+                    "description": "Optional referrer URL",
+                    "optional": true
+                },
+                "country": {
+                    "type": "string",
+                    "description": "Optional country-level visitor origin",
+                    "optional": true
+                },
+                "openedChat": {
+                    "type": "boolean",
+                    "description": "Whether the visitor opened the chat surface",
+                    "optional": true
+                },
+                "details": {
+                    "type": "object",
+                    "description": "Optional additional event details",
+                    "optional": true
                 },
                 "dataDir": {
                     "type": "string",
