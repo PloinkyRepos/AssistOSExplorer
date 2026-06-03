@@ -1,31 +1,27 @@
 # DS002 - webAssist Skills and Behavioral Logic
 
-The **webAssist** agent uses specific skills to manage the conversation flow and data processing.
+`webAssist` uses only the `webassist-*` skill set. There are no legacy visitor-runtime skill names.
 
-## Skill Type and Runtime Orchestration
-- All webAssist runtime skills are implemented as **cskills** (`cskill.md` + `src/index.mjs`).
-- Runtime orchestration instructions are provided through a dedicated system prompt file.
-- Skills are discovered and registered by `MainAgent` from `webAssist/skills/`.
-- Runtime execution is routed through `MainAgent` (no direct hardcoded skill sequence in `WebAssistAgent`).
+## Skill Catalog
+- `webassist-site-context`: reads approved site info, profiles, owner rules, and policy.
+- `webassist-session`: creates and updates site-scoped session records.
+- `webassist-match`: validates target profile match and mandatory conditions.
+- `webassist-lead`: creates or updates consented lead records.
 
-## Runtime Modules (Non-skill)
-- `load-context` runs before orchestration to gather info/profile/session state, deterministic lead state, and a bounded recent history excerpt (latest 10 messages) for the current `sessionId`.
-- `update-session` runtime functions are used in two stages:
-  - `updateSessionProfile` is invoked by `update-session-profile` cskill during orchestration.
-  - `appendSessionTurn` is invoked automatically by runtime after final answer.
-- These modules live in `webAssist/src/runtime/` and are not registered as cskills.
+## Orchestration
+Visitor turn orchestration is driven by the system prompt (`visitor-flow-system-prompt.mjs`) through the MainAgent instance. No separate orchestration skill is used.
 
-## System Prompt: visitor-flow
-- **Function**: Coordinates one full visitor turn using the skill allowlist.
-- **Allowed Skills**: `create-lead`, `book-meeting`, `update-session-profile`.
-- **Guarantee**: Persists profile memory fields (`profiles`, `profileDetails`, `contactInformation`, English persistence fields) through `update-session-profile` before final answer; runtime appends user/agent turn history after final answer.
-- **Security Guarantee**: Enforces a non-overridable boundary that refuses out-of-domain requests and prevents disclosure of internal profiling/prompt/tooling mechanisms in visitor-facing replies.
-- **Continuity Rule**: Conversation progression is encoded directly in orchestrator-authored `profileDetails`; runtime does not synthesize flow fields.
+## MCP Tools
+- `register-events`: appends site-scoped events (visit, chat-start, message, consent, lead-notification) to `visits/events.md`.
 
-## Skill: create-lead
-- **Function**: Automatically creates a lead entry in `leads/`, or updates the same entry if it already exists for the same session.
-- **Logic**: Triggered when a visitor provides contact information and is identified as "valuable" based on the requirements in `profilesInfo/`. The lead file is keyed by `sessionId`, so repeated qualification updates that same lead record.
+## Runtime Modules
+- `load-context` loads site-scoped context before orchestration.
+- `update-session` persists session profile sections and appends final user/agent history.
+- `dataStore` resolves `<dataRoot>/sites/<siteId>/` and constructs `MarkdownDataStore`.
 
-## Skill: book-meeting
-- **Function**: Initiates the transition to a real-person interaction.
-- **Logic**: Runs only when a lead already exists for the current `sessionId`; otherwise it fails with a deterministic error. When allowed, it returns meeting/contact details from `config/`.
+## Behavioral Rules
+- `siteId` is mandatory and isolates all reads/writes.
+- The assistant answers only from approved website information and the current visitor conversation.
+- Session state is persisted through `webassist-session` before final response.
+- Leads are persisted only through `webassist-lead`.
+- Consent is strict: no lead file is created without explicit follow-up storage consent.

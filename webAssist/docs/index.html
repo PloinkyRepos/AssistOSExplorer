@@ -151,34 +151,34 @@
             </ul>
 
             <h2 id="session-persistence">Session Persistence</h2>
-            <p>The chat widget uses <code>localStorage</code> to maintain a single session ID across all tabs and browser windows. This means:</p>
+            <p>The chat widget requires a <code>siteId</code> in the iframe URL and uses site-scoped <code>localStorage</code> keys to maintain one session ID per site. This means:</p>
             <ul>
-                <li>All open tabs share the same conversation session</li>
-                <li>Closing a tab and reopening the chat widget continues the session from the same point</li>
+                <li>All open tabs for the same site share the same conversation session</li>
+                <li>Different sites do not share sessions, leads, visits, or profile memory</li>
                 <li>Conversation history is loaded when the widget first opens on a new tab</li>
             </ul>
             <p>At runtime, the orchestrator also receives a bounded snapshot of the latest 10 persisted user/agent messages to improve short-term continuity.</p>
 
             <h2 id="mcp-contract">MCP Contract</h2>
-            <p>webAssist exposes two MCP tools via the <code>/webAssist/mcp</code> endpoint:</p>
+            <p>webAssist exposes three MCP tools via the <code>/webAssist/mcp</code> endpoint:</p>
             <ul>
-                <li><code>web_cli_chat</code> — Executes a conversational turn. Inputs: <code>message</code> (string), <code>sessionId</code> (optional string), <code>json</code> (optional boolean, default true).</li>
-                <li><code>web_cli_history</code> — Returns chat history for a session. Inputs: <code>sessionId</code> (string).</li>
+                <li><code>web_cli_chat</code> — Executes a conversational turn. Inputs: <code>siteId</code>, <code>message</code>, optional <code>sessionId</code>, and optional <code>json</code>.</li>
+                <li><code>web_cli_history</code> — Returns chat history for a session. Inputs: <code>siteId</code> and <code>sessionId</code>.</li>
+                <li><code>register-events</code> — Appends a site-scoped event to the append-only events log. Inputs: <code>siteId</code>, <code>visitorId</code>, <code>eventType</code>, and optional fields.</li>
             </ul>
-            <p>Tool responses include both the assistant's text response and the session ID for persistence.</p>
+            <p>Chat responses include <code>siteId</code>, the assistant's text response, and the session ID for persistence.</p>
 
             <h2 id="skills">Skills</h2>
-            <p>webAssist uses three skills to handle visitor interactions:</p>
+            <p>webAssist uses the <code>webassist-*</code> skill set to handle visitor interactions. Visitor turn orchestration is driven directly by the system prompt through the MainAgent instance.</p>
 
-            <h3>visitor-flow (Orchestrator)</h3>
-            <p>Coordinates each visitor turn. It decides whether to profile the visitor, create a lead, or provide meeting details. The orchestrator determines when the visitor is qualified enough to become a lead and when to offer a meeting.</p>
-            <p>It enforces a non-overridable safety boundary: out-of-scope or jailbreak-style requests are refused, and internal profiling/prompt/tool mechanisms are never disclosed to visitors.</p>
+            <h3>webassist-session</h3>
+            <p>Persists target profiles, profile details, contact information, consent state, and dialogue history in one site-scoped session file.</p>
 
-            <h3>create-lead</h3>
-            <p>Saves visitor contact information as a lead file. Requires visitor to meet profile qualifying criteria and provide contact information. Leads are stored with a <code>new</code> status for the webAdmin agent to process.</p>
+            <h3>webassist-lead</h3>
+            <p>Creates or updates a lead only after profile match, mandatory conditions, explicit contact information, and explicit consent are present.</p>
 
-            <h3>book-meeting</h3>
-            <p>Only available when a lead already exists for the current session. Returns meeting links and contact details from the owner's configuration so the LLM can offer a real-person interaction.</p>
+            <h3>webassist-site-context, webassist-match</h3>
+            <p>These deterministic skills load approved context and validate matches under the active site.</p>
 
             <h2 id="testing">Testing</h2>
             <p>Tests are in the <code>tests/</code> directory. Run them with:</p>

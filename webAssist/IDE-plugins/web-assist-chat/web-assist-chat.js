@@ -217,8 +217,8 @@ function pickReadableTextColor(backgroundHex, dark = '#0f172a', light = '#f8fafc
     return luminance > 0.5 ? dark : light;
 }
 
-const BROWSER_STORAGE_KEY = 'webassist-global-chat:sessionId';
-const VISITOR_STORAGE_KEY = 'webassist-global-chat:visitorId';
+const BROWSER_STORAGE_KEY = 'webassist-chat:sessionId';
+const VISITOR_STORAGE_KEY = 'webassist-chat:visitorId';
 
 function generateVisitorId() {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -245,7 +245,7 @@ class WebAssistMcpChatClient {
         this.endpoint = options.endpoint || '/webAssist/mcp';
         this.chatToolName = options.chatToolName || 'web_cli_chat';
         this.historyToolName = options.historyToolName || 'web_cli_history';
-        this.registerVisitorToolName = options.registerVisitorToolName || 'register-visitor';
+        this.registerVisitorToolName = options.registerVisitorToolName || 'register-events';
         this.validateTools = options.validateTools === true;
         this.mcpClient = null;
         this.mcpClientPromise = null;
@@ -297,11 +297,16 @@ class WebAssistMcpChatClient {
         }
     }
 
-    async invokeChat(message, sessionId = '') {
+    async invokeChat(siteId, message, sessionId = '') {
         const client = await this.ensureMcpClient();
         await this.ensureNamedToolAvailable(client, this.chatToolName);
 
-        const args = { message, json: true };
+        const normalizedSiteId = normalizeString(siteId);
+        if (!normalizedSiteId) {
+            throw new Error('Missing siteId for chat.');
+        }
+
+        const args = { siteId: normalizedSiteId, message, json: true };
         const normalizedSessionId = normalizeString(sessionId);
         if (normalizedSessionId) {
             args.sessionId = normalizedSessionId;
@@ -321,6 +326,7 @@ class WebAssistMcpChatClient {
                 || '(no output)';
             return {
                 responseText,
+                siteId: normalizeString(parsed.siteId, normalizedSiteId),
                 sessionId: normalizeString(parsed.sessionId),
             };
         }
@@ -331,7 +337,11 @@ class WebAssistMcpChatClient {
         };
     }
 
-    async invokeHistory(sessionId) {
+    async invokeHistory(siteId, sessionId) {
+        const normalizedSiteId = normalizeString(siteId);
+        if (!normalizedSiteId) {
+            throw new Error('Missing siteId for history loading.');
+        }
         const normalizedSessionId = normalizeString(sessionId);
         if (!normalizedSessionId) {
             throw new Error('Missing sessionId for history loading.');
@@ -340,7 +350,10 @@ class WebAssistMcpChatClient {
         const client = await this.ensureMcpClient();
         await this.ensureNamedToolAvailable(client, this.historyToolName);
 
-        const toolResult = await client.callTool(this.historyToolName, { sessionId: normalizedSessionId });
+        const toolResult = await client.callTool(this.historyToolName, {
+            siteId: normalizedSiteId,
+            sessionId: normalizedSessionId
+        });
         const toolText = extractToolText(toolResult);
         const parsed = tryParseJsonPayload(toolText);
         if (!parsed || typeof parsed !== 'object') {
@@ -348,12 +361,17 @@ class WebAssistMcpChatClient {
         }
 
         return {
+            siteId: normalizeString(parsed.siteId, normalizedSiteId),
             sessionId: normalizeString(parsed.sessionId, normalizedSessionId),
             history: Array.isArray(parsed.history) ? parsed.history : [],
         };
     }
 
-    async registerVisitor(visitorId) {
+    async registerVisitor(siteId, visitorId, openedChat = false) {
+        const normalizedSiteId = normalizeString(siteId);
+        if (!normalizedSiteId) {
+            throw new Error('Missing siteId for visitor registration.');
+        }
         const normalizedVisitorId = normalizeString(visitorId);
         if (!normalizedVisitorId) {
             throw new Error('Missing visitorId for visitor registration.');
@@ -363,7 +381,11 @@ class WebAssistMcpChatClient {
         await this.ensureNamedToolAvailable(client, this.registerVisitorToolName);
 
         const toolResult = await client.callTool(this.registerVisitorToolName, {
+            siteId: normalizedSiteId,
             visitorId: normalizedVisitorId,
+            eventType: 'visit',
+            referrer: typeof document !== 'undefined' ? document.referrer || '' : '',
+            openedChat,
         });
         const toolText = extractToolText(toolResult);
         const parsed = tryParseJsonPayload(toolText);
@@ -373,8 +395,9 @@ class WebAssistMcpChatClient {
 
         return {
             ok: parsed.ok === true,
+            siteId: normalizeString(parsed.siteId, normalizedSiteId),
             visitorId: normalizeString(parsed.visitorId, normalizedVisitorId),
-            logFile: normalizeString(parsed.logFile),
+            visitPath: normalizeString(parsed.visitPath),
         };
     }
 }
@@ -400,12 +423,13 @@ function mountChatSurface(rootNode, options = {}) {
     }
 
     const query = options.query || new URLSearchParams(window.location.search);
+    const siteId = normalizeString(query.get('siteId'));
     const subtitleText = options.subtitleText || 'Embedded preview';
     const enableLauncher = options.enableLauncher === true;
     const validateTools = options.validateTools === true;
     const endpoint = '/webAssist/mcp';
-    const storageKey = BROWSER_STORAGE_KEY;
-    const visitorStorageKey = VISITOR_STORAGE_KEY;
+    const storageKey = `${BROWSER_STORAGE_KEY}:${siteId || 'missing-site'}`;
+    const visitorStorageKey = `${VISITOR_STORAGE_KEY}:${siteId || 'missing-site'}`;
     const chatClient = new WebAssistMcpChatClient({ validateTools, endpoint });
 
     const theme = resolveChatTheme(query);
@@ -440,6 +464,15 @@ function mountChatSurface(rootNode, options = {}) {
     titleEl.textContent = headerText;
     subtitleEl.textContent = subtitleOverride || subtitleText;
 
+    if (!siteId) {
+        appendMessage('agent', 'This WebAssist embed is missing a siteId.');
+        inputEl.disabled = true;
+        sendEl.disabled = true;
+        return () => {
+            void chatClient.close();
+        };
+    }
+
     function setPanelOpen(isOpen) {
         if (!widgetEl || !panelEl) {
             return;
@@ -472,7 +505,7 @@ function mountChatSurface(rootNode, options = {}) {
             return;
         }
         try {
-            await chatClient.registerVisitor(visitorId);
+            await chatClient.registerVisitor(siteId, visitorId, widgetEl?.dataset.open === 'true');
         } catch {
             // Ignore telemetry failures.
         }
@@ -531,7 +564,7 @@ function mountChatSurface(rootNode, options = {}) {
 
         setPending(true);
         try {
-            const payload = await chatClient.invokeHistory(sessionId);
+            const payload = await chatClient.invokeHistory(siteId, sessionId);
             const nextSessionId = normalizeString(payload.sessionId, sessionId);
             sessionId = nextSessionId;
             persistSessionId(storageKey, sessionId);
@@ -581,7 +614,7 @@ function mountChatSurface(rootNode, options = {}) {
         setPending(true);
         showTyping();
         try {
-            const result = await chatClient.invokeChat(message, sessionId);
+            const result = await chatClient.invokeChat(siteId, message, sessionId);
             hideTyping();
             appendMessage('agent', result.responseText);
             if (result.sessionId) {

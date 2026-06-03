@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { createWebAssistAgent } from './WebAssistAgent.mjs';
 
 function printUsage() {
-    process.stdout.write(`Usage:\n  webAssist/src/index.mjs "message"\n  webAssist/src/index.mjs -mcp "message"\n\nOptions:\n  -mcp                         Run a single request and exit\n  --session-id <id>            Reuse a specific session id\n  --json                       Print JSON output from runtime\n  --data-dir <dir>             Override data directory\n  --agent-root <dir>           Override agent root directory\n  -h, --help                   Show this help\n`);
+    process.stdout.write(`Usage:\n  webAssist/src/index.mjs --site-id <site-id> "message"\n  webAssist/src/index.mjs -mcp --site-id <site-id> "message"\n\nOptions:\n  -mcp                         Run a single request and exit\n  --site-id <id>               Website scope id\n  --session-id <id>            Reuse a specific session id\n  --json                       Print JSON output from runtime\n  --data-dir <dir>             Override data root directory\n  --agent-root <dir>           Override agent root directory\n  -h, --help                   Show this help\n`);
 }
 
 function generateSessionId() {
@@ -21,6 +21,7 @@ function parseArguments(argv) {
     const positionals = [];
     const options = {
         mode: 'interactive',
+        siteId: '',
         sessionId: '',
         json: false,
         dataDir: '',
@@ -50,6 +51,21 @@ function parseArguments(argv) {
 
         if (token === '-h' || token === '--help') {
             options.help = true;
+            continue;
+        }
+
+        if (token.startsWith('--site-id=')) {
+            options.siteId = token.slice('--site-id='.length);
+            continue;
+        }
+
+        if (token === '--site-id') {
+            const value = argv[index + 1];
+            if (!value) {
+                throw new Error('Missing value for --site-id');
+            }
+            options.siteId = value;
+            index += 1;
             continue;
         }
 
@@ -144,6 +160,7 @@ function parseMcpPayload(rawInput) {
             message,
             sessionId: typeof input.sessionId === 'string' ? input.sessionId.trim() : '',
             json: input.json === true,
+            siteId: typeof input.siteId === 'string' ? input.siteId.trim() : '',
             dataDir: typeof input.dataDir === 'string' ? input.dataDir.trim() : '',
             agentRoot: typeof input.agentRoot === 'string' ? input.agentRoot.trim() : '',
         };
@@ -167,13 +184,15 @@ async function readStdin() {
 
 async function runTurn(agent, {
     sessionId,
+    siteId,
     message,
     jsonOutput,
     mcpOutput = false,
 }) {
-    const result = await agent.handleMessage({ sessionId, message });
+    const result = await agent.handleMessage({ siteId, sessionId, message });
     if (mcpOutput) {
         const payload = {
+            siteId: String(result.siteId ?? siteId ?? '').trim(),
             sessionId: String(result.sessionId ?? sessionId ?? '').trim(),
             message: String(result.response ?? '').trim(),
         };
@@ -189,12 +208,14 @@ async function runTurn(agent, {
 
 async function runInteractive(agent, state) {
     if (!state.json) {
+        process.stdout.write(`Site ID: ${state.siteId}\n`);
         process.stdout.write(`Session ID: ${state.sessionId}\n`);
         process.stdout.write('Type exit to leave\n');
     }
 
     if (state.message) {
         await runTurn(agent, {
+            siteId: state.siteId,
             sessionId: state.sessionId,
             message: state.message,
             jsonOutput: state.json,
@@ -227,6 +248,7 @@ async function runInteractive(agent, state) {
         }
 
         await runTurn(agent, {
+            siteId: state.siteId,
             sessionId: state.sessionId,
             message: text,
             jsonOutput: state.json,
@@ -246,6 +268,7 @@ async function main() {
 
     const effective = {
         mode: cli.mode,
+        siteId: cli.siteId,
         sessionId: cli.sessionId,
         json: cli.json,
         dataDir: cli.dataDir,
@@ -261,6 +284,9 @@ async function main() {
             }
             if (!effective.sessionId && mcpPayload.sessionId) {
                 effective.sessionId = mcpPayload.sessionId;
+            }
+            if (!effective.siteId && mcpPayload.siteId) {
+                effective.siteId = mcpPayload.siteId;
             }
             if (!effective.dataDir && mcpPayload.dataDir) {
                 effective.dataDir = mcpPayload.dataDir;
@@ -280,6 +306,10 @@ async function main() {
         effective.sessionId = generateSessionId();
     }
 
+    if (!effective.siteId) {
+        throw new Error('webAssist requires --site-id.');
+    }
+
     if (effective.mode === 'mcp' && !effective.message) {
         throw new Error('MCP mode requires a message.');
     }
@@ -291,6 +321,7 @@ async function main() {
 
     if (effective.mode === 'mcp') {
         await runTurn(agent, {
+            siteId: effective.siteId,
             sessionId: effective.sessionId,
             message: effective.message,
             jsonOutput: effective.json,

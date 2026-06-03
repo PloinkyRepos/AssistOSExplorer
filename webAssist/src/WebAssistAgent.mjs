@@ -5,7 +5,7 @@ import { MainAgent } from 'achillesAgentLib';
 import { VISITOR_FLOW_SYSTEM_PROMPT } from './prompts/visitor-flow-system-prompt.mjs';
 import { loadContext } from './runtime/load-context.mjs';
 import { appendSessionTurn } from './runtime/update-session.mjs';
-import { configureDataStore, getConfiguredDataDir } from './runtime/dataStore.mjs';
+import { configureDataStore, resolveDataDir } from './runtime/dataStore.mjs';
 
 function getDefaultAgentRoot() {
     return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -27,10 +27,12 @@ function buildBaseAgentOptions({ agentRoot, logger, mainAgentOptions }) {
     };
 }
 
-function buildRuntimePrompt({ sessionId, message, loadedContext }) {
+function buildRuntimePrompt({ siteId, sessionId, message, loadedContext }) {
     return [
         'User message:',
         String(message),
+        'Site ID:',
+        String(siteId),
         'Session ID:',
         String(sessionId),
         'Session profile:',
@@ -40,9 +42,13 @@ function buildRuntimePrompt({ sessionId, message, loadedContext }) {
         'Session profile markdown snapshot:',
         String(loadedContext.sessionProfileText ?? ''),
         'Known profile templates:',
-        String(loadedContext.combinedProfilesInfo ?? 'No profiling info available.'),
+        String(loadedContext.combinedProfiles ?? 'No target profiles available.'),
         'Website info snapshot:',
         String(loadedContext.combinedSiteInfo ?? 'No site info available.'),
+        'Owner contact rules:',
+        String(loadedContext.ownerConfigText ?? 'No owner contact rules available.'),
+        'Visitor policy:',
+        String(loadedContext.policyText ?? 'No visitor policy available.'),
         'Conversation History (last 10 replies):',
         String(loadedContext.conversationHistoryText ?? 'No previous conversation history found.'),
     ].join('\n');
@@ -56,11 +62,7 @@ export async function createWebAssistAgent({
     mainAgentOptions = {},
 } = {}) {
     const resolvedAgentRoot = path.resolve(agentRoot);
-    configureDataStore({
-        agentRoot: resolvedAgentRoot,
-        dataDir,
-    });
-    const resolvedDataDir = getConfiguredDataDir();
+    const resolvedDataDir = resolveDataDir(resolvedAgentRoot, dataDir);
 
     const mainAgent = new MainAgent(buildBaseAgentOptions({
         agentRoot: resolvedAgentRoot,
@@ -79,7 +81,10 @@ export async function createWebAssistAgent({
         agentRoot: resolvedAgentRoot,
         dataDir: resolvedDataDir,
         mainAgent,
-        async handleMessage({ sessionId, message, mode = 'fast' }) {
+        async handleMessage({ siteId, sessionId, message, mode = 'fast' }) {
+            if (!siteId) {
+                throw new Error('webAssist.handleMessage requires a siteId.');
+            }
             if (!sessionId) {
                 throw new Error('webAssist.handleMessage requires a sessionId.');
             }
@@ -87,10 +92,18 @@ export async function createWebAssistAgent({
                 throw new Error('webAssist.handleMessage requires a message.');
             }
 
+            configureDataStore({
+                agentRoot: resolvedAgentRoot,
+                dataDir,
+                siteId,
+            });
+
             const loadedContext = await loadContext({
+                siteId,
                 sessionId,
             });
             const runtimePrompt = buildRuntimePrompt({
+                siteId,
                 sessionId,
                 message,
                 loadedContext,
@@ -107,6 +120,7 @@ export async function createWebAssistAgent({
             }
 
             await appendSessionTurn({
+                siteId,
                 sessionId,
                 userMessage: message,
                 agentResponse: response,
@@ -114,6 +128,7 @@ export async function createWebAssistAgent({
 
             return {
                 response,
+                siteId,
                 sessionId,
             };
         },

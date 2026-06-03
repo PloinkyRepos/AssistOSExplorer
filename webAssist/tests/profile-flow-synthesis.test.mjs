@@ -6,8 +6,10 @@ import { pathToFileURL } from 'node:url';
 import { LLMAgent } from 'achillesAgentLib';
 
 import { createWebAssistAgent } from '../src/index.mjs';
-import { getSessionHistoryFileName, getSessionProfileFileName } from '../src/constants/datastore.mjs';
+import { getSessionHistoryFileName } from '../src/constants/datastore.mjs';
 import { createWebAssistSandbox } from './helpers.mjs';
+
+const SITE_ID = 'demo-site';
 
 class FakeFlowSynthesisLLM extends LLMAgent {
     constructor() {
@@ -26,14 +28,16 @@ class FakeFlowSynthesisLLM extends LLMAgent {
 
         const userPrompt = String(context?.userPrompt ?? '');
         const sessionId = userPrompt.match(/"sessionId"\s*:\s*"([^\"]+)"/)?.[1] || 'session-flow';
+        const siteId = userPrompt.match(/Site ID:\n([^\n]+)/)?.[1] || SITE_ID;
         const isSecondTurn = userPrompt.includes('I can share some papers later');
 
         if (isSecondTurn) {
             if (!this.secondTurnPersisted) {
                 this.secondTurnPersisted = true;
                 return {
-                    tool: 'update-session-profile',
+                    tool: 'webassist-session',
                     toolPrompt: JSON.stringify({
+                        siteId,
                         sessionId,
                         profiles: ['Researcher.md'],
                         profileDetails: [
@@ -46,6 +50,7 @@ class FakeFlowSynthesisLLM extends LLMAgent {
                             name: 'Research Visitor',
                             email: 'research.visitor@example.com',
                         },
+                        consent: 'Consent not yet collected.',
                     }),
                     reason: 'Persist second-turn profile data.',
                 };
@@ -61,8 +66,9 @@ class FakeFlowSynthesisLLM extends LLMAgent {
         if (!this.firstTurnPersisted) {
             this.firstTurnPersisted = true;
             return {
-                tool: 'update-session-profile',
+                tool: 'webassist-session',
                 toolPrompt: JSON.stringify({
+                    siteId,
                     sessionId,
                     profiles: ['Researcher.md'],
                     profileDetails: [
@@ -72,6 +78,7 @@ class FakeFlowSynthesisLLM extends LLMAgent {
                     contactInformation: {
                         name: 'Research Visitor',
                     },
+                    consent: 'Consent not yet collected.',
                 }),
                 reason: 'Persist first-turn profile data.',
             };
@@ -89,7 +96,7 @@ test('webAssist persists orchestrator-authored conversation memory inside profil
     const sandbox = await createWebAssistSandbox();
     t.after(async () => sandbox.cleanup());
     const sandboxDataStoreModule = await import(pathToFileURL(path.join(sandbox.agentRoot, 'src', 'runtime', 'dataStore.mjs')).href);
-    sandboxDataStoreModule.configureDataStore({ agentRoot: sandbox.agentRoot, dataDir: sandbox.dataDir });
+    sandboxDataStoreModule.configureDataStore({ agentRoot: sandbox.agentRoot, dataDir: sandbox.dataDir, siteId: SITE_ID });
 
     const agent = await createWebAssistAgent({
         agentRoot: sandbox.agentRoot,
@@ -98,6 +105,7 @@ test('webAssist persists orchestrator-authored conversation memory inside profil
     });
 
     const firstTurn = await agent.handleMessage({
+        siteId: SITE_ID,
         sessionId: 'session-flow-1',
         message: 'Can we collaborate on AI research?',
     });
@@ -105,21 +113,20 @@ test('webAssist persists orchestrator-authored conversation memory inside profil
     assert.equal(firstTurn.response, 'Great. What available datasets and student resources can you provide for collaboration?');
 
     const secondTurn = await agent.handleMessage({
+        siteId: SITE_ID,
         sessionId: 'session-flow-1',
         message: 'I can share some papers later.',
     });
 
     assert.equal(secondTurn.response, 'Thanks. I still need one detail: what project timeline and expected outcomes do you have?');
 
-    const profilePath = path.join(sandbox.dataDir, 'sessions', `${getSessionProfileFileName('session-flow-1')}.md`);
-    const historyPath = path.join(sandbox.dataDir, 'sessions', `${getSessionHistoryFileName('session-flow-1')}.md`);
-    const profileContent = await fs.readFile(profilePath, 'utf8');
+    const historyPath = path.join(sandbox.dataDir, 'sites', SITE_ID, 'sessions', `${getSessionHistoryFileName('session-flow-1')}.md`);
     const historyContent = await fs.readFile(historyPath, 'utf8');
 
-    assert.match(profileContent, /The user did not answer the question about available datasets and student resources\./);
-    assert.match(profileContent, /The user is asked about project timeline and expected outcomes\./);
-    assert.match(profileContent, /- \*\*name\*\*: Research Visitor/);
-    assert.match(profileContent, /- \*\*email\*\*: research\.visitor@example\.com/);
+    assert.match(historyContent, /The user did not answer the question about available datasets and student resources\./);
+    assert.match(historyContent, /The user is asked about project timeline and expected outcomes\./);
+    assert.match(historyContent, /- \*\*name\*\*: Research Visitor/);
+    assert.match(historyContent, /- \*\*email\*\*: research\.visitor@example\.com/);
     assert.match(historyContent, /Can we collaborate on AI research\?/);
     assert.match(historyContent, /I can share some papers later\./);
 });

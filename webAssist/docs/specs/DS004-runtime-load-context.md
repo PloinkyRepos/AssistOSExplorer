@@ -1,49 +1,20 @@
 # DS004 - Runtime Module: load-context
 
-## Goal
-Load dynamic visitor-turn context before execution starts.
+`loadContext({ siteId, sessionId })` loads the active site's deterministic runtime context.
 
-## Mechanism
-`webAssist/src/runtime/load-context.mjs` runs before `MainAgent.executePrompt(...)`.
+## Inputs
+- `siteId` (required)
+- `sessionId` (required)
 
-## Module Contract
-- **Name**: `load-context`
-- **Input**:
-  - `sessionId` (string, required)
-- **Output**:
-  - `siteInfo` (array)
-  - `profilesInfo` (array)
-  - `currentLead` (object)
-    - `exists` (boolean)
-    - `leadId` (string)
-    - `status` (string)
-    - `profile` (string)
-    - `sessionId` (string)
-    - `contactInfo` (object)
-    - `summary` (string)
-  - `sessionProfile` (object)
-    - `profiles` (string[])
-    - `profileDetails` (string[])
-    - `contactInformation` (object)
-  - `combinedSiteInfo` (string)
-  - `combinedProfilesInfo` (string)
-  - `conversationHistoryText` (string)
-  - `sessionProfileText` (string)
+## Reads
+- `info/`
+- `profiles/`
+- `config/owner.md`
+- `config/policy.md`
+- `sessions/<sessionId>-history.md`
+- `leads/<sessionId>-lead.md`
 
-## Execution Logic
-1. Read markdown files from `data/info/`.
-2. Read markdown files from `data/profilesInfo/`.
-3. Read and parse `data/sessions/{sessionId}-profile.md` if it exists.
-4. Read `data/sessions/{sessionId}-history.md` when present, parse dialogue entries, and format the latest 10 messages into `conversationHistoryText`.
-5. Resolve deterministic lead file `data/leads/{sessionId}-lead.md` and parse it when present.
-6. Return dynamic context values used by the runtime prompt.
+## Output
+The module returns approved site info, target profile markdown, owner rules, policy text, parsed session profile state, current lead state, and a bounded latest-history excerpt.
 
-## Session Memory Rule
-- `load-context` injects a bounded history excerpt from `{sessionId}-history.md` (latest 10 user/agent messages) through `conversationHistoryText`.
-- Full session history remains persisted on disk for audit/admin consumers.
-- Session continuity remains anchored in `Profile` and `Profile Details` from `{sessionId}-profile.md`.
-- Lead existence and lead metadata are provided through `currentLead` from `{sessionId}-lead.md`.
-
-## Datastore Source
-- `load-context` uses the datastore singleton configured at agent startup.
-- It does not accept runtime `dataDir` overrides.
+No cross-site fallback or legacy folder fallback is allowed.

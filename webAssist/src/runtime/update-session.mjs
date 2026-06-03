@@ -5,7 +5,6 @@ import {
     DATASTORE_TYPES,
     SESSION_SECTIONS,
     getSessionHistoryFileName,
-    getSessionProfileFileName,
 } from '../constants/datastore.mjs';
 
 function uniqueStrings(values) {
@@ -50,25 +49,33 @@ function renderContactInformation(contactInformation) {
 }
 
 export async function updateSessionProfile({
+    siteId,
     sessionId,
     profiles,
     profileDetails,
     contactInformation,
+    consent,
 }) {
+    if (!siteId) {
+        throw new Error('webassist-session requires siteId.');
+    }
     if (!sessionId) {
-        throw new Error('update-session profile requires sessionId.');
+        throw new Error('webassist-session requires sessionId.');
     }
 
     const store = getDataStore();
-    const profileFileName = getSessionProfileFileName(sessionId);
+    const sessionFileName = getSessionHistoryFileName(sessionId);
     const nextProfiles = uniqueStrings(profiles);
     const nextProfileDetails = uniqueStrings(profileDetails);
+    const nextConsent = String(consent ?? '').trim() || '*None*';
     let existingContactInformationSection = '*None*';
     let existingContactInformation = {};
+    let existingHistory = '*None*';
     try {
-        const existingProfile = await store.getSectionMap(DATASTORE_TYPES.SESSIONS, profileFileName);
+        const existingProfile = await store.getSectionMap(DATASTORE_TYPES.SESSIONS, sessionFileName);
         existingContactInformationSection = existingProfile.sections?.[SESSION_SECTIONS.CONTACT_INFORMATION] ?? '*None*';
         existingContactInformation = store.parseKeyValue(existingContactInformationSection);
+        existingHistory = existingProfile.sections?.[SESSION_SECTIONS.HISTORY] ?? '*None*';
     } catch (error) {
         if (!error || error.code !== 'ENOENT') {
             throw error;
@@ -87,35 +94,43 @@ export async function updateSessionProfile({
         }
     }
 
-    await store.replaceFile(DATASTORE_TYPES.SESSIONS, profileFileName, {
-        [SESSION_SECTIONS.PROFILE]: store.renderList(nextProfiles),
+    await store.replaceFile(DATASTORE_TYPES.SESSIONS, sessionFileName, {
+        [SESSION_SECTIONS.TARGET_PROFILES]: store.renderList(nextProfiles),
         [SESSION_SECTIONS.PROFILE_DETAILS]: store.renderList(nextProfileDetails),
         [SESSION_SECTIONS.CONTACT_INFORMATION]: nextContactInformationSection,
+        [SESSION_SECTIONS.CONSENT]: nextConsent,
+        [SESSION_SECTIONS.HISTORY]: existingHistory,
     });
 
-    const savedProfile = await store.getSectionMap(DATASTORE_TYPES.SESSIONS, profileFileName);
+    const savedProfile = await store.getSectionMap(DATASTORE_TYPES.SESSIONS, sessionFileName);
     const parsedContactInformation = store.parseKeyValue(savedProfile.sections?.[SESSION_SECTIONS.CONTACT_INFORMATION]);
 
     return {
         success: true,
+        siteId,
         sessionId,
-        sessionProfilePath: `${profileFileName}.md`,
+        sessionPath: `${sessionFileName}.md`,
         sessionProfile: {
             profiles: nextProfiles,
             profileDetails: nextProfileDetails,
             contactInformation: parsedContactInformation,
+            consent: nextConsent,
             profileRawContent: savedProfile.rawMarkdown,
         },
     };
 }
 
 export async function appendSessionTurn({
+    siteId,
     sessionId,
     userMessage,
     agentResponse,
 }) {
+    if (!siteId) {
+        throw new Error('webassist-session history requires siteId.');
+    }
     if (!sessionId || !userMessage || !agentResponse) {
-        throw new Error('update-session history requires sessionId, userMessage, and agentResponse.');
+        throw new Error('webassist-session history requires sessionId, userMessage, and agentResponse.');
     }
 
     const store = getDataStore();
@@ -125,9 +140,21 @@ export async function appendSessionTurn({
         { speaker: 'Agent', message: agentResponse },
     ]);
     let existingHistory = '*None*';
+    let existingSections = {
+        [SESSION_SECTIONS.TARGET_PROFILES]: '*None*',
+        [SESSION_SECTIONS.PROFILE_DETAILS]: '*None*',
+        [SESSION_SECTIONS.CONTACT_INFORMATION]: '*None*',
+        [SESSION_SECTIONS.CONSENT]: '*None*',
+    };
     try {
         const existing = await store.getSectionMap(DATASTORE_TYPES.SESSIONS, historyFileName);
         existingHistory = existing.sections[SESSION_SECTIONS.HISTORY] ?? '*None*';
+        existingSections = {
+            [SESSION_SECTIONS.TARGET_PROFILES]: existing.sections?.[SESSION_SECTIONS.TARGET_PROFILES] ?? '*None*',
+            [SESSION_SECTIONS.PROFILE_DETAILS]: existing.sections?.[SESSION_SECTIONS.PROFILE_DETAILS] ?? '*None*',
+            [SESSION_SECTIONS.CONTACT_INFORMATION]: existing.sections?.[SESSION_SECTIONS.CONTACT_INFORMATION] ?? '*None*',
+            [SESSION_SECTIONS.CONSENT]: existing.sections?.[SESSION_SECTIONS.CONSENT] ?? '*None*',
+        };
     } catch (error) {
         if (!error || error.code !== 'ENOENT') {
             throw error;
@@ -135,6 +162,7 @@ export async function appendSessionTurn({
     }
 
     await store.replaceFile(DATASTORE_TYPES.SESSIONS, historyFileName, {
+        ...existingSections,
         [SESSION_SECTIONS.HISTORY]: existingHistory,
     });
     await store.appendToFile(DATASTORE_TYPES.SESSIONS, historyFileName, {
@@ -151,6 +179,7 @@ export async function appendSessionTurn({
 
     return {
         success: true,
+        siteId,
         sessionId,
         sessionHistoryPath: `${historyFileName}.md`,
         sessionHistory: {

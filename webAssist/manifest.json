@@ -27,9 +27,6 @@
         }
     },
     "cli": "node /code/src/index.mjs",
-    "volumes": {
-        ".ploinky/repos/AchillesIDE/data": "/data"
-    },
     "ideSettings": [
         {
             "key": "webassist-chat",

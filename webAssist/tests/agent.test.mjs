@@ -6,8 +6,10 @@ import { pathToFileURL } from 'node:url';
 import { LLMAgent } from 'achillesAgentLib';
 
 import { createWebAssistAgent } from '../src/index.mjs';
-import { getSessionHistoryFileName, getSessionProfileFileName } from '../src/constants/datastore.mjs';
+import { getSessionHistoryFileName } from '../src/constants/datastore.mjs';
 import { createWebAssistSandbox } from './helpers.mjs';
+
+const SITE_ID = 'demo-site';
 
 class FakeWebAssistLLM extends LLMAgent {
     constructor() {
@@ -27,35 +29,49 @@ class FakeWebAssistLLM extends LLMAgent {
 
         const runtimePrompt = String(context?.userPrompt ?? '');
         const sessionId = runtimePrompt.match(/"sessionId"\s*:\s*"([^\"]+)"/)?.[1] || 'visitor-42';
+        const siteId = runtimePrompt.match(/Site ID:\n([^\n]+)/)?.[1] || SITE_ID;
 
-        if (!prompt.includes('TOOL[create-lead]')) {
+        if (!prompt.includes('TOOL[webassist-match]')) {
             return {
-                tool: 'create-lead',
+                tool: 'webassist-match',
                 toolPrompt: JSON.stringify({
+                    siteId,
+                    sessionId,
+                    profile: 'Developer',
+                    mandatoryConditionsSatisfied: true,
+                    matchExplanation: 'High-intent developer asking for an API integration discussion.',
+                }),
+                reason: 'Validate qualified match.',
+            };
+        }
+
+        if (!prompt.includes('TOOL[webassist-lead]')) {
+            return {
+                tool: 'webassist-lead',
+                toolPrompt: JSON.stringify({
+                    siteId,
                     sessionId,
                     contactInfo: {
                         email: 'alice@example.com',
                         name: 'Alice Example',
                     },
                     profile: 'Developer',
+                    mandatoryConditionsSatisfied: true,
+                    matchExplanation: 'High-intent developer asking for an API integration discussion.',
+                    consentGranted: true,
+                    consentText: 'Alice explicitly agreed to follow-up storage.',
                     summary: 'High-intent developer asking for an API integration discussion.',
+                    contactRoute: 'https://cal.example.com/webassist-demo',
                 }),
-                reason: 'Create qualified lead.',
+                reason: 'Create qualified consented lead.',
             };
         }
 
-        if (!prompt.includes('TOOL[book-meeting]')) {
+        if (!prompt.includes('TOOL[webassist-session]')) {
             return {
-                tool: 'book-meeting',
-                toolPrompt: JSON.stringify({ sessionId }),
-                reason: 'Retrieve meeting details.',
-            };
-        }
-
-        if (!prompt.includes('TOOL[update-session-profile]')) {
-            return {
-                tool: 'update-session-profile',
+                tool: 'webassist-session',
                 toolPrompt: JSON.stringify({
+                    siteId,
                     sessionId,
                     profiles: ['Developer.md'],
                     profileDetails: ['Evaluating an API integration', 'Provided email address'],
@@ -63,6 +79,7 @@ class FakeWebAssistLLM extends LLMAgent {
                         name: 'Alice Example',
                         email: 'alice@example.com',
                     },
+                    consent: 'Alice explicitly agreed to follow-up storage.',
                 }),
                 reason: 'Persist profiling updates.',
             };
@@ -80,7 +97,7 @@ test('webAssist agent loads AchillesAgentLib and executes a full visitor turn', 
     const sandbox = await createWebAssistSandbox();
     t.after(async () => sandbox.cleanup());
     const sandboxDataStoreModule = await import(pathToFileURL(path.join(sandbox.agentRoot, 'src', 'runtime', 'dataStore.mjs')).href);
-    sandboxDataStoreModule.configureDataStore({ agentRoot: sandbox.agentRoot, dataDir: sandbox.dataDir });
+    sandboxDataStoreModule.configureDataStore({ agentRoot: sandbox.agentRoot, dataDir: sandbox.dataDir, siteId: SITE_ID });
 
     const llmAgent = new FakeWebAssistLLM();
     const agent = await createWebAssistAgent({
@@ -90,6 +107,7 @@ test('webAssist agent loads AchillesAgentLib and executes a full visitor turn', 
     });
 
     const result = await agent.handleMessage({
+        siteId: SITE_ID,
         sessionId: 'visitor-42',
         message: 'Buna, vreau sa integrez API-ul vostru. Sunt Alice, alice@example.com. Putem programa o discutie?',
     });
@@ -101,26 +119,22 @@ test('webAssist agent loads AchillesAgentLib and executes a full visitor turn', 
     assert.match(String(llmAgent.calls[0]?.context?.userPrompt ?? ''), /Conversation History \(last 10 replies\):/);
 
     const leadContent = await fs.readFile(
-        path.join(sandbox.dataDir, 'leads', 'visitor-42-lead.md'),
+        path.join(sandbox.dataDir, 'sites', SITE_ID, 'leads', 'visitor-42-lead.md'),
         'utf8'
     );
     assert.match(leadContent, /- \*\*Profile\*\*: Developer/);
     assert.match(leadContent, /alice@example\.com/);
 
-    const sessionProfileContent = await fs.readFile(
-        path.join(sandbox.dataDir, 'sessions', `${getSessionProfileFileName('visitor-42')}.md`),
-        'utf8'
-    );
     const sessionHistoryContent = await fs.readFile(
-        path.join(sandbox.dataDir, 'sessions', `${getSessionHistoryFileName('visitor-42')}.md`),
+        path.join(sandbox.dataDir, 'sites', SITE_ID, 'sessions', `${getSessionHistoryFileName('visitor-42')}.md`),
         'utf8'
     );
-    assert.match(sessionProfileContent, /- Developer\.md/);
-    assert.match(sessionProfileContent, /Evaluating an API integration/);
-    assert.match(sessionProfileContent, /Provided email address/);
-    assert.match(sessionProfileContent, /### 3\. Contact Information/);
-    assert.match(sessionProfileContent, /- \*\*name\*\*: Alice Example/);
-    assert.match(sessionProfileContent, /- \*\*email\*\*: alice@example\.com/);
+    assert.match(sessionHistoryContent, /- Developer\.md/);
+    assert.match(sessionHistoryContent, /Evaluating an API integration/);
+    assert.match(sessionHistoryContent, /Provided email address/);
+    assert.match(sessionHistoryContent, /### 3\. Contact Information/);
+    assert.match(sessionHistoryContent, /- \*\*name\*\*: Alice Example/);
+    assert.match(sessionHistoryContent, /- \*\*email\*\*: alice@example\.com/);
     assert.match(sessionHistoryContent, /Buna, vreau sa integrez API-ul vostru/);
     assert.match(sessionHistoryContent, /Mai jos gasiti linkul de programare/);
 });
