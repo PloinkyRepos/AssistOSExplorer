@@ -2,11 +2,12 @@ import WebSkel from './WebSkel/webskel.mjs';
 import assistosSDK, { initialiseAssistOS } from './services/assistosSDK.js';
 import { createComponentRegistry } from './services/runtime/componentRegistry.js';
 import { createRuntimePluginLoader } from './services/runtime/runtimePluginLoader.js';
-import { filterRuntimePluginsByPolicy } from './utils/pluginUtils.core.js';
+import { filterRuntimePluginsByPolicy, forEachRuntimePluginEntry } from './utils/pluginUtils.core.js';
 import { initializeTheme } from './utils/theme.js';
 
 const EXPLORER_AGENT_ID = 'explorer';
 const RUNTIME_PLUGIN_TOOL = 'collect_ide_plugins';
+const ROOM_ID_PATTERN = /^room_[0-9a-fA-F-]{36}$/;
 
 if (typeof window !== 'undefined') {
     window.ASSISTOS_AGENT_ID = window.ASSISTOS_AGENT_ID || EXPLORER_AGENT_ID;
@@ -62,6 +63,33 @@ const parseAllowedDirectories = (result) => {
         .filter((entry) => entry && !/^allowed directories:?$/i.test(entry));
 };
 
+function getRoomEntryFromUrl() {
+    if (typeof window === 'undefined') {
+        return null;
+    }
+    const params = new URLSearchParams(window.location.search || '');
+    const roomId = String(params.get('roomId') || '').trim();
+    if (!ROOM_ID_PATTERN.test(roomId)) {
+        return null;
+    }
+    return {
+        roomId
+    };
+}
+
+function hasWebMeetRuntimePlugin(runtimePlugins) {
+    let found = false;
+    forEachRuntimePluginEntry(runtimePlugins, (plugin) => {
+        const agent = String(plugin?.agent || '').trim();
+        const id = String(plugin?.id || '').trim();
+        const component = String(plugin?.component || '').trim();
+        if (agent === 'webmeetAgent' && (id === 'webmeet' || component === 'webmeet-tool-button')) {
+            found = true;
+        }
+    });
+    return found;
+}
+
 async function bootstrapWorkspaceRoot() {
     try {
         const result = await assistosSDK.callTool(EXPLORER_AGENT_ID, 'list_allowed_directories', {});
@@ -95,7 +123,10 @@ async function start() {
     initializeTheme();
     const webSkel = await WebSkel.initialise('webskel.json');
     webSkel.appServices = assistosSDK;
-    await bootstrapWorkspaceRoot();
+    const roomEntry = getRoomEntryFromUrl();
+    if (!roomEntry) {
+        await bootstrapWorkspaceRoot();
+    }
 
     const componentRegistry = createComponentRegistry(webSkel);
     const runtimePluginLoader = createRuntimePluginLoader({
@@ -110,7 +141,12 @@ async function start() {
     const { raw: rawRuntimePlugins, normalized: runtimePluginsRaw } = await runtimePluginLoader.fetchRuntimePlugins();
     const runtimePlugins = filterRuntimePluginsByPolicy(runtimePluginsRaw, runtimePluginPolicy);
     const filteredRawRuntimePlugins = filterRuntimePluginsByPolicy(rawRuntimePlugins, runtimePluginPolicy);
-    const pluginSettingsResult = await assistosSDK.callTool(EXPLORER_AGENT_ID, 'get_plugin_settings', {});
+    if (roomEntry && !hasWebMeetRuntimePlugin(runtimePlugins)) {
+        throw new Error('WebMeet runtime plugin is unavailable.');
+    }
+    const pluginSettingsResult = roomEntry
+        ? { json: {} }
+        : await assistosSDK.callTool(EXPLORER_AGENT_ID, 'get_plugin_settings', {});
     const pluginSettings = normalizePluginSettings(pluginSettingsResult?.json);
     const assistOS = initialiseAssistOS({
         ui: webSkel,
@@ -184,9 +220,13 @@ async function start() {
     const hash = window.location.hash;
     let pageName;
     let url;
+    let suppressNavigationHash = false;
     if (hash) {
         url = hash.substring(1);
         pageName = url.split('/')[0].split('?')[0];
+    } else if (ROOM_ID_PATTERN.test(String(new URLSearchParams(window.location.search || '').get('roomId') || '').trim())) {
+        pageName = 'webmeet-dashboard';
+        url = 'webmeet-dashboard';
     } else {
         pageName = 'file-exp';
         url = 'file-exp';
@@ -195,7 +235,7 @@ async function start() {
     const loadedRuntimeComponents = await runtimePluginLoader.loadComponents(runtimePlugins, { includeDependencies: false });
     assistOS.runtimePluginComponents = loadedRuntimeComponents;
 
-    await webSkel.changeToDynamicPage(pageName || 'file-exp', url || 'file-exp');
+    await webSkel.changeToDynamicPage(pageName || 'file-exp', url || 'file-exp', null, suppressNavigationHash);
     window.webSkel = webSkel;
 }
 
