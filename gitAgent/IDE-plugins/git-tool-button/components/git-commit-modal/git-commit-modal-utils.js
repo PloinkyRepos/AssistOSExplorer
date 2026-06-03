@@ -266,6 +266,30 @@ export function buildFallbackCommitMessage(selections = []) {
         : `Sync changes across ${repoCount} repositories`;
 }
 
+export function buildEditableFallbackCommitMessage(selections = []) {
+    const entries = Array.isArray(selections) ? selections : [];
+    const files = [];
+    for (const entry of entries) {
+        const repoPath = stripTrailingSlash(entry?.repoPath || '');
+        const list = Array.isArray(entry?.files) ? entry.files : [];
+        for (const file of list) {
+            const normalizedFile = normalizeSlashes(String(file || '').trim());
+            if (!normalizedFile) continue;
+            const normalizedRepo = repoPath ? normalizeSlashes(repoPath) : '';
+            const displayPath = normalizedRepo && normalizedFile.startsWith(`${normalizedRepo}/`)
+                ? normalizedFile.slice(normalizedRepo.length + 1)
+                : normalizedFile.replace(/^\/+/, '');
+            if (displayPath) files.push(displayPath);
+        }
+    }
+    const uniqueFiles = [...new Set(files)];
+    if (!uniqueFiles.length) return 'Update project files';
+    return [
+        'Update project files:',
+        ...uniqueFiles.map((file) => `- ${file}`)
+    ].join('\n');
+}
+
 export function isGitConflictError(message) {
     const text = String(message || '');
     const lower = text.toLowerCase();

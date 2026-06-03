@@ -1,4 +1,9 @@
-import { normalizeErrorMessage, parseJsonToolResult } from "./git-commit-modal-utils.js";
+import {
+    buildEditableFallbackCommitMessage,
+    normalizeSlashes,
+    parseJsonToolResult,
+    stripTrailingSlash
+} from "./git-commit-modal-utils.js";
 import { withGlobalLoader } from "/explorer/utils/globalLoader.js";
 
 export function createCommitMessageActions(ctx) {
@@ -50,6 +55,49 @@ export function createCommitMessageActions(ctx) {
         return out.join('\n');
     };
 
+    const encodeBase64 = (value) => {
+        const raw = String(value ?? '');
+        try {
+            return btoa(unescape(encodeURIComponent(raw)));
+        } catch {
+            try {
+                return btoa(raw);
+            } catch {
+                return '';
+            }
+        }
+    };
+
+    const getFallbackFileList = (selections) => {
+        const out = [];
+        const entries = Array.isArray(selections) ? selections : [];
+        for (const selection of entries) {
+            const repoPath = stripTrailingSlash(selection?.repoPath || '');
+            const files = Array.isArray(selection?.files) ? selection.files : [];
+            for (const file of files) {
+                const normalizedFile = normalizeSlashes(String(file || '').trim());
+                if (!normalizedFile) continue;
+                const normalizedRepo = repoPath ? normalizeSlashes(repoPath) : '';
+                const displayPath = normalizedRepo && normalizedFile.startsWith(`${normalizedRepo}/`)
+                    ? normalizedFile.slice(normalizedRepo.length + 1)
+                    : normalizedFile.replace(/^\/+/, '');
+                if (displayPath) out.push(displayPath);
+            }
+        }
+        return [...new Set(out)];
+    };
+
+    const promptForFallbackCommitMessage = async (selections) => {
+        const fallbackMessage = buildEditableFallbackCommitMessage(selections);
+        const files = getFallbackFileList(selections);
+        const result = await assistOS.UI.showModal('git-commit-message-fallback-modal', {
+            message: encodeBase64(fallbackMessage),
+            files: encodeBase64(JSON.stringify(files))
+        }, true);
+        const message = String(result?.message || '').trim();
+        return message || null;
+    };
+
     const generateCommitMessageForSelections = async (selections) => {
         const cleanSelections = Array.isArray(selections) ? selections : [];
         const diffs = [];
@@ -92,17 +140,17 @@ export function createCommitMessageActions(ctx) {
         }
 
         setStatusLine('Generating commit message...');
-        return withGlobalLoader(async () => {
-            try {
-                const selections = selectedRepos.map((repoPath) => ({
-                    repoPath,
-                    files: getPathsForCommitInRepo(repoPath)
-                })).filter((entry) => entry.repoPath && Array.isArray(entry.files) && entry.files.length > 0);
-                if (!selections.length) {
-                    setStatusLine('Select at least one file to generate a message.', true);
-                    return;
-                }
+        const selections = selectedRepos.map((repoPath) => ({
+            repoPath,
+            files: getPathsForCommitInRepo(repoPath)
+        })).filter((entry) => entry.repoPath && Array.isArray(entry.files) && entry.files.length > 0);
+        if (!selections.length) {
+            setStatusLine('Select at least one file to generate a message.', true);
+            return;
+        }
 
+        const result = await withGlobalLoader(async () => {
+            try {
                 const diffs = [];
                 const maxFilesPerRepo = 80;
                 const maxFilesTotal = 20;
@@ -125,8 +173,7 @@ export function createCommitMessageActions(ctx) {
                 }
 
                 if (!diffs.length) {
-                    setStatusLine('Select at least one file to generate a message.', true);
-                    return;
+                    return { ok: false, emptySelection: true };
                 }
 
                 const payloadText = await service.generateCommitMessage(diffs);
@@ -140,17 +187,37 @@ export function createCommitMessageActions(ctx) {
                 const next = String(payload.message || '').trim();
                 if (!next) throw new Error('AI returned an empty commit message.');
 
-                setCommitMessage(next);
-                updateCommitButtons();
-                setStatusLine('Commit message generated.');
+                return { ok: true, message: next };
             } catch (error) {
-                setStatusLine(normalizeErrorMessage(error), true);
+                return { ok: false, error };
             }
         });
+
+        if (result?.ok) {
+            setCommitMessage(result.message);
+            updateCommitButtons();
+            setStatusLine('Commit message generated.');
+            return;
+        }
+
+        if (result?.emptySelection) {
+            setStatusLine('Select at least one file to generate a message.', true);
+            return;
+        }
+
+        const message = await promptForFallbackCommitMessage(selections);
+        if (!message) {
+            setStatusLine('Commit message generation canceled.', true);
+            return;
+        }
+        setCommitMessage(message);
+        updateCommitButtons();
+        setStatusLine('Using edited fallback commit message.');
     };
 
     return {
         generateCommitMessageForSelections,
+        promptForFallbackCommitMessage,
         generateCommitMessage
     };
 }

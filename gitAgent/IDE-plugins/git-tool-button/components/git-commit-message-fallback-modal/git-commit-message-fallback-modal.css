@@ -1,0 +1,65 @@
+.git-commit-message-fallback {
+    min-width: min(620px, calc(100vw - 48px));
+}
+
+.git-commit-message-fallback-warning {
+    margin: 0 0 6px;
+    color: var(--text);
+    font-size: 0.98rem;
+    font-weight: 600;
+}
+
+.git-commit-message-fallback-subtitle {
+    margin: 0 0 12px;
+    color: var(--text-soft);
+    font-size: 0.9rem;
+}
+
+.git-commit-message-fallback-files {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 160px;
+    overflow-y: auto;
+    margin-bottom: 12px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+}
+
+.git-commit-message-fallback-file {
+    color: var(--text-soft);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    font-size: 0.82rem;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+
+.git-commit-message-fallback-label {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--text);
+    font-size: 0.86rem;
+    font-weight: 600;
+}
+
+.git-commit-message-fallback-textarea {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 150px;
+    resize: vertical;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+    line-height: 1.35;
+}
+
+.git-commit-message-fallback-error {
+    margin-top: 8px;
+    color: var(--danger, #b42318);
+    font-size: 0.86rem;
+}

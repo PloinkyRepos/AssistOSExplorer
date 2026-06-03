@@ -21,6 +21,11 @@
             "type": "modal"
         },
         {
+            "component": "git-commit-message-fallback-modal",
+            "presenter": "GitCommitMessageFallbackModal",
+            "type": "modal"
+        },
+        {
             "component": "git-new-repository-modal",
             "presenter": "GitNewRepositoryModal",
             "type": "modal"

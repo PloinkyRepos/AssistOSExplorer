@@ -5,7 +5,8 @@ import {
     humanizeGitError,
     isGitAuthError,
     isLlmUnavailableError,
-    buildFallbackCommitMessage
+    buildFallbackCommitMessage,
+    buildEditableFallbackCommitMessage
 } from '../../IDE-plugins/git-tool-button/components/git-commit-modal/git-commit-modal-utils.js';
 
 test('isLlmUnavailableError matches missing model configuration failures', () => {
@@ -66,4 +67,57 @@ test('buildFallbackCommitMessage summarizes multi-repo selections', () => {
         ]),
         'Sync changes across 2 repositories'
     );
+});
+
+test('buildEditableFallbackCommitMessage includes the complete affected file list', () => {
+    const message = buildEditableFallbackCommitMessage([
+        {
+            repoPath: '/workspace/demo-repo',
+            files: [
+                'README.md',
+                'src/index.js',
+                'src/utils/helpers.js'
+            ]
+        }
+    ]);
+
+    assert.equal(
+        message,
+        [
+            'Update selected files',
+            '',
+            'Affected files:',
+            '- README.md',
+            '- src/index.js',
+            '- src/utils/helpers.js'
+        ].join('\n')
+    );
+});
+
+test('buildEditableFallbackCommitMessage preserves distinct relative paths', () => {
+    const message = buildEditableFallbackCommitMessage([
+        {
+            repoPath: '/workspace/demo-repo',
+            files: [
+                '/workspace/demo-repo/client/index.js',
+                '/workspace/demo-repo/server/index.js',
+                '/workspace/demo-repo/client/index.js'
+            ]
+        }
+    ]);
+
+    assert.equal(message.includes('- client/index.js'), true);
+    assert.equal(message.includes('- server/index.js'), true);
+    assert.equal(message.match(/client\/index\.js/g)?.length, 1);
+});
+
+test('buildEditableFallbackCommitMessage is not empty for valid selections', () => {
+    const message = buildEditableFallbackCommitMessage([
+        {
+            repoPath: '/workspace/demo-repo',
+            files: ['package.json']
+        }
+    ]);
+
+    assert.equal(Boolean(message.trim()), true);
 });

@@ -7,9 +7,6 @@ import {
     isGitIdentityError,
     isGitConflictError,
     isGitPullBlockedError,
-    isLlmUnavailableError,
-    buildFallbackCommitMessage,
-    extractGitPullBlockedFiles,
     getRememberedGitIdentity,
     getEffectiveGitIdentity,
     getRememberedGitAuthMethod,
@@ -52,7 +49,8 @@ export function createGitOpsActions(ctx) {
         getAheadCountForRepo,
         dispatchAutocommitStop,
         dispatchAutocommitReset,
-        generateCommitMessageForSelections
+        generateCommitMessageForSelections,
+        promptForFallbackCommitMessage
     } = ctx;
 
     const formatCount = (count, singular, plural = `${singular}s`) => {
@@ -237,6 +235,13 @@ export function createGitOpsActions(ctx) {
     const gitPullWithToken = async (repoPath, _token = null) => {
         const payload = { path: repoPath, rebase: false, ffOnly: false };
         await service.gitPull(payload);
+    };
+
+    const restoreStagedSnapshots = async (snapshots) => {
+        if (!(snapshots instanceof Map) || snapshots.size === 0) return;
+        for (const [repoPath, files] of snapshots.entries()) {
+            await service.gitStageExact(repoPath, Array.isArray(files) ? files : []);
+        }
     };
 
     const pushRepos = async (repoPaths, { token = null, allowNoop = false, showNoopStatus = true } = {}) => {
@@ -534,7 +539,88 @@ export function createGitOpsActions(ctx) {
         applyState({ pendingAction: { type: 'sync', mode: 'batch', repoPaths: selected } }, { silent: true });
         clearPullBlockedState();
         setStatusLine(`Syncing ${selected.length} repo(s)…`);
-        return withGlobalLoader(async () => {
+
+        const finishSyncWithMessage = async ({ pullResult, stagedSelections, message }) => {
+            if (!message) {
+                setStatusLine('AI returned an empty commit message.', true);
+                dispatchAutocommitStop();
+                return;
+            }
+            setCommitMessage(message);
+            updateCommitButtons();
+            let committedRepos = 0;
+            let committedFiles = 0;
+
+            for (const selection of stagedSelections) {
+                const repoPath = selection.repoPath;
+                const commitResult = await commitSelectionForRepo({
+                    repoPath,
+                    files: selection.files,
+                    message,
+                    pendingAction: { type: 'sync', mode: 'batch', repoPaths: selected },
+                    state
+                });
+                if (!commitResult?.ok) {
+                    dispatchAutocommitStop();
+                    return;
+                }
+                if (!commitResult.committed) continue;
+                committedRepos += 1;
+                committedFiles += commitResult.fileCount;
+            }
+
+            const auth = getAuthContext(getState(), tokenOverride);
+            let pushedRepos = 0;
+            let pushedCommits = 0;
+            for (const repoPath of selected) {
+                try {
+                    const aheadCount = Math.max(0, Number(await getAheadCountForRepo(repoPath)) || 0);
+                    await gitPushAfterEnsuringRemote(repoPath);
+                    pushedRepos += 1;
+                    pushedCommits += Math.max(1, aheadCount);
+                } catch (error) {
+                    const msg = normalizeErrorMessage(error);
+                    const human = humanizeGitError(msg, { action: 'push' });
+                    if (isGitAuthError(msg)) {
+                        if (auth.usingGithub && !auth.githubConnected) {
+                            showGitAuthPrompt(repoPath, { type: 'sync', mode: 'batch', repoPaths: selected }, { message: human, authMethod: 'github' });
+                            dispatchAutocommitStop();
+                            return;
+                        }
+                        if (!auth.usingGithub && !auth.tokenStored) {
+                            showGitAuthPrompt(repoPath, { type: 'sync', mode: 'batch', repoPaths: selected }, { message: human, authMethod: 'token' });
+                            dispatchAutocommitStop();
+                            return;
+                        }
+                        setStatusLine(
+                            auth.usingGithub
+                                ? `${human} (Reconnect GitHub or switch to Token.)`
+                                : `${human} (Use Token to update credentials or switch to GitHub.)`,
+                            true
+                        );
+                        dispatchAutocommitStop();
+                        return;
+                    }
+                    throw error;
+                }
+            }
+
+            applyState({ selectedFilesByRepo: {}, commitMessage: '' }, { silent: true });
+            clearCommitMessageInput();
+            applyState({ pendingAction: null }, { silent: true });
+            await refreshAfterGitOperation({ keepStatus: true });
+            setStatusLine(buildCompletionMessage({
+                intro: 'Sync finished.',
+                details: [
+                    pullResult.pulledRepos > 0 ? `pulled the latest changes for ${formatCount(pullResult.pulledRepos, 'repository')}` : '',
+                    committedRepos > 0 ? `committed ${formatCount(committedFiles, 'file')} in ${formatCount(committedRepos, 'repository')}` : '',
+                    pushedRepos > 0 ? `pushed ${formatCount(pushedCommits, 'commit')} from ${formatCount(pushedRepos, 'repository')}` : ''
+                ]
+            }));
+            dispatchAutocommitReset();
+        };
+
+        const prepareResult = await withGlobalLoader(async () => {
             try {
                 const pullResult = await pullRepos(selected, {
                     pendingAction: { type: 'sync', mode: 'batch', repoPaths: selected },
@@ -542,9 +628,11 @@ export function createGitOpsActions(ctx) {
                 });
                 if (!pullResult?.ok) return;
                 const stagedSelections = [];
+                const initialStagedByRepo = new Map();
                 for (const repoPath of selected) {
                     const statusPayload = parseJsonToolResult(await service.gitStatus(repoPath)) || {};
                     updateRepoOverviewFromStatus(repoPath, statusPayload);
+                    initialStagedByRepo.set(repoPath, normalizeGitStatusPayload(statusPayload).paths.staged);
                     const selectedPaths = getPathsForCommitInRepo(repoPath);
                     if (selectedPaths.length) {
                         await service.gitStageExact(repoPath, selectedPaths);
@@ -571,96 +659,42 @@ export function createGitOpsActions(ctx) {
                     return;
                 }
 
-                let usedFallbackCommitMessage = false;
                 let message = '';
                 try {
                     message = await generateCommitMessageForSelections(stagedSelections);
                 } catch (error) {
-                    const raw = normalizeErrorMessage(error);
-                    if (!isLlmUnavailableError(raw)) {
-                        throw error;
-                    }
-                    message = buildFallbackCommitMessage(stagedSelections);
-                    usedFallbackCommitMessage = true;
+                    return { needsFallback: true, pullResult, stagedSelections, initialStagedByRepo };
                 }
-                if (!message) {
-                    setStatusLine('AI returned an empty commit message.', true);
-                    dispatchAutocommitStop();
-                    return;
-                }
-                setCommitMessage(message);
-                updateCommitButtons();
-                let committedRepos = 0;
-                let committedFiles = 0;
+                await finishSyncWithMessage({ pullResult, stagedSelections, message });
+                return { done: true };
+            } catch (error) {
+                setStatusLine(humanizeGitError(normalizeErrorMessage(error), { action: 'push' }), true);
+                dispatchAutocommitStop();
+                return { done: true };
+            }
+        });
 
-                for (const selection of stagedSelections) {
-                    const repoPath = selection.repoPath;
-                    const commitResult = await commitSelectionForRepo({
-                        repoPath,
-                        files: selection.files,
-                        message,
-                        pendingAction: { type: 'sync', mode: 'batch', repoPaths: selected },
-                        state
-                    });
-                    if (!commitResult?.ok) {
-                        dispatchAutocommitStop();
-                        return;
-                    }
-                    if (!commitResult.committed) continue;
-                    committedRepos += 1;
-                    committedFiles += commitResult.fileCount;
-                }
+        if (!prepareResult?.needsFallback) return;
 
-                const auth = getAuthContext(getState(), tokenOverride);
-                let pushedRepos = 0;
-                let pushedCommits = 0;
-                for (const repoPath of selected) {
-                    try {
-                        const aheadCount = Math.max(0, Number(await getAheadCountForRepo(repoPath)) || 0);
-                        await gitPushAfterEnsuringRemote(repoPath);
-                        pushedRepos += 1;
-                        pushedCommits += Math.max(1, aheadCount);
-                    } catch (error) {
-                        const msg = normalizeErrorMessage(error);
-                        const human = humanizeGitError(msg, { action: 'push' });
-                        if (isGitAuthError(msg)) {
-                            if (auth.usingGithub && !auth.githubConnected) {
-                                showGitAuthPrompt(repoPath, { type: 'sync', mode: 'batch', repoPaths: selected }, { message: human, authMethod: 'github' });
-                                dispatchAutocommitStop();
-                                return;
-                            }
-                            if (!auth.usingGithub && !auth.tokenStored) {
-                                showGitAuthPrompt(repoPath, { type: 'sync', mode: 'batch', repoPaths: selected }, { message: human, authMethod: 'token' });
-                                dispatchAutocommitStop();
-                                return;
-                            }
-                            setStatusLine(
-                                auth.usingGithub
-                                    ? `${human} (Reconnect GitHub or switch to Token.)`
-                                    : `${human} (Use Token to update credentials or switch to GitHub.)`,
-                                true
-                            );
-                            dispatchAutocommitStop();
-                            return;
-                        }
-                        throw error;
-                    }
-                }
-
-                applyState({ selectedFilesByRepo: {}, commitMessage: '' }, { silent: true });
-                clearCommitMessageInput();
+        const message = await promptForFallbackCommitMessage(prepareResult.stagedSelections);
+        if (!message) {
+            await withGlobalLoader(async () => {
+                await restoreStagedSnapshots(prepareResult.initialStagedByRepo);
                 applyState({ pendingAction: null }, { silent: true });
                 await refreshAfterGitOperation({ keepStatus: true });
-                setStatusLine(buildCompletionMessage({
-                    intro: 'Sync finished.',
-                    details: [
-                        pullResult.pulledRepos > 0 ? `pulled the latest changes for ${formatCount(pullResult.pulledRepos, 'repository')}` : '',
-                        committedRepos > 0 ? `committed ${formatCount(committedFiles, 'file')} in ${formatCount(committedRepos, 'repository')}` : '',
-                        pushedRepos > 0 ? `pushed ${formatCount(pushedCommits, 'commit')} from ${formatCount(pushedRepos, 'repository')}` : ''
-                    ],
-                    outro: usedFallbackCommitMessage ? 'Used a fallback commit message because no LLM model is configured.' : ''
-                }));
-                dispatchAutocommitReset();
+            });
+            setStatusLine('Commit message generation canceled. Sync stopped.');
+            dispatchAutocommitReset();
+            return;
+        }
+
+        return withGlobalLoader(async () => {
+            try {
+                await finishSyncWithMessage({
+                    pullResult: prepareResult.pullResult,
+                    stagedSelections: prepareResult.stagedSelections,
+                    message
+                });
             } catch (error) {
                 setStatusLine(humanizeGitError(normalizeErrorMessage(error), { action: 'push' }), true);
                 dispatchAutocommitStop();

@@ -100,7 +100,11 @@ export function createGitCommitActions(ctx) {
         getSelectedReposForBatch,
         getPathsForCommitInRepo
     });
-    const { generateCommitMessageForSelections, generateCommitMessage } = commitMessageActions;
+    const {
+        generateCommitMessageForSelections,
+        promptForFallbackCommitMessage,
+        generateCommitMessage
+    } = commitMessageActions;
 
     const credentialsActions = createCredentialsActions({
         getState,
@@ -520,6 +524,7 @@ export function createGitCommitActions(ctx) {
         dispatchAutocommitStop,
         dispatchAutocommitReset,
         generateCommitMessageForSelections,
+        promptForFallbackCommitMessage,
         stashSelectedRepos,
         unstashSelectedRepos
     });
