@@ -13,35 +13,41 @@ Define, in full detail, what `webassist-settings` can configure and how each set
 ## Settings surface (`webassist-settings`)
 
 ### Available configuration fields
-1. **Theme** (`#webassistTheme`)
+1. **Site ID** (`#webassistSiteId`)
+   - Type: text (max 80 chars)
+   - Default: `demo-site`
+   - Required at runtime: chat surface is disabled if `siteId` is missing or empty.
+   - Normalized to a filesystem-safe identifier (alphanumeric, `-`, `.`, `_` only).
+
+2. **Theme** (`#webassistTheme`)
    - Allowed values: `light`, `dark`, `aqua`, `forest`, `amethyst`
    - Default: `light`
    - Each theme preset provides a coordinated palette for background, user bubble, agent bubble, and header colors.
    - On change, color fields are reset to the selected theme's defaults.
 
-2. **Header Text** (`#webassistHeaderText`)
+3. **Header Text** (`#webassistHeaderText`)
    - Default: `WebAssist Assistant`
    - Max length: `100`
    - Empty/whitespace falls back to default when URL/snippet is generated.
 
-3. **Subheader Text** (`#webassistSubtitleText`)
+4. **Subheader Text** (`#webassistSubtitleText`)
    - Default: `Embedded preview`
    - Max length: `120`
    - Empty/whitespace falls back to default when URL/snippet is generated.
 
-4. **Chat Background** (`#webassistChatBackground`)
+5. **Chat Background** (`#webassistChatBackground`)
    - Type: hex color (`#RRGGBB`)
    - Invalid values are rejected and previous valid/default value is kept.
 
-5. **User Bubble** (`#webassistUserBubble`)
+6. **User Bubble** (`#webassistUserBubble`)
    - Type: hex color (`#RRGGBB`)
    - Invalid values are rejected and previous valid/default value is kept.
 
-6. **Agent Bubble** (`#webassistAgentBubble`)
+7. **Agent Bubble** (`#webassistAgentBubble`)
    - Type: hex color (`#RRGGBB`)
    - Invalid values are rejected and previous valid/default value is kept.
 
-7. **Header Color** (`#webassistHeaderColor`)
+8. **Header Color** (`#webassistHeaderColor`)
    - Type: hex color (`#RRGGBB`)
    - Invalid values are rejected and previous valid/default value is kept.
 
@@ -55,6 +61,7 @@ Define, in full detail, what `webassist-settings` can configure and how each set
 - Embed URL format:
   - `{origin}/webAssist/IDE-plugins/web-assist-chat/web-assist-chat.html?{query}`
 - Query parameters included:
+  - `siteId` (required) — website scope identifier; chat is disabled if missing or empty
   - `theme`
   - `headerText`
   - `subtitleText`
@@ -124,6 +131,10 @@ Define, in full detail, what `webassist-settings` can configure and how each set
 ### Theme and visual configuration intake
 - `web-assist-chat` reads URL query params and applies CSS custom properties:
   - `--chat-bg`, `--chat-user`, `--chat-agent`, `--chat-header`
+- `siteId` is read from the URL query param at startup:
+  - If missing or empty, the chat surface is disabled with an error message and no MCP calls are made.
+  - Browser storage keys are scoped to siteId: `webassist-chat:sessionId:<siteId>`, `webassist-chat:visitorId:<siteId>`.
+  - All MCP tool calls include `siteId` as a required parameter.
 - Existing settings fields also drive additional surfaces (without adding extra settings controls):
   - `chatBackground` also styles composer and input backgrounds,
   - `userBubble` also styles the send button as a **solid** color,
@@ -140,16 +151,20 @@ Define, in full detail, what `webassist-settings` can configure and how each set
 - MCP client module: `/MCPBrowserClient.js`
 - Endpoint: `/webAssist/mcp` (always; no token-based routing)
 - Tools:
-  - `web_cli_chat` with `{ message, sessionId?, json: true }`
-  - `web_cli_history` with `{ sessionId }`
+  - `list-sites` with `{ dataDir?, agentRoot? }` — returns `{ sites: [...], count: N, dataDir }`
+  - `web_cli_chat` with `{ siteId, message, sessionId?, json: true }`
+  - `web_cli_history` with `{ siteId, sessionId }`
+  - `register-events` with `{ siteId, visitorId, eventType, ... }`
+- All tools except `list-sites` require `siteId` as a mandatory parameter.
 - Chat response parsing:
   - accepts plain JSON or JSON wrapped in text,
   - extracts assistant text from `message`/`response`/raw output,
   - strips CLI noise lines (`Session ID`, `Type exit...`, `you>` prompts).
 
 ### Session and history behavior
-- Session storage key:
-  - `webassist-global-chat:sessionId` (single global key for all tabs and modes)
+- Session storage keys (site-scoped):
+  - `webassist-chat:sessionId:<siteId>`
+  - `webassist-chat:visitorId:<siteId>`
 - Persistence:
   - `localStorage` is used (not `sessionStorage`), so the `sessionId` survives tab close and is shared across all open tabs in the same browser.
 - On successful chat response:

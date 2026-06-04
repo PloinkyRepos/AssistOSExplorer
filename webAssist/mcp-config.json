@@ -1,6 +1,25 @@
 {
     "tools": [
         {
+            "name": "list-sites",
+            "title": "List Sites",
+            "description": "List all available site IDs from the webAssist data directory.",
+            "command": "/code/src/mcp/list-sites.mjs",
+            "cwd": "workspace",
+            "inputSchema": {
+                "dataDir": {
+                    "type": "string",
+                    "description": "Optional data directory override",
+                    "optional": true
+                },
+                "agentRoot": {
+                    "type": "string",
+                    "description": "Optional agent root override",
+                    "optional": true
+                }
+            }
+        },
+        {
             "name": "web_cli_chat",
             "title": "Web CLI Chat",
             "description": "Execute a one-shot webAssist request in MCP mode.",
