@@ -13,7 +13,7 @@ export async function openWebMeet(page, account = smokeConfig.primaryUser) {
   } else {
     await page.goto('/explorer/index.html#webmeet-dashboard', { waitUntil: 'domcontentloaded' });
   }
-  await expect(page.locator('.webmeet-dashboard-modal')).toBeVisible({ timeout: smokeConfig.timeouts.navigation });
+  await expect(page.locator('.webmeet-dashbaoard')).toBeVisible({ timeout: smokeConfig.timeouts.navigation });
   await expect(page.locator('#webmeetCreateRoomButton')).toBeVisible();
 }
 

@@ -12,8 +12,16 @@ test.describe('WebMeet settings', () => {
 
     const settingsPanel = page.locator('#webmeetMediaSettingsPanel');
     await expect(settingsPanel).toBeVisible();
+    const settingsDialog = page.locator('dialog.webmeet-settings-modal-dialog');
+    await expect(settingsDialog).toBeVisible();
+    await page.locator('#webmeetSettingsFullscreenButton').click();
+    await expect(settingsDialog).toHaveClass(/is-fullscreen/);
     await expect(settingsPanel).toContainText('Audio & video');
     await expect(settingsPanel).toContainText('Background & privacy');
+    await expect(page.locator('#webmeetVoiceProcessingMode')).toHaveValue('auto');
+    await expect(page.locator('#webmeetVoiceProcessingMode option').first()).toHaveText('Automatic, recommended');
+    await expect(page.locator('#webmeetAutomaticParticipantVolume')).toBeChecked();
+    await expect(page.locator('#webmeetAudioHealthValue')).toHaveText('Good');
 
     const effectSelect = page.locator('#webmeetBackgroundEffectSelect');
     await expect(effectSelect).toBeVisible();
