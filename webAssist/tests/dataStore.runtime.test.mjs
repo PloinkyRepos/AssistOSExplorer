@@ -11,22 +11,43 @@ import {
     resolveSiteDataDir,
 } from '../src/runtime/dataStore.mjs';
 
-test('default data directory resolves to current working directory data folder', async () => {
-    const previousCwd = process.cwd();
+test('default data directory resolves to WORKSPACE_PATH/data', async () => {
     const sandboxRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'webassist-datastore-'));
+    const workspacePath = path.join(sandboxRoot, 'workspace');
+    await fs.mkdir(workspacePath, { recursive: true });
 
+    const originalEnv = process.env.WORKSPACE_PATH;
     try {
-        process.chdir(sandboxRoot);
+        process.env.WORKSPACE_PATH = workspacePath;
 
-        const expectedDataDir = path.join(sandboxRoot, 'data');
+        const expectedDataDir = path.join(workspacePath, 'data');
         assert.equal(resolveDataDir('/ignored-agent-root'), expectedDataDir);
         assert.equal(resolveSiteDataDir(expectedDataDir, 'demo-site'), path.join(expectedDataDir, 'sites', 'demo-site'));
 
         configureDataStore({ agentRoot: '/ignored-agent-root', siteId: 'demo-site' });
         assert.equal(getConfiguredDataDir(), path.join(expectedDataDir, 'sites', 'demo-site'));
     } finally {
-        process.chdir(previousCwd);
+        if (originalEnv !== undefined) {
+            process.env.WORKSPACE_PATH = originalEnv;
+        } else {
+            delete process.env.WORKSPACE_PATH;
+        }
         await fs.rm(sandboxRoot, { recursive: true, force: true });
+    }
+});
+
+test('throws when WORKSPACE_PATH is not set', async () => {
+    const originalEnv = process.env.WORKSPACE_PATH;
+    try {
+        delete process.env.WORKSPACE_PATH;
+        assert.throws(
+            () => resolveDataDir('/ignored-agent-root'),
+            /WORKSPACE_PATH is required/
+        );
+    } finally {
+        if (originalEnv !== undefined) {
+            process.env.WORKSPACE_PATH = originalEnv;
+        }
     }
 });
 

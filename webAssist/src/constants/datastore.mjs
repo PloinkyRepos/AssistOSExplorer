@@ -24,10 +24,15 @@ export const SESSION_SECTION_INDEX = {
 };
 
 export const SESSION_FILE_SUFFIX = {
+    PROFILE: 'profile',
     HISTORY: 'history',
 };
 
 export const LEAD_FILE_SUFFIX = 'lead';
+
+export function getSessionProfileFileName(sessionId) {
+    return `${sessionId}-${SESSION_FILE_SUFFIX.PROFILE}`;
+}
 
 export function getSessionHistoryFileName(sessionId) {
     return `${sessionId}-${SESSION_FILE_SUFFIX.HISTORY}`;

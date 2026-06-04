@@ -6,11 +6,11 @@ import path from 'node:path';
 import { createWebAssistSandbox } from './helpers.mjs';
 import { appendSessionTurn, updateSessionProfile } from '../src/runtime/update-session.mjs';
 import { configureDataStore } from '../src/runtime/dataStore.mjs';
-import { getSessionHistoryFileName } from '../src/constants/datastore.mjs';
+import { getSessionProfileFileName, getSessionHistoryFileName } from '../src/constants/datastore.mjs';
 
 const SITE_ID = 'demo-site';
 
-test('update-session.runtime updates profile and appends turn history', async (t) => {
+test('update-session.runtime updates profile and appends turn history to separate files', async (t) => {
     const sandbox = await createWebAssistSandbox();
     t.after(async () => sandbox.cleanup());
     configureDataStore({ agentRoot: sandbox.agentRoot, dataDir: sandbox.dataDir, siteId: SITE_ID });
@@ -53,22 +53,31 @@ test('update-session.runtime updates profile and appends turn history', async (t
     assert.equal(secondResult.sessionProfile.contactInformation.name, 'Alex Builder');
     assert.equal(secondResult.sessionProfile.contactInformation.email, 'alex@example.com');
 
+    const profileContent = await fs.readFile(
+        path.join(sandbox.dataDir, 'sites', SITE_ID, 'sessions', `${getSessionProfileFileName('test-session-1')}.md`),
+        'utf8'
+    );
+
+    assert.match(profileContent, /### 1\. Target Profiles/);
+    assert.match(profileContent, /- Developer\.md/);
+    assert.match(profileContent, /- EnterpriseClient\.md/);
+    assert.match(profileContent, /- Urgent integration timeline/);
+    assert.match(profileContent, /### 3\. Contact Information/);
+    assert.match(profileContent, /- \*\*name\*\*: Alex Builder/);
+    assert.match(profileContent, /- \*\*email\*\*: alex@example\.com/);
+    assert.doesNotMatch(profileContent, /### 5\. History/);
+
     const historyContent = await fs.readFile(
         path.join(sandbox.dataDir, 'sites', SITE_ID, 'sessions', `${getSessionHistoryFileName('test-session-1')}.md`),
         'utf8'
     );
 
-    assert.match(historyContent, /### 1\. Target Profiles/);
-    assert.match(historyContent, /- Developer\.md/);
-    assert.match(historyContent, /- EnterpriseClient\.md/);
-    assert.match(historyContent, /- Urgent integration timeline/);
-    assert.match(historyContent, /### 3\. Contact Information/);
-    assert.match(historyContent, /- \*\*name\*\*: Alex Builder/);
-    assert.match(historyContent, /- \*\*email\*\*: alex@example\.com/);
-    assert.match(historyContent, /### 5\. History/);
+    assert.match(historyContent, /### 1\. History/);
     assert.match(historyContent, /- \*\*User\*\*: Hello/);
     assert.match(historyContent, /- \*\*User\*\*: Need API help/);
     assert.match(historyContent, /  ASAP/);
     assert.match(historyContent, /- \*\*Agent\*\*: Happy to help\./);
     assert.match(historyContent, /  Can you share your timeline\?/);
+    assert.doesNotMatch(historyContent, /### 1\. Target Profiles/);
+    assert.doesNotMatch(historyContent, /### 3\. Contact Information/);
 });

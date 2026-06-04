@@ -23,8 +23,8 @@ Examples:
 The iframe URL must include `siteId`. The widget uses site-scoped `localStorage` keys and passes `siteId` to chat, history, and visitor-registration MCP calls.
 
 ## Runtime Flow
-1. Resolve data root from `--data-dir` or `path.join(process.cwd(), "data")`.
+1. Resolve data root from `--data-dir` or `path.join(process.env.WORKSPACE_PATH, "data")`.
 2. Configure `MarkdownDataStore` at `<dataRoot>/sites/<siteId>/`.
-3. Load context from `config/`, `info/`, `profiles/`, `sessions/`, and `leads/`.
+3. Load context from `config/`, `info/`, `profiles/`, `sessions/<sessionId>-profile.md`, `sessions/<sessionId>-history.md`, and `leads/`.
 4. Execute `MainAgent` with the visitor-flow system prompt and `webassist-*` skill set.
-5. Append the final user/agent turn to the site-scoped session file.
+5. Append the final user/agent turn to `sessions/<sessionId>-history.md` automatically.

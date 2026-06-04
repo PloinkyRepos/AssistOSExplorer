@@ -3,7 +3,7 @@
 `webAssist` stores all operational data under a site-scoped data root. There is no single-site storage contract.
 
 ## Data Root
-- Default root: `path.join(process.cwd(), "data")`.
+- Default root: `path.join(process.env.WORKSPACE_PATH, "data")`.
 - CLI/MCP override: `--data-dir <dir>`.
 - Site root: `<dataRoot>/sites/<siteId>/`.
 - `siteId` is required for every runtime, CLI, MCP, and embedded chat operation.
@@ -13,24 +13,32 @@
 - `config/policy.md`: visitor notice, consent rule, retention settings, lead statuses, and disclosure policy.
 - `info/`: approved website, organization, service, project, and opportunity information.
 - `profiles/`: target visitor profile files.
-- `sessions/`: active visitor conversations, one `<sessionId>-history.md` file per session.
+- `sessions/`: active visitor records, two files per session:
+  - `<sessionId>-profile.md` — target profiles, profile details, contact information, consent state.
+  - `<sessionId>-history.md` — full user/agent conversation transcript.
 - `leads/`: active lead records, one `<sessionId>-lead.md` file per qualified consented visitor.
 - `visits/`: visit, chat, match, and lead event records used for statistics.
-- `archive/sessions/` and `archive/leads/`: archived records excluded from active operations.
+- `archive/sessions/` and `archive/leads/`: archived records excluding from active operations.
 - `.aku/`: site-specific Agentic Knowledge Units memory.
 
-## Session File
-Each session uses one file: `sessions/<sessionId>-history.md`.
+## Session Profile File
+Each session profile uses `sessions/<sessionId>-profile.md`.
 
 Required sections:
 - `Target Profiles`
-- `Visitor Profile Summary`
 - `Profile Details`
 - `Contact Information`
 - `Consent`
+
+This file is written by `webassist-session` skill and read by `loadContext` for session state.
+
+## Session History File
+Each session history uses `sessions/<sessionId>-history.md`.
+
+Required sections:
 - `History`
 
-`History` stores the full user/agent transcript. Runtime context injects only the latest bounded history excerpt.
+This file is appended automatically by the runtime after each visitor turn. It is not modified by `webassist-session`.
 
 ## Lead File
 Each lead uses `leads/<sessionId>-lead.md`.

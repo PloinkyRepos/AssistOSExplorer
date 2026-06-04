@@ -9,7 +9,7 @@ import { action as createLeadAction } from '../skills/webassist-lead/src/index.m
 
 const SITE_ID = 'demo-site';
 
-test('load-context.runtime loads info, profile definitions, and parsed session state', async (t) => {
+test('load-context.runtime loads info, profile definitions, and parsed session state from separate files', async (t) => {
     const sandbox = await createWebAssistSandbox();
     t.after(async () => sandbox.cleanup());
     configureDataStore({ agentRoot: sandbox.agentRoot, dataDir: sandbox.dataDir, siteId: SITE_ID });

@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { LLMAgent } from 'achillesAgentLib';
 
 import { createWebAssistAgent } from '../src/index.mjs';
-import { getSessionHistoryFileName } from '../src/constants/datastore.mjs';
+import { getSessionProfileFileName, getSessionHistoryFileName } from '../src/constants/datastore.mjs';
 import { createWebAssistSandbox } from './helpers.mjs';
 
 const SITE_ID = 'demo-site';
@@ -120,13 +120,19 @@ test('webAssist persists orchestrator-authored conversation memory inside profil
 
     assert.equal(secondTurn.response, 'Thanks. I still need one detail: what project timeline and expected outcomes do you have?');
 
+    const profilePath = path.join(sandbox.dataDir, 'sites', SITE_ID, 'sessions', `${getSessionProfileFileName('session-flow-1')}.md`);
+    const profileContent = await fs.readFile(profilePath, 'utf8');
+
+    assert.match(profileContent, /The user did not answer the question about available datasets and student resources\./);
+    assert.match(profileContent, /The user is asked about project timeline and expected outcomes\./);
+    assert.match(profileContent, /- \*\*name\*\*: Research Visitor/);
+    assert.match(profileContent, /- \*\*email\*\*: research\.visitor@example\.com/);
+    assert.doesNotMatch(profileContent, /Can we collaborate on AI research\?/);
+    assert.doesNotMatch(profileContent, /I can share some papers later\./);
+
     const historyPath = path.join(sandbox.dataDir, 'sites', SITE_ID, 'sessions', `${getSessionHistoryFileName('session-flow-1')}.md`);
     const historyContent = await fs.readFile(historyPath, 'utf8');
 
-    assert.match(historyContent, /The user did not answer the question about available datasets and student resources\./);
-    assert.match(historyContent, /The user is asked about project timeline and expected outcomes\./);
-    assert.match(historyContent, /- \*\*name\*\*: Research Visitor/);
-    assert.match(historyContent, /- \*\*email\*\*: research\.visitor@example\.com/);
     assert.match(historyContent, /Can we collaborate on AI research\?/);
     assert.match(historyContent, /I can share some papers later\./);
 });

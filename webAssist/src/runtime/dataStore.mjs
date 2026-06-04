@@ -8,9 +8,14 @@ let configuredSiteId = null;
 let dataStoreInstance = null;
 
 export function resolveDataDir(agentRoot, explicitDataDir = null) {
-    return explicitDataDir
-        ? path.resolve(explicitDataDir)
-        : path.join(process.cwd(), 'data');
+    if (explicitDataDir) {
+        return path.resolve(explicitDataDir);
+    }
+    const workspacePath = process.env.WORKSPACE_PATH;
+    if (!workspacePath) {
+        throw new Error('WORKSPACE_PATH is required to resolve the data directory.');
+    }
+    return path.join(workspacePath, 'data');
 }
 
 export function normalizeSiteId(value) {

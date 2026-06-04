@@ -25,8 +25,8 @@ Define the active plugin contract for the Web CLI chat integration.
 ## Runtime Contract
 - MCP endpoint: `/webAssist/mcp` (always; no token-based routing)
 - Tools:
-  - `web_cli_chat` with `{ message, sessionId?, json: true }`
-  - `web_cli_history` with `{ sessionId }`
+  - `web_cli_chat` with `{ siteId, message, sessionId?, json: true }`
+  - `web_cli_history` with `{ siteId, sessionId }`
 - `web-assist-chat.js` handles:
   - message parsing/sanitization,
   - session persistence,
@@ -38,3 +38,8 @@ Define the active plugin contract for the Web CLI chat integration.
 - Loaded dynamically via `import()`
 - Calls `callTool()` for chat and history operations
 - Parses tool responses to extract response text and sessionId
+
+## Session Data Layout
+- Session profile: `sessions/<sessionId>-profile.md` — profiles, profile details, contact info, consent
+- Session history: `sessions/<sessionId>-history.md` — conversation transcript
+- History is appended automatically by the runtime after each turn, independent of the `webassist-session` skill

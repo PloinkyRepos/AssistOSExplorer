@@ -5,6 +5,7 @@ import {
     DATASTORE_TYPES,
     LEAD_SECTIONS,
     SESSION_SECTIONS,
+    getSessionProfileFileName,
     getSessionHistoryFileName,
     getSessionLeadFileName,
 } from '../constants/datastore.mjs';
@@ -92,14 +93,14 @@ export async function loadContext({ siteId, sessionId }) {
     const store = getDataStore();
     const siteInfo = await listMarkdownFiles(store, DATASTORE_TYPES.INFO);
     const profiles = await listMarkdownFiles(store, DATASTORE_TYPES.PROFILES);
+    const sessionProfileFileName = getSessionProfileFileName(sessionId);
     const sessionHistoryFileName = getSessionHistoryFileName(sessionId);
     const sessionLeadFileName = getSessionLeadFileName(sessionId);
     const ownerConfig = await readConfigFile(store, 'owner');
     const policyConfig = await readConfigFile(store, 'policy');
-    let sessionRecord = null;
     let currentLead = null;
     let conversationHistoryText = 'No previous conversation history found.';
-    const emptyRecord = {
+    const emptyProfile = {
         profiles: [],
         profileDetails: [],
         contactInformation: {},
@@ -117,27 +118,25 @@ export async function loadContext({ siteId, sessionId }) {
         }
     };
 
+    const profileRecord = await readSectionMap(DATASTORE_TYPES.SESSIONS, sessionProfileFileName);
     const historyRecord = await readSectionMap(DATASTORE_TYPES.SESSIONS, sessionHistoryFileName);
     const leadRecord = await readSectionMap(DATASTORE_TYPES.LEADS, sessionLeadFileName);
-    const exists = Boolean(historyRecord);
-    if (!exists) {
-        sessionRecord = {
-            exists: false,
-            content: '',
-            parsed: emptyRecord,
-        };
+    const profileExists = Boolean(profileRecord);
+
+    let sessionProfileText;
+    let sessionProfileParsed;
+    if (!profileExists) {
+        sessionProfileParsed = emptyProfile;
+        sessionProfileText = 'No previous session record found. This is a new session.';
     } else {
-        const combined = `--- [Session: ${sessionHistoryFileName}.md] ---\n${historyRecord.rawMarkdown.trim()}`;
-        sessionRecord = {
-            exists: true,
-            content: combined,
-            parsed: {
-                profiles: store.parseList(historyRecord?.sections?.[SESSION_SECTIONS.TARGET_PROFILES]),
-                profileDetails: store.parseList(historyRecord?.sections?.[SESSION_SECTIONS.PROFILE_DETAILS]),
-                contactInformation: store.parseKeyValue(historyRecord?.sections?.[SESSION_SECTIONS.CONTACT_INFORMATION]),
-                consent: String(historyRecord?.sections?.[SESSION_SECTIONS.CONSENT] ?? '').trim(),
-            },
+        const combined = `--- [Session: ${sessionProfileFileName}.md] ---\n${profileRecord.rawMarkdown.trim()}`;
+        sessionProfileParsed = {
+            profiles: store.parseList(profileRecord?.sections?.[SESSION_SECTIONS.TARGET_PROFILES]),
+            profileDetails: store.parseList(profileRecord?.sections?.[SESSION_SECTIONS.PROFILE_DETAILS]),
+            contactInformation: store.parseKeyValue(profileRecord?.sections?.[SESSION_SECTIONS.CONTACT_INFORMATION]),
+            consent: String(profileRecord?.sections?.[SESSION_SECTIONS.CONSENT] ?? '').trim(),
         };
+        sessionProfileText = combined.trim();
     }
 
     if (historyRecord?.sections?.[SESSION_SECTIONS.HISTORY]) {
@@ -185,16 +184,14 @@ export async function loadContext({ siteId, sessionId }) {
         sessionProfile: {
             siteId,
             sessionId,
-            isNewSession: !sessionRecord.exists,
-            ...sessionRecord.parsed,
+            isNewSession: !profileExists,
+            ...sessionProfileParsed,
         },
         combinedSiteInfo: combineMarkdownFiles(siteInfo, 'Info') || 'No site info available.',
         combinedProfiles: combineMarkdownFiles(profiles, 'Profile') || 'No target profiles available.',
         ownerConfigText: ownerConfig.exists ? ownerConfig.content.trim() : 'No owner contact rules available.',
         policyText: policyConfig.exists ? policyConfig.content.trim() : 'No visitor policy available.',
         conversationHistoryText,
-        sessionProfileText: sessionRecord.exists
-            ? sessionRecord.content.trim()
-            : 'No previous session record found. This is a new session.',
+        sessionProfileText,
     };
 }

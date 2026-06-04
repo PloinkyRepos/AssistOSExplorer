@@ -8,13 +8,12 @@
 
 ## Optional Input
 - `profiles`
- - `profiles`
- - `profileDetails`
 - `profileDetails`
 - `contactInformation`
 - `consent`
 
 ## Guarantees
-- Writes only to `data/sites/<siteId>/sessions/<sessionId>-history.md`.
+- Writes only to `data/sites/<siteId>/sessions/<sessionId>-profile.md`.
+- Does not modify `<sessionId>-history.md`.
 - Uses the runtime `updateSessionProfile` function.
 - Does not call the LLM.
