@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { LLMAgent } from 'achillesAgentLib';
 
 import { createWebAssistAgent } from '../src/index.mjs';
-import { getSessionHistoryFileName } from '../src/constants/datastore.mjs';
+import { getSessionProfileFileName, getSessionHistoryFileName } from '../src/constants/datastore.mjs';
 import { createWebAssistSandbox } from './helpers.mjs';
 
 const SITE_ID = 'demo-site';
@@ -125,16 +125,21 @@ test('webAssist agent loads AchillesAgentLib and executes a full visitor turn', 
     assert.match(leadContent, /- \*\*Profile\*\*: Developer/);
     assert.match(leadContent, /alice@example\.com/);
 
-    const sessionHistoryContent = await fs.readFile(
+    const profileContent = await fs.readFile(
+        path.join(sandbox.dataDir, 'sites', SITE_ID, 'sessions', `${getSessionProfileFileName('visitor-42')}.md`),
+        'utf8'
+    );
+    assert.match(profileContent, /- Developer\.md/);
+    assert.match(profileContent, /Evaluating an API integration/);
+    assert.match(profileContent, /Provided email address/);
+    assert.match(profileContent, /### 3\. Contact Information/);
+    assert.match(profileContent, /- \*\*name\*\*: Alice Example/);
+    assert.match(profileContent, /- \*\*email\*\*: alice@example\.com/);
+
+    const historyContent = await fs.readFile(
         path.join(sandbox.dataDir, 'sites', SITE_ID, 'sessions', `${getSessionHistoryFileName('visitor-42')}.md`),
         'utf8'
     );
-    assert.match(sessionHistoryContent, /- Developer\.md/);
-    assert.match(sessionHistoryContent, /Evaluating an API integration/);
-    assert.match(sessionHistoryContent, /Provided email address/);
-    assert.match(sessionHistoryContent, /### 3\. Contact Information/);
-    assert.match(sessionHistoryContent, /- \*\*name\*\*: Alice Example/);
-    assert.match(sessionHistoryContent, /- \*\*email\*\*: alice@example\.com/);
-    assert.match(sessionHistoryContent, /Buna, vreau sa integrez API-ul vostru/);
-    assert.match(sessionHistoryContent, /Mai jos gasiti linkul de programare/);
+    assert.match(historyContent, /Buna, vreau sa integrez API-ul vostru/);
+    assert.match(historyContent, /Mai jos gasiti linkul de programare/);
 });

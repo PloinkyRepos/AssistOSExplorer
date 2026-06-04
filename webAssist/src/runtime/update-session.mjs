@@ -4,6 +4,7 @@ import {
 import {
     DATASTORE_TYPES,
     SESSION_SECTIONS,
+    getSessionProfileFileName,
     getSessionHistoryFileName,
 } from '../constants/datastore.mjs';
 
@@ -64,18 +65,16 @@ export async function updateSessionProfile({
     }
 
     const store = getDataStore();
-    const sessionFileName = getSessionHistoryFileName(sessionId);
+    const profileFileName = getSessionProfileFileName(sessionId);
     const nextProfiles = uniqueStrings(profiles);
     const nextProfileDetails = uniqueStrings(profileDetails);
     const nextConsent = String(consent ?? '').trim() || '*None*';
     let existingContactInformationSection = '*None*';
     let existingContactInformation = {};
-    let existingHistory = '*None*';
     try {
-        const existingProfile = await store.getSectionMap(DATASTORE_TYPES.SESSIONS, sessionFileName);
+        const existingProfile = await store.getSectionMap(DATASTORE_TYPES.SESSIONS, profileFileName);
         existingContactInformationSection = existingProfile.sections?.[SESSION_SECTIONS.CONTACT_INFORMATION] ?? '*None*';
         existingContactInformation = store.parseKeyValue(existingContactInformationSection);
-        existingHistory = existingProfile.sections?.[SESSION_SECTIONS.HISTORY] ?? '*None*';
     } catch (error) {
         if (!error || error.code !== 'ENOENT') {
             throw error;
@@ -94,22 +93,21 @@ export async function updateSessionProfile({
         }
     }
 
-    await store.replaceFile(DATASTORE_TYPES.SESSIONS, sessionFileName, {
+    await store.replaceFile(DATASTORE_TYPES.SESSIONS, profileFileName, {
         [SESSION_SECTIONS.TARGET_PROFILES]: store.renderList(nextProfiles),
         [SESSION_SECTIONS.PROFILE_DETAILS]: store.renderList(nextProfileDetails),
         [SESSION_SECTIONS.CONTACT_INFORMATION]: nextContactInformationSection,
         [SESSION_SECTIONS.CONSENT]: nextConsent,
-        [SESSION_SECTIONS.HISTORY]: existingHistory,
     });
 
-    const savedProfile = await store.getSectionMap(DATASTORE_TYPES.SESSIONS, sessionFileName);
+    const savedProfile = await store.getSectionMap(DATASTORE_TYPES.SESSIONS, profileFileName);
     const parsedContactInformation = store.parseKeyValue(savedProfile.sections?.[SESSION_SECTIONS.CONTACT_INFORMATION]);
 
     return {
         success: true,
         siteId,
         sessionId,
-        sessionPath: `${sessionFileName}.md`,
+        sessionProfilePath: `${profileFileName}.md`,
         sessionProfile: {
             profiles: nextProfiles,
             profileDetails: nextProfileDetails,
@@ -140,21 +138,9 @@ export async function appendSessionTurn({
         { speaker: 'Agent', message: agentResponse },
     ]);
     let existingHistory = '*None*';
-    let existingSections = {
-        [SESSION_SECTIONS.TARGET_PROFILES]: '*None*',
-        [SESSION_SECTIONS.PROFILE_DETAILS]: '*None*',
-        [SESSION_SECTIONS.CONTACT_INFORMATION]: '*None*',
-        [SESSION_SECTIONS.CONSENT]: '*None*',
-    };
     try {
         const existing = await store.getSectionMap(DATASTORE_TYPES.SESSIONS, historyFileName);
-        existingHistory = existing.sections[SESSION_SECTIONS.HISTORY] ?? '*None*';
-        existingSections = {
-            [SESSION_SECTIONS.TARGET_PROFILES]: existing.sections?.[SESSION_SECTIONS.TARGET_PROFILES] ?? '*None*',
-            [SESSION_SECTIONS.PROFILE_DETAILS]: existing.sections?.[SESSION_SECTIONS.PROFILE_DETAILS] ?? '*None*',
-            [SESSION_SECTIONS.CONTACT_INFORMATION]: existing.sections?.[SESSION_SECTIONS.CONTACT_INFORMATION] ?? '*None*',
-            [SESSION_SECTIONS.CONSENT]: existing.sections?.[SESSION_SECTIONS.CONSENT] ?? '*None*',
-        };
+        existingHistory = existing.sections?.[SESSION_SECTIONS.HISTORY] ?? '*None*';
     } catch (error) {
         if (!error || error.code !== 'ENOENT') {
             throw error;
@@ -162,7 +148,6 @@ export async function appendSessionTurn({
     }
 
     await store.replaceFile(DATASTORE_TYPES.SESSIONS, historyFileName, {
-        ...existingSections,
         [SESSION_SECTIONS.HISTORY]: existingHistory,
     });
     await store.appendToFile(DATASTORE_TYPES.SESSIONS, historyFileName, {

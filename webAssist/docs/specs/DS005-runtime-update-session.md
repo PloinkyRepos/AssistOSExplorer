@@ -1,22 +1,23 @@
 # DS005 - Runtime Module: update-session
 
-`update-session` owns deterministic session persistence.
+`update-session` owns deterministic session persistence across two separate files.
 
 ## Functions
-- `updateSessionProfile({ siteId, sessionId, profiles, profileDetails, contactInformation, consent })`
-- `appendSessionTurn({ siteId, sessionId, userMessage, agentResponse })`
+- `updateSessionProfile({ siteId, sessionId, profiles, profileDetails, contactInformation, consent })` — writes to `sessions/<sessionId>-profile.md`
+- `appendSessionTurn({ siteId, sessionId, userMessage, agentResponse })` — appends to `sessions/<sessionId>-history.md`
 
 ## Behavior
 - Writes only to the configured site datastore.
-- Uses one session file: `sessions/<sessionId>-history.md`.
-- Preserves existing `History` while profile sections are replaced.
-- Merges explicit contact fields with existing contact fields.
-- Appends user/agent dialogue entries after final response.
+- `updateSessionProfile` writes target profiles, profile details, contact information, and consent to the profile file. It does not touch the history file.
+- `appendSessionTurn` appends user/agent dialogue entries to the history file. It does not touch the profile file.
+- Contact fields are merged with existing contact fields in the profile file.
+- History entries are appended after the final response automatically by the runtime.
 
-## Sections
+## Profile File Sections
 - `Target Profiles`
-- `Visitor Profile Summary`
 - `Profile Details`
 - `Contact Information`
 - `Consent`
+
+## History File Sections
 - `History`

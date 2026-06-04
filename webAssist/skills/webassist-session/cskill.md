@@ -1,7 +1,7 @@
 # webassist-session
 
 ## Description
-Creates and updates site-scoped WebAssist visitor session records.
+Creates and updates site-scoped WebAssist visitor session profile records.
 
 ## Input Format
 - `promptText` contains a JSON object with:
@@ -16,6 +16,6 @@ Creates and updates site-scoped WebAssist visitor session records.
 - Plain text only.
 
 ## Constraints
-- Persists only under `data/sites/<siteId>/sessions/`.
-- Uses the single session file `<sessionId>-history.md`.
+- Persists only to `data/sites/<siteId>/sessions/<sessionId>-profile.md`.
+- Does not modify the session history file (`<sessionId>-history.md`).
 - Does not call the LLM.
