@@ -10,13 +10,13 @@
 
 ## Site Folders
 - `config/owner.md`: owner contact rules and routes that may be disclosed after lead creation.
-- `config/policy.md`: visitor notice, consent rule, retention settings, lead statuses, and disclosure policy.
+- `config/policy.md`: visitor notice, retention settings, lead statuses, and disclosure policy.
 - `info/`: approved website, organization, service, project, and opportunity information.
 - `profiles/`: target visitor profile files.
 - `sessions/`: active visitor records, two files per session:
-  - `<sessionId>-profile.md` — target profiles, profile details, contact information, consent state.
+  - `<sessionId>-profile.md` — profile details and contact information.
   - `<sessionId>-history.md` — full user/agent conversation transcript.
-- `leads/`: active lead records, one `<sessionId>-lead.md` file per qualified consented visitor.
+- `leads/`: active lead records, one `<sessionId>-lead.md` file per qualified visitor.
 - `visits/`: visit, chat, match, and lead event records used for statistics.
 - `archive/sessions/` and `archive/leads/`: archived records excluding from active operations.
 - `.aku/`: site-specific Agentic Knowledge Units memory.
@@ -25,10 +25,8 @@
 Each session profile uses `sessions/<sessionId>-profile.md`.
 
 Required sections:
-- `Target Profiles`
 - `Profile Details`
 - `Contact Information`
-- `Consent`
 
 This file is written by `webassist-session` skill and read by `loadContext` for session state.
 
@@ -47,8 +45,6 @@ Required sections:
 - `Lead Info`
 - `Match Explanation`
 - `Contact Info`
-- `Consent`
-- `Contact Route`
 - `Summary`
 
-Lead creation requires target profile match, mandatory conditions, explicit contact information, and explicit consent.
+Lead creation requires target profile match, mandatory conditions, and explicit contact information.

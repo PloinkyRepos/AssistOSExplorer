@@ -11,7 +11,7 @@
 - `profiles/`
 - `config/owner.md`
 - `config/policy.md`
-- `sessions/<sessionId>-profile.md` — session profile state (profiles, profile details, contact info, consent)
+- `sessions/<sessionId>-profile.md` — session profile state (profile details, contact info)
 - `sessions/<sessionId>-history.md` — conversation transcript (last 10 turns for context)
 - `leads/<sessionId>-lead.md`
 

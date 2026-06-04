@@ -101,10 +101,8 @@ export async function loadContext({ siteId, sessionId }) {
     let currentLead = null;
     let conversationHistoryText = 'No previous conversation history found.';
     const emptyProfile = {
-        profiles: [],
         profileDetails: [],
         contactInformation: {},
-        consent: '',
     };
 
     const readSectionMap = async (type, fileName) => {
@@ -131,10 +129,8 @@ export async function loadContext({ siteId, sessionId }) {
     } else {
         const combined = `--- [Session: ${sessionProfileFileName}.md] ---\n${profileRecord.rawMarkdown.trim()}`;
         sessionProfileParsed = {
-            profiles: store.parseList(profileRecord?.sections?.[SESSION_SECTIONS.TARGET_PROFILES]),
             profileDetails: store.parseList(profileRecord?.sections?.[SESSION_SECTIONS.PROFILE_DETAILS]),
             contactInformation: store.parseKeyValue(profileRecord?.sections?.[SESSION_SECTIONS.CONTACT_INFORMATION]),
-            consent: String(profileRecord?.sections?.[SESSION_SECTIONS.CONSENT] ?? '').trim(),
         };
         sessionProfileText = combined.trim();
     }
@@ -147,15 +143,6 @@ export async function loadContext({ siteId, sessionId }) {
     if (!leadRecord) {
         currentLead = {
             exists: false,
-            leadId: `${sessionLeadFileName}.md`,
-            status: '',
-            profile: '',
-            sessionId: '',
-            contactInfo: {},
-            consent: '',
-            matchExplanation: '',
-            contactRoute: '',
-            summary: '',
         };
     } else {
         const leadInfo = store.parseKeyValue(leadRecord.sections?.[LEAD_SECTIONS.LEAD_INFO]);
@@ -167,9 +154,7 @@ export async function loadContext({ siteId, sessionId }) {
             profile: String(leadInfo?.Profile ?? '').trim(),
             sessionId: String(leadInfo?.['Session ID'] ?? '').trim(),
             contactInfo,
-            consent: String(leadRecord.sections?.[LEAD_SECTIONS.CONSENT] ?? '').trim(),
             matchExplanation: String(leadRecord.sections?.[LEAD_SECTIONS.MATCH_EXPLANATION] ?? '').trim(),
-            contactRoute: String(leadRecord.sections?.[LEAD_SECTIONS.CONTACT_ROUTE] ?? '').trim(),
             summary: String(leadRecord.sections?.[LEAD_SECTIONS.SUMMARY] ?? '').trim(),
         };
     }

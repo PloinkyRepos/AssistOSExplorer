@@ -48,10 +48,7 @@ export async function action({ promptText }) {
         mandatoryConditionsSatisfied,
         matchExplanation,
         contactInfo,
-        consentGranted,
-        consentText,
         summary,
-        contactRoute = '',
     } = parseInput(promptText);
 
     if (!siteId || !sessionId || !profile || !summary) {
@@ -62,9 +59,6 @@ export async function action({ promptText }) {
     }
     if (!String(matchExplanation ?? '').trim()) {
         throw new Error('webassist-lead requires a match explanation.');
-    }
-    if (consentGranted !== true || !String(consentText ?? '').trim()) {
-        throw new Error('webassist-lead requires explicit consent for follow-up storage.');
     }
 
     const normalizedContactInfo = normalizeContactInfo(contactInfo);
@@ -92,8 +86,6 @@ export async function action({ promptText }) {
         sessionId: String(sessionId).trim(),
         contactInfo: normalizedContactInfo,
         matchExplanation: String(matchExplanation).trim(),
-        consentText: String(consentText).trim(),
-        contactRoute: String(contactRoute ?? '').trim() || '*None*',
         summary: String(summary).trim(),
         createdAt: existingLead?.createdAt || timestamp,
         updatedAt: timestamp,
@@ -104,24 +96,13 @@ export async function action({ promptText }) {
             `- **${LEAD_FIELDS.STATUS}**: ${leadRecord.status}`,
             `- **${LEAD_FIELDS.PROFILE}**: ${leadRecord.profile}`,
             `- **${LEAD_FIELDS.SESSION_ID}**: ${leadRecord.sessionId}`,
-            `- **${LEAD_FIELDS.CONSENT_GRANTED}**: yes`,
             `- **${LEAD_FIELDS.CREATED_AT}**: ${leadRecord.createdAt}`,
             `- **${LEAD_FIELDS.UPDATED_AT}**: ${leadRecord.updatedAt}`,
         ].join('\n'),
         [LEAD_SECTIONS.MATCH_EXPLANATION]: leadRecord.matchExplanation,
         [LEAD_SECTIONS.CONTACT_INFO]: store.renderKeyValue(leadRecord.contactInfo),
-        [LEAD_SECTIONS.CONSENT]: leadRecord.consentText,
-        [LEAD_SECTIONS.CONTACT_ROUTE]: leadRecord.contactRoute,
         [LEAD_SECTIONS.SUMMARY]: leadRecord.summary,
     });
 
-    return [
-        `${existingLead ? 'Updated' : 'Created'} lead ${leadFileName}.md.`,
-        `Site ID: ${siteId}`,
-        `Session ID: ${leadRecord.sessionId}`,
-        `Status: ${leadRecord.status}`,
-        `Profile: ${leadRecord.profile}`,
-        'Lead Markdown:',
-        saved.rawMarkdown,
-    ].join('\n');
+    return 'Operation successful.';
 }

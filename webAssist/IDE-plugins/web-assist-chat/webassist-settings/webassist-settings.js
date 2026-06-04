@@ -295,7 +295,8 @@ export class WebassistSettingsSettings {
             this.renderStatus();
             return;
         }
-        window.open(`${baseUrl}/webchat?agent=webAdmin`, '_blank', 'noopener');
+        const webchatUrl = `${baseUrl}/webchat?agent=achilles-cli&workspace-dir=.ploinky/agents/webAssist`;
+        window.open(webchatUrl, '_blank', 'noopener');
         this.state.status = 'Admin webchat opened in a new tab.';
         this.state.statusType = '';
         this.renderStatus();

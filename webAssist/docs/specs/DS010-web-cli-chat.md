@@ -40,6 +40,6 @@ Define the active plugin contract for the Web CLI chat integration.
 - Parses tool responses to extract response text and sessionId
 
 ## Session Data Layout
-- Session profile: `sessions/<sessionId>-profile.md` — profiles, profile details, contact info, consent
+- Session profile: `sessions/<sessionId>-profile.md` — profile details and contact information
 - Session history: `sessions/<sessionId>-history.md` — conversation transcript
 - History is appended automatically by the runtime after each turn, independent of the `webassist-session` skill

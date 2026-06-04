@@ -58,12 +58,9 @@ class FakeWebAssistLLM extends LLMAgent {
                     profile: 'Developer',
                     mandatoryConditionsSatisfied: true,
                     matchExplanation: 'High-intent developer asking for an API integration discussion.',
-                    consentGranted: true,
-                    consentText: 'Alice explicitly agreed to follow-up storage.',
                     summary: 'High-intent developer asking for an API integration discussion.',
-                    contactRoute: 'https://cal.example.com/webassist-demo',
                 }),
-                reason: 'Create qualified consented lead.',
+                reason: 'Create qualified lead.',
             };
         }
 
@@ -73,13 +70,11 @@ class FakeWebAssistLLM extends LLMAgent {
                 toolPrompt: JSON.stringify({
                     siteId,
                     sessionId,
-                    profiles: ['Developer.md'],
                     profileDetails: ['Evaluating an API integration', 'Provided email address'],
                     contactInformation: {
                         name: 'Alice Example',
                         email: 'alice@example.com',
                     },
-                    consent: 'Alice explicitly agreed to follow-up storage.',
                 }),
                 reason: 'Persist profiling updates.',
             };
@@ -129,10 +124,9 @@ test('webAssist agent loads AchillesAgentLib and executes a full visitor turn', 
         path.join(sandbox.dataDir, 'sites', SITE_ID, 'sessions', `${getSessionProfileFileName('visitor-42')}.md`),
         'utf8'
     );
-    assert.match(profileContent, /- Developer\.md/);
     assert.match(profileContent, /Evaluating an API integration/);
     assert.match(profileContent, /Provided email address/);
-    assert.match(profileContent, /### 3\. Contact Information/);
+    assert.match(profileContent, /### 2\. Contact Information/);
     assert.match(profileContent, /- \*\*name\*\*: Alice Example/);
     assert.match(profileContent, /- \*\*email\*\*: alice@example\.com/);
 

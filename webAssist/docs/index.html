@@ -159,7 +159,7 @@
             </ul>
             <p>Each session is stored in two separate files under <code>data/sites/&lt;siteId&gt;/sessions/</code>:</p>
             <ul>
-                <li><code>&lt;sessionId&gt;-profile.md</code> — target profiles, profile details, contact information, and consent state</li>
+                <li><code>&lt;sessionId&gt;-profile.md</code> — profile details and contact information</li>
                 <li><code>&lt;sessionId&gt;-history.md</code> — full user/agent conversation transcript</li>
             </ul>
             <p>The profile file is updated by the <code>webassist-session</code> skill when the agent persists profiling data. The history file is appended automatically by the runtime after each turn, independent of the skill. At runtime, the orchestrator receives a bounded snapshot of the latest 10 persisted user/agent messages to improve short-term continuity.</p>
@@ -177,10 +177,10 @@
             <p>webAssist uses the <code>webassist-*</code> skill set to handle visitor interactions. Visitor turn orchestration is driven directly by the system prompt through the MainAgent instance.</p>
 
             <h3>webassist-session</h3>
-            <p>Persists target profiles, profile details, contact information, and consent state to <code>&lt;sessionId&gt;-profile.md</code>. Does not modify the history file.</p>
+            <p>Persists profile details and contact information to <code>&lt;sessionId&gt;-profile.md</code>. Does not modify the history file.</p>
 
             <h3>webassist-lead</h3>
-            <p>Creates or updates a lead only after profile match, mandatory conditions, explicit contact information, and explicit consent are present.</p>
+            <p>Creates or updates a lead after profile match, mandatory conditions, and explicit contact information are present.</p>
 
             <h3>webassist-site-context, webassist-match</h3>
             <p>These deterministic skills load approved context and validate matches under the active site.</p>

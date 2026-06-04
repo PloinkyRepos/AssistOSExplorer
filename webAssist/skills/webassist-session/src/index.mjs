@@ -19,10 +19,8 @@ export async function action({ promptText }) {
     const {
         siteId,
         sessionId,
-        profiles,
         profileDetails,
         contactInformation,
-        consent,
     } = parsePayload(promptText);
 
     if (!siteId || !sessionId) {
@@ -32,17 +30,9 @@ export async function action({ promptText }) {
     const saved = await updateSessionProfile({
         siteId,
         sessionId,
-        profiles: Array.isArray(profiles) ? profiles : [],
         profileDetails: Array.isArray(profileDetails) ? profileDetails : [],
         contactInformation: contactInformation || {},
-        consent,
     });
 
-    return [
-        `Updated session ${saved.sessionPath}.`,
-        `Site ID: ${siteId}`,
-        `Session ID: ${sessionId}`,
-        `Profiles: ${Array.isArray(profiles) ? profiles.length : 0}`,
-        `Profile Details: ${Array.isArray(profileDetails) ? profileDetails.length : 0}`,
-    ].join('\n');
+    return 'Operation successful.';
 }
