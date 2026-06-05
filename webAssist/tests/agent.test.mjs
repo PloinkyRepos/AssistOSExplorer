@@ -31,20 +31,6 @@ class FakeWebAssistLLM extends LLMAgent {
         const sessionId = runtimePrompt.match(/"sessionId"\s*:\s*"([^\"]+)"/)?.[1] || 'visitor-42';
         const siteId = runtimePrompt.match(/Site ID:\n([^\n]+)/)?.[1] || SITE_ID;
 
-        if (!prompt.includes('TOOL[webassist-match]')) {
-            return {
-                tool: 'webassist-match',
-                toolPrompt: JSON.stringify({
-                    siteId,
-                    sessionId,
-                    profile: 'Developer',
-                    mandatoryConditionsSatisfied: true,
-                    matchExplanation: 'High-intent developer asking for an API integration discussion.',
-                }),
-                reason: 'Validate qualified match.',
-            };
-        }
-
         if (!prompt.includes('TOOL[webassist-lead]')) {
             return {
                 tool: 'webassist-lead',

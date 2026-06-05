@@ -5,7 +5,6 @@
 ## Skill Catalog
 - `webassist-site-context`: reads approved site info, profiles, owner rules, and policy.
 - `webassist-session`: creates and updates site-scoped session records.
-- `webassist-match`: validates target profile match and mandatory conditions.
 - `webassist-lead`: creates or updates lead records.
 
 ## Orchestration
