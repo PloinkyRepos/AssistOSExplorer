@@ -571,6 +571,56 @@ function mountChatSurface(rootNode, options = {}) {
         typingEl.setAttribute('aria-hidden', 'true');
     }
 
+    function buildLoadingMessages() {
+        const label = siteId ? siteId.replace(/-/g, ' ') : 'this site';
+        return [
+            `Looking up info on ${label}`,
+            `Reading page details`,
+            `Almost ready`,
+        ];
+    }
+
+    let loadingBubble = null;
+    let loadingText = null;
+    let loadingTimer = null;
+    let loadingIndex = 0;
+
+    function showLoadingMessages() {
+        hideTyping();
+        const wrapper = document.createElement('div');
+        wrapper.className = 'chat-message agent';
+        wrapper.dataset.loading = 'true';
+        const bubble = document.createElement('div');
+        bubble.className = 'chat-bubble chat-bubble-loading';
+        loadingText = document.createTextNode('Thinking');
+        bubble.appendChild(loadingText);
+        for (let i = 0; i < 3; i += 1) {
+            const dot = document.createElement('span');
+            bubble.appendChild(dot);
+        }
+        wrapper.appendChild(bubble);
+        messagesEl.appendChild(wrapper);
+        loadingBubble = bubble;
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+
+        const msgs = buildLoadingMessages();
+        loadingIndex = 0;
+        loadingTimer = setInterval(() => {
+            loadingIndex = (loadingIndex + 1) % msgs.length;
+            loadingText.textContent = msgs[loadingIndex];
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }, 1500);
+    }
+
+    function hideLoadingMessages() {
+        clearInterval(loadingTimer);
+        loadingTimer = null;
+        const el = messagesEl.querySelector('[data-loading="true"]');
+        if (el) el.remove();
+        loadingBubble = null;
+        loadingText = null;
+    }
+
     function setPending(next) {
         isPending = Boolean(next);
         sendEl.disabled = isPending;
@@ -655,17 +705,17 @@ function mountChatSurface(rootNode, options = {}) {
         resizeInput();
 
         setPending(true);
-        showTyping();
+        showLoadingMessages();
         try {
             const result = await chatClient.invokeChat(siteId, message, currentSessionId);
-            hideTyping();
+            hideLoadingMessages();
             appendMessage('agent', result.responseText);
             if (result.sessionId) {
                 currentSessionId = result.sessionId;
                 persistSessionId(storageKey, currentSessionId);
             }
         } catch (error) {
-            hideTyping();
+            hideLoadingMessages();
             appendMessage('agent', `Error: ${error?.message || 'MCP request failed.'}`);
         } finally {
             setPending(false);
