@@ -93,6 +93,14 @@ function renderCheckbox({ key, label, checked = false }) {
     `;
 }
 
+function normalizeSourceModes(values = Object.values(AVATAR_SOURCE_MODES)) {
+    const allowed = new Set(Object.values(AVATAR_SOURCE_MODES));
+    const normalized = (Array.isArray(values) ? values : [])
+        .map((value) => String(value || '').trim())
+        .filter((value) => allowed.has(value));
+    return normalized.length ? [...new Set(normalized)] : Object.values(AVATAR_SOURCE_MODES);
+}
+
 function stableKey(value) {
     try {
         return JSON.stringify(value);
@@ -112,6 +120,7 @@ export class AvatarSettingsForm {
             generatedStyles: [],
             palettes: [],
             hiddenFields: [],
+            sourceModes: Object.values(AVATAR_SOURCE_MODES),
             disabled: false,
             showPreview: true,
             labels: {}
@@ -141,7 +150,10 @@ export class AvatarSettingsForm {
             palettes: data.palettes ? normalizeGeneratedPaletteList(data.palettes) : this.state.palettes,
             hiddenFields: Array.isArray(data.hiddenFields)
                 ? data.hiddenFields.map((field) => String(field || '').trim()).filter(Boolean)
-                : this.state.hiddenFields
+                : this.state.hiddenFields,
+            sourceModes: Array.isArray(data.sourceModes)
+                ? normalizeSourceModes(data.sourceModes)
+                : this.state.sourceModes
         };
         const previousKey = stableKey({
             value: this.state.value,
@@ -149,6 +161,7 @@ export class AvatarSettingsForm {
             generatedStyles: this.state.generatedStyles,
             palettes: this.state.palettes,
             hiddenFields: this.state.hiddenFields,
+            sourceModes: this.state.sourceModes,
             disabled: this.state.disabled,
             showPreview: this.state.showPreview
         });
@@ -158,6 +171,7 @@ export class AvatarSettingsForm {
             generatedStyles: nextState.generatedStyles,
             palettes: nextState.palettes,
             hiddenFields: nextState.hiddenFields,
+            sourceModes: nextState.sourceModes,
             disabled: nextState.disabled,
             showPreview: nextState.showPreview
         });
@@ -177,7 +191,9 @@ export class AvatarSettingsForm {
     normalizeFromDom() {
         const current = this.state.value && typeof this.state.value === 'object' ? this.state.value : {};
         const next = { ...current };
-        const sourceMode = String(this.element.querySelector('[data-avatar-source-mode]')?.value || deriveAvatarSourceMode(current));
+        const sourceModes = normalizeSourceModes(this.state.sourceModes);
+        const requestedSourceMode = String(this.element.querySelector('[data-avatar-source-mode]')?.value || deriveAvatarSourceMode(current));
+        const sourceMode = sourceModes.includes(requestedSourceMode) ? requestedSourceMode : sourceModes[0];
         this.element.querySelectorAll('[data-avatar-field]').forEach((input) => {
             const key = input.dataset.avatarField;
             if (!key) return;
@@ -211,7 +227,9 @@ export class AvatarSettingsForm {
         const styles = normalizeGeneratedStyleList(this.state.generatedStyles);
         const palettes = normalizeGeneratedPaletteList(this.state.palettes);
         const config = this.state.value && typeof this.state.value === 'object' ? this.state.value : {};
-        const sourceMode = deriveAvatarSourceMode(config);
+        const sourceModes = normalizeSourceModes(this.state.sourceModes);
+        const requestedSourceMode = deriveAvatarSourceMode(config);
+        const sourceMode = sourceModes.includes(requestedSourceMode) ? requestedSourceMode : sourceModes[0];
         const normalized = normalizeAvatarForSourceMode(config, sourceMode, { packs });
         const fieldState = buildAvatarFieldState(sourceMode);
         const labels = this.state.labels || {};
@@ -240,9 +258,9 @@ export class AvatarSettingsForm {
                     ${renderWhenVisible('sourceMode', `<label class="avatar-settings-field">
                         <span>${escapeHtml(labels.sourceMode || 'Avatar source')}</span>
                         <select class="form-input avatar-settings-input" data-avatar-source-mode ${disabled}>
-                            <option value="${AVATAR_SOURCE_MODES.GENERATED}" ${sourceMode === AVATAR_SOURCE_MODES.GENERATED ? 'selected' : ''}>Generated</option>
-                            <option value="${AVATAR_SOURCE_MODES.PACK}" ${sourceMode === AVATAR_SOURCE_MODES.PACK ? 'selected' : ''}>AxiFace pack</option>
-                            <option value="${AVATAR_SOURCE_MODES.SVG}" ${sourceMode === AVATAR_SOURCE_MODES.SVG ? 'selected' : ''}>SVG source</option>
+                            ${sourceModes.includes(AVATAR_SOURCE_MODES.GENERATED) ? `<option value="${AVATAR_SOURCE_MODES.GENERATED}" ${sourceMode === AVATAR_SOURCE_MODES.GENERATED ? 'selected' : ''}>Generated</option>` : ''}
+                            ${sourceModes.includes(AVATAR_SOURCE_MODES.PACK) ? `<option value="${AVATAR_SOURCE_MODES.PACK}" ${sourceMode === AVATAR_SOURCE_MODES.PACK ? 'selected' : ''}>AxiFace pack</option>` : ''}
+                            ${sourceModes.includes(AVATAR_SOURCE_MODES.SVG) ? `<option value="${AVATAR_SOURCE_MODES.SVG}" ${sourceMode === AVATAR_SOURCE_MODES.SVG ? 'selected' : ''}>SVG source</option>` : ''}
                         </select>
                     </label>`)}
                 </div>
