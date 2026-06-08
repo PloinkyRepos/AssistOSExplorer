@@ -3,15 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Standalone DPU MCP agent for confidential storage, secrets, and access control.",
-  "bin": {
-    "dpu-agent": "./server/standalone-mcp-server.mjs"
-  },
+  "description": "Ploinky DPU MCP agent for confidential storage, secrets, and access control.",
   "scripts": {
-    "start": "node ./server/standalone-mcp-server.mjs",
-    "test": "node --test ./tests/dpu-store.test.mjs"
-  },
-  "dependencies": {
-    "mcp-sdk": "git+https://github.com/PloinkyRepos/MCPSDK.git#main"
+    "test": "node --test ./tests/*.test.mjs"
   }
 }

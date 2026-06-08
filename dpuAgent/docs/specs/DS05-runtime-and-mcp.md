@@ -2,7 +2,7 @@
 
 ## Summary
 
-`dpuAgent` exposes its domain through Model Context Protocol (MCP) tools declared in `mcp-config.json`. The same contract is used whether the agent runs under Ploinky or through the standalone HTTP MCP server.
+`dpuAgent` exposes its domain through Model Context Protocol (MCP) tools declared in `mcp-config.json`. The agent runs under the bundled Ploinky `AgentServer.mjs`; it does not maintain a custom standalone HTTP MCP runtime.
 
 ## Background / Problem Statement
 
@@ -21,9 +21,9 @@ Each Model Context Protocol tool entry in `mcp-config.json` points to `tools/dpu
 4. validates required fields and enum-like values
 5. dispatches into `lib/dpu-store.mjs`
 
-In standalone mode, `server/standalone-mcp-server.mjs` loads the same `mcp-config.json`, registers the same tools, and still routes execution through the same wrapper and dispatcher.
+The bundled Ploinky `AgentServer.mjs` loads `mcp-config.json`, registers the tools, verifies router-issued secure-wire requests, and routes execution through the same wrapper and dispatcher.
 
-For routed callers, the trusted auth context is carried by a router-issued DS011 invocation JWT in the HTTP `Authorization: Bearer <jwt>` header. Direct delegated agent calls send the caller's current invocation JWT to the router as `X-Ploinky-Caller-JWT`; the router verifies it and mints a fresh provider-audience invocation JWT for DPU. The MCP runtime must verify `typ`, `iss`, `aud`, `tool`, `bh`, `exp`, and `jti` before exposing delegated user or caller-agent data to the domain layer. Legacy `x-ploinky-invocation`, `x-ploinky-caller-assertion`, `x-ploinky-user-context`, and `x-ploinky-auth-info` headers are not trusted.
+For routed callers, the trusted auth context is carried by a router-issued DS013 Router Request JWT in the HTTP `Authorization: Bearer <jwt>` header. Direct delegated agent calls present a DS013 Agent Assertion to the router as `Authorization: Bearer <assertion>`; the router verifies the source agent, applies MCP policy, and mints a fresh DPU-audience Router Request for the target tool. Agent callers may invoke only DPU tools declared with the `internal` policy class, such as the `dpu_agent_secret_*` aliases used by `gitAgent`. The MCP runtime must verify `typ`, `iss`, `aud`, `tool`, `rch`, `exp`, and `jti` before exposing delegated user or caller-agent data to the domain layer. Legacy `x-ploinky-invocation`, `x-ploinky-caller-jwt`, `x-ploinky-caller-assertion`, `x-ploinky-user-context`, and `x-ploinky-auth-info` headers are not trusted.
 
 The auth payload may also include optional agent context, for example:
 
