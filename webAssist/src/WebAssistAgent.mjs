@@ -81,7 +81,7 @@ export async function createWebAssistAgent({
         agentRoot: resolvedAgentRoot,
         dataDir: resolvedDataDir,
         mainAgent,
-        async handleMessage({ siteId, sessionId, message, mode = 'soul_gateway/web-assist' }) {
+        async handleMessage({ siteId, sessionId, message, mode = 'opencode/deepseek-v4-flash' }) {
             if (!siteId) {
                 throw new Error('webAssist.handleMessage requires a siteId.');
             }
@@ -112,6 +112,7 @@ export async function createWebAssistAgent({
             const execution = await mainAgent.executePrompt(runtimePrompt, {
                 model: mode,
                 systemPrompt: VISITOR_FLOW_SYSTEM_PROMPT,
+                reasoningEffort: "low"
             });
 
             const response = String(execution.result ?? '').trim();
