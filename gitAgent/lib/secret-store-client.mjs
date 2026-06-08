@@ -6,7 +6,7 @@ import crypto from 'node:crypto';
  * DPU-aware secret client used by gitAgent. It:
  *
  *   - routes every call through the router to the configured DPU route
- *   - forwards the router-issued invocation JWT as the caller JWT
+ *   - signs each delegated DPU call with this agent's Ploinky agent assertion
  *   - calls the canonical DPU secret operations
  *
  * Env contract (set by AgentServer/ploinky start scripts):
@@ -16,8 +16,15 @@ import crypto from 'node:crypto';
  *   PLOINKY_DPU_ROUTE             - optional explicit DPU MCP route name
  */
 
-const CALLER_JWT_HEADER = 'x-ploinky-caller-jwt';
 const DEFAULT_DPU_ROUTE = 'dpuAgent';
+const AGENT_SECRET_TOOL_NAMES = {
+  dpu_secret_get: 'dpu_agent_secret_get',
+  dpu_secret_put: 'dpu_agent_secret_put',
+  dpu_secret_delete: 'dpu_agent_secret_delete',
+  dpu_secret_grant: 'dpu_agent_secret_grant',
+  dpu_secret_revoke: 'dpu_agent_secret_revoke',
+  dpu_secret_list: 'dpu_agent_secret_list'
+};
 
 function isNonEmptyString(value) {
   return typeof value === 'string' && value.trim().length > 0;
@@ -40,6 +47,23 @@ function resolveConsumerPrincipal() {
   const principal = String(process.env.PLOINKY_AGENT_PRINCIPAL || '').trim();
   if (principal) return principal;
   throw new Error('PLOINKY_AGENT_PRINCIPAL is required and must use canonical agent:<repo>/<agent> form.');
+}
+
+async function loadAgentAssertionSigner() {
+  const agentLibDir = String(process.env.PLOINKY_AGENT_LIB_DIR || '/Agent').replace(/\/+$/, '');
+  const candidates = [
+    `${agentLibDir}/lib/agentAssertion.mjs`,
+    new URL('../../../ploinky/Agent/lib/agentAssertion.mjs', import.meta.url).href
+  ];
+  for (const candidate of candidates) {
+    try {
+      const mod = await import(candidate);
+      if (typeof mod.signAgentAssertion === 'function') {
+        return mod.signAgentAssertion;
+      }
+    } catch (_) {}
+  }
+  throw new Error('secret-store-client: unable to load Ploinky agent assertion signer.');
 }
 
 function extractInvocationToken(authInfo) {
@@ -84,25 +108,34 @@ export function createSecretStoreClient({ providerRouteName, authInfo = null, in
   const baseUrl = `${routerBase}/${encodeURIComponent(dpuRouteName)}/mcp`;
 
   async function callContractOperation(operation, args = {}) {
+    const routedOperation = AGENT_SECRET_TOOL_NAMES[operation] || operation;
     const forwardedInvocationToken = isNonEmptyString(invocationToken)
       ? invocationToken.trim()
       : extractInvocationToken(authInfo) || undefined;
     if (!forwardedInvocationToken) {
       throw new Error('secret-store-client: missing invocation token for delegated DPU call.');
     }
+    const signAgentAssertion = await loadAgentAssertionSigner();
+    const assertion = signAgentAssertion({
+      method: 'POST',
+      path: '/mcp',
+      targetAgent: dpuRouteName,
+      tool: routedOperation,
+      argumentsObj: args
+    });
     const response = await fetch(baseUrl, {
       method: 'POST',
       headers: {
         Accept: 'application/json',
         'Content-Type': 'application/json',
-        [CALLER_JWT_HEADER]: forwardedInvocationToken
+        Authorization: `Bearer ${assertion}`
       },
       body: JSON.stringify({
         jsonrpc: '2.0',
         id: crypto.randomUUID(),
         method: 'tools/call',
         params: {
-          name: operation,
+          name: routedOperation,
           arguments: args
         }
       })

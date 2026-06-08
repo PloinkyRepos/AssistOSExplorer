@@ -110,6 +110,7 @@ function normalizeArgs(toolName, args) {
     case 'dpu_whoami':
     case 'dpu_workspace_roots':
     case 'dpu_secret_list':
+    case 'dpu_agent_secret_list':
     case 'dpu_audit_config_get':
     case 'dpu_audit_list':
       return input;
@@ -135,10 +136,13 @@ function normalizeArgs(toolName, args) {
       requireString('name');
       return input;
     case 'dpu_secret_get':
+    case 'dpu_agent_secret_get':
     case 'dpu_secret_delete':
+    case 'dpu_agent_secret_delete':
       requireString('key');
       return input;
     case 'dpu_secret_put':
+    case 'dpu_agent_secret_put':
       requireString('key');
       if (typeof input.value !== 'string') {
         throw new Error(`${toolName} requires a "value" string.`);
@@ -148,11 +152,13 @@ function normalizeArgs(toolName, args) {
       }
       return input;
     case 'dpu_secret_grant':
+    case 'dpu_agent_secret_grant':
       requireString('key');
       requireString('principal');
       requireString('role');
       return input;
     case 'dpu_secret_revoke':
+    case 'dpu_agent_secret_revoke':
       requireString('key');
       requireString('principal');
       return input;
@@ -249,21 +255,27 @@ async function main() {
       result = await getWorkspaceRoots(authInfo);
       break;
     case 'dpu_secret_list':
+    case 'dpu_agent_secret_list':
       result = await listSecrets(authInfo);
       break;
     case 'dpu_secret_get':
+    case 'dpu_agent_secret_get':
       result = await getSecretByKey(authInfo, args);
       break;
     case 'dpu_secret_put':
+    case 'dpu_agent_secret_put':
       result = await putSecret(authInfo, args);
       break;
     case 'dpu_secret_delete':
+    case 'dpu_agent_secret_delete':
       result = await deleteSecret(authInfo, args);
       break;
     case 'dpu_secret_grant':
+    case 'dpu_agent_secret_grant':
       result = await grantSecret(authInfo, args);
       break;
     case 'dpu_secret_revoke':
+    case 'dpu_agent_secret_revoke':
       result = await revokeSecret(authInfo, args);
       break;
     case 'dpu_confidential_list':

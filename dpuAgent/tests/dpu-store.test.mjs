@@ -233,6 +233,30 @@ test('delegated secret reads reject missing required scope', async () => {
   );
 });
 
+test('delegated secret reads with no explicit scope fall through to secret ACL', async () => {
+  await putSecret(authInfo, { key: 'DIRECT_NO_SCOPE_TOKEN', value: 'direct-value' });
+  await grantSecret(authInfo, { key: 'DIRECT_NO_SCOPE_TOKEN', principal: 'reader@example.com', role: 'read' });
+
+  const delegatedAuth = {
+    user: {
+      email: 'reader@example.com'
+    },
+    agent: {
+      principalId: 'agent:AssistOSExplorer/gitAgent',
+      name: 'gitAgent'
+    },
+    invocation: {
+      scope: [],
+      tool: 'dpu_secret_get',
+      workspaceId: 'default'
+    }
+  };
+
+  const fetched = await getSecretByKey(delegatedAuth, { key: 'DIRECT_NO_SCOPE_TOKEN' });
+  assert.equal(fetched.ok, true);
+  assert.equal(fetched.secret.value, 'direct-value');
+});
+
 test('plaintext secret storage is rejected', async () => {
   const readerAuth = {
     user: {

@@ -285,6 +285,141 @@
       }
     },
     {
+      "name": "dpu_agent_secret_list",
+      "title": "DPU Agent Secret List",
+      "description": "Internal: list secrets visible to a trusted agent principal.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "tags": [
+        "internal"
+      ],
+      "inputSchema": {},
+      "env": {
+        "TOOL_NAME": "dpu_agent_secret_list"
+      }
+    },
+    {
+      "name": "dpu_agent_secret_get",
+      "title": "DPU Agent Secret Get",
+      "description": "Internal: get a secret by key for a trusted agent principal.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "tags": [
+        "internal"
+      ],
+      "inputSchema": {
+        "key": {
+          "type": "string",
+          "optional": false
+        }
+      },
+      "env": {
+        "TOOL_NAME": "dpu_agent_secret_get"
+      }
+    },
+    {
+      "name": "dpu_agent_secret_put",
+      "title": "DPU Agent Secret Put",
+      "description": "Internal: create or update a secret for a trusted agent principal.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "tags": [
+        "internal"
+      ],
+      "inputSchema": {
+        "key": {
+          "type": "string",
+          "optional": false
+        },
+        "value": {
+          "type": "string",
+          "optional": false
+        },
+        "displayName": {
+          "type": "string",
+          "optional": true
+        }
+      },
+      "env": {
+        "TOOL_NAME": "dpu_agent_secret_put"
+      }
+    },
+    {
+      "name": "dpu_agent_secret_delete",
+      "title": "DPU Agent Secret Delete",
+      "description": "Internal: delete a secret by key for a trusted agent principal.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "tags": [
+        "internal"
+      ],
+      "inputSchema": {
+        "key": {
+          "type": "string",
+          "optional": false
+        }
+      },
+      "env": {
+        "TOOL_NAME": "dpu_agent_secret_delete"
+      }
+    },
+    {
+      "name": "dpu_agent_secret_grant",
+      "title": "DPU Agent Secret Grant",
+      "description": "Internal: grant a secret role from a trusted agent-owned secret.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "tags": [
+        "internal"
+      ],
+      "inputSchema": {
+        "key": {
+          "type": "string",
+          "optional": false
+        },
+        "principal": {
+          "type": "string",
+          "optional": false
+        },
+        "role": {
+          "type": "string",
+          "optional": false,
+          "enum": [
+            "access",
+            "write-access",
+            "read",
+            "write"
+          ]
+        }
+      },
+      "env": {
+        "TOOL_NAME": "dpu_agent_secret_grant"
+      }
+    },
+    {
+      "name": "dpu_agent_secret_revoke",
+      "title": "DPU Agent Secret Revoke",
+      "description": "Internal: revoke a secret role from a trusted agent-owned secret.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "tags": [
+        "internal"
+      ],
+      "inputSchema": {
+        "key": {
+          "type": "string",
+          "optional": false
+        },
+        "principal": {
+          "type": "string",
+          "optional": false
+        }
+      },
+      "env": {
+        "TOOL_NAME": "dpu_agent_secret_revoke"
+      }
+    },
+    {
       "name": "dpu_confidential_list",
       "title": "DPU Confidential List",
       "description": "List confidential objects in My Space or Shared.",
