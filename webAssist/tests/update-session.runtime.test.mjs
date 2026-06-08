@@ -18,7 +18,6 @@ test('update-session.runtime updates profile and appends turn history to separat
     const firstResult = await updateSessionProfile({
         siteId: SITE_ID,
         sessionId: 'test-session-1',
-        profiles: ['Developer.md'],
         profileDetails: ['Understands the API basics'],
         contactInformation: {
             name: 'Alex Builder',
@@ -36,7 +35,6 @@ test('update-session.runtime updates profile and appends turn history to separat
     const secondResult = await updateSessionProfile({
         siteId: SITE_ID,
         sessionId: 'test-session-1',
-        profiles: ['Developer.md', 'Developer.md', 'EnterpriseClient.md'],
         profileDetails: ['Understands the API basics', 'Urgent integration timeline'],
         contactInformation: {
             email: 'alex@example.com',
@@ -58,11 +56,9 @@ test('update-session.runtime updates profile and appends turn history to separat
         'utf8'
     );
 
-    assert.match(profileContent, /### 1\. Target Profiles/);
-    assert.match(profileContent, /- Developer\.md/);
-    assert.match(profileContent, /- EnterpriseClient\.md/);
+    assert.match(profileContent, /### 1\. Profile Details/);
     assert.match(profileContent, /- Urgent integration timeline/);
-    assert.match(profileContent, /### 3\. Contact Information/);
+    assert.match(profileContent, /### 2\. Contact Information/);
     assert.match(profileContent, /- \*\*name\*\*: Alex Builder/);
     assert.match(profileContent, /- \*\*email\*\*: alex@example\.com/);
     assert.doesNotMatch(profileContent, /### 5\. History/);

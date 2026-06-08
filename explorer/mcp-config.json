@@ -1,0 +1,112 @@
+{
+  "tools": [
+    {
+      "name": "read_file",
+      "description": "Read the complete contents of a file as text. Deprecated; use read_text_file instead."
+    },
+    {
+      "name": "read_text_file",
+      "description": "Read the complete contents of a text file."
+    },
+    {
+      "name": "read_media_file",
+      "description": "Read an image or audio file as base64 data with a MIME type."
+    },
+    {
+      "name": "read_multiple_files",
+      "description": "Read the contents of multiple files."
+    },
+    {
+      "name": "write_file",
+      "description": "Create or overwrite a text file."
+    },
+    {
+      "name": "write_binary_file",
+      "description": "Create or overwrite a binary file from base64 content."
+    },
+    {
+      "name": "edit_file",
+      "description": "Apply textual edits to a file and return a diff."
+    },
+    {
+      "name": "create_directory",
+      "description": "Create a directory recursively."
+    },
+    {
+      "name": "delete_file",
+      "description": "Delete a file."
+    },
+    {
+      "name": "delete_directory",
+      "description": "Delete a directory."
+    },
+    {
+      "name": "list_directory",
+      "description": "List files and directories within a path."
+    },
+    {
+      "name": "list_directory_with_sizes",
+      "description": "List directory contents with sizes and summary information."
+    },
+    {
+      "name": "list_directory_detailed",
+      "description": "List directory contents with metadata."
+    },
+    {
+      "name": "directory_tree",
+      "description": "Return a JSON tree of files and directories."
+    },
+    {
+      "name": "move_file",
+      "description": "Move or rename files or directories."
+    },
+    {
+      "name": "copy_file",
+      "description": "Copy files or directories."
+    },
+    {
+      "name": "search_files",
+      "description": "Search recursively for files and directories matching a pattern."
+    },
+    {
+      "name": "search_text",
+      "description": "Start a background text search under a path."
+    },
+    {
+      "name": "search_text_status",
+      "description": "Poll the status and results of a background text search."
+    },
+    {
+      "name": "search_text_cancel",
+      "description": "Cancel a running background text search."
+    },
+    {
+      "name": "replace_text",
+      "description": "Replace text matches inside files under a path."
+    },
+    {
+      "name": "get_file_info",
+      "description": "Retrieve metadata about a file or directory."
+    },
+    {
+      "name": "collect_ide_plugins",
+      "description": "Aggregate IDE plugin configurations from enabled workspace agents."
+    },
+    {
+      "name": "get_plugin_settings",
+      "description": "Read persisted workspace plugin settings."
+    },
+    {
+      "name": "set_plugin_enabled",
+      "description": "Persist enabled or disabled state for a workspace plugin."
+    },
+    {
+      "name": "list-skills",
+      "description": "List Achilles CLI skills discovered for the current workspace."
+    },
+    {
+      "name": "list_allowed_directories",
+      "description": "Return the directories the Explorer server is permitted to access."
+    }
+  ]
+}

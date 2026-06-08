@@ -5,6 +5,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 
+const agentLibDir = path.resolve(new URL('../../../../ploinky/Agent', import.meta.url).pathname);
 const moduleUrl = new URL('../../lib/github-auth.mjs', import.meta.url);
 const moduleSuffix = `?test=${Date.now()}`;
 const {
@@ -73,7 +74,10 @@ test('manual GitHub token state is isolated by routed workspace user', async () 
 
   await withEnv({
     PLOINKY_ROUTER_URL: `http://127.0.0.1:${port}`,
+    PLOINKY_AGENT_ID: 'agent:AchillesIDE/gitAgent',
     PLOINKY_AGENT_PRINCIPAL: 'agent:AchillesIDE/gitAgent',
+    PLOINKY_AGENT_SECRET: 'a'.repeat(64),
+    PLOINKY_AGENT_LIB_DIR: agentLibDir,
     PLOINKY_DPU_ROUTE: 'dpuAgent'
   }, async () => {
     await storeManualGitAuthToken({ workspaceRoot, authInfo: adminAuth, token: 'ghp_admin' });
@@ -89,5 +93,5 @@ test('manual GitHub token state is isolated by routed workspace user', async () 
   assert.equal(nicoletaState.connection.source, 'token');
   assert.equal(adminState.connection.accessToken, '');
   assert.equal(nicoletaState.connection.accessToken, '');
-  assert.equal(requests.filter((body) => body?.params?.name === 'dpu_secret_put').length, 2);
+  assert.equal(requests.filter((body) => body?.params?.name === 'dpu_agent_secret_put').length, 2);
 });

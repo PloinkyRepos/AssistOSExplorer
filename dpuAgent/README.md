@@ -10,19 +10,7 @@ The agent owns three things that Explorer should not implement locally:
 
 ## Runtime
 
-`dpuAgent` can run under the Ploinky runtime or as a standalone HTTP Model Context Protocol server. Under Ploinky, `DPU_MASTER_KEY` is a per-agent generated secret derived from `PLOINKY_DERIVED_MASTER_KEY` through `{{generatedSecret:DPU_MASTER_KEY}}`; standalone runs must still provide `DPU_MASTER_KEY` explicitly.
-
-Standalone entry point:
-
-```bash
-npm install
-DPU_MASTER_KEY=... DPU_DATA_ROOT=... node ./server/standalone-mcp-server.mjs
-```
-
-Standalone endpoints:
-
-- `POST /mcp`
-- `GET /health`
+`dpuAgent` runs as a Ploinky MCP-first agent through the bundled Ploinky `AgentServer.mjs`. Under Ploinky, `DPU_MASTER_KEY` is a per-agent generated secret provided through `{{generatedSecret:DPU_MASTER_KEY}}`, and the router is the only public entry point for DPU MCP calls.
 
 Required or relevant environment variables:
 

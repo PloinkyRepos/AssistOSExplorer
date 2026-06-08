@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
+import path from 'node:path';
+
+const agentLibDir = path.resolve(new URL('../../../../ploinky/Agent', import.meta.url).pathname);
 
 const moduleUrl = new URL('../../lib/secret-store-client.mjs', import.meta.url);
 const moduleSuffix = `?test=${Date.now()}`;
@@ -11,6 +14,7 @@ const {
   resolveGitAuthPrincipal,
   resolveGitTokenSecretKey
 } = await import(`${moduleUrl.href}${moduleSuffix}`);
+const { authInfoFromInvocation } = await import(new URL('../../../../ploinky/Agent/lib/invocation-auth.mjs', import.meta.url).href);
 
 function withEnv(env, fn) {
   const previous = new Map();
@@ -29,7 +33,7 @@ function withEnv(env, fn) {
     });
 }
 
-test('secret-store client forwards the invocation JWT as caller JWT without MCP session setup', async () => {
+test('secret-store client calls DPU with an agent assertion and internal secret tool', async () => {
   const requests = [];
   const server = http.createServer((req, res) => {
     const chunks = [];
@@ -59,15 +63,17 @@ test('secret-store client forwards the invocation JWT as caller JWT without MCP 
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const { port } = server.address();
 
-  const invocationToken = 'router-issued-invocation-jwt';
   await withEnv({
     PLOINKY_ROUTER_URL: `http://127.0.0.1:${port}`,
+    PLOINKY_AGENT_ID: 'agent:AchillesIDE/gitAgent',
     PLOINKY_AGENT_PRINCIPAL: 'agent:AchillesIDE/gitAgent',
+    PLOINKY_AGENT_SECRET: 'a'.repeat(64),
+    PLOINKY_AGENT_LIB_DIR: agentLibDir,
     PLOINKY_DPU_ROUTE: 'dpuAgent'
   }, async () => {
     const client = createSecretStoreClient({
       authInfo: {
-        invocationToken
+        invocationToken: 'router-issued-invocation-jwt'
       }
     });
 
@@ -82,10 +88,11 @@ test('secret-store client forwards the invocation JWT as caller JWT without MCP 
   assert.equal(request.method, 'POST');
   assert.equal(request.url, '/dpuAgent/mcp');
   assert.equal(request.body.method, 'tools/call');
-  assert.equal(request.body.params?.name, 'dpu_secret_put');
+  assert.equal(request.body.params?.name, 'dpu_agent_secret_put');
   assert.deepEqual(request.body.params?.arguments, { key: 'API_TOKEN', value: 'secret-value' });
   assert.equal(typeof request.headers['mcp-session-id'], 'undefined');
-  assert.equal(request.headers['x-ploinky-caller-jwt'], invocationToken);
+  assert.match(String(request.headers.authorization || ''), /^Bearer\s+\S+\.\S+\.\S+$/);
+  assert.equal(typeof request.headers['x-ploinky-caller-jwt'], 'undefined');
   assert.equal(typeof request.headers['x-ploinky-user-context'], 'undefined');
   assert.equal(typeof request.headers['x-ploinky-caller-assertion'], 'undefined');
 });
@@ -127,6 +134,25 @@ test('GitHub token keys are scoped by routed workspace user identity', () => {
   assert.match(adminKey, /^GIT_GITHUB_TOKEN_[A-F0-9]{16}$/);
   assert.notEqual(adminKey, GIT_GITHUB_TOKEN_SECRET_KEY);
   assert.notEqual(adminKey, otherKey);
+});
+
+test('GitHub token keys stay scoped when router grants only carry sub and actor', () => {
+  const authInfo = authInfoFromInvocation({
+    sub: 'user:local:admin',
+    actor: {
+      kind: 'user',
+      id: 'user:local:admin',
+      roles: ['admin']
+    },
+    scope: ['git_auth_status'],
+    tool: 'git_auth_status',
+    workspace_id: 'testExplorerFresh'
+  }, {
+    invocationToken: 'router-issued-invocation-jwt'
+  });
+
+  assert.equal(resolveGitAuthPrincipal(authInfo), 'user:local:admin');
+  assert.match(resolveGitTokenSecretKey({ authInfo }), /^GIT_GITHUB_TOKEN_[A-F0-9]{16}$/);
 });
 
 test('putStoredGitToken writes and grants the user-scoped GitHub token key', async () => {
@@ -172,7 +198,10 @@ test('putStoredGitToken writes and grants the user-scoped GitHub token key', asy
 
   await withEnv({
     PLOINKY_ROUTER_URL: `http://127.0.0.1:${port}`,
+    PLOINKY_AGENT_ID: 'agent:AchillesIDE/gitAgent',
     PLOINKY_AGENT_PRINCIPAL: 'agent:AchillesIDE/gitAgent',
+    PLOINKY_AGENT_SECRET: 'a'.repeat(64),
+    PLOINKY_AGENT_LIB_DIR: agentLibDir,
     PLOINKY_DPU_ROUTE: 'dpuAgent'
   }, async () => {
     await putStoredGitToken({ authInfo, token: 'ghp_test' });
@@ -183,9 +212,9 @@ test('putStoredGitToken writes and grants the user-scoped GitHub token key', asy
   assert.equal(requests.length, 2);
   assert.equal(requests[0].url, '/dpuAgent/mcp');
   assert.equal(requests[1].url, '/dpuAgent/mcp');
-  assert.equal(requests[0].body.params?.name, 'dpu_secret_put');
+  assert.equal(requests[0].body.params?.name, 'dpu_agent_secret_put');
   assert.deepEqual(requests[0].body.params?.arguments, { key: expectedKey, value: 'ghp_test' });
-  assert.equal(requests[1].body.params?.name, 'dpu_secret_grant');
+  assert.equal(requests[1].body.params?.name, 'dpu_agent_secret_grant');
   assert.deepEqual(requests[1].body.params?.arguments, {
     key: expectedKey,
     principal: 'agent:AchillesIDE/gitAgent',

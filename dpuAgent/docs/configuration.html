@@ -39,7 +39,7 @@
 
                 <section>
                     <h2>Why Configuration Matters</h2>
-                    <p>The agent only works correctly if it can find the workspace boundary, the DPU storage root, and the master key used to encrypt secrets and confidential content. In Ploinky, the DPU master key is derived from <code>PLOINKY_DERIVED_MASTER_KEY</code> through the manifest runtime-resource contract, so it remains stable without manual secret configuration.</p>
+                    <p>The agent only works correctly if it can find the workspace boundary, the DPU storage root, and the master key used to encrypt secrets and confidential content. In Ploinky, <code>{{generatedSecret:DPU_MASTER_KEY}}</code> is resolved before launch, so the agent receives a stable per-agent encryption key without manual secret configuration or workspace master-key access.</p>
                 </section>
 
                 <section>
@@ -81,7 +81,7 @@
                         <tbody>
                             <tr>
                                 <td><code>DPU_MASTER_KEY</code></td>
-                                <td>Encryption root for secret values and confidential file content, a per-agent generated secret derived from <code>PLOINKY_DERIVED_MASTER_KEY</code> through <code>{{generatedSecret:DPU_MASTER_KEY}}</code>.</td>
+                                <td>Encryption root for secret values and confidential file content, resolved before launch from the manifest <code>{{generatedSecret:DPU_MASTER_KEY}}</code> runtime-resource template.</td>
                             </tr>
                             <tr>
                                 <td><code>DPU_DATA_ROOT</code></td>
@@ -100,8 +100,8 @@
                 </section>
 
                 <section>
-                    <h2>Standalone Mode</h2>
-                    <p>The standalone entry point is <code>server/standalone-mcp-server.mjs</code>. It serves <code>POST /mcp</code> and <code>GET /health</code>, while reusing the same <code>mcp-config.json</code> and tool dispatcher as the embedded runtime.</p>
+                    <h2>Ploinky Runtime</h2>
+                    <p><code>dpuAgent</code> is MCP-first and runs through the bundled Ploinky <code>AgentServer.mjs</code>. The agent does not expose a standalone HTTP MCP server; Ploinky owns <code>POST /mcp</code>, <code>GET /health</code>, secure-wire verification, and tool registration from <code>mcp-config.json</code>.</p>
                 </section>
             </div>
         </div>

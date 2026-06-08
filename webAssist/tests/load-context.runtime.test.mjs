@@ -17,13 +17,11 @@ test('load-context.runtime loads info, profile definitions, and parsed session s
     await updateSessionProfile({
         siteId: SITE_ID,
         sessionId: 'sess1',
-        profiles: ['Developer.md'],
         profileDetails: ['Asked about API integrations'],
         contactInformation: {
             name: 'Session One',
             email: 'sess1@example.com',
         },
-        consent: 'The visitor explicitly agreed to follow-up storage.',
     });
     await createLeadAction({
         promptText: JSON.stringify({
@@ -33,8 +31,6 @@ test('load-context.runtime loads info, profile definitions, and parsed session s
             profile: 'Developer',
             mandatoryConditionsSatisfied: true,
             matchExplanation: 'The visitor asked about API integrations and provided contact information.',
-            consentGranted: true,
-            consentText: 'The visitor explicitly agreed to follow-up storage.',
             summary: 'Qualified developer profile.',
         }),
     });
@@ -86,7 +82,6 @@ test('load-context.runtime loads info, profile definitions, and parsed session s
     assert.equal(result.ownerConfig.exists, true);
     assert.equal(result.policyConfig.exists, true);
     assert.equal(result.sessionProfile.isNewSession, false);
-    assert.deepEqual(result.sessionProfile.profiles, ['Developer.md']);
     assert.deepEqual(result.sessionProfile.profileDetails, ['Asked about API integrations']);
     assert.equal(result.sessionProfile.contactInformation.name, 'Session One');
     assert.equal(result.sessionProfile.contactInformation.email, 'sess1@example.com');
@@ -95,7 +90,6 @@ test('load-context.runtime loads info, profile definitions, and parsed session s
     assert.equal(result.currentLead.profile, 'Developer');
     assert.equal(result.currentLead.sessionId, 'sess1');
     assert.equal(result.currentLead.contactInfo.email, 'sess1@example.com');
-    assert.match(result.currentLead.consent, /explicitly agreed/);
     assert.match(result.combinedSiteInfo, /WebAssist builds AI-assisted websites/);
     assert.match(result.combinedProfiles, /Profile: Developer/);
     assert.doesNotMatch(result.sessionProfileText, /Tell me about your API/);

@@ -1,7 +1,7 @@
 # webassist-lead
 
 ## Description
-Creates or updates a site-scoped lead after profile match, contact information, and explicit consent are validated.
+Creates or updates a site-scoped lead after profile match and contact information are validated.
 
 ## Input Format
 - `promptText` contains a JSON object with:
@@ -11,10 +11,7 @@ Creates or updates a site-scoped lead after profile match, contact information, 
   - `mandatoryConditionsSatisfied` (boolean, required true)
   - `matchExplanation` (string, required)
   - `contactInfo` (object, required)
-  - `consentGranted` (boolean, required true)
-  - `consentText` (string, required)
   - `summary` (string, required)
-  - `contactRoute` (string, optional)
 
 ## Output Format
 - Plain text only.

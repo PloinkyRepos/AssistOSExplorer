@@ -52,10 +52,8 @@ function renderContactInformation(contactInformation) {
 export async function updateSessionProfile({
     siteId,
     sessionId,
-    profiles,
     profileDetails,
     contactInformation,
-    consent,
 }) {
     if (!siteId) {
         throw new Error('webassist-session requires siteId.');
@@ -66,9 +64,7 @@ export async function updateSessionProfile({
 
     const store = getDataStore();
     const profileFileName = getSessionProfileFileName(sessionId);
-    const nextProfiles = uniqueStrings(profiles);
     const nextProfileDetails = uniqueStrings(profileDetails);
-    const nextConsent = String(consent ?? '').trim() || '*None*';
     let existingContactInformationSection = '*None*';
     let existingContactInformation = {};
     try {
@@ -94,10 +90,8 @@ export async function updateSessionProfile({
     }
 
     await store.replaceFile(DATASTORE_TYPES.SESSIONS, profileFileName, {
-        [SESSION_SECTIONS.TARGET_PROFILES]: store.renderList(nextProfiles),
         [SESSION_SECTIONS.PROFILE_DETAILS]: store.renderList(nextProfileDetails),
         [SESSION_SECTIONS.CONTACT_INFORMATION]: nextContactInformationSection,
-        [SESSION_SECTIONS.CONSENT]: nextConsent,
     });
 
     const savedProfile = await store.getSectionMap(DATASTORE_TYPES.SESSIONS, profileFileName);
@@ -109,10 +103,8 @@ export async function updateSessionProfile({
         sessionId,
         sessionProfilePath: `${profileFileName}.md`,
         sessionProfile: {
-            profiles: nextProfiles,
             profileDetails: nextProfileDetails,
             contactInformation: parsedContactInformation,
-            consent: nextConsent,
             profileRawContent: savedProfile.rawMarkdown,
         },
     };

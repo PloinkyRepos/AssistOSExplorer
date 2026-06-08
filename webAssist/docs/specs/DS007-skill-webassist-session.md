@@ -7,10 +7,8 @@
 - `sessionId`
 
 ## Optional Input
-- `profiles`
 - `profileDetails`
 - `contactInformation`
-- `consent`
 
 ## Guarantees
 - Writes only to `data/sites/<siteId>/sessions/<sessionId>-profile.md`.

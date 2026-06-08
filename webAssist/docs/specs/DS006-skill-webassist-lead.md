@@ -9,13 +9,9 @@
 - `mandatoryConditionsSatisfied: true`
 - `matchExplanation`
 - `contactInfo`
-- `consentGranted: true`
-- `consentText`
 - `summary`
-- `contactRoute` optional
 
 ## Guarantees
 - Rejects missing contact information.
-- Rejects missing explicit consent.
 - Preserves `Created At` on update and refreshes `Updated At`.
-- Stores match explanation, consent evidence, contact route, and summary in Markdown sections.
+- Stores match explanation, contact route, and summary in Markdown sections.

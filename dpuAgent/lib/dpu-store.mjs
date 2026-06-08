@@ -74,8 +74,11 @@ const OPERATION_SCOPE_MAP = {
 function extractInvocationScope(authInfo) {
   const invocation = authInfo && typeof authInfo === 'object' ? authInfo.invocation : null;
   if (!invocation || typeof invocation !== 'object') return null;
-  const scope = Array.isArray(invocation.scope) ? invocation.scope : [];
-  return new Set(scope.map((v) => String(v || '').trim().toLowerCase()).filter(Boolean));
+  const scope = Array.isArray(invocation.scope) ? invocation.scope : null;
+  if (!scope) return null;
+  const normalized = scope.map((v) => String(v || '').trim().toLowerCase()).filter(Boolean);
+  if (!normalized.length) return null;
+  return new Set(normalized);
 }
 
 function assertInvocationScopeFor(operation, authInfo) {

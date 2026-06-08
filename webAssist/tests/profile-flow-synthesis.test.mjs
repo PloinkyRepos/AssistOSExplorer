@@ -39,7 +39,6 @@ class FakeFlowSynthesisLLM extends LLMAgent {
                     toolPrompt: JSON.stringify({
                         siteId,
                         sessionId,
-                        profiles: ['Researcher.md'],
                         profileDetails: [
                             'Interested in research collaboration',
                             'Open to academic-industry partnerships',
@@ -50,7 +49,6 @@ class FakeFlowSynthesisLLM extends LLMAgent {
                             name: 'Research Visitor',
                             email: 'research.visitor@example.com',
                         },
-                        consent: 'Consent not yet collected.',
                     }),
                     reason: 'Persist second-turn profile data.',
                 };
@@ -70,7 +68,6 @@ class FakeFlowSynthesisLLM extends LLMAgent {
                 toolPrompt: JSON.stringify({
                     siteId,
                     sessionId,
-                    profiles: ['Researcher.md'],
                     profileDetails: [
                         'Interested in research collaboration',
                         'The user is asked about available datasets and student resources. His/her next reply should answer the question.',
@@ -78,7 +75,6 @@ class FakeFlowSynthesisLLM extends LLMAgent {
                     contactInformation: {
                         name: 'Research Visitor',
                     },
-                    consent: 'Consent not yet collected.',
                 }),
                 reason: 'Persist first-turn profile data.',
             };

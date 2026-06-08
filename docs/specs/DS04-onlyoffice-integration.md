@@ -159,7 +159,7 @@ The storage bridge is implemented in:
 Important behavior:
 
 - DPU access is routed back through Ploinky's router MCP proxy instead of directly dialing another agent container or host-published port.
-- protected Office service requests must receive a router-issued invocation token, which Explorer forwards as `X-Ploinky-Caller-JWT` when calling `dpuAgent`.
+- protected Office service requests must receive a router-issued invocation token; delegated DPU calls re-enter the router with a DS013 Agent Assertion and are authorized through MCP policy before DPU receives a target-audience Router Request.
 - read: DPU content is fetched and decoded for download to OnlyOffice
 - save: updated binary content is downloaded from OnlyOffice and stored back to DPU as base64
 

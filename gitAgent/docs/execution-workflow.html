@@ -78,7 +78,7 @@ JSON result -> MCP response -> Explorer user interface</code></pre>
                         <li><strong>Path policy:</strong> repository path arguments are constrained to allowed roots from <code>ASSISTOS_FS_ROOT</code>, <code>WORKSPACE_ROOT</code>, or <code>PLOINKY_WORKSPACE_ROOT</code>.</li>
                         <li><strong>Operation execution:</strong> Git tools call <code>createGitService</code>; auth tools call GitHub auth handlers.</li>
                         <li><strong>Remote token fallback:</strong> push and pull can resolve tokens from auth metadata or stored token state.</li>
-                        <li><strong>Direct DPU call:</strong> when GitHub auth or token storage needs a secret operation, the client forwards the current router-issued invocation JWT as <code>X-Ploinky-Caller-JWT</code>. The router verifies that caller token and mints the DPU-audience invocation used by domain code.</li>
+                        <li><strong>Direct DPU call:</strong> when GitHub auth or token storage needs a secret operation, the client signs a DS013 Agent Assertion with <code>gitAgent</code>'s own <code>PLOINKY_AGENT_SECRET</code> and calls DPU's internal secret aliases through the router. The router verifies the source agent assertion, applies MCP policy, and mints the DPU-audience invocation used by domain code.</li>
                         <li><strong>Response emission:</strong> tool result is serialized to stdout; failures return <code>{ "ok": false, "error": ... }</code>.</li>
                     </ol>
                 </section>
