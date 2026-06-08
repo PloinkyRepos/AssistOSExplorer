@@ -149,6 +149,30 @@
                     "optional": true
                 }
             }
+        },
+        {
+            "name": "fetch-agent-context",
+            "title": "Fetch Agent Context",
+            "description": "Fetch and execute a website's agent-context.mjs module, then save the resulting documents to the local data store.",
+            "command": "/code/src/mcp/fetch-agent-context.mjs",
+            "cwd": "workspace",
+            "inputSchema": {
+                "siteUrl": {
+                    "type": "string",
+                    "description": "Base URL of the website hosting agent-context.mjs",
+                    "optional": false
+                },
+                "dataDir": {
+                    "type": "string",
+                    "description": "Optional data directory override",
+                    "optional": true
+                },
+                "agentRoot": {
+                    "type": "string",
+                    "description": "Optional agent root override",
+                    "optional": true
+                }
+            }
         }
     ]
 }
