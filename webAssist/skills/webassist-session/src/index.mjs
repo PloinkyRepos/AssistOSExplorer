@@ -36,5 +36,5 @@ export async function action({ promptText }) {
 
     const detailCount = Array.isArray(profileDetails) ? profileDetails.length : 0;
     const contactKeys = contactInformation ? Object.keys(contactInformation).length : 0;
-    return `Session profile updated: ${detailCount} detail(s), ${contactKeys} contact field(s).`;
+    return `[internal] Session profile persisted: ${detailCount} detail(s), ${contactKeys} contact field(s). Compose visitor-facing response.`;
 }

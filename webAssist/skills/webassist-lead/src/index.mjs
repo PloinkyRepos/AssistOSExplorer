@@ -92,5 +92,5 @@ export async function action({ promptText }) {
     });
 
     const contactFields = Object.keys(normalizedContactInfo).join(', ');
-    return `Lead created for profile: ${profile}. Contact: ${contactFields}.`;
+    return `[internal] Lead persisted for profile: ${profile}. Contact: ${contactFields}. Compose visitor-facing response.`;
 }
