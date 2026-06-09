@@ -1,3 +1,19 @@
+import { readFileSync, readdirSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const PROFILES_DIR = join(__dirname, 'profiles');
+
+function loadProfileFiles() {
+    const files = readdirSync(PROFILES_DIR).filter((f) => f.endsWith('.md'));
+    return files.map((file) => {
+        const title = file.replace(/\.md$/, '').replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+        const content = readFileSync(join(PROFILES_DIR, file), 'utf8');
+        return { type: 'profile', title, content };
+    });
+}
+
 module.exports = {
     async describeSite() {
         return {
@@ -39,35 +55,10 @@ AI Democratizes Dev Tools: AI assistance will unlock the power of computing for 
 Tell AI What, Not How: The focus will shift from meticulous manual labor on details to the art of crafting specifications and orchestrating AI pipelines that produce the desired artifacts.`,
         });
 
-        registerDocument({
-            type: 'profile',
-            title: 'Developer',
-            content: `Software developers and engineers interested in AI-powered development tools, IDE integration, and version control systems.
-
-Keywords: developer, software engineer, IDE, version control, AI tools, open-source, production-ready, DevOps, API integration.
-
-Engagement Path: Early access to AI development tools, open-source contribution opportunities, IDE plugin development, integration with existing workflows.`,
-        });
-
-        registerDocument({
-            type: 'profile',
-            title: 'Designer',
-            content: `UX/UI designers and design system creators interested in AI-assisted design workflows, component libraries, and design-to-code pipelines.
-
-Keywords: designer, UX, UI, design systems, AI design tools, component libraries, design tokens.
-
-Engagement Path: AI-assisted design tool exploration, design system automation, design-to-code workflow integration.`,
-        });
-
-        registerDocument({
-            type: 'profile',
-            title: 'Researcher',
-            content: `Academic and industry researchers interested in AI methodology, human-computer interaction, and research tooling automation.
-
-Keywords: researcher, academic, HCI, AI methodology, research automation, knowledge management.
-
-Engagement Path: Research collaboration opportunities, AI methodology testing, knowledge management tool development.`,
-        });
+        const profiles = loadProfileFiles();
+        for (const profile of profiles) {
+            registerDocument(profile);
+        }
 
         registerDocument({
             type: 'contact',

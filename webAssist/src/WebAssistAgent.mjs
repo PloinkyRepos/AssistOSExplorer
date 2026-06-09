@@ -81,7 +81,7 @@ export async function createWebAssistAgent({
         agentRoot: resolvedAgentRoot,
         dataDir: resolvedDataDir,
         mainAgent,
-        async handleMessage({ siteId, sessionId, message, mode = 'opencode/deepseek-v4-flash' }) {
+        async handleMessage({ siteId, sessionId, message, mode = 'soul_gateway/web-assist' }) {
             if (!siteId) {
                 throw new Error('webAssist.handleMessage requires a siteId.');
             }

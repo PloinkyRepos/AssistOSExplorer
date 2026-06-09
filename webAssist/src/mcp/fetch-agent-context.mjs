@@ -1,11 +1,15 @@
 #!/usr/bin/env node
 
 import path from 'node:path';
+import fs from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
 
 import { configureDataStore, resolveDataDir } from '../runtime/dataStore.mjs';
 import { executeWacModule } from '../runtime/execute-wac-module.mjs';
 import { saveWacDocuments } from '../runtime/wac-to-datastore.mjs';
+
+const WAC_CACHE_TTL = 5 * 60 * 1000;
 
 function deriveSiteId(siteUrl) {
     try {
@@ -52,6 +56,56 @@ function resolveLocalhostForContainer(siteUrl) {
     return siteUrl;
 }
 
+function computeSourceHash(sourceCode) {
+    return createHash('sha256').update(sourceCode).digest('hex').slice(0, 16);
+}
+
+function resolveCachePath(dataDir) {
+    return path.join(path.resolve(dataDir), 'wac-cache.json');
+}
+
+async function loadCache(dataDir) {
+    try {
+        const cachePath = resolveCachePath(dataDir);
+        const raw = await fs.readFile(cachePath, 'utf8');
+        return JSON.parse(raw);
+    } catch {
+        return {};
+    }
+}
+
+async function saveCache(dataDir, cache) {
+    try {
+        const cachePath = resolveCachePath(dataDir);
+        await fs.mkdir(path.dirname(cachePath), { recursive: true });
+        await fs.writeFile(cachePath, JSON.stringify(cache, null, 2), 'utf8');
+    } catch {
+    }
+}
+
+function getCacheEntry(cache, siteUrl, sourceHash) {
+    const entry = cache[siteUrl];
+    if (!entry) {
+        return null;
+    }
+    const age = Date.now() - entry.timestamp;
+    if (age > WAC_CACHE_TTL) {
+        return null;
+    }
+    if (entry.sourceHash !== sourceHash) {
+        return null;
+    }
+    return entry;
+}
+
+function setCacheEntry(cache, siteUrl, sourceHash, data) {
+    cache[siteUrl] = {
+        sourceHash,
+        timestamp: Date.now(),
+        data,
+    };
+}
+
 async function main() {
     const stdinData = await new Promise((resolve) => {
         let data = '';
@@ -83,12 +137,12 @@ async function main() {
     const agentRoot = typeof input.agentRoot === 'string' && input.agentRoot.trim()
         ? input.agentRoot.trim()
         : path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-    const dataDir = typeof input.dataDir === 'string' && input.dataDir.trim()
+    const resolvedDataDir = typeof input.dataDir === 'string' && input.dataDir.trim()
         ? input.dataDir.trim()
-        : undefined;
+        : resolveDataDir(agentRoot, undefined);
 
     const siteId = deriveSiteId(siteUrl);
-    configureDataStore({ agentRoot, dataDir, siteId });
+    configureDataStore({ agentRoot, dataDir: resolvedDataDir, siteId });
 
     const { getDataStore } = await import('../runtime/dataStore.mjs');
     const store = getDataStore();
@@ -135,6 +189,20 @@ async function main() {
         return;
     }
 
+    const sourceHash = computeSourceHash(sourceCode);
+    const cache = await loadCache(resolvedDataDir);
+    const cached = getCacheEntry(cache, siteUrl, sourceHash);
+
+    if (cached) {
+        process.stdout.write(JSON.stringify({
+            ok: true,
+            siteId: cached.data.siteId,
+            siteUrl: cached.data.siteUrl,
+            cached: true,
+        }));
+        return;
+    }
+
     try {
         const { exports, documents } = await executeWacModule({
             sourceCode,
@@ -147,15 +215,22 @@ async function main() {
         const siteInfo = exports.describeSite ? await exports.describeSite() : null;
         const interactionConfig = exports.configureInteraction ? await exports.configureInteraction() : null;
 
-        process.stdout.write(JSON.stringify({
-            ok: true,
+        setCacheEntry(cache, siteUrl, sourceHash, {
             siteId,
             siteUrl,
             documentsLoaded: documents.length,
             saved: saveResult,
-            siteInfo: siteInfo || null,
-            interactionConfig: interactionConfig || null,
-        }, null, 2));
+            siteInfo,
+            interactionConfig,
+        });
+        await saveCache(resolvedDataDir, cache);
+
+        process.stdout.write(JSON.stringify({
+            ok: true,
+            siteId,
+            siteUrl,
+            cached: false,
+        }));
     } catch (error) {
         process.stdout.write(JSON.stringify({
             ok: false,
