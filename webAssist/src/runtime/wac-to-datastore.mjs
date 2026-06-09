@@ -7,6 +7,7 @@ const WAC_TO_DATASTORE_MAP = {
     project: { type: 'info', fileName: 'projects' },
     notice: { type: 'info', fileName: 'notices' },
     page: { type: 'info', fileName: 'pages' },
+    profile: { type: 'profiles', fileName: 'catalog' },
     contact: { type: 'config', fileName: 'owner' },
     'interaction-policy': { type: 'config', fileName: 'policy' },
 };

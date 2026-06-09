@@ -53,15 +53,11 @@ Execution contract:
     Rules for building this payload:
       - combinedProfilesInfo represents the fixed profile catalog for this website; use only these profiles for qualification decisions.
       - keep profileDetails and lead summary in English.
-      - profileDetails must synthesize conversation essence, not raw transcript.
-      - Treat profileDetails as an evolving cumulative state across turns. Preserve all existing entries that remain valid. Only add new entries, update, or replace existing ones when the current turn provides new evidence that directly changes a known fact or conversation state. When profileDetails exceeds 12 entries or around 300 characters, proactively summarize and consolidate into essential facts while preserving key decisions.
+      - profileDetails must synthesize the visitor's profile, not log the conversation.
+      - Treat profileDetails as a living profile that evolves across turns. Add new facts when discovered, update existing facts when they change, and remove entries that are no longer relevant to the current conversation state.
       - If sessionProfile.isNewSession is true (no previous session profile loaded), you MUST initialize the session profile in this turn. Initialization must include at least one meaningful profileDetails entry capturing the current visitor intent (in English), even if profile match is still unknown.
-      - always keep a list of negative and positive traits of the user (negative could be that the user did not answer your questions).
-      - profileDetails must include concise facts about:
-        - user profile-relevant details and constraints,
-        - what the agent asked and what the user answered,
-        - pending questions and whether the user skipped a previous question,
-        - main aspects discussed by both participants (agent and user) that affect qualification.
+      - Focus on capturing profile-relevant information: user interests, constraints, language preferences, technical background, and behavioral signals that affect qualification.
+      - Do not append a new entry for every message. Consolidate related facts and remove outdated or resolved information.
       - when asking for missing contact data, explicitly record this in profileDetails (for example: user was asked for email/phone and next reply should provide it).
       - if no profile matches after several profiling attempts, enter a dismissive mode: stop asking profiling questions and answer only strict website-related questions.
       - if the visitor later provides new profile-relevant evidence, you may exit dismissive mode and resume profiling against the same fixed profile catalog.

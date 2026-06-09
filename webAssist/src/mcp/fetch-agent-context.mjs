@@ -196,8 +196,8 @@ async function main() {
     if (cached) {
         process.stdout.write(JSON.stringify({
             ok: true,
-            siteId: cached.data.siteId,
-            siteUrl: cached.data.siteUrl,
+            siteId,
+            siteUrl,
             cached: true,
         }));
         return;
@@ -206,22 +206,15 @@ async function main() {
     try {
         const { exports, documents } = await executeWacModule({
             sourceCode,
-            siteUrl,
+            siteUrl: resolvedUrl,
             timeout: 5000,
         });
 
         const saveResult = await saveWacDocuments({ store, documents });
 
-        const siteInfo = exports.describeSite ? await exports.describeSite() : null;
-        const interactionConfig = exports.configureInteraction ? await exports.configureInteraction() : null;
-
         setCacheEntry(cache, siteUrl, sourceHash, {
-            siteId,
-            siteUrl,
             documentsLoaded: documents.length,
             saved: saveResult,
-            siteInfo,
-            interactionConfig,
         });
         await saveCache(resolvedDataDir, cache);
 
