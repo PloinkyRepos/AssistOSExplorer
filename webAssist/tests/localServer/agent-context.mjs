@@ -1,28 +1,43 @@
-import { readFileSync, readdirSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+const PROFILE_FILES = [
+    'ai-researcher.md',
+    'designer.md',
+    'node-developer.md',
+    'tester.md',
+];
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const PROFILES_DIR = join(__dirname, 'profiles');
-const SITE_INFO_DIR = join(__dirname, 'assistos-info');
+const SITE_INFO_FILES = [
+    'chapter_01_vision.md',
+    'chapter_02_achilles_ide_as_assistos_explorer.md',
+    'chapter_03_installation_and_architecture.md',
+    'chapter_04_observability.md',
+    'chapter_05_ploinky_environment.md',
+];
 
-function loadProfileFiles() {
-    const files = readdirSync(PROFILES_DIR).filter((f) => f.endsWith('.md'));
-    return files.map((file) => {
-        const title = file.replace(/\.md$/, '').replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-        const content = readFileSync(join(PROFILES_DIR, file), 'utf8');
-        return { type: 'profile', title, content };
-    });
+async function loadProfileFiles(httpFetch) {
+    const results = [];
+    for (const file of PROFILE_FILES) {
+        const response = await httpFetch(`/profiles/${file}`);
+        if (response.ok) {
+            const content = await response.text();
+            const title = file.replace(/\.md$/, '').replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+            results.push({ type: 'profile', title, content });
+        }
+    }
+    return results;
 }
 
-function loadSiteInfoFiles() {
-    const files = readdirSync(SITE_INFO_DIR).filter((f) => f.endsWith('.md'));
-    return files.map((file) => {
-        const content = readFileSync(join(SITE_INFO_DIR, file), 'utf8');
-        const titleMatch = content.match(/^#\s+(.+)$/m);
-        const title = titleMatch ? titleMatch[1].trim() : file.replace(/\.md$/, '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-        return { type: 'site', title, content };
-    });
+async function loadSiteInfoFiles(httpFetch) {
+    const results = [];
+    for (const file of SITE_INFO_FILES) {
+        const response = await httpFetch(`/assistos-info/${file}`);
+        if (response.ok) {
+            const content = await response.text();
+            const titleMatch = content.match(/^#\s+(.+)$/m);
+            const title = titleMatch ? titleMatch[1].trim() : file.replace(/\.md$/, '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+            results.push({ type: 'site', title, content });
+        }
+    }
+    return results;
 }
 
 module.exports = {
@@ -47,13 +62,13 @@ module.exports = {
         };
     },
 
-    async loadContext({ registerDocument }) {
-        const siteInfo = loadSiteInfoFiles();
+    async loadContext({ registerDocument, httpFetch }) {
+        const siteInfo = await loadSiteInfoFiles(httpFetch);
         for (const doc of siteInfo) {
             registerDocument(doc);
         }
 
-        const profiles = loadProfileFiles();
+        const profiles = await loadProfileFiles(httpFetch);
         for (const profile of profiles) {
             registerDocument(profile);
         }

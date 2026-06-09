@@ -665,7 +665,7 @@ function mountChatSurface(rootNode, options = {}) {
                 appendMessage(role, message);
             }
         } catch (error) {
-            appendMessage('agent', `Error loading history: ${error?.message || 'Failed to load history.'}`);
+            console.error('[WebAssistChat] Failed to load history:', error);
         } finally {
             hydratedHistorySessionId = currentSessionId;
             setPending(false);
@@ -716,7 +716,7 @@ function mountChatSurface(rootNode, options = {}) {
             }
         } catch (error) {
             hideLoadingMessages();
-            appendMessage('agent', `Error: ${error?.message || 'MCP request failed.'}`);
+            console.error('[WebAssistChat] Chat request failed:', error);
         } finally {
             setPending(false);
             inputEl.focus();
@@ -776,10 +776,10 @@ function mountChatSurface(rootNode, options = {}) {
                     currentSessionId = loadSessionId(storageKey);
                     hydratedHistorySessionId = '';
                 } else if (contextResult && contextResult.error) {
-                    appendMessage('agent', `Could not load website context: ${contextResult.error}`);
+                    console.error('[WebAssistChat] Could not load website context:', contextResult.error);
                 }
             } catch (error) {
-                appendMessage('agent', `Failed to load website context: ${error?.message || 'Unknown error.'}`);
+                console.error('[WebAssistChat] Failed to load website context:', error);
             }
             activateChat();
         })();
