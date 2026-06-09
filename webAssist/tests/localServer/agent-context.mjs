@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROFILES_DIR = join(__dirname, 'profiles');
+const SITE_INFO_DIR = join(__dirname, 'assistos-info');
 
 function loadProfileFiles() {
     const files = readdirSync(PROFILES_DIR).filter((f) => f.endsWith('.md'));
@@ -11,6 +12,16 @@ function loadProfileFiles() {
         const title = file.replace(/\.md$/, '').replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
         const content = readFileSync(join(PROFILES_DIR, file), 'utf8');
         return { type: 'profile', title, content };
+    });
+}
+
+function loadSiteInfoFiles() {
+    const files = readdirSync(SITE_INFO_DIR).filter((f) => f.endsWith('.md'));
+    return files.map((file) => {
+        const content = readFileSync(join(SITE_INFO_DIR, file), 'utf8');
+        const titleMatch = content.match(/^#\s+(.+)$/m);
+        const title = titleMatch ? titleMatch[1].trim() : file.replace(/\.md$/, '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+        return { type: 'site', title, content };
     });
 }
 
@@ -37,23 +48,10 @@ module.exports = {
     },
 
     async loadContext({ registerDocument }) {
-        registerDocument({
-            type: 'site',
-            title: 'About AssistOS',
-            content: `AssistOS is a research initiative launched in 2022 by Axiologic Research, driven by a singular ambition: to pioneer technologies that transform artificial intelligence into a true human assistant. Our work spans both open-source contributions and commercial applications, all unified by the belief that we are at the dawn of a fundamental shift in how humans interact with computers.
-
-In October 2024, AssistOS received a significant boost through EU funding as part of the Achilles Project consortium. This partnership focuses on advancing research results from low Technology Readiness Levels toward production-ready products and technologies by 2027.`,
-        });
-
-        registerDocument({
-            type: 'site',
-            title: 'Vision',
-            content: `Human-AI Collaboration: Our foundational research hypothesis is that user experience and human-computer interaction are about to change radically. While conversational interfaces have proven remarkably powerful, we recognize that the future isn't purely chat-based. The most effective AI assistants will seamlessly blend natural language with legacy interaction paradigms.
-
-AI Democratizes Dev Tools: AI assistance will unlock the power of computing for domains that have historically been reserved for programmers. With AI as an intermediary, the rigor and benefits of tools like version control become accessible to everyone.
-
-Tell AI What, Not How: The focus will shift from meticulous manual labor on details to the art of crafting specifications and orchestrating AI pipelines that produce the desired artifacts.`,
-        });
+        const siteInfo = loadSiteInfoFiles();
+        for (const doc of siteInfo) {
+            registerDocument(doc);
+        }
 
         const profiles = loadProfileFiles();
         for (const profile of profiles) {
