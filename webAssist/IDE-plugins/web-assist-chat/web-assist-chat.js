@@ -766,25 +766,23 @@ function mountChatSurface(rootNode, options = {}) {
     }
 
     if (!siteId && parentSiteUrl) {
-        appendMessage('agent', 'Loading website context...');
-        chatClient.fetchAgentContext(parentSiteUrl).then((contextResult) => {
-            if (contextResult && contextResult.ok && contextResult.siteId) {
-                siteId = contextResult.siteId;
-                storageKey = `${BROWSER_STORAGE_KEY}:${siteId}`;
-                visitorStorageKey = `${VISITOR_STORAGE_KEY}:${siteId}`;
-                const oldSession = loadSessionId(storageKey);
-                if (oldSession) {
-                    persistSessionId(storageKey, oldSession);
+        (async () => {
+            try {
+                const contextResult = await chatClient.fetchAgentContext(parentSiteUrl);
+                if (contextResult && contextResult.ok && contextResult.siteId) {
+                    siteId = contextResult.siteId;
+                    storageKey = `${BROWSER_STORAGE_KEY}:${siteId}`;
+                    visitorStorageKey = `${VISITOR_STORAGE_KEY}:${siteId}`;
+                    currentSessionId = loadSessionId(storageKey);
+                    hydratedHistorySessionId = '';
+                } else if (contextResult && contextResult.error) {
+                    appendMessage('agent', `Could not load website context: ${contextResult.error}`);
                 }
-                appendMessage('agent', 'Website context loaded.');
-            } else if (contextResult && contextResult.error) {
-                appendMessage('agent', `Could not load website context: ${contextResult.error}`);
+            } catch (error) {
+                appendMessage('agent', `Failed to load website context: ${error?.message || 'Unknown error.'}`);
             }
             activateChat();
-        }).catch((error) => {
-            appendMessage('agent', `Failed to load website context: ${error?.message || 'Unknown error.'}`);
-            activateChat();
-        });
+        })();
     } else {
         activateChat();
     }
