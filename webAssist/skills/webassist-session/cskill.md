@@ -12,8 +12,3 @@ Creates and updates site-scoped WebAssist visitor session profile records.
 
 ## Output Format
 - Plain text only.
-
-## Constraints
-- Persists only to `data/sites/<siteId>/sessions/<sessionId>-profile.md`.
-- Does not modify the session history file (`<sessionId>-history.md`).
-- Does not call the LLM.

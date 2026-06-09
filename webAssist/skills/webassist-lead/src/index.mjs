@@ -45,20 +45,11 @@ export async function action({ promptText }) {
         siteId,
         sessionId,
         profile,
-        mandatoryConditionsSatisfied,
-        matchExplanation,
         contactInfo,
-        summary,
     } = parseInput(promptText);
 
-    if (!siteId || !sessionId || !profile || !summary) {
-        throw new Error('webassist-lead requires siteId, sessionId, profile, and summary.');
-    }
-    if (mandatoryConditionsSatisfied !== true) {
-        throw new Error('webassist-lead requires satisfied mandatory profile conditions.');
-    }
-    if (!String(matchExplanation ?? '').trim()) {
-        throw new Error('webassist-lead requires a match explanation.');
+    if (!siteId || !sessionId || !profile) {
+        throw new Error('webassist-lead requires siteId, sessionId, and profile.');
     }
 
     const normalizedContactInfo = normalizeContactInfo(contactInfo);
@@ -85,8 +76,6 @@ export async function action({ promptText }) {
         profile: String(profile).trim(),
         sessionId: String(sessionId).trim(),
         contactInfo: normalizedContactInfo,
-        matchExplanation: String(matchExplanation).trim(),
-        summary: String(summary).trim(),
         createdAt: existingLead?.createdAt || timestamp,
         updatedAt: timestamp,
     };
@@ -99,10 +88,9 @@ export async function action({ promptText }) {
             `- **${LEAD_FIELDS.CREATED_AT}**: ${leadRecord.createdAt}`,
             `- **${LEAD_FIELDS.UPDATED_AT}**: ${leadRecord.updatedAt}`,
         ].join('\n'),
-        [LEAD_SECTIONS.MATCH_EXPLANATION]: leadRecord.matchExplanation,
         [LEAD_SECTIONS.CONTACT_INFO]: store.renderKeyValue(leadRecord.contactInfo),
-        [LEAD_SECTIONS.SUMMARY]: leadRecord.summary,
     });
 
-    return 'Operation successful.';
+    const contactFields = Object.keys(normalizedContactInfo).join(', ');
+    return `Lead created for profile: ${profile}. Contact: ${contactFields}.`;
 }

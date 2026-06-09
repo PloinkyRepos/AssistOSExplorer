@@ -34,5 +34,7 @@ export async function action({ promptText }) {
         contactInformation: contactInformation || {},
     });
 
-    return 'Operation successful.';
+    const detailCount = Array.isArray(profileDetails) ? profileDetails.length : 0;
+    const contactKeys = contactInformation ? Object.keys(contactInformation).length : 0;
+    return `Session profile updated: ${detailCount} detail(s), ${contactKeys} contact field(s).`;
 }
