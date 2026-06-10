@@ -37,10 +37,13 @@ OnlyOfficeAgent owns three distinct HTTP planes:
    - only the required editor assets, including OnlyOffice-generated `/<version-hash>/web-apps/*` iframe assets, and `/doc/*` co-authoring WebSocket paths
 - must block command, convert, demo, welcome, info, internal, and healthcheck endpoints from the internet
 - must strip browser cookies, `Authorization`, proxy authorization, and caller-supplied `x-ploinky-*` identity headers before forwarding to Document Server
+- must advertise the public origin to Document Server on both HTTP and WebSocket forwards: preserve incoming `X-Forwarded-Host`/`X-Forwarded-Proto` when an outer proxy (for example the Cloudflare tunnel) set them, otherwise fill `X-Forwarded-Host` from the incoming `Host` header and `X-Forwarded-Proto` with `http`. Document Server mints browser-facing cache-file URLs and redirects from these headers; because the forwarders rewrite `Host` to the internal target, omitting them makes the editor download converted documents from `http://127.0.0.1/` (no public port) and fail with `Download failed.`
 
 The manifest must publish the protected control listener on container port `7000` through an ephemeral localhost host port so the Ploinky `httpServices` route targets `/control/*`. The browser-facing editor proxy on container port `8080` remains a separate host port for the OnlyOffice editor assets and `/doc/*` WebSocket paths. The loopback storage listener on `9100` must not be published.
 
 Published ports: the control listener uses a dynamic loopback host port (`127.0.0.1:0:7000`), but the editor proxy publishes a fixed host port (`127.0.0.1:8082:8080`, dev `127.0.0.1:18082:8080`). Ploinky manifest `ports` are literal and are not env-interpolated, so if `8082` collides on the host the operator must edit the manifest `ports` mapping (and the matching `ONLYOFFICE_PUBLIC_URL`) for that workspace. Making the published editor port env-driven requires Ploinky `ports` templating support and is tracked as a separate ploinky enhancement.
+
+Document Server request filtering must allow private-address fetches because signed editor configs intentionally point `document.url` and `callbackUrl` at the decorator's co-located `127.0.0.1` storage listener. The OnlyOfficeAgent manifest sets `ALLOW_PRIVATE_IP_ADDRESS=true` for this in-container loopback flow. It must not set `ALLOW_META_IP_ADDRESS`; metadata-address fetches are not required for document storage and must remain blocked.
 
 The router remains the only public control point for authenticated identity and agent-to-agent execution.
 
@@ -66,6 +69,8 @@ Explorer now depends on OnlyOfficeAgent only through the protected session route
 - `GET /services/onlyoffice/office/session?path=<workspace-or-confidential-path>`
 
 Explorer must not expose anonymous or protected `/services/explorer/office/*` or `/public-services/explorer/office/*` routes once the cutover is complete.
+
+Explorer must enable OnlyOfficeAgent in `global` mode so the Ploinky runtime mounts the workspace root into the agent container. Non-Confidential Office files are then read and written through OnlyOfficeAgent's path-confined workspace store under `PLOINKY_WORKSPACE_ROOT`; Confidential files still route to `dpuAgent` and must never be read from direct disk.
 
 ## Disallowed State
 
@@ -104,6 +109,8 @@ An acceptable deployment must be able to prove, without printing secrets, that:
 - `/internal/document/<token>` and `/internal/callback/<token>` are reachable only on loopback
 - the public editor plane serves `api.js` and `/doc/*` while blocking admin/convert/demo/internal endpoints
 - the public editor plane does not forward browser credentials or Ploinky identity headers to Document Server
+- the Document Server can fetch the decorator's `127.0.0.1` document URL, while metadata-address fetches remain disabled
+- the enabled Explorer dependency graph starts OnlyOfficeAgent in `global` mode so normal workspace files are visible inside the container
 - save callbacks reject read-only sessions and untrusted download origins before any fetch
 - Confidential Office reads and writes reach `dpuAgent` only through router-mediated user delegation
 - a user lacking the DPU ACL is denied even though OnlyOfficeAgent is the caller

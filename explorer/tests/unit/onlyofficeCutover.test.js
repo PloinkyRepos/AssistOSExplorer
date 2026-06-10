@@ -57,6 +57,17 @@ test('explorer manifest no longer declares anonymous public office document rout
     assert.equal(prefixes.includes('/services/explorer/office/'), false);
 });
 
+test('explorer enables OnlyOfficeAgent with workspace-root access for direct disk persistence', () => {
+    const manifest = JSON.parse(
+        readFileSync(new URL('../../manifest.json', import.meta.url), 'utf8')
+    );
+
+    assert.ok(
+        (manifest.enable || []).some((entry) => entry === 'onlyOffice global'),
+        'OnlyOfficeAgent must run in global mode so non-Confidential documents resolve under PLOINKY_WORKSPACE_ROOT'
+    );
+});
+
 test('explorer server does not register office document or callback routes after cutover', async () => {
     const handler = createOnlyOfficeHttpHandler({});
     const noopRes = {};

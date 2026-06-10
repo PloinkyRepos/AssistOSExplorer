@@ -132,6 +132,8 @@ For a supported file:
 
 Explorer no longer builds Office document URLs or callback URLs and no longer calls `dpuAgent` directly for Office persistence.
 
+Explorer declares `onlyOffice global` in its `enable[]` dependency list. This is required for the Ploinky container runtime to mount the workspace root at `PLOINKY_WORKSPACE_ROOT` inside OnlyOfficeAgent, which in turn allows the agent's path-confined workspace store to read and write non-Confidential Office files. The `/Confidential` subtree remains excluded from direct disk access and is delegated to `dpuAgent`.
+
 ### Permission Behavior
 
 Workspace files are path-confined and writable only inside the configured workspace root.
@@ -175,13 +177,19 @@ Explorer no longer depends on Explorer-owned public callback/document base URLs 
 
 OnlyOfficeAgent's manifest must keep the protected control listener and browser editor proxy on separate published ports. The Ploinky router must target the control listener on container port `7000` for `/services/onlyoffice/office/session`, while browser editor assets and `/doc/*` WebSockets use the editor proxy on container port `8080`. The storage listener on `9100` is loopback-only and must not be published or routed.
 
+The editor proxy must advertise the public origin to the Document Server by forwarding `X-Forwarded-Host` and `X-Forwarded-Proto` on both HTTP and WebSocket upgrade forwards (preserving values set by an outer proxy, otherwise deriving them from the incoming `Host` header and plain `http`). The Document Server builds the browser-facing converted-document cache URLs from these headers, so dropping them strips the public editor port from those URLs and the editor fails with `Download failed.` after the shell loads. See `onlyOffice/docs/specs/DS01-ploinky-agent-invariant.md` for the full proxy header contract.
+
+Because signed OnlyOffice configs point the Document Server at the decorator's `127.0.0.1` document and callback URLs, the OnlyOfficeAgent manifest enables `ALLOW_PRIVATE_IP_ADDRESS=true` for the bundled Document Server. It must not enable metadata-address fetches (`ALLOW_META_IP_ADDRESS`) because storage does not need them and they would widen the server-side request surface.
+
 ## Operational Constraints
 
 OnlyOffice integration is correct only when all of the following are true:
 
 - OnlyOfficeAgent owns the protected session route
 - Explorer no longer declares `/services/explorer/office/` or `/public-services/explorer/office/`
+- Explorer enables OnlyOfficeAgent in `global` mode so non-Confidential workspace paths are mounted inside the agent container
 - loopback storage routes are not host-published and are not router-routed
+- Document Server private-address fetching is limited to the required loopback storage flow, with metadata-address fetching disabled
 - the public editor host serves `api.js` and `/doc/*` while blocking admin/convert/demo/internal endpoints
 - Confidential Office persistence re-enters `dpuAgent` only through router-mediated delegation
 

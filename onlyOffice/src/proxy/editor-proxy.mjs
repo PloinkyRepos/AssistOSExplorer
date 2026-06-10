@@ -42,6 +42,22 @@ function sanitizeHeaders(headers = {}) {
   return sanitized;
 }
 
+// The Document Server mints browser-facing URLs (cache files, redirects) from
+// X-Forwarded-Host/X-Forwarded-Proto, falling back to the Host header it sees.
+// The forwarders rewrite Host to the internal target, so the public host must
+// travel in the forwarded headers or generated URLs lose the public port.
+function withForwardedHeaders(headers, req) {
+  const out = { ...headers };
+  const incomingHost = String(req?.headers?.host || '').trim();
+  if (!String(out['x-forwarded-host'] || '').trim() && incomingHost) {
+    out['x-forwarded-host'] = incomingHost;
+  }
+  if (!String(out['x-forwarded-proto'] || '').trim()) {
+    out['x-forwarded-proto'] = 'http';
+  }
+  return out;
+}
+
 function isBlockedPath(pathname) {
   const normalizedPathname = stripOnlyOfficeVersionPrefix(pathname);
   return BLOCKED_EXACT_PATHS.has(normalizedPathname) || BLOCKED_PREFIXES.some((prefix) => normalizedPathname.startsWith(prefix));
@@ -103,7 +119,7 @@ export function createEditorProxy({
     const plan = {
       kind: 'http',
       targetUrl: buildTargetUrl(targetBaseUrl, req.url, 'http'),
-      headers: sanitizeHeaders(req.headers)
+      headers: withForwardedHeaders(sanitizeHeaders(req.headers), req)
     };
 
     if (typeof forwardHttp !== 'function') {
@@ -134,7 +150,7 @@ export function createEditorProxy({
     const plan = {
       kind: 'ws',
       targetUrl: buildTargetUrl(targetBaseUrl, req.url, 'ws'),
-      headers: sanitizeHeaders(req.headers)
+      headers: withForwardedHeaders(sanitizeHeaders(req.headers), req)
     };
     await forwardUpgrade(plan, req, socket, head);
   }

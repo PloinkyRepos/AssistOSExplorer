@@ -38,7 +38,7 @@
         "webmeetStt",
         "webmeetAgent global",
         "multimedia global",
-        "onlyOffice",
+        "onlyOffice global",
         {
             "agent": "webAssist",
             "profile": "embedded"

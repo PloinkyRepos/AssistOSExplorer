@@ -86,6 +86,33 @@ test('manifest publishes router-facing control and browser-facing editor ports s
   }
 });
 
+test('manifest allows Document Server to fetch decorator loopback URLs without allowing metadata IPs', () => {
+  const manifest = readManifest();
+
+  for (const profileName of ['default', 'dev', 'prod']) {
+    const profile = manifest.profiles?.[profileName];
+    assert.ok(profile, `profile ${profileName} exists`);
+
+    const env = entriesByName(profile);
+    assert.deepEqual(
+      {
+        required: env.get('ALLOW_PRIVATE_IP_ADDRESS')?.required,
+        default: env.get('ALLOW_PRIVATE_IP_ADDRESS')?.default,
+      },
+      {
+        required: false,
+        default: 'true',
+      },
+      `${profileName} lets Document Server fetch the decorator's 127.0.0.1 storage URL`
+    );
+    assert.equal(
+      env.has('ALLOW_META_IP_ADDRESS'),
+      false,
+      `${profileName} must not enable metadata-address fetches`
+    );
+  }
+});
+
 test('manifest delegates Confidential storage to the deployed dpuAgent principal', () => {
   const manifest = readManifest();
   const service = manifest.httpServices?.find((entry) => entry?.slug === 'onlyoffice');

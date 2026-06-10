@@ -57,6 +57,11 @@
           "default": "true"
         },
         {
+          "name": "ALLOW_PRIVATE_IP_ADDRESS",
+          "required": false,
+          "default": "true"
+        },
+        {
           "name": "ONLYOFFICE_JWT_SECRET",
           "varName": "ONLYOFFICE_JWT_SECRET",
           "required": true,
@@ -116,6 +121,11 @@
           "default": "true"
         },
         {
+          "name": "ALLOW_PRIVATE_IP_ADDRESS",
+          "required": false,
+          "default": "true"
+        },
+        {
           "name": "ONLYOFFICE_JWT_SECRET",
           "varName": "ONLYOFFICE_JWT_SECRET",
           "required": true,
@@ -171,6 +181,11 @@
         },
         {
           "name": "JWT_ENABLED",
+          "required": false,
+          "default": "true"
+        },
+        {
+          "name": "ALLOW_PRIVATE_IP_ADDRESS",
           "required": false,
           "default": "true"
         },

@@ -109,10 +109,100 @@ test('editor proxy forwards websocket upgrades under /doc/', async () => {
       headers: {
         connection: 'Upgrade',
         host: 'office.example',
-        upgrade: 'websocket'
+        upgrade: 'websocket',
+        'x-forwarded-host': 'office.example',
+        'x-forwarded-proto': 'http'
       }
     }
   ]);
+});
+
+test('editor proxy advertises the original host to the document server', async () => {
+  const forwarded = [];
+  const proxy = createEditorProxy({
+    targetBaseUrl: 'http://127.0.0.1:80',
+    async forwardHttp(plan) {
+      forwarded.push(plan);
+      return { statusCode: 200, body: 'proxied' };
+    },
+    async forwardUpgrade(plan) {
+      forwarded.push(plan);
+    }
+  });
+
+  const res = createResponse();
+  await proxy.handle({
+    method: 'GET',
+    url: '/web-apps/apps/api/documents/api.js',
+    headers: { host: '127.0.0.1:8082' }
+  }, res);
+
+  await proxy.handleUpgrade({
+    method: 'GET',
+    url: '/doc/123/c',
+    headers: {
+      upgrade: 'websocket',
+      connection: 'Upgrade',
+      host: '127.0.0.1:8082'
+    }
+  }, { destroy() {} }, Buffer.alloc(0));
+
+  assert.equal(forwarded.length, 2);
+  for (const plan of forwarded) {
+    assert.equal(plan.headers['x-forwarded-host'], '127.0.0.1:8082');
+    assert.equal(plan.headers['x-forwarded-proto'], 'http');
+  }
+});
+
+test('editor proxy preserves forwarded headers set by an outer proxy', async () => {
+  const forwarded = [];
+  const proxy = createEditorProxy({
+    targetBaseUrl: 'http://127.0.0.1:80',
+    async forwardUpgrade(plan) {
+      forwarded.push(plan);
+    }
+  });
+
+  await proxy.handleUpgrade({
+    method: 'GET',
+    url: '/doc/123/c',
+    headers: {
+      upgrade: 'websocket',
+      connection: 'Upgrade',
+      host: 'office.axiologic.dev',
+      'x-forwarded-host': 'office.axiologic.dev',
+      'x-forwarded-proto': 'https'
+    }
+  }, { destroy() {} }, Buffer.alloc(0));
+
+  assert.deepEqual(forwarded.map((plan) => ({
+    host: plan.headers['x-forwarded-host'],
+    proto: plan.headers['x-forwarded-proto']
+  })), [
+    { host: 'office.axiologic.dev', proto: 'https' }
+  ]);
+});
+
+test('editor proxy omits forwarded host when the request has no host header', async () => {
+  const forwarded = [];
+  const proxy = createEditorProxy({
+    targetBaseUrl: 'http://127.0.0.1:80',
+    async forwardHttp(plan) {
+      forwarded.push(plan);
+      return { statusCode: 200, body: 'proxied' };
+    }
+  });
+
+  const res = createResponse();
+  await proxy.handle({
+    method: 'GET',
+    url: '/web-apps/apps/api/documents/api.js',
+    headers: {}
+  }, res);
+
+  assert.equal(forwarded.length, 1);
+  assert.equal('x-forwarded-host' in forwarded[0].headers, false);
+  assert.equal(forwarded[0].headers['x-forwarded-proto'], 'http');
 });
 
 test('editor proxy blocks command service from the internet', async () => {
@@ -229,7 +319,9 @@ test('editor proxy does not forward cookies authorization or ploinky identity he
       kind: 'http',
       targetUrl: 'http://127.0.0.1:8080/web-apps/apps/api/documents/api.js',
       headers: {
-        host: 'office.example'
+        host: 'office.example',
+        'x-forwarded-host': 'office.example',
+        'x-forwarded-proto': 'http'
       }
     }
   ]);
