@@ -26,7 +26,13 @@
             "dpu:confidential:read",
             "dpu:confidential:write"
           ],
-          "ttlSeconds": 1800
+          "ttlSeconds": 28800,
+          "when": {
+            "queryParam": "path",
+            "pathRoots": [
+              "/Confidential"
+            ]
+          }
         }
       ]
     }

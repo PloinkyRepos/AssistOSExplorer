@@ -5,7 +5,7 @@
 | Status | **Proposed / Draft** (not yet implemented) |
 | Scope | Evolution of the `onlyOffice` agent into an **OnlyOfficeAgent decorator** that fronts the standard OnlyOffice Document Server and owns persistence routing (filesystem vs. encrypted DPU) using **B2 router-minted user delegation** for DPU. |
 | Owning agent | `agent:AssistOSExplorer/onlyOffice` (route key `onlyOffice`) |
-| Related agents | `agent:AssistOSExplorer/explorer`, `agent:AssistOSExplorer/dpuAgent` |
+| Related agents | `agent:AssistOSExplorer/explorer`, same-repo `dpuAgent` (`agent:./dpuAgent` in the manifest, expanded by Ploinky to `agent:<repo>/dpuAgent`) |
 | Authoritative security base | `ploinky/docs/specs/DS011-security-model.md`, DS013 (per-agent secrets), DS014 (MCP policy) |
 
 > This is a **design document**, not an implemented DS spec. When this architecture is built, promote the relevant sections into the `onlyOffice` and `explorer` DS sets and resynchronize docs via the `gamp-specs` skill.
@@ -301,7 +301,7 @@ This design therefore chooses **B2: router-minted user delegation**. The router,
 | Step | Required behavior |
 | --- | --- |
 | 1. Protected Office session route | Browser calls `/services/onlyoffice/office/session`; router authenticates the user, strips caller-supplied `x-ploinky-*`, and injects `x-ploinky-auth-info` with the normal `__http_service__` invocation token. |
-| 2. Delegation grant minting | Because the OnlyOffice manifest explicitly declares a DPU delegation set for this protected service route, the router also mints a short-lived **User Delegation Grant** and includes it inside the verified auth-info payload. The grant is router-signed, audience `ploinky-router`, source-bound to `agent:AssistOSExplorer/onlyOffice`, and limited to `agent:AssistOSExplorer/dpuAgent` + named Confidential tools/scopes. |
+| 2. Delegation grant minting | Because the OnlyOffice manifest explicitly declares a DPU delegation set for this protected service route, the router mints a **User Delegation Grant** only when the session request's `path` query parameter is boundary-contained by `/Confidential`. The grant is router-signed, audience `ploinky-router`, source-bound to `agent:<repo>/onlyOffice`, and limited to the same repo's `dpuAgent` + named Confidential tools/scopes for the Office editing window. |
 | 3. Session binding | OnlyOfficeAgent verifies the HTTP-service invocation token before trusting `authInfo.user` or storing the delegation grant. The grant is stored only inside the opaque Office session record, never returned separately to the browser or logged. |
 | 4. DPU call | For DPU operations, OnlyOfficeAgent signs its normal Agent Assertion and sends it to `/<dpuAgent>/mcp` together with the User Delegation Grant. The router verifies both tokens, verifies the grant allows this source/target/tool, applies MCP policy, and only then mints the DPU Router Request. |
 | 5. DPU execution | The DPU-audience Router Request carries `caller: agent:AssistOSExplorer/onlyOffice`, `actor.kind:"agent"`, and router-signed `usr` claims for the original user. DPU's existing `authInfoFromInvocation()` gives `usr` precedence for ACLs while preserving the caller agent for audit. |
@@ -366,7 +366,7 @@ Recommended manifest intent (Option A/B share these declarations):
 
 | Manifest field | Value | Purpose |
 | --- | --- | --- |
-| `httpServices[]` | `{ externalPrefix: "/services/onlyoffice/", internalPrefix: "/control/", auth: "protected", delegations: [{ targetAgentId: "agent:AssistOSExplorer/dpuAgent", tools: ["dpu_workspace_roots", "dpu_confidential_list", "dpu_confidential_get", "dpu_confidential_update"], scopes: ["dpu:confidential:read", "dpu:confidential:write"], ttlSeconds: 1800 }] }` — only `/control/*` is router-reachable; DPU delegation is explicit and fail-closed; route keys are routing labels, not identity | Tier 3 session route (router-authenticated) + B2 DPU delegation |
+| `httpServices[]` | `{ externalPrefix: "/services/onlyoffice/", internalPrefix: "/control/", auth: "protected", delegations: [{ key: "dpuConfidential", targetAgentId: "agent:./dpuAgent", tools: ["dpu_workspace_roots", "dpu_confidential_list", "dpu_confidential_get", "dpu_confidential_update"], scopes: ["dpu:confidential:read", "dpu:confidential:write"], ttlSeconds: 28800, when: { queryParam: "path", pathRoots: ["/Confidential"] } }] }` — only `/control/*` is router-reachable; DPU delegation is explicit, portable, Confidential-path scoped, and fail-closed; route keys are routing labels, not identity | Tier 3 session route (router-authenticated) + B2 DPU delegation |
 | ports | see §9.1 (DS editor surface fronted by the tunnel; control via router; document/callback never published) | exposure separation |
 | `JWT_ENABLED` / `JWT_SECRET` | `true` / `varName: ONLYOFFICE_JWT_SECRET`, `sharedGeneratedSecret: true` | config integrity (shared only where the editor host needs to validate config JWTs) |
 | workspace volume | explicit RW mount under workspace root | direct-disk persistence (I5/I6) |

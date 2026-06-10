@@ -151,7 +151,7 @@ The protected Office session response may include browser-safe `preview` metadat
 Confidential Office persistence uses router-mediated user delegation:
 
 - the protected Office session route receives router-verified user auth info
-- the router includes a short-lived User Delegation Grant scoped to OnlyOfficeAgent → `agent:AchillesIDE/dpuAgent`
+- the router includes a User Delegation Grant only for session requests whose `path` query parameter is boundary-contained by `/Confidential`; the grant is scoped to OnlyOfficeAgent → `agent:<repo>/dpuAgent` after expanding the OnlyOffice manifest's portable `agent:./dpuAgent` target
 - OnlyOfficeAgent presents its Agent Assertion plus that grant when calling `dpu_confidential_*`
 - the router verifies both and mints the DPU Router Request with the original acting user in signed `usr` claims
 - `dpuAgent` stores the resulting bytes encrypted at rest

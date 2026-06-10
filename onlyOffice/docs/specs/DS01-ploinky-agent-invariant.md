@@ -49,14 +49,15 @@ The router remains the only public control point for authenticated identity and 
 Confidential Office persistence is router-mediated Tier 1 storage:
 
 - the browser opens a protected OnlyOffice session through the router
-- the router verifies the user session and mints a short-lived User Delegation Grant scoped to OnlyOfficeAgent → `dpuAgent` in the same repo (the manifest declares the target as `agent:./dpuAgent`, which the router expands to `agent:<repo>/dpuAgent` at mint time)
+- the router verifies the user session and mints a User Delegation Grant only when the session request's `path` query parameter is boundary-contained by `/Confidential`
+- the grant is scoped to OnlyOfficeAgent → `dpuAgent` in the same repo for up to the eight-hour Office editing window (the manifest declares the target as `agent:./dpuAgent`, which the router expands to `agent:<repo>/dpuAgent` at mint time)
 - OnlyOfficeAgent calls `dpuAgent` by presenting both its Agent Assertion and the stored delegation grant
 - the router verifies both and mints the DPU-audience Router Request with the original acting user in signed `usr` claims
 - `dpuAgent` evaluates Confidential ACLs for the acting user while preserving OnlyOfficeAgent as the caller for audit
 
 OnlyOfficeAgent must never receive `PLOINKY_MASTER_KEY`, `PLOINKY_DERIVED_MASTER_KEY`, `DPU_MASTER_KEY`, or another agent's secret.
 
-OnlyOfficeAgent stores the User Delegation Grant only server-side in the Office session. The grant may be reused until its expiry for the allowed Confidential tools and scopes of that Office session, but each agent-to-agent call still carries a fresh Agent Assertion and receives a fresh DPU Router Request.
+OnlyOfficeAgent stores the User Delegation Grant only server-side in the Office session. The grant may be reused until its expiry for the allowed Confidential tools and scopes of that Office session, but each agent-to-agent call still carries a fresh Agent Assertion and receives a fresh DPU Router Request. Workspace sessions must not receive, store, or forward this grant.
 
 ## Explorer Contract
 
@@ -109,7 +110,7 @@ An acceptable deployment must be able to prove, without printing secrets, that:
 
 ### Manifest validator posture
 
-`validate-ploinky-agent` passes with 0 errors and emits two intentional warnings that are accepted, not bugs:
+`validate-ploinky-agent` passes with 0 errors and emits two intentional warning types, four warning instances total, that are accepted, not bugs:
 
 - `profiles.{default,dev,prod}.env should be an object when present` — the manifest uses the array-of-`{name,...}` form for `env`, which is the runtime-supported shape used by sibling agents in this workspace; the array form is deliberate.
 - `mcp-config.json: missing` — OnlyOfficeAgent exposes no MCP tools of its own; it is a delegated MCP *consumer* of `dpuAgent`, so it ships no `mcp-config.json`. If a future policy requires zero warnings, add an explicit empty `mcp-config.json` (`{ "tools": [] }`); until then the absence is correct and intended.

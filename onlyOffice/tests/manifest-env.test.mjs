@@ -105,3 +105,15 @@ test('onlyoffice delegation targets dpuAgent in the same repo via "." with an ex
   assert.equal(delegation.targetAgentId, 'agent:./dpuAgent');
   assert.equal(delegation.key, 'dpuConfidential');
 });
+
+test('onlyoffice DPU delegation is Confidential-path scoped and lasts for the workspace editing window', () => {
+  const manifest = readManifest();
+  const service = manifest.httpServices?.find((entry) => entry?.slug === 'onlyoffice');
+  const delegation = service?.delegations?.[0];
+
+  assert.deepEqual(delegation?.when, {
+    queryParam: 'path',
+    pathRoots: ['/Confidential'],
+  });
+  assert.equal(delegation?.ttlSeconds, 8 * 60 * 60);
+});

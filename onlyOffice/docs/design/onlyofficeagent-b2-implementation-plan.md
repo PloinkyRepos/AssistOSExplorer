@@ -4,7 +4,7 @@
 
 **Goal:** Implement the OnlyOfficeAgent decorator architecture with B2 router-minted user delegation so Office files outside `/Confidential` persist to a path-confined workspace filesystem and `/Confidential` Office files persist through dpuAgent as the acting user.
 
-**Architecture:** The browser opens Office sessions through the Ploinky router at `/services/onlyoffice/office/session`. The router authenticates the user, mints a route-scoped User Delegation Grant for dpuAgent, and injects it into the verified HTTP-service auth-info. OnlyOfficeAgent stores that grant in its opaque Office session, calls dpuAgent with Agent Assertion plus the grant, and the router mints a DPU-audience Router Request that carries `usr` claims for ACL evaluation and caller-agent claims for audit.
+**Architecture:** The browser opens Office sessions through the Ploinky router at `/services/onlyoffice/office/session`. The router authenticates the user, mints a path-conditioned User Delegation Grant for dpuAgent only when the requested `path` is boundary-contained by `/Confidential`, and injects it into the verified HTTP-service auth-info. OnlyOfficeAgent stores that grant in its opaque Office session, calls dpuAgent with Agent Assertion plus the grant, and the router mints a DPU-audience Router Request that carries `usr` claims for ACL evaluation and caller-agent claims for audit.
 
 **Tech Stack:** Node.js ES modules, Ploinky router HTTP services, DS013 Agent Assertion / Router Request JWTs, DS014 MCP policy, OnlyOffice Document Server `9.3.1`, Node's built-in `node:test`, `http`, `net`, `crypto`, and mounted Ploinky Agent helper modules.
 
@@ -14,7 +14,7 @@
 
 - Preserve the router-only public boundary: no browser or internet client reaches agent container ports directly except the intentionally public editor asset/WebSocket surface.
 - Preserve secret boundaries: OnlyOfficeAgent receives only `PLOINKY_AGENT_ID`, `PLOINKY_AGENT_SECRET`, and `ONLYOFFICE_JWT_SECRET`; it never receives `PLOINKY_MASTER_KEY`, `DPU_MASTER_KEY`, or another agent secret.
-- Treat route keys as routing labels and canonical ids as identity: delegation grants bind `sourceAgentId: "agent:AssistOSExplorer/onlyOffice"` and `targetAgentId: "agent:AssistOSExplorer/dpuAgent"`.
+- Treat route keys as routing labels and canonical ids as identity: the manifest uses portable `agent:./dpuAgent`, and the router expands delegation grants to `sourceAgentId: "agent:<repo>/onlyOffice"` and `targetAgentId: "agent:<repo>/dpuAgent"` for the installed repo.
 - Make delegation explicit and fail-closed: no `delegations` manifest entry means no grant; anonymous/guest HTTP services never receive grants; grants are denied for mismatched source, target, tool, scope, expiry, or MCP policy.
 - Keep storage callbacks off the router-facing port: `/internal/document/<token>` and `/internal/callback/<token>` live on a dedicated loopback listener or Unix socket that is not host-published and is not the route `hostPort`.
 - Move Office responsibilities out of Explorer after OnlyOfficeAgent proves parity: Explorer initiates "open file" and renders the editor host, but it no longer owns Document Server callback/document routes or DPU persistence.
@@ -33,8 +33,8 @@ The router signs this grant with a router-held signing key. The grant is address
   "sub": "user:<stable-user-id>",
   "jti": "<random-id>",
   "iat": 1760000000,
-  "exp": 1760001800,
-  "sourceAgentId": "agent:AssistOSExplorer/onlyOffice",
+  "exp": 1760028800,
+  "sourceAgentId": "agent:<repo>/onlyOffice",
   "service": {
     "routeKey": "onlyOffice",
     "externalPrefix": "/services/onlyoffice/",
@@ -46,7 +46,7 @@ The router signs this grant with a router-held signing key. The grant is address
     "username": "alice",
     "roles": ["user"]
   },
-  "allowedTargets": ["agent:AssistOSExplorer/dpuAgent"],
+  "allowedTargets": ["agent:<repo>/dpuAgent"],
   "allowedTools": [
     "dpu_workspace_roots",
     "dpu_confidential_list",
@@ -66,8 +66,8 @@ The router injects the compact JWT into the verified HTTP-service auth-info:
   "delegations": {
     "dpuConfidential": {
       "token": "<router-signed-user-delegation-jwt>",
-      "expiresAt": "2026-06-09T12:30:00.000Z",
-      "targetAgentId": "agent:AssistOSExplorer/dpuAgent",
+      "expiresAt": "2026-06-09T20:00:00.000Z",
+      "targetAgentId": "agent:<repo>/dpuAgent",
       "tools": [
         "dpu_workspace_roots",
         "dpu_confidential_list",
@@ -88,7 +88,7 @@ OnlyOfficeAgent calls dpuAgent through the router:
 
 ```http
 POST /dpuAgent/mcp HTTP/1.1
-Authorization: Bearer <agent-assertion-from-agent:AssistOSExplorer/onlyOffice>
+Authorization: Bearer <agent-assertion-from-agent:<repo>/onlyOffice>
 X-Ploinky-User-Delegation: <router-signed-user-delegation-jwt>
 Content-Type: application/json
 
@@ -111,16 +111,16 @@ The router verifies the Agent Assertion first, verifies the User Delegation Gran
 {
   "typ": "router-request",
   "iss": "ploinky-router",
-  "aud": "agent:AssistOSExplorer/dpuAgent",
-  "sub": "agent:AssistOSExplorer/onlyOffice",
+  "aud": "agent:<repo>/dpuAgent",
+  "sub": "agent:<repo>/onlyOffice",
   "actor": {
     "kind": "agent",
-    "id": "agent:AssistOSExplorer/onlyOffice",
+    "id": "agent:<repo>/onlyOffice",
     "roles": ["agent"]
   },
   "caller": {
     "kind": "agent",
-    "id": "agent:AssistOSExplorer/onlyOffice",
+    "id": "agent:<repo>/onlyOffice",
     "roles": ["agent"]
   },
   "usr": {
@@ -131,7 +131,7 @@ The router verifies the Agent Assertion first, verifies the User Delegation Gran
   "delegation": {
     "jti": "<grant-jti>",
     "scope": ["dpu:confidential:read", "dpu:confidential:write"],
-    "sourceAgentId": "agent:AssistOSExplorer/onlyOffice"
+    "sourceAgentId": "agent:<repo>/onlyOffice"
   },
   "method": "POST",
   "path": "/mcp",
@@ -140,7 +140,7 @@ The router verifies the Agent Assertion first, verifies the User Delegation Gran
 }
 ```
 
-DPU already gives `usr` precedence in `authInfoFromInvocation()`. The implementation must keep that behavior and add tests that prove ACLs evaluate the user, not `agent:AssistOSExplorer/onlyOffice`.
+DPU already gives `usr` precedence in `authInfoFromInvocation()`. The implementation must keep that behavior and add tests that prove ACLs evaluate the user, not `agent:<repo>/onlyOffice`.
 
 ## File Map
 
@@ -224,7 +224,8 @@ Behavior to add:
   internalPrefix: "/control/",
   auth: "protected",
   delegations: [{
-    targetAgentId: "agent:AssistOSExplorer/dpuAgent",
+    key: "dpuConfidential",
+    targetAgentId: "agent:./dpuAgent",
     tools: [
       "dpu_workspace_roots",
       "dpu_confidential_list",
@@ -232,7 +233,8 @@ Behavior to add:
       "dpu_confidential_update"
     ],
     scopes: ["dpu:confidential:read", "dpu:confidential:write"],
-    ttlSeconds: 1800
+    ttlSeconds: 28800,
+    when: { queryParam: "path", pathRoots: ["/Confidential"] }
   }]
 }
 ```
@@ -241,10 +243,11 @@ Validation rules:
 
 - `delegations` is optional and defaults to an empty array.
 - A service with delegations must have `auth: "protected"`.
-- `targetAgentId` must match `^agent:[^/]+/[^/]+$`.
+- `targetAgentId` must match `^agent:[^/]+/[^/]+$` or the portable same-repo form `agent:./<agent>`, which expands to `agent:<source-repo>/<agent>`.
 - `tools` must be a non-empty array of unique non-empty strings.
 - `scopes` must be a non-empty array of unique non-empty strings.
-- `ttlSeconds` must be an integer from `30` through `1800`; missing value defaults to `1800`.
+- `ttlSeconds` must be an integer from `30` through `PLOINKY_USER_DELEGATION_MAX_TTL_SECONDS`; missing value defaults to `1800`, while the router-wide ceiling defaults to `28800`.
+- `when` is optional. When present for OnlyOffice, it must use `{ queryParam: "path", pathRoots: ["/Confidential"] }` so workspace sessions do not receive a DPU grant.
 
 - [ ] **Step 3: Run the focused tests.**
 
@@ -1307,7 +1310,7 @@ Expected results:
 
 - [ ] No `auth: "none"` Office document/callback route remains in Explorer or OnlyOfficeAgent manifests.
 - [ ] No `/internal/document` or `/internal/callback` listener is host-published or attached to the router route hostPort.
-- [ ] OnlyOfficeAgent manifest uses canonical delegation target id `agent:AssistOSExplorer/dpuAgent`.
+- [ ] OnlyOfficeAgent manifest uses portable delegation target id `agent:./dpuAgent`, which the router expands to canonical `agent:<repo>/dpuAgent`.
 - [ ] OnlyOfficeAgent environment excludes `PLOINKY_MASTER_KEY`, `PLOINKY_DERIVED_MASTER_KEY`, and `DPU_MASTER_KEY`.
 - [ ] `x-ploinky-auth-info` is trusted only after invocation-token verification.
 - [ ] `x-ploinky-user-delegation` is stripped from external requests and accepted only on verified agent-to-agent MCP calls.
