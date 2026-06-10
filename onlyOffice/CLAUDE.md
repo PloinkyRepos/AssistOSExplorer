@@ -30,3 +30,5 @@ OnlyOffice owns the runtime boundary for the workspace OnlyOffice Document Serve
 ## Validation
 
 At minimum, validate without printing secrets that the Ploinky agent owns the Document Server container, Explorer and Document Server agree on the JWT secret, `api.js` loads, tokenized document routes work, callbacks work, and Confidential Office files still flow through `Explorer -> Ploinky router -> dpuAgent`.
+
+- Security e2e (cross-user Confidential denial, internal-route isolation, editor allow-list) live in `tests/e2e/` and are skipped unless run against a live runtime: `ONLYOFFICE_E2E=1 ONLYOFFICE_E2E_ROUTER_BASE_URL=<url> ONLYOFFICE_E2E_AUTH_COOKIE=<cookie> npm test`. Run them in the deployment/CI lane on any routing, proxy, or delegation change. The fast unit test `tests/dpu-store-acl.test.mjs` characterizes the agent-side `contentVisible` ACL reliance without a runtime.
