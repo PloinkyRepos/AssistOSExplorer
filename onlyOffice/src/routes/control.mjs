@@ -144,10 +144,11 @@ export function createControlRouteHandler({
       authUser,
       delegations,
     });
+    const sessionDelegations = isConfidentialPath(requestedPath) ? delegations : {};
     const session = sessionStore.createSession({
       ...descriptor,
       authUser,
-      delegations,
+      delegations: sessionDelegations,
     });
 
     const documentUrl = buildLoopbackStorageUrl(config.storagePort, 'document', session.token);

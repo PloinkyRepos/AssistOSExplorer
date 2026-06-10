@@ -281,6 +281,35 @@ test('office session route resolves storage metadata before signing config', asy
   assert.equal(signedPayload.document.permissions.comment, true);
 });
 
+test('workspace session is created WITHOUT a DPU delegation token', async () => {
+  const captured = {};
+  const handler = createControlRouteHandler({
+    env: makeEnv(),
+    sessionStore: {
+      createSession(input) {
+        captured.input = input;
+        return { token: 'sess-token', publicSummary: () => ({}) };
+      },
+    },
+    resolveSessionDescriptor: async () => ({
+      requestedPath: '/workspace/report.docx', path: '/workspace/report.docx', storageKind: 'workspace',
+      storageId: 'workspace/report.docx', fileName: 'report.docx', canWrite: true, canComment: true, versionKey: 'v',
+      preview: { storageKind: 'workspace', requestedPath: '/workspace/report.docx', canWrite: true, canComment: true },
+    }),
+  });
+  const req = makeRequest({
+    url: '/control/office/session?path=%2Fworkspace%2Freport.docx',
+    headers: mintAuthHeaders({
+      delegations: { dpuConfidential: { token: 'grant', expiresAt: '2026-01-01T00:30:00.000Z' } },
+    }),
+  });
+  const res = new MockWritableResponse();
+  assert.equal(await handler(req, res, new URL(req.url, 'http://localhost')), true);
+  await res.done;
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(captured.input.delegations, {});
+});
+
 test('office session route does not return delegation tokens to the browser', async () => {
   const handler = createControlRouteHandler({
     env: makeEnv(),
