@@ -10,6 +10,7 @@ import {
   defaultPermissionsManifest,
   normalizePermissionsManifest
 } from './permissions-manifest.mjs';
+import { applyFreshDefaultAgentPolicies } from './default-agent-policies.mjs';
 
 const DPU_DATA_ROOT_NAME = '.dpu-storage';
 const STATE_FILENAME = 'state.json';
@@ -220,8 +221,11 @@ export async function appendAuditLine(fileName, line) {
 }
 
 export async function loadPermissionsManifest() {
-  const manifest = await readJsonFile(getPermissionsManifestPath(), defaultPermissionsManifest());
-  return normalizePermissionsManifest(manifest);
+  const manifestPath = getPermissionsManifestPath();
+  const exists = await fileExists(manifestPath);
+  const manifest = await readJsonFile(manifestPath, defaultPermissionsManifest());
+  const seeded = exists ? manifest : applyFreshDefaultAgentPolicies(manifest);
+  return normalizePermissionsManifest(seeded);
 }
 
 export async function savePermissionsManifest(manifest) {

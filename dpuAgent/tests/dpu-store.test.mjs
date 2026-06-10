@@ -26,7 +26,8 @@ const {
   grantConfidential,
   putSecret,
   resolveActor,
-  setAgentPolicyAllowedRoles
+  setAgentPolicyAllowedRoles,
+  updateConfidential
 } = await import(`${storeUrl.href}${moduleSuffix}`);
 
 const previousWorkspaceRoot = process.env.DPU_WORKSPACE_ROOT;
@@ -255,6 +256,182 @@ test('delegated secret reads with no explicit scope fall through to secret ACL',
   const fetched = await getSecretByKey(delegatedAuth, { key: 'DIRECT_NO_SCOPE_TOKEN' });
   assert.equal(fetched.ok, true);
   assert.equal(fetched.secret.value, 'direct-value');
+});
+
+test('delegated confidential get uses usr as the acting principal', async () => {
+  await setAuditConfig(adminAuth, { enabled: true });
+  const created = await createConfidential(authInfo, {
+    type: 'file',
+    name: 'delegated-read.txt',
+    content: 'delegated read',
+    mimeType: 'text/plain'
+  });
+  await grantConfidential(authInfo, {
+    id: created.object.id,
+    principal: 'reader@example.com',
+    role: 'read'
+  });
+
+  const delegatedAuth = {
+    user: {
+      email: 'reader@example.com'
+    },
+    agent: {
+      principalId: 'agent:AssistOSExplorer/onlyOffice',
+      name: 'onlyOffice'
+    },
+    invocation: {
+      tool: 'dpu_confidential_get',
+      workspaceId: 'default'
+    }
+  };
+
+  const fetched = await getConfidentialById(delegatedAuth, { id: created.object.id });
+  assert.equal(fetched.ok, true);
+  assert.equal(fetched.object.content, 'delegated read');
+
+  const listed = await listAuditEntries(adminAuth);
+  const auditEntry = await getAuditEntry(adminAuth, { name: listed.items[0].name });
+  assert.match(auditEntry.item.content, /"principalId":"reader@example\.com"/);
+  assert.match(auditEntry.item.content, /"agentPrincipalId":"agent:AssistOSExplorer\/onlyOffice"/);
+});
+
+test('delegated confidential update uses usr as the acting principal', async () => {
+  const created = await createConfidential(authInfo, {
+    type: 'file',
+    name: 'delegated-write.txt',
+    content: 'before',
+    mimeType: 'text/plain'
+  });
+  await grantConfidential(authInfo, {
+    id: created.object.id,
+    principal: 'editor@example.com',
+    role: 'write'
+  });
+
+  const delegatedAuth = {
+    user: {
+      email: 'editor@example.com'
+    },
+    agent: {
+      principalId: 'agent:AssistOSExplorer/onlyOffice',
+      name: 'onlyOffice'
+    },
+    invocation: {
+      tool: 'dpu_confidential_update',
+      workspaceId: 'default'
+    }
+  };
+
+  const updated = await updateConfidential(delegatedAuth, {
+    id: created.object.id,
+    content: 'after'
+  });
+  assert.equal(updated.ok, true);
+  assert.equal(updated.object.content, 'after');
+
+  const fetched = await getConfidentialById(authInfo, { id: created.object.id });
+  assert.equal(fetched.ok, true);
+  assert.equal(fetched.object.content, 'after');
+});
+
+test('agent caller without usr cannot satisfy user-owned confidential acl', async () => {
+  const created = await createConfidential(authInfo, {
+    type: 'file',
+    name: 'agent-only.txt',
+    content: 'locked',
+    mimeType: 'text/plain'
+  });
+
+  const agentOnlyAuth = {
+    agent: {
+      principalId: 'agent:AssistOSExplorer/onlyOffice',
+      name: 'onlyOffice'
+    },
+    invocation: {
+      tool: 'dpu_confidential_get',
+      workspaceId: 'default'
+    }
+  };
+
+  await assert.rejects(
+    () => getConfidentialById(agentOnlyAuth, { id: created.object.id }),
+    /Access denied: missing access on confidential object/
+  );
+  await assert.rejects(
+    () => updateConfidential(agentOnlyAuth, { id: created.object.id, content: 'tampered' }),
+    /Access denied: missing write on confidential object/
+  );
+});
+
+test('delegated confidential get requires read delegation scope when present', async () => {
+  const created = await createConfidential(authInfo, {
+    type: 'file',
+    name: 'delegated-scope-read.txt',
+    content: 'scoped read',
+    mimeType: 'text/plain'
+  });
+  await grantConfidential(authInfo, {
+    id: created.object.id,
+    principal: 'reader@example.com',
+    role: 'read'
+  });
+
+  const delegatedAuth = {
+    user: {
+      email: 'reader@example.com'
+    },
+    agent: {
+      principalId: 'agent:AssistOSExplorer/onlyOffice',
+      name: 'onlyOffice'
+    },
+    invocation: {
+      tool: 'dpu_confidential_get',
+      delegation: {
+        scope: ['dpu:confidential:write']
+      }
+    }
+  };
+
+  await assert.rejects(
+    () => getConfidentialById(delegatedAuth, { id: created.object.id }),
+    /Invocation scope does not permit dpu_confidential_get/
+  );
+});
+
+test('delegated confidential update requires write delegation scope when present', async () => {
+  const created = await createConfidential(authInfo, {
+    type: 'file',
+    name: 'delegated-scope-write.txt',
+    content: 'before',
+    mimeType: 'text/plain'
+  });
+  await grantConfidential(authInfo, {
+    id: created.object.id,
+    principal: 'editor@example.com',
+    role: 'write'
+  });
+
+  const delegatedAuth = {
+    user: {
+      email: 'editor@example.com'
+    },
+    agent: {
+      principalId: 'agent:AssistOSExplorer/onlyOffice',
+      name: 'onlyOffice'
+    },
+    invocation: {
+      tool: 'dpu_confidential_update',
+      delegation: {
+        scope: ['dpu:confidential:read']
+      }
+    }
+  };
+
+  await assert.rejects(
+    () => updateConfidential(delegatedAuth, { id: created.object.id, content: 'after' }),
+    /Invocation scope does not permit dpu_confidential_update/
+  );
 });
 
 test('plaintext secret storage is rejected', async () => {

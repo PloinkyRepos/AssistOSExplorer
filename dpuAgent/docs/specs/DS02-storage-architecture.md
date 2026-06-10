@@ -24,12 +24,12 @@ By default, the storage root lives next to the resolved workspace root:
 The layers have separate roles:
 
 - `state.json` stores users, secret metadata, and confidential object metadata
-- `permissions.manifest.json` stores canonical principal identities and access control list entries for both users and agents
+- `permissions.manifest.json` stores canonical principal identities, access control list entries for both users and agents, and DPU-owned agent role ceilings
 - `secrets.json` stores encrypted secret values
 - `blobs/` stores encrypted confidential file content
 - `.lock/` is used by the file lock
 
-Agent capability policy remains outside `permissions.manifest.json`. DPU resolves the target agent manifest from the workspace repository tree when it needs to validate whether an agent principal may receive a secret role such as `read` or `write`.
+Agent secret-role policy lives inside `permissions.manifest.json` under `agentPolicies[<principalId>].secrets.allowedRoles`. DPU does not consult an agent manifest when deciding whether an agent may receive a secret role. Fresh storage roots seed the same-repository `gitAgent` principal with `["read"]`; existing manifests are never overwritten or backfilled automatically.
 
 ## Structural Separation
 

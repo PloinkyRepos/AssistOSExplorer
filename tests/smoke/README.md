@@ -49,6 +49,29 @@ Opt-in checks:
 - `SMOKE_ONLYOFFICE=1` enables DPU/OnlyOffice route checks.
 - `SMOKE_GITHUB=1` enables GitHub plugin authentication checks.
 
+## GitHub DPU Token Ownership
+
+The GitHub smoke lane verifies the DPU-backed token ownership path used by
+`gitAgent`. It stores a synthetic manual GitHub token through the router MCP
+surface, confirms the DPU secret is owned by the signed-in user, checks that the
+encrypted secret value is not stored in plaintext, verifies the secret appears
+under Explorer `/Confidential/Secrets`, and confirms disconnect removes both the
+state record and per-secret ACL entry.
+
+Run it against a local deployment with:
+
+```bash
+SMOKE_BASE_URL=http://127.0.0.1:8080 \
+SMOKE_GITHUB=1 \
+npm test -- --grep "GitHub token DPU ownership"
+```
+
+The same lane also fabricates a pre-delegation, agent-owned token record and
+asserts that a fresh store operation deletes the stale record through the
+agent-owned compatibility path, then rewrites it as a user-owned DPU secret with
+only the configured `gitAgent` read grant. Existing deployments should seed the
+matching DPU `agentPolicies` grant before relying on this upgrade path.
+
 ## Useful Commands
 
 Run only the default non-external suite:

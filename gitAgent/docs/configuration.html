@@ -95,7 +95,7 @@
 
                 <section>
                     <h2>Auth State and Secrets</h2>
-                    <p>GitHub auth state is persisted under user-scoped workspace state files, while access tokens are stored through user-scoped DPU secret keys. Push and pull operations can read token metadata from request context or from stored auth state when token input is omitted.</p>
+                    <p>GitHub auth state is persisted under user-scoped workspace state files, while access tokens are stored through user-owned DPU secret keys derived from the routed Ploinky user. The GitHub auth tools declare a <code>dpuGitSecrets</code> MCP delegation in <code>mcp-config.json</code>; the router mints that short-lived grant only for signed-in users, and <code>gitAgent</code> forwards it to DPU as <code>x-ploinky-user-delegation</code>. DPU grants <code>gitAgent</code> only the <code>read</code> role allowed by <code>permissions.manifest.json</code> agent policy. Push and pull operations can read token metadata from request context or from stored auth state when token input is omitted.</p>
                 </section>
 
                 <section>

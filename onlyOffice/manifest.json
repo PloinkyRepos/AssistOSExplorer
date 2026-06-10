@@ -1,82 +1,284 @@
 {
-    "container": "docker.io/onlyoffice/documentserver:${ONLYOFFICE_VERSION}",
-    "entrypoint": "/bin/bash",
-    "start": "/app/ds/run-document-server.sh",
-    "about": "OnlyOffice Document Server (delegated office editor for Explorer).",
-    "readiness": {
-        "protocol": "tcp"
-    },
-    "volumes": {
-        ".ploinky/data/onlyOffice/log": "/var/log/onlyoffice",
-        ".ploinky/data/onlyOffice/data": "/var/www/onlyoffice/Data",
-        ".ploinky/data/onlyOffice/lib": "/var/lib/onlyoffice"
-    },
-    "profiles": {
-        "default": {
-            "preinstall": "scripts/hooks/preinstall.sh",
-            "env": [
-                {
-                    "name": "ONLYOFFICE_VERSION",
-                    "required": false,
-                    "default": "9.3.1"
-                },
-                {
-                    "name": "JWT_ENABLED",
-                    "required": false,
-                    "default": "true"
-                },
-                {
-                    "name": "JWT_SECRET",
-                    "varName": "ONLYOFFICE_JWT_SECRET",
-                    "required": true,
-                    "sharedGeneratedSecret": true
-                }
-            ],
-            "ports": ["127.0.0.1:8082:80"]
-        },
-        "dev": {
-            "preinstall": "scripts/hooks/preinstall.sh",
-            "env": [
-                {
-                    "name": "ONLYOFFICE_VERSION",
-                    "required": false,
-                    "default": "9.3.1"
-                },
-                {
-                    "name": "JWT_ENABLED",
-                    "required": false,
-                    "default": "true"
-                },
-                {
-                    "name": "JWT_SECRET",
-                    "varName": "ONLYOFFICE_JWT_SECRET",
-                    "required": true,
-                    "sharedGeneratedSecret": true
-                }
-            ],
-            "ports": ["127.0.0.1:18082:80"]
-        },
-        "prod": {
-            "preinstall": "scripts/hooks/preinstall.sh",
-            "env": [
-                {
-                    "name": "ONLYOFFICE_VERSION",
-                    "required": false,
-                    "default": "9.3.1"
-                },
-                {
-                    "name": "JWT_ENABLED",
-                    "required": false,
-                    "default": "true"
-                },
-                {
-                    "name": "JWT_SECRET",
-                    "varName": "ONLYOFFICE_JWT_SECRET",
-                    "required": true,
-                    "sharedGeneratedSecret": true
-                }
-            ],
-            "ports": ["127.0.0.1:8082:80"]
+  "container": "docker.io/assistos/onlyoffice-agent:${ONLYOFFICE_VERSION}",
+  "entrypoint": "/bin/bash",
+  "start": "-lc \"node src/index.mjs\"",
+  "about": "OnlyOffice decorator agent for authenticated Office sessions, loopback storage routes, and the public editor proxy.",
+  "readiness": {
+    "protocol": "tcp"
+  },
+  "httpServices": [
+    {
+      "slug": "onlyoffice",
+      "externalPrefix": "/services/onlyoffice/",
+      "internalPrefix": "/control/",
+      "auth": "protected",
+      "delegations": [
+        {
+          "key": "dpuConfidential",
+          "targetAgentId": "agent:./dpuAgent",
+          "tools": [
+            "dpu_workspace_roots",
+            "dpu_confidential_list",
+            "dpu_confidential_get",
+            "dpu_confidential_update"
+          ],
+          "scopes": [
+            "dpu:confidential:read",
+            "dpu:confidential:write"
+          ],
+          "ttlSeconds": 28800,
+          "when": {
+            "queryParam": "path",
+            "pathRoots": [
+              "/Confidential"
+            ]
+          }
         }
+      ]
     }
+  ],
+  "volumes": {
+    ".ploinky/data/onlyOffice/log": "/var/log/onlyoffice",
+    ".ploinky/data/onlyOffice/data": "/var/www/onlyoffice/Data",
+    ".ploinky/data/onlyOffice/lib": "/var/lib/onlyoffice"
+  },
+  "profiles": {
+    "default": {
+      "preinstall": "scripts/hooks/preinstall.sh",
+      "env": [
+        {
+          "name": "ONLYOFFICE_VERSION",
+          "required": false,
+          "default": "9.3.1"
+        },
+        {
+          "name": "JWT_ENABLED",
+          "required": false,
+          "default": "true"
+        },
+        {
+          "name": "ALLOW_PRIVATE_IP_ADDRESS",
+          "required": false,
+          "default": "true"
+        },
+        {
+          "name": "ONLYOFFICE_JWT_SECRET",
+          "varName": "ONLYOFFICE_JWT_SECRET",
+          "required": true,
+          "sharedGeneratedSecret": true
+        },
+        {
+          "name": "JWT_SECRET",
+          "varName": "ONLYOFFICE_JWT_SECRET",
+          "required": true,
+          "sharedGeneratedSecret": true
+        },
+        {
+          "name": "ONLYOFFICE_PUBLIC_URL",
+          "required": false
+        },
+        {
+          "name": "ONLYOFFICE_INTERNAL_URL",
+          "required": false
+        },
+        {
+          "name": "ONLYOFFICE_EDITOR_PORT",
+          "required": false,
+          "default": "8080"
+        },
+        {
+          "name": "ONLYOFFICE_CONTROL_PORT",
+          "required": false,
+          "default": "7000"
+        },
+        {
+          "name": "ONLYOFFICE_STORAGE_PORT",
+          "required": false,
+          "default": "9100"
+        },
+        {
+          "name": "ONLYOFFICE_SESSION_IDLE_TTL_MS",
+          "required": false,
+          "default": "1800000"
+        },
+        {
+          "name": "ONLYOFFICE_AUTO_ASSEMBLY_ENABLED",
+          "required": false,
+          "default": "true"
+        },
+        {
+          "name": "ONLYOFFICE_AUTO_ASSEMBLY_INTERVAL",
+          "required": false,
+          "default": "1m"
+        },
+        {
+          "name": "ONLYOFFICE_AUTO_ASSEMBLY_STEP",
+          "required": false,
+          "default": "1m"
+        }
+      ],
+      "ports": [
+        "127.0.0.1:0:7000",
+        "127.0.0.1:8082:8080"
+      ]
+    },
+    "dev": {
+      "preinstall": "scripts/hooks/preinstall.sh",
+      "env": [
+        {
+          "name": "ONLYOFFICE_VERSION",
+          "required": false,
+          "default": "9.3.1"
+        },
+        {
+          "name": "JWT_ENABLED",
+          "required": false,
+          "default": "true"
+        },
+        {
+          "name": "ALLOW_PRIVATE_IP_ADDRESS",
+          "required": false,
+          "default": "true"
+        },
+        {
+          "name": "ONLYOFFICE_JWT_SECRET",
+          "varName": "ONLYOFFICE_JWT_SECRET",
+          "required": true,
+          "sharedGeneratedSecret": true
+        },
+        {
+          "name": "JWT_SECRET",
+          "varName": "ONLYOFFICE_JWT_SECRET",
+          "required": true,
+          "sharedGeneratedSecret": true
+        },
+        {
+          "name": "ONLYOFFICE_PUBLIC_URL",
+          "required": false
+        },
+        {
+          "name": "ONLYOFFICE_INTERNAL_URL",
+          "required": false
+        },
+        {
+          "name": "ONLYOFFICE_EDITOR_PORT",
+          "required": false,
+          "default": "8080"
+        },
+        {
+          "name": "ONLYOFFICE_CONTROL_PORT",
+          "required": false,
+          "default": "7000"
+        },
+        {
+          "name": "ONLYOFFICE_STORAGE_PORT",
+          "required": false,
+          "default": "9100"
+        },
+        {
+          "name": "ONLYOFFICE_SESSION_IDLE_TTL_MS",
+          "required": false,
+          "default": "1800000"
+        },
+        {
+          "name": "ONLYOFFICE_AUTO_ASSEMBLY_ENABLED",
+          "required": false,
+          "default": "true"
+        },
+        {
+          "name": "ONLYOFFICE_AUTO_ASSEMBLY_INTERVAL",
+          "required": false,
+          "default": "1m"
+        },
+        {
+          "name": "ONLYOFFICE_AUTO_ASSEMBLY_STEP",
+          "required": false,
+          "default": "1m"
+        }
+      ],
+      "ports": [
+        "127.0.0.1:0:7000",
+        "127.0.0.1:18082:8080"
+      ]
+    },
+    "prod": {
+      "preinstall": "scripts/hooks/preinstall.sh",
+      "env": [
+        {
+          "name": "ONLYOFFICE_VERSION",
+          "required": false,
+          "default": "9.3.1"
+        },
+        {
+          "name": "JWT_ENABLED",
+          "required": false,
+          "default": "true"
+        },
+        {
+          "name": "ALLOW_PRIVATE_IP_ADDRESS",
+          "required": false,
+          "default": "true"
+        },
+        {
+          "name": "ONLYOFFICE_JWT_SECRET",
+          "varName": "ONLYOFFICE_JWT_SECRET",
+          "required": true,
+          "sharedGeneratedSecret": true
+        },
+        {
+          "name": "JWT_SECRET",
+          "varName": "ONLYOFFICE_JWT_SECRET",
+          "required": true,
+          "sharedGeneratedSecret": true
+        },
+        {
+          "name": "ONLYOFFICE_PUBLIC_URL",
+          "required": false
+        },
+        {
+          "name": "ONLYOFFICE_INTERNAL_URL",
+          "required": false
+        },
+        {
+          "name": "ONLYOFFICE_EDITOR_PORT",
+          "required": false,
+          "default": "8080"
+        },
+        {
+          "name": "ONLYOFFICE_CONTROL_PORT",
+          "required": false,
+          "default": "7000"
+        },
+        {
+          "name": "ONLYOFFICE_STORAGE_PORT",
+          "required": false,
+          "default": "9100"
+        },
+        {
+          "name": "ONLYOFFICE_SESSION_IDLE_TTL_MS",
+          "required": false,
+          "default": "1800000"
+        },
+        {
+          "name": "ONLYOFFICE_AUTO_ASSEMBLY_ENABLED",
+          "required": false,
+          "default": "true"
+        },
+        {
+          "name": "ONLYOFFICE_AUTO_ASSEMBLY_INTERVAL",
+          "required": false,
+          "default": "1m"
+        },
+        {
+          "name": "ONLYOFFICE_AUTO_ASSEMBLY_STEP",
+          "required": false,
+          "default": "1m"
+        }
+      ],
+      "ports": [
+        "127.0.0.1:0:7000",
+        "127.0.0.1:8082:8080"
+      ]
+    }
+  }
 }

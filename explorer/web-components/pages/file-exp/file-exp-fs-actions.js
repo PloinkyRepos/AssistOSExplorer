@@ -1,6 +1,7 @@
 // File system related UI actions for FileExp, attached to the presenter to keep it lean.
 import { buildFileExpHash, showContextPasteMenu } from "./file-exp-utils.js";
 import { callToolWithLoader } from "../../../utils/globalLoader.js";
+import { getNewFileInitialContent } from "../../../services/onlyoffice/onlyoffice-new-file-content.js";
 import { FILE_EXP_UI_ACTIONS } from "./file-exp-ui-controller.js";
 import { PREVIEW_ACTIONS } from "./file-exp-preview-controller.js";
 import {
@@ -725,6 +726,8 @@ export function attachFsActions(fileExp) {
         async newFile() {
             const fileName = prompt('Enter name for the new file:');
             if (!fileName || !fileName.trim()) return;
+            const trimmedName = fileName.trim();
+            const initialContent = getNewFileInitialContent(trimmedName);
             try {
                 let shouldSelect = false;
                 let createdPath = null;
@@ -736,16 +739,20 @@ export function attachFsActions(fileExp) {
                         if (!capabilities.canCreateFiles) {
                             throw new Error('New files are not allowed in this Confidential folder.');
                         }
-                        const created = await createDpuFile(this, this.state.path, fileName.trim(), { content: '' });
-                        createdPath = created?.path || this.joinPath(this.state.path, created?.key || created?.name || fileName.trim());
+                        const createsSecret = this.normalizePath(this.state.path) === DPU_SECRETS_PATH;
+                        const created = await createDpuFile(this, this.state.path, trimmedName, {
+                            content: createsSecret ? '' : initialContent.dpuContent,
+                            mimeType: createsSecret ? '' : initialContent.mimeType
+                        });
+                        createdPath = created?.path || this.joinPath(this.state.path, created?.key || created?.name || trimmedName);
                         createdType = created?.type || 'file';
-                        shouldEditAfterCreate = this.normalizePath(this.state.path) === DPU_SECRETS_PATH;
+                        shouldEditAfterCreate = createsSecret;
                     } else {
                         if (!this.ensureMutableFsPath(this.state.path)) return;
-                        createdPath = this.joinPath(this.state.path, fileName.trim());
+                        createdPath = this.joinPath(this.state.path, trimmedName);
                         await callToolWithLoader('explorer', 'write_file', {
                             path: createdPath,
-                            content: ''
+                            content: initialContent.content
                         });
                         this.bumpWorkspaceVersion?.();
                         invalidateFsMutationCaches(this, {

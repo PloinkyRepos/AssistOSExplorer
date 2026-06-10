@@ -26,6 +26,29 @@ export function createFileExpCaches({
 
     const normalizeDirPath = (normalizePathFn, dirPath) => normalizePathFn ? normalizePathFn(dirPath) : dirPath;
 
+    // Single-slot store for the active OnlyOffice session (managed by
+    // services/onlyoffice/onlyoffice-preview-service.js). Lives here so the
+    // filePreview invalidation lifecycle clears it whenever file content is
+    // known to have changed.
+    let officeSessionEntry = null;
+    const officeSession = {
+        get() {
+            return officeSessionEntry;
+        },
+        set(entry) {
+            officeSessionEntry = entry && typeof entry === 'object' ? entry : null;
+        },
+        clear() {
+            officeSessionEntry = null;
+        },
+        invalidateForPath(filePath) {
+            if (!filePath) return;
+            if (officeSessionEntry?.path === filePath) {
+                officeSessionEntry = null;
+            }
+        }
+    };
+
     return {
         dirListing: {
             get(fileExp, dirPath) {
@@ -65,8 +88,10 @@ export function createFileExpCaches({
                         filePreview.delete(key);
                     }
                 }
+                officeSession.invalidateForPath(filePath);
             }
         },
+        officeSession,
         mdTree: {
             get(fileExp, dirPath) {
                 const normalized = normalizeDirPath(fileExp?.normalizePath, dirPath);

@@ -11,6 +11,9 @@ const {
   GIT_GITHUB_TOKEN_SECRET_KEY,
   createSecretStoreClient,
   putStoredGitToken,
+  getStoredGitToken,
+  deleteStoredGitToken,
+  grantStoredGitTokenAccess,
   resolveGitAuthPrincipal,
   resolveGitTokenSecretKey
 } = await import(`${moduleUrl.href}${moduleSuffix}`);
@@ -192,6 +195,14 @@ test('putStoredGitToken writes and grants the user-scoped GitHub token key', asy
     user: {
       id: 'local:admin',
       username: 'admin'
+    },
+    delegations: {
+      dpuGitSecrets: {
+        token: 'user-delegation-jwt',
+        targetAgentId: 'agent:AchillesIDE/dpuAgent',
+        tools: ['dpu_secret_put', 'dpu_secret_grant'],
+        scope: ['secret:write', 'secret:grant']
+      }
     }
   };
   const expectedKey = resolveGitTokenSecretKey({ authInfo });
@@ -212,12 +223,147 @@ test('putStoredGitToken writes and grants the user-scoped GitHub token key', asy
   assert.equal(requests.length, 2);
   assert.equal(requests[0].url, '/dpuAgent/mcp');
   assert.equal(requests[1].url, '/dpuAgent/mcp');
-  assert.equal(requests[0].body.params?.name, 'dpu_agent_secret_put');
+  assert.equal(requests[0].body.params?.name, 'dpu_secret_put');
+  assert.equal(requests[0].headers['x-ploinky-user-delegation'], 'user-delegation-jwt');
   assert.deepEqual(requests[0].body.params?.arguments, { key: expectedKey, value: 'ghp_test' });
-  assert.equal(requests[1].body.params?.name, 'dpu_agent_secret_grant');
+  assert.equal(requests[1].body.params?.name, 'dpu_secret_grant');
+  assert.equal(requests[1].headers['x-ploinky-user-delegation'], 'user-delegation-jwt');
   assert.deepEqual(requests[1].body.params?.arguments, {
     key: expectedKey,
     principal: 'agent:AchillesIDE/gitAgent',
     role: 'read'
   });
+});
+
+const DELEGATED_AUTH = Object.freeze({
+  invocationToken: 'router-issued-invocation-jwt',
+  user: { id: 'local:admin', username: 'admin' },
+  delegations: {
+    dpuGitSecrets: {
+      token: 'user-delegation-jwt',
+      targetAgentId: 'agent:AchillesIDE/dpuAgent',
+      tools: ['dpu_secret_get', 'dpu_secret_put', 'dpu_secret_delete', 'dpu_secret_grant'],
+      scope: ['secret:read', 'secret:write', 'secret:grant']
+    }
+  }
+});
+
+const UNDELEGATED_USER_AUTH = Object.freeze({
+  invocationToken: 'router-issued-invocation-jwt',
+  user: { id: 'local:admin', username: 'admin' }
+});
+
+const GUEST_AUTH = Object.freeze({
+  invocationToken: 'router-issued-invocation-jwt',
+  user: { id: 'guest-7', username: 'guest', roles: ['guest'] }
+});
+
+const GIT_AGENT_ENV = Object.freeze({
+  PLOINKY_AGENT_ID: 'agent:AchillesIDE/gitAgent',
+  PLOINKY_AGENT_PRINCIPAL: 'agent:AchillesIDE/gitAgent',
+  PLOINKY_AGENT_SECRET: 'a'.repeat(64),
+  PLOINKY_AGENT_LIB_DIR: agentLibDir,
+  PLOINKY_DPU_ROUTE: 'dpuAgent'
+});
+
+test('GitHub token helpers fail closed for user callers without a DPU delegation', async () => {
+  await withEnv({ ...GIT_AGENT_ENV, PLOINKY_ROUTER_URL: 'http://127.0.0.1:1' }, async () => {
+    await assert.rejects(() => putStoredGitToken({ authInfo: UNDELEGATED_USER_AUTH, token: 'ghp_test' }), /missing DPU user delegation/);
+    await assert.rejects(() => getStoredGitToken({ authInfo: UNDELEGATED_USER_AUTH }), /missing DPU user delegation/);
+    await assert.rejects(() => deleteStoredGitToken({ authInfo: UNDELEGATED_USER_AUTH }), /missing DPU user delegation/);
+    await assert.rejects(() => grantStoredGitTokenAccess({ authInfo: UNDELEGATED_USER_AUTH }), /missing DPU user delegation/);
+  });
+});
+
+test('guest callers degrade gracefully on read and fail explicitly on writes', async () => {
+  await withEnv({ ...GIT_AGENT_ENV, PLOINKY_ROUTER_URL: 'http://127.0.0.1:1' }, async () => {
+    assert.equal(await getStoredGitToken({ authInfo: GUEST_AUTH }), '');
+    await assert.rejects(() => putStoredGitToken({ authInfo: GUEST_AUTH, token: 'ghp_test' }), /signed-in workspace user/);
+    await assert.rejects(() => deleteStoredGitToken({ authInfo: GUEST_AUTH }), /signed-in workspace user/);
+    await assert.rejects(() => grantStoredGitTokenAccess({ authInfo: GUEST_AUTH }), /signed-in workspace user/);
+  });
+});
+
+test('putStoredGitToken self-repairs a stale agent-owned record then retries the user-owned write', async () => {
+  const requests = [];
+  let putAttempts = 0;
+  const server = http.createServer((req, res) => {
+    const chunks = [];
+    req.on('data', (chunk) => chunks.push(chunk));
+    req.on('end', () => {
+      const body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+      requests.push({ headers: req.headers, body });
+      const tool = body?.params?.name || '';
+      let payloadText = JSON.stringify({ ok: true });
+      if (tool === 'dpu_secret_put') {
+        putAttempts += 1;
+        if (putAttempts === 1) {
+          payloadText = JSON.stringify({ ok: false, error: 'Access denied: missing write on secret GIT_GITHUB_TOKEN_TEST' });
+        }
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        jsonrpc: '2.0',
+        id: body?.id || null,
+        result: { content: [{ type: 'text', text: payloadText }] }
+      }));
+    });
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address();
+
+  await withEnv({ ...GIT_AGENT_ENV, PLOINKY_ROUTER_URL: `http://127.0.0.1:${port}` }, async () => {
+    await putStoredGitToken({ authInfo: DELEGATED_AUTH, token: 'ghp_test' });
+  });
+  server.close();
+
+  assert.deepEqual(
+    requests.map((entry) => entry.body.params?.name),
+    ['dpu_secret_put', 'dpu_agent_secret_delete', 'dpu_secret_put', 'dpu_secret_grant']
+  );
+  assert.equal(requests[0].headers['x-ploinky-user-delegation'], 'user-delegation-jwt');
+  assert.equal(requests[1].headers['x-ploinky-user-delegation'], undefined);
+  assert.equal(requests[2].headers['x-ploinky-user-delegation'], 'user-delegation-jwt');
+});
+
+test('deleteStoredGitToken treats missing secrets as success and self-repairs stale agent-owned records', async () => {
+  const scripts = [
+    {
+      firstError: 'Secret not found: GIT_GITHUB_TOKEN_TEST',
+      expectTools: ['dpu_secret_delete'],
+      expectResult: { ok: true, deleted: false }
+    },
+    {
+      firstError: 'Access denied: missing write on secret GIT_GITHUB_TOKEN_TEST',
+      expectTools: ['dpu_secret_delete', 'dpu_agent_secret_delete'],
+      expectResult: { ok: true, deleted: true, migratedStaleAgentRecord: true }
+    }
+  ];
+  for (const script of scripts) {
+    const requests = [];
+    let calls = 0;
+    const server = http.createServer((req, res) => {
+      const chunks = [];
+      req.on('data', (chunk) => chunks.push(chunk));
+      req.on('end', () => {
+        const body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+        requests.push({ body });
+        calls += 1;
+        const payloadText = calls === 1
+          ? JSON.stringify({ ok: false, error: script.firstError })
+          : JSON.stringify({ ok: true, deleted: true });
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ jsonrpc: '2.0', id: body?.id || null, result: { content: [{ type: 'text', text: payloadText }] } }));
+      });
+    });
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address();
+    let result;
+    await withEnv({ ...GIT_AGENT_ENV, PLOINKY_ROUTER_URL: `http://127.0.0.1:${port}` }, async () => {
+      result = await deleteStoredGitToken({ authInfo: DELEGATED_AUTH });
+    });
+    server.close();
+    assert.deepEqual(requests.map((entry) => entry.body.params?.name), script.expectTools);
+    assert.deepEqual(result, script.expectResult);
+  }
 });

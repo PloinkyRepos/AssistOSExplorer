@@ -25,6 +25,7 @@ gh secret set LOCAL_LLM_API_KEY --repo PloinkyRepos/AssistOSExplorer
 ```
 
 `ONLYOFFICE_JWT_SECRET` is not configured as a GitHub secret for the managed Document Server. Explorer derives `ONLYOFFICE_JWT_SECRET` through its Ploinky manifest, and the `onlyOffice` Ploinky agent derives its container `JWT_SECRET` from the same `AchillesIDE/explorer/ONLYOFFICE_JWT_SECRET` identity. Explorer's host preinstall hook no longer computes or injects the Document Server secret.
+OnlyOfficeAgent also sets `ALLOW_PRIVATE_IP_ADDRESS=true` so the bundled Document Server can fetch the decorator's signed `127.0.0.1` document and callback URLs. Do not set `ALLOW_META_IP_ADDRESS`; metadata-address fetches are not part of the Office storage flow.
 WebMeet LiveKit and TURN credentials are also manifest-derived, using the same shared derivation identity across `webmeetAgent`, `webmeetLivekitAiAgent`, and `webmeetInfra/liveKitServerAgent`; do not configure them as GitHub secrets for the deploy workflow.
 
 The centralized image-build repository needs a Docker Hub token for the manual image publish workflows:

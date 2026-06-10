@@ -97,6 +97,9 @@ export function mountPresenterElement(mount, { key, tagName, attributes = {} }) 
 
     let node = currentNode;
     if (shouldReplace) {
+        // The mount may still host a live OnlyOffice editor; destroy it
+        // before wiping its DOM so the editor runtime does not go stale.
+        clearOnlyOfficeEditor(mount);
         mount.textContent = '';
         node = document.createElement(normalizedTag);
         mount.appendChild(node);
@@ -309,7 +312,12 @@ export function renderStandardPreview(fileExp, refs, previewUiState) {
         return;
     }
 
-    clearMountElement(refs.componentMount);
+    if (fileExp.state.previewMode !== 'onlyoffice') {
+        // Keep a live OnlyOffice editor when we stay in onlyoffice mode;
+        // renderOnlyOfficeEditor reconciles config changes itself and a
+        // destroy here would force a full editor reload on every re-render.
+        clearMountElement(refs.componentMount);
+    }
 
     if (fileExp.state.previewMode === 'pdf') {
         fileExp.detachPreviewAnchorHandler();
@@ -342,11 +350,19 @@ export function renderStandardPreview(fileExp, refs, previewUiState) {
         refs.componentMount.classList.add('onlyoffice-editor-host');
 
         if (fileExp.state.onlyOfficeConfig) {
+            if (refs.componentMount.dataset?.presenterKey) {
+                // The mount still holds another presenter (editor, backlog
+                // panel, ...) from a previous mode; reset it before handing
+                // the mount to the OnlyOffice editor.
+                clearMountElement(refs.componentMount);
+            }
             renderOnlyOfficeEditor(refs.componentMount, fileExp.state.onlyOfficeConfig).catch((error) => {
                 console.error('OnlyOffice editor mount failed', error);
+                clearMountElement(refs.componentMount);
                 refs.componentMount.innerHTML = `<div class="preview-placeholder">${error?.message || 'OnlyOffice preview is unavailable.'}</div>`;
             });
         } else {
+            clearMountElement(refs.componentMount);
             refs.componentMount.innerHTML = `<div class="preview-placeholder">${fileExp.state.onlyOfficeStatusText || 'OnlyOffice preview is unavailable.'}</div>`;
         }
         return;

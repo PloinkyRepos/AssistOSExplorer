@@ -85,7 +85,7 @@
   secrets.json
   blobs/
   .lock/</code></pre>
-                    <p><code>state.json</code> stores users, secret metadata, and confidential object metadata. <code>permissions.manifest.json</code> stores canonical access control list state. <code>secrets.json</code> stores encrypted secret values. Confidential file bodies are stored as encrypted blobs under <code>blobs/</code>.</p>
+                    <p><code>state.json</code> stores users, secret metadata, and confidential object metadata. <code>permissions.manifest.json</code> stores canonical access control list state and DPU-owned agent role ceilings such as the read-only <code>gitAgent</code> secret policy. <code>secrets.json</code> stores encrypted secret values. Confidential file bodies are stored as encrypted blobs under <code>blobs/</code>.</p>
                 </section>
 
                 <section>
