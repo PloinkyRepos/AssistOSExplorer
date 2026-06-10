@@ -126,7 +126,7 @@ function clonePreview(preview = null) {
   };
 }
 
-export function createSessionStore({ now = () => new Date(), idleTtlMs = 30 * 60 * 1000 } = {}) {
+export function createSessionStore({ now = () => new Date(), idleTtlMs = 30 * 60 * 1000, absoluteTtlMs = 8 * 60 * 60 * 1000 } = {}) {
   const sessions = new Map();
 
   function resolveNow(value) {
@@ -157,7 +157,8 @@ export function createSessionStore({ now = () => new Date(), idleTtlMs = 30 * 60
     createSession(input = {}) {
       const createdAt = resolveNow(input.createdAt);
       const idleCandidate = new Date(createdAt.getTime() + idleTtlMs);
-      const absoluteExpiresAt = earliestDelegationExpiry(input.delegations, idleCandidate);
+      const absoluteCandidate = new Date(createdAt.getTime() + absoluteTtlMs);
+      const absoluteExpiresAt = earliestDelegationExpiry(input.delegations, absoluteCandidate);
       const idleExpiresAt = minDate(idleCandidate, absoluteExpiresAt);
       const token = crypto.randomBytes(32).toString('base64url');
       const tokenHash = hashToken(token);
@@ -198,7 +199,13 @@ export function createSessionStore({ now = () => new Date(), idleTtlMs = 30 * 60
 
     getForStorageRequest(token, { now: valueNow } = {}) {
       const record = readRecordByToken(token);
-      assertActive(record, valueNow);
+      const at = assertActive(record, valueNow);
+      const nextIdleExpiry = minDate(
+        new Date(at.getTime() + idleTtlMs),
+        asDate(record.absoluteExpiresAt)
+      );
+      record.idleExpiresAt = nextIdleExpiry.toISOString();
+      sessions.set(record.tokenHash, record);
       return sanitizeStoredSession(record);
     },
   };

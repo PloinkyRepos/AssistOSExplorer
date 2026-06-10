@@ -94,6 +94,19 @@ test('session store expires at the earlier of idle timeout and delegation expiry
   assert.equal(touched.absoluteExpiresAt, '2026-06-09T12:10:00.000Z');
 });
 
+test('getForStorageRequest renews idle expiry within the absolute bound', () => {
+  let clock = new Date('2026-01-01T00:00:00.000Z');
+  const store = createSessionStore({ now: () => clock, idleTtlMs: 30 * 60 * 1000 });
+  const created = store.createSession({ path: '/docs/a.docx', storageKind: 'workspace', fileName: 'a.docx', canWrite: true });
+
+  clock = new Date('2026-01-01T00:25:00.000Z'); // 25 min in, still active → touch-on-read
+  store.getForStorageRequest(created.token);
+
+  clock = new Date('2026-01-01T00:50:00.000Z'); // 50 min after open, but only 25 min since last activity
+  const after = store.getForStorageRequest(created.token);
+  assert.equal(after.path, '/docs/a.docx');
+});
+
 test('session store rejects document access after absolute delegation expiry', () => {
   const store = createSessionStore({
     now: () => at('2026-06-09T12:00:00.000Z'),
