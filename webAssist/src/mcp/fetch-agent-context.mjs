@@ -98,11 +98,10 @@ function getCacheEntry(cache, siteUrl, sourceHash) {
     return entry;
 }
 
-function setCacheEntry(cache, siteUrl, sourceHash, data) {
+function setCacheEntry(cache, siteUrl, sourceHash) {
     cache[siteUrl] = {
         sourceHash,
         timestamp: Date.now(),
-        data,
     };
 }
 
@@ -210,12 +209,9 @@ async function main() {
             timeout: 5000,
         });
 
-        const saveResult = await saveWacDocuments({ store, documents });
+        await saveWacDocuments({ store, documents });
 
-        setCacheEntry(cache, siteUrl, sourceHash, {
-            documentsLoaded: documents.length,
-            saved: saveResult,
-        });
+        setCacheEntry(cache, siteUrl, sourceHash);
         await saveCache(resolvedDataDir, cache);
 
         process.stdout.write(JSON.stringify({
