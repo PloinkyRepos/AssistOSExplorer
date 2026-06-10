@@ -60,18 +60,6 @@
     },
     "httpServices": [
         {
-            "externalPrefix": "/services/explorer/office/",
-            "internalPrefix": "/office/",
-            "auth": "protected",
-            "notFoundMessage": "Explorer route not found."
-        },
-        {
-            "externalPrefix": "/public-services/explorer/office/",
-            "internalPrefix": "/office/",
-            "auth": "none",
-            "notFoundMessage": "Explorer route not found."
-        },
-        {
             "externalPrefix": "/services/explorer/avatar-settings/",
             "internalPrefix": "/avatar-settings/",
             "auth": "protected",

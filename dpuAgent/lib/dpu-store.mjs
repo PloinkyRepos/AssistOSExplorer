@@ -68,14 +68,25 @@ const OPERATION_SCOPE_MAP = {
   dpu_secret_revoke: ['secret:revoke', 'secret:write'],
   dpu_secret_list: ['secret:access', 'secret:read'],
   dpu_whoami: ['secret:access', 'secret:read'],
-  dpu_workspace_roots: ['secret:access', 'secret:read']
+  dpu_workspace_roots: ['secret:access', 'secret:read', 'dpu:confidential:read'],
+  dpu_confidential_list: ['dpu:confidential:read'],
+  dpu_confidential_get: ['dpu:confidential:read'],
+  dpu_confidential_create: ['dpu:confidential:write'],
+  dpu_confidential_update: ['dpu:confidential:write'],
+  dpu_confidential_delete: ['dpu:confidential:write'],
+  dpu_confidential_grant: ['dpu:confidential:write'],
+  dpu_confidential_revoke: ['dpu:confidential:write'],
+  dpu_confidential_comment_add: ['dpu:confidential:write'],
+  dpu_confidential_comment_delete: ['dpu:confidential:write']
 };
 
 function extractInvocationScope(authInfo) {
   const invocation = authInfo && typeof authInfo === 'object' ? authInfo.invocation : null;
   if (!invocation || typeof invocation !== 'object') return null;
-  const scope = Array.isArray(invocation.scope) ? invocation.scope : null;
-  if (!scope) return null;
+  const directScope = Array.isArray(invocation.scope) ? invocation.scope : [];
+  const delegationScope = Array.isArray(invocation.delegation?.scope) ? invocation.delegation.scope : [];
+  const scope = [...directScope, ...delegationScope];
+  if (!scope.length) return null;
   const normalized = scope.map((v) => String(v || '').trim().toLowerCase()).filter(Boolean);
   if (!normalized.length) return null;
   return new Set(normalized);
@@ -1172,6 +1183,7 @@ export async function revokeSecret(authInfo = null, { key, principal }) {
 }
 
 export async function listConfidential(authInfo = null, { scope = 'my-space', parentId = '' } = {}) {
+  assertInvocationScopeFor('dpu_confidential_list', authInfo);
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
     const userSpace = await ensureUserRecord(state, permissionsManifest, actor, ctx);
@@ -1217,6 +1229,7 @@ export async function listConfidential(authInfo = null, { scope = 'my-space', pa
 }
 
 export async function getConfidentialById(authInfo = null, { id }) {
+  assertInvocationScopeFor('dpu_confidential_get', authInfo);
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
     await ensureUserRecord(state, permissionsManifest, actor, ctx);
@@ -1239,6 +1252,7 @@ export async function getConfidentialById(authInfo = null, { id }) {
 }
 
 export async function createConfidential(authInfo = null, payload = {}) {
+  assertInvocationScopeFor('dpu_confidential_create', authInfo);
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
     const userSpace = await ensureUserRecord(state, permissionsManifest, actor, ctx);
@@ -1293,6 +1307,7 @@ export async function createConfidential(authInfo = null, payload = {}) {
 }
 
 export async function updateConfidential(authInfo = null, payload = {}) {
+  assertInvocationScopeFor('dpu_confidential_update', authInfo);
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
     await ensureUserRecord(state, permissionsManifest, actor, ctx);
@@ -1343,6 +1358,7 @@ export async function updateConfidential(authInfo = null, payload = {}) {
 }
 
 export async function deleteConfidential(authInfo = null, { id }) {
+  assertInvocationScopeFor('dpu_confidential_delete', authInfo);
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
     await ensureUserRecord(state, permissionsManifest, actor, ctx);
@@ -1370,6 +1386,7 @@ export async function deleteConfidential(authInfo = null, { id }) {
 }
 
 export async function grantConfidential(authInfo = null, { id, principal, role }) {
+  assertInvocationScopeFor('dpu_confidential_grant', authInfo);
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
     await ensureUserRecord(state, permissionsManifest, actor, ctx);
@@ -1411,6 +1428,7 @@ export async function grantConfidential(authInfo = null, { id, principal, role }
 }
 
 export async function revokeConfidential(authInfo = null, { id, principal }) {
+  assertInvocationScopeFor('dpu_confidential_revoke', authInfo);
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
     await ensureUserRecord(state, permissionsManifest, actor, ctx);
@@ -1447,6 +1465,7 @@ export async function revokeConfidential(authInfo = null, { id, principal }) {
 }
 
 export async function addConfidentialComment(authInfo = null, { id, message }) {
+  assertInvocationScopeFor('dpu_confidential_comment_add', authInfo);
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
     await ensureUserRecord(state, permissionsManifest, actor, ctx);
@@ -1483,6 +1502,7 @@ export async function addConfidentialComment(authInfo = null, { id, message }) {
 }
 
 export async function deleteConfidentialComment(authInfo = null, { id, commentId }) {
+  assertInvocationScopeFor('dpu_confidential_comment_delete', authInfo);
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
     await ensureUserRecord(state, permissionsManifest, actor, ctx);

@@ -8,8 +8,8 @@
 <body>
     <main>
         <h1>OnlyOffice Documentation</h1>
-        <p>OnlyOffice is the Ploinky-managed agent that owns the workspace Document Server. The agent declares its image (pinned via <code>${ONLYOFFICE_VERSION}</code>), derived JWT secret, internal port, readiness probe, and persistent storage in <code>manifest.json</code>. Explorer remains the office-session and storage bridge.</p>
-        <p>The DS specifications are the source of truth for runtime ownership, secret derivation, readiness, and Explorer integration.</p>
+        <p>OnlyOfficeAgent is the Ploinky-managed decorator that fronts the workspace Document Server and owns Office session creation, signed editor config generation, loopback document/callback routes, the public editor proxy, and workspace-vs-DPU persistence routing. The agent declares its image (pinned via <code>${ONLYOFFICE_VERSION}</code>), derived JWT secret, protected control route, public editor port, unpublished storage listener, readiness probe, and persistent storage in <code>manifest.json</code>.</p>
+        <p>Explorer remains the IDE shell and document picker. The DS specifications are the source of truth for runtime ownership, secret derivation, route separation, delegated DPU persistence, and Explorer integration.</p>
         <ul>
             <li><a href="specs/matrix.md">Specification matrix</a></li>
             <li><a href="../AGENTS.md">Agent guide</a></li>

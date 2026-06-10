@@ -2,67 +2,109 @@
 
 ## Summary
 
-OnlyOffice Document Server is owned by the Ploinky-managed `onlyOffice` agent in this workspace. The agent owns its image, derived JWT secret, internal port, readiness probe, profile-specific lifecycle, and persistent storage. Explorer remains the office-session and storage bridge but does not own the Document Server container.
+OnlyOfficeAgent is a Ploinky-managed decorator runtime that fronts the workspace OnlyOffice Document Server and owns the Office session, document, callback, and persistence boundary for this workspace.
 
 Status: implemented.
 
 ## Core Invariant
 
-The workspace Document Server is a long-running service. Long-running services belong in Ploinky manifests so image selection, env resolution, generated secrets, readiness, profiles, routing metadata, logs, lifecycle, and teardown all flow through the same runtime contract as other workspace infrastructure agents.
+OnlyOfficeAgent is not a thin sidecar anymore. It is the single workspace-owned Office runtime boundary for:
 
-The OnlyOffice agent manifest (`onlyOffice/manifest.json`) owns:
+- authenticated session creation at `GET /services/onlyoffice/office/session`
+- signed OnlyOffice config generation
+- storage metadata resolution before signing edit/comment permissions
+- opaque session-token storage for Office document/callback requests
+- path-confined workspace persistence for non-Confidential files
+- delegated Confidential persistence through `dpuAgent`
+- public editor asset and WebSocket proxying for the browser-visible OnlyOffice surface
 
-- the Document Server container image, pinned via `${ONLYOFFICE_VERSION}` (no `:latest`)
-- `JWT_ENABLED=true` and required `JWT_SECRET` injected by Ploinky env resolution
-- `JWT_SECRET` injected from a workspace-scoped generated secret using `varName: "ONLYOFFICE_JWT_SECRET"`, `sharedGeneratedSecret: true`. This matches Explorer's `ONLYOFFICE_JWT_SECRET` env entry by source name, so both sides resolve to the same hex value without custom derivation fields
-- the internal container port (`80`) published on `127.0.0.1:8082` (default and `prod` profiles) or `127.0.0.1:18082` (`dev` profile)
-- explicit runtime startup through `entrypoint: "/bin/bash"` and `start: "/app/ds/run-document-server.sh"` so Ploinky runs the image's Document Server process rather than the implicit AgentServer
-- `readiness.protocol: "tcp"`, probed on the published host port; deployment validation must still fetch `api.js` because TCP readiness proves the port is open, not that the editor API has fully warmed
-- profile-specific ports, env defaults, and lifecycle hooks
-- bind-mounted persistent storage under `.ploinky/data/onlyOffice/` for Document Server `log`, `data`, and `lib` paths only. Internal service-owned PostgreSQL, RabbitMQ, and Redis data directories must not be bind-mounted in local rootless Podman workspaces because the image starts those services as non-root users and root-owned host bind mounts can prevent initialization.
+Explorer remains the IDE shell and document picker, but it no longer owns Office download routes, callback routes, session/config building, or DPU persistence for Office edits.
 
-Explorer remains the office-session and storage bridge. Explorer does not start, stop, or mutate the Document Server container directly. Explorer consumes `ONLYOFFICE_PUBLIC_URL`, `ONLYOFFICE_INTERNAL_URL`, `ONLYOFFICE_CALLBACK_BASE_URL`, and `ONLYOFFICE_JWT_SECRET` through Ploinky-managed env (deploy-workflow vars in production; defaulted by `onlyOffice/scripts/hooks/preinstall.sh` for local dev). The local-dev defaults must be written when the resolved variable is missing or resolves to an empty string, because `ploinky echo NAME` may print `NAME=` while still exiting successfully for unset variables.
+## Runtime Boundary
+
+OnlyOfficeAgent owns three distinct HTTP planes:
+
+1. Protected router plane:
+   - `/services/onlyoffice/office/session`
+- authenticated through the router only
+- source of the router-verified acting user and router-minted user delegation grant
+- returns only browser-safe preview metadata; it must never return DPU delegation tokens
+2. Loopback-only storage plane:
+   - `/internal/document/<token>`
+   - `/internal/callback/<token>`
+   - bound only on loopback and never published through `httpServices` or manifest `ports`
+3. Public editor plane:
+   - only the required editor assets, including OnlyOffice-generated `/<version-hash>/web-apps/*` iframe assets, and `/doc/*` co-authoring WebSocket paths
+- must block command, convert, demo, welcome, info, internal, and healthcheck endpoints from the internet
+- must strip browser cookies, `Authorization`, proxy authorization, and caller-supplied `x-ploinky-*` identity headers before forwarding to Document Server
+
+The manifest must publish the protected control listener on container port `7000` through an ephemeral localhost host port so the Ploinky `httpServices` route targets `/control/*`. The browser-facing editor proxy on container port `8080` remains a separate host port for the OnlyOffice editor assets and `/doc/*` WebSocket paths. The loopback storage listener on `9100` must not be published.
+
+The router remains the only public control point for authenticated identity and agent-to-agent execution.
+
+## Confidential Persistence Invariant
+
+Confidential Office persistence is router-mediated Tier 1 storage:
+
+- the browser opens a protected OnlyOffice session through the router
+- the router verifies the user session and mints a short-lived User Delegation Grant scoped to OnlyOfficeAgent → `agent:AchillesIDE/dpuAgent`
+- OnlyOfficeAgent calls `dpuAgent` by presenting both its Agent Assertion and the stored delegation grant
+- the router verifies both and mints the DPU-audience Router Request with the original acting user in signed `usr` claims
+- `dpuAgent` evaluates Confidential ACLs for the acting user while preserving OnlyOfficeAgent as the caller for audit
+
+OnlyOfficeAgent must never receive `PLOINKY_MASTER_KEY`, `PLOINKY_DERIVED_MASTER_KEY`, `DPU_MASTER_KEY`, or another agent's secret.
+
+OnlyOfficeAgent stores the User Delegation Grant only server-side in the Office session. The grant may be reused until its expiry for the allowed Confidential tools and scopes of that Office session, but each agent-to-agent call still carries a fresh Agent Assertion and receives a fresh DPU Router Request.
+
+## Explorer Contract
+
+Explorer now depends on OnlyOfficeAgent only through the protected session route:
+
+- `GET /services/onlyoffice/office/session?path=<workspace-or-confidential-path>`
+
+Explorer must not expose anonymous or protected `/services/explorer/office/*` or `/public-services/explorer/office/*` routes once the cutover is complete.
 
 ## Disallowed State
 
-A container named like `ploinky_onlyoffice_<workspace>` that is created by an Explorer host hook is not compliant with this invariant. The Explorer preinstall hook no longer creates such a container. The `onlyOffice` agent's preinstall script first verifies that the target Document Server image is locally available or pullable, then removes any leftover `ploinky_onlyoffice_<workspace>` container as a one-time migration step before binding host port `8082`. If the pull or removal fails, the hook exits non-zero so a deploy cannot delete the working sidecar and then continue into a broken replacement.
+The following states are not compliant with this invariant:
+
+- Explorer-owned public Office document or callback routes
+- loopback storage routes published through router `httpServices`
+- a public editor host that exposes `/coauthoring/CommandService.ashx`, `/ConvertService.ashx`, `/converter`, `/example/*`, `/welcome/*`, `/info/*`, `/internal/*`, or `/healthcheck`
+- Confidential Office persistence performed with a plain Agent Assertion and no router-minted user delegation
+- save callbacks that fetch a caller-provided URL before checking session write permission and trusted Document Server origin
 
 ## Implementation Layout
 
 ```text
-Ploinky dependency graph
-  -> onlyOffice agent (this directory)
-    -> docker.io/onlyoffice/documentserver:${ONLYOFFICE_VERSION}
-    -> JWT_SECRET derived from AchillesIDE/explorer/ONLYOFFICE_JWT_SECRET
-    -> bind-mounted Document Server volumes under .ploinky/data/onlyOffice/
-  -> explorer agent
-    -> /services/explorer/office/session
-    -> /public-services/explorer/office/document/<token>
-    -> /public-services/explorer/office/callback/<token>
-    -> DPU delegated MCP for Confidential files
+Browser
+  -> router protected /services/onlyoffice/office/session
+    -> OnlyOfficeAgent control route
+      -> workspace metadata or delegated dpuAgent metadata
+      -> signed OnlyOffice config
+  -> public OnlyOffice editor host
+    -> OnlyOfficeAgent allow-list proxy
+      -> Document Server editor assets and /doc/* websocket
+Document Server
+  -> loopback /internal/document/<token>
+  -> loopback /internal/callback/<token>
+    -> OnlyOfficeAgent storage router
+      -> workspace store OR delegated dpuAgent store
 ```
-
-The Document Server image is pinned to `9.3.1` by default, matching the Docker tag for the previously-deployed 9.3.1 package line without including the package build-revision suffix. Operators override the pin via the `WEBMEET_LIVEKIT_VERSION`-style precedence chain: `ploinky var ONLYOFFICE_VERSION <tag>` overrides the manifest default.
-
-## Migration Notes
-
-The previous raw `ploinky_onlyoffice_<workspace>` sidecar used anonymous podman volumes for `/var/www/onlyoffice/Data`, `/var/lib/onlyoffice`, `/var/lib/postgresql`, `/var/lib/rabbitmq`, `/var/lib/redis`, and `/var/log/onlyoffice`. The new agent bind-mounts only `/var/www/onlyoffice/Data`, `/var/lib/onlyoffice`, and `/var/log/onlyoffice` under `.ploinky/data/onlyOffice/`; the image owns its internal PostgreSQL, RabbitMQ, and Redis directories inside the container so rootless Podman ownership mapping cannot block those services from booting.
-
-Practical consequences:
-
-- in-progress collaborative editing sessions held by the legacy sidecar's internal databases are cut off when the legacy container is removed or recreated
-- OnlyOffice rebuilds its document key registry on demand the next time a user opens a document, so steady-state editing recovers without operator intervention
-- if an operator needs to preserve in-progress internal database state across the migration, they must snapshot the legacy sidecar before the next deploy and accept that the current local agent contract treats internal database state as container-owned runtime state
-
-The agent does not encode that operator-driven volume migration; it removes the legacy container only after the target image preflight succeeds, so the new agent can bind port `8082` without making an image-pull failure destructive.
 
 ## Validation
 
-An acceptable deployment must be able to prove without printing secrets that:
+An acceptable deployment must be able to prove, without printing secrets, that:
 
-- a Ploinky-managed `onlyOffice` agent owns the OnlyOffice Document Server container (visible in `ploinky status` and `podman ps`)
-- the agent's `JWT_SECRET` env equals Explorer's `ONLYOFFICE_JWT_SECRET` env (boolean equality only; never print either value)
-- the browser can load OnlyOffice `api.js` from `${ONLYOFFICE_PUBLIC_URL}/web-apps/apps/api/documents/api.js`
-- the deployment path can load OnlyOffice `api.js` from `${ONLYOFFICE_INTERNAL_URL}/web-apps/apps/api/documents/api.js` after Ploinky TCP readiness passes
-- OnlyOffice can fetch tokenized document URLs and post callbacks through Explorer's `/public-services/explorer/office/` routes
-- Confidential Office documents still resolve through `Explorer -> Ploinky router -> dpuAgent`
+- the browser opens Office sessions through `/services/onlyoffice/office/session`
+- Explorer no longer exposes `/services/explorer/office/*` or `/public-services/explorer/office/*`
+- `/internal/document/<token>` and `/internal/callback/<token>` are reachable only on loopback
+- the public editor plane serves `api.js` and `/doc/*` while blocking admin/convert/demo/internal endpoints
+- the public editor plane does not forward browser credentials or Ploinky identity headers to Document Server
+- save callbacks reject read-only sessions and untrusted download origins before any fetch
+- Confidential Office reads and writes reach `dpuAgent` only through router-mediated user delegation
+- a user lacking the DPU ACL is denied even though OnlyOfficeAgent is the caller
+
+## Conclusion
+
+OnlyOfficeAgent owns the Office runtime boundary in this workspace. Browser Office traffic, loopback document/callback traffic, and delegated Confidential persistence all terminate there, with the router remaining the only public trust broker for authenticated and agent traffic.

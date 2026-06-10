@@ -15,7 +15,7 @@ OnlyOffice owns the runtime boundary for the workspace OnlyOffice Document Serve
 
 - The DS specifications are the source of truth for local contracts and invariants.
 - OnlyOffice Document Server is owned by the Ploinky `onlyOffice` agent declared in `manifest.json`.
-- Explorer is the office-session and storage bridge; it does not own the Document Server lifecycle.
+- OnlyOfficeAgent is the office-session, document/callback, and storage bridge; Explorer is the IDE shell and document picker.
 - Keep generated secrets derived through Ploinky runtime contracts and never log JWT secrets, document tokens, callback tokens, or file contents.
 - Update `AGENTS.md` and `CLAUDE.md` together so coding agents receive the same local context.
 

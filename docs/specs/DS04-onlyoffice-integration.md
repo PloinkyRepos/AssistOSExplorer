@@ -2,59 +2,61 @@
 
 ## Summary
 
-This specification describes how Explorer integrates with OnlyOffice Document Server for Office-style document preview and editing.
-
-Within Explorer, OnlyOffice is the delegated editor for supported Office-style documents. It extends the IDE surface rather than replacing it.
+This specification describes how `AssistOSExplorer` integrates with the Ploinky-managed OnlyOfficeAgent decorator runtime for Office-style document preview and editing.
 
 ## Background / Problem Statement
 
-Explorer needs to support Office-class documents as part of the IDE experience, but these resources cannot be handled correctly by the normal text or PDF preview flows.
-
-The integration must support:
+Explorer must support Office-class documents inside the IDE without owning the security-sensitive editor runtime itself. The implementation must support:
 
 - browser-side editor loading
-- secure session derivation
-- document download and callback routes
-- support for both local workspace files and DPU-backed Confidential files
+- authenticated Office session creation
+- loopback-only document and callback handling
+- workspace file persistence
+- Confidential DPU persistence with user ACL enforcement
 
 ## Goals
 
-1. Integrate OnlyOffice as the delegated editor for supported document types
-2. Keep Explorer as the surrounding IDE shell
-3. Separate browser-facing and server-facing networking concerns
-4. Support both workspace and Confidential document sources
-5. Make the configuration and runtime constraints explicit
+1. Keep Explorer as the IDE shell and preview host.
+2. Move Office session/config/document/callback responsibilities into OnlyOfficeAgent.
+3. Preserve router-mediated authentication and agent-to-agent policy enforcement.
+4. Support both workspace files and Confidential DPU-backed files.
+5. Block unnecessary OnlyOffice public endpoints from internet access.
 
 ## Non-Goals
 
-- provisioning or managing the OnlyOffice service itself inside Explorer
-- reimplementing an Office editor in Explorer
-- using OnlyOffice for DPU secrets
-- replacing the native OnlyOffice UI with a heavily customized Explorer-specific fork
+- managing Office persistence directly inside Explorer
+- exposing anonymous Explorer-owned Office document or callback routes
+- using OnlyOffice for `/Confidential/Secrets`
+- replacing the native OnlyOffice editor UI with a custom Explorer fork
 
 ## Architecture Overview
 
 ```text
 Explorer preview shell
-  -> OnlyOffice session route
-    -> Explorer session/config builder
-      -> OnlyOffice browser API
-        -> tokenized document route
-        -> tokenized callback route
-          -> Explorer storage bridge
+  -> GET /services/onlyoffice/office/session?path=...
+    -> OnlyOfficeAgent control route
+      -> workspace store OR delegated dpuAgent metadata
+      -> signed OnlyOffice config
+  -> browser loads OnlyOffice api.js from OnlyOfficeAgent public editor host
+    -> OnlyOfficeAgent allow-list proxy
+      -> Document Server assets and /doc/* websocket
+Document Server
+  -> GET /internal/document/<token>
+  -> POST /internal/callback/<token>
+    -> OnlyOfficeAgent storage router
+      -> workspace disk OR delegated dpuAgent persistence
 ```
 
-Explorer remains responsible for the surrounding IDE experience:
+Explorer remains responsible for:
 
 - path selection
 - preview state transitions
-- loading and error handling
-- session derivation
-- post-save refresh of the visible resource
+- loading and error presentation
+- re-rendering the surrounding IDE shell
 
-## Data Models
+OnlyOfficeAgent owns the Office runtime contract itself.
 
-### Supported File Types
+## Supported File Types
 
 Explorer routes these file types to OnlyOffice:
 
@@ -70,151 +72,136 @@ Explorer routes these file types to OnlyOffice:
 - `odp`
 - `pdf`
 
-The extension-to-editor mapping is implemented in:
+The extension mapping remains implemented in:
 
 - [`services/onlyoffice/onlyoffice-file-types.js`](../services/onlyoffice/onlyoffice-file-types.js)
-- [`utils/server/onlyoffice/file-types.mjs`](../utils/server/onlyoffice/file-types.mjs)
+- [`onlyOffice/src/onlyoffice-config.mjs`](../../onlyOffice/src/onlyoffice-config.mjs)
 
-### Session Model
+## API Contract
 
-For a supported resource, Explorer derives:
+### Browser Session Route
 
-- the resolved target path
-- the access policy for the current user
-- a short-lived document session token
-- the OnlyOffice editor configuration
-- public callback and document URLs
+Explorer opens Office sessions only through:
 
-This session model is what lets Explorer host the editor while still keeping server-controlled security boundaries.
+- `GET /services/onlyoffice/office/session?path=<workspace-or-confidential-path>`
 
-## API Contracts
-
-### Session Route
-
-Authenticated session route:
-
-- `GET /services/explorer/office/session?path=<workspace-or-confidential-path>`
-
-This route is responsible for:
+This protected router route is responsible for:
 
 - resolving the selected resource
-- determining permissions
-- building the editor configuration
-- returning the browser-facing session payload
+- verifying the acting user through router-authenticated `x-ploinky-auth-info`
+- minting or carrying the router-issued user delegation required for Confidential persistence
+- building the browser-facing OnlyOffice config
 
-### Public Tokenized Routes
+### Loopback Storage Routes
 
-Tokenized public routes used by OnlyOffice:
+OnlyOfficeAgent, not Explorer, owns the tokenized storage routes:
 
-- `GET /public-services/explorer/office/document/<token>`
-- `POST /public-services/explorer/office/callback/<token>`
+- `GET /internal/document/<token>`
+- `POST /internal/callback/<token>`
 
-The public routes are intentionally token-scoped so OnlyOffice can reach them without a user browser session.
+These routes are loopback-only implementation details and must never be published through Explorer or router `httpServices`.
 
-This keeps the browser-facing IDE shell and the server-to-server document flow separated.
+### Public Editor Plane
+
+The browser-visible Office host may expose only the required editor surface:
+
+- `GET /web-apps/apps/api/documents/api.js`
+- `GET /web-apps/*`, including OnlyOffice-generated `/<version-hash>/web-apps/*` editor iframe assets
+- `GET /sdkjs/*`
+- `GET /sdkjs-plugins/*`
+- `GET /fonts/*`
+- `GET /themes/*`
+- `GET /cache/files/*`
+- `GET`/`Upgrade` for `/doc/*`
+
+It must block command, convert, demo, welcome, info, internal, and healthcheck endpoints.
 
 ## Behavioral Specification
 
 ### Runtime Flow
 
-For a supported file, Explorer does not use the normal text or PDF preview flow.
+For a supported file:
 
-The runtime sequence is:
+1. Explorer requests `GET /services/onlyoffice/office/session?path=...`.
+2. OnlyOfficeAgent resolves workspace or Confidential metadata before signing the editor config.
+3. OnlyOfficeAgent stores an opaque Office session token.
+4. OnlyOfficeAgent signs the OnlyOffice editor config.
+5. The browser loads `api.js` from the OnlyOfficeAgent public editor host.
+6. Document Server reads through `/internal/document/<token>`.
+7. Save callbacks persist through `/internal/callback/<token>`.
 
-1. The UI requests `GET /services/explorer/office/session?path=...`
-2. Explorer resolves the file and permissions
-3. Explorer creates a short-lived session token
-4. Explorer builds an OnlyOffice editor config
-5. The browser loads `api.js` from the configured Document Server
-6. OnlyOffice opens the document through Explorer's public download route
-7. OnlyOffice saves back through Explorer's public callback route
+Explorer no longer builds Office document URLs or callback URLs and no longer calls `dpuAgent` directly for Office persistence.
 
 ### Permission Behavior
 
-Explorer derives the OnlyOffice permissions from the resolved file or session:
+Workspace files are path-confined and writable only inside the configured workspace root.
 
-- `edit`
-- `comment`
-- `review`
+Confidential Office permissions come from `dpuAgent` metadata:
 
-The config builder is here:
+- `contentVisible` gates document readability
+- `canWrite` controls callback persistence
+- `canComment` maps to the editor comment capability
 
-- [`utils/server/onlyoffice/onlyoffice-config.mjs`](../utils/server/onlyoffice/onlyoffice-config.mjs)
+OnlyOfficeAgent must not assume that a router-authenticated user or a stored delegation grant authorizes every DPU operation; `dpuAgent` remains the ACL authority.
 
-For normal workspace files, Explorer currently enables write access by default.
-
-For Confidential files, the permissions come from DPU metadata.
-
-Explorer therefore acts as the policy bridge between the selected IDE resource and the editor capabilities granted to OnlyOffice.
+The protected Office session response may include browser-safe `preview` metadata (`storageKind`, `requestedPath`, optional `objectId`, `canWrite`, `canComment`) so Explorer can render state without learning callback tokens or DPU delegation tokens.
 
 ### Confidential File Support
 
-OnlyOffice supports Confidential files stored through DPU.
+Confidential Office persistence uses router-mediated user delegation:
 
-The storage bridge is implemented in:
+- the protected Office session route receives router-verified user auth info
+- the router includes a short-lived User Delegation Grant scoped to OnlyOfficeAgent → `agent:AchillesIDE/dpuAgent`
+- OnlyOfficeAgent presents its Agent Assertion plus that grant when calling `dpu_confidential_*`
+- the router verifies both and mints the DPU Router Request with the original acting user in signed `usr` claims
+- `dpuAgent` stores the resulting bytes encrypted at rest
 
-- [`utils/server/onlyoffice/onlyoffice-document-store.mjs`](../utils/server/onlyoffice/onlyoffice-document-store.mjs)
-- [`utils/server/onlyoffice/onlyoffice-dpu-client.mjs`](../utils/server/onlyoffice/onlyoffice-dpu-client.mjs)
+The User Delegation Grant is a short-lived scoped lease for the Office session. It may be reused for the allowed Confidential tool calls until expiry; each agent-to-agent call still uses a fresh Agent Assertion and receives a fresh DPU Router Request.
 
-Important behavior:
-
-- DPU access is routed back through Ploinky's router MCP proxy instead of directly dialing another agent container or host-published port.
-- protected Office service requests must receive a router-issued invocation token; delegated DPU calls re-enter the router with a DS013 Agent Assertion and are authorized through MCP policy before DPU receives a target-audience Router Request.
-- read: DPU content is fetched and decoded for download to OnlyOffice
-- save: updated binary content is downloaded from OnlyOffice and stored back to DPU as base64
-
-This allows Office editing to remain part of the same Explorer experience even when the resource is not stored on the local filesystem.
+Explorer therefore keeps the same IDE experience while moving the persistence boundary out of its own process.
 
 ## Configuration
 
-Explorer expects these environment variables:
+Explorer depends on these environment/runtime assumptions:
 
 - `ONLYOFFICE_PUBLIC_URL`
-  Browser-visible URL of the Document Server
+  Browser-visible editor host URL
 - `ONLYOFFICE_INTERNAL_URL`
-  URL that the Explorer backend uses when it must fetch generated files from OnlyOffice during callback processing
-- `ONLYOFFICE_CALLBACK_BASE_URL`
-  Public base used to generate Explorer callback and document URLs for OnlyOffice
+  Internal Document Server base used when callback download URLs must be rewritten
 - `ONLYOFFICE_JWT_SECRET`
-  Shared signing secret used to sign the OnlyOffice editor config. Explorer declares this env as a required workspace-scoped generated value. The Ploinky-managed `onlyOffice` agent (`onlyOffice/manifest.json`) declares required `JWT_SECRET` with `varName: "ONLYOFFICE_JWT_SECRET"`, `sharedGeneratedSecret: true` so that Document Server's `JWT_SECRET` and Explorer's `ONLYOFFICE_JWT_SECRET` env entries resolve to the same hex value at runtime without custom derivation fields. Explorer no longer derives this secret in its preinstall hook.
+  Shared secret used to sign the OnlyOffice editor config
 
-The distinction between public and internal URLs is architectural, not cosmetic. Explorer needs both because the browser and the backend do not necessarily reach OnlyOffice through the same network path.
+Explorer no longer depends on Explorer-owned public callback/document base URLs because those routes no longer exist.
+
+OnlyOfficeAgent's manifest must keep the protected control listener and browser editor proxy on separate published ports. The Ploinky router must target the control listener on container port `7000` for `/services/onlyoffice/office/session`, while browser editor assets and `/doc/*` WebSockets use the editor proxy on container port `8080`. The storage listener on `9100` is loopback-only and must not be published or routed.
 
 ## Operational Constraints
 
 OnlyOffice integration is correct only when all of the following are true:
 
-- the Document Server is owned by the Ploinky-managed `onlyOffice` agent (see `onlyOffice/docs/specs/DS01-ploinky-agent-invariant.md`)
-- the browser can load `api.js` from `ONLYOFFICE_PUBLIC_URL`
-- Explorer can reach the internal document server endpoint when callback processing requires it
-- OnlyOffice can reach Explorer's public callback and document routes
-- the JWT secret is aligned between Explorer and OnlyOffice
-- the selected resource resolves to a supported content class
-
-Explorer does not own the OnlyOffice Document Server lifecycle. The Document Server is provisioned by the `onlyOffice` Ploinky agent. The `ONLYOFFICE_*` variables flow into Explorer either from the deploy workflow (`set_var ONLYOFFICE_PUBLIC_URL ...` and siblings) or from the `onlyOffice` agent's preinstall hook which writes local-dev defaults if the vars are not already set or resolve to an empty value. Explorer's preinstall hook no longer creates, recreates, or mutates the Document Server container.
-
-`api.js` is provided by the OnlyOffice Document Server itself, not by the Explorer repo.
-Ploinky TCP readiness for the `onlyOffice` agent is only the startup gate; acceptance validation must still load `api.js` from the configured internal and browser-visible URLs before the Office editor path is considered healthy.
-
-The `onlyOffice` agent must not bind-mount the Document Server image's internal PostgreSQL, RabbitMQ, or Redis data directories in local rootless Podman workspaces. Those services run as image-owned non-root users, and host bind mounts can appear as root-owned directories inside the container, preventing PostgreSQL from initializing and leaving the browser-visible `api.js` endpoint unavailable. The agent may bind-mount the Document Server `log`, `Data`, and `/var/lib/onlyoffice` paths that are part of the Explorer integration contract.
+- OnlyOfficeAgent owns the protected session route
+- Explorer no longer declares `/services/explorer/office/` or `/public-services/explorer/office/`
+- loopback storage routes are not host-published and are not router-routed
+- the public editor host serves `api.js` and `/doc/*` while blocking admin/convert/demo/internal endpoints
+- Confidential Office persistence re-enters `dpuAgent` only through router-mediated delegation
 
 ## Failure And Recovery Expectations
 
-If OnlyOffice integration fails, Explorer should:
+If the Office runtime fails, Explorer should:
 
 - keep the surrounding IDE shell responsive
-- surface the failure as a document-opening or editor-loading problem
-- avoid corrupting the selected resource state
-- allow the user to retry after configuration or connectivity recovery
+- surface a document-opening or editor-loading error
+- avoid mutating the selected resource unless a verified save callback succeeds
+- reject read-only sessions and untrusted callback download origins before fetching callback bytes
+- allow the user to reopen the document after auth, connectivity, or delegation expiry recovery
 
 ## Known Limitations
 
-- Explorer currently uses the native OnlyOffice editor UI without project-specific customization for plugins, history, force-save controls, or toolbar behavior.
-- The UI currently shows the global Explorer loader while a file is opening, but it does not yet show a dedicated inline OnlyOffice spinner during editor bootstrap.
-- The editor behavior for features such as multipage view is native OnlyOffice behavior. Explorer does not currently track or persist those UI settings.
+- Full end-to-end browser + Document Server smoke coverage requires a live local runtime profile and is not exercised by the default unit test suite.
+- Explorer still renders the native OnlyOffice editor UI without project-specific customization.
 
 ## Related Specs
 
-- [DS01 - Explorer System Overview](./DS01-system-overview.md)
 - [DS03 - Confidential Files And DPU](./DS03-confidential-files-and-dpu.md)
+- [DS06 - Ploinky Runtime Invariants](./DS06-ploinky-runtime-invariants.md)
 - [OnlyOffice DS01 - Ploinky Agent Invariant](../../onlyOffice/docs/specs/DS01-ploinky-agent-invariant.md)

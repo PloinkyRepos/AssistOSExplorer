@@ -24,7 +24,15 @@ function defaultRunId() {
   return `${stamp}-${process.pid}`;
 }
 
+function resolveOptionalPath(value) {
+  const text = String(value || '').trim();
+  return text ? path.resolve(text) : '';
+}
+
 const runId = String(process.env.SMOKE_RUN_ID || defaultRunId()).replace(/[^A-Za-z0-9_-]/g, '-');
+const workspaceRoot = resolveOptionalPath(process.env.SMOKE_WORKSPACE_ROOT);
+const dpuDataRoot = resolveOptionalPath(process.env.SMOKE_DPU_DATA_ROOT)
+  || (workspaceRoot ? path.join(workspaceRoot, '.ploinky', 'data', 'dpu-data') : path.join(repoRoot, '.ploinky', 'data', 'dpu-data'));
 const artifactRoot = path.resolve(
   process.env.SMOKE_ARTIFACT_DIR || path.join(repoRoot, '.ploinky', 'test-artifacts', 'headless-smoke', runId)
 );
@@ -34,6 +42,8 @@ export const smokeConfig = Object.freeze({
   repoRoot,
   runId,
   artifactRoot,
+  workspaceRoot,
+  dpuDataRoot,
   baseURL: stripTrailingSlash(process.env.SMOKE_BASE_URL || process.env.PLAYWRIGHT_BASE_URL),
   primaryUser: {
     username: process.env.SMOKE_USERNAME || 'admin',

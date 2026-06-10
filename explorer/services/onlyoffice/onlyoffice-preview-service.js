@@ -2,7 +2,7 @@ import { isOnlyOfficeFile } from './onlyoffice-file-types.js';
 
 function buildSessionUrl(filePath) {
     const params = new URLSearchParams({ path: String(filePath || '') });
-    return `/services/explorer/office/session?${params.toString()}`;
+    return `/services/onlyoffice/office/session?${params.toString()}`;
 }
 
 async function readJsonResponse(response) {
@@ -66,4 +66,3 @@ export async function tryLoadOnlyOfficePreview(fileExp, filePath, { invalidate =
     }
     return true;
 }
-
