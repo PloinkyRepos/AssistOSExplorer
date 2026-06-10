@@ -40,6 +40,8 @@ OnlyOfficeAgent owns three distinct HTTP planes:
 
 The manifest must publish the protected control listener on container port `7000` through an ephemeral localhost host port so the Ploinky `httpServices` route targets `/control/*`. The browser-facing editor proxy on container port `8080` remains a separate host port for the OnlyOffice editor assets and `/doc/*` WebSocket paths. The loopback storage listener on `9100` must not be published.
 
+Published ports: the control listener uses a dynamic loopback host port (`127.0.0.1:0:7000`), but the editor proxy publishes a fixed host port (`127.0.0.1:8082:8080`, dev `127.0.0.1:18082:8080`). Ploinky manifest `ports` are literal and are not env-interpolated, so if `8082` collides on the host the operator must edit the manifest `ports` mapping (and the matching `ONLYOFFICE_PUBLIC_URL`) for that workspace. Making the published editor port env-driven requires Ploinky `ports` templating support and is tracked as a separate ploinky enhancement.
+
 The router remains the only public control point for authenticated identity and agent-to-agent execution.
 
 ## Confidential Persistence Invariant
@@ -47,7 +49,7 @@ The router remains the only public control point for authenticated identity and 
 Confidential Office persistence is router-mediated Tier 1 storage:
 
 - the browser opens a protected OnlyOffice session through the router
-- the router verifies the user session and mints a short-lived User Delegation Grant scoped to OnlyOfficeAgent → `agent:AchillesIDE/dpuAgent`
+- the router verifies the user session and mints a short-lived User Delegation Grant scoped to OnlyOfficeAgent → `dpuAgent` in the same repo (the manifest declares the target as `agent:./dpuAgent`, which the router expands to `agent:<repo>/dpuAgent` at mint time)
 - OnlyOfficeAgent calls `dpuAgent` by presenting both its Agent Assertion and the stored delegation grant
 - the router verifies both and mints the DPU-audience Router Request with the original acting user in signed `usr` claims
 - `dpuAgent` evaluates Confidential ACLs for the acting user while preserving OnlyOfficeAgent as the caller for audit
@@ -104,6 +106,13 @@ An acceptable deployment must be able to prove, without printing secrets, that:
 - save callbacks reject read-only sessions and untrusted download origins before any fetch
 - Confidential Office reads and writes reach `dpuAgent` only through router-mediated user delegation
 - a user lacking the DPU ACL is denied even though OnlyOfficeAgent is the caller
+
+### Manifest validator posture
+
+`validate-ploinky-agent` passes with 0 errors and emits two intentional warnings that are accepted, not bugs:
+
+- `profiles.{default,dev,prod}.env should be an object when present` — the manifest uses the array-of-`{name,...}` form for `env`, which is the runtime-supported shape used by sibling agents in this workspace; the array form is deliberate.
+- `mcp-config.json: missing` — OnlyOfficeAgent exposes no MCP tools of its own; it is a delegated MCP *consumer* of `dpuAgent`, so it ships no `mcp-config.json`. If a future policy requires zero warnings, add an explicit empty `mcp-config.json` (`{ "tools": [] }`); until then the absence is correct and intended.
 
 ## Conclusion
 
