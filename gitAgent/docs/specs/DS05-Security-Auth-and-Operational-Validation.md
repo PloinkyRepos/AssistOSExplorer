@@ -20,7 +20,9 @@ Requirement O4: GitHub device flow state shall persist under user-scoped workspa
 
 Requirement O4a: `gitAgent/manifest.json` shall not declare an `identity` block or DPU-specific `capabilities` or `permissions.secrets.allowedRoles`. Ploinky derives the agent principal as `agent:<repo>/<agent>`, and DPU owns the agent's secret-role ceiling via `agentPolicies` in `permissions.manifest.json`.
 
-Requirement O4b: when `gitAgent` stores the GitHub token in DPU secret storage, it shall preserve user ownership on a per-routed-user secret key and request only the concrete secret grant needed for remote Git operations. DPU validates that requested role against the DPU-owned agent policy; if no policy exists for the caller's principal, DPU rejects the grant.
+Requirement O4b: when `gitAgent` stores the GitHub token in DPU secret storage, it shall use a router-minted `dpuGitSecrets` user delegation, call authenticated DPU `dpu_secret_*` tools through a signed Agent Assertion, preserve user ownership on a per-routed-user secret key, and request only the concrete `read` grant needed for remote Git operations. DPU validates that requested role against the DPU-owned agent policy; if no policy exists for the caller's principal, DPU rejects the grant. Guests and out-of-band calls shall not write or delete GitHub token secrets.
+
+Requirement O4c: if an existing deployment contains the pre-delegation agent-owned GitHub token record, `gitAgent` may delete that stale record through its internal agent-owned compatibility alias and retry the same write as a user-owned delegated secret. Other DPU failures must remain fail-loud.
 
 Requirement O5: configuration and documentation shall remain aligned with `manifest.json` and `mcp-config.json`.
 
