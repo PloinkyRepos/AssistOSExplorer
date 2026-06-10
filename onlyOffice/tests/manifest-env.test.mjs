@@ -94,7 +94,14 @@ test('manifest delegates Confidential storage to the deployed dpuAgent principal
   const targets = (service.delegations || []).map((entry) => entry?.targetAgentId);
   assert.deepEqual(
     targets,
-    ['agent:AchillesIDE/dpuAgent'],
-    'delegation target must match the principal Ploinky injects into the deployed dpuAgent runtime'
+    ['agent:./dpuAgent'],
+    'delegation target must use same-repo "." so the manifest is portable across repo installs'
   );
+});
+
+test('onlyoffice delegation targets dpuAgent in the same repo via "." with an explicit key', () => {
+  const manifest = JSON.parse(fs.readFileSync(new URL('../manifest.json', import.meta.url)));
+  const delegation = manifest.httpServices[0].delegations[0];
+  assert.equal(delegation.targetAgentId, 'agent:./dpuAgent');
+  assert.equal(delegation.key, 'dpuConfidential');
 });

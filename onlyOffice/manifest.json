@@ -14,7 +14,8 @@
       "auth": "protected",
       "delegations": [
         {
-          "targetAgentId": "agent:AchillesIDE/dpuAgent",
+          "key": "dpuConfidential",
+          "targetAgentId": "agent:./dpuAgent",
           "tools": [
             "dpu_workspace_roots",
             "dpu_confidential_list",
