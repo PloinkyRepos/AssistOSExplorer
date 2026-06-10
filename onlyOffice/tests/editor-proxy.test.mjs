@@ -178,6 +178,24 @@ test('editor proxy blocks example welcome info internal and healthcheck endpoint
   }
 });
 
+test('editor proxy serves a cache file but blocks a bare cache directory request', async () => {
+  const forwarded = [];
+  const proxy = createEditorProxy({
+    targetBaseUrl: 'http://127.0.0.1:8080',
+    async forwardHttp(plan) { forwarded.push(plan); return { statusCode: 200, body: 'ok' }; },
+  });
+
+  const okRes = createResponse();
+  await proxy.handle({ method: 'GET', url: '/cache/files/doc123/output.png', headers: { host: 'o' } }, okRes);
+  assert.equal(okRes.statusCode, 200);
+
+  for (const url of ['/cache/files/', '/cache/files']) {
+    const res = createResponse();
+    await proxy.handle({ method: 'GET', url, headers: { host: 'o' } }, res);
+    assert.equal(res.statusCode, 404);
+  }
+});
+
 test('editor proxy does not forward cookies authorization or ploinky identity headers', async () => {
   const forwarded = [];
   const proxy = createEditorProxy({

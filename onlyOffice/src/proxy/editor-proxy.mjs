@@ -49,8 +49,14 @@ function isBlockedPath(pathname) {
 
 function isAllowedHttpPath(pathname) {
   const normalizedPathname = stripOnlyOfficeVersionPrefix(pathname);
-  return normalizedPathname === '/web-apps/apps/api/documents/api.js' ||
-    ALLOWED_HTTP_PREFIXES.some((prefix) => normalizedPathname.startsWith(prefix));
+  if (normalizedPathname === '/web-apps/apps/api/documents/api.js') {
+    return true;
+  }
+  if (/^\/cache\/files\/.+/.test(normalizedPathname)) {
+    return true;
+  }
+  const nonCachePrefixes = ALLOWED_HTTP_PREFIXES.filter((prefix) => prefix !== '/cache/files/');
+  return nonCachePrefixes.some((prefix) => normalizedPathname.startsWith(prefix));
 }
 
 function isAllowedUpgradeRequest(req, pathname) {

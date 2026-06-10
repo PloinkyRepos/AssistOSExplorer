@@ -227,6 +227,8 @@ Only the OnlyOffice **editor runtime** must be reachable by the browser. These a
 | `GET /web-apps/apps/api/documents/api.js` | bootstraps `DocsAPI.DocEditor` in the browser | **Observed**: `explorer/services/onlyoffice/onlyoffice-editor-host.js:28` |
 | `GET /web-apps/*`, `/sdkjs/*`, `/sdkjs-plugins/*`, `/fonts/*`, `/themes/*` | editor SPA assets the browser loads | OnlyOffice product reference (verify against pinned `9.3.1`) |
 | `GET /cache/files/*` | rendered/cached document chunks the editor fetches | OnlyOffice product reference |
+
+> **Defense-in-depth note:** the proxy now blocks bare-directory requests (`/cache/files/` and `/cache/files`) and only forwards paths with a non-empty sub-path (`/cache/files/<key>/...`). Enumeration protection ultimately depends on the Document Server image running nginx with `autoindex off` for `/cache/files/`.
 | `WS /doc/<key>/c/*` (and the upgrade path) | co-editing WebSocket channel | OnlyOffice product reference |
 
 **Rules for Tier 2:**
