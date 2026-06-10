@@ -66,25 +66,63 @@ async function loadScript(documentServerUrl) {
 }
 
 function destroyEditor(host) {
-    const runtime = ensureRuntimeState(host);
+    const runtime = host?.__onlyOfficeRuntime;
+    if (!runtime) {
+        return;
+    }
     if (runtime.editor && typeof runtime.editor.destroyEditor === 'function') {
-        runtime.editor.destroyEditor();
+        try {
+            runtime.editor.destroyEditor();
+        } catch (error) {
+            console.warn('OnlyOffice editor destroy failed', error);
+        }
     }
     runtime.editor = null;
 }
 
-function buildConfigKey(config) {
+export function buildConfigKey(config) {
     if (!config || typeof config !== 'object') {
         return '';
     }
+    // Identity of what the editor shows, not of the transport session.
+    // token/documentUrl/callbackUrl embed a freshly minted per-session token
+    // on every fetch, while document.key is derived server-side from the file
+    // version - so keying on the document identity lets an already mounted
+    // editor survive a session re-fetch for an unchanged document.
     return JSON.stringify({
         documentKey: config.document?.key || '',
         title: config.document?.title || '',
-        token: config.token || '',
-        callbackUrl: config.editorConfig?.callbackUrl || '',
+        fileType: config.document?.fileType || '',
+        permissions: config.document?.permissions || null,
         mode: config.editorConfig?.mode || '',
-        documentUrl: config.document?.url || ''
+        userId: config.editorConfig?.user?.id || '',
+        documentServerUrl: config.documentServerUrl || ''
     });
+}
+
+function findEditorContainer(host) {
+    if (typeof host?.querySelector !== 'function') {
+        return null;
+    }
+    // Before instantiation the container is the .onlyoffice-editor-frame div;
+    // DocsAPI.DocEditor then replaces that div with the editor iframe
+    // (observed: <iframe name="frameEditor">), so accept either as proof the
+    // editor DOM is still mounted in this host.
+    return host.querySelector('.onlyoffice-editor-frame') || host.querySelector('iframe');
+}
+
+export function isOnlyOfficeEditorActive(host, config) {
+    const runtime = host?.__onlyOfficeRuntime;
+    if (!runtime?.editor) {
+        return false;
+    }
+    if (host.isConnected === false) {
+        // A full page re-render replaces the preview DOM; a detached host may
+        // still hold a runtime but its editor is gone with the old subtree.
+        return false;
+    }
+    const configKey = buildConfigKey(config);
+    return Boolean(configKey) && runtime.configKey === configKey && Boolean(findEditorContainer(host));
 }
 
 function ensureContainer(host, runtime) {
@@ -106,7 +144,7 @@ export async function renderOnlyOfficeEditor(host, config) {
     if (!host) return;
     const runtime = ensureRuntimeState(host);
     const nextConfigKey = buildConfigKey(config);
-    if (runtime.editor && runtime.configKey === nextConfigKey) {
+    if (runtime.editor && runtime.configKey === nextConfigKey && findEditorContainer(host)) {
         return;
     }
 

@@ -134,6 +134,15 @@ Explorer no longer builds Office document URLs or callback URLs and no longer ca
 
 Explorer declares `onlyOffice global` in its `enable[]` dependency list. This is required for the Ploinky container runtime to mount the workspace root at `PLOINKY_WORKSPACE_ROOT` inside OnlyOfficeAgent, which in turn allows the agent's path-confined workspace store to read and write non-Confidential Office files. The `/Confidential` subtree remains excluded from direct disk access and is delegated to `dpuAgent`.
 
+### Client Session Reuse
+
+One user open maps to one Office session. Each `GET /office/session` mints a new server-side session (and, for Confidential paths, consumes a router-minted User Delegation Grant plus `dpuAgent` metadata calls), so Explorer must not re-request a session when nothing changed:
+
+- Explorer caches the in-flight or resolved session per normalized path in the file-exp cache layer; concurrent opens of the same path share one fetch.
+- The cached session is reused while the file version hint (listing `modified`/`size`, DPU `updatedAt`) is unchanged — indefinitely while the editor for that session is still mounted, and within a short freshness window (below the agent's session idle TTL) for remounts.
+- The cache entry is dropped together with the file-preview cache invalidation for that path, when a different document is opened, or when the fetch fails.
+- Editor remount identity is keyed on the signed document identity (`document.key`, title, file type, permissions, mode, user, Document Server URL), never on per-session transport fields (`token`, document/callback URLs). Re-opening an unchanged document keeps the mounted editor iframe; a changed `document.key` (the server derives it from the storage version key) forces a reload.
+
 ### Permission Behavior
 
 Workspace files are path-confined and writable only inside the configured workspace root.
