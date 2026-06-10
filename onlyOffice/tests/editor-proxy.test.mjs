@@ -39,15 +39,19 @@ test('editor proxy allows api js and editor asset prefixes', async () => {
     }
   });
 
-  for (const pathname of [
-    '/web-apps/apps/api/documents/api.js',
-    '/web-apps/apps/documenteditor/main/index.html',
-    '/9.3.1-432bda2685f348ede7efa2a35cafe793/web-apps/apps/documenteditor/main/index.html',
-    '/sdkjs/main.js',
-    '/sdkjs-plugins/plugin.js',
-    '/fonts/font.woff2',
-    '/themes/theme.css',
-    '/cache/files/report.docx'
+	  for (const pathname of [
+	    '/web-apps/apps/api/documents/api.js',
+	    '/web-apps/apps/documenteditor/main/index.html',
+	    '/9.3.1-432bda2685f348ede7efa2a35cafe793/web-apps/apps/documenteditor/main/index.html',
+	    '/document_editor_service_worker.js',
+	    '/9.3.1-1c82c0b-/document_editor_service_worker.js',
+	    '/9.3.1-1c7d/plugins.json',
+	    '/9.3.1-1c7d/themes.json',
+	    '/sdkjs/main.js',
+	    '/sdkjs-plugins/plugin.js',
+	    '/fonts/font.woff2',
+	    '/themes/theme.css',
+	    '/cache/files/report.docx'
   ]) {
     const res = createResponse();
     await proxy.handle({
@@ -63,14 +67,18 @@ test('editor proxy allows api js and editor asset prefixes', async () => {
 
   assert.deepEqual(
     forwarded.map((entry) => entry.targetUrl),
-    [
-      'http://127.0.0.1:8080/web-apps/apps/api/documents/api.js',
-      'http://127.0.0.1:8080/web-apps/apps/documenteditor/main/index.html',
-      'http://127.0.0.1:8080/9.3.1-432bda2685f348ede7efa2a35cafe793/web-apps/apps/documenteditor/main/index.html',
-      'http://127.0.0.1:8080/sdkjs/main.js',
-      'http://127.0.0.1:8080/sdkjs-plugins/plugin.js',
-      'http://127.0.0.1:8080/fonts/font.woff2',
-      'http://127.0.0.1:8080/themes/theme.css',
+	    [
+	      'http://127.0.0.1:8080/web-apps/apps/api/documents/api.js',
+	      'http://127.0.0.1:8080/web-apps/apps/documenteditor/main/index.html',
+	      'http://127.0.0.1:8080/9.3.1-432bda2685f348ede7efa2a35cafe793/web-apps/apps/documenteditor/main/index.html',
+	      'http://127.0.0.1:8080/document_editor_service_worker.js',
+	      'http://127.0.0.1:8080/document_editor_service_worker.js',
+	      'http://127.0.0.1:8080/9.3.1-1c7d/plugins.json',
+	      'http://127.0.0.1:8080/9.3.1-1c7d/themes.json',
+	      'http://127.0.0.1:8080/sdkjs/main.js',
+	      'http://127.0.0.1:8080/sdkjs-plugins/plugin.js',
+	      'http://127.0.0.1:8080/fonts/font.woff2',
+	      'http://127.0.0.1:8080/themes/theme.css',
       'http://127.0.0.1:8080/cache/files/report.docx'
     ]
   );

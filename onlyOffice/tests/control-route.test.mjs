@@ -211,10 +211,15 @@ test('office session route builds signed config with loopback document and callb
   assert.match(payload.config.document.url, /^http:\/\/127\.0\.0\.1:9100\/internal\/document\//);
   assert.match(payload.config.editorConfig.callbackUrl, /^http:\/\/127\.0\.0\.1:9100\/internal\/callback\//);
   assert.equal(payload.config.documentServerUrl, 'https://office.example.com');
+  assert.deepEqual(payload.config.editorConfig.customization, {
+    autosave: true,
+    forcesave: true,
+  });
 
   const signedPayload = verifySignedConfigToken(payload.config.token, 'onlyoffice-jwt-secret');
   assert.equal(signedPayload.document.url, payload.config.document.url);
   assert.equal(signedPayload.editorConfig.callbackUrl, payload.config.editorConfig.callbackUrl);
+  assert.deepEqual(signedPayload.editorConfig.customization, payload.config.editorConfig.customization);
 });
 
 test('office session route resolves storage metadata before signing config', async () => {
@@ -273,12 +278,16 @@ test('office session route resolves storage metadata before signing config', asy
     canWrite: false,
     canComment: true,
   });
-  assert.equal(payload.config.document.permissions.edit, false);
-  assert.equal(payload.config.document.permissions.comment, true);
+	  assert.equal(payload.config.document.permissions.edit, false);
+	  assert.equal(payload.config.document.permissions.comment, true);
+	  assert.deepEqual(payload.config.editorConfig.customization, {
+	    autosave: true,
+	    forcesave: false,
+	  });
 
-  const signedPayload = verifySignedConfigToken(payload.config.token, 'onlyoffice-jwt-secret');
-  assert.equal(signedPayload.document.permissions.edit, false);
-  assert.equal(signedPayload.document.permissions.comment, true);
+	  const signedPayload = verifySignedConfigToken(payload.config.token, 'onlyoffice-jwt-secret');
+	  assert.equal(signedPayload.document.permissions.edit, false);
+	  assert.equal(signedPayload.document.permissions.comment, true);
 });
 
 test('workspace session is created WITHOUT a DPU delegation token', async () => {

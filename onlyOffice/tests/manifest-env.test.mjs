@@ -113,6 +113,30 @@ test('manifest allows Document Server to fetch decorator loopback URLs without a
   }
 });
 
+test('manifest enables configurable Document Server auto assembly for open editors', () => {
+  const manifest = readManifest();
+
+  for (const profileName of ['default', 'dev', 'prod']) {
+    const profile = manifest.profiles?.[profileName];
+    assert.ok(profile, `profile ${profileName} exists`);
+
+    const env = entriesByName(profile);
+    assert.deepEqual(
+      {
+        enabled: env.get('ONLYOFFICE_AUTO_ASSEMBLY_ENABLED')?.default,
+        interval: env.get('ONLYOFFICE_AUTO_ASSEMBLY_INTERVAL')?.default,
+        step: env.get('ONLYOFFICE_AUTO_ASSEMBLY_STEP')?.default,
+      },
+      {
+        enabled: 'true',
+        interval: '1m',
+        step: '1m',
+      },
+      `${profileName} exposes auto-assembly controls for callback-backed persistence`
+    );
+  }
+});
+
 test('manifest delegates Confidential storage to the deployed dpuAgent principal', () => {
   const manifest = readManifest();
   const service = manifest.httpServices?.find((entry) => entry?.slug === 'onlyoffice');

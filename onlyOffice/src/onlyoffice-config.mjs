@@ -67,6 +67,10 @@ export function buildSignedOnlyOfficeConfig({
     editorConfig: {
       callbackUrl,
       mode: session.canWrite || session.canComment ? 'edit' : 'view',
+      customization: {
+        autosave: true,
+        forcesave: Boolean(session.canWrite),
+      },
       user: {
         id: String(authUser?.id || 'onlyoffice-user'),
         name: String(authUser?.username || authUser?.id || 'OnlyOffice User'),

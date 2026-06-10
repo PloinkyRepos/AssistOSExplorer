@@ -100,6 +100,21 @@
           "name": "ONLYOFFICE_SESSION_IDLE_TTL_MS",
           "required": false,
           "default": "1800000"
+        },
+        {
+          "name": "ONLYOFFICE_AUTO_ASSEMBLY_ENABLED",
+          "required": false,
+          "default": "true"
+        },
+        {
+          "name": "ONLYOFFICE_AUTO_ASSEMBLY_INTERVAL",
+          "required": false,
+          "default": "1m"
+        },
+        {
+          "name": "ONLYOFFICE_AUTO_ASSEMBLY_STEP",
+          "required": false,
+          "default": "1m"
         }
       ],
       "ports": [
@@ -164,6 +179,21 @@
           "name": "ONLYOFFICE_SESSION_IDLE_TTL_MS",
           "required": false,
           "default": "1800000"
+        },
+        {
+          "name": "ONLYOFFICE_AUTO_ASSEMBLY_ENABLED",
+          "required": false,
+          "default": "true"
+        },
+        {
+          "name": "ONLYOFFICE_AUTO_ASSEMBLY_INTERVAL",
+          "required": false,
+          "default": "1m"
+        },
+        {
+          "name": "ONLYOFFICE_AUTO_ASSEMBLY_STEP",
+          "required": false,
+          "default": "1m"
         }
       ],
       "ports": [
@@ -228,6 +258,21 @@
           "name": "ONLYOFFICE_SESSION_IDLE_TTL_MS",
           "required": false,
           "default": "1800000"
+        },
+        {
+          "name": "ONLYOFFICE_AUTO_ASSEMBLY_ENABLED",
+          "required": false,
+          "default": "true"
+        },
+        {
+          "name": "ONLYOFFICE_AUTO_ASSEMBLY_INTERVAL",
+          "required": false,
+          "default": "1m"
+        },
+        {
+          "name": "ONLYOFFICE_AUTO_ASSEMBLY_STEP",
+          "required": false,
+          "default": "1m"
         }
       ],
       "ports": [

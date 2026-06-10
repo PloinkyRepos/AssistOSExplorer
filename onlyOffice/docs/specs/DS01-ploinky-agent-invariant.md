@@ -34,7 +34,7 @@ OnlyOfficeAgent owns three distinct HTTP planes:
    - `/internal/callback/<token>`
    - bound only on loopback and never published through `httpServices` or manifest `ports`
 3. Public editor plane:
-   - only the required editor assets, including OnlyOffice-generated `/<version-hash>/web-apps/*` iframe assets, and `/doc/*` co-authoring WebSocket paths
+   - only the required editor assets, including OnlyOffice-generated `/<version-hash>/web-apps/*` iframe assets, root editor runtime files (`/document_editor_service_worker.js`, `/<version-hash>/plugins.json`, `/<version-hash>/themes.json`), and `/doc/*` co-authoring WebSocket paths
 - must block command, convert, demo, welcome, info, internal, and healthcheck endpoints from the internet
 - must strip browser cookies, `Authorization`, proxy authorization, and caller-supplied `x-ploinky-*` identity headers before forwarding to Document Server
 - must advertise the public origin to Document Server on both HTTP and WebSocket forwards: preserve incoming `X-Forwarded-Host`/`X-Forwarded-Proto` when an outer proxy (for example the Cloudflare tunnel) set them, otherwise fill `X-Forwarded-Host` from the incoming `Host` header and `X-Forwarded-Proto` with `http`. Document Server mints browser-facing cache-file URLs and redirects from these headers; because the forwarders rewrite `Host` to the internal target, omitting them makes the editor download converted documents from `http://127.0.0.1/` (no public port) and fail with `Download failed.`
@@ -44,6 +44,8 @@ The manifest must publish the protected control listener on container port `7000
 Published ports: the control listener uses a dynamic loopback host port (`127.0.0.1:0:7000`), but the editor proxy publishes a fixed host port (`127.0.0.1:8082:8080`, dev `127.0.0.1:18082:8080`). Ploinky manifest `ports` are literal and are not env-interpolated, so if `8082` collides on the host the operator must edit the manifest `ports` mapping (and the matching `ONLYOFFICE_PUBLIC_URL`) for that workspace. Making the published editor port env-driven requires Ploinky `ports` templating support and is tracked as a separate ploinky enhancement.
 
 Document Server request filtering must allow private-address fetches because signed editor configs intentionally point `document.url` and `callbackUrl` at the decorator's co-located `127.0.0.1` storage listener. The OnlyOfficeAgent manifest sets `ALLOW_PRIVATE_IP_ADDRESS=true` for this in-container loopback flow. It must not set `ALLOW_META_IP_ADDRESS`; metadata-address fetches are not required for document storage and must remain blocked.
+
+Writable editor configs must set `editorConfig.customization.autosave=true` and `editorConfig.customization.forcesave=true`; read-only configs keep autosave enabled but set forcesave false. Autosave is the editor-to-Document-Server state, while OnlyOfficeAgent persistence occurs only from trusted save callbacks (`status` 2 or 6) after write permission and download-origin checks. The custom Document Server wrapper must enable `services.CoAuthoring.autoAssembly` before supervisor starts so open editing sessions periodically emit force-save callbacks without requiring the user to close the tab. Operators may tune this with `ONLYOFFICE_AUTO_ASSEMBLY_ENABLED`, `ONLYOFFICE_AUTO_ASSEMBLY_INTERVAL`, and `ONLYOFFICE_AUTO_ASSEMBLY_STEP`.
 
 The router remains the only public control point for authenticated identity and agent-to-agent execution.
 
@@ -107,10 +109,12 @@ An acceptable deployment must be able to prove, without printing secrets, that:
 - the browser opens Office sessions through `/services/onlyoffice/office/session`
 - Explorer no longer exposes `/services/explorer/office/*` or `/public-services/explorer/office/*`
 - `/internal/document/<token>` and `/internal/callback/<token>` are reachable only on loopback
-- the public editor plane serves `api.js` and `/doc/*` while blocking admin/convert/demo/internal endpoints
-- the public editor plane does not forward browser credentials or Ploinky identity headers to Document Server
-- the Document Server can fetch the decorator's `127.0.0.1` document URL, while metadata-address fetches remain disabled
-- the enabled Explorer dependency graph starts OnlyOfficeAgent in `global` mode so normal workspace files are visible inside the container
+	- the public editor plane serves `api.js` and `/doc/*` while blocking admin/convert/demo/internal endpoints
+	- the public editor plane serves the root Office runtime assets required by the stock editor (`/document_editor_service_worker.js`, versioned `plugins.json`, and versioned `themes.json`) while still blocking admin/convert/demo/internal endpoints
+	- the public editor plane does not forward browser credentials or Ploinky identity headers to Document Server
+	- the Document Server can fetch the decorator's `127.0.0.1` document URL, while metadata-address fetches remain disabled
+	- writable sessions generate force-save-capable configs and the Document Server has auto-assembly enabled so open documents can persist through status 6 callbacks
+	- the enabled Explorer dependency graph starts OnlyOfficeAgent in `global` mode so normal workspace files are visible inside the container
 - save callbacks reject read-only sessions and untrusted download origins before any fetch
 - Confidential Office reads and writes reach `dpuAgent` only through router-mediated user delegation
 - a user lacking the DPU ACL is denied even though OnlyOfficeAgent is the caller

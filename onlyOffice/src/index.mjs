@@ -196,7 +196,7 @@ function createUpgradeForwarder({
 }
 
 function defaultDocumentServerCommand(env) {
-  return String(env?.ONLYOFFICE_DOCUMENT_SERVER_COMMAND || '/app/ds/run-document-server.sh').trim();
+  return String(env?.ONLYOFFICE_DOCUMENT_SERVER_COMMAND || '/bin/bash scripts/run-document-server-with-autoassembly.sh').trim();
 }
 
 function startDocumentServerProcess({

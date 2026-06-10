@@ -107,6 +107,9 @@ The browser-visible Office host may expose only the required editor surface:
 
 - `GET /web-apps/apps/api/documents/api.js`
 - `GET /web-apps/*`, including OnlyOffice-generated `/<version-hash>/web-apps/*` editor iframe assets
+- `GET /document_editor_service_worker.js`
+- `GET /<version-hash>/plugins.json`
+- `GET /<version-hash>/themes.json`
 - `GET /sdkjs/*`
 - `GET /sdkjs-plugins/*`
 - `GET /fonts/*`
@@ -131,6 +134,8 @@ For a supported file:
 7. Save callbacks persist through `/internal/callback/<token>`.
 
 Explorer no longer builds Office document URLs or callback URLs and no longer calls `dpuAgent` directly for Office persistence.
+
+OnlyOffice editor autosave is not the same thing as workspace or DPU persistence. The browser editor may show its changes as saved after the Document Server receives them, but OnlyOfficeAgent writes bytes back to the selected storage only when the Document Server calls the loopback callback with a save status (`2` for final save or `6` for force-save). Writable sessions therefore enable `editorConfig.customization.forcesave`, and the OnlyOfficeAgent Document Server wrapper enables `services.CoAuthoring.autoAssembly` so long-lived open editors periodically produce force-save callbacks.
 
 Explorer declares `onlyOffice global` in its `enable[]` dependency list. This is required for the Ploinky container runtime to mount the workspace root at `PLOINKY_WORKSPACE_ROOT` inside OnlyOfficeAgent, which in turn allows the agent's path-confined workspace store to read and write non-Confidential Office files. The `/Confidential` subtree remains excluded from direct disk access and is delegated to `dpuAgent`.
 
@@ -200,6 +205,8 @@ OnlyOffice integration is correct only when all of the following are true:
 - loopback storage routes are not host-published and are not router-routed
 - Document Server private-address fetching is limited to the required loopback storage flow, with metadata-address fetching disabled
 - the public editor host serves `api.js` and `/doc/*` while blocking admin/convert/demo/internal endpoints
+- the public editor host serves the stock editor's root runtime assets (`/document_editor_service_worker.js`, versioned `plugins.json`, and versioned `themes.json`)
+- writable sessions are force-save capable and the bundled Document Server has auto-assembly enabled for periodic callback-backed persistence
 - Confidential Office persistence re-enters `dpuAgent` only through router-mediated delegation
 
 ## Failure And Recovery Expectations

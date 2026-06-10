@@ -21,6 +21,12 @@ const ALLOWED_HTTP_PREFIXES = [
   '/cache/files/'
 ];
 
+const ALLOWED_HTTP_EXACT_PATHS = new Set([
+  '/document_editor_service_worker.js',
+  '/plugins.json',
+  '/themes.json'
+]);
+
 function stripOnlyOfficeVersionPrefix(pathname) {
   const match = String(pathname || '').match(/^\/\d+(?:\.\d+){1,3}-[A-Za-z0-9._-]+(?=\/)/);
   if (!match) {
@@ -65,7 +71,7 @@ function isBlockedPath(pathname) {
 
 function isAllowedHttpPath(pathname) {
   const normalizedPathname = stripOnlyOfficeVersionPrefix(pathname);
-  if (normalizedPathname === '/web-apps/apps/api/documents/api.js') {
+  if (normalizedPathname === '/web-apps/apps/api/documents/api.js' || ALLOWED_HTTP_EXACT_PATHS.has(normalizedPathname)) {
     return true;
   }
   if (/^\/cache\/files\/.+/.test(normalizedPathname)) {
@@ -80,6 +86,15 @@ function isAllowedUpgradeRequest(req, pathname) {
   return req?.method === 'GET' &&
     normalizedPathname.startsWith('/doc/') &&
     String(req?.headers?.upgrade || '').toLowerCase() === 'websocket';
+}
+
+function rewriteRequestUrlForDocumentServer(requestUrl) {
+  const url = new URL(requestUrl, 'http://127.0.0.1');
+  const normalizedPathname = stripOnlyOfficeVersionPrefix(url.pathname);
+  if (normalizedPathname === '/document_editor_service_worker.js') {
+    url.pathname = normalizedPathname;
+  }
+  return `${url.pathname}${url.search}`;
 }
 
 function buildTargetUrl(targetBaseUrl, requestUrl, kind) {
@@ -118,7 +133,7 @@ export function createEditorProxy({
 
     const plan = {
       kind: 'http',
-      targetUrl: buildTargetUrl(targetBaseUrl, req.url, 'http'),
+      targetUrl: buildTargetUrl(targetBaseUrl, rewriteRequestUrlForDocumentServer(req.url), 'http'),
       headers: withForwardedHeaders(sanitizeHeaders(req.headers), req)
     };
 
