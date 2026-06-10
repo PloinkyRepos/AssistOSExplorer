@@ -4,6 +4,7 @@ import { loadConfig } from '../config.mjs';
 import { createSessionStore } from '../session-store.mjs';
 import { verifyControlRouteAuth } from '../http-auth.mjs';
 import { buildSignedOnlyOfficeConfig } from '../onlyoffice-config.mjs';
+import { isConfidentialRequestPath as isConfidentialPath } from '../storage/dpu-paths.mjs';
 
 function sendJson(res, statusCode, payload) {
   const body = Buffer.from(JSON.stringify(payload));
@@ -15,9 +16,6 @@ function sendJson(res, statusCode, payload) {
   res.end(body);
 }
 
-function isConfidentialPath(requestedPath) {
-  return String(requestedPath || '').startsWith('/Confidential');
-}
 
 function defaultResolveSessionDescriptor({ requestedPath }) {
   const cleanPath = String(requestedPath || '').trim();

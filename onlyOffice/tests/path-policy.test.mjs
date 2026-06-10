@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { createWorkspacePathPolicy } from '../src/storage/path-policy.mjs';
+import { isConfidentialRequestPath } from '../src/storage/dpu-paths.mjs';
 
 test('workspace path policy accepts paths inside the workspace root', async (t) => {
   const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyoffice-workspace-root-'));
@@ -86,4 +87,11 @@ test('workspace path policy rejects /Confidential because dpu storage owns it', 
     () => policy.resolve('/Confidential/My Space/report.docx'),
     /Confidential/i
   );
+});
+
+test('isConfidentialRequestPath uses a path boundary', () => {
+  assert.equal(isConfidentialRequestPath('/Confidential'), true);
+  assert.equal(isConfidentialRequestPath('/Confidential/My Space/a.docx'), true);
+  assert.equal(isConfidentialRequestPath('/Confidentialfoo.docx'), false);
+  assert.equal(isConfidentialRequestPath('/docs/a.docx'), false);
 });

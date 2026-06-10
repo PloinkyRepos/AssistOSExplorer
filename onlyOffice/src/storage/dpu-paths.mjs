@@ -23,6 +23,10 @@ export function isDpuVirtualPath(path) {
   return normalized === DPU_ROOT_PATH || normalized.startsWith(`${DPU_ROOT_PATH}/`);
 }
 
+export function isConfidentialRequestPath(path) {
+  return isDpuVirtualPath(path);
+}
+
 export function isDpuSecretPath(path) {
   const normalized = normalizeDpuPath(path);
   return normalized === DPU_SECRETS_PATH || normalized.startsWith(`${DPU_SECRETS_PATH}/`);
