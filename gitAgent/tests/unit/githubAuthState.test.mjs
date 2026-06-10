@@ -63,11 +63,27 @@ test('manual GitHub token state is isolated by routed workspace user', async () 
 
   const adminAuth = {
     invocationToken: 'admin-invocation',
-    user: { id: 'local:admin', username: 'admin' }
+    user: { id: 'local:admin', username: 'admin' },
+    delegations: {
+      dpuGitSecrets: {
+        token: 'admin-user-delegation-jwt',
+        targetAgentId: 'agent:AchillesIDE/dpuAgent',
+        tools: ['dpu_secret_put', 'dpu_secret_grant'],
+        scope: ['secret:write', 'secret:grant']
+      }
+    }
   };
   const nicoletaAuth = {
     invocationToken: 'nicoleta-invocation',
-    user: { id: 'local:nicoleta', username: 'nicoleta' }
+    user: { id: 'local:nicoleta', username: 'nicoleta' },
+    delegations: {
+      dpuGitSecrets: {
+        token: 'nicoleta-user-delegation-jwt',
+        targetAgentId: 'agent:AchillesIDE/dpuAgent',
+        tools: ['dpu_secret_put', 'dpu_secret_grant'],
+        scope: ['secret:write', 'secret:grant']
+      }
+    }
   };
   const adminStatePath = getGithubAuthStateFilePath(workspaceRoot, adminAuth);
   const nicoletaStatePath = getGithubAuthStateFilePath(workspaceRoot, nicoletaAuth);
@@ -93,5 +109,5 @@ test('manual GitHub token state is isolated by routed workspace user', async () 
   assert.equal(nicoletaState.connection.source, 'token');
   assert.equal(adminState.connection.accessToken, '');
   assert.equal(nicoletaState.connection.accessToken, '');
-  assert.equal(requests.filter((body) => body?.params?.name === 'dpu_agent_secret_put').length, 2);
+  assert.equal(requests.filter((body) => body?.params?.name === 'dpu_secret_put').length, 2);
 });
