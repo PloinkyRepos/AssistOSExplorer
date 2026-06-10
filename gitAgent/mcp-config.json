@@ -441,6 +441,15 @@
       "command": "tools/git_tool.sh",
       "cwd": "workspace",
       "inputSchema": {},
+      "delegations": [
+        {
+          "key": "dpuGitSecrets",
+          "targetAgentId": "agent:./dpuAgent",
+          "tools": ["dpu_secret_get"],
+          "scopes": ["secret:read"],
+          "ttlSeconds": 120
+        }
+      ],
       "env": {
         "TOOL_NAME": "git_auth_status"
       }
@@ -452,6 +461,15 @@
       "command": "tools/git_tool.sh",
       "cwd": "workspace",
       "inputSchema": {},
+      "delegations": [
+        {
+          "key": "dpuGitSecrets",
+          "targetAgentId": "agent:./dpuAgent",
+          "tools": ["dpu_secret_get"],
+          "scopes": ["secret:read"],
+          "ttlSeconds": 120
+        }
+      ],
       "env": {
         "TOOL_NAME": "git_auth_begin"
       }
@@ -463,6 +481,15 @@
       "command": "tools/git_tool.sh",
       "cwd": "workspace",
       "inputSchema": {},
+      "delegations": [
+        {
+          "key": "dpuGitSecrets",
+          "targetAgentId": "agent:./dpuAgent",
+          "tools": ["dpu_secret_get", "dpu_secret_put", "dpu_secret_grant"],
+          "scopes": ["secret:read", "secret:write", "secret:grant"],
+          "ttlSeconds": 120
+        }
+      ],
       "env": {
         "TOOL_NAME": "git_auth_poll"
       }
@@ -474,6 +501,15 @@
       "command": "tools/git_tool.sh",
       "cwd": "workspace",
       "inputSchema": {},
+      "delegations": [
+        {
+          "key": "dpuGitSecrets",
+          "targetAgentId": "agent:./dpuAgent",
+          "tools": ["dpu_secret_delete"],
+          "scopes": ["secret:write"],
+          "ttlSeconds": 120
+        }
+      ],
       "env": {
         "TOOL_NAME": "git_auth_disconnect"
       }
@@ -490,6 +526,15 @@
           "optional": false
         }
       },
+      "delegations": [
+        {
+          "key": "dpuGitSecrets",
+          "targetAgentId": "agent:./dpuAgent",
+          "tools": ["dpu_secret_put", "dpu_secret_grant"],
+          "scopes": ["secret:write", "secret:grant"],
+          "ttlSeconds": 120
+        }
+      ],
       "env": {
         "TOOL_NAME": "git_auth_store_token"
       }
@@ -522,6 +567,15 @@
           "optional": true
         }
       },
+      "delegations": [
+        {
+          "key": "dpuGitSecrets",
+          "targetAgentId": "agent:./dpuAgent",
+          "tools": ["dpu_secret_get"],
+          "scopes": ["secret:read"],
+          "ttlSeconds": 120
+        }
+      ],
       "env": {
         "TOOL_NAME": "git_push"
       }
@@ -558,6 +612,15 @@
           "optional": true
         }
       },
+      "delegations": [
+        {
+          "key": "dpuGitSecrets",
+          "targetAgentId": "agent:./dpuAgent",
+          "tools": ["dpu_secret_get"],
+          "scopes": ["secret:read"],
+          "ttlSeconds": 120
+        }
+      ],
       "env": {
         "TOOL_NAME": "git_pull"
       }
