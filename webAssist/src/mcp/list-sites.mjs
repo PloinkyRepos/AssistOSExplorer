@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { resolveDataDir } from '../runtime/dataStore.mjs';
+import { resolveDataDir } from '../runtime/akuStore.mjs';
 
 function getDefaultAgentRoot() {
     return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');

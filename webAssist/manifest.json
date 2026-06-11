@@ -2,6 +2,9 @@
   "container": "docker.io/assistos/ploinky-node:24-bookworm-tools",
   "lite-sandbox": true,
   "guest": true,
+  "volumes": {
+    ".ploinky/agents/webAssist/debuglogs": "/code/debuglogs"
+  },
   "profiles": {
     "default": {
       "env": {
@@ -12,6 +15,21 @@
           "required": false
         },
         "SOUL_GATEWAY_BASE_URL": {
+          "required": false
+        },
+        "OPENCODE_API_KEY": {
+          "required": false
+        },
+        "PLOINKY_ROUTER_URL": {
+          "required": false
+        },
+        "PLOINKY_ROUTER_HOST": {
+          "required": false
+        },
+        "PLOINKY_ROUTER_PORT": {
+          "required": false
+        },
+        "WORKSPACE_PATH": {
           "required": false
         }
       }
@@ -35,12 +53,6 @@
       "pluginKey": "webAssist/webassist-chat",
       "settingsComponent": "webassist-settings",
       "adminOnly": false
-    }
-  ],
-  "expose": [
-    {
-      "name": "ACHILLES_DEBUG",
-      "value": "true"
     }
   ]
 }

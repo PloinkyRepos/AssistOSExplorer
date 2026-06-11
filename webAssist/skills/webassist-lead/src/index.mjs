@@ -1,10 +1,5 @@
-import { getDataStore } from '../../../src/runtime/dataStore.mjs';
-import {
-    DATASTORE_TYPES,
-    LEAD_FIELDS,
-    LEAD_SECTIONS,
-    getSessionLeadFileName,
-} from '../../../src/constants/datastore.mjs';
+import { AgenticKnowledgeUnits } from 'achillesAgentLib';
+import { resolveSiteAkuDir } from '../../../src/runtime/akuStore.mjs';
 
 function parseInput(promptText) {
     let parsed;
@@ -32,15 +27,35 @@ function normalizeContactInfo(contactInfo) {
     return Object.fromEntries(entries);
 }
 
-function toIsoTimestamp(value = new Date()) {
-    const date = value instanceof Date ? value : new Date(value);
-    if (Number.isNaN(date.getTime())) {
-        throw new Error('Cannot convert invalid date to ISO timestamp.');
-    }
-    return date.toISOString();
+function getLeadKuId(sessionId) {
+    return `ku_lead_${sessionId}`;
 }
 
-export async function action({ promptText }) {
+function getSessionKuId(sessionId) {
+    return `ku_sess_${sessionId}`;
+}
+
+function getDefaultAgentRoot() {
+    return process.env.WORKSPACE_PATH || process.cwd();
+}
+
+async function getAkuInstance(agentRoot, dataDir, siteId) {
+    const akuRootDir = resolveSiteAkuDir(agentRoot, siteId, dataDir);
+    const aku = new AgenticKnowledgeUnits({
+        rootDir: akuRootDir,
+        actor: `webassist/${siteId}`,
+    });
+
+    const akuExists = await aku.exists();
+    if (!akuExists) {
+        throw new Error(`AKU not initialized for site: ${siteId}`);
+    }
+
+    await aku.loadAKU();
+    return aku;
+}
+
+export async function action({ promptText, context }) {
     const {
         siteId,
         sessionId,
@@ -53,44 +68,68 @@ export async function action({ promptText }) {
     }
 
     const normalizedContactInfo = normalizeContactInfo(contactInfo);
-    const store = getDataStore();
-    const leadFileName = getSessionLeadFileName(sessionId);
-    const timestamp = toIsoTimestamp();
+    const agentRoot = context?.agentRoot || getDefaultAgentRoot();
+    const dataDir = context?.dataDir || null;
 
-    let existingLead = null;
+    const aku = await getAkuInstance(agentRoot, dataDir, siteId);
+    const leadKuId = getLeadKuId(sessionId);
+    const sessionKuId = getSessionKuId(sessionId);
+    const timestamp = new Date().toISOString();
+
+    const stateLines = [
+        `## Lead Information`,
+        `- **Profile**: ${profile}`,
+        `- **Session ID**: ${sessionId}`,
+        `- **Created**: ${timestamp}`,
+        '',
+        `## Contact Information`,
+        ...Object.entries(normalizedContactInfo).map(([k, v]) => `- **${k}**: ${v}`),
+    ];
+
+    let isUpdate = false;
     try {
-        const existing = await store.getSectionMap(DATASTORE_TYPES.LEADS, leadFileName);
-        const leadInfo = store.parseKeyValue(existing.sections[LEAD_SECTIONS.LEAD_INFO]);
-        existingLead = {
-            createdAt: String(leadInfo[LEAD_FIELDS.CREATED_AT] ?? '').trim(),
-            status: String(leadInfo[LEAD_FIELDS.STATUS] ?? '').trim(),
-        };
+        await aku.loadKU(leadKuId);
+        isUpdate = true;
+        await aku.updateKUState(leadKuId, {
+            state: stateLines.join('\n'),
+            summary: `Lead for profile: ${profile}`,
+            metadata: {
+                sessionId,
+                profile,
+                contactInfo: normalizedContactInfo,
+                updatedAt: timestamp,
+            },
+        });
     } catch (error) {
-        if (!error || error.code !== 'ENOENT') {
+        if (error?.message?.includes('not found')) {
+            await aku.initKU({
+                ku_id: leadKuId,
+                ku_name: `Lead ${sessionId}`,
+                ku_type: 'lead',
+                keywords: ['lead', profile.toLowerCase(), sessionId],
+                tags: ['lead', 'qualified'],
+                summary: `Lead for profile: ${profile}`,
+                state: stateLines.join('\n'),
+                metadata: {
+                    sessionId,
+                    profile,
+                    contactInfo: normalizedContactInfo,
+                    createdAt: timestamp,
+                },
+            });
+        } else {
             throw error;
         }
     }
 
-    const leadRecord = {
-        status: existingLead?.status || 'new',
-        profile: String(profile).trim(),
-        sessionId: String(sessionId).trim(),
-        contactInfo: normalizedContactInfo,
-        createdAt: existingLead?.createdAt || timestamp,
-        updatedAt: timestamp,
-    };
-
-    const saved = await store.replaceFile(DATASTORE_TYPES.LEADS, leadFileName, {
-        [LEAD_SECTIONS.LEAD_INFO]: [
-            `- **${LEAD_FIELDS.STATUS}**: ${leadRecord.status}`,
-            `- **${LEAD_FIELDS.PROFILE}**: ${leadRecord.profile}`,
-            `- **${LEAD_FIELDS.SESSION_ID}**: ${leadRecord.sessionId}`,
-            `- **${LEAD_FIELDS.CREATED_AT}**: ${leadRecord.createdAt}`,
-            `- **${LEAD_FIELDS.UPDATED_AT}**: ${leadRecord.updatedAt}`,
-        ].join('\n'),
-        [LEAD_SECTIONS.CONTACT_INFO]: store.renderKeyValue(leadRecord.contactInfo),
-    });
+    try {
+        await aku.linkKU(sessionKuId, leadKuId, {
+            relation: 'produced_result',
+            summary: `Session produced lead for ${profile}`,
+        });
+    } catch {
+    }
 
     const contactFields = Object.keys(normalizedContactInfo).join(', ');
-    return `[internal] Lead persisted for profile: ${profile}. Contact: ${contactFields}. Compose visitor-facing response.`;
+    return `[internal] Lead ${isUpdate ? 'updated' : 'created'} for profile: ${profile}. Contact: ${contactFields}. Compose visitor-facing response.`;
 }

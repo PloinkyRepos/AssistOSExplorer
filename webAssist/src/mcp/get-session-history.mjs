@@ -3,12 +3,8 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { configureDataStore, getDataStore } from '../runtime/dataStore.mjs';
-import {
-    DATASTORE_TYPES,
-    SESSION_SECTIONS,
-    getSessionHistoryFileName,
-} from '../constants/datastore.mjs';
+import { AgenticKnowledgeUnits } from 'achillesAgentLib';
+import { resolveSiteAkuDir } from '../runtime/akuStore.mjs';
 
 function getDefaultAgentRoot() {
     return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -68,6 +64,10 @@ async function readStdinFallback() {
     });
 }
 
+function getSessionKuId(sessionId) {
+    return `ku_sess_${sessionId}`;
+}
+
 export async function getSessionHistory({
     siteId,
     sessionId,
@@ -84,36 +84,51 @@ export async function getSessionHistory({
     }
 
     const resolvedAgentRoot = path.resolve(agentRoot);
-    configureDataStore({
-        agentRoot: resolvedAgentRoot,
-        dataDir,
-        siteId: normalizedSiteId,
+    const akuRootDir = resolveSiteAkuDir(resolvedAgentRoot, normalizedSiteId, dataDir);
+    const sessionKuId = getSessionKuId(normalizedSessionId);
+
+    const aku = new AgenticKnowledgeUnits({
+        rootDir: akuRootDir,
+        actor: `webassist/${normalizedSiteId}`,
     });
 
-    const store = getDataStore();
-    const historyFileName = getSessionHistoryFileName(normalizedSessionId);
+    const akuExists = await aku.exists();
+    if (!akuExists) {
+        return {
+            siteId: normalizedSiteId,
+            sessionId: normalizedSessionId,
+            exists: false,
+            sessionKuId,
+            history: [],
+        };
+    }
+
+    await aku.loadAKU();
 
     try {
-        const record = await store.getSectionMap(DATASTORE_TYPES.SESSIONS, historyFileName);
-        const history = store.parseDialogue(record.sections?.[SESSION_SECTIONS.HISTORY]).map((entry) => ({
-            role: String(entry.speaker ?? '').trim().toLowerCase(),
-            message: String(entry.message ?? '').trim(),
-        }));
+        const sessionKU = await aku.loadKU(sessionKuId);
+        const events = sessionKU.events || [];
+        const turnEvents = events
+            .filter(e => e.event_type === 'turn' && e.metadata?.speaker && e.metadata?.message)
+            .map(e => ({
+                role: e.metadata.speaker.toLowerCase(),
+                message: e.metadata.message,
+            }));
 
         return {
             siteId: normalizedSiteId,
             sessionId: normalizedSessionId,
             exists: true,
-            sessionHistoryPath: `${historyFileName}.md`,
-            history,
+            sessionKuId,
+            history: turnEvents,
         };
     } catch (error) {
-        if (error && error.code === 'ENOENT') {
+        if (error?.message?.includes('not found')) {
             return {
                 siteId: normalizedSiteId,
                 sessionId: normalizedSessionId,
                 exists: false,
-                sessionHistoryPath: `${historyFileName}.md`,
+                sessionKuId,
                 history: [],
             };
         }
