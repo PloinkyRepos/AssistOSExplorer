@@ -54,11 +54,5 @@
       "settingsComponent": "webassist-settings",
       "adminOnly": false
     }
-  ],
-  "expose": [
-    {
-      "name": "ACHILLES_DEBUG",
-      "value": "true"
-    }
   ]
 }

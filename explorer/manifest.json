@@ -123,11 +123,5 @@
       ],
       "preinstall": "scripts/hooks/preinstall.sh"
     }
-  },
-  "expose": [
-    {
-      "name": "ACHILLES_DEBUG",
-      "value": "true"
-    }
-  ]
+  }
 }
