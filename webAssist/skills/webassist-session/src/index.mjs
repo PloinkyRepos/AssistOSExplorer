@@ -15,7 +15,11 @@ function parsePayload(promptText) {
     return payload;
 }
 
-export async function action({ promptText }) {
+function getDefaultAgentRoot() {
+    return process.env.WORKSPACE_PATH || process.cwd();
+}
+
+export async function action({ promptText, context }) {
     const {
         siteId,
         sessionId,
@@ -27,7 +31,12 @@ export async function action({ promptText }) {
         throw new Error('webassist-session requires siteId and sessionId.');
     }
 
+    const agentRoot = context?.agentRoot || getDefaultAgentRoot();
+    const dataDir = context?.dataDir || null;
+
     const saved = await updateSessionProfile({
+        agentRoot,
+        dataDir,
         siteId,
         sessionId,
         profileDetails: Array.isArray(profileDetails) ? profileDetails : [],

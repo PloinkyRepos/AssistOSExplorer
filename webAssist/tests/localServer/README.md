@@ -1,6 +1,6 @@
 # WAC Local Test Server
 
-Test server for Web Agent Context (WAC) integration. Serves a demo website with an embedded WebAssist chat iframe pointing to the real WebAssist server (port 8080).
+Test server for Web Agent Context (WAC) integration. Serves a demo website with a WAC.json file containing site information.
 
 ## Quick Start
 
@@ -15,27 +15,26 @@ Then open http://localhost:3000 in your browser.
 ```
 Port 3000 (Test website)          Port 8080 (WebAssist server)
 ├── /                             ├── /webAssist/mcp
-│   ├── index.html (with iframe)  │   └── MCP tools (fetch-agent-context, etc.)
-│   └── /agent-context.mjs        │
+│   ├── index.html                │   └── MCP tools (fetch-wac, etc.)
+│   └── /WAC.json                 │
 ```
 
 ## Flow
 
 1. Open http://localhost:3000
-2. Iframe loads from port 8080
-3. Iframe detects parent URL (http://localhost:3000)
-4. Iframe calls `fetch-agent-context` with `siteUrl: http://localhost:3000`
-5. WebAssist server fetches `http://localhost:3000/agent-context.mjs`
-6. Module executes in sandbox, documents saved to `data/sites/localhost/`
-7. Chat proceeds with loaded context
+2. Browser calls `fetch-wac` MCP tool with `siteUrl: http://localhost:3000`
+3. WebAssist server fetches `http://localhost:3000/WAC.json`
+4. WAC.json is validated (siteInfo, profilesInfo, contactInfo, siteMap)
+5. WebAssist delegates AKU construction to opencode-agent via execute-task MCP tool
+6. Knowledge units are stored under `data/sites/localhost/.aku/`
 
 ## Files
 
 | File | Purpose |
 |------|---------|
-| `index.html` | Demo page with WebAssist iframe |
-| `agent-context.mjs` | WAC module with AssistOS data |
-| `server.mjs` | Static server on port 3000 |
+| `index.html` | Demo page |
+| `WAC.json` | Static JSON with siteInfo, profilesInfo, contactInfo, siteMap |
+| `server.mjs` | Static server on port 3000, serves WAC.json at /WAC.json |
 
 ## Custom Port
 

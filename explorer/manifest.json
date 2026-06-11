@@ -1,113 +1,133 @@
 {
-    "container": "docker.io/assistos/ploinky-node:24-bookworm-tools",
-    "lite-sandbox": true,
-    "update": "",
-    "cli": "/bin/bash",
-    "agent": "node /code/filesystem-http-server.mjs",
-    "about": "AssistOS Explorer agent",
-    "ploinky": "pwd enable",
-    "pwd": {
-        "users": [
-            {
-                "username": "admin",
-                "password": "admin",
-                "name": "Admin",
-                "roles": ["admin"]
-            },
-            {
-                "username": "user",
-                "password": "user",
-                "name": "User"
-            }
+  "container": "docker.io/assistos/ploinky-node:24-bookworm-tools",
+  "lite-sandbox": true,
+  "update": "",
+  "cli": "/bin/bash",
+  "agent": "node /code/filesystem-http-server.mjs",
+  "about": "AssistOS Explorer agent",
+  "ploinky": "pwd enable",
+  "pwd": {
+    "users": [
+      {
+        "username": "admin",
+        "password": "admin",
+        "name": "Admin",
+        "roles": [
+          "admin"
         ]
+      },
+      {
+        "username": "user",
+        "password": "user",
+        "name": "User"
+      }
+    ]
+  },
+  "enable": [
+    {
+      "agent": "gitAgent global",
+      "profile": "embedded"
     },
-    "enable": [
-        {
-            "agent": "gitAgent global",
-            "profile": "embedded"
-        },
-        "dpuAgent global",
-        "soplangAgent global",
-        "tasksAgent global",
-        {
-            "agent": "llmAssistant global",
-            "profile": "embedded"
-        },
-        "AchillesCLI/achilles-cli global",
-        "webmeetInfra/liveKitServerAgent",
-        "webmeetStt",
-        "webmeetAgent global",
-        "multimedia global",
-        "onlyOffice global",
-        {
-            "agent": "webAssist",
-            "profile": "embedded"
-        },
-        "proxies/soul-gateway"
-    ],
-    "repos": {
-        "AxiFace": "https://github.com/PloinkyRepos/AxiFace.git",
-        "webmeetInfra": "https://github.com/PloinkyRepos/webmeetInfra.git"
+    "dpuAgent global",
+    "soplangAgent global",
+    "tasksAgent global",
+    {
+      "agent": "llmAssistant global",
+      "profile": "embedded"
     },
-    "applicationPlugins": {
-        "git": true,
-        "dpu-runtime-support": true,
-        "dpu-audit-menu": true,
-        "soplang-builder": true,
-        "tasks": true,
-        "webmeet": true,
-        "soul-gateway": true
+    "AchillesCLI/achilles-cli global",
+    "webmeetInfra/liveKitServerAgent",
+    "webmeetStt",
+    "webmeetAgent global",
+    "multimedia global",
+    "onlyOffice",
+    {
+      "agent": "webAssist",
+      "profile": "embedded"
     },
-    "httpServices": [
-        {
-            "externalPrefix": "/services/explorer/avatar-settings/",
-            "internalPrefix": "/avatar-settings/",
-            "auth": "protected",
-            "notFoundMessage": "Explorer avatar settings route not found."
-        },
-        {
-            "externalPrefix": "/services/explorer/axi-face/",
-            "internalPrefix": "/axi-face/",
-            "auth": "protected",
-            "notFoundMessage": "AxiFace asset not found."
-        }
-    ],
-    "profiles": {
-        "default": {
-            "env": [
-                "ASSISTOS_FS_ROOT",
-                {
-                    "name": "SOUL_GATEWAY_API_KEY",
-                    "required": true,
-                    "sharedGeneratedSecret": true
-                },
-                {
-                    "name": "SOUL_GATEWAY_BASE_URL",
-                    "required": false
-                },
-                {
-                    "name": "AXIFACE_REPO_PATH",
-                    "required": false
-                },
-                {
-                    "name": "ONLYOFFICE_PUBLIC_URL",
-                    "required": false
-                },
-                {
-                    "name": "ONLYOFFICE_INTERNAL_URL",
-                    "required": false
-                },
-                {
-                    "name": "ONLYOFFICE_JWT_SECRET",
-                    "required": true,
-                    "sharedGeneratedSecret": true
-                },
-                {
-                    "name": "ONLYOFFICE_CALLBACK_BASE_URL",
-                    "required": false
-                }
-            ],
-            "preinstall": "scripts/hooks/preinstall.sh"
-        }
+    "proxies/soul-gateway"
+  ],
+  "repos": {
+    "AxiFace": "https://github.com/PloinkyRepos/AxiFace.git",
+    "webmeetInfra": "https://github.com/PloinkyRepos/webmeetInfra.git"
+  },
+  "applicationPlugins": {
+    "git": true,
+    "dpu-runtime-support": true,
+    "dpu-audit-menu": true,
+    "soplang-builder": true,
+    "tasks": true,
+    "webmeet": true,
+    "soul-gateway": true
+  },
+  "httpServices": [
+    {
+      "externalPrefix": "/services/explorer/office/",
+      "internalPrefix": "/office/",
+      "auth": "protected",
+      "notFoundMessage": "Explorer route not found."
+    },
+    {
+      "externalPrefix": "/public-services/explorer/office/",
+      "internalPrefix": "/office/",
+      "auth": "none",
+      "notFoundMessage": "Explorer route not found."
+    },
+    {
+      "externalPrefix": "/services/explorer/avatar-settings/",
+      "internalPrefix": "/avatar-settings/",
+      "auth": "protected",
+      "notFoundMessage": "Explorer avatar settings route not found."
+    },
+    {
+      "externalPrefix": "/services/explorer/axi-face/",
+      "internalPrefix": "/axi-face/",
+      "auth": "protected",
+      "notFoundMessage": "AxiFace asset not found."
     }
+  ],
+  "profiles": {
+    "default": {
+      "env": [
+        "ASSISTOS_FS_ROOT",
+        {
+          "name": "SOUL_GATEWAY_API_KEY",
+          "required": true,
+          "sharedGeneratedSecret": true
+        },
+        {
+          "name": "SOUL_GATEWAY_BASE_URL",
+          "required": false
+        },
+        {
+          "name": "AXIFACE_REPO_PATH",
+          "required": false
+        },
+        {
+          "name": "ONLYOFFICE_PUBLIC_URL",
+          "required": false
+        },
+        {
+          "name": "ONLYOFFICE_INTERNAL_URL",
+          "required": false
+        },
+        {
+          "name": "ONLYOFFICE_JWT_SECRET",
+          "required": true,
+          "sharedGeneratedSecret": true
+        },
+        {
+          "name": "ONLYOFFICE_CALLBACK_BASE_URL",
+          "required": false
+        }
+      ],
+      "preinstall": "scripts/hooks/preinstall.sh"
+    }
+  },
+  "expose": [
+    {
+      "name": "ACHILLES_DEBUG",
+      "value": "true"
+    }
+  ]
 }

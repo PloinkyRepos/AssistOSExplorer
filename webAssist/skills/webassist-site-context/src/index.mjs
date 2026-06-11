@@ -1,4 +1,4 @@
-import { loadContext } from '../../../src/runtime/load-context.mjs';
+import { loadAkuContext } from '../../../src/runtime/load-aku-context.mjs';
 
 function parseInput(promptText) {
     try {
@@ -9,22 +9,26 @@ function parseInput(promptText) {
     }
 }
 
-export async function action({ promptText }) {
-    const { siteId, sessionId } = parseInput(promptText);
+function getDefaultAgentRoot() {
+    return process.env.WORKSPACE_PATH || process.cwd();
+}
+
+export async function action({ promptText, context }) {
+    const { siteId, sessionId, message } = parseInput(promptText);
     if (!siteId || !sessionId) {
         throw new Error('webassist-site-context requires siteId and sessionId.');
     }
 
-    const context = await loadContext({ siteId, sessionId });
-    return [
-        `Site ID: ${siteId}`,
-        'Visitor Policy:',
-        context.policyText,
-        'Owner Contact Rules:',
-        context.ownerConfigText,
-        'Website Info:',
-        context.combinedSiteInfo,
-        'Target Profiles:',
-        context.combinedProfiles,
-    ].join('\n');
+    const agentRoot = context?.agentRoot || getDefaultAgentRoot();
+    const dataDir = context?.dataDir || null;
+
+    const akuContext = await loadAkuContext({
+        agentRoot,
+        dataDir,
+        siteId,
+        sessionId,
+        message: message || '',
+    });
+
+    return akuContext.akuContextText || 'No relevant site context found.';
 }

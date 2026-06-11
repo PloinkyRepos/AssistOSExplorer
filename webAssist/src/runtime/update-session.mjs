@@ -1,12 +1,5 @@
-import {
-    getDataStore,
-} from './dataStore.mjs';
-import {
-    DATASTORE_TYPES,
-    SESSION_SECTIONS,
-    getSessionProfileFileName,
-    getSessionHistoryFileName,
-} from '../constants/datastore.mjs';
+import { AgenticKnowledgeUnits } from 'achillesAgentLib';
+import { resolveSiteAkuDir } from './akuStore.mjs';
 
 function uniqueStrings(values) {
     const seen = new Set();
@@ -26,30 +19,49 @@ function uniqueStrings(values) {
 
 function renderContactInformation(contactInformation) {
     if (contactInformation == null) {
-        return '*None*';
+        return '';
     }
     if (typeof contactInformation === 'string') {
-        const normalized = contactInformation.trim();
-        return normalized || '*None*';
+        return contactInformation.trim();
     }
     if (Array.isArray(contactInformation)) {
-        const lines = contactInformation.map((value) => `- ${String(value ?? '').trim()}`);
-        return lines.join('\n') || '*None*';
+        return contactInformation.map((value) => `- ${String(value ?? '').trim()}`).join('\n');
     }
     if (typeof contactInformation === 'object') {
         const entries = Object.entries(contactInformation);
         if (entries.length === 0) {
-            return '*None*';
+            return '';
         }
         return entries
             .map(([key, value]) => `- **${String(key).trim()}**: ${String(value ?? '').trim()}`)
             .join('\n');
     }
-    const normalized = String(contactInformation).trim();
-    return normalized || '*None*';
+    return String(contactInformation).trim();
+}
+
+function getSessionKuId(sessionId) {
+    return `ku_sess_${sessionId}`;
+}
+
+async function getAkuInstance(agentRoot, dataDir, siteId) {
+    const akuRootDir = resolveSiteAkuDir(agentRoot, siteId, dataDir);
+    const aku = new AgenticKnowledgeUnits({
+        rootDir: akuRootDir,
+        actor: `webassist/${siteId}`,
+    });
+
+    const akuExists = await aku.exists();
+    if (!akuExists) {
+        throw new Error(`AKU not initialized for site: ${siteId}`);
+    }
+
+    await aku.loadAKU();
+    return aku;
 }
 
 export async function updateSessionProfile({
+    agentRoot,
+    dataDir,
     siteId,
     sessionId,
     profileDetails,
@@ -62,55 +74,92 @@ export async function updateSessionProfile({
         throw new Error('webassist-session requires sessionId.');
     }
 
-    const store = getDataStore();
-    const profileFileName = getSessionProfileFileName(sessionId);
+    const aku = await getAkuInstance(agentRoot, dataDir, siteId);
+    const sessionKuId = getSessionKuId(sessionId);
     const nextProfileDetails = uniqueStrings(profileDetails);
-    let existingContactInformationSection = '*None*';
+
     let existingContactInformation = {};
+    let existingState = '';
+
     try {
-        const existingProfile = await store.getSectionMap(DATASTORE_TYPES.SESSIONS, profileFileName);
-        existingContactInformationSection = existingProfile.sections?.[SESSION_SECTIONS.CONTACT_INFORMATION] ?? '*None*';
-        existingContactInformation = store.parseKeyValue(existingContactInformationSection);
+        const existingKU = await aku.loadKU(sessionKuId);
+        existingState = existingKU.state || '';
+        const metadata = existingKU.manifest?.metadata || {};
+        existingContactInformation = metadata.contactInformation || {};
     } catch (error) {
-        if (!error || error.code !== 'ENOENT') {
+        if (!error?.message?.includes('not found')) {
             throw error;
         }
     }
 
-    let nextContactInformationSection = existingContactInformationSection;
+    let nextContactInformation = existingContactInformation;
     if (contactInformation !== undefined) {
         if (contactInformation && typeof contactInformation === 'object' && !Array.isArray(contactInformation)) {
-            nextContactInformationSection = renderContactInformation({
+            nextContactInformation = {
                 ...existingContactInformation,
                 ...contactInformation,
-            });
+            };
         } else {
-            nextContactInformationSection = renderContactInformation(contactInformation);
+            nextContactInformation = {};
         }
     }
 
-    await store.replaceFile(DATASTORE_TYPES.SESSIONS, profileFileName, {
-        [SESSION_SECTIONS.PROFILE_DETAILS]: store.renderList(nextProfileDetails),
-        [SESSION_SECTIONS.CONTACT_INFORMATION]: nextContactInformationSection,
-    });
+    const stateLines = [];
+    if (nextProfileDetails.length > 0) {
+        stateLines.push('## Profile Details');
+        stateLines.push(nextProfileDetails.map(d => `- ${d}`).join('\n'));
+    }
+    if (Object.keys(nextContactInformation).length > 0) {
+        stateLines.push('');
+        stateLines.push('## Contact Information');
+        stateLines.push(renderContactInformation(nextContactInformation));
+    }
+    const newState = stateLines.join('\n');
 
-    const savedProfile = await store.getSectionMap(DATASTORE_TYPES.SESSIONS, profileFileName);
-    const parsedContactInformation = store.parseKeyValue(savedProfile.sections?.[SESSION_SECTIONS.CONTACT_INFORMATION]);
+    try {
+        await aku.loadKU(sessionKuId);
+        await aku.updateKUState(sessionKuId, {
+            state: newState,
+            summary: `Session profile for ${sessionId}`,
+            tags: ['session', 'profile'],
+        });
+    } catch (error) {
+        if (error?.message?.includes('not found')) {
+            await aku.initKU({
+                ku_id: sessionKuId,
+                ku_name: `Session ${sessionId}`,
+                ku_type: 'session-profile',
+                keywords: ['session', sessionId],
+                tags: ['session', 'profile'],
+                summary: `Session profile for ${sessionId}`,
+                state: newState,
+                metadata: {
+                    sessionId,
+                    profileDetails: nextProfileDetails,
+                    contactInformation: nextContactInformation,
+                },
+            });
+        } else {
+            throw error;
+        }
+    }
 
     return {
         success: true,
         siteId,
         sessionId,
-        sessionProfilePath: `${profileFileName}.md`,
+        sessionProfileKuId: sessionKuId,
         sessionProfile: {
             profileDetails: nextProfileDetails,
-            contactInformation: parsedContactInformation,
-            profileRawContent: savedProfile.rawMarkdown,
+            contactInformation: nextContactInformation,
+            profileRawContent: newState,
         },
     };
 }
 
 export async function appendSessionTurn({
+    agentRoot,
+    dataDir,
     siteId,
     sessionId,
     userMessage,
@@ -123,45 +172,41 @@ export async function appendSessionTurn({
         throw new Error('webassist-session history requires sessionId, userMessage, and agentResponse.');
     }
 
-    const store = getDataStore();
-    const historyFileName = getSessionHistoryFileName(sessionId);
-    const historyAppend = store.renderDialogue([
-        { speaker: 'User', message: userMessage },
-        { speaker: 'Agent', message: agentResponse },
-    ]);
-    let existingHistory = '*None*';
-    try {
-        const existing = await store.getSectionMap(DATASTORE_TYPES.SESSIONS, historyFileName);
-        existingHistory = existing.sections?.[SESSION_SECTIONS.HISTORY] ?? '*None*';
-    } catch (error) {
-        if (!error || error.code !== 'ENOENT') {
-            throw error;
-        }
-    }
+    const aku = await getAkuInstance(agentRoot, dataDir, siteId);
+    const sessionKuId = getSessionKuId(sessionId);
 
-    await store.replaceFile(DATASTORE_TYPES.SESSIONS, historyFileName, {
-        [SESSION_SECTIONS.HISTORY]: existingHistory,
-    });
-    await store.appendToFile(DATASTORE_TYPES.SESSIONS, historyFileName, {
-        sections: {
-            [SESSION_SECTIONS.HISTORY]: historyAppend,
+    const timestamp = new Date().toISOString();
+
+    await aku.recordEvent(sessionKuId, {
+        event_type: 'turn',
+        title: 'User message',
+        summary: userMessage.slice(0, 200),
+        tags: ['turn', 'user'],
+        metadata: {
+            speaker: 'user',
+            message: userMessage,
+            timestamp,
         },
     });
 
-    const savedHistory = await store.getSectionMap(DATASTORE_TYPES.SESSIONS, historyFileName);
-    const parsedHistory = store.parseDialogue(savedHistory.sections[SESSION_SECTIONS.HISTORY]).map((entry) => ({
-        role: entry.speaker.toLowerCase(),
-        message: entry.message,
-    }));
+    await aku.recordEvent(sessionKuId, {
+        event_type: 'turn',
+        title: 'Agent response',
+        summary: agentResponse.slice(0, 200),
+        tags: ['turn', 'agent'],
+        metadata: {
+            speaker: 'agent',
+            message: agentResponse,
+            timestamp,
+        },
+    });
 
     return {
         success: true,
         siteId,
         sessionId,
-        sessionHistoryPath: `${historyFileName}.md`,
-        sessionHistory: {
-            history: parsedHistory,
-            historyRawContent: savedHistory.rawMarkdown,
-        },
+        sessionKuId,
     };
 }
+
+export { getSessionKuId };

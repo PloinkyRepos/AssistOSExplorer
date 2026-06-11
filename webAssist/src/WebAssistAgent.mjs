@@ -3,9 +3,8 @@ import { fileURLToPath } from 'node:url';
 
 import { MainAgent } from 'achillesAgentLib';
 import { VISITOR_FLOW_SYSTEM_PROMPT } from './prompts/visitor-flow-system-prompt.mjs';
-import { loadContext } from './runtime/load-context.mjs';
+import { loadAkuContext } from './runtime/load-aku-context.mjs';
 import { appendSessionTurn } from './runtime/update-session.mjs';
-import { configureDataStore, resolveDataDir } from './runtime/dataStore.mjs';
 
 function getDefaultAgentRoot() {
     return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -40,15 +39,9 @@ function buildRuntimePrompt({ siteId, sessionId, message, loadedContext }) {
         'Current lead:',
         JSON.stringify(loadedContext.currentLead ?? {}, null, 2),
         'Session profile markdown snapshot:',
-        String(loadedContext.sessionProfileText ?? ''),
-        'Known profile templates:',
-        String(loadedContext.combinedProfiles ?? 'No target profiles available.'),
-        'Website info snapshot:',
-        String(loadedContext.combinedSiteInfo ?? 'No site info available.'),
-        'Owner contact rules:',
-        String(loadedContext.ownerConfigText ?? 'No owner contact rules available.'),
-        'Visitor policy:',
-        String(loadedContext.policyText ?? 'No visitor policy available.'),
+        String(loadedContext.sessionProfile?.sessionProfileText ?? ''),
+        'Relevant Site Context (from AKU):',
+        String(loadedContext.akuContextText ?? 'No relevant site context found.'),
         'Conversation History (last 10 replies):',
         String(loadedContext.conversationHistoryText ?? 'No previous conversation history found.'),
     ].join('\n');
@@ -62,7 +55,6 @@ export async function createWebAssistAgent({
     mainAgentOptions = {},
 } = {}) {
     const resolvedAgentRoot = path.resolve(agentRoot);
-    const resolvedDataDir = resolveDataDir(resolvedAgentRoot, dataDir);
 
     const mainAgent = new MainAgent(buildBaseAgentOptions({
         agentRoot: resolvedAgentRoot,
@@ -79,7 +71,7 @@ export async function createWebAssistAgent({
             source: 'node_modules',
         },
         agentRoot: resolvedAgentRoot,
-        dataDir: resolvedDataDir,
+        dataDir,
         mainAgent,
         async handleMessage({ siteId, sessionId, message, mode = 'soul_gateway/web-assist' }) {
             if (!siteId) {
@@ -92,15 +84,12 @@ export async function createWebAssistAgent({
                 throw new Error('webAssist.handleMessage requires a message.');
             }
 
-            configureDataStore({
+            const loadedContext = await loadAkuContext({
                 agentRoot: resolvedAgentRoot,
                 dataDir,
                 siteId,
-            });
-
-            const loadedContext = await loadContext({
-                siteId,
                 sessionId,
+                message,
             });
             const runtimePrompt = buildRuntimePrompt({
                 siteId,
@@ -121,6 +110,8 @@ export async function createWebAssistAgent({
             }
 
             await appendSessionTurn({
+                agentRoot: resolvedAgentRoot,
+                dataDir,
                 siteId,
                 sessionId,
                 userMessage: message,

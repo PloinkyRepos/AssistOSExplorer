@@ -17,6 +17,7 @@ const MIME_TYPES = {
     '.svg': 'image/svg+xml',
     '.png': 'image/png',
     '.ico': 'image/x-icon',
+    '.md': 'text/markdown; charset=utf-8',
 };
 
 async function serveStaticFile(res, filePath) {
@@ -47,5 +48,5 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, () => {
     console.log(`WAC Test Server running at http://localhost:${PORT}`);
     console.log(`  Demo page:     http://localhost:${PORT}/`);
-    console.log(`  Agent context: http://localhost:${PORT}/agent-context.mjs`);
+    console.log(`  WAC.json:      http://localhost:${PORT}/WAC.json`);
 });

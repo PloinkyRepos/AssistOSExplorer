@@ -151,16 +151,22 @@
             }
         },
         {
-            "name": "fetch-agent-context",
-            "title": "Fetch Agent Context",
-            "description": "Fetch and execute a website's agent-context.mjs module, then save the resulting documents to the local data store.",
-            "command": "/code/src/mcp/fetch-agent-context.mjs",
+            "name": "fetch-wac",
+            "title": "Fetch WAC",
+            "description": "Fetch a website's WAC.json file, validate it, and delegate AKU construction to opencode-agent. Returns site-id and success/failure. No code execution — static JSON only.",
+            "command": "/code/src/mcp/fetch-wac.mjs",
             "cwd": "workspace",
+            "timeoutMs": 300000,
             "inputSchema": {
                 "siteUrl": {
                     "type": "string",
-                    "description": "Base URL of the website hosting agent-context.mjs",
+                    "description": "Base URL of the website hosting WAC.json",
                     "optional": false
+                },
+                "invocationToken": {
+                    "type": "string",
+                    "description": "Ploinky invocation token for agent-to-agent MCP calls",
+                    "optional": true
                 },
                 "dataDir": {
                     "type": "string",

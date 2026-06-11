@@ -1,0 +1,18 @@
+{
+  "siteInfo": "TestCorp is a software testing company specializing in CI/CD pipeline automation and quality assurance tools. We provide testing frameworks, integration services, and developer training programs for enterprise teams.",
+  "profilesInfo": {
+    "developer": "Software developers and engineers who need help with testing frameworks, unit testing, integration testing, and CI/CD pipelines. They typically use Node.js, Python, or Java.",
+    "qa-engineer": "Quality assurance professionals who manage test suites, automate regression testing, and oversee release quality processes.",
+    "manager": "Engineering managers who need visibility into test coverage, quality metrics, and team productivity across multiple projects."
+  },
+  "contactInfo": "Email: contact@testcorp.com, Phone: +1-555-0123. Business hours: Monday to Friday, 9am to 5pm EST. Emergency support available for enterprise customers.",
+  "siteMap": [
+    "https://testcorp.example.com/",
+    "https://testcorp.example.com/services",
+    "https://testcorp.example.com/pricing",
+    "https://testcorp.example.com/about",
+    "https://testcorp.example.com/contact",
+    "https://testcorp.example.com/docs/getting-started",
+    "https://testcorp.example.com/docs/api-reference"
+  ]
+}

@@ -3,9 +3,8 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { configureDataStore, getDataStore } from '../runtime/dataStore.mjs';
-
-const EVENTS_LOG_FILE = 'events';
+import { AgenticKnowledgeUnits } from 'achillesAgentLib';
+import { resolveSiteAkuDir } from '../runtime/akuStore.mjs';
 
 function getDefaultAgentRoot() {
     return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -86,6 +85,10 @@ function normalizeEventType(value) {
     return raw;
 }
 
+function getSiteKuId(siteId) {
+    return `ku_site`;
+}
+
 export async function registerEvent({
     siteId,
     visitorId,
@@ -104,42 +107,52 @@ export async function registerEvent({
     const normalizedVisitorId = normalizeVisitorId(visitorId);
     const normalizedEventType = normalizeEventType(eventType);
     const resolvedAgentRoot = path.resolve(agentRoot);
-    configureDataStore({
-        agentRoot: resolvedAgentRoot,
-        dataDir,
-        siteId,
+    const akuRootDir = resolveSiteAkuDir(resolvedAgentRoot, siteId, dataDir);
+
+    const aku = new AgenticKnowledgeUnits({
+        rootDir: akuRootDir,
+        actor: `webassist/${siteId}`,
     });
-    const store = getDataStore();
+
+    const akuExists = await aku.exists();
+    if (!akuExists) {
+        throw new Error(`AKU not initialized for site: ${siteId}`);
+    }
+
+    await aku.loadAKU();
+
+    const siteKuId = getSiteKuId(siteId);
     const nowIso = new Date().toISOString();
 
-    const entryFields = {
-        'Event Type': normalizedEventType,
-        'Visitor ID': normalizedVisitorId,
-        Timestamp: nowIso,
+    const metadata = {
+        visitorId: normalizedVisitorId,
+        timestamp: nowIso,
     };
 
     if (sessionId) {
-        entryFields['Session ID'] = String(sessionId).trim();
+        metadata.sessionId = String(sessionId).trim();
     }
     if (typeof referrer === 'string' && referrer.trim()) {
-        entryFields.Referrer = referrer.trim();
+        metadata.referrer = referrer.trim();
     }
     if (typeof country === 'string' && country.trim()) {
-        entryFields.Country = country.trim();
+        metadata.country = country.trim();
     }
     if (normalizedEventType === 'visit' || normalizedEventType === 'chat-start') {
-        entryFields['Opened Chat'] = openedChat === true ? 'yes' : 'no';
+        metadata.openedChat = openedChat === true ? 'yes' : 'no';
     }
     if (details && typeof details === 'object' && !Array.isArray(details)) {
         for (const [key, value] of Object.entries(details)) {
-            entryFields[String(key)] = String(value ?? '');
+            metadata[String(key)] = String(value ?? '');
         }
     }
 
-    await store.appendToFile('visits', EVENTS_LOG_FILE, {
-        sections: {
-            'Event Entry': store.renderKeyValue(entryFields),
-        },
+    await aku.recordEvent(siteKuId, {
+        event_type: normalizedEventType,
+        title: `Event: ${normalizedEventType}`,
+        summary: `Visitor ${normalizedVisitorId} - ${normalizedEventType}`,
+        tags: ['event', normalizedEventType],
+        metadata,
     });
 
     return {
@@ -147,7 +160,6 @@ export async function registerEvent({
         siteId,
         visitorId: normalizedVisitorId,
         eventType: normalizedEventType,
-        logPath: `visits/${EVENTS_LOG_FILE}.md`,
         timestamp: nowIso,
     };
 }
