@@ -24,7 +24,7 @@ Ploinky-owned generated secrets are resolved by the launcher before agent code r
 
 The compact `x-ploinky-auth-info` header is not a secure grant by itself. Any HTTP service that receives that header must trust it only when it arrived through a declared Ploinky HTTP service route and, for guest services, only after validating the router-issued invocation token and the expected guest role or scope. Caller-supplied copies of identity headers must be rejected as authoritative input.
 
-Guest access must remain scoped to the route shape declared by the owning manifest. Manifest-level `guest: true` exposes the agent as a normal guest agent and should still enforce limitations from `usr.roles`. An `httpServices` entry with `access: "guest"` exposes only the declared HTTP prefix and mints or reuses a service-scoped guest session according to the Ploinky router's current guest policy. Product-specific public paths must be declared in the agent manifest rather than hard-coded in Ploinky core.
+Guest access must remain scoped to the route shape declared by the owning manifest. Manifest-level `guest: true` exposes the agent as a normal guest agent and should still enforce limitations from `usr.roles`. A `routerAccess.httpRoutes` entry with `access: "guest"` exposes only the declared agent-owned HTTP path and mints or reuses a route-scoped guest session according to the Ploinky router's current guest policy. An `httpServices` entry with `access: "guest"` exposes only the declared HTTP prefix and mints or reuses a service-scoped guest session. Product-specific public paths must be declared in the agent manifest rather than hard-coded in Ploinky core.
 
 Agent code must enforce its own domain authorization. Ploinky route authentication identifies the caller and signs the invocation, but it does not grant every domain operation. Sensitive actions must check the verified user, roles, scopes, target resource, workspace path, and agent-local policy before reading or mutating state.
 
@@ -36,13 +36,13 @@ Logs and user-facing errors must not expose secrets, cookies, bearer tokens, inv
 
 Agent-local contract:
 
-- Manifest: `webassist/manifest.json`
+- Manifest: `webAssist/manifest.json`
 - Role: Visitor-facing guest assistant and lead-conversion agent.
 - Authentication: Manifest-level `guest: true` means normal Ploinky guest policy applies; the agent must enforce visitor-only scope from roles and session context. Manifest guest: true. Explorer deployments use a workspace-scoped generated Soul Gateway key. Achilles derives the active Ploinky router service URL when `PLOINKY_ENV_SOURCE_SOUL_GATEWAY_API_KEY=generated`; remote production gateways are configured as providers inside the local Soul Gateway, not as replacement `SOUL_GATEWAY_API_KEY` credentials for webAssist.
-- HTTP service surface: No manifest-declared HTTP service is used for guest mode; guest access is at the agent route level. Manifest httpServices: none.
-- Persistent state: Visitor/session/lead data must remain under the configured data store and must not leak to static plugin assets or logs. Manifest volumes: {".ploinky/repos/AchillesIDE/data":"/data"}.
+- HTTP service surface: No manifest-declared HTTP service is used for guest mode; guest access is at the agent route level. Manifest `httpServices`: none. Manifest `routerAccess.httpRoutes`: `/IDE-plugins/web-assist-chat/*` with `access: "guest"`. `/webAssist/mcp` is guest-authenticated through manifest-level `guest: true`, not through an HTTP route policy entry.
+- Persistent state: Visitor/session/lead data must remain under the configured data store and must not leak to static plugin assets or logs. Manifest volumes: {".ploinky/agents/webAssist/debuglogs":"/code/debuglogs"}.
 - Documentation: `docs/index.html`
-- Validation: `node tests/runAll.mjs` in webAssist/webassist when visitor flow behavior changes.
+- Validation: `node tests/runAll.mjs` in `webAssist/` when visitor flow behavior changes. Router guest changes must also run the headless smoke spec `tests/smoke/specs/15-webassist-guest.spec.mjs`.
 
 ## Decisions & Questions
 
@@ -58,4 +58,4 @@ Ploinky establishes who the caller is and signs the invocation path, but domain 
 
 ## Conclusion
 
-`webAssist` remains compatible with Ploinky only while it preserves router-mediated entry, secure-wire invocation, scoped guest behavior, explicit manifest-declared HTTP services, workspace-confined storage, redacted logging, and local domain authorization. Any source change that affects these contracts must update this specification, the local docs, and the local guide files in the same change set.
+`webAssist` remains compatible with Ploinky only while it preserves router-mediated entry, secure-wire invocation, scoped guest behavior, explicit manifest-declared route policy and HTTP-service boundaries, workspace-confined storage, redacted logging, and local domain authorization. Any source change that affects these contracts must update this specification, the local docs, and the local guide files in the same change set.

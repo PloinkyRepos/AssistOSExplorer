@@ -11,6 +11,10 @@
 - `webassist-lead` deterministic lead file updates.
 - `register-events` appends Markdown event records to `visits/events.md`.
 - `web_cli_history` requiring `siteId`.
+- Manifest guest access for the embedded chat route and guest-callable MCP tool policy.
+
+## Headless Smoke
+- `tests/smoke/specs/15-webassist-guest.spec.mjs` loads the embedded chat without login and initializes `/webAssist/mcp` from a clean browser context.
 
 ## Fixtures
 Fixtures live under `tests/fixtures/seed-data/sites/demo-site/` and match the production folder layout.

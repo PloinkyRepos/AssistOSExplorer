@@ -30,7 +30,7 @@ The compact `x-ploinky-auth-info` header is not a secure grant by itself. Any HT
 
 `x-ploinky-user-delegation` is even narrower: the router must strip it from external requests, and agent code must treat it as meaningful only on verified agent-to-agent MCP calls where the router has already authenticated the source agent. Browser traffic, generic public HTTP requests, and loopback document/callback routes must never accept that header as an authorization source. Delegated-user tool access remains narrower than a normal authenticated browser call because the grant is source-bound, target-bound, tool-bound, scope-bound, and short-lived; it may be reused within those bounds until expiry, while per-call Agent Assertions and Router Requests remain replay-protected.
 
-Guest access must remain scoped to the route shape declared by the owning manifest. Manifest-level `guest: true` exposes the agent as a normal guest agent and should still enforce limitations from `usr.roles`. An `httpServices` entry with `access: "guest"` exposes only the declared HTTP prefix and mints or reuses a service-scoped guest session according to the Ploinky router's current guest policy. Product-specific public paths must be declared in the agent manifest rather than hard-coded in Ploinky core.
+Guest access must remain scoped to the route shape declared by the owning manifest. Manifest-level `guest: true` exposes the agent as a normal guest agent and should still enforce limitations from `usr.roles`. A `routerAccess.httpRoutes` entry with `access: "guest"` exposes only the declared agent-owned HTTP path and mints or reuses a route-scoped guest session according to the Ploinky router's current guest policy. An `httpServices` entry with `access: "guest"` exposes only the declared HTTP prefix and mints or reuses a service-scoped guest session. Product-specific public paths must be declared in the agent manifest rather than hard-coded in Ploinky core.
 
 Agent code must enforce its own domain authorization. Ploinky route authentication identifies the caller and signs the invocation, but it does not grant every domain operation. Sensitive actions must check the verified user, roles, scopes, target resource, workspace path, and agent-local policy before reading or mutating state.
 
@@ -49,7 +49,7 @@ Agent-local contract:
 - Manifest: `explorer/manifest.json`
 - Role: Multi-agent AchillesIDE repository and Explorer static-agent surface.
 - Authentication: Explorer and dependent agents inherit route policy from their manifests and Ploinky enable-time auth records.
-- HTTP service surface: Explorer and WebMeet HTTP service prefixes must be manifest-declared and routed through Ploinky core generically.
+- HTTP service surface: Explorer and WebMeet HTTP service prefixes and product route-access entries must be manifest-declared and routed through Ploinky core generically.
 - Persistent state: Workspace files, confidential DPU objects, WebMeet data, and visitor records stay in their owning agent boundaries.
 - Documentation: `docs/index.html`
 - Validation: `npm test` in the affected agent plus Ploinky smoke tests for routing or auth changes.
@@ -70,4 +70,4 @@ Ploinky establishes who the caller is and signs the invocation path, but domain 
 
 ## Conclusion
 
-`AssistOSExplorer` remains compatible with Ploinky only while it preserves router-mediated entry, secure-wire invocation, scoped guest behavior, explicit manifest-declared HTTP services, workspace-confined storage, redacted logging, and local domain authorization. Any source change that affects these contracts must update this specification, the local docs, and the local guide files in the same change set.
+`AssistOSExplorer` remains compatible with Ploinky only while it preserves router-mediated entry, secure-wire invocation, scoped guest behavior, explicit manifest-declared route policy and HTTP-service boundaries, workspace-confined storage, redacted logging, and local domain authorization. Any source change that affects these contracts must update this specification, the local docs, and the local guide files in the same change set.
