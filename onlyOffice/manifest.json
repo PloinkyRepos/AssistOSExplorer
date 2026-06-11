@@ -11,7 +11,7 @@
       "slug": "onlyoffice",
       "externalPrefix": "/services/onlyoffice/",
       "internalPrefix": "/control/",
-      "auth": "protected",
+      "access": "authenticated",
       "delegations": [
         {
           "key": "dpuConfidential",

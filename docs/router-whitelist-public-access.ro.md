@@ -189,7 +189,7 @@ flowchart TD
     B -->|"/whitelist/command"| D["Autentifica si autorizeaza comanda admin"]
     B -->|Alta cale router-owned| E["Foloseste auth si handler router existente"]
     B -->|Nu| F{"Serviciu HTTP din manifest?"}
-    F -->|Da| G["Foloseste modul auth httpServices"]
+    F -->|Da| G["Foloseste politica access httpServices"]
     F -->|Nu| H{"Ruta transparenta /<agent>/...?"}
     H -->|Nu| I["404"]
     H -->|Da| J{"Cale MCP agent?"}
@@ -239,8 +239,8 @@ O intrare de ruta cu `access: "guest"` permite unui vizitator sa ajunga la ruta 
 Acest mod oglindeste serviciile HTTP guest existente:
 
 - scope-ul guest implicit ar trebui derivat din id-ul intrarii whitelist, de exemplu `whitelist-route:<entryId>`;
-- `forceGuest: true` ignora cookie-urile autentificate existente si foloseste identitate guest;
-- `forceGuest: false` poate onora o sesiune autentificata existenta;
+- sesiunile autentificate au prioritate fata de sesiunile guest;
+- routerul minteaza o identitate guest cu scope doar cand nu exista user logat;
 - serviciile downstream care au incredere in identitatea routerului ar trebui sa verifice un token de invocare emis de router.
 
 Tokenul optional de invocare ar trebui sa foloseasca tool name `__whitelist_route__` si sa semneze un body care contine metoda, calea externa, search string-ul, route key-ul si id-ul intrarii whitelist.

@@ -308,7 +308,7 @@ Relevant manifest:
     {
       "externalPrefix": "/services/onlyoffice/",
       "internalPrefix": "/control/",
-      "auth": "protected"
+      "access": "authenticated"
     }
   ],
   "profiles": {
@@ -372,7 +372,7 @@ OnlyOffice manifest:
 
 ```text
 AssistOSExplorer/onlyOffice/manifest.json
-  httpServices: /services/onlyoffice/ -> /control/, auth protected
+  httpServices: /services/onlyoffice/ -> /control/, access authenticated
   default profile publishes 127.0.0.1:8082:8080
 ```
 

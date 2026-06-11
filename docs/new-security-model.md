@@ -115,14 +115,13 @@ This is not full workspace authentication. It is a scoped guest identity that al
 
 Public protected endpoints may be declared in either of these ways:
 
-- a manifest-declared HTTP service with `auth: "guest"`;
+- a manifest-declared HTTP service with `access: "guest"`;
 - a router whitelist entry with `access: "guest"`.
 
 The policy should include:
 
 - guest scope, such as `webmeet-public-service` or `whitelist-route:<entryId>`;
 - expiry;
-- whether `forceGuest` is enabled;
 - allowed methods and query policy;
 - optional service invocation requirement;
 - route-specific blocklist or rate-limit bucket.
@@ -133,7 +132,7 @@ The router must:
 
 1. Mint or validate a short-lived `ploinky_guest` JWT.
 2. Bind the guest token to the declared guest scope.
-3. Respect `forceGuest: true` by ignoring an existing authenticated session and using guest identity.
+3. Honor an existing authenticated session, and mint a scoped guest identity only when no user is logged in.
 4. Strip caller-supplied Ploinky identity headers.
 5. Regenerate guest identity metadata for the downstream service.
 6. Mint a request-bound invocation token when the service expects to trust `x-ploinky-auth-info`.
@@ -164,7 +163,7 @@ The service or agent must:
 | --- | --- |
 | Public protected endpoints use guest tokens instead of full anonymous access | Guest tokens allow expiry, blocking, rate limiting, and scoped behavior without requiring a real user account. |
 | Guest scope is required | A token for one public surface must not become reusable across unrelated guest routes. |
-| `forceGuest` is explicit | Some public flows must avoid accidentally inheriting an admin user's authenticated browser session. |
+| Authenticated sessions take precedence | A signed-in user should not be silently downgraded to a weaker guest identity. |
 | Invocation verification is required before trusting auth info | `x-ploinky-auth-info` is contextual metadata unless backed by a router-signed, request-bound proof. |
 | Guest operations stay narrower than authenticated operations | Guest identity is weaker than user identity and should not authorize workspace-level actions. |
 
@@ -196,7 +195,7 @@ This is the default access mode for Explorer workspace routes, protected HTTP se
 Authenticated endpoints may be declared through:
 
 - static route auth such as `local`, `pwd`, or `sso`;
-- manifest HTTP service auth `protected`;
+- manifest HTTP service `access: "authenticated"`;
 - route-specific whitelist policy with `access: "authenticated"` that narrows access by role, user, or manager policy.
 
 Authenticated policy may narrow the normal requirement, but it must not weaken it. The owning agent still performs resource-level authorization.

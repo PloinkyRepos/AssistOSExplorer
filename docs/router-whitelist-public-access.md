@@ -189,7 +189,7 @@ flowchart TD
     B -->|"/whitelist/command"| D["Authenticate and authorize admin command"]
     B -->|Other router-owned path| E["Use existing router auth and handler"]
     B -->|No| F{"Manifest HTTP service?"}
-    F -->|Yes| G["Use httpServices auth mode"]
+    F -->|Yes| G["Use httpServices access policy"]
     F -->|No| H{"Transparent /<agent>/... route?"}
     H -->|No| I["404"]
     H -->|Yes| J{"Agent MCP path?"}
@@ -239,8 +239,8 @@ A route entry with `access: "guest"` allows a visitor to reach the route without
 This mode mirrors existing guest HTTP services:
 
 - default guest scope should be derived from the whitelist entry id, such as `whitelist-route:<entryId>`;
-- `forceGuest: true` ignores existing authenticated cookies and uses guest identity;
-- `forceGuest: false` may honor an existing authenticated session;
+- authenticated sessions take precedence over guest sessions;
+- the router mints a scoped guest identity only when no user is logged in;
 - downstream services that trust router identity should verify a router-issued invocation token.
 
 The optional invocation token should use tool name `__whitelist_route__` and sign a body containing method, external path, search string, route key, and whitelist entry id.

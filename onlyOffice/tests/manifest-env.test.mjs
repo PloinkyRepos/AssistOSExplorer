@@ -16,6 +16,13 @@ function entriesByName(profileConfig) {
   return new Map((profileConfig.env || []).map((entry) => [entry.name, entry]));
 }
 
+function assertModernHttpService(service, label) {
+  assert.equal(service?.access, 'authenticated', `${label} must declare authenticated access`);
+  assert.equal(service?.auth, undefined, `${label} must not declare removed auth field`);
+  assert.equal(service?.mode, undefined, `${label} must not declare removed mode field`);
+  assert.equal(service?.forceGuest, undefined, `${label} must not declare removed forceGuest field`);
+}
+
 test('manifest injects the OnlyOffice JWT secret under decorator and Document Server names', () => {
   const manifest = readManifest();
 
@@ -148,6 +155,14 @@ test('manifest delegates Confidential storage to the deployed dpuAgent principal
     ['agent:./dpuAgent'],
     'delegation target must use same-repo "." so the manifest is portable across repo installs'
   );
+});
+
+test('onlyoffice control service uses authenticated Ploinky access schema', () => {
+  const manifest = readManifest();
+  const service = manifest.httpServices?.find((entry) => entry?.slug === 'onlyoffice');
+  assert.ok(service, 'onlyoffice http service exists');
+
+  assertModernHttpService(service, 'onlyoffice http service');
 });
 
 test('onlyoffice delegation targets dpuAgent in the same repo via "." with an explicit key', () => {

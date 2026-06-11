@@ -62,13 +62,13 @@
         {
             "externalPrefix": "/services/explorer/avatar-settings/",
             "internalPrefix": "/avatar-settings/",
-            "auth": "protected",
+            "access": "authenticated",
             "notFoundMessage": "Explorer avatar settings route not found."
         },
         {
             "externalPrefix": "/services/explorer/axi-face/",
             "internalPrefix": "/axi-face/",
-            "auth": "protected",
+            "access": "authenticated",
             "notFoundMessage": "AxiFace asset not found."
         }
     ],

@@ -222,7 +222,7 @@ Behavior to add:
 {
   externalPrefix: "/services/onlyoffice/",
   internalPrefix: "/control/",
-  auth: "protected",
+  access: "authenticated",
   delegations: [{
     key: "dpuConfidential",
     targetAgentId: "agent:./dpuAgent",
@@ -242,7 +242,7 @@ Behavior to add:
 Validation rules:
 
 - `delegations` is optional and defaults to an empty array.
-- A service with delegations must have `auth: "protected"`.
+- A service with delegations must have `access: "authenticated"`.
 - `targetAgentId` must match `^agent:[^/]+/[^/]+$` or the portable same-repo form `agent:./<agent>`, which expands to `agent:<source-repo>/<agent>`.
 - `tools` must be a non-empty array of unique non-empty strings.
 - `scopes` must be a non-empty array of unique non-empty strings.
@@ -1308,7 +1308,7 @@ Expected results:
 
 ## Final PR Checklist
 
-- [ ] No `auth: "none"` Office document/callback route remains in Explorer or OnlyOfficeAgent manifests.
+- [ ] No `access: "public"` Office document/callback route remains in Explorer or OnlyOfficeAgent manifests.
 - [ ] No `/internal/document` or `/internal/callback` listener is host-published or attached to the router route hostPort.
 - [ ] OnlyOfficeAgent manifest uses portable delegation target id `agent:./dpuAgent`, which the router expands to canonical `agent:<repo>/dpuAgent`.
 - [ ] OnlyOfficeAgent environment excludes `PLOINKY_MASTER_KEY`, `PLOINKY_DERIVED_MASTER_KEY`, and `DPU_MASTER_KEY`.

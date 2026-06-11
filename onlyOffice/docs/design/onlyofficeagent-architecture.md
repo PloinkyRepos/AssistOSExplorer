@@ -29,7 +29,7 @@ The chosen architecture makes **OnlyOfficeAgent** a *decorator* that wraps the s
 
 For Confidential files, this design chooses **B2: router-minted user delegation**. OnlyOfficeAgent may call dpuAgent only by presenting both its own Agent Assertion and a router-issued user-delegation grant minted from the protected Office session route. The router verifies both, applies MCP policy, and mints the DPU-audience Router Request with the original user in router-signed `usr` claims. DPU therefore evaluates ACLs for the user, while audit data can still record that OnlyOfficeAgent performed the delegated Office operation.
 
-The single most important security property: **the document-download and save-callback routes are not public**. In the current workspace they are anonymous (`/public-services/explorer/office/...`, `auth: "none"`) because the Document Server lives in a separate container and must reach Explorer across the network (`explorer/manifest.json:68-73`, DS04:106-114). When the decorator and the Document Server are **co-located in one agent**, that traffic is **localhost-only** between the Document Server and the decorator, and never needs internet or router exposure.
+The single most important security property: **the document-download and save-callback routes are not public**. In the legacy Explorer-owned design they were anonymous (`/public-services/explorer/office/...`, equivalent to `access: "public"`) because the Document Server lived in a separate container and had to reach Explorer across the network (`explorer/manifest.json:68-73`, DS04:106-114). When the decorator and the Document Server are **co-located in one agent**, that traffic is **localhost-only** between the Document Server and the decorator, and never needs internet or router exposure.
 
 The design classifies every endpoint into the three exposure tiers from the brief:
 
@@ -47,7 +47,7 @@ The design classifies every endpoint into the three exposure tiers from the brie
 
 ```text
 Browser (Explorer SPA)
-  │  1. GET /services/explorer/office/session?path=...        (router auth: protected)
+  │  1. GET /services/explorer/office/session?path=...        (access: authenticated)
   ▼
 Ploinky Router ──────────────────────────────► Explorer agent
   │  injects x-ploinky-auth-info (+ invocation token)   │  builds + HS256-signs editor config
@@ -58,8 +58,8 @@ Browser loads {PUBLIC_URL}/web-apps/apps/api/documents/api.js   ── from only
   │  new DocsAPI.DocEditor(container, config)
   ▼
 OnlyOffice Document Server  (onlyOffice agent, 127.0.0.1:8082 → tunnel → office.axiologic.dev)
-  │  3. GET  /public-services/explorer/office/document/<token>   (auth: none)  ─► Explorer
-  │  4. POST /public-services/explorer/office/callback/<token>   (auth: none)  ─► Explorer
+  │  3. GET  /public-services/explorer/office/document/<token>   (legacy access: public)  ─► Explorer
+  │  4. POST /public-services/explorer/office/callback/<token>   (legacy access: public)  ─► Explorer
   ▼                                                                                  │
 Explorer storage bridge                                                              │
   ├─ workspace path → fs.readFile / fs.writeFile  ────────────────────────► local disk
@@ -72,7 +72,7 @@ Evidence: `explorer/utils/server/onlyoffice/onlyoffice-http-routes.mjs:56-182`, 
 
 | Property | Evidence |
 | --- | --- |
-| Session creation is **authenticated** (router `protected`, requires `x-ploinky-auth-info`) | `onlyoffice-http-routes.mjs:56-61`; `explorer/manifest.json:63-66` |
+| Session creation is **authenticated** (`access: "authenticated"`, requires `x-ploinky-auth-info`) | `onlyoffice-http-routes.mjs:56-61`; `explorer/manifest.json:63-66` |
 | Confidential persistence is **router-mediated MCP**, never a direct container dial | `onlyoffice-dpu-client.mjs:40-91`; DS04:160-164 |
 | Editor config is **HS256-signed**, so the browser cannot tamper with `document.url`/permissions | `onlyoffice-config.mjs:93-97` (`token: signJwt(baseConfig, settings.jwtSecret)`) |
 | Document Server's `JWT_SECRET` == Explorer's `ONLYOFFICE_JWT_SECRET` via `sharedGeneratedSecret` | `onlyOffice/manifest.json:28-33`; `explorer/manifest.json:112-116` |
@@ -82,7 +82,7 @@ Evidence: `explorer/utils/server/onlyoffice/onlyoffice-http-routes.mjs:56-182`, 
 
 | Weakness | Evidence | Consequence |
 | --- | --- | --- |
-| document & callback routes are **anonymous and internet-reachable** | `explorer/manifest.json:68-73` (`auth: "none"`) | A leaked/guessed session token is usable by anyone on the internet; the only gate is an opaque token with a 30-min TTL. |
+| document & callback routes are **anonymous and internet-reachable** | legacy Explorer-owned `/public-services/explorer/office/...` routes (`access: "public"`) | A leaked/guessed session token is usable by anyone on the internet; the only gate is an opaque token with a 30-min TTL. |
 | Explorer (the IDE shell) carries Office server-bridge responsibilities | `onlyoffice-http-routes.mjs`, `onlyoffice-document-store.mjs` | Office networking concerns are entangled with the IDE; two agents must agree on URL/JWT wiring. |
 
 ### 2.4 Current onlyOffice agent — exposed ports & endpoints
@@ -166,7 +166,7 @@ Direct disk access (workspace volume, path-confined)  ◄─── decorator, fo
 1. User opens an Office file in Explorer.
 2. Browser → Ploinky Router → OnlyOfficeAgent decorator:
       GET /services/onlyoffice/office/session?path=<workspace-or-/Confidential-path>
-      (Tier 3, router auth: protected; router injects verified x-ploinky-auth-info + invocation token)
+      (Tier 3, access: authenticated; router injects verified x-ploinky-auth-info + invocation token)
 3. Decorator:
       - verifies the router invocation token (verifyHttpServiceAuthInfoFromHeaders)
       - extracts and stores the router-minted User Delegation Grant for the Office session
@@ -248,7 +248,7 @@ The "open an Office session" operation is the only control endpoint the browser/
 
 | Endpoint (decorator) | Exposure | Auth | Notes |
 | --- | --- | --- | --- |
-| `GET /services/onlyoffice/office/session?path=…` | Ploinky Router, `auth: "protected"` | User Session JWT → router injects verified `x-ploinky-auth-info` + invocation token | builds & signs config; returns `documentServerUrl` + opaque token |
+| `GET /services/onlyoffice/office/session?path=…` | Ploinky Router, `access: "authenticated"` | User Session JWT → router injects verified `x-ploinky-auth-info` + invocation token | builds & signs config; returns `documentServerUrl` + opaque token |
 
 This is the brief's "*endpoints proxied by the Ploinky Router (authenticated) — good practice*" tier, and it is the endpoint that should be **available only to Explorer / authenticated users** (a guest or anonymous internet client must not be able to mint Office sessions for arbitrary paths).
 
@@ -366,13 +366,13 @@ Recommended manifest intent (Option A/B share these declarations):
 
 | Manifest field | Value | Purpose |
 | --- | --- | --- |
-| `httpServices[]` | `{ externalPrefix: "/services/onlyoffice/", internalPrefix: "/control/", auth: "protected", delegations: [{ key: "dpuConfidential", targetAgentId: "agent:./dpuAgent", tools: ["dpu_workspace_roots", "dpu_confidential_list", "dpu_confidential_get", "dpu_confidential_update"], scopes: ["dpu:confidential:read", "dpu:confidential:write"], ttlSeconds: 28800, when: { queryParam: "path", pathRoots: ["/Confidential"] } }] }` — only `/control/*` is router-reachable; DPU delegation is explicit, portable, Confidential-path scoped, and fail-closed; route keys are routing labels, not identity | Tier 3 session route (router-authenticated) + B2 DPU delegation |
+| `httpServices[]` | `{ externalPrefix: "/services/onlyoffice/", internalPrefix: "/control/", access: "authenticated", delegations: [{ key: "dpuConfidential", targetAgentId: "agent:./dpuAgent", tools: ["dpu_workspace_roots", "dpu_confidential_list", "dpu_confidential_get", "dpu_confidential_update"], scopes: ["dpu:confidential:read", "dpu:confidential:write"], ttlSeconds: 28800, when: { queryParam: "path", pathRoots: ["/Confidential"] } }] }` — only `/control/*` is router-reachable; DPU delegation is explicit, portable, Confidential-path scoped, and fail-closed; route keys are routing labels, not identity | Tier 3 session route (router-authenticated) + B2 DPU delegation |
 | ports | see §9.1 (DS editor surface fronted by the tunnel; control via router; document/callback never published) | exposure separation |
 | `JWT_ENABLED` / `JWT_SECRET` | `true` / `varName: ONLYOFFICE_JWT_SECRET`, `sharedGeneratedSecret: true` | config integrity (shared only where the editor host needs to validate config JWTs) |
 | workspace volume | explicit RW mount under workspace root | direct-disk persistence (I5/I6) |
 | `ONLYOFFICE_VERSION` | pinned default (`9.3.1`) | I11 |
 
-The design has **no** anonymous (internet-facing) Office route: document/callback are localhost-internal and carry no manifest `httpServices` declaration at all. There is no `auth: "none"` office entry anywhere in the design.
+The design has **no** anonymous (internet-facing) Office route: document/callback are localhost-internal and carry no manifest `httpServices` declaration at all. There is no `access: "public"` office entry anywhere in the design.
 
 ### 9.1 Port & listener layout (proposed)
 
@@ -381,7 +381,7 @@ Logical listeners inside the OnlyOfficeAgent container and how each is reached. 
 | Listener | Container port | Host publish / routing | Tier — exposure | Serves |
 | --- | --- | --- | --- | --- |
 | Decorator — public editor surface | e.g. `8080` | `127.0.0.1:8082:8080` → tunnel (`ONLYOFFICE_PUBLIC_URL`) | **Tier 2** — internet (browser) | reverse-proxies the DS editor assets, `api.js`, and the co-editing WebSocket over `127.0.0.1`; nothing else public |
-| Decorator — control API | e.g. `7000` | router host port from `.ploinky/routing.json`, `127.0.0.1` only (router-proxied; never on the tunnel) | **Tier 3** — Ploinky router, `auth: protected` | `/control/office/session` (ext `/services/onlyoffice/office/session` → `/control/`) |
+| Decorator — control API | e.g. `7000` | router host port from `.ploinky/routing.json`, `127.0.0.1` only (router-proxied; never on the tunnel) | **Tier 3** — Ploinky router, `access: authenticated` | `/control/office/session` (ext `/services/onlyoffice/office/session` → `/control/`) |
 | Decorator — storage callbacks | dedicated loopback port, e.g. `9100` (or a Unix socket) — **distinct from the control/`hostPort`** | **not host-published, not the route `hostPort`** (container-internal `127.0.0.1` only) | **Tier 1** — co-located Document Server only | `/internal/document/<token>`, `/internal/callback/<token>` |
 | OnlyOffice Document Server | `80` | **not host-published** when the decorator fronts it; reached only over `127.0.0.1` by the decorator | reached by the decorator only | DS runtime (assets, WS, convert/command) |
 
