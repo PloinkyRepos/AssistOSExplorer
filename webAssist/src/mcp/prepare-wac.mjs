@@ -45,6 +45,11 @@ export function normalizeSiteUrl(value) {
     return raw.replace(/\/+$/, '');
 }
 
+export function resolveOpenCodeModel(env = process.env) {
+    return (typeof env.WEBASSIST_OPENCODE_MODEL === 'string' ? env.WEBASSIST_OPENCODE_MODEL.trim() : '') ||
+        DEFAULT_OPENCODE_MODEL;
+}
+
 export function isRunningInContainer() {
     return process.env.container === 'podman' ||
            process.env.CONTAINER === 'podman' ||
@@ -235,9 +240,7 @@ async function main() {
     const resolvedDataDir = typeof input.dataDir === 'string' && input.dataDir.trim()
         ? input.dataDir.trim()
         : resolveDataDir(agentRoot, undefined);
-    const model = typeof input.model === 'string' && input.model.trim()
-        ? input.model.trim()
-        : DEFAULT_OPENCODE_MODEL;
+    const model = resolveOpenCodeModel();
     const siteId = deriveSiteId(siteUrl);
     const fetchUrl = `${resolveLocalhostForContainer(siteUrl)}/WAC.json`;
 

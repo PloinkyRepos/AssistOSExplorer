@@ -12,6 +12,7 @@ import {
     computeWacTimestamp,
     prepareWacForAkuPrompt,
     readWacCache,
+    resolveOpenCodeModel,
 } from '../src/mcp/prepare-wac.mjs';
 
 const TESTS_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -134,7 +135,6 @@ test('prepare-wac delegates prompt, projectDir, and model to opencodeAgent', asy
         const result = await runPrepareWac({
             siteUrl: server.url,
             dataDir,
-            model: 'opencode/test-model',
         }, {
             WORKSPACE_PATH: tempDir,
             WEBASSIST_AGENT_MCP_CLIENT_MODULE: mockClientModule,
@@ -144,7 +144,7 @@ test('prepare-wac delegates prompt, projectDir, and model to opencodeAgent', asy
         assert.equal(result.code, 0, result.stderr || result.stdout);
         const payload = JSON.parse(result.stdout);
         assert.equal(payload.ok, true);
-        assert.equal(payload.model, 'opencode/test-model');
+        assert.equal(payload.model, 'opencode/deepseek-v4-flash-free');
         assert.equal(payload.akuBuilt, true);
         assert.equal(payload.cacheHit, false);
         assert.equal(payload.cachePath, path.join(dataDir, 'wac-cache.json'));
@@ -155,7 +155,7 @@ test('prepare-wac delegates prompt, projectDir, and model to opencodeAgent', asy
         assert.equal(captured.agentName, 'opencodeAgent');
         assert.equal(captured.toolName, 'execute-task');
         assert.equal(captured.args.projectDir, path.join(dataDir, 'sites', '127.0.0.1'));
-        assert.equal(captured.args.model, 'opencode/test-model');
+        assert.equal(captured.args.model, 'opencode/deepseek-v4-flash-free');
         assert.equal(typeof captured.args.prompt, 'string');
         assert.match(captured.args.prompt, /WAC\.json:/);
         assert.match(captured.args.prompt, /Example site information/);
@@ -179,7 +179,6 @@ test('prepare-wac skips opencodeAgent when WAC timestamp and AKU manifest are ca
     const input = {
         siteUrl: server.url,
         dataDir,
-        model: 'opencode/test-model',
     };
     const env = {
         WORKSPACE_PATH: tempDir,
@@ -208,6 +207,34 @@ test('prepare-wac skips opencodeAgent when WAC timestamp and AKU manifest are ca
     }
 });
 
+test('prepare-wac uses WEBASSIST_OPENCODE_MODEL', async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'webassist-prepare-wac-env-model-'));
+    const { callsFile, mockClientModule } = await createMockClientModule(tempDir);
+    const server = await startWacServer(SAMPLE_WAC);
+    const dataDir = path.join(tempDir, 'data');
+
+    try {
+        const result = await runPrepareWac({
+            siteUrl: server.url,
+            dataDir,
+        }, {
+            WORKSPACE_PATH: tempDir,
+            WEBASSIST_AGENT_MCP_CLIENT_MODULE: mockClientModule,
+            CAPTURE_ARGS_FILE: callsFile,
+            WEBASSIST_OPENCODE_MODEL: 'opencode/test-env-model',
+        });
+
+        assert.equal(result.code, 0, result.stderr || result.stdout);
+        const payload = JSON.parse(result.stdout);
+        assert.equal(payload.model, 'opencode/test-env-model');
+        const [captured] = await readCapturedCalls(callsFile);
+        assert.equal(captured.args.model, 'opencode/test-env-model');
+    } finally {
+        await server.close();
+        await fs.rm(tempDir, { recursive: true, force: true });
+    }
+});
+
 test('prepare-wac rebuilds when WAC timestamp changes', async () => {
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'webassist-prepare-wac-changed-'));
     const { callsFile, mockClientModule } = await createMockClientModule(tempDir);
@@ -216,7 +243,6 @@ test('prepare-wac rebuilds when WAC timestamp changes', async () => {
     const input = {
         siteUrl: server.url,
         dataDir,
-        model: 'opencode/test-model',
     };
     const env = {
         WORKSPACE_PATH: tempDir,
@@ -255,7 +281,6 @@ test('prepare-wac rebuilds when cached AKU manifest is missing', async () => {
     const input = {
         siteUrl: server.url,
         dataDir,
-        model: 'opencode/test-model',
     };
     const env = {
         WORKSPACE_PATH: tempDir,
@@ -295,7 +320,6 @@ test('prepare-wac treats corrupt WAC cache as miss and rewrites it', async () =>
         const result = await runPrepareWac({
             siteUrl: server.url,
             dataDir,
-            model: 'opencode/test-model',
         }, {
             WORKSPACE_PATH: tempDir,
             WEBASSIST_AGENT_MCP_CLIENT_MODULE: mockClientModule,
@@ -320,6 +344,16 @@ test('computeWacTimestamp falls back to content hash when Last-Modified is absen
     const timestamp = computeWacTimestamp(text, new Headers());
     assert.match(timestamp, /^sha256:[a-f0-9]{64}$/);
     assert.equal(computeWacTimestamp(text, new Headers({ 'last-modified': nextLastModified() })), nextLastModified());
+});
+
+test('resolveOpenCodeModel uses WEBASSIST_OPENCODE_MODEL or built-in default', () => {
+    assert.equal(
+        resolveOpenCodeModel({
+            WEBASSIST_OPENCODE_MODEL: 'opencode/env-model',
+        }),
+        'opencode/env-model',
+    );
+    assert.equal(resolveOpenCodeModel({}), 'opencode/deepseek-v4-flash-free');
 });
 
 test('prepare-wac rewrites localhost siteMap URLs for container prompt access', () => {

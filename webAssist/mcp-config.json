@@ -163,11 +163,6 @@
                     "description": "Base URL of the website hosting WAC.json",
                     "optional": false
                 },
-                "model": {
-                    "type": "string",
-                    "description": "Optional OpenCode model identifier for delegated AKU construction. Defaults to webAssist's selected AKU builder model.",
-                    "optional": true
-                },
                 "invocationToken": {
                     "type": "string",
                     "description": "Ploinky invocation token for agent-to-agent MCP calls",
