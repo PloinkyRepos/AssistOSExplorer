@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+import crypto from 'node:crypto';
+import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -9,6 +12,7 @@ const REQUIRED_FIELDS = ['siteInfo', 'profilesInfo', 'contactInfo', 'siteMap'];
 const OPENCODE_AGENT = 'opencodeAgent';
 const EXECUTE_TASK_TOOL = 'execute-task';
 const DEFAULT_OPENCODE_MODEL = 'opencode/deepseek-v4-flash-free';
+const WAC_CACHE_FILE = 'wac-cache.json';
 
 async function createAgentMcpClient(agentName) {
     const agentLibDir = String(process.env.PLOINKY_AGENT_LIB_DIR || '/Agent').replace(/\/+$/, '');
@@ -122,6 +126,58 @@ function resolveDataDir(agentRoot, explicitDataDir) {
     return path.join(workspacePath, 'data');
 }
 
+export function resolveWacCachePath(dataDir) {
+    return path.join(path.resolve(dataDir), WAC_CACHE_FILE);
+}
+
+export function computeWacTimestamp(text, headers = null) {
+    const lastModified = headers && typeof headers.get === 'function'
+        ? String(headers.get('last-modified') || '').trim()
+        : '';
+    if (lastModified) {
+        return lastModified;
+    }
+    return `sha256:${crypto.createHash('sha256').update(String(text ?? '')).digest('hex')}`;
+}
+
+export async function readWacCache(cachePath) {
+    try {
+        const parsed = JSON.parse(await fs.readFile(cachePath, 'utf8'));
+        if (!parsed || typeof parsed !== 'object' || !parsed.entries || typeof parsed.entries !== 'object') {
+            return { schema: 1, entries: {} };
+        }
+        return {
+            schema: 1,
+            entries: parsed.entries,
+        };
+    } catch {
+        return { schema: 1, entries: {} };
+    }
+}
+
+export async function writeWacCache(cachePath, cache) {
+    await fs.mkdir(path.dirname(cachePath), { recursive: true });
+    const tempPath = path.join(
+        path.dirname(cachePath),
+        `.${path.basename(cachePath)}.${process.pid}.${Date.now()}.${crypto.randomBytes(4).toString('hex')}.tmp`,
+    );
+    const content = `${JSON.stringify({
+        schema: 1,
+        entries: cache.entries && typeof cache.entries === 'object' ? cache.entries : {},
+    }, null, 2)}${os.EOL}`;
+    await fs.writeFile(tempPath, content, 'utf8');
+    await fs.rename(tempPath, cachePath);
+}
+
+async function fileExists(filePath) {
+    try {
+        const stats = await fs.stat(filePath);
+        return stats.isFile();
+    } catch {
+        return false;
+    }
+}
+
 export function prepareWacForAkuPrompt(wacData) {
     return {
         ...wacData,
@@ -186,6 +242,7 @@ async function main() {
     const fetchUrl = `${resolveLocalhostForContainer(siteUrl)}/WAC.json`;
 
     let wacData;
+    let wacTimestamp;
     try {
         const response = await fetch(fetchUrl, {
             method: 'GET',
@@ -202,6 +259,7 @@ async function main() {
             return;
         }
         const text = await response.text();
+        wacTimestamp = computeWacTimestamp(text, response.headers);
         wacData = JSON.parse(text);
     } catch (error) {
         process.stdout.write(JSON.stringify({
@@ -228,6 +286,32 @@ async function main() {
     }
 
     const projectDir = resolveSiteProjectDir(agentRoot, siteId, resolvedDataDir);
+    const akuDir = path.join(projectDir, '.aku');
+    const akuManifestPath = path.join(akuDir, 'aku.json');
+    const cachePath = resolveWacCachePath(resolvedDataDir);
+    const cache = await readWacCache(cachePath);
+    const cachedEntry = cache.entries[siteUrl];
+
+    if (
+        cachedEntry &&
+        cachedEntry.wacTimestamp === wacTimestamp &&
+        await fileExists(akuManifestPath)
+    ) {
+        process.stdout.write(JSON.stringify({
+            ok: true,
+            siteId,
+            siteUrl,
+            akuBuilt: false,
+            cacheHit: true,
+            wacTimestamp,
+            cachePath,
+            projectDir,
+            akuDir,
+            model,
+        }));
+        return;
+    }
+
     const prompt = buildAkuPrompt(prepareWacForAkuPrompt(wacData));
 
     try {
@@ -238,13 +322,26 @@ async function main() {
             model,
         });
 
+        cache.entries[siteUrl] = {
+            siteUrl,
+            siteId,
+            wacTimestamp,
+            updatedAt: new Date().toISOString(),
+            projectDir,
+            akuDir,
+        };
+        await writeWacCache(cachePath, cache);
+
         process.stdout.write(JSON.stringify({
             ok: true,
             siteId,
             siteUrl,
             akuBuilt: true,
+            cacheHit: false,
+            wacTimestamp,
+            cachePath,
             projectDir,
-            akuDir: path.join(projectDir, '.aku'),
+            akuDir,
             model,
         }));
     } catch (error) {

@@ -22,10 +22,14 @@ const MIME_TYPES = {
 
 async function serveStaticFile(res, filePath) {
     try {
+        const stats = await fs.stat(filePath);
         const content = await fs.readFile(filePath);
         const ext = path.extname(filePath).toLowerCase();
         const contentType = MIME_TYPES[ext] || 'application/octet-stream';
-        res.writeHead(200, { 'Content-Type': contentType });
+        res.writeHead(200, {
+            'Content-Type': contentType,
+            'Last-Modified': stats.mtime.toUTCString(),
+        });
         res.end(content);
     } catch {
         res.writeHead(404, { 'Content-Type': 'text/plain' });

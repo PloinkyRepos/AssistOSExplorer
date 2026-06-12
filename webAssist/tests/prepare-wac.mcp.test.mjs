@@ -9,7 +9,9 @@ import { fileURLToPath } from 'node:url';
 
 import {
     buildAkuPrompt,
+    computeWacTimestamp,
     prepareWacForAkuPrompt,
+    readWacCache,
 } from '../src/mcp/prepare-wac.mjs';
 
 const TESTS_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -24,6 +26,10 @@ const SAMPLE_WAC = {
     contactInfo: 'Email: owner@example.test',
     siteMap: ['http://127.0.0.1/'],
 };
+
+function nextLastModified(offsetMs = 0) {
+    return new Date(Date.UTC(2026, 0, 1, 12, 0, 0) + offsetMs).toUTCString();
+}
 
 function runPrepareWac(input, env) {
     return new Promise((resolve) => {
@@ -52,10 +58,15 @@ function runPrepareWac(input, env) {
     });
 }
 
-async function startWacServer(wacData) {
+async function startWacServer(initialWacData, options = {}) {
+    let wacData = initialWacData;
+    let lastModified = options.lastModified ?? nextLastModified();
     const server = http.createServer((req, res) => {
         if (req.url === '/WAC.json') {
             res.setHeader('content-type', 'application/json');
+            if (lastModified) {
+                res.setHeader('last-modified', lastModified);
+            }
             res.end(JSON.stringify(wacData));
             return;
         }
@@ -70,59 +81,245 @@ async function startWacServer(wacData) {
 
     return {
         url: `http://127.0.0.1:${server.address().port}`,
+        setWac(nextWacData, nextModified = nextLastModified(1000)) {
+            wacData = nextWacData;
+            lastModified = nextModified;
+        },
         close: () => new Promise((resolve) => server.close(resolve)),
     };
 }
 
-test('prepare-wac delegates prompt, projectDir, and model to opencodeAgent', async () => {
-    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'webassist-prepare-wac-'));
-    const captureFile = path.join(tempDir, 'captured-call.json');
-    const mockClientModule = path.join(tempDir, 'mock-agent-client.mjs');
+async function createMockClientModule(tempDir, options = {}) {
+    const callsFile = path.join(tempDir, options.callsFileName ?? 'captured-calls.json');
+    const mockClientModule = path.join(tempDir, options.moduleFileName ?? 'mock-agent-client.mjs');
     await fs.writeFile(mockClientModule, `
         import fs from 'node:fs/promises';
+        import path from 'node:path';
         export function createAgentClient(agentName) {
             return {
                 async callTool(toolName, args) {
-                    await fs.writeFile(process.env.CAPTURE_ARGS_FILE, JSON.stringify({ agentName, toolName, args }, null, 2));
+                    const callsPath = process.env.CAPTURE_ARGS_FILE;
+                    let calls = [];
+                    try {
+                        calls = JSON.parse(await fs.readFile(callsPath, 'utf8'));
+                    } catch {
+                    }
+                    calls.push({ agentName, toolName, args });
+                    await fs.writeFile(callsPath, JSON.stringify(calls, null, 2));
+                    await fs.mkdir(path.join(args.projectDir, '.aku'), { recursive: true });
+                    await fs.writeFile(path.join(args.projectDir, '.aku', 'aku.json'), JSON.stringify({ ok: true }));
                     return { ok: true };
                 }
             };
         }
     `);
+    return { callsFile, mockClientModule };
+}
+
+async function readCapturedCalls(callsFile) {
+    try {
+        return JSON.parse(await fs.readFile(callsFile, 'utf8'));
+    } catch {
+        return [];
+    }
+}
+
+test('prepare-wac delegates prompt, projectDir, and model to opencodeAgent', async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'webassist-prepare-wac-'));
+    const { callsFile, mockClientModule } = await createMockClientModule(tempDir);
 
     const server = await startWacServer(SAMPLE_WAC);
+    const dataDir = path.join(tempDir, 'data');
     try {
         const result = await runPrepareWac({
             siteUrl: server.url,
-            dataDir: path.join(tempDir, 'data'),
+            dataDir,
             model: 'opencode/test-model',
         }, {
             WORKSPACE_PATH: tempDir,
             WEBASSIST_AGENT_MCP_CLIENT_MODULE: mockClientModule,
-            CAPTURE_ARGS_FILE: captureFile,
+            CAPTURE_ARGS_FILE: callsFile,
         });
 
         assert.equal(result.code, 0, result.stderr || result.stdout);
         const payload = JSON.parse(result.stdout);
         assert.equal(payload.ok, true);
         assert.equal(payload.model, 'opencode/test-model');
-        assert.equal(payload.projectDir, path.join(tempDir, 'data', 'sites', '127.0.0.1'));
+        assert.equal(payload.akuBuilt, true);
+        assert.equal(payload.cacheHit, false);
+        assert.equal(payload.cachePath, path.join(dataDir, 'wac-cache.json'));
+        assert.equal(payload.projectDir, path.join(dataDir, 'sites', '127.0.0.1'));
         assert.equal(payload.akuDir, path.join(payload.projectDir, '.aku'));
 
-        const captured = JSON.parse(await fs.readFile(captureFile, 'utf8'));
+        const [captured] = await readCapturedCalls(callsFile);
         assert.equal(captured.agentName, 'opencodeAgent');
         assert.equal(captured.toolName, 'execute-task');
-        assert.equal(captured.args.projectDir, path.join(tempDir, 'data', 'sites', '127.0.0.1'));
+        assert.equal(captured.args.projectDir, path.join(dataDir, 'sites', '127.0.0.1'));
         assert.equal(captured.args.model, 'opencode/test-model');
         assert.equal(typeof captured.args.prompt, 'string');
         assert.match(captured.args.prompt, /WAC\.json:/);
         assert.match(captured.args.prompt, /Example site information/);
         assert.match(captured.args.prompt, /Fetch every URL listed in siteMap/);
         assert.equal('wacData' in captured.args, false);
+
+        const cache = await readWacCache(payload.cachePath);
+        assert.equal(cache.entries[server.url].wacTimestamp, payload.wacTimestamp);
+        assert.equal(cache.entries[server.url].projectDir, payload.projectDir);
     } finally {
         await server.close();
         await fs.rm(tempDir, { recursive: true, force: true });
     }
+});
+
+test('prepare-wac skips opencodeAgent when WAC timestamp and AKU manifest are cached', async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'webassist-prepare-wac-cache-'));
+    const { callsFile, mockClientModule } = await createMockClientModule(tempDir);
+    const server = await startWacServer(SAMPLE_WAC);
+    const dataDir = path.join(tempDir, 'data');
+    const input = {
+        siteUrl: server.url,
+        dataDir,
+        model: 'opencode/test-model',
+    };
+    const env = {
+        WORKSPACE_PATH: tempDir,
+        WEBASSIST_AGENT_MCP_CLIENT_MODULE: mockClientModule,
+        CAPTURE_ARGS_FILE: callsFile,
+    };
+
+    try {
+        const first = await runPrepareWac(input, env);
+        assert.equal(first.code, 0, first.stderr || first.stdout);
+        const firstPayload = JSON.parse(first.stdout);
+        assert.equal(firstPayload.akuBuilt, true);
+        assert.equal(firstPayload.cacheHit, false);
+        assert.equal((await readCapturedCalls(callsFile)).length, 1);
+
+        const second = await runPrepareWac(input, env);
+        assert.equal(second.code, 0, second.stderr || second.stdout);
+        const secondPayload = JSON.parse(second.stdout);
+        assert.equal(secondPayload.akuBuilt, false);
+        assert.equal(secondPayload.cacheHit, true);
+        assert.equal(secondPayload.wacTimestamp, firstPayload.wacTimestamp);
+        assert.equal((await readCapturedCalls(callsFile)).length, 1);
+    } finally {
+        await server.close();
+        await fs.rm(tempDir, { recursive: true, force: true });
+    }
+});
+
+test('prepare-wac rebuilds when WAC timestamp changes', async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'webassist-prepare-wac-changed-'));
+    const { callsFile, mockClientModule } = await createMockClientModule(tempDir);
+    const server = await startWacServer(SAMPLE_WAC, { lastModified: nextLastModified() });
+    const dataDir = path.join(tempDir, 'data');
+    const input = {
+        siteUrl: server.url,
+        dataDir,
+        model: 'opencode/test-model',
+    };
+    const env = {
+        WORKSPACE_PATH: tempDir,
+        WEBASSIST_AGENT_MCP_CLIENT_MODULE: mockClientModule,
+        CAPTURE_ARGS_FILE: callsFile,
+    };
+
+    try {
+        const first = await runPrepareWac(input, env);
+        assert.equal(first.code, 0, first.stderr || first.stdout);
+        const firstPayload = JSON.parse(first.stdout);
+
+        server.setWac({
+            ...SAMPLE_WAC,
+            siteInfo: 'Changed example site information',
+        }, nextLastModified(2000));
+
+        const second = await runPrepareWac(input, env);
+        assert.equal(second.code, 0, second.stderr || second.stdout);
+        const secondPayload = JSON.parse(second.stdout);
+        assert.equal(secondPayload.akuBuilt, true);
+        assert.equal(secondPayload.cacheHit, false);
+        assert.notEqual(secondPayload.wacTimestamp, firstPayload.wacTimestamp);
+        assert.equal((await readCapturedCalls(callsFile)).length, 2);
+    } finally {
+        await server.close();
+        await fs.rm(tempDir, { recursive: true, force: true });
+    }
+});
+
+test('prepare-wac rebuilds when cached AKU manifest is missing', async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'webassist-prepare-wac-missing-aku-'));
+    const { callsFile, mockClientModule } = await createMockClientModule(tempDir);
+    const server = await startWacServer(SAMPLE_WAC);
+    const dataDir = path.join(tempDir, 'data');
+    const input = {
+        siteUrl: server.url,
+        dataDir,
+        model: 'opencode/test-model',
+    };
+    const env = {
+        WORKSPACE_PATH: tempDir,
+        WEBASSIST_AGENT_MCP_CLIENT_MODULE: mockClientModule,
+        CAPTURE_ARGS_FILE: callsFile,
+    };
+
+    try {
+        const first = await runPrepareWac(input, env);
+        assert.equal(first.code, 0, first.stderr || first.stdout);
+        const firstPayload = JSON.parse(first.stdout);
+        await fs.rm(path.join(firstPayload.akuDir, 'aku.json'), { force: true });
+
+        const second = await runPrepareWac(input, env);
+        assert.equal(second.code, 0, second.stderr || second.stdout);
+        const secondPayload = JSON.parse(second.stdout);
+        assert.equal(secondPayload.akuBuilt, true);
+        assert.equal(secondPayload.cacheHit, false);
+        assert.equal(secondPayload.wacTimestamp, firstPayload.wacTimestamp);
+        assert.equal((await readCapturedCalls(callsFile)).length, 2);
+    } finally {
+        await server.close();
+        await fs.rm(tempDir, { recursive: true, force: true });
+    }
+});
+
+test('prepare-wac treats corrupt WAC cache as miss and rewrites it', async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'webassist-prepare-wac-corrupt-'));
+    const { callsFile, mockClientModule } = await createMockClientModule(tempDir);
+    const server = await startWacServer(SAMPLE_WAC);
+    const dataDir = path.join(tempDir, 'data');
+    await fs.mkdir(dataDir, { recursive: true });
+    const cachePath = path.join(dataDir, 'wac-cache.json');
+    await fs.writeFile(cachePath, '{not json', 'utf8');
+
+    try {
+        const result = await runPrepareWac({
+            siteUrl: server.url,
+            dataDir,
+            model: 'opencode/test-model',
+        }, {
+            WORKSPACE_PATH: tempDir,
+            WEBASSIST_AGENT_MCP_CLIENT_MODULE: mockClientModule,
+            CAPTURE_ARGS_FILE: callsFile,
+        });
+
+        assert.equal(result.code, 0, result.stderr || result.stdout);
+        const payload = JSON.parse(result.stdout);
+        assert.equal(payload.akuBuilt, true);
+        assert.equal(payload.cacheHit, false);
+        assert.equal((await readCapturedCalls(callsFile)).length, 1);
+        const cache = await readWacCache(cachePath);
+        assert.equal(cache.entries[server.url].wacTimestamp, payload.wacTimestamp);
+    } finally {
+        await server.close();
+        await fs.rm(tempDir, { recursive: true, force: true });
+    }
+});
+
+test('computeWacTimestamp falls back to content hash when Last-Modified is absent', () => {
+    const text = JSON.stringify(SAMPLE_WAC);
+    const timestamp = computeWacTimestamp(text, new Headers());
+    assert.match(timestamp, /^sha256:[a-f0-9]{64}$/);
+    assert.equal(computeWacTimestamp(text, new Headers({ 'last-modified': nextLastModified() })), nextLastModified());
 });
 
 test('prepare-wac rewrites localhost siteMap URLs for container prompt access', () => {
