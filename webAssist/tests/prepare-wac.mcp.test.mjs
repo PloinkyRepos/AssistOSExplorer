@@ -7,6 +7,11 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
+import {
+    buildAkuPrompt,
+    prepareWacForAkuPrompt,
+} from '../src/mcp/prepare-wac.mjs';
+
 const TESTS_DIR = path.dirname(fileURLToPath(import.meta.url));
 const WEBASSIST_ROOT = path.resolve(TESTS_DIR, '..');
 const PREPARE_WAC_ENTRY = path.join(WEBASSIST_ROOT, 'src', 'mcp', 'prepare-wac.mjs');
@@ -112,9 +117,41 @@ test('prepare-wac delegates prompt, projectDir, and model to opencodeAgent', asy
         assert.equal(typeof captured.args.prompt, 'string');
         assert.match(captured.args.prompt, /WAC\.json:/);
         assert.match(captured.args.prompt, /Example site information/);
+        assert.match(captured.args.prompt, /Fetch every URL listed in siteMap/);
         assert.equal('wacData' in captured.args, false);
     } finally {
         await server.close();
         await fs.rm(tempDir, { recursive: true, force: true });
+    }
+});
+
+test('prepare-wac rewrites localhost siteMap URLs for container prompt access', () => {
+    const previousContainer = process.env.CONTAINER;
+    process.env.CONTAINER = 'podman';
+
+    try {
+        const prepared = prepareWacForAkuPrompt({
+            ...SAMPLE_WAC,
+            siteMap: [
+                'http://localhost:3000/assistos-info/chapter_01_vision.md',
+                'http://127.0.0.1:3000/assistos-info/chapter_02_achilles_ide_as_assistos_explorer.md',
+                'https://example.test/external.md',
+            ],
+        });
+
+        assert.deepEqual(prepared.siteMap, [
+            'http://host.containers.internal:3000/assistos-info/chapter_01_vision.md',
+            'http://host.containers.internal:3000/assistos-info/chapter_02_achilles_ide_as_assistos_explorer.md',
+            'https://example.test/external.md',
+        ]);
+
+        const prompt = buildAkuPrompt(prepared);
+        assert.match(prompt, /host\.containers\.internal:3000\/assistos-info\/chapter_01_vision\.md/);
+    } finally {
+        if (previousContainer === undefined) {
+            delete process.env.CONTAINER;
+        } else {
+            process.env.CONTAINER = previousContainer;
+        }
     }
 });

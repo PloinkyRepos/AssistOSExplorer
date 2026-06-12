@@ -16,7 +16,7 @@ Examples:
 - `web_cli_chat`: requires `siteId` and `message`; accepts optional `sessionId`, `json`, `dataDir`, and `agentRoot`.
 - `web_cli_history`: requires `siteId` and `sessionId`.
 - `register-events`: requires `siteId`, `visitorId`, and `eventType`; accepts optional `sessionId`, `referrer`, `country`, `openedChat`, and `details`.
-- `prepare-wac`: requires `siteUrl`, fetches and validates `<siteUrl>/WAC.json`, builds the AKU construction prompt including the WAC JSON, selects the OpenCode model, and delegates to `opencodeAgent.execute-task` with `{ prompt, projectDir, model }`. `projectDir` is `<dataRoot>/sites/<siteId>`; the delegated `create-akus` skill creates `.aku/` inside that directory.
+- `prepare-wac`: requires `siteUrl`, fetches and validates `<siteUrl>/WAC.json`, builds the AKU construction prompt including the WAC JSON, selects the OpenCode model, and delegates to `opencodeAgent.execute-task` with `{ prompt, projectDir, model }`. `projectDir` is `<dataRoot>/sites/<siteId>`; the delegated `create-akus` skill creates `.aku/` inside that directory. The prompt tells `create-akus` to fetch every URL in `siteMap` and use the fetched content for document KUs. When `webAssist` is running in a container, localhost `siteMap` URLs are rewritten in the delegated prompt to `host.containers.internal` so the `opencodeAgent` container can reach the host test server.
 
 `web_cli_chat` returns `{ siteId, sessionId, message }`.
 

@@ -30,7 +30,7 @@ function deriveSiteId(siteUrl) {
     }
 }
 
-function normalizeSiteUrl(value) {
+export function normalizeSiteUrl(value) {
     const raw = String(value || '').trim();
     if (!raw) {
         return '';
@@ -41,7 +41,7 @@ function normalizeSiteUrl(value) {
     return raw.replace(/\/+$/, '');
 }
 
-function isRunningInContainer() {
+export function isRunningInContainer() {
     return process.env.container === 'podman' ||
            process.env.CONTAINER === 'podman' ||
            process.env.CONTAINER === 'docker' ||
@@ -50,7 +50,7 @@ function isRunningInContainer() {
            false;
 }
 
-function resolveLocalhostForContainer(siteUrl) {
+export function resolveLocalhostForContainer(siteUrl) {
     if (!isRunningInContainer()) {
         return siteUrl;
     }
@@ -65,7 +65,7 @@ function resolveLocalhostForContainer(siteUrl) {
     return siteUrl;
 }
 
-function validateWacJson(data) {
+export function validateWacJson(data) {
     const errors = [];
 
     if (!data || typeof data !== 'object') {
@@ -122,15 +122,26 @@ function resolveDataDir(agentRoot, explicitDataDir) {
     return path.join(workspacePath, 'data');
 }
 
-function buildAkuPrompt(wacData) {
+export function prepareWacForAkuPrompt(wacData) {
+    return {
+        ...wacData,
+        siteMap: Array.isArray(wacData.siteMap)
+            ? wacData.siteMap.map((url) => resolveLocalhostForContainer(String(url)))
+            : wacData.siteMap,
+    };
+}
+
+export function buildAkuPrompt(wacData) {
     const wacJson = JSON.stringify(wacData, null, 2);
     return [
         'Use the create-akus skill to transform the following WAC.json data into knowledge units in the current directory.',
+        'Fetch every URL listed in siteMap and use the fetched content as source material for document knowledge units.',
+        'If a siteMap URL cannot be fetched, record the failed URL in the AKU output and do not invent source content.',
         '',
         'WAC.json:',
         wacJson,
         '',
-        'Create the .aku/ directory structure with all knowledge units (site, profiles, contact) in the current working directory.',
+        'Create the .aku/ directory structure with site, profile, contact, and fetched document knowledge units in the current working directory.',
     ].join('\n');
 }
 
@@ -217,7 +228,7 @@ async function main() {
     }
 
     const projectDir = resolveSiteProjectDir(agentRoot, siteId, resolvedDataDir);
-    const prompt = buildAkuPrompt(wacData);
+    const prompt = buildAkuPrompt(prepareWacForAkuPrompt(wacData));
 
     try {
         const opencodeClient = await createAgentMcpClient(OPENCODE_AGENT);
