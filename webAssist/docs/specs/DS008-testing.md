@@ -11,6 +11,7 @@
 - `webassist-lead` deterministic lead file updates.
 - `register-events` appends Markdown event records to `visits/events.md`.
 - `web_cli_history` requiring `siteId`.
+- `prepare-wac` delegating `{ prompt, projectDir, model }` to `opencodeAgent.execute-task` without passing raw `wacData`, and reporting `.aku/` as a child of the site project directory.
 - Manifest guest access for the embedded chat route and guest-callable MCP tool policy.
 
 ## Headless Smoke

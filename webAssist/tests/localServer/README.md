@@ -15,14 +15,14 @@ Then open http://localhost:3000 in your browser.
 ```
 Port 3000 (Test website)          Port 8080 (WebAssist server)
 ├── /                             ├── /webAssist/mcp
-│   ├── index.html                │   └── MCP tools (fetch-wac, etc.)
+│   ├── index.html                │   └── MCP tools (prepare-wac, etc.)
 │   └── /WAC.json                 │
 ```
 
 ## Flow
 
 1. Open http://localhost:3000
-2. Browser calls `fetch-wac` MCP tool with `siteUrl: http://localhost:3000`
+2. Browser calls `prepare-wac` MCP tool with `siteUrl: http://localhost:3000`
 3. WebAssist server fetches `http://localhost:3000/WAC.json`
 4. WAC.json is validated (siteInfo, profilesInfo, contactInfo, siteMap)
 5. WebAssist delegates AKU construction to opencode-agent via execute-task MCP tool

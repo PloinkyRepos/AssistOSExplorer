@@ -285,7 +285,7 @@ class WebAssistMcpChatClient {
         this.chatToolName = options.chatToolName || 'web_cli_chat';
         this.historyToolName = options.historyToolName || 'web_cli_history';
         this.registerVisitorToolName = options.registerVisitorToolName || 'register-events';
-        this.fetchContextToolName = options.fetchContextToolName || 'fetch-agent-context';
+        this.prepareWACToolName = options.prepareWACToolName || 'prepare-wac';
         this.validateTools = options.validateTools === true;
         this.mcpClient = null;
         this.mcpClientPromise = null;
@@ -441,22 +441,22 @@ class WebAssistMcpChatClient {
         };
     }
 
-    async fetchAgentContext(siteUrl) {
+    async prepareWAC(siteUrl) {
         const normalizedSiteUrl = normalizeString(siteUrl);
         if (!normalizedSiteUrl) {
             throw new Error('Missing siteUrl for context fetch.');
         }
 
         const client = await this.ensureMcpClient();
-        await this.ensureNamedToolAvailable(client, this.fetchContextToolName);
+        await this.ensureNamedToolAvailable(client, this.prepareWACToolName);
 
-        const toolResult = await client.callTool(this.fetchContextToolName, {
+        const toolResult = await client.callTool(this.prepareWACToolName, {
             siteUrl: normalizedSiteUrl,
         });
         const toolText = extractToolText(toolResult);
         const parsed = tryParseJsonPayload(toolText);
         if (!parsed || typeof parsed !== 'object') {
-            throw new Error(`Invalid response from ${this.fetchContextToolName}.`);
+            throw new Error(`Invalid response from ${this.prepareWACToolName}.`);
         }
 
         return parsed;
@@ -551,9 +551,13 @@ function mountChatSurface(rootNode, options = {}) {
     }
 
     let isPending = false;
+    let isContextPreparing = false;
+    let isActivated = false;
+    let missingSiteMessageShown = false;
     let currentSessionId = loadSessionId(storageKey);
     let visitorId = loadSessionId(visitorStorageKey);
     let hydratedHistorySessionId = '';
+    let contextPreparingEl = null;
 
     function hasConversationMessages() {
         return messagesEl.querySelector('.chat-message:not(.chat-typing)') !== null;
@@ -585,23 +589,35 @@ function mountChatSurface(rootNode, options = {}) {
     let loadingTimer = null;
     let loadingIndex = 0;
 
-    function showLoadingMessages() {
+    function appendLoadingBubble({ text, datasetKey }) {
         hideTyping();
         const wrapper = document.createElement('div');
         wrapper.className = 'chat-message agent';
-        wrapper.dataset.loading = 'true';
+        if (datasetKey) {
+            wrapper.dataset[datasetKey] = 'true';
+        }
         const bubble = document.createElement('div');
         bubble.className = 'chat-bubble chat-bubble-loading';
-        loadingText = document.createTextNode('Thinking');
-        bubble.appendChild(loadingText);
+        const textNode = document.createTextNode(text);
+        bubble.appendChild(textNode);
         for (let i = 0; i < 3; i += 1) {
             const dot = document.createElement('span');
             bubble.appendChild(dot);
         }
         wrapper.appendChild(bubble);
         messagesEl.appendChild(wrapper);
-        loadingBubble = bubble;
         messagesEl.scrollTop = messagesEl.scrollHeight;
+
+        return { wrapper, bubble, textNode };
+    }
+
+    function showLoadingMessages() {
+        const loading = appendLoadingBubble({
+            text: 'Thinking',
+            datasetKey: 'loading',
+        });
+        loadingText = loading.textNode;
+        loadingBubble = loading.bubble;
 
         const msgs = buildLoadingMessages();
         loadingIndex = 0;
@@ -621,10 +637,48 @@ function mountChatSurface(rootNode, options = {}) {
         loadingText = null;
     }
 
+    function showContextPreparingMessage() {
+        if (contextPreparingEl) {
+            return;
+        }
+        const loading = appendLoadingBubble({
+            text: 'Preparing context please wait',
+            datasetKey: 'contextPreparing',
+        });
+        contextPreparingEl = loading.wrapper;
+    }
+
+    function hideContextPreparingMessage() {
+        if (contextPreparingEl) {
+            contextPreparingEl.remove();
+            contextPreparingEl = null;
+            return;
+        }
+        const el = messagesEl.querySelector('[data-context-preparing="true"]');
+        if (el) {
+            el.remove();
+        }
+    }
+
+    function refreshComposerState() {
+        const disabled = isPending || isContextPreparing || !siteId;
+        sendEl.disabled = disabled;
+        inputEl.disabled = disabled;
+    }
+
     function setPending(next) {
         isPending = Boolean(next);
-        sendEl.disabled = isPending;
-        inputEl.disabled = isPending;
+        refreshComposerState();
+    }
+
+    function setContextPreparing(next) {
+        isContextPreparing = Boolean(next);
+        if (isContextPreparing) {
+            showContextPreparingMessage();
+        } else {
+            hideContextPreparingMessage();
+        }
+        refreshComposerState();
     }
 
     function resizeInput() {
@@ -634,7 +688,7 @@ function mountChatSurface(rootNode, options = {}) {
     }
 
     async function hydrateHistoryFromSession() {
-        if (!currentSessionId) {
+        if (!siteId || !currentSessionId) {
             return;
         }
         if (hydratedHistorySessionId === currentSessionId) {
@@ -673,7 +727,7 @@ function mountChatSurface(rootNode, options = {}) {
     }
 
     async function registerVisitorActivity() {
-        if (!visitorId) {
+        if (!siteId || !visitorId) {
             return;
         }
         try {
@@ -691,7 +745,7 @@ function mountChatSurface(rootNode, options = {}) {
     };
     const onSubmit = async (event) => {
         event.preventDefault();
-        if (isPending) {
+        if (isPending || isContextPreparing || !siteId) {
             return;
         }
 
@@ -727,18 +781,64 @@ function mountChatSurface(rootNode, options = {}) {
     };
     const onOpenPanel = () => {
         setPanelOpen(true);
-        inputEl.focus();
+        if (!inputEl.disabled) {
+            inputEl.focus();
+        }
     };
     const onClosePanel = () => {
         setPanelOpen(false);
     };
 
+    async function prepareSiteContext(siteUrl) {
+        setContextPreparing(true);
+        try {
+            const contextResult = await chatClient.prepareWAC(siteUrl);
+            if (contextResult && contextResult.ok && contextResult.siteId) {
+                siteId = contextResult.siteId;
+                storageKey = `${BROWSER_STORAGE_KEY}:${siteId}`;
+                visitorStorageKey = `${VISITOR_STORAGE_KEY}:${siteId}`;
+                currentSessionId = loadSessionId(storageKey);
+                visitorId = loadSessionId(visitorStorageKey);
+                hydratedHistorySessionId = '';
+            } else if (contextResult && contextResult.error) {
+                console.error('[WebAssistChat] Could not load website context:', contextResult.error);
+            }
+        } catch (error) {
+            console.error('[WebAssistChat] Failed to load website context:', error);
+        } finally {
+            setContextPreparing(false);
+        }
+
+        if (!siteId) {
+            if (!missingSiteMessageShown) {
+                appendMessage('agent', 'This WebAssist embed could not prepare site context.');
+                missingSiteMessageShown = true;
+            }
+            refreshComposerState();
+            return;
+        }
+
+        await hydrateHistoryFromSession();
+        if (!visitorId) {
+            visitorId = loadOrCreateVisitorId(visitorStorageKey);
+        }
+        void registerVisitorActivity();
+        refreshComposerState();
+        if (widgetEl?.dataset.open === 'true') {
+            inputEl.focus();
+        }
+    }
+
     function activateChat() {
         if (!siteId) {
-            appendMessage('agent', 'This WebAssist embed is missing a siteId.');
-            inputEl.disabled = true;
-            sendEl.disabled = true;
-            return;
+            if (!isContextPreparing && !parentSiteUrl) {
+                if (!missingSiteMessageShown) {
+                    appendMessage('agent', 'This WebAssist embed is missing a siteId.');
+                    missingSiteMessageShown = true;
+                }
+                refreshComposerState();
+                return;
+            }
         }
 
         if (widgetEl && panelEl) {
@@ -751,38 +851,31 @@ function mountChatSurface(rootNode, options = {}) {
             }
         }
 
-        inputEl.addEventListener('input', onInput);
-        inputEl.addEventListener('keydown', onKeyDown);
-        composerEl.addEventListener('submit', onSubmit);
-        window.addEventListener('beforeunload', onBeforeUnload);
-        launcherEl?.addEventListener('click', onOpenPanel);
-        closeEl?.addEventListener('click', onClosePanel);
-        void hydrateHistoryFromSession();
+        if (!isActivated) {
+            inputEl.addEventListener('input', onInput);
+            inputEl.addEventListener('keydown', onKeyDown);
+            composerEl.addEventListener('submit', onSubmit);
+            window.addEventListener('beforeunload', onBeforeUnload);
+            launcherEl?.addEventListener('click', onOpenPanel);
+            closeEl?.addEventListener('click', onClosePanel);
+            isActivated = true;
+        }
+        refreshComposerState();
 
-        if (!visitorId) {
+        if (siteId) {
+            void hydrateHistoryFromSession();
+        }
+
+        if (siteId && !visitorId) {
             visitorId = loadOrCreateVisitorId(visitorStorageKey);
             void registerVisitorActivity();
         }
     }
 
     if (!siteId && parentSiteUrl) {
-        (async () => {
-            try {
-                const contextResult = await chatClient.fetchAgentContext(parentSiteUrl);
-                if (contextResult && contextResult.ok && contextResult.siteId) {
-                    siteId = contextResult.siteId;
-                    storageKey = `${BROWSER_STORAGE_KEY}:${siteId}`;
-                    visitorStorageKey = `${VISITOR_STORAGE_KEY}:${siteId}`;
-                    currentSessionId = loadSessionId(storageKey);
-                    hydratedHistorySessionId = '';
-                } else if (contextResult && contextResult.error) {
-                    console.error('[WebAssistChat] Could not load website context:', contextResult.error);
-                }
-            } catch (error) {
-                console.error('[WebAssistChat] Failed to load website context:', error);
-            }
-            activateChat();
-        })();
+        setContextPreparing(true);
+        activateChat();
+        void prepareSiteContext(parentSiteUrl);
     } else {
         activateChat();
     }

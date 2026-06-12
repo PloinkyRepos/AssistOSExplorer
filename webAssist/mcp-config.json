@@ -151,10 +151,10 @@
             }
         },
         {
-            "name": "fetch-wac",
-            "title": "Fetch WAC",
+            "name": "prepare-wac",
+            "title": "Prepare WAC",
             "description": "Fetch a website's WAC.json file, validate it, and delegate AKU construction to opencode-agent. Returns site-id and success/failure. No code execution — static JSON only.",
-            "command": "/code/src/mcp/fetch-wac.mjs",
+            "command": "/code/src/mcp/prepare-wac.mjs",
             "cwd": "workspace",
             "timeoutMs": 300000,
             "inputSchema": {
@@ -162,6 +162,11 @@
                     "type": "string",
                     "description": "Base URL of the website hosting WAC.json",
                     "optional": false
+                },
+                "model": {
+                    "type": "string",
+                    "description": "Optional OpenCode model identifier for delegated AKU construction. Defaults to webAssist's selected AKU builder model.",
+                    "optional": true
                 },
                 "invocationToken": {
                     "type": "string",

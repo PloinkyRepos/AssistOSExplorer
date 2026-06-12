@@ -16,11 +16,12 @@ Examples:
 - `web_cli_chat`: requires `siteId` and `message`; accepts optional `sessionId`, `json`, `dataDir`, and `agentRoot`.
 - `web_cli_history`: requires `siteId` and `sessionId`.
 - `register-events`: requires `siteId`, `visitorId`, and `eventType`; accepts optional `sessionId`, `referrer`, `country`, `openedChat`, and `details`.
+- `prepare-wac`: requires `siteUrl`, fetches and validates `<siteUrl>/WAC.json`, builds the AKU construction prompt including the WAC JSON, selects the OpenCode model, and delegates to `opencodeAgent.execute-task` with `{ prompt, projectDir, model }`. `projectDir` is `<dataRoot>/sites/<siteId>`; the delegated `create-akus` skill creates `.aku/` inside that directory.
 
 `web_cli_chat` returns `{ siteId, sessionId, message }`.
 
 ## Embedded Chat
-The iframe URL must include `siteId`. The widget uses site-scoped `localStorage` keys and passes `siteId` to chat, history, and visitor-registration MCP calls.
+The iframe URL may include `siteId`. If `siteId` is absent and the widget can derive the parent site URL, it opens the chat UI immediately, disables message submission, shows the context-preparation loading message, and runs `prepare-wac` asynchronously. After `prepare-wac` returns a `siteId`, the widget switches to site-scoped `localStorage` keys and passes `siteId` to chat, history, and visitor-registration MCP calls.
 
 ## Runtime Flow
 1. Resolve data root from `--data-dir` or `path.join(process.env.WORKSPACE_PATH, "data")`.
