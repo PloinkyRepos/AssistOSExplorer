@@ -24,7 +24,6 @@
   "profiles": {
     "default": {
       "env": [
-        "SOUL_GATEWAY_API_KEY",
         "LLMAgentClient_DEBUG",
         "LLMAgentClient_VERBOSE_DELAY",
         {
@@ -86,7 +85,6 @@
     },
     "dev": {
       "env": [
-        "SOUL_GATEWAY_API_KEY",
         "LLMAgentClient_DEBUG",
         "LLMAgentClient_VERBOSE_DELAY",
         {
@@ -151,7 +149,6 @@
         "mode": "host"
       },
       "env": [
-        "SOUL_GATEWAY_API_KEY",
         "LLMAgentClient_DEBUG",
         "LLMAgentClient_VERBOSE_DELAY",
         {
