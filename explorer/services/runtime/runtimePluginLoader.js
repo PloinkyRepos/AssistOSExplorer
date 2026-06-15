@@ -6,6 +6,12 @@ import {
 
 const isNonEmptyString = (value) => typeof value === 'string' && value.trim().length > 0;
 const isWorkspaceFilesUrl = (value) => isNonEmptyString(value) && value.trim().startsWith('/workspace-files/');
+const isUrlOnlyGlobalSettingsPlugin = (plugin) => (
+    plugin?.type === 'global'
+    && isNonEmptyString(plugin?.settingsUrl)
+    && plugin.settingsUrl.trim().startsWith('/')
+    && !plugin.settingsUrl.trim().startsWith('//')
+);
 
 export function createRuntimePluginLoader({
     agentId,
@@ -85,6 +91,9 @@ export function createRuntimePluginLoader({
 
         forEachRuntimePluginEntry(runtimePlugins, (plugin) => {
             if (!plugin || typeof plugin !== 'object') {
+                return;
+            }
+            if (isUrlOnlyGlobalSettingsPlugin(plugin)) {
                 return;
             }
             scheduleComponent({

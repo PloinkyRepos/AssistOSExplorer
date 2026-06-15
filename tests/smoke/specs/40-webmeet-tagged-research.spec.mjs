@@ -3,17 +3,13 @@ import { smokeConfig } from '../lib/config.mjs';
 import {
   createRoom,
   deleteRoomIfPresent,
-  expectWebMeetSuggestion,
   joinRoom,
   openWebMeet,
-  selectActiveWebMeetSuggestion,
   sendWebMeetChat,
 } from '../lib/webmeet.mjs';
 
 test.describe('WebMeet @ tags', () => {
-  test('Open Interpreter tag can be suggested, selected, highlighted, and optionally dispatched @external', async ({ page }) => {
-    test.setTimeout(smokeConfig.flags.openInterpreter ? smokeConfig.timeouts.relay + 60_000 : smokeConfig.timeouts.test);
-
+  test('provider-looking @ tags stay ordinary meeting chat', async ({ page }) => {
     const roomTitle = `e2e-tags-${smokeConfig.runId}`;
     try {
       await openWebMeet(page);
@@ -26,26 +22,15 @@ test.describe('WebMeet @ tags', () => {
         input.selectionEnd = input.value.length;
         input.dispatchEvent(new Event('input', { bubbles: true }));
       });
-      await expectWebMeetSuggestion(page, {
-        group: 'Agents',
-        text: '@open-interpreter',
-      });
-      await selectActiveWebMeetSuggestion(page);
-      await expect(page.locator('#webmeetChatInput')).toHaveValue('@open-interpreter ');
-      await expect(page.locator('.webmeet-chat-mention', { hasText: '@open-interpreter' })).toBeVisible();
+      await page.waitForTimeout(1_000);
+      await expect(page.locator('.webmeet-chat-suggest-group', { hasText: 'Agents' })).toHaveCount(0);
+      await expect(page.locator('.webmeet-chat-suggest-item', { hasText: '@open-interpreter' })).toHaveCount(0);
+      await expect(page.locator('#webmeetChatInput')).toHaveValue('@op');
 
-      if (!smokeConfig.flags.openInterpreter) {
-        test.info().annotations.push({
-          type: 'skip-external-dispatch',
-          description: 'Set SMOKE_OPEN_INTERPRETER=1 to run the long relay response check.',
-        });
-        return;
-      }
-
-      await sendWebMeetChat(page, '@open-interpreter Reply with exactly WEBMEET_E2E_OK and no other words.');
-      await expect(page.locator('#webmeetChatList', { hasText: 'WEBMEET_E2E_OK' })).toBeVisible({
-        timeout: smokeConfig.timeouts.relay,
-      });
+      const message = `@open-interpreter ordinary-chat-${smokeConfig.runId}`;
+      await sendWebMeetChat(page, message);
+      await expect(page.locator('#webmeetChatList', { hasText: message })).toBeVisible();
+      await expect(page.locator('#webmeetChatList .webmeet-chat-mention', { hasText: '@open-interpreter' })).toHaveCount(0);
     } finally {
       await deleteRoomIfPresent(page, roomTitle).catch(() => null);
     }

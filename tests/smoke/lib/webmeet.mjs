@@ -1,19 +1,18 @@
 import { expect } from './fixtures.mjs';
-import { openExplorer } from './explorer.mjs';
+import { signIn } from './auth.mjs';
 import { smokeConfig } from './config.mjs';
 
+function webMeetDashboardPath() {
+  const params = new URLSearchParams({
+    webmeetSmoke: smokeConfig.runId,
+  });
+  return `/explorer/index.html?${params.toString()}#webmeet-dashboard`;
+}
+
 export async function openWebMeet(page, account = smokeConfig.primaryUser) {
-  await openExplorer(page, { account });
-  const toolButton = page.locator('#webmeetToolButton');
-  if (await toolButton.isVisible({ timeout: 12_000 }).catch(() => false)) {
-    await Promise.all([
-      page.waitForLoadState('domcontentloaded').catch(() => null),
-      toolButton.click(),
-    ]);
-  } else {
-    await page.goto('/explorer/index.html#webmeet-dashboard', { waitUntil: 'domcontentloaded' });
-  }
-  await expect(page.locator('.webmeet-dashbaoard')).toBeVisible({ timeout: smokeConfig.timeouts.navigation });
+  await signIn(page, account, '/dashboard');
+  await page.goto(webMeetDashboardPath(), { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('div.webmeet-dashbaoard')).toBeVisible({ timeout: smokeConfig.timeouts.navigation });
   await expect(page.locator('#webmeetCreateRoomButton')).toBeVisible();
 }
 

@@ -218,51 +218,45 @@ Pass criteria:
 - The scribe attachment produces persisted transcript segments from microphone audio.
 - Screen sharing either succeeds and produces a remote track, or is explicitly skipped because the browser capture environment does not support headless display capture.
 
-## Case 5: Copilot And WebMeet Tagged Open Interpreter Chat
+## Case 5: WebChat And WebMeet Provider-Looking Tags
 
-Purpose: verify that the Ploinky Copilot WebChat and the Explorer WebMeet chat both expose the new `@` autocomplete behavior and can dispatch `@open-interpreter` prompts through the research relay without exposing provider secrets to the browser.
+Purpose: verify that WebChat and WebMeet keep workspace/file `@` references usable while treating provider-looking tokens such as `@open-interpreter` as ordinary chat text. Provider dispatch belongs to Copilot semantic routing, not inline chat tags.
 
 Preconditions:
 
-- `AchillesCLI/achilles-cli`, `copilot-agents/research-agents`, `copilot-agents/researchRelay`, and `copilot-agents/openInterpreterAgent` are enabled in the workspace.
-- `SOUL_GATEWAY_API_KEY` is available to Ploinky as a workspace secret or process environment value. Do not require `SOUL_GATEWAY_BASE_URL` for the normal local smoke.
-- The Open Interpreter runtime may need a first-run preparation window. Use timeouts long enough for a cold runtime, for example 420 seconds for tagged relay responses.
-- Create a small workspace fixture such as `e2e-headless-note-<run-id>.txt` in the disposable workspace root so file/folder suggestions have a deterministic target.
+- `AchillesCLI/achilles-cli` and `webmeetAgent` are enabled in the workspace.
+- Create uploads, rooms, and chat text with `SMOKE_RUN_ID` names so repeated smoke runs do not collide.
+- Run Copilot semantic routing checks separately with `SMOKE_OPEN_INTERPRETER=1` when the external provider runtime is configured.
 
 Copilot WebChat steps:
 
-1. Open the routed WebChat URL for AchillesCLI with the tag-relay parameters:
+1. Open the routed WebChat URL for AchillesCLI:
 
    ```text
-   /webchat?agent=achilles-cli&research-tags=1&forward-envelope=1&tag-relay-agent=researchRelay&tag-relay-submit-tool=research_task_submit&tag-relay-list-tool=research_relay_list_backends&tag-relay-tags=open-interpreter&workspace-dir=.
+   /webchat?agent=achilles-cli&forward-envelope=1&workspace-dir=.
    ```
 
-2. Type `@e2e-headless-note-<run-id-prefix>` into the composer and assert the suggestion menu includes a `Files and folders` group containing the fixture file.
-3. Type `@op` and assert the suggestion menu includes an `Agents` group with `@open-interpreter`.
-4. Select `@open-interpreter` with Enter, Tab, or pointer input and assert the composer value becomes `@open-interpreter `.
-5. Assert the composer renders the selected mention with the WebChat mention-highlight element while preserving textarea editing and caret behavior.
-6. Send `@open-interpreter Reply with exactly WEBCHAT_E2E_OK and no other words.`
-7. Assert the sent WebChat message keeps `@open-interpreter` visually emphasized, and wait for an assistant response containing `WEBCHAT_E2E_OK`.
+2. Upload a file and a nested folder through the browser UI.
+3. Type the uploaded path prefix with `@` and assert the suggestion menu includes a `Files and folders` group scoped to the current upload session.
+4. Open a sibling browser context and assert the first context's upload is not suggested there.
+5. Type `@op` and assert the menu does not expose an `Agents` group or `@open-interpreter` suggestion.
+6. Leave the composer text unchanged as `@op`; selecting a provider tag must not be possible from the normal WebChat autocomplete.
 
 WebMeet chat steps:
 
-1. Open Explorer at `/explorer/index.html`, not by directly cold-loading the WebMeet hash route.
-2. Press the WebMeet toolbar button and use the resulting WebMeet page or tab.
-3. Create and join `e2e-room-<run-id>`.
-4. Type `@e2e-headless-note-<run-id-prefix>` into `#webmeetChatInput` and assert the suggestion menu includes a `Files and folders` group containing the fixture file.
-5. Type `@op` and assert the suggestion menu includes an `Agents` group with `@open-interpreter`.
-6. Select `@open-interpreter` and assert the input value becomes `@open-interpreter `.
-7. Assert the WebMeet composer renders the selected mention with the WebMeet mention-highlight element while preserving the underlying textarea, send-on-Enter shortcut, and `webmeet_chat_send` path.
-8. Send `@open-interpreter Reply with exactly WEBMEET_E2E_OK and no other words.` Use the UI send path, not a direct MCP call.
-9. Because WebMeet waits for `webmeet_chat_send` to finish before refreshing the chat list, wait for the relay result before treating the missing sent message as a failure.
-10. Assert the chat list contains the sent `@open-interpreter` message in bold and a relay response containing `WEBMEET_E2E_OK`.
+1. Open the WebMeet dashboard route through Explorer authentication.
+2. Create and join `e2e-room-<run-id>`.
+3. Type `@op` into `#webmeetChatInput`.
+4. Assert the menu does not expose an `Agents` group or `@open-interpreter` suggestion.
+5. Send `@open-interpreter ordinary-chat-<run-id>` through the UI.
+6. Assert the chat list contains the sent text and does not render `@open-interpreter` as a highlighted provider mention.
 
 Pass criteria:
 
-- Both surfaces show `Agents` and `Files and folders` groups for `@` suggestions.
-- Selecting `@open-interpreter` inserts exactly one canonical tag with a trailing space.
-- Sent messages keep known agent tags visually emphasized after submission.
-- Both surfaces dispatch to Open Interpreter through the configured research relay and receive the expected marker response.
+- WebChat exposes session-scoped `Files and folders` suggestions for uploaded paths.
+- WebChat and WebMeet do not expose an `Agents` group or provider suggestion for `@open-interpreter`.
+- WebMeet persists provider-looking text as ordinary meeting chat.
+- `SMOKE_OPEN_INTERPRETER=1` opt-in Copilot checks cover semantic provider dispatch when external runtime is configured.
 - Browser logs, screenshots, network payloads, and artifacts do not contain Soul Gateway keys, DockerHub tokens, local auth passwords, invocation JWTs, prompt bodies beyond the explicit test messages, or other provider credentials.
 
 ## Reporting

@@ -61,3 +61,53 @@ test('runtime plugin loader prefers workspace component URLs over legacy agent U
         '/workspace-files/.ploinky/repos/AchillesIDE/gitAgent/IDE-plugins/git-tool-button/components/git-new-repository-modal/git-new-repository-modal'
     );
 });
+
+test('runtime plugin loader does not load URL-only global settings plugins as components', async () => {
+    const loaded = [];
+    const componentRegistry = {
+        async loadComponent(meta) {
+            loaded.push(meta);
+            return meta;
+        },
+        getCachedComponent() {
+            return undefined;
+        }
+    };
+    const loader = createRuntimePluginLoader({
+        agentId: 'explorer',
+        runtimePluginTool: 'collect_ide_plugins',
+        assistosSDK: {
+            async fetchRuntimePlugins() {
+                return {};
+            }
+        },
+        componentRegistry
+    });
+
+    await loader.loadComponents({
+        application: {
+            '': [{
+                id: 'soul-gateway',
+                agent: 'soul-gateway',
+                pluginCategory: 'application',
+                contributionType: 'mount',
+                component: 'soul-gateway-settings',
+                type: 'global',
+                settingsUrl: '/services/soul-gateway/management/'
+            }],
+            'file-exp:toolbar': [{
+                id: 'git',
+                agent: 'gitAgent',
+                pluginCategory: 'application',
+                contributionType: 'mount',
+                component: 'git-tool-button',
+                type: 'embedded'
+            }]
+        }
+    });
+
+    assert.deepEqual(
+        loaded.map((meta) => `${meta.agent}/${meta.componentName}`),
+        ['gitAgent/git-tool-button']
+    );
+});

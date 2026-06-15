@@ -64,6 +64,8 @@ async function sendAndWaitForReply(page, prompt, introCount, timeoutMs) {
 }
 
 test.describe('AKU memory through Copilot WebChat @external', () => {
+    test.skip(!smokeConfig.flags.openInterpreter, 'Set SMOKE_OPEN_INTERPRETER=1 to run Copilot semantic routing checks.');
+
     test('creates and resolves an AKU knowledge unit via /exec aku-memory', async ({ page }) => {
         test.setTimeout(smokeConfig.timeouts.relay + 120_000);
 
@@ -119,6 +121,8 @@ test.describe('AKU memory through Copilot WebChat @external', () => {
 });
 
 test.describe('Copilot semantic routing @external', () => {
+    test.skip(!smokeConfig.flags.openInterpreter, 'Set SMOKE_OPEN_INTERPRETER=1 to run Copilot semantic routing checks.');
+
     test('routes a natural-language execution prompt to Open Interpreter', async ({ page }) => {
         test.setTimeout(smokeConfig.timeouts.relay + 120_000);
 

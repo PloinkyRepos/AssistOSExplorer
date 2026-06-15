@@ -23,6 +23,20 @@ function shouldIgnoreUrl(url) {
   return ignoredUrlPatterns.some((pattern) => pattern.test(String(url || '')));
 }
 
+function shouldIgnoreRequestFailure(url, method, failure) {
+  if (shouldIgnoreUrl(url)) return true;
+  if (failure !== 'net::ERR_ABORTED' || String(method || '').toUpperCase() !== 'POST') return false;
+  try {
+    const pathname = new URL(url).pathname;
+    return pathname === '/dashboard/run'
+      || pathname === '/webchat/input'
+      || pathname === '/mcp'
+      || pathname.endsWith('/mcp');
+  } catch (_) {
+    return false;
+  }
+}
+
 function shouldIgnoreConsole(event) {
   const text = `${event.type || ''} ${event.text || ''}`;
   return ignoredConsolePatterns.some((pattern) => pattern.test(text));
@@ -66,13 +80,15 @@ export function attachPageDiagnostics(page, testInfo, label = 'page') {
 
   page.on('requestfailed', (request) => {
     const url = request.url();
-    if (shouldIgnoreUrl(url)) return;
+    const method = request.method();
+    const failure = request.failure()?.errorText || '';
+    if (shouldIgnoreRequestFailure(url, method, failure)) return;
     events.push({
       kind: 'requestfailed',
       type: 'error',
       url: redact(url),
-      method: request.method(),
-      failure: request.failure()?.errorText || '',
+      method,
+      failure,
     });
   });
 

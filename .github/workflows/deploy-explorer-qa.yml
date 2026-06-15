@@ -1,0 +1,726 @@
+name: Deploy Explorer QA
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'AssistOSExplorer branch to deploy'
+        required: false
+        default: 'main'
+        type: string
+      workspace_name:
+        description: 'QA workspace directory name on the proxies/Soul Gateway host'
+        required: false
+        default: 'explorerQaWorkspace'
+        type: string
+      router_port:
+        description: 'Router port on the remote host'
+        required: false
+        default: '8097'
+        type: string
+      public_url:
+        description: 'Public QA Explorer URL. Leave empty until DNS/tunnel routing exists.'
+        required: false
+        default: ''
+        type: string
+      profile:
+        description: 'Ploinky profile to use. Defaults to vars.EXPLORER_QA_PLOINKY_PROFILE, then prod.'
+        required: false
+        default: ''
+        type: string
+      proxies_branch:
+        description: 'proxies repo branch. Falls back to vars.EXPLORER_QA_PROXIES_BRANCH, then main.'
+        required: false
+        default: ''
+        type: string
+      ploinky_branch:
+        description: 'Ploinky runtime branch. Falls back to vars.EXPLORER_QA_PLOINKY_BRANCH, then master.'
+        required: false
+        default: ''
+        type: string
+      achilles_branch:
+        description: 'achillesAgentLib branch. Falls back to vars.EXPLORER_QA_ACHILLES_BRANCH, then master.'
+        required: false
+        default: ''
+        type: string
+      webmeet_infra_image_tag:
+        description: 'liveKitServerAgent image tag override. Falls back to vars.EXPLORER_QA_WEBMEET_INFRA_IMAGE_TAG, then webmeet-infra.'
+        required: false
+        default: ''
+        type: string
+      ploinky_node_image_tag:
+        description: 'Ploinky Node image tag override. Falls back to vars.EXPLORER_QA_PLOINKY_NODE_IMAGE_TAG, then 24-bookworm-tools.'
+        required: false
+        default: ''
+        type: string
+
+concurrency:
+  group: deploy-explorer-qa
+  cancel-in-progress: false
+
+env:
+  SSH_USER: ${{ vars.EXPLORER_QA_SSH_USER || 'admin' }}
+  SSH_HOST: ${{ vars.EXPLORER_QA_SSH_HOST || '45.136.70.141' }}
+  WORKSPACE: ${{ inputs.workspace_name || vars.EXPLORER_QA_WORKSPACE || 'explorerQaWorkspace' }}
+  ROUTER_PORT: ${{ inputs.router_port || vars.EXPLORER_QA_ROUTER_PORT || '8097' }}
+  PUBLIC_URL: ${{ inputs.public_url || vars.EXPLORER_QA_PUBLIC_URL || '' }}
+  EXPLORER_BRANCH: ${{ inputs.branch || 'main' }}
+  PLOINKY_PROFILE: ${{ inputs.profile || vars.EXPLORER_QA_PLOINKY_PROFILE || 'prod' }}
+  # Production services co-located on this host. Used only by the safety guards below.
+  SOUL_GATEWAY_WORKSPACE: 'soulGateway'
+  SOUL_GATEWAY_ROUTER_PORT: '8080'
+
+jobs:
+  deploy:
+    name: Deploy or Update Explorer
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Validate GitHub configuration
+        env:
+          SSH_KEY: ${{ secrets.EXPLORER_QA_SSH_KEY }}
+          PLOINKY_MASTER_KEY: ${{ secrets.EXPLORER_QA_PLOINKY_MASTER_KEY }}
+          SOUL_GATEWAY_PROVIDER_API_KEY: ${{ secrets.EXPLORER_QA_SOUL_GATEWAY_PROVIDER_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SSH_KEY:-}" ]; then
+            echo "::error::Missing required repository secret EXPLORER_QA_SSH_KEY"
+            exit 1
+          fi
+          if [ -z "${PLOINKY_MASTER_KEY:-}" ]; then
+            echo "::error::Missing required repository secret EXPLORER_QA_PLOINKY_MASTER_KEY"
+            exit 1
+          fi
+          if ! printf '%s' "$PLOINKY_MASTER_KEY" | grep -Eq '^[A-Fa-f0-9]{64}$'; then
+            echo "::error::EXPLORER_QA_PLOINKY_MASTER_KEY must be exactly 64 hex characters"
+            exit 1
+          fi
+          if [ -z "${SOUL_GATEWAY_PROVIDER_API_KEY:-}" ]; then
+            echo "::error::Missing required repository secret EXPLORER_QA_SOUL_GATEWAY_PROVIDER_API_KEY"
+            exit 1
+          fi
+          if [ -z "${SSH_HOST:-}" ] || [ -z "${SSH_USER:-}" ]; then
+            echo "::error::EXPLORER_QA_SSH_USER and EXPLORER_QA_SSH_HOST must be configured"
+            exit 1
+          fi
+          if [ "${WORKSPACE:-}" = "${SOUL_GATEWAY_WORKSPACE}" ]; then
+            echo "::error::Refusing to deploy Explorer QA into the production Soul Gateway workspace"
+            exit 1
+          fi
+          if [ "${ROUTER_PORT:-}" = "${SOUL_GATEWAY_ROUTER_PORT}" ]; then
+            echo "::error::Refusing to deploy Explorer QA on the production Soul Gateway router port ${ROUTER_PORT}"
+            exit 1
+          fi
+          case "${ROUTER_PORT:-}" in
+            8042|8043|8085|8317|8318)
+              echo "::error::Refusing to deploy Explorer QA on a known production proxies-host port ${ROUTER_PORT}"
+              exit 1
+              ;;
+          esac
+
+      - name: Prepare SSH key
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.EXPLORER_QA_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ env.SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Deploy workspace
+        env:
+          PLOINKY_MASTER_KEY: ${{ secrets.EXPLORER_QA_PLOINKY_MASTER_KEY }}
+          SOUL_GATEWAY_PROVIDER_API_KEY: ${{ secrets.EXPLORER_QA_SOUL_GATEWAY_PROVIDER_API_KEY }}
+          SOUL_GATEWAY_PROVIDER_BASE_URL: ${{ vars.EXPLORER_QA_SOUL_GATEWAY_PROVIDER_BASE_URL || 'https://soul.axiologic.dev/v1' }}
+          SOUL_GATEWAY_PROVIDER_DISCOVERY_MODE: ${{ vars.EXPLORER_QA_SOUL_GATEWAY_PROVIDER_DISCOVERY_MODE || 'auto' }}
+          SOUL_GATEWAY_PROVIDER_ALIASES: ${{ vars.EXPLORER_QA_SOUL_GATEWAY_PROVIDER_ALIASES || 'fast,axl/fast,plan,code,write,deep,ultra' }}
+          LMSTUDIO_PROXY_TOKEN: ${{ secrets.EXPLORER_QA_LMSTUDIO_PROXY_TOKEN }}
+          LOCAL_LLM_API_KEY: ${{ secrets.EXPLORER_QA_LOCAL_LLM_API_KEY }}
+          LOCAL_LLM_BASE_URL: ${{ vars.EXPLORER_QA_LOCAL_LLM_BASE_URL }}
+          LOCAL_LLM_MODEL: ${{ vars.EXPLORER_QA_LOCAL_LLM_MODEL }}
+          LOCAL_LLM_DISCOVERY_MODE: ${{ vars.EXPLORER_QA_LOCAL_LLM_DISCOVERY_MODE }}
+          ONLYOFFICE_PUBLIC_URL: ${{ vars.EXPLORER_QA_ONLYOFFICE_PUBLIC_URL }}
+          ONLYOFFICE_INTERNAL_URL: ${{ vars.EXPLORER_QA_ONLYOFFICE_INTERNAL_URL }}
+          ONLYOFFICE_CALLBACK_BASE_URL: ${{ vars.EXPLORER_QA_ONLYOFFICE_CALLBACK_BASE_URL }}
+          WEBMEET_PUBLIC_LIVEKIT_URL: ${{ vars.EXPLORER_QA_WEBMEET_PUBLIC_LIVEKIT_URL }}
+          WEBMEET_LIVEKIT_URL: ${{ vars.EXPLORER_QA_WEBMEET_LIVEKIT_URL }}
+          WEBMEET_EGRESS_URL: ${{ vars.EXPLORER_QA_WEBMEET_EGRESS_URL }}
+          WEBMEET_INFRA_IMAGE_TAG: ${{ inputs.webmeet_infra_image_tag || vars.EXPLORER_QA_WEBMEET_INFRA_IMAGE_TAG || 'webmeet-infra' }}
+          PLOINKY_NODE_IMAGE_TAG: ${{ inputs.ploinky_node_image_tag || vars.EXPLORER_QA_PLOINKY_NODE_IMAGE_TAG || '24-bookworm-tools' }}
+          WEBMEET_INFRA_HEALTH_PORT: ${{ vars.EXPLORER_QA_WEBMEET_INFRA_HEALTH_PORT }}
+          WEBMEET_LIVEKIT_USE_EXTERNAL_IP: ${{ vars.EXPLORER_QA_WEBMEET_LIVEKIT_USE_EXTERNAL_IP }}
+          WEBMEET_LIVEKIT_NODE_IP: ${{ vars.EXPLORER_QA_WEBMEET_LIVEKIT_NODE_IP }}
+          WEBMEET_LIVEKIT_LOG_LEVEL: ${{ vars.EXPLORER_QA_WEBMEET_LIVEKIT_LOG_LEVEL }}
+          WEBMEET_LIVEKIT_FORCE_TCP: ${{ vars.EXPLORER_QA_WEBMEET_LIVEKIT_FORCE_TCP }}
+          WEBMEET_LIVEKIT_REDIS_ADDRESS: ${{ vars.EXPLORER_QA_WEBMEET_LIVEKIT_REDIS_ADDRESS }}
+          WEBMEET_EGRESS_REDIS_ADDRESS: ${{ vars.EXPLORER_QA_WEBMEET_EGRESS_REDIS_ADDRESS }}
+          WEBMEET_LIVEKIT_INTERNAL_WS_URL: ${{ vars.EXPLORER_QA_WEBMEET_LIVEKIT_INTERNAL_WS_URL }}
+          WEBMEET_TLS_HOSTNAME: ${{ vars.EXPLORER_QA_WEBMEET_TLS_HOSTNAME }}
+          WEBMEET_TLS_HTTPS_PORT: ${{ vars.EXPLORER_QA_WEBMEET_TLS_HTTPS_PORT }}
+          WEBMEET_TLS_HTTP_PORT: ${{ vars.EXPLORER_QA_WEBMEET_TLS_HTTP_PORT }}
+          WEBMEET_LIVEKIT_UPSTREAM: ${{ vars.EXPLORER_QA_WEBMEET_LIVEKIT_UPSTREAM }}
+          WEBMEET_CERT_EMAIL: ${{ vars.EXPLORER_QA_WEBMEET_CERT_EMAIL }}
+          WEBMEET_CERTBOT_AUTO_ISSUE: ${{ vars.EXPLORER_QA_WEBMEET_CERTBOT_AUTO_ISSUE }}
+          WEBMEET_CERTBOT_RENEW_INTERVAL_SECONDS: ${{ vars.EXPLORER_QA_WEBMEET_CERTBOT_RENEW_INTERVAL_SECONDS }}
+          WEBMEET_TURN_EXTERNAL_IP: ${{ vars.EXPLORER_QA_WEBMEET_TURN_EXTERNAL_IP }}
+          WEBMEET_TURN_HOST: ${{ vars.EXPLORER_QA_WEBMEET_TURN_HOST }}
+          WEBMEET_TURN_PORT: ${{ vars.EXPLORER_QA_WEBMEET_TURN_PORT }}
+          WEBMEET_TURN_REALM: ${{ vars.EXPLORER_QA_WEBMEET_TURN_REALM }}
+          WEBMEET_TURN_USER: ${{ vars.EXPLORER_QA_WEBMEET_TURN_USER }}
+          WEBMEET_ICE_TRANSPORT_POLICY: ${{ vars.EXPLORER_QA_WEBMEET_ICE_TRANSPORT_POLICY }}
+          WEBMEET_TURN_MIN_PORT: ${{ vars.EXPLORER_QA_WEBMEET_TURN_MIN_PORT }}
+          WEBMEET_TURN_MAX_PORT: ${{ vars.EXPLORER_QA_WEBMEET_TURN_MAX_PORT }}
+          STRICT_INFRA_CHECKS: ${{ vars.EXPLORER_QA_STRICT_INFRA_CHECKS }}
+        run: |
+          set -euo pipefail
+
+          write_env() {
+            local name="$1"
+            local value="${!name:-}"
+            if [ "$name" != "PLOINKY_MASTER_KEY" ] && [ -z "$value" ]; then
+              return 0
+            fi
+            printf '%s=' "$name"
+            printf '%q\n' "$value"
+          }
+
+          {
+            write_env PLOINKY_MASTER_KEY
+            write_env SOUL_GATEWAY_PROVIDER_API_KEY
+            write_env SOUL_GATEWAY_PROVIDER_BASE_URL
+            write_env SOUL_GATEWAY_PROVIDER_DISCOVERY_MODE
+            write_env SOUL_GATEWAY_PROVIDER_ALIASES
+            write_env LMSTUDIO_PROXY_TOKEN
+            write_env LOCAL_LLM_API_KEY
+            write_env LOCAL_LLM_BASE_URL
+            write_env LOCAL_LLM_MODEL
+            write_env LOCAL_LLM_DISCOVERY_MODE
+            write_env ONLYOFFICE_PUBLIC_URL
+            write_env ONLYOFFICE_INTERNAL_URL
+            write_env ONLYOFFICE_CALLBACK_BASE_URL
+            write_env WEBMEET_PUBLIC_LIVEKIT_URL
+            write_env WEBMEET_LIVEKIT_URL
+            write_env WEBMEET_EGRESS_URL
+            write_env WEBMEET_INFRA_IMAGE_TAG
+            write_env PLOINKY_NODE_IMAGE_TAG
+            write_env WEBMEET_INFRA_HEALTH_PORT
+            write_env WEBMEET_LIVEKIT_USE_EXTERNAL_IP
+            write_env WEBMEET_LIVEKIT_NODE_IP
+            write_env WEBMEET_LIVEKIT_LOG_LEVEL
+            write_env WEBMEET_LIVEKIT_FORCE_TCP
+            write_env WEBMEET_LIVEKIT_REDIS_ADDRESS
+            write_env WEBMEET_EGRESS_REDIS_ADDRESS
+            write_env WEBMEET_LIVEKIT_INTERNAL_WS_URL
+            write_env WEBMEET_TLS_HOSTNAME
+            write_env WEBMEET_TLS_HTTPS_PORT
+            write_env WEBMEET_TLS_HTTP_PORT
+            write_env WEBMEET_LIVEKIT_UPSTREAM
+            write_env WEBMEET_CERT_EMAIL
+            write_env WEBMEET_CERTBOT_AUTO_ISSUE
+            write_env WEBMEET_CERTBOT_RENEW_INTERVAL_SECONDS
+            write_env WEBMEET_TURN_EXTERNAL_IP
+            write_env WEBMEET_TURN_HOST
+            write_env WEBMEET_TURN_PORT
+            write_env WEBMEET_TURN_REALM
+            write_env WEBMEET_TURN_USER
+            write_env WEBMEET_ICE_TRANSPORT_POLICY
+            write_env WEBMEET_TURN_MIN_PORT
+            write_env WEBMEET_TURN_MAX_PORT
+            write_env STRICT_INFRA_CHECKS
+          } > /tmp/explorer_qa_env
+          chmod 600 /tmp/explorer_qa_env
+
+          scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no /tmp/explorer_qa_env "${SSH_USER}@${SSH_HOST}:/tmp/explorer_qa_env"
+
+          PROXIES_BRANCH="${{ inputs.proxies_branch || vars.EXPLORER_QA_PROXIES_BRANCH || 'main' }}"
+          PLOINKY_BRANCH="${{ inputs.ploinky_branch || vars.EXPLORER_QA_PLOINKY_BRANCH || 'master' }}"
+          ACHILLES_BRANCH="${{ inputs.achilles_branch || vars.EXPLORER_QA_ACHILLES_BRANCH || 'master' }}"
+
+          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
+            -i ~/.ssh/deploy_key "${SSH_USER}@${SSH_HOST}" \
+            "WORKSPACE='$WORKSPACE' EXPLORER_BRANCH='$EXPLORER_BRANCH' PROXIES_BRANCH='$PROXIES_BRANCH' PLOINKY_BRANCH='$PLOINKY_BRANCH' ACHILLES_BRANCH='$ACHILLES_BRANCH' ROUTER_PORT='$ROUTER_PORT' PUBLIC_URL='$PUBLIC_URL' PLOINKY_PROFILE='$PLOINKY_PROFILE' SOUL_GATEWAY_WORKSPACE='$SOUL_GATEWAY_WORKSPACE' SOUL_GATEWAY_ROUTER_PORT='$SOUL_GATEWAY_ROUTER_PORT' bash -s" << 'REMOTE'
+          set -euo pipefail
+          # Ensure the plaintext env file is removed even if a later step exits non-zero.
+          trap 'rm -f /tmp/explorer_qa_env' EXIT
+
+          # --- Safety: never act on the co-located production Soul Gateway. ---
+          if [ "$WORKSPACE" = "${SOUL_GATEWAY_WORKSPACE:-soulGateway}" ]; then
+            echo "[deploy-qa] ERROR: refusing to operate on the production Soul Gateway workspace."
+            exit 1
+          fi
+          if [ "$ROUTER_PORT" = "${SOUL_GATEWAY_ROUTER_PORT:-8080}" ]; then
+            echo "[deploy-qa] ERROR: refusing to bind QA Explorer to the production Soul Gateway router port."
+            exit 1
+          fi
+
+          # --- Pre-flight: record whether production Soul Gateway is healthy now. ---
+          SOUL_HEALTH_URL="http://127.0.0.1:${SOUL_GATEWAY_ROUTER_PORT:-8080}/public-services/soul-gateway-health/"
+          SOUL_UP_BEFORE=0
+          if curl -sf "$SOUL_HEALTH_URL" >/dev/null 2>&1; then
+            SOUL_UP_BEFORE=1
+            echo "[deploy-qa] Pre-flight: production Soul Gateway is UP on :${SOUL_GATEWAY_ROUTER_PORT:-8080}."
+          else
+            echo "[deploy-qa] Pre-flight: production Soul Gateway not reachable before deploy (will not be made worse)."
+          fi
+
+          resolve_ploinky() {
+            if [ -x "$HOME/ploinky/bin/ploinky" ]; then
+              printf '%s\n' "$HOME/ploinky/bin/ploinky"
+              return 0
+            fi
+            if [ -x "$HOME/.local/bin/ploinky" ]; then
+              printf '%s\n' "$HOME/.local/bin/ploinky"
+              return 0
+            fi
+            if command -v ploinky >/dev/null 2>&1; then
+              command -v ploinky
+              return 0
+            fi
+            return 1
+          }
+
+          PLOINKY="$(resolve_ploinky)" || {
+            echo "[deploy] ERROR: ploinky is not installed on the remote host."
+            echo "[deploy] Run the Provision Skills Explorer Host workflow first."
+            exit 1
+          }
+
+          for tool in git node npm podman curl; do
+            if ! command -v "$tool" >/dev/null 2>&1; then
+              echo "[deploy] ERROR: missing required tool '$tool'."
+              echo "[deploy] Run the Provision Skills Explorer Host workflow first."
+              exit 1
+            fi
+          done
+
+          WORK_DIR="$HOME/$WORKSPACE"
+          mkdir -p "$WORK_DIR/logs"
+          cd "$WORK_DIR"
+
+          set -a
+          . /tmp/explorer_qa_env
+          set +a
+          rm -f /tmp/explorer_qa_env
+
+          LOCAL_LLM_API_KEY="${LOCAL_LLM_API_KEY:-${LMSTUDIO_PROXY_TOKEN:-}}"
+          if [ -n "${SOUL_GATEWAY_API_KEY:-}" ] && [ -z "${SOUL_GATEWAY_PROVIDER_API_KEY:-}" ]; then
+            SOUL_GATEWAY_PROVIDER_API_KEY="$SOUL_GATEWAY_API_KEY"
+            unset SOUL_GATEWAY_API_KEY
+            echo "[deploy] Treating legacy SOUL_GATEWAY_API_KEY input as SOUL_GATEWAY_PROVIDER_API_KEY."
+          fi
+          if [ -n "${SOUL_GATEWAY_PROVIDER_API_KEY:-}" ]; then
+            echo "[deploy] Soul Gateway provider credential is configured; Explorer consumers will use the generated local gateway key and the local gateway will delegate to the Soul Gateway provider."
+          else
+            LOCAL_LLM_BASE_URL="${LOCAL_LLM_BASE_URL:-https://lmstudio.axiologic.dev/v1}"
+            LOCAL_LLM_MODEL="${LOCAL_LLM_MODEL:-gemma-3-12b-it}"
+            LOCAL_LLM_DISCOVERY_MODE="${LOCAL_LLM_DISCOVERY_MODE:-single}"
+            if [ "$LOCAL_LLM_BASE_URL" = "https://lmstudio.axiologic.dev/v1" ] && [ -z "${LOCAL_LLM_API_KEY:-}" ]; then
+              echo "[deploy] ERROR: SOUL_GATEWAY_PROVIDER_API_KEY is unset, so a local LLM provider credential is required."
+              echo "[deploy] Set LMSTUDIO_PROXY_TOKEN or LOCAL_LLM_API_KEY for the default LOCAL_LLM_BASE_URL."
+              exit 1
+            fi
+          fi
+
+          WEBMEET_INFRA_IMAGE_TAG="${WEBMEET_INFRA_IMAGE_TAG:-webmeet-infra}"
+          PLOINKY_NODE_IMAGE_TAG="${PLOINKY_NODE_IMAGE_TAG:-24-bookworm-tools}"
+          WEBMEET_INFRA_HEALTH_PORT="${WEBMEET_INFRA_HEALTH_PORT:-17000}"
+          if [ "${WEBMEET_EGRESS_URL:-}" = "http://webmeetLivekitEgress:7980" ]; then
+            echo "[deploy] Ignoring retired split-agent WEBMEET_EGRESS_URL override."
+            WEBMEET_EGRESS_URL=""
+          fi
+          if [ "${PLOINKY_PROFILE:-prod}" = "prod" ]; then
+            WEBMEET_EGRESS_URL="${WEBMEET_EGRESS_URL:-http://host.containers.internal:7980}"
+          fi
+
+          # (Finding 1) 'ploinky shutdown' kills whatever listens on the port in
+          # THIS workspace's routing.json, defaulting to :8080 when that file is
+          # absent. Only shut down when this QA workspace provably owns ROUTER_PORT.
+          read_routing_port() {
+            node -e 'try{const p=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).port;process.stdout.write(p?String(p):"")}catch(e){process.stdout.write("")}' "$1" 2>/dev/null || true
+          }
+          SAFE_TO_SHUTDOWN=0
+          if [ -f "$WORK_DIR/.ploinky/routing.json" ]; then
+            QA_ROUTING_PORT="$(read_routing_port "$WORK_DIR/.ploinky/routing.json")"
+            if [ "$QA_ROUTING_PORT" = "$ROUTER_PORT" ]; then
+              SAFE_TO_SHUTDOWN=1
+            elif [ -n "$QA_ROUTING_PORT" ]; then
+              echo "[deploy-qa] ERROR: existing QA routing.json port ($QA_ROUTING_PORT) != ROUTER_PORT ($ROUTER_PORT)."
+              echo "[deploy-qa] 'ploinky shutdown' would target a port this run does not own. Aborting."
+              exit 1
+            fi
+          fi
+          if [ "$SAFE_TO_SHUTDOWN" = "1" ]; then
+            echo "[deploy-qa] QA workspace owns :$ROUTER_PORT; shutting it down before redeploy..."
+            env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" shutdown || \
+              env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" stop || true
+          else
+            echo "[deploy-qa] Cold/unconfirmed QA workspace; SKIPPING 'ploinky shutdown' (it would default to :${SOUL_GATEWAY_ROUTER_PORT:-8080} and could kill the production Soul Gateway router)."
+          fi
+
+          # (Finding 1) Refuse to start if ROUTER_PORT is held by a router this run does not own.
+          # SAFE_TO_SHUTDOWN=1 means we just shut our own router down (port is freeing); any
+          # other case (cold/absent/foreign) with a live listener on ROUTER_PORT is not ours.
+          if [ "$SAFE_TO_SHUTDOWN" != "1" ] && ss -ltn 2>/dev/null | awk '{print $4}' | grep -Eq "[:.]${ROUTER_PORT}$"; then
+            echo "[deploy-qa] ERROR: port ${ROUTER_PORT} is already in use and is not owned by this QA workspace."
+            exit 1
+          fi
+
+          echo "[deploy-qa] Verifying shared Ploinky runtime branches WITHOUT mutating them..."
+          resolve_realpath() {
+            if command -v realpath >/dev/null 2>&1; then realpath "$1"; else readlink -f "$1"; fi
+          }
+          PLOINKY_BIN="$(resolve_realpath "$PLOINKY")"
+          PLOINKY_DIR="$(cd "$(dirname "$PLOINKY_BIN")/.." && pwd -P)"
+          if [ ! -d "$PLOINKY_DIR/.git" ] && [ -d "$HOME/ploinky/.git" ]; then
+            PLOINKY_DIR="$HOME/ploinky"
+            PLOINKY="$PLOINKY_DIR/bin/ploinky"
+          fi
+          assert_runtime_branch() {
+            local repo_dir="$1" want="$2" label="$3" have
+            if [ ! -d "$repo_dir/.git" ]; then
+              echo "[deploy-qa] $label is not a git checkout ($repo_dir); leaving untouched."
+              return 0
+            fi
+            have="$(git -C "$repo_dir" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
+            if [ "$have" != "$want" ]; then
+              echo "[deploy-qa] ERROR: shared $label is on '$have' but this QA run requested '$want'."
+              echo "[deploy-qa] This runtime is shared with production Soul Gateway; QA will not switch it."
+              echo "[deploy-qa] Re-run with the matching *_branch input/var, or realign the host via the Soul Gateway deploy."
+              exit 1
+            fi
+            echo "[deploy-qa] Shared $label already on '$have' (left untouched)."
+          }
+          assert_runtime_branch "$PLOINKY_DIR" "${PLOINKY_BRANCH:-master}" "Ploinky runtime"
+          assert_runtime_branch "$PLOINKY_DIR/node_modules/achillesAgentLib" "${ACHILLES_BRANCH:-master}" "achillesAgentLib"
+
+          echo "[deploy] Ensuring Ploinky repos are installed and enabled..."
+          "$PLOINKY" add repo AchillesIDE https://github.com/PloinkyRepos/AssistOSExplorer.git "${EXPLORER_BRANCH:-main}" || true
+          "$PLOINKY" add repo webmeetInfra https://github.com/PloinkyRepos/webmeetInfra.git main || true
+          "$PLOINKY" add repo proxies https://github.com/PloinkyRepos/proxies.git "${PROXIES_BRANCH:-main}" || true
+          "$PLOINKY" enable repo AchillesIDE
+          "$PLOINKY" enable repo webmeetInfra
+          "$PLOINKY" enable repo proxies
+
+          echo "[deploy-qa] Skipping global 'ploinky update' to avoid mutating the shared runtime; QA uses the host runtime maintained by Soul Gateway deploys. Workspace repos are refreshed below."
+
+          for repo_spec in "AchillesIDE:${EXPLORER_BRANCH:-main}" "webmeetInfra:main" "proxies:${PROXIES_BRANCH:-main}"; do
+            repo_name="${repo_spec%%:*}"
+            repo_branch="${repo_spec#*:}"
+            repo_dir="$WORK_DIR/.ploinky/repos/$repo_name"
+            if [ -d "$repo_dir/.git" ]; then
+              git -C "$repo_dir" fetch origin
+              git -C "$repo_dir" checkout "$repo_branch"
+              git -C "$repo_dir" reset --hard "origin/$repo_branch"
+              git -C "$repo_dir" clean -fd
+              echo "[deploy] $repo_name at $(git -C "$repo_dir" rev-parse --short HEAD)"
+            fi
+          done
+
+          cleanup_retired_webmeet_infra() {
+            local retired_agents=(
+              stack
+              webmeetCoturn
+              webmeetRedis
+              webmeetLivekitServer
+              webmeetLivekitEgress
+              webmeetLivekitNginx
+              webmeetLivekitCertbot
+            )
+
+            echo "[deploy] Removing retired split WebMeet infra agent registrations..."
+            for agent in "${retired_agents[@]}"; do
+              env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" disable agent "webmeetInfra/$agent" || true
+              env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" disable agent "$agent" || true
+            done
+
+            node <<'NODE'
+          const fs = require('fs');
+          const path = require('path');
+
+          const retired = new Set([
+            'stack',
+            'webmeetCoturn',
+            'webmeetRedis',
+            'webmeetLivekitServer',
+            'webmeetLivekitEgress',
+            'webmeetLivekitNginx',
+            'webmeetLivekitCertbot',
+          ]);
+          const root = process.cwd();
+
+          function splitRef(value) {
+            const text = String(value || '');
+            const parts = text.split('/');
+            return {
+              repo: parts.length > 1 ? parts[0] : '',
+              agent: parts[parts.length - 1] || text,
+            };
+          }
+
+          function readJson(filePath) {
+            try {
+              return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+            } catch (_) {
+              return null;
+            }
+          }
+
+          function writeJson(filePath, value) {
+            fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`);
+          }
+
+          const agentsPath = path.join(root, '.ploinky', 'agents.json');
+          const agents = readJson(agentsPath);
+          let agentsChanged = false;
+          if (agents && typeof agents === 'object') {
+            for (const [key, record] of Object.entries(agents)) {
+              if (key === '_config' || !record || typeof record !== 'object') continue;
+              const keyRef = splitRef(key);
+              const repo = String(record.repoName || keyRef.repo);
+              const agent = String(record.agentName || keyRef.agent);
+              if (repo === 'webmeetInfra' && retired.has(agent)) {
+                delete agents[key];
+                agentsChanged = true;
+              }
+            }
+            if (agentsChanged) {
+              writeJson(agentsPath, agents);
+            }
+          }
+
+          const routingPath = path.join(root, '.ploinky', 'routing.json');
+          const routing = readJson(routingPath);
+          let routingChanged = false;
+          if (routing && routing.routes && typeof routing.routes === 'object') {
+            for (const [key, route] of Object.entries(routing.routes)) {
+              const keyRef = splitRef(key);
+              const routeRef = splitRef(route && route.agent);
+              const agent = String(routeRef.agent || keyRef.agent);
+              const repo = String(route && route.repo || routeRef.repo || keyRef.repo);
+              if (retired.has(agent) && (!repo || repo === 'webmeetInfra')) {
+                delete routing.routes[key];
+                routingChanged = true;
+              }
+            }
+            if (routingChanged) {
+              writeJson(routingPath, routing);
+            }
+          }
+
+          console.log(`[deploy] Retired registry cleanup: agents=${agentsChanged ? 'updated' : 'unchanged'} routes=${routingChanged ? 'updated' : 'unchanged'}`);
+          NODE
+
+            local retired_pattern="^ploinky_webmeetInfra_(stack|webmeetCoturn|webmeetRedis|webmeetLivekitServer|webmeetLivekitEgress|webmeetLivekitNginx|webmeetLivekitCertbot)_${WORKSPACE}_"
+            podman ps -a --format '{{.Names}}' | grep -E "$retired_pattern" | while read -r container_name; do
+              [ -n "$container_name" ] || continue
+              echo "[deploy] Removing retired container $container_name"
+              podman rm -f "$container_name" || true
+            done || true
+          }
+
+          cleanup_retired_webmeet_infra
+
+          "$PLOINKY" profile "${PLOINKY_PROFILE:-prod}"
+          "$PLOINKY" sandbox disable
+
+          set_var() {
+            local name="$1"
+            local value="$2"
+            if [ -n "$value" ]; then
+              env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" var "$name" "$value"
+              echo "[deploy] Set $name"
+            fi
+          }
+
+          set_var PLOINKY_CODE_WRITABLE "1"
+          set_var ASSISTOS_FS_ROOT "$WORK_DIR"
+          set_var WORKSPACE_ROOT "$WORK_DIR"
+          set_var PLOINKY_WORKSPACE_ROOT "$WORK_DIR"
+
+          set_var SOUL_GATEWAY_PROVIDER_API_KEY "${SOUL_GATEWAY_PROVIDER_API_KEY:-}"
+          set_var SOUL_GATEWAY_PROVIDER_BASE_URL "${SOUL_GATEWAY_PROVIDER_BASE_URL:-}"
+          set_var SOUL_GATEWAY_PROVIDER_DISCOVERY_MODE "${SOUL_GATEWAY_PROVIDER_DISCOVERY_MODE:-}"
+          set_var SOUL_GATEWAY_PROVIDER_ALIASES "${SOUL_GATEWAY_PROVIDER_ALIASES:-}"
+          set_var LOCAL_LLM_BASE_URL "${LOCAL_LLM_BASE_URL:-}"
+          set_var LOCAL_LLM_MODEL "${LOCAL_LLM_MODEL:-}"
+          set_var LOCAL_LLM_DISCOVERY_MODE "${LOCAL_LLM_DISCOVERY_MODE:-}"
+          set_var LOCAL_LLM_API_KEY "${LOCAL_LLM_API_KEY:-}"
+
+          set_var ONLYOFFICE_PUBLIC_URL "${ONLYOFFICE_PUBLIC_URL:-}"
+          set_var ONLYOFFICE_INTERNAL_URL "${ONLYOFFICE_INTERNAL_URL:-}"
+          set_var ONLYOFFICE_CALLBACK_BASE_URL "${ONLYOFFICE_CALLBACK_BASE_URL:-$PUBLIC_URL}"
+
+          set_var WEBMEET_PUBLIC_LIVEKIT_URL "${WEBMEET_PUBLIC_LIVEKIT_URL:-}"
+          set_var WEBMEET_LIVEKIT_URL "${WEBMEET_LIVEKIT_URL:-}"
+          set_var WEBMEET_EGRESS_URL "${WEBMEET_EGRESS_URL:-}"
+          set_var WEBMEET_INFRA_IMAGE_TAG "${WEBMEET_INFRA_IMAGE_TAG:-webmeet-infra}"
+          set_var WEBMEET_INFRA_HEALTH_PORT "${WEBMEET_INFRA_HEALTH_PORT:-17000}"
+          set_var WEBMEET_LIVEKIT_USE_EXTERNAL_IP "${WEBMEET_LIVEKIT_USE_EXTERNAL_IP:-}"
+          set_var WEBMEET_LIVEKIT_NODE_IP "${WEBMEET_LIVEKIT_NODE_IP:-}"
+          set_var WEBMEET_LIVEKIT_LOG_LEVEL "${WEBMEET_LIVEKIT_LOG_LEVEL:-}"
+          set_var WEBMEET_LIVEKIT_FORCE_TCP "${WEBMEET_LIVEKIT_FORCE_TCP:-}"
+          set_var WEBMEET_LIVEKIT_REDIS_ADDRESS "${WEBMEET_LIVEKIT_REDIS_ADDRESS:-}"
+          set_var WEBMEET_EGRESS_REDIS_ADDRESS "${WEBMEET_EGRESS_REDIS_ADDRESS:-}"
+          set_var WEBMEET_LIVEKIT_INTERNAL_WS_URL "${WEBMEET_LIVEKIT_INTERNAL_WS_URL:-}"
+          set_var WEBMEET_TLS_HOSTNAME "${WEBMEET_TLS_HOSTNAME:-}"
+          set_var WEBMEET_TLS_HTTPS_PORT "${WEBMEET_TLS_HTTPS_PORT:-}"
+          set_var WEBMEET_TLS_HTTP_PORT "${WEBMEET_TLS_HTTP_PORT:-}"
+          set_var WEBMEET_LIVEKIT_UPSTREAM "${WEBMEET_LIVEKIT_UPSTREAM:-}"
+          set_var WEBMEET_CERT_EMAIL "${WEBMEET_CERT_EMAIL:-}"
+          set_var WEBMEET_CERTBOT_AUTO_ISSUE "${WEBMEET_CERTBOT_AUTO_ISSUE:-}"
+          set_var WEBMEET_CERTBOT_RENEW_INTERVAL_SECONDS "${WEBMEET_CERTBOT_RENEW_INTERVAL_SECONDS:-}"
+          set_var WEBMEET_TURN_EXTERNAL_IP "${WEBMEET_TURN_EXTERNAL_IP:-}"
+          set_var WEBMEET_TURN_HOST "${WEBMEET_TURN_HOST:-}"
+          set_var WEBMEET_TURN_PORT "${WEBMEET_TURN_PORT:-}"
+          set_var WEBMEET_TURN_REALM "${WEBMEET_TURN_REALM:-}"
+          set_var WEBMEET_TURN_USER "${WEBMEET_TURN_USER:-}"
+          set_var WEBMEET_ICE_TRANSPORT_POLICY "${WEBMEET_ICE_TRANSPORT_POLICY:-all}"
+          set_var WEBMEET_TURN_MIN_PORT "${WEBMEET_TURN_MIN_PORT:-}"
+          set_var WEBMEET_TURN_MAX_PORT "${WEBMEET_TURN_MAX_PORT:-}"
+
+          echo "[deploy] Pulling Ploinky Node image docker.io/assistos/ploinky-node:${PLOINKY_NODE_IMAGE_TAG}..."
+          podman pull "docker.io/assistos/ploinky-node:${PLOINKY_NODE_IMAGE_TAG}"
+
+          echo "[deploy] Pulling liveKitServerAgent image docker.io/assistos/livekit-server-agent:${WEBMEET_INFRA_IMAGE_TAG}..."
+          podman pull "docker.io/assistos/livekit-server-agent:${WEBMEET_INFRA_IMAGE_TAG}"
+
+          echo "[deploy] Starting Explorer..."
+          nohup env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" start AchillesIDE/explorer "$ROUTER_PORT" \
+            --branch "${EXPLORER_BRANCH:-main}" \
+            --repo-branch "proxies=${PROXIES_BRANCH:-main}" \
+            --repo-branch "webmeetInfra=main" \
+            --branch-fallback fail \
+            --reset-repos \
+            > "$WORK_DIR/logs/explorer-qa-start.log" 2>&1 &
+
+          echo "[deploy] Waiting for local router..."
+          sleep 10
+          for i in $(seq 1 390); do
+            code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${ROUTER_PORT}/dashboard" || true)"
+            if [ "$code" = "200" ] || [ "$code" = "302" ]; then
+              echo "[deploy] Local router responding with HTTP $code"
+              break
+            fi
+            if [ "$i" = "390" ]; then
+              echo "[deploy] ERROR: local router did not respond in time"
+              tail -120 "$WORK_DIR/logs/explorer-qa-start.log" || true
+              exit 1
+            fi
+            sleep 2
+          done
+
+          case "$(printf '%s' "${STRICT_INFRA_CHECKS:-0}" | tr '[:upper:]' '[:lower:]')" in
+            1|true|yes|on) INFRA_FATAL=1 ;;
+            *) INFRA_FATAL=0 ;;
+          esac
+          echo "[deploy-qa] Verifying liveKitServerAgent health on 127.0.0.1:${WEBMEET_INFRA_HEALTH_PORT} (fatal=${INFRA_FATAL})..."
+          LK_OK=0
+          for i in $(seq 1 120); do
+            code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${WEBMEET_INFRA_HEALTH_PORT}/" || true)"
+            if [ "$code" = "200" ]; then LK_OK=1; echo "[deploy-qa] liveKitServerAgent health responding with HTTP $code"; break; fi
+            sleep 2
+          done
+          if [ "$LK_OK" != "1" ]; then
+            if [ "$INFRA_FATAL" = "1" ]; then
+              echo "[deploy-qa] ERROR: liveKitServerAgent health did not respond and STRICT_INFRA_CHECKS=1."
+              tail -120 "$WORK_DIR/logs/explorer-qa-start.log" || true
+              exit 1
+            fi
+            echo "[deploy-qa] WARNING: liveKitServerAgent health not responding; continuing (QA non-strict)."
+          fi
+
+          ONLYOFFICE_API_BASE="${ONLYOFFICE_INTERNAL_URL:-http://127.0.0.1:8082}"
+          echo "[deploy-qa] Verifying OnlyOffice api.js through ${ONLYOFFICE_API_BASE%/} (fatal=${INFRA_FATAL})..."
+          OO_OK=0
+          for i in $(seq 1 120); do
+            code="$(curl -s -o /dev/null -w '%{http_code}' "${ONLYOFFICE_API_BASE%/}/web-apps/apps/api/documents/api.js" || true)"
+            if [ "$code" = "200" ]; then OO_OK=1; echo "[deploy-qa] OnlyOffice api.js responding with HTTP $code"; break; fi
+            sleep 2
+          done
+          if [ "$OO_OK" != "1" ]; then
+            if [ "$INFRA_FATAL" = "1" ]; then
+              echo "[deploy-qa] ERROR: OnlyOffice api.js did not respond and STRICT_INFRA_CHECKS=1."
+              tail -120 "$WORK_DIR/logs/explorer-qa-start.log" || true
+              exit 1
+            fi
+            echo "[deploy-qa] WARNING: OnlyOffice api.js not responding; continuing (QA non-strict)."
+          fi
+
+          echo "[deploy] Containers:"
+          podman ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | head -100
+          echo "[deploy-qa] QA workspace status:"
+          env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" status || true
+
+          # (Finding 1 backstop) production Soul Gateway must be no worse than before.
+          if [ "$SOUL_UP_BEFORE" = "1" ]; then
+            echo "[deploy-qa] Post-flight: re-verifying production Soul Gateway on :${SOUL_GATEWAY_ROUTER_PORT:-8080}..."
+            SOUL_OK=0
+            for i in $(seq 1 30); do
+              if curl -sf "$SOUL_HEALTH_URL" >/dev/null 2>&1; then SOUL_OK=1; break; fi
+              sleep 2
+            done
+            if [ "$SOUL_OK" != "1" ]; then
+              echo "[deploy-qa] ERROR: production Soul Gateway was UP before this deploy but is now unreachable on :${SOUL_GATEWAY_ROUTER_PORT:-8080}."
+              echo "[deploy-qa] The QA deploy may have disrupted production. Investigate immediately."
+              exit 1
+            fi
+            echo "[deploy-qa] Post-flight: production Soul Gateway still healthy."
+          fi
+          REMOTE
+
+      - name: Verify public URL
+        if: ${{ env.PUBLIC_URL != '' }}
+        env:
+          ONLYOFFICE_PUBLIC_URL: ${{ vars.EXPLORER_QA_ONLYOFFICE_PUBLIC_URL }}
+        run: |
+          set -euo pipefail
+          echo "[deploy-qa] Verifying ${PUBLIC_URL}/dashboard from GitHub runner..."
+          for i in $(seq 1 60); do
+            code="$(curl -L -s -o /tmp/explorer-qa-response.txt -w '%{http_code}' "${PUBLIC_URL%/}/dashboard" || true)"
+            if [ "$code" = "200" ] || [ "$code" = "302" ]; then
+              echo "[deploy-qa] Public URL responding with HTTP $code"
+              break
+            fi
+            if [ "$i" = "60" ]; then
+              echo "[deploy-qa] ERROR: public URL did not become reachable"
+              echo "[deploy-qa] Last HTTP code: ${code:-none}"
+              sed -n '1,40p' /tmp/explorer-qa-response.txt 2>/dev/null || true
+              exit 1
+            fi
+            sleep 5
+          done
+
+          if [ -n "${ONLYOFFICE_PUBLIC_URL:-}" ]; then
+            echo "[deploy-qa] Verifying OnlyOffice public api.js from GitHub runner..."
+            for i in $(seq 1 60); do
+              code="$(curl -L -s -o /tmp/onlyoffice-qa-api.js -w '%{http_code}' "${ONLYOFFICE_PUBLIC_URL%/}/web-apps/apps/api/documents/api.js" || true)"
+              if [ "$code" = "200" ]; then
+                echo "[deploy-qa] OnlyOffice public api.js responding with HTTP $code"
+                break
+              fi
+              if [ "$i" = "60" ]; then
+                echo "[deploy-qa] ERROR: OnlyOffice public api.js did not become reachable"
+                exit 1
+              fi
+              sleep 5
+            done
+          fi
+
+      - name: Create summary
+        if: always()
+        run: |
+          {
+            echo "## Explorer QA Deploy"
+            echo ""
+            echo "- Host: \`${SSH_USER}@${SSH_HOST}\`"
+            echo "- Workspace: \`${WORKSPACE}\`"
+            echo "- Router port: \`${ROUTER_PORT}\`"
+            echo "- Local dashboard: \`http://127.0.0.1:${ROUTER_PORT}/dashboard\`"
+            echo "- Public URL: \`${PUBLIC_URL:-not configured}\`"
+            echo "- Branch: \`${EXPLORER_BRANCH}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/deploy_key /tmp/explorer_qa_env

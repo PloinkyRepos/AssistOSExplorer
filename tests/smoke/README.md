@@ -37,13 +37,13 @@ Default smoke checks:
 - WebChat file and folder uploads through the browser.
 - WebChat upload containment evidence from the upload response: `uploads/<sessionId>/...`.
 - Session-scoped WebChat `@` file suggestions by comparing two browser contexts.
-- WebChat `@open-interpreter` suggestion, selection, and composer highlight.
+- WebChat provider-looking `@open-interpreter` text is not offered as a dispatch suggestion.
 - WebMeet room creation, two-account join, chat delivery, and cleanup.
-- WebMeet `@open-interpreter` suggestion, selection, and composer highlight.
+- WebMeet provider-looking `@open-interpreter` text stays ordinary meeting chat.
 
 Opt-in checks:
 
-- `SMOKE_OPEN_INTERPRETER=1` waits for real relay responses from Open Interpreter.
+- `SMOKE_OPEN_INTERPRETER=1` runs Copilot semantic routing and AKU memory checks that require configured external provider runtime.
 - `SMOKE_WEBMEET_MEDIA=1` enables fake camera/microphone and asserts WebRTC stats increase.
 - `SMOKE_WEBMEET_SCREEN=1` is reserved for headless screen-share coverage once the runtime environment supports deterministic display capture.
 - `SMOKE_ONLYOFFICE=1` enables DPU/OnlyOffice route checks.

@@ -23,7 +23,56 @@ export async function openTaggedWebchat(page, account = smokeConfig.primaryUser)
   await signIn(page, account, '/dashboard');
   await page.goto(taggedWebchatPath(), { waitUntil: 'domcontentloaded' });
   await expect(page.locator('#cmd')).toBeVisible();
+  await cancelWebchatGenerationIfActive(page);
+  await waitForWebchatIdle(page);
+}
+
+export async function waitForWebchatIdle(page, timeout = smokeConfig.timeouts.navigation) {
+  await expect(page.locator('#typingIndicator')).toHaveAttribute('aria-hidden', 'true', { timeout });
+  await expect(page.locator('#cancelBtn')).toBeHidden({ timeout });
   await expect(page.locator('#send')).toBeVisible();
+}
+
+export async function cancelWebchatGenerationIfActive(page) {
+  await page.waitForTimeout(1_000);
+  const cancelButton = page.locator('#cancelBtn');
+  const active = await cancelButton.isVisible({ timeout: 2_000 }).catch(() => false);
+  if (!active) return;
+  await cancelButton.click();
+  await waitForWebchatIdle(page);
+}
+
+async function captureNextUploadResponse(page) {
+  const pattern = '**/uploads**';
+  let handler;
+  const promise = new Promise((resolve, reject) => {
+    handler = async (route) => {
+      if (route.request().method() !== 'POST') {
+        await route.continue();
+        return;
+      }
+
+      try {
+        const response = await route.fetch();
+        const body = await response.text();
+        let payload = null;
+        try {
+          payload = JSON.parse(body);
+        } catch (error) {
+          reject(error);
+        }
+        resolve({ status: response.status(), payload, body });
+        await route.fulfill({ response, body });
+      } catch (error) {
+        reject(error);
+        await route.abort().catch(() => {});
+      } finally {
+        await page.unroute(pattern, handler).catch(() => {});
+      }
+    };
+  });
+  await page.route(pattern, handler);
+  return promise;
 }
 
 export async function setComposer(page, value) {
@@ -62,17 +111,14 @@ export async function uploadOneFile(page, testInfo, name = `smoke-${smokeConfig.
   await page.locator('#fileUploadInput').setInputFiles(filePath);
   await expect(page.locator('.wa-file-preview-name', { hasText: name })).toBeVisible();
 
-  const responsePromise = page.waitForResponse((response) => (
-    response.request().method() === 'POST'
-    && response.url().includes('/uploads')
-  ));
+  const responsePromise = captureNextUploadResponse(page);
   await page.locator('#send').click();
-  const response = await responsePromise;
-  expect(response.status()).toBe(200);
-  const payload = await response.json();
+  const { status, payload } = await responsePromise;
+  expect(status).toBe(201);
   expect(payload.relativePath).toBe(name);
   expect(payload.workspacePath).toMatch(/^uploads\/[A-Za-z0-9_-]{1,128}\//);
   expect(payload.downloadUrl).toContain('/webchat/uploads');
+  await cancelWebchatGenerationIfActive(page);
   return { filePath, name, payload };
 }
 
@@ -87,15 +133,12 @@ export async function uploadFolder(page, testInfo, folderName = `smoke-folder-${
   await page.locator('#folderUploadInput').setInputFiles(folderPath);
   await expect(page.locator('.wa-file-preview-name', { hasText: relativePath })).toBeVisible();
 
-  const responsePromise = page.waitForResponse((response) => (
-    response.request().method() === 'POST'
-    && response.url().includes('/uploads')
-  ));
+  const responsePromise = captureNextUploadResponse(page);
   await page.locator('#send').click();
-  const response = await responsePromise;
-  expect(response.status()).toBe(200);
-  const payload = await response.json();
+  const { status, payload } = await responsePromise;
+  expect(status).toBe(201);
   expect(payload.relativePath).toBe(relativePath);
   expect(payload.workspacePath).toMatch(/^uploads\/[A-Za-z0-9_-]{1,128}\//);
+  await cancelWebchatGenerationIfActive(page);
   return { folderPath, folderName, relativePath, payload };
 }
