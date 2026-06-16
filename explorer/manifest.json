@@ -43,7 +43,7 @@
             "agent": "webAssist",
             "profile": "embedded"
         },
-        "proxies/soul-gateway"
+        "proxies/soul-gateway no-wait"
     ],
     "repos": {
         "AxiFace": "https://github.com/PloinkyRepos/AxiFace.git",
