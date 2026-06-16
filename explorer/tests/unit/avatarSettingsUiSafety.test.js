@@ -27,7 +27,7 @@ test('avatar settings use shared source-mode form for profile and agent avatars'
     assert.match(html, /data-avatar-tab="agent"/);
     assert.match(html, /<avatar-settings-form[^>]+data-avatar-scope="profile"/);
     assert.match(html, /<avatar-settings-form[^>]+data-avatar-scope="agent"/);
-    assert.match(source, /shared\/ui\/avatar-settings-form\/avatar-settings-form/);
+    assert.match(source, /\/explorer\/ui-shared\/avatar-settings-form\/avatar-settings-form/);
     assert.match(source, /ensureAvatarSettingsFormRegistered/);
     assert.match(source, /loadAxiFacePacks/);
     assert.doesNotMatch(source, /AVATAR_FIELD_DEFS/);
