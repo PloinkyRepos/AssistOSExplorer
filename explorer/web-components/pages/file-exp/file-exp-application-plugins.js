@@ -114,6 +114,7 @@ function updateMountedPluginElement(pluginElement, plugin, context) {
     pluginElement.setAttribute('data-plugin-label', label);
     pluginElement.setAttribute('data-plugin-tooltip', tooltip);
     pluginElement.setAttribute('data-plugin-icon', typeof plugin?.icon === 'string' ? plugin.icon : '');
+    pluginElement.setAttribute('data-plugin-agent', typeof plugin?.agent === 'string' ? plugin.agent : '');
     if (typeof context?.slot === 'string' && context.slot.trim()) {
         pluginElement.setAttribute('data-host-slot', context.slot.trim());
     } else {
@@ -128,6 +129,7 @@ function updateMountedPluginElement(pluginElement, plugin, context) {
     if (typeof presenter?.updateHostContext === 'function') {
         presenter.updateHostContext({
             ...(context || {}),
+            pluginAgent: typeof plugin?.agent === 'string' ? plugin.agent : '',
             pluginLabel: label,
             pluginTooltip: tooltip,
             pluginIcon: typeof plugin?.icon === 'string' ? plugin.icon : ''
