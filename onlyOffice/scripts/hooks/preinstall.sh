@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-workspace_root="${PLOINKY_CWD:-$PWD}"
+workspace_root="${PLOINKY_WORKSPACE_ROOT:?PLOINKY_WORKSPACE_ROOT is required}"
 profile="${PLOINKY_PROFILE:-default}"
 data_root="${workspace_root}/.ploinky/data/onlyOffice"
 onlyoffice_version="${ONLYOFFICE_VERSION:-9.3.1}"
