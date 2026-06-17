@@ -80,6 +80,7 @@ Public URL: `https://skills.axiologic.dev`. SSH: `admin@193.180.209.191` (key `~
 ## Commit/PR rules
 
 - Inherits root workspace commit policy (no AI attribution). See `~/work/file-parser/CLAUDE.md`.
+- **Active feature branch (TEMPORARY, set 2026-06-16):** Only commit on `soul-gateway-local-integration`; never on `main`/`master`. Holds until the user lifts it — see root `CLAUDE.md`.
 - Commits in present-tense imperative ("Add smoke harness helpers"). Group unrelated changes into separate commits.
 - PRs link issues, outline behavior impact, include repro steps or test output when touching runtime flows.
 - Add screenshots/captures for dashboard, Explorer UI, or CLI changes.
