@@ -1,0 +1,149 @@
+:root {
+    color-scheme: light dark;
+
+    --bg: #f4f5f7;
+    --bg-active: rgba(37, 99, 235, 0.08);
+    --surface: #ffffff;
+    --surface-soft: #f9fafb;
+    --surface-dark: #1f2933;
+    --text: #1f2933;
+    --text-soft: #4b5563;
+    --accent: #2563eb;
+    --accent-muted: #93c5fd;
+    --accent-rgb: 37, 99, 235;
+    --border: #e5e7eb;
+    --border-strong: #cbd5e1;
+
+    --default-font: "Inter", sans-serif;
+    --mono-font: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+
+    --black: black;
+    --white: white;
+    --white-text: white;
+    --red: #DB5C5C;
+    --danger: #b91c1c;
+    --warning: #f59e0b;
+    --success: #047857;
+
+    --input-bg: var(--surface);
+    --input-bg-focus: var(--surface);
+    --input-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+    --form-input-border: #BDBDBD;
+    --light-gray: #BDBDBD;
+    --very-light-gray: #c2c2c299;
+    --light-gray-border: #EFEFEF;
+    --inactive-element: #F9F9F9;
+    --option-hover: #F2F2F2;
+    --menu-backgroud: #F5F5F5;
+
+    --file-exp-panel: var(--surface);
+    --file-exp-border: var(--border);
+    --gray-button-background: #EDEDED;
+    --gray-button-text: #454545;
+    --gray-button-border: #CCCCCC;
+
+    --backlog-status-approved-glow: rgba(59, 130, 246, 0.2);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #26282C;
+        --bg-active: rgba(96, 165, 250, 0.14);
+        --surface: #191A1C;
+        --surface-soft: #1E1F22;
+        --surface-dark: #131416;
+        --text: #CFD1D6;
+        --text-soft: #9FA2A8;
+        --accent: #60A5FA;
+        --accent-muted: #60A5FA;
+        --accent-rgb: 96, 165, 250;
+        --border: #393B42;
+        --border-strong: #40434A;
+        --danger: #f87171;
+        --warning: #fbbf24;
+        --success: #34d399;
+        --input-bg: var(--surface);
+        --input-bg-focus: var(--surface);
+        --form-input-border: #40434A;
+        --light-gray: #73767C;
+        --very-light-gray: rgba(255, 255, 255, 0.10);
+        --light-gray-border: #393B42;
+        --inactive-element: #1E1F22;
+        --option-hover: #33353B;
+        --menu-backgroud: #1E1F22;
+        --file-exp-panel: var(--surface);
+        --file-exp-border: var(--border);
+        --gray-button-background: #2B2D31;
+        --gray-button-text: #CFD1D6;
+        --gray-button-border: #40434A;
+        --backlog-status-approved-glow: rgba(96, 165, 250, 0.34);
+    }
+}
+
+.theme-dark {
+    color-scheme: dark;
+    --bg: #26282C;
+    --bg-active: rgba(96, 165, 250, 0.14);
+    --surface: #191A1C;
+    --surface-soft: #1E1F22;
+    --surface-dark: #131416;
+    --text: #CFD1D6;
+    --text-soft: #9FA2A8;
+    --accent: #60A5FA;
+    --accent-muted: #60A5FA;
+    --accent-rgb: 96, 165, 250;
+    --border: #393B42;
+    --border-strong: #40434A;
+    --danger: #f87171;
+    --warning: #fbbf24;
+    --success: #34d399;
+    --input-bg: var(--surface);
+    --input-bg-focus: var(--surface);
+    --form-input-border: #40434A;
+    --light-gray: #73767C;
+    --very-light-gray: rgba(255, 255, 255, 0.10);
+    --light-gray-border: #393B42;
+    --inactive-element: #1E1F22;
+    --option-hover: #33353B;
+    --menu-backgroud: #1E1F22;
+    --file-exp-panel: var(--surface);
+    --file-exp-border: var(--border);
+    --gray-button-background: #2B2D31;
+    --gray-button-text: #CFD1D6;
+    --gray-button-border: #40434A;
+    --backlog-status-approved-glow: rgba(96, 165, 250, 0.34);
+}
+
+.theme-light {
+    color-scheme: light;
+    --bg: #f4f5f7;
+    --bg-active: rgba(37, 99, 235, 0.08);
+    --surface: #ffffff;
+    --surface-soft: #f9fafb;
+    --surface-dark: #1f2933;
+    --text: #1f2933;
+    --text-soft: #4b5563;
+    --accent: #2563eb;
+    --accent-muted: #93c5fd;
+    --accent-rgb: 37, 99, 235;
+    --border: #e5e7eb;
+    --border-strong: #cbd5e1;
+    --danger: #b91c1c;
+    --warning: #f59e0b;
+    --success: #047857;
+    --input-bg: var(--surface);
+    --input-bg-focus: var(--surface);
+    --form-input-border: #BDBDBD;
+    --light-gray: #BDBDBD;
+    --very-light-gray: #c2c2c299;
+    --light-gray-border: #EFEFEF;
+    --inactive-element: #F9F9F9;
+    --option-hover: #F2F2F2;
+    --menu-backgroud: #F5F5F5;
+    --file-exp-panel: var(--surface);
+    --file-exp-border: var(--border);
+    --gray-button-background: #EDEDED;
+    --gray-button-text: #454545;
+    --gray-button-border: #CCCCCC;
+    --backlog-status-approved-glow: rgba(59, 130, 246, 0.2);
+}

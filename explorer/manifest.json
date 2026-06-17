@@ -74,6 +74,18 @@
             "notFoundMessage": "AxiFace asset not found."
         }
     ],
+    "routerAccess": {
+        "httpRoutes": [
+            {
+                "path": "/ui-common.css",
+                "access": "public"
+            },
+            {
+                "path": "/ui-shared/avatar-settings-form/*",
+                "access": "public"
+            }
+        ]
+    },
     "profiles": {
         "default": {
             "env": [

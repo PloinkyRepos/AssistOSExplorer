@@ -1,5 +1,6 @@
 import { isMicrophonePublication } from '../services/microphone-publication.js';
 import { buildWebMeetAvatarSource } from '../services/webmeet-avatar-override.js';
+import { WEBMEET_EVENT_TYPES } from '../services/webmeet-events.js';
 
 function getParticipantUserIdFromParticipant(participant = null) {
     return String(
@@ -90,6 +91,46 @@ function clearRoomAvatarFor(owner, participantId) {
     if (!Object.prototype.hasOwnProperty.call(roomAvatars, id)) return false;
     delete roomAvatars[id];
     return true;
+}
+
+const ROBO_TEAM_PARTICIPANT_ID = 'agent_robo_team';
+
+function findRoboTeamAgent(owner, participantId = '', view = null) {
+    const id = String(participantId || '').trim();
+    const viewAgentId = String(view?.agentId || '').trim();
+    const agents = Array.isArray(owner?.state?.agents) ? owner.state.agents : [];
+    return agents.find((entry) => {
+        const agentId = String(entry?.id || '').trim();
+        const participantIdentity = String(entry?.participantIdentity || entry?.participant?.identity || '').trim();
+        const agentType = String(entry?.agentType || '').trim();
+        return agentType === 'robo_team'
+            && (
+                (viewAgentId && agentId === viewAgentId)
+                || (id && participantIdentity === id)
+            );
+    }) || null;
+}
+
+function isRoboTeamParticipant(owner, participantId = '', view = null) {
+    const id = String(participantId || '').trim();
+    if (id === ROBO_TEAM_PARTICIPANT_ID) {
+        return true;
+    }
+    return Boolean(findRoboTeamAgent(owner, id, view));
+}
+
+function getActionTarget(input = null) {
+    return input?.target || input?.currentTarget || input;
+}
+
+function getLocalParticipantId(owner) {
+    return String(
+        owner.state.session?.participantIdentity
+        || owner.state.session?.participant?.id
+        || owner.state.session?.participant?.identity
+        || owner.room?.localParticipant?.identity
+        || ''
+    ).trim();
 }
 
 export const participantViewMethods = {
@@ -253,14 +294,55 @@ export const participantViewMethods = {
 
     renderParticipantLayout() {
         this.participantLayoutController.renderParticipantLayout();
+        this.applyBlackboardFocusLayout?.();
     },
 
     setFocusedParticipant(participantId) {
         this.participantLayoutController.setFocusedParticipant(participantId);
     },
 
-    focusParticipantCard(target) {
-        this.participantLayoutController.focusParticipantCard(target);
+    async focusParticipantCard(target) {
+        const actionTarget = getActionTarget(target);
+        const participantId = String(actionTarget?.dataset?.participantId || actionTarget?.closest?.('[data-participant-id]')?.dataset?.participantId || '').trim();
+        const view = participantId
+            ? this.participantLayoutController?.getParticipantView?.(participantId)
+            : null;
+        const agent = findRoboTeamAgent(this, participantId, view);
+        if (isRoboTeamParticipant(this, participantId, view)) {
+            const meetingId = String(this.state.session?.meeting?.id || this.state.selectedMeetingId || '').trim();
+            const actorParticipantId = getLocalParticipantId(this);
+            if (!meetingId) return;
+            if (!actorParticipantId) {
+                this.setError?.('Join a meeting before opening the blackboard.');
+                return;
+            }
+            const presenterId = String(agent?.participantIdentity || agent?.participant?.identity || participantId || ROBO_TEAM_PARTICIPANT_ID).trim();
+            const presenterName = String(agent?.agentName || agent?.participant?.name || 'Robo Team').trim() || 'Robo Team';
+            try {
+                await this.applyBlackboardVisibility?.({
+                    meetingId,
+                    participantId: actorParticipantId,
+                    visible: true,
+                    presenterId,
+                    presenterName
+                });
+                await this.publishRealtimePayload?.({
+                    type: WEBMEET_EVENT_TYPES.BLACKBOARD_VISIBILITY_CHANGED,
+                    meetingId,
+                    participantId: actorParticipantId,
+                    visible: true,
+                    presenterId,
+                    presenterName
+                });
+            } catch (error) {
+                this.setError?.(error instanceof Error ? error.message : String(error));
+            }
+            return;
+        }
+        if (this.state.blackboard?.visible) {
+            this.collapseBlackboardFocus?.();
+        }
+        this.participantLayoutController.focusParticipantCard(actionTarget);
     },
 
     setParticipantMicState(participantId, isMicOn) {
@@ -466,6 +548,39 @@ export const participantViewMethods = {
                 kind: 'remote'
             });
         }
+        for (const storedParticipant of currentParticipants) {
+            const identity = String(storedParticipant?.identity || storedParticipant?.id || '').trim();
+            if (!identity || storedParticipant?.kind !== 'agent') continue;
+            if (items.some((entry) => String(entry?.identity || entry?.id || '').trim() === identity)) continue;
+            items.push({
+                ...storedParticipant,
+                id: identity,
+                identity,
+                displayName: String(storedParticipant?.displayName || storedParticipant?.name || identity).trim() || identity,
+                name: String(storedParticipant?.name || storedParticipant?.displayName || identity).trim() || identity,
+                kind: 'agent'
+            });
+        }
+        for (const agent of Array.isArray(this.state.agents) ? this.state.agents : []) {
+            if (!agent || agent.deletedAt || String(agent.status || '').trim() === 'detached') continue;
+            const identity = String(agent.participantIdentity || agent.participant?.identity || '').trim();
+            if (!identity || items.some((entry) => String(entry?.identity || entry?.id || '').trim() === identity)) continue;
+            const name = String(agent.agentName || agent.participant?.name || agent.agentType || 'Robo Team').trim() || 'Robo Team';
+            items.push({
+                id: identity,
+                identity,
+                displayName: name,
+                name,
+                attributes: {
+                    webmeetAgent: 'true',
+                    webmeetMeetingId: String(this.state.session?.meeting?.id || this.state.selectedMeetingId || '').trim(),
+                    webmeetAgentType: String(agent.agentType || '').trim(),
+                    webmeetAgentMode: String(agent.mode || '').trim(),
+                    webmeetAgentRuntime: String(agent.runtime || 'ploinky').trim()
+                },
+                kind: 'agent'
+            });
+        }
         const keep = new Set();
         for (const item of items) {
             const id = String(item.identity || '').trim();
@@ -473,7 +588,9 @@ export const participantViewMethods = {
             keep.add(id);
             const view = this.upsertParticipantView(item);
             if (!view) continue;
-            const sourceParticipant = item.kind === 'local' ? room.localParticipant : room.remoteParticipants.get(id);
+            const sourceParticipant = item.kind === 'local'
+                ? room.localParticipant
+                : (item.kind === 'agent' ? null : room.remoteParticipants.get(id));
             view.micOn = Track
                 ? this.isParticipantMicOn(sourceParticipant, Track)
                 : Boolean(view.micOn);
