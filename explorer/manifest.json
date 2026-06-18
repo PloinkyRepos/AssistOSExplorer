@@ -68,7 +68,7 @@
         {
             "externalPrefix": "/services/explorer/axi-face/",
             "internalPrefix": "/axi-face/",
-            "access": "authenticated",
+            "access": "public",
             "notFoundMessage": "AxiFace asset not found."
         }
     ],

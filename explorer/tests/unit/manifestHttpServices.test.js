@@ -33,10 +33,10 @@ test('explorer manifest http services use the Ploinky access schema', () => {
     }
 });
 
-test('explorer avatar and AxiFace services remain authenticated', () => {
+test('explorer avatar settings stay authenticated while AxiFace assets are public', () => {
     const manifest = readManifest();
     const services = new Map((manifest.httpServices || []).map((service) => [service.externalPrefix, service]));
 
     assert.equal(services.get('/services/explorer/avatar-settings/')?.access, 'authenticated');
-    assert.equal(services.get('/services/explorer/axi-face/')?.access, 'authenticated');
+    assert.equal(services.get('/services/explorer/axi-face/')?.access, 'public');
 });
