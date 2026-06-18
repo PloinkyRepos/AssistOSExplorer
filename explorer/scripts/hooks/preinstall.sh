@@ -11,7 +11,7 @@ set -euo pipefail
 # `onlyOffice/manifest.json` and `onlyOffice/docs/specs/DS01-ploinky-agent-invariant.md`).
 # Explorer no longer creates, recreates, or mutates that container.
 
-workspace_root="${PLOINKY_CWD:-$PWD}"
+workspace_root="${PLOINKY_WORKSPACE_ROOT:?PLOINKY_WORKSPACE_ROOT is required}"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 secrets_tool="${script_dir}/encrypted-secrets.mjs"
 
@@ -28,7 +28,8 @@ if [[ -f "$agents_file" ]]; then
 const fs = require('fs');
 const path = require('path');
 
-const workspaceRoot = process.env.PLOINKY_CWD || process.cwd();
+const workspaceRoot = process.env.PLOINKY_WORKSPACE_ROOT;
+if (!workspaceRoot) process.exit(1);
 const agentsFile = path.join(workspaceRoot, '.ploinky', 'agents.json');
 
 const agentName = String(process.env.PLOINKY_AGENT_NAME || '').trim() || 'explorer';
@@ -78,7 +79,7 @@ if (changed) {
 NODE
 fi
 
-mkdir -p .ploinky
+mkdir -p "${workspace_root}/.ploinky"
 
 # If already configured in secrets, don't overwrite.
 if [[ -z "$(node "$secrets_tool" "$workspace_root" get "ASSISTOS_FS_ROOT")" ]]; then
