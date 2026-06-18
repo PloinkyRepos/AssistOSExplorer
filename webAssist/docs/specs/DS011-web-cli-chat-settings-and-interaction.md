@@ -79,7 +79,7 @@ Define, in full detail, what `webassist-settings` can configure and how each set
 
 ### Settings actions
 1. **Admin Webchat**
-   - Opens `{origin}/webchat?agent=webAdmin` in a new tab, where `origin` is `window.location.origin`.
+   - Opens `{origin}/webchat?agent=achilles-cli&workspace-dir=webassist-data` in a new tab, where `origin` is `window.location.origin`.
    - Requires available browser origin.
 
 2. **Preview Chat**
