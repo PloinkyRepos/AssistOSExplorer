@@ -12,5 +12,5 @@ Reads approved site information, target profiles, owner contact rules, and visit
 - Plain text context snapshot.
 
 ## Constraints
-- Reads only from `data/sites/<siteId>/`.
+- Reads only from `<dataRoot>/sites/<siteId>/`, where the default data root is `<PLOINKY_WORKSPACE_ROOT>/webassist-data`.
 - Does not call the LLM.

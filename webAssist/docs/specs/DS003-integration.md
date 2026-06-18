@@ -24,7 +24,7 @@ Examples:
 The iframe URL must include `siteId`. If `siteId` is absent, the chat surface stays disabled, shows a missing-site message, and makes no MCP calls. With `siteId`, the widget uses site-scoped `localStorage` keys and passes `siteId` to chat, history, and visitor-registration MCP calls.
 
 ## Runtime Flow
-1. Resolve data root from `--data-dir` or `path.join(process.env.WORKSPACE_PATH, "data")`.
+1. Resolve data root from `--data-dir` or `path.join(process.env.PLOINKY_WORKSPACE_ROOT, "webassist-data")`; without an override, fail when `PLOINKY_WORKSPACE_ROOT` or the `webassist-data` directory is missing.
 2. Configure `MarkdownDataStore` at `<dataRoot>/sites/<siteId>/`.
 3. Load context from `config/`, `info/`, `profiles/`, `sessions/<sessionId>-profile.md`, `sessions/<sessionId>-history.md`, and `leads/`.
 4. Execute `MainAgent` with the visitor-flow system prompt and `webassist-*` skill set.

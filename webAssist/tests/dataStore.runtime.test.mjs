@@ -5,49 +5,66 @@ import os from 'node:os';
 import path from 'node:path';
 
 import {
-    configureDataStore,
-    getConfiguredDataDir,
     resolveDataDir,
     resolveSiteDataDir,
-} from '../src/runtime/dataStore.mjs';
+} from '../src/runtime/akuStore.mjs';
 
-test('default data directory resolves to WORKSPACE_PATH/data', async () => {
+test('default data directory resolves to PLOINKY_WORKSPACE_ROOT/webassist-data', async () => {
     const sandboxRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'webassist-datastore-'));
     const workspacePath = path.join(sandboxRoot, 'workspace');
-    await fs.mkdir(workspacePath, { recursive: true });
+    const expectedDataDir = path.join(workspacePath, 'webassist-data');
+    await fs.mkdir(expectedDataDir, { recursive: true });
 
-    const originalEnv = process.env.WORKSPACE_PATH;
+    const originalEnv = process.env.PLOINKY_WORKSPACE_ROOT;
     try {
-        process.env.WORKSPACE_PATH = workspacePath;
+        process.env.PLOINKY_WORKSPACE_ROOT = workspacePath;
 
-        const expectedDataDir = path.join(workspacePath, 'data');
         assert.equal(resolveDataDir('/ignored-agent-root'), expectedDataDir);
         assert.equal(resolveSiteDataDir(expectedDataDir, 'demo-site'), path.join(expectedDataDir, 'sites', 'demo-site'));
-
-        configureDataStore({ agentRoot: '/ignored-agent-root', siteId: 'demo-site' });
-        assert.equal(getConfiguredDataDir(), path.join(expectedDataDir, 'sites', 'demo-site'));
     } finally {
         if (originalEnv !== undefined) {
-            process.env.WORKSPACE_PATH = originalEnv;
+            process.env.PLOINKY_WORKSPACE_ROOT = originalEnv;
         } else {
-            delete process.env.WORKSPACE_PATH;
+            delete process.env.PLOINKY_WORKSPACE_ROOT;
         }
         await fs.rm(sandboxRoot, { recursive: true, force: true });
     }
 });
 
-test('throws when WORKSPACE_PATH is not set', async () => {
-    const originalEnv = process.env.WORKSPACE_PATH;
+test('throws when PLOINKY_WORKSPACE_ROOT is not set', async () => {
+    const originalEnv = process.env.PLOINKY_WORKSPACE_ROOT;
     try {
-        delete process.env.WORKSPACE_PATH;
+        delete process.env.PLOINKY_WORKSPACE_ROOT;
         assert.throws(
             () => resolveDataDir('/ignored-agent-root'),
-            /WORKSPACE_PATH is required/
+            /PLOINKY_WORKSPACE_ROOT is required/
         );
     } finally {
         if (originalEnv !== undefined) {
-            process.env.WORKSPACE_PATH = originalEnv;
+            process.env.PLOINKY_WORKSPACE_ROOT = originalEnv;
         }
+    }
+});
+
+test('throws when default webassist-data directory is missing', async () => {
+    const sandboxRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'webassist-datastore-'));
+    const workspacePath = path.join(sandboxRoot, 'workspace');
+    await fs.mkdir(workspacePath, { recursive: true });
+
+    const originalEnv = process.env.PLOINKY_WORKSPACE_ROOT;
+    try {
+        process.env.PLOINKY_WORKSPACE_ROOT = workspacePath;
+        assert.throws(
+            () => resolveDataDir('/ignored-agent-root'),
+            /webAssist data directory does not exist/
+        );
+    } finally {
+        if (originalEnv !== undefined) {
+            process.env.PLOINKY_WORKSPACE_ROOT = originalEnv;
+        } else {
+            delete process.env.PLOINKY_WORKSPACE_ROOT;
+        }
+        await fs.rm(sandboxRoot, { recursive: true, force: true });
     }
 });
 
@@ -57,13 +74,6 @@ test('explicit data directory override still wins', async () => {
 
     try {
         assert.equal(resolveDataDir('/ignored-agent-root', explicitDataDir), explicitDataDir);
-
-        configureDataStore({
-            agentRoot: '/ignored-agent-root',
-            dataDir: explicitDataDir,
-            siteId: 'demo-site',
-        });
-        assert.equal(getConfiguredDataDir(), path.join(explicitDataDir, 'sites', 'demo-site'));
     } finally {
         await fs.rm(sandboxRoot, { recursive: true, force: true });
     }

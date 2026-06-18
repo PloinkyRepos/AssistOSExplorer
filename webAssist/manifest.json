@@ -31,8 +31,8 @@
                 "PLOINKY_ROUTER_PORT": {
                     "required": false
                 },
-                "WORKSPACE_PATH": {
-                    "required": false
+                "PLOINKY_WORKSPACE_ROOT": {
+                    "required": true
                 }
             }
         },

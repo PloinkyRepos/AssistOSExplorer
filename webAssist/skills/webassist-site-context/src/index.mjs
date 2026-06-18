@@ -10,7 +10,7 @@ function parseInput(promptText) {
 }
 
 function getDefaultAgentRoot() {
-    return process.env.WORKSPACE_PATH || process.cwd();
+    return process.cwd();
 }
 
 export async function action({ promptText, context }) {

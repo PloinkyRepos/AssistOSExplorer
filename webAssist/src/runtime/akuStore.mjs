@@ -1,4 +1,7 @@
+import fs from 'node:fs';
 import path from 'node:path';
+
+const DEFAULT_DATA_DIR_NAME = 'webassist-data';
 
 export function normalizeSiteId(value) {
     const raw = typeof value === 'string' ? value.trim() : '';
@@ -17,11 +20,24 @@ export function resolveDataDir(agentRoot, explicitDataDir = null) {
     if (explicitDataDir) {
         return path.resolve(explicitDataDir);
     }
-    const workspacePath = process.env.WORKSPACE_PATH;
-    if (!workspacePath) {
-        throw new Error('WORKSPACE_PATH is required to resolve the data directory.');
+    const workspaceRoot = process.env.PLOINKY_WORKSPACE_ROOT;
+    if (!workspaceRoot) {
+        throw new Error('PLOINKY_WORKSPACE_ROOT is required to resolve the webAssist data directory.');
     }
-    return path.join(workspacePath, 'data');
+
+    const dataDir = path.join(workspaceRoot, DEFAULT_DATA_DIR_NAME);
+    let dataDirStats = null;
+    try {
+        dataDirStats = fs.statSync(dataDir);
+    } catch (error) {
+        if (error?.code !== 'ENOENT') {
+            throw error;
+        }
+    }
+    if (!dataDirStats?.isDirectory()) {
+        throw new Error(`webAssist data directory does not exist: ${dataDir}`);
+    }
+    return dataDir;
 }
 
 export function resolveSiteDataDir(dataRoot, siteId) {

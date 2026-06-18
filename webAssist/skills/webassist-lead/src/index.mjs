@@ -36,7 +36,7 @@ function getSessionKuId(sessionId) {
 }
 
 function getDefaultAgentRoot() {
-    return process.env.WORKSPACE_PATH || process.cwd();
+    return process.cwd();
 }
 
 async function getAkuInstance(agentRoot, dataDir, siteId) {
