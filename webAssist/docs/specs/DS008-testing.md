@@ -11,10 +11,7 @@
 - `webassist-lead` deterministic lead file updates.
 - `register-events` appends Markdown event records to `visits/events.md`.
 - `web_cli_history` requiring `siteId`.
-- `prepare-wac` delegating `{ prompt, projectDir, model }` to `opencodeAgent.execute-task` without passing raw `wacData`, reporting `.aku/` as a child of the site project directory, instructing `create-akus` to fetch `siteMap`, and rewriting local `siteMap` URLs for container prompt access.
-- `prepare-wac` OpenCode model selection: `WEBASSIST_OPENCODE_MODEL`, then built-in fallback.
-- `prepare-wac` WAC caching in `<dataRoot>/wac-cache.json`: first build writes cache, unchanged WAC plus existing `.aku/aku.json` skips OpenCode, changed WAC rebuilds, missing AKU manifest rebuilds, and corrupt cache files are treated as cache misses.
-- Local WAC fixture consistency: `tests/localServer/WAC.json` must mirror `tests/localServer/profiles/*.md` exactly and list `tests/localServer/assistos-info/*.md` as absolute local server URLs.
+- Embedded chat requiring `siteId` and making no WAC, AKU-generation, or OpenCode calls during iframe load.
 - Manifest guest access for the embedded chat route and guest-callable MCP tool policy.
 
 ## Headless Smoke

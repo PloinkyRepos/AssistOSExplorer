@@ -149,36 +149,6 @@
                     "optional": true
                 }
             }
-        },
-        {
-            "name": "prepare-wac",
-            "title": "Prepare WAC",
-            "description": "Fetch a website's WAC.json file, validate it, and delegate AKU construction to opencode-agent. Returns site-id and success/failure. No code execution — static JSON only.",
-            "command": "/code/src/mcp/prepare-wac.mjs",
-            "cwd": "workspace",
-            "timeoutMs": 300000,
-            "inputSchema": {
-                "siteUrl": {
-                    "type": "string",
-                    "description": "Base URL of the website hosting WAC.json",
-                    "optional": false
-                },
-                "invocationToken": {
-                    "type": "string",
-                    "description": "Ploinky invocation token for agent-to-agent MCP calls",
-                    "optional": true
-                },
-                "dataDir": {
-                    "type": "string",
-                    "description": "Optional data directory override",
-                    "optional": true
-                },
-                "agentRoot": {
-                    "type": "string",
-                    "description": "Optional agent root override",
-                    "optional": true
-                }
-            }
         }
     ]
 }

@@ -285,7 +285,6 @@ class WebAssistMcpChatClient {
         this.chatToolName = options.chatToolName || 'web_cli_chat';
         this.historyToolName = options.historyToolName || 'web_cli_history';
         this.registerVisitorToolName = options.registerVisitorToolName || 'register-events';
-        this.prepareWACToolName = options.prepareWACToolName || 'prepare-wac';
         this.validateTools = options.validateTools === true;
         this.mcpClient = null;
         this.mcpClientPromise = null;
@@ -440,27 +439,6 @@ class WebAssistMcpChatClient {
             visitPath: normalizeString(parsed.visitPath),
         };
     }
-
-    async prepareWAC(siteUrl) {
-        const normalizedSiteUrl = normalizeString(siteUrl);
-        if (!normalizedSiteUrl) {
-            throw new Error('Missing siteUrl for context fetch.');
-        }
-
-        const client = await this.ensureMcpClient();
-        await this.ensureNamedToolAvailable(client, this.prepareWACToolName);
-
-        const toolResult = await client.callTool(this.prepareWACToolName, {
-            siteUrl: normalizedSiteUrl,
-        });
-        const toolText = extractToolText(toolResult);
-        const parsed = tryParseJsonPayload(toolText);
-        if (!parsed || typeof parsed !== 'object') {
-            throw new Error(`Invalid response from ${this.prepareWACToolName}.`);
-        }
-
-        return parsed;
-    }
 }
 
 function mountChatSurface(rootNode, options = {}) {
@@ -485,7 +463,6 @@ function mountChatSurface(rootNode, options = {}) {
 
     const query = options.query || new URLSearchParams(window.location.search);
     let siteId = normalizeString(query.get('siteId'));
-    const parentSiteUrl = options.siteUrl || getParentSiteUrl();
     const subtitleText = options.subtitleText || 'Embedded preview';
     const enableLauncher = options.enableLauncher === true;
     const validateTools = options.validateTools === true;
@@ -551,13 +528,11 @@ function mountChatSurface(rootNode, options = {}) {
     }
 
     let isPending = false;
-    let isContextPreparing = false;
     let isActivated = false;
     let missingSiteMessageShown = false;
     let currentSessionId = loadSessionId(storageKey);
     let visitorId = loadSessionId(visitorStorageKey);
     let hydratedHistorySessionId = '';
-    let contextPreparingEl = null;
 
     function hasConversationMessages() {
         return messagesEl.querySelector('.chat-message:not(.chat-typing)') !== null;
@@ -637,47 +612,14 @@ function mountChatSurface(rootNode, options = {}) {
         loadingText = null;
     }
 
-    function showContextPreparingMessage() {
-        if (contextPreparingEl) {
-            return;
-        }
-        const loading = appendLoadingBubble({
-            text: 'Preparing context please wait',
-            datasetKey: 'contextPreparing',
-        });
-        contextPreparingEl = loading.wrapper;
-    }
-
-    function hideContextPreparingMessage() {
-        if (contextPreparingEl) {
-            contextPreparingEl.remove();
-            contextPreparingEl = null;
-            return;
-        }
-        const el = messagesEl.querySelector('[data-context-preparing="true"]');
-        if (el) {
-            el.remove();
-        }
-    }
-
     function refreshComposerState() {
-        const disabled = isPending || isContextPreparing || !siteId;
+        const disabled = isPending || !siteId;
         sendEl.disabled = disabled;
         inputEl.disabled = disabled;
     }
 
     function setPending(next) {
         isPending = Boolean(next);
-        refreshComposerState();
-    }
-
-    function setContextPreparing(next) {
-        isContextPreparing = Boolean(next);
-        if (isContextPreparing) {
-            showContextPreparingMessage();
-        } else {
-            hideContextPreparingMessage();
-        }
         refreshComposerState();
     }
 
@@ -745,7 +687,7 @@ function mountChatSurface(rootNode, options = {}) {
     };
     const onSubmit = async (event) => {
         event.preventDefault();
-        if (isPending || isContextPreparing || !siteId) {
+        if (isPending || !siteId) {
             return;
         }
 
@@ -789,56 +731,14 @@ function mountChatSurface(rootNode, options = {}) {
         setPanelOpen(false);
     };
 
-    async function prepareSiteContext(siteUrl) {
-        setContextPreparing(true);
-        try {
-            const contextResult = await chatClient.prepareWAC(siteUrl);
-            if (contextResult && contextResult.ok && contextResult.siteId) {
-                siteId = contextResult.siteId;
-                storageKey = `${BROWSER_STORAGE_KEY}:${siteId}`;
-                visitorStorageKey = `${VISITOR_STORAGE_KEY}:${siteId}`;
-                currentSessionId = loadSessionId(storageKey);
-                visitorId = loadSessionId(visitorStorageKey);
-                hydratedHistorySessionId = '';
-            } else if (contextResult && contextResult.error) {
-                console.error('[WebAssistChat] Could not load website context:', contextResult.error);
-            }
-        } catch (error) {
-            console.error('[WebAssistChat] Failed to load website context:', error);
-        } finally {
-            setContextPreparing(false);
-        }
-
+    function activateChat() {
         if (!siteId) {
             if (!missingSiteMessageShown) {
-                appendMessage('agent', 'This WebAssist embed could not prepare site context.');
+                appendMessage('agent', 'This WebAssist embed is missing a siteId.');
                 missingSiteMessageShown = true;
             }
             refreshComposerState();
             return;
-        }
-
-        await hydrateHistoryFromSession();
-        if (!visitorId) {
-            visitorId = loadOrCreateVisitorId(visitorStorageKey);
-        }
-        void registerVisitorActivity();
-        refreshComposerState();
-        if (widgetEl?.dataset.open === 'true') {
-            inputEl.focus();
-        }
-    }
-
-    function activateChat() {
-        if (!siteId) {
-            if (!isContextPreparing && !parentSiteUrl) {
-                if (!missingSiteMessageShown) {
-                    appendMessage('agent', 'This WebAssist embed is missing a siteId.');
-                    missingSiteMessageShown = true;
-                }
-                refreshComposerState();
-                return;
-            }
         }
 
         if (widgetEl && panelEl) {
@@ -872,13 +772,7 @@ function mountChatSurface(rootNode, options = {}) {
         }
     }
 
-    if (!siteId && parentSiteUrl) {
-        setContextPreparing(true);
-        activateChat();
-        void prepareSiteContext(parentSiteUrl);
-    } else {
-        activateChat();
-    }
+    activateChat();
 
     return () => {
         inputEl.removeEventListener('input', onInput);

@@ -1,5 +1,6 @@
 const DEFAULTS = Object.freeze({
     theme: 'light',
+    siteId: '',
     headerText: 'WebAssist Assistant',
     subtitleText: 'Embedded preview',
     themes: Object.freeze({
@@ -105,6 +106,7 @@ export class WebassistSettingsSettings {
         this.props = element?.props || element?._componentProxy?.props || {};
         this.state = {
             theme: DEFAULTS.theme,
+            siteId: DEFAULTS.siteId,
             headerText: DEFAULTS.headerText,
             subtitleText: DEFAULTS.subtitleText,
             chatBackground: buildThemeDefaults(DEFAULTS.theme).chatBackground,
@@ -128,6 +130,7 @@ export class WebassistSettingsSettings {
 
     cacheElements() {
         this.themeInput = this.element.querySelector('#webassistTheme');
+        this.siteIdInput = this.element.querySelector('#webassistSiteId');
         this.headerTextInput = this.element.querySelector('#webassistHeaderText');
         this.subtitleTextInput = this.element.querySelector('#webassistSubtitleText');
         this.chatBackgroundInput = this.element.querySelector('#webassistChatBackground');
@@ -161,6 +164,12 @@ export class WebassistSettingsSettings {
 
         this.headerTextInput?.addEventListener('input', (event) => {
             this.state.headerText = String(event.target?.value || '');
+            this.clearStatus();
+            this.renderDerived();
+        });
+
+        this.siteIdInput?.addEventListener('input', (event) => {
+            this.state.siteId = String(event.target?.value || '');
             this.clearStatus();
             this.renderDerived();
         });
@@ -203,6 +212,9 @@ export class WebassistSettingsSettings {
         if (this.headerTextInput) {
             this.headerTextInput.value = this.state.headerText;
         }
+        if (this.siteIdInput) {
+            this.siteIdInput.value = this.state.siteId;
+        }
         if (this.subtitleTextInput) {
             this.subtitleTextInput.value = this.state.subtitleText;
         }
@@ -231,6 +243,7 @@ export class WebassistSettingsSettings {
         }
 
         const params = {
+            siteId: normalizeString(this.state.siteId),
             theme: this.state.theme,
             headerText: normalizeString(this.state.headerText, DEFAULTS.headerText),
             subtitleText: normalizeString(this.state.subtitleText, DEFAULTS.subtitleText),

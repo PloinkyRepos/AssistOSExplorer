@@ -47,7 +47,12 @@ Define, in full detail, what `webassist-settings` can configure and how each set
    - Type: hex color (`#RRGGBB`)
    - Invalid values are rejected and previous valid/default value is kept.
 
-8. **Header Color** (`#webassistHeaderColor`)
+8. **Site ID** (`#webassistSiteId`)
+   - Type: text
+   - Updates the generated iframe URL live while typing.
+   - If the value is empty or whitespace-only, the generated URL omits `siteId`.
+
+9. **Header Color** (`#webassistHeaderColor`)
    - Type: hex color (`#RRGGBB`)
    - Invalid values are rejected and previous valid/default value is kept.
 
@@ -61,7 +66,7 @@ Define, in full detail, what `webassist-settings` can configure and how each set
 - Embed URL format:
   - `{origin}/webAssist/IDE-plugins/web-assist-chat/web-assist-chat.html?{query}`
 - Query parameters included:
-  - `siteId` (required) — website scope identifier; chat is disabled if missing or empty
+  - `siteId` — website scope identifier; included only when the settings field is non-empty after trimming
   - `theme`
   - `headerText`
   - `subtitleText`
@@ -127,18 +132,13 @@ Define, in full detail, what `webassist-settings` can configure and how each set
   - textarea auto-resizes up to `160px`.
 - Pending state:
   - send button + input are disabled while request is in flight.
-- Context preparation state:
-  - when the iframe has no `siteId` and can derive the parent site URL, the chat UI opens immediately and starts `prepare-wac` asynchronously,
-  - while `prepare-wac` is running, the composer is disabled and the messages area shows `Preparing context please wait` with the existing animated three-dot loading treatment,
-  - after context preparation succeeds, the loading message is removed, storage keys are rebound to the returned `siteId`, history and visitor registration run, and the composer is enabled,
-  - if context preparation fails to produce a `siteId`, the composer stays disabled and a visitor-facing context-preparation failure message is shown.
 
 ### Theme and visual configuration intake
 - `web-assist-chat` reads URL query params and applies CSS custom properties:
   - `--chat-bg`, `--chat-user`, `--chat-agent`, `--chat-header`
 - `siteId` is read from the URL query param at startup:
-  - If missing or empty and a parent site URL is available, the chat surface calls `prepare-wac` asynchronously before enabling message submission.
-  - If missing or empty and no parent site URL is available, the chat surface is disabled with an error message and no MCP calls are made.
+  - If missing or empty, the chat surface is disabled with an error message and no MCP calls are made.
+  - The settings dialog exposes `siteId` as a live input for the generated iframe query string.
   - Browser storage keys are scoped to siteId: `webassist-chat:sessionId:<siteId>`, `webassist-chat:visitorId:<siteId>`.
   - All MCP tool calls include `siteId` as a required parameter.
 - Existing settings fields also drive additional surfaces (without adding extra settings controls):

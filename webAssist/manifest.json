@@ -22,12 +22,6 @@
                 "SOUL_GATEWAY_BASE_URL": {
                     "required": false
                 },
-                "OPENCODE_API_KEY": {
-                    "required": false
-                },
-                "WEBASSIST_OPENCODE_MODEL": {
-                    "required": false
-                },
                 "PLOINKY_ROUTER_URL": {
                     "required": false
                 },

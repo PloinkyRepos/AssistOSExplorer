@@ -16,19 +16,12 @@ Examples:
 - `web_cli_chat`: requires `siteId` and `message`; accepts optional `sessionId`, `json`, `dataDir`, and `agentRoot`.
 - `web_cli_history`: requires `siteId` and `sessionId`.
 - `register-events`: requires `siteId`, `visitorId`, and `eventType`; accepts optional `sessionId`, `referrer`, `country`, `openedChat`, and `details`.
-- `prepare-wac`: requires `siteUrl`, fetches and validates `<siteUrl>/WAC.json`, builds the AKU construction prompt including the WAC JSON, selects the OpenCode model from `WEBASSIST_OPENCODE_MODEL` with fallback to `opencode/deepseek-v4-flash-free`, and delegates to `opencodeAgent.execute-task` with `{ prompt, projectDir, model }` only when the WAC cache is stale or the site AKU manifest is missing. `projectDir` is `<dataRoot>/sites/<siteId>`; the delegated `create-akus` skill creates `.aku/` inside that directory. The prompt tells `create-akus` to fetch every URL in `siteMap` and use the fetched content for document KUs. When `webAssist` is running in a container, localhost `siteMap` URLs are rewritten in the delegated prompt to `host.containers.internal` so the `opencodeAgent` container can reach the host test server.
-
-## WAC Cache
-- `prepare-wac` stores cache metadata in `<dataRoot>/wac-cache.json`.
-- Cache entries are keyed by normalized website URL and include `siteUrl`, `siteId`, `wacTimestamp`, `updatedAt`, `projectDir`, and `akuDir`.
-- `wacTimestamp` is the `Last-Modified` response header when present; otherwise it is a `sha256:` hash of the raw WAC JSON response body.
-- A cache hit requires the same `wacTimestamp` and an existing `<projectDir>/.aku/aku.json`. On cache hit, `prepare-wac` returns success with `akuBuilt: false` and does not call `opencodeAgent`.
-- For v1, invalidation tracks only `WAC.json`; changes behind `siteMap` URLs do not force a rebuild unless WAC changes.
+- `webAssist` does not generate AKUs, fetch WAC data, or call `opencodeAgent`. The configured site AKU directory must already exist on disk under `<dataRoot>/sites/<siteId>/.aku/`.
 
 `web_cli_chat` returns `{ siteId, sessionId, message }`.
 
 ## Embedded Chat
-The iframe URL may include `siteId`. If `siteId` is absent and the widget can derive the parent site URL, it opens the chat UI immediately, disables message submission, shows the context-preparation loading message, and runs `prepare-wac` asynchronously. After `prepare-wac` returns a `siteId`, the widget switches to site-scoped `localStorage` keys and passes `siteId` to chat, history, and visitor-registration MCP calls.
+The iframe URL must include `siteId`. If `siteId` is absent, the chat surface stays disabled, shows a missing-site message, and makes no MCP calls. With `siteId`, the widget uses site-scoped `localStorage` keys and passes `siteId` to chat, history, and visitor-registration MCP calls.
 
 ## Runtime Flow
 1. Resolve data root from `--data-dir` or `path.join(process.env.WORKSPACE_PATH, "data")`.

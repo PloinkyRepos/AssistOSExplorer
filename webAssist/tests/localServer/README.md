@@ -1,6 +1,6 @@
-# WAC Local Test Server
+# WebAssist Local Test Server
 
-Test server for Web Agent Context (WAC) integration. Serves a demo website with a WAC.json file containing site information.
+Test server for the embedded WebAssist iframe against pre-existing site data.
 
 ## Quick Start
 
@@ -15,26 +15,21 @@ Then open http://localhost:3000 in your browser.
 ```
 Port 3000 (Test website)          Port 8080 (WebAssist server)
 ├── /                             ├── /webAssist/mcp
-│   ├── index.html                │   └── MCP tools (prepare-wac, etc.)
-│   └── /WAC.json                 │
+│   └── index.html                │   └── MCP tools
 ```
 
 ## Flow
 
 1. Open http://localhost:3000
-2. Browser calls `prepare-wac` MCP tool with `siteUrl: http://localhost:3000`
-3. WebAssist server fetches `http://localhost:3000/WAC.json`
-4. WAC.json is validated (siteInfo, profilesInfo, contactInfo, siteMap)
-5. WebAssist delegates AKU construction to opencode-agent via execute-task MCP tool
-6. Knowledge units are stored under `data/sites/localhost/.aku/`
+2. The iframe URL supplies `siteId`
+3. WebAssist loads existing AKUs from the configured data directory
 
 ## Files
 
 | File | Purpose |
 |------|---------|
 | `index.html` | Demo page |
-| `WAC.json` | Static JSON with siteInfo, profilesInfo, contactInfo, siteMap |
-| `server.mjs` | Static server on port 3000, serves WAC.json at /WAC.json |
+| `server.mjs` | Static server on port 3000 |
 
 ## Custom Port
 
