@@ -43,13 +43,11 @@
             "agent": "webAssist",
             "profile": "embedded"
         },
-        "proxies/soul-gateway",
-        "llm-runtime/base-local"
+        "proxies/soul-gateway"
     ],
     "repos": {
         "AxiFace": "https://github.com/PloinkyRepos/AxiFace.git",
-        "webmeetInfra": "https://github.com/PloinkyRepos/webmeetInfra.git",
-        "llm-runtime": "https://github.com/AssistOS-AI/llm-runtime.git"
+        "webmeetInfra": "https://github.com/PloinkyRepos/webmeetInfra.git"
     },
     "applicationPlugins": {
         "git": true,
