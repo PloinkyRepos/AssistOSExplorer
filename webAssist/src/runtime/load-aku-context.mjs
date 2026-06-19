@@ -1,9 +1,98 @@
 import { AgenticKnowledgeUnits } from 'achillesAgentLib';
-import { resolveSiteAkuDir } from './akuStore.mjs';
+import path from 'node:path';
+import { resolveSiteDataDir } from './akuStore.mjs';
 
 const SESSION_KU_PREFIX = 'ku_sess_';
 const LEAD_KU_PREFIX = 'ku_lead_';
 const MAX_HISTORY_EVENTS = 20;
+
+function normalizeMetadataValue(value) {
+    if (value === undefined || value === null) {
+        return '';
+    }
+    return String(value).trim();
+}
+
+function parseSessionProfileFromState(state) {
+    const lines = String(state ?? '').split('\n').map((line) => line.trim());
+    let activeSection = '';
+    const profileDetails = [];
+    const contactInformation = {};
+
+    for (const line of lines) {
+        if (/^##\s*Profile\s*Details/i.test(line)) {
+            activeSection = 'profile';
+            continue;
+        }
+        if (/^##\s*Contact\s*Information/i.test(line)) {
+            activeSection = 'contact';
+            continue;
+        }
+        if (!line.startsWith('-')) {
+            continue;
+        }
+        if (activeSection === 'profile') {
+            const value = line.replace(/^-\s*/, '');
+            if (value) {
+                profileDetails.push(value);
+            }
+            continue;
+        }
+        if (activeSection === 'contact') {
+            const match = line.match(/-\s*\*\*(.+?)\*\*:\s*(.+)$/);
+            if (match) {
+                contactInformation[normalizeMetadataValue(match[1]).toLowerCase()] = normalizeMetadataValue(match[2]);
+            } else {
+                const fallback = line.replace(/^-\s*/, '');
+                const fallbackMatch = fallback.match(/^([^:]+):\s*(.+)$/);
+                if (fallbackMatch) {
+                    contactInformation[normalizeMetadataValue(fallbackMatch[1]).toLowerCase()] = normalizeMetadataValue(fallbackMatch[2]);
+                }
+            }
+        }
+    }
+
+    return {
+        profileDetails,
+        contactInformation,
+    };
+}
+
+function parseLeadFromState(state) {
+    const lines = String(state ?? '').split('\n').map((line) => line.trim());
+    let inContactSection = false;
+    let profile = '';
+    const contactInformation = {};
+
+    for (const line of lines) {
+        if (/^##\s*Lead\s*Information/i.test(line)) {
+            inContactSection = false;
+            continue;
+        }
+        if (/^##\s*Contact\s*Information/i.test(line)) {
+            inContactSection = true;
+            continue;
+        }
+        if (!line.startsWith('-')) {
+            continue;
+        }
+
+        const profileMatch = line.match(/-\s*\*\*Profile\*\*:\s*(.+)$/i);
+        if (profileMatch) {
+            profile = normalizeMetadataValue(profileMatch[1]);
+            continue;
+        }
+
+        if (inContactSection) {
+            const contactMatch = line.match(/-\s*\*\*(.+?)\*\*:\s*(.+)$/i);
+            if (contactMatch) {
+                contactInformation[normalizeMetadataValue(contactMatch[1]).toLowerCase()] = normalizeMetadataValue(contactMatch[2]);
+            }
+        }
+    }
+
+    return { profile, contactInformation };
+}
 
 function getSessionKuId(sessionId) {
     return `${SESSION_KU_PREFIX}${sessionId}`;
@@ -117,8 +206,19 @@ function formatSessionProfile(state, metadata = {}) {
         };
     }
 
-    const profileDetails = metadata.profileDetails || [];
-    const contactInformation = metadata.contactInformation || {};
+    const parsedState = parseSessionProfileFromState(state);
+    const metadataProfileDetails = Array.isArray(metadata.profileDetails) ? metadata.profileDetails : [];
+    const metadataContactInformation = metadata.contactInformation && typeof metadata.contactInformation === 'object' && !Array.isArray(metadata.contactInformation)
+        ? metadata.contactInformation
+        : {};
+    const profileDetails = [
+        ...metadataProfileDetails,
+        ...parsedState.profileDetails,
+    ];
+    const contactInformation = {
+        ...parsedState.contactInformation,
+        ...metadataContactInformation,
+    };
 
     return {
         isNewSession: false,
@@ -129,8 +229,7 @@ function formatSessionProfile(state, metadata = {}) {
 }
 
 export async function loadAkuContext({
-    agentRoot,
-    dataDir,
+    siteDataDir = '',
     siteId,
     sessionId,
     message,
@@ -143,7 +242,9 @@ export async function loadAkuContext({
         throw new Error('loadAkuContext requires a sessionId.');
     }
 
-    const akuRootDir = resolveSiteAkuDir(agentRoot, siteId, dataDir);
+    const akuRootDir = siteDataDir
+        ? path.resolve(siteDataDir)
+        : resolveSiteDataDir(siteId);
     const aku = new AgenticKnowledgeUnits({
         rootDir: akuRootDir,
         actor: `webassist/${siteId}`,
@@ -217,13 +318,19 @@ export async function loadAkuContext({
 
     try {
         const leadKU = await aku.loadKU(leadKuId);
+        const leadState = leadKU.state || '';
+        const parsedLead = parseLeadFromState(leadState);
+        const leadMetadata = leadKU.manifest?.metadata || {};
         currentLead = {
             exists: true,
             kuId: leadKuId,
-            profile: leadKU.manifest?.metadata?.profile || '',
+            profile: normalizeMetadataValue(parsedLead.profile || leadMetadata.profile),
             sessionId,
-            contactInfo: leadKU.manifest?.metadata?.contactInfo || {},
-            state: leadKU.state || '',
+            contactInfo: {
+                ...(parsedLead.contactInformation || {}),
+                ...(leadMetadata.contactInfo || {}),
+            },
+            state: leadState,
         };
     } catch {
         currentLead = { exists: false };
@@ -240,6 +347,9 @@ export async function loadAkuContext({
             sessionId,
             ...sessionProfile,
         },
+        sessionProfileText: sessionProfile.sessionProfileText,
+        contactInformation: sessionProfile.contactInformation,
+        profileDetails: sessionProfile.profileDetails,
         conversationHistoryText,
         currentLead,
         akuContextText,
@@ -274,8 +384,10 @@ function formatAkuContextForPrompt(contextPack) {
     return lines.join('\n').trim() || 'No relevant site context found.';
 }
 
-export async function getAkuInstance({ agentRoot, dataDir, siteId }) {
-    const akuRootDir = resolveSiteAkuDir(agentRoot, siteId, dataDir);
+export async function getAkuInstance({ siteId, siteDataDir = '' }) {
+    const akuRootDir = siteDataDir
+        ? path.resolve(siteDataDir)
+        : resolveSiteDataDir(siteId);
     const aku = new AgenticKnowledgeUnits({
         rootDir: akuRootDir,
         actor: `webassist/${siteId}`,

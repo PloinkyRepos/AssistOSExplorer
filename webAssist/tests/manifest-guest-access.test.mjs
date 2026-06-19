@@ -41,7 +41,7 @@ test('webAssist MCP tools remain callable by guest-authenticated sessions', asyn
     const tools = Array.isArray(config.tools) ? config.tools : [];
     assert.ok(tools.length > 0, 'mcp-config.json must declare tools');
 
-    const requiredTools = new Set(['web_cli_chat', 'web_cli_history', 'register-events', 'prepare-wac']);
+    const requiredTools = new Set(['web_cli_chat', 'web_cli_history', 'register-events', 'list-sites']);
     const toolNames = new Set(tools.map((tool) => tool?.name).filter(Boolean));
     for (const toolName of requiredTools) {
         assert.ok(toolNames.has(toolName), `${toolName} must remain available for the embedded guest flow`);

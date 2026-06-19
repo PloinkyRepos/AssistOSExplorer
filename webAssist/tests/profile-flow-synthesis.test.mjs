@@ -1,13 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+
 import { LLMAgent } from 'achillesAgentLib';
 
 import { createWebAssistAgent } from '../src/index.mjs';
-import { getSessionProfileFileName, getSessionHistoryFileName } from '../src/constants/datastore.mjs';
-import { createWebAssistSandbox } from './helpers.mjs';
+import { createWebAssistSandbox, ensureSiteAku } from './helpers.mjs';
+import { loadAkuContext } from '../src/runtime/load-aku-context.mjs';
 
 const SITE_ID = 'demo-site';
 
@@ -27,7 +25,7 @@ class FakeFlowSynthesisLLM extends LLMAgent {
         }
 
         const userPrompt = String(context?.userPrompt ?? '');
-        const sessionId = userPrompt.match(/"sessionId"\s*:\s*"([^\"]+)"/)?.[1] || 'session-flow';
+        const sessionId = userPrompt.match(/"sessionId"\s*:\s*"([^"]+)"/)?.[1] || 'session-flow';
         const siteId = userPrompt.match(/Site ID:\n([^\n]+)/)?.[1] || SITE_ID;
         const isSecondTurn = userPrompt.includes('I can share some papers later');
 
@@ -88,15 +86,15 @@ class FakeFlowSynthesisLLM extends LLMAgent {
     }
 }
 
-test('webAssist persists orchestrator-authored conversation memory inside profile details and keeps history on disk', async (t) => {
+test('webAssist persists orchestrator-authored conversation memory inside session KU and history', async (t) => {
     const sandbox = await createWebAssistSandbox();
     t.after(async () => sandbox.cleanup());
-    const sandboxDataStoreModule = await import(pathToFileURL(path.join(sandbox.agentRoot, 'src', 'runtime', 'dataStore.mjs')).href);
-    sandboxDataStoreModule.configureDataStore({ agentRoot: sandbox.agentRoot, dataDir: sandbox.dataDir, siteId: SITE_ID });
+
+    await ensureSiteAku({
+        siteId: SITE_ID,
+    });
 
     const agent = await createWebAssistAgent({
-        agentRoot: sandbox.agentRoot,
-        dataDir: sandbox.dataDir,
         llmAgent: new FakeFlowSynthesisLLM(),
     });
 
@@ -116,19 +114,17 @@ test('webAssist persists orchestrator-authored conversation memory inside profil
 
     assert.equal(secondTurn.response, 'Thanks. I still need one detail: what project timeline and expected outcomes do you have?');
 
-    const profilePath = path.join(sandbox.dataDir, 'sites', SITE_ID, 'sessions', `${getSessionProfileFileName('session-flow-1')}.md`);
-    const profileContent = await fs.readFile(profilePath, 'utf8');
+    const context = await loadAkuContext({
+        siteId: SITE_ID,
+        sessionId: 'session-flow-1',
+        message: 'I can share some papers.',
+    });
 
-    assert.match(profileContent, /The user did not answer the question about available datasets and student resources\./);
-    assert.match(profileContent, /The user is asked about project timeline and expected outcomes\./);
-    assert.match(profileContent, /- \*\*name\*\*: Research Visitor/);
-    assert.match(profileContent, /- \*\*email\*\*: research\.visitor@example\.com/);
-    assert.doesNotMatch(profileContent, /Can we collaborate on AI research\?/);
-    assert.doesNotMatch(profileContent, /I can share some papers later\./);
+    assert.match(context.sessionProfileText, /The user did not answer the question about available datasets and student resources/);
+    assert.match(context.sessionProfileText, /The user is asked about project timeline and expected outcomes/);
+    assert.equal(context.sessionProfile.contactInformation.name, 'Research Visitor');
+    assert.equal(context.sessionProfile.contactInformation.email, 'research.visitor@example.com');
 
-    const historyPath = path.join(sandbox.dataDir, 'sites', SITE_ID, 'sessions', `${getSessionHistoryFileName('session-flow-1')}.md`);
-    const historyContent = await fs.readFile(historyPath, 'utf8');
-
-    assert.match(historyContent, /Can we collaborate on AI research\?/);
-    assert.match(historyContent, /I can share some papers later\./);
+    assert.match(context.conversationHistoryText, /Can we collaborate on AI research/);
+    assert.match(context.conversationHistoryText, /I can share some papers later/);
 });

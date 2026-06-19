@@ -93,6 +93,43 @@ function escapeAttribute(value) {
         .replace(/>/g, '&gt;');
 }
 
+function extractToolText(result) {
+    if (typeof result === 'string') {
+        return result;
+    }
+    if (Array.isArray(result?.content)) {
+        return result.content
+            .filter((entry) => entry && entry.type === 'text' && typeof entry.text === 'string')
+            .map((entry) => entry.text)
+            .join('\n')
+            .trim();
+    }
+    if (typeof result?.text === 'string') {
+        return result.text;
+    }
+    try {
+        return JSON.stringify(result);
+    } catch {
+        return '';
+    }
+}
+
+function tryParseToolResult(rawText) {
+    if (!rawText || typeof rawText !== 'string') {
+        return null;
+    }
+    try {
+        const parsed = JSON.parse(rawText);
+        return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch {
+        return null;
+    }
+}
+
+function normalizeSiteId(value) {
+    return normalizeString(value, '');
+}
+
 function buildIframeCode(src) {
     const safeSrc = escapeAttribute(src);
     return `<iframe src="${safeSrc}" title="WebAssist Chat" loading="lazy" style="width:100%;max-width:420px;height:640px;border:0;border-radius:16px;overflow:hidden" allow="clipboard-write"></iframe>`;
@@ -111,9 +148,13 @@ export class WebassistSettingsSettings {
             userBubble: buildThemeDefaults(DEFAULTS.theme).userBubble,
             agentBubble: buildThemeDefaults(DEFAULTS.theme).agentBubble,
             headerColor: buildThemeDefaults(DEFAULTS.theme).headerColor,
+            siteIds: [],
+            siteId: '',
             status: '',
             statusType: ''
         };
+        this.mcpClient = null;
+        this.mcpClientPromise = null;
         this.invalidate();
     }
 
@@ -124,10 +165,12 @@ export class WebassistSettingsSettings {
         this.bindEvents();
         this.syncInputsFromState();
         this.renderDerived();
+        void this.loadAvailableSites();
     }
 
     cacheElements() {
         this.themeInput = this.element.querySelector('#webassistTheme');
+        this.siteIdSelect = this.element.querySelector('#webassistSiteId');
         this.headerTextInput = this.element.querySelector('#webassistHeaderText');
         this.subtitleTextInput = this.element.querySelector('#webassistSubtitleText');
         this.chatBackgroundInput = this.element.querySelector('#webassistChatBackground');
@@ -145,6 +188,13 @@ export class WebassistSettingsSettings {
             return;
         }
         this.element.dataset.webassistSettingsBound = 'true';
+
+        this.siteIdSelect?.addEventListener('change', (event) => {
+            this.state.siteId = normalizeString(event.target?.value);
+            this.state.status = '';
+            this.state.statusType = '';
+            this.renderDerived();
+        });
 
         this.themeInput?.addEventListener('change', (event) => {
             const nextTheme = normalizeTheme(event.target?.value);
@@ -200,6 +250,9 @@ export class WebassistSettingsSettings {
         if (this.themeInput) {
             this.themeInput.value = this.state.theme;
         }
+        if (this.siteIdSelect) {
+            this.siteIdSelect.value = this.state.siteId;
+        }
         if (this.headerTextInput) {
             this.headerTextInput.value = this.state.headerText;
         }
@@ -224,14 +277,115 @@ export class WebassistSettingsSettings {
         return typeof window !== 'undefined' ? window.location.origin : '';
     }
 
+    async ensureMcpClient() {
+        if (this.mcpClient) {
+            return this.mcpClient;
+        }
+        if (this.mcpClientPromise) {
+            return this.mcpClientPromise;
+        }
+
+        this.mcpClientPromise = (async () => {
+            const module = await import('/MCPBrowserClient.js');
+            if (!module || typeof module.createAgentClient !== 'function') {
+                throw new Error('MCP browser client module is unavailable.');
+            }
+            this.mcpClient = module.createAgentClient('/webAssist/mcp');
+            return this.mcpClient;
+        })();
+
+        try {
+            return await this.mcpClientPromise;
+        } finally {
+            this.mcpClientPromise = null;
+        }
+    }
+
+    async listSitesFromMcp() {
+        const client = await this.ensureMcpClient();
+        const toolResult = await client.callTool('list-sites', {});
+        const parsed = tryParseToolResult(extractToolText(toolResult));
+        if (!parsed || typeof parsed !== 'object') {
+            throw new Error('Invalid list-sites payload.');
+        }
+        const rawSites = Array.isArray(parsed.sites) ? parsed.sites : [];
+        return rawSites
+            .map(normalizeSiteId)
+            .filter(Boolean)
+            .filter((item, index, values) => values.indexOf(item) === index)
+            .sort();
+    }
+
+    async loadAvailableSites() {
+        if (!this.siteIdSelect) {
+            return;
+        }
+
+        this.siteIdSelect.disabled = true;
+        this.state.status = 'Loading site list...';
+        this.state.statusType = '';
+        this.renderStatus();
+        this.renderDerived();
+
+        try {
+            const siteIds = await this.listSitesFromMcp();
+            this.state.siteIds = siteIds;
+            if (!this.state.siteId || !siteIds.includes(this.state.siteId)) {
+                this.state.siteId = siteIds[0] || '';
+            }
+            this.renderSiteOptions();
+            this.state.status = siteIds.length
+                ? `Loaded ${siteIds.length} site${siteIds.length === 1 ? '' : 's'}.`
+                : 'No webAssist sites found.';
+            this.state.statusType = '';
+            this.renderDerived();
+        } catch (error) {
+            this.state.siteIds = [];
+            this.state.siteId = '';
+            this.renderSiteOptions();
+            this.state.status = error?.message || 'Failed to load available sites.';
+            this.state.statusType = 'error';
+            this.renderStatus();
+            this.renderDerived();
+        }
+    }
+
+    renderSiteOptions() {
+        if (!this.siteIdSelect) {
+            return;
+        }
+
+        const options = Array.isArray(this.state.siteIds) ? this.state.siteIds : [];
+        this.siteIdSelect.innerHTML = '';
+
+        const emptyOption = document.createElement('option');
+        emptyOption.value = '';
+        emptyOption.textContent = options.length ? 'Select a site' : 'No sites available';
+        this.siteIdSelect.appendChild(emptyOption);
+
+        options.forEach((siteId) => {
+            const option = document.createElement('option');
+            option.value = siteId;
+            option.textContent = siteId;
+            this.siteIdSelect.appendChild(option);
+        });
+
+        this.siteIdSelect.value = this.state.siteId || '';
+        this.siteIdSelect.disabled = options.length === 0 && !this.state.siteId;
+    }
+
     buildEmbedUrl() {
         const baseUrl = this.getOrigin();
         if (!baseUrl) {
             return '';
         }
+        if (!this.state.siteId) {
+            return '';
+        }
 
         const params = {
             theme: this.state.theme,
+            siteId: this.state.siteId,
             headerText: normalizeString(this.state.headerText, DEFAULTS.headerText),
             subtitleText: normalizeString(this.state.subtitleText, DEFAULTS.subtitleText),
             chatBackground: normalizeHex(this.state.chatBackground, buildThemeDefaults(this.state.theme).chatBackground),
@@ -246,12 +400,14 @@ export class WebassistSettingsSettings {
 
     renderDerived() {
         const validBaseUrl = Boolean(this.getOrigin());
+        const hasSiteId = Boolean(this.state.siteId);
         if (this.previewButton) {
-            this.previewButton.disabled = !validBaseUrl;
+            this.previewButton.disabled = !validBaseUrl || !hasSiteId;
         }
         if (this.copyButton) {
-            this.copyButton.disabled = !validBaseUrl;
+            this.copyButton.disabled = !validBaseUrl || !hasSiteId;
         }
+        this.renderSiteOptions();
 
         const embedUrl = this.buildEmbedUrl();
         if (this.snippetArea) {
@@ -282,7 +438,7 @@ export class WebassistSettingsSettings {
             this.renderStatus();
             return;
         }
-        const webchatUrl = `${baseUrl}/webchat?agent=achilles-cli&workspace-dir=.ploinky/agents/webAssist`;
+        const webchatUrl = `${baseUrl}/webchat?agent=achilles-cli&workspace-dir=webassist-data`;
         window.open(webchatUrl, '_blank', 'noopener');
         this.state.status = 'Admin webchat opened in a new tab.';
         this.state.statusType = '';

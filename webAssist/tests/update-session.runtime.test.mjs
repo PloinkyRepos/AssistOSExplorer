@@ -1,19 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs/promises';
-import path from 'node:path';
 
-import { createWebAssistSandbox } from './helpers.mjs';
+import { createWebAssistSandbox, ensureSiteAku } from './helpers.mjs';
 import { appendSessionTurn, updateSessionProfile } from '../src/runtime/update-session.mjs';
-import { configureDataStore } from '../src/runtime/dataStore.mjs';
-import { getSessionProfileFileName, getSessionHistoryFileName } from '../src/constants/datastore.mjs';
+import { loadAkuContext } from '../src/runtime/load-aku-context.mjs';
 
 const SITE_ID = 'demo-site';
 
-test('update-session.runtime updates profile and appends turn history to separate files', async (t) => {
+test('update-session.runtime updates profile and appends turn history', async (t) => {
     const sandbox = await createWebAssistSandbox();
     t.after(async () => sandbox.cleanup());
-    configureDataStore({ agentRoot: sandbox.agentRoot, dataDir: sandbox.dataDir, siteId: SITE_ID });
+
+    await ensureSiteAku({
+        siteId: SITE_ID,
+    });
 
     const firstResult = await updateSessionProfile({
         siteId: SITE_ID,
@@ -51,29 +51,17 @@ test('update-session.runtime updates profile and appends turn history to separat
     assert.equal(secondResult.sessionProfile.contactInformation.name, 'Alex Builder');
     assert.equal(secondResult.sessionProfile.contactInformation.email, 'alex@example.com');
 
-    const profileContent = await fs.readFile(
-        path.join(sandbox.dataDir, 'sites', SITE_ID, 'sessions', `${getSessionProfileFileName('test-session-1')}.md`),
-        'utf8'
-    );
+    const context = await loadAkuContext({
+        siteId: SITE_ID,
+        sessionId: 'test-session-1',
+        message: 'Need API help',
+    });
 
-    assert.match(profileContent, /### 1\. Profile Details/);
-    assert.match(profileContent, /- Urgent integration timeline/);
-    assert.match(profileContent, /### 2\. Contact Information/);
-    assert.match(profileContent, /- \*\*name\*\*: Alex Builder/);
-    assert.match(profileContent, /- \*\*email\*\*: alex@example\.com/);
-    assert.doesNotMatch(profileContent, /### 5\. History/);
-
-    const historyContent = await fs.readFile(
-        path.join(sandbox.dataDir, 'sites', SITE_ID, 'sessions', `${getSessionHistoryFileName('test-session-1')}.md`),
-        'utf8'
-    );
-
-    assert.match(historyContent, /### 1\. History/);
-    assert.match(historyContent, /- \*\*User\*\*: Hello/);
-    assert.match(historyContent, /- \*\*User\*\*: Need API help/);
-    assert.match(historyContent, /  ASAP/);
-    assert.match(historyContent, /- \*\*Agent\*\*: Happy to help\./);
-    assert.match(historyContent, /  Can you share your timeline\?/);
-    assert.doesNotMatch(historyContent, /### 1\. Target Profiles/);
-    assert.doesNotMatch(historyContent, /### 3\. Contact Information/);
+    assert.match(context.sessionProfileText, /Urgent integration timeline/);
+    assert.match(context.sessionProfileText, /Alex Builder/);
+    assert.match(context.sessionProfileText, /alex@example\.com/);
+    assert.match(context.conversationHistoryText, /\*\*user\*\*: Hello/);
+    assert.match(context.conversationHistoryText, /\*\*user\*\*: Need API help/);
+    assert.match(context.conversationHistoryText, /\*\*agent\*\*: Hi there!/);
+    assert.match(context.conversationHistoryText, /\*\*agent\*\*: Happy to help\./);
 });

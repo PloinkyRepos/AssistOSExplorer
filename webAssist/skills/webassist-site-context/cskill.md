@@ -12,5 +12,5 @@ Reads approved site information, target profiles, owner contact rules, and visit
 - Plain text context snapshot.
 
 ## Constraints
-- Reads only from `data/sites/<siteId>/`.
+- Reads only from `context.siteDataDir`.
 - Does not call the LLM.

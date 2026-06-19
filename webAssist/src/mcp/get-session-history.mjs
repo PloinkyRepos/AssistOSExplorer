@@ -4,11 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { AgenticKnowledgeUnits } from 'achillesAgentLib';
-import { resolveSiteAkuDir } from '../runtime/akuStore.mjs';
-
-function getDefaultAgentRoot() {
-    return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-}
+import { resolveSiteDataDir } from '../runtime/akuStore.mjs';
 
 function safeParseJson(text) {
     try {
@@ -71,8 +67,6 @@ function getSessionKuId(sessionId) {
 export async function getSessionHistory({
     siteId,
     sessionId,
-    agentRoot = getDefaultAgentRoot(),
-    dataDir = null,
 }) {
     const normalizedSiteId = typeof siteId === 'string' ? siteId.trim() : '';
     if (!normalizedSiteId) {
@@ -83,8 +77,7 @@ export async function getSessionHistory({
         throw new Error('web_cli_history requires sessionId.');
     }
 
-    const resolvedAgentRoot = path.resolve(agentRoot);
-    const akuRootDir = resolveSiteAkuDir(resolvedAgentRoot, normalizedSiteId, dataDir);
+    const akuRootDir = resolveSiteDataDir(normalizedSiteId);
     const sessionKuId = getSessionKuId(normalizedSessionId);
 
     const aku = new AgenticKnowledgeUnits({
@@ -144,8 +137,6 @@ async function main() {
     const result = await getSessionHistory({
         siteId: typeof input.siteId === 'string' ? input.siteId.trim() : '',
         sessionId: typeof input.sessionId === 'string' ? input.sessionId.trim() : '',
-        dataDir: typeof input.dataDir === 'string' ? input.dataDir.trim() : null,
-        agentRoot: typeof input.agentRoot === 'string' ? input.agentRoot.trim() : getDefaultAgentRoot(),
     });
 
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);

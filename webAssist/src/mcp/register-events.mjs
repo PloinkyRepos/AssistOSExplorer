@@ -4,11 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { AgenticKnowledgeUnits } from 'achillesAgentLib';
-import { resolveSiteAkuDir } from '../runtime/akuStore.mjs';
-
-function getDefaultAgentRoot() {
-    return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-}
+import { resolveSiteDataDir } from '../runtime/akuStore.mjs';
 
 function safeParseJson(text) {
     try {
@@ -98,16 +94,13 @@ export async function registerEvent({
     country = '',
     openedChat = false,
     details = {},
-    agentRoot = getDefaultAgentRoot(),
-    dataDir = null,
 }) {
     if (!siteId) {
         throw new Error('register-events requires siteId.');
     }
     const normalizedVisitorId = normalizeVisitorId(visitorId);
     const normalizedEventType = normalizeEventType(eventType);
-    const resolvedAgentRoot = path.resolve(agentRoot);
-    const akuRootDir = resolveSiteAkuDir(resolvedAgentRoot, siteId, dataDir);
+    const akuRootDir = resolveSiteDataDir(siteId);
 
     const aku = new AgenticKnowledgeUnits({
         rootDir: akuRootDir,
@@ -178,8 +171,6 @@ async function main() {
         country: typeof input.country === 'string' ? input.country.trim() : '',
         openedChat: input.openedChat === true,
         details: input.details && typeof input.details === 'object' ? input.details : {},
-        dataDir: typeof input.dataDir === 'string' ? input.dataDir.trim() : null,
-        agentRoot: typeof input.agentRoot === 'string' ? input.agentRoot.trim() : getDefaultAgentRoot(),
     });
 
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);

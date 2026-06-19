@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { createWebAssistAgent } from './WebAssistAgent.mjs';
 
 function printUsage() {
-    process.stdout.write(`Usage:\n  webAssist/src/index.mjs --site-id <site-id> "message"\n  webAssist/src/index.mjs -mcp --site-id <site-id> "message"\n\nOptions:\n  -mcp                         Run a single request and exit\n  --site-id <id>               Website scope id\n  --session-id <id>            Reuse a specific session id\n  --json                       Print JSON output from runtime\n  --data-dir <dir>             Override data root directory\n  --agent-root <dir>           Override agent root directory\n  -h, --help                   Show this help\n`);
+    process.stdout.write(`Usage:\n  webAssist/src/index.mjs --site-id <site-id> "message"\n  webAssist/src/index.mjs -mcp --site-id <site-id> "message"\n\nOptions:\n  -mcp                         Run a single request and exit\n  --site-id <id>               Website scope id\n  --session-id <id>            Reuse a specific session id\n  --json                       Print JSON output from runtime\n  -h, --help                   Show this help\n`);
 }
 
 function generateSessionId() {
@@ -24,8 +24,6 @@ function parseArguments(argv) {
         siteId: '',
         sessionId: '',
         json: false,
-        dataDir: '',
-        agentRoot: '',
         help: false,
     };
 
@@ -84,36 +82,6 @@ function parseArguments(argv) {
             continue;
         }
 
-        if (token.startsWith('--data-dir=')) {
-            options.dataDir = token.slice('--data-dir='.length);
-            continue;
-        }
-
-        if (token === '--data-dir') {
-            const value = argv[index + 1];
-            if (!value) {
-                throw new Error('Missing value for --data-dir');
-            }
-            options.dataDir = value;
-            index += 1;
-            continue;
-        }
-
-        if (token.startsWith('--agent-root=')) {
-            options.agentRoot = token.slice('--agent-root='.length);
-            continue;
-        }
-
-        if (token === '--agent-root') {
-            const value = argv[index + 1];
-            if (!value) {
-                throw new Error('Missing value for --agent-root');
-            }
-            options.agentRoot = value;
-            index += 1;
-            continue;
-        }
-
         if (token.startsWith('-')) {
             throw new Error(`Unknown option: ${token}`);
         }
@@ -161,8 +129,6 @@ function parseMcpPayload(rawInput) {
             sessionId: typeof input.sessionId === 'string' ? input.sessionId.trim() : '',
             json: input.json === true,
             siteId: typeof input.siteId === 'string' ? input.siteId.trim() : '',
-            dataDir: typeof input.dataDir === 'string' ? input.dataDir.trim() : '',
-            agentRoot: typeof input.agentRoot === 'string' ? input.agentRoot.trim() : '',
         };
     } catch {
         return null;
@@ -271,8 +237,6 @@ async function main() {
         siteId: cli.siteId,
         sessionId: cli.sessionId,
         json: cli.json,
-        dataDir: cli.dataDir,
-        agentRoot: cli.agentRoot,
         message: cli.message,
     };
 
@@ -287,12 +251,6 @@ async function main() {
             }
             if (!effective.siteId && mcpPayload.siteId) {
                 effective.siteId = mcpPayload.siteId;
-            }
-            if (!effective.dataDir && mcpPayload.dataDir) {
-                effective.dataDir = mcpPayload.dataDir;
-            }
-            if (!effective.agentRoot && mcpPayload.agentRoot) {
-                effective.agentRoot = mcpPayload.agentRoot;
             }
             if (!cli.json && mcpPayload.json) {
                 effective.json = true;
@@ -314,10 +272,7 @@ async function main() {
         throw new Error('MCP mode requires a message.');
     }
 
-    const agent = await createWebAssistAgent({
-        agentRoot: effective.agentRoot || undefined,
-        dataDir: effective.dataDir || undefined,
-    });
+    const agent = await createWebAssistAgent();
 
     if (effective.mode === 'mcp') {
         await runTurn(agent, {

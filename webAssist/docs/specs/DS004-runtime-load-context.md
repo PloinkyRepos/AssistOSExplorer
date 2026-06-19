@@ -1,21 +1,25 @@
-# DS004 - Runtime Module: load-context
+# DS004 - Runtime Module: load-aku-context
 
-`loadContext({ siteId, sessionId })` loads the active site's deterministic runtime context.
+`loadAkuContext({ siteId, sessionId, message })` loads AKU-backed runtime context.
 
 ## Inputs
 - `siteId` (required)
 - `sessionId` (required)
+- `message` (used by AKU search input)
 
 ## Reads
-- `info/`
-- `profiles/`
-- `config/owner.md`
-- `config/policy.md`
-- `sessions/<sessionId>-profile.md` — session profile state (profile details, contact info)
-- `sessions/<sessionId>-history.md` — conversation transcript (last 10 turns for context)
-- `leads/<sessionId>-lead.md`
+- `$PLOINKY_WORKSPACE_ROOT/webassist-data/sites/<siteId>/.aku/` runtime context, including:
+  - site KU and available profile documents,
+  - session KU state metadata,
+  - session turn history events,
+  - lead KU state.
 
 ## Output
-The module returns approved site info, target profile markdown, owner rules, policy text, parsed session profile state from the profile file, current lead state, and a bounded latest-history excerpt from the history file.
+Returns:
+- `sessionProfile` (contact data and profile details),
+- `sessionProfileText`,
+- `conversationHistoryText`,
+- `currentLead`,
+- `akuContextText`.
 
-No cross-site fallback or legacy folder fallback is allowed.
+If AKU is missing, returns a valid “new session” scaffold and no-site-context payload.

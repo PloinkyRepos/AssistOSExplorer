@@ -1,62 +1,60 @@
 {
-    "container": "docker.io/assistos/ploinky-node:24-bookworm-tools",
-    "lite-sandbox": true,
-    "guest": true,
-    "routerAccess": {
-        "httpRoutes": [
-            {
-                "path": "/IDE-plugins/web-assist-chat/*",
-                "access": "guest"
-            }
-        ]
-    },
-    "volumes": {
-        ".ploinky/agents/webAssist/debuglogs": "/code/debuglogs"
-    },
-    "profiles": {
-        "default": {
-            "env": {
-                "ACHILLES_DEBUG": {
-                    "required": false
-                },
-                "SOUL_GATEWAY_BASE_URL": {
-                    "required": false
-                },
-                "OPENCODE_API_KEY": {
-                    "required": false
-                },
-                "WEBASSIST_OPENCODE_MODEL": {
-                    "required": false
-                },
-                "PLOINKY_ROUTER_URL": {
-                    "required": false
-                },
-                "PLOINKY_ROUTER_HOST": {
-                    "required": false
-                },
-                "PLOINKY_ROUTER_PORT": {
-                    "required": false
-                },
-                "WORKSPACE_PATH": {
-                    "required": false
-                }
-            }
-        },
-        "embedded": {
-            "env": {
-                "SOUL_GATEWAY_BASE_URL": ""
-            }
-        }
-    },
-    "cli": "node /code/src/index.mjs",
-    "ideSettings": [
-        {
-            "key": "webassist-chat",
-            "label": "WebAssist Chat",
-            "scope": "workspace",
-            "pluginKey": "webAssist/webassist-chat",
-            "settingsComponent": "webassist-settings",
-            "adminOnly": false
-        }
+  "container": "docker.io/assistos/ploinky-node:24-bookworm-tools",
+  "lite-sandbox": true,
+  "guest": true,
+  "routerAccess": {
+    "httpRoutes": [
+      {
+        "path": "/IDE-plugins/web-assist-chat/*",
+        "access": "guest"
+      }
     ]
+  },
+  "volumes": {
+    ".ploinky/agents/webAssist/debuglogs": "/code/debuglogs"
+  },
+  "profiles": {
+    "default": {
+      "env": {
+        "ACHILLES_DEBUG": {
+          "required": false
+        },
+        "SOUL_GATEWAY_BASE_URL": {
+          "required": false
+        },
+        "OPENCODE_API_KEY": {
+          "required": false
+        },
+        "PLOINKY_ROUTER_URL": {
+          "required": false
+        },
+        "PLOINKY_ROUTER_HOST": {
+          "required": false
+        },
+        "PLOINKY_ROUTER_PORT": {
+          "required": false
+        },
+        "PLOINKY_WORKSPACE_ROOT": {
+          "required": true
+        }
+      }
+    },
+    "embedded": {
+      "env": {
+        "SOUL_GATEWAY_BASE_URL": "",
+        "PLOINKY_WORKSPACE_ROOT": ""
+      }
+    }
+  },
+  "cli": "node /code/src/index.mjs",
+  "ideSettings": [
+    {
+      "key": "webassist-chat",
+      "label": "WebAssist Chat",
+      "scope": "workspace",
+      "pluginKey": "webAssist/webassist-chat",
+      "settingsComponent": "webassist-settings",
+      "adminOnly": false
+    }
+  ]
 }

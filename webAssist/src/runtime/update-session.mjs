@@ -1,5 +1,6 @@
 import { AgenticKnowledgeUnits } from 'achillesAgentLib';
-import { resolveSiteAkuDir } from './akuStore.mjs';
+import path from 'node:path';
+import { resolveSiteDataDir } from './akuStore.mjs';
 
 function uniqueStrings(values) {
     const seen = new Set();
@@ -15,6 +16,60 @@ function uniqueStrings(values) {
     }
 
     return result;
+}
+
+function normalizeMetadataValue(value) {
+    if (value === undefined || value === null) {
+        return '';
+    }
+    return String(value).trim();
+}
+
+function parseSessionProfileFromState(state) {
+    const lines = String(state ?? '').split('\n').map((line) => line.trim());
+    let activeSection = '';
+    const profileDetails = [];
+    const contactInformation = {};
+
+    for (const line of lines) {
+        if (/^##\s*Profile\s*Details/i.test(line)) {
+            activeSection = 'profile';
+            continue;
+        }
+        if (/^##\s*Contact\s*Information/i.test(line)) {
+            activeSection = 'contact';
+            continue;
+        }
+        if (!line.startsWith('-')) {
+            continue;
+        }
+
+        if (activeSection === 'profile') {
+            const value = line.replace(/^-\s*/, '');
+            if (value) {
+                profileDetails.push(value);
+            }
+            continue;
+        }
+
+        if (activeSection === 'contact') {
+            const match = line.match(/-\s*\*\*(.+?)\*\*:\s*(.+)$/);
+            if (match) {
+                contactInformation[normalizeMetadataValue(match[1]).toLowerCase()] = normalizeMetadataValue(match[2]);
+            } else {
+                const fallback = line.replace(/^-\s*/, '');
+                const fallbackMatch = fallback.match(/^([^:]+):\s*(.+)$/);
+                if (fallbackMatch) {
+                    contactInformation[normalizeMetadataValue(fallbackMatch[1]).toLowerCase()] = normalizeMetadataValue(fallbackMatch[2]);
+                }
+            }
+        }
+    }
+
+    return {
+        profileDetails,
+        contactInformation,
+    };
 }
 
 function renderContactInformation(contactInformation) {
@@ -43,8 +98,37 @@ function getSessionKuId(sessionId) {
     return `ku_sess_${sessionId}`;
 }
 
-async function getAkuInstance(agentRoot, dataDir, siteId) {
-    const akuRootDir = resolveSiteAkuDir(agentRoot, siteId, dataDir);
+async function ensureSessionKu(aku, sessionId) {
+    const sessionKuId = getSessionKuId(sessionId);
+    const timestamp = new Date().toISOString();
+    try {
+        await aku.loadKU(sessionKuId);
+        return;
+    } catch (error) {
+        if (!error?.message?.includes('not found')) {
+            throw error;
+        }
+    }
+
+    await aku.initKU({
+        ku_id: sessionKuId,
+        ku_name: `Session ${sessionId}`,
+        ku_type: 'session-profile',
+        keywords: ['session', sessionId],
+        tags: ['session', 'profile'],
+        summary: `Session profile for ${sessionId}`,
+        state: '',
+        metadata: {
+            sessionId,
+            createdAt: timestamp,
+        },
+    });
+}
+
+async function getAkuInstance(siteId, siteDataDir = '') {
+    const akuRootDir = siteDataDir
+        ? path.resolve(siteDataDir)
+        : resolveSiteDataDir(siteId);
     const aku = new AgenticKnowledgeUnits({
         rootDir: akuRootDir,
         actor: `webassist/${siteId}`,
@@ -60,8 +144,7 @@ async function getAkuInstance(agentRoot, dataDir, siteId) {
 }
 
 export async function updateSessionProfile({
-    agentRoot,
-    dataDir,
+    siteDataDir = '',
     siteId,
     sessionId,
     profileDetails,
@@ -74,8 +157,9 @@ export async function updateSessionProfile({
         throw new Error('webassist-session requires sessionId.');
     }
 
-    const aku = await getAkuInstance(agentRoot, dataDir, siteId);
+    const aku = await getAkuInstance(siteId, siteDataDir);
     const sessionKuId = getSessionKuId(sessionId);
+    await ensureSessionKu(aku, sessionId);
     const nextProfileDetails = uniqueStrings(profileDetails);
 
     let existingContactInformation = {};
@@ -85,7 +169,14 @@ export async function updateSessionProfile({
         const existingKU = await aku.loadKU(sessionKuId);
         existingState = existingKU.state || '';
         const metadata = existingKU.manifest?.metadata || {};
-        existingContactInformation = metadata.contactInformation || {};
+        const parsedExisting = parseSessionProfileFromState(existingState);
+        const metadataContact = metadata.contactInformation && typeof metadata.contactInformation === 'object' && !Array.isArray(metadata.contactInformation)
+            ? metadata.contactInformation
+            : {};
+        existingContactInformation = {
+            ...parsedExisting.contactInformation,
+            ...metadataContact,
+        };
     } catch (error) {
         if (!error?.message?.includes('not found')) {
             throw error;
@@ -122,6 +213,10 @@ export async function updateSessionProfile({
             state: newState,
             summary: `Session profile for ${sessionId}`,
             tags: ['session', 'profile'],
+            metadata: {
+                contactInformation: nextContactInformation,
+                profileDetails: nextProfileDetails,
+            },
         });
     } catch (error) {
         if (error?.message?.includes('not found')) {
@@ -158,8 +253,7 @@ export async function updateSessionProfile({
 }
 
 export async function appendSessionTurn({
-    agentRoot,
-    dataDir,
+    siteDataDir = '',
     siteId,
     sessionId,
     userMessage,
@@ -172,8 +266,9 @@ export async function appendSessionTurn({
         throw new Error('webassist-session history requires sessionId, userMessage, and agentResponse.');
     }
 
-    const aku = await getAkuInstance(agentRoot, dataDir, siteId);
+    const aku = await getAkuInstance(siteId, siteDataDir);
     const sessionKuId = getSessionKuId(sessionId);
+    await ensureSessionKu(aku, sessionId);
 
     const timestamp = new Date().toISOString();
 
