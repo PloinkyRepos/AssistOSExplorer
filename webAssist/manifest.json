@@ -11,7 +11,8 @@
     ]
   },
   "volumes": {
-    ".ploinky/agents/webAssist/debuglogs": "/code/debuglogs"
+    ".ploinky/agents/webAssist/debuglogs": "/code/debuglogs",
+    "webassist-data": "/webassist-data"
   },
   "profiles": {
     "default": {
