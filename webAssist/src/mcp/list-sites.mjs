@@ -4,11 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { resolveDataDir } from '../runtime/akuStore.mjs';
-
-function getDefaultAgentRoot() {
-    return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-}
+import { resolveWebAssistDataRoot } from '../runtime/akuStore.mjs';
 
 function safeParseJson(text) {
     try {
@@ -64,12 +60,8 @@ async function readStdinFallback() {
     });
 }
 
-export async function listSites({
-    agentRoot = getDefaultAgentRoot(),
-    dataDir = null,
-} = {}) {
-    const resolvedAgentRoot = path.resolve(agentRoot);
-    const resolvedDataDir = resolveDataDir(resolvedAgentRoot, dataDir);
+export async function listSites() {
+    const resolvedDataDir = resolveWebAssistDataRoot();
     const sitesDir = path.join(resolvedDataDir, 'sites');
 
     try {
@@ -82,14 +74,14 @@ export async function listSites({
         return {
             sites: siteIds,
             count: siteIds.length,
-            dataDir: resolvedDataDir,
+            dataRoot: resolvedDataDir,
         };
     } catch (error) {
         if (error && error.code === 'ENOENT') {
             return {
                 sites: [],
                 count: 0,
-                dataDir: resolvedDataDir,
+                dataRoot: resolvedDataDir,
             };
         }
         throw error;
@@ -101,10 +93,7 @@ async function main() {
     const envelope = rawInput && rawInput.trim() ? safeParseJson(rawInput) : null;
     const input = normalizeInput(envelope || {});
 
-    const result = await listSites({
-        dataDir: typeof input.dataDir === 'string' ? input.dataDir.trim() : null,
-        agentRoot: typeof input.agentRoot === 'string' ? input.agentRoot.trim() : getDefaultAgentRoot(),
-    });
+    const result = await listSites();
 
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 }

@@ -4,67 +4,61 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-import {
-    configureDataStore,
-    getConfiguredDataDir,
-    resolveDataDir,
-    resolveSiteDataDir,
-} from '../src/runtime/dataStore.mjs';
+import { resolveDataRoot, resolveSiteAkuDir, resolveSiteDataDir, resolveWebAssistDataRoot } from '../src/runtime/akuStore.mjs';
 
-test('default data directory resolves to WORKSPACE_PATH/data', async () => {
+test('default data directory resolves to PLOINKY_WORKSPACE_ROOT/webassist-data', async () => {
     const sandboxRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'webassist-datastore-'));
-    const workspacePath = path.join(sandboxRoot, 'workspace');
-    await fs.mkdir(workspacePath, { recursive: true });
+    const dataRoot = path.join(sandboxRoot, 'webassist-data');
+    await fs.mkdir(dataRoot, { recursive: true });
 
-    const originalEnv = process.env.WORKSPACE_PATH;
+    const originalEnv = process.env.PLOINKY_WORKSPACE_ROOT;
     try {
-        process.env.WORKSPACE_PATH = workspacePath;
+        process.env.PLOINKY_WORKSPACE_ROOT = sandboxRoot;
 
-        const expectedDataDir = path.join(workspacePath, 'data');
-        assert.equal(resolveDataDir('/ignored-agent-root'), expectedDataDir);
-        assert.equal(resolveSiteDataDir(expectedDataDir, 'demo-site'), path.join(expectedDataDir, 'sites', 'demo-site'));
-
-        configureDataStore({ agentRoot: '/ignored-agent-root', siteId: 'demo-site' });
-        assert.equal(getConfiguredDataDir(), path.join(expectedDataDir, 'sites', 'demo-site'));
+        assert.equal(resolveWebAssistDataRoot(), dataRoot);
+        assert.equal(resolveDataRoot(), dataRoot);
+        assert.equal(resolveSiteDataDir('demo-site'), path.join(dataRoot, 'sites', 'demo-site'));
+        assert.equal(resolveSiteAkuDir('demo-site'), path.join(dataRoot, 'sites', 'demo-site', '.aku'));
     } finally {
         if (originalEnv !== undefined) {
-            process.env.WORKSPACE_PATH = originalEnv;
+            process.env.PLOINKY_WORKSPACE_ROOT = originalEnv;
         } else {
-            delete process.env.WORKSPACE_PATH;
+            delete process.env.PLOINKY_WORKSPACE_ROOT;
         }
         await fs.rm(sandboxRoot, { recursive: true, force: true });
     }
 });
 
-test('throws when WORKSPACE_PATH is not set', async () => {
-    const originalEnv = process.env.WORKSPACE_PATH;
+test('throws when PLOINKY_WORKSPACE_ROOT is not set', () => {
+    const originalEnv = process.env.PLOINKY_WORKSPACE_ROOT;
     try {
-        delete process.env.WORKSPACE_PATH;
+        delete process.env.PLOINKY_WORKSPACE_ROOT;
         assert.throws(
-            () => resolveDataDir('/ignored-agent-root'),
-            /WORKSPACE_PATH is required/
+            () => resolveWebAssistDataRoot(),
+            /PLOINKY_WORKSPACE_ROOT is required/
         );
     } finally {
         if (originalEnv !== undefined) {
-            process.env.WORKSPACE_PATH = originalEnv;
+            process.env.PLOINKY_WORKSPACE_ROOT = originalEnv;
         }
     }
 });
 
-test('explicit data directory override still wins', async () => {
+test('throws when webassist-data directory is missing', async () => {
     const sandboxRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'webassist-datastore-'));
-    const explicitDataDir = path.join(sandboxRoot, 'custom-data');
-
+    const originalEnv = process.env.PLOINKY_WORKSPACE_ROOT;
     try {
-        assert.equal(resolveDataDir('/ignored-agent-root', explicitDataDir), explicitDataDir);
-
-        configureDataStore({
-            agentRoot: '/ignored-agent-root',
-            dataDir: explicitDataDir,
-            siteId: 'demo-site',
-        });
-        assert.equal(getConfiguredDataDir(), path.join(explicitDataDir, 'sites', 'demo-site'));
+        process.env.PLOINKY_WORKSPACE_ROOT = sandboxRoot;
+        assert.throws(
+            () => resolveWebAssistDataRoot(),
+            /webAssist data directory does not exist/
+        );
     } finally {
+        if (originalEnv !== undefined) {
+            process.env.PLOINKY_WORKSPACE_ROOT = originalEnv;
+        } else {
+            delete process.env.PLOINKY_WORKSPACE_ROOT;
+        }
         await fs.rm(sandboxRoot, { recursive: true, force: true });
     }
 });

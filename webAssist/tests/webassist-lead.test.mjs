@@ -1,11 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { createWebAssistSandbox } from './helpers.mjs';
+import { createWebAssistSandbox, ensureSiteAku } from './helpers.mjs';
+import { loadAkuContext } from '../src/runtime/load-aku-context.mjs';
 import { action } from '../skills/webassist-lead/src/index.mjs';
-import { configureDataStore } from '../src/runtime/dataStore.mjs';
 
 const SITE_ID = 'demo-site';
 
@@ -25,26 +24,37 @@ function leadPayload(overrides = {}) {
 test('webassist-lead writes a deterministic site-scoped lead', async (t) => {
     const sandbox = await createWebAssistSandbox();
     t.after(async () => sandbox.cleanup());
-    configureDataStore({ agentRoot: sandbox.agentRoot, dataDir: sandbox.dataDir, siteId: SITE_ID });
+
+    await ensureSiteAku({
+        siteId: SITE_ID,
+    });
 
     const firstResult = await action({
         promptText: JSON.stringify(leadPayload()),
+        context: {
+            siteDataDir: path.join(sandbox.webAssistDataDir, 'sites', SITE_ID),
+        },
     });
 
-    assert.equal(firstResult, 'Operation successful.');
+    assert.ok(firstResult.includes('Lead created for profile'));
 
     const secondResult = await action({
         promptText: JSON.stringify(leadPayload({ summary: 'Ready to scope an implementation call.' })),
+        context: {
+            siteDataDir: path.join(sandbox.webAssistDataDir, 'sites', SITE_ID),
+        },
     });
 
-    assert.equal(secondResult, 'Operation successful.');
+    assert.ok(secondResult.includes('Lead updated for profile'));
 
-    const leadsDir = path.join(sandbox.dataDir, 'sites', SITE_ID, 'leads');
-    const files = await fs.readdir(leadsDir);
-    assert.deepEqual(files, ['session-xyz-lead.md']);
+    const context = await loadAkuContext({
+        siteId: SITE_ID,
+        sessionId: 'session-xyz',
+        message: 'What is the status?',
+    });
 
-    const content = await fs.readFile(path.join(leadsDir, files[0]), 'utf8');
-    assert.match(content, /- \*\*Profile\*\*: Developer/);
-    assert.match(content, /- \*\*email\*\*: test@example\.com/);
-    assert.match(content, /Ready to scope an implementation call\./);
+    assert.equal(context.currentLead.exists, true);
+    assert.equal(context.currentLead.profile, 'Developer');
+    assert.equal(context.currentLead.contactInfo.email, 'test@example.com');
+    assert.match(context.currentLead.state, /John Doe/);
 });

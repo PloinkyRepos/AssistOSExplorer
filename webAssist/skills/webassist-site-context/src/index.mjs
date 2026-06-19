@@ -9,22 +9,19 @@ function parseInput(promptText) {
     }
 }
 
-function getDefaultAgentRoot() {
-    return process.env.WORKSPACE_PATH || process.cwd();
-}
-
 export async function action({ promptText, context }) {
     const { siteId, sessionId, message } = parseInput(promptText);
     if (!siteId || !sessionId) {
         throw new Error('webassist-site-context requires siteId and sessionId.');
     }
 
-    const agentRoot = context?.agentRoot || getDefaultAgentRoot();
-    const dataDir = context?.dataDir || null;
+    const siteDataDir = context?.siteDataDir || '';
+    if (!siteDataDir) {
+        throw new Error('webassist-site-context requires context.siteDataDir.');
+    }
 
     const akuContext = await loadAkuContext({
-        agentRoot,
-        dataDir,
+        siteDataDir,
         siteId,
         sessionId,
         message: message || '',

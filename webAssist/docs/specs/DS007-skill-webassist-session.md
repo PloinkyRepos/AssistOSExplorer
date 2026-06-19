@@ -11,7 +11,7 @@
 - `contactInformation`
 
 ## Guarantees
-- Writes only to `data/sites/<siteId>/sessions/<sessionId>-profile.md`.
-- Does not modify `<sessionId>-history.md`.
+- Writes only to `$PLOINKY_WORKSPACE_ROOT/webassist-data/sites/<siteId>/.aku/`.
+- Does not write legacy session markdown files.
 - Uses the runtime `updateSessionProfile` function.
 - Does not call the LLM.

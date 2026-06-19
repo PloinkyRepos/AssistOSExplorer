@@ -15,10 +15,6 @@ function parsePayload(promptText) {
     return payload;
 }
 
-function getDefaultAgentRoot() {
-    return process.env.WORKSPACE_PATH || process.cwd();
-}
-
 export async function action({ promptText, context }) {
     const {
         siteId,
@@ -31,12 +27,13 @@ export async function action({ promptText, context }) {
         throw new Error('webassist-session requires siteId and sessionId.');
     }
 
-    const agentRoot = context?.agentRoot || getDefaultAgentRoot();
-    const dataDir = context?.dataDir || null;
+    const siteDataDir = context?.siteDataDir || '';
+    if (!siteDataDir) {
+        throw new Error('webassist-session requires context.siteDataDir.');
+    }
 
     const saved = await updateSessionProfile({
-        agentRoot,
-        dataDir,
+        siteDataDir,
         siteId,
         sessionId,
         profileDetails: Array.isArray(profileDetails) ? profileDetails : [],

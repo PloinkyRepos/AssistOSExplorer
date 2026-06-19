@@ -3,9 +3,9 @@
 `webAssist` stores all operational data under a site-scoped data root. There is no single-site storage contract.
 
 ## Data Root
-- Default root: `path.join(process.env.WORKSPACE_PATH, "data")`.
-- CLI/MCP override: `--data-dir <dir>`.
-- Site root: `<dataRoot>/sites/<siteId>/`.
+- Default root: `path.join(process.env.PLOINKY_WORKSPACE_ROOT, "webassist-data")`.
+- No CLI/MCP override exists.
+- Site root: `$PLOINKY_WORKSPACE_ROOT/webassist-data/sites/<siteId>/`.
 - `siteId` is required for every runtime, CLI, MCP, and embedded chat operation.
 
 ## Site Folders

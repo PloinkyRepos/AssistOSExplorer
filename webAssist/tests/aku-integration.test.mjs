@@ -5,7 +5,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 
 import { AgenticKnowledgeUnits } from 'achillesAgentLib';
-import { resolveSiteAkuDir } from '../src/runtime/akuStore.mjs';
+import { resolveSiteDataDir } from '../src/runtime/akuStore.mjs';
 import { loadAkuContext } from '../src/runtime/load-aku-context.mjs';
 import { updateSessionProfile, appendSessionTurn } from '../src/runtime/update-session.mjs';
 
@@ -69,17 +69,21 @@ async function cleanupTempDir(tempDir) {
 
 describe('AKU Integration Tests', () => {
     let tempDir;
-    let agentRoot;
-    let dataDir;
+    let originalWorkspaceRoot;
 
     beforeEach(async () => {
         tempDir = await createTempDir();
-        agentRoot = tempDir;
-        dataDir = path.join(tempDir, 'data');
-        await fs.mkdir(dataDir, { recursive: true });
+        originalWorkspaceRoot = process.env.PLOINKY_WORKSPACE_ROOT;
+        process.env.PLOINKY_WORKSPACE_ROOT = tempDir;
+        await fs.mkdir(path.join(tempDir, 'webassist-data', 'sites'), { recursive: true });
     });
 
     afterEach(async () => {
+        if (originalWorkspaceRoot !== undefined) {
+            process.env.PLOINKY_WORKSPACE_ROOT = originalWorkspaceRoot;
+        } else {
+            delete process.env.PLOINKY_WORKSPACE_ROOT;
+        }
         await cleanupTempDir(tempDir);
     });
 
@@ -120,7 +124,7 @@ describe('AKU Integration Tests', () => {
 
     describe('AKU initialization and KU creation from WAC', () => {
         test('should initialize AKU and create KUs from WAC specs', async () => {
-            const akuRootDir = resolveSiteAkuDir(agentRoot, TEST_SITE_ID, dataDir);
+            const akuRootDir = resolveSiteDataDir(TEST_SITE_ID);
             const aku = new AgenticKnowledgeUnits({
                 rootDir: akuRootDir,
                 actor: `webassist/${TEST_SITE_ID}`,
@@ -157,7 +161,7 @@ describe('AKU Integration Tests', () => {
         let akuRootDir;
 
         beforeEach(async () => {
-            akuRootDir = resolveSiteAkuDir(agentRoot, TEST_SITE_ID, dataDir);
+            akuRootDir = resolveSiteDataDir(TEST_SITE_ID);
             aku = new AgenticKnowledgeUnits({
                 rootDir: akuRootDir,
                 actor: `webassist/${TEST_SITE_ID}`,
@@ -204,7 +208,7 @@ describe('AKU Integration Tests', () => {
 
     describe('Session profile KU', () => {
         test('should create and update session profile KU', async () => {
-            const akuRootDir = resolveSiteAkuDir(agentRoot, TEST_SITE_ID, dataDir);
+            const akuRootDir = resolveSiteDataDir(TEST_SITE_ID);
             const aku = new AgenticKnowledgeUnits({
                 rootDir: akuRootDir,
                 actor: `webassist/${TEST_SITE_ID}`,
@@ -213,8 +217,6 @@ describe('AKU Integration Tests', () => {
             await aku.initAKU({ actor: `webassist/${TEST_SITE_ID}` });
 
             const result = await updateSessionProfile({
-                agentRoot,
-                dataDir,
                 siteId: TEST_SITE_ID,
                 sessionId: TEST_SESSION_ID,
                 profileDetails: ['Looking for testing help', 'Uses Node.js'],
@@ -231,7 +233,7 @@ describe('AKU Integration Tests', () => {
         });
 
         test('should append conversation turns as events', async () => {
-            const akuRootDir = resolveSiteAkuDir(agentRoot, TEST_SITE_ID, dataDir);
+            const akuRootDir = resolveSiteDataDir(TEST_SITE_ID);
             const aku = new AgenticKnowledgeUnits({
                 rootDir: akuRootDir,
                 actor: `webassist/${TEST_SITE_ID}`,
@@ -240,8 +242,6 @@ describe('AKU Integration Tests', () => {
             await aku.initAKU({ actor: `webassist/${TEST_SITE_ID}` });
 
             await updateSessionProfile({
-                agentRoot,
-                dataDir,
                 siteId: TEST_SITE_ID,
                 sessionId: TEST_SESSION_ID,
                 profileDetails: [],
@@ -249,8 +249,6 @@ describe('AKU Integration Tests', () => {
             });
 
             await appendSessionTurn({
-                agentRoot,
-                dataDir,
                 siteId: TEST_SITE_ID,
                 sessionId: TEST_SESSION_ID,
                 userMessage: 'Hello, I need help with testing.',
@@ -267,7 +265,7 @@ describe('AKU Integration Tests', () => {
 
     describe('Lead KU', () => {
         test('should create lead KU and link to session', async () => {
-            const akuRootDir = resolveSiteAkuDir(agentRoot, TEST_SITE_ID, dataDir);
+            const akuRootDir = resolveSiteDataDir(TEST_SITE_ID);
             const aku = new AgenticKnowledgeUnits({
                 rootDir: akuRootDir,
                 actor: `webassist/${TEST_SITE_ID}`,
@@ -319,7 +317,7 @@ describe('AKU Integration Tests', () => {
         let akuRootDir;
 
         beforeEach(async () => {
-            akuRootDir = resolveSiteAkuDir(agentRoot, TEST_SITE_ID, dataDir);
+            akuRootDir = resolveSiteDataDir(TEST_SITE_ID);
             aku = new AgenticKnowledgeUnits({
                 rootDir: akuRootDir,
                 actor: `webassist/${TEST_SITE_ID}`,
@@ -345,8 +343,6 @@ describe('AKU Integration Tests', () => {
 
         test('should load context with AKU search', async () => {
             const context = await loadAkuContext({
-                agentRoot,
-                dataDir,
                 siteId: TEST_SITE_ID,
                 sessionId: TEST_SESSION_ID,
                 message: 'I am a developer looking for help',
@@ -356,14 +352,15 @@ describe('AKU Integration Tests', () => {
             assert.equal(context.sessionId, TEST_SESSION_ID);
             assert.ok(context.akuContext, 'Should have akuContext');
             assert.ok(context.akuContextText, 'Should have akuContextText');
+            assert.equal(context.profileCatalog.length, 2, 'Should always load all predefined profile KUs');
+            assert.match(context.profileCatalogText, /developer Profile/);
+            assert.match(context.profileCatalogText, /qa Profile/);
             assert.ok(context.sessionProfile, 'Should have sessionProfile');
             assert.equal(context.sessionProfile.isNewSession, true, 'Should be new session');
         });
 
         test('should return empty context when AKU not initialized', async () => {
             const context = await loadAkuContext({
-                agentRoot,
-                dataDir,
                 siteId: 'nonexistent-site',
                 sessionId: TEST_SESSION_ID,
                 message: 'test',
@@ -371,6 +368,8 @@ describe('AKU Integration Tests', () => {
 
             assert.equal(context.akuContext, null);
             assert.equal(context.akuContextText, 'No site context available.');
+            assert.deepEqual(context.profileCatalog, []);
+            assert.equal(context.profileCatalogText, 'No predefined target profiles found.');
         });
     });
 });

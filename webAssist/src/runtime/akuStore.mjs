@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 
 export function normalizeSiteId(value) {
@@ -13,27 +14,27 @@ export function normalizeSiteId(value) {
     return normalized;
 }
 
-export function resolveDataDir(agentRoot, explicitDataDir = null) {
-    if (explicitDataDir) {
-        return path.resolve(explicitDataDir);
+export function resolveWebAssistDataRoot() {
+    const workspaceRoot = process.env.PLOINKY_WORKSPACE_ROOT;
+    if (!workspaceRoot) {
+        throw new Error('PLOINKY_WORKSPACE_ROOT is required to resolve the webAssist data directory.');
     }
-    const workspacePath = process.env.WORKSPACE_PATH;
-    if (!workspacePath) {
-        throw new Error('WORKSPACE_PATH is required to resolve the data directory.');
+
+    const dataRoot = path.join(path.resolve(workspaceRoot), 'webassist-data');
+    if (!fs.existsSync(dataRoot)) {
+        throw new Error(`webAssist data directory does not exist: ${dataRoot}`);
     }
-    return path.join(workspacePath, 'data');
+    return dataRoot;
 }
 
-export function resolveSiteDataDir(dataRoot, siteId) {
-    return path.join(path.resolve(dataRoot), 'sites', normalizeSiteId(siteId));
+export function resolveSiteDataDir(siteId) {
+    return path.join(resolveWebAssistDataRoot(), 'sites', normalizeSiteId(siteId));
 }
 
-export function resolveSiteAkuDir(agentRoot, siteId, explicitDataDir = null) {
-    const dataRoot = resolveDataDir(agentRoot, explicitDataDir);
-    const siteDir = resolveSiteDataDir(dataRoot, siteId);
-    return path.join(siteDir, '.aku');
+export function resolveSiteAkuDir(siteId) {
+    return path.join(resolveSiteDataDir(siteId), '.aku');
 }
 
-export function resolveDataRoot(agentRoot, explicitDataDir = null) {
-    return resolveDataDir(agentRoot, explicitDataDir);
+export function resolveDataRoot() {
+    return resolveWebAssistDataRoot();
 }

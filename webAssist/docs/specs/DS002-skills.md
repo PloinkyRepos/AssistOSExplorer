@@ -14,9 +14,9 @@ Visitor turn orchestration is driven by the system prompt (`visitor-flow-system-
 - `register-events`: appends site-scoped events (visit, chat-start, message, lead-notification) to `visits/events.md`.
 
 ## Runtime Modules
-- `load-context` loads site-scoped context before orchestration.
-- `update-session` persists session profile sections and appends final user/agent history.
-- `dataStore` resolves `<dataRoot>/sites/<siteId>/` and constructs `MarkdownDataStore`.
+- `load-aku-context` loads site-scoped AKU context before orchestration.
+- `update-session` updates session profile KU state and appends session turns as events.
+- `akuStore` resolves `$PLOINKY_WORKSPACE_ROOT/webassist-data/sites/<siteId>/.aku`.
 
 ## Behavioral Rules
 - `siteId` is mandatory and isolates all reads/writes.

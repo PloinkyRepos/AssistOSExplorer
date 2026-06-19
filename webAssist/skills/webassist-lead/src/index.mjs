@@ -1,5 +1,5 @@
 import { AgenticKnowledgeUnits } from 'achillesAgentLib';
-import { resolveSiteAkuDir } from '../../../src/runtime/akuStore.mjs';
+import path from 'node:path';
 
 function parseInput(promptText) {
     let parsed;
@@ -35,12 +35,11 @@ function getSessionKuId(sessionId) {
     return `ku_sess_${sessionId}`;
 }
 
-function getDefaultAgentRoot() {
-    return process.env.WORKSPACE_PATH || process.cwd();
-}
-
-async function getAkuInstance(agentRoot, dataDir, siteId) {
-    const akuRootDir = resolveSiteAkuDir(agentRoot, siteId, dataDir);
+async function getAkuInstance(siteDataDir, siteId) {
+    if (!siteDataDir) {
+        throw new Error('webassist-lead requires context.siteDataDir.');
+    }
+    const akuRootDir = path.resolve(siteDataDir);
     const aku = new AgenticKnowledgeUnits({
         rootDir: akuRootDir,
         actor: `webassist/${siteId}`,
@@ -68,10 +67,9 @@ export async function action({ promptText, context }) {
     }
 
     const normalizedContactInfo = normalizeContactInfo(contactInfo);
-    const agentRoot = context?.agentRoot || getDefaultAgentRoot();
-    const dataDir = context?.dataDir || null;
+    const siteDataDir = context?.siteDataDir || '';
 
-    const aku = await getAkuInstance(agentRoot, dataDir, siteId);
+    const aku = await getAkuInstance(siteDataDir, siteId);
     const leadKuId = getLeadKuId(sessionId);
     const sessionKuId = getSessionKuId(sessionId);
     const timestamp = new Date().toISOString();

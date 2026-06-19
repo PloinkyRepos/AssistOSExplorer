@@ -1,13 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import { pathToFileURL } from 'node:url';
-import { LLMAgent } from 'achillesAgentLib';
+import { AgenticKnowledgeUnits, LLMAgent } from 'achillesAgentLib';
 
 import { createWebAssistAgent } from '../src/index.mjs';
-import { getSessionProfileFileName, getSessionHistoryFileName } from '../src/constants/datastore.mjs';
-import { createWebAssistSandbox } from './helpers.mjs';
+import { createWebAssistSandbox, ensureSiteAku } from './helpers.mjs';
+import { loadAkuContext } from '../src/runtime/load-aku-context.mjs';
 
 const SITE_ID = 'demo-site';
 
@@ -28,7 +25,7 @@ class FakeWebAssistLLM extends LLMAgent {
         }
 
         const runtimePrompt = String(context?.userPrompt ?? '');
-        const sessionId = runtimePrompt.match(/"sessionId"\s*:\s*"([^\"]+)"/)?.[1] || 'visitor-42';
+        const sessionId = runtimePrompt.match(/"sessionId"\s*:\s*"([^"]+)"/)?.[1] || 'visitor-42';
         const siteId = runtimePrompt.match(/Site ID:\n([^\n]+)/)?.[1] || SITE_ID;
 
         if (!prompt.includes('TOOL[webassist-lead]')) {
@@ -77,13 +74,27 @@ class FakeWebAssistLLM extends LLMAgent {
 test('webAssist agent loads AchillesAgentLib and executes a full visitor turn', async (t) => {
     const sandbox = await createWebAssistSandbox();
     t.after(async () => sandbox.cleanup());
-    const sandboxDataStoreModule = await import(pathToFileURL(path.join(sandbox.agentRoot, 'src', 'runtime', 'dataStore.mjs')).href);
-    sandboxDataStoreModule.configureDataStore({ agentRoot: sandbox.agentRoot, dataDir: sandbox.dataDir, siteId: SITE_ID });
+
+    await ensureSiteAku({
+        siteId: SITE_ID,
+    });
+    const setupAku = new AgenticKnowledgeUnits({
+        rootDir: `${sandbox.webAssistDataDir}/sites/${SITE_ID}`,
+        actor: `webassist/${SITE_ID}`,
+    });
+    await setupAku.loadAKU();
+    await setupAku.initKU({
+        ku_id: 'ku_profile_developer',
+        ku_name: 'Profile: Developer',
+        ku_type: 'profile',
+        tags: ['profile', 'developer'],
+        keywords: ['developer'],
+        summary: 'Developer target profile',
+        state: 'Developers need API integration details and implementation guidance.',
+    });
 
     const llmAgent = new FakeWebAssistLLM();
     const agent = await createWebAssistAgent({
-        agentRoot: sandbox.agentRoot,
-        dataDir: sandbox.dataDir,
         llmAgent,
     });
 
@@ -97,29 +108,25 @@ test('webAssist agent loads AchillesAgentLib and executes a full visitor turn', 
     assert.match(result.response, /integrarea API-ului/);
     assert.equal(result.sessionId, 'visitor-42');
     assert.ok(llmAgent.calls.length >= 3);
-    assert.match(String(llmAgent.calls[0]?.context?.userPrompt ?? ''), /Conversation History \(last 10 replies\):/);
+    assert.match(String(llmAgent.calls[0]?.context?.userPrompt ?? ''), /Predefined target profiles \(always loaded from AKU\):/);
+    assert.match(String(llmAgent.calls[0]?.context?.userPrompt ?? ''), /Developers need API integration details/);
+    assert.match(String(llmAgent.calls[0]?.context?.userPrompt ?? ''), /Conversation History \(last 10 messages\):/);
 
-    const leadContent = await fs.readFile(
-        path.join(sandbox.dataDir, 'sites', SITE_ID, 'leads', 'visitor-42-lead.md'),
-        'utf8'
-    );
-    assert.match(leadContent, /- \*\*Profile\*\*: Developer/);
-    assert.match(leadContent, /alice@example\.com/);
+    const context = await loadAkuContext({
+        siteId: SITE_ID,
+        sessionId: 'visitor-42',
+        message: 'verify context',
+    });
 
-    const profileContent = await fs.readFile(
-        path.join(sandbox.dataDir, 'sites', SITE_ID, 'sessions', `${getSessionProfileFileName('visitor-42')}.md`),
-        'utf8'
-    );
-    assert.match(profileContent, /Evaluating an API integration/);
-    assert.match(profileContent, /Provided email address/);
-    assert.match(profileContent, /### 2\. Contact Information/);
-    assert.match(profileContent, /- \*\*name\*\*: Alice Example/);
-    assert.match(profileContent, /- \*\*email\*\*: alice@example\.com/);
+    assert.equal(context.currentLead.exists, true);
+    assert.equal(context.currentLead.profile, 'Developer');
+    assert.equal(context.currentLead.contactInfo.email, 'alice@example.com');
+    assert.match(context.currentLead.state, /Alice Example/);
+    assert.match(context.currentLead.state, /Developer/);
 
-    const historyContent = await fs.readFile(
-        path.join(sandbox.dataDir, 'sites', SITE_ID, 'sessions', `${getSessionHistoryFileName('visitor-42')}.md`),
-        'utf8'
-    );
-    assert.match(historyContent, /Buna, vreau sa integrez API-ul vostru/);
-    assert.match(historyContent, /Mai jos gasiti linkul de programare/);
+    assert.equal(context.sessionProfile.contactInformation.email, 'alice@example.com');
+    assert.equal(context.sessionProfile.contactInformation.name, 'Alice Example');
+    assert.match(context.sessionProfileText, /Evaluating an API integration/);
+    assert.match(context.conversationHistoryText, /Buna, vreau sa integrez API-ul vostru/);
+    assert.match(context.conversationHistoryText, /Mai jos gasiti linkul de programare/);
 });

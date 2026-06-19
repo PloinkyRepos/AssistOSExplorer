@@ -5,13 +5,14 @@ import { MainAgent } from 'achillesAgentLib';
 import { VISITOR_FLOW_SYSTEM_PROMPT } from './prompts/visitor-flow-system-prompt.mjs';
 import { loadAkuContext } from './runtime/load-aku-context.mjs';
 import { appendSessionTurn } from './runtime/update-session.mjs';
+import { resolveSiteDataDir } from './runtime/akuStore.mjs';
 
-function getDefaultAgentRoot() {
+function getCodeRoot() {
     return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 }
 
-function buildBaseAgentOptions({ agentRoot, logger, mainAgentOptions }) {
-    const explicitSkillRoot = path.join(agentRoot, 'skills');
+function buildBaseAgentOptions({ codeRoot, logger, mainAgentOptions }) {
+    const explicitSkillRoot = path.join(codeRoot, 'skills');
     const requestedSkillRoots = Array.isArray(mainAgentOptions?.additionalSkillRoots)
         ? mainAgentOptions.additionalSkillRoots
         : [];
@@ -20,7 +21,7 @@ function buildBaseAgentOptions({ agentRoot, logger, mainAgentOptions }) {
 
     return {
         logger,
-        startDir: agentRoot,
+        startDir: codeRoot,
         additionalSkillRoots,
         ...(mainAgentOptions ?? {}),
     };
@@ -40,24 +41,24 @@ function buildRuntimePrompt({ siteId, sessionId, message, loadedContext }) {
         JSON.stringify(loadedContext.currentLead ?? {}, null, 2),
         'Session profile markdown snapshot:',
         String(loadedContext.sessionProfile?.sessionProfileText ?? ''),
+        'Predefined target profiles (always loaded from AKU):',
+        String(loadedContext.profileCatalogText ?? 'No predefined target profiles found.'),
         'Relevant Site Context (from AKU):',
         String(loadedContext.akuContextText ?? 'No relevant site context found.'),
-        'Conversation History (last 10 replies):',
+        'Conversation History (last 10 messages):',
         String(loadedContext.conversationHistoryText ?? 'No previous conversation history found.'),
     ].join('\n');
 }
 
 export async function createWebAssistAgent({
-    agentRoot = getDefaultAgentRoot(),
-    dataDir = null,
     llmAgent = null,
     logger = null,
     mainAgentOptions = {},
 } = {}) {
-    const resolvedAgentRoot = path.resolve(agentRoot);
+    const codeRoot = getCodeRoot();
 
     const mainAgent = new MainAgent(buildBaseAgentOptions({
-        agentRoot: resolvedAgentRoot,
+        codeRoot,
         logger,
         mainAgentOptions,
     }));
@@ -70,8 +71,6 @@ export async function createWebAssistAgent({
             libraryName: 'achillesAgentLib',
             source: 'node_modules',
         },
-        agentRoot: resolvedAgentRoot,
-        dataDir,
         mainAgent,
         async handleMessage({ siteId, sessionId, message, mode = 'soul_gateway/web-assist' }) {
             if (!siteId) {
@@ -84,9 +83,8 @@ export async function createWebAssistAgent({
                 throw new Error('webAssist.handleMessage requires a message.');
             }
 
+            const siteDataDir = resolveSiteDataDir(siteId);
             const loadedContext = await loadAkuContext({
-                agentRoot: resolvedAgentRoot,
-                dataDir,
                 siteId,
                 sessionId,
                 message,
@@ -101,7 +99,10 @@ export async function createWebAssistAgent({
             const execution = await mainAgent.executePrompt(runtimePrompt, {
                 model: mode,
                 systemPrompt: VISITOR_FLOW_SYSTEM_PROMPT,
-                reasoningEffort: "low"
+                reasoningEffort: "low",
+                context: {
+                    siteDataDir,
+                },
             });
 
             const response = String(execution.result ?? '').trim();
@@ -110,8 +111,6 @@ export async function createWebAssistAgent({
             }
 
             await appendSessionTurn({
-                agentRoot: resolvedAgentRoot,
-                dataDir,
                 siteId,
                 sessionId,
                 userMessage: message,
