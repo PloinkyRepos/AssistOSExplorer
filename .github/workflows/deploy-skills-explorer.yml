@@ -540,7 +540,6 @@ jobs:
             --branch "${EXPLORER_BRANCH:-main}" \
             --repo-branch "proxies=${PROXIES_BRANCH:-main}" \
             --repo-branch "webmeetInfra=main" \
-            --branch-fallback fail \
             --reset-repos \
             > "$WORK_DIR/logs/skills-explorer-start.log" 2>&1 &
 
