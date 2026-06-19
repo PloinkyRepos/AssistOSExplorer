@@ -352,6 +352,9 @@ describe('AKU Integration Tests', () => {
             assert.equal(context.sessionId, TEST_SESSION_ID);
             assert.ok(context.akuContext, 'Should have akuContext');
             assert.ok(context.akuContextText, 'Should have akuContextText');
+            assert.equal(context.profileCatalog.length, 2, 'Should always load all predefined profile KUs');
+            assert.match(context.profileCatalogText, /developer Profile/);
+            assert.match(context.profileCatalogText, /qa Profile/);
             assert.ok(context.sessionProfile, 'Should have sessionProfile');
             assert.equal(context.sessionProfile.isNewSession, true, 'Should be new session');
         });
@@ -365,6 +368,8 @@ describe('AKU Integration Tests', () => {
 
             assert.equal(context.akuContext, null);
             assert.equal(context.akuContextText, 'No site context available.');
+            assert.deepEqual(context.profileCatalog, []);
+            assert.equal(context.profileCatalogText, 'No predefined target profiles found.');
         });
     });
 });

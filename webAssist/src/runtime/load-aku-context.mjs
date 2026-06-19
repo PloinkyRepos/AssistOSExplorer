@@ -1,4 +1,5 @@
 import { AgenticKnowledgeUnits } from 'achillesAgentLib';
+import fs from 'node:fs/promises';
 import path from 'node:path';
 import { resolveSiteDataDir } from './akuStore.mjs';
 
@@ -178,14 +179,14 @@ async function buildManualContextPack(aku, searchResults, options = {}) {
     };
 }
 
-function formatConversationHistory(events, maxEntries = 10) {
+function formatConversationHistory(events, maxMessages = 10) {
     if (!Array.isArray(events) || events.length === 0) {
         return 'No previous conversation history found.';
     }
 
     const turnEvents = events
         .filter(e => e.event_type === 'turn' && e.metadata?.speaker && e.metadata?.message)
-        .slice(-maxEntries * 2);
+        .slice(-maxMessages);
 
     if (turnEvents.length === 0) {
         return 'No previous conversation history found.';
@@ -194,6 +195,71 @@ function formatConversationHistory(events, maxEntries = 10) {
     return turnEvents
         .map(e => `- **${e.metadata.speaker}**: ${e.metadata.message}`)
         .join('\n');
+}
+
+function isProfileRecord(record) {
+    const tags = Array.isArray(record?.tags) ? record.tags.map(tag => String(tag).toLowerCase()) : [];
+    const kuId = String(record?.ku_id || '');
+    const kuType = String(record?.ku_type || '').toLowerCase();
+    if (kuId.startsWith('ku_sess_') || kuId.startsWith('ku_lead_') || kuType === 'session-profile') {
+        return false;
+    }
+    return tags.includes('profile')
+        || kuId.startsWith('ku_profile_')
+        || kuType === 'profile';
+}
+
+async function readProfileDocumentText(aku, ku) {
+    const sourceDoc = (ku.documents || []).find((document) => String(document?.path || '').endsWith('/source.md'))
+        || (ku.documents || [])[0];
+    if (!sourceDoc?.path) {
+        return '';
+    }
+
+    try {
+        const sourcePath = path.join(aku.store.akuRoot, sourceDoc.path);
+        return (await fs.readFile(sourcePath, 'utf8')).trim();
+    } catch {
+        return '';
+    }
+}
+
+async function loadProfileCatalog(aku) {
+    const profileRecords = (await aku.listKUs())
+        .filter(isProfileRecord)
+        .sort((first, second) => String(first.title || first.ku_id).localeCompare(String(second.title || second.ku_id)));
+
+    const profiles = [];
+    for (const record of profileRecords) {
+        try {
+            const ku = await aku.loadKU(record.ku_id);
+            const documentText = await readProfileDocumentText(aku, ku);
+            profiles.push({
+                kuId: record.ku_id,
+                name: ku.manifest?.ku_name || record.title || record.ku_id,
+                summary: ku.manifest?.summary || record.summary || '',
+                state: ku.state || '',
+                content: documentText || ku.state || ku.manifest?.summary || '',
+            });
+        } catch {
+            // Ignore a stale index entry; the AKU doctor/search path will surface broader corruption.
+        }
+    }
+
+    return profiles;
+}
+
+function formatProfileCatalogForPrompt(profiles) {
+    if (!Array.isArray(profiles) || profiles.length === 0) {
+        return 'No predefined target profiles found.';
+    }
+
+    return profiles.map((profile) => [
+        `[Profile] ${profile.name}`,
+        `KU ID: ${profile.kuId}`,
+        profile.summary ? `Summary: ${profile.summary}` : '',
+        profile.content ? `Definition:\n${profile.content}` : '',
+    ].filter(Boolean).join('\n')).join('\n\n');
 }
 
 function formatSessionProfile(state, metadata = {}) {
@@ -266,10 +332,14 @@ export async function loadAkuContext({
             conversationHistoryText: 'No previous conversation history found.',
             currentLead: { exists: false },
             akuContextText: 'No site context available.',
+            profileCatalog: [],
+            profileCatalogText: 'No predefined target profiles found.',
         };
     }
 
     await aku.loadAKU();
+    const profileCatalog = await loadProfileCatalog(aku);
+    const profileCatalogText = formatProfileCatalogForPrompt(profileCatalog);
 
     const sessionKuId = getSessionKuId(sessionId);
     const leadKuId = getLeadKuId(sessionId);
@@ -352,6 +422,8 @@ export async function loadAkuContext({
         profileDetails: sessionProfile.profileDetails,
         conversationHistoryText,
         currentLead,
+        profileCatalog,
+        profileCatalogText,
         akuContextText,
     };
 }

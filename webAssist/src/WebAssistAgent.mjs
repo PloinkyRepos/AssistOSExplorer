@@ -41,9 +41,11 @@ function buildRuntimePrompt({ siteId, sessionId, message, loadedContext }) {
         JSON.stringify(loadedContext.currentLead ?? {}, null, 2),
         'Session profile markdown snapshot:',
         String(loadedContext.sessionProfile?.sessionProfileText ?? ''),
+        'Predefined target profiles (always loaded from AKU):',
+        String(loadedContext.profileCatalogText ?? 'No predefined target profiles found.'),
         'Relevant Site Context (from AKU):',
         String(loadedContext.akuContextText ?? 'No relevant site context found.'),
-        'Conversation History (last 10 replies):',
+        'Conversation History (last 10 messages):',
         String(loadedContext.conversationHistoryText ?? 'No previous conversation history found.'),
     ].join('\n');
 }

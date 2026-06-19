@@ -65,3 +65,34 @@ test('update-session.runtime updates profile and appends turn history', async (t
     assert.match(context.conversationHistoryText, /\*\*agent\*\*: Hi there!/);
     assert.match(context.conversationHistoryText, /\*\*agent\*\*: Happy to help\./);
 });
+
+test('loadAkuContext keeps only the last 10 conversation messages', async (t) => {
+    const sandbox = await createWebAssistSandbox();
+    t.after(async () => sandbox.cleanup());
+
+    await ensureSiteAku({
+        siteId: SITE_ID,
+    });
+
+    for (let index = 1; index <= 7; index += 1) {
+        await appendSessionTurn({
+            siteId: SITE_ID,
+            sessionId: 'history-session',
+            userMessage: `user turn ${index}`,
+            agentResponse: `agent turn ${index}`,
+        });
+    }
+
+    const context = await loadAkuContext({
+        siteId: SITE_ID,
+        sessionId: 'history-session',
+        message: 'continue',
+    });
+
+    assert.doesNotMatch(context.conversationHistoryText, /user turn 1/);
+    assert.doesNotMatch(context.conversationHistoryText, /agent turn 1/);
+    assert.doesNotMatch(context.conversationHistoryText, /user turn 2/);
+    assert.doesNotMatch(context.conversationHistoryText, /agent turn 2/);
+    assert.match(context.conversationHistoryText, /user turn 3/);
+    assert.match(context.conversationHistoryText, /agent turn 7/);
+});

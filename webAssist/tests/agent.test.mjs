@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { LLMAgent } from 'achillesAgentLib';
+import { AgenticKnowledgeUnits, LLMAgent } from 'achillesAgentLib';
 
 import { createWebAssistAgent } from '../src/index.mjs';
 import { createWebAssistSandbox, ensureSiteAku } from './helpers.mjs';
@@ -78,6 +78,20 @@ test('webAssist agent loads AchillesAgentLib and executes a full visitor turn', 
     await ensureSiteAku({
         siteId: SITE_ID,
     });
+    const setupAku = new AgenticKnowledgeUnits({
+        rootDir: `${sandbox.webAssistDataDir}/sites/${SITE_ID}`,
+        actor: `webassist/${SITE_ID}`,
+    });
+    await setupAku.loadAKU();
+    await setupAku.initKU({
+        ku_id: 'ku_profile_developer',
+        ku_name: 'Profile: Developer',
+        ku_type: 'profile',
+        tags: ['profile', 'developer'],
+        keywords: ['developer'],
+        summary: 'Developer target profile',
+        state: 'Developers need API integration details and implementation guidance.',
+    });
 
     const llmAgent = new FakeWebAssistLLM();
     const agent = await createWebAssistAgent({
@@ -94,7 +108,9 @@ test('webAssist agent loads AchillesAgentLib and executes a full visitor turn', 
     assert.match(result.response, /integrarea API-ului/);
     assert.equal(result.sessionId, 'visitor-42');
     assert.ok(llmAgent.calls.length >= 3);
-    assert.match(String(llmAgent.calls[0]?.context?.userPrompt ?? ''), /Conversation History \(last 10 replies\):/);
+    assert.match(String(llmAgent.calls[0]?.context?.userPrompt ?? ''), /Predefined target profiles \(always loaded from AKU\):/);
+    assert.match(String(llmAgent.calls[0]?.context?.userPrompt ?? ''), /Developers need API integration details/);
+    assert.match(String(llmAgent.calls[0]?.context?.userPrompt ?? ''), /Conversation History \(last 10 messages\):/);
 
     const context = await loadAkuContext({
         siteId: SITE_ID,
