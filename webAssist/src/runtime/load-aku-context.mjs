@@ -6,6 +6,45 @@ import { resolveSiteDataDir } from './akuStore.mjs';
 const SESSION_KU_PREFIX = 'ku_sess_';
 const LEAD_KU_PREFIX = 'ku_lead_';
 const MAX_HISTORY_EVENTS = 20;
+const DEFAULT_DEBUG_DIR = '/code/debuglogs';
+
+function isDebugEnabled() {
+    const raw = String(process.env.ACHILLES_DEBUG || '').trim().toLowerCase();
+    return raw && !['0', 'false', 'no', 'off'].includes(raw);
+}
+
+function resolveDebugDir() {
+    return path.resolve(process.env.WEBASSIST_DEBUG_DIR || DEFAULT_DEBUG_DIR);
+}
+
+function safeFileSegment(value) {
+    const normalized = String(value || '')
+        .replace(/[^A-Za-z0-9._-]/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^[-.]+|[-.]+$/g, '');
+    return normalized || 'unknown';
+}
+
+function debugTimestamp(date = new Date()) {
+    return date.toISOString().replace(/[:.]/g, '-');
+}
+
+async function writeDebugJson(kind, { siteId, sessionId, payload }) {
+    if (!isDebugEnabled()) {
+        return null;
+    }
+
+    try {
+        const debugDir = resolveDebugDir();
+        await fs.mkdir(debugDir, { recursive: true });
+        const fileName = `${kind}-${debugTimestamp()}-${safeFileSegment(siteId)}-${safeFileSegment(sessionId)}.json`;
+        const filePath = path.join(debugDir, fileName);
+        await fs.writeFile(filePath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+        return filePath;
+    } catch {
+        return null;
+    }
+}
 
 function normalizeMetadataValue(value) {
     if (value === undefined || value === null) {
@@ -344,14 +383,15 @@ export async function loadAkuContext({
     const sessionKuId = getSessionKuId(sessionId);
     const leadKuId = getLeadKuId(sessionId);
     const query = message || '';
+    const searchOptions = {
+        explain: true,
+        limit: 20,
+        maxResultsPerKU: 0,
+    };
     
     // Use direct search instead of buildScopedContextPack to avoid redundancy filtering
     // that treats KUs and their events as redundant
-    const searchResult = await aku.search(query, {
-        explain: true,
-        limit: 20,
-        maxResultsPerKU: 0,  // No limit per KU
-    });
+    const searchResult = await aku.search(query, searchOptions);
     
     // Manually build context pack with KUs and their state
     const akuContext = await buildManualContextPack(aku, searchResult.results, {
@@ -407,6 +447,39 @@ export async function loadAkuContext({
     }
 
     const akuContextText = formatAkuContextForPrompt(akuContext);
+    await writeDebugJson('aku-search', {
+        siteId,
+        sessionId,
+        payload: {
+            timestamp: new Date().toISOString(),
+            siteId,
+            sessionId,
+            akuRootDir,
+            query,
+            searchOptions,
+            rawResults: Array.isArray(searchResult.results) ? searchResult.results.map((result) => ({
+                search_id: result.search_id,
+                record_type: result.record_type,
+                ku_id: result.ku_id,
+                ku_type: result.ku_type,
+                title: result.title,
+                summary: result.summary,
+                score: result.score,
+                matched_on: result.matched_on,
+                path: result.path,
+                tags: result.tags,
+                keywords: result.keywords,
+            })) : [],
+            rawResultCount: Array.isArray(searchResult.results) ? searchResult.results.length : 0,
+            profileCatalog: profileCatalog.map((profile) => ({
+                kuId: profile.kuId,
+                name: profile.name,
+                summary: profile.summary,
+            })),
+            contextPack: akuContext,
+            akuContextText,
+        },
+    });
 
     return {
         siteId,

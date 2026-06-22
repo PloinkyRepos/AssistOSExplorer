@@ -1,4 +1,5 @@
 import path from 'node:path';
+import fs from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
 import { MainAgent } from 'achillesAgentLib';
@@ -9,6 +10,44 @@ import { resolveSiteDataDir } from './runtime/akuStore.mjs';
 
 function getCodeRoot() {
     return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+}
+
+function isDebugEnabled() {
+    const raw = String(process.env.ACHILLES_DEBUG || '').trim().toLowerCase();
+    return raw && !['0', 'false', 'no', 'off'].includes(raw);
+}
+
+function resolveDebugDir() {
+    return path.resolve(process.env.WEBASSIST_DEBUG_DIR || '/code/debuglogs');
+}
+
+function safeFileSegment(value) {
+    const normalized = String(value || '')
+        .replace(/[^A-Za-z0-9._-]/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^[-.]+|[-.]+$/g, '');
+    return normalized || 'unknown';
+}
+
+function debugTimestamp(date = new Date()) {
+    return date.toISOString().replace(/[:.]/g, '-');
+}
+
+async function writeDebugText(kind, { siteId, sessionId, text }) {
+    if (!isDebugEnabled()) {
+        return null;
+    }
+
+    try {
+        const debugDir = resolveDebugDir();
+        await fs.mkdir(debugDir, { recursive: true });
+        const fileName = `${kind}-${debugTimestamp()}-${safeFileSegment(siteId)}-${safeFileSegment(sessionId)}.txt`;
+        const filePath = path.join(debugDir, fileName);
+        await fs.writeFile(filePath, `${text}\n`, 'utf8');
+        return filePath;
+    } catch {
+        return null;
+    }
 }
 
 function buildBaseAgentOptions({ codeRoot, logger, mainAgentOptions }) {
@@ -94,6 +133,11 @@ export async function createWebAssistAgent({
                 sessionId,
                 message,
                 loadedContext,
+            });
+            await writeDebugText('runtime-prompt', {
+                siteId,
+                sessionId,
+                text: runtimePrompt,
             });
 
             const execution = await mainAgent.executePrompt(runtimePrompt, {
