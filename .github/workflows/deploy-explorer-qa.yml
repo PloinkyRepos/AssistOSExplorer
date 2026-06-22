@@ -172,6 +172,9 @@ jobs:
           WEBMEET_TURN_MIN_PORT: ${{ vars.EXPLORER_QA_WEBMEET_TURN_MIN_PORT }}
           WEBMEET_TURN_MAX_PORT: ${{ vars.EXPLORER_QA_WEBMEET_TURN_MAX_PORT }}
           STRICT_INFRA_CHECKS: ${{ vars.EXPLORER_QA_STRICT_INFRA_CHECKS }}
+          PROXIES_BRANCH: ${{ inputs.proxies_branch || vars.EXPLORER_QA_PROXIES_BRANCH || 'main' }}
+          PLOINKY_BRANCH: ${{ inputs.ploinky_branch || vars.EXPLORER_QA_PLOINKY_BRANCH || 'master' }}
+          ACHILLES_BRANCH: ${{ inputs.achilles_branch || vars.EXPLORER_QA_ACHILLES_BRANCH || 'master' }}
         run: |
           set -euo pipefail
 
@@ -232,10 +235,6 @@ jobs:
           chmod 600 /tmp/explorer_qa_env
 
           scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no /tmp/explorer_qa_env "${SSH_USER}@${SSH_HOST}:/tmp/explorer_qa_env"
-
-          PROXIES_BRANCH="${{ inputs.proxies_branch || vars.EXPLORER_QA_PROXIES_BRANCH || 'main' }}"
-          PLOINKY_BRANCH="${{ inputs.ploinky_branch || vars.EXPLORER_QA_PLOINKY_BRANCH || 'master' }}"
-          ACHILLES_BRANCH="${{ inputs.achilles_branch || vars.EXPLORER_QA_ACHILLES_BRANCH || 'master' }}"
 
           ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
             -i ~/.ssh/deploy_key "${SSH_USER}@${SSH_HOST}" \
@@ -366,33 +365,45 @@ jobs:
             exit 1
           fi
 
-          echo "[deploy-qa] Verifying shared Ploinky runtime branches WITHOUT mutating them..."
+          echo "[deploy-qa] Updating shared Ploinky runtime to the requested branch (QA host is dedicated to Explorer)..."
           resolve_realpath() {
             if command -v realpath >/dev/null 2>&1; then realpath "$1"; else readlink -f "$1"; fi
           }
+          checkout_runtime_branch() {
+            local repo_dir="$1"
+            local branch="$2"
+            local label="$3"
+            git -C "$repo_dir" check-ref-format --branch "$branch" >/dev/null
+            git -C "$repo_dir" fetch --prune origin
+            if git -C "$repo_dir" show-ref --verify --quiet "refs/heads/$branch"; then
+              git -C "$repo_dir" checkout "$branch"
+            else
+              git -C "$repo_dir" checkout -b "$branch" "origin/$branch"
+            fi
+            git -C "$repo_dir" reset --hard "origin/$branch"
+            echo "[deploy-qa] $label at $(git -C "$repo_dir" rev-parse --short HEAD) ($branch)"
+          }
+          PLOINKY_BRANCH="${PLOINKY_BRANCH:-master}"
           PLOINKY_BIN="$(resolve_realpath "$PLOINKY")"
           PLOINKY_DIR="$(cd "$(dirname "$PLOINKY_BIN")/.." && pwd -P)"
           if [ ! -d "$PLOINKY_DIR/.git" ] && [ -d "$HOME/ploinky/.git" ]; then
             PLOINKY_DIR="$HOME/ploinky"
             PLOINKY="$PLOINKY_DIR/bin/ploinky"
           fi
-          assert_runtime_branch() {
-            local repo_dir="$1" want="$2" label="$3" have
-            if [ ! -d "$repo_dir/.git" ]; then
-              echo "[deploy-qa] $label is not a git checkout ($repo_dir); leaving untouched."
-              return 0
-            fi
-            have="$(git -C "$repo_dir" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
-            if [ "$have" != "$want" ]; then
-              echo "[deploy-qa] ERROR: shared $label is on '$have' but this QA run requested '$want'."
-              echo "[deploy-qa] This runtime is shared with production Soul Gateway; QA will not switch it."
-              echo "[deploy-qa] Re-run with the matching *_branch input/var, or realign the host via the Soul Gateway deploy."
-              exit 1
-            fi
-            echo "[deploy-qa] Shared $label already on '$have' (left untouched)."
-          }
-          assert_runtime_branch "$PLOINKY_DIR" "${PLOINKY_BRANCH:-master}" "Ploinky runtime"
-          assert_runtime_branch "$PLOINKY_DIR/node_modules/achillesAgentLib" "${ACHILLES_BRANCH:-master}" "achillesAgentLib"
+          if [ -d "$PLOINKY_DIR/.git" ]; then
+            checkout_runtime_branch "$PLOINKY_DIR" "$PLOINKY_BRANCH" "Ploinky runtime"
+          elif [ "$PLOINKY_BRANCH" != "master" ]; then
+            echo "[deploy-qa] ERROR: cannot checkout Ploinky branch '$PLOINKY_BRANCH'; '$PLOINKY_DIR' is not a git checkout."
+            exit 1
+          fi
+          ACHILLES_BRANCH="${ACHILLES_BRANCH:-master}"
+          ACHILLES_DIR="$PLOINKY_DIR/node_modules/achillesAgentLib"
+          if [ -d "$ACHILLES_DIR/.git" ]; then
+            checkout_runtime_branch "$ACHILLES_DIR" "$ACHILLES_BRANCH" "achillesAgentLib"
+          elif [ "$ACHILLES_BRANCH" != "master" ]; then
+            echo "[deploy-qa] ERROR: cannot checkout achillesAgentLib branch '$ACHILLES_BRANCH'; '$ACHILLES_DIR' is not a git checkout."
+            exit 1
+          fi
 
           echo "[deploy] Ensuring Ploinky repos are installed and enabled..."
           "$PLOINKY" add repo AchillesIDE https://github.com/PloinkyRepos/AssistOSExplorer.git "${EXPLORER_BRANCH:-main}" || true
@@ -402,7 +413,11 @@ jobs:
           "$PLOINKY" enable repo webmeetInfra
           "$PLOINKY" enable repo proxies
 
-          echo "[deploy-qa] Skipping global 'ploinky update' to avoid mutating the shared runtime; QA uses the host runtime maintained by Soul Gateway deploys. Workspace repos are refreshed below."
+          echo "[deploy-qa] Updating Ploinky, Achilles dependencies, and installed repos..."
+          if ! env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" update; then
+            echo "[deploy-qa] Initial update failed; retrying once in case Ploinky self-updated during this run..."
+            env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" update
+          fi
 
           for repo_spec in "AchillesIDE:${EXPLORER_BRANCH:-main}" "webmeetInfra:main" "proxies:${PROXIES_BRANCH:-main}"; do
             repo_name="${repo_spec%%:*}"
