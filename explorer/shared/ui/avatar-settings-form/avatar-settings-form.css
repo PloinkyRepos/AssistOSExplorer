@@ -1,0 +1,98 @@
+avatar-settings-form {
+    display: block;
+}
+
+avatar-settings-form .avatar-settings-form-root {
+    display: grid;
+    gap: 12px;
+    align-items: start;
+}
+
+avatar-settings-form .avatar-settings-fields {
+    display: grid;
+    gap: 12px;
+}
+
+avatar-settings-form .avatar-settings-section {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+    align-items: end;
+    min-width: 0;
+    padding: 12px;
+    border: 1px solid var(--border, #e2e8f0);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--surface, #fff) 94%, var(--file-exp-panel, #f8fafc));
+}
+
+avatar-settings-form .avatar-source-section {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+avatar-settings-form .avatar-settings-field {
+    display: grid;
+    grid-template-rows: auto 36px;
+    gap: 6px;
+    min-width: 0;
+}
+
+avatar-settings-form .avatar-settings-field span {
+    color: var(--text-soft, #627080);
+    font-size: 0.78rem;
+    font-weight: 650;
+}
+
+avatar-settings-form .avatar-settings-field input,
+avatar-settings-form .avatar-settings-field select {
+    width: 100%;
+    min-height: 40px;
+    min-width: 0;
+}
+
+avatar-settings-form .avatar-settings-checks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    min-width: 0;
+}
+
+avatar-settings-form .avatar-settings-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 34px;
+    color: var(--text, #17202a);
+    font-size: 0.86rem;
+}
+
+avatar-settings-form .avatar-settings-preview {
+    width: 104px;
+    min-height: 104px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--border-strong, #d8dee7);
+    border-radius: 8px;
+    background: var(--surface, #fff);
+    overflow: hidden;
+}
+
+avatar-settings-form .avatar-settings-preview axi-face {
+    width: 88px;
+    height: 88px;
+}
+
+@media (max-width: 720px) {
+    avatar-settings-form .avatar-settings-form-root {
+        grid-template-columns: 1fr;
+    }
+
+    avatar-settings-form .avatar-settings-section {
+        grid-template-columns: 1fr;
+        padding: 10px;
+    }
+
+    avatar-settings-form .avatar-settings-preview {
+        width: 100%;
+        min-height: 96px;
+    }
+}

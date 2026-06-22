@@ -30,7 +30,7 @@ async function fetchText(url, description) {
 }
 
 function getSharedAvatarSettingsComponentBaseUrl() {
-    return '/workspace-files/.ploinky/repos/AchillesIDE/shared/ui/avatar-settings-form/avatar-settings-form';
+    return '/explorer/shared/ui/avatar-settings-form/avatar-settings-form';
 }
 
 async function ensureAvatarSettingsFormRegistered() {

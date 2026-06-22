@@ -76,11 +76,7 @@
     "routerAccess": {
         "httpRoutes": [
             {
-                "path": "/ui-common.css",
-                "access": "public"
-            },
-            {
-                "path": "/ui-shared/avatar-settings-form/*",
+                "path": "/shared/*",
                 "access": "public"
             }
         ]

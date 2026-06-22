@@ -1,4 +1,4 @@
-import WebSkel from '/web-libs/webskel/webskel.mjs';
+import WebSkel from './shared/libs/webskel/webskel.mjs';
 import assistosSDK, { initialiseAssistOS } from './services/assistosSDK.js';
 import { createComponentRegistry } from './services/runtime/componentRegistry.js';
 import { createRuntimePluginLoader } from './services/runtime/runtimePluginLoader.js';
