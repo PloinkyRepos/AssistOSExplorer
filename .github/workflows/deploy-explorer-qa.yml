@@ -172,6 +172,9 @@ jobs:
           WEBMEET_TURN_MIN_PORT: ${{ vars.EXPLORER_QA_WEBMEET_TURN_MIN_PORT }}
           WEBMEET_TURN_MAX_PORT: ${{ vars.EXPLORER_QA_WEBMEET_TURN_MAX_PORT }}
           STRICT_INFRA_CHECKS: ${{ vars.EXPLORER_QA_STRICT_INFRA_CHECKS }}
+          PROXIES_BRANCH: ${{ inputs.proxies_branch || vars.EXPLORER_QA_PROXIES_BRANCH || 'main' }}
+          PLOINKY_BRANCH: ${{ inputs.ploinky_branch || vars.EXPLORER_QA_PLOINKY_BRANCH || 'master' }}
+          ACHILLES_BRANCH: ${{ inputs.achilles_branch || vars.EXPLORER_QA_ACHILLES_BRANCH || 'master' }}
         run: |
           set -euo pipefail
 
@@ -232,10 +235,6 @@ jobs:
           chmod 600 /tmp/explorer_qa_env
 
           scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no /tmp/explorer_qa_env "${SSH_USER}@${SSH_HOST}:/tmp/explorer_qa_env"
-
-          PROXIES_BRANCH="${{ inputs.proxies_branch || vars.EXPLORER_QA_PROXIES_BRANCH || 'main' }}"
-          PLOINKY_BRANCH="${{ inputs.ploinky_branch || vars.EXPLORER_QA_PLOINKY_BRANCH || 'master' }}"
-          ACHILLES_BRANCH="${{ inputs.achilles_branch || vars.EXPLORER_QA_ACHILLES_BRANCH || 'master' }}"
 
           ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
             -i ~/.ssh/deploy_key "${SSH_USER}@${SSH_HOST}" \

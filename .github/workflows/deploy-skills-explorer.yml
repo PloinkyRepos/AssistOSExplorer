@@ -149,6 +149,9 @@ jobs:
           WEBMEET_ICE_TRANSPORT_POLICY: ${{ vars.WEBMEET_ICE_TRANSPORT_POLICY }}
           WEBMEET_TURN_MIN_PORT: ${{ vars.WEBMEET_TURN_MIN_PORT }}
           WEBMEET_TURN_MAX_PORT: ${{ vars.WEBMEET_TURN_MAX_PORT }}
+          PROXIES_BRANCH: ${{ inputs.proxies_branch || vars.PROXIES_BRANCH || 'main' }}
+          PLOINKY_BRANCH: ${{ inputs.ploinky_branch || vars.PLOINKY_BRANCH || 'master' }}
+          ACHILLES_BRANCH: ${{ inputs.achilles_branch || vars.ACHILLES_BRANCH || 'master' }}
         run: |
           set -euo pipefail
 
@@ -208,10 +211,6 @@ jobs:
           chmod 600 /tmp/skills_explorer_env
 
           scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no /tmp/skills_explorer_env "${SSH_USER}@${SSH_HOST}:/tmp/skills_explorer_env"
-
-          PROXIES_BRANCH="${{ inputs.proxies_branch || vars.PROXIES_BRANCH || 'main' }}"
-          PLOINKY_BRANCH="${{ inputs.ploinky_branch || vars.PLOINKY_BRANCH || 'master' }}"
-          ACHILLES_BRANCH="${{ inputs.achilles_branch || vars.ACHILLES_BRANCH || 'master' }}"
 
           ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
             -i ~/.ssh/deploy_key "${SSH_USER}@${SSH_HOST}" \
