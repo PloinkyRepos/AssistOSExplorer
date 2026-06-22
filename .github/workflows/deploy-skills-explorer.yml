@@ -498,7 +498,9 @@ jobs:
           set_var LOCAL_LLM_API_KEY "${LOCAL_LLM_API_KEY:-}"
 
           set_var ONLYOFFICE_PUBLIC_URL "${ONLYOFFICE_PUBLIC_URL:-}"
-          set_var ONLYOFFICE_INTERNAL_URL "${ONLYOFFICE_INTERNAL_URL:-}"
+          # This value is consumed inside the onlyOffice agent container. The
+          # host-facing editor proxy stays published separately on 127.0.0.1:8082.
+          set_var ONLYOFFICE_INTERNAL_URL "http://127.0.0.1:80"
           set_var ONLYOFFICE_CALLBACK_BASE_URL "${ONLYOFFICE_CALLBACK_BASE_URL:-$PUBLIC_URL}"
 
           set_var WEBMEET_PUBLIC_LIVEKIT_URL "${WEBMEET_PUBLIC_LIVEKIT_URL:-}"
@@ -540,7 +542,6 @@ jobs:
             --branch "${EXPLORER_BRANCH:-main}" \
             --repo-branch "proxies=${PROXIES_BRANCH:-main}" \
             --repo-branch "webmeetInfra=main" \
-            --branch-fallback fail \
             --reset-repos \
             > "$WORK_DIR/logs/skills-explorer-start.log" 2>&1 &
 
@@ -576,7 +577,7 @@ jobs:
             sleep 2
           done
 
-          ONLYOFFICE_API_BASE="${ONLYOFFICE_INTERNAL_URL:-http://127.0.0.1:8082}"
+          ONLYOFFICE_API_BASE="http://127.0.0.1:8082"
           echo "[deploy] Verifying OnlyOffice api.js through ${ONLYOFFICE_API_BASE%/}..."
           for i in $(seq 1 120); do
             code="$(curl -s -o /dev/null -w '%{http_code}' "${ONLYOFFICE_API_BASE%/}/web-apps/apps/api/documents/api.js" || true)"
