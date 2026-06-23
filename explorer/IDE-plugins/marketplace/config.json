@@ -1,0 +1,19 @@
+{
+  "pluginCategory": "application",
+  "id": "marketplace",
+  "component": "marketplace-tool-button",
+  "location": ["file-exp:toolbar"],
+  "label": "Marketplace",
+  "tooltip": "Ploinky Agent Marketplace",
+  "icon": "./icon.svg",
+  "presenter": "MarketplaceToolButton",
+  "type": "embedded",
+  "autoPin": false,
+  "dependencies": [
+    {
+      "component": "marketplace-modal",
+      "presenter": "MarketplaceModal",
+      "type": "modal"
+    }
+  ]
+}
