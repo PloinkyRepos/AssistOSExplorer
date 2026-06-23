@@ -45,6 +45,7 @@ export function createCommitMessageActions(ctx) {
                 continue;
             }
             if (isDiffFileHeaderLine(line)) continue;
+            if (!line.startsWith('+') && !line.startsWith('-')) continue;
             if (contentCount >= maxLines) continue;
             out.push(line);
             contentCount += 1;
