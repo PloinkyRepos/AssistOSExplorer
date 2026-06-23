@@ -65,6 +65,12 @@ export class MarketplaceToolButton {
     event?.preventDefault?.();
     event?.stopPropagation?.();
     if (!this.hasAccess) return;
-    await assistOS.UI.createReactiveModal('marketplace-modal', {}, true);
+    try {
+      const targetUrl = new URL(window.location.href);
+      targetUrl.hash = 'marketplace-modal';
+      window.open(targetUrl.toString(), '_blank', 'noopener,noreferrer');
+    } catch (_) {
+      await assistOS.UI.changeToDynamicPage('marketplace-modal', 'marketplace-modal');
+    }
   };
 }
