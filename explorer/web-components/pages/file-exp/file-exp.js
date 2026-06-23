@@ -610,6 +610,8 @@ export class FileExp {
                 return this.renameEntry(element);
             case 'openEntryInNewTab':
                 return this.openEntryInNewTab(element);
+            case 'openTerminalHere':
+                return this.openTerminalHere(element);
             case 'copyEntry':
                 return this.copyEntry(element);
             case 'cutEntry':
@@ -1330,6 +1332,21 @@ export class FileExp {
         try {
             const targetUrl = new URL(buildFileExpHash(targetPath), window.location.href);
             window.open(targetUrl.toString(), '_blank', 'noopener,noreferrer');
+            return true;
+        } catch (_) {
+            return false;
+        }
+    }
+
+    openTerminalHere(element) {
+        const targetPath = this.normalizePath(element?.dataset?.entryPath || '');
+        if (!targetPath) {
+            return false;
+        }
+        try {
+            const relativePath = targetPath.replace(/^\/+/, '');
+            const targetUrl = `${window.location.origin}/webtty/?dir=${encodeURIComponent(relativePath)}`;
+            window.open(targetUrl, '_blank', 'noopener,noreferrer');
             return true;
         } catch (_) {
             return false;

@@ -34,6 +34,7 @@
             "profile": "embedded"
         },
         "AchillesCLI/achilles-cli global",
+        "basic/webtty global",
         "webmeetInfra/liveKitServerAgent",
         "webmeetStt",
         "webmeetAgent global",

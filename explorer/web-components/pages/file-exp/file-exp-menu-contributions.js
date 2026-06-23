@@ -227,6 +227,18 @@ export function getBuiltInContextMenuItems(fileExp, target) {
     if (type === 'directory') {
         items.push(
             {
+                id: 'host:open-terminal-here',
+                source: 'host',
+                slot: FILE_EXP_MENU_SLOTS.contextDirectory,
+                action: 'openTerminalHere',
+                label: 'Open Terminal Here',
+                entryPath,
+                entryType: type,
+                targetPath: entryPath,
+                icon: './assets/icons/terminal.svg',
+                disabled: false
+            },
+            {
                 id: 'host:upload-here',
                 source: 'host',
                 slot: FILE_EXP_MENU_SLOTS.contextDirectory,
