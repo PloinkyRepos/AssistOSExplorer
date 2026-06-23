@@ -9,7 +9,7 @@ export function createFileExpTooling() {
             return { text };
         },
         async listDirectoryDetailed(path) {
-            const raw = await callExplorerTool('list_directory_detailed', { path }, { raw: true });
+            const raw = await callExplorerTool('list_directory_detailed', { path }, { raw: true, withLoader: false });
             ensureSuccess(raw);
             const parsed = parseToolResult(raw);
             if (typeof parsed === 'string') {

@@ -3,7 +3,6 @@ export class MarketplaceToolButton {
     this.element = element;
     this.invalidate = invalidate;
     this.hostContext = {};
-    this.hasAccess = false;
     this.invalidate();
   }
 
@@ -15,7 +14,9 @@ export class MarketplaceToolButton {
     this.labelEl = this.element.querySelector('.marketplace-tool-button-label');
     this.button?.addEventListener('click', this.openMarketplace);
     this.syncButtonMetadata();
-    this.checkAccess();
+    if (this.button) {
+      this.button.hidden = false;
+    }
   }
 
   afterUnload() {
@@ -46,25 +47,9 @@ export class MarketplaceToolButton {
     }
   }
 
-  async checkAccess() {
-    try {
-      const response = await fetch('/api/marketplace', {
-        credentials: 'include',
-        headers: { Accept: 'application/json' }
-      });
-      this.hasAccess = response.ok;
-    } catch (_) {
-      this.hasAccess = false;
-    }
-    if (this.button) {
-      this.button.hidden = !this.hasAccess;
-    }
-  }
-
   openMarketplace = async (event) => {
     event?.preventDefault?.();
     event?.stopPropagation?.();
-    if (!this.hasAccess) return;
     try {
       const targetUrl = new URL(window.location.href);
       targetUrl.hash = 'marketplace-modal';
