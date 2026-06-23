@@ -169,12 +169,16 @@ export class MarketplaceModal {
     if (!button || this.state.busy) return;
     const agentRef = button.dataset.agentRef || '';
     const active = button.dataset.active === 'true';
+    const controls = button.closest?.('.marketplace-agent-controls');
+    const modeSelect = controls?.querySelector?.('[data-enable-mode-for]');
+    const mode = String(modeSelect?.value || button.dataset.enableMode || 'isolated').trim() || 'isolated';
     this.setBusy(true);
     this.setStatus(`${active ? 'Disabling' : 'Enabling'} ${agentRef}...`);
     try {
       this.state.marketplace = await this.requestMarketplace({
-        action: active ? 'deactivate_agent' : 'activate_agent',
-        agentRef
+        action: active ? 'disable_agent' : 'enable_agent',
+        agentRef,
+        ...(!active ? { mode } : {})
       });
       this.setStatus(`${agentRef} ${active ? 'disabled' : 'enabled'}.`);
     } catch (error) {
@@ -314,16 +318,38 @@ export class MarketplaceModal {
       info.append(title, about);
 
       row.append(info);
+      const controls = document.createElement('div');
+      controls.className = 'marketplace-agent-controls';
+
+      const modeSelect = document.createElement('select');
+      modeSelect.className = 'marketplace-enable-mode';
+      modeSelect.dataset.enableModeFor = agent.ref;
+      const modes = Array.isArray(agent.enableModes) && agent.enableModes.length
+        ? agent.enableModes
+        : ['isolated', 'global', 'devel'];
+      const currentMode = modes.includes(agent.enableMode) ? agent.enableMode : 'isolated';
+      for (const mode of modes) {
+        const option = document.createElement('option');
+        option.value = mode;
+        option.textContent = mode;
+        modeSelect.append(option);
+      }
+      modeSelect.value = currentMode;
+      modeSelect.disabled = this.state.busy || !canManage || agent.active;
+      controls.append(modeSelect);
+
       if (canManage) {
         const toggle = document.createElement('button');
         toggle.type = 'button';
         toggle.className = `marketplace-agent-toggle${agent.active ? ' active' : ''}`;
         toggle.dataset.agentRef = agent.ref;
         toggle.dataset.active = agent.active ? 'true' : 'false';
+        toggle.dataset.enableMode = currentMode;
         toggle.disabled = this.state.busy;
         toggle.textContent = agent.active ? 'Disable' : 'Enable';
-        row.append(toggle);
+        controls.append(toggle);
       }
+      row.append(controls);
       return row;
     }));
   }

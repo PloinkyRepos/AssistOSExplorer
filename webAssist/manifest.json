@@ -36,7 +36,7 @@
           "required": false
         },
         "PLOINKY_WORKSPACE_ROOT": {
-          "required": true
+          "required": false
         }
       }
     },
