@@ -7,7 +7,9 @@ export class MarketplaceModal {
       activeTab: 'agents',
       busy: false,
       status: 'Loading marketplace...',
-      statusType: ''
+      statusType: '',
+      agentSearchInput: '',
+      agentSearchQuery: ''
     };
     this.invalidate();
   }
@@ -22,12 +24,14 @@ export class MarketplaceModal {
     this.statusEl = this.element.querySelector('#marketplaceStatus');
     this.repositoriesEl = this.element.querySelector('#marketplaceRepositories');
     this.agentsEl = this.element.querySelector('#marketplaceAgents');
+    this.agentSearchInput = this.element.querySelector('#marketplaceAgentSearch');
     this.tabButtons = Array.from(this.element.querySelectorAll('[data-tab]'));
     this.tabPanels = Array.from(this.element.querySelectorAll('[data-panel]'));
 
     this.element.querySelector('[data-action="close"]')?.addEventListener('click', this.close);
     this.addRepoButton?.addEventListener('click', this.addRepository);
     this.repoUrlInput?.addEventListener('input', this.suggestRepoName);
+    this.agentSearchInput?.addEventListener('input', this.handleAgentSearchInput);
     this.agentsEl?.addEventListener('click', this.handleAgentClick);
     this.repositoriesEl?.addEventListener('click', this.handleRepositoryClick);
     this.tabButtons.forEach(button => button.addEventListener('click', this.switchTab));
@@ -44,9 +48,14 @@ export class MarketplaceModal {
       clearTimeout(this.statusClearTimer);
       this.statusClearTimer = null;
     }
+    if (this.agentSearchTimer) {
+      clearTimeout(this.agentSearchTimer);
+      this.agentSearchTimer = null;
+    }
     this.element.querySelector('[data-action="close"]')?.removeEventListener('click', this.close);
     this.addRepoButton?.removeEventListener('click', this.addRepository);
     this.repoUrlInput?.removeEventListener('input', this.suggestRepoName);
+    this.agentSearchInput?.removeEventListener('input', this.handleAgentSearchInput);
     this.agentsEl?.removeEventListener('click', this.handleAgentClick);
     this.repositoriesEl?.removeEventListener('click', this.handleRepositoryClick);
     this.tabButtons?.forEach(button => button.removeEventListener('click', this.switchTab));
@@ -58,7 +67,10 @@ export class MarketplaceModal {
       dialog.close();
       return;
     }
-    this.element.remove();
+    window.close();
+    setTimeout(() => {
+      window.assistOS?.UI?.changeToDynamicPage?.('file-exp', 'file-exp');
+    }, 100);
   };
 
   closeModal() {
@@ -134,6 +146,19 @@ export class MarketplaceModal {
     if (!match) return;
     const name = match[1].replace(/[^a-zA-Z0-9_.-]+/g, '-');
     if (name) this.repoNameInput.value = name;
+  };
+
+  handleAgentSearchInput = (event) => {
+    const value = String(event.target?.value || '').trim();
+    this.state.agentSearchInput = value;
+    if (this.agentSearchTimer) {
+      clearTimeout(this.agentSearchTimer);
+    }
+    this.agentSearchTimer = setTimeout(() => {
+      this.agentSearchTimer = null;
+      this.state.agentSearchQuery = this.state.agentSearchInput;
+      this.renderState();
+    }, 500);
   };
 
   addRepository = async () => {
@@ -216,6 +241,9 @@ export class MarketplaceModal {
       this.statusEl.classList.toggle('error', this.state.statusType === 'error');
     }
     if (this.addRepoButton) this.addRepoButton.disabled = this.state.busy;
+    if (this.agentSearchInput && this.agentSearchInput.value !== this.state.agentSearchInput) {
+      this.agentSearchInput.value = this.state.agentSearchInput;
+    }
     this.element.querySelector('.marketplace-repo-tools')?.classList.toggle('hidden', !canManage);
     this.renderRepositories();
     this.renderAgents();
@@ -298,7 +326,23 @@ export class MarketplaceModal {
       this.agentsEl.innerHTML = '<div class="marketplace-empty">No agents found.</div>';
       return;
     }
-    this.agentsEl.replaceChildren(...agents.map(agent => {
+    const query = String(this.state.agentSearchQuery || '').trim().toLowerCase();
+    const filteredAgents = query
+      ? agents.filter(agent => {
+          const values = [
+            agent.ref,
+            agent.repo,
+            agent.name,
+            `${agent.repo || ''}/${agent.name || ''}`
+          ];
+          return values.some(value => String(value || '').toLowerCase().includes(query));
+        })
+      : agents;
+    if (!filteredAgents.length) {
+      this.agentsEl.innerHTML = '<div class="marketplace-empty">No agents match the search.</div>';
+      return;
+    }
+    this.agentsEl.replaceChildren(...filteredAgents.map(agent => {
       const canManage = this.canManageMarketplace();
       const row = document.createElement('article');
       row.className = 'marketplace-row';

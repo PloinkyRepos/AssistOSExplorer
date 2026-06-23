@@ -8,9 +8,9 @@
   <div class="marketplace-modal">
     <div class="marketplace-description">Manage available agents and repository sources.</div>
 
-    <nav class="marketplace-tabs" role="tablist" aria-label="Marketplace sections">
-      <button type="button" class="marketplace-tab active" data-tab="agents" role="tab" aria-selected="true">Agents</button>
-      <button type="button" class="marketplace-tab" data-tab="repos" role="tab" aria-selected="false">Repos</button>
+    <nav class="marketplace-tabs settings-tabs" role="tablist" aria-label="Marketplace sections">
+      <button type="button" class="marketplace-tab settings-tab active" data-tab="agents" role="tab" aria-selected="true">Agents</button>
+      <button type="button" class="marketplace-tab settings-tab" data-tab="repos" role="tab" aria-selected="false">Repos</button>
     </nav>
 
     <div id="marketplaceStatus" class="marketplace-status" role="status"></div>
@@ -19,6 +19,7 @@
       <section class="marketplace-panel marketplace-tab-panel" data-panel="agents" role="tabpanel">
         <div class="marketplace-panel-header">
           <h3>Agents</h3>
+          <input id="marketplaceAgentSearch" class="marketplace-agent-search" type="search" placeholder="Search agents or repos" autocomplete="off">
         </div>
         <div id="marketplaceAgents" class="marketplace-list marketplace-agent-list"></div>
       </section>

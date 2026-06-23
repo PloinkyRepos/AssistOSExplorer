@@ -28,6 +28,32 @@ dialog.modal.settings-modal-dialog{
     display: none;
 }
 
+.settings-tabs {
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    gap: 8px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+}
+
+.settings-tab {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 0.92rem;
+    font-weight: 500;
+    padding: 7px 12px;
+    cursor: pointer;
+}
+
+.settings-tab.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+}
+
 .input-invalid {
     border: 1px solid var(--red) !important;
     border-radius: 8px !important;
