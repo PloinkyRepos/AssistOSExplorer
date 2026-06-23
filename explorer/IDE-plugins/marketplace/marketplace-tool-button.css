@@ -1,0 +1,26 @@
+marketplace-tool-button {
+  display: block;
+  width: 100%;
+  text-align: center;
+}
+
+.app-toolbar-slot marketplace-tool-button,
+marketplace-tool-button[data-host-orientation="horizontal"] {
+  width: auto;
+  text-align: initial;
+}
+
+marketplace-tool-button .marketplace-tool {
+  display: inline-flex;
+  width: 100%;
+  justify-content: center;
+}
+
+.app-toolbar-slot marketplace-tool-button .marketplace-tool,
+marketplace-tool-button[data-host-orientation="horizontal"] .marketplace-tool {
+  width: auto;
+}
+
+marketplace-tool-button .marketplace-tool-button[hidden] {
+  display: none;
+}

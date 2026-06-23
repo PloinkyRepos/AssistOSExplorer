@@ -1,0 +1,37 @@
+<div class="modal-header">
+    <div class="modal-title">Ploinky Marketplace</div>
+    <div class="close" data-action="close" data-local-action="closeModal" aria-label="Close">
+        <img class="close-icon" src="/explorer/assets/icons/x-mark.svg" alt="close">
+    </div>
+</div>
+<div class="modal-body marketplace-modal-body">
+  <div class="marketplace-modal">
+    <div class="marketplace-description">Manage available agents and repository sources.</div>
+
+    <nav class="marketplace-tabs" role="tablist" aria-label="Marketplace sections">
+      <button type="button" class="marketplace-tab active" data-tab="agents" role="tab" aria-selected="true">Agents</button>
+      <button type="button" class="marketplace-tab" data-tab="repos" role="tab" aria-selected="false">Repos</button>
+    </nav>
+
+    <div id="marketplaceStatus" class="marketplace-status" role="status"></div>
+
+    <main class="marketplace-content">
+      <section class="marketplace-panel marketplace-tab-panel" data-panel="agents" role="tabpanel">
+        <div class="marketplace-panel-header">
+          <h3>Agents</h3>
+        </div>
+        <div id="marketplaceAgents" class="marketplace-list marketplace-agent-list"></div>
+      </section>
+
+      <section class="marketplace-panel marketplace-tab-panel hidden" data-panel="repos" role="tabpanel" hidden>
+        <div class="marketplace-repo-tools">
+          <input id="marketplaceRepoName" type="text" placeholder="Repository name" autocomplete="off">
+          <input id="marketplaceRepoUrl" type="url" placeholder="Git repository URL" autocomplete="off">
+          <input id="marketplaceRepoBranch" type="text" placeholder="Branch (optional)" autocomplete="off">
+          <button id="marketplaceAddRepo" type="button">Add</button>
+        </div>
+        <div id="marketplaceRepositories" class="marketplace-list"></div>
+      </section>
+    </main>
+  </div>
+</div>
