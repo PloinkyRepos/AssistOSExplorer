@@ -31,10 +31,6 @@ function repoMatchesKnownRepository(repo, repository) {
     );
 }
 
-function logManifestDebug(label, details = {}) {
-    console.log(`[edit-skills-manifest] ${label}`, details);
-}
-
 function normalizeState(raw = {}) {
     const repositories = Array.isArray(raw.repositories) ? raw.repositories : [];
     return {
@@ -147,31 +143,15 @@ export class EditSkillsManifestModal {
     }
 
     async callJsonTool(name, args) {
-        logManifestDebug('calling tool', { name, args });
         const payload = await callExplorerTool(name, args, { raw: true, withLoader: false });
-        logManifestDebug('tool raw payload', { name, payload });
         ensureSuccess(payload);
-        const parsed = parseToolResult(payload);
-        logManifestDebug('tool parsed payload', { name, parsed });
-        return parsed;
+        return parseToolResult(payload);
     }
 
     async loadStateFromManifestFile() {
         const manifestPath = this.manifestPath || buildSkillsManifestPath(this.folderPath);
-        logManifestDebug('fallback read manifest file', {
-            folderPath: this.folderPath,
-            manifestPath
-        });
         const text = await callExplorerTool('read_text_file', { path: manifestPath }, { withLoader: false });
-        logManifestDebug('fallback manifest file content', {
-            manifestPath,
-            text
-        });
         const parsed = JSON.parse(text || '[]');
-        logManifestDebug('fallback manifest parsed', {
-            manifestPath,
-            parsed
-        });
         const entries = Array.isArray(parsed) ? parsed : [];
         const repositories = entries.map(normalizeManifestEntry).filter((repo) => repo.url || repo.name);
         return {
@@ -188,11 +168,6 @@ export class EditSkillsManifestModal {
             const raw = await this.callJsonTool('read_skills_manifest_state', { folderPath: this.folderPath });
             return normalizeState(raw);
         } catch (error) {
-            logManifestDebug('readCurrentState falling back to manifest file', {
-                folderPath: this.folderPath,
-                manifestPath: this.manifestPath,
-                error
-            });
             return normalizeState(await this.loadStateFromManifestFile());
         }
     }
@@ -209,89 +184,36 @@ export class EditSkillsManifestModal {
         for (const repoName of Array.from(this.seenRepos)) {
             if (!currentRepoNames.has(repoName)) this.seenRepos.delete(repoName);
         }
-        logManifestDebug('state refreshed after mutation', {
-            manifestPath: this.state.manifestPath,
-            folderPath: this.state.folderPath,
-            repositories: this.state.repositories,
-            installedSkills: this.state.installedSkills,
-            skillRepositories: this.state.skillRepositories
-        });
     }
 
     async loadState() {
-        logManifestDebug('loadState start', {
-            folderPath: this.folderPath,
-            manifestPath: this.manifestPath
-        });
         if (!this.folderPath) {
             this.setStatus('Missing target folder for skills manifest.', 'error');
-            logManifestDebug('loadState missing folderPath', {
-                folderPath: this.folderPath,
-                manifestPath: this.manifestPath
-            });
             return;
         }
         this.setBusy(true);
         this.setStatus('Loading skills manifest...', 'info');
         try {
             this.state = mergeSkillRepositories(await this.readCurrentState(), this.state);
-            logManifestDebug('state loaded from read_skills_manifest_state', {
-                manifestPath: this.state.manifestPath,
-                folderPath: this.state.folderPath,
-                repositories: this.state.repositories,
-                installedSkills: this.state.installedSkills,
-                skillRepositories: this.state.skillRepositories
-            });
             if (!this.state.skillRepositories.length) {
                 this.state.skillRepositories = await this.loadMarketplaceSkillRepositories();
-                logManifestDebug('marketplace skill repositories loaded', {
-                    skillRepositories: this.state.skillRepositories
-                });
             }
             this.manifestPath = this.state.manifestPath || this.manifestPath;
             this.setStatus('', '');
         } catch (error) {
-            logManifestDebug('read_skills_manifest_state failed, trying direct manifest read', {
-                folderPath: this.folderPath,
-                manifestPath: this.manifestPath,
-                error
-            });
             try {
                 const raw = await this.loadStateFromManifestFile();
                 this.state = mergeSkillRepositories(normalizeState(raw), this.state);
-                logManifestDebug('state loaded from direct manifest read', {
-                    manifestPath: this.state.manifestPath,
-                    folderPath: this.state.folderPath,
-                    repositories: this.state.repositories,
-                    installedSkills: this.state.installedSkills,
-                    skillRepositories: this.state.skillRepositories
-                });
                 if (!this.state.skillRepositories.length) {
                     this.state.skillRepositories = await this.loadMarketplaceSkillRepositories();
-                    logManifestDebug('marketplace skill repositories loaded after fallback', {
-                        skillRepositories: this.state.skillRepositories
-                    });
                 }
                 this.manifestPath = this.state.manifestPath || this.manifestPath;
                 this.setStatus('Loaded manifest directly. Repository cache details are unavailable until the skills manifest tools reload.', 'info');
             } catch (fallbackError) {
-                logManifestDebug('direct manifest read failed', {
-                    folderPath: this.folderPath,
-                    manifestPath: this.manifestPath,
-                    error,
-                    fallbackError
-                });
                 this.setStatus(fallbackError?.message || error?.message || 'Could not read skills manifest.', 'error');
             }
         } finally {
             this.setBusy(false);
-            logManifestDebug('loadState done', {
-                folderPath: this.folderPath,
-                manifestPath: this.manifestPath,
-                repositories: this.state.repositories,
-                installedSkills: this.state.installedSkills,
-                skillRepositories: this.state.skillRepositories
-            });
             this.render();
         }
     }
@@ -423,10 +345,6 @@ export class EditSkillsManifestModal {
 
     toggleRepository(repoName) {
         if (!repoName) return;
-        logManifestDebug('toggle repository', {
-            repoName,
-            wasExpanded: this.expandedRepos.has(repoName)
-        });
         if (this.expandedRepos.has(repoName)) {
             this.expandedRepos.delete(repoName);
         } else {
