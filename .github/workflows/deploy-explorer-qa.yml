@@ -296,6 +296,12 @@ jobs:
           WORK_DIR="$HOME/$WORKSPACE"
           mkdir -p "$WORK_DIR/logs"
           cd "$WORK_DIR"
+          # Pin the workspace root so every ploinky command uses THIS workspace's .ploinky.
+          # The new ploinky resolves the workspace by walking up from cwd for an existing
+          # .ploinky; after a destroy wipes this workspace's .ploinky, that search would
+          # otherwise escape to a stale ~/.ploinky (whose .secrets we can't decrypt). The
+          # PLOINKY_WORKSPACE_ROOT env var short-circuits that search (config.js resolveWorkspaceRoot).
+          export PLOINKY_WORKSPACE_ROOT="$WORK_DIR"
 
           set -a
           . /tmp/explorer_qa_env
