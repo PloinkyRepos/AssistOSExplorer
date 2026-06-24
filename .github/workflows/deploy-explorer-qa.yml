@@ -405,13 +405,13 @@ jobs:
             exit 1
           fi
 
-          echo "[deploy] Ensuring Ploinky repos are installed and enabled..."
-          "$PLOINKY" add repo AchillesIDE https://github.com/PloinkyRepos/AssistOSExplorer.git "${EXPLORER_BRANCH:-main}" || true
-          "$PLOINKY" add repo webmeetInfra https://github.com/PloinkyRepos/webmeetInfra.git main || true
-          "$PLOINKY" add repo proxies https://github.com/PloinkyRepos/proxies.git "${PROXIES_BRANCH:-main}" || true
-          "$PLOINKY" enable repo AchillesIDE
-          "$PLOINKY" enable repo webmeetInfra
-          "$PLOINKY" enable repo proxies
+          echo "[deploy] Installing Ploinky repos..."
+          # Ploinky retired 'add repo <name> <url> <branch>' / 'enable repo <name>' in favor of
+          # 'install <url|repoName> [name] [--branch X]'. Repos are activated by install; the
+          # explorer manifest's "enable" list brings up the agent stack at start time.
+          "$PLOINKY" install https://github.com/PloinkyRepos/AssistOSExplorer.git AchillesIDE --branch "${EXPLORER_BRANCH:-main}" || true
+          "$PLOINKY" install https://github.com/PloinkyRepos/webmeetInfra.git webmeetInfra --branch main || true
+          "$PLOINKY" install https://github.com/PloinkyRepos/proxies.git proxies --branch "${PROXIES_BRANCH:-main}" || true
 
           echo "[deploy-qa] Updating Ploinky, Achilles dependencies, and installed repos..."
           if ! env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" update; then
