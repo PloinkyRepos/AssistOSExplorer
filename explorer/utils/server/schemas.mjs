@@ -76,6 +76,23 @@ export function createSchemas(z) {
     enabled: z.boolean()
   });
   const ListSkillsArgsSchema = z.object({});
+  const ReadSkillsManifestStateArgsSchema = z.object({ folderPath: z.string() });
+  const AddSkillsManifestRepoArgsSchema = z.object({
+    folderPath: z.string(),
+    url: z.string(),
+    name: z.string().optional().nullable(),
+    branch: z.string().optional().nullable()
+  });
+  const SetSkillsManifestSkillEnabledArgsSchema = z.object({
+    folderPath: z.string(),
+    repoName: z.string(),
+    skill: z.string(),
+    enabled: z.boolean()
+  });
+  const RemoveSkillsManifestRepoArgsSchema = z.object({
+    folderPath: z.string(),
+    repoName: z.string()
+  });
 
   return {
     ReadTextFileArgsSchema,
@@ -103,6 +120,10 @@ export function createSchemas(z) {
     CollectIDEPluginsArgsSchema,
     GetPluginSettingsArgsSchema,
     SetPluginEnabledArgsSchema,
-    ListSkillsArgsSchema
+    ListSkillsArgsSchema,
+    ReadSkillsManifestStateArgsSchema,
+    AddSkillsManifestRepoArgsSchema,
+    SetSkillsManifestSkillEnabledArgsSchema,
+    RemoveSkillsManifestRepoArgsSchema
   };
 }

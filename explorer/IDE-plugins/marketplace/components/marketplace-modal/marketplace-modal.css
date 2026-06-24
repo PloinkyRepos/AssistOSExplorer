@@ -115,6 +115,7 @@ marketplace-modal button {
 marketplace-modal #marketplaceAddRepo,
 marketplace-modal .marketplace-repo-toggle,
 marketplace-modal .marketplace-agent-toggle,
+marketplace-modal .marketplace-agent-settings,
 marketplace-modal .marketplace-enable-mode {
   border: 1px solid var(--border-strong, var(--border, #cbd5e1));
   background: var(--surface, #fff);
@@ -148,6 +149,7 @@ marketplace-modal .marketplace-agent-toggle.active {
 marketplace-modal #marketplaceAddRepo:hover,
 marketplace-modal .marketplace-repo-toggle:hover,
 marketplace-modal .marketplace-agent-toggle:hover,
+marketplace-modal .marketplace-agent-settings:hover,
 marketplace-modal .marketplace-enable-mode:hover {
   border-color: var(--accent, var(--border-strong, #8b95a1));
   background: var(--bg, #f6f7f9);
@@ -355,6 +357,55 @@ marketplace-modal .marketplace-badge {
 
 marketplace-modal .marketplace-tree-empty {
   margin-left: 0;
+}
+
+dialog.marketplace-agent-settings-dialog {
+  width: 100vw;
+  max-width: none;
+  height: 100vh;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  overflow: hidden;
+}
+
+dialog.marketplace-agent-settings-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.36);
+}
+
+dialog.marketplace-agent-settings-dialog > * {
+  min-height: 0;
+}
+
+dialog.marketplace-agent-settings-dialog .modal-header {
+  min-height: 48px;
+  padding: 0 16px;
+}
+
+.marketplace-agent-settings-close {
+  border: 1px solid var(--border-strong, var(--border, #cbd5e1));
+  background: var(--surface, #fff);
+  color: var(--text, #202124);
+  border-radius: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.marketplace-agent-settings-dialog-body {
+  height: calc(100% - 48px);
+  min-height: 0;
+}
+
+.marketplace-agent-settings-frame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+  background: var(--surface, #fff);
 }
 
 @media (max-width: 820px) {

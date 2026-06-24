@@ -1,3 +1,19 @@
+import {
+  callExplorerTool,
+  parseToolResult
+} from '/explorer/services/infrastructure/explorerApi.js';
+import {
+  buildAgentSettingsItems
+} from '/explorer/web-components/modals/settings-modal/settings-agent-model.js';
+import {
+  ensureSettingsComponentRegistered,
+  resolvePluginSettingsUrl
+} from '/explorer/web-components/modals/settings-modal/settings-component-loader.js';
+import {
+  flattenPluginsByKey,
+  getCachedRuntimePlugins
+} from '/explorer/web-components/modals/settings-modal/settings-plugin-model.js';
+
 export class MarketplaceModal {
   constructor(element, invalidate) {
     this.element = element;
@@ -11,7 +27,11 @@ export class MarketplaceModal {
       agentSearchInput: '',
       agentSearchQuery: '',
       activeRepoKindTab: 'agents',
-      expandedAgentRepos: {}
+      expandedAgentRepos: {},
+      agentSettingsRaw: [],
+      agentSettingsItems: [],
+      agentSettingsDataLoaded: false,
+      agentSettingsBusyKey: ''
     };
     this.invalidate();
   }
@@ -44,6 +64,10 @@ export class MarketplaceModal {
     if (!this.state.marketplace && !this.loadingStarted) {
       this.loadingStarted = true;
       this.loadMarketplace();
+    } else if (this.canManageMarketplace() && !this.state.agentSettingsDataLoaded) {
+      this.loadAgentSettingsData().catch((error) => {
+        this.setStatus(error?.message || 'Failed to load agent settings.', 'error');
+      });
     }
   }
 
@@ -142,12 +166,29 @@ export class MarketplaceModal {
     this.setBusy(true);
     try {
       this.state.marketplace = await this.requestMarketplace();
+      if (this.canManageMarketplace()) {
+        await this.loadAgentSettingsData();
+      }
       this.setStatus('');
     } catch (error) {
       this.setStatus(error?.message || 'Failed to load marketplace.', 'error');
     } finally {
       this.setBusy(false);
     }
+  }
+
+  async loadAgentSettingsData() {
+    let pluginsByLocation = getCachedRuntimePlugins();
+    if (!pluginsByLocation) {
+      const pluginsPayload = await callExplorerTool('collect_ide_plugins', {}, { raw: true, withLoader: false });
+      pluginsByLocation = parseToolResult(pluginsPayload) || {};
+    }
+    this.state.agentSettingsRaw = Array.isArray(pluginsByLocation?.agentSettings)
+      ? pluginsByLocation.agentSettings
+      : [];
+    const pluginItems = flattenPluginsByKey(pluginsByLocation);
+    this.state.agentSettingsItems = buildAgentSettingsItems(this.state.agentSettingsRaw, pluginItems, { isAdmin: true });
+    this.state.agentSettingsDataLoaded = true;
   }
 
   suggestRepoName = () => {
@@ -211,6 +252,12 @@ export class MarketplaceModal {
       return;
     }
 
+    const settingsButton = event.target?.closest?.('[data-agent-settings-key]');
+    if (settingsButton) {
+      await this.openAgentSettings(settingsButton.dataset.agentSettingsKey || '');
+      return;
+    }
+
     const button = event.target?.closest?.('[data-agent-ref]');
     if (!button) return;
 
@@ -235,6 +282,119 @@ export class MarketplaceModal {
       this.setBusy(false);
     }
   };
+
+  normalizeAgentSettingsMatchKey(value) {
+    return String(value || '').trim().toLowerCase();
+  }
+
+  getAgentSettingsCandidates(agent) {
+    const repo = String(agent?.repo || '').trim();
+    const name = String(agent?.name || '').trim();
+    const ref = String(agent?.ref || '').trim();
+    return new Set([
+      ref,
+      name,
+      repo && name ? `${repo}/${name}` : '',
+      ref.includes('/') ? ref.split('/').pop() : ''
+    ].map((value) => this.normalizeAgentSettingsMatchKey(value)).filter(Boolean));
+  }
+
+  getAgentSettingsItem(agent) {
+    const candidates = this.getAgentSettingsCandidates(agent);
+    return (this.state.agentSettingsItems || []).find((item) => {
+      if (!item?.available) return false;
+      const ownerAgent = this.normalizeAgentSettingsMatchKey(item.ownerAgent);
+      const key = this.normalizeAgentSettingsMatchKey(item.key);
+      return candidates.has(ownerAgent) || candidates.has(key);
+    }) || null;
+  }
+
+  async openAgentSettings(key) {
+    if (!key || !this.canManageMarketplace()) return;
+    if (!this.state.agentSettingsDataLoaded) {
+      await this.loadAgentSettingsData();
+    }
+    const item = (this.state.agentSettingsItems || []).find((entry) => entry?.key === key);
+    if (!item || !item.available || !item.sourcePlugin || (!item.settingsUrl && !item.settingsComponent)) {
+      this.setStatus('Agent settings are not available.', 'error');
+      return;
+    }
+
+    this.state.agentSettingsBusyKey = key;
+    this.renderState();
+
+    try {
+      if (item.settingsUrl) {
+        if (!this.openAgentSettingsUrlPopup(item)) {
+          throw new Error(`Invalid settings URL for ${key}.`);
+        }
+        this.setStatus(`${item.label || item.component} settings opened.`);
+        return;
+      }
+
+      await ensureSettingsComponentRegistered({
+        ...item.sourcePlugin,
+        settingsComponent: item.settingsComponent
+      });
+      const modal = await assistOS.UI.createReactiveModal(item.settingsComponent, {
+        agentSettings: {
+          key: item.key,
+          label: item.label,
+          ownerAgent: item.ownerAgent,
+          scope: item.scope,
+          settingsComponent: item.settingsComponent,
+          settingsUrl: item.settingsUrl,
+          assetRootPath: item.assetRootPath
+        }
+      });
+      modal?.classList?.add?.('marketplace-agent-settings-dialog');
+      this.setStatus(`${item.label} settings opened.`);
+    } catch (error) {
+      this.setStatus(error?.message || `Failed to open settings for ${key}.`, 'error');
+    } finally {
+      this.state.agentSettingsBusyKey = '';
+      this.renderState();
+    }
+  }
+
+  openAgentSettingsUrlPopup(item) {
+    const settingsUrl = resolvePluginSettingsUrl(item);
+    if (!settingsUrl) return false;
+
+    const dialog = document.createElement('dialog');
+    dialog.className = 'modal marketplace-agent-settings-dialog';
+
+    const header = document.createElement('div');
+    header.className = 'modal-header';
+
+    const title = document.createElement('div');
+    title.className = 'modal-title';
+    title.textContent = item.label || item.key || 'Agent settings';
+
+    const closeButton = document.createElement('button');
+    closeButton.type = 'button';
+    closeButton.className = 'marketplace-agent-settings-close';
+    closeButton.setAttribute('aria-label', 'Close settings');
+    closeButton.textContent = 'Close';
+
+    const body = document.createElement('div');
+    body.className = 'marketplace-agent-settings-dialog-body';
+
+    const frame = document.createElement('iframe');
+    frame.className = 'marketplace-agent-settings-frame';
+    frame.title = title.textContent;
+    frame.src = settingsUrl;
+
+    body.append(frame);
+    header.append(title, closeButton);
+    dialog.append(header, body);
+    document.body.append(dialog);
+
+    closeButton.addEventListener('click', () => dialog.close());
+    dialog.addEventListener('close', () => dialog.remove(), { once: true });
+    dialog.showModal();
+    return true;
+  }
 
   toggleAgentRepo = (repoName) => {
     const name = String(repoName || '').trim();
@@ -511,9 +671,21 @@ export class MarketplaceModal {
       }
       modeSelect.value = currentMode;
       modeSelect.disabled = this.state.busy || !canManage || agent.active;
-      controls.append(modeSelect);
 
       if (canManage) {
+        const settingsItem = this.getAgentSettingsItem(agent);
+        if (settingsItem) {
+          const settingsButton = document.createElement('button');
+          settingsButton.type = 'button';
+          settingsButton.className = 'marketplace-agent-settings';
+          settingsButton.dataset.agentSettingsKey = settingsItem.key;
+          settingsButton.disabled = this.state.busy || this.state.agentSettingsBusyKey === settingsItem.key;
+          settingsButton.textContent = 'Configure';
+          controls.append(settingsButton);
+        }
+
+        controls.append(modeSelect);
+
         const toggle = document.createElement('button');
         toggle.type = 'button';
         toggle.className = `marketplace-agent-toggle${agent.active ? ' active' : ''}`;
@@ -523,6 +695,8 @@ export class MarketplaceModal {
         toggle.disabled = this.state.busy;
         toggle.textContent = agent.active ? 'Disable' : 'Enable';
         controls.append(toggle);
+      } else {
+        controls.append(modeSelect);
       }
 
       row.append(controls);

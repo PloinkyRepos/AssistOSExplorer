@@ -24,7 +24,11 @@ export function buildToolDefinitions(zodToJsonSchema, schemas) {
     CollectIDEPluginsArgsSchema,
     GetPluginSettingsArgsSchema,
     SetPluginEnabledArgsSchema,
-    ListSkillsArgsSchema
+    ListSkillsArgsSchema,
+    ReadSkillsManifestStateArgsSchema,
+    AddSkillsManifestRepoArgsSchema,
+    SetSkillsManifestSkillEnabledArgsSchema,
+    RemoveSkillsManifestRepoArgsSchema
   } = schemas;
 
   return [
@@ -157,6 +161,26 @@ export function buildToolDefinitions(zodToJsonSchema, schemas) {
       name: 'list-skills',
       description: 'List Achilles CLI skills discovered for the current workspace.',
       inputSchema: zodToJsonSchema(ListSkillsArgsSchema)
+    },
+    {
+      name: 'read_skills_manifest_state',
+      description: 'Read ploinky-skills-manifest.json and available cached skills for a workspace folder.',
+      inputSchema: zodToJsonSchema(ReadSkillsManifestStateArgsSchema)
+    },
+    {
+      name: 'add_skills_manifest_repo',
+      description: 'Add a skill repository to ploinky-skills-manifest.json, cache it, and install all of its skills.',
+      inputSchema: zodToJsonSchema(AddSkillsManifestRepoArgsSchema)
+    },
+    {
+      name: 'set_skills_manifest_skill_enabled',
+      description: 'Enable or disable one skill from a repository entry in ploinky-skills-manifest.json.',
+      inputSchema: zodToJsonSchema(SetSkillsManifestSkillEnabledArgsSchema)
+    },
+    {
+      name: 'remove_skills_manifest_repo',
+      description: 'Remove a repository entry from ploinky-skills-manifest.json and resync installed skills.',
+      inputSchema: zodToJsonSchema(RemoveSkillsManifestRepoArgsSchema)
     },
     {
       name: 'list_allowed_directories',
