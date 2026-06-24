@@ -123,12 +123,10 @@ export const avatarController = {
         this.state.profileAvatar = normalizeAvatarConfig(me.config, me.config?.agentId || `profile:${me.user?.id || 'current-user'}`);
         this.state.profileAvatarEnabled = me.enabled !== false;
         this.state.profileAvatarSource = me.source || null;
-        this.state.dpuProfileAvailable = me.source?.kind !== 'error';
-        if (!this.state.dpuProfileAvailable) {
-            this.state.avatarStatus = me.source?.error || "DPU My Space is unavailable. Profile avatar cannot be saved.";
-            this.state.avatarStatusType = "error";
-        }
-        const agentsPayload = await this.fetchAvatarJson('agents');
+        const agentsPayload = await this.fetchAvatarJson('agents').catch(() => ({
+            canManageAgents: false,
+            agents: []
+        }));
         this.state.canManageAgentAvatars = Boolean(agentsPayload.canManageAgents);
         this.state.agentAvatarItems = Array.isArray(agentsPayload.agents) ? agentsPayload.agents : [];
         const selectedAgent = this.state.agentAvatarItems.find((item) => item.id === this.state.selectedAvatarAgentId)
@@ -138,10 +136,8 @@ export const avatarController = {
         this.state.selectedAgentAvatar = normalizeAvatarConfig(selectedAgent?.config, selectedAgent?.id || 'agent');
         this.state.selectedAgentAvatarEnabled = selectedAgent?.enabled !== false;
         this.state.avatarDataLoaded = true;
-        if (this.state.avatarStatusType !== "error") {
-            this.state.avatarStatus = "Avatar settings loaded.";
-            this.state.avatarStatusType = "";
-        }
+        this.state.avatarStatus = "Avatar settings loaded.";
+        this.state.avatarStatusType = "";
         this.renderAvatarSettings();
     },
 
@@ -161,10 +157,10 @@ export const avatarController = {
         }
         if (this.profileAvatarEnabledInput) {
             this.profileAvatarEnabledInput.checked = Boolean(this.state.profileAvatarEnabled);
-            this.profileAvatarEnabledInput.disabled = this.state.avatarBusy || !this.state.dpuProfileAvailable;
+            this.profileAvatarEnabledInput.disabled = this.state.avatarBusy;
         }
         if (this.saveProfileAvatarButton) {
-            this.saveProfileAvatarButton.disabled = this.state.avatarBusy || !this.state.dpuProfileAvailable;
+            this.saveProfileAvatarButton.disabled = this.state.avatarBusy;
         }
         if (this.saveAgentAvatarButton) {
             this.saveAgentAvatarButton.disabled = this.state.avatarBusy || !this.state.canManageAgentAvatars || !this.state.selectedAvatarAgentId;
@@ -206,7 +202,7 @@ export const avatarController = {
             packs: this.state.axiFacePacks,
             generatedStyles: this.state.axiFaceGeneratedFaceStyles,
             palettes: this.state.axiFaceGeneratedFacePalettes,
-            disabled: this.state.avatarBusy || (scope === 'profile' && !this.state.dpuProfileAvailable),
+            disabled: this.state.avatarBusy || (scope === 'agent' && (!this.state.canManageAgentAvatars || !this.state.selectedAvatarAgentId)),
             showPreview: false
         });
     },
@@ -280,7 +276,7 @@ export const avatarController = {
     },
 
     async saveProfileAvatar() {
-        if (this.state.avatarBusy || !this.state.dpuProfileAvailable) return;
+        if (this.state.avatarBusy) return;
         this.state.avatarBusy = true;
         this.state.avatarStatus = "Saving profile avatar...";
         this.state.avatarStatusType = "";
@@ -294,7 +290,7 @@ export const avatarController = {
             this.state.profileAvatar = normalizeAvatarConfig(payload.config, this.state.profileAvatar.agentId);
             this.state.profileAvatarEnabled = payload.enabled !== false;
             this.state.profileAvatarSource = payload.source || null;
-            this.state.avatarStatus = "Profile avatar saved in DPU My Space.";
+            this.state.avatarStatus = "Profile avatar saved in this browser.";
             this.state.avatarStatusType = "";
         } catch (error) {
             this.state.avatarStatus = error?.message || "Failed to save profile avatar.";

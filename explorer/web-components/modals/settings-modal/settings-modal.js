@@ -70,7 +70,6 @@ export class SettingsModal {
             profileAvatar: defaultAvatarConfig('profile:current-user', '72'),
             profileAvatarEnabled: true,
             profileAvatarSource: null,
-            dpuProfileAvailable: true,
             activeAvatarTab: 'profile',
             axiFacePacks: [],
             axiFaceGeneratedFaceStyles: [],

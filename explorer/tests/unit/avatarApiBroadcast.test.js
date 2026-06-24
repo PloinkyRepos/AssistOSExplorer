@@ -2,13 +2,13 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 test('saveCurrentProfileAvatar broadcasts profile avatar updates to other browser contexts', async () => {
-    const originalFetch = globalThis.fetch;
     const originalWindow = globalThis.window;
     const originalCustomEvent = globalThis.CustomEvent;
     const originalBroadcastChannel = globalThis.BroadcastChannel;
+    const originalAssistOS = globalThis.assistOS;
     const dispatchedEvents = [];
-    const storageWrites = [];
     const channelMessages = [];
+    const storage = new Map();
 
     class TestCustomEvent {
         constructor(type, options = {}) {
@@ -37,37 +37,23 @@ test('saveCurrentProfileAvatar broadcasts profile avatar updates to other browse
         },
         addEventListener() {},
         localStorage: {
+            getItem(key) {
+                return storage.has(key) ? storage.get(key) : null;
+            },
             setItem(key, value) {
-                storageWrites.push({ key, value });
+                storage.set(key, value);
+            }
+        },
+        assistOS: {
+            user: {
+                id: 'local:user',
+                username: 'user',
+                roles: ['user']
             }
         },
         location: { href: 'http://localhost/' }
     };
-    globalThis.fetch = async () => ({
-        ok: true,
-        async json() {
-            return {
-                ok: true,
-                user: {
-                    id: 'local:user',
-                    username: 'user',
-                    roles: ['user']
-                },
-                avatar: {
-                    enabled: true,
-                    config: {
-                        agentId: 'profile:local:user',
-                        generated: true,
-                        seed: 'profile:local:user',
-                        style: 'terminal',
-                        palette: 'terminal'
-                    },
-                    fallbackLetter: 'U',
-                    source: { kind: 'dpu' }
-                }
-            };
-        }
-    });
+    globalThis.assistOS = globalThis.window.assistOS;
 
     try {
         const { saveCurrentProfileAvatar } = await import('../../services/profileAvatar/avatarApi.js');
@@ -87,12 +73,12 @@ test('saveCurrentProfileAvatar broadcasts profile avatar updates to other browse
         assert.equal(dispatchedEvents[0]?.detail?.config?.style, 'terminal');
         assert.equal(channelMessages[0]?.name, 'assistOS.avatar-settings');
         assert.equal(channelMessages[0]?.message?.userId, 'local:user');
-        assert.equal(storageWrites[0]?.key, 'assistOS.avatar-settings.updated');
-        assert.equal(JSON.parse(storageWrites[0]?.value || '{}').config.style, 'terminal');
+        assert.equal(JSON.parse(storage.get('assistOS.avatar-settings.updated') || '{}').config.style, 'terminal');
+        assert.equal(JSON.parse(storage.get('assistOS.profileAvatar.settings') || '{}').config.style, 'terminal');
     } finally {
-        globalThis.fetch = originalFetch;
         globalThis.window = originalWindow;
         globalThis.CustomEvent = originalCustomEvent;
         globalThis.BroadcastChannel = originalBroadcastChannel;
+        globalThis.assistOS = originalAssistOS;
     }
 });

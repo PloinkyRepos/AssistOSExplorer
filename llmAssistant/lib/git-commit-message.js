@@ -53,34 +53,34 @@ function buildFileSummaryPrompt(item, maxDiffChars = MAX_DIFF_CHARS_PER_FILE) {
     truncateText(item?.diff, maxDiffChars),
     '',
     'Write one short commit-message sentence for this file.',
-    'Return only that sentence. No labels. No raw diff lines.'
+    'Return only that sentence. No labels. No file path. No raw diff lines.'
   ].join('\n');
 }
 
 function buildFinalPrompt(summaries) {
   return [
-    'Write one Git commit message by synthesizing these per-file change summaries.',
+    `Write one Git commit subject by synthesizing these ${summaries.length} per-file change summaries.`,
+    'Return only the subject line. Do not return bullets.',
+    'The subject must describe the dominant shared feature or behavior change across the files.',
+    'Do not choose a subject from one isolated implementation cleanup when other summaries describe a larger feature change.',
     '',
-    'Per-file summaries:',
+    'PER_FILE_SUMMARIES_START',
     ...summaries.map((item) => `- ${item.filePath}: ${item.summary}`),
+    'PER_FILE_SUMMARIES_END',
     '',
-    'Return only the commit message text that should be saved.',
+    'Return only the commit subject text that should be used as the first line.',
     'Do not write labels such as "Commit Message:", "Message:", or "Summary:".',
-    'Do not include explanations, markdown headings, or numbered sections.',
-    'First line: one imperative sentence about the shared capability or behavior changed.',
-    'The first line must start with the real action, not with a generic file phrase.',
-    'Bad first lines:',
+    'Do not include explanations, markdown headings, numbered sections, or bullets.',
+    'Use only the per-file summaries as commit content.',
+    'Write one imperative sentence about the shared capability or behavior changed.',
+    'The subject must be supported by most of the summaries, not just one file.',
+    'The subject must start with the real action, not with a generic file phrase.',
+    'Bad subjects:',
     '- Update files',
     '- Update selected files',
     '- Update project files',
     '- Update files Add validation and error handling',
-    'Good first lines:',
-    '- Improve GitHub repository creation and cloning',
-    '- Add GitHub repository picker validation',
-    'After the first line, always add a blank line and concise bullet list.',
-    'Use the per-file summaries as the bullet content.',
-    'Cover the combined change across the summaries, not just the first file.',
-    'Do not repeat the same idea.'
+    'Cover the combined change across the summaries, not just the first file.'
   ].join('\n');
 }
 
@@ -114,6 +114,25 @@ function buildMessageFromSummaries(summaries) {
     '',
     ...cleanSummaries.slice(0, 5).map((summary) => `- ${summary}`)
   ].join('\n');
+}
+
+function buildMessageWithSummaryBullets(subject, summaries) {
+  const normalizedSummaries = summaries
+    .map((item) => ({
+      filePath: normalizePath(item?.filePath),
+      summary: String(item?.summary || '').trim()
+    }))
+    .filter((item) => item.filePath && item.summary);
+  if (normalizedSummaries.length <= 1) {
+    return String(subject || '').trim();
+  }
+
+  const cleanSubject = String(subject || '').split(/\r?\n/).find((line) => line.trim() && !/^\s*[-*]\s+/.test(line))?.trim();
+  return [
+    cleanSubject || buildMessageFromSummaries(normalizedSummaries).split(/\r?\n/)[0],
+    '',
+    ...normalizedSummaries.map((item) => `- ${item.summary}`)
+  ].join('\n').trim();
 }
 
 async function executePromptWithTimeout(agent, prompt, timeoutMs) {
@@ -242,9 +261,9 @@ export default async function gitCommitMessage(input, context = {}) {
     }
     throw error;
   }
-  const message = stripFences(raw);
-  if (!message) {
+  const subject = stripFences(raw);
+  if (!subject) {
     throw new Error('AI returned an empty commit message.');
   }
-  return message;
+  return buildMessageWithSummaryBullets(subject, summaries);
 }

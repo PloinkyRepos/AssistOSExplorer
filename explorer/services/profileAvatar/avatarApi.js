@@ -11,6 +11,7 @@ const currentUserCache = {
 const AVATAR_SETTINGS_EVENT = 'assistOS:avatar-settings-updated';
 const AVATAR_SETTINGS_CHANNEL = 'assistOS.avatar-settings';
 const AVATAR_SETTINGS_STORAGE_KEY = 'assistOS.avatar-settings.updated';
+const PROFILE_AVATAR_STORAGE_KEY = 'assistOS.profileAvatar.settings';
 let axiFaceLoadPromise = null;
 let axiFaceModule = null;
 let axiFacePacksPromise = null;
@@ -60,20 +61,43 @@ function getAxiFaceAssetBaseUrl() {
     return `/services/${encodeURIComponent(getCurrentAgentName())}/axi-face`;
 }
 
-async function fetchAvatarJson(path, options = {}) {
-    const response = await fetch(`/services/explorer/avatar-settings/${path}`, {
-        credentials: 'include',
-        headers: {
-            Accept: 'application/json',
-            ...(options.body ? { 'Content-Type': 'application/json' } : {})
-        },
-        ...options
-    });
-    const parsed = await response.json().catch(() => ({}));
-    if (!response.ok || parsed.ok === false) {
-        throw new Error(parsed.error || `Avatar settings request failed (${response.status}).`);
+function getAssistOSUser() {
+    const source = typeof window !== 'undefined' ? window.assistOS : globalThis.assistOS;
+    const user = source?.user && typeof source.user === 'object' ? source.user : {};
+    const id = String(user.id || user.userId || user.email || user.username || 'current-user').trim() || 'current-user';
+    const username = String(user.username || user.name || user.email || id).trim();
+    const roles = Array.isArray(user.roles) ? user.roles.map((role) => String(role || '').trim()).filter(Boolean) : [];
+    return {
+        id,
+        username,
+        roles,
+        canManageAgents: roles.includes('admin') || username === 'admin' || id === 'local:admin'
+    };
+}
+
+function getLocalStorage() {
+    try {
+        return typeof window !== 'undefined' ? window.localStorage : null;
+    } catch (_) {
+        return null;
     }
-    return parsed;
+}
+
+function readLocalProfileAvatar() {
+    const storage = getLocalStorage();
+    if (!storage?.getItem) return null;
+    try {
+        const parsed = JSON.parse(storage.getItem(PROFILE_AVATAR_STORAGE_KEY) || 'null');
+        return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch (_) {
+        return null;
+    }
+}
+
+function writeLocalProfileAvatar(payload) {
+    const storage = getLocalStorage();
+    if (!storage?.setItem) return;
+    storage.setItem(PROFILE_AVATAR_STORAGE_KEY, JSON.stringify(payload));
 }
 
 function installUpdateListener() {
@@ -216,23 +240,40 @@ export async function getCurrentProfileAvatar({ force = false } = {}) {
     if (!force && currentUserCache.promise) {
         return currentUserCache.promise;
     }
-    currentUserCache.promise = fetchAvatarJson('me')
-        .then((payload) => {
-            currentUserCache.value = normalizeProfileAvatarPayload(payload);
-            return currentUserCache.value;
-        })
-        .finally(() => {
-            currentUserCache.promise = null;
+    currentUserCache.promise = Promise.resolve().then(() => {
+        const user = getAssistOSUser();
+        const stored = readLocalProfileAvatar();
+        currentUserCache.value = normalizeProfileAvatarPayload({
+            ok: true,
+            user,
+            enabled: stored?.enabled !== false,
+            config: stored?.config,
+            fallbackLetter: user.username || user.id,
+            source: { kind: 'localStorage' }
         });
+        return currentUserCache.value;
+    }).finally(() => {
+        currentUserCache.promise = null;
+    });
     return currentUserCache.promise;
 }
 
 export async function saveCurrentProfileAvatar({ enabled = true, config } = {}) {
-    const payload = await fetchAvatarJson('me', {
-        method: 'PATCH',
-        body: JSON.stringify({ enabled, config })
+    const user = getAssistOSUser();
+    const normalizedConfig = normalizeAvatarConfig(config, `profile:${user.id}`);
+    writeLocalProfileAvatar({
+        enabled: enabled !== false,
+        config: normalizedConfig,
+        updatedAt: new Date().toISOString()
     });
-    const avatar = normalizeProfileAvatarPayload(payload);
+    const avatar = normalizeProfileAvatarPayload({
+        ok: true,
+        user,
+        enabled: enabled !== false,
+        config: normalizedConfig,
+        fallbackLetter: user.username || user.id,
+        source: { kind: 'localStorage' }
+    });
     currentUserCache.value = avatar;
     currentUserCache.promise = null;
     const userId = avatar.user?.id || '';
