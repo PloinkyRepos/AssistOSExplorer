@@ -40,7 +40,7 @@
                     <input name="name" autocomplete="off">
                 </label>
                 <label>Roles
-                    <input name="roles" autocomplete="off">
+                    <select name="roles"></select>
                 </label>
                 <button class="general-button" type="submit">Add User</button>
             </form>
@@ -73,6 +73,7 @@
     const settingsStripHost = document.getElementById('settingsStripHost');
     const auditSettingsHost = document.getElementById('auditSettingsHost');
     const createForm = document.getElementById('createForm');
+    const createRolesSelect = createForm.elements.roles;
     const backLink = document.getElementById('backLink');
     const tabButtons = Array.from(document.querySelectorAll('.administration-tab'));
     const tabPanels = Array.from(document.querySelectorAll('.administration-tab-panel'));
@@ -81,6 +82,7 @@
     backLink.textContent = `Back to ${agent}`;
 
     let users = [];
+    let availableRoles = [];
     let loginBrandingName = 'Login';
     let auditConfig = {
         enabled: false,
@@ -101,18 +103,49 @@
     }
 
     function parseRoles(value) {
-        const roles = String(value || '')
-            .split(',')
+        const values = Array.isArray(value) ? value : [value];
+        const roles = values
+            .flatMap((entry) => String(entry || '').split(','))
             .map((role) => role.trim())
             .filter((role) => role.toLowerCase() !== 'local')
             .filter(Boolean);
         return Array.from(new Set(roles));
     }
 
-    function formatRoles(roles) {
-        return Array.isArray(roles)
-            ? roles.filter((role) => String(role || '').trim().toLowerCase() !== 'local').join(', ')
-            : '';
+    function getRoleOptions() {
+        return availableRoles;
+    }
+
+    function getEffectiveRole(roles = []) {
+        const selectedRoles = parseRoles(roles);
+        const elevatedRole = [...selectedRoles].reverse().find((role) => role !== 'user' && availableRoles.includes(role));
+        if (elevatedRole) {
+            return elevatedRole;
+        }
+        if (selectedRoles.includes('user') && availableRoles.includes('user')) {
+            return 'user';
+        }
+        return selectedRoles.find((role) => availableRoles.includes(role)) || availableRoles[0] || '';
+    }
+
+    function renderRoleOptions(selectedRoles = []) {
+        const selectedRole = getEffectiveRole(selectedRoles);
+        return getRoleOptions()
+            .map((role) => `<option value="${escapeAttr(role)}"${role === selectedRole ? ' selected' : ''}>${escapeAttr(role)}</option>`)
+            .join('');
+    }
+
+    function renderRoleSelect(selectedRoles = [], attributes = '') {
+        return `<select ${attributes}>${renderRoleOptions(selectedRoles)}</select>`;
+    }
+
+    function getSelectedRoles(select) {
+        return parseRoles(select.value);
+    }
+
+    function syncCreateRoleOptions() {
+        const selectedRoles = getSelectedRoles(createRolesSelect);
+        createRolesSelect.innerHTML = renderRoleOptions(selectedRoles);
     }
 
     function togglePasswordVisibility(button) {
@@ -224,7 +257,7 @@
         tr.innerHTML = `
             <td data-label="Username"><input data-field="username" value="${escapeAttr(user.username)}"></td>
             <td data-label="Name"><input data-field="name" value="${escapeAttr(user.name || '')}"></td>
-            <td data-label="Roles"><input data-field="roles" value="${escapeAttr(formatRoles(user.roles))}"></td>
+            <td data-label="Roles">${renderRoleSelect(user.roles, 'data-field="roles"')}</td>
             <td data-label="Password"><span class="password-field">
                 <input data-field="password" type="password" placeholder="Leave unchanged">
                 <button type="button" class="password-toggle" data-toggle-password aria-label="Show password" title="Show password" aria-pressed="false">
@@ -392,6 +425,8 @@
         ]);
         loginBrandingName = settingsPayload.settings?.loginBrandingName || 'Login';
         users = Array.isArray(usersPayload.users) ? usersPayload.users : [];
+        availableRoles = parseRoles(usersPayload.availableRoles);
+        syncCreateRoleOptions();
         try {
             const auditPayload = await callDpuTool('dpu_audit_config_get');
             auditConfig = {
@@ -451,9 +486,9 @@
             }
             if (action === 'save') {
                 const body = {};
-                row.querySelectorAll('input[data-field]').forEach((input) => {
+                row.querySelectorAll('input[data-field], select[data-field]').forEach((input) => {
                     if (input.dataset.field === 'roles') {
-                        body.roles = parseRoles(input.value);
+                        body.roles = getSelectedRoles(input);
                     } else if (input.dataset.field === 'password') {
                         if (input.value) body.password = input.value;
                     } else {

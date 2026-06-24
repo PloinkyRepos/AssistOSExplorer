@@ -21,7 +21,7 @@ import { copilotController } from "./settings-copilot-controller.js";
 import { runtimeSettingsController } from "./settings-runtime-controller.js";
 import { usersController } from "./settings-users-controller.js";
 
-const BASE_TABS = ['keymap', 'editor', 'theme', 'plugins', 'agents', 'copilot', 'avatar'];
+const BASE_TABS = ['agents', 'plugins', 'copilot', 'keymap', 'editor', 'theme', 'avatar'];
 
 export {
     buildAgentSettingsItems,
@@ -35,7 +35,7 @@ export class SettingsModal {
         this.element = element;
         this.invalidate = invalidate;
         this.props = props || {};
-        const initialTab = [...BASE_TABS, 'users'].includes(this.props.tab) ? this.props.tab : 'keymap';
+        const initialTab = [...BASE_TABS, 'users'].includes(this.props.tab) ? this.props.tab : 'agents';
         this.state = {
             activeTab: initialTab,
             selectedTheme: this.props.theme === "dark" ? "dark" : getCurrentTheme(),
@@ -200,7 +200,7 @@ export class SettingsModal {
 
     switchTab(_target, tab) {
         const allowedTabs = this.getAllowedTabs();
-        this.state.activeTab = allowedTabs.includes(tab) ? tab : 'keymap';
+        this.state.activeTab = allowedTabs.includes(tab) ? tab : 'agents';
         this.updateTabUI();
         if (this.state.activeTab === "plugins" && !this.state.pluginDataLoaded) {
             this.loadPluginSettingsData().catch((error) => {
@@ -242,7 +242,7 @@ export class SettingsModal {
 
     updateTabUI() {
         if (!this.getAllowedTabs().includes(this.state.activeTab)) {
-            this.state.activeTab = 'keymap';
+            this.state.activeTab = 'agents';
         }
         this.element.dataset.activeTab = this.state.activeTab;
         const tabs = this.element.querySelectorAll(".settings-tab");

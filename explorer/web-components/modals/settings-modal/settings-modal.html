@@ -6,18 +6,19 @@
 </div>
 <div class="modal-body settings-modal-body">
     <div class="settings-tabs" role="tablist" aria-label="Settings tabs">
-        <button type="button" class="settings-tab" data-local-action="switchTab keymap" data-tab="keymap" role="tab" aria-selected="true">Keymap</button>
+        <button type="button" class="settings-tab" data-local-action="switchTab agents" data-tab="agents" role="tab" aria-selected="true">Agents</button>
+        <button type="button" class="settings-tab" data-local-action="switchTab plugins" data-tab="plugins" role="tab" aria-selected="false">Plugins</button>
+        <button type="button" class="settings-tab" data-local-action="switchTab copilot" data-tab="copilot" role="tab" aria-selected="false">Copilot</button>
+        <button type="button" class="settings-tab" data-local-action="switchTab users" data-tab="users" data-admin-tab hidden role="tab" aria-selected="false">Administration</button>
+        <button type="button" class="settings-tab" data-local-action="switchTab keymap" data-tab="keymap" role="tab" aria-selected="false">Keymap</button>
         <button type="button" class="settings-tab" data-local-action="switchTab editor" data-tab="editor" role="tab" aria-selected="false">Editor</button>
         <button type="button" class="settings-tab" data-local-action="switchTab theme" data-tab="theme" role="tab" aria-selected="false">Theme</button>
-        <button type="button" class="settings-tab" data-local-action="switchTab plugins" data-tab="plugins" role="tab" aria-selected="false">Plugins</button>
-        <button type="button" class="settings-tab" data-local-action="switchTab agents" data-tab="agents" role="tab" aria-selected="false">Agents</button>
-        <button type="button" class="settings-tab" data-local-action="switchTab copilot" data-tab="copilot" role="tab" aria-selected="false">Copilot</button>
         <button type="button" class="settings-tab" data-local-action="switchTab avatar" data-tab="avatar" role="tab" aria-selected="false">Avatar</button>
-        <button type="button" class="settings-tab" data-local-action="switchTab users" data-tab="users" data-admin-tab hidden role="tab" aria-selected="false">Administration</button>
+
     </div>
 
     <div class="settings-content">
-        <section class="settings-section" data-section="keymap">
+        <section class="settings-section hidden" data-section="keymap">
             <p class="keymap-description">Focus a field and press a new shortcut. Use Backspace to clear.</p>
             <div class="keymap-list" id="keymapList"></div>
             <div class="keymap-warning" id="keymapWarning" role="status" aria-live="polite"></div>
@@ -52,7 +53,7 @@
             <div class="plugin-settings-list" id="pluginSettingsList"></div>
         </section>
 
-        <section class="settings-section hidden" data-section="agents">
+        <section class="settings-section" data-section="agents">
             <p class="plugin-settings-description">Configure agent behavior from one workspace-scoped settings surface.</p>
             <div class="plugin-settings-status" id="agentSettingsStatus" role="status" aria-live="polite"></div>
             <div class="plugin-settings-list" id="agentSettingsList"></div>
