@@ -10,6 +10,10 @@ import {
   getGithubAuthAccessToken,
   storeManualGitAuthToken
 } from '../lib/github-auth.mjs';
+import {
+  listGithubRepositories,
+  listGithubRepositoryTargets
+} from '../lib/git/github-remotes.mjs';
 
 async function loadInvocationAuth() {
   const candidates = [
@@ -129,6 +133,8 @@ function normalizeArgs(toolName, args) {
   switch (toolName) {
     case 'git_info':
     case 'git_init_repository':
+    case 'git_clone_repository':
+    case 'git_create_github_repository':
     case 'git_status':
     case 'git_diagnose':
     case 'git_identity':
@@ -142,9 +148,33 @@ function normalizeArgs(toolName, args) {
           throw new Error('git_init_repository requires a "remoteUrl" string.');
         }
       }
+      if (toolName === 'git_clone_repository') {
+        input.remote = input.remote ?? 'origin';
+        if (!input.remoteUrl || typeof input.remoteUrl !== 'string') {
+          throw new Error('git_clone_repository requires a "remoteUrl" string.');
+        }
+      }
+      if (toolName === 'git_create_github_repository') {
+        input.remote = input.remote ?? 'origin';
+        input.visibility = input.visibility === 'public' ? 'public' : 'private';
+        if (!input.owner || typeof input.owner !== 'string') {
+          throw new Error('git_create_github_repository requires an "owner" string.');
+        }
+        if (!input.name || typeof input.name !== 'string') {
+          throw new Error('git_create_github_repository requires a "name" string.');
+        }
+      }
       if (toolName === 'git_status') {
         input.includeAhead = Boolean(input.includeAhead || false);
       }
+      return input;
+    case 'git_github_repository_targets':
+      return input;
+    case 'git_github_repositories':
+      if (typeof input.maxRepos !== 'number') {
+        input.maxRepos = 500;
+      }
+      input.query = typeof input.query === 'string' ? input.query : '';
       return input;
     case 'git_remote_set':
       requirePath();
@@ -279,7 +309,7 @@ async function main() {
     const workspaceRoot = roots[0] || process.cwd();
 
     const payload = normalizeArgs(toolName, args);
-    if ((toolName === 'git_push' || toolName === 'git_pull') && !payload.token) {
+    if ((toolName === 'git_push' || toolName === 'git_pull' || toolName === 'git_clone_repository' || toolName === 'git_create_github_repository') && !payload.token) {
       const accessToken = String(authInfo?.github?.accessToken || '').trim();
       if (accessToken) {
         payload.token = accessToken;
@@ -290,6 +320,11 @@ async function main() {
         }
       }
     }
+    const getGithubToolToken = async () => {
+      const accessToken = String(authInfo?.github?.accessToken || '').trim();
+      if (accessToken) return accessToken;
+      return getGithubAuthAccessToken({ workspaceRoot, authInfo });
+    };
     let result;
     switch (toolName) {
       case 'git_auth_status':
@@ -322,6 +357,26 @@ async function main() {
         return;
       case 'git_init_repository':
         result = await gitService.gitInitRepository(payload);
+        writeJson(result);
+        return;
+      case 'git_create_github_repository':
+        result = await gitService.gitCreateGithubRepository(payload);
+        writeJson(result);
+        return;
+      case 'git_clone_repository':
+        result = await gitService.gitCloneRepository(payload);
+        writeJson(result);
+        return;
+      case 'git_github_repository_targets':
+        result = await listGithubRepositoryTargets({ token: await getGithubToolToken() });
+        writeJson(result);
+        return;
+      case 'git_github_repositories':
+        result = await listGithubRepositories({
+          token: await getGithubToolToken(),
+          query: payload.query,
+          maxRepos: payload.maxRepos
+        });
         writeJson(result);
         return;
       case 'git_remote_set':

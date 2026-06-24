@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
+import { createGithubRepository, isGithubHttpsRemote, toBasicAuthHeader } from './github-remotes.mjs';
 import { runGit } from './run-git.mjs';
 import { normalizeRemoteName, normalizeRemoteUrl, normalizeRepositoryName } from './validators.mjs';
 
@@ -109,6 +110,97 @@ export function createRepositoryOps(ctx) {
       remote: configuredRemoteName
     };
   }
+
+  async function ensureRepositoryTargetPath(parentPathArg, name) {
+    const validatedParentPath = await validatePath(parentPathArg || '/');
+    const parentPath = await fs.realpath(validatedParentPath);
+    const parentStats = await fs.lstat(parentPath);
+    if (!parentStats.isDirectory()) {
+      throw new Error('Repository parent path must be a directory.');
+    }
+
+    const repoName = normalizeRepositoryName(name);
+    const targetPath = path.join(parentPath, repoName);
+    await validatePath(targetPath);
+    try {
+      await fs.lstat(targetPath);
+      throw new Error(`Repository directory already exists: ${repoName}`);
+    } catch (error) {
+      if (error?.code !== 'ENOENT') {
+        throw error;
+      }
+    }
+    return { parentPath, repoName, targetPath };
+  }
+
+  async function gitCreateGithubRepository({ path: parentPathArg, owner, name, localName = '', visibility = 'private', remote = 'origin', token }) {
+    const repoName = normalizeRepositoryName(name);
+    const localRepoName = normalizeRepositoryName(localName || repoName);
+    const repoOwner = String(owner || '').trim();
+    if (!repoOwner) {
+      throw new Error('GitHub owner is required.');
+    }
+    const { parentPath, targetPath } = await ensureRepositoryTargetPath(parentPathArg, localRepoName);
+    const configuredRemoteName = normalizeRemoteName(remote || 'origin');
+    const repository = await createGithubRepository({
+      owner: repoOwner,
+      name: repoName,
+      visibility,
+      token
+    });
+    const remoteUrl = normalizeRemoteUrl(repository?.repository?.cloneUrl || `https://github.com/${repoOwner}/${repoName}.git`);
+    await fs.mkdir(targetPath, { recursive: false });
+    const gitBinary = await getGitBinary(parentPath);
+    try {
+      await runGit(targetPath, [gitBinary, 'init'], { timeoutMs: 20000 });
+      await runGit(targetPath, [gitBinary, 'remote', 'add', configuredRemoteName, remoteUrl], { timeoutMs: 10000 });
+    } catch (error) {
+      await fs.rm(targetPath, { recursive: true, force: true }).catch(() => {});
+      throw error;
+    }
+    return {
+      ok: true,
+      parentPath,
+      repoPath: await fs.realpath(targetPath),
+      name: localRepoName,
+      remote: configuredRemoteName,
+      remoteUrl,
+      repository: repository.repository
+    };
+  }
+
+  async function gitCloneRepository({ path: parentPathArg, name = '', remote = 'origin', remoteUrl, token }) {
+    const configuredRemoteUrl = normalizeRemoteUrl(remoteUrl);
+    const defaultName = configuredRemoteUrl
+      .replace(/\/+$/g, '')
+      .replace(/\.git$/i, '')
+      .split(/[/:]/)
+      .filter(Boolean)
+      .pop();
+    const { parentPath, repoName, targetPath } = await ensureRepositoryTargetPath(parentPathArg, name || defaultName);
+    const configuredRemoteName = normalizeRemoteName(remote || 'origin');
+    const gitBinary = await getGitBinary(parentPath);
+    const cloneArgs = [gitBinary];
+    const authToken = String(token || '').trim();
+    if (authToken && isGithubHttpsRemote(configuredRemoteUrl)) {
+      cloneArgs.push('-c', `http.https://github.com/.extraheader=${toBasicAuthHeader({ token: authToken })}`);
+    }
+    cloneArgs.push('clone', '--origin', configuredRemoteName, configuredRemoteUrl, targetPath);
+    try {
+      await runGit(parentPath, cloneArgs, { timeoutMs: 120000 });
+    } catch (error) {
+      await fs.rm(targetPath, { recursive: true, force: true }).catch(() => {});
+      throw error;
+    }
+    return {
+      ok: true,
+      parentPath,
+      repoPath: await fs.realpath(targetPath),
+      name: repoName,
+      remote: configuredRemoteName,
+      remoteUrl: configuredRemoteUrl
+    };
+  }
   
   async function gitRemoteSet({ path: repoPathArg, remote = 'origin', url }) {
     const repoPath = await resolveRepoWorkTreePath(repoPathArg);
@@ -126,6 +218,8 @@ export function createRepositoryOps(ctx) {
 
   return {
     gitInfo,
+    gitCreateGithubRepository,
+    gitCloneRepository,
     gitInitRepository,
     gitRemoteSet,
   };

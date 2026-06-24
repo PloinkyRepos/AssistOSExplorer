@@ -79,6 +79,35 @@ function summarizeChangedTerms(lines, limit = 10) {
     .map(([term]) => term);
 }
 
+function hasMeaningfulChangedTerms(summary) {
+  const terms = [
+    ...(Array.isArray(summary?.addedTerms) ? summary.addedTerms : []),
+    ...(Array.isArray(summary?.removedTerms) ? summary.removedTerms : [])
+  ];
+  return terms.some((term) => /[A-Za-z]{3,}/.test(String(term || '')));
+}
+
+function looksLikePlaceholderText(line) {
+  const value = String(line || '').trim();
+  if (!value) return true;
+  if (!/^[A-Za-z0-9]{1,40}$/.test(value)) return false;
+  return /\d/.test(value) || !/[aeiou]/i.test(value);
+}
+
+function isLowSignalDiff(diffs) {
+  const summaries = diffs.map(summarizeDiffItem);
+  if (!summaries.length) return true;
+  return summaries.every((item, index) => {
+    const totalChanged = Number(item.addedLines || 0) + Number(item.removedLines || 0);
+    const changedLines = [
+      ...collectChangedLines(diffs[index]?.diff, '+'),
+      ...collectChangedLines(diffs[index]?.diff, '-')
+    ];
+    const placeholderOnly = changedLines.length > 0 && changedLines.every(looksLikePlaceholderText);
+    return totalChanged <= 2 && (placeholderOnly || !hasMeaningfulChangedTerms(item));
+  });
+}
+
 function summarizeDiffItem(item) {
   const filePath = normalizePath(item?.filePath || '');
   const added = collectChangedLines(item?.diff, '+');
@@ -125,6 +154,24 @@ function buildFallbackMessage(diffs) {
   return [subject, '', ...bullets].join('\n').trim();
 }
 
+function buildLowSignalFallbackMessage(diffs) {
+  const summaries = diffs.map(summarizeDiffItem);
+  const files = summaries.map((item) => item.filePath).filter(Boolean);
+  const fileLabel = files.length === 1 ? files[0] : `${files.length || 1} files`;
+  return `Update ${fileLabel}`;
+}
+
+function diffEvidenceText(diffs) {
+  return diffs.map((item) => `${item?.filePath || ''}\n${item?.diff || ''}`).join('\n').toLowerCase();
+}
+
+function usesUnsupportedDomainTerms(message, diffs) {
+  const text = String(message || '').toLowerCase();
+  const evidence = diffEvidenceText(diffs);
+  const domainTerms = ['participant', 'speaker', 'audio', 'volume', 'microphone', 'webmeet'];
+  return domainTerms.some((term) => text.includes(term) && !evidence.includes(term));
+}
+
 function looksLikeCode(text) {
   const value = String(text || '').trim();
   if (!value) return false;
@@ -148,14 +195,15 @@ function buildPrompt(diffs) {
     '- First line: imperative mood, <= 72 chars.',
     '- Optional blank line then bullet list (max 6 bullets).',
     '- Be specific: mention key parts touched.',
+    '- Do not reuse wording from examples unless it is directly supported by the diffs.',
+    '- If the diff has only placeholder/random text, say only which file was updated.',
     '- If unsure, write a conservative summary of the affected files and behavior.',
     '',
-    'Commit message examples:',
-    'Improve participant audio volume handling',
+    'Commit message format example:',
+    'Update repository picker state handling',
     '',
-    '- Default participant playback to 100%',
-    '- Apply manual volume as a factor over speaker volume',
-    '- Cover participant audio behavior with unit tests',
+    '- Keep visible tab content in sync with GitHub auth state',
+    '- Avoid stale repository loading states',
     '',
     'Extracted facts from the diffs:',
     buildDiffSummary(diffs),
@@ -191,6 +239,9 @@ export default async function gitCommitMessage(input, context = {}) {
   if (!diffs.length) {
     throw new Error('No diffs provided.');
   }
+  if (isLowSignalDiff(diffs)) {
+    return buildLowSignalFallbackMessage(diffs);
+  }
 
   const agent = getDefaultAgent();
   if (!agent) {
@@ -200,7 +251,7 @@ export default async function gitCommitMessage(input, context = {}) {
   const prompt = buildPrompt(diffs);
   const raw = await agent.executePrompt(prompt, { model: 'fast', responseShape: 'text' });
   const message = stripFences(raw);
-  if (!message || looksLikeCode(message)) {
+  if (!message || looksLikeCode(message) || usesUnsupportedDomainTerms(message, diffs)) {
     const fallback = buildFallbackMessage(diffs);
     if (fallback) return fallback;
     throw new Error('AI returned an empty commit message.');
