@@ -541,24 +541,16 @@ async function main() {
       return;
     }
     handleAvatarSettingsHttpRequest(req, res, parsedUrl).then((handled) => {
-      if (handled) {
-        return;
-      }
+      if (handled) return true;
       return handleAxiFaceAssetsHttpRequest(req, res, parsedUrl);
     }).then((handled) => {
-      if (handled) {
-        return;
-      }
+      if (handled) return true;
       return handleOnlyOfficeHttpRequest(req, res, parsedUrl);
     }).then((handled) => {
-      if (handled) {
-        return;
-      }
+      if (handled) return true;
       return serveStaticFile(req, res, parsedUrl.pathname);
     }).then((handled) => {
-      if (handled) {
-        return;
-      }
+      if (handled) return;
       if (parsedUrl.pathname !== '/mcp') {
         res.writeHead(404, { 'Content-Type': 'text/plain' });
         res.end('Not Found');

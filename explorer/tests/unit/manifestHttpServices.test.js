@@ -37,6 +37,8 @@ test('explorer avatar settings stay authenticated while AxiFace assets are publi
     const manifest = readManifest();
     const services = new Map((manifest.httpServices || []).map((service) => [service.externalPrefix, service]));
 
-    assert.equal(services.get('/services/explorer/avatar-settings/')?.access, 'authenticated');
+    const avatarSettingsService = services.get('/services/explorer/avatar-settings/');
+    assert.equal(avatarSettingsService?.access, 'authenticated');
+    assert.equal(avatarSettingsService?.delegations, undefined);
     assert.equal(services.get('/services/explorer/axi-face/')?.access, 'public');
 });

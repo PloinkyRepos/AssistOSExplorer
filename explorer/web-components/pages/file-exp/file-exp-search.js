@@ -191,9 +191,9 @@ export function attachSearchController(fileExp) {
         await openSearchModal('replace');
     }
 
-    async function openSettingsModal(_target, tab = 'keymap') {
+    async function openSettingsModal(_target, tab = 'agents') {
         const state = getState();
-        const normalizedTab = ['keymap', 'editor', 'theme', 'plugins'].includes(tab) ? tab : 'keymap';
+        const normalizedTab = ['agents', 'plugins', 'copilot', 'keymap', 'editor', 'theme', 'avatar', 'users'].includes(tab) ? tab : 'agents';
         fileExp.setSearchMenuOpen(false);
         updateSearchUI();
         const result = await assistOS.UI.createReactiveModal('settings-modal', {

@@ -15,9 +15,14 @@ async function openNewRepositoryModal(basePath) {
         return null;
     }
     return {
+        mode: String(result.mode || 'manual').trim() || 'manual',
         name: normalizeRepositoryName(result.name),
+        localName: normalizeRepositoryName(result.localName || result.name),
+        owner: String(result.owner || '').trim(),
+        visibility: String(result.visibility || 'private').trim(),
         remote: String(result.remote || 'origin').trim(),
-        remoteUrl: String(result.remoteUrl || '').trim()
+        remoteUrl: String(result.remoteUrl || '').trim(),
+        repository: result.repository && typeof result.repository === 'object' ? result.repository : null
     };
 }
 
@@ -96,6 +101,44 @@ export async function executeMenuAction({ action, context, host }) {
         const repoName = modalResult.name;
         if (!repoName) {
             throw new Error('Repository name is required.');
+        }
+        if (modalResult.mode === 'create-github') {
+            if (!modalResult.owner) {
+                throw new Error('GitHub owner is required.');
+            }
+            const result = await callGitTool('git_create_github_repository', {
+                path: basePath,
+                owner: modalResult.owner,
+                name: repoName,
+                localName: modalResult.localName || repoName,
+                visibility: modalResult.visibility === 'public' ? 'public' : 'private',
+                remote: modalResult.remote || 'origin'
+            });
+            if (!result?.ok) {
+                throw new Error(result?.error || 'Failed to create GitHub repository.');
+            }
+            const fullName = result.repository?.fullName || `${modalResult.owner}/${repoName}`;
+            host?.showStatus?.(`Created GitHub repository: ${fullName}.`);
+            await host?.refreshDirectory?.();
+            return;
+        }
+        if (modalResult.mode === 'clone-github') {
+            if (!modalResult.remoteUrl) {
+                throw new Error('Remote URL is required.');
+            }
+            const result = await callGitTool('git_clone_repository', {
+                path: basePath,
+                name: modalResult.localName || repoName,
+                remote: modalResult.remote || 'origin',
+                remoteUrl: modalResult.remoteUrl
+            });
+            if (!result?.ok) {
+                throw new Error(result?.error || 'Failed to clone repository.');
+            }
+            const fullName = modalResult.repository?.fullName || repoName;
+            host?.showStatus?.(`Cloned repository: ${fullName}.`);
+            await host?.refreshDirectory?.();
+            return;
         }
         if (!modalResult.remoteUrl) {
             throw new Error('Remote URL is required.');

@@ -7,6 +7,7 @@
     --line: #d9dee8;
     --accent: #2563eb;
     --accent-rgb: 37, 99, 235;
+    --accent-contrast: #ffffff;
     --danger: #b42318;
     --ok: #087443;
     --border: var(--line);
@@ -293,6 +294,21 @@ input {
     background: var(--panel);
 }
 
+select {
+    width: 100%;
+    min-height: 38px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font: inherit;
+    color: var(--text);
+    background: var(--panel);
+}
+
+select option {
+    padding: 4px 6px;
+}
+
 .password-field {
     position: relative;
     display: block;
@@ -303,9 +319,60 @@ input {
 }
 
 button:focus-visible,
-a:focus-visible {
+a:focus-visible,
+input:focus-visible,
+select:focus-visible {
     outline: 2px solid rgba(var(--accent-rgb), 0.35);
     outline-offset: 2px;
+}
+
+.general-button,
+.gray-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 36px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font: inherit;
+    font-size: 0.95rem;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.general-button {
+    border: 1px solid var(--accent);
+    background: var(--accent);
+    color: var(--accent-contrast);
+}
+
+.gray-button {
+    border: 1px solid var(--line);
+    background: var(--bg);
+    color: var(--text);
+    text-decoration: none;
+}
+
+.general-button:hover:not(:disabled),
+.gray-button:hover:not(:disabled) {
+    transform: translateY(-1px);
+}
+
+.general-button:hover:not(:disabled) {
+    box-shadow: 0 10px 18px rgba(var(--accent-rgb), 0.28);
+}
+
+.gray-button:hover:not(:disabled) {
+    background: var(--line);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.general-button:active,
+.gray-button:active {
+    transform: translateY(1px);
 }
 
 .gray-button.danger {
@@ -318,7 +385,7 @@ a:focus-visible {
     background: rgba(180, 35, 24, 0.08);
     border-color: rgba(180, 35, 24, 0.4);
     box-shadow: 0 2px 5px rgba(180, 35, 24, 0.12);
-    color: #8f1d14;
+    color: var(--danger);
 }
 
 .password-toggle {
@@ -473,7 +540,7 @@ tr:last-child td {
 
     #tableHost tr {
         display: grid;
-        grid-template-columns: 1fr 1fr 1fr 1fr auto;
+        grid-template-columns: 1fr;
     }
 
     .actions {

@@ -1,4 +1,5 @@
 import { createReadStream } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { jsonResponse, textResponse } from './responses.mjs';
 
@@ -83,7 +84,11 @@ export function createToolHandlers({
     CollectIDEPluginsArgsSchema,
     GetPluginSettingsArgsSchema,
     SetPluginEnabledArgsSchema,
-    ListSkillsArgsSchema
+    ListSkillsArgsSchema,
+    ReadSkillsManifestStateArgsSchema,
+    AddSkillsManifestRepoArgsSchema,
+    SetSkillsManifestSkillEnabledArgsSchema,
+    RemoveSkillsManifestRepoArgsSchema
   } = schemas;
   const inflightSearchFiles = new Map();
   const inflightSearchText = new Map();
@@ -115,10 +120,294 @@ export function createToolHandlers({
       }
     }
   }
-  setInterval(cleanupSearchTextJobs, 60 * 1000);
+  setInterval(cleanupSearchTextJobs, 60 * 1000).unref?.();
 
   const pluginSettingsPath = path.join(workspaceRoot, '.ploinky', 'explorer-plugin-settings.json');
   const achillesCliRoot = path.join(workspaceRoot, '.ploinky', 'repos', 'AchillesCLI', 'achilles-cli');
+  const skillsManifestFile = 'ploinky-skills-manifest.json';
+  const reposCacheRoot = path.join(workspaceRoot, '.ploinky', 'repos');
+  const canonicalAgentsDir = '.agents';
+  const canonicalSkillsDir = path.join(canonicalAgentsDir, 'skills');
+  const ploinkyRoot = path.join(workspaceRoot, 'ploinky');
+  let ploinkyReposServicePromise = null;
+
+  async function loadPloinkyReposService() {
+    if (!ploinkyReposServicePromise) {
+      const modulePath = path.join(ploinkyRoot, 'cli', 'services', 'repos.js');
+      ploinkyReposServicePromise = import(pathToFileURL(modulePath).href);
+    }
+    return ploinkyReposServicePromise;
+  }
+
+  async function listKnownSkillRepositories() {
+    const reposSvc = await loadPloinkyReposService();
+    const predefined = reposSvc.getPredefinedRepos?.() || {};
+    const sources = reposSvc.getRepoSources?.() || {};
+    const installed = new Set(reposSvc.getInstalledRepos?.(reposCacheRoot) || []);
+    const names = new Set([...Object.keys(predefined), ...Object.keys(sources), ...installed]);
+    const result = [];
+    for (const name of names) {
+      const predefinedEntry = predefined[name] || {};
+      const sourceEntry = sources[name] || {};
+      const kind = predefinedEntry.kind || sourceEntry.kind || reposSvc.classifyRepoKind?.(name) || 'unknown';
+      if (kind !== 'skills' && kind !== 'mixed') continue;
+      const url = predefinedEntry.url || sourceEntry.url || '';
+      if (!url) continue;
+      if (!predefinedEntry.url && path.isAbsolute(url) && !await repoPathExists(url)) continue;
+      result.push({
+        name,
+        label: predefinedEntry.description ? `${name} - ${predefinedEntry.description}` : name,
+        url,
+        branch: sourceEntry.branch || '',
+        installed: installed.has(name),
+        kind
+      });
+    }
+    return result.sort((left, right) => left.name.localeCompare(right.name));
+  }
+
+  function deriveRepoNameFromUrl(url) {
+    const rawUrl = String(url || '').trim();
+    const withoutHash = rawUrl.split('#')[0].split('?')[0].replace(/\/+$/, '');
+    const lastSegment = withoutHash.slice(withoutHash.lastIndexOf('/') + 1);
+    const name = lastSegment.replace(/\.git$/i, '').replace(/[^a-zA-Z0-9_.-]+/g, '-').replace(/^-+|-+$/g, '');
+    return name;
+  }
+
+  function normalizeRepoName(value) {
+    const name = String(value || '').trim();
+    if (!name || !/^[a-zA-Z0-9_.-]+$/.test(name)) {
+      throw new Error('Invalid repository name.');
+    }
+    return name;
+  }
+
+  function normalizeSkillName(value) {
+    const name = String(value || '').trim();
+    if (!name || !/^[a-zA-Z0-9_.-]+$/.test(name)) {
+      throw new Error('Invalid skill name.');
+    }
+    return name;
+  }
+
+  function normalizeBranch(value) {
+    const branch = String(value || '').trim();
+    return branch ? branch : null;
+  }
+
+  function looksLikeRepoUrl(value) {
+    const candidate = String(value || '').trim();
+    if (!candidate) return false;
+    return /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(candidate)
+      || /^git@[^:]+:.+/.test(candidate)
+      || candidate.startsWith('ssh://')
+      || candidate.startsWith('file://')
+      || candidate.endsWith('.git');
+  }
+
+  async function resolveSkillRepoInput(input, explicitName = '') {
+    const value = String(input || '').trim();
+    if (!value) throw new Error('Repository URL or name is required.');
+    if (!looksLikeRepoUrl(value)) {
+      const skillRepos = await listKnownSkillRepositories();
+      const known = skillRepos.find((repo) => repo.name === value || repo.name.toLowerCase() === value.toLowerCase());
+      if (!known) {
+        throw new Error(`Unknown skill repository '${value}'. Use a git URL or a known repository name.`);
+      }
+      return {
+        url: known.url,
+        name: normalizeRepoName(explicitName || known.name || value),
+        branch: normalizeBranch(known.branch)
+      };
+    }
+    return {
+      url: value,
+      name: normalizeRepoName(explicitName || deriveRepoNameFromUrl(value)),
+      branch: null
+    };
+  }
+
+  async function skillsManifestPathForFolder(folderPath) {
+    const folder = await validatePath(folderPath);
+    const stat = await fs.stat(folder);
+    if (!stat.isDirectory()) {
+      throw new Error('Skills manifest target must be a directory.');
+    }
+    return {
+      folder,
+      manifestPath: path.join(folder, skillsManifestFile)
+    };
+  }
+
+  function normalizeSkillsManifestEntry(entry, index, manifestPath) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      throw new Error(`Invalid skills manifest '${manifestPath}': entry at index ${index} must be an object.`);
+    }
+    const url = String(entry.url || '').trim();
+    if (!url) {
+      throw new Error(`Invalid skills manifest '${manifestPath}': entry at index ${index} is missing url.`);
+    }
+    const name = normalizeRepoName(entry.name || deriveRepoNameFromUrl(url));
+    const branch = normalizeBranch(entry.branch);
+    if (!Array.isArray(entry.skills)) {
+      throw new Error(`Invalid skills manifest '${manifestPath}': entry at index ${index} is missing skills array.`);
+    }
+    const skills = Array.from(new Set(entry.skills.map(normalizeSkillName)));
+    return { url, name, branch, skills };
+  }
+
+  async function readSkillsManifestEntries(manifestPath) {
+    let raw;
+    try {
+      raw = await fs.readFile(manifestPath, 'utf8');
+    } catch (error) {
+      if (error?.code === 'ENOENT') return [];
+      throw error;
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(raw || '[]');
+    } catch (error) {
+      throw new Error(`Invalid JSON in skills manifest '${manifestPath}': ${error?.message || error}`);
+    }
+    if (!Array.isArray(parsed)) {
+      throw new Error(`Invalid skills manifest '${manifestPath}': expected an array of repository objects.`);
+    }
+    return parsed.map((entry, index) => normalizeSkillsManifestEntry(entry, index, manifestPath));
+  }
+
+  async function writeSkillsManifestEntries(manifestPath, entries) {
+    await fs.mkdir(path.dirname(manifestPath), { recursive: true });
+    const normalized = entries.map((entry) => ({
+      url: entry.url,
+      name: entry.name,
+      branch: entry.branch || null,
+      skills: Array.from(new Set((entry.skills || []).map(normalizeSkillName))).sort((a, b) => a.localeCompare(b))
+    }));
+    await fs.writeFile(manifestPath, `${JSON.stringify(normalized, null, 2)}\n`, 'utf8');
+    invalidateCachesForPath(manifestPath);
+  }
+
+  async function repoPathExists(repoPath) {
+    const stat = await fs.stat(repoPath).catch(() => null);
+    return Boolean(stat?.isDirectory?.());
+  }
+
+  async function ensureSkillRepoCached(entry, { pull = false } = {}) {
+    const repoName = normalizeRepoName(entry.name || deriveRepoNameFromUrl(entry.url));
+    const repoPath = path.join(reposCacheRoot, repoName);
+    await fs.mkdir(reposCacheRoot, { recursive: true });
+    if (await repoPathExists(repoPath)) {
+      if (pull) {
+        const gitDir = path.join(repoPath, '.git');
+        if (await repoPathExists(gitDir)) {
+          execFileSync('git', ['-C', repoPath, 'pull', '--rebase', '--autostash'], { stdio: 'ignore' });
+        }
+      }
+      return repoPath;
+    }
+    const args = ['clone', '--quiet'];
+    if (entry.branch) args.push('--branch', entry.branch);
+    args.push(entry.url, repoPath);
+    execFileSync('git', args, { stdio: 'ignore' });
+    return repoPath;
+  }
+
+  async function listRepoSkillNames(repoPath) {
+    const skillsRoot = path.join(repoPath, 'skills');
+    const stat = await fs.stat(skillsRoot).catch(() => null);
+    if (!stat?.isDirectory?.()) return [];
+    const entries = await fs.readdir(skillsRoot, { withFileTypes: true });
+    const skills = [];
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
+      const skillFile = path.join(skillsRoot, entry.name, 'SKILL.md');
+      const skillStat = await fs.stat(skillFile).catch(() => null);
+      if (skillStat?.isFile?.()) skills.push(entry.name);
+    }
+    return skills.sort((left, right) => left.localeCompare(right));
+  }
+
+  async function ensureClaudeSymlink(folder) {
+    const claudePath = path.join(folder, '.claude');
+    const target = canonicalAgentsDir;
+    const stat = await fs.lstat(claudePath).catch(() => null);
+    if (!stat) {
+      await fs.symlink(target, claudePath, 'dir').catch(() => {});
+      return;
+    }
+    if (stat.isSymbolicLink()) {
+      const existing = await fs.readlink(claudePath).catch(() => '');
+      if (existing === target) return;
+    }
+  }
+
+  async function copyDirectory(src, dest) {
+    await fs.rm(dest, { recursive: true, force: true });
+    await fs.cp(src, dest, { recursive: true, force: true });
+  }
+
+  async function syncSkillsManifestInstall(folder, entries) {
+    const selected = new Map();
+    const repoStates = [];
+    for (const entry of entries) {
+      const repoPath = await ensureSkillRepoCached(entry);
+      const availableSkills = await listRepoSkillNames(repoPath);
+      const available = new Set(availableSkills);
+      for (const skill of entry.skills) {
+        if (!available.has(skill)) {
+          throw new Error(`Skill '${skill}' is listed for repo '${entry.name}' but is not available in cache.`);
+        }
+        selected.set(skill, { repoPath, repoName: entry.name, skill });
+      }
+      repoStates.push({ ...entry, repoPath, availableSkills });
+    }
+
+    const skillsDir = path.join(folder, canonicalSkillsDir);
+    await fs.rm(skillsDir, { recursive: true, force: true });
+    await fs.mkdir(skillsDir, { recursive: true });
+    for (const [skill, source] of selected.entries()) {
+      await copyDirectory(path.join(source.repoPath, 'skills', skill), path.join(skillsDir, skill));
+    }
+    await ensureClaudeSymlink(folder);
+    invalidateCachesForPath(path.join(folder, canonicalAgentsDir));
+    return {
+      installedSkills: Array.from(selected.keys()).sort((left, right) => left.localeCompare(right)),
+      repositories: repoStates
+    };
+  }
+
+  async function buildSkillsManifestState(folder, manifestPath, entries) {
+    const repositories = [];
+    for (const entry of entries) {
+      let repoPath = path.join(reposCacheRoot, entry.name);
+      let cacheError = '';
+      if (!await repoPathExists(repoPath)) {
+        try {
+          repoPath = await ensureSkillRepoCached(entry);
+        } catch (error) {
+          cacheError = error?.message || String(error || 'Could not cache repository.');
+        }
+      }
+      const exists = await repoPathExists(repoPath);
+      const availableSkills = exists ? await listRepoSkillNames(repoPath) : [];
+      repositories.push({
+        ...entry,
+        repoPath,
+        cached: exists,
+        availableSkills,
+        cacheError
+      });
+    }
+    const installedSkills = Array.from(new Set(entries.flatMap((entry) => entry.skills || []))).sort((a, b) => a.localeCompare(b));
+    return {
+      manifestPath,
+      folderPath: folder,
+      repositories,
+      installedSkills,
+      skillRepositories: await listKnownSkillRepositories().catch(() => [])
+    };
+  }
 
   async function loadAchillesDiscoverFunctions() {
     const modulePath = path.join(
@@ -722,6 +1011,78 @@ export function createToolHandlers({
     });
   }
 
+  async function handleReadSkillsManifestState(args) {
+    const data = parseArgs(ReadSkillsManifestStateArgsSchema, args, 'read_skills_manifest_state');
+    const { folder, manifestPath } = await skillsManifestPathForFolder(data.folderPath);
+    const entries = await readSkillsManifestEntries(manifestPath);
+    return jsonResponse(await buildSkillsManifestState(folder, manifestPath, entries));
+  }
+
+  async function handleAddSkillsManifestRepo(args) {
+    const data = parseArgs(AddSkillsManifestRepoArgsSchema, args, 'add_skills_manifest_repo');
+    const { folder, manifestPath } = await skillsManifestPathForFolder(data.folderPath);
+    const resolved = await resolveSkillRepoInput(data.url, data.name);
+    const url = resolved.url;
+    const name = resolved.name;
+    const branch = normalizeBranch(data.branch) || resolved.branch || null;
+    const repoEntry = { url, name, branch, skills: [] };
+    const repoPath = await ensureSkillRepoCached(repoEntry);
+    const availableSkills = await listRepoSkillNames(repoPath);
+    if (!availableSkills.length) {
+      throw new Error(`No skills found in repository '${name}'. Expected skills/*/SKILL.md.`);
+    }
+
+    const entries = await readSkillsManifestEntries(manifestPath);
+    const nextEntry = { ...repoEntry, skills: availableSkills };
+    const existingIndex = entries.findIndex((entry) => entry.name === name || entry.url === url);
+    const nextEntries = existingIndex === -1
+      ? [...entries, nextEntry]
+      : entries.map((entry, index) => index === existingIndex ? nextEntry : entry);
+    await writeSkillsManifestEntries(manifestPath, nextEntries);
+    await syncSkillsManifestInstall(folder, nextEntries);
+    return jsonResponse(await buildSkillsManifestState(folder, manifestPath, nextEntries));
+  }
+
+  async function handleSetSkillsManifestSkillEnabled(args) {
+    const data = parseArgs(SetSkillsManifestSkillEnabledArgsSchema, args, 'set_skills_manifest_skill_enabled');
+    const { folder, manifestPath } = await skillsManifestPathForFolder(data.folderPath);
+    const repoName = normalizeRepoName(data.repoName);
+    const skill = normalizeSkillName(data.skill);
+    const entries = await readSkillsManifestEntries(manifestPath);
+    const index = entries.findIndex((entry) => entry.name === repoName);
+    if (index === -1) {
+      throw new Error(`Repository '${repoName}' is not in the skills manifest.`);
+    }
+    const repoPath = await ensureSkillRepoCached(entries[index]);
+    const availableSkills = await listRepoSkillNames(repoPath);
+    if (!availableSkills.includes(skill)) {
+      throw new Error(`Skill '${skill}' is not available in repository '${repoName}'.`);
+    }
+    const current = new Set(entries[index].skills || []);
+    if (data.enabled) current.add(skill);
+    else current.delete(skill);
+    const nextEntries = entries.map((entry, entryIndex) => entryIndex === index
+      ? { ...entry, skills: Array.from(current).sort((left, right) => left.localeCompare(right)) }
+      : entry);
+    await writeSkillsManifestEntries(manifestPath, nextEntries);
+    await syncSkillsManifestInstall(folder, nextEntries);
+    return jsonResponse(await buildSkillsManifestState(folder, manifestPath, nextEntries));
+  }
+
+  async function handleRemoveSkillsManifestRepo(args) {
+    const data = parseArgs(RemoveSkillsManifestRepoArgsSchema, args, 'remove_skills_manifest_repo');
+    const { folder, manifestPath } = await skillsManifestPathForFolder(data.folderPath);
+    const repoName = normalizeRepoName(data.repoName);
+    const entries = await readSkillsManifestEntries(manifestPath);
+    const nextEntries = entries.filter((entry) => entry.name !== repoName);
+    if (nextEntries.length === entries.length) {
+      throw new Error(`Repository '${repoName}' is not in the skills manifest.`);
+    }
+    await writeSkillsManifestEntries(manifestPath, nextEntries);
+    await syncSkillsManifestInstall(folder, nextEntries);
+    return jsonResponse(await buildSkillsManifestState(folder, manifestPath, nextEntries));
+  }
+
   async function handleListAllowedDirectories() {
     const allowed = getAllowedDirectories ? getAllowedDirectories() : [];
     return textResponse(`Allowed directories:\n${allowed.join('\n')}`);
@@ -754,6 +1115,10 @@ export function createToolHandlers({
     get_plugin_settings: handleGetPluginSettings,
     set_plugin_enabled: handleSetPluginEnabled,
     'list-skills': handleListSkills,
+    read_skills_manifest_state: handleReadSkillsManifestState,
+    add_skills_manifest_repo: handleAddSkillsManifestRepo,
+    set_skills_manifest_skill_enabled: handleSetSkillsManifestSkillEnabled,
+    remove_skills_manifest_repo: handleRemoveSkillsManifestRepo,
     list_allowed_directories: handleListAllowedDirectories
   };
 }

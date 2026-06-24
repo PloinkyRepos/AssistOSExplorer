@@ -49,6 +49,137 @@
       }
     },
     {
+      "name": "git_create_github_repository",
+      "title": "Git Create GitHub Repository",
+      "description": "Create a GitHub repository, initialize a local repository, and configure its remote.",
+      "command": "tools/git_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "path": {
+          "type": "string",
+          "optional": false
+        },
+        "owner": {
+          "type": "string",
+          "optional": false
+        },
+        "name": {
+          "type": "string",
+          "optional": false
+        },
+        "localName": {
+          "type": "string",
+          "optional": true
+        },
+        "visibility": {
+          "type": "string",
+          "optional": true
+        },
+        "remote": {
+          "type": "string",
+          "optional": true
+        }
+      },
+      "delegations": [
+        {
+          "key": "dpuGitSecrets",
+          "targetAgentId": "agent:./dpuAgent",
+          "tools": ["dpu_secret_get"],
+          "scopes": ["secret:read"],
+          "ttlSeconds": 120
+        }
+      ],
+      "env": {
+        "TOOL_NAME": "git_create_github_repository"
+      }
+    },
+    {
+      "name": "git_clone_repository",
+      "title": "Git Clone Repository",
+      "description": "Clone a repository into a new local directory.",
+      "command": "tools/git_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "path": {
+          "type": "string",
+          "optional": false
+        },
+        "name": {
+          "type": "string",
+          "optional": true
+        },
+        "remote": {
+          "type": "string",
+          "optional": true
+        },
+        "remoteUrl": {
+          "type": "string",
+          "optional": false
+        }
+      },
+      "delegations": [
+        {
+          "key": "dpuGitSecrets",
+          "targetAgentId": "agent:./dpuAgent",
+          "tools": ["dpu_secret_get"],
+          "scopes": ["secret:read"],
+          "ttlSeconds": 120
+        }
+      ],
+      "env": {
+        "TOOL_NAME": "git_clone_repository"
+      }
+    },
+    {
+      "name": "git_github_repository_targets",
+      "title": "GitHub Repository Targets",
+      "description": "List GitHub user and organization targets available for repository creation.",
+      "command": "tools/git_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {},
+      "delegations": [
+        {
+          "key": "dpuGitSecrets",
+          "targetAgentId": "agent:./dpuAgent",
+          "tools": ["dpu_secret_get"],
+          "scopes": ["secret:read"],
+          "ttlSeconds": 120
+        }
+      ],
+      "env": {
+        "TOOL_NAME": "git_github_repository_targets"
+      }
+    },
+    {
+      "name": "git_github_repositories",
+      "title": "GitHub Repositories",
+      "description": "List GitHub repositories available to the authenticated user.",
+      "command": "tools/git_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "query": {
+          "type": "string",
+          "optional": true
+        },
+        "maxRepos": {
+          "type": "number",
+          "optional": true
+        }
+      },
+      "delegations": [
+        {
+          "key": "dpuGitSecrets",
+          "targetAgentId": "agent:./dpuAgent",
+          "tools": ["dpu_secret_get"],
+          "scopes": ["secret:read"],
+          "ttlSeconds": 120
+        }
+      ],
+      "env": {
+        "TOOL_NAME": "git_github_repositories"
+      }
+    },
+    {
       "name": "git_remote_set",
       "title": "Git Remote Set",
       "description": "Add or update a repository remote URL.",

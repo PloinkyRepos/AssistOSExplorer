@@ -105,6 +105,22 @@
       "description": "List Achilles CLI skills discovered for the current workspace."
     },
     {
+      "name": "read_skills_manifest_state",
+      "description": "Read ploinky-skills-manifest.json and available cached skills for a workspace folder."
+    },
+    {
+      "name": "add_skills_manifest_repo",
+      "description": "Add a skill repository to ploinky-skills-manifest.json, cache it, and install all of its skills."
+    },
+    {
+      "name": "set_skills_manifest_skill_enabled",
+      "description": "Enable or disable one skill from a repository entry in ploinky-skills-manifest.json."
+    },
+    {
+      "name": "remove_skills_manifest_repo",
+      "description": "Remove a repository entry from ploinky-skills-manifest.json and resync installed skills."
+    },
+    {
       "name": "list_allowed_directories",
       "description": "Return the directories the Explorer server is permitted to access."
     }

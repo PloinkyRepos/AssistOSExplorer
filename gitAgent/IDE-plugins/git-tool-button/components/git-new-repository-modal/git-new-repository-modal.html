@@ -6,17 +6,62 @@
 </div>
 <div class="modal-body git-new-repository-modal-body">
     <form class="git-new-repository-form" data-git-new-repository-form>
-        <label class="git-new-repository-field" for="gitNewRepositoryName">
-            <span>Name</span>
-            <input id="gitNewRepositoryName" name="name" type="text" autocomplete="off" spellcheck="false" required>
-        </label>
-        <label class="git-new-repository-field" for="gitNewRepositoryRemoteUrl">
-            <span>Remote URL</span>
-            <input id="gitNewRepositoryRemoteUrl" name="remoteUrl" type="text" autocomplete="off" spellcheck="false" required>
-        </label>
+        <div class="git-new-repository-tabs" role="tablist" aria-label="Repository source">
+            <button type="button" class="git-new-repository-tab active" data-git-new-repository-mode="create-github" data-local-action="setMode create-github" role="tab" aria-selected="true">Create on GitHub</button>
+            <button type="button" class="git-new-repository-tab" data-git-new-repository-mode="clone-github" data-local-action="setMode clone-github" role="tab" aria-selected="false">Clone from GitHub</button>
+            <button type="button" class="git-new-repository-tab" data-git-new-repository-mode="manual" data-local-action="setMode manual" role="tab" aria-selected="false">Manual URL</button>
+        </div>
+
+        <section class="git-new-repository-panel" data-git-new-repository-panel="create-github">
+            <label class="git-new-repository-field">
+                <span>Organization URL</span>
+                <div class="git-new-repository-targets" data-github-targets></div>
+            </label>
+            <div class="git-new-repository-grid">
+                <label class="git-new-repository-field" for="gitNewRepositoryGithubName">
+                    <span>Repository name</span>
+                    <input id="gitNewRepositoryGithubName" name="githubName" type="text" autocomplete="off" spellcheck="false">
+                </label>
+                <label class="git-new-repository-field" for="gitNewRepositoryGithubLocalName">
+                    <span>Local folder</span>
+                    <input id="gitNewRepositoryGithubLocalName" name="githubLocalName" type="text" autocomplete="off" spellcheck="false" data-synced-from-name="true">
+                </label>
+            </div>
+            <label class="git-new-repository-field" for="gitNewRepositoryVisibility">
+                <span>Visibility</span>
+                <select id="gitNewRepositoryVisibility" name="visibility">
+                    <option value="private" selected>Private</option>
+                    <option value="public">Public</option>
+                </select>
+            </label>
+        </section>
+
+        <section class="git-new-repository-panel" data-git-new-repository-panel="clone-github" hidden>
+            <label class="git-new-repository-field" for="gitNewRepositorySearch">
+                <span>Find repository</span>
+                <input id="gitNewRepositorySearch" name="repositorySearch" type="search" autocomplete="off" spellcheck="false" placeholder="Search repositories">
+            </label>
+            <div class="git-new-repository-repositories" data-github-repositories></div>
+            <label class="git-new-repository-field" for="gitNewRepositoryCloneLocalName">
+                <span>Local folder</span>
+                <input id="gitNewRepositoryCloneLocalName" name="cloneLocalName" type="text" autocomplete="off" spellcheck="false">
+            </label>
+        </section>
+
+        <section class="git-new-repository-panel" data-git-new-repository-panel="manual" hidden>
+            <label class="git-new-repository-field" for="gitNewRepositoryName">
+                <span>Name</span>
+                <input id="gitNewRepositoryName" name="name" type="text" autocomplete="off" spellcheck="false">
+            </label>
+            <label class="git-new-repository-field" for="gitNewRepositoryRemoteUrl">
+                <span>Remote URL</span>
+                <input id="gitNewRepositoryRemoteUrl" name="remoteUrl" type="text" autocomplete="off" spellcheck="false" placeholder="https://github.com/owner/repository.git">
+            </label>
+        </section>
+
         <div class="git-new-repository-error" data-git-new-repository-error hidden></div>
         <div class="bottom-modal-section modal-actions">
-            <button class="general-button" type="submit">Create</button>
+            <button class="general-button" type="submit" data-git-new-repository-submit>Create</button>
             <button class="gray-button" type="button" data-local-action="closeModal">Cancel</button>
         </div>
     </form>

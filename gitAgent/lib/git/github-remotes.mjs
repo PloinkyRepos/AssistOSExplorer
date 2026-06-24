@@ -14,7 +14,7 @@ export function isGithubHttpsRemote(remoteUrl) {
   return value.startsWith('https://github.com/') || value.startsWith('http://github.com/');
 }
 
-function parseGithubHttpsRepositoryRemote(remoteUrl) {
+export function parseGithubHttpsRepositoryRemote(remoteUrl) {
   const normalized = String(remoteUrl || '').trim().replace(/\/+$/g, '').replace(/\.git$/i, '');
   const match = normalized.match(/^https?:\/\/github\.com\/([^/\s]+)\/([^/\s]+)$/i);
   if (!match) return null;
@@ -25,7 +25,7 @@ function parseGithubHttpsRepositoryRemote(remoteUrl) {
   };
 }
 
-async function readGithubApiError(response) {
+export async function readGithubApiError(response) {
   const text = await response.text().catch(() => '');
   if (!text) return '';
   try {
@@ -34,6 +34,174 @@ async function readGithubApiError(response) {
   } catch {
     return text.trim();
   }
+}
+
+function createGithubHeaders(token) {
+  const headers = {
+    Accept: 'application/vnd.github+json',
+    'User-Agent': 'ploinky-git-agent'
+  };
+  const authToken = String(token || '').trim();
+  if (authToken) {
+    headers.Authorization = `Bearer ${authToken}`;
+  }
+  return headers;
+}
+
+async function fetchGithubJson(url, { token, method = 'GET', body = null } = {}) {
+  const headers = createGithubHeaders(token);
+  if (body !== null) {
+    headers['Content-Type'] = 'application/json';
+  }
+  const response = await fetch(url, {
+    method,
+    headers,
+    body: body !== null ? JSON.stringify(body) : undefined
+  });
+  if (!response.ok) {
+    throw new Error(await readGithubApiError(response) || `GitHub API request failed (${response.status}).`);
+  }
+  return response.json();
+}
+
+function sanitizeGithubOwner(owner) {
+  const login = String(owner?.login || '').trim();
+  if (!login) return null;
+  return {
+    login,
+    type: String(owner?.type || '').trim() || 'User',
+    avatarUrl: String(owner?.avatar_url || '').trim(),
+    htmlUrl: String(owner?.html_url || `https://github.com/${login}`).trim(),
+    repositoryUrl: `https://github.com/${login}`
+  };
+}
+
+function sanitizeGithubRepository(repo) {
+  const owner = sanitizeGithubOwner(repo?.owner);
+  const name = String(repo?.name || '').trim();
+  const fullName = String(repo?.full_name || '').trim();
+  if (!owner || !name || !fullName) return null;
+  return {
+    id: Number.isFinite(Number(repo?.id)) ? Number(repo.id) : null,
+    fullName,
+    name,
+    owner: owner.login,
+    ownerType: owner.type,
+    private: Boolean(repo?.private),
+    htmlUrl: String(repo?.html_url || `https://github.com/${fullName}`).trim(),
+    cloneUrl: String(repo?.clone_url || `https://github.com/${fullName}.git`).trim(),
+    defaultBranch: String(repo?.default_branch || '').trim(),
+    description: String(repo?.description || '').trim(),
+    updatedAt: String(repo?.updated_at || '').trim()
+  };
+}
+
+function parseGithubLinkHeader(value) {
+  const links = {};
+  for (const part of String(value || '').split(',')) {
+    const match = part.match(/<([^>]+)>;\s*rel="([^"]+)"/);
+    if (match) {
+      links[match[2]] = match[1];
+    }
+  }
+  return links;
+}
+
+async function fetchGithubPages(initialUrl, { token, maxItems = 500 } = {}) {
+  const items = [];
+  let nextUrl = initialUrl;
+  while (nextUrl && items.length < maxItems) {
+    const response = await fetch(nextUrl, {
+      headers: createGithubHeaders(token)
+    });
+    if (!response.ok) {
+      throw new Error(await readGithubApiError(response) || `GitHub API request failed (${response.status}).`);
+    }
+    const payload = await response.json().catch(() => []);
+    if (Array.isArray(payload)) {
+      items.push(...payload);
+    }
+    const links = parseGithubLinkHeader(response.headers.get('link'));
+    nextUrl = links.next || '';
+  }
+  return items.slice(0, maxItems);
+}
+
+export async function listGithubRepositoryTargets({ token }) {
+  const authToken = String(token || '').trim();
+  if (!authToken) {
+    return { ok: false, code: 'github_auth_required', error: 'Connect GitHub to load organizations.' };
+  }
+  const orgs = await fetchGithubPages('https://api.github.com/user/orgs?per_page=100', { token: authToken, maxItems: 300 });
+  const targets = orgs
+    .map((org) => sanitizeGithubOwner({ ...org, type: 'Organization' }))
+    .filter(Boolean);
+  const seen = new Set();
+  return {
+    ok: true,
+    targets: targets.filter((target) => {
+      const key = target.login.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+  };
+}
+
+export async function listGithubRepositories({ token, query = '', maxRepos = 500 }) {
+  const authToken = String(token || '').trim();
+  if (!authToken) {
+    return { ok: false, code: 'github_auth_required', error: 'Connect GitHub to load repositories.' };
+  }
+  const url = 'https://api.github.com/user/repos?per_page=100&sort=updated&affiliation=owner,collaborator,organization_member';
+  const normalizedQuery = String(query || '').trim().toLowerCase();
+  const repositories = (await fetchGithubPages(url, { token: authToken, maxItems: maxRepos }))
+    .map(sanitizeGithubRepository)
+    .filter(Boolean)
+    .filter((repo) => {
+      if (!normalizedQuery) return true;
+      return repo.fullName.toLowerCase().includes(normalizedQuery)
+        || repo.description.toLowerCase().includes(normalizedQuery);
+    });
+  return { ok: true, repositories };
+}
+
+export async function createGithubRepository({ owner, name, visibility = 'private', token }) {
+  const authToken = String(token || '').trim();
+  if (!authToken) {
+    throw new Error('GitHub authentication is required to create the remote repository.');
+  }
+  const repoOwner = String(owner || '').trim();
+  const repoName = String(name || '').trim();
+  if (!repoOwner || !repoName) {
+    throw new Error('GitHub owner and repository name are required.');
+  }
+  const user = await fetchGithubJson('https://api.github.com/user', { token: authToken });
+  const login = String(user?.login || '').trim();
+  const createUrl = repoOwner.toLowerCase() === login.toLowerCase()
+    ? 'https://api.github.com/user/repos'
+    : `https://api.github.com/orgs/${encodeURIComponent(repoOwner)}/repos`;
+  const created = await fetchGithubJson(createUrl, {
+    method: 'POST',
+    token: authToken,
+    body: {
+      name: repoName,
+      private: visibility !== 'public',
+      auto_init: false
+    }
+  });
+  const repository = sanitizeGithubRepository(created);
+  return {
+    ok: true,
+    repository: repository || {
+      fullName: `${repoOwner}/${repoName}`,
+      name: repoName,
+      owner: repoOwner,
+      private: visibility !== 'public',
+      htmlUrl: `https://github.com/${repoOwner}/${repoName}`,
+      cloneUrl: `https://github.com/${repoOwner}/${repoName}.git`
+    }
+  };
 }
 
 export async function ensureGithubHttpsRemoteRepository({ repoPath, gitBinary, remoteName, remoteUrl, token }) {
