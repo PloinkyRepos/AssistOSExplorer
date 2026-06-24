@@ -9,7 +9,9 @@ export class MarketplaceModal {
       status: 'Loading marketplace...',
       statusType: '',
       agentSearchInput: '',
-      agentSearchQuery: ''
+      agentSearchQuery: '',
+      activeRepoKindTab: 'agents',
+      expandedAgentRepos: {}
     };
     this.invalidate();
   }
@@ -27,6 +29,7 @@ export class MarketplaceModal {
     this.agentSearchInput = this.element.querySelector('#marketplaceAgentSearch');
     this.tabButtons = Array.from(this.element.querySelectorAll('[data-tab]'));
     this.tabPanels = Array.from(this.element.querySelectorAll('[data-panel]'));
+    this.repoKindButtons = Array.from(this.element.querySelectorAll('[data-repo-kind-tab]'));
 
     this.element.querySelector('[data-action="close"]')?.addEventListener('click', this.close);
     this.addRepoButton?.addEventListener('click', this.addRepository);
@@ -35,6 +38,7 @@ export class MarketplaceModal {
     this.agentsEl?.addEventListener('click', this.handleAgentClick);
     this.repositoriesEl?.addEventListener('click', this.handleRepositoryClick);
     this.tabButtons.forEach(button => button.addEventListener('click', this.switchTab));
+    this.repoKindButtons.forEach(button => button.addEventListener('click', this.switchRepoKindTab));
 
     this.renderState();
     if (!this.state.marketplace && !this.loadingStarted) {
@@ -59,6 +63,7 @@ export class MarketplaceModal {
     this.agentsEl?.removeEventListener('click', this.handleAgentClick);
     this.repositoriesEl?.removeEventListener('click', this.handleRepositoryClick);
     this.tabButtons?.forEach(button => button.removeEventListener('click', this.switchTab));
+    this.repoKindButtons?.forEach(button => button.removeEventListener('click', this.switchRepoKindTab));
   }
 
   close = () => {
@@ -108,23 +113,29 @@ export class MarketplaceModal {
     this.renderState();
   };
 
-  async requestMarketplace(actionBody = null) {
-    const options = {
+  switchRepoKindTab = (event) => {
+    const tab = event.currentTarget?.dataset?.repoKindTab || 'agents';
+    this.state.activeRepoKindTab = ['agents', 'skills', 'others'].includes(tab) ? tab : 'agents';
+    this.renderState();
+  };
+
+  async requestMarketplace(actionBody = null, options = {}) {
+    const fetchOptions = {
       credentials: 'include',
       headers: { Accept: 'application/json' }
     };
     let url = '/api/marketplace';
     if (actionBody) {
-      options.method = 'POST';
-      options.headers['Content-Type'] = 'application/json';
-      options.body = JSON.stringify(actionBody);
+      fetchOptions.method = 'POST';
+      fetchOptions.headers['Content-Type'] = 'application/json';
+      fetchOptions.body = JSON.stringify(actionBody);
     }
-    const response = await fetch(url, options);
+    const response = await fetch(url, fetchOptions);
     const data = await response.json().catch(() => ({}));
     if (!response.ok || data?.ok === false) {
       throw new Error(data?.message || data?.error || `Marketplace request failed (${response.status})`);
     }
-    return data.marketplace;
+    return options.raw === true ? data : data.marketplace;
   }
 
   async loadMarketplace() {
@@ -165,38 +176,50 @@ export class MarketplaceModal {
     const name = String(this.repoNameInput?.value || '').trim();
     const url = String(this.repoUrlInput?.value || '').trim();
     const branch = String(this.repoBranchInput?.value || '').trim();
-    if (!name || !url) {
-      this.setStatus('Repository name and URL are required.', 'error');
+    if (!url) {
+      this.setStatus('Repository URL is required.', 'error');
       return;
     }
     this.setBusy(true);
-    this.setStatus(`Adding ${name}...`);
+    this.setStatus(`Installing ${name || url}...`);
     try {
-      this.state.marketplace = await this.requestMarketplace({
-        action: 'add_repository',
-        name,
+      const response = await this.requestMarketplace({
+        action: 'install_repo',
         url,
+        ...(name ? { name } : {}),
         ...(branch ? { branch } : {})
-      });
+      }, { raw: true });
+      this.state.marketplace = response?.marketplace || response;
       this.repoNameInput.value = '';
       this.repoUrlInput.value = '';
       this.repoBranchInput.value = '';
-      this.setStatus(`${name} added.`);
+      const result = response?.result || {};
+      this.setStatus(`${result.name || name || url} installed.`);
     } catch (error) {
-      this.setStatus(error?.message || 'Failed to add repository.', 'error');
+      this.setStatus(error?.message || 'Failed to install repository.', 'error');
     } finally {
       this.setBusy(false);
     }
   };
 
   handleAgentClick = async (event) => {
+    if (this.state.busy) return;
+
+    const repoToggle = event.target?.closest?.('[data-repo-tree-toggle]');
+    if (repoToggle) {
+      this.toggleAgentRepo(repoToggle.dataset.repoName || '');
+      return;
+    }
+
     const button = event.target?.closest?.('[data-agent-ref]');
-    if (!button || this.state.busy) return;
+    if (!button) return;
+
     const agentRef = button.dataset.agentRef || '';
     const active = button.dataset.active === 'true';
     const controls = button.closest?.('.marketplace-agent-controls');
     const modeSelect = controls?.querySelector?.('[data-enable-mode-for]');
     const mode = String(modeSelect?.value || button.dataset.enableMode || 'isolated').trim() || 'isolated';
+
     this.setBusy(true);
     this.setStatus(`${active ? 'Disabling' : 'Enabling'} ${agentRef}...`);
     try {
@@ -213,21 +236,33 @@ export class MarketplaceModal {
     }
   };
 
+  toggleAgentRepo = (repoName) => {
+    const name = String(repoName || '').trim();
+    if (!name) return;
+    const expandedAgentRepos = { ...(this.state.expandedAgentRepos || {}) };
+    expandedAgentRepos[name] = !Boolean(expandedAgentRepos[name]);
+    this.state.expandedAgentRepos = expandedAgentRepos;
+    this.renderState();
+  };
+
   handleRepositoryClick = async (event) => {
     const button = event.target?.closest?.('[data-repo-name]');
     if (!button || this.state.busy) return;
     const name = button.dataset.repoName || '';
-    const enabled = button.dataset.enabled === 'true';
+    const installed = button.dataset.installed === 'true';
+    const url = button.dataset.repoUrl || '';
     this.setBusy(true);
-    this.setStatus(`${enabled ? 'Disabling' : 'Enabling'} ${name}...`);
+    this.setStatus(`${installed ? 'Uninstalling' : 'Installing'} ${name || url}...`);
     try {
-      this.state.marketplace = await this.requestMarketplace({
-        action: enabled ? 'disable_repository' : 'enable_repository',
-        name
-      });
-      this.setStatus(`${name} ${enabled ? 'disabled' : 'enabled'}.`);
+      const payload = installed
+        ? { action: 'uninstall_repo', target: name || url }
+        : { action: 'install_repo', url, ...(name ? { name } : {}) };
+      const response = await this.requestMarketplace(payload, { raw: true });
+      this.state.marketplace = response?.marketplace || response;
+      const resultName = response?.result?.name || name || url;
+      this.setStatus(`${resultName} ${installed ? 'uninstalled' : 'installed'}.`);
     } catch (error) {
-      this.setStatus(error?.message || 'Failed to update repository.', 'error');
+      this.setStatus(error?.message || 'Failed to update repository installation.', 'error');
     } finally {
       this.setBusy(false);
     }
@@ -245,6 +280,7 @@ export class MarketplaceModal {
       this.agentSearchInput.value = this.state.agentSearchInput;
     }
     this.element.querySelector('.marketplace-repo-tools')?.classList.toggle('hidden', !canManage);
+    this.renderRepoKindTabs();
     this.renderRepositories();
     this.renderAgents();
   }
@@ -267,6 +303,28 @@ export class MarketplaceModal {
     });
   }
 
+  renderRepoKindTabs() {
+    const active = ['agents', 'skills', 'others'].includes(this.state.activeRepoKindTab)
+      ? this.state.activeRepoKindTab
+      : 'agents';
+    this.repoKindButtons?.forEach(button => {
+      const isActive = button.dataset.repoKindTab === active;
+      button.classList.toggle('active', isActive);
+      button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    });
+  }
+
+  repoMatchesKindTab(repo, activeTab = this.state.activeRepoKindTab) {
+    const kind = String(repo?.kind || '').trim().toLowerCase();
+    if (activeTab === 'skills') {
+      return kind === 'skills' || kind === 'mixed';
+    }
+    if (activeTab === 'others') {
+      return kind !== 'agents' && kind !== 'skills' && kind !== 'mixed';
+    }
+    return kind === 'agents' || kind === 'mixed';
+  }
+
   renderRepositories() {
     if (!this.repositoriesEl) return;
     const repositories = this.state.marketplace?.repositories || [];
@@ -274,7 +332,17 @@ export class MarketplaceModal {
       this.repositoriesEl.innerHTML = '<div class="marketplace-empty">No repositories found.</div>';
       return;
     }
-    this.repositoriesEl.replaceChildren(...repositories.map(repo => {
+    const activeRepoKindTab = ['agents', 'skills', 'others'].includes(this.state.activeRepoKindTab)
+      ? this.state.activeRepoKindTab
+      : 'agents';
+    const filteredRepositories = repositories.filter(repo => this.repoMatchesKindTab(repo, activeRepoKindTab));
+    if (!filteredRepositories.length) {
+      const label = activeRepoKindTab === 'skills' ? 'skills' : (activeRepoKindTab === 'others' ? 'other' : 'agent');
+      this.repositoriesEl.innerHTML = `<div class="marketplace-empty">No ${label} repositories found.</div>`;
+      return;
+    }
+
+    this.repositoriesEl.replaceChildren(...filteredRepositories.map(repo => {
       const canManage = this.canManageMarketplace();
       const row = document.createElement('article');
       row.className = 'marketplace-row';
@@ -289,73 +357,136 @@ export class MarketplaceModal {
       const note = document.createElement('div');
       note.className = 'marketplace-meta';
       note.textContent = activeAgentsCount > 0
-        ? `${activeAgentsCount} enabled agent${activeAgentsCount === 1 ? '' : 's'} remain active if this repo is disabled.`
+        ? `${activeAgentsCount} enabled agent${activeAgentsCount === 1 ? '' : 's'} will be removed if this repo is uninstalled.`
         : '';
-      const badges = document.createElement('div');
-      badges.className = 'marketplace-badges';
-      [repo.kind, repo.default ? 'default' : '', repo.installed ? 'installed' : '', repo.enabled ? 'enabled' : '']
-        .filter(Boolean)
-        .forEach(label => {
-          const badge = document.createElement('span');
-          badge.className = 'marketplace-badge';
-          badge.textContent = label;
-          badges.appendChild(badge);
-        });
       info.append(title, description);
       if (note.textContent) info.append(note);
-      info.append(badges);
       row.append(info);
       if (canManage) {
         const toggle = document.createElement('button');
         toggle.type = 'button';
-        toggle.className = `marketplace-repo-toggle${repo.enabled ? ' active' : ''}`;
+        toggle.className = `marketplace-repo-toggle${repo.installed ? ' active' : ''}`;
         toggle.dataset.repoName = repo.name;
-        toggle.dataset.enabled = repo.enabled ? 'true' : 'false';
-        toggle.disabled = this.state.busy;
-        toggle.textContent = repo.enabled ? 'Disable' : 'Enable';
+        toggle.dataset.repoUrl = repo.url || '';
+        toggle.dataset.installed = repo.installed ? 'true' : 'false';
+        toggle.disabled = this.state.busy || (!repo.installed && !repo.url);
+        toggle.textContent = repo.installed ? 'Uninstall' : 'Install';
         row.append(toggle);
       }
       return row;
     }));
   }
 
+  getAgentDisplayName(agent) {
+    const ref = String(agent?.ref || '').trim();
+    if (ref.includes('/')) {
+      const parts = ref.split('/');
+      return parts[parts.length - 1] || ref;
+    }
+    if (agent?.name) return String(agent.name);
+    return ref || 'Unknown agent';
+  }
+
   renderAgents() {
     if (!this.agentsEl) return;
+    const repositories = this.state.marketplace?.repositories || [];
     const agents = this.state.marketplace?.agents || [];
-    if (!agents.length) {
+    const canManage = this.canManageMarketplace();
+    const noRepoName = '__no_repo__';
+    const noRepoLabel = '(No repository)';
+
+    if (!repositories.length && !agents.length) {
       this.agentsEl.innerHTML = '<div class="marketplace-empty">No agents found.</div>';
       return;
     }
+
+    const agentsByRepo = new Map();
+    for (const agent of agents) {
+      const repoName = String(agent?.repo || '').trim() || noRepoName;
+      const list = agentsByRepo.get(repoName);
+      if (list) {
+        list.push(agent);
+      } else {
+        agentsByRepo.set(repoName, [agent]);
+      }
+    }
+
+    const repoEntries = [];
+    const usedRepoNames = new Set();
+    for (const repo of repositories) {
+      const repoName = String(repo?.name || '').trim() || noRepoName;
+      usedRepoNames.add(repoName);
+      repoEntries.push({
+        repoName,
+        repoLabel: repoName === noRepoName ? noRepoLabel : repoName,
+        repo,
+        agents: agentsByRepo.get(repoName) || [],
+        hasMetadata: true
+      });
+    }
+
+    for (const [repoName, list] of agentsByRepo.entries()) {
+      if (usedRepoNames.has(repoName)) continue;
+      repoEntries.push({
+        repoName,
+        repoLabel: repoName === noRepoName ? noRepoLabel : repoName,
+        repo: { name: repoName === noRepoName ? '' : repoName },
+        agents: list,
+        hasMetadata: false
+      });
+    }
+
     const query = String(this.state.agentSearchQuery || '').trim().toLowerCase();
-    const filteredAgents = query
-      ? agents.filter(agent => {
-          const values = [
-            agent.ref,
-            agent.repo,
-            agent.name,
-            `${agent.repo || ''}/${agent.name || ''}`
-          ];
-          return values.some(value => String(value || '').toLowerCase().includes(query));
-        })
-      : agents;
-    if (!filteredAgents.length) {
-      this.agentsEl.innerHTML = '<div class="marketplace-empty">No agents match the search.</div>';
+    const hasQuery = Boolean(query);
+    const queryIncludes = (value) => String(value || '').toLowerCase().includes(query);
+
+    const filteredEntries = repoEntries.filter(entry => {
+      const repo = entry.repo || {};
+      const repoMatches = !hasQuery
+        ? true
+        : [
+            entry.repoLabel,
+            repo.url,
+            repo.description,
+            repo.kind
+          ].some(value => queryIncludes(value));
+
+      const matchingAgents = hasQuery
+        ? entry.agents.filter(agent => {
+            const searchValues = [
+              agent.ref,
+              agent.repo,
+              agent.name,
+              `${agent.repo || ''}/${agent.name || ''}`
+            ];
+            return searchValues.some(value => queryIncludes(value));
+          })
+        : [];
+
+      entry.matchingAgents = matchingAgents;
+      return !hasQuery || repoMatches || matchingAgents.length > 0;
+    });
+
+    if (!filteredEntries.length) {
+      this.agentsEl.innerHTML = '<div class="marketplace-empty">No agents or repositories match the search.</div>';
       return;
     }
-    this.agentsEl.replaceChildren(...filteredAgents.map(agent => {
-      const canManage = this.canManageMarketplace();
+
+    const createAgentRow = (agent) => {
       const row = document.createElement('article');
-      row.className = 'marketplace-row';
+      row.className = 'marketplace-row marketplace-agent-row';
+
       const info = document.createElement('div');
       const title = document.createElement('div');
       title.className = 'marketplace-title';
       const name = document.createElement('span');
-      name.textContent = agent.ref;
+      name.textContent = this.getAgentDisplayName(agent);
       const status = document.createElement('span');
       const statusText = String(agent.status || (agent.active ? 'stopped' : 'inactive')).toLowerCase();
       status.className = `marketplace-agent-status ${statusText}`;
       status.textContent = statusText;
       title.append(name, status);
+
       const about = document.createElement('div');
       about.className = 'marketplace-description';
       about.textContent = agent.about || 'No description';
@@ -393,8 +524,69 @@ export class MarketplaceModal {
         toggle.textContent = agent.active ? 'Disable' : 'Enable';
         controls.append(toggle);
       }
+
       row.append(controls);
       return row;
+    };
+
+    this.agentsEl.replaceChildren(...filteredEntries.map(entry => {
+      const repoMatches = !hasQuery
+        ? false
+        : [
+            entry.repoLabel,
+            entry.repo.url,
+            entry.repo.description,
+            entry.repo.kind
+          ].some(value => queryIncludes(value));
+      const hasAgentMatches = hasQuery ? entry.matchingAgents.length > 0 : false;
+      const isExpandedBySearch = hasQuery && (repoMatches || hasAgentMatches);
+      const isExpanded = Boolean(isExpandedBySearch || this.state.expandedAgentRepos?.[entry.repoName]);
+      const visibleAgents = hasQuery ? entry.matchingAgents : entry.agents;
+      const hasAgents = (entry.agents || []).length > 0;
+
+      const wrapper = document.createElement('article');
+      wrapper.className = 'marketplace-repo-tree-node';
+
+      const header = document.createElement('div');
+      header.className = 'marketplace-row marketplace-repo-row';
+
+      const toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = `marketplace-tree-toggle${isExpanded ? ' expanded' : ''}`;
+      toggle.dataset.repoTreeToggle = '1';
+      toggle.dataset.repoName = entry.repoName;
+      toggle.disabled = !hasAgents;
+      toggle.setAttribute('aria-expanded', String(Boolean(isExpanded)));
+      toggle.setAttribute('aria-label', `${isExpanded ? 'Collapse' : 'Expand'} agents for ${entry.repoLabel}`);
+      const arrow = document.createElement('span');
+      arrow.className = 'marketplace-tree-arrow';
+      arrow.textContent = '›';
+      toggle.append(arrow);
+
+      const info = document.createElement('div');
+      info.className = 'marketplace-repo-info';
+      const title = document.createElement('div');
+      title.className = 'marketplace-title marketplace-repo-title';
+      title.textContent = entry.repoLabel;
+      info.append(title);
+
+      header.append(toggle, info);
+
+      const children = document.createElement('div');
+      children.className = 'marketplace-agent-tree-children';
+      children.dataset.repoName = entry.repoName;
+      children.hidden = !isExpanded;
+
+      if (visibleAgents.length > 0) {
+        children.replaceChildren(...visibleAgents.map(createAgentRow));
+      } else {
+        children.innerHTML = `<div class="marketplace-empty marketplace-tree-empty">${
+          hasQuery ? 'No agents match the search in this repository.' : 'No agents in this repository.'
+        }</div>`;
+      }
+
+      wrapper.append(header, children);
+      return wrapper;
     }));
   }
 }
