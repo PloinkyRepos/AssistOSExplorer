@@ -180,6 +180,69 @@
       }
     },
     {
+      "name": "git_commit_message",
+      "title": "Generate Git Commit Message",
+      "description": "Generate a Git commit message using an LLM from provided diffs.",
+      "command": "tools/git_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "diffs": {
+          "type": "array",
+          "optional": false,
+          "items": {
+            "type": "object",
+            "properties": {
+              "repoPath": {
+                "type": "string"
+              },
+              "filePath": {
+                "type": "string"
+              },
+              "diff": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "repoPath",
+              "filePath",
+              "diff"
+            ]
+          }
+        }
+      },
+      "env": {
+        "TOOL_NAME": "git_commit_message"
+      }
+    },
+    {
+      "name": "git_resolve_conflict",
+      "title": "Resolve Git Conflict",
+      "description": "Resolve a git conflict by merging base/ours/theirs using an LLM.",
+      "command": "tools/git_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "base": {
+          "type": "string",
+          "optional": true
+        },
+        "ours": {
+          "type": "string",
+          "optional": false
+        },
+        "theirs": {
+          "type": "string",
+          "optional": false
+        },
+        "source": {
+          "type": "string",
+          "optional": true
+        }
+      },
+      "env": {
+        "TOOL_NAME": "git_resolve_conflict"
+      }
+    },
+    {
       "name": "git_remote_set",
       "title": "Git Remote Set",
       "description": "Add or update a repository remote URL.",

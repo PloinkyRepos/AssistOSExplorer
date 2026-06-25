@@ -283,9 +283,11 @@ export function buildEditableFallbackCommitMessage(selections = []) {
         }
     }
     const uniqueFiles = [...new Set(files)];
-    if (!uniqueFiles.length) return 'Update project files';
+    if (!uniqueFiles.length) return 'Update selected files';
     return [
-        'Update project files:',
+        'Update selected files',
+        '',
+        'Affected files:',
         ...uniqueFiles.map((file) => `- ${file}`)
     ].join('\n');
 }

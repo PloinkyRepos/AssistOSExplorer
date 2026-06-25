@@ -77,7 +77,6 @@ flowchart TD
 | `gitAgent` | MCP intern, MCP Admin. | Lucreaza cu repo-uri, fisiere si credentiale. |
 | `dpuAgent` | MCP intern, MCP Admin. | Detine date sensibile, profiluri si secrete. |
 | `tasksAgent` | Autentificat daca are UI, MCP intern, MCP Admin pentru override-uri. | Task-urile sunt date de workspace. |
-| `llmAssistant` | MCP intern, MCP Admin pentru politici de model si tool-uri. | Poate atinge prompturi, date si tool-uri. |
 | `soplangAgent` | MCP intern, MCP Admin. | Executa capabilitati si poate modifica programe sau politici. |
 | `multimedia` | Autentificat daca are UI, MCP intern, MCP Admin pentru politici globale. | Media poate contine date personale si costuri de procesare. |
 | `onlyOffice` | Public protejat sau autentificat. | Documentele cer token si politica de document. |

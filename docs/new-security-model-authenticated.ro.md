@@ -80,7 +80,7 @@ sequenceDiagram
 | `gitAgent` | Actiuni Git initiate de user. | Repo-ul si credentialele sunt resurse private. |
 | `tasksAgent` | Task-uri si planuri de lucru. | Task-urile sunt date de workspace. |
 | `dpuAgent` | Date user-owned si profiluri. | DPU detine date sensibile. |
-| `llmAssistant`, `soplangAgent`, `multimedia` | UI-uri sau actiuni initiate de user. | Contextul userului limiteaza operatiile. |
+| `soplangAgent`, `multimedia` | UI-uri sau actiuni initiate de user. | Contextul userului limiteaza operatiile. |
 
 ## 7. Detalii De Politica Si Manifest
 

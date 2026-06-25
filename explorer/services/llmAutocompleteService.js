@@ -1,4 +1,4 @@
-import { callAgentTool } from "./infrastructure/explorerApi.js";
+import { callExplorerTool } from "./infrastructure/explorerApi.js";
 import { emitAuditEvent } from "./audit/auditService.js";
 
 function parseJsonToolResult(toolResultText) {
@@ -71,7 +71,7 @@ export async function requestLlmAutocomplete({ path, content, cursorOffset, lang
             cursorOffset
         }
     });
-    const raw = await callAgentTool('llmAssistant', 'llm_autocomplete', payload, { raw: true });
+    const raw = await callExplorerTool('llm_autocomplete', payload, { raw: true, withLoader: false });
     const parsed = parseJsonToolResult(raw) || raw;
 
     if (parsed && typeof parsed === 'object') {

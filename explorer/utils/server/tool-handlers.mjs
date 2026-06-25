@@ -1,6 +1,6 @@
 import { createReadStream } from 'node:fs';
-import { execFileSync } from 'node:child_process';
-import { pathToFileURL } from 'node:url';
+import { execFileSync, spawn } from 'node:child_process';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { jsonResponse, textResponse } from './responses.mjs';
 
 function parseArgs(schema, args, name) {
@@ -21,6 +21,45 @@ async function readFileAsBase64Stream(filePath) {
       resolve(finalBuffer.toString('base64'));
     });
     stream.on('error', reject);
+  });
+}
+
+async function runExplorerToolScript(scriptName, args, { timeoutMs = 30000 } = {}) {
+  const scriptPath = fileURLToPath(new URL(`../../tools/${scriptName}`, import.meta.url));
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [scriptPath], {
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+    let stdout = '';
+    let stderr = '';
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      reject(new Error(`${scriptName} timed out.`));
+    }, timeoutMs);
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    child.on('error', (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      let parsed = null;
+      try {
+        parsed = JSON.parse(stdout.trim() || '{}');
+      } catch {
+        reject(new Error(stderr.trim() || stdout.trim() || `${scriptName} returned invalid JSON.`));
+        return;
+      }
+      if (code !== 0 || parsed?.ok === false) {
+        reject(new Error(parsed?.error || stderr.trim() || `${scriptName} failed.`));
+        return;
+      }
+      resolve(parsed);
+    });
+    child.stdin.end(JSON.stringify({ arguments: args || {} }));
   });
 }
 
@@ -81,6 +120,7 @@ export function createToolHandlers({
     SearchTextCancelArgsSchema,
     ReplaceTextArgsSchema,
     GetFileInfoArgsSchema,
+    LlmAutocompleteArgsSchema,
     CollectIDEPluginsArgsSchema,
     GetPluginSettingsArgsSchema,
     SetPluginEnabledArgsSchema,
@@ -635,6 +675,11 @@ export function createToolHandlers({
     };
   }
 
+  async function handleLlmAutocomplete(args) {
+    const data = parseArgs(LlmAutocompleteArgsSchema, args, 'llm_autocomplete');
+    return jsonResponse(await runExplorerToolScript('llm_autocomplete_tool.mjs', data));
+  }
+
   async function handleReadMultiple(args) {
     const data = parseArgs(ReadMultipleFilesArgsSchema, args, 'read_multiple_files');
     const results = await Promise.all(data.paths.map(async (filePath) => {
@@ -1111,6 +1156,7 @@ export function createToolHandlers({
     search_text_cancel: handleCancelSearchText,
     replace_text: handleReplaceText,
     get_file_info: handleGetFileInfo,
+    llm_autocomplete: handleLlmAutocomplete,
     collect_ide_plugins: handleCollectIdePlugins,
     get_plugin_settings: handleGetPluginSettings,
     set_plugin_enabled: handleSetPluginEnabled,

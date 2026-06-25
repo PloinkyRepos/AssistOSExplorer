@@ -54,7 +54,7 @@ Agent-local contract:
 - Documentation: `docs/index.html`
 - Validation: `npm test` in the affected agent plus Ploinky smoke tests for routing or auth changes.
 
-The documentation website at `docs/index.html` must keep direct references to the docs or agent guides for Explorer, `dpuAgent`, `gitAgent`, `llmAssistant`, `multimedia`, `onlyOffice`, `soplangAgent`, `tasksAgent`, `webAssist`, `webmeetAgent`, `webmeetLivekitAiAgent`, `webmeetInfra`, the unified `webmeetInfra/liveKitServerAgent`, and the local Ploinky docs. The Ploinky references must include `docs/specs/DS005-routing-and-web-surfaces.md` and `docs/specs/DS011-security-model.md` so future work can reach the routing and security invariants from the website.
+The documentation website at `docs/index.html` must keep direct references to the docs or agent guides for Explorer, `dpuAgent`, `gitAgent`, `multimedia`, `onlyOffice`, `soplangAgent`, `tasksAgent`, `webAssist`, `webmeetAgent`, `webmeetLivekitAiAgent`, `webmeetInfra`, the unified `webmeetInfra/liveKitServerAgent`, and the local Ploinky docs. The Ploinky references must include `docs/specs/DS005-routing-and-web-surfaces.md` and `docs/specs/DS011-security-model.md` so future work can reach the routing and security invariants from the website.
 
 ## Decisions & Questions
 

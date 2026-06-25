@@ -14,6 +14,8 @@ import {
   listGithubRepositories,
   listGithubRepositoryTargets
 } from '../lib/git/github-remotes.mjs';
+import gitCommitMessage from '../lib/git-commit-message.js';
+import resolveConflict from '../lib/git-resolve-conflict.js';
 
 async function loadInvocationAuth() {
   const candidates = [
@@ -175,6 +177,17 @@ function normalizeArgs(toolName, args) {
         input.maxRepos = 500;
       }
       input.query = typeof input.query === 'string' ? input.query : '';
+      return input;
+    case 'git_commit_message':
+      if (!Array.isArray(input.diffs)) {
+        throw new Error('git_commit_message requires diffs array.');
+      }
+      return input;
+    case 'git_resolve_conflict':
+      input.base = typeof input.base === 'string' ? input.base : '';
+      input.ours = typeof input.ours === 'string' ? input.ours : '';
+      input.theirs = typeof input.theirs === 'string' ? input.theirs : '';
+      input.source = typeof input.source === 'string' ? input.source : '';
       return input;
     case 'git_remote_set':
       requirePath();
@@ -378,6 +391,14 @@ async function main() {
           maxRepos: payload.maxRepos
         });
         writeJson(result);
+        return;
+      case 'git_commit_message':
+        result = await gitCommitMessage(payload);
+        writeJson({ ok: true, message: typeof result === 'string' ? result : String(result ?? '') });
+        return;
+      case 'git_resolve_conflict':
+        result = await resolveConflict(payload);
+        writeJson({ ok: true, content: typeof result === 'string' ? result : String(result ?? '') });
         return;
       case 'git_remote_set':
         result = await gitService.gitRemoteSet(payload);

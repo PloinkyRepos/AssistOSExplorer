@@ -89,6 +89,34 @@
       "description": "Retrieve metadata about a file or directory."
     },
     {
+      "name": "llm_autocomplete",
+      "title": "LLM Autocomplete",
+      "description": "Generate a code completion for the current cursor position using file context.",
+      "command": "tools/llm_autocomplete_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "path": {
+          "type": "string",
+          "optional": false
+        },
+        "content": {
+          "type": "string",
+          "optional": false
+        },
+        "cursorOffset": {
+          "type": "number",
+          "optional": false
+        },
+        "language": {
+          "type": "string",
+          "optional": true
+        }
+      },
+      "env": {
+        "TOOL_NAME": "llm_autocomplete"
+      }
+    },
+    {
       "name": "collect_ide_plugins",
       "description": "Aggregate IDE plugin configurations from enabled workspace agents."
     },

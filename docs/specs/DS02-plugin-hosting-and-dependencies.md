@@ -155,7 +155,6 @@ When workspace plugin settings change, Explorer must invalidate cached menu cont
 | `dpuAgent` | confidential navigation shell, preview host | storage, ACL, comments, confidential object logic |
 | `soplangAgent` | explicit SOPLang tag-edit action and document context | build logic, markdown sync, skills bridge |
 | `tasksAgent` | toolbar slot and document context | backlog CRUD, conflict handling, task UI |
-| `llmAssistant` | generic host invocation points | autocomplete, commit message, conflict resolution |
 
 This ownership table is an architectural guardrail. If Explorer starts duplicating domain behavior from these agents, the design has drifted.
 
