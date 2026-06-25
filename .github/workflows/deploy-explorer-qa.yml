@@ -83,6 +83,7 @@ jobs:
           SSH_KEY: ${{ secrets.EXPLORER_QA_SSH_KEY }}
           PLOINKY_MASTER_KEY: ${{ secrets.EXPLORER_QA_PLOINKY_MASTER_KEY }}
           SOUL_GATEWAY_PROVIDER_API_KEY: ${{ secrets.EXPLORER_QA_SOUL_GATEWAY_PROVIDER_API_KEY }}
+          ONLYOFFICE_PUBLIC_URL: ${{ vars.EXPLORER_QA_ONLYOFFICE_PUBLIC_URL }}
         run: |
           set -euo pipefail
           if [ -z "${SSH_KEY:-}" ]; then
@@ -101,6 +102,16 @@ jobs:
             echo "::error::Missing required repository secret EXPLORER_QA_SOUL_GATEWAY_PROVIDER_API_KEY"
             exit 1
           fi
+          if [ -z "${ONLYOFFICE_PUBLIC_URL:-}" ]; then
+            echo "::error::Missing required repository variable EXPLORER_QA_ONLYOFFICE_PUBLIC_URL"
+            exit 1
+          fi
+          case "${ONLYOFFICE_PUBLIC_URL}" in
+            https://localhost*|https://127.*|https://0.0.0.0*|http://*)
+              echo "::error::EXPLORER_QA_ONLYOFFICE_PUBLIC_URL must be a browser-reachable HTTPS URL, not ${ONLYOFFICE_PUBLIC_URL}"
+              exit 1
+              ;;
+          esac
           if [ -z "${SSH_HOST:-}" ] || [ -z "${SSH_USER:-}" ]; then
             echo "::error::EXPLORER_QA_SSH_USER and EXPLORER_QA_SSH_HOST must be configured"
             exit 1
@@ -711,21 +722,23 @@ jobs:
             sleep 5
           done
 
-          if [ -n "${ONLYOFFICE_PUBLIC_URL:-}" ]; then
-            echo "[deploy-qa] Verifying OnlyOffice public api.js from GitHub runner..."
-            for i in $(seq 1 60); do
-              code="$(curl -L -s -o /tmp/onlyoffice-qa-api.js -w '%{http_code}' "${ONLYOFFICE_PUBLIC_URL%/}/web-apps/apps/api/documents/api.js" || true)"
-              if [ "$code" = "200" ]; then
-                echo "[deploy-qa] OnlyOffice public api.js responding with HTTP $code"
-                break
-              fi
-              if [ "$i" = "60" ]; then
-                echo "[deploy-qa] ERROR: OnlyOffice public api.js did not become reachable"
-                exit 1
-              fi
-              sleep 5
-            done
+          if [ -z "${ONLYOFFICE_PUBLIC_URL:-}" ]; then
+            echo "[deploy-qa] ERROR: ONLYOFFICE_PUBLIC_URL is required for browser editors."
+            exit 1
           fi
+          echo "[deploy-qa] Verifying OnlyOffice public api.js from GitHub runner..."
+          for i in $(seq 1 60); do
+            code="$(curl -L -s -o /tmp/onlyoffice-qa-api.js -w '%{http_code}' "${ONLYOFFICE_PUBLIC_URL%/}/web-apps/apps/api/documents/api.js" || true)"
+            if [ "$code" = "200" ]; then
+              echo "[deploy-qa] OnlyOffice public api.js responding with HTTP $code"
+              break
+            fi
+            if [ "$i" = "60" ]; then
+              echo "[deploy-qa] ERROR: OnlyOffice public api.js did not become reachable"
+              exit 1
+            fi
+            sleep 5
+          done
 
       - name: Create summary
         if: always()
