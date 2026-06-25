@@ -60,7 +60,6 @@
                     <ul>
                         <li><a href="../dpuAgent/docs/index.html">DPU Agent</a></li>
                         <li><a href="../gitAgent/docs/index.html">Git Agent</a></li>
-                        <li><a href="../llmAssistant/docs/index.html">LLM Assistant</a></li>
                         <li><a href="../soplangAgent/docs/index.html">SOPLang Agent</a></li>
                         <li><a href="../tasksAgent/docs/index.html">Tasks Agent</a></li>
                         <li><a href="../multimedia/docs/index.html">Multimedia</a></li>
@@ -81,7 +80,7 @@
                 <div class="content-wrapper">
                 <div class="doc-section">
                     <h2>One Surface For The Workspace</h2>
-                    <p>A Ploinky workspace needs one stable surface where a user can browse files, open documents, inspect previews, edit source, and trigger domain-specific actions without manually switching between separate agent interfaces. A plain file browser is too narrow for that role, while a domain-specific agent should not take ownership of the whole workspace shell. Explorer exists to solve that boundary: it owns the IDE shell, while agents such as <a href="../dpuAgent/docs/index.html"><code>dpuAgent</code></a>, <a href="../gitAgent/docs/index.html"><code>gitAgent</code></a>, <a href="../llmAssistant/docs/index.html"><code>llmAssistant</code></a>, <a href="../soplangAgent/docs/index.html"><code>soplangAgent</code></a>, <a href="../tasksAgent/docs/index.html"><code>tasksAgent</code></a>, <a href="../multimedia/docs/index.html"><code>multimedia</code></a>, <code>webAdmin</code> (external repo), and <a href="../webAssist/docs/index.html"><code>webAssist</code></a> keep ownership of their own domain logic.</p>
+                    <p>A Ploinky workspace needs one stable surface where a user can browse files, open documents, inspect previews, edit source, and trigger domain-specific actions without manually switching between separate agent interfaces. A plain file browser is too narrow for that role, while a domain-specific agent should not take ownership of the whole workspace shell. Explorer exists to solve that boundary: it owns the IDE shell, while agents such as <a href="../dpuAgent/docs/index.html"><code>dpuAgent</code></a>, <a href="../gitAgent/docs/index.html"><code>gitAgent</code></a>, <a href="../soplangAgent/docs/index.html"><code>soplangAgent</code></a>, <a href="../tasksAgent/docs/index.html"><code>tasksAgent</code></a>, <a href="../multimedia/docs/index.html"><code>multimedia</code></a>, <code>webAdmin</code> (external repo), and <a href="../webAssist/docs/index.html"><code>webAssist</code></a> keep ownership of their own domain logic.</p>
                     <p>In practice, that means Explorer has to combine several responsibilities that would otherwise drift apart: filesystem navigation, content-aware preview, normal Markdown source editing, explicit SOPLang tag editing for structured documents, general-purpose text/code editing, and runtime plugin hosting. The result is broader than a file explorer but intentionally narrower than a monolithic backend. Explorer is the host application for the workspace, not the owner of every workflow that appears inside it.</p>
                 </div>
 
@@ -171,7 +170,7 @@ ploinky start explorer 8080
                             </tr>
                             <tr>
                                 <td>Workspace data and operations</td>
-                                <td><a href="../dpuAgent/docs/index.html">dpuAgent</a>, <a href="../gitAgent/docs/index.html">gitAgent</a>, <a href="../llmAssistant/docs/index.html">llmAssistant</a>, <a href="../soplangAgent/docs/index.html">soplangAgent</a>, <a href="../tasksAgent/docs/index.html">tasksAgent</a>, <a href="../multimedia/docs/index.html">multimedia</a></td>
+                                <td><a href="../dpuAgent/docs/index.html">dpuAgent</a>, <a href="../gitAgent/docs/index.html">gitAgent</a>, <a href="../soplangAgent/docs/index.html">soplangAgent</a>, <a href="../tasksAgent/docs/index.html">tasksAgent</a>, <a href="../multimedia/docs/index.html">multimedia</a></td>
                             </tr>
                             <tr>
                                 <td>Web and meeting agents</td>

@@ -11,7 +11,7 @@ async function createTempWorkspace() {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'avatar-settings-http-'));
     await fs.mkdir(path.join(root, 'explorer'), { recursive: true });
     await fs.writeFile(path.join(root, 'explorer/manifest.json'), JSON.stringify({
-        enable: ['llmAssistant global']
+        enable: [{ agent: 'webAssist', profile: 'embedded' }]
     }, null, 2));
     return root;
 }
@@ -97,7 +97,7 @@ test('PATCH /avatar-settings/agents requires admin privileges', async () => {
     try {
         const response = await invokeRoute(handler, {
             method: 'PATCH',
-            pathname: '/avatar-settings/agents/llmAssistant',
+            pathname: '/avatar-settings/agents/webAssist',
             headers: {
                 ...createAuthHeaders(),
                 'content-type': 'application/json'

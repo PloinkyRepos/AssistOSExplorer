@@ -82,7 +82,7 @@ sequenceDiagram
 | `onlyOffice` | Vizualizare sau callback-uri protejate de token de document. | Documentul ramane controlat de politica de document. |
 | `webmeetAgent` | Asset-uri publice strict safe. | Intrarea in camera are nevoie de public protejat. |
 | `webAssist` | Asset-uri widget statice. | Conversatia si history au nevoie de sesiune guest. |
-| `gitAgent`, `dpuAgent`, `tasksAgent`, `llmAssistant`, `soplangAgent`, `multimedia`, `webmeetStt` | Nu se aplica implicit. | Acesti agenti lucreaza cu capabilitati, date sensibile sau continut de workspace. |
+| `gitAgent`, `dpuAgent`, `tasksAgent`, `soplangAgent`, `multimedia`, `webmeetStt` | Nu se aplica implicit. | Acesti agenti lucreaza cu capabilitati, date sensibile sau continut de workspace. |
 
 ## 7. Specificatie Router Whitelist Pentru Public Complet
 

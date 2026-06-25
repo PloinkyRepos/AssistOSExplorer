@@ -3,7 +3,7 @@
 <a id="chapter-chapter-2b41c910-2fc9-438c-a615-dac2bc563f42"></a>
 # AchillesIDE
 <!-- {"achilles-ide-paragraph":{"id":"paragraph-070de524-21ad-4600-9211-3bca9d2f5791","type":"markdown","title":"Paragraph 1"}} -->
-`AchillesIDE` groups the `explorer` IDE shell and the agents that are coupled to it: `dpuAgent`, `gitAgent`, `llmAssistant`, `soplangAgent`, `tasksAgent`, and `multimedia`.
+`AchillesIDE` groups the `explorer` IDE shell and the agents that are coupled to it: `dpuAgent`, `gitAgent`, `soplangAgent`, `tasksAgent`, and `multimedia`.
 
 Explorer is the main user-facing surface. It exposes filesystem navigation, preview, editing, plugin hosting, and workspace-integrated agent workflows through the WebSkel frontend and the Explorer Model Context Protocol (MCP) backend.
 
@@ -18,7 +18,6 @@ This repository is organized around one host shell and several agent boundaries:
 - `explorer` owns normal Markdown source editing for `.md` files through the embedded TinyMDE editor
 - `dpuAgent` owns confidential data and secret storage
 - `gitAgent` owns workspace Git operations
-- `llmAssistant` owns shared LLM-backed helper contracts
 - `soplangAgent` owns SOPLang build and execution orchestration
 - `tasksAgent` owns backlog file operations
 - `multimedia` owns media-oriented IDE plugin workflows 
@@ -84,7 +83,6 @@ Repository-level documentation:
 - [explorer](./explorer/README.md)
 - [dpuAgent](./dpuAgent/README.md)
 - [gitAgent](./gitAgent/README.md)
-- [llmAssistant](./llmAssistant/README.md)
 - [soplangAgent](./soplangAgent/README.md)
 - [tasksAgent](./tasksAgent/README.md)
 

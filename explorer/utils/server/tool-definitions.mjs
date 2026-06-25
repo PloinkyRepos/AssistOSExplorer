@@ -21,6 +21,7 @@ export function buildToolDefinitions(zodToJsonSchema, schemas) {
     SearchTextCancelArgsSchema,
     ReplaceTextArgsSchema,
     GetFileInfoArgsSchema,
+    LlmAutocompleteArgsSchema,
     CollectIDEPluginsArgsSchema,
     GetPluginSettingsArgsSchema,
     SetPluginEnabledArgsSchema,
@@ -141,6 +142,11 @@ export function buildToolDefinitions(zodToJsonSchema, schemas) {
       name: 'get_file_info',
       description: 'Retrieve metadata about a file or directory.',
       inputSchema: zodToJsonSchema(GetFileInfoArgsSchema)
+    },
+    {
+      name: 'llm_autocomplete',
+      description: 'Generate a code completion for the current cursor position using file context.',
+      inputSchema: zodToJsonSchema(LlmAutocompleteArgsSchema)
     },
     {
       name: 'collect_ide_plugins',

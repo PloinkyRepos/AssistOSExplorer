@@ -299,8 +299,8 @@ export function createGitCommitActions(ctx) {
             return { ok: true, errorMessage: '' };
         } catch (error) {
             const msg = normalizeErrorMessage(error);
-            if (msg.toLowerCase().includes('llm_resolve_conflict') && msg.toLowerCase().includes('not found')) {
-                return { ok: false, errorMessage: 'Autoresolve unavailable: llm_resolve_conflict tool not found.' };
+            if (msg.toLowerCase().includes('git_resolve_conflict') && msg.toLowerCase().includes('not found')) {
+                return { ok: false, errorMessage: 'Autoresolve unavailable: git_resolve_conflict tool not found.' };
             }
             return { ok: false, errorMessage: msg };
         }

@@ -15,7 +15,6 @@ Ploinky Explorer workspace + 17 coupled agents. Origin: `https://github.com/Ploi
 - `explorer/` — routing, FS access, preview, editing, plugin hosting, Explorer MCP.
 - `dpuAgent/` — confidential data, secret storage, ACL behavior.
 - `gitAgent/` — workspace Git operations, MCP tooling, auth integration.
-- `llmAssistant/` — shared LLM-backed helper contracts.
 - `soplangAgent/` — SOPLang build and execution orchestration.
 - `tasksAgent/` — backlog file operations.
 - `multimedia/`, `webmeetAgent/`, `webmeetLivekitAiAgent/`, `webmeetInfra/`, `webassist/` — domain-specific workflows.
@@ -38,7 +37,7 @@ Ploinky Explorer workspace + 17 coupled agents. Origin: `https://github.com/Ploi
 - Tool/internal logs are NOT visitor-facing. Final answers are clean conversational text unless an endpoint expects JSON.
 - All agents are built on `achillesAgentLib` at `/Users/danielsava/work/file-parser/ploinky/node_modules/achillesAgentLib`. See its `CLAUDE.md` for the subsystem map.
 - Request-time LLM access must go through Achilles runtime helpers, not ad-hoc vendor HTTP, unless a local spec defines an exception.
-- Soul Gateway runs as a sibling Ploinky agent providing LLM routing for Explorer and llmAssistant. Gateway consumers receive a workspace-scoped generated `SOUL_GATEWAY_API_KEY` and resolve the gateway URL through the Ploinky router. If Explorer deployment needs `soul.axiologic.dev`, configure it as the local gateway's normal `soul-gateway` provider with `SOUL_GATEWAY_PROVIDER_API_KEY` or an operator `SOUL_GATEWAY_API_KEY` that the Soul Gateway manifest maps into that provider key; do not replace the generated local gateway key with a production API key. See `proxies/soul-gateway/docs/specs/DS016-ploinky-agent-mode.md` for the unified contract.
+- Soul Gateway runs as a sibling Ploinky agent providing LLM routing for Explorer and workspace agents. Gateway consumers receive a workspace-scoped generated `SOUL_GATEWAY_API_KEY` and resolve the gateway URL through the Ploinky router. If Explorer deployment needs `soul.axiologic.dev`, configure it as the local gateway's normal `soul-gateway` provider with `SOUL_GATEWAY_PROVIDER_API_KEY` or an operator `SOUL_GATEWAY_API_KEY` that the Soul Gateway manifest maps into that provider key; do not replace the generated local gateway key with a production API key. See `proxies/soul-gateway/docs/specs/DS016-ploinky-agent-mode.md` for the unified contract.
 
 ## Skills contract
 

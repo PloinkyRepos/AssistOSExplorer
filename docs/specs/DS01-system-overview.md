@@ -151,7 +151,6 @@ Dependencies declared in [manifest.json](../../explorer/manifest.json) include:
 - `dpuAgent`
 - `soplangAgent`
 - `tasksAgent`
-- `llmAssistant`
 - `multimedia`
 - `webCli`
 - `webAdmin`

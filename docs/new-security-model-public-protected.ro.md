@@ -80,7 +80,7 @@ sequenceDiagram
 | `explorer` | Documente sau foldere partajate cand este nevoie de sesiune guest. | Unele share-uri trebuie limitate pe link, timp sau browser. |
 | `onlyOffice` | Vizualizare document cu token guest si token de document. | Documentul nu trebuie expus doar prin path. |
 | `soul-gateway` | Portaluri publice de onboarding, nu API client standard. | API-ul standard foloseste auth proprie de domeniu. |
-| `gitAgent`, `dpuAgent`, `tasksAgent`, `llmAssistant`, `soplangAgent`, `multimedia`, `webmeetStt` | Nu se aplica implicit. | Capabilitatile si datele lor nu sunt pentru vizitatori anonimi. |
+| `gitAgent`, `dpuAgent`, `tasksAgent`, `soplangAgent`, `multimedia`, `webmeetStt` | Nu se aplica implicit. | Capabilitatile si datele lor nu sunt pentru vizitatori anonimi. |
 
 ## 7. Detalii De Politica Si Manifest
 

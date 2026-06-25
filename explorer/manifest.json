@@ -29,10 +29,6 @@
         "dpuAgent global",
         "soplangAgent global",
         "tasksAgent global",
-        {
-            "agent": "llmAssistant global",
-            "profile": "embedded"
-        },
         "AchillesCLI/achilles-cli global",
         "basic/webtty global",
         "webmeetInfra/liveKitServerAgent",

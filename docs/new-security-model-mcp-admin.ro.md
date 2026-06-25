@@ -81,7 +81,6 @@ sequenceDiagram
 | `gitAgent` | Operatii destructive pe repo si credential binding global. | Poate modifica cod si credentiale. |
 | `webmeetAgent` | Recording policy, room admin override, LiveKit control, invite revocation globala. | Afecteaza camere si infrastructura live. |
 | `webAssist` | Prompt policy, visitor policy, lead routing, hidden tool configuration. | Interactioneaza cu vizitatori si modele. |
-| `llmAssistant` | Model/tool policy si guvernanta prompturilor. | Poate schimba felul in care agentii folosesc modele. |
 | `soplangAgent`, `tasksAgent`, `multimedia` | Override-uri globale, retention, quotas si politici. | Pot afecta date sau costuri la nivel de workspace. |
 | `onlyOffice`, `webmeetStt`, `webmeetLivekitAiAgent` | Configurare infrastructura sau control worker. | Serviciile auxiliare nu primesc admin implicit. |
 

@@ -69,6 +69,12 @@ export function createSchemas(z) {
     dryRun: z.boolean().optional().default(false)
   });
   const GetFileInfoArgsSchema = z.object({ path: z.string() });
+  const LlmAutocompleteArgsSchema = z.object({
+    path: z.string(),
+    content: z.string(),
+    cursorOffset: z.number(),
+    language: z.string().optional().default('')
+  });
   const CollectIDEPluginsArgsSchema = z.object({});
   const GetPluginSettingsArgsSchema = z.object({});
   const SetPluginEnabledArgsSchema = z.object({
@@ -117,6 +123,7 @@ export function createSchemas(z) {
     SearchTextCancelArgsSchema,
     ReplaceTextArgsSchema,
     GetFileInfoArgsSchema,
+    LlmAutocompleteArgsSchema,
     CollectIDEPluginsArgsSchema,
     GetPluginSettingsArgsSchema,
     SetPluginEnabledArgsSchema,

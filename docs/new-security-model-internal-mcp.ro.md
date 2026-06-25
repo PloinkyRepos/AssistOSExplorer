@@ -78,7 +78,6 @@ sequenceDiagram
 | `gitAgent` | Caller pentru secrete GitHub si tinta pentru operatii Git. | Are nevoie de cooperare fara acces global. |
 | `dpuAgent` | Tinta pentru date, profiluri si secrete. | Detine resurse sensibile. |
 | `tasksAgent` | Tinta pentru task-uri si caller pentru automatizari. | Task-urile trebuie legate de user sau workspace. |
-| `llmAssistant` | Caller pentru tool-uri de asistenta. | Nu trebuie sa primeasca acces implicit la secrete. |
 | `soplangAgent` | Tinta pentru executie controlata. | Executia este capabilitate. |
 | `webAssist` | Tool-uri de chat, history si visitor registration in limitele scope-ului. | Interactioneaza cu vizitatori, dar ruleaza capabilitati interne. |
 | `webmeetAgent` | Tool-uri pentru camere, evenimente si transcript. | Camera are useri, invitati si politici proprii. |

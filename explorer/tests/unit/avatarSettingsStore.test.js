@@ -16,13 +16,12 @@ async function createTempWorkspace() {
     await fs.writeFile(path.join(root, 'explorer/manifest.json'), JSON.stringify({
         enable: [
             'gitAgent global',
-            { agent: 'llmAssistant global', profile: 'embedded' },
             { agent: 'webAssist', profile: 'embedded' },
             'webmeetAgent global'
         ]
     }, null, 2));
-    await fs.mkdir(path.join(root, 'llmAssistant'), { recursive: true });
-    await fs.writeFile(path.join(root, 'llmAssistant/manifest.json'), JSON.stringify({
+    await fs.mkdir(path.join(root, 'webAssist'), { recursive: true });
+    await fs.writeFile(path.join(root, 'webAssist/manifest.json'), JSON.stringify({
         avatar: {
             generated: true,
             style: 'emoji',
@@ -58,24 +57,24 @@ test('lists AI agents from manifest and applies saved overrides', async () => {
     const store = createAvatarSettingsStore({ fs: await import('node:fs'), path, workspaceRoot });
 
     let agents = await store.listAgents();
-    assert.deepEqual(agents.map((agent) => agent.id), ['llmAssistant', 'webAssist']);
-    const defaultLlm = agents.find((agent) => agent.id === 'llmAssistant');
-    assert.equal(defaultLlm.config.generated, true);
-    assert.equal(defaultLlm.config.style, 'emoji');
-    assert.equal(defaultLlm.config.palette, 'sunset');
+    assert.deepEqual(agents.map((agent) => agent.id), ['webAssist']);
+    const defaultWebAssist = agents.find((agent) => agent.id === 'webAssist');
+    assert.equal(defaultWebAssist.config.generated, true);
+    assert.equal(defaultWebAssist.config.style, 'emoji');
+    assert.equal(defaultWebAssist.config.palette, 'sunset');
 
-    await store.updateAgent('llmAssistant', {
+    await store.updateAgent('webAssist', {
         generated: true,
         style: 'terminal',
         palette: 'terminal',
         emotion: 'thinking'
     });
-    await store.setAgentVisibility('llmAssistant', false);
+    await store.setAgentVisibility('webAssist', false);
 
     agents = await store.listAgents();
-    const llm = agents.find((agent) => agent.id === 'llmAssistant');
-    assert.equal(llm.config.style, 'terminal');
-    assert.equal(llm.enabled, false);
+    const webAssist = agents.find((agent) => agent.id === 'webAssist');
+    assert.equal(webAssist.config.style, 'terminal');
+    assert.equal(webAssist.enabled, false);
 });
 
 test('keeps saved agent override as missing when it is no longer in manifest', async () => {

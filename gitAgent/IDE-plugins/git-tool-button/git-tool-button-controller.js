@@ -300,7 +300,7 @@ export function attachGitController(fileExp) {
                 const localSide = (source === 'rebase' || source === 'stash') ? 'theirs' : 'ours';
                 const oursContent = localSide === 'ours' ? (versions.ours || '') : (versions.theirs || '');
                 const theirsContent = localSide === 'ours' ? (versions.theirs || '') : (versions.ours || '');
-                const resolveText = await callAgentTool('llmAssistant', 'llm_resolve_conflict', {
+                const resolveText = await callAgentTool('gitAgent', 'git_resolve_conflict', {
                     base: versions.base || '',
                     ours: oursContent,
                     theirs: theirsContent,
@@ -327,8 +327,8 @@ export function attachGitController(fileExp) {
             return { ok: true };
         } catch (error) {
             const msg = normalizeErrorMessage(error);
-            if (msg.toLowerCase().includes('llm_resolve_conflict') && msg.toLowerCase().includes('not found')) {
-                return { ok: false, message: 'Autoresolve unavailable: llm_resolve_conflict tool not found.' };
+            if (msg.toLowerCase().includes('git_resolve_conflict') && msg.toLowerCase().includes('not found')) {
+                return { ok: false, message: 'Autoresolve unavailable: git_resolve_conflict tool not found.' };
             }
             return { ok: false, message: msg };
         }
