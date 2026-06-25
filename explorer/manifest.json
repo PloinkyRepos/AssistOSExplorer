@@ -42,10 +42,12 @@
             "profile": "embedded"
         },
         "proxies/soul-gateway",
-        "webAssist"
+        "webAssist",
+        "AnalyticsAgent/analyticsAgent no-wait"
     ],
     "repos": {
-        "webmeetInfra": "https://github.com/PloinkyRepos/webmeetInfra.git"
+        "webmeetInfra": "https://github.com/PloinkyRepos/webmeetInfra.git",
+        "AnalyticsAgent": "https://github.com/AssistOS-AI/AnalyticsAgent.git"
     },
     "applicationPlugins": {
         "git": true,
