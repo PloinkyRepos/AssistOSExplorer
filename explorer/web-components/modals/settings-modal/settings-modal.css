@@ -177,8 +177,6 @@ settings-modal .avatar-settings-card p {
 settings-modal .avatar-preview {
     display: grid;
     place-items: center;
-    width: 92px;
-    height: 92px;
     border: 1px solid color-mix(in srgb, var(--accent) 14%, var(--border));
     border-radius: 18px;
     background:
@@ -188,8 +186,6 @@ settings-modal .avatar-preview {
 }
 
 settings-modal .avatar-preview-fallback {
-    width: 72px;
-    height: 72px;
     border-radius: 50%;
     display: inline-flex;
     align-items: center;

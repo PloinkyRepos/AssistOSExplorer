@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 
 test('saveCurrentProfileAvatar broadcasts profile avatar updates to other browser contexts', async () => {
     const originalWindow = globalThis.window;
@@ -81,4 +83,14 @@ test('saveCurrentProfileAvatar broadcasts profile avatar updates to other browse
         globalThis.BroadcastChannel = originalBroadcastChannel;
         globalThis.assistOS = originalAssistOS;
     }
+});
+
+test('profile avatar source is localStorage only when a saved avatar config exists', async () => {
+    const source = await fs.readFile(
+        path.resolve(import.meta.dirname, '../../services/profileAvatar/avatarApi.js'),
+        'utf8'
+    );
+
+    assert.match(source, /const hasStoredAvatar = Boolean\(stored && typeof stored === 'object' && stored\.config\);/);
+    assert.match(source, /source: hasStoredAvatar \? \{ kind: 'localStorage' \} : \{ kind: 'fallback' \}/);
 });

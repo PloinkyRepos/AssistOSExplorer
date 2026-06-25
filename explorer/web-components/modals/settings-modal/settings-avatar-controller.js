@@ -1,5 +1,9 @@
 import { registerRuntimeComponent } from "../../../utils/pluginUtils.ui.js";
 import {
+    callExplorerTool,
+    parseToolResult
+} from "../../../services/infrastructure/explorerApi.js";
+import {
     ensureAxiFaceLoaded,
     getCurrentProfileAvatar,
     loadAxiFaceGeneratedFacePalettes,
@@ -87,18 +91,11 @@ export const avatarController = {
         this.renderAvatarSettings();
     },
 
-    async fetchAvatarJson(path, options = {}) {
-        const response = await fetch(`/services/explorer/avatar-settings/${path}`, {
-            credentials: 'include',
-            headers: {
-                Accept: 'application/json',
-                ...(options.body ? { 'Content-Type': 'application/json' } : {})
-            },
-            ...options
-        });
-        const parsed = await response.json().catch(() => ({}));
-        if (!response.ok || parsed.ok === false) {
-            throw new Error(parsed.error || `Avatar settings request failed (${response.status}).`);
+    async callAvatarSettingsTool(name, args = {}) {
+        const payload = await callExplorerTool(name, args, { raw: true, withLoader: false });
+        const parsed = parseToolResult(payload) || {};
+        if (parsed.ok === false) {
+            throw new Error(parsed.error || "Avatar settings request failed.");
         }
         return parsed;
     },
@@ -123,7 +120,7 @@ export const avatarController = {
         this.state.profileAvatar = normalizeAvatarConfig(me.config, me.config?.agentId || `profile:${me.user?.id || 'current-user'}`);
         this.state.profileAvatarEnabled = me.enabled !== false;
         this.state.profileAvatarSource = me.source || null;
-        const agentsPayload = await this.fetchAvatarJson('agents').catch(() => ({
+        const agentsPayload = await this.callAvatarSettingsTool('get_avatar_settings_agents').catch(() => ({
             canManageAgents: false,
             agents: []
         }));
@@ -292,6 +289,7 @@ export const avatarController = {
             this.state.profileAvatarSource = payload.source || null;
             this.state.avatarStatus = "Profile avatar saved in this browser.";
             this.state.avatarStatusType = "";
+            await (assistOS.showToast || assistOS.UI?.showToast)?.("Profile avatar saved.", "success", 2500);
         } catch (error) {
             this.state.avatarStatus = error?.message || "Failed to save profile avatar.";
             this.state.avatarStatusType = "error";
@@ -306,16 +304,16 @@ export const avatarController = {
         this.state.avatarBusy = true;
         this.state.avatarStatus = `Saving ${this.state.selectedAvatarAgentId} avatar...`;
         this.state.avatarStatusType = "";
-        this.renderAvatarSettings();
+            this.renderAvatarSettings();
         try {
             this.state.selectedAgentAvatar = this.readAvatarControls('agent');
-            await this.fetchAvatarJson(`agents/${encodeURIComponent(this.state.selectedAvatarAgentId)}`, {
-                method: 'PATCH',
-                body: JSON.stringify({ config: this.state.selectedAgentAvatar })
+            await this.callAvatarSettingsTool('update_avatar_settings_agent', {
+                agentId: this.state.selectedAvatarAgentId,
+                config: this.state.selectedAgentAvatar
             });
-            await this.fetchAvatarJson(`agents/${encodeURIComponent(this.state.selectedAvatarAgentId)}/visibility`, {
-                method: 'PATCH',
-                body: JSON.stringify({ enabled: this.state.selectedAgentAvatarEnabled })
+            await this.callAvatarSettingsTool('set_avatar_settings_agent_visibility', {
+                agentId: this.state.selectedAvatarAgentId,
+                enabled: this.state.selectedAgentAvatarEnabled
             });
             this.state.avatarStatus = `${this.state.selectedAvatarAgentId} avatar saved.`;
             this.state.avatarStatusType = "";

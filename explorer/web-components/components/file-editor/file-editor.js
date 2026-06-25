@@ -120,7 +120,7 @@ export class FileEditor {
             }));
             const insert = String(completion || '');
             if (!insert.trim()) {
-                throw new Error('Empty autocomplete response.');
+                return;
             }
             this.textarea.value = content.slice(0, start) + insert + content.slice(end);
             const nextCursor = start + insert.length;

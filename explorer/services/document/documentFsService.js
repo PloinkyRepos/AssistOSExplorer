@@ -1,6 +1,6 @@
 import { parseMarkdownDocument, serializeMarkdownDocument } from './markdownDocumentParser.js';
 import { callToolWithLoader } from '../../utils/globalLoader.js';
-import { callAgentTool, callExplorerTool, parseToolResult, ToolError } from '../infrastructure/explorerApi.js';
+import { callAgentTool, callExplorerTool, extractToolText, parseToolResult, ToolError } from '../infrastructure/explorerApi.js';
 import {
     DPU_MY_SPACE_PATH,
     DPU_SHARED_PATH,
@@ -117,7 +117,7 @@ export default class DocumentFsService {
 
         const result = await this.callExplorer('read_text_file', { path });
         ensureSuccess(result, path);
-        return result.text ?? '';
+        return extractToolText(result);
     }
 
     async readDocument(path) {

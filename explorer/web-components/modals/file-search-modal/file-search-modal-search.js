@@ -4,8 +4,10 @@ import {
     groupSearchMatchesByFileDetailed,
     mergeSearchMatchesByPaths,
     normalizeSearchTextMatches,
-    parseToolJsonPayload
+    parseToolJsonPayload,
+    withTimeout
 } from "../../utils/workspace-search-utils.js";
+import { extractToolText } from "../../../services/infrastructure/explorerApi.js";
 
 const SEARCH_DEBOUNCE_MS = 200;
 const SEARCH_JOB_POLL_INTERVAL_MS = 500;
@@ -565,7 +567,7 @@ export const fileSearchModalSearchMethods = {
                     if (requestId !== this.searchInFilesRequestId) {
                         return { cancelled: true };
                     }
-                    const text = typeof result?.text === "string" ? result.text : "";
+                    const text = extractToolText(result);
                     const fileMatches = this.findSearchMatchesInTextForPath(pathValue, text);
                     collectedMatches.push(...fileMatches);
                 } catch (error) {

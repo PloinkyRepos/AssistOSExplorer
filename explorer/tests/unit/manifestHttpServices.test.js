@@ -8,37 +8,19 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const explorerRoot = path.resolve(__dirname, '..', '..');
 
-const VALID_SERVICE_ACCESS = new Set(['public', 'guest', 'authenticated']);
-const REMOVED_SERVICE_FIELDS = ['auth', 'mode', 'forceGuest'];
-
 function readManifest() {
     return JSON.parse(fs.readFileSync(path.join(explorerRoot, 'manifest.json'), 'utf8'));
 }
 
-function assertModernHttpService(service, label) {
-    assert.ok(VALID_SERVICE_ACCESS.has(service.access), `${label} must declare access: public | guest | authenticated`);
-
-    for (const field of REMOVED_SERVICE_FIELDS) {
-        assert.equal(service[field], undefined, `${label} must not declare removed ${field} field`);
-    }
-}
-
-test('explorer manifest http services use the Ploinky access schema', () => {
+test('explorer does not expose AxiFace through a custom HTTP service', () => {
     const manifest = readManifest();
     const services = manifest.httpServices || [];
-    assert.ok(services.length > 0, 'explorer manifest declares http services');
-
-    for (const service of services) {
-        assertModernHttpService(service, service.externalPrefix || service.slug || 'http service');
-    }
+    assert.equal(services.some((service) => String(service?.externalPrefix || '').includes('axi-face')), false);
 });
 
-test('explorer avatar settings stay authenticated while AxiFace assets are public', () => {
+test('explorer exposes shared assets through the whitelisted shared route', () => {
     const manifest = readManifest();
-    const services = new Map((manifest.httpServices || []).map((service) => [service.externalPrefix, service]));
+    const sharedRoute = manifest.routerAccess?.httpRoutes?.find((entry) => entry?.path === '/shared/*');
 
-    const avatarSettingsService = services.get('/services/explorer/avatar-settings/');
-    assert.equal(avatarSettingsService?.access, 'authenticated');
-    assert.equal(avatarSettingsService?.delegations, undefined);
-    assert.equal(services.get('/services/explorer/axi-face/')?.access, 'public');
+    assert.equal(sharedRoute?.access, 'public');
 });

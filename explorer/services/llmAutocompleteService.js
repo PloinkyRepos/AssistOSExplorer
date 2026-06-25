@@ -1,4 +1,8 @@
-import { callExplorerTool } from "./infrastructure/explorerApi.js";
+import {
+    callExplorerTool,
+    ensureSuccess,
+    extractToolText
+} from "./infrastructure/explorerApi.js";
 import { emitAuditEvent } from "./audit/auditService.js";
 
 function parseJsonToolResult(toolResultText) {
@@ -43,6 +47,15 @@ function parseJsonToolResult(toolResultText) {
         return null;
     };
 
+    const text = extractToolText(toolResultText);
+    if (text) {
+        try {
+            return JSON.parse(text.trim());
+        } catch {
+            return null;
+        }
+    }
+
     if (typeof toolResultText === 'string') {
         const trimmed = toolResultText.trim();
         if (!trimmed) return null;
@@ -72,11 +85,16 @@ export async function requestLlmAutocomplete({ path, content, cursorOffset, lang
         }
     });
     const raw = await callExplorerTool('llm_autocomplete', payload, { raw: true, withLoader: false });
+    ensureSuccess(raw);
     const parsed = parseJsonToolResult(raw) || raw;
 
     if (parsed && typeof parsed === 'object') {
         if (parsed.ok === false) {
-            throw new Error(parsed.error || 'LLM autocomplete failed.');
+            const message = parsed.error || 'LLM autocomplete failed.';
+            if (/autocomplete timed out|empty completion/i.test(message)) {
+                return '';
+            }
+            throw new Error(message);
         }
         const candidate = parsed.content || parsed.message || parsed.result;
         if (typeof candidate === 'string' && candidate.trim()) {

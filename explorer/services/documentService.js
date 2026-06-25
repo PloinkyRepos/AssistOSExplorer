@@ -1,6 +1,8 @@
 import markdownDocumentService from "./markdownDocumentService.js";
 import { callToolWithLoader } from "../utils/globalLoader.js";
 
+const EMPTY_TEXT_SENTINEL = '__ASSISTOS_EXPLORER_EMPTY_TEXT__';
+
 class DocumentService {
     constructor() {
         this.appServices = null;
@@ -79,7 +81,7 @@ class DocumentService {
             }
             throw new Error(result.text.replace(/^Error:\s*/, "") || `Unable to read "${path}"`);
         }
-        return result?.text ?? "";
+        return result?.text === EMPTY_TEXT_SENTINEL ? "" : result?.text ?? "";
     }
 
     async writeTextFile(appServices, path, content) {

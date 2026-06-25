@@ -2,6 +2,7 @@ import { createReadStream } from 'node:fs';
 import { execFileSync, spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { jsonResponse, textResponse } from './responses.mjs';
+import { createAvatarSettingsStore } from './avatar-settings/avatar-settings-store.mjs';
 
 function parseArgs(schema, args, name) {
   const parsed = schema.safeParse(args);
@@ -96,7 +97,10 @@ export function createToolHandlers({
   REPLACE_TEXT_TIMEOUT_MS,
   DEFAULT_DIRECTORY_TREE_MAX_DEPTH,
   DEFAULT_DIRECTORY_TREE_MAX_NODES,
-  getAllowedDirectories
+  getAllowedDirectories,
+  commandMode = false,
+  searchTextJobStorePath = '',
+  getInvocationContext = () => ({})
 }) {
   const {
     ReadTextFileArgsSchema,
@@ -128,7 +132,10 @@ export function createToolHandlers({
     ReadSkillsManifestStateArgsSchema,
     AddSkillsManifestRepoArgsSchema,
     SetSkillsManifestSkillEnabledArgsSchema,
-    RemoveSkillsManifestRepoArgsSchema
+    RemoveSkillsManifestRepoArgsSchema,
+    GetAvatarSettingsAgentsArgsSchema,
+    UpdateAvatarSettingsAgentArgsSchema,
+    SetAvatarSettingsAgentVisibilityArgsSchema
   } = schemas;
   const inflightSearchFiles = new Map();
   const inflightSearchText = new Map();
@@ -162,6 +169,29 @@ export function createToolHandlers({
   }
   setInterval(cleanupSearchTextJobs, 60 * 1000).unref?.();
 
+  function createSearchTextJobId() {
+    return `search_job_${++searchTextJobIdSeq}_${Date.now()}`;
+  }
+
+  async function writeSearchTextJobRecord(job) {
+    if (!searchTextJobStorePath) return;
+    await fs.mkdir(searchTextJobStorePath, { recursive: true });
+    await fs.writeFile(path.join(searchTextJobStorePath, `${job.id}.json`), `${JSON.stringify(job)}\n`, 'utf8');
+  }
+
+  async function readSearchTextJobRecord(jobId) {
+    if (!searchTextJobStorePath) return null;
+    const safeJobId = String(jobId || '').trim();
+    if (!/^[a-zA-Z0-9_.-]+$/.test(safeJobId)) return null;
+    try {
+      const raw = await fs.readFile(path.join(searchTextJobStorePath, `${safeJobId}.json`), 'utf8');
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
   const pluginSettingsPath = path.join(workspaceRoot, '.ploinky', 'explorer-plugin-settings.json');
   const achillesCliRoot = path.join(workspaceRoot, '.ploinky', 'repos', 'AchillesCLI', 'achilles-cli');
   const skillsManifestFile = 'ploinky-skills-manifest.json';
@@ -170,6 +200,7 @@ export function createToolHandlers({
   const canonicalSkillsDir = path.join(canonicalAgentsDir, 'skills');
   const ploinkyRoot = path.join(workspaceRoot, 'ploinky');
   let ploinkyReposServicePromise = null;
+  const avatarSettingsStore = createAvatarSettingsStore({ fs, path, workspaceRoot });
 
   async function loadPloinkyReposService() {
     if (!ploinkyReposServicePromise) {
@@ -900,7 +931,9 @@ export function createToolHandlers({
 
     const cached = searchTextCache.get(cacheKey);
     if (cached) {
-      const job = createSearchTextJob(cacheKey);
+      const job = commandMode
+        ? { id: createSearchTextJobId(), status: 'completed', createdAt: Date.now(), results: [], truncated: false, timedOut: false, error: null, cacheKey }
+        : createSearchTextJob(cacheKey);
       try {
         const parsed = JSON.parse(cached);
         job.results = parsed.results || [];
@@ -911,6 +944,42 @@ export function createToolHandlers({
         job.status = 'error';
         job.error = 'Failed to parse cached results.';
       }
+      if (commandMode) {
+        await writeSearchTextJobRecord(job);
+      }
+      return jsonResponse({ jobId: job.id, status: job.status });
+    }
+
+    if (commandMode) {
+      const job = {
+        id: createSearchTextJobId(),
+        status: 'running',
+        createdAt: Date.now(),
+        results: [],
+        truncated: false,
+        timedOut: false,
+        error: null,
+        cacheKey
+      };
+      try {
+        const searchArgs = scopedPaths.length > 0
+          ? { ...data, paths: scopedPaths }
+          : data;
+        const { results, truncated, timedOut } = await searchTextWithinWorkspace(validPath, searchArgs, {
+          maxBytesPerFile: MAX_TEXT_SEARCH_FILE_BYTES,
+          timeoutMs: SEARCH_TEXT_TIMEOUT_MS
+        });
+        const payload = { results, truncated, timedOut: Boolean(timedOut) };
+        searchTextCache.set(cacheKey, JSON.stringify(payload));
+        job.results = results;
+        job.truncated = truncated;
+        job.timedOut = timedOut;
+        job.status = timedOut ? 'timed_out' : 'completed';
+      } catch (error) {
+        job.status = 'error';
+        job.error = error?.message || 'Search failed.';
+      }
+      await writeSearchTextJobRecord(job);
       return jsonResponse({ jobId: job.id, status: job.status });
     }
 
@@ -952,7 +1021,7 @@ export function createToolHandlers({
 
   async function handleSearchTextStatus(args) {
     const data = parseArgs(SearchTextStatusArgsSchema, args, 'search_text_status');
-    const job = searchTextJobs.get(data.jobId);
+    const job = searchTextJobs.get(data.jobId) || await readSearchTextJobRecord(data.jobId);
     if (!job) {
       return jsonResponse({ status: 'not_found', error: 'Job not found or expired.' });
     }
@@ -969,6 +1038,14 @@ export function createToolHandlers({
   async function handleCancelSearchText(args) {
     const data = parseArgs(SearchTextCancelArgsSchema, args, 'search_text_cancel');
     const job = searchTextJobs.get(data.jobId);
+    if (!job && commandMode) {
+      const storedJob = await readSearchTextJobRecord(data.jobId);
+      if (storedJob) {
+        storedJob.status = storedJob.status === 'running' ? 'cancelled' : storedJob.status;
+        await writeSearchTextJobRecord(storedJob);
+        return jsonResponse({ ok: true, jobId: storedJob.id });
+      }
+    }
     if (!job) {
       return jsonResponse({ ok: false, error: 'Job not found or expired.' });
     }
@@ -1128,6 +1205,56 @@ export function createToolHandlers({
     return jsonResponse(await buildSkillsManifestState(folder, manifestPath, nextEntries));
   }
 
+  function getInvocationIdentity() {
+    const context = getInvocationContext?.() || {};
+    const actor = context.invocation?.actor && typeof context.invocation.actor === 'object'
+      ? context.invocation.actor
+      : {};
+    const roles = Array.isArray(actor.roles) ? actor.roles.map((role) => String(role || '').trim()) : [];
+    const id = String(actor.id || '').trim();
+    const username = id.replace(/^user:/, '');
+    return {
+      id,
+      username,
+      roles,
+      isAdmin: roles.includes('admin') || username === 'admin' || id === 'local:admin'
+    };
+  }
+
+  async function handleGetAvatarSettingsAgents(args) {
+    parseArgs(GetAvatarSettingsAgentsArgsSchema, args, 'get_avatar_settings_agents');
+    const identity = getInvocationIdentity();
+    const agents = await avatarSettingsStore.listAgents();
+    return jsonResponse({
+      ok: true,
+      canManageAgents: identity.isAdmin,
+      agents
+    });
+  }
+
+  async function handleUpdateAvatarSettingsAgent(args) {
+    const data = parseArgs(UpdateAvatarSettingsAgentArgsSchema, args, 'update_avatar_settings_agent');
+    const identity = getInvocationIdentity();
+    if (!identity.isAdmin) {
+      throw new Error('Only admins can update agent avatars.');
+    }
+    const config = await avatarSettingsStore.updateAgent(data.agentId, data.config || {}, {
+      assetBaseUrl: '/explorer/shared/vendor/axi-face',
+      env: process.env
+    });
+    return jsonResponse({ ok: true, agent: { id: data.agentId, config } });
+  }
+
+  async function handleSetAvatarSettingsAgentVisibility(args) {
+    const data = parseArgs(SetAvatarSettingsAgentVisibilityArgsSchema, args, 'set_avatar_settings_agent_visibility');
+    const identity = getInvocationIdentity();
+    if (!identity.isAdmin) {
+      throw new Error('Only admins can update agent avatars.');
+    }
+    const agent = await avatarSettingsStore.setAgentVisibility(data.agentId, data.enabled !== false);
+    return jsonResponse({ ok: true, agent });
+  }
+
   async function handleListAllowedDirectories() {
     const allowed = getAllowedDirectories ? getAllowedDirectories() : [];
     return textResponse(`Allowed directories:\n${allowed.join('\n')}`);
@@ -1165,6 +1292,9 @@ export function createToolHandlers({
     add_skills_manifest_repo: handleAddSkillsManifestRepo,
     set_skills_manifest_skill_enabled: handleSetSkillsManifestSkillEnabled,
     remove_skills_manifest_repo: handleRemoveSkillsManifestRepo,
+    get_avatar_settings_agents: handleGetAvatarSettingsAgents,
+    update_avatar_settings_agent: handleUpdateAvatarSettingsAgent,
+    set_avatar_settings_agent_visibility: handleSetAvatarSettingsAgentVisibility,
     list_allowed_directories: handleListAllowedDirectories
   };
 }

@@ -3,7 +3,6 @@
     "lite-sandbox": true,
     "update": "",
     "cli": "/bin/bash",
-    "agent": "node /code/filesystem-http-server.mjs",
     "about": "AssistOS Explorer agent",
     "ploinky": "pwd enable",
     "pwd": {
@@ -12,7 +11,9 @@
                 "username": "admin",
                 "password": "admin",
                 "name": "Admin",
-                "roles": ["admin"]
+                "roles": [
+                    "admin"
+                ]
             },
             {
                 "username": "user",
@@ -44,7 +45,6 @@
         "webAssist"
     ],
     "repos": {
-        "AxiFace": "https://github.com/PloinkyRepos/AxiFace.git",
         "webmeetInfra": "https://github.com/PloinkyRepos/webmeetInfra.git"
     },
     "applicationPlugins": {
@@ -56,20 +56,6 @@
         "webmeet": true,
         "soul-gateway": true
     },
-    "httpServices": [
-        {
-            "externalPrefix": "/services/explorer/avatar-settings/",
-            "internalPrefix": "/avatar-settings/",
-            "access": "authenticated",
-            "notFoundMessage": "Explorer avatar settings route not found."
-        },
-        {
-            "externalPrefix": "/services/explorer/axi-face/",
-            "internalPrefix": "/axi-face/",
-            "access": "public",
-            "notFoundMessage": "AxiFace asset not found."
-        }
-    ],
     "routerAccess": {
         "httpRoutes": [
             {

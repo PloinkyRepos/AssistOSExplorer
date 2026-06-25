@@ -9,7 +9,11 @@ import {
     scrollPreviewToAnchor,
     clearLineHighlight
 } from "./file-exp-utils.js";
-import { callExplorerTool } from "../../../services/infrastructure/explorerApi.js";
+import {
+    callExplorerTool,
+    extractToolText,
+    parseToolResult
+} from "../../../services/infrastructure/explorerApi.js";
 import { withTimeout } from "../../utils/workspace-search-utils.js";
 import { isDpuVirtualPath, openDpuFile } from "./file-exp-dpu-provider.js";
 import { tryLoadOnlyOfficePreview } from "../../../services/onlyoffice/onlyoffice-preview-service.js";
@@ -35,8 +39,9 @@ export async function tryLoadMediaPreview(fileExp, filePath, { requestTimeoutMs 
                 timeoutMessage: `Reading media timed out after ${Math.ceil(requestTimeoutMs / 1000)}s.`
             }
         );
-        const blocks = Array.isArray(result?.blocks) ? result.blocks : [];
-        const content = Array.isArray(result?.content) ? result.content : [];
+        const parsedResult = parseToolResult(result) || result;
+        const blocks = Array.isArray(parsedResult?.blocks) ? parsedResult.blocks : [];
+        const content = Array.isArray(parsedResult?.content) ? parsedResult.content : [];
         const block = [...blocks, ...content].find((item) => item?.data || item?.resource?.uri);
         if (!block) {
             throw new Error('No media data returned.');
@@ -262,7 +267,7 @@ export async function openFile(fileExp, filePath, {
                 message: `File is ${entrySize ? fileExp.formatBytes(entrySize) : 'large'}; showing first ${previewLineBudget} lines. Editing is disabled in this view.`
             } : null;
 
-            const fileContent = String(contentResult?.text || '');
+            const fileContent = extractToolText(contentResult);
             const selectedIsMarkdown = fileExp.isMarkdownFile(filePath);
             const useMarkdownTextViewForHighlight = Boolean(hasPendingForFile && selectedIsMarkdown);
             const previewContent = selectedIsMarkdown

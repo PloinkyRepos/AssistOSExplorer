@@ -29,7 +29,10 @@ export function buildToolDefinitions(zodToJsonSchema, schemas) {
     ReadSkillsManifestStateArgsSchema,
     AddSkillsManifestRepoArgsSchema,
     SetSkillsManifestSkillEnabledArgsSchema,
-    RemoveSkillsManifestRepoArgsSchema
+    RemoveSkillsManifestRepoArgsSchema,
+    GetAvatarSettingsAgentsArgsSchema,
+    UpdateAvatarSettingsAgentArgsSchema,
+    SetAvatarSettingsAgentVisibilityArgsSchema
   } = schemas;
 
   return [
@@ -187,6 +190,21 @@ export function buildToolDefinitions(zodToJsonSchema, schemas) {
       name: 'remove_skills_manifest_repo',
       description: 'Remove a repository entry from ploinky-skills-manifest.json and resync installed skills.',
       inputSchema: zodToJsonSchema(RemoveSkillsManifestRepoArgsSchema)
+    },
+    {
+      name: 'get_avatar_settings_agents',
+      description: 'List AI agent avatar settings visible in the current workspace.',
+      inputSchema: zodToJsonSchema(GetAvatarSettingsAgentsArgsSchema)
+    },
+    {
+      name: 'update_avatar_settings_agent',
+      description: 'Update one AI agent avatar configuration.',
+      inputSchema: zodToJsonSchema(UpdateAvatarSettingsAgentArgsSchema)
+    },
+    {
+      name: 'set_avatar_settings_agent_visibility',
+      description: 'Enable or disable one AI agent avatar.',
+      inputSchema: zodToJsonSchema(SetAvatarSettingsAgentVisibilityArgsSchema)
     },
     {
       name: 'list_allowed_directories',

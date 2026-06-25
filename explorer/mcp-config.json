@@ -2,91 +2,486 @@
   "tools": [
     {
       "name": "read_file",
-      "description": "Read the complete contents of a file as text. Deprecated; use read_text_file instead."
+      "description": "Read the complete contents of a file as text. Deprecated; use read_text_file instead.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "env": {
+        "TOOL_NAME": "read_file"
+      },
+      "inputSchema": {
+        "path": {
+          "type": "string"
+        },
+        "tail": {
+          "type": "number",
+          "optional": true
+        },
+        "head": {
+          "type": "number",
+          "optional": true
+        }
+      }
     },
     {
       "name": "read_text_file",
-      "description": "Read the complete contents of a text file."
+      "description": "Read the complete contents of a text file.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "env": {
+        "TOOL_NAME": "read_text_file"
+      },
+      "inputSchema": {
+        "path": {
+          "type": "string"
+        },
+        "tail": {
+          "type": "number",
+          "optional": true
+        },
+        "head": {
+          "type": "number",
+          "optional": true
+        }
+      }
     },
     {
       "name": "read_media_file",
-      "description": "Read an image or audio file as base64 data with a MIME type."
+      "description": "Read an image or audio file as base64 data with a MIME type.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "env": {
+        "TOOL_NAME": "read_media_file"
+      },
+      "inputSchema": {
+        "path": {
+          "type": "string"
+        }
+      }
     },
     {
       "name": "read_multiple_files",
-      "description": "Read the contents of multiple files."
+      "description": "Read the contents of multiple files.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "env": {
+        "TOOL_NAME": "read_multiple_files"
+      },
+      "inputSchema": {
+        "paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
     },
     {
       "name": "write_file",
-      "description": "Create or overwrite a text file."
+      "description": "Create or overwrite a text file.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "env": {
+        "TOOL_NAME": "write_file"
+      },
+      "inputSchema": {
+        "path": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        }
+      }
     },
     {
       "name": "write_binary_file",
-      "description": "Create or overwrite a binary file from base64 content."
+      "description": "Create or overwrite a binary file from base64 content.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "env": {
+        "TOOL_NAME": "write_binary_file"
+      },
+      "inputSchema": {
+        "path": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        },
+        "encoding": {
+          "type": "string",
+          "enum": [
+            "base64"
+          ],
+          "optional": true
+        }
+      }
     },
     {
       "name": "edit_file",
-      "description": "Apply textual edits to a file and return a diff."
+      "description": "Apply textual edits to a file and return a diff.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "env": {
+        "TOOL_NAME": "edit_file"
+      },
+      "inputSchema": {
+        "path": {
+          "type": "string"
+        },
+        "edits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "oldText": {
+                "type": "string"
+              },
+              "newText": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "dryRun": {
+          "type": "boolean",
+          "optional": true
+        }
+      }
     },
     {
       "name": "create_directory",
-      "description": "Create a directory recursively."
+      "description": "Create a directory recursively.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "env": {
+        "TOOL_NAME": "create_directory"
+      },
+      "inputSchema": {
+        "path": {
+          "type": "string"
+        }
+      }
     },
     {
       "name": "delete_file",
-      "description": "Delete a file."
+      "description": "Delete a file.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "env": {
+        "TOOL_NAME": "delete_file"
+      },
+      "inputSchema": {
+        "path": {
+          "type": "string"
+        }
+      }
     },
     {
       "name": "delete_directory",
-      "description": "Delete a directory."
+      "description": "Delete a directory.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "env": {
+        "TOOL_NAME": "delete_directory"
+      },
+      "inputSchema": {
+        "path": {
+          "type": "string"
+        }
+      }
     },
     {
       "name": "list_directory",
-      "description": "List files and directories within a path."
+      "description": "List files and directories within a path.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "env": {
+        "TOOL_NAME": "list_directory"
+      },
+      "inputSchema": {
+        "path": {
+          "type": "string"
+        }
+      }
     },
     {
       "name": "list_directory_with_sizes",
-      "description": "List directory contents with sizes and summary information."
+      "description": "List directory contents with sizes and summary information.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "env": {
+        "TOOL_NAME": "list_directory_with_sizes"
+      },
+      "inputSchema": {
+        "path": {
+          "type": "string"
+        },
+        "sortBy": {
+          "type": "string",
+          "enum": [
+            "name",
+            "size"
+          ],
+          "optional": true
+        }
+      }
     },
     {
       "name": "list_directory_detailed",
-      "description": "List directory contents with metadata."
+      "description": "List directory contents with metadata.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "env": {
+        "TOOL_NAME": "list_directory_detailed"
+      },
+      "inputSchema": {
+        "path": {
+          "type": "string"
+        }
+      }
     },
     {
       "name": "directory_tree",
-      "description": "Return a JSON tree of files and directories."
+      "description": "Return a JSON tree of files and directories.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "env": {
+        "TOOL_NAME": "directory_tree"
+      },
+      "inputSchema": {
+        "path": {
+          "type": "string"
+        },
+        "maxDepth": {
+          "type": "number",
+          "optional": true
+        },
+        "maxNodes": {
+          "type": "number",
+          "optional": true
+        }
+      }
     },
     {
       "name": "move_file",
-      "description": "Move or rename files or directories."
+      "description": "Move or rename files or directories.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "env": {
+        "TOOL_NAME": "move_file"
+      },
+      "inputSchema": {
+        "source": {
+          "type": "string"
+        },
+        "destination": {
+          "type": "string"
+        }
+      }
     },
     {
       "name": "copy_file",
-      "description": "Copy files or directories."
+      "description": "Copy files or directories.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "env": {
+        "TOOL_NAME": "copy_file"
+      },
+      "inputSchema": {
+        "source": {
+          "type": "string"
+        },
+        "destination": {
+          "type": "string"
+        },
+        "overwrite": {
+          "type": "boolean",
+          "optional": true
+        }
+      }
     },
     {
       "name": "search_files",
-      "description": "Search recursively for files and directories matching a pattern."
+      "description": "Search recursively for files and directories matching a pattern.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "env": {
+        "TOOL_NAME": "search_files"
+      },
+      "inputSchema": {
+        "path": {
+          "type": "string"
+        },
+        "pattern": {
+          "type": "string"
+        },
+        "excludePatterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "optional": true
+        },
+        "maxResults": {
+          "type": "number",
+          "optional": true
+        },
+        "workspaceVersion": {
+          "type": "number",
+          "optional": true
+        }
+      }
     },
     {
       "name": "search_text",
-      "description": "Start a background text search under a path."
+      "description": "Start a background text search under a path.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "env": {
+        "TOOL_NAME": "search_text"
+      },
+      "inputSchema": {
+        "path": {
+          "type": "string"
+        },
+        "query": {
+          "type": "string"
+        },
+        "caseSensitive": {
+          "type": "boolean",
+          "optional": true
+        },
+        "useRegex": {
+          "type": "boolean",
+          "optional": true
+        },
+        "wholeWord": {
+          "type": "boolean",
+          "optional": true
+        },
+        "maxResults": {
+          "type": "number",
+          "optional": true
+        },
+        "excludePatterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "optional": true
+        },
+        "paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "optional": true
+        },
+        "workspaceVersion": {
+          "type": "number",
+          "optional": true
+        }
+      }
     },
     {
       "name": "search_text_status",
-      "description": "Poll the status and results of a background text search."
+      "description": "Poll the status and results of a background text search.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "env": {
+        "TOOL_NAME": "search_text_status"
+      },
+      "inputSchema": {
+        "jobId": {
+          "type": "string"
+        }
+      }
     },
     {
       "name": "search_text_cancel",
-      "description": "Cancel a running background text search."
+      "description": "Cancel a running background text search.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "env": {
+        "TOOL_NAME": "search_text_cancel"
+      },
+      "inputSchema": {
+        "jobId": {
+          "type": "string"
+        }
+      }
     },
     {
       "name": "replace_text",
-      "description": "Replace text matches inside files under a path."
+      "description": "Replace text matches inside files under a path.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "env": {
+        "TOOL_NAME": "replace_text"
+      },
+      "inputSchema": {
+        "path": {
+          "type": "string"
+        },
+        "query": {
+          "type": "string"
+        },
+        "replaceWith": {
+          "type": "string"
+        },
+        "caseSensitive": {
+          "type": "boolean",
+          "optional": true
+        },
+        "useRegex": {
+          "type": "boolean",
+          "optional": true
+        },
+        "wholeWord": {
+          "type": "boolean",
+          "optional": true
+        },
+        "maxResults": {
+          "type": "number",
+          "optional": true
+        },
+        "excludePatterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "optional": true
+        },
+        "selectedMatchIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "optional": true
+        },
+        "workspaceVersion": {
+          "type": "number",
+          "optional": true
+        },
+        "dryRun": {
+          "type": "boolean",
+          "optional": true
+        }
+      }
     },
     {
       "name": "get_file_info",
-      "description": "Retrieve metadata about a file or directory."
+      "description": "Retrieve metadata about a file or directory.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "env": {
+        "TOOL_NAME": "get_file_info"
+      },
+      "inputSchema": {
+        "path": {
+          "type": "string"
+        }
+      }
     },
     {
       "name": "llm_autocomplete",
@@ -96,16 +491,13 @@
       "cwd": "workspace",
       "inputSchema": {
         "path": {
-          "type": "string",
-          "optional": false
+          "type": "string"
         },
         "content": {
-          "type": "string",
-          "optional": false
+          "type": "string"
         },
         "cursorOffset": {
-          "type": "number",
-          "optional": false
+          "type": "number"
         },
         "language": {
           "type": "string",
@@ -118,39 +510,186 @@
     },
     {
       "name": "collect_ide_plugins",
-      "description": "Aggregate IDE plugin configurations from enabled workspace agents."
+      "description": "Aggregate IDE plugin configurations from enabled workspace agents.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "env": {
+        "TOOL_NAME": "collect_ide_plugins"
+      },
+      "inputSchema": {}
     },
     {
       "name": "get_plugin_settings",
-      "description": "Read persisted workspace plugin settings."
+      "description": "Read persisted workspace plugin settings.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "env": {
+        "TOOL_NAME": "get_plugin_settings"
+      },
+      "inputSchema": {}
     },
     {
       "name": "set_plugin_enabled",
-      "description": "Persist enabled or disabled state for a workspace plugin."
+      "description": "Persist enabled or disabled state for a workspace plugin.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "env": {
+        "TOOL_NAME": "set_plugin_enabled"
+      },
+      "inputSchema": {
+        "key": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        }
+      }
     },
     {
       "name": "list-skills",
-      "description": "List Achilles CLI skills discovered for the current workspace."
+      "description": "List Achilles CLI skills discovered for the current workspace.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "env": {
+        "TOOL_NAME": "list-skills"
+      },
+      "inputSchema": {}
     },
     {
       "name": "read_skills_manifest_state",
-      "description": "Read ploinky-skills-manifest.json and available cached skills for a workspace folder."
+      "description": "Read ploinky-skills-manifest.json and available cached skills for a workspace folder.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "env": {
+        "TOOL_NAME": "read_skills_manifest_state"
+      },
+      "inputSchema": {
+        "folderPath": {
+          "type": "string"
+        }
+      }
     },
     {
       "name": "add_skills_manifest_repo",
-      "description": "Add a skill repository to ploinky-skills-manifest.json, cache it, and install all of its skills."
+      "description": "Add a skill repository to ploinky-skills-manifest.json, cache it, and install all of its skills.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "env": {
+        "TOOL_NAME": "add_skills_manifest_repo"
+      },
+      "inputSchema": {
+        "folderPath": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string",
+          "optional": true,
+          "nullable": true
+        },
+        "branch": {
+          "type": "string",
+          "optional": true,
+          "nullable": true
+        }
+      }
     },
     {
       "name": "set_skills_manifest_skill_enabled",
-      "description": "Enable or disable one skill from a repository entry in ploinky-skills-manifest.json."
+      "description": "Enable or disable one skill from a repository entry in ploinky-skills-manifest.json.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "env": {
+        "TOOL_NAME": "set_skills_manifest_skill_enabled"
+      },
+      "inputSchema": {
+        "folderPath": {
+          "type": "string"
+        },
+        "repoName": {
+          "type": "string"
+        },
+        "skill": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        }
+      }
     },
     {
       "name": "remove_skills_manifest_repo",
-      "description": "Remove a repository entry from ploinky-skills-manifest.json and resync installed skills."
+      "description": "Remove a repository entry from ploinky-skills-manifest.json and resync installed skills.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "env": {
+        "TOOL_NAME": "remove_skills_manifest_repo"
+      },
+      "inputSchema": {
+        "folderPath": {
+          "type": "string"
+        },
+        "repoName": {
+          "type": "string"
+        }
+      }
     },
     {
       "name": "list_allowed_directories",
-      "description": "Return the directories the Explorer server is permitted to access."
+      "description": "Return the directories the Explorer server is permitted to access.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "env": {
+        "TOOL_NAME": "list_allowed_directories"
+      },
+      "inputSchema": {}
+    },
+    {
+      "name": "get_avatar_settings_agents",
+      "description": "List AI agent avatar settings visible in the current workspace.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "env": {
+        "TOOL_NAME": "get_avatar_settings_agents"
+      },
+      "inputSchema": {}
+    },
+    {
+      "name": "update_avatar_settings_agent",
+      "description": "Update one AI agent avatar configuration.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "env": {
+        "TOOL_NAME": "update_avatar_settings_agent"
+      },
+      "inputSchema": {
+        "agentId": {
+          "type": "string"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    {
+      "name": "set_avatar_settings_agent_visibility",
+      "description": "Enable or disable one AI agent avatar.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "env": {
+        "TOOL_NAME": "set_avatar_settings_agent_visibility"
+      },
+      "inputSchema": {
+        "agentId": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        }
+      }
     }
   ]
 }

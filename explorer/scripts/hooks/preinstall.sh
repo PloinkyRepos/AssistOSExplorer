@@ -13,7 +13,11 @@ set -euo pipefail
 
 workspace_root="${PLOINKY_WORKSPACE_ROOT:?PLOINKY_WORKSPACE_ROOT is required}"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+explorer_root="$(cd "${script_dir}/../.." && pwd)"
 secrets_tool="${script_dir}/encrypted-secrets.mjs"
+axiface_url="${AXIFACE_REPO_URL:-https://github.com/PloinkyRepos/AxiFace.git}"
+axiface_default_root="${explorer_root}/shared/vendor/axi-face"
+axiface_root="${AXIFACE_REPO_PATH:-${axiface_default_root}}"
 
 # Ensure the Explorer agent runs in global mode so the workspace root is mounted
 # into the container (not just the isolated agent workdir under ./agents/explorer).
@@ -85,5 +89,63 @@ mkdir -p "${workspace_root}/.ploinky"
 if [[ -z "$(node "$secrets_tool" "$workspace_root" get "ASSISTOS_FS_ROOT")" ]]; then
     node "$secrets_tool" "$workspace_root" set "ASSISTOS_FS_ROOT" "$workspace_root"
 fi
+
+if [[ ! -f "${axiface_root}/src/axi-face.mjs" ]]; then
+    if [[ -n "${AXIFACE_REPO_PATH:-}" ]]; then
+        echo "[preinstall] AXIFACE_REPO_PATH does not contain src/axi-face.mjs: ${AXIFACE_REPO_PATH}" >&2
+        exit 1
+    fi
+    mkdir -p "$(dirname "${axiface_root}")"
+    git clone "${axiface_url}" "${axiface_root}"
+fi
+
+if [[ ! -f "${axiface_root}/src/axi-face.mjs" ]]; then
+    echo "[preinstall] AxiFace asset repository is missing src/axi-face.mjs: ${axiface_root}" >&2
+    exit 1
+fi
+
+if [[ ! -d "${axiface_root}/packs" ]]; then
+    echo "[preinstall] AxiFace asset repository is missing packs/: ${axiface_root}" >&2
+    exit 1
+fi
+
+if find "${axiface_root}/src" "${axiface_root}/packs" -type l -print -quit | grep -q .; then
+    echo "[preinstall] AxiFace public assets must not contain symlinks: ${axiface_root}" >&2
+    exit 1
+fi
+
+for pack_dir in "${axiface_root}"/packs/*; do
+    if [[ -d "${pack_dir}" ]]; then
+        pack_name="$(basename "${pack_dir}")"
+        if [[ ! "${pack_name}" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "[preinstall] Invalid AxiFace pack directory name: ${pack_name}" >&2
+            exit 1
+        fi
+    fi
+done
+
+node --input-type=module - "${axiface_root}" "${axiface_root}/packs/index.json" <<'NODE'
+import fs from 'node:fs';
+import path from 'node:path';
+
+const [, , axifaceRoot, outputPath] = process.argv;
+const packsRoot = path.join(axifaceRoot, 'packs');
+const packs = [];
+
+for (const name of fs.readdirSync(packsRoot).sort()) {
+    const manifestPath = path.join(packsRoot, name, 'manifest.json');
+    if (!fs.existsSync(manifestPath)) continue;
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    packs.push({
+        ...manifest,
+        id: manifest.id || name,
+        name: manifest.name || name,
+        description: manifest.description || '',
+        manifestSrc: `/explorer/shared/vendor/axi-face/packs/${name}/manifest.json`
+    });
+}
+
+fs.writeFileSync(outputPath, `${JSON.stringify({ packs }, null, 2)}\n`);
+NODE
 
 exit 0

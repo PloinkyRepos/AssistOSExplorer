@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import { getDefaultLLMAgent, registerDefaultLLMAgent } from 'achillesAgentLib/LLMAgents';
 
-const MAX_PREFIX_CHARS = 12000;
-const MAX_SUFFIX_CHARS = 6000;
-const MAX_FOCUS_CHARS = 2000;
+const MAX_CONTEXT_LINE_CHARS = 180;
+const AUTOCOMPLETE_TIMEOUT_MS = 12000;
+const TOKEN_RE = /[A-Za-z_$][\w$-]*$/;
 
 function safeParseJson(text) {
   try { return JSON.parse(text); } catch { return null; }
@@ -11,6 +11,12 @@ function safeParseJson(text) {
 
 function writeJson(value) {
   process.stdout.write(JSON.stringify(value));
+}
+
+function writeJsonAndExit(value) {
+  process.stdout.write(JSON.stringify(value), () => {
+    process.exit(0);
+  });
 }
 
 async function readStdinFallback() {
@@ -58,49 +64,141 @@ function stripFences(text) {
     .trim();
 }
 
+function getTokenBeforeCursor(content, cursorOffset) {
+  const beforeCursor = content.slice(0, cursorOffset);
+  const lineStart = beforeCursor.lastIndexOf('\n') + 1;
+  const linePrefix = beforeCursor.slice(lineStart);
+  return linePrefix.match(TOKEN_RE)?.[0] || '';
+}
+
+function detectEmbeddedLanguage({ path, content, cursorOffset, language }) {
+  const explicit = String(language || '').toLowerCase();
+  const filePath = String(path || '').toLowerCase();
+  if (!(explicit.includes('html') || /\.html?$/.test(filePath))) {
+    return explicit || language || '';
+  }
+
+  const prefix = content.slice(0, cursorOffset).toLowerCase();
+  const lastStyleOpen = prefix.lastIndexOf('<style');
+  const lastStyleClose = prefix.lastIndexOf('</style>');
+  if (lastStyleOpen !== -1 && lastStyleOpen > lastStyleClose) {
+    return 'css';
+  }
+  const lastScriptOpen = prefix.lastIndexOf('<script');
+  const lastScriptClose = prefix.lastIndexOf('</script>');
+  if (lastScriptOpen !== -1 && lastScriptOpen > lastScriptClose) {
+    return 'javascript';
+  }
+  return explicit || 'html';
+}
+
+function normalizeCompletion(text) {
+  return stripFences(text)
+    .replace(/\[END_OF_TEXT\]|\[END\]|<\|endoftext\|>/gi, '')
+    .trim();
+}
+
 function getDefaultAgent() {
   return (typeof getDefaultLLMAgent === 'function' && getDefaultLLMAgent())
     || (typeof registerDefaultLLMAgent === 'function' && registerDefaultLLMAgent());
 }
 
-function buildFocusSnippet(content, cursorOffset) {
-  const lines = content.split(/\r?\n/);
-  const prefix = content.slice(0, cursorOffset);
-  const lineIndex = Math.max(0, prefix.split(/\r?\n/).length - 1);
-  const start = Math.max(0, lineIndex - 1);
-  const end = Math.min(lines.length - 1, lineIndex + 1);
-  const snippet = [];
-  for (let i = start; i <= end; i += 1) {
-    const marker = i === lineIndex ? '>>' : '  ';
-    snippet.push(`${marker} ${i + 1} | ${lines[i]}`);
-  }
-  let text = snippet.join('\n');
-  if (text.length > MAX_FOCUS_CHARS) {
-    text = text.slice(0, MAX_FOCUS_CHARS);
-  }
-  return text;
+function buildCurrentLine(content, cursorOffset) {
+  const lineStart = content.lastIndexOf('\n', Math.max(0, cursorOffset - 1)) + 1;
+  const nextBreak = content.indexOf('\n', cursorOffset);
+  const lineEnd = nextBreak === -1 ? content.length : nextBreak;
+  const before = content.slice(lineStart, cursorOffset);
+  const after = content.slice(cursorOffset, lineEnd);
+  return `${before}<CURSOR>${after}`;
 }
 
-function buildPrompt({ path, language, prefix, suffix, focus }) {
+function buildCurrentLineParts(content, cursorOffset) {
+  const lineStart = content.lastIndexOf('\n', Math.max(0, cursorOffset - 1)) + 1;
+  const nextBreak = content.indexOf('\n', cursorOffset);
+  const lineEnd = nextBreak === -1 ? content.length : nextBreak;
+  return {
+    before: content.slice(lineStart, cursorOffset),
+    after: content.slice(cursorOffset, lineEnd)
+  };
+}
+
+function clampContextLine(line) {
+  const text = String(line || '');
+  if (text.length <= MAX_CONTEXT_LINE_CHARS) {
+    return text;
+  }
+  return `${text.slice(0, MAX_CONTEXT_LINE_CHARS)}...`;
+}
+
+function buildLineContext(content, cursorOffset) {
+  const beforeCursor = content.slice(0, cursorOffset);
+  const cursorLineIndex = Math.max(0, beforeCursor.split(/\r?\n/).length - 1);
+  const lines = content.split(/\r?\n/);
+  const beforeStart = Math.max(0, cursorLineIndex - 5);
+  const before = lines
+    .slice(beforeStart, cursorLineIndex)
+    .map(clampContextLine)
+    .join('\n');
+  const after = lines
+    .slice(cursorLineIndex + 1, cursorLineIndex + 3)
+    .map(clampContextLine)
+    .join('\n');
+  return {
+    before,
+    current: clampContextLine(buildCurrentLine(content, cursorOffset)),
+    currentParts: buildCurrentLineParts(content, cursorOffset),
+    after
+  };
+}
+
+function withTimeout(promise, timeoutMs, message) {
+  let timeoutId;
+  const timeout = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(message)), timeoutMs);
+  });
+  return Promise.race([promise, timeout]).finally(() => {
+    clearTimeout(timeoutId);
+  });
+}
+
+function buildPrompt({ path, language, tokenPrefix, before, current, currentParts, after }) {
+  const prefixTail = `${before ? `${before}\n` : ''}${currentParts?.before || ''}`.slice(-900);
   return [
-    'You are an expert code autocomplete engine.',
-    'Return ONLY the text that should be inserted at the cursor.',
-    'Do not include markdown fences, explanations, or surrounding quotes.',
-    'Avoid repeating text that already exists after the cursor.',
-    'Keep the completion concise and consistent with the file style.',
+    'You are an inline autocomplete engine for an editor.',
+    'Return the next characters that should appear immediately after DOCUMENT_PREFIX_ENDS_WITH.',
+    'The editor appends your response at the cursor. It does not replace existing text.',
+    'Return only those next characters. No markdown. No quotes. No explanation.',
     '',
-    `File: ${path || ''}`,
-    `Language: ${language || ''}`,
+    'Critical rule:',
+    'Your first character must be the character that comes immediately after the cursor.',
+    'Do not repeat any character that already appears in DOCUMENT_PREFIX_ENDS_WITH.',
+    'Do not answer with metadata such as file type, language, or section names.',
+    'Do not return the completed line, completed sentence, completed tag, or completed token.',
+    'If the prefix ends inside a word, tag, selector, identifier, or sentence, return only the missing suffix.',
+    'If the best completion is uncertain, return an empty response.',
     '',
-    'Focus (current line +/- 1):',
-    focus || '(no focus)',
+    'Generic examples:',
+    'DOCUMENT_PREFIX_ENDS_WITH: "Hello wor" -> response: "ld"',
+    'DOCUMENT_PREFIX_ENDS_WITH: "</ti" -> response: "tle>"',
+    'DOCUMENT_PREFIX_ENDS_WITH: "</tit" -> response: "le>"',
+    'DOCUMENT_PREFIX_ENDS_WITH: "linear-gra" -> response: "dient"',
+    'DOCUMENT_PREFIX_ENDS_WITH: "items.ma" -> response: "p"',
     '',
-    'Context:',
-    '[PREFIX]',
-    prefix,
-    '<<<CURSOR>>>',
-    suffix,
-    '[SUFFIX]'
+    'Wrong examples:',
+    'DOCUMENT_PREFIX_ENDS_WITH: "</ti" -> wrong response: "ti" because it repeats already typed text',
+    'DOCUMENT_PREFIX_ENDS_WITH: "</ti" -> wrong response: "</title>" because it repeats already typed text',
+    'DOCUMENT_PREFIX_ENDS_WITH: "<title>AxiFace Demo</ti" -> wrong response: "<title>AxiFace Demo</title>" because it repeats the line',
+    '',
+    `File path for context only: ${path || ''}`,
+    `Current token prefix already typed: ${tokenPrefix || '(none)'}`,
+    '',
+    'DOCUMENT_PREFIX_ENDS_WITH:',
+    prefixTail || '(empty)',
+    '',
+    'TEXT_AFTER_CURSOR_ON_SAME_LINE:',
+    currentParts?.after || '(empty)',
+    '',
+    'Next characters after DOCUMENT_PREFIX_ENDS_WITH:'
   ].join('\n');
 }
 
@@ -126,14 +224,14 @@ function normalizeArgs(input) {
 async function generateLlmAutocomplete({ path, content, cursorOffset, language }) {
   const maxOffset = content.length;
   const offset = Math.max(0, Math.min(maxOffset, Number.isFinite(cursorOffset) ? cursorOffset : maxOffset));
-  const prefix = content.slice(0, offset);
-  const suffix = content.slice(offset);
+  const effectiveLanguage = detectEmbeddedLanguage({ path, content, cursorOffset: offset, language });
+  const tokenPrefix = getTokenBeforeCursor(content, offset);
+  const lineContext = buildLineContext(content, offset);
   const prompt = buildPrompt({
     path,
-    language,
-    prefix: prefix.slice(-MAX_PREFIX_CHARS),
-    suffix: suffix.slice(0, MAX_SUFFIX_CHARS),
-    focus: buildFocusSnippet(content, offset)
+    language: effectiveLanguage,
+    tokenPrefix,
+    ...lineContext
   });
 
   const agent = getDefaultAgent();
@@ -141,8 +239,19 @@ async function generateLlmAutocomplete({ path, content, cursorOffset, language }
     throw new Error('No default LLM agent available.');
   }
 
-  const raw = await agent.executePrompt(prompt, { model: 'fast', responseShape: 'text' });
-  const completion = stripFences(raw);
+  const raw = await withTimeout(
+    agent.complete({
+      prompt,
+      model: 'fast',
+      context: { intent: 'code-autocomplete' }
+    }),
+    AUTOCOMPLETE_TIMEOUT_MS,
+    `LLM autocomplete timed out after ${Math.round(AUTOCOMPLETE_TIMEOUT_MS / 1000)}s.`
+  );
+  if (process.env.LLM_AUTOCOMPLETE_DEBUG === '1') {
+    console.error('[llm_autocomplete] raw response:', JSON.stringify(String(raw || '').slice(0, 500)));
+  }
+  const completion = normalizeCompletion(raw);
   if (!completion) {
     throw new Error('LLM returned an empty completion.');
   }
@@ -154,10 +263,9 @@ async function main() {
     const raw = await readStdinFallback();
     const payload = normalizeArgs(safeParseJson(raw) || {});
     const content = await generateLlmAutocomplete(payload);
-    writeJson({ ok: true, content });
+    writeJsonAndExit({ ok: true, content });
   } catch (error) {
-    writeJson({ ok: false, error: error?.message || String(error) });
-    process.exitCode = 1;
+    writeJsonAndExit({ ok: false, error: error?.message || String(error) });
   }
 }
 

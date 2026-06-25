@@ -99,6 +99,15 @@ export function createSchemas(z) {
     folderPath: z.string(),
     repoName: z.string()
   });
+  const GetAvatarSettingsAgentsArgsSchema = z.object({});
+  const UpdateAvatarSettingsAgentArgsSchema = z.object({
+    agentId: z.string(),
+    config: z.record(z.any())
+  });
+  const SetAvatarSettingsAgentVisibilityArgsSchema = z.object({
+    agentId: z.string(),
+    enabled: z.boolean()
+  });
 
   return {
     ReadTextFileArgsSchema,
@@ -131,6 +140,9 @@ export function createSchemas(z) {
     ReadSkillsManifestStateArgsSchema,
     AddSkillsManifestRepoArgsSchema,
     SetSkillsManifestSkillEnabledArgsSchema,
-    RemoveSkillsManifestRepoArgsSchema
+    RemoveSkillsManifestRepoArgsSchema,
+    GetAvatarSettingsAgentsArgsSchema,
+    UpdateAvatarSettingsAgentArgsSchema,
+    SetAvatarSettingsAgentVisibilityArgsSchema
   };
 }

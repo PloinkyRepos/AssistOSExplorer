@@ -11,6 +11,7 @@ export class ToolError extends Error {
 }
 
 const isNonEmptyString = (value) => typeof value === 'string' && value.trim().length > 0;
+const EMPTY_TEXT_SENTINEL = '__ASSISTOS_EXPLORER_EMPTY_TEXT__';
 const MISSING_SESSION_TEXT = 'Missing or invalid MCP session';
 let sessionPromptActive = false;
 let cachedWorkspaceRootAbs = '';
@@ -100,6 +101,9 @@ export function parseToolResult(payload) {
             const jsonBlock = blocks.find((block) => block?.type === 'json' && block.json !== undefined);
             if (jsonBlock) return jsonBlock.json;
             const textBlock = blocks.find((block) => block?.type === 'text' && typeof block.text === 'string');
+            if (textBlock?.text === EMPTY_TEXT_SENTINEL) {
+                return '';
+            }
             if (textBlock?.text) {
                 try {
                     return JSON.parse(textBlock.text);
@@ -132,14 +136,14 @@ export function parseToolResult(payload) {
 
 export function extractToolText(payload) {
     if (!payload) return '';
-    if (typeof payload === 'string') return payload;
+    if (typeof payload === 'string') return payload === EMPTY_TEXT_SENTINEL ? '' : payload;
     const blocks = Array.isArray(payload.content) ? payload.content : null;
     if (blocks) {
         const textBlock = blocks.find((block) => block?.type === 'text' && typeof block.text === 'string');
-        if (textBlock?.text) return textBlock.text;
+        if (textBlock?.text) return textBlock.text === EMPTY_TEXT_SENTINEL ? '' : textBlock.text;
     }
     if (typeof payload.text === 'string') {
-        return payload.text;
+        return payload.text === EMPTY_TEXT_SENTINEL ? '' : payload.text;
     }
     return '';
 }

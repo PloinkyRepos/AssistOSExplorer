@@ -44,21 +44,14 @@ function broadcastAvatarSettingsUpdate(detail = {}) {
     }
 }
 
-function getCurrentAgentName() {
-    try {
-        const parts = new URL(import.meta.url, window.location.href).pathname.split('/').filter(Boolean);
-        return parts[0] || 'explorer';
-    } catch (_) {
-        return 'explorer';
-    }
-}
+const AXIFACE_ASSET_BASE_URL = '/explorer/shared/vendor/axi-face';
 
 function getAxiFaceModuleUrl() {
-    return `/services/${encodeURIComponent(getCurrentAgentName())}/axi-face/src/axi-face.mjs`;
+    return `${AXIFACE_ASSET_BASE_URL}/src/axi-face.mjs`;
 }
 
 function getAxiFaceAssetBaseUrl() {
-    return `/services/${encodeURIComponent(getCurrentAgentName())}/axi-face`;
+    return AXIFACE_ASSET_BASE_URL;
 }
 
 function getAssistOSUser() {
@@ -243,13 +236,14 @@ export async function getCurrentProfileAvatar({ force = false } = {}) {
     currentUserCache.promise = Promise.resolve().then(() => {
         const user = getAssistOSUser();
         const stored = readLocalProfileAvatar();
+        const hasStoredAvatar = Boolean(stored && typeof stored === 'object' && stored.config);
         currentUserCache.value = normalizeProfileAvatarPayload({
             ok: true,
             user,
             enabled: stored?.enabled !== false,
             config: stored?.config,
             fallbackLetter: user.username || user.id,
-            source: { kind: 'localStorage' }
+            source: hasStoredAvatar ? { kind: 'localStorage' } : { kind: 'fallback' }
         });
         return currentUserCache.value;
     }).finally(() => {
