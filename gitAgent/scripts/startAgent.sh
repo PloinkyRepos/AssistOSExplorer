@@ -52,7 +52,6 @@ export_with_fallback() {
 }
 
 for name in \
-    SOUL_GATEWAY_API_KEY \
     LLMAgentClient_DEBUG \
     LLMAgentClient_VERBOSE_DELAY
 do

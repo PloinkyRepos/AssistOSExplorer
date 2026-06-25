@@ -510,7 +510,23 @@ export class FileExp {
             : Array.isArray(this.state.entries)
                 ? this.state.entries
                 : [];
-        return entries.find((entry) => this.normalizePath(entry?.path || '') === normalizedTarget) || null;
+        const topLevelEntry = entries.find((entry) => this.normalizePath(entry?.path || '') === normalizedTarget) || null;
+        if (topLevelEntry) {
+            return topLevelEntry;
+        }
+        const treeChildren = this.treeViewState?.childrenCache instanceof Map
+            ? this.treeViewState.childrenCache.values()
+            : [];
+        for (const children of treeChildren) {
+            if (!Array.isArray(children)) {
+                continue;
+            }
+            const childEntry = children.find((entry) => this.normalizePath(entry?.path || '') === normalizedTarget) || null;
+            if (childEntry) {
+                return childEntry;
+            }
+        }
+        return null;
     }
 
     getToolbarMenuItems() {

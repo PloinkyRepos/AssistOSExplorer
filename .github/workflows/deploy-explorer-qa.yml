@@ -83,6 +83,7 @@ jobs:
           SSH_KEY: ${{ secrets.EXPLORER_QA_SSH_KEY }}
           PLOINKY_MASTER_KEY: ${{ secrets.EXPLORER_QA_PLOINKY_MASTER_KEY }}
           SOUL_GATEWAY_PROVIDER_API_KEY: ${{ secrets.EXPLORER_QA_SOUL_GATEWAY_PROVIDER_API_KEY }}
+          ONLYOFFICE_PUBLIC_URL: ${{ vars.EXPLORER_QA_ONLYOFFICE_PUBLIC_URL }}
         run: |
           set -euo pipefail
           if [ -z "${SSH_KEY:-}" ]; then
@@ -101,6 +102,16 @@ jobs:
             echo "::error::Missing required repository secret EXPLORER_QA_SOUL_GATEWAY_PROVIDER_API_KEY"
             exit 1
           fi
+          if [ -z "${ONLYOFFICE_PUBLIC_URL:-}" ]; then
+            echo "::error::Missing required repository variable EXPLORER_QA_ONLYOFFICE_PUBLIC_URL"
+            exit 1
+          fi
+          case "${ONLYOFFICE_PUBLIC_URL}" in
+            https://localhost*|https://127.*|https://0.0.0.0*|http://*)
+              echo "::error::EXPLORER_QA_ONLYOFFICE_PUBLIC_URL must be a browser-reachable HTTPS URL, not ${ONLYOFFICE_PUBLIC_URL}"
+              exit 1
+              ;;
+          esac
           if [ -z "${SSH_HOST:-}" ] || [ -z "${SSH_USER:-}" ]; then
             echo "::error::EXPLORER_QA_SSH_USER and EXPLORER_QA_SSH_HOST must be configured"
             exit 1
@@ -296,6 +307,12 @@ jobs:
           WORK_DIR="$HOME/$WORKSPACE"
           mkdir -p "$WORK_DIR/logs"
           cd "$WORK_DIR"
+          # Pin the workspace root so every ploinky command uses THIS workspace's .ploinky.
+          # The new ploinky resolves the workspace by walking up from cwd for an existing
+          # .ploinky; after a destroy wipes this workspace's .ploinky, that search would
+          # otherwise escape to a stale ~/.ploinky (whose .secrets we can't decrypt). The
+          # PLOINKY_WORKSPACE_ROOT env var short-circuits that search (config.js resolveWorkspaceRoot).
+          export PLOINKY_WORKSPACE_ROOT="$WORK_DIR"
 
           set -a
           . /tmp/explorer_qa_env
@@ -405,13 +422,13 @@ jobs:
             exit 1
           fi
 
-          echo "[deploy] Ensuring Ploinky repos are installed and enabled..."
-          "$PLOINKY" add repo AchillesIDE https://github.com/PloinkyRepos/AssistOSExplorer.git "${EXPLORER_BRANCH:-main}" || true
-          "$PLOINKY" add repo webmeetInfra https://github.com/PloinkyRepos/webmeetInfra.git main || true
-          "$PLOINKY" add repo proxies https://github.com/PloinkyRepos/proxies.git "${PROXIES_BRANCH:-main}" || true
-          "$PLOINKY" enable repo AchillesIDE
-          "$PLOINKY" enable repo webmeetInfra
-          "$PLOINKY" enable repo proxies
+          echo "[deploy] Installing Ploinky repos..."
+          # Ploinky retired 'add repo <name> <url> <branch>' / 'enable repo <name>' in favor of
+          # 'install <url|repoName> [name] [--branch X]'. Repos are activated by install; the
+          # explorer manifest's "enable" list brings up the agent stack at start time.
+          "$PLOINKY" install https://github.com/PloinkyRepos/AssistOSExplorer.git AchillesIDE --branch "${EXPLORER_BRANCH:-main}" || true
+          "$PLOINKY" install https://github.com/PloinkyRepos/webmeetInfra.git webmeetInfra --branch main || true
+          "$PLOINKY" install https://github.com/PloinkyRepos/proxies.git proxies --branch "${PROXIES_BRANCH:-main}" || true
 
           echo "[deploy-qa] Updating Ploinky, Achilles dependencies, and installed repos..."
           if ! env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" update; then
@@ -705,21 +722,23 @@ jobs:
             sleep 5
           done
 
-          if [ -n "${ONLYOFFICE_PUBLIC_URL:-}" ]; then
-            echo "[deploy-qa] Verifying OnlyOffice public api.js from GitHub runner..."
-            for i in $(seq 1 60); do
-              code="$(curl -L -s -o /tmp/onlyoffice-qa-api.js -w '%{http_code}' "${ONLYOFFICE_PUBLIC_URL%/}/web-apps/apps/api/documents/api.js" || true)"
-              if [ "$code" = "200" ]; then
-                echo "[deploy-qa] OnlyOffice public api.js responding with HTTP $code"
-                break
-              fi
-              if [ "$i" = "60" ]; then
-                echo "[deploy-qa] ERROR: OnlyOffice public api.js did not become reachable"
-                exit 1
-              fi
-              sleep 5
-            done
+          if [ -z "${ONLYOFFICE_PUBLIC_URL:-}" ]; then
+            echo "[deploy-qa] ERROR: ONLYOFFICE_PUBLIC_URL is required for browser editors."
+            exit 1
           fi
+          echo "[deploy-qa] Verifying OnlyOffice public api.js from GitHub runner..."
+          for i in $(seq 1 60); do
+            code="$(curl -L -s -o /tmp/onlyoffice-qa-api.js -w '%{http_code}' "${ONLYOFFICE_PUBLIC_URL%/}/web-apps/apps/api/documents/api.js" || true)"
+            if [ "$code" = "200" ]; then
+              echo "[deploy-qa] OnlyOffice public api.js responding with HTTP $code"
+              break
+            fi
+            if [ "$i" = "60" ]; then
+              echo "[deploy-qa] ERROR: OnlyOffice public api.js did not become reachable"
+              exit 1
+            fi
+            sleep 5
+          done
 
       - name: Create summary
         if: always()

@@ -1,0 +1,259 @@
+name: Destroy Explorer QA (Remote Wipe)
+
+on:
+  workflow_dispatch:
+    inputs:
+      workspace_name:
+        description: 'QA workspace directory name to wipe on the Soul Gateway host'
+        required: false
+        default: 'explorerQaWorkspace'
+        type: string
+      router_port:
+        description: 'QA router port this workspace owns (gates the conditional ploinky shutdown)'
+        required: false
+        default: '8097'
+        type: string
+      remove_workspace_dir:
+        description: 'Also remove the entire workspace directory (rm -rf ~/workspace_name)'
+        required: false
+        default: true
+        type: boolean
+
+# Share the deploy concurrency group so a destroy and a deploy can never run
+# against the QA workspace at the same time.
+concurrency:
+  group: deploy-explorer-qa
+  cancel-in-progress: false
+
+env:
+  SSH_USER: ${{ vars.EXPLORER_QA_SSH_USER || 'admin' }}
+  SSH_HOST: ${{ vars.EXPLORER_QA_SSH_HOST || '45.136.70.141' }}
+  WORKSPACE: ${{ inputs.workspace_name || vars.EXPLORER_QA_WORKSPACE || 'explorerQaWorkspace' }}
+  ROUTER_PORT: ${{ inputs.router_port || vars.EXPLORER_QA_ROUTER_PORT || '8097' }}
+  # Production services co-located on this host. Used only by the safety guards below.
+  SOUL_GATEWAY_WORKSPACE: 'soulGateway'
+  SOUL_GATEWAY_ROUTER_PORT: '8080'
+
+jobs:
+  destroy:
+    name: Destroy Explorer QA on Remote Host
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Validate GitHub configuration
+        env:
+          SSH_KEY: ${{ secrets.EXPLORER_QA_SSH_KEY }}
+          PLOINKY_MASTER_KEY: ${{ secrets.EXPLORER_QA_PLOINKY_MASTER_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SSH_KEY:-}" ]; then
+            echo "::error::Missing required repository secret EXPLORER_QA_SSH_KEY"
+            exit 1
+          fi
+          if [ -z "${PLOINKY_MASTER_KEY:-}" ]; then
+            echo "::error::Missing required repository secret EXPLORER_QA_PLOINKY_MASTER_KEY"
+            exit 1
+          fi
+          if ! printf '%s' "$PLOINKY_MASTER_KEY" | grep -Eq '^[A-Fa-f0-9]{64}$'; then
+            echo "::error::EXPLORER_QA_PLOINKY_MASTER_KEY must be exactly 64 hex characters"
+            exit 1
+          fi
+          if [ -z "${SSH_HOST:-}" ] || [ -z "${SSH_USER:-}" ]; then
+            echo "::error::EXPLORER_QA_SSH_USER and EXPLORER_QA_SSH_HOST must be configured"
+            exit 1
+          fi
+          case "${WORKSPACE:-}" in
+            ''|.|..|*[!A-Za-z0-9._-]*)
+              echo "::error::Invalid workspace name '${WORKSPACE:-}' (allowed: A-Za-z0-9._-)"
+              exit 1
+              ;;
+          esac
+          if [ "${WORKSPACE:-}" = "${SOUL_GATEWAY_WORKSPACE}" ]; then
+            echo "::error::Refusing to destroy the production Soul Gateway workspace"
+            exit 1
+          fi
+          if [ "${ROUTER_PORT:-}" = "${SOUL_GATEWAY_ROUTER_PORT}" ]; then
+            echo "::error::Refusing to target the production Soul Gateway router port ${ROUTER_PORT}"
+            exit 1
+          fi
+          case "${ROUTER_PORT:-}" in
+            8042|8043|8085|8317|8318)
+              echo "::error::Refusing to target a known production proxies-host port ${ROUTER_PORT}"
+              exit 1
+              ;;
+          esac
+
+      - name: Prepare SSH key
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.EXPLORER_QA_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ env.SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Destroy Explorer QA workspace
+        env:
+          PLOINKY_MASTER_KEY: ${{ secrets.EXPLORER_QA_PLOINKY_MASTER_KEY }}
+          REMOVE_DIR: ${{ inputs.remove_workspace_dir }}
+        run: |
+          set -euo pipefail
+
+          # Keep the master key off the command line (and out of the runner process
+          # list): ship it in a 0600 env file, source it remotely, delete it.
+          umask 077
+          printf 'PLOINKY_MASTER_KEY=%q\n' "$PLOINKY_MASTER_KEY" > /tmp/explorer_qa_destroy_env
+          chmod 600 /tmp/explorer_qa_destroy_env
+          scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no /tmp/explorer_qa_destroy_env "${SSH_USER}@${SSH_HOST}:/tmp/explorer_qa_destroy_env"
+          rm -f /tmp/explorer_qa_destroy_env
+
+          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
+            -i ~/.ssh/deploy_key "${SSH_USER}@${SSH_HOST}" \
+            "WORKSPACE='$WORKSPACE' ROUTER_PORT='$ROUTER_PORT' REMOVE_DIR='$REMOVE_DIR' SOUL_GATEWAY_WORKSPACE='$SOUL_GATEWAY_WORKSPACE' SOUL_GATEWAY_ROUTER_PORT='$SOUL_GATEWAY_ROUTER_PORT' bash -s" << 'REMOTE'
+          set -euo pipefail
+          # Always remove the plaintext env file, even on early exit.
+          trap 'rm -f /tmp/explorer_qa_destroy_env' EXIT
+          export PATH="$HOME/ploinky/bin:$HOME/.local/bin:$PATH"
+
+          PLOINKY_MASTER_KEY=""
+          if [ -f /tmp/explorer_qa_destroy_env ]; then
+            set -a
+            . /tmp/explorer_qa_destroy_env
+            set +a
+            rm -f /tmp/explorer_qa_destroy_env
+          fi
+
+          # --- Safety: never act on the co-located production Soul Gateway. ---
+          case "${WORKSPACE:-}" in
+            ''|.|..|*[!A-Za-z0-9._-]*)
+              echo "[destroy-qa] ERROR: invalid workspace name '${WORKSPACE:-}'."
+              exit 1
+              ;;
+          esac
+          if [ "$WORKSPACE" = "${SOUL_GATEWAY_WORKSPACE:-soulGateway}" ]; then
+            echo "[destroy-qa] ERROR: refusing to operate on the production Soul Gateway workspace."
+            exit 1
+          fi
+          if [ "$ROUTER_PORT" = "${SOUL_GATEWAY_ROUTER_PORT:-8080}" ]; then
+            echo "[destroy-qa] ERROR: refusing to target the production Soul Gateway router port."
+            exit 1
+          fi
+
+          WORK_DIR="$HOME/$WORKSPACE"
+          echo "[destroy-qa] Workspace: $WORK_DIR (router port $ROUTER_PORT)"
+
+          # --- Pre-flight: record whether production Soul Gateway is healthy now. ---
+          SOUL_HEALTH_URL="http://127.0.0.1:${SOUL_GATEWAY_ROUTER_PORT:-8080}/public-services/soul-gateway-health/"
+          SOUL_UP_BEFORE=0
+          if curl -sf "$SOUL_HEALTH_URL" >/dev/null 2>&1; then
+            SOUL_UP_BEFORE=1
+            echo "[destroy-qa] Pre-flight: production Soul Gateway is UP on :${SOUL_GATEWAY_ROUTER_PORT:-8080}."
+          else
+            echo "[destroy-qa] Pre-flight: production Soul Gateway not reachable before destroy (will not be made worse)."
+          fi
+
+          resolve_ploinky() {
+            if [ -x "$HOME/ploinky/bin/ploinky" ]; then printf '%s\n' "$HOME/ploinky/bin/ploinky"; return 0; fi
+            if [ -x "$HOME/.local/bin/ploinky" ]; then printf '%s\n' "$HOME/.local/bin/ploinky"; return 0; fi
+            if command -v ploinky >/dev/null 2>&1; then command -v ploinky; return 0; fi
+            return 1
+          }
+          PLOINKY="$(resolve_ploinky)" || PLOINKY=""
+
+          # --- Conditional shutdown: ONLY when this QA workspace provably owns ROUTER_PORT. ---
+          # 'ploinky shutdown' targets the port in the cwd workspace's routing.json and
+          # DEFAULTS TO :8080 when that file is absent — a blind shutdown could kill the
+          # production Soul Gateway router. Gate strictly on routing.json port == ROUTER_PORT.
+          read_routing_port() {
+            node -e 'try{const p=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).port;process.stdout.write(p?String(p):"")}catch(e){process.stdout.write("")}' "$1" 2>/dev/null || true
+          }
+          SAFE_TO_SHUTDOWN=0
+          if [ -f "$WORK_DIR/.ploinky/routing.json" ]; then
+            QA_ROUTING_PORT="$(read_routing_port "$WORK_DIR/.ploinky/routing.json")"
+            if [ "$QA_ROUTING_PORT" = "$ROUTER_PORT" ]; then
+              SAFE_TO_SHUTDOWN=1
+            elif [ -n "$QA_ROUTING_PORT" ]; then
+              echo "[destroy-qa] ERROR: existing QA routing.json port ($QA_ROUTING_PORT) != ROUTER_PORT ($ROUTER_PORT)."
+              echo "[destroy-qa] 'ploinky shutdown' would target a port this run does not own. Aborting."
+              exit 1
+            fi
+          fi
+          if [ -n "$PLOINKY" ] && [ -d "$WORK_DIR" ] && [ "$SAFE_TO_SHUTDOWN" = "1" ]; then
+            echo "[destroy-qa] QA workspace owns :$ROUTER_PORT; shutting it down..."
+            ( cd "$WORK_DIR" && env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" shutdown ) 2>/dev/null || \
+              ( cd "$WORK_DIR" && env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" stop ) 2>/dev/null || true
+          else
+            echo "[destroy-qa] SKIPPING 'ploinky shutdown' (QA workspace does not provably own :$ROUTER_PORT; a blind shutdown could hit :${SOUL_GATEWAY_ROUTER_PORT:-8080})."
+          fi
+
+          # --- Remove ONLY containers scoped to this QA workspace ('_${WORKSPACE}_'). ---
+          echo "[destroy-qa] Removing containers for workspace $WORKSPACE..."
+          REMAINING=$(podman ps -a --format '{{.Names}}' | grep "_${WORKSPACE}_" || true)
+          if [ -n "$REMAINING" ]; then
+            printf '%s\n' "$REMAINING" | while IFS= read -r C; do
+              [ -z "$C" ] && continue
+              echo "[destroy-qa]   removing $C"
+              podman stop "$C" 2>/dev/null || true
+              podman rm -f "$C" 2>/dev/null || true
+            done
+          fi
+          ONLYOFFICE_CONTAINER="ploinky_onlyoffice_${WORKSPACE}"
+          if podman container exists "$ONLYOFFICE_CONTAINER" 2>/dev/null; then
+            echo "[destroy-qa]   removing $ONLYOFFICE_CONTAINER"
+            podman stop "$ONLYOFFICE_CONTAINER" 2>/dev/null || true
+            podman rm -f "$ONLYOFFICE_CONTAINER" 2>/dev/null || true
+          fi
+
+          # --- Remove workspace contents / directory. ---
+          if [ -d "$WORK_DIR" ] && [ "$WORK_DIR" != "$HOME" ]; then
+            echo "[destroy-qa] Removing workspace contents..."
+            podman unshare rm -rf \
+              "$WORK_DIR/.ploinky" "$WORK_DIR/agents" "$WORK_DIR/code" \
+              "$WORK_DIR/skills" "$WORK_DIR/shared" "$WORK_DIR/logs" "$WORK_DIR/gitTest" 2>/dev/null || true
+            rm -rf \
+              "$WORK_DIR/.ploinky" "$WORK_DIR/agents" "$WORK_DIR/code" \
+              "$WORK_DIR/skills" "$WORK_DIR/shared" "$WORK_DIR/logs" "$WORK_DIR/gitTest" 2>/dev/null || true
+          fi
+          if [ "$REMOVE_DIR" = "true" ] && [ -d "$WORK_DIR" ] && [ "$WORK_DIR" != "$HOME" ]; then
+            echo "[destroy-qa] Removing workspace directory $WORK_DIR..."
+            podman unshare rm -rf "$WORK_DIR" 2>/dev/null || true
+            rm -rf "$WORK_DIR" 2>/dev/null || true
+          fi
+
+          echo "[destroy-qa] Remaining containers for $WORKSPACE:"
+          podman ps -a --format '{{.Names}}' | grep "_${WORKSPACE}_" || echo "[destroy-qa] none"
+
+          # --- Post-flight: production Soul Gateway must be no worse than before. ---
+          if [ "$SOUL_UP_BEFORE" = "1" ]; then
+            echo "[destroy-qa] Post-flight: re-verifying production Soul Gateway on :${SOUL_GATEWAY_ROUTER_PORT:-8080}..."
+            SOUL_OK=0
+            for i in $(seq 1 30); do
+              if curl -sf "$SOUL_HEALTH_URL" >/dev/null 2>&1; then SOUL_OK=1; break; fi
+              sleep 2
+            done
+            if [ "$SOUL_OK" != "1" ]; then
+              echo "[destroy-qa] ERROR: production Soul Gateway was UP before this destroy but is now unreachable on :${SOUL_GATEWAY_ROUTER_PORT:-8080}."
+              echo "[destroy-qa] The QA destroy may have disrupted production. Investigate immediately."
+              exit 1
+            fi
+            echo "[destroy-qa] Post-flight: production Soul Gateway still healthy."
+          fi
+          echo "[destroy-qa] Done."
+          REMOTE
+
+      - name: Create summary
+        if: always()
+        run: |
+          {
+            echo "## Explorer QA Destroy"
+            echo ""
+            echo "- Host: \`${SSH_USER}@${SSH_HOST}\`"
+            echo "- Workspace: \`${WORKSPACE}\`"
+            echo "- Router port: \`${ROUTER_PORT}\`"
+            echo "- Remove workspace dir: \`${{ inputs.remove_workspace_dir }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key /tmp/explorer_qa_destroy_env
