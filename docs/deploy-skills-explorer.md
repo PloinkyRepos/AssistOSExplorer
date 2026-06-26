@@ -7,8 +7,8 @@ This document describes the GitHub Actions deployment for the Explorer agent on 
 Create or update these repository secrets in `AssistOS-AI/AssistOSExplorer`.
 
 ```sh
-gh secret set SSH_KEY --repo PloinkyRepos/AssistOSExplorer < ~/.ssh/skills-explorer-deploy
-gh secret set PLOINKY_MASTER_KEY --repo PloinkyRepos/AssistOSExplorer --body "$(openssl rand -hex 32)"
+gh secret set SSH_KEY --repo AssistOS-AI/AssistOSExplorer < ~/.ssh/skills-explorer-deploy
+gh secret set PLOINKY_MASTER_KEY --repo AssistOS-AI/AssistOSExplorer --body "$(openssl rand -hex 32)"
 ```
 
 `PLOINKY_MASTER_KEY` must be exactly 64 hex characters. Keep it stable after the first deployment because it encrypts the Ploinky workspace secret stores and local-auth password store.
