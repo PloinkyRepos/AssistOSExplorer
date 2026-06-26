@@ -37,7 +37,7 @@ Ploinky Explorer workspace + 17 coupled agents. Origin: `https://github.com/Ploi
 - Tool/internal logs are NOT visitor-facing. Final answers are clean conversational text unless an endpoint expects JSON.
 - All agents are built on `achillesAgentLib` at `/Users/danielsava/work/file-parser/ploinky/node_modules/achillesAgentLib`. See its `CLAUDE.md` for the subsystem map.
 - Request-time LLM access must go through Achilles runtime helpers, not ad-hoc vendor HTTP, unless a local spec defines an exception.
-- Soul Gateway runs as a sibling Ploinky agent providing LLM routing for Explorer and workspace agents. Gateway consumers receive a generated `PLOINKY_AGENT_API_KEY` signed-subject credential and resolve the gateway URL through the Ploinky router. If Explorer deployment needs `soul.axiologic.dev`, configure it as the local gateway's normal `soul_gateway` provider with `SOUL_GATEWAY_PROVIDER_API_KEY`; do not replace the generated signed-subject credential with a production provider API key. See `proxies/soul-gateway/docs/specs/DS016-ploinky-agent-mode.md` for the unified contract.
+- Soul Gateway runs as a sibling Ploinky agent providing LLM routing for Explorer and workspace agents. Gateway consumers receive a generated `PLOINKY_AGENT_API_KEY` signed-subject credential and resolve the gateway URL through the Ploinky router. The local Soul Gateway is the LLM hub; it does not delegate to a remote gateway. See `proxies/soul-gateway/docs/specs/DS016-ploinky-agent-mode.md` for the unified contract.
 
 ## Skills contract
 
