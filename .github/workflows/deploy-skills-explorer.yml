@@ -340,9 +340,9 @@ jobs:
           fi
 
           echo "[deploy] Ensuring Ploinky repos are installed and enabled..."
-          "$PLOINKY" add repo AchillesIDE https://github.com/PloinkyRepos/AssistOSExplorer.git "${EXPLORER_BRANCH:-main}" || true
-          "$PLOINKY" add repo webmeetInfra https://github.com/PloinkyRepos/webmeetInfra.git main || true
-          "$PLOINKY" add repo proxies https://github.com/PloinkyRepos/proxies.git "${PROXIES_BRANCH:-main}" || true
+          "$PLOINKY" add repo AchillesIDE https://github.com/AssistOS-AI/AssistOSExplorer.git "${EXPLORER_BRANCH:-main}" || true
+          "$PLOINKY" add repo webmeetInfra https://github.com/AssistOS-AI/webmeetInfra.git main || true
+          "$PLOINKY" add repo proxies https://github.com/AssistOS-AI/proxies.git "${PROXIES_BRANCH:-main}" || true
           "$PLOINKY" enable repo AchillesIDE
           "$PLOINKY" enable repo webmeetInfra
           "$PLOINKY" enable repo proxies

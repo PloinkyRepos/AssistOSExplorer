@@ -1,6 +1,6 @@
 # AchillesIDE / Ploinky Explorer
 
-Ploinky Explorer workspace + 17 coupled agents. Origin: `https://github.com/PloinkyRepos/AssistOSExplorer.git`.
+Ploinky Explorer workspace + 17 coupled agents. Origin: `https://github.com/AssistOS-AI/AssistOSExplorer.git`.
 
 ## Mandatory reading order
 
