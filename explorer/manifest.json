@@ -43,11 +43,11 @@
         },
         "proxies/soul-gateway",
         "webAssist",
-        "AnalyticsAgent/analyticsAgent no-wait"
+        "UmamiAgent/umamiAgent no-wait"
     ],
     "repos": {
         "webmeetInfra": "https://github.com/AssistOS-AI/webmeetInfra.git",
-        "AnalyticsAgent": "https://github.com/AssistOS-AI/AnalyticsAgent.git"
+        "UmamiAgent": "https://github.com/AssistOS-AI/UmamiAgent.git"
     },
     "applicationPlugins": {
         "git": true,
