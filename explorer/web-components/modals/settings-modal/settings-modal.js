@@ -17,11 +17,12 @@ import {
     resolveSettingsComponentBase
 } from "./settings-component-loader.js";
 import { avatarController, defaultAvatarConfig } from "./settings-avatar-controller.js";
+import { authPreferenceController } from "./settings-auth-controller.js";
 import { copilotController } from "./settings-copilot-controller.js";
 import { runtimeSettingsController } from "./settings-runtime-controller.js";
 import { usersController } from "./settings-users-controller.js";
 
-const BASE_TABS = ['agents', 'plugins', 'copilot', 'keymap', 'editor', 'theme', 'avatar'];
+const BASE_TABS = ['users', 'agents', 'plugins', 'copilot', 'keymap', 'editor', 'theme', 'avatar'];
 
 export {
     buildAgentSettingsItems,
@@ -35,7 +36,7 @@ export class SettingsModal {
         this.element = element;
         this.invalidate = invalidate;
         this.props = props || {};
-        const initialTab = [...BASE_TABS, 'users'].includes(this.props.tab) ? this.props.tab : 'agents';
+        const initialTab = BASE_TABS.includes(this.props.tab) ? this.props.tab : 'users';
         this.state = {
             activeTab: initialTab,
             selectedTheme: this.props.theme === "dark" ? "dark" : getCurrentTheme(),
@@ -79,9 +80,24 @@ export class SettingsModal {
             selectedAgentAvatar: defaultAvatarConfig('agent', '72'),
             selectedAgentAvatarEnabled: true,
             canManageAgentAvatars: false,
-            usersAccessChecked: false,
-            usersAccess: false,
-            usersUrl: ""
+            authProfileLoaded: false,
+            authPreferenceBusy: false,
+            authUser: null,
+            authMethods: [],
+            allowedAuthMethods: [],
+            authEnrollments: {},
+            preferredAuthStatus: "",
+            preferredAuthStatusType: "",
+            adminAccessChecked: false,
+            adminAccess: false,
+            activeUsersTab: 'auth',
+            activeUserAdministrationPanel: 'users',
+            usersAdministrationMenuOpen: false,
+            userAdministrationLoaded: false,
+            userAdministrationBusy: false,
+            userAdministrationStatus: "",
+            userAdministrationStatusType: "",
+            userAdministrationSettingsItem: null
         };
         this.invalidate();
     }
@@ -94,6 +110,7 @@ export class SettingsModal {
         this.renderRows();
         this.renderPluginSettings();
         this.renderAgentSettings();
+        this.renderPreferredAuthMethods();
         this.updateThemeSelection();
         this.bindEvents();
         this.refreshUsersAccess();
@@ -109,9 +126,16 @@ export class SettingsModal {
         if (this.state.activeTab === "avatar" && !this.state.avatarDataLoaded) {
             await this.loadAvatarSettingsData();
         }
+        if (this.state.activeTab === "users" && this.state.activeUsersTab === "auth" && !this.state.authProfileLoaded) {
+            await this.loadPreferredAuthProfile();
+        }
     }
 
     cacheElements() {
+        this.preferredAuthSelectEl = this.element.querySelector('#preferredAuthMethod');
+        this.preferredAuthStatusEl = this.element.querySelector('#preferredAuthStatus');
+        this.savePreferredAuthButton = this.element.querySelector('#savePreferredAuthMethodButton');
+        this.authEnrollmentListEl = this.element.querySelector('#authEnrollmentList');
         this.keymapSection = this.element.querySelector('[data-section="keymap"]');
         this.editorSection = this.element.querySelector('[data-section="editor"]');
         this.themeSection = this.element.querySelector('[data-section="theme"]');
@@ -120,8 +144,14 @@ export class SettingsModal {
         this.copilotSection = this.element.querySelector('[data-section="copilot"]');
         this.avatarSection = this.element.querySelector('[data-section="avatar"]');
         this.usersSection = this.element.querySelector('[data-section="users"]');
-        this.usersTab = this.element.querySelector('[data-admin-tab]');
-        this.usersFrame = this.element.querySelector('#usersSettingsFrame');
+        this.usersAdministrationMenuButton = this.element.querySelector('#usersAdministrationMenuButton');
+        this.usersAdministrationMenu = this.element.querySelector('#usersAdministrationMenu');
+        this.usersAdministrationMenuItems = Array.from(this.element.querySelectorAll('[data-users-admin-panel]'));
+        this.usersSubtabEls = Array.from(this.element.querySelectorAll('[data-users-tab]'));
+        this.usersPanelEls = Array.from(this.element.querySelectorAll('[data-users-panel]'));
+        this.userAdministrationSubtab = this.element.querySelector('[data-admin-users-tab]');
+        this.userAdministrationMount = this.element.querySelector('#userAdministrationMount');
+        this.userAdministrationStatusEl = this.element.querySelector('#userAdministrationStatus');
         this.listEl = this.element.querySelector("#keymapList");
         this.warningEl = this.element.querySelector("#keymapWarning");
         this.pluginSettingsListEl = this.element.querySelector("#pluginSettingsList");
@@ -190,6 +220,15 @@ export class SettingsModal {
             });
             this.profileAvatarEnabledInput.dataset.bound = 'true';
         }
+        if (!this.element.dataset.boundUsersAdministrationMenuClose) {
+            document.addEventListener('click', (event) => {
+                if (!this.state.usersAdministrationMenuOpen) return;
+                if (event.target?.closest?.('.settings-users-menu-subtab')) return;
+                this.state.usersAdministrationMenuOpen = false;
+                this.renderUsersSubtabs();
+            });
+            this.element.dataset.boundUsersAdministrationMenuClose = 'true';
+        }
     }
 
     switchAvatarTab(_target, tab) {
@@ -200,7 +239,7 @@ export class SettingsModal {
 
     switchTab(_target, tab) {
         const allowedTabs = this.getAllowedTabs();
-        this.state.activeTab = allowedTabs.includes(tab) ? tab : 'agents';
+        this.state.activeTab = allowedTabs.includes(tab) ? tab : 'users';
         this.updateTabUI();
         if (this.state.activeTab === "plugins" && !this.state.pluginDataLoaded) {
             this.loadPluginSettingsData().catch((error) => {
@@ -231,18 +270,96 @@ export class SettingsModal {
                 this.renderAvatarSettings();
             });
         }
-        if (this.state.activeTab === "users") {
-            this.syncUsersFrame();
+        if (this.state.activeTab === "users" && this.state.activeUsersTab === "auth" && !this.state.authProfileLoaded) {
+            this.loadPreferredAuthProfile();
+        }
+        if (this.state.activeTab === "users" && this.state.activeUsersTab === "administration") {
+            this.loadUserAdministration();
         }
     }
 
     getAllowedTabs() {
-        return this.state.usersAccess ? [...BASE_TABS, 'users'] : BASE_TABS;
+        return BASE_TABS;
+    }
+
+    switchUsersTab(_target, tab) {
+        const nextTab = tab === 'administration' && this.state.adminAccess ? 'administration' : 'auth';
+        this.state.usersAdministrationMenuOpen = false;
+        this.state.activeUsersTab = nextTab;
+        this.renderUsersSubtabs();
+        if (this.state.activeTab === "users" && nextTab === "auth" && !this.state.authProfileLoaded) {
+            this.loadPreferredAuthProfile();
+        }
+        if (this.state.activeTab === "users" && nextTab === "administration") {
+            this.loadUserAdministration();
+        }
+    }
+
+    toggleUsersAdministrationMenu() {
+        if (!this.state.adminAccess) return;
+        this.state.activeUsersTab = 'administration';
+        this.state.usersAdministrationMenuOpen = !this.state.usersAdministrationMenuOpen;
+        this.renderUsersSubtabs();
+        if (this.state.activeTab === "users") {
+            this.loadUserAdministration();
+            this.applyUserAdministrationPanel();
+        }
+    }
+
+    switchUserAdministrationPanel(_target, panel) {
+        const nextPanel = ['users', 'auth', 'provider'].includes(panel) ? panel : 'users';
+        this.state.activeUsersTab = this.state.adminAccess ? 'administration' : 'auth';
+        this.state.activeUserAdministrationPanel = nextPanel;
+        this.state.usersAdministrationMenuOpen = false;
+        this.renderUsersSubtabs();
+        if (this.state.activeTab === "users" && this.state.activeUsersTab === "administration") {
+            this.loadUserAdministration();
+            this.applyUserAdministrationPanel();
+        }
+    }
+
+    applyUserAdministrationPanel() {
+        const component = this.userAdministrationMount?.querySelector('userpersisto-settings');
+        if (!component) return;
+        component.setAttribute('data-active-panel', this.state.activeUserAdministrationPanel);
+        component.dispatchEvent(new CustomEvent('userpersisto-panel-change', {
+            detail: { panel: this.state.activeUserAdministrationPanel }
+        }));
+    }
+
+    renderUsersSubtabs() {
+        if (!this.state.adminAccess && this.state.activeUsersTab === 'administration') {
+            this.state.activeUsersTab = 'auth';
+            this.state.usersAdministrationMenuOpen = false;
+        }
+        this.usersSubtabEls?.forEach((tab) => {
+            const isActive = tab.dataset.usersTab === this.state.activeUsersTab;
+            tab.classList.toggle('active', isActive);
+            tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        });
+        if (this.usersAdministrationMenuButton) {
+            const isActive = this.state.activeUsersTab === 'administration';
+            this.usersAdministrationMenuButton.classList.toggle('active', isActive);
+            this.usersAdministrationMenuButton.setAttribute('aria-selected', isActive ? 'true' : 'false');
+            this.usersAdministrationMenuButton.setAttribute('aria-expanded', this.state.usersAdministrationMenuOpen ? 'true' : 'false');
+        }
+        if (this.usersAdministrationMenu) {
+            this.usersAdministrationMenu.hidden = !this.state.usersAdministrationMenuOpen;
+        }
+        this.usersAdministrationMenuItems?.forEach((item) => {
+            item.classList.toggle('active', item.dataset.usersAdminPanel === this.state.activeUserAdministrationPanel);
+        });
+        this.usersPanelEls?.forEach((panel) => {
+            panel.hidden = panel.dataset.usersPanel !== this.state.activeUsersTab;
+        });
+        if (this.userAdministrationSubtab) {
+            this.userAdministrationSubtab.hidden = !this.state.adminAccess;
+        }
     }
 
     updateTabUI() {
         if (!this.getAllowedTabs().includes(this.state.activeTab)) {
-            this.state.activeTab = 'agents';
+            this.state.activeTab = 'users';
         }
         this.element.dataset.activeTab = this.state.activeTab;
         const tabs = this.element.querySelectorAll(".settings-tab");
@@ -251,9 +368,7 @@ export class SettingsModal {
             tab.classList.toggle("active", isActive);
             tab.setAttribute("aria-selected", isActive ? "true" : "false");
         });
-        if (this.usersTab) {
-            this.usersTab.hidden = !this.state.usersAccess;
-        }
+        this.renderUsersSubtabs();
 
         const sections = [
             { key: 'keymap', element: this.keymapSection },
@@ -279,7 +394,9 @@ export class SettingsModal {
                 || this.state.activeTab === "agents";
         }
         this.syncEditorSettingsUi();
-        this.syncUsersFrame();
+        if (this.state.activeTab === "users" && this.state.activeUsersTab === "administration") {
+            this.loadUserAdministration();
+        }
     }
 
     renderRows() {
@@ -448,5 +565,6 @@ Object.assign(
     runtimeSettingsController,
     copilotController,
     avatarController,
+    authPreferenceController,
     usersController
 );

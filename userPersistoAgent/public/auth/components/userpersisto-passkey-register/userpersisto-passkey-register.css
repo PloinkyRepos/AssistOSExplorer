@@ -1,0 +1,30 @@
+.userpersisto-passkey-card {
+  display: grid;
+  gap: 14px;
+  width: 100%;
+  padding: 28px;
+  border: 1px solid var(--border-color, #d4dbe7);
+  border-radius: 8px;
+  background: var(--surface-color, #fff);
+}
+
+.userpersisto-passkey-card h1 {
+  margin: 0;
+  font-size: 1.35rem;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+.userpersisto-passkey-card p {
+  margin: 0;
+  color: var(--muted-text-color, #526071);
+  line-height: 1.45;
+}
+
+.userpersisto-passkey-error {
+  padding: 10px;
+  border: 1px solid var(--danger-border-color, #f0b7b7);
+  border-radius: 7px;
+  background: var(--danger-background-color, #fff5f5);
+  color: var(--danger-text-color, #9b1c1c);
+}

@@ -1,0 +1,45 @@
+{
+  "container": "docker.io/assistos/ploinky-node:24-bookworm-tools",
+  "lite-sandbox": true,
+  "agent": "sh /code/scripts/start.sh",
+  "profiles": {
+    "default": {
+      "env": {
+        "EMAIL_AGENT_SETTINGS_SECRET": {
+          "required": false
+        },
+        "MAILJET_API_KEY": {
+          "required": false
+        },
+        "MAILJET_API_SECRET": {
+          "required": false
+        },
+        "MAILJET_SECRET_KEY": {
+          "required": false
+        },
+        "MAILJET_FROM_EMAIL": {
+          "required": false
+        },
+        "MAILJET_FROM_NAME": {
+          "required": false
+        },
+        "EMAIL_AUTH_CODE_TEMPLATE_ID": {
+          "required": false
+        }
+      }
+    }
+  },
+  "volumes": {
+    ".ploinky/agents/emailAgent": "/emailagent-data"
+  },
+  "ideSettings": [
+    {
+      "key": "email-agent",
+      "label": "EmailAgent",
+      "scope": "workspace",
+      "pluginKey": "emailAgent/email-agent-settings",
+      "settingsComponent": "email-agent-settings",
+      "adminOnly": true
+    }
+  ]
+}

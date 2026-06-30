@@ -1,0 +1,370 @@
+{
+  "tools": [
+    {
+      "name": "userpersisto_get_current_user",
+      "title": "UserPersisto Current User",
+      "description": "Return the current authenticated user context known to UserPersisto.",
+      "command": "tools/userpersisto_tool.sh",
+      "cwd": "workspace",
+      "tags": ["admin"],
+      "inputSchema": {},
+      "env": { "TOOL_NAME": "userpersisto_get_current_user" }
+    },
+    {
+      "name": "userpersisto_create_user",
+      "title": "UserPersisto Create User",
+      "description": "Create a UserPersisto user.",
+      "command": "tools/userpersisto_tool.sh",
+      "cwd": "workspace",
+      "tags": ["admin"],
+      "inputSchema": {
+        "email": { "type": "string", "optional": false },
+        "username": { "type": "string", "optional": true },
+        "password": { "type": "string", "optional": true },
+        "displayName": { "type": "string", "optional": true },
+        "role": { "type": "string", "optional": true },
+        "status": { "type": "string", "optional": true }
+      },
+      "env": { "TOOL_NAME": "userpersisto_create_user" }
+    },
+    {
+      "name": "userpersisto_update_user",
+      "title": "UserPersisto Update User",
+      "description": "Update a UserPersisto user.",
+      "command": "tools/userpersisto_tool.sh",
+      "cwd": "workspace",
+      "tags": ["admin"],
+      "inputSchema": {
+        "userId": { "type": "string", "optional": false },
+        "displayName": { "type": "string", "optional": true },
+        "status": { "type": "string", "optional": true }
+      },
+      "env": { "TOOL_NAME": "userpersisto_update_user" }
+    },
+    {
+      "name": "userpersisto_list_users",
+      "title": "UserPersisto List Users",
+      "description": "List users managed by UserPersisto.",
+      "command": "tools/userpersisto_tool.sh",
+      "cwd": "workspace",
+      "tags": ["admin"],
+      "inputSchema": {
+        "query": { "type": "string", "optional": true },
+        "limit": { "type": "number", "optional": true }
+      },
+      "env": { "TOOL_NAME": "userpersisto_list_users" }
+    },
+    {
+      "name": "userpersisto_set_user_role",
+      "title": "UserPersisto Set User Role",
+      "description": "Set one role for a UserPersisto user.",
+      "command": "tools/userpersisto_tool.sh",
+      "cwd": "workspace",
+      "tags": ["admin"],
+      "inputSchema": {
+        "userId": { "type": "string", "optional": false },
+        "role": { "type": "string", "optional": false }
+      },
+      "env": { "TOOL_NAME": "userpersisto_set_user_role" }
+    },
+    {
+      "name": "userpersisto_get_roles",
+      "title": "UserPersisto Roles",
+      "description": "Return supported UserPersisto roles.",
+      "command": "tools/userpersisto_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {},
+      "env": { "TOOL_NAME": "userpersisto_get_roles" }
+    },
+    {
+      "name": "userpersisto_get_my_auth_profile",
+      "title": "UserPersisto My Auth Profile",
+      "description": "Return the authenticated user's UserPersisto auth profile.",
+      "command": "tools/userpersisto_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {},
+      "env": { "TOOL_NAME": "userpersisto_get_my_auth_profile" }
+    },
+    {
+      "name": "userpersisto_set_my_preferred_auth_method",
+      "title": "UserPersisto Set My Preferred Auth Method",
+      "description": "Set the authenticated user's preferred authentication method.",
+      "command": "tools/userpersisto_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "preferredAuthMethod": { "type": "string", "optional": false }
+      },
+      "env": { "TOOL_NAME": "userpersisto_set_my_preferred_auth_method" }
+    },
+    {
+      "name": "userpersisto_start_my_passkey_registration",
+      "title": "UserPersisto Start My Passkey Registration",
+      "description": "Start passkey registration for the authenticated user.",
+      "command": "tools/userpersisto_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "origin": { "type": "string", "optional": true },
+        "rpId": { "type": "string", "optional": true },
+        "rpName": { "type": "string", "optional": true }
+      },
+      "env": { "TOOL_NAME": "userpersisto_start_my_passkey_registration" }
+    },
+    {
+      "name": "userpersisto_verify_my_passkey_registration",
+      "title": "UserPersisto Verify My Passkey Registration",
+      "description": "Verify passkey registration for the authenticated user.",
+      "command": "tools/userpersisto_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "credential": {
+          "type": "object",
+          "optional": false,
+          "additionalProperties": true
+        }
+      },
+      "env": { "TOOL_NAME": "userpersisto_verify_my_passkey_registration" }
+    },
+    {
+      "name": "userpersisto_setup_my_totp",
+      "title": "UserPersisto Setup My TOTP",
+      "description": "Start TOTP setup for the authenticated user.",
+      "command": "tools/userpersisto_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "issuer": { "type": "string", "optional": true },
+        "label": { "type": "string", "optional": true }
+      },
+      "env": { "TOOL_NAME": "userpersisto_setup_my_totp" }
+    },
+    {
+      "name": "userpersisto_verify_my_totp",
+      "title": "UserPersisto Verify My TOTP",
+      "description": "Verify and enable TOTP for the authenticated user.",
+      "command": "tools/userpersisto_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "code": { "type": "string", "optional": false }
+      },
+      "env": { "TOOL_NAME": "userpersisto_verify_my_totp" }
+    },
+    {
+      "name": "userpersisto_check_access",
+      "title": "UserPersisto Check Access",
+      "description": "Check role and credit based access for an explicit UserPersisto client.",
+      "command": "tools/userpersisto_tool.sh",
+      "cwd": "workspace",
+      "tags": ["admin"],
+      "inputSchema": {
+        "userId": { "type": "string", "optional": true },
+        "email": { "type": "string", "optional": true },
+        "clientId": { "type": "string", "optional": false },
+        "creditCost": { "type": "number", "optional": true }
+      },
+      "env": { "TOOL_NAME": "userpersisto_check_access" }
+    },
+    {
+      "name": "userpersisto_start_email_code_login",
+      "title": "UserPersisto Start Email Code Login",
+      "description": "Create an email authentication code.",
+      "command": "tools/userpersisto_tool.sh",
+      "cwd": "workspace",
+      "tags": ["admin"],
+      "inputSchema": {
+        "email": { "type": "string", "optional": false }
+      },
+      "env": { "TOOL_NAME": "userpersisto_start_email_code_login" }
+    },
+    {
+      "name": "userpersisto_verify_email_code",
+      "title": "UserPersisto Verify Email Code",
+      "description": "Verify an email authentication code and create a session.",
+      "command": "tools/userpersisto_tool.sh",
+      "cwd": "workspace",
+      "tags": ["admin"],
+      "inputSchema": {
+        "email": { "type": "string", "optional": false },
+        "code": { "type": "string", "optional": false }
+      },
+      "env": { "TOOL_NAME": "userpersisto_verify_email_code" }
+    },
+    {
+      "name": "userpersisto_start_passkey_registration",
+      "title": "UserPersisto Start Passkey Registration",
+      "description": "Start passkey registration challenge flow.",
+      "command": "tools/userpersisto_tool.sh",
+      "cwd": "workspace",
+      "tags": ["admin"],
+      "inputSchema": {
+        "userId": { "type": "string", "optional": false }
+      },
+      "env": { "TOOL_NAME": "userpersisto_start_passkey_registration" }
+    },
+    {
+      "name": "userpersisto_verify_passkey_registration",
+      "title": "UserPersisto Verify Passkey Registration",
+      "description": "Verify passkey registration.",
+      "command": "tools/userpersisto_tool.sh",
+      "cwd": "workspace",
+      "tags": ["admin"],
+      "inputSchema": {
+        "userId": { "type": "string", "optional": false },
+        "response": { "type": "object", "optional": false }
+      },
+      "env": { "TOOL_NAME": "userpersisto_verify_passkey_registration" }
+    },
+    {
+      "name": "userpersisto_start_passkey_login",
+      "title": "UserPersisto Start Passkey Login",
+      "description": "Start passkey login challenge flow.",
+      "command": "tools/userpersisto_tool.sh",
+      "cwd": "workspace",
+      "tags": ["admin"],
+      "inputSchema": {
+        "email": { "type": "string", "optional": true }
+      },
+      "env": { "TOOL_NAME": "userpersisto_start_passkey_login" }
+    },
+    {
+      "name": "userpersisto_verify_passkey_login",
+      "title": "UserPersisto Verify Passkey Login",
+      "description": "Verify passkey login.",
+      "command": "tools/userpersisto_tool.sh",
+      "cwd": "workspace",
+      "tags": ["admin"],
+      "inputSchema": {
+        "response": { "type": "object", "optional": false }
+      },
+      "env": { "TOOL_NAME": "userpersisto_verify_passkey_login" }
+    },
+    {
+      "name": "userpersisto_setup_totp",
+      "title": "UserPersisto Setup TOTP",
+      "description": "Start TOTP setup.",
+      "command": "tools/userpersisto_tool.sh",
+      "cwd": "workspace",
+      "tags": ["admin"],
+      "inputSchema": {
+        "userId": { "type": "string", "optional": false }
+      },
+      "env": { "TOOL_NAME": "userpersisto_setup_totp" }
+    },
+    {
+      "name": "userpersisto_verify_totp",
+      "title": "UserPersisto Verify TOTP",
+      "description": "Verify a TOTP code.",
+      "command": "tools/userpersisto_tool.sh",
+      "cwd": "workspace",
+      "tags": ["admin"],
+      "inputSchema": {
+        "userId": { "type": "string", "optional": false },
+        "code": { "type": "string", "optional": false }
+      },
+      "env": { "TOOL_NAME": "userpersisto_verify_totp" }
+    },
+    {
+      "name": "userpersisto_get_credit_balance",
+      "title": "UserPersisto Credit Balance",
+      "description": "Return a user's credit balance.",
+      "command": "tools/userpersisto_tool.sh",
+      "cwd": "workspace",
+      "tags": ["admin"],
+      "inputSchema": {
+        "userId": { "type": "string", "optional": false }
+      },
+      "env": { "TOOL_NAME": "userpersisto_get_credit_balance" }
+    },
+    {
+      "name": "userpersisto_add_credits",
+      "title": "UserPersisto Add Credits",
+      "description": "Add credits to a user ledger.",
+      "command": "tools/userpersisto_tool.sh",
+      "cwd": "workspace",
+      "tags": ["admin"],
+      "inputSchema": {
+        "userId": { "type": "string", "optional": false },
+        "amount": { "type": "number", "optional": false },
+        "reason": { "type": "string", "optional": true },
+        "reference": { "type": "string", "optional": true }
+      },
+      "env": { "TOOL_NAME": "userpersisto_add_credits" }
+    },
+    {
+      "name": "userpersisto_consume_credits",
+      "title": "UserPersisto Consume Credits",
+      "description": "Consume credits from a user ledger.",
+      "command": "tools/userpersisto_tool.sh",
+      "cwd": "workspace",
+      "tags": ["admin"],
+      "inputSchema": {
+        "userId": { "type": "string", "optional": false },
+        "amount": { "type": "number", "optional": false },
+        "reason": { "type": "string", "optional": true },
+        "reference": { "type": "string", "optional": true }
+      },
+      "env": { "TOOL_NAME": "userpersisto_consume_credits" }
+    },
+    {
+      "name": "userpersisto_get_subscription",
+      "title": "UserPersisto Subscription",
+      "description": "Return a user's subscription state.",
+      "command": "tools/userpersisto_tool.sh",
+      "cwd": "workspace",
+      "tags": ["admin"],
+      "inputSchema": {
+        "userId": { "type": "string", "optional": false }
+      },
+      "env": { "TOOL_NAME": "userpersisto_get_subscription" }
+    },
+    {
+      "name": "userpersisto_create_stripe_checkout",
+      "title": "UserPersisto Create Stripe Checkout",
+      "description": "Create a Stripe checkout session for credits or subscription.",
+      "command": "tools/userpersisto_tool.sh",
+      "cwd": "workspace",
+      "tags": ["admin"],
+      "inputSchema": {
+        "userId": { "type": "string", "optional": false },
+        "mode": { "type": "string", "optional": false },
+        "successUrl": { "type": "string", "optional": false },
+        "cancelUrl": { "type": "string", "optional": false }
+      },
+      "env": { "TOOL_NAME": "userpersisto_create_stripe_checkout" }
+    },
+    {
+      "name": "userpersisto_get_audit_events",
+      "title": "UserPersisto Audit Events",
+      "description": "List audit events.",
+      "command": "tools/userpersisto_tool.sh",
+      "cwd": "workspace",
+      "tags": ["admin"],
+      "inputSchema": {
+        "limit": { "type": "number", "optional": true },
+        "targetType": { "type": "string", "optional": true },
+        "targetId": { "type": "string", "optional": true }
+      },
+      "env": { "TOOL_NAME": "userpersisto_get_audit_events" }
+    },
+    {
+      "name": "userpersisto_get_agent_settings",
+      "title": "UserPersisto Agent Settings",
+      "description": "Return masked UserPersisto provider settings.",
+      "command": "tools/userpersisto_tool.sh",
+      "cwd": "workspace",
+      "tags": ["admin"],
+      "inputSchema": {},
+      "env": { "TOOL_NAME": "userpersisto_get_agent_settings" }
+    },
+    {
+      "name": "userpersisto_save_agent_settings",
+      "title": "UserPersisto Save Agent Settings",
+      "description": "Save UserPersisto provider settings.",
+      "command": "tools/userpersisto_tool.sh",
+      "cwd": "workspace",
+      "tags": ["admin"],
+      "inputSchema": {
+        "settings": { "type": "object", "optional": false, "additionalProperties": true }
+      },
+      "env": { "TOOL_NAME": "userpersisto_save_agent_settings" }
+    }
+  ]
+}

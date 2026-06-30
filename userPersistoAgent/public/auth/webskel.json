@@ -1,0 +1,16 @@
+{
+  "rootDir": "/public-services/userpersisto/auth",
+  "services": [],
+  "components": [
+    {
+      "name": "userpersisto-login",
+      "type": "components",
+      "presenterClassName": "UserPersistoLogin"
+    },
+    {
+      "name": "userpersisto-passkey-register",
+      "type": "components",
+      "presenterClassName": "UserPersistoPasskeyRegister"
+    }
+  ]
+}

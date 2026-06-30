@@ -1,0 +1,268 @@
+.userpersisto-auth-component {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl, 20px);
+  width: 100%;
+  padding: 28px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 10px);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-sm, 0 2px 6px rgba(15, 23, 42, 0.08));
+}
+
+.userpersisto-auth-component .header {
+  display: grid;
+  gap: 6px;
+}
+
+.userpersisto-auth-component .title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: var(--font-bold, 700);
+  line-height: var(--line-tight, 1.2);
+  letter-spacing: 0;
+}
+
+.auth_container,
+.auth_type_wrapper,
+.email_wrapper,
+.password_login_section,
+.totp_login_section,
+.code_submit_section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md, 12px);
+}
+
+.input_container {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-sm, 8px);
+  align-items: end;
+}
+
+.email_input,
+.username_input,
+.password_input,
+.code_input,
+.totp_input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 38px;
+}
+
+.email_input[readonly] {
+  border-color: var(--border);
+  background: var(--surface-soft);
+  color: var(--text-soft);
+}
+
+.auth_methods_section {
+  display: grid;
+  gap: var(--space-sm, 8px);
+}
+
+.choice {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-md, 12px);
+  min-height: 64px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 8px);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  transition: background-color var(--transition-base, 0.15s) ease,
+    border-color var(--transition-base, 0.15s) ease,
+    box-shadow var(--transition-base, 0.15s) ease,
+    transform var(--transition-fast, 0.12s) ease;
+}
+
+.choice:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-soft);
+}
+
+.choice.selected {
+  border-color: var(--accent);
+  background: var(--bg-active);
+  box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.18);
+}
+
+.choice input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.choice-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.choice .label {
+  color: var(--text);
+  font-size: var(--font-base, 0.9rem);
+  font-weight: var(--font-semibold, 600);
+  line-height: var(--line-tight, 1.2);
+}
+
+.choice .hint {
+  color: var(--text-soft);
+  font-size: var(--font-xs, 0.75rem);
+  line-height: var(--line-normal, 1.4);
+}
+
+.choice .icon {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  object-fit: contain;
+  opacity: 0.82;
+}
+
+.actions_container {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm, 8px);
+  padding-top: var(--space-xs, 4px);
+}
+
+.selection_short_info,
+.selection_long_info {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 8px);
+  background: var(--surface-soft);
+  color: var(--text-soft);
+  font-size: var(--font-sm, 0.85rem);
+  line-height: var(--line-normal, 1.4);
+}
+
+.password_login_section,
+.totp_login_section,
+.code_submit_section {
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 8px);
+  background: var(--surface-soft);
+}
+
+.password_login_section .input_container,
+.totp_login_section .input_container,
+.code_submit_section .input_container {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+
+.password_login_section .general-button,
+.totp_login_section .general-button,
+.code_submit_section .submit_code_button {
+  justify-self: end;
+  min-width: 132px;
+}
+
+.code_submit_section .resend_code_button {
+  align-self: flex-start;
+  width: max-content;
+}
+
+.selection_short_info,
+.selection_long_info,
+.password_login_section,
+.totp_login_section,
+.code_submit_section,
+.auth_step1 .selection_long_info,
+.auth_step1 .auth_methods_section,
+.auth_step1 .actions_container {
+  display: none;
+}
+
+.auth_container[selected-auth="emailCode"] .selection_short_info.emailCode,
+.auth_container[selected-auth="emailCode"] .selection_long_info.emailCode,
+.auth_container[selected-auth="password"] .selection_short_info.password,
+.auth_container[selected-auth="password"] .selection_long_info.password,
+.auth_container[selected-auth="passkey"] .selection_short_info.passkey,
+.auth_container[selected-auth="passkey"] .selection_long_info.passkey,
+.auth_container[selected-auth="totp"] .selection_short_info.totp,
+.auth_container[selected-auth="totp"] .selection_long_info.totp {
+  display: block;
+}
+
+.auth_container[login-step="password"] .auth_type_wrapper,
+.auth_container[login-step="emailCode"] .auth_type_wrapper,
+.auth_container[login-step="totp"] .auth_type_wrapper {
+  display: none;
+}
+
+.auth_container[login-step="password"] .password_login_section,
+.auth_container[login-step="emailCode"] .code_submit_section,
+.auth_container[login-step="totp"] .totp_login_section {
+  display: flex;
+}
+
+.account_label,
+.info {
+  color: var(--text-soft);
+  font-size: var(--font-sm, 0.85rem);
+  line-height: var(--line-normal, 1.4);
+}
+
+.account_label {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  padding: 0 10px;
+  color: var(--text);
+  font-weight: var(--font-semibold, 600);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.userpersisto-status {
+  padding: 10px;
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid rgba(4, 120, 87, 0.25);
+  background: rgba(4, 120, 87, 0.08);
+  color: var(--success);
+  font-size: var(--font-sm, 0.85rem);
+}
+
+.userpersisto-status.error {
+  border-color: rgba(185, 28, 28, 0.25);
+  background: rgba(185, 28, 28, 0.08);
+  color: var(--danger);
+}
+
+@media (max-width: 560px) {
+  .userpersisto-auth-component {
+    padding: 18px;
+  }
+
+  .input_container {
+    grid-template-columns: 1fr;
+  }
+
+  .actions_container {
+    flex-direction: column-reverse;
+  }
+
+  .actions_container .general-button,
+  .password_login_section .general-button,
+  .totp_login_section .general-button,
+  .code_submit_section .submit_code_button,
+  .code_submit_section .resend_code_button {
+    width: 100%;
+    justify-self: stretch;
+  }
+}

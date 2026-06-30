@@ -287,6 +287,28 @@ export async function createExplorerToolRuntime({
     getInvocationContext: () => activeInvocationContext
   });
 
+  function getInvocationRoles(context = {}) {
+    const candidates = [
+      context.invocation?.actor?.roles,
+      context.invocation?.user?.roles,
+      context.user?.roles,
+      context.auth?.user?.roles,
+      context.claims?.roles
+    ];
+    return candidates
+      .filter(Array.isArray)
+      .flat()
+      .map((role) => String(role || '').trim())
+      .filter(Boolean);
+  }
+
+  function assertExplorerAccess(context = {}) {
+    const roles = getInvocationRoles(context);
+    if (!roles.includes('selfRegistered')) return;
+    if (roles.includes('admin') || roles.includes('user')) return;
+    throw new Error('Self-registered users do not have Explorer access.');
+  }
+
   return {
     async callTool(name, args = {}, context = {}) {
       const fatalState = fatal.getState();
@@ -295,6 +317,7 @@ export async function createExplorerToolRuntime({
       }
       activeInvocationContext = context && typeof context === 'object' ? context : {};
       try {
+        assertExplorerAccess(activeInvocationContext);
         const resolvedArgs = await resolvePathsInArgs(args);
         const handler = toolHandlers[name];
         if (!handler) throw new Error(`Unknown tool: ${name}`);

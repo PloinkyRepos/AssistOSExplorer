@@ -1,0 +1,81 @@
+{
+  "tools": [
+    {
+      "name": "email_send_auth_code",
+      "title": "Email Send Auth Code",
+      "description": "Send a sign-in code email for authentication flows.",
+      "command": "tools/email_tool.sh",
+      "cwd": "workspace",
+      "tags": ["internal"],
+      "inputSchema": {
+        "email": { "type": "string", "optional": false },
+        "code": { "type": "string", "optional": false },
+        "expiresAt": { "type": "string", "optional": false }
+      },
+      "env": { "TOOL_NAME": "email_send_auth_code" }
+    },
+    {
+      "name": "email_send_text",
+      "title": "Email Send Text",
+      "description": "Send a plain text email through the configured Mailjet account.",
+      "command": "tools/email_tool.sh",
+      "cwd": "workspace",
+      "tags": ["admin"],
+      "inputSchema": {
+        "to": { "type": "string", "optional": false },
+        "fromEmail": { "type": "string", "optional": true },
+        "subject": { "type": "string", "optional": false },
+        "textBody": { "type": "string", "optional": false }
+      },
+      "env": { "TOOL_NAME": "email_send_text" }
+    },
+    {
+      "name": "email_send_template",
+      "title": "Email Send Template",
+      "description": "Send an email using a configured Mailjet template.",
+      "command": "tools/email_tool.sh",
+      "cwd": "workspace",
+      "tags": ["admin"],
+      "inputSchema": {
+        "to": { "type": "string", "optional": false },
+        "fromEmail": { "type": "string", "optional": true },
+        "templateId": { "type": "string", "optional": false },
+        "variables": { "type": "object", "optional": true },
+        "subject": { "type": "string", "optional": true }
+      },
+      "env": { "TOOL_NAME": "email_send_template" }
+    },
+    {
+      "name": "email_test_configuration",
+      "title": "Email Test Configuration",
+      "description": "Validate that EmailAgent has the required Mailjet settings.",
+      "command": "tools/email_tool.sh",
+      "cwd": "workspace",
+      "tags": ["admin"],
+      "inputSchema": {},
+      "env": { "TOOL_NAME": "email_test_configuration" }
+    },
+    {
+      "name": "email_get_agent_settings",
+      "title": "Email Agent Settings",
+      "description": "Return masked EmailAgent settings.",
+      "command": "tools/email_tool.sh",
+      "cwd": "workspace",
+      "tags": ["admin"],
+      "inputSchema": {},
+      "env": { "TOOL_NAME": "email_get_agent_settings" }
+    },
+    {
+      "name": "email_save_agent_settings",
+      "title": "Email Save Agent Settings",
+      "description": "Save EmailAgent settings.",
+      "command": "tools/email_tool.sh",
+      "cwd": "workspace",
+      "tags": ["admin"],
+      "inputSchema": {
+        "settings": { "type": "object", "optional": false }
+      },
+      "env": { "TOOL_NAME": "email_save_agent_settings" }
+    }
+  ]
+}

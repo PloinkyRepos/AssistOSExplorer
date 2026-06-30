@@ -1,0 +1,102 @@
+{
+  "container": "docker.io/assistos/ploinky-node:24-bookworm-tools",
+  "lite-sandbox": true,
+  "ssoProvider": true,
+  "agent": "sh /code/scripts/start.sh",
+  "httpServices": [
+    {
+      "slug": "userpersisto",
+      "externalPrefix": "/public-services/userpersisto/",
+      "internalPrefix": "/",
+      "access": "guest",
+      "invocation": false,
+      "includeAuthInfo": false
+    },
+    {
+      "slug": "selfregistered",
+      "externalPrefix": "/selfregistered/",
+      "internalPrefix": "/selfregistered/",
+      "access": "guest",
+      "invocation": false,
+      "includeAuthInfo": false
+    }
+  ],
+  "profiles": {
+    "default": {
+      "install": "sh /code/scripts/installPersisto.sh",
+      "env": {
+        "PERSISTO_URL": {
+          "required": false
+        },
+        "PERSISTO_HOST": {
+          "required": false
+        },
+        "PERSISTO_PORT": {
+          "required": false
+        },
+        "PERSISTENCE_FOLDER": {
+          "required": false
+        },
+        "LOGS_FOLDER": {
+          "required": false
+        },
+        "AUDIT_FOLDER": {
+          "required": false
+        },
+        "WORKSPACE_PATH": {
+          "required": false
+        },
+        "PLOINKY_WORKSPACE_ROOT": {
+          "required": false
+        },
+        "PLOINKY_MASTER_KEY": {
+          "required": false
+        },
+        "USERPERSISTO_SETTINGS_SECRET": {
+          "required": false
+        },
+        "USERPERSISTO_RUNTIME_SECRET": {
+          "required": false
+        },
+        "USERPERSISTO_BOOTSTRAP_ADMIN_EMAIL": {
+          "required": false,
+          "default": "adrian@axiologic.net"
+        },
+        "USERPERSISTO_BOOTSTRAP_ADMIN_USERNAME": {
+          "required": false,
+          "default": "admin"
+        },
+        "USERPERSISTO_BOOTSTRAP_ADMIN_PASSWORD": {
+          "required": false,
+          "default": "admin"
+        },
+        "USERPERSISTO_BOOTSTRAP_ADMIN_DISPLAY_NAME": {
+          "required": false,
+          "default": "Admin"
+        },
+        "USERPERSISTO_STORAGE": {
+          "required": false
+        },
+        "USERPERSISTO_SERVICE_PORT": {
+          "required": false
+        },
+        "USERPERSISTO_AGENTSERVER_PORT": {
+          "required": false
+        }
+      }
+    }
+  },
+  "volumes": {
+    ".ploinky/agents/userPersistoAgent": "/userpersisto-data"
+  },
+  "ideSettings": [
+    {
+      "key": "userpersisto",
+      "label": "UserPersisto",
+      "scope": "workspace",
+      "pluginKey": "userPersistoAgent/userpersisto-settings",
+      "settingsComponent": "userpersisto-settings",
+      "adminOnly": true
+    }
+  ]
+}

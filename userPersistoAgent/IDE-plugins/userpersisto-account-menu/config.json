@@ -1,0 +1,11 @@
+{
+  "pluginCategory": "application",
+  "id": "userpersisto-account-menu",
+  "component": "userpersisto-account-menu",
+  "location": [],
+  "label": "Sign-in preferences",
+  "tooltip": "Set preferred sign-in method",
+  "presenter": "UserpersistoAccountMenu",
+  "type": "embedded",
+  "autoPin": false
+}
