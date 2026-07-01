@@ -234,7 +234,10 @@ export function computeComponentBaseUrl(agent, component, {
         ? pluginsBaseUrl.trim().replace(/\/+$/, '')
         : `/${agent}/IDE-plugins`;
     if (isNonEmptyString(customPath)) {
-        return joinUrlSegments(effectivePluginsBaseUrl, customPath);
+        const customPathBase = isDependency && isNonEmptyString(ownerAssetBaseUrl)
+            ? ownerAssetBaseUrl.trim().replace(/\/+$/, '')
+            : effectivePluginsBaseUrl;
+        return joinUrlSegments(customPathBase, customPath);
     }
     if (isDependency && isNonEmptyString(ownerComponent) && ownerComponent.trim() !== component.trim()) {
         const child = component.trim();

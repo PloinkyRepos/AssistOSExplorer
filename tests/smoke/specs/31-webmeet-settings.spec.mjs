@@ -30,7 +30,7 @@ test.describe('WebMeet settings', () => {
       await expect(settingsPanel).toContainText('Camera background');
       await expect(settingsPanel).toContainText('Avatar');
       await expect(page.locator('#webmeetVoiceProcessingMode')).toHaveValue('auto');
-      await expect(page.locator('#webmeetVoiceProcessingMode option').first()).toHaveText('Automatic, recommended');
+      await expect(page.locator('#webmeetVoiceProcessingMode option').first()).toHaveText('Voice Focus, recommended');
       await expect(page.locator('#webmeetAutomaticParticipantVolume')).toBeChecked();
       await expect(page.locator('#webmeetAudioHealthIndicator')).toHaveAttribute('data-health', 'good');
       await expect(page.locator('#webmeetMicButton')).toHaveAttribute('title', 'Toggle Microphone - Audio: Good');

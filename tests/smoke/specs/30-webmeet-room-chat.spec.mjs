@@ -37,7 +37,7 @@ test.describe('WebMeet rooms', () => {
       const secondaryLoginOk = await trySignIn(memberPage, smokeConfig.secondaryUser, '/dashboard');
       test.skip(!secondaryLoginOk, `Secondary smoke account ${smokeConfig.secondaryUser.username} cannot log in.`);
 
-      await openWebMeet(memberPage, smokeConfig.secondaryUser);
+      await openWebMeet(memberPage, smokeConfig.secondaryUser, { expectCreateRoom: false });
       await joinRoom(memberPage, roomTitle);
 
       await sendWebMeetChat(page, ownerMessage);

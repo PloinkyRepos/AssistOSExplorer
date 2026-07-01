@@ -82,7 +82,6 @@ jobs:
         env:
           SSH_KEY: ${{ secrets.EXPLORER_QA_SSH_KEY }}
           PLOINKY_MASTER_KEY: ${{ secrets.EXPLORER_QA_PLOINKY_MASTER_KEY }}
-          SOUL_GATEWAY_PROVIDER_API_KEY: ${{ secrets.EXPLORER_QA_SOUL_GATEWAY_PROVIDER_API_KEY }}
           ONLYOFFICE_PUBLIC_URL: ${{ vars.EXPLORER_QA_ONLYOFFICE_PUBLIC_URL }}
         run: |
           set -euo pipefail
@@ -96,10 +95,6 @@ jobs:
           fi
           if ! printf '%s' "$PLOINKY_MASTER_KEY" | grep -Eq '^[A-Fa-f0-9]{64}$'; then
             echo "::error::EXPLORER_QA_PLOINKY_MASTER_KEY must be exactly 64 hex characters"
-            exit 1
-          fi
-          if [ -z "${SOUL_GATEWAY_PROVIDER_API_KEY:-}" ]; then
-            echo "::error::Missing required repository secret EXPLORER_QA_SOUL_GATEWAY_PROVIDER_API_KEY"
             exit 1
           fi
           if [ -z "${ONLYOFFICE_PUBLIC_URL:-}" ]; then
@@ -142,15 +137,6 @@ jobs:
       - name: Deploy workspace
         env:
           PLOINKY_MASTER_KEY: ${{ secrets.EXPLORER_QA_PLOINKY_MASTER_KEY }}
-          SOUL_GATEWAY_PROVIDER_API_KEY: ${{ secrets.EXPLORER_QA_SOUL_GATEWAY_PROVIDER_API_KEY }}
-          SOUL_GATEWAY_PROVIDER_BASE_URL: ${{ vars.EXPLORER_QA_SOUL_GATEWAY_PROVIDER_BASE_URL || 'https://soul.axiologic.dev/v1' }}
-          SOUL_GATEWAY_PROVIDER_DISCOVERY_MODE: ${{ vars.EXPLORER_QA_SOUL_GATEWAY_PROVIDER_DISCOVERY_MODE || 'auto' }}
-          SOUL_GATEWAY_PROVIDER_ALIASES: ${{ vars.EXPLORER_QA_SOUL_GATEWAY_PROVIDER_ALIASES || 'fast,axl/fast,plan,code,write,deep,ultra' }}
-          LMSTUDIO_PROXY_TOKEN: ${{ secrets.EXPLORER_QA_LMSTUDIO_PROXY_TOKEN }}
-          LOCAL_LLM_API_KEY: ${{ secrets.EXPLORER_QA_LOCAL_LLM_API_KEY }}
-          LOCAL_LLM_BASE_URL: ${{ vars.EXPLORER_QA_LOCAL_LLM_BASE_URL }}
-          LOCAL_LLM_MODEL: ${{ vars.EXPLORER_QA_LOCAL_LLM_MODEL }}
-          LOCAL_LLM_DISCOVERY_MODE: ${{ vars.EXPLORER_QA_LOCAL_LLM_DISCOVERY_MODE }}
           ONLYOFFICE_PUBLIC_URL: ${{ vars.EXPLORER_QA_ONLYOFFICE_PUBLIC_URL }}
           ONLYOFFICE_INTERNAL_URL: ${{ vars.EXPLORER_QA_ONLYOFFICE_INTERNAL_URL }}
           ONLYOFFICE_CALLBACK_BASE_URL: ${{ vars.EXPLORER_QA_ONLYOFFICE_CALLBACK_BASE_URL }}
@@ -201,15 +187,6 @@ jobs:
 
           {
             write_env PLOINKY_MASTER_KEY
-            write_env SOUL_GATEWAY_PROVIDER_API_KEY
-            write_env SOUL_GATEWAY_PROVIDER_BASE_URL
-            write_env SOUL_GATEWAY_PROVIDER_DISCOVERY_MODE
-            write_env SOUL_GATEWAY_PROVIDER_ALIASES
-            write_env LMSTUDIO_PROXY_TOKEN
-            write_env LOCAL_LLM_API_KEY
-            write_env LOCAL_LLM_BASE_URL
-            write_env LOCAL_LLM_MODEL
-            write_env LOCAL_LLM_DISCOVERY_MODE
             write_env ONLYOFFICE_PUBLIC_URL
             write_env ONLYOFFICE_INTERNAL_URL
             write_env ONLYOFFICE_CALLBACK_BASE_URL
@@ -319,25 +296,6 @@ jobs:
           set +a
           rm -f /tmp/explorer_qa_env
 
-          LOCAL_LLM_API_KEY="${LOCAL_LLM_API_KEY:-${LMSTUDIO_PROXY_TOKEN:-}}"
-          if [ -n "${SOUL_GATEWAY_API_KEY:-}" ] && [ -z "${SOUL_GATEWAY_PROVIDER_API_KEY:-}" ]; then
-            SOUL_GATEWAY_PROVIDER_API_KEY="$SOUL_GATEWAY_API_KEY"
-            unset SOUL_GATEWAY_API_KEY
-            echo "[deploy] Treating legacy SOUL_GATEWAY_API_KEY input as SOUL_GATEWAY_PROVIDER_API_KEY."
-          fi
-          if [ -n "${SOUL_GATEWAY_PROVIDER_API_KEY:-}" ]; then
-            echo "[deploy] Soul Gateway provider credential is configured; Explorer consumers will use the generated local gateway key and the local gateway will delegate to the Soul Gateway provider."
-          else
-            LOCAL_LLM_BASE_URL="${LOCAL_LLM_BASE_URL:-https://lmstudio.axiologic.dev/v1}"
-            LOCAL_LLM_MODEL="${LOCAL_LLM_MODEL:-gemma-3-12b-it}"
-            LOCAL_LLM_DISCOVERY_MODE="${LOCAL_LLM_DISCOVERY_MODE:-single}"
-            if [ "$LOCAL_LLM_BASE_URL" = "https://lmstudio.axiologic.dev/v1" ] && [ -z "${LOCAL_LLM_API_KEY:-}" ]; then
-              echo "[deploy] ERROR: SOUL_GATEWAY_PROVIDER_API_KEY is unset, so a local LLM provider credential is required."
-              echo "[deploy] Set LMSTUDIO_PROXY_TOKEN or LOCAL_LLM_API_KEY for the default LOCAL_LLM_BASE_URL."
-              exit 1
-            fi
-          fi
-
           WEBMEET_INFRA_IMAGE_TAG="${WEBMEET_INFRA_IMAGE_TAG:-webmeet-infra}"
           PLOINKY_NODE_IMAGE_TAG="${PLOINKY_NODE_IMAGE_TAG:-24-bookworm-tools}"
           WEBMEET_INFRA_HEALTH_PORT="${WEBMEET_INFRA_HEALTH_PORT:-17000}"
@@ -426,9 +384,9 @@ jobs:
           # Ploinky retired 'add repo <name> <url> <branch>' / 'enable repo <name>' in favor of
           # 'install <url|repoName> [name] [--branch X]'. Repos are activated by install; the
           # explorer manifest's "enable" list brings up the agent stack at start time.
-          "$PLOINKY" install https://github.com/PloinkyRepos/AssistOSExplorer.git AchillesIDE --branch "${EXPLORER_BRANCH:-main}" || true
-          "$PLOINKY" install https://github.com/PloinkyRepos/webmeetInfra.git webmeetInfra --branch main || true
-          "$PLOINKY" install https://github.com/PloinkyRepos/proxies.git proxies --branch "${PROXIES_BRANCH:-main}" || true
+          "$PLOINKY" install https://github.com/AssistOS-AI/AssistOSExplorer.git AchillesIDE --branch "${EXPLORER_BRANCH:-main}" || true
+          "$PLOINKY" install https://github.com/AssistOS-AI/webmeetInfra.git webmeetInfra --branch main || true
+          "$PLOINKY" install https://github.com/AssistOS-AI/proxies.git proxies --branch "${PROXIES_BRANCH:-main}" || true
 
           echo "[deploy-qa] Updating Ploinky, Achilles dependencies, and installed repos..."
           if ! env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" update; then
@@ -569,15 +527,6 @@ jobs:
           set_var ASSISTOS_FS_ROOT "$WORK_DIR"
           set_var WORKSPACE_ROOT "$WORK_DIR"
           set_var PLOINKY_WORKSPACE_ROOT "$WORK_DIR"
-
-          set_var SOUL_GATEWAY_PROVIDER_API_KEY "${SOUL_GATEWAY_PROVIDER_API_KEY:-}"
-          set_var SOUL_GATEWAY_PROVIDER_BASE_URL "${SOUL_GATEWAY_PROVIDER_BASE_URL:-}"
-          set_var SOUL_GATEWAY_PROVIDER_DISCOVERY_MODE "${SOUL_GATEWAY_PROVIDER_DISCOVERY_MODE:-}"
-          set_var SOUL_GATEWAY_PROVIDER_ALIASES "${SOUL_GATEWAY_PROVIDER_ALIASES:-}"
-          set_var LOCAL_LLM_BASE_URL "${LOCAL_LLM_BASE_URL:-}"
-          set_var LOCAL_LLM_MODEL "${LOCAL_LLM_MODEL:-}"
-          set_var LOCAL_LLM_DISCOVERY_MODE "${LOCAL_LLM_DISCOVERY_MODE:-}"
-          set_var LOCAL_LLM_API_KEY "${LOCAL_LLM_API_KEY:-}"
 
           set_var ONLYOFFICE_PUBLIC_URL "${ONLYOFFICE_PUBLIC_URL:-}"
           set_var ONLYOFFICE_INTERNAL_URL "${ONLYOFFICE_INTERNAL_URL:-}"
