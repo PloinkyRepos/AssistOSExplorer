@@ -37,7 +37,7 @@
         "webmeetAgent global no-wait",
         "multimedia global no-wait",
         "onlyOffice global no-wait",
-        "proxies/soul-gateway",
+        "proxies/soul-gateway no-wait",
         "webAssist no-wait",
         "UmamiAgent/umamiAgent no-wait"
     ],
