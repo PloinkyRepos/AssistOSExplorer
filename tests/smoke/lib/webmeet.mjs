@@ -9,11 +9,14 @@ function webMeetDashboardPath() {
   return `/explorer/index.html?${params.toString()}#webmeet-dashboard`;
 }
 
-export async function openWebMeet(page, account = smokeConfig.primaryUser) {
+export async function openWebMeet(page, account = smokeConfig.primaryUser, options = {}) {
+  const { expectCreateRoom = true } = options;
   await signIn(page, account, '/dashboard');
   await page.goto(webMeetDashboardPath(), { waitUntil: 'domcontentloaded' });
   await expect(page.locator('div.webmeet-dashboard')).toBeVisible({ timeout: smokeConfig.timeouts.navigation });
-  await expect(page.locator('#webmeetCreateRoomButton')).toBeVisible();
+  if (expectCreateRoom) {
+    await expect(page.locator('#webmeetCreateRoomButton')).toBeVisible();
+  }
 }
 
 export async function createRoom(page, title) {
