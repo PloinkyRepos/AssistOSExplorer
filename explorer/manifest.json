@@ -11,28 +11,24 @@
             "profile": "embedded"
         },
         "dpuAgent global",
-        "soplangAgent global",
+        "soplangAgent global no-wait",
         "tasksAgent global",
-        "AchillesCLI/achilles-cli global",
+        "AchillesCLI/achilles-cli global no-wait",
         "basic/webtty global",
-        "webmeetInfra/liveKitServerAgent",
-        "webmeetStt",
-        "webmeetAgent global",
+        "webmeetInfra/liveKitServerAgent no-wait",
+        "webmeetStt no-wait",
+        "webmeetAgent global no-wait",
         "userPersistoAgent global",
         "emailAgent global",
-        "multimedia global",
-        "onlyOffice global",
-        {
-            "agent": "webAssist",
-            "profile": "embedded"
-        },
-        "proxies/soul-gateway",
-        "webAssist",
-        "AnalyticsAgent/analyticsAgent no-wait"
+        "multimedia global no-wait",
+        "onlyOffice global no-wait",
+        "proxies/soul-gateway no-wait",
+        "webAssist no-wait",
+        "UmamiAgent/umamiAgent no-wait"
     ],
     "repos": {
-        "webmeetInfra": "https://github.com/PloinkyRepos/webmeetInfra.git",
-        "AnalyticsAgent": "https://github.com/AssistOS-AI/AnalyticsAgent.git"
+        "webmeetInfra": "https://github.com/AssistOS-AI/webmeetInfra.git",
+        "UmamiAgent": "https://github.com/AssistOS-AI/UmamiAgent.git"
     },
     "applicationPlugins": {
         "git": true,
