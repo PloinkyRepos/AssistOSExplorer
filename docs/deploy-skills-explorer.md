@@ -58,7 +58,6 @@ gh variable set EXPLORER_ROUTER_PORT --repo AssistOS-AI/AssistOSExplorer --body 
 gh variable set EXPLORER_PUBLIC_URL --repo AssistOS-AI/AssistOSExplorer --body https://skills.axiologic.dev
 gh variable set PLOINKY_PROFILE --repo AssistOS-AI/AssistOSExplorer --body prod
 gh variable set ONLYOFFICE_PUBLIC_URL --repo AssistOS-AI/AssistOSExplorer --body https://office.axiologic.dev
-gh variable set ONLYOFFICE_INTERNAL_URL --repo AssistOS-AI/AssistOSExplorer --body http://127.0.0.1:8082
 gh variable set ONLYOFFICE_CALLBACK_BASE_URL --repo AssistOS-AI/AssistOSExplorer --body https://skills.axiologic.dev
 gh variable set WEBMEET_PUBLIC_LIVEKIT_URL --repo AssistOS-AI/AssistOSExplorer --body wss://livekit-skills.axiologic.dev
 gh variable set WEBMEET_LIVEKIT_URL --repo AssistOS-AI/AssistOSExplorer --body http://host.containers.internal:7880
@@ -76,9 +75,16 @@ gh variable set WEBMEET_TURN_REALM --repo AssistOS-AI/AssistOSExplorer --body sk
 gh variable set WEBMEET_TURN_USER --repo AssistOS-AI/AssistOSExplorer --body webmeet
 gh variable set WEBMEET_TURN_MIN_PORT --repo AssistOS-AI/AssistOSExplorer --body 20000
 gh variable set WEBMEET_TURN_MAX_PORT --repo AssistOS-AI/AssistOSExplorer --body 20010
+gh variable set STRICT_INFRA_CHECKS --repo AssistOS-AI/AssistOSExplorer --body 0
 ```
 
 Set `WEBMEET_TURN_EXTERNAL_IP` only when coturn must use an explicit public IP instead of resolving `WEBMEET_TURN_HOST` at startup.
+Set `STRICT_INFRA_CHECKS=1` only when local LiveKit and OnlyOffice health failures should fail the deployment; the default `0` matches the QA-tested non-strict infra gate.
+Leave `ONLYOFFICE_INTERNAL_URL` unset for the managed OnlyOffice agent. The agent defaults its in-container Document Server target to `http://127.0.0.1:80`, while the workflow health probe falls back to the host-facing editor proxy at `http://127.0.0.1:8082`. Remove any legacy repository variable that points `ONLYOFFICE_INTERNAL_URL` at `http://127.0.0.1:8082` before deploying:
+
+```sh
+gh variable delete ONLYOFFICE_INTERNAL_URL --repo AssistOS-AI/AssistOSExplorer
+```
 
 ## Provision Host
 
@@ -132,13 +138,14 @@ The workflow:
 
 1. Connects to `SSH_USER@SSH_HOST` with `SSH_KEY`.
 2. Resolves the installed `ploinky` binary and verifies required host tools are already present.
-3. Stops the current workspace if it is running.
-4. Puts the Ploinky runtime checkout on `ploinky_branch` and `achillesAgentLib` on `achilles_branch`.
-5. Adds/enables the `AchillesIDE` and `webmeetInfra` repos through Ploinky commands.
-6. Runs `ploinky update` so Ploinky updates the workspace repos and local Ploinky dependencies.
-7. Hard-resets the remote Ploinky-managed repo checkouts to the requested branches.
-8. Removes retired split WebMeet infra registrations and containers before the unified agent starts.
-9. Stores configured runtime variable overrides through `ploinky var`.
-10. Pulls `docker.io/assistos/ploinky-node:${PLOINKY_NODE_IMAGE_TAG}` and `docker.io/assistos/livekit-server-agent:${WEBMEET_INFRA_IMAGE_TAG}` before startup, so cold deployments use published runtime images instead of ad hoc package installation.
-11. Starts `AchillesIDE/explorer` on `EXPLORER_ROUTER_PORT` with branch-aware flags (`--branch`, `--repo-branch`, `--branch-fallback fail`, `--reset-repos`).
-12. Verifies local router health, `liveKitServerAgent` health on `127.0.0.1:${WEBMEET_INFRA_HEALTH_PORT:-17000}`, OnlyOffice `api.js` through `ONLYOFFICE_INTERNAL_URL`, public `EXPLORER_PUBLIC_URL` access through the Cloudflare tunnel, public `WEBMEET_PUBLIC_LIVEKIT_URL`, and browser-visible OnlyOffice `api.js` when `ONLYOFFICE_PUBLIC_URL` is configured.
+3. Pins `PLOINKY_WORKSPACE_ROOT` to the requested workspace so Ploinky commands cannot resolve to a stale parent workspace.
+4. Stops the current workspace only when its `.ploinky/routing.json` owns `EXPLORER_ROUTER_PORT`; otherwise it skips shutdown for cold workspaces and refuses to start when the port is already held by an unowned process.
+5. Puts the Ploinky runtime checkout on `ploinky_branch` and `achillesAgentLib` on `achilles_branch`.
+6. Installs the `AchillesIDE`, `webmeetInfra`, and `proxies` repos with the current `ploinky install ... --branch` command shape.
+7. Runs `ploinky update` so Ploinky updates the workspace repos and local Ploinky dependencies.
+8. Hard-resets the remote Ploinky-managed repo checkouts to the requested branches.
+9. Removes retired split WebMeet infra registrations and containers before the unified agent starts.
+10. Stores configured runtime variable overrides through `ploinky var`.
+11. Pulls `docker.io/assistos/ploinky-node:${PLOINKY_NODE_IMAGE_TAG}` and `docker.io/assistos/livekit-server-agent:${WEBMEET_INFRA_IMAGE_TAG}` before startup, so cold deployments use published runtime images instead of ad hoc package installation.
+12. Starts `AchillesIDE/explorer` on `EXPLORER_ROUTER_PORT` with branch-aware flags (`--branch`, `--repo-branch`, `--reset-repos`).
+13. Verifies local router health, checks `liveKitServerAgent` and OnlyOffice `api.js` as non-fatal infra gates unless `STRICT_INFRA_CHECKS=1`, verifies public `EXPLORER_PUBLIC_URL` access through the Cloudflare tunnel, verifies public `WEBMEET_PUBLIC_LIVEKIT_URL`, and verifies browser-visible OnlyOffice `api.js` through the required `ONLYOFFICE_PUBLIC_URL`.

@@ -79,6 +79,8 @@ jobs:
         env:
           SSH_KEY: ${{ secrets.SSH_KEY }}
           PLOINKY_MASTER_KEY: ${{ secrets.PLOINKY_MASTER_KEY }}
+          ONLYOFFICE_PUBLIC_URL: ${{ vars.ONLYOFFICE_PUBLIC_URL }}
+          ONLYOFFICE_INTERNAL_URL: ${{ vars.ONLYOFFICE_INTERNAL_URL }}
         run: |
           set -euo pipefail
           if [ -z "${SSH_KEY:-}" ]; then
@@ -93,6 +95,23 @@ jobs:
             echo "::error::PLOINKY_MASTER_KEY must be exactly 64 hex characters"
             exit 1
           fi
+          if [ -z "${ONLYOFFICE_PUBLIC_URL:-}" ]; then
+            echo "::error::Missing required repository variable ONLYOFFICE_PUBLIC_URL"
+            exit 1
+          fi
+          case "${ONLYOFFICE_PUBLIC_URL}" in
+            https://localhost*|https://127.*|https://0.0.0.0*|http://*)
+              echo "::error::ONLYOFFICE_PUBLIC_URL must be a browser-reachable HTTPS URL, not ${ONLYOFFICE_PUBLIC_URL}"
+              exit 1
+              ;;
+          esac
+          case "${ONLYOFFICE_INTERNAL_URL:-}" in
+            http://127.0.0.1:8082|http://localhost:8082|http://0.0.0.0:8082)
+              echo "::error::ONLYOFFICE_INTERNAL_URL is the in-container Document Server URL; leave it unset for managed OnlyOffice or set it to http://127.0.0.1:80."
+              echo "::error::The host-facing health probe already falls back to http://127.0.0.1:8082 when ONLYOFFICE_INTERNAL_URL is unset."
+              exit 1
+              ;;
+          esac
           if [ -z "${SSH_HOST:-}" ] || [ -z "${SSH_USER:-}" ]; then
             echo "::error::SSH_USER and SSH_HOST must be configured"
             exit 1
@@ -140,6 +159,7 @@ jobs:
           WEBMEET_ICE_TRANSPORT_POLICY: ${{ vars.WEBMEET_ICE_TRANSPORT_POLICY }}
           WEBMEET_TURN_MIN_PORT: ${{ vars.WEBMEET_TURN_MIN_PORT }}
           WEBMEET_TURN_MAX_PORT: ${{ vars.WEBMEET_TURN_MAX_PORT }}
+          STRICT_INFRA_CHECKS: ${{ vars.STRICT_INFRA_CHECKS }}
           PROXIES_BRANCH: ${{ inputs.proxies_branch || vars.PROXIES_BRANCH || 'main' }}
           PLOINKY_BRANCH: ${{ inputs.ploinky_branch || vars.PLOINKY_BRANCH || 'master' }}
           ACHILLES_BRANCH: ${{ inputs.achilles_branch || vars.ACHILLES_BRANCH || 'master' }}
@@ -189,6 +209,7 @@ jobs:
             write_env WEBMEET_ICE_TRANSPORT_POLICY
             write_env WEBMEET_TURN_MIN_PORT
             write_env WEBMEET_TURN_MAX_PORT
+            write_env STRICT_INFRA_CHECKS
           } > /tmp/skills_explorer_env
           chmod 600 /tmp/skills_explorer_env
 
@@ -234,6 +255,10 @@ jobs:
           WORK_DIR="$HOME/$WORKSPACE"
           mkdir -p "$WORK_DIR/logs"
           cd "$WORK_DIR"
+          # Pin every ploinky command to this workspace's .ploinky tree. Without
+          # this, a cold or partially destroyed workspace can resolve upward to a
+          # stale ~/.ploinky and read or mutate the wrong encrypted state.
+          export PLOINKY_WORKSPACE_ROOT="$WORK_DIR"
 
           set -a
           . /tmp/skills_explorer_env
@@ -251,9 +276,32 @@ jobs:
             WEBMEET_EGRESS_URL="${WEBMEET_EGRESS_URL:-http://host.containers.internal:7980}"
           fi
 
-          echo "[deploy] Removing current workspace containers if present..."
-          env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" shutdown || \
-            env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" stop || true
+          read_routing_port() {
+            node -e 'try{const p=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).port;process.stdout.write(p?String(p):"")}catch(e){process.stdout.write("")}' "$1" 2>/dev/null || true
+          }
+          SAFE_TO_SHUTDOWN=0
+          if [ -f "$WORK_DIR/.ploinky/routing.json" ]; then
+            WORKSPACE_ROUTING_PORT="$(read_routing_port "$WORK_DIR/.ploinky/routing.json")"
+            if [ "$WORKSPACE_ROUTING_PORT" = "$ROUTER_PORT" ]; then
+              SAFE_TO_SHUTDOWN=1
+            elif [ -n "$WORKSPACE_ROUTING_PORT" ]; then
+              echo "[deploy] ERROR: existing routing.json port ($WORKSPACE_ROUTING_PORT) != ROUTER_PORT ($ROUTER_PORT)."
+              echo "[deploy] 'ploinky shutdown' would target a port this run does not own. Aborting."
+              exit 1
+            fi
+          fi
+          if [ "$SAFE_TO_SHUTDOWN" = "1" ]; then
+            echo "[deploy] Workspace owns :$ROUTER_PORT; shutting it down before redeploy..."
+            env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" shutdown || \
+              env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" stop || true
+          else
+            echo "[deploy] Cold/unconfirmed workspace; skipping 'ploinky shutdown' because no matching routing.json owns :$ROUTER_PORT."
+          fi
+
+          if [ "$SAFE_TO_SHUTDOWN" != "1" ] && ss -ltn 2>/dev/null | awk '{print $4}' | grep -Eq "[:.]${ROUTER_PORT}$"; then
+            echo "[deploy] ERROR: port ${ROUTER_PORT} is already in use and is not owned by this workspace."
+            exit 1
+          fi
 
           echo "[deploy] Ensuring Ploinky runtime is on requested branch..."
           resolve_realpath() {
@@ -302,13 +350,13 @@ jobs:
             exit 1
           fi
 
-          echo "[deploy] Ensuring Ploinky repos are installed and enabled..."
-          "$PLOINKY" add repo AchillesIDE https://github.com/AssistOS-AI/AssistOSExplorer.git "${EXPLORER_BRANCH:-main}" || true
-          "$PLOINKY" add repo webmeetInfra https://github.com/AssistOS-AI/webmeetInfra.git main || true
-          "$PLOINKY" add repo proxies https://github.com/AssistOS-AI/proxies.git "${PROXIES_BRANCH:-main}" || true
-          "$PLOINKY" enable repo AchillesIDE
-          "$PLOINKY" enable repo webmeetInfra
-          "$PLOINKY" enable repo proxies
+          echo "[deploy] Installing Ploinky repos..."
+          # Ploinky retired 'add repo <name> <url> <branch>' / 'enable repo <name>' in favor of
+          # 'install <url|repoName> [name] [--branch X]'. Repos are activated by install; the
+          # explorer manifest's "enable" list brings up the agent stack at start time.
+          "$PLOINKY" install https://github.com/AssistOS-AI/AssistOSExplorer.git AchillesIDE --branch "${EXPLORER_BRANCH:-main}" || true
+          "$PLOINKY" install https://github.com/AssistOS-AI/webmeetInfra.git webmeetInfra --branch main || true
+          "$PLOINKY" install https://github.com/AssistOS-AI/proxies.git proxies --branch "${PROXIES_BRANCH:-main}" || true
 
           echo "[deploy] Updating Ploinky, Achilles dependencies, and installed repos..."
           if ! env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" update; then
@@ -451,9 +499,7 @@ jobs:
           set_var PLOINKY_WORKSPACE_ROOT "$WORK_DIR"
 
           set_var ONLYOFFICE_PUBLIC_URL "${ONLYOFFICE_PUBLIC_URL:-}"
-          # This value is consumed inside the onlyOffice agent container. The
-          # host-facing editor proxy stays published separately on 127.0.0.1:8082.
-          set_var ONLYOFFICE_INTERNAL_URL "http://127.0.0.1:80"
+          set_var ONLYOFFICE_INTERNAL_URL "${ONLYOFFICE_INTERNAL_URL:-}"
           set_var ONLYOFFICE_CALLBACK_BASE_URL "${ONLYOFFICE_CALLBACK_BASE_URL:-$PUBLIC_URL}"
 
           set_var WEBMEET_PUBLIC_LIVEKIT_URL "${WEBMEET_PUBLIC_LIVEKIT_URL:-}"
@@ -514,38 +560,50 @@ jobs:
             sleep 2
           done
 
-          echo "[deploy] Verifying liveKitServerAgent health on 127.0.0.1:${WEBMEET_INFRA_HEALTH_PORT}..."
+          case "$(printf '%s' "${STRICT_INFRA_CHECKS:-0}" | tr '[:upper:]' '[:lower:]')" in
+            1|true|yes|on) INFRA_FATAL=1 ;;
+            *) INFRA_FATAL=0 ;;
+          esac
+          echo "[deploy] Verifying liveKitServerAgent health on 127.0.0.1:${WEBMEET_INFRA_HEALTH_PORT} (fatal=${INFRA_FATAL})..."
+          LK_OK=0
           for i in $(seq 1 120); do
             code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${WEBMEET_INFRA_HEALTH_PORT}/" || true)"
             if [ "$code" = "200" ]; then
+              LK_OK=1
               echo "[deploy] liveKitServerAgent health responding with HTTP $code"
               break
             fi
-            if [ "$i" = "120" ]; then
-              echo "[deploy] ERROR: liveKitServerAgent health did not respond in time"
-              echo "[deploy] Last HTTP code: ${code:-none}"
+            sleep 2
+          done
+          if [ "$LK_OK" != "1" ]; then
+            if [ "$INFRA_FATAL" = "1" ]; then
+              echo "[deploy] ERROR: liveKitServerAgent health did not respond and STRICT_INFRA_CHECKS=1."
               tail -120 "$WORK_DIR/logs/skills-explorer-start.log" || true
               exit 1
             fi
-            sleep 2
-          done
+            echo "[deploy] WARNING: liveKitServerAgent health not responding; continuing (non-strict)."
+          fi
 
-          ONLYOFFICE_API_BASE="http://127.0.0.1:8082"
-          echo "[deploy] Verifying OnlyOffice api.js through ${ONLYOFFICE_API_BASE%/}..."
+          ONLYOFFICE_API_BASE="${ONLYOFFICE_INTERNAL_URL:-http://127.0.0.1:8082}"
+          echo "[deploy] Verifying OnlyOffice api.js through ${ONLYOFFICE_API_BASE%/} (fatal=${INFRA_FATAL})..."
+          OO_OK=0
           for i in $(seq 1 120); do
             code="$(curl -s -o /dev/null -w '%{http_code}' "${ONLYOFFICE_API_BASE%/}/web-apps/apps/api/documents/api.js" || true)"
             if [ "$code" = "200" ]; then
+              OO_OK=1
               echo "[deploy] OnlyOffice api.js responding with HTTP $code"
               break
             fi
-            if [ "$i" = "120" ]; then
-              echo "[deploy] ERROR: OnlyOffice api.js did not respond in time"
-              echo "[deploy] Last HTTP code: ${code:-none}"
+            sleep 2
+          done
+          if [ "$OO_OK" != "1" ]; then
+            if [ "$INFRA_FATAL" = "1" ]; then
+              echo "[deploy] ERROR: OnlyOffice api.js did not respond and STRICT_INFRA_CHECKS=1."
               tail -120 "$WORK_DIR/logs/skills-explorer-start.log" || true
               exit 1
             fi
-            sleep 2
-          done
+            echo "[deploy] WARNING: OnlyOffice api.js not responding; continuing (non-strict)."
+          fi
 
           echo "[deploy] Containers:"
           podman ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | head -100
@@ -595,6 +653,10 @@ jobs:
             done
           fi
 
+          if [ -z "${ONLYOFFICE_PUBLIC_URL:-}" ]; then
+            echo "[deploy] ERROR: ONLYOFFICE_PUBLIC_URL is required for browser editors."
+            exit 1
+          fi
           if [ -n "${ONLYOFFICE_PUBLIC_URL:-}" ]; then
             echo "[deploy] Verifying OnlyOffice public api.js from GitHub runner..."
             for i in $(seq 1 60); do
@@ -611,6 +673,20 @@ jobs:
               sleep 5
             done
           fi
+
+      - name: Create summary
+        if: always()
+        run: |
+          {
+            echo "## Skills Explorer Deploy"
+            echo ""
+            echo "- Host: \`${SSH_USER}@${SSH_HOST}\`"
+            echo "- Workspace: \`${WORKSPACE}\`"
+            echo "- Router port: \`${ROUTER_PORT}\`"
+            echo "- Local dashboard: \`http://127.0.0.1:${ROUTER_PORT}/dashboard\`"
+            echo "- Public URL: \`${PUBLIC_URL}\`"
+            echo "- Branch: \`${EXPLORER_BRANCH}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Cleanup
         if: always()
