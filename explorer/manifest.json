@@ -28,21 +28,17 @@
             "profile": "embedded"
         },
         "dpuAgent global",
-        "soplangAgent global",
+        "soplangAgent global no-wait",
         "tasksAgent global",
-        "AchillesCLI/achilles-cli global",
+        "AchillesCLI/achilles-cli global no-wait",
         "basic/webtty global",
         "webmeetInfra/liveKitServerAgent no-wait",
         "webmeetStt no-wait",
-        "webmeetAgent global",
-        "multimedia global",
-        "onlyOffice global",
-        {
-            "agent": "webAssist",
-            "profile": "embedded"
-        },
+        "webmeetAgent global no-wait",
+        "multimedia global no-wait",
+        "onlyOffice global no-wait",
         "proxies/soul-gateway",
-        "webAssist",
+        "webAssist no-wait",
         "UmamiAgent/umamiAgent no-wait"
     ],
     "repos": {
