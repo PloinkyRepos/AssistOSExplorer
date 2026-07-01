@@ -21,7 +21,7 @@ edit-skills-manifest-modal .edit-skills-manifest-modal-body {
     display: flex;
     flex-direction: column;
     gap: 12px;
-    min-width: min(760px, 92vw);
+    min-width: min(760px, calc(100vw - 24px));
     max-width: 860px;
     max-height: none;
     flex: 1 1 auto;
@@ -290,8 +290,37 @@ edit-skills-manifest-modal .edit-skills-manifest-skill-action:disabled {
 }
 
 @media (max-width: 720px) {
+    dialog.edit-skills-manifest-modal-dialog {
+        width: calc(100vw - 16px);
+        max-width: calc(100vw - 16px);
+        height: calc(100vh - 16px);
+        max-height: calc(100vh - 16px);
+        padding: 0;
+    }
+
+    edit-skills-manifest-modal .modal-header,
+    edit-skills-manifest-modal .edit-skills-manifest-modal-body {
+        padding: 12px;
+    }
+
+    edit-skills-manifest-modal .edit-skills-manifest-modal-body {
+        min-width: 0;
+    }
+
     edit-skills-manifest-modal .edit-skills-manifest-add-row {
         grid-template-columns: 1fr;
+    }
+
+    edit-skills-manifest-modal .edit-skills-manifest-preset-row,
+    edit-skills-manifest-modal .edit-skills-manifest-repo-header,
+    edit-skills-manifest-modal .edit-skills-manifest-skill-row {
+        grid-template-columns: 1fr;
+        align-items: stretch;
+    }
+
+    edit-skills-manifest-modal .edit-skills-manifest-skill-action,
+    edit-skills-manifest-modal .edit-skills-manifest-remove-repo {
+        width: 100%;
     }
 }
 

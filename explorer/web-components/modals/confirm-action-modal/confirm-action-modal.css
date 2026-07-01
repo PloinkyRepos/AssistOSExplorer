@@ -27,6 +27,7 @@ confirm-action-modal .modal-message {
 
 confirm-action-modal .modal-footer {
     display: flex;
+    flex-wrap: wrap;
     justify-content: flex-end;
     gap: var(--space-sm);
     margin-top: var(--space-lg);
@@ -72,4 +73,20 @@ confirm-action-modal .modal-footer button.secondary:hover {
 .theme-dark confirm-action-modal .modal-footer button.secondary:hover {
     background: #2b3a53;
     border-color: #64748b;
+}
+
+@media (max-width: 520px) {
+    confirm-action-modal .modal-body {
+        max-width: none;
+        overflow: auto;
+    }
+
+    confirm-action-modal .modal-footer {
+        align-items: stretch;
+        flex-direction: column-reverse;
+    }
+
+    confirm-action-modal .modal-footer button {
+        width: 100%;
+    }
 }

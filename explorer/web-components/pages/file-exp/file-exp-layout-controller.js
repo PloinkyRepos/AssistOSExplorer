@@ -4,6 +4,12 @@ import { getPreviewUiState as derivePreviewUiState } from "./file-exp-preview-st
 import { scrollToLine } from "./file-exp-utils.js";
 import { getDpuPathCapabilities, isDpuManagedPath } from "./file-exp-dpu-provider.js";
 
+function isMobileFileExplorerLayout() {
+    return typeof window !== 'undefined'
+        && typeof window.matchMedia === 'function'
+        && window.matchMedia('(max-width: 720px)').matches;
+}
+
 export async function runAfterRender(fileExp, options = {}) {
     const previewLinesFallback = Number.isFinite(options.previewLines) ? options.previewLines : 400;
 
@@ -122,8 +128,12 @@ export async function runAfterRender(fileExp, options = {}) {
         if (!toggleListButton || !listPanel) return;
         const collapsed = listPanel.classList.contains('collapsed');
         toggleListButton.setAttribute('aria-expanded', String(!collapsed));
-        toggleListButton.setAttribute('title', collapsed ? 'Expand directory panel' : 'Collapse directory panel');
-        toggleListButton.setAttribute('aria-label', collapsed ? 'Expand directory panel' : 'Collapse directory panel');
+        const isMobile = isMobileFileExplorerLayout();
+        const title = isMobile
+            ? (collapsed ? 'Show files' : 'Hide files')
+            : (collapsed ? 'Expand directory panel' : 'Collapse directory panel');
+        toggleListButton.setAttribute('title', title);
+        toggleListButton.setAttribute('aria-label', title);
     };
 
     const applyHeaderCollapsedState = () => {
@@ -159,11 +169,13 @@ export async function runAfterRender(fileExp, options = {}) {
     const applyCollapsedState = () => {
         if (!listPanel) return;
         listPanel.classList.toggle('collapsed', Boolean(fileExp.state.listCollapsed));
+        listPanel.classList.toggle('mobile-drawer', isMobileFileExplorerLayout());
     };
 
     const syncCollapsedState = () => {
         if (!workspace || !listPanel) return;
         workspace.classList.toggle('list-collapsed', listPanel.classList.contains('collapsed'));
+        workspace.classList.toggle('mobile-list-drawer', isMobileFileExplorerLayout());
     };
 
     const applySavedWidth = () => {
@@ -207,6 +219,18 @@ export async function runAfterRender(fileExp, options = {}) {
         };
         fileExp.setElementListener('toggle-list-button', toggleListButton, 'click', onToggleListClick);
         updateToggleState();
+    }
+
+    if (workspace && listPanel) {
+        const onMobileDrawerResize = () => {
+            applyCollapsedState();
+            syncCollapsedState();
+            updateToggleState();
+        };
+        fileExp.removeDocumentListener('mobile-list-drawer-outside');
+        fileExp.setWindowListener?.('mobile-list-drawer-resize', 'resize', onMobileDrawerResize);
+    } else {
+        fileExp.removeDocumentListener('mobile-list-drawer-outside');
     }
 
     if (toggleHeaderButton && directoryPanel && pathInfo && toolbar) {

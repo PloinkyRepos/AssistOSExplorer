@@ -35,6 +35,8 @@ export function positionOpenActionMenu(fileExp) {
     dropdown.style.right = '';
     dropdown.style.bottom = '';
     dropdown.style.maxHeight = '';
+    dropdown.style.maxWidth = '';
+    dropdown.style.width = '';
 
     const triggerRect = trigger.getBoundingClientRect();
     const menuRect = dropdown.getBoundingClientRect();
@@ -43,15 +45,19 @@ export function positionOpenActionMenu(fileExp) {
     const margin = 8;
     const viewportWidth = document.documentElement?.clientWidth || window.innerWidth;
     const viewportHeight = document.documentElement?.clientHeight || window.innerHeight;
+    const isMobileViewport = viewportWidth <= 720;
 
-    let left = triggerRect.right - menuRect.width;
-    const maxLeft = Math.max(margin, viewportWidth - menuRect.width - margin);
+    const menuWidth = isMobileViewport
+        ? Math.min(Math.max(menuRect.width, dropdown.scrollWidth || 0, 220), viewportWidth - margin * 2)
+        : menuRect.width;
+    let left = triggerRect.right - menuWidth;
+    const maxLeft = Math.max(margin, viewportWidth - menuWidth - margin);
     left = Math.min(Math.max(left, margin), maxLeft);
 
     const availableBelow = Math.max(0, viewportHeight - triggerRect.bottom - spacing - margin);
     const availableAbove = Math.max(0, triggerRect.top - spacing - margin);
     const menuHeight = naturalMenuHeight;
-    const shouldDropUp = availableBelow < menuHeight && availableAbove > availableBelow;
+    const shouldDropUp = !isMobileViewport && availableBelow < menuHeight && availableAbove > availableBelow;
     const availableVertical = shouldDropUp ? availableAbove : availableBelow;
     let top = triggerRect.bottom + spacing;
     let bottom = 'auto';
@@ -69,6 +75,10 @@ export function positionOpenActionMenu(fileExp) {
     dropdown.style.right = 'auto';
     dropdown.style.bottom = bottom;
     dropdown.style.maxHeight = `${Math.max(80, Math.floor(availableVertical))}px`;
+    if (isMobileViewport) {
+        dropdown.style.width = `${Math.floor(menuWidth)}px`;
+        dropdown.style.maxWidth = `calc(100vw - ${margin * 2}px)`;
+    }
     dropdown.dataset.positioned = 'true';
     dropdown.classList.toggle('drop-up', shouldDropUp);
 }

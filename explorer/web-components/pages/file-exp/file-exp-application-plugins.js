@@ -88,6 +88,32 @@ function getContainerOrientation(container, slot) {
     return slot === APP_PLUGIN_SLOTS.toolbar ? 'horizontal' : 'vertical';
 }
 
+function isMobileToolbarLayout() {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+        return false;
+    }
+    return window.matchMedia('(max-width: 720px)').matches;
+}
+
+function mergeUniquePlugins(...pluginLists) {
+    const plugins = [];
+    const seen = new Set();
+    for (const pluginList of pluginLists) {
+        if (!Array.isArray(pluginList)) {
+            continue;
+        }
+        for (const plugin of pluginList) {
+            const key = getPluginKey(plugin);
+            if (!key || seen.has(key)) {
+                continue;
+            }
+            seen.add(key);
+            plugins.push(plugin);
+        }
+    }
+    return plugins;
+}
+
 async function ensureRuntimeComponent(componentName) {
     const ensureComponentRegistered = window.assistOS?.webSkel?.ensureComponentRegistered || window.UI?.ensureComponentRegistered;
     if (typeof ensureComponentRegistered === 'function') {
@@ -224,6 +250,11 @@ async function performRenderApplicationPluginSlots(fileExp) {
     const accountMenuContainer = fileExp.element.querySelector('#fileExpAccountMenuPlugins');
     const toolbarPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.toolbar, { contributionType: MOUNT_CONTRIBUTION_TYPE });
     const toolbarPluginsDropdownPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.toolbarPluginsDropdown, { contributionType: MOUNT_CONTRIBUTION_TYPE });
+    const useMobileToolbar = isMobileToolbarLayout();
+    const visibleToolbarPlugins = useMobileToolbar ? [] : toolbarPlugins;
+    const visibleToolbarDropdownPlugins = useMobileToolbar
+        ? mergeUniquePlugins(toolbarPlugins, toolbarPluginsDropdownPlugins)
+        : toolbarPluginsDropdownPlugins;
     const rightBarPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.rightBar, { contributionType: MOUNT_CONTRIBUTION_TYPE });
     const internalPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.internal, { contributionType: MOUNT_CONTRIBUTION_TYPE });
     const globalPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.global, { contributionType: MOUNT_CONTRIBUTION_TYPE });
@@ -235,8 +266,8 @@ async function performRenderApplicationPluginSlots(fileExp) {
     const globalContext = buildPluginContext(fileExp, APP_PLUGIN_SLOTS.global);
     const accountMenuContext = buildPluginContext(fileExp, APP_PLUGIN_SLOTS.accountMenu);
 
-    await mountSlot(toolbarContainer, APP_PLUGIN_SLOTS.toolbar, toolbarPlugins, toolbarContext);
-    await mountSlot(toolbarPluginsDropdownContainer, APP_PLUGIN_SLOTS.toolbarPluginsDropdown, toolbarPluginsDropdownPlugins, toolbarPluginsDropdownContext);
+    await mountSlot(toolbarContainer, APP_PLUGIN_SLOTS.toolbar, visibleToolbarPlugins, toolbarContext);
+    await mountSlot(toolbarPluginsDropdownContainer, APP_PLUGIN_SLOTS.toolbarPluginsDropdown, visibleToolbarDropdownPlugins, toolbarPluginsDropdownContext);
     await mountSlot(rightBarContainer, APP_PLUGIN_SLOTS.rightBar, rightBarPlugins, rightBarContext);
     await mountSlot(internalContainer, APP_PLUGIN_SLOTS.internal, internalPlugins, internalContext);
     await mountSlot(globalContainer, APP_PLUGIN_SLOTS.global, globalPlugins, globalContext);
@@ -285,8 +316,22 @@ export function attachApplicationPluginHost(fileExp) {
             console.error('[app-plugins] Failed to render application plugin slots', error);
         });
     };
+    const rerenderForToolbarViewport = () => {
+        const nextMobileToolbarLayout = isMobileToolbarLayout();
+        if (fileExp.__appPluginMobileToolbarLayout === nextMobileToolbarLayout) {
+            return;
+        }
+        fileExp.__appPluginMobileToolbarLayout = nextMobileToolbarLayout;
+        renderApplicationPluginSlots(fileExp).catch((error) => {
+            console.error('[app-plugins] Failed to render application plugin slots after viewport change', error);
+        });
+    };
 
+    fileExp.__appPluginMobileToolbarLayout = isMobileToolbarLayout();
     fileExp.setWindowListener?.('file-exp-app-plugins-settings', 'assistos:plugin-settings-updated', rerender);
+    fileExp.setWindowListener?.('file-exp-app-plugins-toolbar-viewport', 'resize', rerenderForToolbarViewport, {
+        passive: true
+    });
     fileExp.registerCleanup?.(() => {
         const toolbarContainer = fileExp.element?.querySelector?.('#fileExpToolbarPlugins');
         const toolbarPluginsDropdownContainer = fileExp.element?.querySelector?.('#fileExpToolbarPluginsDropdown');
@@ -309,5 +354,6 @@ export function attachApplicationPluginHost(fileExp) {
             globalContainer.replaceChildren();
         }
         fileExp.__appPluginRenderPromise = null;
+        fileExp.__appPluginMobileToolbarLayout = null;
     });
 }

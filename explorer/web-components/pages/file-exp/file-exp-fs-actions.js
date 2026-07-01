@@ -491,6 +491,8 @@ export function attachFsActions(fileExp) {
                 dropdown.style.top = '';
                 dropdown.style.right = '';
                 dropdown.style.bottom = '';
+                dropdown.style.width = '';
+                dropdown.style.maxWidth = '';
             }
             this.pendingMenuFocusPath = null;
             this.contextMenuLoadToken += 1;

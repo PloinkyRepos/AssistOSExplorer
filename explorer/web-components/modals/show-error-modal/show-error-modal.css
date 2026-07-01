@@ -1,5 +1,7 @@
 #show-error-modal {
-    width: 500px;
+    width: min(500px, calc(100vw - 32px));
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 #show-error-modal-header {
@@ -22,7 +24,7 @@
 }
 
 #show-error-model-content {
-    margin: 20px 40px;
+    margin: 20px clamp(12px, 8vw, 40px);
     text-align: center;
 }
 
@@ -65,7 +67,7 @@
 
 @media (max-width: 500px) {
     #show-error-modal {
-        width: 100%;
+        width: calc(100vw - 16px);
     }
 
     #error-message {
@@ -82,5 +84,6 @@
     #details-button,
     #ok-button {
         margin: 10px 0;
+        width: 100%;
     }
 }

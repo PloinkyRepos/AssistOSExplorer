@@ -1,11 +1,26 @@
 add-comment {
     display: block;
-    width: 860px;
+    width: min(860px, calc(100vw - 32px));
+    max-width: 100%;
 }
 
 #comment{
     resize: none;
     outline: none;
-    height: 250px;
-    margin-bottom: 55px;
+    width: 100%;
+    min-height: 180px;
+    height: min(250px, 38vh);
+    margin-bottom: 24px;
+    box-sizing: border-box;
+}
+
+@media (max-width: 520px) {
+    add-comment {
+        width: calc(100vw - 16px);
+    }
+
+    #comment {
+        height: 34vh;
+        margin-bottom: 16px;
+    }
 }

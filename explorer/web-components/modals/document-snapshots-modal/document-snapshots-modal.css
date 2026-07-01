@@ -1,6 +1,8 @@
 document-snapshots-modal{
     display: block;
-    width: 560px;
+    width: min(560px, calc(100vw - 32px));
+    max-width: 100%;
+    box-sizing: border-box;
 }
 .document-snapshot{
     display: flex;
@@ -20,7 +22,7 @@ document-snapshots-modal{
     width: 130px;
 }
 .snapshot-user{
-    width: 300px;
+    width: min(300px, 45vw);
 }
 .list-header{
     display: flex;
@@ -63,4 +65,25 @@ document-snapshots-modal{
 }
 .current-snapshot-version{
     background-color: var(--very-light-gray);
+}
+
+@media (max-width: 520px) {
+    .document-snapshot,
+    .list-header {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .snapshot-date,
+    .snapshot-user {
+        width: 100%;
+        margin-right: 0;
+    }
+
+    .export-snapshot,
+    .export-document {
+        margin-right: 0;
+        margin-left: 0;
+    }
 }
