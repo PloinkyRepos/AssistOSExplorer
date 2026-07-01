@@ -23,6 +23,20 @@ test('computeComponentBaseUrl handles overrides via custom path', () => {
     assert.equal(base, '/agent/IDE-plugins/shared/widgets/widget');
 });
 
+test('computeComponentBaseUrl resolves custom dependency paths from owner asset root', () => {
+    const base = computeComponentBaseUrl('webmeetAgent', 'webmeet-dashboard', {
+        ownerComponent: 'webmeet-tool-button',
+        isDependency: true,
+        customPath: 'components/webmeet-dashboard/webmeet-dashboard',
+        pluginsBaseUrl: '/workspace-files/.ploinky/repos/AchillesIDE/webmeetAgent/IDE-plugins',
+        ownerAssetBaseUrl: '/workspace-files/.ploinky/repos/AchillesIDE/webmeetAgent/IDE-plugins/webmeet-tool-button'
+    });
+    assert.equal(
+        base,
+        '/workspace-files/.ploinky/repos/AchillesIDE/webmeetAgent/IDE-plugins/webmeet-tool-button/components/webmeet-dashboard/webmeet-dashboard'
+    );
+});
+
 test('resolveRuntimeAssetUrl ignores absolute urls', () => {
     const value = resolveRuntimeAssetUrl('agent', 'component', 'https://example.com/icon.svg');
     assert.equal(value, 'https://example.com/icon.svg');
