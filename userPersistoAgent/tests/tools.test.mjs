@@ -33,6 +33,12 @@ const IMPLEMENTED = [
     'userpersisto_credits_reserve',
     'userpersisto_credits_commit',
     'userpersisto_credits_release',
+    'userpersisto_config_get',
+    'userpersisto_config_set',
+    'userpersisto_billing_checkout_create',
+    'userpersisto_billing_stripe_webhook_process',
+    'userpersisto_billing_subscription_get',
+    'userpersisto_billing_events_list',
     'userpersisto_audit_events_list'
 ];
 
