@@ -40,6 +40,7 @@
         "soul-gateway": true
     },
     "routerAccess": {
+        "requiredCapability": "explorer.access",
         "httpRoutes": [
             {
                 "path": "/shared/*",
