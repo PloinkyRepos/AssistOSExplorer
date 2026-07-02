@@ -4,6 +4,7 @@ import { loginWithPassword, setPassword } from '../lib/auth/password.mjs';
 import { startEmailCode, verifyEmailCode } from '../lib/auth/email-code.mjs';
 import * as passkey from '../lib/auth/passkey.mjs';
 import * as totp from '../lib/auth/totp.mjs';
+import * as credits from '../lib/credits.mjs';
 import { getStore } from '../lib/store.mjs';
 
 function requireAdmin(context) {
@@ -98,6 +99,49 @@ const HANDLERS = {
     userpersisto_totp_login_verify: async (args) => totp.loginVerify({
         email: args.email,
         token: args.token
+    }),
+    userpersisto_credits_balance: async (args, context) => credits.getBalance(
+        args.userId && context.actorRoles?.includes('admin') ? args.userId : requireActor(context)
+    ),
+    userpersisto_credits_grant: async (args, context) => {
+        requireAdmin(context);
+        return credits.grant({
+            userId: args.userId,
+            amount: args.amount,
+            reason: args.reason || '',
+            actorId: context.actorUserId
+        });
+    },
+    userpersisto_credits_reserve: async (args) => credits.reserve({
+        userId: args.userId,
+        amount: args.amount,
+        reason: args.reason || '',
+        referenceId: args.referenceId || ''
+    }),
+    userpersisto_credits_commit: async (args) => credits.commit({
+        userId: args.userId,
+        amount: args.amount,
+        referenceId: args.referenceId || ''
+    }),
+    userpersisto_credits_release: async (args) => credits.release({
+        userId: args.userId,
+        amount: args.amount,
+        referenceId: args.referenceId || ''
+    }),
+    userpersisto_credits_refund: async (args, context) => {
+        requireAdmin(context);
+        return credits.refund({
+            userId: args.userId,
+            amount: args.amount,
+            reason: args.reason || '',
+            referenceId: args.referenceId || '',
+            actorId: context.actorUserId
+        });
+    },
+    userpersisto_credits_ledger: async (args, context) => credits.ledger({
+        userId: args.userId && context.actorRoles?.includes('admin') ? args.userId : requireActor(context),
+        start: args.start || 0,
+        pageSize: args.pageSize || 100
     }),
     userpersisto_audit_events_list: async (args, context) => {
         requireAdmin(context);

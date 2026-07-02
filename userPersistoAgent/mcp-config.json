@@ -420,11 +420,11 @@
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "reservationId": { "type": "string", "minLength": 1 },
-                    "reason": { "type": "string" },
+                    "userId": { "type": "string", "minLength": 1 },
+                    "amount": { "type": "integer", "minimum": 1 },
                     "referenceId": { "type": "string" }
                 },
-                "required": ["reservationId"],
+                "required": ["userId", "amount"],
                 "additionalProperties": false
             },
             "tags": ["internal"],
@@ -440,8 +440,12 @@
             "timeoutMs": 30000,
             "inputSchema": {
                 "type": "object",
-                "properties": { "reservationId": { "type": "string", "minLength": 1 } },
-                "required": ["reservationId"],
+                "properties": {
+                    "userId": { "type": "string", "minLength": 1 },
+                    "amount": { "type": "integer", "minimum": 1 },
+                    "referenceId": { "type": "string" }
+                },
+                "required": ["userId", "amount"],
                 "additionalProperties": false
             },
             "tags": ["internal"],
