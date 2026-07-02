@@ -241,7 +241,7 @@ dialog::backdrop {
 
 .search-overlay.open {
     display: block;
-    height: 100%;
+    height: fit-content;
 }
 
 .search-overlay-card {
@@ -647,7 +647,7 @@ dialog::backdrop {
 
     .search-mode-switch {
         width: 100%;
-        overflow-x: auto;
+        height: fit-content;
     }
 
     .search-row.search-row-primary {

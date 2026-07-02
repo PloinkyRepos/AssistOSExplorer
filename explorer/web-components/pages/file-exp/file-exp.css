@@ -716,6 +716,7 @@ main {
         border: 1px solid var(--file-exp-border);
         border-radius: 8px;
         background: var(--file-exp-panel);
+        width: calc(50% - 5px);
     }
 
     .toolbar-spacer {
@@ -1939,14 +1940,14 @@ th {
         content: "";
         position: absolute;
         inset: 0;
-        z-index: 850;
+        z-index: 1;
         background: rgba(15, 23, 42, 0.22);
     }
 
     .list {
         position: absolute;
         inset: 0 auto 0 0;
-        z-index: 900;
+        z-index: 1;
         width: min(86vw, 360px);
         flex: 0 0 min(86vw, 360px);
         min-width: 0;
