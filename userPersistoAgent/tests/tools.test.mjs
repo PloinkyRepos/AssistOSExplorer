@@ -26,6 +26,13 @@ const IMPLEMENTED = [
     'userpersisto_totp_setup_start',
     'userpersisto_totp_setup_verify',
     'userpersisto_totp_login_verify',
+    'userpersisto_credits_balance',
+    'userpersisto_credits_ledger',
+    'userpersisto_credits_grant',
+    'userpersisto_credits_refund',
+    'userpersisto_credits_reserve',
+    'userpersisto_credits_commit',
+    'userpersisto_credits_release',
     'userpersisto_audit_events_list'
 ];
 
