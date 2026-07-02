@@ -529,6 +529,9 @@ export async function runAfterRender(fileExp, options = {}) {
     const filterToggle = fileExp.element.querySelector('#filterSpecsToggle');
     if (filterToggle) {
         filterToggle.checked = Boolean(fileExp.state.filterSpecs);
+        fileExp.setElementListener('filter-specs-toggle', filterToggle, 'change', () => {
+            fileExp.toggleFilterSpecs(filterToggle);
+        });
     }
 
     fileExp.setupSearchBindings();
