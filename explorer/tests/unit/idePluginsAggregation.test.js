@@ -334,3 +334,33 @@ test('aggregateIdePlugins rejects absolute plugin settings URLs', async () => {
         await fs.rm(workspaceRoot, { recursive: true, force: true });
     }
 });
+
+test('aggregateIdePlugins discovers UserPersisto and EmailAgent settings from repository manifests', async () => {
+    const repoRoot = path.resolve(import.meta.dirname, '../../..');
+    const aggregated = await aggregateIdePlugins(repoRoot);
+    const settingsByKey = new Map(aggregated.agentSettings.map((item) => [item.key, item]));
+
+    assert.deepEqual(
+        ['userpersisto-settings', 'email-agent-settings'].map((key) => settingsByKey.get(key)),
+        [
+            {
+                key: 'userpersisto-settings',
+                label: 'UserPersisto',
+                ownerAgent: 'userPersistoAgent',
+                scope: 'workspace',
+                pluginKey: 'userPersistoAgent/userpersisto-settings',
+                settingsComponent: 'userpersisto-settings',
+                adminOnly: true
+            },
+            {
+                key: 'email-agent-settings',
+                label: 'Email Agent',
+                ownerAgent: 'emailAgent',
+                scope: 'workspace',
+                pluginKey: 'emailAgent/email-agent-settings',
+                settingsComponent: 'email-agent-settings',
+                adminOnly: true
+            }
+        ]
+    );
+});

@@ -22,6 +22,16 @@
             "includeAuthInfo": false
         }
     ],
+    "ideSettings": [
+        {
+            "key": "userpersisto-settings",
+            "label": "UserPersisto",
+            "scope": "workspace",
+            "pluginKey": "userPersistoAgent/userpersisto-settings",
+            "settingsComponent": "userpersisto-settings",
+            "adminOnly": true
+        }
+    ],
     "profiles": {
         "default": {
             "install": "sh /code/scripts/installPersisto.sh",

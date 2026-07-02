@@ -1,0 +1,104 @@
+<div class="userpersisto-settings-modal">
+    <div class="modal-header">
+        <div class="modal-title">UserPersisto Settings</div>
+        <div class="close" data-local-action="closeModal" aria-label="Close">
+            <img class="close-icon" src="./assets/icons/x-mark.svg" alt="close">
+        </div>
+    </div>
+
+    <div class="modal-body userpersisto-settings-body">
+        <div class="userpersisto-tabs" role="tablist">
+            <button type="button" class="userpersisto-tab active" data-local-action="switchPanel users" data-panel="users">User Management</button>
+            <button type="button" class="userpersisto-tab" data-local-action="switchPanel auth" data-panel="auth">Current Profile</button>
+            <button type="button" class="userpersisto-tab" data-local-action="switchPanel provider" data-panel="provider">Billing</button>
+        </div>
+
+        <section class="userpersisto-panel hidden" data-section="provider">
+            <div class="userpersisto-grid">
+                <label class="form-item">
+                    <span class="form-label">Stripe secret key</span>
+                    <input id="stripeSecretKey" class="form-input" type="password" placeholder="Leave unchanged" autocomplete="off" spellcheck="false">
+                    <span class="userpersisto-mask" data-mask-for="STRIPE_SECRET_KEY"></span>
+                    <button type="button" class="gray-button userpersisto-remove-secret" data-local-action="removeSecret STRIPE_SECRET_KEY">Remove secret</button>
+                </label>
+                <label class="form-item">
+                    <span class="form-label">Stripe webhook secret</span>
+                    <input id="stripeWebhookSecret" class="form-input" type="password" placeholder="Leave unchanged" autocomplete="off" spellcheck="false">
+                    <span class="userpersisto-mask" data-mask-for="STRIPE_WEBHOOK_SECRET"></span>
+                    <button type="button" class="gray-button userpersisto-remove-secret" data-local-action="removeSecret STRIPE_WEBHOOK_SECRET">Remove secret</button>
+                </label>
+                <label class="form-item">
+                    <span class="form-label">Stripe publishable key</span>
+                    <input id="stripePublishableKey" class="form-input" type="text" autocomplete="off" spellcheck="false">
+                    <span class="userpersisto-mask" data-mask-for="STRIPE_PUBLISHABLE_KEY"></span>
+                </label>
+                <label class="form-item">
+                    <span class="form-label">Credits price ID</span>
+                    <input id="stripePriceCredits" class="form-input" type="text" autocomplete="off" spellcheck="false">
+                    <span class="userpersisto-mask" data-mask-for="STRIPE_PRICE_CREDITS"></span>
+                </label>
+                <label class="form-item">
+                    <span class="form-label">Subscription price ID</span>
+                    <input id="stripePriceSubscription" class="form-input" type="text" autocomplete="off" spellcheck="false">
+                    <span class="userpersisto-mask" data-mask-for="STRIPE_PRICE_SUBSCRIPTION"></span>
+                </label>
+                <label class="form-item">
+                    <span class="form-label">Credits per unit</span>
+                    <input id="creditsPerUnit" class="form-input" type="number" min="1" step="1" autocomplete="off" spellcheck="false">
+                    <span class="userpersisto-mask" data-mask-for="USERPERSISTO_CREDITS_PER_UNIT"></span>
+                </label>
+            </div>
+            <div class="userpersisto-actions">
+                <button type="button" class="general-button" data-local-action="saveProviderSettings">Save billing settings</button>
+            </div>
+        </section>
+
+        <section class="userpersisto-panel hidden" data-section="auth">
+            <div class="userpersisto-auth-methods-card">
+                <div class="userpersisto-auth-methods-header">
+                    <div>
+                        <div class="userpersisto-card-title">Authenticated profile</div>
+                        <div class="userpersisto-card-description">The current router user as resolved by UserPersisto.</div>
+                    </div>
+                    <button type="button" class="gray-button" data-local-action="refreshAuthProfile">Refresh</button>
+                </div>
+                <div id="authProfileSummary" class="userpersisto-list"></div>
+            </div>
+        </section>
+
+        <section class="userpersisto-panel" data-section="users">
+            <div class="userpersisto-create-user">
+                <label class="form-item">
+                    <span class="form-label">Email</span>
+                    <input id="createUserEmail" class="form-input" type="email" autocomplete="off" spellcheck="false">
+                </label>
+                <label class="form-item">
+                    <span class="form-label">Display name</span>
+                    <input id="createUserDisplayName" class="form-input" type="text" autocomplete="off" spellcheck="false">
+                </label>
+                <label class="form-item">
+                    <span class="form-label">Password (optional)</span>
+                    <input id="createUserPassword" class="form-input" type="password" autocomplete="new-password" spellcheck="false">
+                </label>
+                <label class="form-item">
+                    <span class="form-label">Role</span>
+                    <select id="createUserRole" class="form-input">
+                        <option value="user">user</option>
+                        <option value="admin">admin</option>
+                        <option value="selfRegistered">selfRegistered</option>
+                    </select>
+                </label>
+                <div class="userpersisto-actions">
+                    <button type="button" class="general-button" data-local-action="createUser">Create user</button>
+                </div>
+            </div>
+            <div class="userpersisto-actions userpersisto-actions-split">
+                <input id="userSearchInput" class="form-input" type="search" placeholder="Search users" spellcheck="false">
+                <button type="button" class="general-button" data-local-action="refreshUsers">Refresh</button>
+            </div>
+            <div id="usersList" class="userpersisto-list"></div>
+        </section>
+
+        <div id="userpersistoStatus" class="userpersisto-status" role="status" aria-live="polite"></div>
+    </div>
+</div>

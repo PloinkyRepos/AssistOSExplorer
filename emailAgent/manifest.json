@@ -12,6 +12,16 @@
       "containerPath": "/data"
     }
   ],
+  "ideSettings": [
+    {
+      "key": "email-agent-settings",
+      "label": "Email Agent",
+      "scope": "workspace",
+      "pluginKey": "emailAgent/email-agent-settings",
+      "settingsComponent": "email-agent-settings",
+      "adminOnly": true
+    }
+  ],
   "profiles": {
     "default": {
       "env": {
