@@ -17,7 +17,7 @@
         {
             "slug": "userpersisto",
             "externalPrefix": "/public-services/userpersisto/",
-            "internalPrefix": "/",
+            "internalPrefix": "/service/",
             "access": "guest",
             "includeAuthInfo": false
         }
