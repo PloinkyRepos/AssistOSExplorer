@@ -1,0 +1,28 @@
+{
+  "name": "emailAgent",
+  "description": "Transactional email via Mailjet. Sends auth codes for UserPersisto and text/template emails for other agents. Never logs raw auth codes.",
+  "container": "docker.io/assistos/ploinky-node:24-bookworm-tools",
+  "agent": "sh -c 'mkdir -p /data && exec sleep infinity'",
+  "readiness": {
+    "protocol": "mcp"
+  },
+  "volumes": [
+    {
+      "hostPath": ".ploinky/data/emailAgent",
+      "containerPath": "/data"
+    }
+  ],
+  "profiles": {
+    "default": {
+      "env": {
+        "EMAILAGENT_SETTINGS_KEY": {
+          "generatedSecret": true
+        },
+        "EMAILAGENT_SETTINGS_FILE": {
+          "required": false,
+          "default": "/data/settings.enc.json"
+        }
+      }
+    }
+  }
+}
