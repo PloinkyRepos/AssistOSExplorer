@@ -13,6 +13,24 @@ import {
     openPluginSettingsUrl
 } from "./settings-component-loader.js";
 
+function isUserPersistoSettingsItem(item) {
+    const owner = String(item?.ownerAgent || item?.agent || "").trim();
+    const key = String(item?.key || "").trim();
+    const component = String(item?.settingsComponent || item?.component || "").trim();
+    return owner === "userPersistoAgent"
+        || owner.endsWith("/userPersistoAgent")
+        || key === "userPersistoAgent/userpersisto-settings"
+        || component === "userpersisto-settings";
+}
+
+function splitUserAdministrationItem(items = []) {
+    const userAdministrationItem = items.find(isUserPersistoSettingsItem) || null;
+    return {
+        userAdministrationItem,
+        agentItems: items
+    };
+}
+
 function escapeHtml(value) {
     return String(value ?? '')
         .replaceAll('&', '&amp;')
@@ -51,7 +69,7 @@ export const runtimeSettingsController = {
             this.pluginSettingsListEl.innerHTML = `<div class="plugin-settings-empty">No plugins discovered for this workspace.</div>`;
             return;
         }
-        const visibleItems = this.state.usersAccess
+        const visibleItems = this.state.adminAccess
             ? this.state.pluginItems
             : this.state.pluginItems.filter((item) => !item.adminOnly);
         this.pluginSettingsListEl.innerHTML = visibleItems.map((item) => {
@@ -86,7 +104,7 @@ export const runtimeSettingsController = {
             this.agentSettingsListEl.innerHTML = `<div class="plugin-settings-empty">No configurable agents discovered for this workspace.</div>`;
             return;
         }
-        const visibleItems = this.state.usersAccess
+        const visibleItems = this.state.adminAccess
             ? this.state.agentSettingsItems
             : this.state.agentSettingsItems.filter((item) => !item.adminOnly);
         if (!visibleItems.length) {
@@ -141,7 +159,10 @@ export const runtimeSettingsController = {
                 ? pluginsByLocation.agentSettings
                 : [];
             this.state.pluginItems = flattenPluginsByKey(pluginsByLocation);
-            this.state.agentSettingsItems = buildAgentSettingsItems(this.state.agentSettingsRaw, this.state.pluginItems);
+            const agentSettingsItems = buildAgentSettingsItems(this.state.agentSettingsRaw, this.state.pluginItems);
+            const { userAdministrationItem, agentItems } = splitUserAdministrationItem(agentSettingsItems);
+            this.state.userAdministrationSettingsItem = userAdministrationItem;
+            this.state.agentSettingsItems = agentItems;
             this.state.pluginSettings = settings;
             this.state.pluginDataLoaded = true;
             if (window.assistOS) {
@@ -171,7 +192,10 @@ export const runtimeSettingsController = {
         if (!this.state.pluginDataLoaded) {
             await this.loadPluginSettingsData();
         } else {
-            this.state.agentSettingsItems = buildAgentSettingsItems(this.state.agentSettingsRaw, this.state.pluginItems);
+            const agentSettingsItems = buildAgentSettingsItems(this.state.agentSettingsRaw, this.state.pluginItems);
+            const { userAdministrationItem, agentItems } = splitUserAdministrationItem(agentSettingsItems);
+            this.state.userAdministrationSettingsItem = userAdministrationItem;
+            this.state.agentSettingsItems = agentItems;
         }
         this.state.agentSettingsDataLoaded = true;
         this.state.agentSettingsStatus = this.state.agentSettingsItems.length
@@ -262,4 +286,3 @@ export const runtimeSettingsController = {
         }
     }
 };
-

@@ -27,6 +27,117 @@ axiface_root="${AXIFACE_REPO_PATH:-${axiface_default_root}}"
 # - runMode: global
 # - projectPath: <workspace_root>
 agents_file="${workspace_root}/.ploinky/agents.json"
+mkdir -p "${workspace_root}/.ploinky"
+
+if [[ -z "$(node "$secrets_tool" "$workspace_root" get "USERPERSISTO_RUNTIME_SECRET")" ]]; then
+    node "$secrets_tool" "$workspace_root" set "USERPERSISTO_RUNTIME_SECRET" "$(node -e "process.stdout.write(require('crypto').randomBytes(32).toString('base64url'))")"
+fi
+
+if [[ -z "$(node "$secrets_tool" "$workspace_root" get "USERPERSISTO_SETTINGS_SECRET")" ]]; then
+    node "$secrets_tool" "$workspace_root" set "USERPERSISTO_SETTINGS_SECRET" "$(node -e "process.stdout.write(require('crypto').randomBytes(32).toString('base64url'))")"
+fi
+
+if [[ -z "$(node "$secrets_tool" "$workspace_root" get "EMAIL_AGENT_SETTINGS_SECRET")" ]]; then
+    node "$secrets_tool" "$workspace_root" set "EMAIL_AGENT_SETTINGS_SECRET" "$(node -e "process.stdout.write(require('crypto').randomBytes(32).toString('base64url'))")"
+fi
+
+node - <<'NODE'
+const fs = require('fs');
+const path = require('path');
+
+const workspaceRoot = process.env.PLOINKY_WORKSPACE_ROOT;
+if (!workspaceRoot) process.exit(0);
+
+const policyFile = path.join(workspaceRoot, '.ploinky', 'data', 'router-security', 'policy-state.json');
+const now = new Date().toISOString();
+const requiredTools = [
+  ['emailAgent', 'email_send_auth_code', 'internal'],
+  ['emailAgent', 'email_send_text', 'internal'],
+  ['emailAgent', 'email_send_template', 'internal'],
+  ['emailAgent', 'email_send_test', 'admin'],
+  ['emailAgent', 'email_config_get', 'admin'],
+  ['emailAgent', 'email_config_set', 'admin'],
+  ['emailAgent', 'email_provider_status', 'admin'],
+  ['userPersistoAgent', 'userpersisto_profile_get', 'authenticated'],
+  ['userPersistoAgent', 'userpersisto_authorize_capability', 'internal'],
+  ['userPersistoAgent', 'userpersisto_user_list', 'admin'],
+  ['userPersistoAgent', 'userpersisto_user_create', 'admin'],
+  ['userPersistoAgent', 'userpersisto_user_update', 'admin'],
+  ['userPersistoAgent', 'userpersisto_user_roles_update', 'admin'],
+  ['userPersistoAgent', 'userpersisto_auth_password_login', 'internal'],
+  ['userPersistoAgent', 'userpersisto_auth_password_set', 'authenticated'],
+  ['userPersistoAgent', 'userpersisto_auth_email_code_start', 'internal'],
+  ['userPersistoAgent', 'userpersisto_auth_email_code_verify', 'internal'],
+  ['userPersistoAgent', 'userpersisto_passkey_registration_options', 'authenticated'],
+  ['userPersistoAgent', 'userpersisto_passkey_registration_verify', 'authenticated'],
+  ['userPersistoAgent', 'userpersisto_passkey_login_options', 'internal'],
+  ['userPersistoAgent', 'userpersisto_passkey_login_verify', 'internal'],
+  ['userPersistoAgent', 'userpersisto_totp_setup_start', 'authenticated'],
+  ['userPersistoAgent', 'userpersisto_totp_setup_verify', 'authenticated'],
+  ['userPersistoAgent', 'userpersisto_totp_login_verify', 'internal'],
+  ['userPersistoAgent', 'userpersisto_credits_balance', 'authenticated'],
+  ['userPersistoAgent', 'userpersisto_credits_ledger', 'authenticated'],
+  ['userPersistoAgent', 'userpersisto_credits_grant', 'admin'],
+  ['userPersistoAgent', 'userpersisto_credits_refund', 'admin'],
+  ['userPersistoAgent', 'userpersisto_credits_reserve', 'internal'],
+  ['userPersistoAgent', 'userpersisto_credits_commit', 'internal'],
+  ['userPersistoAgent', 'userpersisto_credits_release', 'internal'],
+  ['userPersistoAgent', 'userpersisto_billing_checkout_create', 'authenticated'],
+  ['userPersistoAgent', 'userpersisto_billing_subscription_get', 'authenticated'],
+  ['userPersistoAgent', 'userpersisto_billing_stripe_webhook_process', 'internal'],
+  ['userPersistoAgent', 'userpersisto_billing_events_list', 'admin'],
+  ['userPersistoAgent', 'userpersisto_config_get', 'admin'],
+  ['userPersistoAgent', 'userpersisto_config_set', 'admin'],
+  ['userPersistoAgent', 'userpersisto_audit_events_list', 'admin']
+];
+
+let state = { schema: 'router-policy', httpRoutes: [], mcpTools: [] };
+try {
+  if (fs.existsSync(policyFile)) {
+    state = JSON.parse(fs.readFileSync(policyFile, 'utf8'));
+  }
+} catch {
+  process.exit(0);
+}
+if (!state || state.schema !== 'router-policy' || !Array.isArray(state.httpRoutes) || !Array.isArray(state.mcpTools)) {
+  process.exit(0);
+}
+
+let changed = false;
+for (const [agent, tool, access] of requiredTools) {
+  let entry = state.mcpTools.find((item) => item.agent === agent && item.tool === tool);
+  if (entry) {
+    if (entry.access !== access || entry.enabled === false) {
+      entry.access = access;
+      entry.enabled = true;
+      entry.updatedAt = now;
+      entry.updatedBy = 'explorer:preinstall';
+      changed = true;
+    }
+    continue;
+  }
+  state.mcpTools.push({
+    agent,
+    tool,
+    access,
+    source: 'explorer:preinstall',
+    enabled: true,
+    createdAt: now,
+    createdBy: 'explorer:preinstall',
+    updatedAt: now,
+    updatedBy: 'explorer:preinstall'
+  });
+  changed = true;
+}
+
+if (changed) {
+  fs.mkdirSync(path.dirname(policyFile), { recursive: true });
+  const tmpFile = `${policyFile}.${process.pid}.tmp`;
+  fs.writeFileSync(tmpFile, `${JSON.stringify(state, null, 2)}\n`);
+  fs.renameSync(tmpFile, policyFile);
+}
+NODE
+
 if [[ -f "$agents_file" ]]; then
     node - <<'NODE'
 const fs = require('fs');
@@ -70,7 +181,38 @@ for (const [key, rec] of Object.entries(data)) {
         rec.projectPath = workspaceRoot;
         changed = true;
     }
+    const nextAuth = { mode: 'sso' };
+    if (JSON.stringify(rec.auth || {}) !== JSON.stringify(nextAuth)) {
+        rec.auth = nextAuth;
+        changed = true;
+    }
     data[key] = rec;
+}
+
+data._config = data._config && typeof data._config === 'object' ? data._config : {};
+const nextSso = {
+    ...(data._config.sso && typeof data._config.sso === 'object' ? data._config.sso : {}),
+    enabled: true,
+    providerAgent: 'AchillesIDE/userPersistoAgent',
+    providerAgentShort: 'userPersistoAgent',
+    providerConfig: {
+        ...(
+            data._config.sso &&
+            typeof data._config.sso === 'object' &&
+            data._config.sso.providerConfig &&
+            typeof data._config.sso.providerConfig === 'object'
+                ? data._config.sso.providerConfig
+                : {}
+        ),
+        routerBaseUrl: `http://localhost:${process.env.PLOINKY_ROUTER_PORT || process.env.ROUTER_PORT || '8080'}`,
+        loginPath: '/public-services/userpersisto/auth/login',
+        runtimePath: '/public-services/userpersisto/runtime',
+        runtimeSecretName: 'USERPERSISTO_RUNTIME_SECRET'
+    }
+};
+if (JSON.stringify(data._config.sso || {}) !== JSON.stringify(nextSso)) {
+    data._config.sso = nextSso;
+    changed = true;
 }
 
 if (changed) {
@@ -82,8 +224,6 @@ if (changed) {
 }
 NODE
 fi
-
-mkdir -p "${workspace_root}/.ploinky"
 
 # If already configured in secrets, don't overwrite.
 if [[ -z "$(node "$secrets_tool" "$workspace_root" get "ASSISTOS_FS_ROOT")" ]]; then

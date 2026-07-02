@@ -6,8 +6,10 @@ import { filterRuntimePluginsByPolicy, forEachRuntimePluginEntry } from './utils
 import { initializeTheme } from './utils/theme.js';
 
 const EXPLORER_AGENT_ID = 'explorer';
+const USERPERSISTO_AGENT_ID = 'userPersistoAgent';
 const RUNTIME_PLUGIN_TOOL = 'collect_ide_plugins';
 const ROOM_ID_PATTERN = /^room_[0-9a-fA-F-]{36}$/;
+const SELF_REGISTERED_APP_URL = '/selfregistered/';
 
 if (typeof window !== 'undefined') {
     window.ASSISTOS_AGENT_ID = window.ASSISTOS_AGENT_ID || EXPLORER_AGENT_ID;
@@ -90,6 +92,37 @@ function hasWebMeetRuntimePlugin(runtimePlugins) {
     return found;
 }
 
+function isSelfRegisteredUser(user) {
+    const role = String(user?.role || user?.raw?.role || '').trim();
+    if (role === 'selfRegistered') {
+        return true;
+    }
+    const roles = Array.isArray(user?.roles)
+        ? user.roles.map((entry) => String(entry || '').trim()).filter(Boolean)
+        : [];
+    return roles.includes('selfRegistered') && !roles.includes('admin') && !roles.includes('user');
+}
+
+async function redirectSelfRegisteredUsers() {
+    try {
+        const result = await assistosSDK.callTool(USERPERSISTO_AGENT_ID, 'userpersisto_profile_get', {});
+        const profile = result?.json || {};
+        const user = profile.user || null;
+        const roles = Array.isArray(profile.roles) ? profile.roles : user?.roles;
+        if (isSelfRegisteredUser(user)) {
+            window.location.replace(SELF_REGISTERED_APP_URL);
+            return true;
+        }
+        if (isSelfRegisteredUser({ ...user, roles })) {
+            window.location.replace(SELF_REGISTERED_APP_URL);
+            return true;
+        }
+    } catch (error) {
+        console.warn('[explorer] Could not verify UserPersisto access profile:', error);
+    }
+    return false;
+}
+
 async function bootstrapWorkspaceRoot() {
     try {
         const result = await assistosSDK.callTool(EXPLORER_AGENT_ID, 'list_allowed_directories', {});
@@ -120,6 +153,9 @@ async function loadExplorerManifest() {
 }
 
 async function start() {
+    if (await redirectSelfRegisteredUsers()) {
+        return;
+    }
     initializeTheme();
     const webSkel = await WebSkel.initialise('webskel.json');
     webSkel.appServices = assistosSDK;

@@ -23,11 +23,27 @@ async function readStdin() {
 
 function normalizeEnvelope(payload) {
   const input = payload && typeof payload === 'object' ? payload : {};
-  const args = input.input && typeof input.input === 'object'
-    ? input.input
-    : input.arguments && typeof input.arguments === 'object'
-      ? input.arguments
-      : {};
+  let args = {};
+  if (input.input && typeof input.input === 'object') {
+    args = input.input;
+  } else if (input.arguments && typeof input.arguments === 'object') {
+    args = input.arguments;
+  } else if (input.params?.arguments && typeof input.params.arguments === 'object') {
+    args = input.params.arguments;
+  } else if (input.params?.input && typeof input.params.input === 'object') {
+    args = input.params.input;
+  } else {
+    const {
+      id,
+      jsonrpc,
+      metadata,
+      method,
+      params,
+      tool,
+      ...directArgs
+    } = input;
+    args = directArgs;
+  }
   return {
     toolName: String(input.tool || process.env.TOOL_NAME || '').trim(),
     args,

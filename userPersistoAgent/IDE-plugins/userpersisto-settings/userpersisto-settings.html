@@ -8,9 +8,11 @@
 
     <div class="modal-body userpersisto-settings-body">
         <div class="userpersisto-tabs" role="tablist">
-            <button type="button" class="userpersisto-tab active" data-local-action="switchPanel users" data-panel="users">User Management</button>
-            <button type="button" class="userpersisto-tab" data-local-action="switchPanel auth" data-panel="auth">Current Profile</button>
+            <button type="button" class="userpersisto-tab active" data-local-action="switchPanel users" data-panel="users">Users</button>
+            <button type="button" class="userpersisto-tab" data-local-action="switchPanel auth" data-panel="auth">Roles & Access</button>
             <button type="button" class="userpersisto-tab" data-local-action="switchPanel provider" data-panel="provider">Billing</button>
+            <button type="button" class="userpersisto-tab" data-local-action="switchPanel credits" data-panel="credits">Credits</button>
+            <button type="button" class="userpersisto-tab" data-local-action="switchPanel audit" data-panel="audit">Audit</button>
         </div>
 
         <section class="userpersisto-panel hidden" data-section="provider">
@@ -97,6 +99,63 @@
                 <button type="button" class="general-button" data-local-action="refreshUsers">Refresh</button>
             </div>
             <div id="usersList" class="userpersisto-list"></div>
+        </section>
+
+        <section class="userpersisto-panel hidden" data-section="credits">
+            <div class="userpersisto-actions userpersisto-actions-split">
+                <input id="creditUserSearchInput" class="form-input" type="search" placeholder="Search users for credits" spellcheck="false">
+                <button type="button" class="general-button" data-local-action="searchCreditUsers">Search</button>
+                <button type="button" class="gray-button" data-local-action="refreshCredits">Refresh selected</button>
+            </div>
+
+            <div class="userpersisto-credit-layout">
+                <div class="userpersisto-section-card">
+                    <div class="userpersisto-card-title">Users</div>
+                    <div id="creditUserResults" class="userpersisto-list"></div>
+                </div>
+
+                <div class="userpersisto-section-card">
+                    <div class="userpersisto-card-title">Credit account</div>
+                    <div id="selectedCreditUser" class="userpersisto-selected-user"></div>
+                    <div id="creditBalance" class="userpersisto-balance-grid"></div>
+                    <div class="userpersisto-credit-tools">
+                        <label class="form-item">
+                            <span class="form-label">Grant amount</span>
+                            <input id="grantCreditAmount" class="form-input" type="number" min="1" step="1" autocomplete="off">
+                        </label>
+                        <label class="form-item">
+                            <span class="form-label">Grant reason</span>
+                            <input id="grantCreditReason" class="form-input" type="text" autocomplete="off" spellcheck="false">
+                        </label>
+                        <button type="button" class="general-button" data-local-action="grantCredits">Grant credits</button>
+                        <label class="form-item">
+                            <span class="form-label">Refund amount</span>
+                            <input id="refundCreditAmount" class="form-input" type="number" min="1" step="1" autocomplete="off">
+                        </label>
+                        <label class="form-item">
+                            <span class="form-label">Refund reason</span>
+                            <input id="refundCreditReason" class="form-input" type="text" autocomplete="off" spellcheck="false">
+                        </label>
+                        <button type="button" class="gray-button" data-local-action="refundCredits">Refund credits</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="userpersisto-section-card">
+                <div class="userpersisto-card-title">Credit ledger</div>
+                <div id="creditLedger" class="userpersisto-table"></div>
+            </div>
+        </section>
+
+        <section class="userpersisto-panel hidden" data-section="audit">
+            <div class="userpersisto-actions userpersisto-actions-split">
+                <input id="auditActorFilter" class="form-input" type="search" placeholder="Filter by actor ID" spellcheck="false">
+                <button type="button" class="general-button" data-local-action="refreshAuditEvents">Refresh</button>
+                <button type="button" class="gray-button" id="auditPreviousButton" data-local-action="previousAuditPage">Previous</button>
+                <button type="button" class="gray-button" id="auditNextButton" data-local-action="nextAuditPage">Next</button>
+                <span id="auditPageMeta" class="userpersisto-page-meta">0-0 of 0</span>
+            </div>
+            <div id="auditEvents" class="userpersisto-table"></div>
         </section>
 
         <div id="userpersistoStatus" class="userpersisto-status" role="status" aria-live="polite"></div>

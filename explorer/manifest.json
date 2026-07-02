@@ -4,24 +4,7 @@
     "update": "",
     "cli": "/bin/bash",
     "about": "AssistOS Explorer agent",
-    "ploinky": "pwd enable",
-    "pwd": {
-        "users": [
-            {
-                "username": "admin",
-                "password": "admin",
-                "name": "Admin",
-                "roles": [
-                    "admin"
-                ]
-            },
-            {
-                "username": "user",
-                "password": "user",
-                "name": "User"
-            }
-        ]
-    },
+    "ploinky": "sso enable",
     "enable": [
         {
             "agent": "gitAgent global",
@@ -35,6 +18,8 @@
         "webmeetInfra/liveKitServerAgent no-wait",
         "webmeetStt no-wait",
         "webmeetAgent global no-wait",
+        "userPersistoAgent global",
+        "emailAgent global",
         "multimedia global no-wait",
         "onlyOffice global no-wait",
         "proxies/soul-gateway no-wait",

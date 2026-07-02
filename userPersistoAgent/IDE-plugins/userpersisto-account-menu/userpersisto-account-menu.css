@@ -1,0 +1,29 @@
+.userpersisto-account-menu {
+    display: block;
+}
+
+.userpersisto-account-menu-field {
+    align-items: center;
+    gap: 10px;
+    cursor: default;
+}
+
+.userpersisto-account-menu-action {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+}
+
+.userpersisto-account-menu-select {
+    min-height: 28px;
+    max-width: 190px;
+    border: 1px solid var(--border-color, #d0d7de);
+    border-radius: 6px;
+    background: var(--input-background, #fff);
+    color: var(--text-color, #24292f);
+    font: inherit;
+    font-size: 0.82rem;
+    padding: 0 8px;
+}

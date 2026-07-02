@@ -6,14 +6,15 @@
 </div>
 <div class="modal-body settings-modal-body">
     <div class="settings-tabs" role="tablist" aria-label="Settings tabs">
-        <button type="button" class="settings-tab" data-local-action="switchTab agents" data-tab="agents" role="tab" aria-selected="true">Agents</button>
+        <button type="button" class="settings-tab" data-local-action="switchTab agents" data-tab="agents" role="tab" aria-selected="false">Agents</button>
         <button type="button" class="settings-tab" data-local-action="switchTab plugins" data-tab="plugins" role="tab" aria-selected="false">Plugins</button>
         <button type="button" class="settings-tab" data-local-action="switchTab copilot" data-tab="copilot" role="tab" aria-selected="false">Copilot</button>
-        <button type="button" class="settings-tab" data-local-action="switchTab users" data-tab="users" data-admin-tab hidden role="tab" aria-selected="false">Administration</button>
         <button type="button" class="settings-tab" data-local-action="switchTab keymap" data-tab="keymap" role="tab" aria-selected="false">Keymap</button>
         <button type="button" class="settings-tab" data-local-action="switchTab editor" data-tab="editor" role="tab" aria-selected="false">Editor</button>
         <button type="button" class="settings-tab" data-local-action="switchTab theme" data-tab="theme" role="tab" aria-selected="false">Theme</button>
         <button type="button" class="settings-tab" data-local-action="switchTab avatar" data-tab="avatar" role="tab" aria-selected="false">Avatar</button>
+        <button type="button" class="settings-tab" data-local-action="switchTab users" data-tab="users" role="tab" aria-selected="true">User administration</button>
+
 
     </div>
 
@@ -112,9 +113,48 @@
             </div>
         </section>
 
-        <section class="settings-section hidden" data-section="users">
-            <div class="users-settings-frame-shell">
-                <iframe id="usersSettingsFrame" class="users-settings-frame" title="Administration" loading="lazy"></iframe>
+        <section class="settings-section" data-section="users">
+            <div class="settings-subtabs" role="tablist" aria-label="User settings">
+                <button type="button" class="settings-subtab active" data-local-action="switchUsersTab auth" data-users-tab="auth" role="tab" aria-selected="true">Preferred sign-in</button>
+                <div class="settings-users-menu-subtab" data-admin-users-tab hidden>
+                    <button type="button" class="settings-subtab" id="usersAdministrationMenuButton" data-local-action="toggleUsersAdministrationMenu" aria-haspopup="menu" aria-expanded="false">Users</button>
+                    <div class="settings-users-menu" id="usersAdministrationMenu" role="menu" hidden>
+                        <button type="button" role="menuitem" data-users-admin-panel="users" data-local-action="switchUserAdministrationPanel users">Users</button>
+                        <button type="button" role="menuitem" data-users-admin-panel="auth" data-local-action="switchUserAdministrationPanel auth">Roles & Access</button>
+                        <button type="button" role="menuitem" data-users-admin-panel="provider" data-local-action="switchUserAdministrationPanel provider">Billing</button>
+                        <button type="button" role="menuitem" data-users-admin-panel="credits" data-local-action="switchUserAdministrationPanel credits">Credits</button>
+                        <button type="button" role="menuitem" data-users-admin-panel="audit" data-local-action="switchUserAdministrationPanel audit">Audit</button>
+                    </div>
+                </div>
+            </div>
+
+            <div data-users-panel="auth">
+                <p class="plugin-settings-description">Choose the sign-in method used first when more than one method is available for your account.</p>
+                <div class="auth-preference-card">
+                    <label class="form-item" for="preferredAuthMethod">
+                        <span class="form-label">Preferred sign-in method</span>
+                        <select id="preferredAuthMethod" class="form-input" disabled></select>
+                    </label>
+                    <div id="preferredAuthStatus" class="plugin-settings-status" role="status" aria-live="polite"></div>
+                    <div class="auth-preference-actions">
+                        <button type="button" class="general-button" data-local-action="savePreferredAuthMethod" disabled id="savePreferredAuthMethodButton">Save preferred sign-in</button>
+                        <button type="button" class="gray-button" data-local-action="loadPreferredAuthProfile">Refresh</button>
+                    </div>
+                </div>
+                <div class="auth-enrollment-card">
+                    <div class="auth-enrollment-header">
+                        <div>
+                            <h3>Sign-in setup</h3>
+                            <p>Add available methods to this account.</p>
+                        </div>
+                    </div>
+                    <div id="authEnrollmentList" class="auth-enrollment-list"></div>
+                </div>
+            </div>
+
+            <div data-users-panel="administration" hidden>
+                <div id="userAdministrationStatus" class="plugin-settings-status" role="status" aria-live="polite"></div>
+                <div id="userAdministrationMount" class="user-administration-mount"></div>
             </div>
         </section>
     </div>

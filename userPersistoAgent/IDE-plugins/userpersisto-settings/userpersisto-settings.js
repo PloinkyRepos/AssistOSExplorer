@@ -4,7 +4,9 @@ import {
     parseToolResult
 } from "/explorer/services/infrastructure/explorerApi.js";
 
-const PANELS = new Set(["users", "auth", "provider"]);
+const PANELS = new Set(["users", "auth", "provider", "credits", "audit"]);
+const CREDIT_PAGE_SIZE = 100;
+const AUDIT_PAGE_SIZE = 50;
 const SECRET_KEYS = new Set(["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"]);
 const SETTING_KEYS = [
     "STRIPE_SECRET_KEY",
@@ -51,6 +53,36 @@ function primaryRole(user = {}) {
     return roles.find((role) => ["admin", "user", "selfRegistered"].includes(role)) || roles[0] || "user";
 }
 
+function listFromPayload(payload = {}, key) {
+    if (Array.isArray(payload?.[key])) return payload[key];
+    if (Array.isArray(payload?.objects)) return payload.objects;
+    if (Array.isArray(payload?.entries)) return payload.entries;
+    return [];
+}
+
+function totalFromPayload(payload = {}, fallback = 0) {
+    return Number.isFinite(payload.filteredCount)
+        ? payload.filteredCount
+        : Number.isFinite(payload.totalCount)
+            ? payload.totalCount
+            : fallback;
+}
+
+function formatTimestamp(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value || "");
+    return date.toLocaleString();
+}
+
+function userLabel(user = {}) {
+    const email = String(user.email || "").trim();
+    const displayName = String(user.displayName || "").trim();
+    const id = String(user.id || "").trim();
+    return displayName && email
+        ? `${displayName} <${email}>`
+        : email || displayName || id || "Unknown user";
+}
+
 export class UserpersistoSettings {
     constructor(element, invalidate) {
         this.element = element;
@@ -61,7 +93,16 @@ export class UserpersistoSettings {
             statusType: "",
             settings: {},
             users: [],
-            authProfile: null
+            authProfile: null,
+            creditUsers: [],
+            creditSearchResults: [],
+            selectedCreditUserId: "",
+            creditBalance: null,
+            creditLedger: [],
+            creditLedgerTotalCount: 0,
+            auditEvents: [],
+            auditTotalCount: 0,
+            auditStart: 0
         };
         this.settingsRequestId = 0;
         this.invalidate();
@@ -77,6 +118,8 @@ export class UserpersistoSettings {
         void this.loadSettings();
         if (this.state.activePanel === "users") void this.refreshUsers();
         if (this.state.activePanel === "auth") void this.refreshAuthProfile();
+        if (this.state.activePanel === "credits") void this.searchCreditUsers();
+        if (this.state.activePanel === "audit") void this.refreshAuditEvents();
     }
 
     cacheElements() {
@@ -89,6 +132,20 @@ export class UserpersistoSettings {
         this.createUserPasswordInput = this.element.querySelector("#createUserPassword");
         this.createUserRoleInput = this.element.querySelector("#createUserRole");
         this.authProfileEl = this.element.querySelector("#authProfileSummary");
+        this.creditUserSearchInput = this.element.querySelector("#creditUserSearchInput");
+        this.creditUserResultsEl = this.element.querySelector("#creditUserResults");
+        this.selectedCreditUserEl = this.element.querySelector("#selectedCreditUser");
+        this.creditBalanceEl = this.element.querySelector("#creditBalance");
+        this.creditLedgerEl = this.element.querySelector("#creditLedger");
+        this.grantCreditAmountInput = this.element.querySelector("#grantCreditAmount");
+        this.grantCreditReasonInput = this.element.querySelector("#grantCreditReason");
+        this.refundCreditAmountInput = this.element.querySelector("#refundCreditAmount");
+        this.refundCreditReasonInput = this.element.querySelector("#refundCreditReason");
+        this.auditActorInput = this.element.querySelector("#auditActorFilter");
+        this.auditEventsEl = this.element.querySelector("#auditEvents");
+        this.auditPageMetaEl = this.element.querySelector("#auditPageMeta");
+        this.auditPreviousButton = this.element.querySelector("#auditPreviousButton");
+        this.auditNextButton = this.element.querySelector("#auditNextButton");
         this.inputs = {
             STRIPE_SECRET_KEY: this.element.querySelector("#stripeSecretKey"),
             STRIPE_WEBHOOK_SECRET: this.element.querySelector("#stripeWebhookSecret"),
@@ -110,6 +167,7 @@ export class UserpersistoSettings {
         if (this.element.dataset.userpersistoBound === "true") return;
         this.element.dataset.userpersistoBound = "true";
         this.userSearchInput?.addEventListener("input", () => this.renderUsers());
+        this.creditUserSearchInput?.addEventListener("input", () => this.renderCreditUserResults());
         this.element.addEventListener("userpersisto-panel-change", (event) => {
             this.switchPanel(null, event.detail?.panel);
         });
@@ -140,6 +198,8 @@ export class UserpersistoSettings {
         this.renderPanels();
         if (this.state.activePanel === "users") void this.refreshUsers();
         if (this.state.activePanel === "auth") void this.refreshAuthProfile();
+        if (this.state.activePanel === "credits") void this.searchCreditUsers();
+        if (this.state.activePanel === "audit") void this.refreshAuditEvents();
     }
 
     renderPanels() {
@@ -357,6 +417,290 @@ export class UserpersistoSettings {
         } catch (error) {
             this.setStatus(error?.message || "Failed to update role.", "error");
         }
+    }
+
+    filterCreditUsers() {
+        const query = String(this.creditUserSearchInput?.value || "").trim().toLowerCase();
+        if (!query) return this.state.creditUsers;
+        return this.state.creditUsers.filter((user) => {
+            const haystack = [
+                user.id,
+                user.email,
+                user.displayName,
+                user.status,
+                ...userRoles(user)
+            ].join(" ").toLowerCase();
+            return haystack.includes(query);
+        });
+    }
+
+    selectedCreditUser() {
+        const userId = String(this.state.selectedCreditUserId || "").trim();
+        if (!userId) return null;
+        return [...this.state.creditUsers, ...this.state.users].find((user) => user.id === userId) || { id: userId };
+    }
+
+    async searchCreditUsers() {
+        try {
+            const payload = await this.callTool("userpersisto_user_list", {
+                start: 0,
+                pageSize: CREDIT_PAGE_SIZE
+            });
+            this.state.creditUsers = listFromPayload(payload, "users");
+            this.renderCreditUserResults();
+            this.renderSelectedCreditUser();
+            this.setStatus(`${this.state.creditUsers.length} user${this.state.creditUsers.length === 1 ? "" : "s"} available for credit management.`);
+        } catch (error) {
+            this.state.creditUsers = [];
+            this.renderCreditUserResults();
+            this.setStatus(error?.message || "Failed to search users.", "error");
+        }
+    }
+
+    renderCreditUserResults() {
+        if (!this.creditUserResultsEl) return;
+        const users = this.filterCreditUsers();
+        this.state.creditSearchResults = users;
+        if (!users.length) {
+            this.creditUserResultsEl.innerHTML = '<div class="userpersisto-result">No matching users found.</div>';
+            return;
+        }
+        this.creditUserResultsEl.innerHTML = users.map((user) => {
+            const selected = user.id === this.state.selectedCreditUserId;
+            return `
+                <button type="button" class="userpersisto-user-pick ${selected ? "active" : ""}" data-local-action="selectCreditUser ${escapeHtml(user.id)}">
+                    <span>${escapeHtml(userLabel(user))}</span>
+                    <small>${escapeHtml(user.id || "")}</small>
+                </button>
+            `;
+        }).join("");
+    }
+
+    async selectCreditUser(_target, userId) {
+        const normalized = String(userId || "").trim();
+        if (!normalized) return;
+        this.state.selectedCreditUserId = normalized;
+        this.renderCreditUserResults();
+        this.renderSelectedCreditUser();
+        await this.refreshCredits();
+    }
+
+    renderSelectedCreditUser() {
+        if (!this.selectedCreditUserEl) return;
+        const user = this.selectedCreditUser();
+        if (!user) {
+            this.selectedCreditUserEl.innerHTML = '<div class="userpersisto-result">Select a user to inspect credits.</div>';
+            return;
+        }
+        this.selectedCreditUserEl.innerHTML = `
+            <div class="userpersisto-row-title">${escapeHtml(userLabel(user))}</div>
+            <div class="userpersisto-row-meta">${escapeHtml(user.id || "")}</div>
+        `;
+    }
+
+    renderCreditBalance() {
+        if (!this.creditBalanceEl) return;
+        const balance = this.state.creditBalance;
+        if (!this.state.selectedCreditUserId) {
+            this.creditBalanceEl.innerHTML = '<div class="userpersisto-result">No credit account selected.</div>';
+            return;
+        }
+        if (!balance) {
+            this.creditBalanceEl.innerHTML = '<div class="userpersisto-result">Credit balance has not been loaded.</div>';
+            return;
+        }
+        this.creditBalanceEl.innerHTML = `
+            <div class="userpersisto-balance-item">
+                <span>Available</span>
+                <strong>${escapeHtml(balance.balance ?? 0)}</strong>
+            </div>
+            <div class="userpersisto-balance-item">
+                <span>Reserved</span>
+                <strong>${escapeHtml(balance.reservedBalance ?? 0)}</strong>
+            </div>
+        `;
+    }
+
+    renderCreditLedger() {
+        if (!this.creditLedgerEl) return;
+        const rows = Array.isArray(this.state.creditLedger) ? this.state.creditLedger : [];
+        if (!this.state.selectedCreditUserId) {
+            this.creditLedgerEl.innerHTML = '<div class="userpersisto-result">Select a user to load ledger entries.</div>';
+            return;
+        }
+        if (!rows.length) {
+            this.creditLedgerEl.innerHTML = '<div class="userpersisto-result">No ledger entries found.</div>';
+            return;
+        }
+        this.creditLedgerEl.innerHTML = `
+            <table>
+                <thead>
+                    <tr>
+                        <th>Created</th>
+                        <th>Type</th>
+                        <th>Amount</th>
+                        <th>Reason</th>
+                        <th>Reference</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rows.map((entry) => `
+                        <tr>
+                            <td>${escapeHtml(formatTimestamp(entry.createdAt))}</td>
+                            <td>${escapeHtml(entry.type || "")}</td>
+                            <td>${escapeHtml(entry.amount ?? "")}</td>
+                            <td>${escapeHtml(entry.reason || "")}</td>
+                            <td>${escapeHtml(entry.referenceId || "")}</td>
+                        </tr>
+                    `).join("")}
+                </tbody>
+            </table>
+        `;
+    }
+
+    async refreshCredits() {
+        const userId = String(this.state.selectedCreditUserId || "").trim();
+        if (!userId) {
+            this.setStatus("Select a user before loading credits.");
+            this.renderCreditBalance();
+            this.renderCreditLedger();
+            return;
+        }
+        try {
+            const [balance, ledger] = await Promise.all([
+                this.callTool("userpersisto_credits_balance", { userId }),
+                this.callTool("userpersisto_credits_ledger", {
+                    userId,
+                    start: 0,
+                    pageSize: CREDIT_PAGE_SIZE
+                })
+            ]);
+            this.state.creditBalance = balance;
+            this.state.creditLedger = listFromPayload(ledger, "entries");
+            this.state.creditLedgerTotalCount = totalFromPayload(ledger, this.state.creditLedger.length);
+            this.renderCreditBalance();
+            this.renderCreditLedger();
+            this.setStatus(`Credit account loaded (${this.state.creditLedgerTotalCount} ledger entr${this.state.creditLedgerTotalCount === 1 ? "y" : "ies"}).`);
+        } catch (error) {
+            this.state.creditBalance = null;
+            this.state.creditLedger = [];
+            this.renderCreditBalance();
+            this.renderCreditLedger();
+            this.setStatus(error?.message || "Failed to load credits.", "error");
+        }
+    }
+
+    async grantCredits() {
+        await this.adjustCredits("grant");
+    }
+
+    async refundCredits() {
+        await this.adjustCredits("refund");
+    }
+
+    async adjustCredits(kind) {
+        const userId = String(this.state.selectedCreditUserId || "").trim();
+        if (!userId) {
+            this.setStatus("Select a user before adjusting credits.");
+            return;
+        }
+        const amountInput = kind === "grant" ? this.grantCreditAmountInput : this.refundCreditAmountInput;
+        const reasonInput = kind === "grant" ? this.grantCreditReasonInput : this.refundCreditReasonInput;
+        const amount = Number.parseInt(String(amountInput?.value || ""), 10);
+        const reason = String(reasonInput?.value || "").trim();
+        if (!Number.isInteger(amount) || amount <= 0) {
+            this.setStatus("Credit amount must be a positive whole number.", "error");
+            return;
+        }
+        const tool = kind === "grant" ? "userpersisto_credits_grant" : "userpersisto_credits_refund";
+        try {
+            await this.callTool(tool, { userId, amount, reason });
+            if (amountInput) amountInput.value = "";
+            if (reasonInput) reasonInput.value = "";
+            await this.refreshCredits();
+            this.setStatus(kind === "grant" ? "Credits granted." : "Credits refunded.");
+        } catch (error) {
+            this.setStatus(error?.message || "Failed to adjust credits.", "error");
+        }
+    }
+
+    async refreshAuditEvents() {
+        this.state.auditStart = 0;
+        await this.loadAuditEvents();
+    }
+
+    async previousAuditPage() {
+        this.state.auditStart = Math.max(0, this.state.auditStart - AUDIT_PAGE_SIZE);
+        await this.loadAuditEvents();
+    }
+
+    async nextAuditPage() {
+        this.state.auditStart += AUDIT_PAGE_SIZE;
+        await this.loadAuditEvents();
+    }
+
+    async loadAuditEvents() {
+        const actorId = String(this.auditActorInput?.value || "").trim();
+        const args = {
+            start: this.state.auditStart,
+            pageSize: AUDIT_PAGE_SIZE
+        };
+        if (actorId) args.actorId = actorId;
+        try {
+            const payload = await this.callTool("userpersisto_audit_events_list", args);
+            this.state.auditEvents = listFromPayload(payload, "objects");
+            this.state.auditTotalCount = totalFromPayload(payload, this.state.auditEvents.length);
+            this.renderAuditEvents();
+            this.setStatus(`${this.state.auditEvents.length} audit event${this.state.auditEvents.length === 1 ? "" : "s"} loaded.`);
+        } catch (error) {
+            this.state.auditEvents = [];
+            this.renderAuditEvents();
+            this.setStatus(error?.message || "Failed to load audit events.", "error");
+        }
+    }
+
+    renderAuditEvents() {
+        const rows = Array.isArray(this.state.auditEvents) ? this.state.auditEvents : [];
+        if (this.auditPageMetaEl) {
+            const start = rows.length ? this.state.auditStart + 1 : 0;
+            const end = this.state.auditStart + rows.length;
+            this.auditPageMetaEl.textContent = `${start}-${end} of ${this.state.auditTotalCount}`;
+        }
+        if (this.auditPreviousButton) {
+            this.auditPreviousButton.disabled = this.state.auditStart <= 0;
+        }
+        if (this.auditNextButton) {
+            this.auditNextButton.disabled = this.state.auditStart + AUDIT_PAGE_SIZE >= this.state.auditTotalCount;
+        }
+        if (!this.auditEventsEl) return;
+        if (!rows.length) {
+            this.auditEventsEl.innerHTML = '<div class="userpersisto-result">No audit events found.</div>';
+            return;
+        }
+        this.auditEventsEl.innerHTML = `
+            <table>
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Actor</th>
+                        <th>Action</th>
+                        <th>Target</th>
+                        <th>Reason</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rows.map((event) => `
+                        <tr>
+                            <td>${escapeHtml(formatTimestamp(event.timestamp))}</td>
+                            <td>${escapeHtml(event.actorId || "")}</td>
+                            <td>${escapeHtml(event.action || "")}</td>
+                            <td>${escapeHtml(event.target || "")}</td>
+                            <td>${escapeHtml(event.reason || "")}</td>
+                        </tr>
+                    `).join("")}
+                </tbody>
+            </table>
+        `;
     }
 
     closeModal() {

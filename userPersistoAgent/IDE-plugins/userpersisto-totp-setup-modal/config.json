@@ -1,0 +1,11 @@
+{
+  "pluginCategory": "application",
+  "id": "userpersisto-totp-setup-modal",
+  "component": "userpersisto-totp-setup-modal",
+  "location": [],
+  "label": "Set up authenticator app",
+  "tooltip": "Configure TOTP sign-in",
+  "presenter": "UserpersistoTotpSetupModal",
+  "type": "modal",
+  "autoPin": false
+}
