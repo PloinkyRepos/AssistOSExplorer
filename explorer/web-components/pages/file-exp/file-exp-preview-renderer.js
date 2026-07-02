@@ -52,6 +52,37 @@ function syncDpuCommentsHost(fileExp, refs) {
     toggleHidden(fileExp, refs.dpuCommentPopover, !fileExp.state.dpuCommentsOpen);
 }
 
+async function ensureRuntimeComponent(componentName) {
+    const ensureComponentRegistered = window.assistOS?.webSkel?.ensureComponentRegistered || window.UI?.ensureComponentRegistered;
+    if (typeof ensureComponentRegistered !== 'function') {
+        return null;
+    }
+    return ensureComponentRegistered(componentName);
+}
+
+async function ensureAndMountBacklogPanel(fileExp, refs, pathAttr, repoPath) {
+    if (!customElements.get('backlog-panel')) {
+        try {
+            await ensureRuntimeComponent('backlog-panel');
+        } catch (error) {
+            console.error('Failed to register backlog panel component', error);
+        }
+        if ((fileExp.state.selectedPath || '') !== pathAttr || fileExp.state.backlogTextView) {
+            return;
+        }
+    }
+
+    mountPresenterElement(refs.componentMount, {
+        key: `backlog-panel:${pathAttr}:${repoPath}`,
+        tagName: 'backlog-panel',
+        attributes: {
+            'data-presenter': 'backlog-panel',
+            'data-backlog-path': pathAttr,
+            'data-repo-path': repoPath
+        }
+    });
+}
+
 export function createPreviewActionButton(label, action, className = 'preview-pane-action') {
     const button = document.createElement('button');
     button.type = 'button';
@@ -300,14 +331,8 @@ export function renderStandardPreview(fileExp, refs, previewUiState) {
         toggleHidden(fileExp, refs.dpuCommentPopover, true);
         const pathAttr = fileExp.state.selectedPath || '';
         const repoPath = fileExp.parentPath(pathAttr) || '/';
-        mountPresenterElement(refs.componentMount, {
-            key: `backlog-panel:${pathAttr}:${repoPath}`,
-            tagName: 'backlog-panel',
-            attributes: {
-                'data-presenter': 'backlog-panel',
-                'data-backlog-path': pathAttr,
-                'data-repo-path': repoPath
-            }
+        ensureAndMountBacklogPanel(fileExp, refs, pathAttr, repoPath).catch((error) => {
+            console.error('Failed to mount backlog panel', error);
         });
         return;
     }

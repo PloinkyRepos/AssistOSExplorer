@@ -1,11 +1,33 @@
 backlog-create-modal {
     min-width: max(540px, 60vw);
     max-width: 95vw;
-    display: block;
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 145px);
+    min-height: 0;
+    overflow: hidden;
+}
+
+backlog-create-modal .backlog-create-modal {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
 }
 
 backlog-create-modal .modal-body {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
     gap: var(--space-xl);
+    min-height: 0;
+    overflow: hidden;
+}
+
+backlog-create-modal .modal-actions {
+    flex: 0 0 auto;
+    margin-top: var(--space-md);
+    padding-top: var(--space-md);
 }
 
 /* Title icon accent color */
@@ -40,6 +62,7 @@ backlog-create-modal #backlogModalDescription::placeholder {
 
 /* Options header */
 backlog-create-modal .modal-options-header {
+    flex: 0 0 auto;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -47,11 +70,23 @@ backlog-create-modal .modal-options-header {
     margin-bottom: 10px;
 }
 
+backlog-create-modal .modal-options-section {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+}
+
 /* Options list */
 backlog-create-modal .options-list {
     display: flex;
+    flex: 1 1 auto;
     flex-direction: column;
     gap: var(--space-md);
+    min-height: 72px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: var(--space-xs);
 }
 
 /* Empty state */
@@ -203,6 +238,8 @@ backlog-create-modal .modal-option-item:nth-child(5) {
 
 @media (max-width: 720px) {
     backlog-create-modal {
-        width: min(92vw, 540px);
+        width: 100%;
+        max-height: calc(100vh - 110px);
+        min-width: 0;
     }
 }
