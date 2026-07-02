@@ -153,7 +153,7 @@ main {
 .app-menu-list .app-plugin-tool-button:focus-visible,
 [data-host-orientation="dropdown"] .app-plugin-tool-button:hover,
 [data-host-orientation="dropdown"] .app-plugin-tool-button:focus-visible {
-    background: var(--file-exp-subtle-surface, rgba(148, 163, 184, 0.12));
+    background: var(--file-exp-subtle-surface);
     box-shadow: none;
     transform: none;
 }
@@ -295,7 +295,7 @@ main {
 .app-plugin-tool-button:hover {
     transform: translateY(-1px);
     box-shadow: 0 10px 18px rgba(15, 23, 42, 0.18);
-    background: var(--file-exp-subtle-surface, rgba(148, 163, 184, 0.12));
+    background: var(--file-exp-subtle-surface);
 }
 
 .app-plugin-tool-button:focus-visible {
@@ -717,6 +717,10 @@ main {
         border-radius: 8px;
         background: var(--file-exp-panel);
         width: calc(50% - 5px);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        text-align: left;
     }
 
     .toolbar-spacer {
@@ -765,7 +769,7 @@ main {
     .toolbar-dropdown-menu.action-menu-dropdown.open {
         left: auto;
         right: 0;
-        width: min(320px, calc(100vw - 24px));
+        width: fit-content;
         max-width: calc(100vw - 24px);
     }
 }
@@ -799,7 +803,7 @@ main {
 
     .toolbar-dropdown-menu.action-menu-dropdown,
     .toolbar-dropdown-menu.action-menu-dropdown.open {
-        width: min(300px, calc(100vw - 20px));
+        width: fit-content;
     }
 }
 

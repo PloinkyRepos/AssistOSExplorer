@@ -3,7 +3,7 @@ import { withGlobalLoader } from "../../../utils/globalLoader.js";
 import { getKeymap, matchesShortcut } from "../../../utils/keymap.js";
 import { requestLlmAutocomplete } from "../../../services/llmAutocompleteService.js";
 import { callExplorerTool } from "../../../services/infrastructure/explorerApi.js";
-import { EXPLORER_THEME_CHANGE_EVENT, getCurrentTheme } from "../../../utils/theme.js";
+import { EXPLORER_THEME_CHANGE_EVENT, getCurrentTheme } from "../../../shared/ui/theme.js";
 import { HTML_PREVIEW_LIVE_UPDATE_EVENT, normalizePreviewSourcePath } from "../../../utils/htmlPreviewLive.js";
 import { isDpuVirtualPath } from "../../pages/file-exp/file-exp-dpu-provider.js";
 

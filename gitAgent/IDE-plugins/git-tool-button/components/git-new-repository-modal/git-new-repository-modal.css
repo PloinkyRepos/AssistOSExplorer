@@ -37,7 +37,7 @@ dialog.modal.git-new-repository-modal-dialog {
 
 .git-new-repository-tab.active {
     color: var(--text);
-    border-bottom-color: var(--accent, #60A5FA);
+    border-bottom-color: var(--accent);
 }
 
 .git-new-repository-panel {
@@ -86,7 +86,7 @@ dialog.modal.git-new-repository-modal-dialog {
 
 .git-new-repository-field input:focus,
 .git-new-repository-field select:focus {
-    outline: 2px solid color-mix(in srgb, var(--accent, #60A5FA) 45%, transparent);
+    outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
     outline-offset: 1px;
 }
 
@@ -134,13 +134,13 @@ dialog.modal.git-new-repository-modal-dialog {
 
 .git-new-repository-target:hover,
 .git-new-repository-repo:hover {
-    background: color-mix(in srgb, var(--accent, #60A5FA) 8%, transparent);
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
 .git-new-repository-target.active,
 .git-new-repository-repo.selected {
-    border-color: color-mix(in srgb, var(--accent, #60A5FA) 48%, var(--border));
-    background: color-mix(in srgb, var(--accent, #60A5FA) 12%, transparent);
+    border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 .git-new-repository-target {
@@ -293,7 +293,7 @@ dialog.modal.git-new-repository-modal-dialog {
     height: 14px;
     flex: 0 0 auto;
     border: 2px solid color-mix(in srgb, var(--text-soft) 28%, transparent);
-    border-top-color: var(--accent, #60A5FA);
+    border-top-color: var(--accent);
     border-radius: 50%;
     animation: git-new-repository-spin 0.8s linear infinite;
 }
@@ -352,7 +352,7 @@ dialog.modal.git-new-repository-modal-dialog {
     }
 
     .git-new-repository-tab.active {
-        background: color-mix(in srgb, var(--accent, #60A5FA) 14%, transparent);
+        background: color-mix(in srgb, var(--accent) 14%, transparent);
         border-bottom-color: transparent;
     }
 

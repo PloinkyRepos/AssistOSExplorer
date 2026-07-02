@@ -1,9 +1,9 @@
 :host {
-    font-family: var(--default-font), "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+    font-family: var(--default-font);
     color: inherit;
 }
 
-dialog {
+dialog.file-search-modal-dialog {
     padding: 0;
     border: none;
     border-radius: var(--radius-xl);
@@ -113,11 +113,6 @@ dialog.file-search-modal-dialog.is-fullscreen .file-search-resize-handle {
     width: 12px;
     height: 12px;
     cursor: nesw-resize;
-}
-
-dialog::backdrop {
-    background: rgba(15, 23, 42, 0.5);
-    backdrop-filter: blur(2px);
 }
 
 .search-modal {
@@ -240,19 +235,23 @@ dialog::backdrop {
 }
 
 .search-overlay.open {
-    display: block;
-    height: fit-content;
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    position: relative;
 }
 
 .search-overlay-card {
     background: var(--file-exp-panel);
     border: 1px solid var(--file-exp-border);
     border-radius: 12px;
-    box-shadow: 0 12px 24px rgba(15, 23, 42, 0.12);
+    box-shadow: var(--shadow-lg);
     display: flex;
     flex-direction: column;
     width: 100%;
     height: 100%;
+    min-height: 0;
 }
 
 .search-overlay-header {
@@ -268,6 +267,9 @@ dialog::backdrop {
     display: flex;
     flex-direction: column;
     gap: 10px;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
 }
 
 .search-row {
@@ -440,9 +442,9 @@ dialog::backdrop {
 .search-results {
     flex: 1;
     overflow-y: auto;
+    overflow-x: hidden ;
     background: var(--surface);
-    min-height: 180px;
-    max-height: 375px;
+    min-height: 0;
     display: flex;
     flex-direction: column;
     gap: 3px;

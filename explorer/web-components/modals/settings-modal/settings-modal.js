@@ -7,7 +7,7 @@ import {
     formatShortcutForDisplay,
     normalizeShortcutString
 } from "../../../utils/keymap.js";
-import { getCurrentTheme, setTheme } from "../../../utils/theme.js";
+import { getCurrentTheme, setTheme } from "../../../shared/ui/theme.js";
 import {
     buildAgentSettingsItems
 } from "./settings-agent-model.js";

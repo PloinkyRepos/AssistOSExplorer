@@ -259,7 +259,7 @@ settings-modal .totp-secret-value {
     border-radius: 7px;
     background: var(--surface);
     color: var(--text);
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-family: var(--mono-font);
     font-size: 0.86rem;
     overflow-wrap: anywhere;
 }
@@ -267,7 +267,7 @@ settings-modal .totp-secret-value {
 settings-modal .totp-uri-value {
     min-height: 82px;
     resize: vertical;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-family: var(--mono-font);
     font-size: 0.82rem;
 }
 
@@ -303,11 +303,11 @@ settings-modal .avatar-subtabs {
 
 settings-modal .avatar-subtab {
     min-height: 34px;
-    border: 1px solid var(--border-strong, #d8dee7);
+    border: 1px solid var(--border-strong);
     border-radius: 7px;
     padding: 0 12px;
-    background: var(--surface, #fff);
-    color: var(--text, #17202a);
+    background: var(--surface);
+    color: var(--text);
     font: inherit;
     font-size: 0.88rem;
     font-weight: 550;
@@ -315,8 +315,8 @@ settings-modal .avatar-subtab {
 }
 
 settings-modal .avatar-subtab.active {
-    background: var(--accent, #176b87);
-    border-color: var(--accent, #176b87);
+    background: var(--accent);
+    border-color: var(--accent);
     color: #fff;
 }
 
@@ -334,7 +334,7 @@ settings-modal .avatar-settings-card {
     border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
     border-radius: 16px;
     background:
-        linear-gradient(180deg, color-mix(in srgb, var(--surface) 94%, #ffffff 6%), var(--surface));
+        linear-gradient(180deg, color-mix(in srgb, var(--surface) 94%, var(--white) 6%), var(--surface));
     box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
     transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
 }

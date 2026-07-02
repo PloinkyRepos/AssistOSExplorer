@@ -1,6 +1,6 @@
 // Wire up search-related behaviors for FileExp without bloating the main presenter.
 import { getKeymap, matchesShortcut } from "../../../utils/keymap.js";
-import { getCurrentTheme } from "../../../utils/theme.js";
+import { getCurrentTheme } from "../../../shared/ui/theme.js";
 import { FILE_EXP_REPLACE_COMPLETE_EVENT } from "../../../utils/appEvents.js";
 import { withTimeout } from "../../utils/workspace-search-utils.js";
 import { callExplorerTool } from "../../../services/infrastructure/explorerApi.js";

@@ -78,7 +78,7 @@
     border: 1px solid var(--light-gray-border);
     border-radius: 8px;
     padding: 10px 12px;
-    font-family: monospace;
+    font-family: var(--mono-font);
     font-size: 14px;
     line-height: 1.4;
     background: var(--white);

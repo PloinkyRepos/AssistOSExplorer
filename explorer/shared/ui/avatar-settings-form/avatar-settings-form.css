@@ -20,9 +20,9 @@ avatar-settings-form .avatar-settings-section {
     align-items: end;
     min-width: 0;
     padding: 12px;
-    border: 1px solid var(--border, #e2e8f0);
+    border: 1px solid var(--border);
     border-radius: 8px;
-    background: color-mix(in srgb, var(--surface, #fff) 94%, var(--file-exp-panel, #f8fafc));
+    background: color-mix(in srgb, var(--surface) 94%, var(--file-exp-panel));
 }
 
 avatar-settings-form .avatar-source-section {
@@ -37,7 +37,7 @@ avatar-settings-form .avatar-settings-field {
 }
 
 avatar-settings-form .avatar-settings-field span {
-    color: var(--text-soft, #627080);
+    color: var(--text-soft);
     font-size: 0.78rem;
     font-weight: 650;
 }
@@ -61,7 +61,7 @@ avatar-settings-form .avatar-settings-check {
     align-items: center;
     gap: 7px;
     min-height: 34px;
-    color: var(--text, #17202a);
+    color: var(--text);
     font-size: 0.86rem;
 }
 
@@ -70,9 +70,9 @@ avatar-settings-form .avatar-settings-preview {
     min-height: 104px;
     display: grid;
     place-items: center;
-    border: 1px solid var(--border-strong, #d8dee7);
+    border: 1px solid var(--border-strong);
     border-radius: 8px;
-    background: var(--surface, #fff);
+    background: var(--surface);
     overflow: hidden;
 }
 

@@ -1,4 +1,4 @@
-import { getCurrentTheme } from "../../../utils/theme.js";
+import { getCurrentTheme } from "../../../shared/ui/theme.js";
 
 export function getCurrentAgentName(win = globalThis.window) {
     try {

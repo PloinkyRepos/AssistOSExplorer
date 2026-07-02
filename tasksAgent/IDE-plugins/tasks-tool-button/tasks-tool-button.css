@@ -20,7 +20,7 @@ tasks-tool-button .tasks-tool-button {
 
 tasks-tool-button .tasks-tool-button:hover,
 tasks-tool-button .tasks-tool-button[aria-expanded="true"] {
-    background: var(--file-exp-subtle-surface, rgba(148, 163, 184, 0.12));
+    background: var(--file-exp-subtle-surface);
 }
 
 tasks-tool-button .tasks-tool-button-chevron {

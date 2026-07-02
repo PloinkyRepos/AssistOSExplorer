@@ -3,7 +3,7 @@ import assistosSDK, { initialiseAssistOS } from './services/assistosSDK.js';
 import { createComponentRegistry } from './services/runtime/componentRegistry.js';
 import { createRuntimePluginLoader } from './services/runtime/runtimePluginLoader.js';
 import { filterRuntimePluginsByPolicy, forEachRuntimePluginEntry } from './utils/pluginUtils.core.js';
-import { initializeTheme } from './utils/theme.js';
+import { initializeTheme } from './shared/ui/theme.js';
 
 const EXPLORER_AGENT_ID = 'explorer';
 const RUNTIME_PLUGIN_TOOL = 'collect_ide_plugins';

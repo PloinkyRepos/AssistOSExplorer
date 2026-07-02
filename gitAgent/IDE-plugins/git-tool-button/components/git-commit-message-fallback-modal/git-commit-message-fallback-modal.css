@@ -30,7 +30,7 @@
 
 .git-commit-message-fallback-file {
     color: var(--text-soft);
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    font-family: var(--mono-font);
     font-size: 0.82rem;
     line-height: 1.35;
     overflow-wrap: anywhere;
@@ -60,6 +60,6 @@
 
 .git-commit-message-fallback-error {
     margin-top: 8px;
-    color: var(--danger, #b42318);
+    color: var(--danger);
     font-size: 0.86rem;
 }
