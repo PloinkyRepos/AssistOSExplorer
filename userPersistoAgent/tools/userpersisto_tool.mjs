@@ -10,7 +10,7 @@ import {
   findCurrentUserFromAuthInfo
 } from '../lib/users.mjs';
 import { USERPERSISTO_ROLES } from '../lib/roles.mjs';
-import { checkAccess } from '../lib/authorization.mjs';
+import { authorizeCapability, checkAccess } from '../lib/authorization.mjs';
 import { startEmailCodeLogin, verifyEmailCode } from '../lib/auth/email-code.mjs';
 import {
   startPasskeyRegistration,
@@ -19,12 +19,20 @@ import {
   verifyPasskeyLogin
 } from '../lib/auth/passkey.mjs';
 import { setupTotp, verifyTotp } from '../lib/auth/totp.mjs';
-import { getCreditBalance, addCredits, consumeCredits } from '../lib/credits/ledger.mjs';
+import {
+  getCreditBalance,
+  addCredits,
+  consumeCredits,
+  reserveCredits,
+  commitCredits,
+  releaseCredits,
+  refundCredits,
+  purchaseCredits
+} from '../lib/credits/ledger.mjs';
 import { getSubscription, createStripeCheckout } from '../lib/billing/stripe.mjs';
 import { getAuditEvents } from '../lib/audit.mjs';
 import { getAgentSettings, saveAgentSettings } from '../lib/settings.mjs';
 import { getAllowedAuthMethods } from '../lib/settings.mjs';
-import { ensureUserPersistoSchema } from '../lib/storage/ensure-schema.mjs';
 
 async function loadInvocationAuth() {
   const candidates = [
@@ -76,7 +84,6 @@ function authInfoFromEnvelope(envelope = {}) {
 }
 
 async function dispatch(toolName, input, authInfo = null) {
-  await ensureUserPersistoSchema();
   switch (toolName) {
     case 'userpersisto_get_current_user':
       return getCurrentUser(input.auth || {});
@@ -104,6 +111,8 @@ async function dispatch(toolName, input, authInfo = null) {
       return { roles: USERPERSISTO_ROLES };
     case 'userpersisto_check_access':
       return checkAccess(input);
+    case 'userpersisto_authorize_capability':
+      return authorizeCapability(input);
     case 'userpersisto_start_email_code_login':
       return startEmailCodeLogin(input);
     case 'userpersisto_verify_email_code':
@@ -126,6 +135,16 @@ async function dispatch(toolName, input, authInfo = null) {
       return addCredits(input);
     case 'userpersisto_consume_credits':
       return consumeCredits(input);
+    case 'userpersisto_reserve_credits':
+      return reserveCredits(input);
+    case 'userpersisto_commit_credits':
+      return commitCredits(input);
+    case 'userpersisto_release_credits':
+      return releaseCredits(input);
+    case 'userpersisto_refund_credits':
+      return refundCredits(input);
+    case 'userpersisto_purchase_credits':
+      return purchaseCredits(input);
     case 'userpersisto_get_subscription':
       return getSubscription(input);
     case 'userpersisto_create_stripe_checkout':

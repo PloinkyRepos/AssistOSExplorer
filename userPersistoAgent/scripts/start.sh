@@ -24,16 +24,19 @@ if [ -f "$PERSISTO_DIR/src/persistoServer.cjs" ]; then
   until node -e "fetch(process.env.PERSISTO_URL).then(() => process.exit(0)).catch(() => process.exit(1))" >/dev/null 2>&1; do
     i=$((i + 1))
     if [ "$i" -gt 30 ]; then
-      echo "Persisto did not become ready; UserPersisto will use local fallback storage until it is available."
-      break
+      echo "Persisto did not become ready; UserPersisto requires Persisto storage." >&2
+      exit 1
     fi
     sleep 1
   done
 else
-  echo "Persisto server not installed; UserPersisto will use local fallback storage."
+  echo "Persisto server not installed; UserPersisto requires Persisto storage." >&2
+  exit 1
 fi
 
-export USERPERSISTO_AGENTSERVER_PORT="${USERPERSISTO_AGENTSERVER_PORT:-7001}"
+export USERPERSISTO_SERVICE_PORT="${USERPERSISTO_SERVICE_PORT:-${PORT:-7000}}"
+export USERPERSISTO_AGENTSERVER_PORT="${USERPERSISTO_AGENTSERVER_PORT:-$((USERPERSISTO_SERVICE_PORT + 1))}"
+export PLOINKY_AGENT_MCP_PATH="${PLOINKY_AGENT_MCP_PATH:-/mcp}"
 
 node /code/main.mjs &
 PORT="$USERPERSISTO_AGENTSERVER_PORT" sh "${PLOINKY_AGENT_LIB_DIR:-/Agent}/server/AgentServer.sh" &

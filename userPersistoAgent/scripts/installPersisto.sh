@@ -3,27 +3,35 @@ set -eu
 
 PERSISTO_DIR="${WORKSPACE_PATH:-/userpersisto-data}/Persisto"
 
-if [ -d "$PERSISTO_DIR" ] && [ -d "$PERSISTO_DIR/node_modules" ]; then
+ensure_achilles_utils() {
+  ACHILLES_UTILS_DIR="$PERSISTO_DIR/src/audit/achillesUtils"
+  if [ -d "$ACHILLES_UTILS_DIR" ]; then
+    return 0
+  fi
+  if [ ! -d "$PERSISTO_DIR/src/audit" ]; then
+    echo "ERROR: Persisto audit directory is missing; UserPersisto requires Persisto storage." >&2
+    exit 1
+  fi
+  git clone https://github.com/AssistOS-AI/achillesUtils.git "$ACHILLES_UTILS_DIR" || {
+    echo "ERROR: Persisto achillesUtils install failed; UserPersisto requires Persisto storage." >&2
+    exit 1
+  }
+}
+
+if [ -d "$PERSISTO_DIR" ] && [ -f "$PERSISTO_DIR/src/persistoServer.cjs" ]; then
   echo "Persisto already installed at $PERSISTO_DIR"
+  ensure_achilles_utils
   exit 0
 fi
 
 if [ -d "$PERSISTO_DIR" ] && [ -f "$PERSISTO_DIR/package.json" ]; then
-  echo "Persisto cloned; installing dependencies..."
-  cd "$PERSISTO_DIR"
-  npm install --omit=dev || {
-    echo "WARNING: Persisto npm install failed; UserPersisto will use local fallback storage until Persisto is available."
-    exit 0
-  }
+  echo "Persisto cloned; verifying required files..."
+  ensure_achilles_utils
   exit 0
 fi
 
 mkdir -p "$(dirname "$PERSISTO_DIR")"
 cd "$(dirname "$PERSISTO_DIR")"
 git clone https://github.com/OpenDSU/Persisto.git
-cd Persisto
-npm install --omit=dev || {
-  echo "WARNING: Persisto npm install failed; UserPersisto will use local fallback storage until Persisto is available."
-  exit 0
-}
+ensure_achilles_utils
 echo "Persisto installed at $PERSISTO_DIR"

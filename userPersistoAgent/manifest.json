@@ -74,9 +74,6 @@
           "required": false,
           "default": "Admin"
         },
-        "USERPERSISTO_STORAGE": {
-          "required": false
-        },
         "USERPERSISTO_SERVICE_PORT": {
           "required": false
         },

@@ -1,5 +1,4 @@
 import fsSync from 'node:fs';
-import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { pathToFileURL } from 'node:url';
@@ -13,21 +12,6 @@ function resolveDataDir() {
 }
 
 const DATA_DIR = resolveDataDir();
-const STORE_FILE = path.join(DATA_DIR, 'userpersisto-store.json');
-const TABLES = [
-  'user',
-  'session',
-  'ssoLoginRequest',
-  'ssoAuthCode',
-  'emailAuthCode',
-  'webauthnChallenge',
-  'passkeyCredential',
-  'totpSecret',
-  'creditLedgerEntry',
-  'subscription',
-  'auditEvent',
-  'agentSetting'
-];
 
 let PersistoClient;
 let cachedPersistoClient = null;
@@ -36,18 +20,19 @@ function nowIso() {
   return new Date().toISOString();
 }
 
-function clone(value) {
-  return JSON.parse(JSON.stringify(value));
-}
-
 function isConnectionError(error) {
   const message = String(error?.message || error || '');
   return /(fetch failed|ECONNREFUSED|ENOTFOUND|EHOSTUNREACH|socket hang up|network|Failed to fetch)/i.test(message);
 }
 
 function isEmptyPersistoSelectError(error) {
+  const code = String(error?.code || '');
   const message = String(error?.message || error || '');
-  return /ENOENT:.*\/[A-Za-z0-9._-]+\.undefined\b/.test(message);
+  return code === 'ENOENT' || /ENOENT:.*\/[^/]+\.undefined\b/.test(message);
+}
+
+function matchesFilter(row = {}, filter = {}) {
+  return Object.entries(filter || {}).every(([key, value]) => row?.[key] === value);
 }
 
 async function loadPersistoClientClass() {
@@ -81,10 +66,11 @@ async function loadPersistoClientClass() {
 }
 
 async function getPersistoClient() {
-  if (process.env.USERPERSISTO_STORAGE === 'file') return null;
   if (cachedPersistoClient) return cachedPersistoClient;
   const Client = await loadPersistoClientClass();
-  if (!Client) return null;
+  if (!Client) {
+    throw new Error('PersistoClient is required for UserPersisto storage but was not found.');
+  }
   const url = process.env.PERSISTO_URL || `http://${process.env.PERSISTO_HOST || 'localhost'}:${process.env.PERSISTO_PORT || '3000'}`;
   const client = new Client(url);
   try {
@@ -92,95 +78,36 @@ async function getPersistoClient() {
     cachedPersistoClient = client;
     return client;
   } catch (error) {
-    if (isConnectionError(error)) return null;
+    if (isConnectionError(error)) {
+      throw new Error(`Persisto storage is required but is not reachable at ${url}: ${error?.message || error}`);
+    }
     cachedPersistoClient = client;
     return client;
   }
 }
 
-async function readFileStore() {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  try {
-    const raw = await fs.readFile(STORE_FILE, 'utf8');
-    const parsed = JSON.parse(raw);
-    const store = parsed && typeof parsed === 'object' ? parsed : {};
-    for (const table of TABLES) {
-      if (!Array.isArray(store[table])) store[table] = [];
-    }
-    return store;
-  } catch (error) {
-    if (error?.code !== 'ENOENT') throw error;
-    return Object.fromEntries(TABLES.map((table) => [table, []]));
-  }
-}
-
-async function writeFileStore(store) {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  const tmpFile = `${STORE_FILE}.${process.pid}.tmp`;
-  await fs.writeFile(tmpFile, `${JSON.stringify(store, null, 2)}\n`, 'utf8');
-  await fs.rename(tmpFile, STORE_FILE);
-}
-
-function matchesFilter(record, filter = {}) {
-  return Object.entries(filter || {}).every(([key, value]) => {
-    if (value === undefined || value === null || value === '') return true;
-    return record?.[key] === value;
-  });
-}
-
-function applyQueryOptions(rows, options = {}) {
-  let result = rows;
-  if (options?.sortBy) {
-    const field = options.sortBy;
-    result = result.sort((a, b) => String(a?.[field] || '').localeCompare(String(b?.[field] || '')));
-  }
-  if (Number.isFinite(options?.limit)) {
-    result = result.slice(0, Math.max(0, Math.floor(options.limit)));
-  }
-  return result;
-}
-
-function getRecordId(table, record) {
-  return record?.id || record?.[`${table}Id`] || record?.userId || record?.email;
-}
-
-async function readPersistoFsRows(table, filter = {}, options = {}) {
-  const persistenceFolder = String(
-    process.env.PERSISTENCE_FOLDER || path.join(DATA_DIR, 'persisto-data', 'work_space_data')
-  ).trim();
-  const prefix = table.toUpperCase().slice(0, 7);
-  let names = [];
-  try {
-    names = await fs.readdir(persistenceFolder);
-  } catch (_) {
-    return [];
-  }
-  const rows = [];
-  for (const name of names) {
-    if (!name.startsWith(`${prefix}.`)) continue;
-    try {
-      const row = JSON.parse(await fs.readFile(path.join(persistenceFolder, name), 'utf8'));
-      if (matchesFilter(row, filter)) rows.push(row);
-    } catch (_) {}
-  }
-  return applyQueryOptions(rows, options);
-}
-
 export class UserPersistoStore {
   async select(table, filter = {}, options = {}) {
     const client = await getPersistoClient();
-    if (client) {
-      try {
-        const result = await client.execute('select', table, filter, options || {});
-        return Array.isArray(result) ? result : (result?.objects || []);
-      } catch (error) {
-        if (isEmptyPersistoSelectError(error)) return readPersistoFsRows(table, filter, options);
-        if (!isConnectionError(error)) throw error;
-      }
+    let result;
+    try {
+      result = await client.execute('select', table, filter, options || {});
+    } catch (error) {
+      if (isEmptyPersistoSelectError(error)) return [];
+      throw error;
     }
-    const store = await readFileStore();
-    const rows = (store[table] || []).filter((record) => matchesFilter(record, filter));
-    return clone(applyQueryOptions(rows, options));
+    const rows = Array.isArray(result) ? result : (result?.objects || []);
+    return Object.keys(filter || {}).length ? rows.filter((row) => matchesFilter(row, filter)) : rows;
+  }
+
+  async selectAll(table, options = {}) {
+    const rows = await this.select(table, {}, options || {});
+    return Array.isArray(rows) ? rows : [];
+  }
+
+  async findOne(table, predicate, options = {}) {
+    const rows = await this.selectAll(table, options);
+    return rows.find(predicate) || null;
   }
 
   async selectOne(table, filter = {}) {
@@ -196,45 +123,44 @@ export class UserPersistoStore {
       updatedAt: data.updatedAt || nowIso()
     };
     const client = await getPersistoClient();
-    if (client) {
-      const method = `create${table.charAt(0).toUpperCase()}${table.slice(1)}`;
-      try {
-        return await client.execute(method, record);
-      } catch (error) {
-        if (!isConnectionError(error)) throw error;
-      }
-    }
-    const store = await readFileStore();
-    store[table] ||= [];
-    store[table].push(record);
-    await writeFileStore(store);
-    return clone(record);
+    const method = `create${table.charAt(0).toUpperCase()}${table.slice(1)}`;
+    return client.execute(method, record);
   }
 
   async configureTypes(types = {}) {
     const client = await getPersistoClient();
-    if (!client) return false;
-    await client.addType(types);
+    try {
+      await client.addType(types);
+    } catch (error) {
+      const message = String(error?.message || error || '');
+      if (!/Function \w+ already exists|Refusing to overwrite/i.test(message)) throw error;
+    }
+    return true;
+  }
+
+  async configureIndexes(indexes = {}) {
+    const client = await getPersistoClient();
+    for (const [table, field] of Object.entries(indexes || {})) {
+      try {
+        await client.execute('createIndex', table, field);
+      } catch (error) {
+        const message = String(error?.message || error || '');
+        if (!/already exists/i.test(message)) throw error;
+      }
+    }
     return true;
   }
 
   async update(table, id, patch = {}) {
     const client = await getPersistoClient();
-    if (client) {
-      try {
-        const method = `update${table.charAt(0).toUpperCase()}${table.slice(1)}`;
-        return await client.execute(method, id, { ...patch, updatedAt: nowIso() });
-      } catch (error) {
-        if (!isConnectionError(error)) throw error;
-      }
-    }
-    const store = await readFileStore();
-    const rows = store[table] || [];
-    const index = rows.findIndex((record) => getRecordId(table, record) === id || record.id === id);
-    if (index < 0) throw new Error(`${table} record not found.`);
-    rows[index] = { ...rows[index], ...patch, updatedAt: nowIso() };
-    await writeFileStore(store);
-    return clone(rows[index]);
+    const method = `update${table.charAt(0).toUpperCase()}${table.slice(1)}`;
+    return client.execute(method, id, { ...patch, updatedAt: nowIso() });
+  }
+
+  async delete(table, id) {
+    const client = await getPersistoClient();
+    const method = `delete${table.charAt(0).toUpperCase()}${table.slice(1)}`;
+    return client.execute(method, id);
   }
 
   async appendAudit(action, details = {}) {

@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { getUserPersistoStore } from './storage/persisto-store.mjs';
-import { assertRole, normalizeRole, roleCanAccessExplorer, USERPERSISTO_ROLES } from './roles.mjs';
+import { assertRole, roleCanAccessExplorer, USERPERSISTO_ROLES } from './roles.mjs';
 import { hashPassword, verifyPasswordHash } from './local-auth-passwords.mjs';
 import { getAllowedAuthMethods } from './settings.mjs';
 
@@ -39,8 +39,8 @@ export async function getCurrentUser(auth = {}) {
   return { authenticated: Boolean(user), user };
 }
 
-function normalizeUsername(value, fallback = '') {
-  const username = String(value || fallback || '').trim();
+function normalizeUsername(value, defaultUsername = '') {
+  const username = String(value || defaultUsername || '').trim();
   if (!username) return '';
   if (!/^[A-Za-z0-9._-]{2,64}$/.test(username)) {
     throw new Error('Username must be 2-64 characters and use only letters, numbers, dot, underscore, or dash.');
@@ -51,11 +51,11 @@ function normalizeUsername(value, fallback = '') {
 export async function createUser(input = {}) {
   const store = getUserPersistoStore();
   const email = normalizeEmail(input.email);
-  const existing = await store.selectOne('user', { email });
+  const existing = await store.findOne('user', (user) => String(user.email || '').toLowerCase() === email);
   if (existing) {
     throw new Error(`User ${email} already exists.`);
   }
-  const role = normalizeRole(input.role, 'selfRegistered');
+  const role = assertRole(input.role);
   const username = normalizeUsername(input.username, roleCanAccessExplorer(role) ? email.split('@')[0] : '');
   const password = String(input.password || '');
   const user = await store.create('user', {
@@ -225,7 +225,7 @@ export async function authenticateUserPassword(input = {}) {
   const password = String(input.password || '');
   const requireExplorerAccess = input.requireExplorerAccess !== false;
   if (!password) throw new Error('Password is required.');
-  const user = await getUserPersistoStore().selectOne('user', { username });
+  const user = await getUserPersistoStore().findOne('user', (row) => String(row.username || '') === username);
   if (!user || String(user.status || 'active') !== 'active') {
     throw new Error('Invalid username or password.');
   }
@@ -240,11 +240,11 @@ export async function authenticateUserPassword(input = {}) {
 
 export async function findUserByEmail(email) {
   const value = normalizeEmail(email);
-  return publicUser(await getUserPersistoStore().selectOne('user', { email: value }));
+  return publicUser(await getUserPersistoStore().findOne('user', (user) => String(user.email || '').toLowerCase() === value));
 }
 
 export async function findUserById(userId) {
   const id = String(userId || '').trim();
   if (!id) return null;
-  return publicUser(await getUserPersistoStore().selectOne('user', { id }));
+  return publicUser(await getUserPersistoStore().findOne('user', (user) => String(user.id || '') === id));
 }

@@ -22,7 +22,7 @@
         "username": { "type": "string", "optional": true },
         "password": { "type": "string", "optional": true },
         "displayName": { "type": "string", "optional": true },
-        "role": { "type": "string", "optional": true },
+        "role": { "type": "string", "optional": false },
         "status": { "type": "string", "optional": true }
       },
       "env": { "TOOL_NAME": "userpersisto_create_user" }
@@ -150,17 +150,33 @@
     {
       "name": "userpersisto_check_access",
       "title": "UserPersisto Check Access",
-      "description": "Check role and credit based access for an explicit UserPersisto client.",
+      "description": "Check client, capability, and credit based access for a UserPersisto user.",
       "command": "tools/userpersisto_tool.sh",
       "cwd": "workspace",
       "tags": ["admin"],
       "inputSchema": {
         "userId": { "type": "string", "optional": true },
         "email": { "type": "string", "optional": true },
-        "clientId": { "type": "string", "optional": false },
+        "clientId": { "type": "string", "optional": true },
+        "capability": { "type": "string", "optional": true },
         "creditCost": { "type": "number", "optional": true }
       },
       "env": { "TOOL_NAME": "userpersisto_check_access" }
+    },
+    {
+      "name": "userpersisto_authorize_capability",
+      "title": "UserPersisto Authorize Capability",
+      "description": "Authorize a named capability such as explorer.access for a UserPersisto user.",
+      "command": "tools/userpersisto_tool.sh",
+      "cwd": "workspace",
+      "tags": ["admin"],
+      "inputSchema": {
+        "userId": { "type": "string", "optional": true },
+        "email": { "type": "string", "optional": true },
+        "capability": { "type": "string", "optional": false },
+        "creditCost": { "type": "number", "optional": true }
+      },
+      "env": { "TOOL_NAME": "userpersisto_authorize_capability" }
     },
     {
       "name": "userpersisto_start_email_code_login",
@@ -302,6 +318,77 @@
         "reference": { "type": "string", "optional": true }
       },
       "env": { "TOOL_NAME": "userpersisto_consume_credits" }
+    },
+    {
+      "name": "userpersisto_reserve_credits",
+      "title": "UserPersisto Reserve Credits",
+      "description": "Reserve credits before a billable action is committed.",
+      "command": "tools/userpersisto_tool.sh",
+      "cwd": "workspace",
+      "tags": ["admin"],
+      "inputSchema": {
+        "userId": { "type": "string", "optional": false },
+        "amount": { "type": "number", "optional": false },
+        "reason": { "type": "string", "optional": true },
+        "reference": { "type": "string", "optional": true }
+      },
+      "env": { "TOOL_NAME": "userpersisto_reserve_credits" }
+    },
+    {
+      "name": "userpersisto_commit_credits",
+      "title": "UserPersisto Commit Credits",
+      "description": "Commit a pending credit reservation into a ledger debit.",
+      "command": "tools/userpersisto_tool.sh",
+      "cwd": "workspace",
+      "tags": ["admin"],
+      "inputSchema": {
+        "reservationId": { "type": "string", "optional": false },
+        "reason": { "type": "string", "optional": true },
+        "reference": { "type": "string", "optional": true }
+      },
+      "env": { "TOOL_NAME": "userpersisto_commit_credits" }
+    },
+    {
+      "name": "userpersisto_release_credits",
+      "title": "UserPersisto Release Credits",
+      "description": "Release a pending credit reservation without charging it.",
+      "command": "tools/userpersisto_tool.sh",
+      "cwd": "workspace",
+      "tags": ["admin"],
+      "inputSchema": {
+        "reservationId": { "type": "string", "optional": false }
+      },
+      "env": { "TOOL_NAME": "userpersisto_release_credits" }
+    },
+    {
+      "name": "userpersisto_refund_credits",
+      "title": "UserPersisto Refund Credits",
+      "description": "Refund credits to a user ledger.",
+      "command": "tools/userpersisto_tool.sh",
+      "cwd": "workspace",
+      "tags": ["admin"],
+      "inputSchema": {
+        "userId": { "type": "string", "optional": false },
+        "amount": { "type": "number", "optional": false },
+        "reason": { "type": "string", "optional": true },
+        "reference": { "type": "string", "optional": true }
+      },
+      "env": { "TOOL_NAME": "userpersisto_refund_credits" }
+    },
+    {
+      "name": "userpersisto_purchase_credits",
+      "title": "UserPersisto Purchase Credits",
+      "description": "Apply a credit purchase to a user ledger.",
+      "command": "tools/userpersisto_tool.sh",
+      "cwd": "workspace",
+      "tags": ["admin"],
+      "inputSchema": {
+        "userId": { "type": "string", "optional": false },
+        "amount": { "type": "number", "optional": false },
+        "reason": { "type": "string", "optional": true },
+        "reference": { "type": "string", "optional": true }
+      },
+      "env": { "TOOL_NAME": "userpersisto_purchase_credits" }
     },
     {
       "name": "userpersisto_get_subscription",

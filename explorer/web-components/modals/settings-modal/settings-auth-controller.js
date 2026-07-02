@@ -195,7 +195,6 @@ export const authPreferenceController = {
             this.state.authMethods = Array.isArray(payload.authMethods) ? payload.authMethods : [];
             this.state.allowedAuthMethods = Array.isArray(payload.allowedAuthMethods) ? payload.allowedAuthMethods : [];
             this.state.authEnrollments = payload.enrollments || {};
-            this.state.authProfileLoaded = true;
             this.state.preferredAuthStatusType = "";
             this.state.preferredAuthStatus = "";
         } catch (error) {
@@ -203,7 +202,6 @@ export const authPreferenceController = {
             this.state.authMethods = [];
             this.state.allowedAuthMethods = [];
             this.state.authEnrollments = {};
-            this.state.authProfileLoaded = false;
             this.state.preferredAuthStatus = error?.message || "Failed to load sign-in methods.";
             this.state.preferredAuthStatusType = "error";
         } finally {
@@ -257,7 +255,6 @@ export const authPreferenceController = {
                 this.state.preferredAuthStatus = "Passkey added.";
                 this.state.preferredAuthStatusType = "";
                 await showToast("Passkey added.", "success");
-                this.state.authProfileLoaded = false;
                 this.state.authPreferenceBusy = false;
                 await this.loadPreferredAuthProfile();
                 return;
@@ -272,7 +269,6 @@ export const authPreferenceController = {
             this.state.preferredAuthStatus = "Passkey added.";
             this.state.preferredAuthStatusType = "";
             await showToast("Passkey added.", "success");
-            this.state.authProfileLoaded = false;
             this.state.authPreferenceBusy = false;
             await this.loadPreferredAuthProfile();
         } catch (error) {
@@ -327,7 +323,6 @@ export const authPreferenceController = {
             if (result?.verified) {
                 this.state.preferredAuthStatus = "Authenticator app enabled.";
                 this.state.preferredAuthStatusType = "";
-                this.state.authProfileLoaded = false;
                 this.state.authPreferenceBusy = false;
                 await this.loadPreferredAuthProfile();
                 return;

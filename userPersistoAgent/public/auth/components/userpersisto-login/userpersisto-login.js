@@ -224,10 +224,17 @@ export class UserPersistoLogin {
       this.params.clientId = result.clientId || this.params.clientId;
       if (result.userExists === false) {
         if (result.canSignup) {
+          const shouldCreate = window.confirm(`No account exists for ${this.email}. Do you want to create one with this email?`);
+          if (!shouldCreate) return;
           this.setSignupPromptStep();
           return;
         }
         throw new Error('No account is available for this email.');
+      }
+      if (this.authMode === 'signup') {
+        const shouldLogin = window.confirm(`We found an account for ${this.email}. Do you want to login with this email?`);
+        if (!shouldLogin) return;
+        this.authMode = 'login';
       }
       this.methods = result.methods || [];
       this.selectedMethod = result.selectedMethod || this.methods[0]?.type || '';

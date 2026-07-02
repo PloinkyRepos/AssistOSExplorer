@@ -8,6 +8,7 @@ import { authenticateUserPassword, findUserByEmail, findUserById } from '../lib/
 import { startEmailCodeLogin, verifyEmailCode } from '../lib/auth/email-code.mjs';
 import { startPasskeyLogin, verifyPasskeyLogin, verifyPasskeyRegistration } from '../lib/auth/passkey.mjs';
 import { verifyTotp } from '../lib/auth/totp.mjs';
+import { handleStripeWebhook } from '../lib/billing/stripe.mjs';
 import {
   createSsoAuthCode,
   createSsoLoginRequest,
@@ -18,9 +19,10 @@ import { USERPERSISTO_AUTH_CLIENT_IDS, normalizeAuthClientId, userCanAccessClien
 import { getAllowedAuthMethods } from '../lib/settings.mjs';
 import { getUserPersistoStore } from '../lib/storage/persisto-store.mjs';
 
-const HOST = process.env.USERPERSISTO_SERVICE_HOST || '0.0.0.0';
-const PORT = Number(process.env.USERPERSISTO_SERVICE_PORT || process.env.PORT || 7000);
-const AGENT_SERVER_PORT = Number(process.env.USERPERSISTO_AGENTSERVER_PORT || 7001);
+const HOST = process.env.USERPERSISTO_SERVICE_HOST || process.env.PLOINKY_AGENT_BIND_HOST || '0.0.0.0';
+const PORT = parseRequiredPort(process.env.USERPERSISTO_SERVICE_PORT || process.env.PORT, 'USERPERSISTO_SERVICE_PORT');
+const AGENT_SERVER_PORT = parseRequiredPort(process.env.USERPERSISTO_AGENTSERVER_PORT, 'USERPERSISTO_AGENTSERVER_PORT');
+const PLOINKY_AGENT_MCP_PATH = normalizeServicePath(process.env.PLOINKY_AGENT_MCP_PATH, 'PLOINKY_AGENT_MCP_PATH');
 const RUNTIME_SECRET = String(process.env.USERPERSISTO_RUNTIME_SECRET || '').trim();
 const LOGIN_WINDOW_MS = 5 * 60 * 1000;
 const LOGIN_MAX_FAILURES = 5;
@@ -65,6 +67,22 @@ const STATIC_ROUTES = [
     stripPrefix: '/auth/'
   }
 ];
+
+function parseRequiredPort(value, name) {
+  const port = Number.parseInt(String(value || ''), 10);
+  if (!Number.isFinite(port) || port <= 0 || port > 65535) {
+    throw new Error(`${name} must be a valid TCP port.`);
+  }
+  return port;
+}
+
+function normalizeServicePath(value, name) {
+  const raw = String(value || '').trim();
+  if (!raw.startsWith('/')) {
+    throw new Error(`${name} must be an absolute path.`);
+  }
+  return raw.length > 1 ? raw.replace(/\/+$/, '') : raw;
+}
 
 function sendJson(res, statusCode, payload = {}) {
   const body = Buffer.from(JSON.stringify(payload), 'utf8');
@@ -286,6 +304,12 @@ async function readJsonBody(req) {
   const raw = Buffer.concat(chunks).toString('utf8').trim();
   if (!raw) return {};
   return JSON.parse(raw);
+}
+
+async function readRawBody(req) {
+  const chunks = [];
+  for await (const chunk of req) chunks.push(chunk);
+  return Buffer.concat(chunks).toString('utf8');
 }
 
 async function buildSsoCallbackLocation({ req, requestId, state, user }) {
@@ -664,30 +688,53 @@ async function handleRuntime(req, res, url) {
   sendJson(res, 404, { ok: false, error: 'runtime_endpoint_not_found' });
 }
 
-function proxyToAgentServer(req, res) {
-  const options = {
+async function handleStripeWebhookRequest(req, res) {
+  if (req.method !== 'POST') {
+    res.writeHead(405);
+    res.end();
+    return;
+  }
+  const rawBody = await readRawBody(req);
+  const signature = String(req.headers['stripe-signature'] || '').trim();
+  const result = await handleStripeWebhook({ rawBody, signature });
+  sendJson(res, 200, result);
+}
+
+function proxyMcpToAgentServer(req, res, url) {
+  const headers = { ...req.headers, host: `127.0.0.1:${AGENT_SERVER_PORT}` };
+  delete headers.connection;
+  delete headers['proxy-connection'];
+
+  const proxyReq = http.request({
     hostname: '127.0.0.1',
     port: AGENT_SERVER_PORT,
     method: req.method,
-    path: req.url,
-    headers: { ...req.headers, host: `127.0.0.1:${AGENT_SERVER_PORT}` }
-  };
-  const upstream = http.request(options, (upstreamRes) => {
-    res.writeHead(upstreamRes.statusCode || 502, upstreamRes.headers);
-    upstreamRes.pipe(res);
+    path: `${PLOINKY_AGENT_MCP_PATH}${url.search || ''}`,
+    headers
+  }, (proxyRes) => {
+    res.writeHead(proxyRes.statusCode || 502, proxyRes.headers);
+    proxyRes.pipe(res);
   });
-  upstream.on('error', (error) => {
+
+  proxyReq.on('error', (error) => {
+    console.warn('[UserPersisto] MCP proxy failed:', error?.message || String(error));
     if (!res.headersSent) {
-      res.writeHead(502, { 'Content-Type': 'application/json' });
+      sendJson(res, 502, { ok: false, error: 'mcp_proxy_unavailable' });
+      return;
     }
-    res.end(JSON.stringify({ ok: false, error: 'userpersisto_agentserver_unavailable', detail: error?.message || String(error) }));
+    res.end();
   });
-  req.pipe(upstream);
+
+  req.pipe(proxyReq);
 }
 
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url || '/', `http://${req.headers.host || '127.0.0.1'}`);
+    if (url.pathname === PLOINKY_AGENT_MCP_PATH || url.pathname === `${PLOINKY_AGENT_MCP_PATH}/`) {
+      proxyMcpToAgentServer(req, res, url);
+      return;
+    }
     if (url.pathname === '/auth/passkey/start') {
       await handlePasskeyStart(req, res);
       return;
@@ -740,7 +787,11 @@ const server = http.createServer(async (req, res) => {
       await handleRuntime(req, res, url);
       return;
     }
-    proxyToAgentServer(req, res);
+    if (url.pathname === '/billing/stripe/webhook') {
+      await handleStripeWebhookRequest(req, res);
+      return;
+    }
+    sendJson(res, 404, { ok: false, error: 'userpersisto_endpoint_not_found' });
   } catch (error) {
     if (!res.headersSent) res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok: false, error: error?.message || String(error) }));
@@ -748,5 +799,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`[UserPersisto] service listening on ${HOST}:${PORT}, proxying AgentServer on 127.0.0.1:${AGENT_SERVER_PORT}`);
+  console.log(`[UserPersisto] service listening on ${HOST}:${PORT}; MCP proxy to 127.0.0.1:${AGENT_SERVER_PORT}${PLOINKY_AGENT_MCP_PATH}`);
 });

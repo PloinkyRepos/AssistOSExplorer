@@ -1,10 +1,5 @@
 export const USERPERSISTO_ROLES = Object.freeze(['admin', 'user', 'selfRegistered']);
 
-export function normalizeRole(value, fallback = 'user') {
-  const role = String(value || '').trim();
-  return USERPERSISTO_ROLES.includes(role) ? role : fallback;
-}
-
 export function assertRole(value) {
   const role = String(value || '').trim();
   if (!USERPERSISTO_ROLES.includes(role)) {

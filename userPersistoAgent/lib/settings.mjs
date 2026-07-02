@@ -15,6 +15,7 @@ const SETTING_KEYS = [
 ];
 const PUBLIC_SETTING_KEYS = new Set(['USERPERSISTO_AUTH_METHODS']);
 const AUTH_METHODS = new Set(['password', 'emailCode', 'passkey', 'totp']);
+const PRIMARY_AUTH_METHODS = new Set(['password', 'emailCode']);
 
 function resolveDataDir() {
   if (process.env.USERPERSISTO_DATA_DIR) return process.env.USERPERSISTO_DATA_DIR;
@@ -132,11 +133,13 @@ export async function saveAgentSettings(input = {}) {
     if (!Object.prototype.hasOwnProperty.call(settings, key)) continue;
     let value = String(settings[key] || '');
     if (key === 'USERPERSISTO_AUTH_METHODS') {
-      value = value.split(',')
+      const methods = value.split(',')
         .map((method) => method.trim())
-        .filter((method) => AUTH_METHODS.has(method))
-        .join(',');
-      if (!value) value = 'password';
+        .filter((method) => AUTH_METHODS.has(method));
+      if (!methods.some((method) => PRIMARY_AUTH_METHODS.has(method))) {
+        throw new Error('Enable Username and password or Email authentication code before saving authentication methods.');
+      }
+      value = methods.join(',');
     }
     if (!value) continue;
     records[key] = {

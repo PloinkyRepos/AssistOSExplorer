@@ -77,6 +77,14 @@ export async function startEmailCodeLogin(input = {}) {
     metadata: { email, expiresAt, userCreated }
   });
   const delivery = await sendAuthCodeEmail({ email, code, expiresAt });
+  await store.create('emailDeliveryLog', {
+    provider: 'emailAgent',
+    email,
+    template: 'auth-code',
+    status: delivery?.ok === false ? 'failed' : 'sent',
+    providerMessageId: delivery?.messageId || '',
+    metadata: { expiresAt }
+  }).catch(() => null);
   return {
     ok: true,
     email,
@@ -93,6 +101,9 @@ export async function verifyEmailCode(input = {}) {
   if (!code) throw new Error('code is required.');
   const active = pickCurrentEmailCode(await store.select('emailAuthCode', { email }, { limit: 100 }));
   if (!active) throw new Error('No active email code found.');
+  if (active.consumedAt) {
+    throw new Error('Email code already used.');
+  }
   if (new Date(active.expiresAt).getTime() < Date.now()) {
     throw new Error('Email code expired.');
   }
@@ -110,7 +121,8 @@ export async function verifyEmailCode(input = {}) {
   await store.update('emailAuthCode', active.id, {
     attempts: 0,
     lastAttempt: '',
-    verifiedAt: new Date().toISOString()
+    verifiedAt: new Date().toISOString(),
+    consumedAt: new Date().toISOString()
   });
   const user = await findUserByEmail(email).catch(() => null);
   if (!user) throw new Error('No active account is available for this email.');

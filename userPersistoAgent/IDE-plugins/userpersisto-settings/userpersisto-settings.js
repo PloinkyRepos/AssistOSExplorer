@@ -70,6 +70,9 @@ export class UserpersistoSettings {
         if (this.element.dataset.userpersistoBound === 'true') return;
         this.element.dataset.userpersistoBound = 'true';
         this.userSearchInput?.addEventListener('input', () => this.refreshUsers());
+        [this.authMethodPasswordInput, this.authMethodEmailCodeInput].forEach((input) => {
+            input?.addEventListener('change', () => this.enforcePrimaryAuthMethodSelection(input));
+        });
         this.element.addEventListener('userpersisto-panel-change', (event) => {
             this.switchPanel(null, event.detail?.panel);
         });
@@ -153,9 +156,20 @@ export class UserpersistoSettings {
         if (this.authMethodTotpInput) {
             this.authMethodTotpInput.checked = methods.has('totp');
         }
+        this.enforcePrimaryAuthMethodSelection();
+    }
+
+    enforcePrimaryAuthMethodSelection(changedInput = null) {
+        const hasPrimaryMethod = Boolean(this.authMethodPasswordInput?.checked || this.authMethodEmailCodeInput?.checked);
+        if (hasPrimaryMethod) return true;
+        const primaryInput = changedInput || this.authMethodPasswordInput || this.authMethodEmailCodeInput;
+        if (primaryInput) primaryInput.checked = true;
+        this.setStatus('Keep Username and password or Email authentication code enabled.', 'error');
+        return false;
     }
 
     async saveAuthMethods() {
+        if (!this.enforcePrimaryAuthMethodSelection()) return;
         const methods = [];
         if (this.authMethodPasswordInput?.checked) methods.push('password');
         if (this.authMethodEmailCodeInput?.checked) methods.push('emailCode');

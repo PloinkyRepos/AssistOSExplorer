@@ -80,7 +80,6 @@ export class SettingsModal {
             selectedAgentAvatar: defaultAvatarConfig('agent', '72'),
             selectedAgentAvatarEnabled: true,
             canManageAgentAvatars: false,
-            authProfileLoaded: false,
             authPreferenceBusy: false,
             authUser: null,
             authMethods: [],
@@ -126,7 +125,7 @@ export class SettingsModal {
         if (this.state.activeTab === "avatar" && !this.state.avatarDataLoaded) {
             await this.loadAvatarSettingsData();
         }
-        if (this.state.activeTab === "users" && this.state.activeUsersTab === "auth" && !this.state.authProfileLoaded) {
+        if (this.state.activeTab === "users" && this.state.activeUsersTab === "auth") {
             await this.loadPreferredAuthProfile();
         }
     }
@@ -270,7 +269,7 @@ export class SettingsModal {
                 this.renderAvatarSettings();
             });
         }
-        if (this.state.activeTab === "users" && this.state.activeUsersTab === "auth" && !this.state.authProfileLoaded) {
+        if (this.state.activeTab === "users" && this.state.activeUsersTab === "auth") {
             this.loadPreferredAuthProfile();
         }
         if (this.state.activeTab === "users" && this.state.activeUsersTab === "administration") {
@@ -287,7 +286,7 @@ export class SettingsModal {
         this.state.usersAdministrationMenuOpen = false;
         this.state.activeUsersTab = nextTab;
         this.renderUsersSubtabs();
-        if (this.state.activeTab === "users" && nextTab === "auth" && !this.state.authProfileLoaded) {
+        if (this.state.activeTab === "users" && nextTab === "auth") {
             this.loadPreferredAuthProfile();
         }
         if (this.state.activeTab === "users" && nextTab === "administration") {
@@ -297,13 +296,8 @@ export class SettingsModal {
 
     toggleUsersAdministrationMenu() {
         if (!this.state.adminAccess) return;
-        this.state.activeUsersTab = 'administration';
         this.state.usersAdministrationMenuOpen = !this.state.usersAdministrationMenuOpen;
         this.renderUsersSubtabs();
-        if (this.state.activeTab === "users") {
-            this.loadUserAdministration();
-            this.applyUserAdministrationPanel();
-        }
     }
 
     switchUserAdministrationPanel(_target, panel) {
