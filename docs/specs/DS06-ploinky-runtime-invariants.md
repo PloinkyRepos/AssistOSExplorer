@@ -32,6 +32,10 @@ The compact `x-ploinky-auth-info` header is not a secure grant by itself. Any HT
 
 Guest access must remain scoped to the route shape declared by the owning manifest. Manifest-level `guest: true` exposes the agent as a normal guest agent and should still enforce limitations from `usr.roles`. A `routerAccess.httpRoutes` entry with `access: "guest"` exposes only the declared agent-owned HTTP path and mints or reuses a route-scoped guest session according to the Ploinky router's current guest policy. An `httpServices` entry with `access: "guest"` exposes only the declared HTTP prefix and mints or reuses a service-scoped guest session. Product-specific public paths must be declared in the agent manifest rather than hard-coded in Ploinky core.
 
+Explorer authenticates through the workspace SSO provider, not through router-local credentials. The Explorer manifest declares `"ploinky": "sso enable"` with `userPersistoAgent` (manifest marker `ssoProvider: true`) enabled in the same workspace; Ploinky's built-in local/`pwd` login and seeded user blocks are retired and must not be reintroduced. UserPersisto owns users, roles, capabilities, auth strategies (password is the development default), credits, and billing per `DS08-userpersisto-identity-billing.md`; transactional email delivery belongs to `emailAgent` per `DS09-emailagent-transactional-email.md`.
+
+The Explorer manifest also declares `routerAccess: { "requiredCapability": "explorer.access" }`. The Ploinky router enforces that requirement server-side for every authenticated session reaching Explorer routes: capabilities are resolved by UserPersisto at login and session refresh, ride on the router session user, and a session lacking `explorer.access` (for example a `selfRegistered`-only account) receives `403 CAPABILITY_REQUIRED` before any Explorer traffic. Explorer's tool runtime additionally enforces `assertExplorerAccess` on MCP tool calls, so surface blocking and tool authorization remain two independent layers.
+
 Agent code must enforce its own domain authorization. Ploinky route authentication identifies the caller and signs the invocation, but it does not grant every domain operation. Sensitive actions must check the verified user, roles, scopes, target resource, workspace path, and agent-local policy before reading or mutating state.
 
 For the OnlyOffice integration specifically, the internal document and callback routes are loopback-only implementation details, not router routes. They must rely only on the opaque Office session token and local listener binding, never on browser cookies or `x-ploinky-auth-info`. Public editor proxy requests must strip browser cookies, authorization headers, proxy authorization headers, and caller-supplied `x-ploinky-*` identity headers before forwarding to Document Server.
@@ -48,7 +52,7 @@ Agent-local contract:
 
 - Manifest: `explorer/manifest.json`
 - Role: Multi-agent AchillesIDE repository and Explorer static-agent surface.
-- Authentication: Explorer and dependent agents inherit route policy from their manifests and Ploinky enable-time auth records.
+- Authentication: Explorer authenticates via the workspace SSO provider (`userPersistoAgent`) with router-enforced `explorer.access` capability; dependent agents inherit route policy from their manifests and Ploinky enable-time auth records.
 - HTTP service surface: Explorer and WebMeet HTTP service prefixes and product route-access entries must be manifest-declared and routed through Ploinky core generically.
 - Persistent state: Workspace files, confidential DPU objects, WebMeet data, and visitor records stay in their owning agent boundaries.
 - Documentation: `docs/index.html`
@@ -67,6 +71,11 @@ Coding work often starts from an individual agent directory, where only local gu
 
 Response:
 Ploinky establishes who the caller is and signs the invocation path, but domain ownership remains inside the agent. The agent knows which files, records, rooms, leads, secrets, repositories, media objects, or infrastructure controls are safe for that caller. Each agent must therefore enforce its own resource policy after reading verified auth context.
+
+### Question #3: Why does Explorer require a router-enforced capability when its tool runtime already gates access?
+
+Response:
+Decision 2026-07-02: the two layers fail differently. The router's `requiredCapability` gate blocks the whole Explorer surface for sessions without `explorer.access` (such as `selfRegistered` accounts) before any Explorer process is reached, which keeps the static app, uploads, and HTTP services consistent without per-surface checks. `assertExplorerAccess` in the tool runtime protects MCP tool calls even if routing configuration drifts or a call arrives through an unexpected path. Removing either layer would leave a class of requests guarded only by the other's configuration being correct.
 
 ## Conclusion
 
