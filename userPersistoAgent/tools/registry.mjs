@@ -1,10 +1,98 @@
-export function hasTool() {
-    return false;
+import { getProfile, authorizeCapability } from '../lib/authorization.mjs';
+import { createUser, updateUser, listUsers, setUserRoles } from '../lib/users.mjs';
+import { loginWithPassword, setPassword } from '../lib/auth/password.mjs';
+import { startEmailCode, verifyEmailCode } from '../lib/auth/email-code.mjs';
+import { getStore } from '../lib/store.mjs';
+
+function requireAdmin(context) {
+    if (!Array.isArray(context.actorRoles) || !context.actorRoles.includes('admin')) {
+        throw new Error('admin role required');
+    }
 }
 
-export function registerTools() {
+function requireActor(context) {
+    if (!context.actorUserId) {
+        throw new Error('authenticated user required');
+    }
+    return context.actorUserId;
 }
 
-export async function runTool() {
-    throw new Error('no tools registered yet');
+const HANDLERS = {
+    userpersisto_profile_get: async (_args, context) => getProfile(requireActor(context)),
+    userpersisto_authorize_capability: async (args) => authorizeCapability({
+        userId: args.userId,
+        capability: args.capability,
+        resource: args.resource || ''
+    }),
+    userpersisto_user_list: async (args, context) => {
+        requireAdmin(context);
+        return listUsers({ start: args.start || 0, pageSize: args.pageSize || 50 });
+    },
+    userpersisto_user_create: async (args, context) => {
+        requireAdmin(context);
+        return createUser({
+            email: args.email,
+            displayName: args.displayName || '',
+            source: 'admin',
+            roles: args.roles || ['user'],
+            password: args.password || ''
+        });
+    },
+    userpersisto_user_update: async (args, context) => {
+        requireAdmin(context);
+        return updateUser(args.userId, { displayName: args.displayName, status: args.status });
+    },
+    userpersisto_user_roles_update: async (args, context) => {
+        requireAdmin(context);
+        return setUserRoles(args.userId, args.roles, { actorId: context.actorUserId });
+    },
+    userpersisto_auth_password_login: async (args) => loginWithPassword(args.email, args.password),
+    userpersisto_auth_password_set: async (args, context) => {
+        const actor = requireActor(context);
+        let target = actor;
+        if (args.userId && args.userId !== actor) {
+            requireAdmin(context);
+            target = args.userId;
+        }
+        await setPassword({ userId: target, newPassword: args.newPassword, actorId: actor });
+        return { ok: true };
+    },
+    userpersisto_auth_email_code_start: async (args) => {
+        const started = await startEmailCode({
+            email: args.email,
+            purpose: args.purpose || 'login',
+            correlationId: args.correlationId || '',
+            createSelfRegistered: args.createSelfRegistered === true
+        });
+        return { challengeId: started.challengeId };
+    },
+    userpersisto_auth_email_code_verify: async (args) => verifyEmailCode({ challengeId: args.challengeId, code: args.code }),
+    userpersisto_audit_events_list: async (args, context) => {
+        requireAdmin(context);
+        const store = await getStore();
+        return store.select('auditEvent', args.actorId ? { actorId: args.actorId } : {}, {
+            sortBy: 'timestamp',
+            descending: true,
+            start: args.start || 0,
+            pageSize: args.pageSize || 100
+        });
+    }
+};
+
+export function registerTools(map) {
+    for (const [name, handler] of Object.entries(map || {})) {
+        HANDLERS[name] = handler;
+    }
+}
+
+export function hasTool(name) {
+    return typeof HANDLERS[name] === 'function';
+}
+
+export async function runTool(name, args = {}, context = {}) {
+    const handler = HANDLERS[name];
+    if (!handler) {
+        throw new Error(`Unknown tool: ${name}`);
+    }
+    return handler(args, context);
 }
