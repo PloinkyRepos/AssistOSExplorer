@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url';
 import { timingSafeEqual } from 'node:crypto';
 import { loginWithPassword } from '../lib/auth/password.mjs';
 import { startEmailCode, verifyEmailCode } from '../lib/auth/email-code.mjs';
+import * as passkey from '../lib/auth/passkey.mjs';
+import * as totp from '../lib/auth/totp.mjs';
 import { getEnabledAuthMethods, getDefaultAuthMethod } from '../lib/auth/methods.mjs';
 import { createLoginRequest, issueAuthCode, consumeAuthCode, getSsoUser } from '../lib/sso.mjs';
 import { runTool } from '../tools/registry.mjs';
@@ -75,6 +77,11 @@ function callbackPayload(issued, state) {
     };
 }
 
+async function issueCallbackForUser(body, userId) {
+    const issued = await issueAuthCode({ providerState: providerStateFrom(body), userId });
+    return callbackPayload(issued, body.state);
+}
+
 async function serveStatic(res, relPath) {
     const rel = normalize(String(relPath || 'auth/index.html')).replace(/^\/+/, '');
     const staticPath = rel === 'auth' || rel === 'auth/' ? 'auth/index.html' : rel;
@@ -117,8 +124,7 @@ async function handlePost(req, res, path) {
         if (!result.ok) {
             return sendJson(res, 401, { ok: false, error: result.reason });
         }
-        const issued = await issueAuthCode({ providerState: providerStateFrom(body), userId: result.user.id });
-        return sendJson(res, 200, callbackPayload(issued, body.state));
+        return sendJson(res, 200, await issueCallbackForUser(body, result.user.id));
     }
     if (path === '/service/auth/email-code/start') {
         const started = await startEmailCode({
@@ -134,8 +140,33 @@ async function handlePost(req, res, path) {
         if (!result.ok) {
             return sendJson(res, 401, { ok: false, error: result.reason });
         }
-        const issued = await issueAuthCode({ providerState: providerStateFrom(body), userId: result.user.id });
-        return sendJson(res, 200, callbackPayload(issued, body.state));
+        return sendJson(res, 200, await issueCallbackForUser(body, result.user.id));
+    }
+    if (path === '/service/auth/passkey/options') {
+        const result = await passkey.loginOptions({ email: body.email, origin: body.origin, rpId: body.rpId });
+        if (!result.ok) {
+            return sendJson(res, 401, { ok: false, error: result.reason });
+        }
+        return sendJson(res, 200, result);
+    }
+    if (path === '/service/auth/passkey/verify') {
+        const result = await passkey.loginVerify({
+            email: body.email,
+            assertion: body.assertion,
+            challengeKey: body.challengeKey,
+            origin: body.origin
+        });
+        if (!result.ok) {
+            return sendJson(res, 401, { ok: false, error: result.reason });
+        }
+        return sendJson(res, 200, await issueCallbackForUser(body, result.user.id));
+    }
+    if (path === '/service/auth/totp/setup' || path === '/service/auth/totp/verify') {
+        const result = await totp.loginVerify({ email: body.email, token: body.token });
+        if (!result.ok) {
+            return sendJson(res, 401, { ok: false, error: result.reason });
+        }
+        return sendJson(res, 200, await issueCallbackForUser(body, result.user.id));
     }
     if (path === '/service/runtime/sso-login-request') {
         assertRuntimeSecret(req);

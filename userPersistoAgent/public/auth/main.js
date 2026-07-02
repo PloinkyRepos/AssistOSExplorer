@@ -1,3 +1,5 @@
+import { publicKeyRequestFromServer, assertionCredentialToServer } from './auth-api.js';
+
 const root = document.querySelector('#auth_content');
 const params = new URLSearchParams(window.location.search);
 const state = params.get('state') || '';
@@ -45,14 +47,18 @@ function redirectWithCode(result) {
 }
 
 function setStatus(message, isError = false) {
-    const status = root.querySelector('.status');
+    let status = root.querySelector('.status');
+    if (!status) {
+        status = element('p', { className: 'status', hidden: true });
+        root.prepend(status);
+    }
     status.textContent = message || '';
     status.hidden = !message;
     status.classList.toggle('error', isError);
 }
 
 function authPayload(extra = {}) {
-    return { state, requestId, providerState: requestId, ...extra };
+    return { state, requestId, providerState: requestId, origin: window.location.origin, ...extra };
 }
 
 async function submitPassword(form) {
@@ -100,9 +106,48 @@ async function verifyEmailCode(form) {
     }
 }
 
+async function submitPasskey(form) {
+    const email = form.querySelector('[name="email"]').value.trim();
+    const button = form.querySelector('button[type="submit"]');
+    if (!window.PublicKeyCredential || !navigator.credentials?.get) {
+        setStatus('Passkeys are not available in this browser.', true);
+        return;
+    }
+    button.disabled = true;
+    try {
+        const options = await request('passkey/options', authPayload({ email }));
+        const credential = await navigator.credentials.get({
+            publicKey: publicKeyRequestFromServer(options.publicKey)
+        });
+        const result = await request('passkey/verify', authPayload({
+            email,
+            challengeKey: options.challengeKey,
+            assertion: assertionCredentialToServer(credential)
+        }));
+        redirectWithCode(result);
+    } catch (error) {
+        setStatus(error.message || 'Unable to use this passkey.', true);
+        button.disabled = false;
+    }
+}
+
+async function submitTotp(form) {
+    const email = form.querySelector('[name="email"]').value.trim();
+    const token = form.querySelector('[name="token"]').value.trim();
+    const button = form.querySelector('button[type="submit"]');
+    button.disabled = true;
+    try {
+        const result = await request('totp/verify', authPayload({ email, token }));
+        redirectWithCode(result);
+    } catch (error) {
+        setStatus(error.message || 'Unable to verify the authenticator code.', true);
+        button.disabled = false;
+    }
+}
+
 function methodOrder() {
     const ordered = [defaultMethod, ...methods].filter(Boolean);
-    return [...new Set(ordered)].filter((method) => method === 'password' || method === 'emailCode');
+    return [...new Set(ordered)].filter((method) => ['password', 'emailCode', 'passkey', 'totp'].includes(method));
 }
 
 function render() {
@@ -136,7 +181,31 @@ function render() {
         ])
     ]);
 
-    const panels = { password: passwordForm, emailCode: emailCodeForm };
+    const passkeyForm = element('form', { className: 'auth-panel passkey-panel' }, [
+        element('h2', { text: 'Passkey' }),
+        element('label', { text: 'Email' }),
+        element('input', { name: 'email', type: 'email', autocomplete: 'username webauthn', required: true }),
+        element('button', { type: 'submit', text: 'Use passkey' })
+    ]);
+    passkeyForm.addEventListener('submit', (event) => {
+        event.preventDefault();
+        submitPasskey(passkeyForm);
+    });
+
+    const totpForm = element('form', { className: 'auth-panel totp-panel' }, [
+        element('h2', { text: 'Authenticator Code' }),
+        element('label', { text: 'Email' }),
+        element('input', { name: 'email', type: 'email', autocomplete: 'username', required: true }),
+        element('label', { text: 'Code' }),
+        element('input', { name: 'token', inputmode: 'numeric', pattern: '[0-9]{6}', maxlength: '6', autocomplete: 'one-time-code', required: true }),
+        element('button', { type: 'submit', text: 'Verify code' })
+    ]);
+    totpForm.addEventListener('submit', (event) => {
+        event.preventDefault();
+        submitTotp(totpForm);
+    });
+
+    const panels = { password: passwordForm, emailCode: emailCodeForm, passkey: passkeyForm, totp: totpForm };
     root.replaceChildren(...methodOrder().map((method) => panels[method]));
 }
 
