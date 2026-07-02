@@ -452,6 +452,59 @@
             "env": { "TOOL_NAME": "userpersisto_credits_release" }
         },
         {
+            "name": "userpersisto_config_get",
+            "title": "Get UserPersisto configuration",
+            "description": "Admin: returns masked UserPersisto billing configuration.",
+            "command": "sh",
+            "args": ["tools/userpersisto_tool.sh"],
+            "cwd": "/code",
+            "timeoutMs": 30000,
+            "inputSchema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+            },
+            "tags": ["admin"],
+            "env": { "TOOL_NAME": "userpersisto_config_get" }
+        },
+        {
+            "name": "userpersisto_config_set",
+            "title": "Set UserPersisto configuration",
+            "description": "Admin: stores UserPersisto billing configuration, keeping empty secret values unchanged.",
+            "command": "sh",
+            "args": ["tools/userpersisto_tool.sh"],
+            "cwd": "/code",
+            "timeoutMs": 30000,
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "STRIPE_SECRET_KEY": { "type": "string" },
+                    "STRIPE_WEBHOOK_SECRET": { "type": "string" },
+                    "STRIPE_PUBLISHABLE_KEY": { "type": "string" },
+                    "STRIPE_PRICE_CREDITS": { "type": "string" },
+                    "STRIPE_PRICE_SUBSCRIPTION": { "type": "string" },
+                    "USERPERSISTO_CREDITS_PER_UNIT": { "type": "string" },
+                    "remove": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "enum": [
+                                "STRIPE_SECRET_KEY",
+                                "STRIPE_WEBHOOK_SECRET",
+                                "STRIPE_PUBLISHABLE_KEY",
+                                "STRIPE_PRICE_CREDITS",
+                                "STRIPE_PRICE_SUBSCRIPTION",
+                                "USERPERSISTO_CREDITS_PER_UNIT"
+                            ]
+                        }
+                    }
+                },
+                "additionalProperties": false
+            },
+            "tags": ["admin"],
+            "env": { "TOOL_NAME": "userpersisto_config_set" }
+        },
+        {
             "name": "userpersisto_billing_checkout_create",
             "title": "Create billing checkout",
             "description": "Create a Stripe Checkout session for the authenticated user.",
@@ -462,11 +515,10 @@
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "planId": { "type": "string" },
-                    "quantity": { "type": "integer", "minimum": 1 },
-                    "successUrl": { "type": "string" },
-                    "cancelUrl": { "type": "string" }
+                    "kind": { "type": "string", "enum": ["credits", "subscription"] },
+                    "quantity": { "type": "integer", "minimum": 1 }
                 },
+                "required": ["kind"],
                 "additionalProperties": false
             },
             "env": { "TOOL_NAME": "userpersisto_billing_checkout_create" }
@@ -498,9 +550,9 @@
                 "type": "object",
                 "properties": {
                     "rawBody": { "type": "string" },
-                    "signature": { "type": "string" }
+                    "signatureHeader": { "type": "string" }
                 },
-                "required": ["rawBody", "signature"],
+                "required": ["rawBody", "signatureHeader"],
                 "additionalProperties": false
             },
             "tags": ["internal"],

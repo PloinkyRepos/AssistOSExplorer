@@ -118,6 +118,21 @@ async function handleGet(req, res, path) {
 }
 
 async function handlePost(req, res, path) {
+    if (path === '/service/billing/stripe/webhook') {
+        const raw = [];
+        let size = 0;
+        for await (const chunk of req) {
+            size += chunk.length;
+            if (size > 256 * 1024) return sendJson(res, 413, { ok: false });
+            raw.push(chunk);
+        }
+        const { processStripeWebhook } = await import('../lib/billing.mjs');
+        const result = await processStripeWebhook({
+            rawBody: Buffer.concat(raw).toString('utf8'),
+            signatureHeader: String(req.headers['stripe-signature'] || '')
+        });
+        return sendJson(res, 200, { ok: true, ...result });
+    }
     const body = await readJson(req);
     if (path === '/service/auth/password/login') {
         const result = await loginWithPassword(body.email, body.password);

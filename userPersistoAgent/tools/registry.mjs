@@ -5,6 +5,8 @@ import { startEmailCode, verifyEmailCode } from '../lib/auth/email-code.mjs';
 import * as passkey from '../lib/auth/passkey.mjs';
 import * as totp from '../lib/auth/totp.mjs';
 import * as credits from '../lib/credits.mjs';
+import * as billing from '../lib/billing.mjs';
+import { getSettings as getAgentSettings, saveSettings as saveAgentSettings } from '../lib/settings.mjs';
 import { getStore } from '../lib/store.mjs';
 
 function requireAdmin(context) {
@@ -143,6 +145,31 @@ const HANDLERS = {
         start: args.start || 0,
         pageSize: args.pageSize || 100
     }),
+    userpersisto_billing_checkout_create: async (args, context) => billing.createCheckout({
+        userId: requireActor(context),
+        kind: args.kind,
+        quantity: args.quantity || 1
+    }),
+    userpersisto_billing_stripe_webhook_process: async (args) => billing.processStripeWebhook({
+        rawBody: args.rawBody,
+        signatureHeader: args.signatureHeader
+    }),
+    userpersisto_billing_subscription_get: async (args, context) => billing.getSubscription(
+        args.userId && context.actorRoles?.includes('admin') ? args.userId : requireActor(context)
+    ),
+    userpersisto_billing_events_list: async (args, context) => {
+        requireAdmin(context);
+        return billing.listBillingEvents({ start: args.start || 0, pageSize: args.pageSize || 100 });
+    },
+    userpersisto_config_get: async (_args, context) => {
+        requireAdmin(context);
+        return getAgentSettings();
+    },
+    userpersisto_config_set: async (args, context) => {
+        requireAdmin(context);
+        await saveAgentSettings(args);
+        return getAgentSettings();
+    },
     userpersisto_audit_events_list: async (args, context) => {
         requireAdmin(context);
         const store = await getStore();
