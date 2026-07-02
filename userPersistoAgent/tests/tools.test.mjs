@@ -19,6 +19,13 @@ const IMPLEMENTED = [
     'userpersisto_auth_password_set',
     'userpersisto_auth_email_code_start',
     'userpersisto_auth_email_code_verify',
+    'userpersisto_passkey_registration_options',
+    'userpersisto_passkey_registration_verify',
+    'userpersisto_passkey_login_options',
+    'userpersisto_passkey_login_verify',
+    'userpersisto_totp_setup_start',
+    'userpersisto_totp_setup_verify',
+    'userpersisto_totp_login_verify',
     'userpersisto_audit_events_list'
 ];
 

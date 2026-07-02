@@ -2,6 +2,8 @@ import { getProfile, authorizeCapability } from '../lib/authorization.mjs';
 import { createUser, updateUser, listUsers, setUserRoles } from '../lib/users.mjs';
 import { loginWithPassword, setPassword } from '../lib/auth/password.mjs';
 import { startEmailCode, verifyEmailCode } from '../lib/auth/email-code.mjs';
+import * as passkey from '../lib/auth/passkey.mjs';
+import * as totp from '../lib/auth/totp.mjs';
 import { getStore } from '../lib/store.mjs';
 
 function requireAdmin(context) {
@@ -67,6 +69,36 @@ const HANDLERS = {
         return { challengeId: started.challengeId };
     },
     userpersisto_auth_email_code_verify: async (args) => verifyEmailCode({ challengeId: args.challengeId, code: args.code }),
+    userpersisto_passkey_registration_options: async (args, context) => passkey.registrationOptions({
+        userId: requireActor(context),
+        origin: args.origin,
+        rpId: args.rpId
+    }),
+    userpersisto_passkey_registration_verify: async (args, context) => passkey.registrationVerify({
+        userId: requireActor(context),
+        attestation: args.attestation,
+        origin: args.origin
+    }),
+    userpersisto_passkey_login_options: async (args) => passkey.loginOptions({
+        email: args.email,
+        origin: args.origin,
+        rpId: args.rpId
+    }),
+    userpersisto_passkey_login_verify: async (args) => passkey.loginVerify({
+        email: args.email,
+        assertion: args.assertion,
+        challengeKey: args.challengeKey,
+        origin: args.origin
+    }),
+    userpersisto_totp_setup_start: async (_args, context) => totp.setupStart({ userId: requireActor(context) }),
+    userpersisto_totp_setup_verify: async (args, context) => totp.setupVerify({
+        userId: requireActor(context),
+        token: args.token
+    }),
+    userpersisto_totp_login_verify: async (args) => totp.loginVerify({
+        email: args.email,
+        token: args.token
+    }),
     userpersisto_audit_events_list: async (args, context) => {
         requireAdmin(context);
         const store = await getStore();
