@@ -1,7 +1,8 @@
-import { createHmac, randomInt, randomUUID } from 'node:crypto';
+import { createHash, createHmac, randomInt, randomUUID } from 'node:crypto';
 import { getStore, flush } from '../store.mjs';
 import { getUserByEmail, createUser } from '../users.mjs';
 import { recordAudit } from '../audit.mjs';
+import { sendAuthCode } from '../email-agent-client.mjs';
 
 const CODE_TTL_MS = 5 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
@@ -35,6 +36,29 @@ export async function startEmailCode({ email, purpose = 'login', correlationId =
         correlationId: String(correlationId)
     });
     await recordAudit({ actorId: user ? user.id : 'anonymous', action: 'auth.emailcode.start', target: normalized, result: 'ok', reason: correlationId });
+    if (code) {
+        let deliveryResult = 'failed';
+        let providerMessageId = '';
+        try {
+            const delivery = await sendAuthCode({ to: normalized, code, correlationId });
+            deliveryResult = delivery.delivered ? 'sent' : (delivery.result || 'failed');
+            providerMessageId = delivery.providerMessageId || '';
+        } catch {
+            if (process.env.USERPERSISTO_DEV_BOOTSTRAP === 'true') {
+                console.warn(`[userPersisto] DEV email-code for ${normalized}: ${code}`);
+                deliveryResult = 'dev-console';
+            }
+        }
+        await store.createEmailLog({
+            logId: randomUUID(),
+            providerMessageId,
+            toEmailHash: createHash('sha256').update(normalized).digest('base64url'),
+            template: 'auth-code',
+            result: deliveryResult,
+            correlationId: String(correlationId),
+            createdAt: new Date().toISOString()
+        });
+    }
     await flush();
     return { challengeId, code, user };
 }
