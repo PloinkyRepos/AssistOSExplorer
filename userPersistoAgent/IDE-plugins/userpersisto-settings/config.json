@@ -1,0 +1,13 @@
+{
+  "pluginCategory": "application",
+  "id": "userpersisto-settings",
+  "component": "userpersisto-settings",
+  "location": [],
+  "label": "UserPersisto",
+  "tooltip": "Configure users, roles, credits, billing and audit.",
+  "presenter": "UserpersistoSettings",
+  "type": "global",
+  "autoPin": false,
+  "dependencies": [],
+  "settings": "userpersisto-settings"
+}
