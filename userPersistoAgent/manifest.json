@@ -1,0 +1,63 @@
+{
+    "name": "userPersistoAgent",
+    "description": "Authority for users, roles, capabilities, auth strategies, credits, subscriptions, Stripe billing, and audit. Uses embedded Persisto as its durable store and acts as the workspace SSO provider.",
+    "container": "docker.io/assistos/ploinky-node:24-bookworm-tools",
+    "ssoProvider": true,
+    "agent": "sh /code/scripts/start.sh",
+    "readiness": {
+        "protocol": "mcp"
+    },
+    "volumes": [
+        {
+            "hostPath": ".ploinky/data/userPersistoAgent",
+            "containerPath": "/data"
+        }
+    ],
+    "httpServices": [
+        {
+            "slug": "userpersisto",
+            "externalPrefix": "/public-services/userpersisto/",
+            "internalPrefix": "/",
+            "access": "guest",
+            "includeAuthInfo": false
+        }
+    ],
+    "profiles": {
+        "default": {
+            "install": "sh /code/scripts/installPersisto.sh",
+            "env": {
+                "PERSISTENCE_FOLDER": {
+                    "required": false,
+                    "default": "/data/persisto"
+                },
+                "USERPERSISTO_SETTINGS_KEY": {
+                    "generatedSecret": true
+                },
+                "USERPERSISTO_RUNTIME_SECRET": {
+                    "sharedGeneratedSecret": true
+                },
+                "USERPERSISTO_DEV_BOOTSTRAP": {
+                    "required": false,
+                    "default": ""
+                },
+                "USERPERSISTO_AUTH_METHODS": {
+                    "required": false,
+                    "default": ""
+                },
+                "STRIPE_PUBLISHABLE_KEY": {
+                    "required": false,
+                    "default": ""
+                },
+                "PLOINKY_ROUTER_PORT": {
+                    "required": false
+                }
+            }
+        },
+        "dev": {
+            "env": {
+                "USERPERSISTO_DEV_BOOTSTRAP": "true",
+                "USERPERSISTO_AUTH_METHODS": "password,emailCode,passkey,totp"
+            }
+        }
+    }
+}
