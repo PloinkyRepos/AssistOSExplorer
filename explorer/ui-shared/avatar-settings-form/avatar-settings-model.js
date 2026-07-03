@@ -1,3 +1,10 @@
+import {
+    EMOTIONS,
+    MODES,
+    THEMES,
+    THOUGHT_MODES
+} from '../../shared/vendor/axi-face/src/state-machine.mjs';
+
 export const AVATAR_SOURCE_MODES = Object.freeze({
     GENERATED: 'generated',
     PACK: 'pack',
@@ -6,11 +13,11 @@ export const AVATAR_SOURCE_MODES = Object.freeze({
 
 export const AVATAR_COMMON_OPTIONS = Object.freeze({
     assetMode: Object.freeze(['img', 'inline']),
-    emotion: Object.freeze(['neutral', 'idle', 'listening', 'thinking', 'speaking', 'happy', 'amused', 'confused', 'concerned', 'alert', 'sleepy']),
-    thoughtMode: Object.freeze(['none', 'bubble', 'caption', 'ticker', 'inside']),
-    mode: Object.freeze(['static', 'controlled', 'event-driven', 'autonomous']),
+    emotion: EMOTIONS,
+    thoughtMode: THOUGHT_MODES,
+    mode: MODES,
     shape: Object.freeze(['circle', 'square', 'rounded', 'none']),
-    theme: Object.freeze(['auto', 'light', 'dark']),
+    theme: THEMES,
     complexity: Object.freeze(['', 'low', 'medium', 'high'])
 });
 
