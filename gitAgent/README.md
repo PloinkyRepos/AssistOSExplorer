@@ -12,6 +12,7 @@ Model Context Protocol (MCP) agent for Git operations inside a Ploinky workspace
 ## Available tools
 
 - repository lifecycle and inspection: `git_init_repository`, `git_info`, `git_status`, `git_repos_overview`, `git_identity`
+- branch workflow: `git_branch_list`, `git_branch_checkout`, `git_branch_create`, `git_branch_merge`
 - diff and ignore inspection: `git_diff`, `git_check_ignore`, `git_add_ignore`, `git_remove_ignore`
 - staging workflow: `git_stage`, `git_stage_exact`, `git_unstage`, `git_untrack`, `git_restore`
 - conflict workflow: `git_conflict_versions`, `git_checkout_conflict`

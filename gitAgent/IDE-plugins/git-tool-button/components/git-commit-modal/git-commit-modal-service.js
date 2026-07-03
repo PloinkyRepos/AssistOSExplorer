@@ -45,6 +45,10 @@ export function createGitCommitService({ callTool, callAgentTool }) {
     return {
         gitDiff: (args) => callAgentTool('gitAgent', 'git_diff', args),
         gitInfo: (path) => callAgentTool('gitAgent', 'git_info', { path }),
+        gitBranchList: (path) => callAgentTool('gitAgent', 'git_branch_list', { path }),
+        gitBranchCheckout: (payload) => callAgentTool('gitAgent', 'git_branch_checkout', payload),
+        gitBranchCreate: (payload) => callAgentTool('gitAgent', 'git_branch_create', payload),
+        gitBranchMerge: (payload) => callAgentTool('gitAgent', 'git_branch_merge', payload),
         gitReposOverview: (path) => callAgentTool('gitAgent', 'git_repos_overview', { path }),
         listDirectoryDetailed: (path) => callTool('list_directory_detailed', { path }),
         gitStatus: (path, options = {}) => callAgentTool('gitAgent', 'git_status', { path, ...options }),

@@ -26,6 +26,21 @@
             "type": "modal"
         },
         {
+            "component": "git-branch-select-modal",
+            "presenter": "GitBranchSelectModal",
+            "type": "modal"
+        },
+        {
+            "component": "git-branch-create-modal",
+            "presenter": "GitBranchCreateModal",
+            "type": "modal"
+        },
+        {
+            "component": "git-branch-dirty-modal",
+            "presenter": "GitBranchDirtyModal",
+            "type": "modal"
+        },
+        {
             "component": "git-new-repository-modal",
             "presenter": "GitNewRepositoryModal",
             "type": "modal"

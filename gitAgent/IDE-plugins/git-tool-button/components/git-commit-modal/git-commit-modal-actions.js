@@ -13,6 +13,7 @@ import { createGitOpsActions } from "./git-commit-modal-actions-gitops.js";
 import { createStashActions } from "./git-commit-modal-actions-stash.js";
 import { createRepoActions } from "./git-commit-modal-actions-repo.js";
 import { createAutoStashActions } from "./git-commit-modal-actions-autostash.js";
+import { createBranchActions } from "./git-commit-modal-actions-branches.js";
 import { AUTOCOMMIT_STOP_EVENT, AUTOCOMMIT_RESET_EVENT } from "/explorer/utils/appEvents.js";
 
 export function createGitCommitActions(ctx) {
@@ -473,6 +474,20 @@ export function createGitCommitActions(ctx) {
     });
     const { pullWithAutoStash, maybeRestoreAutoStash } = autoStashActions;
 
+    const branchActions = createBranchActions({
+        service,
+        setStatusLine,
+        refreshAfterGitOperation,
+        handlePullConflicts,
+        restoreStash,
+        applyState
+    });
+    const {
+        checkoutBranchFromRepoRow,
+        createBranchFromRepoRow,
+        mergeBranchFromRepoRow
+    } = branchActions;
+
     const conflictActions = createConflictActions({
         getState,
         applyState,
@@ -569,6 +584,9 @@ export function createGitCommitActions(ctx) {
         pushSelectedRepos,
         pullSelectedRepos,
         stashSelectedRepos,
-        unstashSelectedRepos
+        unstashSelectedRepos,
+        checkoutBranchFromRepoRow,
+        createBranchFromRepoRow,
+        mergeBranchFromRepoRow
     };
 }

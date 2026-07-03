@@ -1,0 +1,24 @@
+.git-branch-dirty-modal {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.git-branch-dirty-message {
+    color: var(--text);
+}
+
+.git-branch-dirty-counts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.git-branch-dirty-count {
+    padding: 4px 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-soft);
+    background: var(--surface);
+    font-size: 0.9rem;
+}

@@ -1049,6 +1049,18 @@ export class GitCommitModal {
         return this.repo.toggleRepoChanges(element);
     }
 
+    checkoutBranchFromRepoRow(element) {
+        return this.actions.checkoutBranchFromRepoRow(element);
+    }
+
+    createBranchFromRepoRow(element) {
+        return this.actions.createBranchFromRepoRow(element);
+    }
+
+    mergeBranchFromRepoRow(element) {
+        return this.actions.mergeBranchFromRepoRow(element);
+    }
+
     isRepoChangesExpanded(repoPath) {
         return this.repo.isRepoChangesExpanded(repoPath);
     }

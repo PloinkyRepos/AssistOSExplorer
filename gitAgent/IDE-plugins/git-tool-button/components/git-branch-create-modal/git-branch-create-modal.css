@@ -1,0 +1,17 @@
+.git-branch-create-modal {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.git-branch-create-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text);
+}
+
+.git-branch-create-error {
+    color: var(--danger);
+    font-size: 0.9rem;
+}

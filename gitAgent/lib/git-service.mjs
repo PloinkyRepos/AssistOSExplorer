@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import { createDiffOps } from './git/diff-ops.mjs';
+import { createBranchOps } from './git/branch-ops.mjs';
 import { createIgnoreOps } from './git/ignore-ops.mjs';
 import { createOverviewOps } from './git/overview-ops.mjs';
 import { createRemoteIdentityOps } from './git/remote-identity-ops.mjs';
@@ -99,6 +100,7 @@ export function createGitService({ validatePath }) {
   };
   const ops = {};
   Object.assign(ops, createRepositoryOps(context));
+  Object.assign(ops, createBranchOps(context));
   Object.assign(ops, createStatusOps(context));
   Object.assign(ops, createDiffOps(context));
   Object.assign(ops, createStageOps(context, ops));

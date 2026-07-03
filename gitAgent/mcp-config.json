@@ -21,6 +21,94 @@
       }
     },
     {
+      "name": "git_branch_list",
+      "title": "Git Branch List",
+      "description": "List local and remote branches for a repository.",
+      "command": "tools/git_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "path": {
+          "type": "string",
+          "optional": false
+        }
+      },
+      "env": {
+        "TOOL_NAME": "git_branch_list"
+      }
+    },
+    {
+      "name": "git_branch_checkout",
+      "title": "Git Branch Checkout",
+      "description": "Checkout an existing local or remote branch.",
+      "command": "tools/git_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "path": {
+          "type": "string",
+          "optional": false
+        },
+        "branch": {
+          "type": "string",
+          "optional": false
+        }
+      },
+      "env": {
+        "TOOL_NAME": "git_branch_checkout"
+      }
+    },
+    {
+      "name": "git_branch_create",
+      "title": "Git Branch Create",
+      "description": "Create a new branch, optionally from a selected start point.",
+      "command": "tools/git_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "path": {
+          "type": "string",
+          "optional": false
+        },
+        "name": {
+          "type": "string",
+          "optional": false
+        },
+        "startPoint": {
+          "type": "string",
+          "optional": true
+        },
+        "checkout": {
+          "type": "boolean",
+          "optional": true
+        }
+      },
+      "env": {
+        "TOOL_NAME": "git_branch_create"
+      }
+    },
+    {
+      "name": "git_branch_merge",
+      "title": "Git Branch Merge",
+      "description": "Merge a selected branch into the current branch.",
+      "command": "tools/git_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "path": {
+          "type": "string",
+          "optional": false
+        },
+        "sourceBranch": {
+          "type": "string",
+          "optional": false
+        },
+        "noFf": {
+          "type": "boolean",
+          "optional": true
+        }
+      },
+      "env": {
+        "TOOL_NAME": "git_branch_merge"
+      }
+    },
+    {
       "name": "git_init_repository",
       "title": "Git Init Repository",
       "description": "Create a new directory and initialize a Git repository inside it.",

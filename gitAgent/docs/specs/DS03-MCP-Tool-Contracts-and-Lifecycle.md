@@ -6,7 +6,7 @@ This document defines contract guarantees for Model Context Protocol (MCP) tool 
 
 ## Contract Surface
 
-Tool names declared in `mcp-config.json` are public agent contracts. Contracts cover repository creation, repository inspection, staging and restore flows, conflict handling, stash and commit flows, remote operations, identity management, and GitHub auth lifecycle operations.
+Tool names declared in `mcp-config.json` are public agent contracts. Contracts cover repository creation, repository inspection, branch operations, staging and restore flows, conflict handling, stash and commit flows, remote operations, identity management, and GitHub auth lifecycle operations.
 
 Each contract shall define input schema expectations and tool identity mapping through `TOOL_NAME` semantics and dispatcher resolution.
 
@@ -44,7 +44,7 @@ Constraint M1: contracts cannot depend on undocumented input payload fields.
 
 Constraint M2: tools cannot execute operations outside validated repository paths.
 
-Constraint M2.1: repository discovery by recursive scan is allowed only for overview and listing contracts such as `git_repos_overview`; it is forbidden for mutating or remote-executing contracts such as pull, push, commit, stash, restore, and identity writes.
+Constraint M2.1: repository discovery by recursive scan is allowed only for overview and listing contracts such as `git_repos_overview`; it is forbidden for mutating or remote-executing contracts such as branch checkout, branch create, branch merge, pull, push, commit, stash, restore, and identity writes.
 
 Constraint M3: mixed output formats for the same contract are forbidden unless explicitly declared.
 

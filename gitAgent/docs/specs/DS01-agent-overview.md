@@ -54,6 +54,10 @@ Primary tools include:
 - `git_info`
 - `git_status`
 - `git_diff`
+- `git_branch_list`
+- `git_branch_checkout`
+- `git_branch_create`
+- `git_branch_merge`
 - `git_commit`
 - `git_push`
 - `git_pull`
@@ -77,6 +81,7 @@ Primary tools include:
 6. Manual token save writes the token into DPU and updates local connection metadata with a non-sensitive source marker.
 7. Disconnect removes the per-user token from DPU and clears local metadata.
 8. Auto-stash pull handling in the Explorer Git plugin uses a single shared implementation for stash creation, pull execution, rollback restore, and stash-pop recovery. Modal and controller-specific UI flows adapt that shared result instead of duplicating Git logic.
+9. Branch operations execute only against the repository resolved from the provided path. Remote branch checkout creates a local tracking branch through Git when no matching local branch exists.
 
 ## Configuration
 

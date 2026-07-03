@@ -6,6 +6,8 @@ import {
     getAncestorCoveringPrefix
 } from "../git-commit-modal/git-commit-modal-selection.js";
 
+const GIT_TOOL_BUTTON_ICON_URL = new URL('../../icon.svg', import.meta.url).href;
+
 const formatCountLabel = (count, singular, plural = `${singular}s`) => {
     const normalized = Number(count) || 0;
     return `${normalized} ${normalized === 1 ? singular : plural}`;
@@ -85,11 +87,12 @@ export class GitRepoTree {
         if (key !== 'Enter' && key !== ' ') return;
         const target = event.target?.closest?.(
             '.git-tree-file[data-local-action="openDiff"], ' +
-            '.git-file-menu-item[data-local-action]'
+            '.git-file-menu-item[data-local-action], ' +
+            '.git-branch-menu-item[data-local-action]'
         );
         if (!target) return;
         event.preventDefault();
-        if (target.classList.contains('git-file-menu-item')) {
+        if (target.classList.contains('git-file-menu-item') || target.classList.contains('git-branch-menu-item')) {
             target.click();
             return;
         }
@@ -258,6 +261,7 @@ export class GitRepoTree {
         if (!menu) return;
         const willOpen = !menu.classList.contains('open');
         this.closeFileMenus();
+        this.closeBranchMenus();
         if (willOpen) {
             menu.classList.add('open');
             const firstItem = menu.querySelector('.git-file-menu-item');
@@ -270,6 +274,105 @@ export class GitRepoTree {
     closeFileMenus() {
         const menus = this.element.querySelectorAll('.git-file-menu.open');
         menus.forEach((menu) => menu.classList.remove('open'));
+    }
+
+    toggleBranchMenu(element) {
+        const menu = element?.closest?.('.git-branch-menu');
+        if (!menu) return;
+        const willOpen = !menu.classList.contains('open');
+        this.closeBranchMenus();
+        this.closeFileMenus();
+        if (willOpen) {
+            menu.classList.add('open');
+            const firstItem = menu.querySelector('.git-file-menu-item');
+            if (firstItem) {
+                setTimeout(() => firstItem.focus(), 0);
+            }
+        }
+    }
+
+    closeBranchMenus() {
+        const menus = this.element.querySelectorAll('.git-branch-menu.open');
+        menus.forEach((menu) => menu.classList.remove('open'));
+    }
+
+    createBranchMenu(repo) {
+        if (!repo?.branch || !repo?.path) return null;
+        const branchMenu = document.createElement('div');
+        branchMenu.className = 'git-file-menu git-branch-menu';
+
+        const branchButton = document.createElement('button');
+        branchButton.type = 'button';
+        branchButton.className = 'icon-button git-file-menu-button git-branch-menu-button';
+        branchButton.setAttribute('data-local-action', 'toggleBranchMenu');
+        branchButton.dataset.repoPath = repo.path;
+        branchButton.setAttribute('aria-label', `Branch actions for ${repo.branch}`);
+        branchButton.title = `Branch actions: ${repo.branch}`;
+
+        const gitIcon = document.createElement('img');
+        gitIcon.className = 'git-branch-menu-button-icon';
+        gitIcon.src = GIT_TOOL_BUTTON_ICON_URL;
+        gitIcon.alt = '';
+        gitIcon.setAttribute('aria-hidden', 'true');
+
+        const branchName = document.createElement('span');
+        branchName.className = 'git-branch-menu-button-label';
+        branchName.textContent = repo.branch;
+
+        const chevron = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        chevron.setAttribute('class', 'git-branch-menu-button-chevron');
+        chevron.setAttribute('viewBox', '0 0 16 16');
+        chevron.setAttribute('aria-hidden', 'true');
+        chevron.setAttribute('focusable', 'false');
+        const chevronPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        chevronPath.setAttribute('d', 'M4 6 8 10 12 6');
+        chevronPath.setAttribute('fill', 'none');
+        chevronPath.setAttribute('stroke', 'currentColor');
+        chevronPath.setAttribute('stroke-width', '1.8');
+        chevronPath.setAttribute('stroke-linecap', 'round');
+        chevronPath.setAttribute('stroke-linejoin', 'round');
+        chevron.appendChild(chevronPath);
+
+        branchButton.appendChild(gitIcon);
+        branchButton.appendChild(branchName);
+        branchButton.appendChild(chevron);
+
+        const branchMenuList = document.createElement('div');
+        branchMenuList.className = 'git-file-menu-list git-branch-menu-list';
+        const branchActions = [
+            ['checkoutBranchFromRepoRow', 'Checkout branch...'],
+            ['createBranchFromRepoRow', 'New branch...'],
+            ['mergeBranchFromRepoRow', 'Merge into current...']
+        ];
+        for (const [action, text] of branchActions) {
+            const item = document.createElement('div');
+            item.className = 'git-file-menu-item git-branch-menu-item';
+            item.setAttribute('role', 'menuitem');
+            item.setAttribute('tabindex', '0');
+            item.setAttribute('data-local-action', action);
+            item.dataset.repoPath = repo.path;
+            item.textContent = text;
+            branchMenuList.appendChild(item);
+        }
+
+        branchMenu.appendChild(branchButton);
+        branchMenu.appendChild(branchMenuList);
+        return branchMenu;
+    }
+
+    checkoutBranchFromRepoRow(element) {
+        this.closeBranchMenus();
+        this.getParentPresenter()?.checkoutBranchFromRepoRow?.(element);
+    }
+
+    createBranchFromRepoRow(element) {
+        this.closeBranchMenus();
+        this.getParentPresenter()?.createBranchFromRepoRow?.(element);
+    }
+
+    mergeBranchFromRepoRow(element) {
+        this.closeBranchMenus();
+        this.getParentPresenter()?.mergeBranchFromRepoRow?.(element);
     }
 
     openIgnoreForFile(element) {
@@ -642,19 +745,8 @@ export class GitRepoTree {
 
                 const counts = repo.counts || { staged: 0, unstaged: 0, untracked: 0, conflicted: 0 };
                 const label = document.createElement('div');
-                label.className = 'git-change-button';
-                label.textContent = `${repo.name}${repo.branch ? ` · ${repo.branch}` : ''}`;
-
-                repoLeft.appendChild(changesToggle);
-                repoLeft.appendChild(repoCheckbox);
-                repoLeft.appendChild(label);
-
-                if (aheadCount > 0) {
-                    const unpushedBadge = document.createElement('span');
-                    unpushedBadge.className = 'git-repo-unpushed-badge';
-                    unpushedBadge.textContent = `${aheadCount} unpushed`;
-                    repoLeft.appendChild(unpushedBadge);
-                }
+                label.className = 'git-change-button git-repo-name-label';
+                label.textContent = repo.name;
 
                 const info = document.createElement('div');
                 info.className = 'git-info-button';
@@ -665,6 +757,23 @@ export class GitRepoTree {
                 info.setAttribute('aria-label', summary);
                 info.textContent = 'i';
                 repoLeft.appendChild(info);
+                repoLeft.appendChild(changesToggle);
+                repoLeft.appendChild(repoCheckbox);
+                repoLeft.appendChild(label);
+
+                const branchMenu = this.createBranchMenu(repo);
+                if (branchMenu) {
+                    repoLeft.classList.add('has-file-menu');
+                    repoLeft.appendChild(branchMenu);
+                }
+
+                if (aheadCount > 0) {
+                    const unpushedBadge = document.createElement('span');
+                    unpushedBadge.className = 'git-repo-unpushed-badge';
+                    unpushedBadge.textContent = `${aheadCount} unpushed`;
+                    repoLeft.appendChild(unpushedBadge);
+                }
+
                 repoRow.appendChild(repoLeft);
 
                 repoWrapper.appendChild(repoRow);
@@ -741,19 +850,8 @@ export class GitRepoTree {
 
             const counts = repo.counts || { staged: 0, unstaged: 0, untracked: 0, conflicted: 0 };
             const label = document.createElement('div');
-            label.className = 'git-change-button';
-            label.textContent = `${repo.name}${repo.branch ? ` · ${repo.branch}` : ''}`;
-
-            repoLeft.appendChild(changesToggle);
-            repoLeft.appendChild(repoCheckbox);
-            repoLeft.appendChild(label);
-
-            if (aheadCount > 0) {
-                const unpushedBadge = document.createElement('span');
-                unpushedBadge.className = 'git-repo-unpushed-badge';
-                unpushedBadge.textContent = `${aheadCount} unpushed`;
-                repoLeft.appendChild(unpushedBadge);
-            }
+            label.className = 'git-change-button git-repo-name-label';
+            label.textContent = repo.name;
 
             const info = document.createElement('div');
             info.className = 'git-info-button';
@@ -764,6 +862,23 @@ export class GitRepoTree {
             info.setAttribute('aria-label', summary);
             info.textContent = 'i';
             repoLeft.appendChild(info);
+            repoLeft.appendChild(changesToggle);
+            repoLeft.appendChild(repoCheckbox);
+            repoLeft.appendChild(label);
+
+            const branchMenu = this.createBranchMenu(repo);
+            if (branchMenu) {
+                repoLeft.classList.add('has-file-menu');
+                repoLeft.appendChild(branchMenu);
+            }
+
+            if (aheadCount > 0) {
+                const unpushedBadge = document.createElement('span');
+                unpushedBadge.className = 'git-repo-unpushed-badge';
+                unpushedBadge.textContent = `${aheadCount} unpushed`;
+                repoLeft.appendChild(unpushedBadge);
+            }
+
             repoRow.appendChild(repoLeft);
 
             repoWrapper.appendChild(repoRow);

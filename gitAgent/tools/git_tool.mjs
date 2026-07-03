@@ -134,6 +134,7 @@ function normalizeArgs(toolName, args) {
 
   switch (toolName) {
     case 'git_info':
+    case 'git_branch_list':
     case 'git_init_repository':
     case 'git_clone_repository':
     case 'git_create_github_repository':
@@ -169,6 +170,27 @@ function normalizeArgs(toolName, args) {
       if (toolName === 'git_status') {
         input.includeAhead = Boolean(input.includeAhead || false);
       }
+      return input;
+    case 'git_branch_checkout':
+      requirePath();
+      if (!input.branch || typeof input.branch !== 'string') {
+        throw new Error('git_branch_checkout requires a "branch" string.');
+      }
+      return input;
+    case 'git_branch_create':
+      requirePath();
+      if (!input.name || typeof input.name !== 'string') {
+        throw new Error('git_branch_create requires a "name" string.');
+      }
+      input.startPoint = typeof input.startPoint === 'string' ? input.startPoint : '';
+      input.checkout = input.checkout !== false;
+      return input;
+    case 'git_branch_merge':
+      requirePath();
+      if (!input.sourceBranch || typeof input.sourceBranch !== 'string') {
+        throw new Error('git_branch_merge requires a "sourceBranch" string.');
+      }
+      input.noFf = Boolean(input.noFf || false);
       return input;
     case 'git_github_repository_targets':
       return input;
@@ -366,6 +388,22 @@ async function main() {
         return;
       case 'git_info':
         result = await gitService.gitInfo(payload);
+        writeJson(result);
+        return;
+      case 'git_branch_list':
+        result = await gitService.gitBranchList(payload);
+        writeJson(result);
+        return;
+      case 'git_branch_checkout':
+        result = await gitService.gitBranchCheckout(payload);
+        writeJson(result);
+        return;
+      case 'git_branch_create':
+        result = await gitService.gitBranchCreate(payload);
+        writeJson(result);
+        return;
+      case 'git_branch_merge':
+        result = await gitService.gitBranchMerge(payload);
         writeJson(result);
         return;
       case 'git_init_repository':
