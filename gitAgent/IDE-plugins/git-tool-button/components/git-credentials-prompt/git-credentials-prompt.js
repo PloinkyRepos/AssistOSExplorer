@@ -245,7 +245,6 @@ export class GitCredentialsPrompt {
         this.state.email = email;
         this.state.credentialsDirty = true;
         this.updateValidationState();
-        this.renderAutocommitRepos();
         this.getParentPresenter()?.handleCredentialsChange?.({
             name,
             email,
@@ -284,7 +283,6 @@ export class GitCredentialsPrompt {
         this.state.token = token;
         this.state.credentialsDirty = true;
         this.updateValidationState();
-        this.renderAutocommitRepos();
         this.getParentPresenter()?.handleCredentialsChange?.({
             name: this.state.name,
             email: this.state.email,
