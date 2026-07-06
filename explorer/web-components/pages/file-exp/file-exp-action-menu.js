@@ -28,15 +28,7 @@ export function positionOpenActionMenu(fileExp) {
         return;
     }
 
-    dropdown.removeAttribute('data-positioned');
-    dropdown.classList.remove('drop-up');
-    dropdown.style.left = '';
-    dropdown.style.top = '';
-    dropdown.style.right = '';
-    dropdown.style.bottom = '';
-    dropdown.style.maxHeight = '';
-    dropdown.style.maxWidth = '';
-    dropdown.style.width = '';
+    const previousScrollTop = dropdown.scrollTop || 0;
 
     const triggerRect = trigger.getBoundingClientRect();
     const menuRect = dropdown.getBoundingClientRect();
@@ -70,15 +62,26 @@ export function positionOpenActionMenu(fileExp) {
         top = Math.min(Math.max(top, margin), maxTop);
     }
 
+    const positionedAvailableVertical = shouldDropUp
+        ? availableAbove
+        : Math.max(0, viewportHeight - (typeof top === 'number' ? top : triggerRect.bottom + spacing) - margin);
+
     dropdown.style.left = `${left}px`;
     dropdown.style.top = typeof top === 'number' ? `${top}px` : top;
     dropdown.style.right = 'auto';
     dropdown.style.bottom = bottom;
-    dropdown.style.maxHeight = `${Math.max(80, Math.floor(availableVertical))}px`;
+    dropdown.style.maxHeight = `${Math.max(80, Math.floor(positionedAvailableVertical || availableVertical))}px`;
     if (isMobileViewport) {
         dropdown.style.width = `${Math.floor(menuWidth)}px`;
         dropdown.style.maxWidth = `calc(100vw - ${margin * 2}px)`;
+    } else {
+        dropdown.style.width = '';
+        dropdown.style.maxWidth = '';
     }
     dropdown.dataset.positioned = 'true';
     dropdown.classList.toggle('drop-up', shouldDropUp);
+    if (previousScrollTop > 0) {
+        const maxScrollTop = Math.max(0, dropdown.scrollHeight - dropdown.clientHeight);
+        dropdown.scrollTop = Math.min(previousScrollTop, maxScrollTop);
+    }
 }

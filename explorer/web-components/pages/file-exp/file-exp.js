@@ -153,7 +153,18 @@ export class FileExp {
         this.openActionMenuResizeObserver = null;
         this.openActionMenuMutationObserver = null;
         this.openActionMenuPositionFrame = null;
-        this.boundOpenActionMenuViewportChange = () => this.scheduleOpenActionMenuPosition?.();
+        this.boundOpenActionMenuViewportChange = (event) => {
+            const dropdown = this.openActionMenuDropdown;
+            const eventTarget = event?.target;
+            const eventPath = typeof event?.composedPath === 'function' ? event.composedPath() : [];
+            if (dropdown && (
+                (eventTarget && (eventTarget === dropdown || dropdown.contains?.(eventTarget)))
+                || (Array.isArray(eventPath) && eventPath.includes(dropdown))
+            )) {
+                return;
+            }
+            this.scheduleOpenActionMenuPosition?.();
+        };
         this.editorAutoSaveTimer = null;
         this.editorExternalWatchTimer = null;
         this.editorExternalWatchInFlight = false;

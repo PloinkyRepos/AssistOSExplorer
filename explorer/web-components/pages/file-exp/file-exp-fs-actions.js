@@ -95,7 +95,6 @@ export function attachFsActions(fileExp) {
                     this.scheduleOpenActionMenuPositionSettle();
                 });
                 this.openActionMenuMutationObserver.observe(dropdown, {
-                    attributes: true,
                     childList: true,
                     subtree: true
                 });
@@ -493,6 +492,7 @@ export function attachFsActions(fileExp) {
                 dropdown.style.bottom = '';
                 dropdown.style.width = '';
                 dropdown.style.maxWidth = '';
+                dropdown.style.maxHeight = '';
             }
             this.pendingMenuFocusPath = null;
             this.contextMenuLoadToken += 1;

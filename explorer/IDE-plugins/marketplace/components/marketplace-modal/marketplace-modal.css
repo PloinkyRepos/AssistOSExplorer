@@ -209,7 +209,7 @@ marketplace-modal .marketplace-panel-header h3 {
 
 marketplace-modal .marketplace-agent-search {
   width: min(280px, 50%);
-  flex: 0 1 280px;
+  flex: 0 1 auto;
 }
 
 marketplace-modal .marketplace-list {
@@ -408,20 +408,22 @@ dialog.marketplace-agent-settings-dialog .modal-header {
   background: var(--surface);
 }
 
-@media (max-width: 820px) {
+@media (max-width: 720px) {
   marketplace-modal {
     min-width: 0;
   }
 
+  marketplace-modal .modal-header,
   marketplace-modal .marketplace-modal-body {
     width: 100%;
     height: auto;
     min-width: 0;
+    padding: 12px;
   }
 
   dialog marketplace-modal .marketplace-modal-body {
-    width: calc(100vw - 24px);
-    height: min(620px, calc(100vh - 90px));
+    width: calc(100vw - 16px);
+    height: calc(100dvh - 96px);
     min-width: 0;
   }
 
@@ -435,6 +437,16 @@ dialog.marketplace-agent-settings-dialog .modal-header {
     flex-direction: column;
   }
 
+  marketplace-modal .marketplace-repo-row {
+    align-items: center;
+    flex-direction: row;
+  }
+
+  marketplace-modal .marketplace-repo-row .marketplace-repo-info {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
   marketplace-modal .marketplace-agent-search,
   marketplace-modal .marketplace-agent-controls,
   marketplace-modal .marketplace-enable-mode,
@@ -446,18 +458,6 @@ dialog.marketplace-agent-settings-dialog .modal-header {
   marketplace-modal .marketplace-agent-controls {
     display: grid;
     grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 520px) {
-  marketplace-modal .modal-header,
-  marketplace-modal .marketplace-modal-body {
-    padding: 12px;
-  }
-
-  dialog marketplace-modal .marketplace-modal-body {
-    width: calc(100vw - 16px);
-    height: calc(100vh - 96px);
   }
 
   marketplace-modal .marketplace-repo-kind-tabs {

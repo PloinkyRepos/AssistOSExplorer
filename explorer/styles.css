@@ -540,6 +540,8 @@ td.actions-cell {
     z-index: 1200;
     max-height: calc(100vh - var(--space-md));
     overflow: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
     visibility: hidden;
     font-family: var(--default-font), "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
 }
