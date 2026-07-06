@@ -132,3 +132,70 @@ tr.is-symlink .col-name .icon {
     border: 0;
     pointer-events: none;
 }
+
+@media (max-width: 720px) {
+    file-exp-entries,
+    file-exp-entries .entries {
+        min-width: 0;
+        max-width: 100%;
+        overflow-x: hidden;
+    }
+
+    file-exp-entries table {
+        width: 100%;
+        min-width: 0;
+        table-layout: fixed;
+    }
+
+    file-exp-entries th,
+    file-exp-entries td {
+        min-width: 0;
+    }
+
+    file-exp-entries .col-type,
+    file-exp-entries .col-size,
+    file-exp-entries .col-modified {
+        display: none !important;
+    }
+
+    file-exp-entries .col-name {
+        width: auto;
+        max-width: 0;
+        overflow: hidden;
+        white-space: nowrap;
+    }
+
+    file-exp-entries .tree-name-cell {
+        padding-left: calc(var(--space-xs) + min(var(--tree-depth, 0), 4) * var(--space-sm));
+    }
+
+    file-exp-entries .entry-label {
+        display: inline-block;
+        max-width: calc(100% - 52px);
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        vertical-align: middle;
+    }
+
+    file-exp-entries .actions-cell,
+    file-exp-entries .col-actions {
+        width: 44px;
+        min-width: 44px;
+        max-width: 44px;
+        padding-inline: 4px;
+        text-align: center;
+        white-space: nowrap;
+    }
+
+    file-exp-entries .action-menu-container {
+        width: 36px;
+        justify-content: center;
+    }
+
+    file-exp-entries .action-menu-trigger {
+        width: 36px;
+        height: 36px;
+    }
+}

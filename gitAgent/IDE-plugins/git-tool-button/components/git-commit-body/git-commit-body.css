@@ -38,6 +38,21 @@ git-commit-body.is-hidden {
     min-height: 0;
 }
 
+.git-main.mobile-tree-hidden > git-repo-tree {
+    flex: 0 0 48px;
+    width: 48px;
+    min-width: 48px;
+    overflow: visible;
+}
+
+.git-main.mobile-tree-hidden > git-diff-viewer {
+    min-width: 0;
+}
+
+.git-main.mobile-tree-hidden .git-main-resizer {
+    display: none;
+}
+
 .git-main-resizer {
     position: relative;
     flex: 0 0 10px;

@@ -68,7 +68,24 @@ git-repo-tree .git-repos-refresh-button:hover .git-settings-icon {
 }
 
 git-repo-tree .git-mobile-tree-toggle {
-    display: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    padding: 0 !important;
+    border: none;
+    border-radius: 10px;
+    background: none;
+    color: var(--text);
+    flex: 0 0 auto;
+}
+
+git-repo-tree .git-mobile-tree-toggle:hover {
+    background: var(--light-gray);
+    box-shadow: 0 10px 18px rgba(var(--accent-rgb), 0.28);
+    transform: translateY(-1px);
 }
 
 git-repo-tree .git-mobile-tree-toggle-icon path {
@@ -93,6 +110,104 @@ git-repo-tree .git-mobile-tree-toggle.is-collapsed .git-mobile-tree-icon-collaps
 
 git-repo-tree .git-mobile-tree-toggle.is-collapsed .git-mobile-tree-icon-expand {
     display: block;
+}
+
+git-repo-tree.mobile-tree-collapsed .git-repo-tree-list,
+git-repo-tree .git-changes.mobile-tree-collapsed .git-repo-tree-list,
+git-repo-tree.mobile-tree-collapsed .filter-refresh-container,
+git-repo-tree .git-changes.mobile-tree-collapsed .filter-refresh-container,
+git-repo-tree.mobile-tree-collapsed .git-repo-filter,
+git-repo-tree .git-changes.mobile-tree-collapsed .git-repo-filter,
+git-repo-tree.mobile-tree-collapsed .git-repos-refresh-button,
+git-repo-tree .git-changes.mobile-tree-collapsed .git-repos-refresh-button,
+git-repo-tree.mobile-tree-collapsed .git-repo-toggle-all,
+git-repo-tree .git-changes.mobile-tree-collapsed .git-repo-toggle-all,
+git-repo-tree.mobile-tree-collapsed .git-section-body,
+git-repo-tree .git-changes.mobile-tree-collapsed .git-section-body,
+.git-main.mobile-tree-hidden > git-repo-tree .git-repo-tree-list,
+.git-main.mobile-tree-hidden > git-repo-tree .filter-refresh-container,
+.git-main.mobile-tree-hidden > git-repo-tree .git-repo-filter,
+.git-main.mobile-tree-hidden > git-repo-tree .git-repos-refresh-button,
+.git-main.mobile-tree-hidden > git-repo-tree .git-repo-toggle-all,
+.git-main.mobile-tree-hidden > git-repo-tree .git-section-body {
+    display: none !important;
+}
+
+git-repo-tree.mobile-tree-collapsed .git-changes,
+git-repo-tree .git-changes.mobile-tree-collapsed,
+.git-main.mobile-tree-hidden > git-repo-tree .git-changes {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    overflow: visible;
+    gap: 0;
+    border-radius: 0 !important;
+    width: 48px;
+}
+
+git-repo-tree.mobile-tree-collapsed .git-section-repos,
+git-repo-tree .git-changes.mobile-tree-collapsed .git-section-repos,
+.git-main.mobile-tree-hidden > git-repo-tree .git-section-repos {
+    display: block;
+    width: 48px;
+    min-width: 48px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+}
+
+.git-main.mobile-tree-hidden > git-repo-tree,
+git-repo-tree.mobile-tree-collapsed {
+    overflow: visible;
+}
+
+git-repo-tree.mobile-tree-collapsed .git-changes > :not(.git-section-repos),
+git-repo-tree .git-changes.mobile-tree-collapsed > :not(.git-section-repos),
+git-repo-tree.mobile-tree-collapsed .git-section-repos > :not(.git-repos-header),
+git-repo-tree .git-changes.mobile-tree-collapsed .git-section-repos > :not(.git-repos-header),
+git-repo-tree.mobile-tree-collapsed .git-repos-header > :not(.git-repos-header-actions),
+git-repo-tree .git-changes.mobile-tree-collapsed .git-repos-header > :not(.git-repos-header-actions),
+git-repo-tree.mobile-tree-collapsed .git-repos-header-actions > :not(.git-mobile-tree-toggle),
+git-repo-tree .git-changes.mobile-tree-collapsed .git-repos-header-actions > :not(.git-mobile-tree-toggle),
+.git-main.mobile-tree-hidden > git-repo-tree .git-changes > :not(.git-section-repos),
+.git-main.mobile-tree-hidden > git-repo-tree .git-section-repos > :not(.git-repos-header),
+.git-main.mobile-tree-hidden > git-repo-tree .git-repos-header > :not(.git-repos-header-actions),
+.git-main.mobile-tree-hidden > git-repo-tree .git-repos-header-actions > :not(.git-mobile-tree-toggle) {
+    display: none !important;
+}
+
+git-repo-tree.mobile-tree-collapsed .git-repos-header,
+git-repo-tree .git-changes.mobile-tree-collapsed .git-repos-header,
+.git-main.mobile-tree-hidden > git-repo-tree .git-repos-header {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    justify-items: end;
+    width: 48px;
+    min-width: 48px;
+    height: 48px;
+    margin: 0;
+    padding: 4px;
+    border: 0;
+    background: transparent;
+}
+
+git-repo-tree.mobile-tree-collapsed .git-repos-header-actions,
+git-repo-tree .git-changes.mobile-tree-collapsed .git-repos-header-actions,
+.git-main.mobile-tree-hidden > git-repo-tree .git-repos-header-actions {
+    display: flex;
+    align-items: center;
+    width: auto;
+    justify-content: flex-end;
+    margin: 0;
+    padding: 0;
+}
+
+git-repo-tree.mobile-tree-collapsed #gitMobileTreeToggle,
+git-repo-tree .git-changes.mobile-tree-collapsed #gitMobileTreeToggle,
+.git-main.mobile-tree-hidden > git-repo-tree #gitMobileTreeToggle {
+    display: inline-flex;
 }
 
 git-repo-tree .git-repo-filter-input {
@@ -236,24 +351,4 @@ git-repo-tree .git-repo-unpushed-badge {
         display: inline-flex;
     }
 
-    git-repo-tree .git-mobile-tree-toggle {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 40px;
-        height: 40px;
-        min-width: 40px;
-        padding: 0 !important;
-        border: none;
-        border-radius: 10px;
-        background: none;
-        color: var(--text);
-        flex: 0 0 auto;
-    }
-
-    git-repo-tree .git-mobile-tree-toggle:hover {
-        background: var(--light-gray);
-        box-shadow: 0 10px 18px rgba(var(--accent-rgb), 0.28);
-        transform: translateY(-1px);
-    }
 }
