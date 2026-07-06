@@ -15,10 +15,16 @@ git-commit-body.is-hidden {
     gap: 12px;
     min-height: 0;
     flex: 1 1 auto;
+    background: var(--file-exp-panel);
 }
 
 .git-commit {
     flex: 0 0 auto;
+}
+
+.git-mobile-tree-toggle {
+    display: none;
+    align-self: flex-start;
 }
 
 .git-main > git-repo-tree {
@@ -58,4 +64,94 @@ git-commit-body.is-hidden {
 .git-main.resizing .git-main-resizer::before {
     background: rgba(var(--accent-rgb, 96, 165, 250), 0.75);
     box-shadow: 0 0 0 3px rgba(var(--accent-rgb, 96, 165, 250), 0.12);
+}
+
+@media (max-width: 720px) {
+    .git-commit-body-inner {
+        --git-mobile-tree-width: min(86vw, 360px);
+        gap: 0 !important;
+        height: 100%;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .git-mobile-tree-toggle {
+        position: static;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        min-width: 40px;
+        padding: 0;
+        border: none;
+        border-radius: 10px;
+        background: none;
+        color: var(--text);
+    }
+
+    .git-main {
+        position: relative;
+        flex-direction: row;
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: hidden;
+        background: var(--file-exp-panel);
+    }
+
+    .git-main:not(.mobile-tree-hidden)::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        background: rgba(15, 23, 42, 0.22);
+    }
+
+    .git-main > git-repo-tree {
+        position: absolute;
+        z-index: 2;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        flex: none;
+        width: var(--git-mobile-tree-width);
+        min-width: 0;
+        max-height: none;
+        overflow: auto;
+        background: var(--file-exp-panel);
+        border-right: 1px solid var(--file-exp-border);
+        transform: translateX(0);
+        transition: transform 180ms ease, box-shadow 180ms ease;
+        box-shadow: var(--shadow-lg);
+    }
+
+    .git-main.mobile-tree-hidden > git-repo-tree {
+        width: var(--git-mobile-tree-width);
+        display: block;
+        transform: translateX(calc(-100% + 48px));
+        box-shadow: none;
+    }
+
+    .git-main > git-diff-viewer {
+        flex: 1 1 auto;
+        width: 100%;
+        min-width: 0;
+        min-height: 220px;
+        margin-left: 0;
+    }
+
+    .git-main.mobile-tree-hidden > git-diff-viewer {
+        margin-left: 48px;
+        width: calc(100% - 48px);
+    }
+
+    .git-main-resizer {
+        display: none;
+    }
+
+    .git-commit {
+        flex: 0 0 auto;
+        min-width: 0;
+        border-radius: 0 !important;
+    }
 }

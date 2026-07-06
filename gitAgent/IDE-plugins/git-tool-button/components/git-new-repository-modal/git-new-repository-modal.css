@@ -319,11 +319,12 @@ dialog.modal.git-new-repository-modal-dialog {
     }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 720px) {
     dialog.modal.git-new-repository-modal-dialog {
         width: calc(100vw - 20px);
         min-width: 0;
         max-width: calc(100vw - 20px);
+        border-radius: 0 !important;
     }
 
     .git-new-repository-tabs {
@@ -332,9 +333,15 @@ dialog.modal.git-new-repository-modal-dialog {
         overflow-x: auto;
         padding: 2px;
         border: 1px solid var(--border);
-        border-radius: 8px;
+        border-radius: 0 !important;
         background: var(--surface);
         scrollbar-width: none;
+    }
+
+    .git-new-repository-section,
+    .git-new-repository-panel,
+    .git-new-repository-error {
+        border-radius: 0 !important;
     }
 
     .git-new-repository-tabs::-webkit-scrollbar {

@@ -41,13 +41,16 @@ export class GitCommitBody {
             visible: true,
             repoPath: '',
             advancedMode: false,
-            treeWidthPx: loadStoredGitTreeWidthPx()
+            treeWidthPx: loadStoredGitTreeWidthPx(),
+            mobileTreeVisible: true
         };
         this.boundActions = false;
         this.mainResizer = null;
         this.stopResizeMove = null;
         this.stopResizeUp = null;
         this.handleMainResizerMouseDown = this.handleMainResizerMouseDown.bind(this);
+        this.handleMobileTreeToggleClick = this.handleMobileTreeToggleClick.bind(this);
+        this.handleClick = this.handleClick.bind(this);
         this.invalidate();
     }
 
@@ -73,7 +76,14 @@ export class GitCommitBody {
                 this.toggleAdvancedMode();
             });
         }
+        this.element.addEventListener('click', this.handleClick);
         this.boundActions = true;
+    }
+
+    handleClick(event) {
+        if (event.target?.closest?.('#gitMobileTreeToggle')) {
+            this.handleMobileTreeToggleClick();
+        }
     }
 
     bindMainResizer() {
@@ -98,6 +108,11 @@ export class GitCommitBody {
         this.stopResizeMove = null;
         this.stopResizeUp = null;
         this.element.querySelector('.git-main')?.classList.remove('resizing');
+    }
+
+    handleMobileTreeToggleClick() {
+        this.state.mobileTreeVisible = !this.state.mobileTreeVisible;
+        this.syncMobileTreeToggle();
     }
 
     addDocumentListener(type, listener) {
@@ -182,6 +197,7 @@ export class GitCommitBody {
         if (commitSection) {
             commitSection.classList.toggle('advanced-mode', this.state.advancedMode);
         }
+        this.syncMobileTreeToggle();
         const fallbackPercent = loadStoredGitTreeWidthPercent();
         const mainWidth = this.element.querySelector('.git-main')?.getBoundingClientRect().width || 0;
         const effectiveWidth = this.state.treeWidthPx
@@ -190,6 +206,24 @@ export class GitCommitBody {
         this.applyTreeWidth(effectiveWidth);
         if (this.advancedModeInput) {
             this.advancedModeInput.checked = this.state.advancedMode;
+        }
+    }
+
+    syncMobileTreeToggle() {
+        const gitMain = this.element.querySelector('.git-main');
+        const repoTree = this.element.querySelector('#gitRepoTreePanel');
+        const gitChanges = repoTree?.querySelector?.('.git-changes');
+        const toggle = this.element.querySelector('#gitMobileTreeToggle');
+        const visible = this.state.mobileTreeVisible !== false;
+        gitMain?.classList.toggle('mobile-tree-hidden', !visible);
+        repoTree?.classList.toggle('mobile-tree-collapsed', !visible);
+        gitChanges?.classList.toggle('mobile-tree-collapsed', !visible);
+        if (toggle) {
+            toggle.classList.toggle('is-collapsed', !visible);
+            toggle.setAttribute('aria-expanded', visible ? 'true' : 'false');
+            const label = visible ? 'Collapse repositories' : 'Expand repositories';
+            toggle.setAttribute('aria-label', label);
+            toggle.setAttribute('title', label);
         }
     }
 

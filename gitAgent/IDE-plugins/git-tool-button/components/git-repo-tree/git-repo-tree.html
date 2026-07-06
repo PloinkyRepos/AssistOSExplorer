@@ -28,7 +28,28 @@
                     <input id="gitRepoToggleAllInput" type="checkbox" data-bulk-action="check">
                     <span id="gitRepoToggleAllLabel">Check all repos</span>
                 </label>
-
+                <button
+                        type="button"
+                        class="secondary git-mobile-tree-toggle"
+                        id="gitMobileTreeToggle"
+                        aria-expanded="true"
+                        aria-controls="gitRepoTreePanel"
+                        aria-label="Collapse repositories"
+                        title="Collapse repositories"
+                >
+                    <svg class="git-mobile-tree-toggle-icon" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
+                        <path class="git-mobile-tree-toggle-panel" d="M3.5 3.5h15a1.5 1.5 0 0 1 1.5 1.5v12a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 2 17V5a1.5 1.5 0 0 1 1.5-1.5Z"></path>
+                        <path class="git-mobile-tree-toggle-divider" d="M8 4v14"></path>
+                        <g class="git-mobile-tree-icon-collapse">
+                            <path d="M15.5 11 H10.5"></path>
+                            <path d="M12.5 8.5 L10.5 11 L12.5 13.5"></path>
+                        </g>
+                        <g class="git-mobile-tree-icon-expand">
+                            <path d="M10.5 11 H15.5"></path>
+                            <path d="M13.5 8.5 L15.5 11 L13.5 13.5"></path>
+                        </g>
+                    </svg>
+                </button>
             </div>
         </div>
         <div class="git-section-body git-repo-tree-list"></div>

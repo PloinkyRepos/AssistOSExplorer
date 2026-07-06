@@ -371,7 +371,7 @@ tbody tr.active {
 .preview-content {
     flex: 1;
     overflow: auto;
-    padding: 0 10px 0 0;
+    padding: 0;
 }
 pre {
     margin: 0;
