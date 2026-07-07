@@ -222,9 +222,8 @@ export async function appendAuditLine(fileName, line) {
 
 export async function loadPermissionsManifest() {
   const manifestPath = getPermissionsManifestPath();
-  const exists = await fileExists(manifestPath);
   const manifest = await readJsonFile(manifestPath, defaultPermissionsManifest());
-  const seeded = exists ? manifest : applyFreshDefaultAgentPolicies(manifest);
+  const seeded = applyFreshDefaultAgentPolicies(manifest);
   return normalizePermissionsManifest(seeded);
 }
 

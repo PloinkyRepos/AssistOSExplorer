@@ -44,7 +44,12 @@ test('deriveSameRepoAgentPrincipal maps the DPU principal to a sibling agent', (
   );
   assert.equal(deriveSameRepoAgentPrincipal('gitAgent', { PLOINKY_AGENT_ID: 'not-an-agent-id' }), '');
   assert.equal(deriveSameRepoAgentPrincipal('gitAgent', {}), '');
-  assert.deepEqual(defaultAgentPolicies({}), {});
+  assert.deepEqual(defaultAgentPolicies({}), {
+    'agent:proxies/searchAgent': {
+      secrets: { allowedRoles: ['read'] },
+      updatedAt: '1970-01-01T00:00:00.000Z'
+    }
+  });
 });
 
 test('fresh data root seeds the same-repo gitAgent read policy', async () => {
@@ -56,13 +61,17 @@ test('fresh data root seeds the same-repo gitAgent read policy', async () => {
         manifest.agentPolicies['agent:AchillesIDE/gitAgent']?.secrets?.allowedRoles,
         ['read']
       );
+      assert.deepEqual(
+        manifest.agentPolicies['agent:proxies/searchAgent']?.secrets?.allowedRoles,
+        ['read']
+      );
     });
   } finally {
     fs.rmSync(dataDir, { recursive: true, force: true });
   }
 });
 
-test('an existing manifest file is never re-seeded', async () => {
+test('an existing manifest file receives missing default policies', async () => {
   const dataDir = freshDataDir();
   try {
     await withEnv({ DPU_DATA_ROOT: dataDir, PLOINKY_AGENT_ID: 'agent:AchillesIDE/dpuAgent' }, async () => {
@@ -74,7 +83,14 @@ test('an existing manifest file is never re-seeded', async () => {
         agentPolicies: {}
       }), 'utf8');
       const manifest = await loadPermissionsManifest();
-      assert.deepEqual(manifest.agentPolicies, {});
+      assert.deepEqual(
+        manifest.agentPolicies['agent:proxies/searchAgent']?.secrets?.allowedRoles,
+        ['read']
+      );
+      assert.deepEqual(
+        manifest.agentPolicies['agent:AchillesIDE/gitAgent']?.secrets?.allowedRoles,
+        ['read']
+      );
     });
   } finally {
     fs.rmSync(dataDir, { recursive: true, force: true });
@@ -99,6 +115,10 @@ test('an admin-customized policy survives reloads untouched', async () => {
         manifest.agentPolicies['agent:AchillesIDE/gitAgent'].secrets.allowedRoles,
         ['read', 'write']
       );
+      assert.deepEqual(
+        manifest.agentPolicies['agent:proxies/searchAgent'].secrets.allowedRoles,
+        ['read']
+      );
     });
   } finally {
     fs.rmSync(dataDir, { recursive: true, force: true });
@@ -116,6 +136,10 @@ test('the seed persists once the manifest is first saved', async () => {
         reloaded.agentPolicies['agent:AchillesIDE/gitAgent']?.secrets?.allowedRoles,
         ['read']
       );
+      assert.deepEqual(
+        reloaded.agentPolicies['agent:proxies/searchAgent']?.secrets?.allowedRoles,
+        ['read']
+      );
     });
   } finally {
     fs.rmSync(dataDir, { recursive: true, force: true });
@@ -125,9 +149,11 @@ test('the seed persists once the manifest is first saved', async () => {
 test('applyFreshDefaultAgentPolicies never overwrites an existing entry in memory', () => {
   const manifest = {
     agentPolicies: {
-      'agent:AchillesIDE/gitAgent': { secrets: { allowedRoles: [] }, updatedAt: '2026-01-01T00:00:00.000Z' }
+      'agent:AchillesIDE/gitAgent': { secrets: { allowedRoles: [] }, updatedAt: '2026-01-01T00:00:00.000Z' },
+      'agent:proxies/searchAgent': { secrets: { allowedRoles: [] }, updatedAt: '2026-01-01T00:00:00.000Z' }
     }
   };
   applyFreshDefaultAgentPolicies(manifest, { PLOINKY_AGENT_ID: 'agent:AchillesIDE/dpuAgent' });
   assert.deepEqual(manifest.agentPolicies['agent:AchillesIDE/gitAgent'].secrets.allowedRoles, []);
+  assert.deepEqual(manifest.agentPolicies['agent:proxies/searchAgent'].secrets.allowedRoles, []);
 });

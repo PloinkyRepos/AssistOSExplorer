@@ -7,13 +7,19 @@ export function deriveSameRepoAgentPrincipal(agentName, env = process.env) {
 
 export function defaultAgentPolicies(env = process.env) {
   const gitAgentPrincipal = deriveSameRepoAgentPrincipal('gitAgent', env);
-  if (!gitAgentPrincipal) return {};
-  return {
-    [gitAgentPrincipal]: {
+  const policies = {
+    'agent:proxies/searchAgent': {
       secrets: { allowedRoles: ['read'] },
       updatedAt: new Date(0).toISOString()
     }
   };
+  if (gitAgentPrincipal) {
+    policies[gitAgentPrincipal] = {
+      secrets: { allowedRoles: ['read'] },
+      updatedAt: new Date(0).toISOString()
+    };
+  }
+  return policies;
 }
 
 export function applyFreshDefaultAgentPolicies(manifest, env = process.env) {
