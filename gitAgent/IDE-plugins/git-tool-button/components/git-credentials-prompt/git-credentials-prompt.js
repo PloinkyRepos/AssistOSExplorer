@@ -264,7 +264,6 @@ export class GitCredentialsPrompt {
         this.state.credentialsDirty = true;
         this.updateAuthPanels();
         this.updateValidationState();
-        this.renderAutocommitRepos();
         this.getParentPresenter()?.handleCredentialsChange?.({
             name: this.state.name,
             email: this.state.email,
@@ -413,6 +412,7 @@ export class GitCredentialsPrompt {
 
     applyState(next) {
         if (!next || typeof next !== 'object') return;
+        const refreshAutocommitRepos = Boolean(next.refreshAutocommitRepos);
         if (Object.prototype.hasOwnProperty.call(next, 'visible')) {
             this.state.visible = Boolean(next.visible);
         }
@@ -605,7 +605,9 @@ export class GitCredentialsPrompt {
             this.showAgentReposInput.checked = Boolean(this.state.showAgentRepos);
         }
         this.updateValidationState();
-        this.renderAutocommitRepos();
+        if (refreshAutocommitRepos) {
+            this.renderAutocommitRepos();
+        }
 
         if (next.focus === 'name') {
             setTimeout(() => this.nameInput?.focus?.(), 0);

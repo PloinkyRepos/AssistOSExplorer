@@ -247,7 +247,8 @@ export class GitCommitModal {
         if (typeof detail.showAgentRepos === 'boolean' && prevShowAgentRepos !== nextShowAgentRepos) {
             setShowAgentReposSetting(nextShowAgentRepos);
             this.applyDefaultRepoTreeExpansion();
-            this.syncStaticUI();
+            this.ui.updateCredentialsPrompt?.({ refreshAutocommitRepos: true });
+            this.ui.updateRepoTree?.();
         }
         this.updateIdentityPrompt();
         if (nextAuthMethod === 'github') {
@@ -1082,7 +1083,9 @@ export class GitCommitModal {
     }
 
     async loadRepoOverviews({ force = false } = {}) {
-        return this.repo.loadRepoOverviews({ force });
+        const result = await this.repo.loadRepoOverviews({ force });
+        this.ui.updateCredentialsPrompt?.({ refreshAutocommitRepos: true });
+        return result;
     }
 
     applyDefaultRepoTreeExpansion() {

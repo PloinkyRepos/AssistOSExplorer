@@ -89,6 +89,7 @@ export function createGitCommitUI(ctx) {
     const getCommitBodyPresenter = () => element.querySelector('git-commit-body')?.webSkelPresenter || null;
     const getCommitActionsPresenter = () => element.querySelector('git-commit-actions')?.webSkelPresenter || null;
     const getRepoTreePresenter = () => element.querySelector('git-repo-tree')?.webSkelPresenter || null;
+    let credentialsPromptVisible = false;
 
     const getGithubIdentityFallback = () => {
         const githubUser = state.githubAuth?.connection?.user || {};
@@ -136,6 +137,8 @@ export function createGitCommitUI(ctx) {
             || state.credentialsGate
             || state.credentialsOpen
         );
+        const refreshAutocommitRepos = Boolean(options.refreshAutocommitRepos || (visible && !credentialsPromptVisible));
+        credentialsPromptVisible = visible;
         const githubAuth = state.githubAuth || {};
         const githubConnection = githubAuth.connection || rememberedGithubConnection || {};
         const githubPending = githubAuth.pending || {};
@@ -191,12 +194,14 @@ export function createGitCommitUI(ctx) {
             autocommitRepos,
             autocommitSelected: useDraft ? draftRepos : autocommitSelected,
             showAgentRepos,
+            refreshAutocommitRepos,
             autoresolveConflicts
         };
+        const presenter = getCredentialsPromptPresenter();
+        if (!presenter?.setState) return;
         if (options.focus) detail.focus = options.focus;
         if (options.activeTab) detail.activeTab = options.activeTab;
-        const presenter = getCredentialsPromptPresenter();
-        presenter?.setState?.(detail);
+        presenter.setState(detail);
     };
 
     const updateIdentityPrompt = (options = {}) => {
@@ -544,6 +549,7 @@ export function createGitCommitUI(ctx) {
     return {
         bindEvents,
         syncStaticUI,
+        updateCredentialsPrompt,
         updateIdentityPrompt,
         updateAuthPrompt,
         updateCommitButtons,
