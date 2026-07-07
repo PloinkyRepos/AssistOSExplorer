@@ -329,10 +329,38 @@ export class FileSearchModal {
         if (searchInFilesBasePath && !searchInFilesBasePath.dataset.bound) {
             searchInFilesBasePath.addEventListener('input', (e) => {
                 this.state.searchInFilesBasePath = e.target.value;
-                this.updateBasePathSuggestions();
+                this.updateBasePathSuggestions({ open: true });
                 this.scheduleSearchInFiles();
             });
+            searchInFilesBasePath.addEventListener('focus', () => {
+                this.updateBasePathSuggestions({ open: true });
+            });
+            searchInFilesBasePath.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    this.closeBasePathSuggestions();
+                }
+            });
             searchInFilesBasePath.dataset.bound = 'true';
+        }
+
+        const basePathList = this.element.querySelector('#searchInFilesBasePathList');
+        if (basePathList && !basePathList.dataset.bound) {
+            basePathList.addEventListener('pointerdown', (event) => {
+                event.preventDefault();
+            });
+            basePathList.addEventListener('click', (event) => {
+                const item = event.target.closest('[data-base-path-suggestion]');
+                if (!item || !basePathList.contains(item)) return;
+                this.selectBasePathSuggestion(item.dataset.basePathSuggestion || '/');
+            });
+            document.addEventListener('pointerdown', (event) => {
+                if (!this.element?.isConnected) return;
+                if (searchInFilesBasePath?.contains(event.target) || basePathList.contains(event.target)) return;
+                this.closeBasePathSuggestions();
+            }, true);
+            window.addEventListener('resize', () => this.positionBasePathSuggestions());
+            document.addEventListener('scroll', () => this.positionBasePathSuggestions(), true);
+            basePathList.dataset.bound = 'true';
         }
 
         const replaceInFilesWith = this.element.querySelector('#replaceInFilesWith');
@@ -463,7 +491,7 @@ export class FileSearchModal {
         this.performReplace({ selectedOnly: false });
     }
 
-    updateBasePathSuggestions() {
+    updateBasePathSuggestions({ open = false } = {}) {
         const list = this.element.querySelector('#searchInFilesBasePathList');
         if (!list) return;
         list.innerHTML = '';
@@ -473,10 +501,81 @@ export class FileSearchModal {
             ? all.filter((entry) => entry.toLowerCase().startsWith(raw) || entry.toLowerCase().includes(raw))
             : all;
         filtered.slice(0, 80).forEach((entry) => {
-            const option = document.createElement('option');
-            option.value = entry;
+            const option = document.createElement('button');
+            option.type = 'button';
+            option.className = 'search-scope-suggestion';
+            option.dataset.basePathSuggestion = entry;
+            option.setAttribute('role', 'option');
+            option.textContent = entry;
             list.appendChild(option);
         });
+        if (open && list.children.length) {
+            this.openBasePathSuggestions();
+        } else {
+            this.closeBasePathSuggestions();
+        }
+    }
+
+    openBasePathSuggestions() {
+        const input = this.element.querySelector('#searchInFilesBasePath');
+        const list = this.element.querySelector('#searchInFilesBasePathList');
+        if (!input || !list || !list.children.length) return;
+        list.classList.remove('hidden');
+        list.hidden = false;
+        input.setAttribute('aria-expanded', 'true');
+        this.positionBasePathSuggestions();
+    }
+
+    closeBasePathSuggestions() {
+        const input = this.element.querySelector('#searchInFilesBasePath');
+        const list = this.element.querySelector('#searchInFilesBasePathList');
+        if (!list) return;
+        list.classList.add('hidden');
+        list.hidden = true;
+        input?.setAttribute('aria-expanded', 'false');
+        for (const property of ['left', 'top', 'width', 'maxHeight']) {
+            list.style.removeProperty(property);
+        }
+    }
+
+    selectBasePathSuggestion(value) {
+        const input = this.element.querySelector('#searchInFilesBasePath');
+        const normalizedValue = String(value || '/');
+        this.state.searchInFilesBasePath = normalizedValue;
+        if (input) {
+            input.value = normalizedValue;
+            input.focus({ preventScroll: true });
+        }
+        this.closeBasePathSuggestions();
+        this.scheduleSearchInFiles();
+    }
+
+    positionBasePathSuggestions() {
+        const input = this.element.querySelector('#searchInFilesBasePath');
+        const list = this.element.querySelector('#searchInFilesBasePathList');
+        if (!input || !list || list.hidden) return;
+        const rect = input.getBoundingClientRect();
+        const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
+        const viewportHeight = document.documentElement.clientHeight || window.innerHeight;
+        const margin = 8;
+        const gap = 4;
+        const desiredMaxHeight = 260;
+        const width = Math.min(Math.max(rect.width, 180), viewportWidth - margin * 2);
+        const left = Math.min(Math.max(rect.left, margin), viewportWidth - width - margin);
+        const spaceBelow = viewportHeight - rect.bottom - margin - gap;
+        const spaceAbove = rect.top - margin - gap;
+        const openAbove = spaceBelow < Math.min(160, desiredMaxHeight) && spaceAbove > spaceBelow;
+        const available = Math.max(64, openAbove ? spaceAbove : spaceBelow);
+        const maxHeight = Math.min(desiredMaxHeight, available);
+        const listHeight = Math.min(list.scrollHeight || maxHeight, maxHeight);
+        const top = openAbove
+            ? Math.max(margin, rect.top - gap - listHeight)
+            : Math.min(rect.bottom + gap, viewportHeight - margin - listHeight);
+
+        list.style.left = `${left}px`;
+        list.style.top = `${top}px`;
+        list.style.width = `${width}px`;
+        list.style.maxHeight = `${maxHeight}px`;
     }
 
     syncUIFromState() {

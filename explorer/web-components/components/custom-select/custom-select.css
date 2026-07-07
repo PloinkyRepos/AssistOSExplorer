@@ -1,15 +1,18 @@
-custom-select{
+custom-select {
     display: block;
+    width: 100%;
 }
+
 .custom-select {
+    width: 100%;
+    box-sizing: border-box;
     padding: var(--space-sm) var(--space-md);
-    font-size: var(--font-base);
+    font-size: var(--font-md);
     font-weight: var(--font-regular);
     border-radius: var(--radius-md);
     border: 1px solid var(--border);
     background-color: var(--surface);
     color: var(--text);
-    position: relative;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -18,55 +21,98 @@ custom-select{
     line-height: var(--line-normal);
     transition: border-color var(--transition-base) ease, box-shadow var(--transition-base) ease;
 }
-.current-option{
+
+.current-option {
     margin-right: var(--space-md);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
-.options-list{
-    position: absolute;
+
+.select-arrow {
+    width: 16px;
+    height: 16px;
+    flex: 0 0 auto;
+}
+
+.custom-select-options-list {
+    position: fixed;
     overflow-y: auto;
-    width: 100%;
+    box-sizing: border-box;
     border: 1px solid var(--border);
     background-color: var(--surface);
-    top: calc(100% + var(--space-xs));
-    left: 0;
+    color: var(--text);
     max-height: 330px;
     border-radius: var(--radius-lg);
-    z-index: 1;
+    z-index: 10000;
     box-shadow: var(--shadow-lg);
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
 }
-.option{
+
+.custom-select-options-list[hidden],
+.custom-select-options-list.hidden {
+    display: none;
+}
+
+.custom-select-option {
+    width: 100%;
+    box-sizing: border-box;
     padding: var(--space-sm) var(--space-md);
-    font-size: var(--font-sm);
+    border: 0;
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+    font-size: var(--font-md);
     font-weight: var(--font-regular);
     cursor: pointer;
+    text-align: left;
     transition: background-color var(--transition-fast) ease;
 }
-.option:hover{
-    background-color: var(--file-exp-subtle-surface);
+
+.custom-select-option:last-child {
+    border-bottom: 0;
 }
-.option[data-selected="true"]{
+
+.custom-select-option:hover,
+.custom-select-option:focus {
     background-color: var(--file-exp-subtle-surface);
+    outline: none;
+}
+
+.custom-select-option[data-selected="true"] {
+    background-color: var(--file-exp-subtle-surface);
+    color: var(--text);
     font-weight: var(--font-medium);
 }
+
 .custom-select.focused {
     border-color: var(--accent);
     outline: 2px solid var(--accent);
     outline-offset: 2px;
 }
 
-/* Dark mode */
-.theme-dark .custom-select {
+.theme-dark .custom-select,
+.theme-dark .custom-select-options-list,
+.theme-dark .custom-select-option {
     background-color: var(--surface);
     border-color: var(--border);
     color: var(--text);
 }
 
-.theme-dark .options-list {
-    background-color: var(--surface);
-    border-color: var(--border);
+.theme-dark .custom-select-options-list {
     box-shadow: var(--shadow-xl);
 }
 
-.theme-dark .option:hover {
-    background-color: rgba(255, 255, 255, 0.1);
+.theme-dark .custom-select-option:hover,
+.theme-dark .custom-select-option:focus {
+    background-color: var(--file-exp-subtle-surface);
+}
+
+@media (max-width: 720px) {
+    .custom-select,
+    .custom-select-option {
+        font-size: var(--mobile-form-control-font-size, var(--font-md));
+    }
 }

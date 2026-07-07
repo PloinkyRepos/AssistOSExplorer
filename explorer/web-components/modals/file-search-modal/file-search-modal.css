@@ -398,6 +398,58 @@ dialog.file-search-modal-dialog.is-fullscreen .file-search-resize-handle {
     min-width: 0;
 }
 
+.search-scope-control {
+    min-width: 0;
+    position: relative;
+}
+
+.search-scope-control input[type="text"] {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.search-scope-suggestions {
+    position: fixed;
+    box-sizing: border-box;
+    z-index: 10000;
+    max-height: 260px;
+    overflow-y: auto;
+    border: 1px solid var(--file-exp-border);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: var(--shadow-lg);
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+}
+
+.search-scope-suggestions[hidden],
+.search-scope-suggestions.hidden {
+    display: none;
+}
+
+.search-scope-suggestion {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    border: 0;
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.search-scope-suggestion:last-child {
+    border-bottom: 0;
+}
+
+.search-scope-suggestion:hover,
+.search-scope-suggestion:focus {
+    background: var(--file-exp-subtle-surface);
+    outline: none;
+}
+
 .search-scope-label {
     color: var(--text-soft);
     font-size: 0.9rem;
@@ -666,5 +718,9 @@ dialog.file-search-modal-dialog.is-fullscreen .file-search-resize-handle {
 
     .search-scope-row {
         grid-template-columns: 1fr;
+    }
+
+    .search-scope-suggestions {
+        border-radius: 0;
     }
 }
