@@ -62,6 +62,9 @@
             }
         ]
     },
+    "volumes": {
+        ".ploinky/repos": "/workspace/.ploinky/repos"
+    },
     "profiles": {
         "default": {
             "env": [
