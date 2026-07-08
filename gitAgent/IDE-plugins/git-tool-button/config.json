@@ -80,6 +80,11 @@
         {
             "component": "git-commit-body",
             "presenter": "GitCommitBody"
+        },
+        {
+            "component": "custom-select",
+            "presenter": "CustomSelect",
+            "path": "explorer/web-components/components/custom-select/custom-select"
         }
     ]
 }

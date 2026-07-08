@@ -46,13 +46,14 @@ function renderAxiFaceMarkup(config = {}) {
     return `<axi-face ${attrs.join(' ')}></axi-face>`;
 }
 
-function renderOptions(values = [], selectedValue = '', labels = {}) {
-    const selected = String(selectedValue ?? '');
-    return values.map((value) => {
+function encodeOptions(values = [], labels = {}) {
+    return encodeURIComponent(JSON.stringify(values.map((value) => {
         const raw = String(value ?? '');
-        const label = labels[raw] || formatAvatarOptionLabel(raw);
-        return `<option value="${escapeHtml(raw)}" ${selected === raw ? 'selected' : ''}>${escapeHtml(label)}</option>`;
-    }).join('');
+        return {
+            value: raw,
+            label: labels[raw] || formatAvatarOptionLabel(raw)
+        };
+    })));
 }
 
 function renderInput({ key, label, value = '', type = 'text', min = '', max = '', step = '' }) {
@@ -77,9 +78,12 @@ function renderSelect({ key, label, value = '', values = [], labels = {} }) {
     return `
         <label class="avatar-settings-field">
             <span>${escapeHtml(label)}</span>
-            <select class="form-input avatar-settings-input" data-avatar-field="${escapeHtml(key)}">
-                ${renderOptions(values, value, labels)}
-            </select>
+            <custom-select class="avatar-settings-input"
+                           data-presenter="custom-select"
+                           data-avatar-field="${escapeHtml(key)}"
+                           data-name="${escapeHtml(key)}"
+                           data-options="${encodeOptions(values, labels)}"
+                           data-selected="${escapeHtml(value)}"></custom-select>
         </label>
     `;
 }
@@ -275,11 +279,17 @@ export class AvatarSettingsForm {
             <div class="avatar-settings-section avatar-source-section">
                 ${renderWhenVisible('sourceMode', `<label class="avatar-settings-field">
                     <span>${escapeHtml(labels.sourceMode || 'Avatar source')}</span>
-                    <select class="form-input avatar-settings-input" data-avatar-source-mode ${disabled}>
-                        ${sourceModes.includes(AVATAR_SOURCE_MODES.GENERATED) ? `<option value="${AVATAR_SOURCE_MODES.GENERATED}" ${sourceMode === AVATAR_SOURCE_MODES.GENERATED ? 'selected' : ''}>Generated</option>` : ''}
-                        ${sourceModes.includes(AVATAR_SOURCE_MODES.PACK) ? `<option value="${AVATAR_SOURCE_MODES.PACK}" ${sourceMode === AVATAR_SOURCE_MODES.PACK ? 'selected' : ''}>AxiFace pack</option>` : ''}
-                        ${sourceModes.includes(AVATAR_SOURCE_MODES.SVG) ? `<option value="${AVATAR_SOURCE_MODES.SVG}" ${sourceMode === AVATAR_SOURCE_MODES.SVG ? 'selected' : ''}>SVG source</option>` : ''}
-                    </select>
+                    <custom-select class="avatar-settings-input"
+                                   data-presenter="custom-select"
+                                   data-avatar-source-mode
+                                   data-name="sourceMode"
+                                   data-options="${encodeOptions(sourceModes, {
+                                       [AVATAR_SOURCE_MODES.GENERATED]: 'Generated',
+                                       [AVATAR_SOURCE_MODES.PACK]: 'AxiFace pack',
+                                       [AVATAR_SOURCE_MODES.SVG]: 'SVG source'
+                                   })}"
+                                   data-selected="${escapeHtml(sourceMode)}"
+                                   ${disabled}></custom-select>
                 </label>`)}
             </div>
             <div class="avatar-settings-section">
@@ -314,8 +324,9 @@ export class AvatarSettingsForm {
             </div>
         `;
         if (this.state.disabled) {
-            this.root.querySelectorAll('input, select').forEach((input) => {
+            this.root.querySelectorAll('input, custom-select').forEach((input) => {
                 input.disabled = true;
+                input.setAttribute('disabled', '');
             });
         }
     }

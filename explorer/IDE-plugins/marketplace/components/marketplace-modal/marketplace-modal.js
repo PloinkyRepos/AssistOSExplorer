@@ -656,21 +656,20 @@ export class MarketplaceModal {
       const controls = document.createElement('div');
       controls.className = 'marketplace-agent-controls';
 
-      const modeSelect = document.createElement('select');
-      modeSelect.className = 'marketplace-enable-mode';
-      modeSelect.dataset.enableModeFor = agent.ref;
       const modes = Array.isArray(agent.enableModes) && agent.enableModes.length
         ? agent.enableModes
         : ['isolated', 'global', 'devel'];
       const currentMode = modes.includes(agent.enableMode) ? agent.enableMode : 'isolated';
-      for (const mode of modes) {
-        const option = document.createElement('option');
-        option.value = mode;
-        option.textContent = mode;
-        modeSelect.append(option);
-      }
-      modeSelect.value = currentMode;
-      modeSelect.disabled = this.state.busy || !canManage || agent.active;
+      assistOS.UI.createElement('custom-select', controls, {
+        options: modes.map((mode) => ({ value: mode, label: mode }))
+      }, {
+        class: 'marketplace-enable-mode',
+        'data-enable-mode-for': agent.ref,
+        'data-name': 'enableMode',
+        'data-selected': currentMode,
+        ...(this.state.busy || !canManage || agent.active ? { disabled: '' } : {})
+      });
+      const modeSelect = controls.querySelector('[data-enable-mode-for]');
 
       if (canManage) {
         const settingsItem = this.getAgentSettingsItem(agent);
@@ -684,8 +683,6 @@ export class MarketplaceModal {
           controls.append(settingsButton);
         }
 
-        controls.append(modeSelect);
-
         const toggle = document.createElement('button');
         toggle.type = 'button';
         toggle.className = `marketplace-agent-toggle${agent.active ? ' active' : ''}`;
@@ -696,7 +693,7 @@ export class MarketplaceModal {
         toggle.textContent = agent.active ? 'Disable' : 'Enable';
         controls.append(toggle);
       } else {
-        controls.append(modeSelect);
+        // The mode selector has already been appended to controls.
       }
 
       row.append(controls);

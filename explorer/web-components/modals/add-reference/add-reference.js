@@ -13,7 +13,7 @@ export class AddReference {
     }
     async afterRender(){
         // Real-time preview update
-        const inputs = this.element.querySelectorAll('input, select');
+        const inputs = this.element.querySelectorAll('input, custom-select');
         inputs.forEach(input => {
             input.addEventListener('input', () => this.updateCitationPreview());
         });
@@ -35,7 +35,7 @@ export class AddReference {
             if (this.reference.type) this.element.querySelector('#reference-type-select').value = this.reference.type;
             if (this.reference.access_date) this.element.querySelector('#reference-access-date').value = this.reference.access_date;
         } else {
-            const inputs = this.element.querySelectorAll('#reference-modal input, #reference-modal select');
+            const inputs = this.element.querySelectorAll('#reference-modal input, #reference-modal custom-select');
             inputs.forEach(input => input.value = '');
         }
 

@@ -214,7 +214,12 @@ export class DpuPermissionsModal {
     renderRoleOptions() {
         if (!this.roleSelect) return;
         const options = this.getRoleOptions();
-        this.roleSelect.innerHTML = options.map((role) => `<option value="${role}">${role}</option>`).join('');
+        const items = options.map((role) => ({ value: role, label: role }));
+        const selected = this.roleSelect.value || options[0] || '';
+        this.roleSelect.setAttribute('data-options', encodeURIComponent(JSON.stringify(items)));
+        this.roleSelect.setAttribute('data-selected', selected);
+        this.roleSelect.webSkelPresenter?.setOptions?.(items, selected);
+        this.roleSelect.value = selected;
     }
 
     renderRoleLegend() {
@@ -267,11 +272,12 @@ export class DpuPermissionsModal {
                 ${canManage ? `
                     <label class="dpu-permissions-inline-editor">
                         <span>Role</span>
-                        <select class="dpu-permissions-inline-role" ${this.state.busy ? 'disabled' : ''}>
-                            ${roleOptions.map((role) => `
-                                <option value="${role}" ${role === entry.role ? 'selected' : ''}>${role}</option>
-                            `).join('')}
-                        </select>
+                        <custom-select class="dpu-permissions-inline-role"
+                                       data-presenter="custom-select"
+                                       data-name="inlineRole"
+                                       data-options="${encodeURIComponent(JSON.stringify(roleOptions.map((role) => ({ value: role, label: role }))))}"
+                                       data-selected="${escapeHtml(entry.role)}"
+                                       ${this.state.busy ? 'disabled' : ''}></custom-select>
                     </label>
                     <div class="dpu-permissions-row-actions">
                         <button
@@ -411,9 +417,15 @@ export class DpuPermissionsModal {
         }
         if (this.principalInput) this.principalInput.disabled = disabled;
         if (this.suggestionsEl) this.suggestionsEl.classList.toggle('hidden', disabled || !this.state.pickerOpen || this.suggestionsEl.innerHTML === '');
-        if (this.roleSelect) this.roleSelect.disabled = disabled;
+        if (this.roleSelect) {
+            this.roleSelect.disabled = disabled;
+            this.roleSelect.toggleAttribute('disabled', disabled);
+            this.roleSelect.webSkelPresenter?.applyDisabledState?.();
+        }
         this.element.querySelectorAll('.dpu-permissions-inline-role').forEach((select) => {
             select.disabled = this.state.busy || !canManage;
+            select.toggleAttribute('disabled', this.state.busy || !canManage);
+            select.webSkelPresenter?.applyDisabledState?.();
         });
         this.element.querySelectorAll('[data-local-action^="updatePermission"]').forEach((button) => {
             button.disabled = this.state.busy || !canManage;

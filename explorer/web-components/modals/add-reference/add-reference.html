@@ -7,12 +7,10 @@
 <div class="modal-body">
     <div class="reference-type-section">
         <label class="form-label">Reference Type:</label>
-        <select id="reference-type-select" class="form-input">
-            <option value="journal">Journal Article</option>
-            <option value="book">Book</option>
-            <option value="website">Website</option>
-            <option value="report">Report</option>
-        </select>
+        <custom-select id="reference-type-select"
+                       data-presenter="custom-select"
+                       data-name="referenceType"
+                       data-options="%5B%7B%22value%22%3A%22journal%22%2C%22label%22%3A%22Journal%20Article%22%7D%2C%7B%22value%22%3A%22book%22%2C%22label%22%3A%22Book%22%7D%2C%7B%22value%22%3A%22website%22%2C%22label%22%3A%22Website%22%7D%2C%7B%22value%22%3A%22report%22%2C%22label%22%3A%22Report%22%7D%5D"></custom-select>
     </div>
 
     <div class="reference-fields">

@@ -32,8 +32,14 @@ export class CustomSelect {
         this.invalidate = invalidate;
         this.options = this.readOptions(props);
         this.defaultSelected = this.element.getAttribute('data-selected');
-        this.name = this.element.getAttribute('data-name') || this.element.id || `custom-select-${Math.random().toString(36).slice(2)}`;
+        this.name = this.element.getAttribute('name') || this.element.getAttribute('data-name') || this.element.id || `custom-select-${Math.random().toString(36).slice(2)}`;
         this.value = '';
+        this._value = '';
+        Object.defineProperty(this.element, 'value', {
+            configurable: true,
+            get: () => this._value,
+            set: (nextValue) => this.applySelectedValue(nextValue, { emit: false })
+        });
         this.invalidate();
     }
 
@@ -50,9 +56,12 @@ export class CustomSelect {
         this.trigger = this.element.querySelector('.custom-select');
         this.currentOption = this.element.querySelector('.current-option');
         this.optionsList = this.element.querySelector('.options-list');
+        this.hiddenInput = this.element.querySelector('.custom-select-hidden-input');
+        this.syncFormInput();
         this.renderOptions(this.options);
         this.applySelectedValue(this.defaultSelected || this.options[0]?.value || '', { emit: false });
         this.applyConfiguredWidth();
+        this.applyDisabledState();
         this.bindKeyboard();
     }
 
@@ -71,6 +80,7 @@ export class CustomSelect {
 
     bindKeyboard() {
         this.trigger?.addEventListener('keydown', (event) => {
+            if (this.isDisabled()) return;
             if (event.key === 'Enter' || event.key === ' ') {
                 event.preventDefault();
                 this.openSelect();
@@ -85,6 +95,7 @@ export class CustomSelect {
     openSelect(event) {
         event?.preventDefault?.();
         event?.stopPropagation?.();
+        if (this.isDisabled()) return;
         if (!this.optionsList || !this.trigger) return;
         if (!this.optionsList.classList.contains('hidden')) {
             this.closeSelect();
@@ -99,13 +110,6 @@ export class CustomSelect {
         this.trigger.setAttribute('aria-expanded', 'true');
         this.optionsList.classList.remove('hidden');
         this.optionsList.hidden = false;
-
-        this.portalHost = this.element.closest('dialog') || document.body;
-        this.previousPortalOverflow = this.portalHost.style.overflow;
-        this.portalHost.style.overflow = 'visible';
-        if (this.optionsList.parentElement !== this.portalHost) {
-            this.portalHost.appendChild(this.optionsList);
-        }
 
         this.positionOptionsList();
         this.optionsList.querySelector('.option[data-selected="true"]')?.focus({ preventScroll: true });
@@ -127,12 +131,6 @@ export class CustomSelect {
         this.trigger?.setAttribute('aria-expanded', 'false');
         this.controller?.abort();
         this.controller = null;
-        this.element.appendChild(this.optionsList);
-        if (this.portalHost) {
-            this.portalHost.style.overflow = this.previousPortalOverflow || '';
-        }
-        this.portalHost = null;
-        this.previousPortalOverflow = '';
         for (const property of ['left', 'top', 'width', 'maxHeight']) {
             this.optionsList.style.removeProperty(property);
         }
@@ -146,9 +144,40 @@ export class CustomSelect {
     handleOptionsClick(event) {
         const option = event.target.closest('.option');
         if (!option || !this.optionsList.contains(option)) return;
+        if (this.isDisabled()) return;
         event.preventDefault();
         event.stopPropagation();
         this.selectOption(option);
+    }
+
+    setOptions(options = [], selectedValue = this.value) {
+        this.renderOptions(Array.isArray(options) ? options : []);
+        this.applySelectedValue(selectedValue, { emit: false });
+    }
+
+    setValue(value, options = {}) {
+        this.applySelectedValue(value, { emit: options.emit !== false });
+    }
+
+    syncFormInput() {
+        if (!this.hiddenInput) return;
+        this.hiddenInput.name = this.name;
+        this.hiddenInput.value = this.value;
+        this.hiddenInput.disabled = this.isDisabled();
+    }
+
+    isDisabled() {
+        return this.element.hasAttribute('disabled') || this.element.getAttribute('aria-disabled') === 'true';
+    }
+
+    applyDisabledState() {
+        const disabled = this.isDisabled();
+        this.trigger?.classList.toggle('is-disabled', disabled);
+        this.trigger?.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+        if (disabled) {
+            this.closeSelect();
+        }
+        this.syncFormInput();
     }
 
     renderOptions(options) {
@@ -165,7 +194,8 @@ export class CustomSelect {
         const normalizedValue = String(value ?? '');
         const selected = this.options.find((option) => String(option.value) === normalizedValue) || this.options[0] || { name: '', value: '' };
         this.value = String(selected.value ?? '');
-        this.element.value = this.value;
+        this._value = this.value;
+        this.syncFormInput();
         if (this.currentOption) {
             this.currentOption.textContent = String(selected.name ?? '');
         }
@@ -176,7 +206,10 @@ export class CustomSelect {
         }
         if (emit) {
             const changeEvent = new Event('change', { bubbles: true, cancelable: true });
+            const inputEvent = new Event('input', { bubbles: true, cancelable: true });
             changeEvent.value = this.value;
+            inputEvent.value = this.value;
+            this.element.dispatchEvent(inputEvent);
             this.element.dispatchEvent(changeEvent);
         }
     }

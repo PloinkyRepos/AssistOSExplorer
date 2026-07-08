@@ -4,7 +4,8 @@ export class GitBranchCreateModal {
         this.invalidate = invalidate;
         this.branches = this.parseJsonAttribute('data-branches');
         this.currentBranch = this.element.getAttribute('data-currentBranch') || '';
-        this.startPointOptionsHTML = '';
+        this.startPointOptions = '';
+        this.startPointSelected = '';
         this.boundSubmit = (event) => {
             event.preventDefault();
             this.submit();
@@ -49,15 +50,9 @@ export class GitBranchCreateModal {
     beforeRender() {
         const names = [...new Set(this.branches.map((branch) => branch?.name).filter(Boolean))];
         const preferred = this.currentBranch || names[0] || '';
-        this.startPointOptionsHTML = names.map((name) => {
-            const escaped = this.escapeHtml(name);
-            const selected = name === preferred ? ' selected' : '';
-            return `<option value="${escaped}"${selected}>${escaped}</option>`;
-        }).join('');
-        if (!this.startPointOptionsHTML && preferred) {
-            const escaped = this.escapeHtml(preferred);
-            this.startPointOptionsHTML = `<option value="${escaped}" selected>${escaped}</option>`;
-        }
+        const options = names.length ? names : (preferred ? [preferred] : []);
+        this.startPointOptions = encodeURIComponent(JSON.stringify(options.map((name) => ({ value: name, label: name }))));
+        this.startPointSelected = this.escapeHtml(preferred);
     }
 
     afterRender() {

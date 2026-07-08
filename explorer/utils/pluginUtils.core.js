@@ -62,6 +62,28 @@ function resolveDependencyOwnerAssetBaseUrl({
     return contributionType === MENU_PLUGIN_CONTRIBUTION_TYPE ? '' : assetBaseUrl;
 }
 
+function resolveRepoRelativeDependencyBaseUrl({ assetRootPath, agent, dependencyPath }) {
+    if (!isNonEmptyString(assetRootPath) || !isNonEmptyString(agent) || !isNonEmptyString(dependencyPath)) {
+        return '';
+    }
+
+    const normalizedDependencyPath = normalizePathSegments(dependencyPath);
+    const firstSegment = normalizedDependencyPath.split('/')[0] || '';
+    if (!firstSegment || firstSegment === 'components' || firstSegment === 'modals' || firstSegment === 'IDE-plugins') {
+        return '';
+    }
+
+    const normalizedAssetRoot = normalizePathSegments(assetRootPath);
+    const marker = `/${agent.trim()}/IDE-plugins/`;
+    const markerIndex = `/${normalizedAssetRoot}/`.indexOf(marker);
+    if (markerIndex < 0) {
+        return '';
+    }
+
+    const repoRootPath = normalizePathSegments(normalizedAssetRoot.slice(0, markerIndex));
+    return repoRootPath ? buildWorkspaceFilesUrl(`${repoRootPath}/${normalizedDependencyPath}`) : '';
+}
+
 export const DOCUMENT_PLUGIN_CATEGORY = 'document';
 export const APPLICATION_PLUGIN_CATEGORY = 'application';
 export const MENU_PLUGIN_CONTRIBUTION_TYPE = 'menu';
@@ -327,11 +349,19 @@ export function normalizeRuntimePlugins(runtimePlugins) {
                         : '';
                 const dependencyPath = isNonEmptyString(dependency.path) ? dependency.path : dependency.directory;
                 const dependencyOwnerComponent = dependency.ownerComponent || component || dependencyName;
+                const explicitBaseUrl = isNonEmptyString(dependency.baseUrl)
+                    ? dependency.baseUrl.trim()
+                    : '';
+                const repoRelativeBaseUrl = resolveRepoRelativeDependencyBaseUrl({
+                    assetRootPath,
+                    agent,
+                    dependencyPath
+                });
                 return {
                     ...dependency,
                     agent: dependencyAgent,
                     component: dependencyName,
-                    baseUrl: computeComponentBaseUrl(dependencyAgent, dependencyName, {
+                    baseUrl: explicitBaseUrl || repoRelativeBaseUrl || computeComponentBaseUrl(dependencyAgent, dependencyName, {
                         ownerComponent: dependencyOwnerComponent,
                         isDependency: true,
                         customPath: dependencyPath,

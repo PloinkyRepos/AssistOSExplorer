@@ -11,9 +11,11 @@
     </label>
     <label class="form-item">
         <span class="form-label">Start point</span>
-        <select id="gitBranchCreateStartPoint" class="form-input" name="startPoint">
-            $$startPointOptionsHTML
-        </select>
+        <custom-select id="gitBranchCreateStartPoint"
+                       data-presenter="custom-select"
+                       name="startPoint"
+                       data-options="$$startPointOptions"
+                       data-selected="$$startPointSelected"></custom-select>
     </label>
     <label class="git-branch-create-check">
         <input type="checkbox" name="checkout" checked>

@@ -164,7 +164,10 @@ export class BacklogPanel {
 
     clearFilters() {
         this.state.filters = { status: '', q: '' };
-        if (this.statusFilter) this.statusFilter.value = '';
+        if (this.statusFilter) {
+            this.statusFilter.webSkelPresenter?.setValue?.('', { emit: false });
+            this.statusFilter.value = '';
+        }
         if (this.searchFilter) this.searchFilter.value = '';
         this.loadTasks();
     }
@@ -281,14 +284,12 @@ export class BacklogPanel {
         const config = this.state.config || {};
         const statuses = Object.entries(config.statuses || {});
         if (this.statusFilter) {
-            this.statusFilter.innerHTML = '';
-            this.statusFilter.appendChild(new Option('All', ''));
+            const options = [{ value: '', label: 'All' }];
             for (const [key, label] of statuses) {
-                this.statusFilter.appendChild(new Option(label, key));
+                options.push({ value: key, label });
             }
-            if (this.state.filters.status) {
-                this.statusFilter.value = this.state.filters.status;
-            }
+            this.statusFilter.webSkelPresenter?.setOptions?.(options, this.state.filters.status || '');
+            this.statusFilter.value = this.state.filters.status || '';
         }
 
     }

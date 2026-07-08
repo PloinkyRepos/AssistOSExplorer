@@ -29,10 +29,11 @@
             </div>
             <label class="git-new-repository-field" for="gitNewRepositoryVisibility">
                 <span>Visibility</span>
-                <select id="gitNewRepositoryVisibility" name="visibility">
-                    <option value="private" selected>Private</option>
-                    <option value="public">Public</option>
-                </select>
+                <custom-select id="gitNewRepositoryVisibility"
+                               data-presenter="custom-select"
+                               name="visibility"
+                               data-options="%5B%7B%22value%22%3A%22private%22%2C%22label%22%3A%22Private%22%7D%2C%7B%22value%22%3A%22public%22%2C%22label%22%3A%22Public%22%7D%5D"
+                               data-selected="private"></custom-select>
             </label>
         </section>
 

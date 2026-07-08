@@ -6,6 +6,7 @@
     <title>Administration</title>
     <link rel="stylesheet" href="../shared/ui/ui-common.css">
     <link rel="stylesheet" href="../plugins.css">
+    <link rel="stylesheet" href="../web-components/components/custom-select/custom-select.css">
     <link rel="stylesheet" href="./settings.css">
 </head>
 <body>
@@ -41,7 +42,7 @@
                     <input name="name" autocomplete="off">
                 </label>
                 <label>Roles
-                    <select name="roles"></select>
+                    <custom-select name="roles" data-admin-custom-select></custom-select>
                 </label>
                 <button class="general-button" type="submit">Add User</button>
             </form>
@@ -74,7 +75,7 @@
     const settingsStripHost = document.getElementById('settingsStripHost');
     const auditSettingsHost = document.getElementById('auditSettingsHost');
     const createForm = document.getElementById('createForm');
-    const createRolesSelect = createForm.elements.roles;
+    const createRolesSelect = createForm.querySelector('custom-select[name="roles"]');
     const backLink = document.getElementById('backLink');
     const tabButtons = Array.from(document.querySelectorAll('.administration-tab'));
     const tabPanels = Array.from(document.querySelectorAll('.administration-tab-panel'));
@@ -129,6 +130,14 @@
         return selectedRoles.find((role) => availableRoles.includes(role)) || availableRoles[0] || '';
     }
 
+    function getRoleOptionItems() {
+        return getRoleOptions().map((role) => ({ value: role, label: role }));
+    }
+
+    function encodeRoleOptions() {
+        return encodeURIComponent(JSON.stringify(getRoleOptionItems()));
+    }
+
     function renderRoleOptions(selectedRoles = []) {
         const selectedRole = getEffectiveRole(selectedRoles);
         return getRoleOptions()
@@ -137,7 +146,8 @@
     }
 
     function renderRoleSelect(selectedRoles = [], attributes = '') {
-        return `<select ${attributes}>${renderRoleOptions(selectedRoles)}</select>`;
+        const selectedRole = getEffectiveRole(selectedRoles);
+        return `<custom-select data-admin-custom-select ${attributes} data-options="${encodeRoleOptions()}" data-selected="${escapeAttr(selectedRole)}"></custom-select>`;
     }
 
     function getSelectedRoles(select) {
@@ -146,7 +156,135 @@
 
     function syncCreateRoleOptions() {
         const selectedRoles = getSelectedRoles(createRolesSelect);
-        createRolesSelect.innerHTML = renderRoleOptions(selectedRoles);
+        const selectedRole = getEffectiveRole(selectedRoles);
+        createRolesSelect.setAttribute('data-options', encodeRoleOptions());
+        createRolesSelect.setAttribute('data-selected', selectedRole);
+        upgradeAdminCustomSelect(createRolesSelect, selectedRole);
+    }
+
+    function decodeSelectOptions(encoded = '') {
+        if (!encoded) return [];
+        try {
+            const parsed = JSON.parse(decodeURIComponent(encoded));
+            return Array.isArray(parsed) ? parsed.map((entry) => ({
+                value: String(entry?.value ?? entry?.label ?? ''),
+                label: String(entry?.label ?? entry?.value ?? '')
+            })) : [];
+        } catch (_) {
+            return [];
+        }
+    }
+
+    function closeAdminCustomSelect(select) {
+        const list = select?.querySelector?.('.custom-select-options-list');
+        const trigger = select?.querySelector?.('.custom-select');
+        if (!list) return;
+        list.hidden = true;
+        list.classList.add('hidden');
+        trigger?.classList.remove('focused');
+        trigger?.setAttribute('aria-expanded', 'false');
+    }
+
+    function positionAdminCustomSelect(select) {
+        const trigger = select.querySelector('.custom-select');
+        const list = select.querySelector('.custom-select-options-list');
+        if (!trigger || !list || list.hidden) return;
+        const rect = trigger.getBoundingClientRect();
+        const margin = 8;
+        const gap = 4;
+        const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
+        const viewportHeight = document.documentElement.clientHeight || window.innerHeight;
+        const mobile = viewportWidth <= 720;
+        const width = mobile ? viewportWidth - margin * 2 : Math.min(Math.max(rect.width, 180), viewportWidth - margin * 2);
+        const left = mobile ? margin : Math.min(Math.max(rect.left, margin), viewportWidth - width - margin);
+        const desiredMaxHeight = 330;
+        const spaceBelow = viewportHeight - rect.bottom - margin - gap;
+        const spaceAbove = rect.top - margin - gap;
+        const openAbove = spaceBelow < 180 && spaceAbove > spaceBelow;
+        const maxHeight = Math.min(desiredMaxHeight, Math.max(64, openAbove ? spaceAbove : spaceBelow));
+        const listHeight = Math.min(list.scrollHeight || maxHeight, maxHeight);
+        const top = openAbove
+            ? Math.max(margin, rect.top - gap - listHeight)
+            : Math.min(rect.bottom + gap, viewportHeight - margin - listHeight);
+        Object.assign(list.style, {
+            left: `${left}px`,
+            top: `${top}px`,
+            width: `${width}px`,
+            maxHeight: `${maxHeight}px`
+        });
+    }
+
+    function setAdminCustomSelectValue(select, value, emit = false) {
+        const options = decodeSelectOptions(select.getAttribute('data-options'));
+        const selected = options.find((option) => option.value === String(value ?? '')) || options[0] || { value: '', label: '' };
+        select._value = selected.value;
+        const hiddenInput = select.querySelector('.custom-select-hidden-input');
+        if (hiddenInput) {
+            hiddenInput.name = select.getAttribute('name') || '';
+            hiddenInput.value = selected.value;
+        }
+        const current = select.querySelector('.current-option');
+        if (current) current.textContent = selected.label;
+        select.querySelectorAll('.custom-select-option').forEach((option) => {
+            const isSelected = option.dataset.value === selected.value;
+            option.toggleAttribute('data-selected', isSelected);
+            option.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+        });
+        if (emit) {
+            select.dispatchEvent(new Event('input', { bubbles: true }));
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    }
+
+    function upgradeAdminCustomSelect(select, selectedValue = null) {
+        if (!select) return;
+        const options = decodeSelectOptions(select.getAttribute('data-options'));
+        if (!select.dataset.adminCustomSelectReady) {
+            select.innerHTML = `
+                <div class="custom-select pointer" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false">
+                    <div class="current-option"></div>
+                    <img class="select-arrow" src="../assets/icons/arrow.svg" alt="" aria-hidden="true">
+                    <div class="options-list custom-select-options-list hidden" role="listbox" hidden></div>
+                </div>
+                <input class="custom-select-hidden-input" type="hidden">
+            `;
+            Object.defineProperty(select, 'value', {
+                configurable: true,
+                get: () => select._value || '',
+                set: (nextValue) => setAdminCustomSelectValue(select, nextValue, false)
+            });
+            select.addEventListener('click', (event) => {
+                const option = event.target.closest('.custom-select-option');
+                if (option) {
+                    event.preventDefault();
+                    setAdminCustomSelectValue(select, option.dataset.value || '', true);
+                    closeAdminCustomSelect(select);
+                    return;
+                }
+                if (!event.target.closest('.custom-select')) return;
+                const list = select.querySelector('.custom-select-options-list');
+                const trigger = select.querySelector('.custom-select');
+                const willOpen = list.hidden;
+                document.querySelectorAll('custom-select[data-admin-custom-select]').forEach((item) => {
+                    if (item !== select) closeAdminCustomSelect(item);
+                });
+                list.hidden = !willOpen;
+                list.classList.toggle('hidden', !willOpen);
+                trigger.classList.toggle('focused', willOpen);
+                trigger.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+                if (willOpen) positionAdminCustomSelect(select);
+            });
+            select.dataset.adminCustomSelectReady = 'true';
+        }
+        const list = select.querySelector('.custom-select-options-list');
+        if (list) {
+            list.innerHTML = options.map((option) => `
+                <button type="button" class="option custom-select-option" data-value="${escapeAttr(option.value)}" role="option">
+                    ${escapeAttr(option.label)}
+                </button>
+            `).join('');
+        }
+        setAdminCustomSelectValue(select, selectedValue ?? select.getAttribute('data-selected') ?? select.value ?? '', false);
     }
 
     function togglePasswordVisibility(button) {
@@ -416,6 +554,7 @@
         users.forEach((user) => tbody.appendChild(userRow(user)));
         fragment.appendChild(table);
         tableHost.replaceChildren(fragment);
+        tableHost.querySelectorAll('custom-select[data-admin-custom-select]').forEach((select) => upgradeAdminCustomSelect(select));
     }
 
     async function loadPage() {
@@ -487,7 +626,7 @@
             }
             if (action === 'save') {
                 const body = {};
-                row.querySelectorAll('input[data-field], select[data-field]').forEach((input) => {
+                row.querySelectorAll('input[data-field], custom-select[data-field]').forEach((input) => {
                     if (input.dataset.field === 'roles') {
                         body.roles = getSelectedRoles(input);
                     } else if (input.dataset.field === 'password') {
@@ -509,10 +648,17 @@
     });
 
     document.addEventListener('click', (event) => {
+        if (!event.target.closest('custom-select[data-admin-custom-select]')) {
+            document.querySelectorAll('custom-select[data-admin-custom-select]').forEach((select) => closeAdminCustomSelect(select));
+        }
         const button = event.target.closest('button[data-toggle-password]');
         if (!button) return;
         togglePasswordVisibility(button);
     });
+
+    window.addEventListener('resize', () => {
+        document.querySelectorAll('custom-select[data-admin-custom-select]').forEach((select) => positionAdminCustomSelect(select));
+    }, { passive: true });
 
     loadPage().catch((error) => setStatus(error.message, 'error'));
 })();

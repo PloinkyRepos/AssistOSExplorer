@@ -14,6 +14,11 @@
       "component": "dpu-permissions-modal",
       "presenter": "DpuPermissionsModal",
       "type": "modal"
+    },
+    {
+      "component": "custom-select",
+      "presenter": "CustomSelect",
+      "path": "explorer/web-components/components/custom-select/custom-select"
     }
   ]
 }
