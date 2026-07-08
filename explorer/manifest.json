@@ -52,19 +52,8 @@
         "soplang-builder": true,
         "tasks": true,
         "webmeet": true,
-        "soul-gateway": true,
-        "cloudflared": true
+        "soul-gateway": true
     },
-    "ideSettings": [
-        {
-            "key": "cloudflared",
-            "label": "Cloudflare Tunnel",
-            "scope": "workspace",
-            "pluginKey": "explorer/cloudflared-settings",
-            "settingsComponent": "cloudflared-settings",
-            "adminOnly": true
-        }
-    ],
     "routerAccess": {
         "httpRoutes": [
             {
@@ -104,11 +93,6 @@
                 }
             ],
             "preinstall": "scripts/hooks/preinstall.sh"
-        },
-        "prod": {
-            "enable": [
-                "basic/cloudflared global no-wait"
-            ]
         }
     }
 }
