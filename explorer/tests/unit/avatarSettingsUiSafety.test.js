@@ -30,6 +30,10 @@ test('avatar settings use shared source-mode form for profile and agent avatars'
     assert.match(source, /\/explorer\/shared\/ui\/avatar-settings-form\/avatar-settings-form/);
     assert.match(source, /ensureAvatarSettingsFormRegistered/);
     assert.match(source, /loadAxiFacePacks/);
+    assert.match(source, /AVATAR_SETTINGS_VISIBLE_SOURCE_MODES = Object\.freeze\(\['generated', 'pack'\]\)/);
+    assert.match(source, /AVATAR_SETTINGS_HIDDEN_FIELDS = Object\.freeze/);
+    assert.match(source, /hiddenFields: AVATAR_SETTINGS_HIDDEN_FIELDS/);
+    assert.match(source, /sourceModes: AVATAR_SETTINGS_VISIBLE_SOURCE_MODES/);
     assert.match(source, /assistOS\.showToast \|\| assistOS\.UI\?\.showToast/);
     assert.match(source, /"Profile avatar saved\.", "success", 2500/);
     assert.doesNotMatch(source, /AVATAR_FIELD_DEFS/);

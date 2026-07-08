@@ -131,8 +131,6 @@ export class SettingsModal {
         this.copilotSettingsListEl = this.element.querySelector("#copilotSettingsList");
         this.copilotSettingsStatusEl = this.element.querySelector("#copilotSettingsStatus");
         this.avatarSettingsStatusEl = this.element.querySelector("#avatarSettingsStatus");
-        this.profileAvatarPreviewEl = this.element.querySelector("#profileAvatarPreview");
-        this.agentAvatarPreviewEl = this.element.querySelector("#agentAvatarPreview");
         this.profileAvatarControlsEl = this.element.querySelector('avatar-settings-form[data-avatar-scope="profile"]');
         this.agentAvatarControlsEl = this.element.querySelector('avatar-settings-form[data-avatar-scope="agent"]');
         this.avatarSubtabEls = Array.from(this.element.querySelectorAll('[data-avatar-tab]'));

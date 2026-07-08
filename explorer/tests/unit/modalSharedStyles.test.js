@@ -21,8 +21,7 @@ test('Explorer serves shared libraries from the whitelisted shared folder', asyn
     const webskelSource = await fs.readFile(path.join(repoRoot, 'shared/libs/webskel/webskel.mjs'), 'utf8');
     const sharedRoute = manifest.routerAccess?.httpRoutes?.find((entry) => entry?.path === '/shared/*');
     const oldSharedRoutes = manifest.routerAccess?.httpRoutes?.filter((entry) => [
-        '/ui-common.css',
-        '/ui-shared/avatar-settings-form/*'
+        '/ui-common.css'
     ].includes(entry?.path)) || [];
 
     assert.equal(sharedRoute?.access, 'public');

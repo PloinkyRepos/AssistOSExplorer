@@ -10,11 +10,24 @@ import {
     loadAxiFaceGeneratedFaceStyles,
     loadAxiFacePacks,
     normalizeAvatarConfig,
-    renderAxiFaceMarkup,
     saveCurrentProfileAvatar
 } from "../../../services/profile-avatar-client.js";
 
 let avatarSettingsComponentPromise = null;
+
+const AVATAR_SETTINGS_VISIBLE_SOURCE_MODES = Object.freeze(['generated', 'pack']);
+const AVATAR_SETTINGS_HIDDEN_FIELDS = Object.freeze([
+    'seed',
+    'assetMode',
+    'mode',
+    'thoughtMode',
+    'thought',
+    'animated',
+    'listen',
+    'complexity',
+    'src',
+    'theme'
+]);
 
 function escapeHtml(value) {
     return String(value ?? '')
@@ -143,7 +156,6 @@ export const avatarController = {
         this.renderAvatarControls('profile');
         this.renderAvatarControls('agent');
         this.renderAvatarAgentList();
-        this.renderAvatarPreviews();
         this.renderAvatarTabs();
         if (this.agentAvatarCardEl) {
             this.agentAvatarCardEl.hidden = !this.state.canManageAgentAvatars || this.state.activeAvatarTab !== 'agent';
@@ -194,27 +206,19 @@ export const avatarController = {
         const container = scope === 'profile' ? this.profileAvatarControlsEl : this.agentAvatarControlsEl;
         if (!container) return;
         const config = scope === 'profile' ? this.state.profileAvatar : this.state.selectedAgentAvatar;
+        const hasAgentSelection = Boolean(this.state.selectedAvatarAgentId);
         container.webSkelPresenter?.setData?.({
             value: config,
             packs: this.state.axiFacePacks,
             generatedStyles: this.state.axiFaceGeneratedFaceStyles,
             palettes: this.state.axiFaceGeneratedFacePalettes,
+            hiddenFields: AVATAR_SETTINGS_HIDDEN_FIELDS,
+            sourceModes: AVATAR_SETTINGS_VISIBLE_SOURCE_MODES,
             disabled: this.state.avatarBusy || (scope === 'agent' && (!this.state.canManageAgentAvatars || !this.state.selectedAvatarAgentId)),
-            showPreview: false
+            showPreview: true,
+            previewEnabled: scope === 'profile' ? this.state.profileAvatarEnabled : hasAgentSelection,
+            previewFallback: scope === 'profile' ? (this.state.avatarUser?.username?.[0] || '?') : ''
         });
-    },
-
-    renderAvatarPreviews() {
-        if (this.profileAvatarPreviewEl) {
-            this.profileAvatarPreviewEl.innerHTML = this.state.profileAvatarEnabled
-                ? renderAxiFaceMarkup(this.state.profileAvatar)
-                : `<span class="avatar-preview-fallback">${escapeHtml(this.state.avatarUser?.username?.[0] || '?')}</span>`;
-        }
-        if (this.agentAvatarPreviewEl) {
-            this.agentAvatarPreviewEl.innerHTML = this.state.selectedAvatarAgentId
-                ? renderAxiFaceMarkup(this.state.selectedAgentAvatar)
-                : "";
-        }
     },
 
     renderAvatarAgentList() {
