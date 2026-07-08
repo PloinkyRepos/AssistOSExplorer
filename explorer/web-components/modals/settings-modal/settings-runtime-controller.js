@@ -70,9 +70,12 @@ export const runtimeSettingsController = {
                             type="button"
                             class="plugin-settings-toggle ${enabled ? "enabled" : ""}"
                             data-local-action="togglePlugin ${item.key}"
+                            aria-pressed="${enabled ? "true" : "false"}"
                             ${busyToggle ? "disabled" : ""}
                         >
-                            ${enabled ? "Enabled" : "Disabled"}
+                            <span class="plugin-settings-switch-track" aria-hidden="true">
+                                <span class="plugin-settings-switch-thumb"></span>
+                            </span>
                         </button>
                     </div>
                 </div>
@@ -262,4 +265,3 @@ export const runtimeSettingsController = {
         }
     }
 };
-
