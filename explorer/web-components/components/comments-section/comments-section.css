@@ -1,7 +1,7 @@
 comments-section{
     position: absolute;
     top: 25px;
-    left: -430px;
+    left: -490px;
     z-index: 2;
     display: block;
     width: 500px;
@@ -59,6 +59,7 @@ comments-section{
 .user-details{
     display: flex;
     align-items: center;
+    margin-bottom: 5px;
 }
 .comment{
     padding: 15px 25px;

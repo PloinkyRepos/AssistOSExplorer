@@ -4,6 +4,7 @@ import { createComponentRegistry } from './services/runtime/componentRegistry.js
 import { createRuntimePluginLoader } from './services/runtime/runtimePluginLoader.js';
 import { filterRuntimePluginsByPolicy, forEachRuntimePluginEntry } from './utils/pluginUtils.core.js';
 import { initializeTheme } from './shared/ui/theme.js';
+import { fetchAuthenticatedUser } from './services/infrastructure/authApi.js';
 
 const EXPLORER_AGENT_ID = 'explorer';
 const RUNTIME_PLUGIN_TOOL = 'collect_ide_plugins';
@@ -152,6 +153,10 @@ async function start() {
         ui: webSkel,
         runtimePlugins: hasRuntimePlugins(runtimePlugins) ? runtimePlugins : undefined
     });
+    const authenticatedUser = await fetchAuthenticatedUser();
+    if (authenticatedUser) {
+        assistOS.user = authenticatedUser;
+    }
     assistOS.webSkel = webSkel;
     assistOS.appServices = assistosSDK;
     assistOS.explorerManifest = explorerManifest;

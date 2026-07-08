@@ -1,4 +1,4 @@
-<!-- {"achilles-ide-document":{"id":"Ly5wbG9pbmt5L3JlcG9zL2ZpbGVFeHBsb3Jlci9SRUFETUUubWQ=","title":"README","version":1,"updatedAt":"2026-05-01T08:00:24.000Z"}} -->
+<!-- {"achilles-ide-document":{"id":"Ly5wbG9pbmt5L3JlcG9zL0FjaGlsbGVzSURFL1JFQURNRS5tZA==","title":"README","version":1,"updatedAt":"2026-07-08T13:46:49.977Z"}} -->
 <!-- {"achilles-ide-chapter":{"id":"chapter-2b41c910-2fc9-438c-a615-dac2bc563f42","title":"AchillesIDE","anchorId":"chapter-chapter-2b41c910-2fc9-438c-a615-dac2bc563f42"}} -->
 <a id="chapter-chapter-2b41c910-2fc9-438c-a615-dac2bc563f42"></a>
 # AchillesIDE
@@ -104,3 +104,4 @@ curl -s -X POST http://127.0.0.1:8080/explorer/mcp \
   -H 'Content-Type: application/json' \
   -d '{ "tool": "list_directory", "path": "/" }'
 ```
+

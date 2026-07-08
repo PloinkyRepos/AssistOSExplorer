@@ -1,3 +1,21 @@
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+}
+
+function getCommentAuthor(comment) {
+    const email = String(comment?.userEmail || '').trim();
+    const userName = String(comment?.userName || '').trim();
+    return {
+        name: userName,
+        email
+    };
+}
+
 export class CommentsSection{
     constructor(element, invalidate, props) {
         this.element = element;
@@ -20,19 +38,26 @@ export class CommentsSection{
     beforeRender() {
         let commentsHTML = "";
         for(let comment of this.comments){
+            const author = getCommentAuthor(comment);
+            const nameHtml = author.name
+                ? `<div class="comment-username">${escapeHtml(author.name)}</div>`
+                : "";
+            const emailHtml = author.email
+                ? `<div class="comment-email">${escapeHtml(author.email)}</div>`
+                : "";
             commentsHTML += `<div class="comment">
                                 <div class="user-details-container">
                                     <div class="user-details">
                                         <div class="user-icon"></div>
 <!--                                        <img src="./assets/icons/user.svg" class="user-icon">-->
                                         <div class="user-info">
-                                            <div class="comment-username">Username</div>
-                                            <div class="comment-email">${comment.userEmail}</div>
+                                            ${nameHtml}
+                                            ${emailHtml}
                                         </div>
                                     </div>
-                                    <img data-local-action="deleteComment ${comment.id}" src="./assets/icons/check.svg" class="check-icon pointer">
+                                    <img data-local-action="deleteComment ${escapeHtml(comment.id)}" src="./assets/icons/check.svg" class="check-icon pointer">
                                 </div>
-                                <div class="comment-message">${comment.message}</div>
+                                <div class="comment-message">${escapeHtml(comment.message)}</div>
                              </div>`;
         }
         this.commentsHTML = commentsHTML;
