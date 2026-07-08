@@ -647,6 +647,9 @@ export function createGitOpsActions(ctx) {
                         dispatchAutocommitReset();
                         return;
                     }
+                    applyState({ selectedFilesByRepo: {}, commitMessage: '' }, { silent: true });
+                    clearCommitMessageInput();
+                    applyState({ pendingAction: null }, { silent: true });
                     await refreshAfterGitOperation({ keepStatus: true });
                     setStatusLine(buildCompletionMessage({
                         intro: 'Sync finished.',
@@ -655,7 +658,6 @@ export function createGitOpsActions(ctx) {
                             pushSummary.pushedRepos > 0 ? `pushed ${formatCount(pushSummary.pushedCommits, 'commit')} from ${formatCount(pushSummary.pushedRepos, 'repository')}` : ''
                         ]
                     }));
-                    applyState({ pendingAction: null }, { silent: true });
                     return;
                 }
 
