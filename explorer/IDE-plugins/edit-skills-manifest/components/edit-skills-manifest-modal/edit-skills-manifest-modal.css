@@ -321,6 +321,14 @@ edit-skills-manifest-modal .edit-skills-manifest-skill-action:disabled {
     edit-skills-manifest-modal .edit-skills-manifest-skill-action,
     edit-skills-manifest-modal .edit-skills-manifest-remove-repo {
         width: 100%;
+        justify-content: center;
+        text-align: center;
+    }
+
+    edit-skills-manifest-modal .edit-skills-manifest-add-row .general-button {
+        width: 100%;
+        justify-content: center;
+        text-align: center;
     }
 }
 
