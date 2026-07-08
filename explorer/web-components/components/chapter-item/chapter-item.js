@@ -274,6 +274,7 @@ export class ChapterItem {
         }
     }
     async addParagraph(_target, direction) {
+        assistOS.workspace.currentChapterId = this.chapter.id;
         let position = this.chapter.paragraphs.length;
         if (assistOS.workspace.currentParagraphId) {
             position = this.chapter.paragraphs.findIndex(paragraph => paragraph.id === assistOS.workspace.currentParagraphId);
@@ -289,6 +290,11 @@ export class ChapterItem {
         let paragraph = await documentModule.addParagraph(this.chapter.id, "", null, null, position);
         assistOS.workspace.currentParagraphId = paragraph.id;
         await this.insertNewParagraph(assistOS.workspace.currentParagraphId, position);
+    }
+    async addChapter(_target, direction) {
+        assistOS.workspace.currentChapterId = this.chapter.id;
+        await this.documentPresenter.addChapter("", direction);
+        this.changeChapterDeleteAvailability();
     }
     async addParagraphOrChapterOnKeyPress(event) {
         if (!event.ctrlKey || event.key !== "Enter") {
@@ -448,17 +454,22 @@ export class ChapterItem {
     openMenu(targetElement, menuName) {
         let menuOpen = this.element.querySelector(`.toolbar-menu.${menuName}`);
         if (menuOpen) {
+            menuOpen.closeController?.abort();
+            menuOpen.remove();
+            targetElement.classList.remove("menu-open");
             return;
         }
 
         let menuContent = this.menus[menuName];
         let menu = `<div class="toolbar-menu ${menuName}">${menuContent}</div>`
         targetElement.insertAdjacentHTML('beforeend', menu);
+        targetElement.classList.add("menu-open");
         let controller = new AbortController();
         let boundCloseMenu = this.closeMenu.bind(this, controller, targetElement, menuName);
         document.addEventListener("click", boundCloseMenu, {signal: controller.signal});
         let menuComponent = this.element.querySelector(`.${menuName}`);
         menuComponent.boundCloseMenu = boundCloseMenu;
+        menuComponent.closeController = controller;
     }
 
     menus = {
@@ -471,13 +482,14 @@ export class ChapterItem {
     }
 
     closeMenu(controller, targetElement, menuName, event) {
-        if (event.target.closest(`.toolbar-menu.${menuName}`) || event.target.closest(".insert-modal")) {
+        if (targetElement.contains(event.target) || event.target.closest(`.toolbar-menu.${menuName}`) || event.target.closest(".insert-modal")) {
             return;
         }
         let menu = this.element.querySelector(`.toolbar-menu.${menuName}`);
         if (menu) {
             menu.remove();
         }
+        targetElement.classList.remove("menu-open");
         controller.abort();
     }
 

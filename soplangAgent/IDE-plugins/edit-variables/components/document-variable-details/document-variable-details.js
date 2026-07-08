@@ -1,3 +1,5 @@
+import {resolveTemplateIconSources} from "../edit-variable-tab/varUtilsUI.js";
+
 export class DocumentVariableDetails {
     constructor(element, invalidate) {
         this.element = element;
@@ -20,6 +22,7 @@ export class DocumentVariableDetails {
     }
 
     afterRender() {
+        resolveTemplateIconSources(this);
         let activeTab = this.element.querySelector(`.${this.activeTab}`);
         activeTab.classList.add("active");
         let icon = activeTab.querySelector(".tab-icon");

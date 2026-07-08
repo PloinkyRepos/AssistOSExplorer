@@ -1,3 +1,5 @@
+import {resolveTemplateIconSources} from "../edit-variable-tab/varUtilsUI.js";
+
 let workspaceModule = assistOS.loadModule("workspace");
 const hasUpdateApi = workspaceModule && typeof workspaceModule.updateTableRow === "function";
 const hasInsertApi = workspaceModule && typeof workspaceModule.insertTableRow === "function";
@@ -81,6 +83,7 @@ export class EditVariableValue {
         return rowHTML;
     }
     async afterRender(){
+        resolveTemplateIconSources(this);
         if(this.variable.command === ":="){
             let textAreaItem = this.element.querySelector('.textarea');
             textAreaItem.classList.remove('hidden');

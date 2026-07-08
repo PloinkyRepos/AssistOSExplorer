@@ -10,6 +10,7 @@ export function getContext(presenterElement) {
     return JSON.parse(decodeURIComponent(presenterElement.getAttribute("data-context")));
 }
 export function renderPluginDefaultOptions(pluginElement){
+    const closeIconUrl = new URL("./assets/icons/x-mark.svg", import.meta.url).href;
     let defaultOptions = `
             <div class="options-container">
                 <div class="pointer pin" data-local-action="pinPlugin" title="Pin plugin" aria-label="Pin plugin">
@@ -18,7 +19,7 @@ export function renderPluginDefaultOptions(pluginElement){
                         <path d="M11.9999 17V21M6.9999 12.6667V6C6.9999 4.89543 7.89533 4 8.9999 4H14.9999C16.1045 4 16.9999 4.89543 16.9999 6V12.6667L18.9135 15.4308C19.3727 16.094 18.898 17 18.0913 17H5.90847C5.1018 17 4.62711 16.094 5.08627 15.4308L6.9999 12.6667Z" stroke="#646464" stroke-width="2" stroke-linecap="round"></path>
                     </svg>
                 </div>
-                <img class="close-plugin pointer" data-local-action="closePlugin ${pluginElement.getAttribute("data-type")}" src="./assets/icons/x-mark.svg" alt="close" title="Close plugin" aria-label="Close plugin">
+                <img class="close-plugin pointer" data-local-action="closePlugin ${pluginElement.getAttribute("data-type")}" src="${closeIconUrl}" alt="close" title="Close plugin" aria-label="Close plugin">
             </div>`
     pluginElement.querySelector(".default-options").insertAdjacentHTML("afterbegin", defaultOptions);
 }

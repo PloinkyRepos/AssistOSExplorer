@@ -372,6 +372,7 @@ export class ParagraphItem {
         let menuContent = this.menus[menuName];
         let menu = `<div class="toolbar-menu ${menuName}">${menuContent}</div>`
         targetElement.insertAdjacentHTML('beforeend', menu);
+        targetElement.classList.add("menu-open");
         let controller = new AbortController();
         let boundCloseMenu = this.closeMenu.bind(this, controller, targetElement, menuName);
         document.addEventListener("click", boundCloseMenu, {signal: controller.signal});
@@ -420,6 +421,7 @@ export class ParagraphItem {
         if (menu) {
             menu.remove();
         }
+        targetElement.classList.remove("menu-open");
         controller.abort();
     }
 

@@ -1,3 +1,15 @@
+const ICON_BASE_URL = new URL("../../assets/icons/", import.meta.url);
+
+export function resolveTemplateIconSources(presenter) {
+    presenter.element.querySelectorAll("img[data-edit-variable-icon]").forEach((image) => {
+        const iconName = image.getAttribute("data-edit-variable-icon");
+        if (!iconName) {
+            return;
+        }
+        image.src = new URL(`${iconName}.svg`, ICON_BASE_URL).href;
+    });
+}
+
 export function constructFullExpression(presenter){
     const self = presenter;
     let saveButton = self.element.querySelector(".save-variable");
@@ -34,9 +46,8 @@ export function constructFullExpression(presenter){
         return res;
     }
 
-    let typeSelect = self.element.querySelector('custom-select');
-    let selectedOption = typeSelect.querySelector(`.option[data-selected='true']`);
-    let type = selectedOption.getAttribute('data-value');
+    let typeSelect = self.element.querySelector('custom-select[data-name="type"]');
+    let type = String(typeSelect?.value || "").trim();
     if(command === "new"){
         let variableType = type;
         if(!variableType){
@@ -86,6 +97,7 @@ export function changePreviewValue(presenter){
 }
 export function attachEventListeners(presenter){
     const self = presenter;
+    resolveTemplateIconSources(self);
     let commandInput = self.element.querySelector("#command");
     let selectOptions = self.element.querySelector(".select-options");
     if(!commandInput || !selectOptions){
