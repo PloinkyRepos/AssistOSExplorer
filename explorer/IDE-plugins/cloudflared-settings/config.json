@@ -1,0 +1,11 @@
+{
+  "pluginCategory": "application",
+  "id": "cloudflared-settings",
+  "component": "cloudflared-settings",
+  "presenter": "CloudflaredSettings",
+  "label": "Cloudflare Tunnel",
+  "tooltip": "Configure Cloudflare Tunnel routes",
+  "location": [],
+  "type": "global",
+  "adminOnly": true
+}

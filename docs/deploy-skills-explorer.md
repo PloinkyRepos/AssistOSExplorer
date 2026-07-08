@@ -29,6 +29,28 @@ The token value must stay only in GitHub Actions secrets.
 
 `skills.axiologic.dev` is fronted by a Cloudflare Zero Trust tunnel running as a podman container on the host. The tunnel terminates TLS at Cloudflare's edge and forwards directly to the Explorer router on `127.0.0.1:${EXPLORER_ROUTER_PORT}` (default `8097`). The workflow does **not** manage the tunnel; ingress is configured in the Cloudflare Zero Trust dashboard. To change the routing target, edit the tunnel's public hostname configuration in the dashboard rather than touching the workflow.
 
+## Production Cloudflare Tunnel
+
+Production ploinky-box deployments use the `prod` profile to start `basic/cloudflared` as a non-blocking dependency of Explorer. Configure the required tunnel token and Cloudflare API values with `ploinky var`; do not store token values in manifests or docs.
+
+| Variable | Purpose |
+| --- | --- |
+| `CLOUDFLARED_TUNNEL_TOKEN` | Starts the remotely managed tunnel connector. |
+| `CLOUDFLARE_API_TOKEN` | Lets the admin dashboard update tunnel ingress and DNS records. |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account for the tunnel. |
+| `CLOUDFLARE_ZONE_ID` | DNS zone for CNAME records. |
+| `CLOUDFLARE_TUNNEL_ID` | Tunnel UUID. |
+| `CLOUDFLARE_BASE_DOMAIN` | Hostname suffix accepted by the dashboard. |
+
+Start Explorer with the production profile before opening the Settings dashboard:
+
+```sh
+ploinky profile prod
+ploinky start explorer --publish 127.0.0.1:8082:8082
+```
+
+Add further `--publish HOST:BOX` mappings only for direct HTTP or media surfaces that are explicitly documented by their owning agent. Cloudflare Tunnel HTTP ingress does not replace LiveKit UDP/TURN exposure.
+
 ## LiveKit Public Access
 
 WebMeet uses a separate public LiveKit endpoint:
