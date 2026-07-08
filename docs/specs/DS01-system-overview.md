@@ -152,8 +152,21 @@ Dependencies declared in [manifest.json](../../explorer/manifest.json) include:
 - `soplangAgent`
 - `tasksAgent`
 - `multimedia`
-- `webCli`
-- `webAdmin`
+- `webmeetInfra/liveKitServerAgent`
+- `webmeetStt`
+- `webmeetAgent`
+- `onlyOffice`
+- `webAssist`
+- `proxies/soul-gateway`
+- `basic/webtty`
+- `AchillesCLI/achilles-cli`
+- `UmamiAgent/umamiAgent`
+
+The `qa` and `prod` profile blocks also enable `basic/cloudflared` as a
+non-blocking dependency. This keeps the Cloudflare Tunnel control plane out of
+the default local profile while making the admin-only tunnel dashboard and
+Cloudflare route tools available in deployment profiles that are expected to
+publish router-hosted surfaces through Cloudflare.
 
 Explorer depends on these agents asymmetrically:
 
@@ -219,7 +232,7 @@ Plugin integration is runtime-driven rather than compile-time hardcoded. Explore
 
 1. Ploinky applies Explorer manifest directives and starts the declared dependencies in parallel
 2. Explorer starts as the static agent
-3. Ploinky waits for readiness of every dependency declared in `manifest.enable[]`, plus Explorer itself
+3. Ploinky waits for readiness of every blocking dependency declared in `manifest.enable[]` and the active profile's `enable[]`, plus Explorer itself
 4. The router publishes the Explorer application
 5. The runtime plugin loader activates the enabled plugins
 

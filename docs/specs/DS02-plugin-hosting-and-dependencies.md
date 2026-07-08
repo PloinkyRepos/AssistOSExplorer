@@ -270,6 +270,8 @@ Plugin hosting behavior is primarily driven by:
 
 - Explorer `manifest.json` application plugin policy
 - enabled agents and repo-local agent/plugin folders in the workspace
+- profile-specific `manifest.profiles.<profile>.enable[]` entries, such as the
+  `qa` and `prod` Cloudflare Tunnel dependency
 - the manifest volume that makes `.ploinky/repos` visible to the Explorer container
 - runtime plugin settings and activation state
 - slot ordering rules applied by the host shell

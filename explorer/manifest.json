@@ -96,6 +96,22 @@
                 }
             ],
             "preinstall": "scripts/hooks/preinstall.sh"
+        },
+        "qa": {
+            "enable": [
+                {
+                    "agent": "basic/cloudflared global no-wait",
+                    "profile": "default"
+                }
+            ]
+        },
+        "prod": {
+            "enable": [
+                {
+                    "agent": "basic/cloudflared global no-wait",
+                    "profile": "default"
+                }
+            ]
         }
     }
 }
