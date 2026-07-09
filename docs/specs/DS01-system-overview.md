@@ -162,9 +162,11 @@ Dependencies declared in [manifest.json](../../explorer/manifest.json) include:
 - `AchillesCLI/achilles-cli`
 - `UmamiAgent/umamiAgent`
 
-The `qa` and `prod` profile blocks also enable `basic/web-publishing` as a
-blocking dependency and startup config provider. This keeps public browser
-topology out of the default local profile while letting Web Publishing generate
+The `default` profile also enables `basic/web-publishing` as a blocking
+dependency and startup config provider. Local, QA, and production launches use
+the same Explorer profile wiring; deployment-specific behavior comes from
+workspace variables such as `WEB_PUBLISHING_BASE_DOMAIN`,
+`WEB_PUBLISHING_MODE`, and scoped tunnel credentials. Web Publishing generates
 OnlyOffice and WebMeet public URLs before the rest of the deployment profile
 resolves env. The standalone Cloudflared agent is not an Explorer deployment
 fallback.

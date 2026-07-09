@@ -68,6 +68,18 @@
     },
     "profiles": {
         "default": {
+            "enable": [
+                {
+                    "agent": "basic/web-publishing global",
+                    "profile": "default"
+                }
+            ],
+            "configProviders": [
+                {
+                    "agent": "basic/web-publishing global",
+                    "profile": "default"
+                }
+            ],
             "env": [
                 "ASSISTOS_FS_ROOT",
                 {
@@ -97,34 +109,6 @@
                 }
             ],
             "preinstall": "scripts/hooks/preinstall.sh"
-        },
-        "qa": {
-            "enable": [
-                {
-                    "agent": "basic/web-publishing global",
-                    "profile": "default"
-                }
-            ],
-            "configProviders": [
-                {
-                    "agent": "basic/web-publishing global",
-                    "profile": "default"
-                }
-            ]
-        },
-        "prod": {
-            "enable": [
-                {
-                    "agent": "basic/web-publishing global",
-                    "profile": "default"
-                }
-            ],
-            "configProviders": [
-                {
-                    "agent": "basic/web-publishing global",
-                    "profile": "default"
-                }
-            ]
         }
     }
 }

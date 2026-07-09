@@ -12,8 +12,8 @@ or injected by the runtime.
 
 | Area | Agents |
 | --- | --- |
-| Explorer direct stack | `AssistOSExplorer/explorer`, `gitAgent`, `dpuAgent`, `soplangAgent`, `tasksAgent`, `AchillesCLI/achilles-cli`, `basic/webtty`, `webmeetInfra/liveKitServerAgent`, `webmeetStt`, `webmeetAgent`, `multimedia`, `onlyOffice`, `proxies/soul-gateway`, `webAssist` |
-| Explorer profile additions | `basic/web-publishing` in Explorer `qa` and `prod` profiles, as both a blocking dependency and a startup config provider |
+| Explorer dependency stack | `AssistOSExplorer/explorer`, `gitAgent`, `dpuAgent`, `soplangAgent`, `tasksAgent`, `AchillesCLI/achilles-cli`, `basic/webtty`, `webmeetInfra/liveKitServerAgent`, `webmeetStt`, `webmeetAgent`, `multimedia`, `onlyOffice`, `proxies/soul-gateway`, `webAssist`, `basic/web-publishing` |
+| Explorer profile policy | Explorer declares only the `default` profile; local, QA, and production launches use that same profile wiring |
 | Transitive dependencies | `AchillesCLI/opencodeAgent`, `AchillesCLI/piAgent`, `AchillesCLI/codexAgent`, `AchillesCLI/GPTResearcher`, `proxies/searchAgent`, `proxies/default-local-llm` |
 | Missing source | `UmamiAgent/umamiAgent` is enabled by Explorer, but its source was not present in this workspace |
 
@@ -21,15 +21,17 @@ or injected by the runtime.
 
 | Question | Answer |
 | --- | --- |
-| Mandatory user-provided values for the normal local/default Explorer stack | None found in available source, assuming Ploinky supplies workspace, router, and identity env |
-| Mandatory user-provided values for Explorer `qa` or `prod` profiles | `WEB_PUBLISHING_BASE_DOMAIN`; token-mode public tunnel startup also requires `WEB_PUBLISHING_CLOUDFLARED_TUNNEL_TOKEN` |
+| Mandatory user-provided values for local/default nginx startup | None found in available source, assuming Ploinky supplies workspace, router, identity env, and Web Publishing uses its default `nginx` mode |
+| Mandatory user-provided values for managed QA/prod public topology | `WEB_PUBLISHING_BASE_DOMAIN`; token-mode public tunnel startup also requires `WEB_PUBLISHING_CLOUDFLARED_TUNNEL_TOKEN` |
 | Values produced by Web Publishing, not supplied directly to Explorer | `ONLYOFFICE_PUBLIC_URL`, `ONLYOFFICE_INTERNAL_URL`, `ONLYOFFICE_CALLBACK_BASE_URL`, `WEBMEET_PUBLIC_LIVEKIT_URL`, `WEBMEET_LIVEKIT_URL`, `WEBMEET_TLS_HOSTNAME`, `WEBMEET_TURN_HOST`, `WEBMEET_TURN_EXTERNAL_IP`, `WEBMEET_TURN_REALM`, `WEBMEET_CERT_EMAIL`, and `WEBMEET_LIVEKIT_UPSTREAM` |
 | Required secrets that should not be supplied by the user | `DPU_MASTER_KEY`, `ONLYOFFICE_JWT_SECRET`, `JWT_SECRET`, WebMeet LiveKit/TURN secrets, Ploinky agent identity secrets, and Soul Gateway signed agent keys are generated or runtime-injected |
 | Optional user-provided values | Web Publishing Cloudflare API credentials, external LLM/search provider keys, and non-public WebMeet media/runtime tuning |
 | Unknown | Any env requirements from `UmamiAgent/umamiAgent`, because its source was unavailable |
 
-Explorer `qa` and `prod` no longer enable the standalone Cloudflared agent. Public
-browser topology is owned by `basic/web-publishing`, which runs before the rest
+Explorer has a single manifest profile, `default`. That profile enables
+`basic/web-publishing` as both a blocking dependency and startup config
+provider, so local, QA, and production launches use the same Explorer wiring.
+Public browser topology is owned by Web Publishing, which runs before the rest
 of the stack publishes dependency env through Ploinky startup config providers.
 Existing workspace vars for the old direct OnlyOffice/WebMeet public topology
 must be cleared before startup so stale public URLs cannot outrank Web Publishing.
@@ -38,9 +40,9 @@ must be cleared before startup so stale public URLs cannot outrank Web Publishin
 
 | Classification | Variables | Applies to | User-supplied? | Notes |
 | --- | --- | --- | --- | --- |
-| Mandatory Web Publishing topology input | `WEB_PUBLISHING_BASE_DOMAIN` | `basic/web-publishing` | Yes for managed QA/prod deployments | Used to generate Explorer, OnlyOffice, and LiveKit public hostnames such as `explorer.<domain>`, `office.<domain>`, and `meet.<domain>`. |
+| Mandatory Web Publishing topology input | `WEB_PUBLISHING_BASE_DOMAIN` | `basic/web-publishing` | Yes for managed QA/prod public deployments | Used to generate Explorer, OnlyOffice, and LiveKit public hostnames such as `explorer.<domain>`, `office.<domain>`, and `meet.<domain>`. |
 | Mandatory Web Publishing token-mode tunnel input | `WEB_PUBLISHING_CLOUDFLARED_TUNNEL_TOKEN` | `basic/web-publishing` | Yes when `WEB_PUBLISHING_MODE` is `cloudflare-token`, `token`, or `nginx-cloudflare` | Mapped by the Web Publishing manifest to container env `TUNNEL_TOKEN`. The old unscoped token variable is not a Web Publishing input or output. |
-| Optional Web Publishing route inputs | `WEB_PUBLISHING_MODE`, `WEB_PUBLISHING_PUBLIC_URL`, `WEB_PUBLISHING_PUBLIC_HOST`, `WEB_PUBLISHING_CERT_EMAIL` | `basic/web-publishing` | Optional/defaulted | Mode defaults to `nginx-cloudflare` in the QA workflow. `WEB_PUBLISHING_PUBLIC_URL` can pin the Explorer callback base URL when it differs from the generated route. `WEB_PUBLISHING_CERT_EMAIL` is the setup input that generates `WEBMEET_CERT_EMAIL`. |
+| Optional Web Publishing route inputs | `WEB_PUBLISHING_MODE`, `WEB_PUBLISHING_PUBLIC_URL`, `WEB_PUBLISHING_PUBLIC_HOST`, `WEB_PUBLISHING_CERT_EMAIL` | `basic/web-publishing` | Optional/defaulted | Mode defaults to `nginx` in the Web Publishing manifest. QA/prod workflows can override it, for example to `nginx-cloudflare`. `WEB_PUBLISHING_PUBLIC_URL` can pin the Explorer callback base URL when it differs from the generated route. `WEB_PUBLISHING_CERT_EMAIL` is the setup input that generates `WEBMEET_CERT_EMAIL`. |
 | Optional Web Publishing Cloudflare API inputs | `WEB_PUBLISHING_CLOUDFLARE_API_TOKEN`, `WEB_PUBLISHING_CLOUDFLARE_ACCOUNT_ID`, `WEB_PUBLISHING_CLOUDFLARE_ZONE_ID`, `WEB_PUBLISHING_CLOUDFLARE_TUNNEL_ID`, `WEB_PUBLISHING_CLOUDFLARE_TUNNEL_NAME` | `basic/web-publishing` dashboard/admin tools | Only when using Web Publishing API tooling | Used for tunnel/DNS planning and apply operations from the Web Publishing settings surface. |
 | Web Publishing provider outputs | `ONLYOFFICE_PUBLIC_URL`, `ONLYOFFICE_INTERNAL_URL`, `ONLYOFFICE_CALLBACK_BASE_URL`, `WEBMEET_PUBLIC_LIVEKIT_URL`, `WEBMEET_LIVEKIT_URL`, `WEBMEET_TLS_HOSTNAME`, `WEBMEET_TURN_HOST`, `WEBMEET_TURN_EXTERNAL_IP`, `WEBMEET_TURN_REALM`, `WEBMEET_CERT_EMAIL`, `WEBMEET_LIVEKIT_UPSTREAM` | Explorer, `onlyOffice`, `webmeetAgent`, `webmeetInfra/liveKitServerAgent` | No direct workflow injection | These are written by Ploinky from the Web Publishing provider response before dependent agent env is resolved. |
 | Mandatory user-provided for deployment control, not agent runtime | `PLOINKY_MASTER_KEY` | Ploinky CLI/router/secret store | Yes for managed deployments | This belongs to the launcher/workspace secret store. Agents must not receive it. Keep it stable after first deployment because it decrypts `.ploinky/.secrets` and generated secret material. |
@@ -58,14 +60,14 @@ must be cleared before startup so stale public URLs cannot outrank Web Publishin
 | Ploinky router/workspace env | `PLOINKY_ROUTER_URL`, `PLOINKY_ROUTER_HOST`, `PLOINKY_ROUTER_PORT`, `PLOINKY_WORKSPACE_ROOT`, `PLOINKY_PROFILE`, `PLOINKY_RUNTIME`, `PLOINKY_SHARED_DIR`, `PLOINKY_CWD`, `PLOINKY_AGENT_LIB_DIR`, `PLOINKY_INVOCATION_AUTH_MODULE` | Many agents | No | Runtime-injected values used for routing, workspace discovery, and secure-wire invocation. |
 | Ploinky master/derived internals | `PLOINKY_MASTER_KEY`, `PLOINKY_DERIVED_MASTER_KEY`, `PLOINKY_ENV_SOURCE_*` | Ploinky launcher/router/secret resolution | No for agents | `PLOINKY_MASTER_KEY` may be supplied to the Ploinky CLI, but must not be injected into agents. |
 | Workspace root overrides | `ASSISTOS_FS_ROOT`, `WORKSPACE_ROOT`, `DPU_DATA_ROOT`, `DPU_WORKSPACE_ROOT`, `MCP_FS_ROOT`, `LOCK_FOLDER` | Explorer, DPU, tasks, WebMeet | No in normal launch | Ploinky/workflow sets roots. Operators may override for nonstandard layouts. |
-| Explorer optional config | `AXIFACE_REPO_PATH`, `AXIFACE_REPO_URL`, `SOUL_GATEWAY_BASE_URL`, `FS_CACHE_TTL_MS`, `LLM_AUTOCOMPLETE_DEBUG` | Explorer | Optional | Tuning and integration overrides. Public OnlyOffice callback/public URLs come from Web Publishing in managed QA/prod. |
+| Explorer optional config | `AXIFACE_REPO_PATH`, `AXIFACE_REPO_URL`, `SOUL_GATEWAY_BASE_URL`, `FS_CACHE_TTL_MS`, `LLM_AUTOCOMPLETE_DEBUG` | Explorer | Optional | Tuning and integration overrides. Public OnlyOffice callback/public URLs come from Web Publishing through Explorer's default profile. |
 | Unknown | Unknown | `UmamiAgent/umamiAgent` | Unknown | The Explorer manifest enables this agent, but no source was available in this workspace. |
 
 ## Key Evidence
 
 | Evidence | File |
 | --- | --- |
-| Explorer dependency list and `qa`/`prod` Web Publishing enablement | [`explorer/manifest.json`](../explorer/manifest.json) |
+| Explorer dependency list and default-profile Web Publishing enablement | [`explorer/manifest.json`](../explorer/manifest.json) |
 | Web Publishing provider contract | [`../../basic/web-publishing/manifest.json`](../../basic/web-publishing/manifest.json), [`../../basic/web-publishing/README.md`](../../basic/web-publishing/README.md) |
 | DPU generated master key | [`../dpuAgent/manifest.json`](../dpuAgent/manifest.json) |
 | OnlyOffice shared generated JWT secret | [`../onlyOffice/manifest.json`](../onlyOffice/manifest.json), [`../onlyOffice/src/config.mjs`](../onlyOffice/src/config.mjs) |

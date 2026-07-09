@@ -54,12 +54,14 @@ need them.
 
 ## Web Publishing Output Path
 
-The QA workflow defaults `PLOINKY_PROFILE` to `prod`, so Explorer `prod` enables
+The QA workflow may set `PLOINKY_PROFILE` to `prod` for deployment defaults, but
+Explorer itself declares only the `default` profile. That profile enables
 `basic/web-publishing` as a blocking dependency and lists it under
-`configProviders`. Ploinky resolves the dependency graph, starts the provider,
-runs `node runtime/provider.mjs`, validates the provider output against the
-Web Publishing manifest, and writes accepted values into `.ploinky/.secrets`
-before dependent agent env maps are built.
+`configProviders`, so local, QA, and production launches all use the same
+Explorer profile wiring. Ploinky resolves the dependency graph, starts the
+provider, runs `node runtime/provider.mjs`, validates the provider output
+against the Web Publishing manifest, and writes accepted values into
+`.ploinky/.secrets` before dependent agent env maps are built.
 
 The provider emits public topology values derived from
 `WEB_PUBLISHING_BASE_DOMAIN` and optional saved Web Publishing settings. Those
