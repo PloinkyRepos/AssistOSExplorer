@@ -62,9 +62,9 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
         left: 0 !important;
         top: 0 !important;
         width: 100vw !important;
-        height: 100dvh !important;
+        height: 100svh !important;
         max-width: 100vw !important;
-        max-height: 100dvh !important;
+        max-height: 100svh !important;
         min-width: 0 !important;
         min-height: 0 !important;
         border-radius: 0 !important;
@@ -190,6 +190,7 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
 
     .git-credentials-row input {
         flex-grow: unset;
+        font-size: 16px;
     }
 
     .autocommit-repo-row input {
