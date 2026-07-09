@@ -59,6 +59,10 @@
             {
                 "path": "/shared/*",
                 "access": "public"
+            },
+            {
+                "path": "/web-components/components/*",
+                "access": "public"
             }
         ]
     },
