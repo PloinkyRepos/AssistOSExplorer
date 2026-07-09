@@ -1,0 +1,64 @@
+admin-audit-settings {
+    display: block;
+    padding: 14px;
+    background: var(--bg);
+}
+
+admin-audit-settings * {
+    box-sizing: border-box;
+}
+
+admin-audit-settings .audit-settings {
+    display: grid;
+    gap: 16px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+}
+
+admin-audit-settings .audit-settings-form {
+    display: grid;
+    gap: 16px;
+}
+
+admin-audit-settings .audit-settings-error {
+    color: var(--danger);
+    font-size: 13px;
+}
+
+admin-audit-settings .audit-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text);
+}
+
+admin-audit-settings .audit-capture-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+admin-audit-settings .audit-capture-grid label {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-height: 38px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 13px;
+}
+
+@media (max-width: 720px) {
+    admin-audit-settings .audit-settings {
+        border-radius: 0;
+    }
+
+    admin-audit-settings .audit-capture-grid {
+        grid-template-columns: 1fr;
+    }
+}

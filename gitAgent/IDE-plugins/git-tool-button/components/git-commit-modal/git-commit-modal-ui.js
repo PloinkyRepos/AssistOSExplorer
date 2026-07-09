@@ -74,7 +74,6 @@ export function createGitCommitUI(ctx) {
             modalRoot.classList.toggle('git-credentials-open', credentialsVisible);
         }
 
-        updateCredentialsPrompt();
         updateConflictHelper();
         updateStatusBar();
         updateConflictBanner();
@@ -524,6 +523,7 @@ export function createGitCommitUI(ctx) {
     const toggleCredentials = () => {
         if (state.credentialsGate) {
             syncStaticUI();
+            updateCredentialsPrompt();
             return;
         }
         state.credentialsOpen = !state.credentialsOpen;
@@ -531,6 +531,7 @@ export function createGitCommitUI(ctx) {
             closeActionsMenu();
         }
         syncStaticUI();
+        updateCredentialsPrompt();
     };
 
     const closeCredentials = () => {
@@ -544,6 +545,7 @@ export function createGitCommitUI(ctx) {
             authMethod: state.authPrompt?.authMethod || 'token'
         };
         syncStaticUI();
+        updateCredentialsPrompt();
     };
 
     return {

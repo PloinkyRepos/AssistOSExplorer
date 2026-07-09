@@ -1,0 +1,178 @@
+admin-users-settings {
+    display: block;
+    min-height: 0;
+}
+
+admin-users-settings * {
+    box-sizing: border-box;
+}
+
+admin-users-settings .toolbar {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr auto;
+    gap: 10px;
+    padding: 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    align-items: end;
+}
+
+admin-users-settings [data-role="tableHost"] {
+    padding: 14px;
+    background: var(--bg);
+}
+
+admin-users-settings .password-field {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: stretch;
+}
+
+admin-users-settings .password-field input {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+admin-users-settings .password-toggle {
+    width: 38px;
+    border: 1px solid var(--border);
+    border-left: 0;
+    border-radius: 0 8px 8px 0;
+    background: var(--surface);
+    color: var(--text-soft);
+    cursor: pointer;
+}
+
+admin-users-settings .password-toggle img {
+    width: 16px;
+    height: 16px;
+    opacity: 0.72;
+}
+
+admin-users-settings table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+admin-users-settings th,
+admin-users-settings td {
+    padding: 10px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    vertical-align: middle;
+}
+
+admin-users-settings th {
+    color: var(--text-soft);
+    font-size: 12px;
+    font-weight: 750;
+}
+
+admin-users-settings tr:last-child td {
+    border-bottom: 0;
+}
+
+admin-users-settings .actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+admin-users-settings .empty {
+    padding: 22px;
+    color: var(--text-soft);
+    text-align: center;
+}
+
+admin-users-settings custom-select {
+    min-width: 0;
+}
+
+admin-users-settings .section-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+admin-users-settings .section-heading h2 {
+    margin: 0;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 750;
+    letter-spacing: 0.02em;
+}
+
+admin-users-settings .user-section-heading {
+    padding: 16px 14px 10px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+}
+
+admin-users-settings .admin-user-row-form {
+    display: none;
+}
+
+@media (max-width: 720px) {
+    admin-users-settings .toolbar {
+        display: grid;
+        grid-template-columns: 1fr;
+    }
+
+    admin-users-settings table {
+        border-radius: 0;
+    }
+
+    admin-users-settings table,
+    admin-users-settings thead,
+    admin-users-settings tbody,
+    admin-users-settings tr,
+    admin-users-settings th,
+    admin-users-settings td {
+        display: block;
+    }
+
+    admin-users-settings thead {
+        display: none;
+    }
+
+    admin-users-settings tr {
+        border-bottom: 1px solid var(--border);
+        background: var(--surface);
+    }
+
+    admin-users-settings tr:nth-child(even) {
+        background: color-mix(in srgb, var(--bg) 62%, var(--surface));
+    }
+
+    admin-users-settings td {
+        border-bottom: 0;
+    }
+
+    admin-users-settings td::before {
+        content: attr(data-label);
+        display: block;
+        color: var(--text-soft);
+        font-size: 11px;
+        font-weight: 750;
+        margin-bottom: 4px;
+    }
+
+    admin-users-settings [data-role="tableHost"] tr {
+        display: grid;
+        gap: 8px;
+        padding: 12px;
+    }
+
+    admin-users-settings [data-role="tableHost"] td {
+        padding: 0;
+    }
+
+    admin-users-settings .actions {
+        justify-content: flex-start;
+    }
+}

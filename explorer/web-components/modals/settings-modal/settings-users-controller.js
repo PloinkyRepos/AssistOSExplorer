@@ -1,5 +1,3 @@
-import { getCurrentTheme } from "../../../shared/ui/theme.js";
-
 export function getCurrentAgentName(win = globalThis.window) {
     try {
         const parts = win.location.pathname.split('/').filter(Boolean);
@@ -9,17 +7,11 @@ export function getCurrentAgentName(win = globalThis.window) {
     }
 }
 
-export function buildUsersSettingsUrl(agentName) {
-    const normalizedAgentName = String(agentName || 'explorer').trim() || 'explorer';
-    return `/${encodeURIComponent(normalizedAgentName)}/admin/settings.html?embedded=1&theme=${getCurrentTheme()}`;
-}
-
 export const usersController = {
     async refreshUsersAccess() {
         if (this.state.usersAccessChecked) return;
         this.state.usersAccessChecked = true;
         const agentName = getCurrentAgentName();
-        this.state.usersUrl = buildUsersSettingsUrl(agentName);
         try {
             const response = await fetch(`/api/agents/${encodeURIComponent(agentName)}/users`, {
                 credentials: 'include',
@@ -29,16 +21,23 @@ export const usersController = {
         } catch (_) {
             this.state.usersAccess = false;
         }
+        if (this.state.usersAccess && this.requestedInitialTab === 'users') {
+            this.state.activeTab = 'users';
+            this.requestedInitialTab = '';
+        }
         this.updateTabUI();
     },
 
-    syncUsersFrame() {
-        if (!this.usersFrame) return;
-        if (!this.state.usersAccess || this.state.activeTab !== "users") {
-            return;
+    async loadAdministrationPanel() {
+        if (!this.adminSettingsPanel || !this.state.usersAccess || this.state.activeTab !== "users") return;
+        if (this.adminSettingsPanel.presenterReadyPromise) {
+            await this.adminSettingsPanel.presenterReadyPromise.catch(() => {});
         }
-        if (this.usersFrame.getAttribute("src") !== this.state.usersUrl) {
-            this.usersFrame.setAttribute("src", this.state.usersUrl);
+        const presenter = this.adminSettingsPanel.webSkelPresenter;
+        if (presenter?.loadPage) {
+            presenter.loadPage().catch((error) => {
+                presenter.setStatus?.(error?.message || 'Administration settings could not be loaded.', 'error');
+            });
         }
     }
 };

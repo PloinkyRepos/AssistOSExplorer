@@ -36,6 +36,7 @@ export class SettingsModal {
         this.invalidate = invalidate;
         this.props = props || {};
         const initialTab = [...BASE_TABS, 'users'].includes(this.props.tab) ? this.props.tab : 'agents';
+        this.requestedInitialTab = initialTab;
         this.state = {
             activeTab: initialTab,
             selectedTheme: this.props.theme === "dark" ? "dark" : getCurrentTheme(),
@@ -80,8 +81,7 @@ export class SettingsModal {
             selectedAgentAvatarEnabled: true,
             canManageAgentAvatars: false,
             usersAccessChecked: false,
-            usersAccess: false,
-            usersUrl: ""
+            usersAccess: false
         };
         this.invalidate();
     }
@@ -121,7 +121,7 @@ export class SettingsModal {
         this.avatarSection = this.element.querySelector('[data-section="avatar"]');
         this.usersSection = this.element.querySelector('[data-section="users"]');
         this.usersTab = this.element.querySelector('[data-admin-tab]');
-        this.usersFrame = this.element.querySelector('#usersSettingsFrame');
+        this.adminSettingsPanel = this.element.querySelector('admin-settings-panel');
         this.listEl = this.element.querySelector("#keymapList");
         this.warningEl = this.element.querySelector("#keymapWarning");
         this.pluginSettingsListEl = this.element.querySelector("#pluginSettingsList");
@@ -197,6 +197,7 @@ export class SettingsModal {
     }
 
     switchTab(_target, tab) {
+        this.requestedInitialTab = '';
         const allowedTabs = this.getAllowedTabs();
         this.state.activeTab = allowedTabs.includes(tab) ? tab : 'agents';
         this.updateTabUI();
@@ -230,7 +231,7 @@ export class SettingsModal {
             });
         }
         if (this.state.activeTab === "users") {
-            this.syncUsersFrame();
+            this.loadAdministrationPanel();
         }
     }
 
@@ -277,7 +278,7 @@ export class SettingsModal {
                 || this.state.activeTab === "agents";
         }
         this.syncEditorSettingsUi();
-        this.syncUsersFrame();
+        this.loadAdministrationPanel();
     }
 
     renderRows() {

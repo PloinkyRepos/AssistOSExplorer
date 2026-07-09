@@ -1,0 +1,21 @@
+<form class="toolbar" data-role="createForm">
+    <label class="form-label">Username
+        <input class="form-input" name="username" autocomplete="off" required>
+    </label>
+    <label class="form-label">Password
+        <span class="password-field">
+            <input class="form-input" name="password" type="password" autocomplete="new-password" required>
+            <button type="button" class="password-toggle" data-local-action="togglePasswordVisibility" aria-label="Show password" title="Show password" aria-pressed="false">
+                <img src="/explorer/assets/icons/eye.svg" alt="">
+            </button>
+        </span>
+    </label>
+    <label class="form-label">Name
+        <input class="form-input" name="name" autocomplete="off">
+    </label>
+    <label class="form-label">Roles
+        <custom-select data-presenter="custom-select" name="roles" data-role="createRolesSelect"></custom-select>
+    </label>
+    <button class="general-button" type="submit">Add User</button>
+</form>
+<div data-role="tableHost"></div>

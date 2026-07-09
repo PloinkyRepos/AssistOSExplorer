@@ -1,0 +1,126 @@
+admin-settings-panel {
+    display: block;
+    min-height: 0;
+    height: 100%;
+    color: var(--text);
+}
+
+admin-settings-panel * {
+    box-sizing: border-box;
+}
+
+admin-settings-panel .administration-panel {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+admin-settings-panel[data-embedded="true"] .administration-panel {
+    border: 0;
+    border-radius: 0;
+}
+
+admin-settings-panel .administration-tabs {
+    display: flex;
+    gap: 24px;
+    padding: 0 18px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex: 0 0 auto;
+}
+
+admin-settings-panel .administration-tab {
+    position: relative;
+    min-height: 0;
+    margin: 0;
+    padding: 14px 0 11px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    color: var(--text-soft);
+    cursor: pointer;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 750;
+    line-height: 1.2;
+    transform: none;
+}
+
+admin-settings-panel .administration-tab::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1px;
+    height: 2px;
+    border-radius: 999px;
+    background: transparent;
+    transition: background 160ms ease, opacity 160ms ease;
+}
+
+admin-settings-panel .administration-tab:hover,
+admin-settings-panel .administration-tab:focus-visible {
+    background: transparent;
+    box-shadow: none;
+    color: var(--accent);
+    transform: none;
+}
+
+admin-settings-panel .administration-tab:hover::after {
+    background: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+admin-settings-panel .administration-tab.active {
+    color: var(--text);
+}
+
+admin-settings-panel .administration-tab.active::after {
+    background: var(--accent);
+}
+
+admin-settings-panel .status {
+    min-height: 26px;
+    padding: 6px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-soft);
+    font-size: 13px;
+    flex: 0 0 auto;
+}
+
+admin-settings-panel .status.ok {
+    color: var(--accent);
+}
+
+admin-settings-panel .status.error {
+    color: var(--danger);
+}
+
+admin-settings-panel .administration-tab-panel {
+    display: none;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    background: var(--bg);
+}
+
+admin-settings-panel .administration-tab-panel.active {
+    display: block;
+}
+
+@media (max-width: 720px) {
+    admin-settings-panel .administration-panel {
+        border-radius: 0;
+    }
+
+    admin-settings-panel .administration-tabs {
+        gap: 16px;
+        overflow-x: auto;
+    }
+}

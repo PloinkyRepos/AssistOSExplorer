@@ -72,6 +72,26 @@
       "presenterClassName": "CustomSelect"
     },
     {
+      "name": "admin-settings-panel",
+      "type": "components",
+      "presenterClassName": "AdminSettingsPanel"
+    },
+    {
+      "name": "admin-users-settings",
+      "type": "components",
+      "presenterClassName": "AdminUsersSettings"
+    },
+    {
+      "name": "admin-branding-settings",
+      "type": "components",
+      "presenterClassName": "AdminBrandingSettings"
+    },
+    {
+      "name": "admin-audit-settings",
+      "type": "components",
+      "presenterClassName": "AdminAuditSettings"
+    },
+    {
       "name": "table-editor",
       "type": "components",
       "presenterClassName": "TableEditor"
