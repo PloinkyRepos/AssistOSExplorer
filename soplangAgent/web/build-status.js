@@ -421,10 +421,10 @@ function renderVars() {
   body.innerHTML = visible
     .map((v) => `
       <tr>
-        <td>${v.errorInfo ? errSvg : okSvg}</td>
-        <td>${v.varName || v.name || v.varId || '—'}</td>
-        <td>${v.docId || v.documentId || '—'}</td>
-        <td>${(() => {
+        <td data-label="Status">${v.errorInfo ? errSvg : okSvg}</td>
+        <td data-label="Variable">${v.varName || v.name || v.varId || '—'}</td>
+        <td data-label="Document">${v.docId || v.documentId || '—'}</td>
+        <td data-label="Value">${(() => {
           const varName = v.varName || v.name || v.varId || 'var';
           const valueText = toValueString(v.value);
           const singleLine = valueText.replace(/\s+/g, ' ').trim();
@@ -437,7 +437,7 @@ function renderVars() {
           }
           return `${previewHtml}<span class="pointer show-more" data-action="show-value" data-name="${escapeHtml(varName)}">Show more</span>`;
         })()}</td>
-        <td><span class="pointer eye-icon" data-name="${v.varName || v.name || 'var'}">${eyeSvg}</span></td>
+        <td data-label="Actions"><span class="pointer eye-icon" data-name="${v.varName || v.name || 'var'}">${eyeSvg}</span></td>
       </tr>
     `)
     .join('');

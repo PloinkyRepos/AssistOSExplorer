@@ -409,4 +409,82 @@ button:disabled {
         padding-left: 10px;
         padding-right: 10px;
     }
+
+    .vars-toolbar {
+        justify-content: flex-start;
+        margin-bottom: 12px;
+    }
+
+    .vars-table,
+    .vars-table thead,
+    .vars-table tbody,
+    .vars-table tr,
+    .vars-table th,
+    .vars-table td {
+        display: block;
+    }
+
+    .vars-table {
+        border-collapse: separate;
+        border-spacing: 0;
+        table-layout: auto;
+    }
+
+    .vars-table thead {
+        display: none;
+    }
+
+    .vars-table tr {
+        display: grid;
+        gap: 8px;
+        padding: 12px;
+        margin-bottom: 10px;
+        border: 1px solid var(--border);
+        border-radius: 0;
+        background: var(--surface);
+    }
+
+    .vars-table td {
+        display: grid;
+        grid-template-columns: minmax(74px, auto) minmax(0, 1fr);
+        gap: 10px;
+        align-items: start;
+        padding: 0;
+        border-bottom: 0;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        word-break: normal;
+    }
+
+    .vars-table td::before {
+        content: attr(data-label);
+        color: var(--text-soft);
+        font-size: 12px;
+        font-weight: 700;
+    }
+
+    .vars-table td:first-child,
+    .vars-table td:last-child {
+        align-items: center;
+    }
+
+    .vars-table td:last-child {
+        justify-items: start;
+    }
+
+    .vars-table .table-message {
+        display: block;
+        padding: 16px;
+        text-align: center;
+    }
+
+    .vars-table .table-message::before {
+        content: none;
+    }
+
+    .show-more {
+        display: inline-block;
+        margin-left: 0;
+        margin-top: 4px;
+    }
 }
