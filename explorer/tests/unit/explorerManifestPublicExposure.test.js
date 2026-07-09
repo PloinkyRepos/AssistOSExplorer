@@ -17,41 +17,45 @@ function refsAgent(value, expected) {
     return typeof value?.agent === 'string' && value.agent.includes(expected);
 }
 
-test('Explorer qa and prod profiles use Web Publishing as blocking public topology provider', async () => {
+test('Explorer default profile uses Web Publishing as blocking public topology provider', async () => {
     const manifest = await readManifest();
+    const profiles = manifest.profiles || {};
+    const profile = profiles.default;
 
-    for (const profileName of ['qa', 'prod']) {
-        const profile = manifest.profiles?.[profileName];
-        assert.ok(profile, `${profileName} profile should exist`);
+    assert.deepEqual(Object.keys(profiles), ['default']);
+    assert.ok(profile, 'default profile should exist');
 
-        assert.equal(
-            (profile.enable || []).some((entry) => refsAgent(entry, 'basic/cloudflared')),
-            false,
-            `${profileName} must not enable the standalone cloudflared agent`
-        );
+    assert.equal(
+        (profile.enable || []).some((entry) => refsAgent(entry, 'basic/cloudflared')),
+        false,
+        'default must not enable the standalone cloudflared agent'
+    );
 
-        assert.deepEqual(profile.enable, [
-            {
-                agent: 'basic/web-publishing global',
-                profile: 'default'
-            }
-        ]);
+    assert.deepEqual(profile.enable, [
+        {
+            agent: 'basic/web-publishing global',
+            profile: 'default'
+        }
+    ]);
 
-        assert.deepEqual(profile.configProviders, [
-            {
-                agent: 'basic/web-publishing global',
-                profile: 'default'
-            }
-        ]);
-    }
+    assert.deepEqual(profile.configProviders, [
+        {
+            agent: 'basic/web-publishing global',
+            profile: 'default'
+        }
+    ]);
 });
 
-test('Explorer declares the basic repo for Web Publishing and never requests the legacy tunnel var', async () => {
+test('Explorer declares Web Publishing support repos and never requests the legacy tunnel var', async () => {
     const manifest = await readManifest();
     const serialized = JSON.stringify(manifest);
     const legacyTokenName = ['CLOUDFLARED', 'TUNNEL', 'TOKEN'].join('_');
 
     assert.equal(manifest.repos?.basic, 'https://github.com/AssistOS-AI/basic.git');
+    assert.equal(
+        manifest.repos?.['container-image-builds'],
+        'https://github.com/AssistOS-AI/container-image-builds.git'
+    );
     assert.match(serialized, /basic\/web-publishing/);
     assert.doesNotMatch(serialized, /basic\/cloudflared/);
     assert.equal(serialized.includes(`"${legacyTokenName}"`), false);
