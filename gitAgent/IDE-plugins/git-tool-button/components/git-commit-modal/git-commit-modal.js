@@ -198,6 +198,8 @@ export class GitCommitModal {
         const prevToken = String(this.state.authPrompt?.token ?? '');
         const prevAuthMethod = this.getEffectiveCredentialsAuthMethod();
         const prevShowAgentRepos = Boolean(this.state.showAgentRepos);
+        const authMethodChanged = Object.prototype.hasOwnProperty.call(detail, 'authMethod')
+            && normalizeGitAuthMethod(detail.authMethod) !== prevAuthMethod;
         const nextName = String(detail.name ?? prevName);
         const nextEmail = String(detail.email ?? prevEmail);
         const nextToken = String(detail.token ?? prevToken);
@@ -250,8 +252,10 @@ export class GitCommitModal {
             this.ui.updateCredentialsPrompt?.({ refreshAutocommitRepos: true });
             this.ui.updateRepoTree?.();
         }
-        this.updateIdentityPrompt();
-        if (nextAuthMethod === 'github') {
+        if (authMethodChanged) {
+            this.updateIdentityPrompt();
+        }
+        if (authMethodChanged && nextAuthMethod === 'github') {
             queueMicrotask(() => {
                 this.ensureGithubDeviceFlow({ silent: true }).catch(() => {});
             });

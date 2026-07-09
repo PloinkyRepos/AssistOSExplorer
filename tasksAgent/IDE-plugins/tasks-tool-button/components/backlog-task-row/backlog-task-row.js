@@ -10,6 +10,7 @@ export class BacklogTaskRow {
             readOnly: false
         };
         this.saveTimer = null;
+        this.lastSavedSignature = '';
         this.invalidate();
     }
 
@@ -63,19 +64,17 @@ export class BacklogTaskRow {
             this.syncOptionSelectionFromResolution();
             this.updateApproveState();
         };
-        const scheduleSave = () => {
-            this.queueSave();
+        const commitSave = () => {
+            markDirty();
+            this.saveTaskIfChanged();
         };
         for (const input of [this.descInput, this.resolutionInput]) {
             if (!input) continue;
             input.addEventListener('input', () => {
                 markDirty();
-                scheduleSave();
             });
-            input.addEventListener('change', () => {
-                markDirty();
-                scheduleSave();
-            });
+            input.addEventListener('change', commitSave);
+            input.addEventListener('focusout', commitSave);
         }
     }
 
@@ -94,6 +93,7 @@ export class BacklogTaskRow {
         this.resizeResolution();
         this.updateApproveState();
         this.ensureAutoSelection();
+        this.syncLastSavedSignature();
     }
 
     syncStatusIcon() {
@@ -192,7 +192,7 @@ export class BacklogTaskRow {
         this.resizeResolution();
         this.syncOptionSelectionFromResolution();
         this.updateApproveState();
-        this.queueSave();
+        this.saveTaskIfChanged();
     }
 
     getResolutionValue() {
@@ -280,8 +280,26 @@ export class BacklogTaskRow {
         }
         this.saveTimer = setTimeout(() => {
             this.saveTimer = null;
-            this.saveTask();
+            this.saveTaskIfChanged();
         }, 300);
+    }
+
+    getSaveSignature() {
+        return JSON.stringify({
+            description: this.descInput?.value || '',
+            resolution: this.resolutionInput?.value || ''
+        });
+    }
+
+    syncLastSavedSignature() {
+        this.lastSavedSignature = this.getSaveSignature();
+    }
+
+    saveTaskIfChanged() {
+        const signature = this.getSaveSignature();
+        if (signature === this.lastSavedSignature) return;
+        this.lastSavedSignature = signature;
+        this.saveTask();
     }
 
     saveTask() {

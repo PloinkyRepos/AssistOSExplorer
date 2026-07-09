@@ -123,14 +123,28 @@ export class GitCredentialsPrompt {
         }
     }
 
+    onFocusout(event) {
+        const target = event?.target;
+        if (!target) return;
+        if (target.id === 'gitCredentialsName' || target.id === 'gitCredentialsEmail' || target.id === 'gitCredentialsToken') {
+            this.commitCredentialsDraft();
+            return;
+        }
+        if (target.id === 'gitCredentialsAutocommitInterval') {
+            this.commitAutocommitDraft();
+        }
+    }
+
     attachDelegatedListeners() {
         if (this.delegatedListenersAttached || !this.element) return;
         this.handleDelegatedInput = (event) => this.onInput(event);
         this.handleDelegatedChange = (event) => this.onChange(event);
         this.handleDelegatedKeydown = (event) => this.onKeydown(event);
+        this.handleDelegatedFocusout = (event) => this.onFocusout(event);
         this.element.addEventListener('input', this.handleDelegatedInput);
         this.element.addEventListener('change', this.handleDelegatedChange);
         this.element.addEventListener('keydown', this.handleDelegatedKeydown);
+        this.element.addEventListener('focusout', this.handleDelegatedFocusout);
         this.delegatedListenersAttached = true;
     }
 
@@ -139,9 +153,11 @@ export class GitCredentialsPrompt {
         this.element.removeEventListener('input', this.handleDelegatedInput);
         this.element.removeEventListener('change', this.handleDelegatedChange);
         this.element.removeEventListener('keydown', this.handleDelegatedKeydown);
+        this.element.removeEventListener('focusout', this.handleDelegatedFocusout);
         this.handleDelegatedInput = null;
         this.handleDelegatedChange = null;
         this.handleDelegatedKeydown = null;
+        this.handleDelegatedFocusout = null;
         this.delegatedListenersAttached = false;
     }
 
@@ -245,17 +261,6 @@ export class GitCredentialsPrompt {
         this.state.email = email;
         this.state.credentialsDirty = true;
         this.updateValidationState();
-        this.getParentPresenter()?.handleCredentialsChange?.({
-            name,
-            email,
-            authMethod: this.state.authMethod,
-            token: this.state.token,
-            autocommitIntervalMinutes: this.state.autocommitIntervalMinutes,
-            autocommitRepos: this.state.autocommitSelected,
-            showAgentRepos: this.state.showAgentRepos,
-            autoresolveConflicts: this.state.autoresolveConflicts,
-            credentialsDirty: true
-        });
     }
 
     handleAuthMethodChange() {
@@ -282,17 +287,6 @@ export class GitCredentialsPrompt {
         this.state.token = token;
         this.state.credentialsDirty = true;
         this.updateValidationState();
-        this.getParentPresenter()?.handleCredentialsChange?.({
-            name: this.state.name,
-            email: this.state.email,
-            authMethod: this.state.authMethod,
-            token,
-            autocommitIntervalMinutes: this.state.autocommitIntervalMinutes,
-            autocommitRepos: this.state.autocommitSelected,
-            showAgentRepos: this.state.showAgentRepos,
-            autoresolveConflicts: this.state.autoresolveConflicts,
-            credentialsDirty: true
-        });
     }
 
     handleAutocommitChange() {
@@ -301,12 +295,29 @@ export class GitCredentialsPrompt {
         this.state.autocommitIntervalMinutes = autocommitIntervalMinutes;
         this.state.autocommitDirty = true;
         this.updateValidationState();
+    }
+
+    commitCredentialsDraft() {
         this.getParentPresenter()?.handleCredentialsChange?.({
             name: this.state.name,
             email: this.state.email,
             authMethod: this.state.authMethod,
             token: this.state.token,
-            autocommitIntervalMinutes,
+            autocommitIntervalMinutes: this.state.autocommitIntervalMinutes,
+            autocommitRepos: this.state.autocommitSelected,
+            showAgentRepos: this.state.showAgentRepos,
+            autoresolveConflicts: this.state.autoresolveConflicts,
+            credentialsDirty: true
+        });
+    }
+
+    commitAutocommitDraft() {
+        this.getParentPresenter()?.handleCredentialsChange?.({
+            name: this.state.name,
+            email: this.state.email,
+            authMethod: this.state.authMethod,
+            token: this.state.token,
+            autocommitIntervalMinutes: this.state.autocommitIntervalMinutes,
             autocommitRepos: this.state.autocommitSelected,
             showAgentRepos: this.state.showAgentRepos,
             autoresolveConflicts: this.state.autoresolveConflicts,
