@@ -9,6 +9,9 @@ Create or update these repository secrets in `AssistOS-AI/AssistOSExplorer`.
 ```sh
 gh secret set SSH_KEY --repo AssistOS-AI/AssistOSExplorer < ~/.ssh/skills-explorer-deploy
 gh secret set PLOINKY_MASTER_KEY --repo AssistOS-AI/AssistOSExplorer --body "$(openssl rand -hex 32)"
+gh secret set WEB_PUBLISHING_CLOUDFLARED_TUNNEL_TOKEN --repo AssistOS-AI/AssistOSExplorer --body "<scoped tunnel token>"
+# Optional, only for Web Publishing Cloudflare API mode:
+gh secret set WEB_PUBLISHING_CLOUDFLARE_API_TOKEN --repo AssistOS-AI/AssistOSExplorer --body "<cloudflare api token>"
 ```
 
 `PLOINKY_MASTER_KEY` must be exactly 64 hex characters. Keep it stable after the first deployment because it encrypts the Ploinky workspace secret stores and local-auth password store.
@@ -27,7 +30,7 @@ The token value must stay only in GitHub Actions secrets.
 
 ## Explorer Public Access
 
-`skills.axiologic.dev` is fronted by a Cloudflare Zero Trust tunnel running as a podman container on the host. The tunnel terminates TLS at Cloudflare's edge and forwards directly to the Explorer router on `127.0.0.1:${EXPLORER_ROUTER_PORT}` (default `8097`). The workflow does **not** manage the tunnel; ingress is configured in the Cloudflare Zero Trust dashboard. To change the routing target, edit the tunnel's public hostname configuration in the dashboard rather than touching the workflow.
+`skills.axiologic.dev` is fronted by the Web Publishing agent (`basic/web-publishing`). Web Publishing generates the Explorer, OnlyOffice, and WebMeet public topology before dependent agents resolve their environment, and it can either run from a scoped Cloudflare tunnel token or use Cloudflare API mode for remote ingress/DNS operations. The deploy workflow clears stale direct public topology variables before startup so generated values cannot be shadowed by old GitHub variables.
 
 ## LiveKit Public Access
 
@@ -47,7 +50,7 @@ If `livekit-skills.axiologic.dev` is moved behind Cloudflare/Tunnel later, retes
 
 ## GitHub Variables
 
-Create or update these repository variables. WebMeet topology variables are optional overrides: the `prod` manifest profiles already carry the Axiologic production defaults for the public LiveKit URL, internal LiveKit API URL, egress URL, TLS hostname/email, TURN realm, and TURN hostname. Keep the variables below when intentionally overriding the profile defaults from GitHub Actions.
+Create or update these repository variables. Public topology uses Web Publishing-scoped inputs; do not set `ONLYOFFICE_*` or `WEBMEET_*` public topology variables in GitHub Actions for production. WebMeet media-plane variables remain optional overrides for direct LiveKit/TURN exposure.
 The deploy workflow omits blank optional variables from the remote environment so empty repository variables do not shadow manifest profile defaults.
 
 ```sh
@@ -57,33 +60,38 @@ gh variable set EXPLORER_WORKSPACE --repo AssistOS-AI/AssistOSExplorer --body ex
 gh variable set EXPLORER_ROUTER_PORT --repo AssistOS-AI/AssistOSExplorer --body 8097
 gh variable set EXPLORER_PUBLIC_URL --repo AssistOS-AI/AssistOSExplorer --body https://skills.axiologic.dev
 gh variable set PLOINKY_PROFILE --repo AssistOS-AI/AssistOSExplorer --body prod
-gh variable set ONLYOFFICE_PUBLIC_URL --repo AssistOS-AI/AssistOSExplorer --body https://office.axiologic.dev
-gh variable set ONLYOFFICE_CALLBACK_BASE_URL --repo AssistOS-AI/AssistOSExplorer --body https://skills.axiologic.dev
-gh variable set WEBMEET_PUBLIC_LIVEKIT_URL --repo AssistOS-AI/AssistOSExplorer --body wss://livekit-skills.axiologic.dev
-gh variable set WEBMEET_LIVEKIT_URL --repo AssistOS-AI/AssistOSExplorer --body http://host.containers.internal:7880
+gh variable set WEB_PUBLISHING_MODE --repo AssistOS-AI/AssistOSExplorer --body nginx-cloudflare
+gh variable set WEB_PUBLISHING_BASE_DOMAIN --repo AssistOS-AI/AssistOSExplorer --body axiologic.dev
+gh variable set WEB_PUBLISHING_PUBLIC_URL --repo AssistOS-AI/AssistOSExplorer --body https://skills.axiologic.dev
+gh variable set WEB_PUBLISHING_CERT_EMAIL --repo AssistOS-AI/AssistOSExplorer --body research@axiologic.net
 gh variable set WEBMEET_EGRESS_URL --repo AssistOS-AI/AssistOSExplorer --body http://host.containers.internal:7980
 gh variable set WEBMEET_INFRA_IMAGE_TAG --repo AssistOS-AI/AssistOSExplorer --body webmeet-infra
 gh variable set PLOINKY_NODE_IMAGE_TAG --repo AssistOS-AI/AssistOSExplorer --body 24-bookworm-tools
 gh variable set WEBMEET_LIVEKIT_USE_EXTERNAL_IP --repo AssistOS-AI/AssistOSExplorer --body false
 gh variable set WEBMEET_LIVEKIT_NODE_IP --repo AssistOS-AI/AssistOSExplorer --body 193.180.209.191
-gh variable set WEBMEET_LIVEKIT_UPSTREAM --repo AssistOS-AI/AssistOSExplorer --body http://127.0.0.1:7880
-gh variable set WEBMEET_TLS_HOSTNAME --repo AssistOS-AI/AssistOSExplorer --body livekit-skills.axiologic.dev
-gh variable set WEBMEET_CERT_EMAIL --repo AssistOS-AI/AssistOSExplorer --body research@axiologic.net
 gh variable set WEBMEET_CERTBOT_AUTO_ISSUE --repo AssistOS-AI/AssistOSExplorer --body true
-gh variable set WEBMEET_TURN_HOST --repo AssistOS-AI/AssistOSExplorer --body livekit-skills.axiologic.dev
-gh variable set WEBMEET_TURN_REALM --repo AssistOS-AI/AssistOSExplorer --body skills.axiologic.dev
 gh variable set WEBMEET_TURN_USER --repo AssistOS-AI/AssistOSExplorer --body webmeet
 gh variable set WEBMEET_TURN_MIN_PORT --repo AssistOS-AI/AssistOSExplorer --body 20000
 gh variable set WEBMEET_TURN_MAX_PORT --repo AssistOS-AI/AssistOSExplorer --body 20010
 gh variable set STRICT_INFRA_CHECKS --repo AssistOS-AI/AssistOSExplorer --body 0
 ```
 
-Set `WEBMEET_TURN_EXTERNAL_IP` only when coturn must use an explicit public IP instead of resolving `WEBMEET_TURN_HOST` at startup.
+Set `WEB_PUBLISHING_PUBLIC_HOST` only when Web Publishing should use an explicit public host in addition to the configured route model. Set `WEBMEET_TURN_EXTERNAL_IP` only through Web Publishing or the saved Web Publishing route/profile model; do not inject it directly through the deploy workflow.
 Set `STRICT_INFRA_CHECKS=1` only when local LiveKit and OnlyOffice health failures should fail the deployment; the default `0` matches the QA-tested non-strict infra gate.
-Leave `ONLYOFFICE_INTERNAL_URL` unset for the managed OnlyOffice agent. The agent defaults its in-container Document Server target to `http://127.0.0.1:80`, while the workflow health probe falls back to the host-facing editor proxy at `http://127.0.0.1:8082`. Remove any legacy repository variable that points `ONLYOFFICE_INTERNAL_URL` at `http://127.0.0.1:8082` before deploying:
+Leave `ONLYOFFICE_INTERNAL_URL` unset in GitHub variables. Web Publishing generates it for the managed OnlyOffice agent, while the workflow health probe falls back to the host-facing editor proxy at `http://127.0.0.1:8082` until the provider value is available. Remove legacy public topology repository variables before deploying:
 
 ```sh
+gh variable delete ONLYOFFICE_PUBLIC_URL --repo AssistOS-AI/AssistOSExplorer
 gh variable delete ONLYOFFICE_INTERNAL_URL --repo AssistOS-AI/AssistOSExplorer
+gh variable delete ONLYOFFICE_CALLBACK_BASE_URL --repo AssistOS-AI/AssistOSExplorer
+gh variable delete WEBMEET_PUBLIC_LIVEKIT_URL --repo AssistOS-AI/AssistOSExplorer
+gh variable delete WEBMEET_LIVEKIT_URL --repo AssistOS-AI/AssistOSExplorer
+gh variable delete WEBMEET_TLS_HOSTNAME --repo AssistOS-AI/AssistOSExplorer
+gh variable delete WEBMEET_LIVEKIT_UPSTREAM --repo AssistOS-AI/AssistOSExplorer
+gh variable delete WEBMEET_CERT_EMAIL --repo AssistOS-AI/AssistOSExplorer
+gh variable delete WEBMEET_TURN_EXTERNAL_IP --repo AssistOS-AI/AssistOSExplorer
+gh variable delete WEBMEET_TURN_HOST --repo AssistOS-AI/AssistOSExplorer
+gh variable delete WEBMEET_TURN_REALM --repo AssistOS-AI/AssistOSExplorer
 ```
 
 ## Provision Host
@@ -141,11 +149,11 @@ The workflow:
 3. Pins `PLOINKY_WORKSPACE_ROOT` to the requested workspace so Ploinky commands cannot resolve to a stale parent workspace.
 4. Stops the current workspace only when its `.ploinky/routing.json` owns `EXPLORER_ROUTER_PORT`; otherwise it skips shutdown for cold workspaces and refuses to start when the port is already held by an unowned process.
 5. Puts the Ploinky runtime checkout on `ploinky_branch` and `achillesAgentLib` on `achilles_branch`.
-6. Installs the `AchillesIDE`, `webmeetInfra`, and `proxies` repos with the current `ploinky install ... --branch` command shape.
+6. Installs the `AchillesIDE`, `basic`, `webmeetInfra`, and `proxies` repos with the current `ploinky install ... --branch` command shape.
 7. Runs `ploinky update` so Ploinky updates the workspace repos and local Ploinky dependencies.
 8. Hard-resets the remote Ploinky-managed repo checkouts to the requested branches.
 9. Removes retired split WebMeet infra registrations and containers before the unified agent starts.
-10. Stores configured runtime variable overrides through `ploinky var`.
-11. Pulls `docker.io/assistos/ploinky-node:${PLOINKY_NODE_IMAGE_TAG}` and `docker.io/assistos/livekit-server-agent:${WEBMEET_INFRA_IMAGE_TAG}` before startup, so cold deployments use published runtime images instead of ad hoc package installation.
-12. Starts `AchillesIDE/explorer` on `EXPLORER_ROUTER_PORT` with branch-aware flags (`--branch`, `--repo-branch`, `--reset-repos`).
-13. Verifies local router health, checks `liveKitServerAgent` and OnlyOffice `api.js` as non-fatal infra gates unless `STRICT_INFRA_CHECKS=1`, verifies public `EXPLORER_PUBLIC_URL` access through the Cloudflare tunnel, verifies public `WEBMEET_PUBLIC_LIVEKIT_URL`, and verifies browser-visible OnlyOffice `api.js` through the required `ONLYOFFICE_PUBLIC_URL`.
+10. Clears stale provider-owned public topology variables, then stores scoped Web Publishing and media-plane runtime overrides through `ploinky var`.
+11. Pulls `docker.io/assistos/ploinky-node:${PLOINKY_NODE_IMAGE_TAG}`, `docker.io/assistos/web-publishing-agent:node24-nginx-cloudflared`, and `docker.io/assistos/livekit-server-agent:${WEBMEET_INFRA_IMAGE_TAG}` before startup, so cold deployments use published runtime images instead of ad hoc package installation.
+12. Starts `AchillesIDE/explorer` on `EXPLORER_ROUTER_PORT` with branch-aware flags (`--branch`, `--repo-branch`, `--reset-repos`) for Explorer, Basic, proxies, and WebMeet infra.
+13. Verifies local router health, checks `liveKitServerAgent` and OnlyOffice `api.js` as non-fatal infra gates unless `STRICT_INFRA_CHECKS=1`, reads Web Publishing-generated public values from the remote workspace, verifies public `EXPLORER_PUBLIC_URL` access, optionally verifies generated `WEBMEET_PUBLIC_LIVEKIT_URL`, and verifies browser-visible OnlyOffice `api.js` through generated `ONLYOFFICE_PUBLIC_URL`.

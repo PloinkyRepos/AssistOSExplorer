@@ -76,7 +76,7 @@ test('manifest publishes router-facing control and browser-facing editor ports s
     const profile = manifest.profiles?.[profileName];
     assert.ok(profile, `profile ${profileName} exists`);
 
-    const ports = profile.ports || [];
+    const ports = profile.openPorts || [];
     assert.ok(
       ports.includes('127.0.0.1:0:7000'),
       `${profileName} publishes the protected control listener on an ephemeral localhost host port for Ploinky httpServices`

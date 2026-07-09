@@ -3,13 +3,8 @@ import test from 'node:test';
 
 import { createParticipantProfileAvatarController } from '../../services/profileAvatar/participantAvatarController.js';
 
-function profileAvatarResponse(size) {
+function profileAvatarSetting(size) {
     return {
-        ok: true,
-        user: {
-            id: 'local:admin',
-            username: 'admin'
-        },
         enabled: true,
         config: {
             agentId: 'profile:local:admin',
@@ -18,23 +13,50 @@ function profileAvatarResponse(size) {
             seed: 'profile:local:admin',
             style: 'sketch',
             palette: 'default'
-        },
-        fallbackLetter: 'A',
-        source: { kind: 'dpu' }
+        }
     };
 }
 
-test('local participant avatar refresh bypasses stale cached profile data', async () => {
+test('local participant avatar refresh rereads stored profile data', async () => {
     const originalFetch = globalThis.fetch;
+    const originalWindow = globalThis.window;
+    const originalAssistOS = globalThis.assistOS;
+    const originalBroadcastChannel = globalThis.BroadcastChannel;
+    const storage = new Map();
     let fetchCalls = 0;
     globalThis.fetch = async () => {
         fetchCalls += 1;
-        return {
-            ok: true,
-            async json() {
-                return profileAvatarResponse(fetchCalls === 1 ? '72' : '32');
+        throw new Error('Local profile avatar refresh should not fetch profile data.');
+    };
+    globalThis.window = {
+        addEventListener() {},
+        removeEventListener() {},
+        dispatchEvent() {},
+        localStorage: {
+            getItem(key) {
+                return storage.has(key) ? storage.get(key) : null;
+            },
+            setItem(key, value) {
+                storage.set(key, value);
+            },
+            removeItem(key) {
+                storage.delete(key);
             }
-        };
+        },
+        assistOS: {
+            user: {
+                id: 'local:admin',
+                username: 'admin',
+                roles: ['admin']
+            }
+        },
+        location: { href: 'http://localhost/' }
+    };
+    globalThis.assistOS = globalThis.window.assistOS;
+    globalThis.BroadcastChannel = class TestBroadcastChannel {
+        addEventListener() {}
+        postMessage() {}
+        close() {}
     };
 
     try {
@@ -55,14 +77,19 @@ test('local participant avatar refresh bypasses stale cached profile data', asyn
             kind: 'local'
         };
 
+        storage.set('assistOS.profileAvatar.settings', JSON.stringify(profileAvatarSetting('72')));
         await controller.refresh(view, participant);
         assert.equal(view.avatarConfig?.size, '72');
 
+        storage.set('assistOS.profileAvatar.settings', JSON.stringify(profileAvatarSetting('32')));
         await controller.refresh(view, participant);
-        assert.equal(fetchCalls, 2);
+        assert.equal(fetchCalls, 0);
         assert.equal(view.avatarConfig?.size, '32');
     } finally {
         globalThis.fetch = originalFetch;
+        globalThis.window = originalWindow;
+        globalThis.assistOS = originalAssistOS;
+        globalThis.BroadcastChannel = originalBroadcastChannel;
     }
 });
 

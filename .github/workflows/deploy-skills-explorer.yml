@@ -33,6 +33,11 @@ on:
         required: false
         default: ''
         type: string
+      basic_branch:
+        description: 'basic repo branch. Falls back to vars.BASIC_BRANCH, then main.'
+        required: false
+        default: ''
+        type: string
       ploinky_branch:
         description: 'Ploinky runtime branch. Falls back to vars.PLOINKY_BRANCH, then master.'
         required: false
@@ -66,6 +71,7 @@ env:
   PUBLIC_URL: ${{ inputs.public_url || vars.EXPLORER_PUBLIC_URL || 'https://skills.axiologic.dev' }}
   EXPLORER_BRANCH: ${{ inputs.branch || 'main' }}
   PLOINKY_PROFILE: ${{ inputs.profile || vars.PLOINKY_PROFILE || 'prod' }}
+  BASIC_BRANCH: ${{ inputs.basic_branch || vars.BASIC_BRANCH || 'main' }}
 
 jobs:
   deploy:
@@ -79,8 +85,9 @@ jobs:
         env:
           SSH_KEY: ${{ secrets.SSH_KEY }}
           PLOINKY_MASTER_KEY: ${{ secrets.PLOINKY_MASTER_KEY }}
-          ONLYOFFICE_PUBLIC_URL: ${{ vars.ONLYOFFICE_PUBLIC_URL }}
-          ONLYOFFICE_INTERNAL_URL: ${{ vars.ONLYOFFICE_INTERNAL_URL }}
+          WEB_PUBLISHING_MODE: ${{ vars.WEB_PUBLISHING_MODE || 'nginx-cloudflare' }}
+          WEB_PUBLISHING_BASE_DOMAIN: ${{ vars.WEB_PUBLISHING_BASE_DOMAIN }}
+          WEB_PUBLISHING_CLOUDFLARED_TUNNEL_TOKEN: ${{ secrets.WEB_PUBLISHING_CLOUDFLARED_TUNNEL_TOKEN }}
         run: |
           set -euo pipefail
           if [ -z "${SSH_KEY:-}" ]; then
@@ -95,21 +102,29 @@ jobs:
             echo "::error::PLOINKY_MASTER_KEY must be exactly 64 hex characters"
             exit 1
           fi
-          if [ -z "${ONLYOFFICE_PUBLIC_URL:-}" ]; then
-            echo "::error::Missing required repository variable ONLYOFFICE_PUBLIC_URL"
-            exit 1
-          fi
-          case "${ONLYOFFICE_PUBLIC_URL}" in
-            https://localhost*|https://127.*|https://0.0.0.0*|http://*)
-              echo "::error::ONLYOFFICE_PUBLIC_URL must be a browser-reachable HTTPS URL, not ${ONLYOFFICE_PUBLIC_URL}"
+          case "$(printf '%s' "${WEB_PUBLISHING_MODE:-nginx-cloudflare}" | tr '[:upper:]' '[:lower:]')" in
+            nginx|cloudflare-token|token|nginx-cloudflare|cloudflare-api) ;;
+            *)
+              echo "::error::WEB_PUBLISHING_MODE must be nginx, cloudflare-token, nginx-cloudflare, or cloudflare-api"
               exit 1
               ;;
           esac
-          case "${ONLYOFFICE_INTERNAL_URL:-}" in
-            http://127.0.0.1:8082|http://localhost:8082|http://0.0.0.0:8082)
-              echo "::error::ONLYOFFICE_INTERNAL_URL is the in-container Document Server URL; leave it unset for managed OnlyOffice or set it to http://127.0.0.1:80."
-              echo "::error::The host-facing health probe already falls back to http://127.0.0.1:8082 when ONLYOFFICE_INTERNAL_URL is unset."
+          if [ -z "${WEB_PUBLISHING_BASE_DOMAIN:-}" ]; then
+            echo "::error::Missing required repository variable WEB_PUBLISHING_BASE_DOMAIN"
+            exit 1
+          fi
+          case "${WEB_PUBLISHING_BASE_DOMAIN}" in
+            .*|*.|*/*|*:*|*' '*)
+              echo "::error::WEB_PUBLISHING_BASE_DOMAIN must be a bare DNS domain"
               exit 1
+              ;;
+          esac
+          case "$(printf '%s' "${WEB_PUBLISHING_MODE:-nginx-cloudflare}" | tr '[:upper:]' '[:lower:]')" in
+            cloudflare-token|token|nginx-cloudflare)
+              if [ -z "${WEB_PUBLISHING_CLOUDFLARED_TUNNEL_TOKEN:-}" ]; then
+                echo "::error::Missing required secret WEB_PUBLISHING_CLOUDFLARED_TUNNEL_TOKEN for token-mode Web Publishing"
+                exit 1
+              fi
               ;;
           esac
           if [ -z "${SSH_HOST:-}" ] || [ -z "${SSH_USER:-}" ]; then
@@ -128,11 +143,17 @@ jobs:
       - name: Deploy workspace
         env:
           PLOINKY_MASTER_KEY: ${{ secrets.PLOINKY_MASTER_KEY }}
-          ONLYOFFICE_PUBLIC_URL: ${{ vars.ONLYOFFICE_PUBLIC_URL }}
-          ONLYOFFICE_INTERNAL_URL: ${{ vars.ONLYOFFICE_INTERNAL_URL }}
-          ONLYOFFICE_CALLBACK_BASE_URL: ${{ vars.ONLYOFFICE_CALLBACK_BASE_URL }}
-          WEBMEET_PUBLIC_LIVEKIT_URL: ${{ vars.WEBMEET_PUBLIC_LIVEKIT_URL }}
-          WEBMEET_LIVEKIT_URL: ${{ vars.WEBMEET_LIVEKIT_URL }}
+          WEB_PUBLISHING_MODE: ${{ vars.WEB_PUBLISHING_MODE || 'nginx-cloudflare' }}
+          WEB_PUBLISHING_BASE_DOMAIN: ${{ vars.WEB_PUBLISHING_BASE_DOMAIN }}
+          WEB_PUBLISHING_PUBLIC_URL: ${{ vars.WEB_PUBLISHING_PUBLIC_URL || inputs.public_url || vars.EXPLORER_PUBLIC_URL || 'https://skills.axiologic.dev' }}
+          WEB_PUBLISHING_PUBLIC_HOST: ${{ vars.WEB_PUBLISHING_PUBLIC_HOST }}
+          WEB_PUBLISHING_CERT_EMAIL: ${{ vars.WEB_PUBLISHING_CERT_EMAIL }}
+          WEB_PUBLISHING_CLOUDFLARED_TUNNEL_TOKEN: ${{ secrets.WEB_PUBLISHING_CLOUDFLARED_TUNNEL_TOKEN }}
+          WEB_PUBLISHING_CLOUDFLARE_API_TOKEN: ${{ secrets.WEB_PUBLISHING_CLOUDFLARE_API_TOKEN }}
+          WEB_PUBLISHING_CLOUDFLARE_ACCOUNT_ID: ${{ vars.WEB_PUBLISHING_CLOUDFLARE_ACCOUNT_ID }}
+          WEB_PUBLISHING_CLOUDFLARE_ZONE_ID: ${{ vars.WEB_PUBLISHING_CLOUDFLARE_ZONE_ID }}
+          WEB_PUBLISHING_CLOUDFLARE_TUNNEL_ID: ${{ vars.WEB_PUBLISHING_CLOUDFLARE_TUNNEL_ID }}
+          WEB_PUBLISHING_CLOUDFLARE_TUNNEL_NAME: ${{ vars.WEB_PUBLISHING_CLOUDFLARE_TUNNEL_NAME }}
           WEBMEET_EGRESS_URL: ${{ vars.WEBMEET_EGRESS_URL }}
           WEBMEET_INFRA_IMAGE_TAG: ${{ inputs.webmeet_infra_image_tag || vars.WEBMEET_INFRA_IMAGE_TAG || 'webmeet-infra' }}
           PLOINKY_NODE_IMAGE_TAG: ${{ inputs.ploinky_node_image_tag || vars.PLOINKY_NODE_IMAGE_TAG || '24-bookworm-tools' }}
@@ -145,17 +166,11 @@ jobs:
           WEBMEET_LIVEKIT_REDIS_ADDRESS: ${{ vars.WEBMEET_LIVEKIT_REDIS_ADDRESS }}
           WEBMEET_EGRESS_REDIS_ADDRESS: ${{ vars.WEBMEET_EGRESS_REDIS_ADDRESS }}
           WEBMEET_LIVEKIT_INTERNAL_WS_URL: ${{ vars.WEBMEET_LIVEKIT_INTERNAL_WS_URL }}
-          WEBMEET_TLS_HOSTNAME: ${{ vars.WEBMEET_TLS_HOSTNAME }}
           WEBMEET_TLS_HTTPS_PORT: ${{ vars.WEBMEET_TLS_HTTPS_PORT }}
           WEBMEET_TLS_HTTP_PORT: ${{ vars.WEBMEET_TLS_HTTP_PORT }}
-          WEBMEET_LIVEKIT_UPSTREAM: ${{ vars.WEBMEET_LIVEKIT_UPSTREAM }}
-          WEBMEET_CERT_EMAIL: ${{ vars.WEBMEET_CERT_EMAIL }}
           WEBMEET_CERTBOT_AUTO_ISSUE: ${{ vars.WEBMEET_CERTBOT_AUTO_ISSUE }}
           WEBMEET_CERTBOT_RENEW_INTERVAL_SECONDS: ${{ vars.WEBMEET_CERTBOT_RENEW_INTERVAL_SECONDS }}
-          WEBMEET_TURN_EXTERNAL_IP: ${{ vars.WEBMEET_TURN_EXTERNAL_IP }}
-          WEBMEET_TURN_HOST: ${{ vars.WEBMEET_TURN_HOST }}
           WEBMEET_TURN_PORT: ${{ vars.WEBMEET_TURN_PORT }}
-          WEBMEET_TURN_REALM: ${{ vars.WEBMEET_TURN_REALM }}
           WEBMEET_TURN_USER: ${{ vars.WEBMEET_TURN_USER }}
           WEBMEET_ICE_TRANSPORT_POLICY: ${{ vars.WEBMEET_ICE_TRANSPORT_POLICY }}
           WEBMEET_TURN_MIN_PORT: ${{ vars.WEBMEET_TURN_MIN_PORT }}
@@ -179,11 +194,17 @@ jobs:
 
           {
             write_env PLOINKY_MASTER_KEY
-            write_env ONLYOFFICE_PUBLIC_URL
-            write_env ONLYOFFICE_INTERNAL_URL
-            write_env ONLYOFFICE_CALLBACK_BASE_URL
-            write_env WEBMEET_PUBLIC_LIVEKIT_URL
-            write_env WEBMEET_LIVEKIT_URL
+            write_env WEB_PUBLISHING_MODE
+            write_env WEB_PUBLISHING_BASE_DOMAIN
+            write_env WEB_PUBLISHING_PUBLIC_URL
+            write_env WEB_PUBLISHING_PUBLIC_HOST
+            write_env WEB_PUBLISHING_CERT_EMAIL
+            write_env WEB_PUBLISHING_CLOUDFLARED_TUNNEL_TOKEN
+            write_env WEB_PUBLISHING_CLOUDFLARE_API_TOKEN
+            write_env WEB_PUBLISHING_CLOUDFLARE_ACCOUNT_ID
+            write_env WEB_PUBLISHING_CLOUDFLARE_ZONE_ID
+            write_env WEB_PUBLISHING_CLOUDFLARE_TUNNEL_ID
+            write_env WEB_PUBLISHING_CLOUDFLARE_TUNNEL_NAME
             write_env WEBMEET_EGRESS_URL
             write_env WEBMEET_INFRA_IMAGE_TAG
             write_env PLOINKY_NODE_IMAGE_TAG
@@ -196,17 +217,11 @@ jobs:
             write_env WEBMEET_LIVEKIT_REDIS_ADDRESS
             write_env WEBMEET_EGRESS_REDIS_ADDRESS
             write_env WEBMEET_LIVEKIT_INTERNAL_WS_URL
-            write_env WEBMEET_TLS_HOSTNAME
             write_env WEBMEET_TLS_HTTPS_PORT
             write_env WEBMEET_TLS_HTTP_PORT
-            write_env WEBMEET_LIVEKIT_UPSTREAM
-            write_env WEBMEET_CERT_EMAIL
             write_env WEBMEET_CERTBOT_AUTO_ISSUE
             write_env WEBMEET_CERTBOT_RENEW_INTERVAL_SECONDS
-            write_env WEBMEET_TURN_EXTERNAL_IP
-            write_env WEBMEET_TURN_HOST
             write_env WEBMEET_TURN_PORT
-            write_env WEBMEET_TURN_REALM
             write_env WEBMEET_TURN_USER
             write_env WEBMEET_ICE_TRANSPORT_POLICY
             write_env WEBMEET_TURN_MIN_PORT
@@ -219,7 +234,7 @@ jobs:
 
           ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
             -i ~/.ssh/deploy_key "${SSH_USER}@${SSH_HOST}" \
-            "WORKSPACE='$WORKSPACE' EXPLORER_BRANCH='$EXPLORER_BRANCH' PROXIES_BRANCH='$PROXIES_BRANCH' PLOINKY_BRANCH='$PLOINKY_BRANCH' ACHILLES_BRANCH='$ACHILLES_BRANCH' ROUTER_PORT='$ROUTER_PORT' PUBLIC_URL='$PUBLIC_URL' PLOINKY_PROFILE='$PLOINKY_PROFILE' bash -s" << 'REMOTE'
+            "WORKSPACE='$WORKSPACE' EXPLORER_BRANCH='$EXPLORER_BRANCH' PROXIES_BRANCH='$PROXIES_BRANCH' BASIC_BRANCH='$BASIC_BRANCH' PLOINKY_BRANCH='$PLOINKY_BRANCH' ACHILLES_BRANCH='$ACHILLES_BRANCH' ROUTER_PORT='$ROUTER_PORT' PUBLIC_URL='$PUBLIC_URL' PLOINKY_PROFILE='$PLOINKY_PROFILE' bash -s" << 'REMOTE'
           set -euo pipefail
           # Ensure the plaintext env file is removed even if a later step exits non-zero.
           trap 'rm -f /tmp/skills_explorer_env' EXIT
@@ -267,6 +282,8 @@ jobs:
           set +a
           rm -f /tmp/skills_explorer_env
 
+          WEB_PUBLISHING_MODE="${WEB_PUBLISHING_MODE:-nginx-cloudflare}"
+          WEB_PUBLISHING_PUBLIC_URL="${WEB_PUBLISHING_PUBLIC_URL:-$PUBLIC_URL}"
           WEBMEET_INFRA_IMAGE_TAG="${WEBMEET_INFRA_IMAGE_TAG:-webmeet-infra}"
           PLOINKY_NODE_IMAGE_TAG="${PLOINKY_NODE_IMAGE_TAG:-24-bookworm-tools}"
           DEFAULT_LOCAL_LLM_IMAGE="${DEFAULT_LOCAL_LLM_IMAGE:-docker.io/assistos/default-local-llm:cpu-qwen25-coder-1.5b}"
@@ -358,6 +375,7 @@ jobs:
           # 'install <url|repoName> [name] [--branch X]'. Repos are activated by install; the
           # explorer manifest's "enable" list brings up the agent stack at start time.
           "$PLOINKY" install https://github.com/AssistOS-AI/AssistOSExplorer.git AchillesIDE --branch "${EXPLORER_BRANCH:-main}" || true
+          "$PLOINKY" install https://github.com/AssistOS-AI/basic.git basic --branch "${BASIC_BRANCH:-main}" || true
           "$PLOINKY" install https://github.com/AssistOS-AI/webmeetInfra.git webmeetInfra --branch main || true
           "$PLOINKY" install https://github.com/AssistOS-AI/proxies.git proxies --branch "${PROXIES_BRANCH:-main}" || true
 
@@ -367,7 +385,7 @@ jobs:
             env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" update
           fi
 
-          for repo_spec in "AchillesIDE:${EXPLORER_BRANCH:-main}" "webmeetInfra:main" "proxies:${PROXIES_BRANCH:-main}"; do
+          for repo_spec in "AchillesIDE:${EXPLORER_BRANCH:-main}" "basic:${BASIC_BRANCH:-main}" "webmeetInfra:main" "proxies:${PROXIES_BRANCH:-main}"; do
             repo_name="${repo_spec%%:*}"
             repo_branch="${repo_spec#*:}"
             repo_dir="$WORK_DIR/.ploinky/repos/$repo_name"
@@ -496,17 +514,61 @@ jobs:
             fi
           }
 
+          clear_provider_owned_topology() {
+            echo "[deploy] Clearing stale public topology vars owned by Web Publishing..."
+            PLOINKY_RUNTIME_DIR="$PLOINKY_DIR" env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" PLOINKY_WORKSPACE_ROOT="$WORK_DIR" node --input-type=module <<'NODE'
+          import path from 'node:path';
+          import { pathToFileURL } from 'node:url';
+
+          const runtimeDir = process.env.PLOINKY_RUNTIME_DIR;
+          const modulePath = path.join(runtimeDir, 'cli', 'services', 'encryptedSecretsFile.js');
+          const { deleteSecretValue, readSecretsFile } = await import(pathToFileURL(modulePath).href);
+
+          const providerOwnedNames = [
+            'ONLYOFFICE_PUBLIC_URL',
+            'ONLYOFFICE_INTERNAL_URL',
+            'ONLYOFFICE_CALLBACK_BASE_URL',
+            'WEBMEET_PUBLIC_LIVEKIT_URL',
+            'WEBMEET_LIVEKIT_URL',
+            'WEBMEET_TLS_HOSTNAME',
+            'WEBMEET_TURN_HOST',
+            'WEBMEET_TURN_EXTERNAL_IP',
+            'WEBMEET_TURN_REALM',
+            'WEBMEET_CERT_EMAIL',
+            'WEBMEET_LIVEKIT_UPSTREAM',
+          ];
+
+          const before = readSecretsFile();
+          let cleared = 0;
+          for (const name of providerOwnedNames) {
+            if (Object.prototype.hasOwnProperty.call(before, name)) {
+              deleteSecretValue(name);
+              cleared += 1;
+            }
+          }
+          console.log(`[deploy] Cleared ${cleared} stale provider-owned public topology var(s).`);
+          NODE
+          }
+
+          clear_provider_owned_topology
+
           set_var PLOINKY_CODE_WRITABLE "1"
           set_var ASSISTOS_FS_ROOT "$WORK_DIR"
           set_var WORKSPACE_ROOT "$WORK_DIR"
           set_var PLOINKY_WORKSPACE_ROOT "$WORK_DIR"
 
-          set_var ONLYOFFICE_PUBLIC_URL "${ONLYOFFICE_PUBLIC_URL:-}"
-          set_var ONLYOFFICE_INTERNAL_URL "${ONLYOFFICE_INTERNAL_URL:-}"
-          set_var ONLYOFFICE_CALLBACK_BASE_URL "${ONLYOFFICE_CALLBACK_BASE_URL:-$PUBLIC_URL}"
+          set_var WEB_PUBLISHING_MODE "${WEB_PUBLISHING_MODE:-nginx-cloudflare}"
+          set_var WEB_PUBLISHING_BASE_DOMAIN "${WEB_PUBLISHING_BASE_DOMAIN:-}"
+          set_var WEB_PUBLISHING_PUBLIC_URL "${WEB_PUBLISHING_PUBLIC_URL:-}"
+          set_var WEB_PUBLISHING_PUBLIC_HOST "${WEB_PUBLISHING_PUBLIC_HOST:-}"
+          set_var WEB_PUBLISHING_CERT_EMAIL "${WEB_PUBLISHING_CERT_EMAIL:-}"
+          set_var WEB_PUBLISHING_CLOUDFLARED_TUNNEL_TOKEN "${WEB_PUBLISHING_CLOUDFLARED_TUNNEL_TOKEN:-}"
+          set_var WEB_PUBLISHING_CLOUDFLARE_API_TOKEN "${WEB_PUBLISHING_CLOUDFLARE_API_TOKEN:-}"
+          set_var WEB_PUBLISHING_CLOUDFLARE_ACCOUNT_ID "${WEB_PUBLISHING_CLOUDFLARE_ACCOUNT_ID:-}"
+          set_var WEB_PUBLISHING_CLOUDFLARE_ZONE_ID "${WEB_PUBLISHING_CLOUDFLARE_ZONE_ID:-}"
+          set_var WEB_PUBLISHING_CLOUDFLARE_TUNNEL_ID "${WEB_PUBLISHING_CLOUDFLARE_TUNNEL_ID:-}"
+          set_var WEB_PUBLISHING_CLOUDFLARE_TUNNEL_NAME "${WEB_PUBLISHING_CLOUDFLARE_TUNNEL_NAME:-}"
 
-          set_var WEBMEET_PUBLIC_LIVEKIT_URL "${WEBMEET_PUBLIC_LIVEKIT_URL:-}"
-          set_var WEBMEET_LIVEKIT_URL "${WEBMEET_LIVEKIT_URL:-}"
           set_var WEBMEET_EGRESS_URL "${WEBMEET_EGRESS_URL:-}"
           set_var WEBMEET_INFRA_IMAGE_TAG "${WEBMEET_INFRA_IMAGE_TAG:-webmeet-infra}"
           set_var WEBMEET_INFRA_HEALTH_PORT "${WEBMEET_INFRA_HEALTH_PORT:-17000}"
@@ -517,17 +579,11 @@ jobs:
           set_var WEBMEET_LIVEKIT_REDIS_ADDRESS "${WEBMEET_LIVEKIT_REDIS_ADDRESS:-}"
           set_var WEBMEET_EGRESS_REDIS_ADDRESS "${WEBMEET_EGRESS_REDIS_ADDRESS:-}"
           set_var WEBMEET_LIVEKIT_INTERNAL_WS_URL "${WEBMEET_LIVEKIT_INTERNAL_WS_URL:-}"
-          set_var WEBMEET_TLS_HOSTNAME "${WEBMEET_TLS_HOSTNAME:-}"
           set_var WEBMEET_TLS_HTTPS_PORT "${WEBMEET_TLS_HTTPS_PORT:-}"
           set_var WEBMEET_TLS_HTTP_PORT "${WEBMEET_TLS_HTTP_PORT:-}"
-          set_var WEBMEET_LIVEKIT_UPSTREAM "${WEBMEET_LIVEKIT_UPSTREAM:-}"
-          set_var WEBMEET_CERT_EMAIL "${WEBMEET_CERT_EMAIL:-}"
           set_var WEBMEET_CERTBOT_AUTO_ISSUE "${WEBMEET_CERTBOT_AUTO_ISSUE:-}"
           set_var WEBMEET_CERTBOT_RENEW_INTERVAL_SECONDS "${WEBMEET_CERTBOT_RENEW_INTERVAL_SECONDS:-}"
-          set_var WEBMEET_TURN_EXTERNAL_IP "${WEBMEET_TURN_EXTERNAL_IP:-}"
-          set_var WEBMEET_TURN_HOST "${WEBMEET_TURN_HOST:-}"
           set_var WEBMEET_TURN_PORT "${WEBMEET_TURN_PORT:-}"
-          set_var WEBMEET_TURN_REALM "${WEBMEET_TURN_REALM:-}"
           set_var WEBMEET_TURN_USER "${WEBMEET_TURN_USER:-}"
           set_var WEBMEET_ICE_TRANSPORT_POLICY "${WEBMEET_ICE_TRANSPORT_POLICY:-all}"
           set_var WEBMEET_TURN_MIN_PORT "${WEBMEET_TURN_MIN_PORT:-}"
@@ -535,6 +591,9 @@ jobs:
 
           echo "[deploy] Pulling Ploinky Node image docker.io/assistos/ploinky-node:${PLOINKY_NODE_IMAGE_TAG}..."
           podman pull "docker.io/assistos/ploinky-node:${PLOINKY_NODE_IMAGE_TAG}"
+
+          echo "[deploy] Pulling Web Publishing image docker.io/assistos/web-publishing-agent:node24-nginx-cloudflared..."
+          podman pull "docker.io/assistos/web-publishing-agent:node24-nginx-cloudflared"
 
           echo "[deploy] Pulling liveKitServerAgent image docker.io/assistos/livekit-server-agent:${WEBMEET_INFRA_IMAGE_TAG}..."
           podman pull "docker.io/assistos/livekit-server-agent:${WEBMEET_INFRA_IMAGE_TAG}"
@@ -546,6 +605,7 @@ jobs:
           echo "[deploy] Starting Explorer..."
           nohup env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" start AchillesIDE/explorer "$ROUTER_PORT" \
             --branch "${EXPLORER_BRANCH:-main}" \
+            --repo-branch "basic=${BASIC_BRANCH:-main}" \
             --repo-branch "proxies=${PROXIES_BRANCH:-main}" \
             --repo-branch "webmeetInfra=main" \
             --reset-repos \
@@ -566,6 +626,21 @@ jobs:
             fi
             sleep 2
           done
+
+          read_workspace_var() {
+            env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" echo "\$$1" 2>/dev/null | tail -n 1 || true
+          }
+
+          ONLYOFFICE_PUBLIC_URL="$(read_workspace_var ONLYOFFICE_PUBLIC_URL)"
+          ONLYOFFICE_INTERNAL_URL="$(read_workspace_var ONLYOFFICE_INTERNAL_URL)"
+          WEBMEET_PUBLIC_LIVEKIT_URL="$(read_workspace_var WEBMEET_PUBLIC_LIVEKIT_URL)"
+
+          {
+            [ -n "$ONLYOFFICE_PUBLIC_URL" ] && printf 'ONLYOFFICE_PUBLIC_URL=%s\n' "$ONLYOFFICE_PUBLIC_URL"
+            [ -n "$ONLYOFFICE_INTERNAL_URL" ] && printf 'ONLYOFFICE_INTERNAL_URL=%s\n' "$ONLYOFFICE_INTERNAL_URL"
+            [ -n "$WEBMEET_PUBLIC_LIVEKIT_URL" ] && printf 'WEBMEET_PUBLIC_LIVEKIT_URL=%s\n' "$WEBMEET_PUBLIC_LIVEKIT_URL"
+          } > "$WORK_DIR/logs/skills-explorer-public.env"
+          chmod 600 "$WORK_DIR/logs/skills-explorer-public.env"
 
           case "$(printf '%s' "${STRICT_INFRA_CHECKS:-0}" | tr '[:upper:]' '[:lower:]')" in
             1|true|yes|on) INFRA_FATAL=1 ;;
@@ -619,9 +694,6 @@ jobs:
           REMOTE
 
       - name: Verify public URL
-        env:
-          ONLYOFFICE_PUBLIC_URL: ${{ vars.ONLYOFFICE_PUBLIC_URL }}
-          WEBMEET_PUBLIC_LIVEKIT_URL: ${{ vars.WEBMEET_PUBLIC_LIVEKIT_URL || 'wss://livekit-skills.axiologic.dev' }}
         run: |
           set -euo pipefail
           echo "[deploy] Verifying ${PUBLIC_URL}/dashboard from GitHub runner..."
@@ -639,6 +711,17 @@ jobs:
             fi
             sleep 5
           done
+
+          public_env="$(ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key "${SSH_USER}@${SSH_HOST}" "WORKSPACE='$WORKSPACE' bash -s" << 'REMOTE_PUBLIC_ENV'
+          set -euo pipefail
+          cat "$HOME/$WORKSPACE/logs/skills-explorer-public.env" 2>/dev/null || true
+          REMOTE_PUBLIC_ENV
+          )"
+          public_var() {
+            printf '%s\n' "$public_env" | awk -F= -v key="$1" '$1 == key { sub(/^[^=]*=/, ""); print; exit }'
+          }
+          ONLYOFFICE_PUBLIC_URL="$(public_var ONLYOFFICE_PUBLIC_URL)"
+          WEBMEET_PUBLIC_LIVEKIT_URL="$(public_var WEBMEET_PUBLIC_LIVEKIT_URL)"
 
           if [ -n "${WEBMEET_PUBLIC_LIVEKIT_URL:-}" ]; then
             livekit_probe_url="${WEBMEET_PUBLIC_LIVEKIT_URL/#wss:/https:}"
@@ -661,7 +744,7 @@ jobs:
           fi
 
           if [ -z "${ONLYOFFICE_PUBLIC_URL:-}" ]; then
-            echo "[deploy] ERROR: ONLYOFFICE_PUBLIC_URL is required for browser editors."
+            echo "[deploy] ERROR: Web Publishing did not publish ONLYOFFICE_PUBLIC_URL for browser editors."
             exit 1
           fi
           if [ -n "${ONLYOFFICE_PUBLIC_URL:-}" ]; then

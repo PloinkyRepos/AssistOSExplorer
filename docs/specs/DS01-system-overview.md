@@ -162,11 +162,12 @@ Dependencies declared in [manifest.json](../../explorer/manifest.json) include:
 - `AchillesCLI/achilles-cli`
 - `UmamiAgent/umamiAgent`
 
-The `qa` and `prod` profile blocks also enable `basic/cloudflared` as a
-non-blocking dependency. This keeps the Cloudflare Tunnel control plane out of
-the default local profile while making the admin-only tunnel dashboard and
-Cloudflare route tools available in deployment profiles that are expected to
-publish router-hosted surfaces through Cloudflare.
+The `qa` and `prod` profile blocks also enable `basic/web-publishing` as a
+blocking dependency and startup config provider. This keeps public browser
+topology out of the default local profile while letting Web Publishing generate
+OnlyOffice and WebMeet public URLs before the rest of the deployment profile
+resolves env. The standalone Cloudflared agent is not an Explorer deployment
+fallback.
 
 Explorer depends on these agents asymmetrically:
 
@@ -288,10 +289,9 @@ Markdown preview must render common documentation visuals directly in the previe
 ### Required / Relevant Environment
 
 - `ASSISTOS_FS_ROOT`
-- `ONLYOFFICE_PUBLIC_URL`
-- `ONLYOFFICE_INTERNAL_URL`
+- `WEB_PUBLISHING_BASE_DOMAIN` for managed `qa`/`prod` deployments
+- Web Publishing provider outputs such as `ONLYOFFICE_PUBLIC_URL` and `WEBMEET_PUBLIC_LIVEKIT_URL`
 - `ONLYOFFICE_JWT_SECRET`
-- `ONLYOFFICE_CALLBACK_BASE_URL`
 - `SOUL_GATEWAY_API_KEY`
 
 Depending on the enabled integrations, additional environment may be required indirectly by dependent agents or by infrastructure such as authentication and database services.

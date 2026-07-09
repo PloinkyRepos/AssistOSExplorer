@@ -42,6 +42,7 @@
         "UmamiAgent/umamiAgent no-wait"
     ],
     "repos": {
+        "basic": "https://github.com/AssistOS-AI/basic.git",
         "webmeetInfra": "https://github.com/AssistOS-AI/webmeetInfra.git",
         "UmamiAgent": "https://github.com/AssistOS-AI/UmamiAgent.git"
     },
@@ -100,7 +101,13 @@
         "qa": {
             "enable": [
                 {
-                    "agent": "basic/cloudflared global no-wait",
+                    "agent": "basic/web-publishing global",
+                    "profile": "default"
+                }
+            ],
+            "configProviders": [
+                {
+                    "agent": "basic/web-publishing global",
                     "profile": "default"
                 }
             ]
@@ -108,7 +115,13 @@
         "prod": {
             "enable": [
                 {
-                    "agent": "basic/cloudflared global no-wait",
+                    "agent": "basic/web-publishing global",
+                    "profile": "default"
+                }
+            ],
+            "configProviders": [
+                {
+                    "agent": "basic/web-publishing global",
                     "profile": "default"
                 }
             ]

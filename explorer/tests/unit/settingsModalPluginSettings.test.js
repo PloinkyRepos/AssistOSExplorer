@@ -97,6 +97,37 @@ test('buildAgentSettingsItems maps Soul Gateway from runtime plugin key and pres
     assert.equal(soulGateway.sourcePlugin.key, 'soul-gateway/soul-gateway');
 });
 
+test('buildAgentSettingsItems maps Web Publishing settings from the basic repo plugin', () => {
+    const items = buildAgentSettingsItems([
+        {
+            key: 'web-publishing-settings',
+            label: 'Web Publishing',
+            ownerAgent: 'web-publishing',
+            pluginKey: 'web-publishing/web-publishing-settings',
+            scope: 'workspace',
+            settingsComponent: 'web-publishing-settings',
+            adminOnly: true
+        }
+    ], [
+        {
+            key: 'web-publishing/web-publishing-settings',
+            agent: 'web-publishing',
+            component: 'web-publishing-settings',
+            pluginId: 'web-publishing',
+            settingsComponent: 'web-publishing-settings',
+            adminOnly: true,
+            assetRootPath: '.ploinky/repos/basic/web-publishing/IDE-plugins/web-publishing-settings'
+        }
+    ]);
+    const webPublishing = items.find((item) => item.key === 'web-publishing-settings');
+
+    assert.ok(webPublishing);
+    assert.equal(webPublishing.available, true);
+    assert.equal(webPublishing.settingsComponent, 'web-publishing-settings');
+    assert.equal(webPublishing.sourcePlugin.key, 'web-publishing/web-publishing-settings');
+    assert.equal(webPublishing.assetRootPath, '.ploinky/repos/basic/web-publishing/IDE-plugins/web-publishing-settings');
+});
+
 test('buildAgentSettingsItems marks missing source plugin unavailable', () => {
     const items = buildAgentSettingsItems([
         {

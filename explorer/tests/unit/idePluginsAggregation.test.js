@@ -273,6 +273,47 @@ test('aggregateIdePlugins returns nested Soul Gateway manifest settings', async 
     }
 });
 
+test('aggregateIdePlugins returns nested Web Publishing manifest settings from basic repo', async () => {
+    const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'explorer-ide-plugins-workspace-'));
+    try {
+        const reposRoot = path.join(workspaceRoot, '.ploinky', 'repos', 'basic');
+        await writeAgentManifest(reposRoot, 'web-publishing', {
+            ideSettings: [
+                {
+                    key: 'web-publishing-settings',
+                    label: 'Web Publishing',
+                    scope: 'workspace',
+                    pluginKey: 'web-publishing/web-publishing-settings',
+                    settingsComponent: 'web-publishing-settings',
+                    adminOnly: true
+                }
+            ]
+        });
+        await writePluginConfig(reposRoot, 'web-publishing', 'web-publishing-settings', {
+            pluginCategory: 'application',
+            id: 'web-publishing',
+            component: 'web-publishing-settings',
+            location: [],
+            type: 'global',
+            adminOnly: true
+        });
+
+        const aggregated = await aggregateIdePlugins(workspaceRoot);
+        const settingsPlugins = aggregated.application[''] || [];
+
+        assert.equal(aggregated.agentSettings.length, 1);
+        assert.equal(aggregated.agentSettings[0].ownerAgent, 'web-publishing');
+        assert.equal(aggregated.agentSettings[0].pluginKey, 'web-publishing/web-publishing-settings');
+        assert.equal(aggregated.agentSettings[0].settingsComponent, 'web-publishing-settings');
+        assert.equal(settingsPlugins.length, 1);
+        assert.equal(settingsPlugins[0].agent, 'web-publishing');
+        assert.equal(settingsPlugins[0].id, 'web-publishing');
+        assert.equal(settingsPlugins[0].adminOnly, true);
+    } finally {
+        await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+});
+
 test('aggregateIdePlugins rejects absolute plugin settings URLs', async () => {
     const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'explorer-ide-plugins-'));
     try {
