@@ -33,6 +33,16 @@ printf '%s\n' 'vm_memory_calculation_strategy = erlang' >> "$rabbitmq_config_tmp
 mv -f "$rabbitmq_config_tmp" "$rabbitmq_config_file"
 
 awk '
+  /^[[:space:]]*service \$i start[[:space:]]*$/ {
+    print "  if [ \"$i\" = \"rabbitmq-server\" ]; then"
+    print "    install -d -o rabbitmq -g rabbitmq -m 0755 /var/run/rabbitmq"
+    print "    RABBITMQ_PID_FILE=/var/run/rabbitmq/pid start-stop-daemon --quiet --chuid rabbitmq --start --exec /usr/sbin/rabbitmq-server --pidfile /var/run/rabbitmq/pid --background"
+    print "  else"
+    print "    service \"$i\" start"
+    print "  fi"
+    rabbitmq_start_patched++
+    next
+  }
   /service supervisor start/ && inserted == 0 {
     print "onlyoffice_agent_autoassembly_enabled=\"${ONLYOFFICE_AUTO_ASSEMBLY_ENABLED:-true}\""
     print "case \"$onlyoffice_agent_autoassembly_enabled\" in"
@@ -50,6 +60,11 @@ awk '
     inserted = 1
   }
   { print }
+  END {
+    if (rabbitmq_start_patched != 1) {
+      exit 42
+    }
+  }
 ' "$source_script" > "$patched_script"
 
 chmod +x "$patched_script"

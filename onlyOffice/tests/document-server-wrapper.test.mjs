@@ -24,6 +24,12 @@ test('document server wrapper enables auto assembly before supervisor starts', a
     'set -e',
     `JSON=${JSON.stringify(fakeJson)}`,
     'service() { echo "service $*"; }',
+    'install() { echo "install $*"; }',
+    'start-stop-daemon() { echo "start-stop-daemon $*"; }',
+    'LOCAL_SERVICES=(postgresql rabbitmq-server)',
+    'for i in "${LOCAL_SERVICES[@]}"; do',
+    '  service $i start',
+    'done',
     'service supervisor start',
   ].join('\n'), { mode: 0o755 });
   await writeFile(rabbitmqConfig, [
@@ -52,6 +58,9 @@ test('document server wrapper enables auto assembly before supervisor starts', a
   assert.match(calls, /autoAssembly\.enable = true/);
   assert.match(calls, /autoAssembly\.interval = '2m'/);
   assert.match(calls, /autoAssembly\.step = '30s'/);
+  assert.match(stdout, /service postgresql start/);
+  assert.match(stdout, /start-stop-daemon .*--exec \/usr\/sbin\/rabbitmq-server .*--background/);
+  assert.doesNotMatch(stdout, /service rabbitmq-server start/);
   assert.match(stdout, /service supervisor start/);
   assert.match(rabbitmqConfigContents, /^listeners\.tcp\.default = 5672$/m);
   assert.deepEqual(
