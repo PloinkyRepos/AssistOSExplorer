@@ -47,6 +47,8 @@ Document Server request filtering must allow private-address fetches because sig
 
 Writable editor configs must set `editorConfig.customization.autosave=true` and `editorConfig.customization.forcesave=true`; read-only configs keep autosave enabled but set forcesave false. Autosave is the editor-to-Document-Server state, while OnlyOfficeAgent persistence occurs only from trusted save callbacks (`status` 2 or 6) after write permission and download-origin checks. The custom Document Server wrapper must enable `services.CoAuthoring.autoAssembly` before supervisor starts so open editing sessions periodically emit force-save callbacks without requiring the user to close the tab. Operators may tune this with `ONLYOFFICE_AUTO_ASSEMBLY_ENABLED`, `ONLYOFFICE_AUTO_ASSEMBLY_INTERVAL`, and `ONLYOFFICE_AUTO_ASSEMBLY_STEP`.
 
+The same wrapper must set RabbitMQ's `vm_memory_calculation_strategy` to `erlang` before the bundled services start. Nested rootless Podman cannot expose inner process IDs through the outer container's procfs, so RabbitMQ's default `rss` strategy aborts while looking up its process in `/proc`; the Erlang strategy obtains process memory from the VM and allows the bundled Document Server to boot without widening the container's privileges.
+
 The router remains the only public control point for authenticated identity and agent-to-agent execution.
 
 ## Confidential Persistence Invariant

@@ -3,11 +3,34 @@ set -euo pipefail
 
 source_script="${ONLYOFFICE_DOCUMENT_SERVER_BASE_SCRIPT:-/app/ds/run-document-server.sh}"
 patched_script="${TMPDIR:-/tmp}/onlyoffice-agent-run-document-server.$$.sh"
+rabbitmq_config_file="${ONLYOFFICE_RABBITMQ_CONFIG_FILE:-/etc/rabbitmq/rabbitmq.conf}"
 
 if [ ! -f "$source_script" ]; then
   echo "OnlyOffice Document Server script not found: $source_script" >&2
   exit 1
 fi
+
+# Nested rootless Podman cannot expose the inner PID namespace through the
+# outer container's procfs. RabbitMQ's default rss strategy consequently tries
+# to read a PID that is not present in /proc and aborts before Document Server
+# starts. The supported erlang strategy obtains process memory from the VM and
+# does not depend on that procfs lookup.
+rabbitmq_config_dir="$(dirname "$rabbitmq_config_file")"
+install -d -m 0755 "$rabbitmq_config_dir"
+rabbitmq_config_tmp="$(mktemp "$rabbitmq_config_dir/.rabbitmq.conf.XXXXXX")"
+if [ -f "$rabbitmq_config_file" ]; then
+  awk '!/^[[:space:]]*vm_memory_calculation_strategy[[:space:]]*=/' \
+    "$rabbitmq_config_file" > "$rabbitmq_config_tmp"
+  chmod --reference="$rabbitmq_config_file" "$rabbitmq_config_tmp"
+  if [ "$(id -u)" -eq 0 ]; then
+    chown --reference="$rabbitmq_config_file" "$rabbitmq_config_tmp"
+  fi
+else
+  chmod 0640 "$rabbitmq_config_tmp"
+  chown root:rabbitmq "$rabbitmq_config_tmp"
+fi
+printf '%s\n' 'vm_memory_calculation_strategy = erlang' >> "$rabbitmq_config_tmp"
+mv -f "$rabbitmq_config_tmp" "$rabbitmq_config_file"
 
 awk '
   /service supervisor start/ && inserted == 0 {

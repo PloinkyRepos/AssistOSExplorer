@@ -13,6 +13,7 @@ test('document server wrapper enables auto assembly before supervisor starts', a
   const jsonLog = path.join(tempDir, 'json.log');
   const fakeJson = path.join(tempDir, 'json-tool.sh');
   const fakeDocumentServer = path.join(tempDir, 'run-document-server.sh');
+  const rabbitmqConfig = path.join(tempDir, 'rabbitmq.conf');
 
   await writeFile(fakeJson, [
     '#!/bin/bash',
@@ -25,6 +26,12 @@ test('document server wrapper enables auto assembly before supervisor starts', a
     'service() { echo "service $*"; }',
     'service supervisor start',
   ].join('\n'), { mode: 0o755 });
+  await writeFile(rabbitmqConfig, [
+    'listeners.tcp.default = 5672',
+    'vm_memory_calculation_strategy = rss',
+    'vm_memory_calculation_strategy=allocated',
+    '',
+  ].join('\n'), { mode: 0o640 });
 
   const { stdout } = await execFileAsync('/bin/bash', [
     'scripts/run-document-server-with-autoassembly.sh',
@@ -33,15 +40,22 @@ test('document server wrapper enables auto assembly before supervisor starts', a
     env: {
       ...process.env,
       ONLYOFFICE_DOCUMENT_SERVER_BASE_SCRIPT: fakeDocumentServer,
+      ONLYOFFICE_RABBITMQ_CONFIG_FILE: rabbitmqConfig,
       ONLYOFFICE_AUTO_ASSEMBLY_ENABLED: 'true',
       ONLYOFFICE_AUTO_ASSEMBLY_INTERVAL: '2m',
       ONLYOFFICE_AUTO_ASSEMBLY_STEP: '30s',
     },
   });
   const calls = await readFile(jsonLog, 'utf8');
+  const rabbitmqConfigContents = await readFile(rabbitmqConfig, 'utf8');
 
   assert.match(calls, /autoAssembly\.enable = true/);
   assert.match(calls, /autoAssembly\.interval = '2m'/);
   assert.match(calls, /autoAssembly\.step = '30s'/);
   assert.match(stdout, /service supervisor start/);
+  assert.match(rabbitmqConfigContents, /^listeners\.tcp\.default = 5672$/m);
+  assert.deepEqual(
+    rabbitmqConfigContents.match(/^vm_memory_calculation_strategy\s*=.*$/gm),
+    ['vm_memory_calculation_strategy = erlang'],
+  );
 });
