@@ -78,12 +78,17 @@ test('manifest publishes router-facing control and browser-facing editor ports s
 
     const ports = profile.openPorts || [];
     assert.ok(
-      ports.includes('127.0.0.1:0:7000'),
-      `${profileName} publishes the protected control listener on an ephemeral localhost host port for Ploinky httpServices`
+      ports.includes('127.0.0.1:17002:7000'),
+      `${profileName} publishes the protected control listener on stable box-side port 17002 for Ploinky httpServices`
     );
     assert.ok(
       ports.includes(editorPort),
       `${profileName} keeps the browser-facing editor proxy on ${editorPort}`
+    );
+    assert.equal(
+      ports.some((entry) => /(?:^|:)0(?::|$)/.test(String(entry))),
+      false,
+      `${profileName} has no unsupported box-side port zero claim`
     );
     assert.equal(
       ports.some((entry) => /:9100$/.test(String(entry))),
