@@ -91,4 +91,3 @@ set_default_var() {
 
 set_default_var ONLYOFFICE_PUBLIC_URL "http://127.0.0.1:${host_port}"
 set_default_var ONLYOFFICE_INTERNAL_URL "http://127.0.0.1:80" "http://host.containers.internal:${host_port}"
-set_default_var ONLYOFFICE_CALLBACK_BASE_URL "http://host.containers.internal:8080"

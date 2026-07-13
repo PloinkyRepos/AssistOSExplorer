@@ -25,7 +25,7 @@ test('document server wrapper enables auto assembly before supervisor starts', a
     `JSON=${JSON.stringify(fakeJson)}`,
     'service() { echo "service $*"; }',
     'install() { echo "install $*"; }',
-    'start-stop-daemon() { echo "start-stop-daemon $*"; }',
+    'start-stop-daemon() { echo "RABBITMQ_NODENAME=${RABBITMQ_NODENAME:-} start-stop-daemon $*"; }',
     'LOCAL_SERVICES=(postgresql rabbitmq-server)',
     'for i in "${LOCAL_SERVICES[@]}"; do',
     '  service $i start',
@@ -45,6 +45,7 @@ test('document server wrapper enables auto assembly before supervisor starts', a
     cwd: new URL('..', import.meta.url),
     env: {
       ...process.env,
+      RABBITMQ_NODENAME: '',
       ONLYOFFICE_DOCUMENT_SERVER_BASE_SCRIPT: fakeDocumentServer,
       ONLYOFFICE_RABBITMQ_CONFIG_FILE: rabbitmqConfig,
       ONLYOFFICE_AUTO_ASSEMBLY_ENABLED: 'true',
@@ -59,6 +60,7 @@ test('document server wrapper enables auto assembly before supervisor starts', a
   assert.match(calls, /autoAssembly\.interval = '2m'/);
   assert.match(calls, /autoAssembly\.step = '30s'/);
   assert.match(stdout, /service postgresql start/);
+  assert.match(stdout, /RABBITMQ_NODENAME=rabbit@localhost start-stop-daemon/);
   assert.match(stdout, /start-stop-daemon .*--exec \/usr\/sbin\/rabbitmq-server .*--background/);
   assert.doesNotMatch(stdout, /service rabbitmq-server start/);
   assert.match(stdout, /service supervisor start/);
@@ -67,4 +69,39 @@ test('document server wrapper enables auto assembly before supervisor starts', a
     rabbitmqConfigContents.match(/^vm_memory_calculation_strategy\s*=.*$/gm),
     ['vm_memory_calculation_strategy = erlang'],
   );
+});
+
+test('document server wrapper preserves an explicit RabbitMQ node name', async () => {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'onlyoffice-wrapper-nodename-'));
+  const fakeDocumentServer = path.join(tempDir, 'run-document-server.sh');
+  const rabbitmqConfig = path.join(tempDir, 'rabbitmq.conf');
+
+  await writeFile(fakeDocumentServer, [
+    '#!/bin/bash',
+    'set -e',
+    'JSON=true',
+    'service() { :; }',
+    'install() { :; }',
+    'start-stop-daemon() { printf "%s\\n" "$RABBITMQ_NODENAME"; }',
+    'LOCAL_SERVICES=(rabbitmq-server)',
+    'for i in "${LOCAL_SERVICES[@]}"; do',
+    '  service $i start',
+    'done',
+    'service supervisor start',
+  ].join('\n'), { mode: 0o755 });
+  await writeFile(rabbitmqConfig, '', { mode: 0o640 });
+
+  const { stdout } = await execFileAsync('/bin/bash', [
+    'scripts/run-document-server-with-autoassembly.sh',
+  ], {
+    cwd: new URL('..', import.meta.url),
+    env: {
+      ...process.env,
+      RABBITMQ_NODENAME: 'rabbit@explicit-host',
+      ONLYOFFICE_DOCUMENT_SERVER_BASE_SCRIPT: fakeDocumentServer,
+      ONLYOFFICE_RABBITMQ_CONFIG_FILE: rabbitmqConfig,
+    },
+  });
+
+  assert.match(stdout, /^rabbit@explicit-host$/m);
 });

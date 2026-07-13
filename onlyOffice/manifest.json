@@ -3,8 +3,22 @@
   "entrypoint": "/bin/bash",
   "start": "-lc \"node src/index.mjs\"",
   "about": "OnlyOffice decorator agent for authenticated Office sessions, loopback storage routes, and the public editor proxy.",
-  "readiness": {
-    "protocol": "tcp"
+  "network": {
+    "mode": "bridge",
+    "attachments": [
+      {
+        "name": "office-publishing",
+        "primary": true
+      }
+    ]
+  },
+  "health": {
+    "readiness": {
+      "script": "readiness.sh",
+      "interval": 2,
+      "timeout": 5,
+      "failureThreshold": 90
+    }
   },
   "httpServices": [
     {

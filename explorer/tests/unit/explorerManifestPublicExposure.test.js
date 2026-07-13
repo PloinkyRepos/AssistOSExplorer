@@ -52,12 +52,24 @@ test('Explorer declares Web Publishing support repos and never requests the lega
     const legacyTokenName = ['CLOUDFLARED', 'TUNNEL', 'TOKEN'].join('_');
 
     assert.equal(manifest.repos?.basic, 'https://github.com/AssistOS-AI/basic.git');
-    assert.equal(
+    assert.deepEqual(
         manifest.repos?.['container-image-builds'],
-        'https://github.com/AssistOS-AI/container-image-builds.git'
+        {
+            url: 'https://github.com/AssistOS-AI/container-image-builds.git',
+            branch: 'main'
+        }
     );
     assert.match(serialized, /basic\/web-publishing/);
     assert.doesNotMatch(serialized, /basic\/cloudflared/);
     assert.equal(serialized.includes(`"${legacyTokenName}"`), false);
     assert.equal(serialized.includes(legacyTokenName), false);
+});
+
+test('Explorer blocks on OnlyOffice full-stack readiness', async () => {
+    const manifest = await readManifest();
+    const onlyOfficeEdges = (manifest.enable || [])
+        .filter((entry) => refsAgent(entry, 'onlyOffice'));
+
+    assert.deepEqual(onlyOfficeEdges, ['onlyOffice global']);
+    assert.equal(onlyOfficeEdges[0].includes('no-wait'), false);
 });

@@ -5,6 +5,23 @@ source_script="${ONLYOFFICE_DOCUMENT_SERVER_BASE_SCRIPT:-/app/ds/run-document-se
 patched_script="${TMPDIR:-/tmp}/onlyoffice-agent-run-document-server.$$.sh"
 rabbitmq_config_file="${ONLYOFFICE_RABBITMQ_CONFIG_FILE:-/etc/rabbitmq/rabbitmq.conf}"
 
+stat_mode() {
+  stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1"
+}
+
+stat_owner() {
+  stat -c '%u:%g' "$1" 2>/dev/null || stat -f '%u:%g' "$1"
+}
+
+# The bundled RabbitMQ is a single-node, in-container dependency. Nested
+# rootless container runtimes can retain an outer-container address for the
+# dynamically assigned inner hostname in /etc/hosts. Erlang then resolves its
+# default rabbit@<hostname> node to an address that is not local to this
+# container and fails to contact epmd even though epmd is listening locally.
+# A stable loopback node name avoids that namespace-dependent lookup while
+# preserving RabbitMQ's standard environment override for non-nested runtimes.
+export RABBITMQ_NODENAME="${RABBITMQ_NODENAME:-rabbit@localhost}"
+
 if [ ! -f "$source_script" ]; then
   echo "OnlyOffice Document Server script not found: $source_script" >&2
   exit 1
@@ -21,9 +38,9 @@ rabbitmq_config_tmp="$(mktemp "$rabbitmq_config_dir/.rabbitmq.conf.XXXXXX")"
 if [ -f "$rabbitmq_config_file" ]; then
   awk '!/^[[:space:]]*vm_memory_calculation_strategy[[:space:]]*=/' \
     "$rabbitmq_config_file" > "$rabbitmq_config_tmp"
-  chmod --reference="$rabbitmq_config_file" "$rabbitmq_config_tmp"
+  chmod "$(stat_mode "$rabbitmq_config_file")" "$rabbitmq_config_tmp"
   if [ "$(id -u)" -eq 0 ]; then
-    chown --reference="$rabbitmq_config_file" "$rabbitmq_config_tmp"
+    chown "$(stat_owner "$rabbitmq_config_file")" "$rabbitmq_config_tmp"
   fi
 else
   chmod 0640 "$rabbitmq_config_tmp"

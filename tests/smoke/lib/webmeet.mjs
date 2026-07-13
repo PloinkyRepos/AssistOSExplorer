@@ -109,3 +109,49 @@ export async function expectIncreasingRtpStats(page) {
   const after = second.reduce((sum, row) => sum + row.packets + row.frames, 0);
   expect(after).toBeGreaterThan(before);
 }
+
+export async function expectRelayIceSelected(page) {
+  const readSelected = () => page.evaluate(async () => {
+    const rows = [];
+    for (const pc of window.__e2ePeerConnections || []) {
+      const stats = await pc.getStats();
+      let selectedPairId = '';
+      stats.forEach((entry) => {
+        if (entry.type === 'transport' && entry.selectedCandidatePairId) {
+          selectedPairId = entry.selectedCandidatePairId;
+        }
+      });
+      if (!selectedPairId) {
+        stats.forEach((entry) => {
+          if (
+            entry.type === 'candidate-pair'
+            && entry.state === 'succeeded'
+            && (entry.nominated || entry.selected)
+          ) {
+            selectedPairId = entry.id;
+          }
+        });
+      }
+      const pair = selectedPairId ? stats.get(selectedPairId) : null;
+      const local = pair?.localCandidateId ? stats.get(pair.localCandidateId) : null;
+      if (pair && local) {
+        rows.push({
+          state: pair.state,
+          candidateType: local.candidateType || '',
+          protocol: local.protocol || '',
+        });
+      }
+    }
+    return rows;
+  });
+
+  await expect.poll(async () => {
+    const selected = await readSelected();
+    return selected.length > 0 && selected.every((row) => (
+      row.state === 'succeeded' && row.candidateType === 'relay'
+    ));
+  }, {
+    timeout: smokeConfig.timeouts.media,
+    message: 'selected WebRTC candidate pairs must use local TURN relay candidates',
+  }).toBe(true);
+}

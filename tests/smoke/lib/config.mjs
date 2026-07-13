@@ -31,6 +31,15 @@ function resolveOptionalPath(value) {
 
 const runId = String(process.env.SMOKE_RUN_ID || defaultRunId()).replace(/[^A-Za-z0-9_-]/g, '-');
 const workspaceRoot = resolveOptionalPath(process.env.SMOKE_WORKSPACE_ROOT);
+const webmeetMedia = readBool('SMOKE_WEBMEET_MEDIA', false);
+const webmeetRequireRelay = readBool('SMOKE_WEBMEET_REQUIRE_RELAY', false);
+const networkTopology = readBool('SMOKE_NETWORK_TOPOLOGY', false);
+if (webmeetRequireRelay && !webmeetMedia) {
+  throw new Error('SMOKE_WEBMEET_REQUIRE_RELAY=1 requires SMOKE_WEBMEET_MEDIA=1.');
+}
+if (networkTopology && !workspaceRoot) {
+  throw new Error('SMOKE_NETWORK_TOPOLOGY=1 requires SMOKE_WORKSPACE_ROOT.');
+}
 const dpuDataRoot = resolveOptionalPath(process.env.SMOKE_DPU_DATA_ROOT)
   || (workspaceRoot ? path.join(workspaceRoot, '.ploinky', 'data', 'dpu-data') : path.join(repoRoot, '.ploinky', 'data', 'dpu-data'));
 const artifactRoot = path.resolve(
@@ -43,6 +52,7 @@ export const smokeConfig = Object.freeze({
   runId,
   artifactRoot,
   workspaceRoot,
+  ploinkyBin: String(process.env.SMOKE_PLOINKY_BIN || 'ploinky').trim() || 'ploinky',
   dpuDataRoot,
   baseURL: stripTrailingSlash(process.env.SMOKE_BASE_URL || process.env.PLAYWRIGHT_BASE_URL),
   primaryUser: {
@@ -58,9 +68,11 @@ export const smokeConfig = Object.freeze({
   flags: {
     failOnBrowserErrors: !readBool('SMOKE_ALLOW_BROWSER_ERRORS', false),
     github: readBool('SMOKE_GITHUB', false),
+    networkTopology,
     onlyoffice: readBool('SMOKE_ONLYOFFICE', false),
     openInterpreter: readBool('SMOKE_OPEN_INTERPRETER', false),
-    webmeetMedia: readBool('SMOKE_WEBMEET_MEDIA', false),
+    webmeetMedia,
+    webmeetRequireRelay,
     webmeetScreen: readBool('SMOKE_WEBMEET_SCREEN', false),
   },
   timeouts: {

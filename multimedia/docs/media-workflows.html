@@ -48,7 +48,14 @@
 
                 <section>
                     <h2>FFmpeg Image to Video Flow</h2>
-                    <p>The <code>ffmpegImageToVideo</code> skill accepts images (and optional audio), normalizes inputs (blob id or URL), runs FFmpeg, and uploads the resulting MP4 to blob storage.</p>
+                    <p>The <code>ffmpegImageToVideo</code> skill accepts images
+                        (and optional audio), resolves blob IDs through the
+                        launcher-injected <code>PLOINKY_ROUTER_URL</code>, runs
+                        FFmpeg, and uploads the resulting MP4 through the same
+                        router blob API. It fails closed when the router URL is
+                        unavailable or invalid. Explicit external HTTP(S) URLs
+                        are used unchanged; loopback and host-gateway names are
+                        never silently rewritten.</p>
                     <pre><code>{
   "images": ["blob-id-1", "blob-id-2"],
   "audio": "blob-audio-id",
@@ -59,7 +66,10 @@
   "bg": "black"
 }</code></pre>
                     <div class="doc-callout">
-                        <p>SVG is explicitly rejected in the processing flow. Use PNG/JPG for image input.</p>
+                        <p>SVG is explicitly rejected in the processing flow.
+                            Use PNG/JPG for image input. Ploinky must inject an
+                            HTTP(S) origin in <code>PLOINKY_ROUTER_URL</code>
+                            because output upload is always router-mediated.</p>
                     </div>
                 </section>
 

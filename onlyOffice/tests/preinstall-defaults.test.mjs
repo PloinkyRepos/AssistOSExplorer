@@ -17,6 +17,8 @@ test('preinstall defaults the decorator internal URL to the in-container Documen
     /set_default_var ONLYOFFICE_INTERNAL_URL "http:\/\/127\.0\.0\.1:80" "http:\/\/host\.containers\.internal:\$\{host_port\}"/
   );
   assert.match(script, /legacy self-loop default/);
+  assert.doesNotMatch(script, /set_default_var ONLYOFFICE_CALLBACK_BASE_URL/);
+  assert.doesNotMatch(script, /"http:\/\/host\.containers\.internal:8080"/);
 });
 
 test('preinstall hook is valid bash syntax', () => {

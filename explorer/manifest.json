@@ -32,18 +32,20 @@
         "tasksAgent global",
         "AchillesCLI/achilles-cli global no-wait",
         "basic/webtty global",
-        "webmeetInfra/liveKitServerAgent no-wait",
         "webmeetStt no-wait",
-        "webmeetAgent global no-wait",
+        "webmeetAgent global",
         "multimedia global no-wait",
-        "onlyOffice global no-wait",
+        "onlyOffice global",
         "proxies/soul-gateway no-wait",
         "webAssist no-wait",
         "UmamiAgent/umamiAgent no-wait"
     ],
     "repos": {
         "basic": "https://github.com/AssistOS-AI/basic.git",
-        "container-image-builds": "https://github.com/AssistOS-AI/container-image-builds.git",
+        "container-image-builds": {
+            "url": "https://github.com/AssistOS-AI/container-image-builds.git",
+            "branch": "main"
+        },
         "webmeetInfra": "https://github.com/AssistOS-AI/webmeetInfra.git",
         "UmamiAgent": "https://github.com/AssistOS-AI/UmamiAgent.git"
     },

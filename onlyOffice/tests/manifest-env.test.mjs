@@ -23,6 +23,30 @@ function assertModernHttpService(service, label) {
   assert.equal(service?.forceGuest, undefined, `${label} must not declare removed forceGuest field`);
 }
 
+test('manifest blocks startup on the real editor API readiness path', () => {
+  const manifest = readManifest();
+
+  assert.equal(manifest.readiness, undefined);
+  assert.deepEqual(manifest.health?.readiness, {
+    script: 'readiness.sh',
+    interval: 2,
+    timeout: 5,
+    failureThreshold: 90,
+  });
+});
+
+test('manifest joins only the office publishing trust zone with a derived DNS name', () => {
+  const manifest = readManifest();
+
+  assert.deepEqual(manifest.network, {
+    mode: 'bridge',
+    attachments: [
+      { name: 'office-publishing', primary: true },
+    ],
+  });
+  assert.equal(JSON.stringify(manifest.network).includes('aliases'), false);
+});
+
 test('manifest injects the OnlyOffice JWT secret under decorator and Document Server names', () => {
   const manifest = readManifest();
 

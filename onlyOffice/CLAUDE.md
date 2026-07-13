@@ -4,6 +4,10 @@
 
 OnlyOffice owns the runtime boundary for the workspace OnlyOffice Document Server integration. The implementation is a Ploinky-managed agent (`manifest.json`); the previous raw host-managed Document Server container started by Explorer's preinstall is no longer used and is removed by this agent's own preinstall hook on first start.
 
+The bundled RabbitMQ must use the stable `rabbit@localhost` node-name default under nested rootless runtimes, and `readiness.sh` must prove both the decorator control listener and the proxied Document Server `api.js` before startup can pass.
+
+The manifest's only shared attachment is primary `office-publishing`, where Web Publishing reaches the editor proxy as `onlyoffice:8080`. Ploinky derives that DNS name from the canonical agent id; the manifest declares no aliases. The co-located Document Server and storage listener remain on container loopback.
+
 ## Mandatory Reading Order
 
 1. Read the nearest parent `AGENTS.md` for workspace-wide rules.

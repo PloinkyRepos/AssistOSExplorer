@@ -4,7 +4,7 @@ import path from 'node:path';
 import { expect, test as base } from '@playwright/test';
 
 import { smokeConfig } from './config.mjs';
-import { createRedactor, findSecretLeaks } from './security.mjs';
+import { createRedactor, findDiagnosticLeaks, redactDiagnosticValue } from './security.mjs';
 
 const ignoredUrlPatterns = [
   /\/favicon\.ico(?:$|\?)/i,
@@ -61,20 +61,24 @@ export function attachPageDiagnostics(page, testInfo, label = 'page') {
   const redact = createRedactor();
   const events = [];
 
+  function record(event) {
+    events.push(redactDiagnosticValue(event, redact));
+  }
+
   page.on('console', (message) => {
-    events.push({
+    record({
       kind: 'console',
       type: message.type(),
-      text: redact(message.text()),
+      text: message.text(),
       location: message.location(),
     });
   });
 
   page.on('pageerror', (error) => {
-    events.push({
+    record({
       kind: 'pageerror',
       type: 'error',
-      text: redact(error?.stack || error?.message || String(error)),
+      text: error?.stack || error?.message || String(error),
     });
   });
 
@@ -83,10 +87,10 @@ export function attachPageDiagnostics(page, testInfo, label = 'page') {
     const method = request.method();
     const failure = request.failure()?.errorText || '';
     if (shouldIgnoreRequestFailure(url, method, failure)) return;
-    events.push({
+    record({
       kind: 'requestfailed',
       type: 'error',
-      url: redact(url),
+      url,
       method,
       failure,
     });
@@ -96,11 +100,11 @@ export function attachPageDiagnostics(page, testInfo, label = 'page') {
     const status = response.status();
     const url = response.url();
     if (status < 400 || shouldIgnoreUrl(url)) return;
-    events.push({
+    record({
       kind: 'response',
       type: 'error',
       status,
-      url: redact(url),
+      url,
       method: response.request().method(),
     });
   });
@@ -109,10 +113,16 @@ export function attachPageDiagnostics(page, testInfo, label = 'page') {
     const outDir = testInfo.outputPath('diagnostics');
     fs.mkdirSync(outDir, { recursive: true });
     const filePath = path.join(outDir, `${label}.browser-events.json`);
-    const payload = JSON.stringify(events, null, 2);
-    fs.writeFileSync(filePath, payload);
-    const leaks = findSecretLeaks(payload);
-    expect(leaks, `secret values leaked into ${label} browser diagnostics`).toEqual([]);
+    const safeEvents = redactDiagnosticValue(events, redact);
+    const payload = JSON.stringify(safeEvents, null, 2);
+    const leaks = findDiagnosticLeaks(payload);
+    if (leaks.length > 0) {
+      throw new Error(`Refusing to persist unsafe ${label} browser diagnostics (${leaks.join(', ')})`);
+    }
+    const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+    fs.writeFileSync(tempPath, payload, { flag: 'wx', mode: 0o600 });
+    fs.renameSync(tempPath, filePath);
+    events.splice(0, events.length, ...safeEvents);
     return events;
   }
 

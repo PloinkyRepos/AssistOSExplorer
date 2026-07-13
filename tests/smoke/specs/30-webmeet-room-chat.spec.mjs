@@ -6,6 +6,7 @@ import {
   deleteRoomIfPresent,
   enableMedia,
   expectIncreasingRtpStats,
+  expectRelayIceSelected,
   joinRoom,
   openWebMeet,
   sendWebMeetChat,
@@ -51,6 +52,10 @@ test.describe('WebMeet rooms', () => {
         await enableMedia(memberPage);
         await expectIncreasingRtpStats(page);
         await expectIncreasingRtpStats(memberPage);
+        if (smokeConfig.flags.webmeetRequireRelay) {
+          await expectRelayIceSelected(page);
+          await expectRelayIceSelected(memberPage);
+        }
       }
     } finally {
       if (memberDiagnostics) {

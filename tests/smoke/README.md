@@ -27,7 +27,7 @@ Artifacts are written outside tracked source by default:
 ../../.ploinky/test-artifacts/headless-smoke/<run-id>/
 ```
 
-Playwright traces, screenshots, videos, and JSON reports stay under `tests/smoke/test-results/` and `tests/smoke/playwright-report/`.
+Playwright screenshots, videos, and JSON reports stay under `tests/smoke/test-results/` and `tests/smoke/playwright-report/`. Traces are disabled because Playwright records raw network URLs and cannot redact browser-minted WebMeet credentials from them. Browser-event diagnostics redact sensitive object fields, URL query values, authorization material, generated JWTs, SDP/ICE material, TURN/STUN URLs, private keys, and bounded nested encodings before writing owner-only files.
 
 ## Coverage
 
@@ -45,8 +45,10 @@ Opt-in checks:
 
 - `SMOKE_OPEN_INTERPRETER=1` runs Copilot semantic routing and AKU memory checks that require configured external provider runtime.
 - `SMOKE_WEBMEET_MEDIA=1` enables fake camera/microphone and asserts WebRTC stats increase.
+- `SMOKE_WEBMEET_REQUIRE_RELAY=1` additionally requires every selected local ICE candidate to be a TURN relay candidate; it fails fast unless `SMOKE_WEBMEET_MEDIA=1` is also set.
 - `SMOKE_WEBMEET_SCREEN=1` is reserved for headless screen-share coverage once the runtime environment supports deterministic display capture.
 - `SMOKE_ONLYOFFICE=1` enables DPU/OnlyOffice route checks.
+- `SMOKE_NETWORK_TOPOLOGY=1` runs `ploinky network status --json` in `SMOKE_WORKSPACE_ROOT` and proves that the WebMeet signaling, WebMeet TURN, and Office publishing zones contain exactly their intended canonical agent identities; WebTTY, webmeetStt, and Umami each occupy a separate owned default network with only their canonical alias; and the owned running gateway has exactly the `ploinky-router` alias on every managed network. `SMOKE_PLOINKY_BIN` may select a non-default CLI executable.
 - `SMOKE_GITHUB=1` enables GitHub plugin authentication checks.
 
 ## GitHub DPU Token Ownership
@@ -92,6 +94,23 @@ Run long relay and media checks:
 SMOKE_OPEN_INTERPRETER=1 SMOKE_WEBMEET_MEDIA=1 npm test
 ```
 
+Prove WebMeet is using TURN relay candidates in a relay-policy deployment:
+
+```bash
+SMOKE_BASE_URL=http://127.0.0.1:8080 \
+SMOKE_WEBMEET_MEDIA=1 \
+SMOKE_WEBMEET_REQUIRE_RELAY=1 \
+npm test -- --grep "room supports two users"
+```
+
+Prove the local rootless trust-zone boundaries after all Explorer dependencies are running:
+
+```bash
+SMOKE_NETWORK_TOPOLOGY=1 \
+SMOKE_WORKSPACE_ROOT=/absolute/path/to/explorerWorkspace \
+npm test -- --grep "rootless network topology"
+```
+
 Allow known browser noise temporarily while triaging:
 
 ```bash
@@ -102,6 +121,6 @@ SMOKE_ALLOW_BROWSER_ERRORS=1 npm test
 
 - Prefer stable IDs and data attributes already present in the UI.
 - Add a helper under `lib/` before duplicating a flow across specs.
-- Keep secret values out of screenshots, traces, console logs, and test annotations.
+- Keep secret values out of screenshots, videos, console logs, and test annotations. Do not enable Playwright traces while browser-minted credentials can appear in request URLs.
 - External provider checks must stay opt-in unless the repository owns all required credentials and runtime configuration.
 - Tests that create rooms, uploads, users, branches, or files must use `SMOKE_RUN_ID` in names and clean up when the UI exposes cleanup.
