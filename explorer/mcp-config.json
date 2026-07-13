@@ -484,6 +484,185 @@
       }
     },
     {
+      "name": "open_markdown_crdt_document",
+      "description": "Open or initialize the Automerge CRDT state for a Markdown document.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "env": {
+        "TOOL_NAME": "open_markdown_crdt_document"
+      },
+      "inputSchema": {
+        "path": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "name": "apply_markdown_crdt_change",
+      "description": "Apply an incremental Markdown CRDT change to an Automerge document.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "env": {
+        "TOOL_NAME": "apply_markdown_crdt_change"
+      },
+      "inputSchema": {
+        "documentId": {
+          "type": "string"
+        },
+        "operation": {
+          "type": "string",
+          "enum": [
+            "replaceTextRange",
+            "replaceDocumentFromMarkdown",
+            "replaceDocumentModel",
+            "updateDocument",
+            "updateDocumentMetadata",
+            "addChapter",
+            "deleteChapter",
+            "reorderChapter",
+            "updateChapter",
+            "addParagraph",
+            "deleteParagraph",
+            "reorderParagraph",
+            "updateParagraph",
+            "updateMetadata"
+          ]
+        },
+        "changeJson": {
+          "type": "string",
+          "optional": true
+        },
+        "change": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "optional": true
+            },
+            "from": {
+              "type": "number",
+              "optional": true
+            },
+            "deleteCount": {
+              "type": "number",
+              "optional": true
+            },
+            "insertText": {
+              "type": "string",
+              "optional": true
+            },
+            "markdown": {
+              "type": "string",
+              "optional": true
+            },
+            "model": {
+              "type": "object",
+              "optional": true
+            },
+            "metadata": {
+              "type": "object",
+              "optional": true
+            },
+            "patch": {
+              "type": "object",
+              "optional": true
+            },
+            "chapter": {
+              "type": "object",
+              "optional": true
+            },
+            "paragraph": {
+              "type": "object",
+              "optional": true
+            },
+            "chapterId": {
+              "type": "string",
+              "optional": true
+            },
+            "paragraphId": {
+              "type": "string",
+              "optional": true
+            },
+            "position": {
+              "type": "number",
+              "optional": true
+            },
+            "title": {
+              "type": "string",
+              "optional": true
+            },
+            "infoText": {
+              "type": "string",
+              "optional": true
+            },
+            "text": {
+              "type": "string",
+              "optional": true
+            },
+            "target": {
+              "type": "string",
+              "optional": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "merge_markdown_crdt_document",
+      "description": "Merge another Automerge Markdown CRDT state into a local Markdown document.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "env": {
+        "TOOL_NAME": "merge_markdown_crdt_document"
+      },
+      "inputSchema": {
+        "documentId": {
+          "type": "string"
+        },
+        "remoteDocumentId": {
+          "type": "string",
+          "optional": true
+        },
+        "remoteStateBase64": {
+          "type": "string",
+          "optional": true
+        }
+      }
+    },
+    {
+      "name": "save_markdown_crdt_document",
+      "description": "Export an Automerge Markdown document state back to the .md file.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "env": {
+        "TOOL_NAME": "save_markdown_crdt_document"
+      },
+      "inputSchema": {
+        "documentId": {
+          "type": "string",
+          "optional": true
+        },
+        "path": {
+          "type": "string",
+          "optional": true
+        }
+      }
+    },
+    {
+      "name": "sync_markdown_crdt_from_file",
+      "description": "Synchronize an Automerge Markdown state from the current .md file contents.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "env": {
+        "TOOL_NAME": "sync_markdown_crdt_from_file"
+      },
+      "inputSchema": {
+        "path": {
+          "type": "string"
+        }
+      }
+    },
+    {
       "name": "llm_autocomplete",
       "title": "LLM Autocomplete",
       "description": "Generate a code completion for the current cursor position using file context.",

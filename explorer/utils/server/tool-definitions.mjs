@@ -21,6 +21,11 @@ export function buildToolDefinitions(zodToJsonSchema, schemas) {
     SearchTextCancelArgsSchema,
     ReplaceTextArgsSchema,
     GetFileInfoArgsSchema,
+    OpenMarkdownCrdtDocumentArgsSchema,
+    ApplyMarkdownCrdtChangeArgsSchema,
+    MergeMarkdownCrdtDocumentArgsSchema,
+    SaveMarkdownCrdtDocumentArgsSchema,
+    SyncMarkdownCrdtFromFileArgsSchema,
     LlmAutocompleteArgsSchema,
     CollectIDEPluginsArgsSchema,
     GetPluginSettingsArgsSchema,
@@ -145,6 +150,31 @@ export function buildToolDefinitions(zodToJsonSchema, schemas) {
       name: 'get_file_info',
       description: 'Retrieve metadata about a file or directory.',
       inputSchema: zodToJsonSchema(GetFileInfoArgsSchema)
+    },
+    {
+      name: 'open_markdown_crdt_document',
+      description: 'Open or initialize the Automerge CRDT state for a Markdown document.',
+      inputSchema: zodToJsonSchema(OpenMarkdownCrdtDocumentArgsSchema)
+    },
+    {
+      name: 'apply_markdown_crdt_change',
+      description: 'Apply an incremental Markdown CRDT change to an Automerge document.',
+      inputSchema: zodToJsonSchema(ApplyMarkdownCrdtChangeArgsSchema)
+    },
+    {
+      name: 'merge_markdown_crdt_document',
+      description: 'Merge another Automerge Markdown CRDT state into a local Markdown document.',
+      inputSchema: zodToJsonSchema(MergeMarkdownCrdtDocumentArgsSchema)
+    },
+    {
+      name: 'save_markdown_crdt_document',
+      description: 'Export an Automerge Markdown document state back to the .md file.',
+      inputSchema: zodToJsonSchema(SaveMarkdownCrdtDocumentArgsSchema)
+    },
+    {
+      name: 'sync_markdown_crdt_from_file',
+      description: 'Synchronize an Automerge Markdown state from the current .md file contents.',
+      inputSchema: zodToJsonSchema(SyncMarkdownCrdtFromFileArgsSchema)
     },
     {
       name: 'llm_autocomplete',

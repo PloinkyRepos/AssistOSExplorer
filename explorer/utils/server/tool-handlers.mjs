@@ -3,6 +3,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { jsonResponse, textResponse } from './responses.mjs';
 import { createAvatarSettingsStore } from './avatar-settings/avatar-settings-store.mjs';
+import { createMarkdownCrdtStore } from './markdown-crdt/markdown-crdt-store.mjs';
 
 function parseArgs(schema, args, name) {
   const parsed = schema.safeParse(args);
@@ -124,6 +125,11 @@ export function createToolHandlers({
     SearchTextCancelArgsSchema,
     ReplaceTextArgsSchema,
     GetFileInfoArgsSchema,
+    OpenMarkdownCrdtDocumentArgsSchema,
+    ApplyMarkdownCrdtChangeArgsSchema,
+    MergeMarkdownCrdtDocumentArgsSchema,
+    SaveMarkdownCrdtDocumentArgsSchema,
+    SyncMarkdownCrdtFromFileArgsSchema,
     LlmAutocompleteArgsSchema,
     CollectIDEPluginsArgsSchema,
     GetPluginSettingsArgsSchema,
@@ -201,6 +207,14 @@ export function createToolHandlers({
   const ploinkyRoot = path.join(workspaceRoot, 'ploinky');
   let ploinkyReposServicePromise = null;
   const avatarSettingsStore = createAvatarSettingsStore({ fs, path, workspaceRoot });
+  const markdownCrdtStore = createMarkdownCrdtStore({
+    fs,
+    path,
+    workspaceRoot,
+    validatePath,
+    writeFileContent,
+    invalidateCachesForPath
+  });
 
   async function loadPloinkyReposService() {
     if (!ploinkyReposServicePromise) {
@@ -1081,6 +1095,53 @@ export function createToolHandlers({
     });
   }
 
+  async function handleOpenMarkdownCrdtDocument(args) {
+    const data = parseArgs(OpenMarkdownCrdtDocumentArgsSchema, args, 'open_markdown_crdt_document');
+    return jsonResponse(await markdownCrdtStore.open(data.path));
+  }
+
+  async function handleApplyMarkdownCrdtChange(args) {
+    const data = parseArgs(ApplyMarkdownCrdtChangeArgsSchema, args, 'apply_markdown_crdt_change');
+    let parsedChange = null;
+    if (typeof data.changeJson === 'string' && data.changeJson.trim()) {
+      try {
+        const candidate = JSON.parse(data.changeJson);
+        if (candidate && typeof candidate === 'object' && !Array.isArray(candidate)) {
+          parsedChange = candidate;
+        }
+      } catch {
+        throw new Error('Invalid arguments for apply_markdown_crdt_change: changeJson must be valid JSON.');
+      }
+    }
+    const operation = data.operation || data.change?.type || parsedChange?.type || '';
+    if (!operation) {
+      throw new Error('Invalid arguments for apply_markdown_crdt_change: operation is required.');
+    }
+    return jsonResponse(await markdownCrdtStore.applyChange({
+      ...data,
+      change: {
+        ...(data.change || {}),
+        ...(parsedChange || {}),
+        type: operation
+      }
+    }));
+  }
+
+  async function handleMergeMarkdownCrdtDocument(args) {
+    const data = parseArgs(MergeMarkdownCrdtDocumentArgsSchema, args, 'merge_markdown_crdt_document');
+    return jsonResponse(await markdownCrdtStore.merge(data));
+  }
+
+  async function handleSaveMarkdownCrdtDocument(args) {
+    const data = parseArgs(SaveMarkdownCrdtDocumentArgsSchema, args, 'save_markdown_crdt_document');
+    return jsonResponse(await markdownCrdtStore.save(data));
+  }
+
+  async function handleSyncMarkdownCrdtFromFile(args) {
+    const data = parseArgs(SyncMarkdownCrdtFromFileArgsSchema, args, 'sync_markdown_crdt_from_file');
+    return jsonResponse(await markdownCrdtStore.syncFromFile(data));
+  }
+
   async function handleCollectIdePlugins(args) {
     parseArgs(CollectIDEPluginsArgsSchema, args, 'collect_ide_plugins');
     const pluginsByLocation = await aggregateIdePlugins(workspaceRoot);
@@ -1283,6 +1344,11 @@ export function createToolHandlers({
     search_text_cancel: handleCancelSearchText,
     replace_text: handleReplaceText,
     get_file_info: handleGetFileInfo,
+    open_markdown_crdt_document: handleOpenMarkdownCrdtDocument,
+    apply_markdown_crdt_change: handleApplyMarkdownCrdtChange,
+    merge_markdown_crdt_document: handleMergeMarkdownCrdtDocument,
+    save_markdown_crdt_document: handleSaveMarkdownCrdtDocument,
+    sync_markdown_crdt_from_file: handleSyncMarkdownCrdtFromFile,
     llm_autocomplete: handleLlmAutocomplete,
     collect_ide_plugins: handleCollectIdePlugins,
     get_plugin_settings: handleGetPluginSettings,

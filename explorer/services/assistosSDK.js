@@ -18,6 +18,7 @@ import { createMediaClient } from './media/mediaClient.js';
 
 const DEFAULT_EMAIL = 'local@example.com';
 const DEFAULT_AGENT_IMAGE = './assets/icons/person.svg';
+const DEFAULT_TOAST_TIMEOUT_MS = 5000;
 const EXPLORER_AGENT_ID = 'explorer';
 const SOPLANG_AGENT_ID = 'soplangAgent';
 
@@ -128,7 +129,7 @@ const buildUIHelpers = () => {
             console.warn('[assistOS] showActionBox is not implemented in the local shim.');
             return null;
         },
-        async showToast(message, type = 'info', timeout = 1500) {
+        async showToast(message, type = 'info', timeout = DEFAULT_TOAST_TIMEOUT_MS) {
             if (typeof document === 'undefined') {
                 console.log(`[${type}] ${message}`);
                 return;
@@ -145,12 +146,11 @@ const buildUIHelpers = () => {
             toast.classList.add('timeout-toast', type);
             toast.innerHTML = `
                 <div class="toast-left">
-                    <img src="./assets/icons/${type}.svg" alt="${type} icon" class="toast-icon">
-                    <span class="message-type">${type.charAt(0).toUpperCase() + type.slice(1)}:</span>
+                    <span class="toast-icon" aria-hidden="true"></span>
                     <span class="toast-message">${message}</span>
                 </div>
                 <button class="close" aria-label="Close">
-                    <img class="close-icon" src="./assets/icons/x-mark.svg" alt="close">
+                    <span aria-hidden="true">×</span>
                 </button>
             `;
 

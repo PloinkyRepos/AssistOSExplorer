@@ -82,7 +82,7 @@ import { emitAuditEvent } from "../../../services/audit/auditService.js";
 
 const LARGE_FILE_PREVIEW_LIMIT_BYTES = 1.5 * 1024 * 1024; // ~1.5MB safety window before transport limits
 const LARGE_FILE_PREVIEW_LINES = 400;
-const EDITOR_EXTERNAL_CHECK_INTERVAL_MS = 4000;
+const EDITOR_EXTERNAL_CHECK_INTERVAL_MS = 30000;
 
 function normalizeEditorIntervalSeconds(value, fallback = 10) {
     const parsed = Number.parseInt(String(value ?? ''), 10);
@@ -909,19 +909,15 @@ export class FileExp {
     }
 
     showStatus(message, isError = false) {
-        const statusBanner = this.element?.querySelector?.('#statusBanner');
-        if (!statusBanner) {
-            return;
-        }
         if (!message) {
-            statusBanner.classList.remove('visible', 'error');
-            statusBanner.textContent = '';
             return;
         }
-        statusBanner.textContent = message;
-        statusBanner.classList.add('visible');
-        statusBanner.classList.toggle('error', Boolean(isError));
-        setTimeout(() => this.showStatus(null), 5000);
+        const toast = window.assistOS?.showToast || window.assistOS?.UI?.showToast;
+        if (typeof toast === 'function') {
+            toast(String(message), isError ? 'error' : 'info', 5000);
+            return;
+        }
+        console[isError ? 'error' : 'info'](message);
     }
 
     isPathNotFoundError(err) {
@@ -1076,13 +1072,13 @@ export class FileExp {
             label.textContent = text;
             statusStrip.appendChild(label);
         };
-        if (previewUiState?.showEditingActions) {
+        if (this.state.savePending) {
+            appendLabel('Saving...');
+        } else if (previewUiState?.showEditingActions) {
             if (this.state.editorAutoSaveEnabled) {
                 appendLabel(`Auto-save on (${normalizeEditorIntervalSeconds(this.state.editorAutoSaveIntervalSeconds, 10)}s)`);
             }
-            if (this.state.savePending) {
-                appendLabel('Saving...');
-            } else if (this.state.hasUnsavedChanges) {
+            if (this.state.hasUnsavedChanges) {
                 appendLabel('Unsaved changes', 'warning');
             } else if (this.state.externallyModified) {
                 appendLabel('Modified externally', 'warning');

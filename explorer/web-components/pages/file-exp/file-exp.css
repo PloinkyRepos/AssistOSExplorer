@@ -2558,12 +2558,3 @@ main {
         border: 1px solid var(--file-exp-border);
         color: var(--text);
     }
-
-    .status {
-        padding: 0.5rem;
-        background: rgba(var(--accent-rgb), 0.12);
-        color: var(--text);
-        text-align: center;
-        border: 1px solid rgba(var(--accent-rgb), 0.25);
-        border-radius: 12px;
-    }

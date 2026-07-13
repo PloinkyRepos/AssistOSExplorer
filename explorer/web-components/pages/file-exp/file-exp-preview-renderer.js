@@ -417,7 +417,12 @@ export function renderStandardPreview(fileExp, refs, previewUiState) {
         } else {
             refs.filePreview.className = 'markdown-preview';
             if (fileExp.state.selectedPath) {
-                const content = typeof fileExp.state.previewContent === 'string' ? fileExp.state.previewContent : '';
+                const content = typeof fileExp.state.fileContent === 'string'
+                    ? fileExp.renderMarkdownPreview(fileExp.prepareMarkdownPreviewContent(fileExp.state.fileContent), {
+                        sourcePath: fileExp.state.selectedPath,
+                        buildResourceUrl: (path) => fileExp.buildWebViewUrl(path)
+                    })
+                    : '';
                 refs.filePreview.innerHTML = content;
                 void renderMarkdownDiagrams(refs.filePreview);
             } else {

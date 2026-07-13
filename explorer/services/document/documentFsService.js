@@ -2,6 +2,11 @@ import { parseMarkdownDocument, serializeMarkdownDocument } from './markdownDocu
 import { callToolWithLoader } from '../../utils/globalLoader.js';
 import { callAgentTool, callExplorerTool, extractToolText, parseToolResult, ToolError } from '../infrastructure/explorerApi.js';
 import {
+    applyMarkdownCrdtChange,
+    openMarkdownCrdtDocument,
+    saveMarkdownCrdtDocument
+} from '../crdt/markdownCrdtClient.js';
+import {
     DPU_MY_SPACE_PATH,
     DPU_SHARED_PATH,
     isDpuSecretPath,
@@ -30,6 +35,7 @@ const ensureSuccess = (result, path) => {
 export default class DocumentFsService {
     constructor(appServices) {
         this.appServices = appServices;
+        this.markdownOperationQueues = new Map();
     }
 
     get explorer() {
@@ -130,6 +136,46 @@ export default class DocumentFsService {
         };
     }
 
+    enqueueMarkdownOperation(path, operation) {
+        const key = String(path || '');
+        const previous = this.markdownOperationQueues.get(key) || Promise.resolve();
+        const run = previous
+            .catch(() => {})
+            .then(operation);
+        const tracked = run.finally(() => {
+            if (this.markdownOperationQueues.get(key) === tracked) {
+                this.markdownOperationQueues.delete(key);
+            }
+        });
+        this.markdownOperationQueues.set(key, tracked);
+        return tracked;
+    }
+
+    async waitForPendingMarkdownChanges(path) {
+        const pending = this.markdownOperationQueues.get(String(path || ''));
+        if (pending) {
+            await pending;
+        }
+    }
+
+    async applyMarkdownChange(path, change, { save = true } = {}) {
+        if (!path) {
+            throw new Error('DocumentFsService.applyMarkdownChange requires a file path.');
+        }
+        if (isDpuVirtualPath(path) || !String(path || '').toLowerCase().endsWith('.md')) {
+            throw new Error('DocumentFsService.applyMarkdownChange only supports workspace Markdown files.');
+        }
+        return this.enqueueMarkdownOperation(path, async () => {
+            const crdt = await openMarkdownCrdtDocument(path);
+            const documentId = String(crdt?.documentId || '');
+            const result = await applyMarkdownCrdtChange(documentId, change);
+            if (save) {
+                await saveMarkdownCrdtDocument({ documentId: String(result?.documentId || documentId), path });
+            }
+            return result;
+        });
+    }
+
     async writeRaw(path, content) {
         if (!path) {
             throw new Error('DocumentFsService.writeRaw requires a file path.');
@@ -159,13 +205,31 @@ export default class DocumentFsService {
             return;
         }
 
-        await this.callExplorer('write_file', {
-            path,
-            content: content ?? ''
-        });
+        if (String(path || '').toLowerCase().endsWith('.md')) {
+            await this.applyMarkdownChange(path, {
+                type: 'replaceDocumentFromMarkdown',
+                markdown: content ?? ''
+            });
+            return;
+        }
+
+        await this.callExplorer('write_file', { path, content: content ?? '' });
     }
 
     async writeDocument(path, documentOrContent) {
+        if (
+            !isDpuVirtualPath(path)
+            && String(path || '').toLowerCase().endsWith('.md')
+            && documentOrContent
+            && typeof documentOrContent === 'object'
+        ) {
+            await this.applyMarkdownChange(path, {
+                type: 'replaceDocumentModel',
+                model: documentOrContent
+            });
+            return serializeMarkdownDocument(documentOrContent);
+        }
+
         const content = typeof documentOrContent === 'string'
             ? documentOrContent
             : serializeMarkdownDocument(documentOrContent);

@@ -154,8 +154,21 @@ const getSceneDuration = (commands = {}) => {
     return 0;
 };
 
-const persistDocument = async (documentIdOrPath) => {
+const getSerializableChapter = (document, chapterId) => {
+    const serializable = serializeDocumentModel(document);
+    return serializable.chapters.find((chapter) => chapter.id === chapterId) ?? null;
+};
+
+const getSerializableParagraph = (document, chapterId, paragraphId) => {
+    const chapter = getSerializableChapter(document, chapterId);
+    return chapter?.paragraphs?.find((paragraph) => paragraph.id === paragraphId) ?? null;
+};
+
+const persistDocument = async (documentIdOrPath, semanticChange = null) => {
     const path = documentStore.resolvePath(documentIdOrPath);
+    if (semanticChange) {
+        return documentStore.applyCrdtChange(path, semanticChange);
+    }
     return documentStore.save(path);
 };
 
@@ -172,6 +185,10 @@ const documentModule = {
     async loadDocument(documentIdOrPath) {
         const path = documentStore.resolvePath(documentIdOrPath);
         return documentStore.load(path);
+    },
+    async waitForPendingMarkdownChanges(documentIdOrPath) {
+        const path = documentStore.resolvePath(documentIdOrPath);
+        await documentStore.waitForPendingMarkdownChanges(path);
     },
     async getDocuments() {
         // Local implementation returns cached documents metadata
@@ -226,7 +243,13 @@ const documentModule = {
             commands: normalizeCommandQuotes(document.commands),
             comments: document.comments
         };
-        await persistDocument(documentIdOrPath);
+        const serializable = serializeDocumentModel(document);
+        await persistDocument(documentIdOrPath, {
+            type: 'updateDocument',
+            metadata: serializable.metadata,
+            title: document.title,
+            infoText: document.infoText
+        });
         return document;
     },
     async createDocument(documentData) {
@@ -263,7 +286,11 @@ const documentModule = {
             item.position = index;
         });
 
-        await persistDocument(documentIdOrPath);
+        await persistDocument(documentIdOrPath, {
+            type: 'addChapter',
+            chapter: getSerializableChapter(document, chapter.id),
+            position: insertPosition
+        });
         return chapter;
     },
     async deleteChapter(documentIdOrPath, chapterId) {
@@ -276,7 +303,10 @@ const documentModule = {
         document.chapters.forEach((chapter, idx) => {
             chapter.position = idx;
         });
-        await persistDocument(documentIdOrPath);
+        await persistDocument(documentIdOrPath, {
+            type: 'deleteChapter',
+            chapterId
+        });
         return removed;
     },
     async changeChapterOrder(documentIdOrPath, chapterId, position) {
@@ -292,7 +322,11 @@ const documentModule = {
         chapters.forEach((item, index) => {
             item.position = index;
         });
-        await persistDocument(documentIdOrPath);
+        await persistDocument(documentIdOrPath, {
+            type: 'reorderChapter',
+            chapterId,
+            position: targetIndex
+        });
         return chapter;
     },
     async getChapter(documentIdOrPathOrChapterId, maybeChapterId) {
@@ -356,7 +390,11 @@ const documentModule = {
             chapter.comments = createCommentDefaults(comments);
             chapter.metadata.comments = chapter.comments;
         }
-        await persistDocument(documentPath ?? documentReference.path ?? documentIdOrPathOrChapterId);
+        await persistDocument(documentPath ?? documentReference.path ?? documentIdOrPathOrChapterId, {
+            type: 'updateChapter',
+            chapterId,
+            patch: getSerializableChapter(documentReference, chapterId)
+        });
         return chapter;
     },
     async setChapterVarValue(documentIdOrPath, chapterId, varName, value, options = undefined) {
@@ -382,7 +420,11 @@ const documentModule = {
             }
         }
         chapter.metadata.variables = chapter.variables;
-        await persistDocument(documentIdOrPath);
+        await persistDocument(documentIdOrPath, {
+            type: 'updateChapter',
+            chapterId,
+            patch: getSerializableChapter(document, chapterId)
+        });
         return variable;
     },
     async setChapterAudioAttachment(documentIdOrPath, chapterId, payload) {
@@ -451,7 +493,12 @@ const documentModule = {
         if (!documentReference?.path) {
             throw new Error('Unable to resolve document path for addParagraph operation.');
         }
-        await persistDocument(documentReference.path);
+        await persistDocument(documentReference.path, {
+            type: 'addParagraph',
+            chapterId: chapterReference.id,
+            paragraph: getSerializableParagraph(documentReference, chapterReference.id, paragraph.id),
+            position: insertPosition
+        });
         return paragraph;
     },
     async deleteParagraph(chapterId, paragraphId) {
@@ -476,7 +523,11 @@ const documentModule = {
         if (!documentReference?.path) {
             throw new Error('Unable to resolve document path for deleteParagraph operation.');
         }
-        await persistDocument(documentReference.path);
+        await persistDocument(documentReference.path, {
+            type: 'deleteParagraph',
+            chapterId: chapterReference.id,
+            paragraphId
+        });
         return removed;
     },
     async changeParagraphOrder(chapterId, paragraphId, position) {
@@ -504,7 +555,12 @@ const documentModule = {
         if (!documentReference?.path) {
             throw new Error('Unable to resolve document path for changeParagraphOrder operation.');
         }
-        await persistDocument(documentReference.path);
+        await persistDocument(documentReference.path, {
+            type: 'reorderParagraph',
+            chapterId: chapterReference.id,
+            paragraphId,
+            position: targetIndex
+        });
         return paragraph;
     },
     async getParagraph(paragraphId) {
@@ -552,7 +608,12 @@ const documentModule = {
         if (!documentReference?.path) {
             throw new Error('Unable to resolve document path for updateParagraph operation.');
         }
-        await persistDocument(documentReference.path);
+        await persistDocument(documentReference.path, {
+            type: 'updateParagraph',
+            chapterId,
+            paragraphId,
+            patch: getSerializableParagraph(documentReference, chapterId, paragraphId)
+        });
         return paragraphReference;
     },
     async getDocCommandsParsed(documentIdOrPath) {
@@ -638,7 +699,13 @@ const documentModule = {
             document.variables.push(variable);
         }
         variable.value = value;
-        await persistDocument(documentIdOrPath);
+        const serializable = serializeDocumentModel(document);
+        await persistDocument(documentIdOrPath, {
+            type: 'updateDocument',
+            metadata: serializable.metadata,
+            title: document.title,
+            infoText: document.infoText
+        });
         return variable;
     },
     async updateChapterCommands(documentIdOrPath, chapterId, commands) {
@@ -650,17 +717,26 @@ const documentModule = {
         const currentCommands = normalizeCommandString(chapter.commands ?? '', '');
         chapter.commands = normalizeCommandQuotes(normalizeCommandString(commands, currentCommands));
         chapter.metadata.commands = chapter.commands;
-        await persistDocument(documentIdOrPath);
+        await persistDocument(documentIdOrPath, {
+            type: 'updateChapter',
+            chapterId,
+            patch: getSerializableChapter(document, chapterId)
+        });
         return chapter.commands;
     },
     async updateParagraphCommands(chapterId, paragraphId, commands) {
-        const paragraph = await this.getParagraph(null, paragraphId);
+        const paragraph = await this.getParagraph(paragraphId);
         const currentCommands = normalizeCommandString(paragraph.commands ?? '', '');
         paragraph.commands = normalizeCommandQuotes(normalizeCommandString(commands, currentCommands));
         paragraph.metadata.commands = paragraph.commands;
         for (const document of documentStore.documents.values()) {
             if (document.chapters.some((chapter) => chapter.id === chapterId)) {
-                await persistDocument(document.path);
+                await persistDocument(document.path, {
+                    type: 'updateParagraph',
+                    chapterId,
+                    paragraphId,
+                    patch: getSerializableParagraph(document, chapterId, paragraphId)
+                });
                 break;
             }
         }
@@ -697,7 +773,13 @@ const documentModule = {
         const document = await getDocumentModel(documentIdOrPath);
         document.docId = newDocId;
         document.metadata.id = newDocId;
-        await persistDocument(documentIdOrPath);
+        const serializable = serializeDocumentModel(document);
+        await persistDocument(documentIdOrPath, {
+            type: 'updateDocument',
+            metadata: serializable.metadata,
+            title: document.title,
+            infoText: document.infoText
+        });
         return document;
     },
     async getStylePreferences() {

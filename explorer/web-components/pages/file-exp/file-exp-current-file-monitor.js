@@ -2,7 +2,7 @@ import { isDpuVirtualPath } from "./file-exp-dpu-provider.js";
 import { FILE_EXP_UI_ACTIONS } from "./file-exp-ui-controller.js";
 import { PREVIEW_ACTIONS } from "./file-exp-preview-controller.js";
 
-const CURRENT_FILE_VIEW_CHECK_INTERVAL_MS = 5000;
+const CURRENT_FILE_VIEW_CHECK_INTERVAL_MS = 30000;
 
 function canMonitorCurrentFileView(fileExp, pathValue = fileExp?.state?.selectedPath) {
     const selectedPath = String(pathValue || '').trim();

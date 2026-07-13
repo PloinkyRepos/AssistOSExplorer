@@ -1,9 +1,15 @@
 import { PREVIEW_ACTIONS } from "./file-exp-preview-controller.js";
-import { renderCodePreview, renderMarkdownPreview } from "./file-exp-utils.js";
+import { renderCodePreview } from "./file-exp-utils.js";
 import { getPreviewUiState } from "./file-exp-preview-state.js";
 import { isDpuSecretPath, isDpuVirtualPath, openDpuFile, readDpuCurrentItemState, updateDpuFile, updateDpuSecret } from "./file-exp-dpu-provider.js";
 import { startCurrentFileViewWatch, stopCurrentFileViewWatch } from "./file-exp-current-file-monitor.js";
 import { emitAuditEvent } from "../../../services/audit/auditService.js";
+import {
+    applyMarkdownCrdtChange,
+    openMarkdownCrdtDocument,
+    saveMarkdownCrdtDocument,
+    syncMarkdownCrdtFromFile
+} from "../../../services/crdt/markdownCrdtClient.js";
 
 function extractDpuUpdatedAt(snapshot) {
     if (!snapshot || typeof snapshot !== 'object') return '';
@@ -76,7 +82,7 @@ export async function editFile(fileExp) {
     });
     stopCurrentFileViewWatch(fileExp);
     fileExp.handleEditorBufferChange?.();
-    if (!isDpuPath) {
+    if (!isDpuPath && !fileExp.state.selectedIsMarkdown) {
         fileExp.startEditorExternalWatch?.();
     }
     fileExp.refreshPreviewUi();
@@ -131,13 +137,41 @@ export async function saveFile(fileExp, options = {}) {
     const preserveEditing = Boolean(options?.preserveEditing);
     const autoSave = Boolean(options?.autoSave);
     const newContent = fileExp.textarea.value;
+    let savedContent = newContent;
     const selectedPath = fileExp.state.selectedPath || '';
     const isDpuPath = isDpuVirtualPath(selectedPath);
     const isExternalModificationError = (error) => /updated externally/i.test(String(error?.message || ''));
+    let markdownCrdtDocumentId = '';
+    let markdownInfoMessage = '';
     if (fileExp.state.savePending) {
         return;
     }
     try {
+        let markdownEditorPresenter = null;
+        if (!isDpuPath && fileExp.state.selectedIsMarkdown) {
+            markdownEditorPresenter = fileExp.element.querySelector('markdown-editor')?.webSkelPresenter || null;
+            markdownCrdtDocumentId = String(markdownEditorPresenter?.crdtDocumentId || '');
+            if (typeof markdownEditorPresenter?.flushPendingCrdtChange === 'function') {
+                await markdownEditorPresenter.flushPendingCrdtChange();
+                markdownCrdtDocumentId = String(markdownEditorPresenter?.crdtDocumentId || markdownCrdtDocumentId);
+            } else if (markdownEditorPresenter?.pendingChange) {
+                await markdownEditorPresenter.pendingChange;
+                markdownCrdtDocumentId = String(markdownEditorPresenter?.crdtDocumentId || markdownCrdtDocumentId);
+            } else {
+                const crdt = await openMarkdownCrdtDocument(fileExp.state.selectedPath);
+                markdownCrdtDocumentId = String(crdt?.documentId || '');
+                const applied = await applyMarkdownCrdtChange(String(crdt?.documentId || ''), {
+                    type: 'replaceDocumentFromMarkdown',
+                    markdown: newContent
+                });
+                if (applied?.documentId) {
+                    markdownCrdtDocumentId = String(applied.documentId);
+                    if (markdownEditorPresenter) {
+                        markdownEditorPresenter.crdtDocumentId = markdownCrdtDocumentId;
+                    }
+                }
+            }
+        }
         fileExp.setPreviewState({
             savePending: true,
             lastSaveError: ''
@@ -169,16 +203,29 @@ export async function saveFile(fileExp, options = {}) {
                 });
             }
         } else {
-            if (fileExp.state.externallyModified) {
+            if (!fileExp.state.selectedIsMarkdown && fileExp.state.externallyModified) {
                 throw new Error('This file was updated externally. Reload it before saving again.');
             }
             const latestInfo = await fileExp.refreshSelectedFileVersionInfo(selectedPath);
             const baselineVersionKey = String(fileExp.state.selectedFileVersionKey || '');
-            if (baselineVersionKey && latestInfo?.versionKey && latestInfo.versionKey !== baselineVersionKey) {
+            if (!fileExp.state.selectedIsMarkdown && baselineVersionKey && latestInfo?.versionKey && latestInfo.versionKey !== baselineVersionKey) {
                 await fileExp.markExternalModificationDetected({ silent: true });
                 throw new Error('This file was updated externally. Reload it before saving again.');
             }
-            await fileExp.tooling.writeFile(fileExp.state.selectedPath, newContent);
+            if (fileExp.state.selectedIsMarkdown) {
+                const saveResult = await saveMarkdownCrdtDocument({
+                    documentId: markdownCrdtDocumentId || markdownEditorPresenter?.crdtDocumentId || '',
+                    path: fileExp.state.selectedPath
+                });
+                if (typeof saveResult?.markdown === 'string') {
+                    savedContent = saveResult.markdown;
+                }
+                if (Array.isArray(saveResult?.warnings) && saveResult.warnings.length > 0) {
+                    markdownInfoMessage = saveResult.warnings.join(' ');
+                }
+            } else {
+                await fileExp.tooling.writeFile(fileExp.state.selectedPath, newContent);
+            }
             fileExp.bumpWorkspaceVersion?.();
             fileExp.caches.filePreview.invalidateForPath(fileExp.state.selectedPath);
             fileExp.caches.dirListing.invalidate(fileExp, fileExp.state.path);
@@ -189,7 +236,7 @@ export async function saveFile(fileExp, options = {}) {
             latestSavedVersion = await fileExp.refreshSelectedFileVersionInfo(selectedPath);
         }
         if (!autoSave) {
-            fileExp.showStatus(`Successfully saved ${selectedPath}`, false);
+            fileExp.showStatus(markdownInfoMessage || `Successfully saved ${selectedPath}`, false);
         }
         void emitAuditEvent('file.update', {
             path: selectedPath,
@@ -202,7 +249,7 @@ export async function saveFile(fileExp, options = {}) {
             }
         });
         fileExp.setPreviewState({
-            fileContent: newContent,
+            fileContent: savedContent,
             hasUnsavedChanges: false,
             savePending: false,
             lastSaveError: '',
@@ -226,12 +273,8 @@ export async function saveFile(fileExp, options = {}) {
         }
 
         if (fileExp.state.selectedIsMarkdown) {
-            const previewSource = fileExp.prepareMarkdownPreviewContent(newContent);
             fileExp.setPreviewState({
-                previewContent: renderMarkdownPreview(previewSource, {
-                    sourcePath: fileExp.state.selectedPath,
-                    buildResourceUrl: (path) => fileExp.buildWebViewUrl(path)
-                }),
+                previewContent: '',
                 markdownTextView: false,
                 documentId: null
             });
@@ -274,13 +317,44 @@ export async function saveFile(fileExp, options = {}) {
 }
 
 export async function cancelEdit(fileExp) {
+    const selectedPath = fileExp.state.selectedPath || '';
+    const isMarkdownClose = Boolean(fileExp.state.selectedIsMarkdown && selectedPath);
     fileExp.clearEditorAutoSaveTimer?.();
     fileExp.stopEditorExternalWatch?.();
+    if (isMarkdownClose) {
+        fileExp.setPreviewState({
+            savePending: true,
+            lastSaveError: ''
+        }, { invalidate: false });
+        fileExp.refreshPreviewUi();
+        try {
+            const markdownEditorPresenter = fileExp.element.querySelector('markdown-editor')?.webSkelPresenter || null;
+            if (markdownEditorPresenter) {
+                if (typeof markdownEditorPresenter.discardPendingCrdtChange === 'function') {
+                    await markdownEditorPresenter.discardPendingCrdtChange();
+                }
+                await syncMarkdownCrdtFromFile(selectedPath);
+            }
+            const documentViewPresenter = fileExp.element.querySelector('document-view-page')?.webSkelPresenter || null;
+            if (typeof documentViewPresenter?.flushPendingEdit === 'function') {
+                await documentViewPresenter.flushPendingEdit();
+            }
+        } catch (error) {
+            console.error(error);
+            fileExp.setPreviewState({
+                savePending: false,
+                lastSaveError: error?.message || 'Failed to close Markdown editor.'
+            }, { invalidate: false });
+            fileExp.refreshPreviewUi();
+            fileExp.showStatus(error?.message || 'Failed to close Markdown editor.', true);
+            return;
+        }
+    }
     fileExp.setPreviewState({
         isEditing: false,
         markdownTextView: false,
         hasUnsavedChanges: false,
-        savePending: false,
+        savePending: isMarkdownClose,
         lastSaveError: '',
         lastEditorSaveAt: 0,
         lastEditorSaveMode: '',
@@ -291,21 +365,43 @@ export async function cancelEdit(fileExp) {
         selectedFileSize: null
     });
     fileExp.editorPresenter = null;
-    if (isDpuVirtualPath(fileExp.state.selectedPath)) {
-        await openDpuFile(fileExp, fileExp.state.selectedPath, {
+    if (isDpuVirtualPath(selectedPath)) {
+        await openDpuFile(fileExp, selectedPath, {
             showLoader: false,
             invalidate: false
         });
         return;
     }
-    if (fileExp.state.selectedIsMarkdown && fileExp.state.selectedPath) {
-        fileExp.bumpWorkspaceVersion?.();
-        fileExp.caches.filePreview.invalidateForPath(fileExp.state.selectedPath);
-        fileExp.caches.dirListing.invalidate(fileExp, fileExp.state.path);
-        await fileExp.openFile(fileExp.state.selectedPath, {
-            showLoader: false,
-            invalidate: false
-        });
+    if (isMarkdownClose) {
+        fileExp.refreshPreviewUi();
+        try {
+            const documentModule = window.assistOS?.loadModule?.('document');
+            if (typeof documentModule?.waitForPendingMarkdownChanges === 'function') {
+                await documentModule.waitForPendingMarkdownChanges(selectedPath);
+            }
+            fileExp.bumpWorkspaceVersion?.();
+            fileExp.caches.filePreview.invalidateForPath(selectedPath);
+            fileExp.caches.dirListing.invalidate(fileExp, fileExp.state.path);
+            await fileExp.openFile(selectedPath, {
+                showLoader: false,
+                invalidate: false,
+                preserveSaveStatus: true
+            });
+            fileExp.setPreviewState({
+                savePending: false,
+                lastSaveError: ''
+            }, { invalidate: false });
+            startCurrentFileViewWatch(fileExp);
+            fileExp.refreshPreviewUi();
+        } catch (error) {
+            console.error(error);
+            fileExp.setPreviewState({
+                savePending: false,
+                lastSaveError: error?.message || 'Failed to refresh Markdown preview.'
+            }, { invalidate: false });
+            fileExp.refreshPreviewUi();
+            fileExp.showStatus(error?.message || 'Failed to refresh Markdown preview.', true);
+        }
         return;
     }
     startCurrentFileViewWatch(fileExp);

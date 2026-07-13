@@ -1,6 +1,6 @@
 const documentModule = assistOS.loadModule("document");
 const workspaceModule = assistOS.loadModule("workspace");
-import {executorTimer, unescapeHtmlEntities} from "../../../imports.js";
+import {unescapeHtmlEntities} from "../../../imports.js";
 import UIUtils from "./UIUtils.js";
 import pluginUtils from "../../../utils/pluginUtils.ui.js";
 
@@ -9,6 +9,11 @@ export class DocumentViewPage {
         this.element = element;
         this.invalidate = invalidate;
         this.observers = [];
+        this.autoSaveTimeout = null;
+        this.autoSaveFunction = null;
+        this.autoSavePromise = null;
+        this.autoSaveInputElement = null;
+        this.autoSaveInputHandler = null;
         const rawDocumentId = this.element.getAttribute("documentId");
         const documentId = rawDocumentId && rawDocumentId !== "null" && rawDocumentId !== "undefined" ? rawDocumentId : null;
         this.invalidate(async () => {
@@ -300,8 +305,8 @@ export class DocumentViewPage {
                 this.currentElement.element.removeAttribute("id");
                 await this.currentElement.focusoutFunction(this.currentElement.element);
                 await this.stopTimer(true);
-                delete this.currentElement;
-                delete this.timer;
+                this.clearAutoSaveInputListener();
+                this.currentElement = null;
             }
         }
     }
@@ -442,13 +447,73 @@ export class DocumentViewPage {
     };
 
     async resetTimer() {
-        await this.timer.reset(1000);
+        this.scheduleAutoSave();
     }
 
     async stopTimer(executeFn) {
-        if (this.timer) {
-            await this.timer.stop(executeFn);
+        if (this.autoSaveTimeout) {
+            clearTimeout(this.autoSaveTimeout);
+            this.autoSaveTimeout = null;
         }
+        if (executeFn) {
+            await this.runAutoSaveNow();
+        } else if (this.autoSavePromise) {
+            await this.autoSavePromise;
+        }
+    }
+
+    async flushPendingEdit() {
+        await this.stopTimer(true);
+        if (!this.currentElement) {
+            return;
+        }
+        const { element, focusoutFunction } = this.currentElement;
+        if (typeof focusoutFunction === "function" && element?.closest("body")) {
+            await focusoutFunction(element);
+        }
+        element?.removeAttribute("id");
+        this.clearAutoSaveInputListener();
+        this.currentElement = null;
+    }
+
+    scheduleAutoSave(delay = 500) {
+        if (typeof this.autoSaveFunction !== "function") {
+            return;
+        }
+        if (this.autoSaveTimeout) {
+            clearTimeout(this.autoSaveTimeout);
+        }
+        this.autoSaveTimeout = setTimeout(() => {
+            this.autoSaveTimeout = null;
+            this.autoSavePromise = Promise.resolve()
+                .then(() => this.autoSaveFunction?.())
+                .catch((error) => {
+                    console.error(error);
+                    assistOS.showToast?.(error?.message || "Autosave failed.", "error");
+                });
+        }, delay);
+    }
+
+    async runAutoSaveNow() {
+        if (this.autoSaveTimeout) {
+            clearTimeout(this.autoSaveTimeout);
+            this.autoSaveTimeout = null;
+        }
+        if (this.autoSavePromise) {
+            await this.autoSavePromise;
+        }
+        if (typeof this.autoSaveFunction === "function") {
+            this.autoSavePromise = Promise.resolve().then(() => this.autoSaveFunction());
+            await this.autoSavePromise;
+        }
+    }
+
+    clearAutoSaveInputListener() {
+        if (this.autoSaveInputElement && this.autoSaveInputHandler) {
+            this.autoSaveInputElement.removeEventListener("input", this.autoSaveInputHandler);
+        }
+        this.autoSaveInputElement = null;
+        this.autoSaveInputHandler = null;
     }
 
     async focusOutHandler(element) {
@@ -471,7 +536,7 @@ export class DocumentViewPage {
         container.classList.remove("focused");
         element.removeEventListener('keydown', this.titleKeyDownHandler);
         element.classList.remove("focused");
-        this.stopTimer.bind(this, true);
+        await this.stopTimer(true);
     }
 
     async controlInfoTextHeight(infoText) {
@@ -577,11 +642,12 @@ export class DocumentViewPage {
             resetTimerFunction = paragraphPresenter.resetTimer.bind(paragraphPresenter, targetElement);
         }
         targetElement.focus();
-        if (this.timer) {
-            await this.timer.stop(true);
-        }
-        this.timer = new executorTimer(saveFunction, 10000);
-        targetElement.addEventListener("keyup", resetTimerFunction);
+        await this.stopTimer(true);
+        this.clearAutoSaveInputListener();
+        this.autoSaveFunction = saveFunction;
+        this.autoSaveInputElement = targetElement;
+        this.autoSaveInputHandler = resetTimerFunction;
+        targetElement.addEventListener("input", resetTimerFunction);
     }
 
     async exportDocument(targetElement) {

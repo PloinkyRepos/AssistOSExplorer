@@ -3,7 +3,6 @@ import {
     isAudioFile,
     isVideoFile,
     isPdfFile,
-    renderMarkdownPreview,
     renderCodePreview,
     scrollToLine,
     scrollPreviewToAnchor,
@@ -129,7 +128,8 @@ export async function openFile(fileExp, filePath, {
     showLoader = true,
     invalidate = true,
     requestTimeoutMs = null,
-    suppressReadErrorStatus = false
+    suppressReadErrorStatus = false,
+    preserveSaveStatus = false
 }) {
     const effectiveTimeoutMs = resolveFileReadTimeoutMs(requestTimeoutMs);
     const run = async () => {
@@ -142,10 +142,10 @@ export async function openFile(fileExp, filePath, {
                 onlyOfficeConfig: null,
                 onlyOfficeStatusText: '',
                 externallyModified: false,
-                savePending: false,
-                lastSaveError: '',
-                lastEditorSaveAt: 0,
-                lastEditorSaveMode: '',
+                savePending: preserveSaveStatus ? fileExp.state.savePending : false,
+                lastSaveError: preserveSaveStatus ? fileExp.state.lastSaveError : '',
+                lastEditorSaveAt: preserveSaveStatus ? fileExp.state.lastEditorSaveAt : 0,
+                lastEditorSaveMode: preserveSaveStatus ? fileExp.state.lastEditorSaveMode : '',
                 lastExternalReloadAt: 0,
                 selectedFileVersionKey: '',
                 selectedFileModifiedAt: '',
@@ -270,12 +270,7 @@ export async function openFile(fileExp, filePath, {
             const fileContent = extractToolText(contentResult);
             const selectedIsMarkdown = fileExp.isMarkdownFile(filePath);
             const useMarkdownTextViewForHighlight = Boolean(hasPendingForFile && selectedIsMarkdown);
-            const previewContent = selectedIsMarkdown
-                ? (renderMarkdownPreview(fileExp.prepareMarkdownPreviewContent(fileContent) || '', {
-                    sourcePath: filePath,
-                    buildResourceUrl: (path) => fileExp.buildWebViewUrl(path)
-                }) || '')
-                : renderCodePreview(fileContent, filePath);
+            const previewContent = selectedIsMarkdown ? '' : renderCodePreview(fileContent, filePath);
             const previewMode = selectedIsMarkdown ? 'markdown' : 'code';
 
             fileExp.setPreviewState({
@@ -302,7 +297,7 @@ export async function openFile(fileExp, filePath, {
                 fileExp.caches.filePreview.set(cacheKey, {
                     fileContent: fileExp.state.fileContent,
                     selectedIsMarkdown: fileExp.state.selectedIsMarkdown,
-                    previewContent: fileExp.state.previewContent,
+                    previewContent: fileExp.state.selectedIsMarkdown ? '' : fileExp.state.previewContent,
                     previewMode: fileExp.state.previewMode,
                     fileLoadInfo: fileExp.state.fileLoadInfo
                 });

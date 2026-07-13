@@ -378,6 +378,20 @@ class DocumentStore {
         return document;
     }
 
+    async applyCrdtChange(path, change) {
+        if (typeof this.service.fs.applyMarkdownChange !== 'function') {
+            return this.save(path);
+        }
+        await this.service.fs.applyMarkdownChange(path, change);
+        return this.get(path);
+    }
+
+    async waitForPendingMarkdownChanges(path) {
+        if (typeof this.service.fs.waitForPendingMarkdownChanges === 'function') {
+            await this.service.fs.waitForPendingMarkdownChanges(path);
+        }
+    }
+
     async create(path, overrides = {}) {
         const doc = createEmptyDocument(overrides);
         const model = hydrateDocumentModel(doc, path);

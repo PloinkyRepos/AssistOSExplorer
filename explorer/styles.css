@@ -689,7 +689,7 @@ tr.clipboard-row.clipboard-copy.active {
 .toast-container {
     pointer-events: none;
     position: fixed;
-    width: min(380px, calc(100vw - var(--space-lg)));
+    width: min(420px, calc(100vw - var(--space-lg)));
     right: var(--space-md);
     top: 70px;
     z-index: 9999;
@@ -697,14 +697,14 @@ tr.clipboard-row.clipboard-copy.active {
 
 .timeout-toast {
     pointer-events: auto;
+    position: relative;
     display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
+    align-items: center;
     z-index: 10;
-    overflow: hidden;
+    overflow: visible;
     border: 1px solid var(--border);
-    padding: var(--space-md) var(--space-lg);
-    border-radius: var(--radius-xl);
+    padding: 14px 42px 14px 16px;
+    border-radius: var(--radius-lg);
     margin-bottom: var(--space-sm);
     box-shadow: var(--shadow-xl);
     background: var(--surface);
@@ -712,35 +712,39 @@ tr.clipboard-row.clipboard-copy.active {
     font-family: var(--default-font), "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
 }
 
-.message-type {
-    font-weight: var(--font-semibold);
-    margin-right: var(--space-sm);
-    display: inline-flex;
-    align-items: center;
-    letter-spacing: 0.01em;
-}
-
 .toast-message {
-    max-width: 265px;
+    min-width: 0;
     color: var(--text);
-    line-height: var(--line-normal);
+    line-height: 1.38;
     font-size: var(--font-base);
-    font-weight: var(--font-regular);
+    font-weight: var(--font-medium);
 }
 
 .timeout-toast .close {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 24px;
+    height: 24px;
     color: var(--text-soft);
-    background: var(--file-exp-subtle-surface);
-    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.55);
+    border: 1px solid currentColor;
     border-radius: 999px;
     cursor: pointer;
-    padding: var(--space-xs);
+    padding: 0;
     display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    line-height: 1;
+    font-weight: var(--font-regular);
+    opacity: 0.8;
     transition: background var(--transition-fast) ease, border-color var(--transition-fast) ease, transform var(--transition-fast) ease;
 }
 
 .timeout-toast .close:hover {
-    background: var(--border);
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.82);
     border-color: var(--border-strong);
     transform: translateY(-1px);
 }
@@ -748,12 +752,18 @@ tr.clipboard-row.clipboard-copy.active {
 .toast-left {
     display: flex;
     align-items: flex-start;
+    gap: 12px;
+    min-width: 0;
 }
 
 .toast-icon {
-    margin-right: 10px;
-    width: 24px;
-    height: 24px;
+    flex: 0 0 auto;
+    width: 22px;
+    height: 22px;
+    margin-top: 1px;
+    background: currentColor;
+    -webkit-mask: url("./assets/icons/info.svg") center / contain no-repeat;
+    mask: url("./assets/icons/info.svg") center / contain no-repeat;
 }
 
 .timeout-toast.success {
@@ -762,18 +772,20 @@ tr.clipboard-row.clipboard-copy.active {
     border-color: rgba(115, 189, 121, 0.3);
 }
 
-.timeout-toast.success .message-type {
+.timeout-toast.success .toast-icon,
+.timeout-toast.success .close {
     color: #15803d;
 }
 
 .timeout-toast.info {
     background: rgba(219, 234, 254, 0.95);
-    color: #60A5FA;
+    color: #1e3a8a;
     border-color: rgba(96, 165, 250, 0.3);
 }
 
-.timeout-toast.info .message-type {
-    color: #60A5FA;
+.timeout-toast.info .toast-icon,
+.timeout-toast.info .close {
+    color: #2563eb;
 }
 
 .timeout-toast.warning {
@@ -782,8 +794,14 @@ tr.clipboard-row.clipboard-copy.active {
     border-color: rgba(245, 158, 11, 0.3);
 }
 
-.timeout-toast.warning .message-type {
+.timeout-toast.warning .toast-icon,
+.timeout-toast.warning .close {
     color: #d97706;
+}
+
+.timeout-toast.warning .toast-icon {
+    -webkit-mask-image: url("./assets/icons/warning.svg");
+    mask-image: url("./assets/icons/warning.svg");
 }
 
 .timeout-toast.error {
@@ -792,8 +810,19 @@ tr.clipboard-row.clipboard-copy.active {
     border-color: rgba(219, 92, 92, 0.3);
 }
 
-.timeout-toast.error .message-type {
+.timeout-toast.error .toast-icon,
+.timeout-toast.error .close {
     color: #DB5C5C;
+}
+
+.timeout-toast.error .toast-icon {
+    -webkit-mask-image: url("./assets/icons/error.svg");
+    mask-image: url("./assets/icons/error.svg");
+}
+
+.timeout-toast.success .toast-icon {
+    -webkit-mask-image: url("./assets/icons/success.svg");
+    mask-image: url("./assets/icons/success.svg");
 }
 
 .theme-dark .timeout-toast {
@@ -808,8 +837,8 @@ tr.clipboard-row.clipboard-copy.active {
 
 .theme-dark .timeout-toast .close {
     color: var(--text-soft);
-    background: rgba(30, 41, 59, 0.72);
-    border-color: rgba(71, 85, 105, 0.5);
+    background: rgba(15, 23, 42, 0.45);
+    border-color: currentColor;
 }
 
 .theme-dark .timeout-toast .close:hover {
@@ -823,7 +852,8 @@ tr.clipboard-row.clipboard-copy.active {
     color: #dcfce7;
 }
 
-.theme-dark .timeout-toast.success .message-type {
+.theme-dark .timeout-toast.success .toast-icon,
+.theme-dark .timeout-toast.success .close {
     color: #86efac;
 }
 
@@ -833,7 +863,8 @@ tr.clipboard-row.clipboard-copy.active {
     color: #dbeafe;
 }
 
-.theme-dark .timeout-toast.info .message-type {
+.theme-dark .timeout-toast.info .toast-icon,
+.theme-dark .timeout-toast.info .close {
     color: #93c5fd;
 }
 
@@ -843,7 +874,8 @@ tr.clipboard-row.clipboard-copy.active {
     color: #fef3c7;
 }
 
-.theme-dark .timeout-toast.warning .message-type {
+.theme-dark .timeout-toast.warning .toast-icon,
+.theme-dark .timeout-toast.warning .close {
     color: #fbbf24;
 }
 
@@ -853,6 +885,7 @@ tr.clipboard-row.clipboard-copy.active {
     color: #fee2e2;
 }
 
-.theme-dark .timeout-toast.error .message-type {
+.theme-dark .timeout-toast.error .toast-icon,
+.theme-dark .timeout-toast.error .close {
     color: #fca5a5;
 }

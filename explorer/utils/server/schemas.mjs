@@ -69,6 +69,62 @@ export function createSchemas(z) {
     dryRun: z.boolean().optional().default(false)
   });
   const GetFileInfoArgsSchema = z.object({ path: z.string() });
+  const MarkdownCrdtChangeTypeSchema = z.enum([
+    'replaceTextRange',
+    'replaceDocumentFromMarkdown',
+    'replaceDocumentModel',
+    'updateDocument',
+    'updateDocumentMetadata',
+    'addChapter',
+    'deleteChapter',
+    'reorderChapter',
+    'updateChapter',
+    'addParagraph',
+    'deleteParagraph',
+    'reorderParagraph',
+    'updateParagraph',
+    'updateMetadata'
+  ]);
+  const MarkdownCrdtChangeSchema = z.object({
+    type: MarkdownCrdtChangeTypeSchema.optional(),
+    from: z.number().optional(),
+    deleteCount: z.number().optional(),
+    insertText: z.string().optional(),
+    markdown: z.string().optional(),
+    model: z.any().optional(),
+    metadata: z.any().optional(),
+    patch: z.any().optional(),
+    chapter: z.any().optional(),
+    paragraph: z.any().optional(),
+    chapterId: z.string().optional(),
+    paragraphId: z.string().optional(),
+    position: z.number().optional(),
+    title: z.string().optional(),
+    infoText: z.string().optional(),
+    text: z.string().optional(),
+    target: z.string().optional()
+  });
+  const OpenMarkdownCrdtDocumentArgsSchema = z.object({ path: z.string() });
+  const ApplyMarkdownCrdtChangeArgsSchema = z.object({
+    documentId: z.string(),
+    operation: MarkdownCrdtChangeTypeSchema.optional(),
+    changeJson: z.string().optional(),
+    change: MarkdownCrdtChangeSchema
+  });
+  const MergeMarkdownCrdtDocumentArgsSchema = z.object({
+    documentId: z.string(),
+    remoteDocumentId: z.string().optional(),
+    remoteStateBase64: z.string().optional()
+  }).refine((value) => Boolean(value.remoteDocumentId || value.remoteStateBase64), {
+    message: 'remoteDocumentId or remoteStateBase64 is required'
+  });
+  const SaveMarkdownCrdtDocumentArgsSchema = z.object({
+    documentId: z.string().optional(),
+    path: z.string().optional()
+  }).refine((value) => Boolean(value.documentId || value.path), {
+    message: 'documentId or path is required'
+  });
+  const SyncMarkdownCrdtFromFileArgsSchema = z.object({ path: z.string() });
   const LlmAutocompleteArgsSchema = z.object({
     path: z.string(),
     content: z.string(),
@@ -132,6 +188,12 @@ export function createSchemas(z) {
     SearchTextCancelArgsSchema,
     ReplaceTextArgsSchema,
     GetFileInfoArgsSchema,
+    MarkdownCrdtChangeSchema,
+    OpenMarkdownCrdtDocumentArgsSchema,
+    ApplyMarkdownCrdtChangeArgsSchema,
+    MergeMarkdownCrdtDocumentArgsSchema,
+    SaveMarkdownCrdtDocumentArgsSchema,
+    SyncMarkdownCrdtFromFileArgsSchema,
     LlmAutocompleteArgsSchema,
     CollectIDEPluginsArgsSchema,
     GetPluginSettingsArgsSchema,
