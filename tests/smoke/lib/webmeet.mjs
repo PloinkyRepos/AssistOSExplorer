@@ -31,6 +31,23 @@ export async function joinRoom(page, title) {
   await page.locator('#webmeetMeetingList .webmeet-list-item', { hasText: title }).first().locator('.webmeet-meeting-row').click();
 /*  await expect(page.locator('#webmeetActiveRoomTitle')).toContainText(title);*/
   await expect(page.locator('#webmeetChatInput')).toBeVisible();
+  await expect.poll(() => page.evaluate(() => {
+    const dashboard = document.querySelector('webmeet-dashboard')?.webSkelPresenter;
+    return String(dashboard?.state?.roomState || '').trim();
+  }), {
+    timeout: smokeConfig.timeouts.action,
+    message: 'WebMeet should finish connecting to LiveKit before the room is used.',
+  }).toBe('Connected');
+}
+
+export async function expectWebMeetPeerCount(page, minimum = 1) {
+  await expect.poll(() => page.evaluate(() => {
+    const dashboard = document.querySelector('webmeet-dashboard')?.webSkelPresenter;
+    return Number(dashboard?.room?.remoteParticipants?.size || 0);
+  }), {
+    timeout: smokeConfig.timeouts.action,
+    message: `WebMeet should observe at least ${minimum} remote participant(s) before realtime assertions.`,
+  }).toBeGreaterThanOrEqual(minimum);
 }
 
 export async function sendWebMeetChat(page, message) {

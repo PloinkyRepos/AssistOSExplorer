@@ -7,6 +7,7 @@ import {
   enableMedia,
   expectIncreasingRtpStats,
   expectRelayIceSelected,
+  expectWebMeetPeerCount,
   joinRoom,
   openWebMeet,
   sendWebMeetChat,
@@ -40,6 +41,10 @@ test.describe('WebMeet rooms', () => {
 
       await openWebMeet(memberPage, smokeConfig.secondaryUser, { expectCreateRoom: false });
       await joinRoom(memberPage, roomTitle);
+      await Promise.all([
+        expectWebMeetPeerCount(page),
+        expectWebMeetPeerCount(memberPage),
+      ]);
 
       await sendWebMeetChat(page, ownerMessage);
       await expect(memberPage.locator('#webmeetChatList', { hasText: ownerMessage })).toBeVisible();
