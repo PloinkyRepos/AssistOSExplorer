@@ -88,37 +88,34 @@ test('manifest injects the OnlyOffice JWT secret under decorator and Document Se
   }
 });
 
-test('manifest publishes router-facing control and browser-facing editor ports separately', () => {
+test('manifest leaves the provider-owned public URL without a dead static port fallback', () => {
   const manifest = readManifest();
-  const expectedEditorPorts = new Map([
-    ['default', '127.0.0.1:8082:8080'],
-    ['dev', '127.0.0.1:18082:8080'],
-    ['prod', '127.0.0.1:8082:8080'],
-  ]);
 
-  for (const [profileName, editorPort] of expectedEditorPorts) {
+  for (const profileName of ['default', 'dev', 'prod']) {
+    const profile = manifest.profiles?.[profileName];
+    const publicUrl = entriesByName(profile).get('ONLYOFFICE_PUBLIC_URL');
+
+    // Ploinky rejects required non-secret profile entries without static
+    // defaults. Runtime config still requires this value after the blocking
+    // Web Publishing provider has resolved the active topology.
+    assert.equal(publicUrl?.required, false, `${profileName} delegates the URL to the startup provider`);
+    assert.equal(publicUrl?.default, undefined, `${profileName} does not retain a retired direct-port fallback`);
+  }
+});
+
+test('manifest keeps control routing private and publishes no OnlyOffice box-boundary ports', () => {
+  const manifest = readManifest();
+
+  for (const profileName of ['default', 'dev', 'prod']) {
     const profile = manifest.profiles?.[profileName];
     assert.ok(profile, `profile ${profileName} exists`);
 
-    const ports = profile.openPorts || [];
-    assert.ok(
-      ports.includes('127.0.0.1:17002:7000'),
-      `${profileName} publishes the protected control listener on stable box-side port 17002 for Ploinky httpServices`
-    );
-    assert.ok(
-      ports.includes(editorPort),
-      `${profileName} keeps the browser-facing editor proxy on ${editorPort}`
-    );
     assert.equal(
-      ports.some((entry) => /(?:^|:)0(?::|$)/.test(String(entry))),
-      false,
-      `${profileName} has no unsupported box-side port zero claim`
+      profile.additionalServerPort,
+      '7000',
+      `${profileName} gives the router a private ephemeral route to the protected control listener`
     );
-    assert.equal(
-      ports.some((entry) => /:9100$/.test(String(entry))),
-      false,
-      `${profileName} does not publish the loopback storage listener`
-    );
+    assert.equal(profile.openPorts, undefined, `${profileName} publishes no OnlyOffice port across the box boundary`);
   }
 });
 

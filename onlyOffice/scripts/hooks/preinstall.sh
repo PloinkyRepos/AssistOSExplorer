@@ -26,10 +26,10 @@ fi
 if [ -n "$container_runtime" ]; then
     # One-time migration: stop and remove the legacy raw sidecar that was started
     # by the Explorer host preinstall hook before the OnlyOffice agent existed.
-    # The legacy container holds host port 8082, so leaving it running would block
-    # the Ploinky-managed agent from binding the same port. The Explorer hook no
-    # longer creates this sidecar, but a previously-deployed workspace may still
-    # have one.
+    # Leaving it running would create a second unmanaged Document Server over the
+    # same persisted data and bypass Ploinky lifecycle and health ownership. The
+    # Explorer hook no longer creates this sidecar, but a previously-deployed
+    # workspace may still have one.
     workspace_name="$(basename "$workspace_root")"
     legacy_container="ploinky_onlyoffice_${workspace_name}"
     if "$container_runtime" container exists "$legacy_container" 2>/dev/null; then
@@ -45,14 +45,14 @@ if [ -n "$container_runtime" ]; then
     fi
 fi
 
-# Default the Explorer-facing OnlyOffice URLs so local-dev workspaces have working
-# values without requiring the deploy workflow's ploinky vars. Production runs
-# with these vars set explicitly by the deploy workflow, so the existing values
-# remain untouched unless they are the legacy self-loop default from the previous
-# host-managed Document Server wiring.
+# ONLYOFFICE_PUBLIC_URL is owned by the blocking Web Publishing config provider.
+# Do not synthesize a direct host-port fallback here: OnlyOffice exposes no box-
+# boundary port, and the provider emits the canonical local or public browser URL.
+# Keep the retired profile port only to migrate the old internal cross-container
+# default to the co-located Document Server loopback URL.
 case "$profile" in
-    dev) host_port=18082 ;;
-    *)   host_port=8082  ;;
+    dev) legacy_host_port=18082 ;;
+    *)   legacy_host_port=8082  ;;
 esac
 
 set_default_var() {
@@ -89,5 +89,4 @@ set_default_var() {
     done
 }
 
-set_default_var ONLYOFFICE_PUBLIC_URL "http://127.0.0.1:${host_port}"
-set_default_var ONLYOFFICE_INTERNAL_URL "http://127.0.0.1:80" "http://host.containers.internal:${host_port}"
+set_default_var ONLYOFFICE_INTERNAL_URL "http://127.0.0.1:80" "http://host.containers.internal:${legacy_host_port}"

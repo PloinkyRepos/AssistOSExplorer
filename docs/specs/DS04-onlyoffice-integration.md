@@ -181,7 +181,7 @@ Explorer therefore keeps the same IDE experience while moving the persistence bo
 Explorer depends on these environment/runtime assumptions:
 
 - `ONLYOFFICE_PUBLIC_URL`
-  Browser-visible editor host URL
+  Provider-owned browser-visible editor host URL; `http://office.localhost:8081` locally and `https://office.<base-domain>` for managed public topology
 - `ONLYOFFICE_INTERNAL_URL`
   Internal Document Server base used when callback download URLs must be rewritten
 - `ONLYOFFICE_JWT_SECRET`
@@ -189,11 +189,13 @@ Explorer depends on these environment/runtime assumptions:
 
 Explorer no longer depends on Explorer-owned public callback/document base URLs because those routes no longer exist.
 
-OnlyOfficeAgent's manifest must keep the protected control listener and browser editor proxy on separate published ports. Every profile maps the control listener as `127.0.0.1:17002:7000`; stable nonzero box-side port `17002` lets Ploinky validate and publish the active graph at the outer box boundary before startup. The former WebMeet `17000` health publication is retired in favor of private readiness scripts. The Ploinky router targets container port `7000` for `/services/onlyoffice/office/session`, while browser editor assets and `/doc/*` WebSockets use the editor proxy on container port `8080`. The storage listener on `9100` is loopback-only and must not be published or routed.
+OnlyOfficeAgent's protected control listener and browser editor proxy are private runtime surfaces, not box-boundary publications. Every profile declares `additionalServerPort: "7000"`, which gives the Ploinky router an ephemeral localhost route to container port `7000` for `/services/onlyoffice/office/session` without adding an `openPorts` claim. Browser editor assets and `/doc/*` WebSockets reach the proxy on container port `8080` only through Web Publishing over `office-publishing`. The storage listener on `9100` remains loopback-only. No OnlyOffice profile may declare `openPorts` for any of these three planes.
 
 The editor proxy must advertise the public origin to the Document Server by forwarding `X-Forwarded-Host` and `X-Forwarded-Proto` on both HTTP and WebSocket upgrade forwards (preserving values set by an outer proxy, otherwise deriving them from the incoming `Host` header and plain `http`). The Document Server builds the browser-facing converted-document cache URLs from these headers, so dropping them strips the public editor port from those URLs and the editor fails with `Download failed.` after the shell loads. See `onlyOffice/docs/specs/DS01-ploinky-agent-invariant.md` for the full proxy header contract.
 
 OnlyOfficeAgent and Web Publishing share only the `office-publishing` trust zone. Ploinky derives `onlyoffice` and `web-publishing` from their canonical agent ids and registers those DNS names on the attachment; neither manifest declares aliases. Web Publishing reaches the editor proxy at `http://onlyoffice:8080`. OnlyOffice is not attached to either WebMeet trust zone, and its co-located Document Server/storage calls stay on loopback.
+
+Web Publishing is also the only owner of `ONLYOFFICE_PUBLIC_URL`. Local/default mode publishes the browser route as `http://office.localhost:8081` through Web Publishing's existing loopback Nginx listener and overwrites retired `127.0.0.1:8082`/`:18082` provider values. Managed public mode emits the canonical TLS URL. OnlyOfficeAgent does not synthesize a direct host-port URL, and its runtime fails closed if provider resolution does not supply one. The local Nginx route preserves `office.localhost:8081` in `X-Forwarded-Host` so Document Server-generated cache URLs retain the reachable port.
 
 OnlyOffice startup readiness is a blocking in-container script that requires both the decorator control listener and an exact HTTP `200` response for the browser-facing proxy's `api.js`; redirects and other non-`200` responses remain not ready. The control socket opens before the bundled Document Server finishes starting RabbitMQ, supervisor, and Nginx, so it must not be used as the sole readiness signal. Under nested rootless runtimes the bundled single-node RabbitMQ uses the stable `rabbit@localhost` node name so Erlang does not resolve a dynamic inner hostname to the outer container's address.
 

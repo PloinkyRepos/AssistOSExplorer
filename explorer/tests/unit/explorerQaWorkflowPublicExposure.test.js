@@ -19,7 +19,7 @@ test('Explorer pins container-image-builds to main independently of the global b
     });
 });
 
-test('Explorer-local agent manifests leave host port 18083 reserved for the Web Publishing external connector', async () => {
+test('Explorer-local agent manifests leave host port 18083 reserved and keep OnlyOffice out of openPorts', async () => {
     const directoryEntries = await fs.readdir(repoRoot, { withFileTypes: true });
     const publishedPorts = [];
     for (const entry of directoryEntries) {
@@ -45,13 +45,9 @@ test('Explorer-local agent manifests leave host port 18083 reserved for the Web 
         JSON.stringify(publishedPorts.filter(({ port }) => port.includes('18083'))),
     );
     assert.equal(
-        publishedPorts.some(({ agent, profile, port }) => (
-            agent === 'onlyOffice'
-            && profile === 'dev'
-            && port === '127.0.0.1:18082:8080'
-        )),
-        true,
-        'OnlyOffice dev owns 18082; Web Publishing must remain on the distinct reserved port 18083.',
+        publishedPorts.some(({ agent }) => agent === 'onlyOffice'),
+        false,
+        'OnlyOffice control and editor traffic must stay on private Ploinky routes.',
     );
 });
 
@@ -88,6 +84,23 @@ test(`Explorer ${label} workflow defaults the Ploinky runtime to ploinky-box`, a
     assert.match(workflow, /PLOINKY_BRANCH="\$\{PLOINKY_BRANCH:-ploinky-box\}"/);
     assert.doesNotMatch(workflow, /PLOINKY_BRANCH[^\n]*(?:then |:-|'|")master/);
     assert.match(workflow, /else\n\s+echo "\[deploy(?:-qa)?\] ERROR: cannot checkout Ploinky branch/);
+});
+
+test(`Explorer ${label} workflow pins the selected start profile and probes OnlyOffice only through its public URL`, async () => {
+    const workflow = await readWorkflow(fileName);
+
+    assert.match(
+        workflow,
+        /start AchillesIDE\/explorer "\$ROUTER_PORT" \\\n\s+--profile "\$\{PLOINKY_PROFILE:-prod\}" \\/,
+    );
+    assert.doesNotMatch(workflow, /ONLYOFFICE_INTERNAL_URL="\$\(read_workspace_var ONLYOFFICE_INTERNAL_URL\)"/);
+    assert.doesNotMatch(workflow, /printf 'ONLYOFFICE_INTERNAL_URL=%s/);
+    assert.doesNotMatch(workflow, /ONLYOFFICE_API_BASE/);
+    assert.doesNotMatch(workflow, /STRICT_INFRA_CHECKS/);
+
+    assert.match(workflow, /ONLYOFFICE_PUBLIC_URL="\$\(public_var ONLYOFFICE_PUBLIC_URL\)"/);
+    assert.match(workflow, /if \[ -z "\$\{ONLYOFFICE_PUBLIC_URL:-\}" \]; then/);
+    assert.match(workflow, /"\$\{ONLYOFFICE_PUBLIC_URL%\/\}\/web-apps\/apps\/api\/documents\/api\.js"/);
 });
 
 test(`Explorer ${label} workflow accepts only Web Publishing inputs for public topology`, async () => {
@@ -128,7 +141,18 @@ test(`Explorer ${label} workflow accepts only Web Publishing inputs for public t
     assert.doesNotMatch(workflow, /127\.0\.0\.1:\$\{WEBMEET_INFRA_HEALTH_PORT\}/);
     assert.doesNotMatch(workflow, /webmeet_infra_image_tag:/);
     assert.match(workflow, /podman pull "docker\.io\/assistos\/livekit-server-agent:webmeet-infra"/);
-    assert.match(workflow, /Router readiness confirms blocking WebMeet infrastructure dependencies completed/);
+    assert.match(workflow, /start_pid=\$!/);
+    assert.match(workflow, /wait "\$start_pid" \|\| start_status=\$\?/);
+    assert.match(workflow, /if \[ "\$start_status" -ne 0 \]; then/);
+    assert.match(workflow, /ERROR: Ploinky start failed with status \$start_status/);
+    assert.match(workflow, /tail -120 "\$WORK_DIR\/logs\/(?:explorer-qa|skills-explorer)-start\.log" \|\| true/);
+    assert.match(workflow, /Ploinky startup completed; blocking dependency readiness passed/);
+    assert.match(workflow, /Local router listener is ready/);
+    const startWaitIndex = workflow.indexOf('wait "$start_pid"');
+    const providerReadIndex = workflow.indexOf('ONLYOFFICE_PUBLIC_URL="$(read_workspace_var ONLYOFFICE_PUBLIC_URL)"');
+    assert.notEqual(startWaitIndex, -1);
+    assert.notEqual(providerReadIndex, -1);
+    assert.ok(startWaitIndex < providerReadIndex, 'provider output must be read only after Ploinky start succeeds');
     assert.match(workflow, /'WEBMEET_TURN_ALLOWED_PEER_IPS'/);
     assert.doesNotMatch(workflow, standaloneLegacyToken);
 

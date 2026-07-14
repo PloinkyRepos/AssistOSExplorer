@@ -15,6 +15,13 @@ test('config rejects missing onlyoffice jwt secret', () => {
   );
 });
 
+test('config rejects a missing provider-owned public editor URL', () => {
+  assert.throws(
+    () => loadConfig({ ONLYOFFICE_JWT_SECRET: 'test-secret' }),
+    /ONLYOFFICE_PUBLIC_URL is required/
+  );
+});
+
 test('session store mints opaque tokens and never exposes delegation tokens in summaries', () => {
   const store = createSessionStore({
     now: () => at('2026-06-09T12:00:00.000Z'),

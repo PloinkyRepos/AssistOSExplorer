@@ -9,14 +9,15 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const agentRoot = path.resolve(__dirname, '..');
 
-test('preinstall defaults the decorator internal URL to the in-container Document Server', () => {
+test('preinstall defaults only the decorator internal URL to the in-container Document Server', () => {
   const script = fs.readFileSync(path.join(agentRoot, 'scripts/hooks/preinstall.sh'), 'utf8');
 
   assert.match(
     script,
-    /set_default_var ONLYOFFICE_INTERNAL_URL "http:\/\/127\.0\.0\.1:80" "http:\/\/host\.containers\.internal:\$\{host_port\}"/
+    /set_default_var ONLYOFFICE_INTERNAL_URL "http:\/\/127\.0\.0\.1:80" "http:\/\/host\.containers\.internal:\$\{legacy_host_port\}"/
   );
-  assert.match(script, /legacy self-loop default/);
+  assert.match(script, /ONLYOFFICE_PUBLIC_URL is owned by the blocking Web Publishing config provider/);
+  assert.doesNotMatch(script, /set_default_var ONLYOFFICE_PUBLIC_URL/);
   assert.doesNotMatch(script, /set_default_var ONLYOFFICE_CALLBACK_BASE_URL/);
   assert.doesNotMatch(script, /"http:\/\/host\.containers\.internal:8080"/);
 });

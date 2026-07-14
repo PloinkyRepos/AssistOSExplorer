@@ -254,7 +254,6 @@ jobs:
           WEBMEET_EGRESS_REDIS_ADDRESS: ${{ vars.EXPLORER_QA_WEBMEET_EGRESS_REDIS_ADDRESS }}
           WEBMEET_LIVEKIT_INTERNAL_WS_URL: ${{ vars.EXPLORER_QA_WEBMEET_LIVEKIT_INTERNAL_WS_URL }}
           WEBMEET_ICE_TRANSPORT_POLICY: ${{ vars.EXPLORER_QA_WEBMEET_ICE_TRANSPORT_POLICY }}
-          STRICT_INFRA_CHECKS: ${{ vars.EXPLORER_QA_STRICT_INFRA_CHECKS }}
           PROXIES_BRANCH: ${{ inputs.proxies_branch || vars.EXPLORER_QA_PROXIES_BRANCH || 'main' }}
           PLOINKY_BRANCH: ${{ inputs.ploinky_branch || vars.EXPLORER_QA_PLOINKY_BRANCH || 'ploinky-box' }}
           ACHILLES_BRANCH: ${{ inputs.achilles_branch || vars.EXPLORER_QA_ACHILLES_BRANCH || 'master' }}
@@ -292,7 +291,6 @@ jobs:
             write_env WEBMEET_EGRESS_REDIS_ADDRESS
             write_env WEBMEET_LIVEKIT_INTERNAL_WS_URL
             write_env WEBMEET_ICE_TRANSPORT_POLICY
-            write_env STRICT_INFRA_CHECKS
           } > /tmp/explorer_qa_env
           chmod 600 /tmp/explorer_qa_env
 
@@ -811,6 +809,7 @@ jobs:
 
           echo "[deploy] Starting Explorer..."
           nohup env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" start AchillesIDE/explorer "$ROUTER_PORT" \
+            --profile "${PLOINKY_PROFILE:-prod}" \
             --branch "${EXPLORER_BRANCH:-ploinky-box}" \
             --repo-branch "basic=${BASIC_BRANCH:-ploinky-box}" \
             --repo-branch "container-image-builds=main" \
@@ -818,8 +817,19 @@ jobs:
             --repo-branch "webmeetInfra=${WEBMEET_INFRA_BRANCH:-ploinky-box}" \
             --reset-repos \
             > "$WORK_DIR/logs/explorer-qa-start.log" 2>&1 &
+          start_pid=$!
 
-          echo "[deploy] Waiting for local router..."
+          echo "[deploy-qa] Waiting for Ploinky startup and blocking dependencies..."
+          start_status=0
+          wait "$start_pid" || start_status=$?
+          if [ "$start_status" -ne 0 ]; then
+            echo "[deploy-qa] ERROR: Ploinky start failed with status $start_status"
+            tail -120 "$WORK_DIR/logs/explorer-qa-start.log" || true
+            exit "$start_status"
+          fi
+          echo "[deploy-qa] Ploinky startup completed; blocking dependency readiness passed."
+
+          echo "[deploy-qa] Waiting for local router listener..."
           sleep 10
           for i in $(seq 1 390); do
             code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${ROUTER_PORT}/dashboard" || true)"
@@ -834,14 +844,13 @@ jobs:
             fi
             sleep 2
           done
-          echo "[deploy-qa] Router readiness confirms blocking WebMeet infrastructure dependencies completed."
+          echo "[deploy-qa] Local router listener is ready."
 
           read_workspace_var() {
             env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" echo "\$$1" 2>/dev/null | tail -n 1 || true
           }
 
           ONLYOFFICE_PUBLIC_URL="$(read_workspace_var ONLYOFFICE_PUBLIC_URL)"
-          ONLYOFFICE_INTERNAL_URL="$(read_workspace_var ONLYOFFICE_INTERNAL_URL)"
           WEBMEET_PUBLIC_LIVEKIT_URL="$(read_workspace_var WEBMEET_PUBLIC_LIVEKIT_URL)"
 
           expected_livekit_url="wss://meet.${WEB_PUBLISHING_BASE_DOMAIN}"
@@ -852,31 +861,9 @@ jobs:
 
           {
             [ -n "$ONLYOFFICE_PUBLIC_URL" ] && printf 'ONLYOFFICE_PUBLIC_URL=%s\n' "$ONLYOFFICE_PUBLIC_URL"
-            [ -n "$ONLYOFFICE_INTERNAL_URL" ] && printf 'ONLYOFFICE_INTERNAL_URL=%s\n' "$ONLYOFFICE_INTERNAL_URL"
             [ -n "$WEBMEET_PUBLIC_LIVEKIT_URL" ] && printf 'WEBMEET_PUBLIC_LIVEKIT_URL=%s\n' "$WEBMEET_PUBLIC_LIVEKIT_URL"
           } > "$WORK_DIR/logs/explorer-qa-public.env"
           chmod 600 "$WORK_DIR/logs/explorer-qa-public.env"
-
-          case "$(printf '%s' "${STRICT_INFRA_CHECKS:-0}" | tr '[:upper:]' '[:lower:]')" in
-            1|true|yes|on) INFRA_FATAL=1 ;;
-            *) INFRA_FATAL=0 ;;
-          esac
-          ONLYOFFICE_API_BASE="${ONLYOFFICE_INTERNAL_URL:-http://127.0.0.1:8082}"
-          echo "[deploy-qa] Verifying OnlyOffice api.js through ${ONLYOFFICE_API_BASE%/} (fatal=${INFRA_FATAL})..."
-          OO_OK=0
-          for i in $(seq 1 120); do
-            code="$(curl -s -o /dev/null -w '%{http_code}' "${ONLYOFFICE_API_BASE%/}/web-apps/apps/api/documents/api.js" || true)"
-            if [ "$code" = "200" ]; then OO_OK=1; echo "[deploy-qa] OnlyOffice api.js responding with HTTP $code"; break; fi
-            sleep 2
-          done
-          if [ "$OO_OK" != "1" ]; then
-            if [ "$INFRA_FATAL" = "1" ]; then
-              echo "[deploy-qa] ERROR: OnlyOffice api.js did not respond and STRICT_INFRA_CHECKS=1."
-              tail -120 "$WORK_DIR/logs/explorer-qa-start.log" || true
-              exit 1
-            fi
-            echo "[deploy-qa] WARNING: OnlyOffice api.js not responding; continuing (QA non-strict)."
-          fi
 
           echo "[deploy] Containers:"
           podman ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | head -100

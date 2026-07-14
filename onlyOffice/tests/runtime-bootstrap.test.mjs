@@ -35,6 +35,7 @@ function createServerFactory() {
 test('onlyoffice agent runtime starts control storage and editor listeners with separated ports', async () => {
   const env = {
     ONLYOFFICE_JWT_SECRET: 'jwt-secret',
+    ONLYOFFICE_PUBLIC_URL: 'http://office.localhost:8081',
     ONLYOFFICE_CONTROL_PORT: '17000',
     ONLYOFFICE_STORAGE_PORT: '19100',
     ONLYOFFICE_EDITOR_PORT: '18080',
@@ -105,6 +106,7 @@ test('onlyoffice agent runtime starts control storage and editor listeners with 
   ]);
   assert.equal(calls.workspace.workspaceRoot, '/tmp/workspace');
   assert.equal(calls.control.config.controlPort, 17000);
+  assert.equal(calls.control.config.publicEditorBaseUrl, 'http://office.localhost:8081');
   assert.equal(calls.storage.storageRouter.kind, 'storage-router');
   assert.equal(calls.editor.targetBaseUrl, 'http://127.0.0.1:80');
   assert.equal(typeof calls.editor.forwardHttp, 'function');
@@ -126,6 +128,7 @@ test('onlyoffice agent runtime requires an explicit workspace root', async () =>
     () => startOnlyOfficeAgent({
       env: {
         ONLYOFFICE_JWT_SECRET: 'jwt-secret',
+        ONLYOFFICE_PUBLIC_URL: 'http://office.localhost:8081',
       },
       createWorkspaceStore() {
         throw new Error('workspace root fallback was used');

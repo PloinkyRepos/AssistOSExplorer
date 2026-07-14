@@ -131,10 +131,7 @@
           "default": "1m"
         }
       ],
-      "openPorts": [
-        "127.0.0.1:17002:7000",
-        "127.0.0.1:8082:8080"
-      ]
+      "additionalServerPort": "7000"
     },
     "dev": {
       "preinstall": "scripts/hooks/preinstall.sh",
@@ -210,10 +207,7 @@
           "default": "1m"
         }
       ],
-      "openPorts": [
-        "127.0.0.1:17002:7000",
-        "127.0.0.1:18082:8080"
-      ]
+      "additionalServerPort": "7000"
     },
     "prod": {
       "preinstall": "scripts/hooks/preinstall.sh",
@@ -289,10 +283,7 @@
           "default": "1m"
         }
       ],
-      "openPorts": [
-        "127.0.0.1:17002:7000",
-        "127.0.0.1:8082:8080"
-      ]
+      "additionalServerPort": "7000"
     }
   }
 }
