@@ -564,8 +564,8 @@ html[theme="dark"] input.document-title {
 
 .preview-icons {
     position: absolute;
-    right: 4px;
-    top: -8px;
+    right: -5px;
+    top: -22px;
     display: inline-flex;
     align-items: center;
     justify-content: flex-end;

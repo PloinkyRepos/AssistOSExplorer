@@ -3,6 +3,10 @@ const workspaceModule = assistOS.loadModule("workspace");
 import {unescapeHtmlEntities} from "../../../imports.js";
 import UIUtils from "./UIUtils.js";
 import pluginUtils from "../../../utils/pluginUtils.ui.js";
+import {
+    updateChapterMediaState,
+    updateParagraphMediaState
+} from "../../../services/document/local/mediaAttachmentUtils.js";
 
 export class DocumentViewPage {
     constructor(element, invalidate) {
@@ -28,24 +32,62 @@ export class DocumentViewPage {
                 if (!targetDocumentId) {
                     throw new Error("Document identifier is required.");
                 }
-                this._document = await documentModule.loadDocument(targetDocumentId);
+                const currentCrdt = window.assistOS?.workspace?.currentMarkdownCrdtDocument;
+                if (this.isMarkdownDocumentPath(targetDocumentId) && currentCrdt?.model) {
+                    this._document = {
+                        ...this.normalizeRemoteMarkdownDocument(currentCrdt.model),
+                        path: currentCrdt.path || targetDocumentId
+                    };
+                } else {
+                    this._document = await documentModule.loadDocument(targetDocumentId);
+                }
             }
 
-            this.documentId = this._document.id;
-            assistOS.workspace.currentDocumentId = this._document.id;
-            assistOS.workspace.currentDocumentMetadataId = this._document.documentId || this._document.metadata?.id || this._document.docId || '';
-            assistOS.workspace.currentDocumentPath = this._document.path || null;
+            this.syncWorkspaceDocumentContext();
         });
     }
+    isMarkdownDocumentPath(path) {
+        return String(path || "").toLowerCase().endsWith(".md");
+    }
+
+    syncWorkspaceDocumentContext() {
+        this.documentId = this._document?.id;
+        const path = this._document?.path || null;
+        const metadataId = this._document?.documentId || this._document?.metadata?.id || this._document?.docId || '';
+        const isMarkdown = this.isMarkdownDocumentPath(path);
+        assistOS.workspace.currentDocumentId = isMarkdown ? path : this._document?.id;
+        assistOS.workspace.currentDocumentMetadataId = metadataId;
+        assistOS.workspace.currentDocumentPath = path;
+    }
+
     async refreshVariables(){
-        this.variables = await documentModule.getDocCommandsParsed(this._document.docId);
+        const docId = this.isMarkdownCrdtDocument()
+            ? (this._document?.path || assistOS.workspace.currentDocumentPath || "")
+            : (this._document?.docId || this._document?.documentId || this._document?.metadata?.id || this._document?.id || "");
+        this.variables = [];
+        if (!docId) {
+            return;
+        }
+        try {
+            this.variables = await documentModule.getDocCommandsParsed(docId);
+        } catch (error) {
+            console.warn("Failed to load document variables", error);
+            this.variables = [];
+            return;
+        }
+        if (!this.variables.length) {
+            return;
+        }
         try {
             const result = await assistOS.appServices?.callTool("soplangAgent", "get_variables_with_values");
+            if (result?.isError || result?.raw?.isError || /^MCP error/i.test(String(result?.text || "").trim())) {
+                return;
+            }
             const enriched = Array.isArray(result?.json) ? result.json : [];
             for (const cmd of this.variables) {
                 const match = enriched.find(v =>
                     (v.varName || v.name) === cmd.varName &&
-                    (v.docId || v.documentId) === this._document.docId
+                    (v.docId || v.documentId) === docId
                 );
                 if (match) {
                     cmd.value = match.value;
@@ -57,7 +99,7 @@ export class DocumentViewPage {
         }
     }
     getVariables(chapterId, paragraphId) {
-        return this.variables.filter(variable => {
+        return (this.variables || []).filter(variable => {
             return variable.chapterId === chapterId && variable.paragraphId === paragraphId;
         })
     }
@@ -66,7 +108,10 @@ export class DocumentViewPage {
     }
 
     async insertNewChapter(chapterId, position) {
-        let newChapter = await documentModule.getChapter(chapterId);
+        let newChapter = this._document.chapters.find((chapter) => chapter.id === chapterId);
+        if (!newChapter) {
+            newChapter = await documentModule.getChapter(chapterId);
+        }
         const existingIndex = this._document.chapters.findIndex((chapter) => chapter.id === chapterId);
         if (existingIndex !== -1) {
             this._document.chapters.splice(existingIndex, 1);
@@ -166,6 +211,481 @@ export class DocumentViewPage {
         //this.toggleEditingState(true);
     }
 
+    getFileExplorerPresenter() {
+        const host = this.element.closest("file-exp") || document.querySelector("file-exp");
+        return host?.webSkelPresenter || null;
+    }
+
+    hasBlockingLocalEdit() {
+        return Boolean(this.currentElement || this.autoSaveTimeout || this.autoSavePromise);
+    }
+
+    getMarkdownCrdtRevision(crdt = {}) {
+        const heads = Array.isArray(crdt.heads) ? crdt.heads.map((head) => String(head)).sort() : [];
+        const headsKey = heads.join("|");
+        const versionKey = String(crdt.versionKey || "");
+        if (headsKey) {
+            return `heads:${headsKey}`;
+        }
+        if (versionKey) {
+            return `version:${versionKey}`;
+        }
+        return "";
+    }
+
+    updateMarkdownCrdtEditRevision(crdt = {}) {
+        const revision = this.getMarkdownCrdtRevision(crdt);
+        if (!revision) {
+            return;
+        }
+        const fileExplorer = this.getFileExplorerPresenter();
+        if (fileExplorer) {
+            fileExplorer.markdownCrdtEditRevision = revision;
+            if (fileExplorer.markdownCrdtEditPending?.revision === revision) {
+                fileExplorer.markdownCrdtEditPending = null;
+            }
+        }
+        this.remoteMarkdownRevision = revision;
+    }
+
+    async applyPendingRemoteMarkdownIfReady() {
+        if (this.hasBlockingLocalEdit()) {
+            return false;
+        }
+        const fileExplorer = this.getFileExplorerPresenter();
+        if (typeof fileExplorer?.applyPendingMarkdownCrdtEdit !== "function") {
+            return false;
+        }
+        return fileExplorer.applyPendingMarkdownCrdtEdit();
+    }
+
+    async applyRemoteMarkdownDocument(nextDocument, options = {}) {
+        if (!nextDocument || this.hasBlockingLocalEdit()) {
+            return false;
+        }
+        const scrollTop = this.element.scrollTop;
+        const synced = this.syncRenderedMarkdownDocument(nextDocument);
+        if (!synced) {
+            return false;
+        }
+        this.remoteMarkdownRevision = options.revision || '';
+        this.element.scrollTop = scrollTop;
+        try {
+            await this.refreshVariables();
+            this.notifyObservers("variables");
+        } catch (error) {
+            console.warn("Failed to refresh variables after remote Markdown CRDT update", error);
+        }
+        return true;
+    }
+
+    parseToolJson(result) {
+        const blocks = Array.isArray(result?.blocks) ? result.blocks : (Array.isArray(result?.raw?.content) ? result.raw.content : []);
+        const text = typeof result?.text === "string"
+            ? result.text
+            : blocks.find((block) => block?.type === "text" && typeof block.text === "string")?.text;
+        if (result?.isError || result?.raw?.isError) {
+            throw new Error(text || "Explorer tool execution failed.");
+        }
+        if (result?.json && typeof result.json === "object") {
+            return result.json;
+        }
+        const jsonBlock = blocks.find((block) => block?.type === "json" && block.json !== undefined);
+        if (jsonBlock) {
+            return jsonBlock.json;
+        }
+        if (text) {
+            try {
+                return JSON.parse(text);
+            } catch (_) {
+                if (/^(MCP error|Error:)/i.test(text.trim())) {
+                    throw new Error(text.trim());
+                }
+                return {};
+            }
+        }
+        return {};
+    }
+
+    async callExplorerTool(toolName, args = {}) {
+        const appServices = assistOS?.appServices || window.webSkel?.appServices || null;
+        if (typeof appServices?.callTool !== "function") {
+            throw new Error("Explorer tool service is not available.");
+        }
+        return this.parseToolJson(await appServices.callTool("explorer", toolName, args));
+    }
+
+    isMarkdownCrdtDocument() {
+        return String(this._document?.path || assistOS.workspace.currentDocumentPath || "").toLowerCase().endsWith(".md");
+    }
+
+    updateMarkdownDocumentModel(nextDocument) {
+        const previousPath = this._document?.path || assistOS.workspace.currentDocumentPath || null;
+        this._document = {
+            ...this.normalizeRemoteMarkdownDocument(nextDocument),
+            path: nextDocument.path || previousPath
+        };
+        this.syncWorkspaceDocumentContext();
+        assistOS.workspace.currentMarkdownCrdtDocument = {
+            ...(assistOS.workspace.currentMarkdownCrdtDocument || {}),
+            documentId: assistOS.workspace.currentDocumentMetadataId,
+            path: this._document.path || null,
+            model: this._document
+        };
+        return this._document;
+    }
+
+    getMarkdownChangeTarget(change = {}, documentModel = this._document) {
+        if (change.type === "updateParagraph") {
+            const chapter = documentModel?.chapters?.find((item) => item.id === change.chapterId);
+            return chapter?.paragraphs?.find((item) => item.id === change.paragraphId) || null;
+        }
+        if (change.type === "updateChapter") {
+            return documentModel?.chapters?.find((item) => item.id === change.chapterId) || null;
+        }
+        if (change.type === "updateDocument") {
+            return documentModel || null;
+        }
+        return null;
+    }
+
+    valuesEqual(left, right) {
+        return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
+    }
+
+    shouldRefreshVariablesForMarkdownChange(change = {}, previousDocument = this._document) {
+        if (change.refreshVariables === true) {
+            return true;
+        }
+        const metadata = change.metadata || change.patch?.metadata || {};
+        const target = this.getMarkdownChangeTarget(change, previousDocument);
+        const currentCommands = target?.commands ?? target?.metadata?.commands ?? "";
+        const nextCommands = Object.prototype.hasOwnProperty.call(change, "commands")
+            ? change.commands
+            : Object.prototype.hasOwnProperty.call(change.patch || {}, "commands")
+                ? change.patch.commands
+                : Object.prototype.hasOwnProperty.call(metadata, "commands")
+                    ? metadata.commands
+                    : undefined;
+        if (nextCommands !== undefined && String(nextCommands ?? "") !== String(currentCommands ?? "")) {
+            return true;
+        }
+        const currentVariables = target?.variables ?? target?.metadata?.variables ?? [];
+        const nextVariables = Object.prototype.hasOwnProperty.call(change.patch || {}, "variables")
+            ? change.patch.variables
+            : Object.prototype.hasOwnProperty.call(metadata, "variables")
+                ? metadata.variables
+                : undefined;
+        return nextVariables !== undefined && !this.valuesEqual(nextVariables, currentVariables);
+    }
+
+    async refreshVariablesAfterMarkdownChange(change = {}, previousDocument = this._document) {
+        if (!this.shouldRefreshVariablesForMarkdownChange(change, previousDocument)) {
+            return;
+        }
+        try {
+            await this.refreshVariables();
+            this.notifyObservers("variables");
+        } catch (error) {
+            console.warn("Failed to refresh variables after Markdown CRDT change", error);
+        }
+    }
+
+    async applyMarkdownDocumentChange(change = {}, options = {}) {
+        if (!this.isMarkdownCrdtDocument()) {
+            return null;
+        }
+        const path = this._document?.path || assistOS.workspace.currentDocumentPath || "";
+        let documentId = String(this._document?.documentId || this._document?.metadata?.id || "");
+        if (!documentId) {
+            const opened = await this.callExplorerTool("open_markdown_crdt_document", { path });
+            documentId = String(opened?.documentId || "");
+        }
+        if (!documentId) {
+            throw new Error("Markdown CRDT document id is not available.");
+        }
+        const previousDocument = this._document;
+        const applied = await this.callExplorerTool("apply_markdown_crdt_change", {
+            documentId,
+            operation: change.type,
+            change,
+            changeJson: JSON.stringify(change)
+        });
+        const saved = await this.callExplorerTool("save_markdown_crdt_document", {
+            documentId: String(applied?.documentId || documentId),
+            path
+        });
+        if (applied?.model) {
+            if (options.sync === false || this.hasBlockingLocalEdit()) {
+                this.updateMarkdownDocumentModel(applied.model);
+            } else {
+                const synced = this.syncRenderedMarkdownDocument(applied.model);
+                if (!synced) {
+                    this.updateMarkdownDocumentModel(applied.model);
+                }
+            }
+            await this.refreshVariablesAfterMarkdownChange(change, previousDocument);
+        }
+        this.updateMarkdownCrdtEditRevision(saved?.heads ? saved : applied);
+        if (assistOS.workspace.currentMarkdownCrdtDocument) {
+            assistOS.workspace.currentMarkdownCrdtDocument = {
+                ...assistOS.workspace.currentMarkdownCrdtDocument,
+                heads: saved?.heads || applied?.heads || assistOS.workspace.currentMarkdownCrdtDocument.heads,
+                versionKey: saved?.versionKey || applied?.versionKey || assistOS.workspace.currentMarkdownCrdtDocument.versionKey
+            };
+        }
+        return applied;
+    }
+
+    async updateParagraphModel(chapterId, paragraphId, patch = {}) {
+        if (this.isMarkdownCrdtDocument()) {
+            return this.applyMarkdownDocumentChange({
+                type: "updateParagraph",
+                chapterId,
+                paragraphId,
+                ...patch
+            });
+        }
+        const chapter = this._document?.chapters?.find((item) => item.id === chapterId);
+        const paragraph = chapter?.paragraphs?.find((item) => item.id === paragraphId);
+        return documentModule.updateParagraph(
+            chapterId,
+            paragraphId,
+            patch.text ?? paragraph?.text ?? "",
+            patch.commands ?? paragraph?.commands ?? "",
+            patch.comments ?? paragraph?.comments ?? { messages: [] }
+        );
+    }
+
+    async updateDocumentModel(patch = {}) {
+        if (this.isMarkdownCrdtDocument()) {
+            return this.applyMarkdownDocumentChange({
+                type: "updateDocument",
+                ...patch
+            });
+        }
+        return documentModule.updateDocument(
+            this._document.id,
+            patch.title ?? this._document.title,
+            patch.docId ?? this._document.docId,
+            patch.infoText ?? this._document.infoText,
+            patch.commands ?? this._document.commands,
+            patch.comments ?? this._document.comments
+        );
+    }
+
+    async updateChapterModel(chapterId, patch = {}) {
+        if (this.isMarkdownCrdtDocument()) {
+            return this.applyMarkdownDocumentChange({
+                type: "updateChapter",
+                chapterId,
+                ...patch
+            });
+        }
+        const chapter = this._document?.chapters?.find((item) => item.id === chapterId);
+        return documentModule.updateChapter(
+            chapterId,
+            patch.title ?? chapter?.title ?? "",
+            patch.commands ?? chapter?.commands ?? "",
+            patch.comments ?? chapter?.comments ?? { messages: [] }
+        );
+    }
+
+    async reorderChapterModel(chapterId, position) {
+        if (this.isMarkdownCrdtDocument()) {
+            return this.applyMarkdownDocumentChange({
+                type: "reorderChapter",
+                chapterId,
+                position
+            }, { sync: false });
+        }
+        return documentModule.changeChapterOrder(this._document.id, chapterId, position);
+    }
+
+    async addChapterModel(title, position) {
+        if (this.isMarkdownCrdtDocument()) {
+            const applied = await this.applyMarkdownDocumentChange({
+                type: "addChapter",
+                position,
+                chapter: {
+                    title,
+                    metadata: { title },
+                    heading: { level: 2, text: title },
+                    paragraphs: []
+                }
+            }, { sync: false });
+            return applied?.model?.chapters?.[position] || null;
+        }
+        return documentModule.addChapter(this._document.id, title, null, null, position);
+    }
+
+    async deleteChapterModel(chapterId) {
+        if (this.isMarkdownCrdtDocument()) {
+            return this.applyMarkdownDocumentChange({
+                type: "deleteChapter",
+                chapterId
+            }, { sync: false });
+        }
+        return documentModule.deleteChapter(this._document.id, chapterId);
+    }
+
+    async addParagraphModel(chapterId, position) {
+        if (this.isMarkdownCrdtDocument()) {
+            const applied = await this.applyMarkdownDocumentChange({
+                type: "addParagraph",
+                chapterId,
+                position,
+                paragraph: {
+                    text: "",
+                    metadata: {
+                        type: "markdown",
+                        comments: { messages: [] }
+                    }
+                }
+            }, { sync: false });
+            const chapter = applied?.model?.chapters?.find((item) => item.id === chapterId);
+            return chapter?.paragraphs?.[position] || null;
+        }
+        return documentModule.addParagraph(chapterId, "", null, null, position);
+    }
+
+    async deleteParagraphModel(chapterId, paragraphId) {
+        if (this.isMarkdownCrdtDocument()) {
+            return this.applyMarkdownDocumentChange({
+                type: "deleteParagraph",
+                chapterId,
+                paragraphId
+            }, { sync: false });
+        }
+        return documentModule.deleteParagraph(chapterId, paragraphId);
+    }
+
+    async reorderParagraphModel(chapterId, paragraphId, position) {
+        if (this.isMarkdownCrdtDocument()) {
+            return this.applyMarkdownDocumentChange({
+                type: "reorderParagraph",
+                chapterId,
+                paragraphId,
+                position
+            }, { sync: false });
+        }
+        return documentModule.changeParagraphOrder(chapterId, paragraphId, position);
+    }
+
+    normalizeRemoteMarkdownDocument(nextDocument) {
+        const normalizeComments = (comments = {}, defaults = {}) => ({
+            messages: Array.isArray(comments?.messages) ? comments.messages : [],
+            ...defaults,
+            ...(comments && typeof comments === "object" ? comments : {})
+        });
+        const normalizeParagraph = (paragraph) => {
+            const normalized = {
+                ...paragraph,
+                commands: paragraph.commands ?? paragraph.metadata?.commands ?? "",
+                comments: normalizeComments(paragraph.comments)
+            };
+            normalized.metadata = {
+                ...(normalized.metadata || {}),
+                commands: normalized.commands,
+                comments: normalized.comments
+            };
+            updateParagraphMediaState(normalized);
+            return normalized;
+        };
+        const normalizeChapter = (chapter) => {
+            const normalized = {
+                ...chapter,
+                commands: chapter.commands ?? chapter.metadata?.commands ?? "",
+                comments: normalizeComments(chapter.comments),
+                paragraphs: (chapter.paragraphs || []).map(normalizeParagraph)
+            };
+            normalized.metadata = {
+                ...(normalized.metadata || {}),
+                commands: normalized.commands,
+                comments: normalized.comments
+            };
+            updateChapterMediaState(normalized);
+            return normalized;
+        };
+        return {
+            ...nextDocument,
+            commands: nextDocument.commands ?? nextDocument.metadata?.commands ?? "",
+            docId: nextDocument.docId || nextDocument.documentId || nextDocument.metadata?.id || nextDocument.id || "",
+            infoText: nextDocument.infoText ?? nextDocument.metadata?.infoText ?? "",
+            comments: normalizeComments(nextDocument.comments, { infoTextTitle: "Document Info" }),
+            chapters: (nextDocument.chapters || []).map(normalizeChapter)
+        };
+    }
+
+    syncRenderedMarkdownDocument(nextDocument) {
+        nextDocument = this.normalizeRemoteMarkdownDocument(nextDocument);
+        const chapterElements = Array.from(this.element.querySelectorAll("chapter-item[data-chapter-id]"));
+        if (chapterElements.length !== nextDocument.chapters.length) {
+            return false;
+        }
+        for (const chapter of nextDocument.chapters) {
+            const chapterElement = this.element.querySelector(`chapter-item[data-chapter-id="${chapter.id}"]`);
+            if (!chapterElement?.webSkelPresenter) {
+                return false;
+            }
+            const paragraphElements = Array.from(chapterElement.querySelectorAll("paragraph-item[data-paragraph-id]"));
+            if (paragraphElements.length !== chapter.paragraphs.length) {
+                return false;
+            }
+            for (const paragraph of chapter.paragraphs) {
+                if (!chapterElement.querySelector(`paragraph-item[data-paragraph-id="${paragraph.id}"]`)?.webSkelPresenter) {
+                    return false;
+                }
+            }
+        }
+
+        const previousPath = this._document?.path || assistOS.workspace.currentDocumentPath || null;
+        this._document = {
+            ...nextDocument,
+            path: nextDocument.path || previousPath
+        };
+        this.syncWorkspaceDocumentContext();
+        assistOS.workspace.currentMarkdownCrdtDocument = {
+            ...(assistOS.workspace.currentMarkdownCrdtDocument || {}),
+            documentId: assistOS.workspace.currentDocumentMetadataId,
+            path: this._document.path || null,
+            model: this._document
+        };
+        this.renderDocumentTitle();
+        this.renderInfoText();
+        UIUtils.changeCommentIndicator(this.element, this._document.comments.messages);
+        UIUtils.displayCurrentStatus(this.element, this._document.comments, "infoText");
+
+        for (const chapter of nextDocument.chapters) {
+            const chapterElement = this.element.querySelector(`chapter-item[data-chapter-id="${chapter.id}"]`);
+            const chapterPresenter = chapterElement.webSkelPresenter;
+            chapterPresenter._document = nextDocument;
+            chapterPresenter.chapter = chapter;
+            chapterPresenter.renderChapterTitle?.();
+            UIUtils.changeCommentIndicator(chapterElement, chapter.comments.messages);
+            UIUtils.displayCurrentStatus(chapterElement, chapter.comments, "chapter");
+
+            for (const paragraph of chapter.paragraphs) {
+                const paragraphElement = chapterElement.querySelector(`paragraph-item[data-paragraph-id="${paragraph.id}"]`);
+                const paragraphPresenter = paragraphElement.webSkelPresenter;
+                paragraphPresenter._document = nextDocument;
+                paragraphPresenter.chapter = chapter;
+                paragraphPresenter.paragraph = paragraph;
+                const paragraphText = paragraphElement.querySelector(".paragraph-text");
+                if (paragraphText) {
+                    paragraphText.innerHTML = paragraph.text;
+                    paragraphText.value = assistOS.UI.unsanitize(paragraph.text || "");
+                    paragraphText.style.height = "auto";
+                    paragraphText.style.height = `${paragraphText.scrollHeight}px`;
+                }
+                UIUtils.changeCommentIndicator(paragraphElement, paragraph.comments.messages);
+                UIUtils.displayCurrentStatus(paragraphElement, paragraph.comments, "paragraph");
+                paragraphPresenter.renderInfoIcons?.();
+            }
+        }
+        return true;
+    }
+
     async beforeRender() {
         if (window.assistOS.stylePreferenceCache) {
             this.stylePreferences = window.assistOS.stylePreferenceCache
@@ -187,7 +707,7 @@ export class DocumentViewPage {
             });
         }
         document.documentElement.style.setProperty('--document-font-color', localStorage.getItem("document-font-color") || "#646464");
-        await this.refreshVariables();
+        this.variables = [];
     }
 
     renderDocumentTitle() {
@@ -263,6 +783,9 @@ export class DocumentViewPage {
         }
         UIUtils.changeCommentIndicator(this.element, this._document.comments.messages);
         UIUtils.displayCurrentStatus(this.element, this._document.comments, "infoText");
+        this.refreshVariables()
+            .then(() => this.notifyObservers("variables"))
+            .catch((error) => console.warn("Failed to refresh variables after render", error));
         delete this.currentPlugin;
     }
 
@@ -276,12 +799,13 @@ export class DocumentViewPage {
         if (!persist) {
             return;
         }
-        await documentModule.updateDocument(this._document.id,
-            this._document.title,
-            this._document.docId,
-            this._document.infoText,
-            this._document.commands,
-            this._document.comments);
+        await this.updateDocumentModel({
+            title: this._document.title,
+            docId: this._document.docId,
+            infoText: this._document.infoText,
+            commands: this._document.commands,
+            comments: this._document.comments
+        });
     }
     async openSnapshotsModal(targetElement) {
         await assistOS.UI.showModal("document-snapshots-modal");
@@ -307,6 +831,7 @@ export class DocumentViewPage {
                 await this.stopTimer(true);
                 this.clearAutoSaveInputListener();
                 this.currentElement = null;
+                await this.applyPendingRemoteMarkdownIfReady();
             }
         }
     }
@@ -325,7 +850,7 @@ export class DocumentViewPage {
         };
 
         const position = getNewPosition(currentChapterIndex, this._document.chapters);
-        await documentModule.changeChapterOrder(this._document.id, currentChapterId, position);
+        await this.reorderChapterModel(currentChapterId, position);
         this.changeChapterOrder(currentChapterId, position);
     }
 
@@ -337,12 +862,13 @@ export class DocumentViewPage {
         let infoText = assistOS.UI.sanitize(infoTextElement.value);
         if (infoText !== this._document.infoText) {
             this._document.infoText = infoText;
-            await documentModule.updateDocument(this._document.id,
-                this._document.title,
-                this._document.docId,
+            await this.updateDocumentModel({
+                title: this._document.title,
+                docId: this._document.docId,
                 infoText,
-                this._document.commands,
-                this._document.comments);
+                commands: this._document.commands,
+                comments: this._document.comments
+            });
         }
     }
 
@@ -350,12 +876,13 @@ export class DocumentViewPage {
         let infoTextTitle = assistOS.UI.sanitize(input.value);
         if (infoTextTitle !== this._document.comments.infoTextTitle) {
             this._document.comments.infoTextTitle = infoTextTitle;
-            await documentModule.updateDocument(this._document.id,
-                this._document.title,
-                this._document.docId,
-                this._document.infoText,
-                this._document.commands,
-                this._document.comments);
+            await this.updateDocumentModel({
+                title: this._document.title,
+                docId: this._document.docId,
+                infoText: this._document.infoText,
+                commands: this._document.commands,
+                comments: this._document.comments
+            });
         }
     }
 
@@ -373,7 +900,10 @@ export class DocumentViewPage {
 
         }
         let chapterTitle = assistOS.UI.sanitize("New Chapter");
-        let chapter = await documentModule.addChapter(this._document.id, chapterTitle, null, null, position);
+        let chapter = await this.addChapterModel(chapterTitle, position);
+        if (!chapter) {
+            return;
+        }
         assistOS.workspace.currentChapterId = chapter.id;
         await this.insertNewChapter(chapter.id, position);
         this.updateChapterOrdering();
@@ -417,12 +947,13 @@ export class DocumentViewPage {
         let titleText = assistOS.UI.sanitize(textElement.value);
         if (titleText !== this._document.title && titleText !== "") {
             this._document.title = titleText;
-            await documentModule.updateDocument(this._document.id,
-                titleText,
-                this._document.docId,
-                this._document.infoText,
-                this._document.commands,
-                this._document.comments);
+            await this.updateDocumentModel({
+                title: titleText,
+                docId: this._document.docId,
+                infoText: this._document.infoText,
+                commands: this._document.commands,
+                comments: this._document.comments
+            });
         }
     }
 
@@ -459,12 +990,14 @@ export class DocumentViewPage {
             await this.runAutoSaveNow();
         } else if (this.autoSavePromise) {
             await this.autoSavePromise;
+            this.autoSavePromise = null;
         }
     }
 
     async flushPendingEdit() {
         await this.stopTimer(true);
         if (!this.currentElement) {
+            await this.applyPendingRemoteMarkdownIfReady();
             return;
         }
         const { element, focusoutFunction } = this.currentElement;
@@ -474,6 +1007,7 @@ export class DocumentViewPage {
         element?.removeAttribute("id");
         this.clearAutoSaveInputListener();
         this.currentElement = null;
+        await this.applyPendingRemoteMarkdownIfReady();
     }
 
     scheduleAutoSave(delay = 500) {
@@ -490,6 +1024,10 @@ export class DocumentViewPage {
                 .catch((error) => {
                     console.error(error);
                     assistOS.showToast?.(error?.message || "Autosave failed.", "error");
+                })
+                .finally(async () => {
+                    this.autoSavePromise = null;
+                    await this.applyPendingRemoteMarkdownIfReady();
                 });
         }, delay);
     }
@@ -499,13 +1037,18 @@ export class DocumentViewPage {
             clearTimeout(this.autoSaveTimeout);
             this.autoSaveTimeout = null;
         }
-        if (this.autoSavePromise) {
-            await this.autoSavePromise;
+        try {
+            if (this.autoSavePromise) {
+                await this.autoSavePromise;
+            }
+            if (typeof this.autoSaveFunction === "function") {
+                this.autoSavePromise = Promise.resolve().then(() => this.autoSaveFunction());
+                await this.autoSavePromise;
+            }
+        } finally {
+            this.autoSavePromise = null;
         }
-        if (typeof this.autoSaveFunction === "function") {
-            this.autoSavePromise = Promise.resolve().then(() => this.autoSaveFunction());
-            await this.autoSavePromise;
-        }
+        await this.applyPendingRemoteMarkdownIfReady();
     }
 
     clearAutoSaveInputListener() {
@@ -720,12 +1263,13 @@ export class DocumentViewPage {
         if (comment !== undefined) {
             this._document.comments.messages.push(comment);
             UIUtils.changeCommentIndicator(this.element, this._document.comments.messages);
-            await documentModule.updateDocument(this._document.id,
-                this._document.title,
-                this._document.docId,
-                this._document.infoText,
-                this._document.commands,
-                this._document.comments);
+            await this.updateDocumentModel({
+                title: this._document.title,
+                docId: this._document.docId,
+                infoText: this._document.infoText,
+                commands: this._document.commands,
+                comments: this._document.comments
+            });
         }
     }
     showComments(iconContainer){
@@ -736,12 +1280,13 @@ export class DocumentViewPage {
     }
     async updateComments(comments) {
         this._document.comments.messages = comments;
-            await documentModule.updateDocument(this._document.id,
-                this._document.title,
-                this._document.docId,
-                this._document.infoText,
-                this._document.commands,
-                this._document.comments);
+            await this.updateDocumentModel({
+                title: this._document.title,
+                docId: this._document.docId,
+                infoText: this._document.infoText,
+                commands: this._document.commands,
+                comments: this._document.comments
+            });
         if(this._document.comments.messages.length === 0){
             this.closeComments();
             UIUtils.changeCommentIndicator(this.element, this._document.comments.messages);
@@ -857,12 +1402,13 @@ export class DocumentViewPage {
         this._document.comments.toc = {
             collapsed: false
         };
-        await documentModule.updateDocument(this._document.id,
-            this._document.title,
-            this._document.docId,
-            this._document.infoText,
-            this._document.commands,
-            this._document.comments);
+        await this.updateDocumentModel({
+            title: this._document.title,
+            docId: this._document.docId,
+            infoText: this._document.infoText,
+            commands: this._document.commands,
+            comments: this._document.comments
+        });
     }
     showTableOfContents() {
         let contentsTable = this.element.querySelector("contents-table");
@@ -879,12 +1425,13 @@ export class DocumentViewPage {
             collapsed: false,
             references: []
         };
-        await documentModule.updateDocument(this._document.id,
-            this._document.title,
-            this._document.docId,
-            this._document.infoText,
-            this._document.commands,
-            this._document.comments);
+        await this.updateDocumentModel({
+            title: this._document.title,
+            docId: this._document.docId,
+            infoText: this._document.infoText,
+            commands: this._document.commands,
+            comments: this._document.comments
+        });
     }
 
     showTableOfReferences() {

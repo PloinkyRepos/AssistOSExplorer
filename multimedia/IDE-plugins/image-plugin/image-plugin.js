@@ -18,12 +18,7 @@ export class ImagePlugin {
         this.element = element;
         this.invalidate = invalidate;
 
-        const { document, chapter, paragraph } = getContextualElement(element);
-        this._document = document;
-        this.chapter = chapter;
-        this.paragraph = paragraph;
-        this.isParagraphContext = !!this.paragraph;
-
+        this.refreshContext();
         if (!this.isParagraphContext) {
             this.ensureBackgroundImageHydrated();
         }
@@ -32,7 +27,16 @@ export class ImagePlugin {
 
     beforeRender() {}
 
+    refreshContext() {
+        const { document, chapter, paragraph } = getContextualElement(this.element);
+        this._document = document;
+        this.chapter = chapter;
+        this.paragraph = paragraph;
+        this.isParagraphContext = !!this.paragraph;
+    }
+
     async afterRender() {
+        this.refreshContext();
         this.fileInput = this.element.querySelector(".file-input");
         this.resetFileInputListener();
         this.imageListElement = this.element.querySelector('.image-list');
@@ -96,6 +100,7 @@ export class ImagePlugin {
     }
 
     async invalidateCompiledVideo() {
+        this.refreshContext();
         if (this.isParagraphContext) {
             return;
         }
@@ -110,6 +115,7 @@ export class ImagePlugin {
     }
 
     getImageAttachments() {
+        this.refreshContext();
         const host = this.paragraph || this.chapter;
         return host?.mediaAttachments?.image || [];
     }
@@ -169,6 +175,7 @@ export class ImagePlugin {
             return;
         }
         try {
+            this.refreshContext();
             if (this.isParagraphContext) {
                 await documentModule.deleteParagraphImageAttachment(
                     this._document.id,
@@ -189,6 +196,7 @@ export class ImagePlugin {
     }
 
     async persistImageAttachment(payload) {
+        this.refreshContext();
         if (this.isParagraphContext) {
             return documentModule.setParagraphImageAttachment(
                 this._document.id,

@@ -65,6 +65,14 @@ export class ChapterItem {
     async insertNewParagraph(paragraphId, position) {
         let newParagraph = this.chapter.paragraphs.find((paragraph) => paragraph.id === paragraphId);
         if (!newParagraph) {
+            const latestChapter = this.documentPresenter._document?.chapters?.find((chapter) => chapter.id === this.chapter.id);
+            newParagraph = latestChapter?.paragraphs?.find((paragraph) => paragraph.id === paragraphId);
+            if (latestChapter) {
+                this._document = this.documentPresenter._document;
+                this.chapter = latestChapter;
+            }
+        }
+        if (!newParagraph) {
             newParagraph = await documentModule.getParagraph(paragraphId);
         }
 
@@ -102,18 +110,22 @@ export class ChapterItem {
         if(comment !== undefined){
             this.chapter.comments.messages.push(comment)
             UIUtils.changeCommentIndicator(this.element, this.chapter.comments.messages);
-            await documentModule.updateChapter(this.chapter.id,
-                this.chapter.title,
-                this.chapter.commands,
-                this.chapter.comments);
+            await this.documentPresenter.updateChapterModel(this.chapter.id, {
+                title: this.chapter.title,
+                commands: this.chapter.commands,
+                comments: this.chapter.comments,
+                metadata: this.chapter.metadata
+            });
         }
     }
     async updateComments(comments) {
         this.chapter.comments.messages = comments;
-        await documentModule.updateChapter(this.chapter.id,
-            this.chapter.title,
-            this.chapter.commands,
-            this.chapter.comments);
+        await this.documentPresenter.updateChapterModel(this.chapter.id, {
+            title: this.chapter.title,
+            commands: this.chapter.commands,
+            comments: this.chapter.comments,
+            metadata: this.chapter.metadata
+        });
         if(this.chapter.comments.messages.length === 0){
             this.closeComments();
             UIUtils.changeCommentIndicator(this.element, this.chapter.comments.messages);
@@ -163,7 +175,8 @@ export class ChapterItem {
         } else {
             switch (data) {
                 case "title": {
-                    let chapter = await documentModule.getChapter(this._document.id, this.chapter.id);
+                    let chapter = this.documentPresenter._document?.chapters?.find((item) => item.id === this.chapter.id)
+                        || await documentModule.getChapter(this._document.id, this.chapter.id);
                     if (chapter.title !== this.chapter.title) {
                         this.chapter.title = chapter.title;
                         this.renderChapterTitle();
@@ -171,7 +184,8 @@ export class ChapterItem {
                     break;
                 }
                 case "commands": {
-                    let chapter = await documentModule.getChapter(this._document.id, this.chapter.id);
+                    let chapter = this.documentPresenter._document?.chapters?.find((item) => item.id === this.chapter.id)
+                        || await documentModule.getChapter(this._document.id, this.chapter.id);
                     this.chapter.commands = chapter.commands;
                     break;
                 }
@@ -189,10 +203,12 @@ export class ChapterItem {
         let titleText = assistOS.UI.sanitize(titleElement.value);
         if (titleText !== this.chapter.title && titleText !== "") {
             this.chapter.title = titleText;
-            await documentModule.updateChapter(this.chapter.id,
-                titleText,
-                this.chapter.commands,
-                this.chapter.comments);
+            await this.documentPresenter.updateChapterModel(this.chapter.id, {
+                title: titleText,
+                commands: this.chapter.commands,
+                comments: this.chapter.comments,
+                metadata: this.chapter.metadata
+            });
         }
     }
 
@@ -260,10 +276,12 @@ export class ChapterItem {
         if (!persist) {
             return;
         }
-        await documentModule.updateChapter(this.chapter.id,
-            this.chapter.title,
-            this.chapter.commands,
-            this.chapter.comments);
+        await this.documentPresenter.updateChapterModel(this.chapter.id, {
+            title: this.chapter.title,
+            commands: this.chapter.commands,
+            comments: this.chapter.comments,
+            metadata: this.chapter.metadata
+        });
     }
     changeChapterDeleteAvailability() {
         let deleteChapter = this.element.querySelector(".delete-chapter");
@@ -287,7 +305,10 @@ export class ChapterItem {
             }
         }
 
-        let paragraph = await documentModule.addParagraph(this.chapter.id, "", null, null, position);
+        let paragraph = await this.documentPresenter.addParagraphModel(this.chapter.id, position);
+        if (!paragraph) {
+            return;
+        }
         assistOS.workspace.currentParagraphId = paragraph.id;
         await this.insertNewParagraph(assistOS.workspace.currentParagraphId, position);
     }
@@ -520,10 +541,12 @@ export class ChapterItem {
     async changeChapterDisplay(_target) {
         this.chapter.comments.collapsed = !this.chapter.comments.collapsed;
         this.displayChapterContent();
-        await documentModule.updateChapter(this.chapter.id,
-            this.chapter.title,
-            this.chapter.commands,
-            this.chapter.comments);
+        await this.documentPresenter.updateChapterModel(this.chapter.id, {
+            title: this.chapter.title,
+            commands: this.chapter.commands,
+            comments: this.chapter.comments,
+            metadata: this.chapter.metadata
+        });
     }
 
     displayChapterContent() {
@@ -555,7 +578,7 @@ export class ChapterItem {
         if (!confirmation) {
             return;
         }
-        await documentModule.deleteChapter(this._document.id, this.chapter.id);
+        await this.documentPresenter.deleteChapterModel(this.chapter.id);
         this.documentPresenter.deleteChapter(this.chapter.id);
     }
 

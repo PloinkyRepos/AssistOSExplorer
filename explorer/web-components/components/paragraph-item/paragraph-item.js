@@ -1,6 +1,7 @@
 const documentModule = assistOS.loadModule("document");
 import UIUtils from "../document-view-page/UIUtils.js";
 import pluginUtils from "../../../utils/pluginUtils.ui.js";
+import { getScriptaStatus } from "../../../services/document/scriptaState.js";
 
 const isMediaVariable = (variable) => {
     if (!variable || typeof variable !== 'object') {
@@ -12,6 +13,13 @@ const isMediaVariable = (variable) => {
     return meta === 'multimedia' || type === 'multimedia' || optionType === 'multimedia'
         || type === 'audio' || type === 'video' || optionType === 'audio' || optionType === 'video';
 };
+
+const isScriptaPluginAvailable = () => {
+    const paragraphPlugins = assistOS?.workspace?.plugins?.paragraph;
+    return Array.isArray(paragraphPlugins)
+        && paragraphPlugins.some((plugin) => plugin?.component === "scripta-variants");
+};
+
 export class ParagraphItem {
     constructor(element, invalidate) {
         this.element = element;
@@ -109,13 +117,17 @@ export class ParagraphItem {
         if (!persist) {
             return;
         }
-        await documentModule.updateParagraph(this.chapter.id, this.paragraph.id,
-            this.paragraph.text,
-            this.paragraph.commands,
-            this.paragraph.comments);
+        await this.documentPresenter.updateParagraphModel(this.chapter.id, this.paragraph.id, {
+            text: this.paragraph.text,
+            commands: this.paragraph.commands,
+            comments: this.paragraph.comments,
+            metadata: this.paragraph.metadata
+        });
     }
     async onParagraphUpdate(type) {
-        this.paragraph = await documentModule.getParagraph(this.paragraph.id);
+        const latestChapter = this.documentPresenter._document?.chapters?.find((chapter) => chapter.id === this.chapter.id);
+        const latestParagraph = latestChapter?.paragraphs?.find((paragraph) => paragraph.id === this.paragraph.id);
+        this.paragraph = latestParagraph || await documentModule.getParagraph(this.paragraph.id);
         let paragraphText = this.element.querySelector(".paragraph-text");
         paragraphText.value = assistOS.UI.unsanitize(this.paragraph.text);
         //this.documentPresenter.toggleEditingState(true);
@@ -132,7 +144,7 @@ export class ParagraphItem {
         }
 
         let currentParagraphIndex = this.chapter.paragraphs.findIndex(paragraph => paragraph.id === this.paragraph.id);
-        await documentModule.deleteParagraph(this.chapter.id, this.paragraph.id);
+        await this.documentPresenter.deleteParagraphModel(this.chapter.id, this.paragraph.id);
         if (this.chapter.paragraphs.length > 0) {
             if (currentParagraphIndex === 0) {
                 assistOS.workspace.currentParagraphId = this.chapter.paragraphs[0].id;
@@ -160,7 +172,7 @@ export class ParagraphItem {
         await this.documentPresenter.stopTimer(false);
         const currentParagraphIndex = this.chapter.paragraphs.findIndex(paragraph => paragraph.id === this.paragraph.id);
         const position = this.getNewPosition(currentParagraphIndex, direction);
-        await documentModule.changeParagraphOrder(this.chapter.id, this.paragraph.id, position);
+        await this.documentPresenter.reorderParagraphModel(this.chapter.id, this.paragraph.id, position);
         let chapterPresenter = this.element.closest("chapter-item").webSkelPresenter;
         chapterPresenter.changeParagraphOrder(this.paragraph.id, position);
     }
@@ -177,8 +189,12 @@ export class ParagraphItem {
         let paragraphText = assistOS.UI.sanitize(paragraph.value);
         if (paragraphText !== this.paragraph.text) {
             this.paragraph.text = paragraphText
-            await documentModule.updateParagraph(this.chapter.id, this.paragraph.id,
-                paragraphText, this.paragraph.commands, this.paragraph.comments);
+            await this.documentPresenter.updateParagraphModel(this.chapter.id, this.paragraph.id, {
+                text: paragraphText,
+                commands: this.paragraph.commands,
+                comments: this.paragraph.comments,
+                metadata: this.paragraph.metadata
+            });
         }
     }
 
@@ -252,6 +268,43 @@ export class ParagraphItem {
             commandCount: this.getParagraphCommandCount()
         };
         UIUtils.renderInfoIcons(this.element, info);
+        this.renderScriptaStatus();
+    }
+
+    renderScriptaStatus() {
+        const previewIcons = this.element.querySelector(".preview-icons");
+        if (!previewIcons) {
+            return;
+        }
+        previewIcons.querySelector(".scripta-status-badge")?.remove();
+        const status = getScriptaStatus(this.paragraph) || (isScriptaPluginAvailable()
+            ? {
+                variants: 0,
+                activeScore: 0,
+                activeTotal: 0,
+                totalReactions: 0
+            }
+            : null);
+        if (!status) {
+            return;
+        }
+        const tone = status.activeScore > 0
+            ? "is-positive"
+            : status.activeScore < 0
+                ? "is-negative"
+                : "is-neutral";
+        const badge = document.createElement("button");
+        badge.type = "button";
+        badge.className = `scripta-status-badge ${tone}`;
+        badge.setAttribute("data-local-action", "openPlugin paragraph scripta-variants false");
+        badge.setAttribute("title", "SCRIPTA variants");
+        badge.setAttribute("aria-label", `SCRIPTA variants: ${status.variants} variants, active score ${status.activeScore} from ${status.totalReactions} reactions`);
+        badge.innerHTML = `
+            <span>${status.variants}v</span>
+            <span class="scripta-status-separator">|</span>
+            <strong>${status.activeScore}/${status.totalReactions}</strong>
+        `;
+        previewIcons.appendChild(badge);
     }
 
     getParagraphVariableCount() {
@@ -313,10 +366,12 @@ export class ParagraphItem {
         this.paragraph.text = paragraph.text;
         this.paragraph.commands = paragraph.commands;
         this.paragraph.comments = JSON.parse(JSON.stringify(paragraph.comments));
-        await documentModule.updateParagraph(this.chapter.id, this.paragraph.id,
-            this.paragraph.text,
-            this.paragraph.commands,
-            this.paragraph.comments);
+        await this.documentPresenter.updateParagraphModel(this.chapter.id, this.paragraph.id, {
+            text: this.paragraph.text,
+            commands: this.paragraph.commands,
+            comments: this.paragraph.comments,
+            metadata: this.paragraph.metadata
+        });
         delete window.copiedParagraph;
         this.invalidate();
     }
@@ -384,19 +439,22 @@ export class ParagraphItem {
         if(comment !== undefined){
             this.paragraph.comments.messages.push(comment);
             UIUtils.changeCommentIndicator(this.element, this.paragraph.comments.messages);
-            await documentModule.updateParagraph(this.chapter.id, this.paragraph.id,
-                this.paragraph.text,
-                this.paragraph.commands,
-                this.paragraph.comments);
+            await this.documentPresenter.updateParagraphModel(this.chapter.id, this.paragraph.id, {
+                text: this.paragraph.text,
+                commands: this.paragraph.commands,
+                comments: this.paragraph.comments,
+                metadata: this.paragraph.metadata
+            });
         }
     }
     async updateComments(comments) {
         this.paragraph.comments.messages = comments;
-        await documentModule.updateParagraph(this.chapter.id,
-            this.paragraph.id,
-            this.paragraph.text,
-            this.paragraph.commands,
-            this.paragraph.comments);
+        await this.documentPresenter.updateParagraphModel(this.chapter.id, this.paragraph.id, {
+            text: this.paragraph.text,
+            commands: this.paragraph.commands,
+            comments: this.paragraph.comments,
+            metadata: this.paragraph.metadata
+        });
         if(this.paragraph.comments.messages.length === 0){
             this.closeComments();
             UIUtils.changeCommentIndicator(this.element, this.paragraph.comments.messages);

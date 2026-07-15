@@ -1,4 +1,3 @@
-const documentModule = assistOS.loadModule("document");
 const workspaceModule = assistOS.loadModule("workspace");
 import {
     attachEventListeners, constructFullExpression,
@@ -12,8 +11,8 @@ export class AddVariable {
         this.documentId = this.element.getAttribute("data-document-id");
         this.chapterId = this.element.getAttribute("data-chapter-id");
         this.paragraphId = this.element.getAttribute("data-paragraph-id");
-        let documentPresenter = document.querySelector("document-view-page").webSkelPresenter;
-        this.document = documentPresenter._document;
+        this.documentPresenter = document.querySelector("document-view-page").webSkelPresenter;
+        this.document = this.documentPresenter._document;
         if(this.chapterId){
             this.chapter = this.document.chapters.find(chapter => chapter.id === this.chapterId);
         }
@@ -88,30 +87,46 @@ export class AddVariable {
                 return;
             }
             if(this.paragraphId){
-                this.paragraph.commands += result.fullExpression;
-                this.paragraph.commands += `\n`;
-                await documentModule.updateParagraph(this.chapterId,
-                    this.paragraphId,
-                    this.paragraph.text,
-                    this.paragraph.commands,
-                    this.paragraph.comments)
+                this.paragraph.commands = `${this.paragraph.commands || ""}${result.fullExpression}\n`;
+                this.paragraph.metadata = {
+                    ...(this.paragraph.metadata || {}),
+                    commands: this.paragraph.commands
+                };
+                await this.documentPresenter.updateParagraphModel(this.chapterId, this.paragraphId, {
+                    text: this.paragraph.text,
+                    commands: this.paragraph.commands,
+                    comments: this.paragraph.comments,
+                    metadata: this.paragraph.metadata
+                });
             } else if(this.chapterId){
-                this.chapter.commands += result.fullExpression;
-                this.chapter.commands += `\n`;
-                await documentModule.updateChapter(this.chapterId,
-                    this.chapter.title,
-                    this.chapter.commands,
-                    this.chapter.comments);
+                this.chapter.commands = `${this.chapter.commands || ""}${result.fullExpression}\n`;
+                this.chapter.metadata = {
+                    ...(this.chapter.metadata || {}),
+                    commands: this.chapter.commands
+                };
+                await this.documentPresenter.updateChapterModel(this.chapterId, {
+                    title: this.chapter.title,
+                    commands: this.chapter.commands,
+                    comments: this.chapter.comments,
+                    metadata: this.chapter.metadata
+                });
             } else {
-                this.document.commands += result.fullExpression;
-                this.document.commands += `\n`;
-                await documentModule.updateDocument(this.documentId,
-                    this.document.title,
-                    this.document.docId,
-                    this.document.infoText,
-                    this.document.commands,
-                    this.document.comments);
+                this.document.commands = `${this.document.commands || ""}${result.fullExpression}\n`;
+                this.document.metadata = {
+                    ...(this.document.metadata || {}),
+                    commands: this.document.commands
+                };
+                await this.documentPresenter.updateDocumentModel({
+                    title: this.document.title,
+                    docId: this.document.docId,
+                    infoText: this.document.infoText,
+                    commands: this.document.commands,
+                    comments: this.document.comments,
+                    metadata: this.document.metadata
+                });
             }
+            await this.documentPresenter?.refreshVariables?.();
+            this.documentPresenter?.notifyObservers?.("variables");
             await assistOS.UI.closeModal(this.element, true);
         } catch (e) {
             assistOS.showToast(e.message, "error", 7000);

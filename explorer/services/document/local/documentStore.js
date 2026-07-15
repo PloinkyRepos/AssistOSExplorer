@@ -383,7 +383,7 @@ class DocumentStore {
             return this.save(path);
         }
         await this.service.fs.applyMarkdownChange(path, change);
-        return this.get(path);
+        return this.load(path);
     }
 
     async waitForPendingMarkdownChanges(path) {

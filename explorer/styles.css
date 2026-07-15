@@ -691,7 +691,7 @@ tr.clipboard-row.clipboard-copy.active {
     position: fixed;
     width: min(420px, calc(100vw - var(--space-lg)));
     right: var(--space-md);
-    top: 70px;
+    top: 10px;
     z-index: 9999;
 }
 

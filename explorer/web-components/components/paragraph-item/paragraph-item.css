@@ -304,3 +304,64 @@ html[theme="dark"] textarea.paragraph-text{
 .paragraph-toolbar .paragraph-highlight-plugin img{
     filter: none;
 }
+
+.scripta-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-height: 24px;
+    padding: 3px 8px;
+    border: 1px solid rgba(100, 116, 139, 0.24);
+    border-radius: 999px;
+    background: var(--white);
+    color: #475569;
+    cursor: pointer;
+    font: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.scripta-status-badge:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 14px rgba(15, 23, 42, 0.12);
+}
+
+.scripta-status-badge.is-positive {
+    border-color: rgba(5, 150, 105, 0.28);
+    background: rgba(5, 150, 105, 0.10);
+    color: #047857;
+}
+
+.scripta-status-badge.is-negative {
+    border-color: rgba(220, 38, 38, 0.26);
+    background: rgba(220, 38, 38, 0.08);
+    color: #b91c1c;
+}
+
+.scripta-status-badge.is-neutral {
+    border-color: rgba(100, 116, 139, 0.24);
+    background: rgba(100, 116, 139, 0.08);
+    color: #475569;
+}
+
+.scripta-status-separator {
+    opacity: 0.55;
+}
+
+html[theme="dark"] .scripta-status-badge {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text);
+    box-shadow: none;
+}
+
+html[theme="dark"] .scripta-status-badge.is-positive {
+    background: rgba(34, 197, 94, 0.14);
+    color: #86efac;
+}
+
+html[theme="dark"] .scripta-status-badge.is-negative {
+    background: rgba(248, 113, 113, 0.13);
+    color: #fca5a5;
+}

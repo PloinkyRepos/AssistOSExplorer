@@ -274,26 +274,45 @@ export class EditVariables {
     async updateCommands(commands) {
         if (this.paragraph) {
             this.paragraph.commands = commands;
-            await documentModule.updateParagraph(this.chapter.id,
-                this.paragraph.id,
-                this.paragraph.text,
-                this.paragraph.commands,
-                this.paragraph.comments);
+            this.paragraph.metadata = {
+                ...(this.paragraph.metadata || {}),
+                commands: this.paragraph.commands
+            };
+            await this.documentPresenter.updateParagraphModel(this.chapter.id, this.paragraph.id, {
+                text: this.paragraph.text,
+                commands: this.paragraph.commands,
+                comments: this.paragraph.comments,
+                metadata: this.paragraph.metadata
+            });
         } else if (this.chapter) {
             this.chapter.commands = commands;
-            await documentModule.updateChapter(this.chapter.id,
-                this.chapter.title,
-                this.chapter.commands,
-                this.chapter.comments);
+            this.chapter.metadata = {
+                ...(this.chapter.metadata || {}),
+                commands: this.chapter.commands
+            };
+            await this.documentPresenter.updateChapterModel(this.chapter.id, {
+                title: this.chapter.title,
+                commands: this.chapter.commands,
+                comments: this.chapter.comments,
+                metadata: this.chapter.metadata
+            });
         } else {
             this.document.commands = commands;
-            await documentModule.updateDocument(this.document.id,
-                this.document.title,
-                this.document.docId,
-                this.document.infoText,
-                this.document.commands,
-                this.document.comments);
+            this.document.metadata = {
+                ...(this.document.metadata || {}),
+                commands: this.document.commands
+            };
+            await this.documentPresenter.updateDocumentModel({
+                title: this.document.title,
+                docId: this.document.docId,
+                infoText: this.document.infoText,
+                commands: this.document.commands,
+                comments: this.document.comments,
+                metadata: this.document.metadata
+            });
         }
+        await this.documentPresenter.refreshVariables?.();
+        this.documentPresenter.notifyObservers?.("variables");
     }
 
     async openEditor(targetElement, varName) {

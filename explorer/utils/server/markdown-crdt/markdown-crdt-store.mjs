@@ -75,12 +75,60 @@ function applyTextDelta(baseText, change) {
   return `${base.slice(0, from)}${String(change.insertText ?? '')}${base.slice(end)}`;
 }
 
+function stripEmbeddedMetadataComments(value = '') {
+  return String(value ?? '').replace(/<!--[\s\S]*?achilles-ide-(?:document|chapter|paragraph|toc|references)[\s\S]*?-->\s*/g, '');
+}
+
 function normalizePosition(list, position) {
   const items = Array.isArray(list) ? list : [];
   if (position === null || typeof position === 'undefined') return items.length;
   const parsed = Number.parseInt(String(position), 10);
   if (!Number.isFinite(parsed)) return items.length;
   return Math.max(0, Math.min(items.length, parsed));
+}
+
+function isPlainObject(value) {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function mergeMetadata(base = {}, patch = {}) {
+  const result = {
+    ...(isPlainObject(base) ? cloneJson(base) : {})
+  };
+  if (!isPlainObject(patch)) {
+    return result;
+  }
+  for (const [key, value] of Object.entries(patch)) {
+    if (key === 'id') {
+      continue;
+    }
+    if (isPlainObject(value) && isPlainObject(result[key])) {
+      result[key] = mergeMetadata(result[key], value);
+    } else {
+      result[key] = cloneJson(value);
+    }
+  }
+  return result;
+}
+
+function applyMetadataPatch(target, patch = {}, id = '') {
+  if (!target || !isPlainObject(patch)) {
+    return;
+  }
+  target.metadata = mergeMetadata(target.metadata || {}, patch);
+  if (id) {
+    target.metadata.id = id;
+  }
+  for (const [key, value] of Object.entries(patch)) {
+    if (key === 'id') {
+      continue;
+    }
+    if (isPlainObject(value) && isPlainObject(target[key])) {
+      target[key] = mergeMetadata(target[key], value);
+    } else {
+      target[key] = cloneJson(value);
+    }
+  }
 }
 
 function findChapter(model, chapterId) {
@@ -115,12 +163,17 @@ function updateModelMetadata(model, patch = {}) {
   const metadataPatch = {
     ...(patch.metadata && typeof patch.metadata === 'object' ? patch.metadata : patch)
   };
+  delete metadataPatch.type;
+  delete metadataPatch.operation;
+  delete metadataPatch.documentId;
+  delete metadataPatch.path;
+  delete metadataPatch.changeJson;
+  delete metadataPatch.chapterId;
+  delete metadataPatch.paragraphId;
+  delete metadataPatch.position;
+  delete metadataPatch.refreshVariables;
   delete metadataPatch.id;
-  model.metadata = {
-    ...(model.metadata || {}),
-    ...cloneJson(metadataPatch),
-    id: currentId
-  };
+  applyMetadataPatch(model, metadataPatch, currentId);
   if (typeof patch.title === 'string') {
     model.metadata.title = patch.title;
   }
@@ -169,14 +222,27 @@ function applySemanticOperation(model, change) {
     const chapter = findChapter(model, change.chapterId);
     if (!chapter) throw new Error(`Chapter ${change.chapterId || ''} not found.`);
     if (change.patch && typeof change.patch === 'object') {
-      Object.assign(chapter, cloneJson(change.patch));
+      const patch = cloneJson(change.patch);
+      const { metadata, ...fields } = patch;
+      Object.assign(chapter, fields);
+      if (metadata && typeof metadata === 'object') {
+        applyMetadataPatch(chapter, metadata, chapter.id);
+      }
     }
     if (typeof change.title === 'string') {
-      chapter.metadata = { ...(chapter.metadata || {}), title: change.title };
+      applyMetadataPatch(chapter, { title: change.title }, chapter.id);
       chapter.heading = { ...(chapter.heading || {}), text: change.title };
     }
+    if (typeof change.commands === 'string') {
+      chapter.commands = change.commands;
+      applyMetadataPatch(chapter, { commands: change.commands }, chapter.id);
+    }
+    if (change.comments && typeof change.comments === 'object') {
+      chapter.comments = cloneJson(change.comments);
+      applyMetadataPatch(chapter, { comments: change.comments }, chapter.id);
+    }
     if (change.metadata && typeof change.metadata === 'object') {
-      chapter.metadata = { ...(chapter.metadata || {}), ...cloneJson(change.metadata), id: chapter.id };
+      applyMetadataPatch(chapter, change.metadata, chapter.id);
     }
     return model;
   }
@@ -207,13 +273,26 @@ function applySemanticOperation(model, change) {
     const { paragraph } = findParagraph(model, change.chapterId, change.paragraphId);
     if (!paragraph) throw new Error(`Paragraph ${change.paragraphId || ''} not found.`);
     if (change.patch && typeof change.patch === 'object') {
-      Object.assign(paragraph, cloneJson(change.patch));
+      const patch = cloneJson(change.patch);
+      const { metadata, ...fields } = patch;
+      Object.assign(paragraph, fields);
+      if (metadata && typeof metadata === 'object') {
+        applyMetadataPatch(paragraph, metadata, paragraph.id);
+      }
     }
     if (typeof change.text === 'string') {
-      paragraph.text = change.text;
+      paragraph.text = stripEmbeddedMetadataComments(change.text);
+    }
+    if (typeof change.commands === 'string') {
+      paragraph.commands = change.commands;
+      applyMetadataPatch(paragraph, { commands: change.commands }, paragraph.id);
+    }
+    if (change.comments && typeof change.comments === 'object') {
+      paragraph.comments = cloneJson(change.comments);
+      applyMetadataPatch(paragraph, { comments: change.comments }, paragraph.id);
     }
     if (change.metadata && typeof change.metadata === 'object') {
-      paragraph.metadata = { ...(paragraph.metadata || {}), ...cloneJson(change.metadata), id: paragraph.id };
+      applyMetadataPatch(paragraph, change.metadata, paragraph.id);
     }
     return model;
   }
@@ -221,13 +300,13 @@ function applySemanticOperation(model, change) {
     if (change.target === 'chapter') {
       const chapter = findChapter(model, change.chapterId);
       if (!chapter) throw new Error(`Chapter ${change.chapterId || ''} not found.`);
-      chapter.metadata = { ...(chapter.metadata || {}), ...cloneJson(change.metadata || {}), id: chapter.id };
+      applyMetadataPatch(chapter, change.metadata || {}, chapter.id);
       return model;
     }
     if (change.target === 'paragraph') {
       const { paragraph } = findParagraph(model, change.chapterId, change.paragraphId);
       if (!paragraph) throw new Error(`Paragraph ${change.paragraphId || ''} not found.`);
-      paragraph.metadata = { ...(paragraph.metadata || {}), ...cloneJson(change.metadata || {}), id: paragraph.id };
+      applyMetadataPatch(paragraph, change.metadata || {}, paragraph.id);
       return model;
     }
     updateModelMetadata(model, change.metadata || {});

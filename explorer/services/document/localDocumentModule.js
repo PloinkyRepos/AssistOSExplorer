@@ -45,9 +45,47 @@ const DOCUMENT_TYPES = {
 
 const documentStore = new DocumentStore();
 
+const getCurrentDocumentPresenter = () => {
+    if (typeof document === 'undefined') {
+        return null;
+    }
+    return document.querySelector('document-view-page')?.webSkelPresenter || null;
+};
+
+const getCurrentMarkdownCrdtDocument = (documentIdOrPath = '') => {
+    const presenter = getCurrentDocumentPresenter();
+    if (!presenter?.isMarkdownCrdtDocument?.()) {
+        return null;
+    }
+    const currentDocument = presenter._document;
+    if (!currentDocument) {
+        return null;
+    }
+    const requested = String(documentIdOrPath || '').trim();
+    if (!requested) {
+        return { presenter, document: currentDocument };
+    }
+    const identifiers = [
+        currentDocument.id,
+        currentDocument.docId,
+        currentDocument.documentId,
+        currentDocument.path,
+        currentDocument.metadata?.id,
+        window.assistOS?.workspace?.currentDocumentPath,
+        window.assistOS?.workspace?.currentDocumentId,
+        window.assistOS?.workspace?.currentDocumentMetadataId
+    ].map((value) => String(value || '').trim()).filter(Boolean);
+    return identifiers.includes(requested) ? { presenter, document: currentDocument } : null;
+};
+
 const findDocumentByChapterId = (chapterId) => {
     if (!chapterId) {
         return null;
+    }
+    const active = getCurrentMarkdownCrdtDocument();
+    const activeChapter = active?.document?.chapters?.find((item) => item.id === chapterId);
+    if (activeChapter) {
+        return { document: active.document, path: active.document.path, chapter: activeChapter };
     }
     for (const [path, document] of documentStore.documents.entries()) {
         const chapter = document.chapters.find((item) => item.id === chapterId);
@@ -59,8 +97,49 @@ const findDocumentByChapterId = (chapterId) => {
 };
 
 const getDocumentModel = async (documentIdOrPath) => {
+    const active = getCurrentMarkdownCrdtDocument(documentIdOrPath);
+    if (active?.document) {
+        return active.document;
+    }
     const path = documentStore.resolvePath(documentIdOrPath);
     return documentStore.get(path);
+};
+
+const findParagraphReference = async (chapterId, paragraphId) => {
+    const searchLoadedDocuments = () => {
+        const active = getCurrentMarkdownCrdtDocument();
+        if (active?.document) {
+            for (const chapter of active.document.chapters || []) {
+                if (chapterId && chapter.id !== chapterId) continue;
+                const paragraph = chapter.paragraphs?.find((item) => item.id === paragraphId);
+                if (paragraph) {
+                    return { document: active.document, chapter, paragraph };
+                }
+            }
+        }
+        for (const document of documentStore.documents.values()) {
+            for (const chapter of document.chapters) {
+                if (chapterId && chapter.id !== chapterId) continue;
+                const paragraph = chapter.paragraphs.find((item) => item.id === paragraphId);
+                if (paragraph) {
+                    return { document, chapter, paragraph };
+                }
+            }
+        }
+        return null;
+    };
+    let found = searchLoadedDocuments();
+    if (found) {
+        return found;
+    }
+    const currentPath = typeof window !== 'undefined'
+        ? String(window.assistOS?.workspace?.currentDocumentPath || '').trim()
+        : '';
+    if (currentPath) {
+        await documentStore.load(documentStore.resolvePath(currentPath));
+        found = searchLoadedDocuments();
+    }
+    return found;
 };
 
 const getChapterSceneAttachment = (chapter, type, paragraphIndex) => {
@@ -165,6 +244,47 @@ const getSerializableParagraph = (document, chapterId, paragraphId) => {
 };
 
 const persistDocument = async (documentIdOrPath, semanticChange = null) => {
+    const active = getCurrentMarkdownCrdtDocument(documentIdOrPath);
+    if (active?.presenter && semanticChange) {
+        if (semanticChange.type === 'updateDocument') {
+            return active.presenter.updateDocumentModel({
+                title: semanticChange.title ?? active.document.title,
+                infoText: semanticChange.infoText ?? active.document.infoText,
+                commands: semanticChange.commands ?? active.document.commands,
+                comments: semanticChange.comments ?? active.document.comments,
+                metadata: semanticChange.metadata ?? active.document.metadata,
+                refreshVariables: semanticChange.refreshVariables === true
+            });
+        }
+        if (semanticChange.type === 'updateChapter') {
+            if (semanticChange.patch && typeof semanticChange.patch === 'object') {
+                return active.presenter.applyMarkdownDocumentChange(semanticChange);
+            }
+            const chapter = active.document.chapters?.find((item) => item.id === semanticChange.chapterId);
+            return active.presenter.updateChapterModel(semanticChange.chapterId, {
+                title: semanticChange.title ?? semanticChange.patch?.title ?? chapter?.title ?? '',
+                commands: semanticChange.commands ?? semanticChange.patch?.commands ?? chapter?.commands ?? '',
+                comments: semanticChange.comments ?? semanticChange.patch?.comments ?? chapter?.comments ?? { messages: [] },
+                metadata: semanticChange.metadata ?? semanticChange.patch?.metadata ?? chapter?.metadata ?? {},
+                refreshVariables: semanticChange.refreshVariables === true
+            });
+        }
+        if (semanticChange.type === 'updateParagraph') {
+            if (semanticChange.patch && typeof semanticChange.patch === 'object') {
+                return active.presenter.applyMarkdownDocumentChange(semanticChange);
+            }
+            const chapter = active.document.chapters?.find((item) => item.id === semanticChange.chapterId);
+            const paragraph = chapter?.paragraphs?.find((item) => item.id === semanticChange.paragraphId);
+            return active.presenter.updateParagraphModel(semanticChange.chapterId, semanticChange.paragraphId, {
+                text: semanticChange.text ?? semanticChange.patch?.text ?? paragraph?.text ?? '',
+                commands: semanticChange.commands ?? semanticChange.patch?.commands ?? paragraph?.commands ?? '',
+                comments: semanticChange.comments ?? semanticChange.patch?.comments ?? paragraph?.comments ?? { messages: [] },
+                metadata: semanticChange.metadata ?? semanticChange.patch?.metadata ?? paragraph?.metadata ?? {},
+                refreshVariables: semanticChange.refreshVariables === true
+            });
+        }
+        return active.presenter.applyMarkdownDocumentChange?.(semanticChange);
+    }
     const path = documentStore.resolvePath(documentIdOrPath);
     if (semanticChange) {
         return documentStore.applyCrdtChange(path, semanticChange);
@@ -248,7 +368,8 @@ const documentModule = {
             type: 'updateDocument',
             metadata: serializable.metadata,
             title: document.title,
-            infoText: document.infoText
+            infoText: document.infoText,
+            refreshVariables: commands !== undefined
         });
         return document;
     },
@@ -393,6 +514,7 @@ const documentModule = {
         await persistDocument(documentPath ?? documentReference.path ?? documentIdOrPathOrChapterId, {
             type: 'updateChapter',
             chapterId,
+            refreshVariables: commands !== undefined,
             patch: getSerializableChapter(documentReference, chapterId)
         });
         return chapter;
@@ -423,6 +545,7 @@ const documentModule = {
         await persistDocument(documentIdOrPath, {
             type: 'updateChapter',
             chapterId,
+            refreshVariables: true,
             patch: getSerializableChapter(document, chapterId)
         });
         return variable;
@@ -564,30 +687,16 @@ const documentModule = {
         return paragraph;
     },
     async getParagraph(paragraphId) {
-        for (const document of documentStore.documents.values()) {
-            for (const chapter of document.chapters) {
-                const paragraph = chapter.paragraphs.find((item) => item.id === paragraphId);
-                if (paragraph) {
-                    return paragraph;
-                }
-            }
+        const found = await findParagraphReference('', paragraphId);
+        if (found?.paragraph) {
+            return found.paragraph;
         }
         throw new Error(`Paragraph ${paragraphId} not found.`);
     },
     async updateParagraph(chapterId, paragraphId, text, commands, comments) {
-        let documentReference;
-        let paragraphReference;
-        for (const document of documentStore.documents.values()) {
-            for (const chapter of document.chapters) {
-                if (chapter.id !== chapterId) continue;
-                const paragraph = chapter.paragraphs.find((item) => item.id === paragraphId);
-                if (paragraph) {
-                    paragraphReference = paragraph;
-                    documentReference = document;
-                    break;
-                }
-            }
-        }
+        const found = await findParagraphReference(chapterId, paragraphId);
+        const documentReference = found?.document;
+        const paragraphReference = found?.paragraph;
         if (!paragraphReference) {
             throw new Error(`Paragraph ${paragraphId} not found.`);
         }
@@ -612,6 +721,7 @@ const documentModule = {
             type: 'updateParagraph',
             chapterId,
             paragraphId,
+            refreshVariables: commands !== undefined,
             patch: getSerializableParagraph(documentReference, chapterId, paragraphId)
         });
         return paragraphReference;
@@ -704,7 +814,8 @@ const documentModule = {
             type: 'updateDocument',
             metadata: serializable.metadata,
             title: document.title,
-            infoText: document.infoText
+            infoText: document.infoText,
+            refreshVariables: true
         });
         return variable;
     },
@@ -720,26 +831,28 @@ const documentModule = {
         await persistDocument(documentIdOrPath, {
             type: 'updateChapter',
             chapterId,
+            refreshVariables: true,
             patch: getSerializableChapter(document, chapterId)
         });
         return chapter.commands;
     },
     async updateParagraphCommands(chapterId, paragraphId, commands) {
-        const paragraph = await this.getParagraph(paragraphId);
+        const found = await findParagraphReference(chapterId, paragraphId);
+        const documentReference = found?.document;
+        const paragraph = found?.paragraph;
+        if (!documentReference || !paragraph) {
+            throw new Error(`Paragraph ${paragraphId} not found.`);
+        }
         const currentCommands = normalizeCommandString(paragraph.commands ?? '', '');
         paragraph.commands = normalizeCommandQuotes(normalizeCommandString(commands, currentCommands));
         paragraph.metadata.commands = paragraph.commands;
-        for (const document of documentStore.documents.values()) {
-            if (document.chapters.some((chapter) => chapter.id === chapterId)) {
-                await persistDocument(document.path, {
-                    type: 'updateParagraph',
-                    chapterId,
-                    paragraphId,
-                    patch: getSerializableParagraph(document, chapterId, paragraphId)
-                });
-                break;
-            }
-        }
+        await persistDocument(documentReference.path || documentReference.id, {
+            type: 'updateParagraph',
+            chapterId,
+            paragraphId,
+            refreshVariables: true,
+            patch: getSerializableParagraph(documentReference, chapterId, paragraphId)
+        });
         return paragraph;
     },
     async exportDocument() {

@@ -1,0 +1,11 @@
+{
+    "pluginCategory": "document",
+    "component": "scripta-variants",
+    "location": ["paragraph"],
+    "tooltip": "SCRIPTA Variants",
+    "icon": "./icon.svg",
+    "presenter": "ScriptaVariants",
+    "type": "modal",
+    "autoPin": false,
+    "dependencies": []
+}

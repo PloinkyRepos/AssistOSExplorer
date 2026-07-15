@@ -177,19 +177,99 @@ async function start() {
 
         webSkel.ensureComponentRegistered = ensureComponentRegistered;
 
-        const wrapComponentOpener = (methodName) => {
-            const original = webSkel[methodName];
-            if (typeof original !== 'function') {
-                return;
+        const preventModalEscape = (event) => {
+            if (event.key === 'Escape') {
+                event.preventDefault();
             }
-            webSkel[methodName] = async (componentName, ...args) => {
-                await ensureComponentRegistered(componentName);
-                return original.call(webSkel, componentName, ...args);
-            };
         };
 
-        wrapComponentOpener('showModal');
-        wrapComponentOpener('createReactiveModal');
+        const findComponentConfig = (componentName) => (
+            webSkel.configs?.components?.find((component) => component.name === componentName) || null
+        );
+
+        const appendModalComponent = (dialog, componentName, payload = {}, observeProps = false) => {
+            const config = findComponentConfig(componentName);
+            const hasPresenter = Boolean(config?.presenterClassName);
+            if (observeProps) {
+                const proxy = webSkel.createElement(
+                    componentName,
+                    null,
+                    payload || {},
+                    hasPresenter ? { 'data-presenter': componentName } : {},
+                    true
+                );
+                dialog.appendChild(proxy.element?.deref?.() || proxy);
+                return proxy;
+            }
+            const component = document.createElement(componentName);
+            if (hasPresenter) {
+                component.setAttribute('data-presenter', componentName);
+            }
+            for (const [key, value] of Object.entries(payload || {})) {
+                component.setAttribute(`data-${key}`, value);
+            }
+            dialog.appendChild(component);
+            return component;
+        };
+
+        const waitForModalRender = async (dialog) => {
+            const renderedComponents = Array.from(dialog.querySelectorAll('[data-presenter]'))
+                .map((component) => component.renderCompletePromise)
+                .filter((promise) => promise && typeof promise.then === 'function');
+            if (renderedComponents.length) {
+                await Promise.allSettled(renderedComponents);
+            }
+        };
+
+        const createHiddenModalDialog = (componentName, payload = {}) => {
+            const dialog = document.createElement('dialog');
+            dialog.classList.add('modal', `${componentName}-dialog`);
+            Object.assign(dialog, {
+                component: componentName,
+                cssClass: componentName,
+                componentProps: payload
+            });
+            return dialog;
+        };
+
+        const openRenderedModal = async (dialog) => {
+            document.body.appendChild(dialog);
+            await waitForModalRender(dialog);
+            dialog.showModal();
+            dialog.addEventListener('keydown', preventModalEscape);
+        };
+
+        webSkel.showModal = async (componentName, payload = {}, expectResult = false) => {
+            await ensureComponentRegistered(componentName);
+            const dialog = createHiddenModalDialog(componentName, payload);
+            appendModalComponent(dialog, componentName, payload, false);
+            const result = expectResult
+                ? new Promise((resolve) => {
+                    dialog.addEventListener('close', (event) => resolve(event.data), { once: true });
+                })
+                : dialog;
+            await openRenderedModal(dialog);
+            return result;
+        };
+
+        webSkel.createReactiveModal = async (componentName, payload = {}, expectResult = false) => {
+            await ensureComponentRegistered(componentName);
+            const dialog = createHiddenModalDialog(componentName, payload);
+            const proxy = appendModalComponent(dialog, componentName, payload, true);
+            Object.assign(dialog, { _componentProxy: proxy });
+            const reactiveDialog = new Proxy(dialog, {
+                get(target, property) {
+                    return property === 'props' ? proxy : Reflect.get(target, property);
+                }
+            });
+            const result = expectResult
+                ? new Promise((resolve) => {
+                    dialog.addEventListener('close', (event) => resolve(event.data), { once: true });
+                })
+                : reactiveDialog;
+            await openRenderedModal(dialog);
+            return result;
+        };
 
         const originalChangeToDynamicPage = webSkel.changeToDynamicPage;
         if (typeof originalChangeToDynamicPage === 'function') {

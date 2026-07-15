@@ -22,8 +22,169 @@ function extractDpuUpdatedAt(snapshot) {
     return '';
 }
 
+async function ensureMarkdownCrdtEditableShape(crdt, selectedPath) {
+    let current = crdt;
+    const documentId = String(current?.documentId || '');
+    if (!documentId) {
+        throw new Error('Unable to resolve Markdown CRDT document id.');
+    }
+    const chapters = Array.isArray(current?.model?.chapters) ? current.model.chapters : [];
+    let changed = false;
+    for (const chapter of chapters) {
+        if (!chapter?.id || Array.isArray(chapter.paragraphs) && chapter.paragraphs.length > 0) {
+            continue;
+        }
+        current = await applyMarkdownCrdtChange(documentId, {
+            type: 'addParagraph',
+            chapterId: chapter.id,
+            position: 0,
+            paragraph: {
+                text: '',
+                metadata: {
+                    type: 'markdown',
+                    comments: { messages: [] }
+                }
+            }
+        });
+        changed = true;
+    }
+    if (changed) {
+        current = await saveMarkdownCrdtDocument({
+            documentId,
+            path: selectedPath
+        });
+    }
+    return current;
+}
+
+const MARKDOWN_CRDT_EDIT_CHECK_INTERVAL_MS = 5000;
+
+function getMarkdownCrdtRevision(crdt) {
+    const heads = Array.isArray(crdt?.heads) ? crdt.heads.map((head) => String(head)).sort() : [];
+    const headsKey = heads.join('|');
+    const versionKey = String(crdt?.versionKey || '');
+    if (headsKey) {
+        return `heads:${headsKey}`;
+    }
+    if (versionKey) {
+        return `version:${versionKey}`;
+    }
+    return '';
+}
+
+export function stopMarkdownCrdtEditWatch(fileExp) {
+    if (fileExp?.markdownCrdtEditWatchTimer) {
+        window.clearInterval(fileExp.markdownCrdtEditWatchTimer);
+        fileExp.markdownCrdtEditWatchTimer = null;
+    }
+    fileExp.markdownCrdtEditWatchInFlight = false;
+    fileExp.markdownCrdtEditPending = null;
+}
+
+async function applyLatestMarkdownCrdtDocument(fileExp, latestCrdt) {
+    const selectedPath = String(fileExp?.state?.selectedPath || '');
+    if (!selectedPath || !fileExp?.state?.isEditing || !fileExp.state.selectedIsMarkdown) {
+        return false;
+    }
+    const documentPresenter = fileExp.element?.querySelector('document-view-page')?.webSkelPresenter || null;
+    if (!documentPresenter || typeof documentPresenter.applyRemoteMarkdownDocument !== 'function') {
+        return false;
+    }
+    const latestDocument = latestCrdt?.model;
+    if (!latestDocument || typeof latestDocument !== 'object') {
+        return false;
+    }
+    return documentPresenter.applyRemoteMarkdownDocument(latestDocument, {
+        revision: getMarkdownCrdtRevision(latestCrdt)
+    });
+}
+
+export async function pollMarkdownCrdtEditWatch(fileExp) {
+    if (fileExp?.markdownCrdtEditWatchInFlight) {
+        return;
+    }
+    if (typeof document !== 'undefined' && document.hidden) {
+        return;
+    }
+    const selectedPath = String(fileExp?.state?.selectedPath || '');
+    if (!selectedPath || !fileExp?.state?.isEditing || !fileExp.state.selectedIsMarkdown) {
+        stopMarkdownCrdtEditWatch(fileExp);
+        return;
+    }
+    const documentPresenter = fileExp.element?.querySelector('document-view-page')?.webSkelPresenter || null;
+    if (typeof documentPresenter?.hasBlockingLocalEdit === 'function' && documentPresenter.hasBlockingLocalEdit()) {
+        return;
+    }
+    fileExp.markdownCrdtEditWatchInFlight = true;
+    try {
+        const latest = await openMarkdownCrdtDocument(selectedPath);
+        const latestRevision = getMarkdownCrdtRevision(latest);
+        if (!latestRevision) {
+            return;
+        }
+        if (!fileExp.markdownCrdtEditRevision) {
+            fileExp.markdownCrdtEditRevision = latestRevision;
+            return;
+        }
+        if (latestRevision === fileExp.markdownCrdtEditRevision) {
+            return;
+        }
+        if (fileExp.markdownCrdtEditPending?.revision === latestRevision) {
+            return;
+        }
+        if (fileExp?.normalizePath?.(fileExp.state.selectedPath || '') !== fileExp?.normalizePath?.(selectedPath)) {
+            return;
+        }
+        const applied = await applyLatestMarkdownCrdtDocument(fileExp, latest);
+        if (applied) {
+            fileExp.markdownCrdtEditRevision = latestRevision;
+            fileExp.markdownCrdtEditPending = null;
+            fileExp.setPreviewState?.({ lastExternalReloadAt: Date.now() }, { invalidate: false });
+        } else {
+            fileExp.markdownCrdtEditPending = {
+                revision: latestRevision,
+                crdt: latest
+            };
+        }
+    } catch (error) {
+        console.warn('Failed to poll Markdown CRDT edit session', error);
+    } finally {
+        fileExp.markdownCrdtEditWatchInFlight = false;
+    }
+}
+
+export function startMarkdownCrdtEditWatch(fileExp, crdt = null) {
+    stopMarkdownCrdtEditWatch(fileExp);
+    if (!fileExp?.state?.selectedPath || !fileExp.state.selectedIsMarkdown || !fileExp.state.isEditing) {
+        return;
+    }
+    fileExp.markdownCrdtEditRevision = getMarkdownCrdtRevision(crdt);
+    fileExp.markdownCrdtEditWatchTimer = window.setInterval(() => {
+        void pollMarkdownCrdtEditWatch(fileExp);
+    }, MARKDOWN_CRDT_EDIT_CHECK_INTERVAL_MS);
+}
+
+export async function applyPendingMarkdownCrdtEdit(fileExp) {
+    const pending = fileExp?.markdownCrdtEditPending;
+    if (!pending?.crdt) {
+        return false;
+    }
+    const applied = await applyLatestMarkdownCrdtDocument(fileExp, pending.crdt);
+    if (!applied) {
+        return false;
+    }
+    fileExp.markdownCrdtEditRevision = String(pending.revision || getMarkdownCrdtRevision(pending.crdt));
+    fileExp.markdownCrdtEditPending = null;
+    fileExp.setPreviewState?.({ lastExternalReloadAt: Date.now() }, { invalidate: false });
+    return true;
+}
+
 export async function editFile(fileExp) {
     if (!fileExp?.state?.selectedPath) return;
+    stopMarkdownCrdtEditWatch(fileExp);
+    if (window.assistOS?.workspace) {
+        window.assistOS.workspace.currentMarkdownCrdtDocument = null;
+    }
     const selectedPath = fileExp.state.selectedPath || '';
     if (isDpuSecretPath(selectedPath)) {
         await fileExp.beginDpuSecretInlineEdit?.();
@@ -103,24 +264,27 @@ export async function editSoplangMarkdown(fileExp) {
         return;
     }
     try {
-        const documentModule = window.assistOS?.loadModule?.('document');
-        if (!documentModule) {
-            throw new Error('Document module is not available.');
-        }
-        const doc = await documentModule.loadDocument(selectedPath);
+        let crdt = await openMarkdownCrdtDocument(selectedPath);
+        crdt = await ensureMarkdownCrdtEditableShape(crdt, selectedPath);
         fileExp.setPreviewState({
-            documentId: doc?.id ?? null,
+            documentId: selectedPath,
             markdownTextView: false,
             hasUnsavedChanges: false,
             savePending: false,
             isEditing: true,
-            lastExternalReloadAt: 0
+            lastExternalReloadAt: Date.now()
         });
-        if (doc?.id && window.assistOS?.workspace) {
-            window.assistOS.workspace.currentDocumentId = doc.id;
+        if (window.assistOS?.workspace) {
+            window.assistOS.workspace.currentDocumentId = selectedPath;
+            window.assistOS.workspace.currentDocumentMetadataId = crdt?.documentId || '';
             window.assistOS.workspace.currentDocumentPath = selectedPath;
+            window.assistOS.workspace.currentMarkdownCrdtDocument = {
+                ...crdt,
+                path: selectedPath
+            };
         }
         stopCurrentFileViewWatch(fileExp);
+        startMarkdownCrdtEditWatch(fileExp, crdt);
         fileExp.refreshPreviewUi();
     } catch (error) {
         console.warn('Failed to prepare SOPLang tag editor', error);
@@ -151,25 +315,13 @@ export async function saveFile(fileExp, options = {}) {
         if (!isDpuPath && fileExp.state.selectedIsMarkdown) {
             markdownEditorPresenter = fileExp.element.querySelector('markdown-editor')?.webSkelPresenter || null;
             markdownCrdtDocumentId = String(markdownEditorPresenter?.crdtDocumentId || '');
-            if (typeof markdownEditorPresenter?.flushPendingCrdtChange === 'function') {
-                await markdownEditorPresenter.flushPendingCrdtChange();
-                markdownCrdtDocumentId = String(markdownEditorPresenter?.crdtDocumentId || markdownCrdtDocumentId);
-            } else if (markdownEditorPresenter?.pendingChange) {
-                await markdownEditorPresenter.pendingChange;
-                markdownCrdtDocumentId = String(markdownEditorPresenter?.crdtDocumentId || markdownCrdtDocumentId);
-            } else {
-                const crdt = await openMarkdownCrdtDocument(fileExp.state.selectedPath);
-                markdownCrdtDocumentId = String(crdt?.documentId || '');
-                const applied = await applyMarkdownCrdtChange(String(crdt?.documentId || ''), {
-                    type: 'replaceDocumentFromMarkdown',
-                    markdown: newContent
-                });
-                if (applied?.documentId) {
-                    markdownCrdtDocumentId = String(applied.documentId);
-                    if (markdownEditorPresenter) {
-                        markdownEditorPresenter.crdtDocumentId = markdownCrdtDocumentId;
-                    }
-                }
+            if (!markdownEditorPresenter || typeof markdownEditorPresenter.flushPendingCrdtChange !== 'function') {
+                throw new Error('Markdown editor is not ready. Wait for the editor to finish loading before saving.');
+            }
+            await markdownEditorPresenter.flushPendingCrdtChange();
+            markdownCrdtDocumentId = String(markdownEditorPresenter.crdtDocumentId || markdownCrdtDocumentId);
+            if (!markdownCrdtDocumentId) {
+                throw new Error('Markdown CRDT document id is not available.');
             }
         }
         fileExp.setPreviewState({
@@ -321,12 +473,12 @@ export async function cancelEdit(fileExp) {
     const isMarkdownClose = Boolean(fileExp.state.selectedIsMarkdown && selectedPath);
     fileExp.clearEditorAutoSaveTimer?.();
     fileExp.stopEditorExternalWatch?.();
+    stopMarkdownCrdtEditWatch(fileExp);
     if (isMarkdownClose) {
         fileExp.setPreviewState({
             savePending: true,
             lastSaveError: ''
         }, { invalidate: false });
-        fileExp.refreshPreviewUi();
         try {
             const markdownEditorPresenter = fileExp.element.querySelector('markdown-editor')?.webSkelPresenter || null;
             if (markdownEditorPresenter) {
@@ -350,11 +502,19 @@ export async function cancelEdit(fileExp) {
             return;
         }
     }
+    if (window.assistOS?.workspace) {
+        window.assistOS.workspace.currentMarkdownCrdtDocument = null;
+        if (isMarkdownClose) {
+            window.assistOS.workspace.currentDocumentId = selectedPath;
+            window.assistOS.workspace.currentDocumentPath = selectedPath;
+        }
+    }
     fileExp.setPreviewState({
+        documentId: isMarkdownClose ? selectedPath : fileExp.state.documentId,
         isEditing: false,
         markdownTextView: false,
         hasUnsavedChanges: false,
-        savePending: isMarkdownClose,
+        savePending: false,
         lastSaveError: '',
         lastEditorSaveAt: 0,
         lastEditorSaveMode: '',
@@ -373,7 +533,6 @@ export async function cancelEdit(fileExp) {
         return;
     }
     if (isMarkdownClose) {
-        fileExp.refreshPreviewUi();
         try {
             const documentModule = window.assistOS?.loadModule?.('document');
             if (typeof documentModule?.waitForPendingMarkdownChanges === 'function') {
@@ -385,9 +544,10 @@ export async function cancelEdit(fileExp) {
             await fileExp.openFile(selectedPath, {
                 showLoader: false,
                 invalidate: false,
-                preserveSaveStatus: true
+                preserveSaveStatus: false
             });
             fileExp.setPreviewState({
+                documentId: selectedPath,
                 savePending: false,
                 lastSaveError: ''
             }, { invalidate: false });

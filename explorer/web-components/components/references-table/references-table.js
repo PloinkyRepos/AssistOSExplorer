@@ -1,5 +1,4 @@
 import { generateAPACitation } from "./referenceUtils.js";
-const documentModule = assistOS.loadModule("document");
 
 export class ReferencesTable {
     constructor(element, invalidate) {
@@ -124,11 +123,12 @@ export class ReferencesTable {
         if(!document.comments.tor) {
             delete document.comments.tor;
         }
-        await documentModule.updateDocument(document.id,
-            document.title,
-            document.docId,
-            document.infoText,
-            document.commands,
-            document.comments);
+        await this.docPresenter.updateDocumentModel({
+            title: document.title,
+            docId: document.docId,
+            infoText: document.infoText,
+            commands: document.commands,
+            comments: document.comments
+        });
     }
 }

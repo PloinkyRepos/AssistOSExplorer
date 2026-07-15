@@ -293,7 +293,7 @@ export function renderStandardPreview(fileExp, refs, previewUiState) {
         toggleHidden(fileExp, refs.dpuCommentPopover, true);
         if (fileExp.state.selectedIsMarkdown && fileExp.state.documentId) {
             mountPresenterElement(refs.componentMount, {
-                key: `document-view:${fileExp.state.selectedPath}:${fileExp.state.documentId}`,
+                key: `document-view:${fileExp.state.selectedPath}:${fileExp.state.documentId}:${fileExp.state.lastExternalReloadAt || 0}`,
                 tagName: 'document-view-page',
                 attributes: {
                     'data-presenter': 'document-view-page',

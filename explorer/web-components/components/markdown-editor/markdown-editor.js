@@ -145,7 +145,7 @@ export class MarkdownEditor {
         }
         this.flushTimer = setTimeout(() => {
             this.flushTimer = null;
-            void this.flushPendingCrdtChange();
+            void this.flushPendingCrdtChange().catch(() => {});
         }, CRDT_CHANGE_DEBOUNCE_MS);
     }
 
@@ -176,8 +176,12 @@ export class MarkdownEditor {
             })
             .catch((error) => {
                 console.error("[markdown-editor] Failed to apply CRDT change", error);
+                if (this.pendingContent === null) {
+                    this.pendingContent = queuedContent;
+                }
                 const fileExp = this.getFileExpPresenter();
                 fileExp?.showStatus?.(error?.message || "Failed to apply Markdown CRDT change.", true);
+                throw error;
             });
         return this.pendingChange;
     }

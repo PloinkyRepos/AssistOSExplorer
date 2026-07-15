@@ -425,7 +425,12 @@ const createMediaAttachmentApi = ({ getDocumentModel, persistDocument }) => {
                 chapter.metadata.commands = updatedCommands;
             }
             updateChapterMediaState(chapter);
-            await persistDocument(documentIdOrPath);
+            await persistDocument(documentIdOrPath, {
+                type: 'updateChapter',
+                chapterId,
+                refreshVariables: true,
+                patch: chapter
+            });
             return null;
         }
         const options = {};
@@ -444,7 +449,12 @@ const createMediaAttachmentApi = ({ getDocumentModel, persistDocument }) => {
             const targetId = options.identifier || attachments[attachments.length - 1]?.identifier;
             result = attachments.find((item) => item.identifier === targetId) ?? attachments[attachments.length - 1] ?? null;
         }
-        await persistDocument(documentIdOrPath);
+        await persistDocument(documentIdOrPath, {
+            type: 'updateChapter',
+            chapterId,
+            refreshVariables: true,
+            patch: chapter
+        });
         return result;
     };
 
@@ -473,7 +483,13 @@ const createMediaAttachmentApi = ({ getDocumentModel, persistDocument }) => {
                 paragraph.metadata.commands = updatedCommands;
             }
             updateParagraphMediaState(paragraph);
-            await persistDocument(documentIdOrPath);
+            await persistDocument(documentIdOrPath, {
+                type: 'updateParagraph',
+                chapterId,
+                paragraphId,
+                refreshVariables: true,
+                patch: paragraph
+            });
             return null;
         }
         const options = {};
@@ -492,7 +508,13 @@ const createMediaAttachmentApi = ({ getDocumentModel, persistDocument }) => {
             const targetId = options.identifier || attachments[attachments.length - 1]?.identifier;
             result = attachments.find((item) => item.identifier === targetId) ?? attachments[attachments.length - 1] ?? null;
         }
-        await persistDocument(documentIdOrPath);
+        await persistDocument(documentIdOrPath, {
+            type: 'updateParagraph',
+            chapterId,
+            paragraphId,
+            refreshVariables: true,
+            patch: paragraph
+        });
         return result;
     };
 
@@ -512,7 +534,12 @@ const createMediaAttachmentApi = ({ getDocumentModel, persistDocument }) => {
             chapter.metadata.commands = updatedCommands;
         }
         updateChapterMediaState(chapter);
-        await persistDocument(documentIdOrPath);
+        await persistDocument(documentIdOrPath, {
+            type: 'updateChapter',
+            chapterId,
+            refreshVariables: true,
+            patch: chapter
+        });
         return true;
     };
 
@@ -536,7 +563,13 @@ const createMediaAttachmentApi = ({ getDocumentModel, persistDocument }) => {
             paragraph.metadata.commands = updatedCommands;
         }
         updateParagraphMediaState(paragraph);
-        await persistDocument(documentIdOrPath);
+        await persistDocument(documentIdOrPath, {
+            type: 'updateParagraph',
+            chapterId,
+            paragraphId,
+            refreshVariables: true,
+            patch: paragraph
+        });
         return true;
     };
 

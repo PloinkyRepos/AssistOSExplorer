@@ -269,7 +269,8 @@ export function isPdfFile(path) {
 export function prepareMarkdownPreviewContent(rawText) {
     if (!rawText) return '';
     const unescaped = unescapeHtmlEntities(rawText);
-    const cleaned = stripDocumentComments(unescaped);
+    const cleaned = stripDocumentComments(unescaped)
+        .replace(/<!--[\s\S]*?achilles-ide-(?:document|chapter|paragraph|toc|references)[\s\S]*?-->\s*/g, '');
     return cleaned.replace(/\u00A0/g, ' ');
 }
 

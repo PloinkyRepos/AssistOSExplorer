@@ -21,6 +21,97 @@ function textValue(value = '') {
   return String(value ?? '');
 }
 
+function objectValue(value, fallback = {}) {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? cloneJson(value)
+    : cloneJson(fallback);
+}
+
+function arrayValue(value) {
+  return Array.isArray(value) ? cloneJson(value) : [];
+}
+
+function commentsValue(value) {
+  const comments = objectValue(value, {});
+  if (!Array.isArray(comments.messages)) {
+    comments.messages = [];
+  }
+  return comments;
+}
+
+function metadataWithFields(source = {}, fields = []) {
+  const metadata = objectValue(source.metadata, {});
+  fields.forEach((field) => {
+    if (source[field] !== undefined) {
+      metadata[field] = cloneJson(source[field]);
+    }
+  });
+  return metadata;
+}
+
+function exposeMetadataFields(target, metadata, fields = []) {
+  fields.forEach((field) => {
+    if (field === 'comments') {
+      target.comments = commentsValue(metadata.comments);
+    } else if ([
+      'variables',
+      'references',
+      'attachments',
+      'snapshots',
+      'tasks'
+    ].includes(field)) {
+      target[field] = arrayValue(metadata[field]);
+    } else if (field === 'pluginState') {
+      target.pluginState = objectValue(metadata.pluginState, {});
+    } else if (field === 'commands') {
+      target.commands = textValue(metadata.commands);
+    } else if (metadata[field] !== undefined) {
+      target[field] = cloneJson(metadata[field]);
+    }
+  });
+}
+
+const DOCUMENT_METADATA_FIELDS = [
+  'title',
+  'infoText',
+  'commands',
+  'comments',
+  'variables',
+  'pluginState',
+  'references',
+  'attachments',
+  'snapshots',
+  'tasks',
+  'version',
+  'updatedAt'
+];
+
+const CHAPTER_METADATA_FIELDS = [
+  'title',
+  'commands',
+  'comments',
+  'pluginState',
+  'references',
+  'attachments',
+  'snapshots',
+  'tasks',
+  'variables',
+  'anchorId'
+];
+
+const PARAGRAPH_METADATA_FIELDS = [
+  'type',
+  'commands',
+  'comments',
+  'pluginState',
+  'references',
+  'attachments',
+  'snapshots',
+  'tasks',
+  'variables',
+  'title'
+];
+
 function nextUniqueId(preferredId, prefix, usedIds) {
   let id = normalizeDocumentId(preferredId);
   if (!id || usedIds.has(id)) {
@@ -54,18 +145,18 @@ function addIdWarning(bucket, type) {
 }
 
 function plainParagraph(paragraph = {}) {
+  const metadata = metadataWithFields(paragraph, PARAGRAPH_METADATA_FIELDS);
   return {
     ...cloneJson(paragraph),
     text: textValue(paragraph.text),
     leading: textValue(paragraph.leading),
     trailing: textValue(paragraph.trailing),
-    metadata: paragraph.metadata && typeof paragraph.metadata === 'object'
-      ? cloneJson(paragraph.metadata)
-      : {}
+    metadata
   };
 }
 
 function plainChapter(chapter = {}) {
+  const metadata = metadataWithFields(chapter, CHAPTER_METADATA_FIELDS);
   return {
     ...cloneJson(chapter),
     heading: {
@@ -73,9 +164,7 @@ function plainChapter(chapter = {}) {
       text: textValue(chapter.heading?.text)
     },
     leading: textValue(chapter.leading),
-    metadata: chapter.metadata && typeof chapter.metadata === 'object'
-      ? cloneJson(chapter.metadata)
-      : {},
+    metadata,
     paragraphs: Array.isArray(chapter.paragraphs)
       ? chapter.paragraphs.map(plainParagraph)
       : []
@@ -83,15 +172,13 @@ function plainChapter(chapter = {}) {
 }
 
 export function materializeMarkdownModel(document = {}) {
-  const metadata = document.metadata && typeof document.metadata === 'object'
-    ? cloneJson(document.metadata)
-    : {};
+  const metadata = metadataWithFields(document, DOCUMENT_METADATA_FIELDS);
   const documentId = normalizeDocumentId(document.documentId || document.id || metadata.id) || generateId('doc');
   metadata.id = documentId;
   const chapters = Array.isArray(document.chapters)
     ? document.chapters.map(plainChapter)
     : [];
-  return {
+  const model = {
     id: documentId,
     documentId,
     metadata,
@@ -104,6 +191,14 @@ export function materializeMarkdownModel(document = {}) {
       chapters
     })
   };
+  exposeMetadataFields(model, metadata, DOCUMENT_METADATA_FIELDS);
+  model.chapters.forEach((chapter) => {
+    exposeMetadataFields(chapter, chapter.metadata || {}, CHAPTER_METADATA_FIELDS);
+    chapter.paragraphs.forEach((paragraph) => {
+      exposeMetadataFields(paragraph, paragraph.metadata || {}, PARAGRAPH_METADATA_FIELDS);
+    });
+  });
+  return model;
 }
 
 export function serializeMarkdownState(document = {}) {
@@ -191,8 +286,9 @@ export function parseMarkdownState(markdown, existingState = null) {
     blocks: []
   };
   model.blocks = buildBlocks(model);
+  const normalizedModel = materializeMarkdownModel(model);
   return {
-    model,
+    model: normalizedModel,
     warnings: bucket.warnings,
     ignoredStructuralIdChanges: bucket.ignoredStructuralIdChanges
   };

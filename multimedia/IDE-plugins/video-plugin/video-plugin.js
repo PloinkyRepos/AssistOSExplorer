@@ -8,12 +8,7 @@ export class VideoPlugin {
         this.element = element;
         this.invalidate = invalidate;
 
-        const { document, chapter, paragraph } = getContextualElement(element);
-        this._document = document;
-        this.chapter = chapter;
-        this.paragraph = paragraph;
-        this.isParagraphContext = !!this.paragraph;
-
+        this.refreshContext();
         if (!this.isParagraphContext) {
             this.ensureBackgroundVideoHydrated();
         }
@@ -22,7 +17,16 @@ export class VideoPlugin {
 
     beforeRender() {}
 
+    refreshContext() {
+        const { document, chapter, paragraph } = getContextualElement(this.element);
+        this._document = document;
+        this.chapter = chapter;
+        this.paragraph = paragraph;
+        this.isParagraphContext = !!this.paragraph;
+    }
+
     async afterRender() {
+        this.refreshContext();
         this.fileInput = this.element.querySelector(".file-input");
         this.resetFileInputListener();
         this.videoListElement = this.element.querySelector('.video-list');
@@ -90,6 +94,7 @@ export class VideoPlugin {
     }
 
     getVideoAttachments() {
+        this.refreshContext();
         const host = this.paragraph || this.chapter;
         return host?.mediaAttachments?.video || [];
     }
@@ -289,6 +294,7 @@ export class VideoPlugin {
             return;
         }
         try {
+            this.refreshContext();
             if (this.isParagraphContext) {
                 await documentModule.deleteParagraphVideoAttachment(
                     this._document.id,
@@ -309,6 +315,7 @@ export class VideoPlugin {
     }
 
     async persistVideoAttachment(payload) {
+        this.refreshContext();
         if (this.isParagraphContext) {
             return documentModule.setParagraphVideoAttachment(
                 this._document.id,
@@ -332,6 +339,7 @@ export class VideoPlugin {
     }
 
     async invalidateCompiledVideo() {
+        this.refreshContext();
         if (this.isParagraphContext) {
             return;
         }

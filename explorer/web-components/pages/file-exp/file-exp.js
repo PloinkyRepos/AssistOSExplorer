@@ -51,7 +51,15 @@ import { createDomListenerRegistry } from "../../../utils/domListenerRegistry.js
 import { runAfterRender as runLayoutAfterRender } from "./file-exp-layout-controller.js";
 import { loadStateFromURL as loadStateFromURLImpl, loadDirectory as loadDirectoryImpl, refreshDirectory as refreshDirectoryImpl, renderBreadcrumbs as renderBreadcrumbsImpl, goUpDirectory as goUpDirectoryImpl } from "./file-exp-navigation-controller.js";
 import { selectEntry as selectEntryImpl, handleSortClick as handleSortClickImpl } from "./file-exp-selection-controller.js";
-import { editFile as editFileImpl, editSoplangMarkdown as editSoplangMarkdownImpl, saveFile as saveFileImpl, cancelEdit as cancelEditImpl } from "./file-exp-editor-controller.js";
+import {
+    applyPendingMarkdownCrdtEdit as applyPendingMarkdownCrdtEditImpl,
+    editFile as editFileImpl,
+    editSoplangMarkdown as editSoplangMarkdownImpl,
+    saveFile as saveFileImpl,
+    cancelEdit as cancelEditImpl,
+    pollMarkdownCrdtEditWatch as pollMarkdownCrdtEditWatchImpl,
+    stopMarkdownCrdtEditWatch as stopMarkdownCrdtEditWatchImpl
+} from "./file-exp-editor-controller.js";
 import {
     toggleHidden as toggleHiddenImpl,
     createPreviewActionButton as createPreviewActionButtonImpl,
@@ -168,6 +176,10 @@ export class FileExp {
         this.editorAutoSaveTimer = null;
         this.editorExternalWatchTimer = null;
         this.editorExternalWatchInFlight = false;
+        this.markdownCrdtEditWatchTimer = null;
+        this.markdownCrdtEditWatchInFlight = false;
+        this.markdownCrdtEditRevision = '';
+        this.markdownCrdtEditPending = null;
         this.currentFileViewWatchTimer = null;
         this.currentFileViewWatchInFlight = false;
         this.externalModificationPromptActive = false;
@@ -217,6 +229,7 @@ export class FileExp {
         this.previewDom = null;
         this.clearEditorAutoSaveTimer();
         this.stopEditorExternalWatch();
+        this.stopMarkdownCrdtEditWatch();
         this.stopCurrentFileViewWatch();
         if (this.boundGlobalKeydown) {
             document.removeEventListener('keydown', this.boundGlobalKeydown);
@@ -323,6 +336,18 @@ export class FileExp {
             this.editorExternalWatchTimer = null;
         }
         this.editorExternalWatchInFlight = false;
+    }
+
+    stopMarkdownCrdtEditWatch() {
+        return stopMarkdownCrdtEditWatchImpl(this);
+    }
+
+    async pollMarkdownCrdtEditWatch() {
+        return pollMarkdownCrdtEditWatchImpl(this);
+    }
+
+    async applyPendingMarkdownCrdtEdit() {
+        return applyPendingMarkdownCrdtEditImpl(this);
     }
 
     isLocalTextEditingActive() {

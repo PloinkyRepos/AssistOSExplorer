@@ -134,13 +134,24 @@ const buildUIHelpers = () => {
                 console.log(`[${type}] ${message}`);
                 return;
             }
-            const containerSelector = '.toast-container';
-            let container = document.querySelector(containerSelector);
+            const openModals = Array.from(document.querySelectorAll('dialog.modal[open]'));
+            const toastRoot = openModals.at(-1) || document.body;
+            let container = Array.from(toastRoot.children)
+                .find((child) => child.classList?.contains('toast-container'));
             if (!container) {
                 container = document.createElement('div');
                 container.classList.add('toast-container');
-                document.body.appendChild(container);
+                toastRoot.appendChild(container);
             }
+            document.querySelectorAll('.toast-container').forEach((otherContainer) => {
+                if (otherContainer === container) {
+                    return;
+                }
+                while (otherContainer.firstChild) {
+                    container.appendChild(otherContainer.firstChild);
+                }
+                otherContainer.remove();
+            });
 
             const toast = document.createElement('div');
             toast.classList.add('timeout-toast', type);

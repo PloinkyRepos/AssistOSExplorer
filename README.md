@@ -22,7 +22,7 @@ This repository is organized around one host shell and several agent boundaries:
 - `tasksAgent` owns backlog file operations
 - `multimedia` owns media-oriented IDE plugin workflows 
 
-Markdown has two explicit edit modes in the Explorer UI. The default `Edit` action opens ordinary `.md` files as Markdown source, backed by Explorer filesystem or DPU save flows. SOPLang-aware document editing remains available through the dedicated `Edit SOPLang Tags` action and is used only when the user wants to edit Achilles/SOPLang metadata, document nodes, commands, variables, or related structured tags.
+Markdown has two explicit edit modes in the Explorer UI. The default `Edit` action opens ordinary `.md` files as Markdown source, backed by Explorer filesystem or DPU save flows. SOPLang-aware document editing remains available through the dedicated `Advanced edit` action and is used only when the user wants to edit Achilles/SOPLang metadata, document nodes, commands, variables, or related structured tags.
 
 
 <!-- {"achilles-ide-chapter":{"id":"chapter-e807b655-0b94-43fc-9204-72c66a6083a1","title":"Running Explorer","anchorId":"chapter-chapter-e807b655-0b94-43fc-9204-72c66a6083a1"}} -->
@@ -104,4 +104,3 @@ curl -s -X POST http://127.0.0.1:8080/explorer/mcp \
   -H 'Content-Type: application/json' \
   -d '{ "tool": "list_directory", "path": "/" }'
 ```
-

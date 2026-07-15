@@ -38,7 +38,7 @@ For the general text and code editor, the current collaboration behavior is:
 For Markdown files, Explorer uses two distinct editing paths:
 
 - `Edit` opens the file as normal Markdown source using the embedded TinyMDE editor. The editor is bound to the same save, dirty-state, conflict, and DPU-backed update flows as other editable text resources.
-- `Edit SOPLang Tags` opens the structured document editor for Achilles/SOPLang metadata, document nodes, commands, variables, media tags, references, and other structured document workflows.
+- `Advanced edit` opens the structured document editor for Achilles/SOPLang metadata, document nodes, commands, variables, media tags, references, and other structured document workflows.
 
 The default `.md` edit path must not implicitly hydrate the full SOPLang document model. Structured SOPLang editing is an explicit user action so ordinary Markdown files remain ordinary editable Markdown.
 

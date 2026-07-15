@@ -1,6 +1,5 @@
 import {
     COMMENT_KEY_PREFIX,
-    LEGACY_COMMENT_KEY_PREFIX,
     COMMENT_KEYS,
     normalizeLineEndings,
     decodeHtmlEntities,
@@ -378,17 +377,13 @@ const stripAchilesComments = (text) => {
         try {
             const parsed = JSON.parse(payload);
             const keys = Object.keys(parsed).filter(
-                (key) => typeof key === 'string'
-                    && (key.startsWith(COMMENT_KEY_PREFIX) || key.startsWith(LEGACY_COMMENT_KEY_PREFIX))
+                (key) => typeof key === 'string' && key.startsWith(COMMENT_KEY_PREFIX)
             );
             if (keys.length === 1) {
-                const rawKey = keys[0];
-                const normalizedKey = rawKey.startsWith(LEGACY_COMMENT_KEY_PREFIX)
-                    ? `${COMMENT_KEY_PREFIX}${rawKey.slice(LEGACY_COMMENT_KEY_PREFIX.length)}`
-                    : rawKey;
+                const key = keys[0];
                 return {
-                    key: normalizedKey,
-                    metadata: parsed[rawKey] ?? {}
+                    key,
+                    metadata: parsed[key] ?? {}
                 };
             }
         } catch (_) {
@@ -408,6 +403,10 @@ const stripAchilesComments = (text) => {
                 commentText += `\n${lines[idx].trim()}`;
             }
             const parsedComment = parseMetadataComment(commentText);
+            if (!parsedComment) {
+                sanitized.push(commentText);
+                continue;
+            }
             if (parsedComment?.key === COMMENT_KEYS.CHAPTER) {
                 const anchorFromMetadata = parsedComment.metadata?.anchorId;
                 if (typeof anchorFromMetadata === 'string' && anchorFromMetadata.trim().length > 0) {

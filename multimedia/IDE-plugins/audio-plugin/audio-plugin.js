@@ -8,12 +8,7 @@ export class AudioPlugin {
         this.element = element;
         this.invalidate = invalidate;
 
-        const { document, chapter, paragraph } = getContextualElement(element);
-        this._document = document;
-        this.chapter = chapter;
-        this.paragraph = paragraph;
-        this.isParagraphContext = !!this.paragraph;
-
+        this.refreshContext();
         if (!this.isParagraphContext) {
             this.ensureBackgroundSoundHydrated();
         }
@@ -22,7 +17,16 @@ export class AudioPlugin {
 
     beforeRender() {}
 
+    refreshContext() {
+        const { document, chapter, paragraph } = getContextualElement(this.element);
+        this._document = document;
+        this.chapter = chapter;
+        this.paragraph = paragraph;
+        this.isParagraphContext = !!this.paragraph;
+    }
+
     async afterRender() {
+        this.refreshContext();
         this.fileInput = this.element.querySelector(".file-input");
         this.resetFileInputListener();
         this.audioListElement = this.element.querySelector('.audio-list');
@@ -86,6 +90,7 @@ export class AudioPlugin {
     }
 
     async invalidateCompiledVideo() {
+        this.refreshContext();
         if (this.isParagraphContext) {
             return;
         }
@@ -100,6 +105,7 @@ export class AudioPlugin {
     }
 
     getAudioAttachments() {
+        this.refreshContext();
         const host = this.paragraph || this.chapter;
         return host?.mediaAttachments?.audio || [];
     }
@@ -303,6 +309,7 @@ export class AudioPlugin {
             return;
         }
         try {
+            this.refreshContext();
             if (this.isParagraphContext) {
                 await documentModule.deleteParagraphAudioAttachment(
                     this._document.id,
@@ -323,6 +330,7 @@ export class AudioPlugin {
     }
 
     async persistAudioAttachment(payload) {
+        this.refreshContext();
         if (this.isParagraphContext) {
             return documentModule.setParagraphAudioAttachment(
                 this._document.id,

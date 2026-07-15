@@ -1,4 +1,3 @@
-const documentModule = assistOS.loadModule("document");
 export class ContentsTable{
     constructor(element, invalidate) {
         this.element = element;
@@ -72,11 +71,12 @@ export class ContentsTable{
         if(!document.comments.toc) {
             delete document.comments.toc;
         }
-        await documentModule.updateDocument(document.id,
-            document.title,
-            document.docId,
-            document.infoText,
-            document.commands,
-            document.comments);
+        await this.docPresenter.updateDocumentModel({
+            title: document.title,
+            docId: document.docId,
+            infoText: document.infoText,
+            commands: document.commands,
+            comments: document.comments
+        });
     }
 }

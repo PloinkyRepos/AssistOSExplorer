@@ -1,6 +1,7 @@
-import { callExplorerTool, parseToolResult } from '../infrastructure/explorerApi.js';
+import { callExplorerTool, ensureSuccess, parseToolResult } from '../infrastructure/explorerApi.js';
 
 function parseResult(result) {
+    ensureSuccess(result);
     const parsed = parseToolResult(result);
     return parsed && typeof parsed === 'object' ? parsed : {};
 }
