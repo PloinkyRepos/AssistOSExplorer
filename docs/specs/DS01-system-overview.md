@@ -162,14 +162,11 @@ Dependencies declared in [manifest.json](../../explorer/manifest.json) include:
 - `AchillesCLI/achilles-cli`
 - `UmamiAgent/umamiAgent`
 
-The `default` profile also enables `basic/web-publishing` as a blocking
-dependency and startup config provider. Local, QA, and production launches use
-the same Explorer profile wiring; deployment-specific behavior comes from
-workspace variables such as `WEB_PUBLISHING_BASE_DOMAIN`,
-`WEB_PUBLISHING_MODE`, and scoped tunnel credentials. Web Publishing generates
-OnlyOffice and WebMeet public URLs before the rest of the deployment profile
-resolves env. The standalone Cloudflared agent is not an Explorer deployment
-fallback.
+Edge publication is box-owned in runtime contract v5. Explorer declares only
+its product dependencies and HTTP surfaces; it does not enable a publication
+agent or supply edge topology. Ploinky mounts the immutable topology generation
+before consumers start, and each integration resolves its current active
+locator at operation time.
 
 Explorer depends on these agents asymmetrically:
 
@@ -233,11 +230,12 @@ Plugin integration is runtime-driven rather than compile-time hardcoded. Explore
 
 ### Startup
 
-1. Ploinky applies Explorer manifest directives and starts the declared dependencies in parallel
-2. Explorer starts as the static agent
-3. Ploinky waits for readiness of every blocking dependency declared in `manifest.enable[]` and the active profile's `enable[]`, plus Explorer itself
-4. The router publishes the Explorer application
-5. The runtime plugin loader activates the enabled plugins
+1. Ploinky prepares the recursive manifest graph and captures an early inactive generation with exact identities and every retained route targetless
+2. Static preinstall and startup config providers run against that topology; Ploinky then aborts the early lease, reloads and re-evaluates retained runtimes, rotates newly stale tuples, and captures the final inactive targetless generation
+3. Ploinky starts blocking dependencies with the final exact lease, applies each wave's private targets, and waits for readiness before starting dependents
+4. Explorer starts as the static agent only after its blocking prerequisites are ready; detached `no-wait` helpers are launched after the blocking graph
+5. Router activates the Explorer route only through coordinated generation apply; this logical publication cannot add a physical-host mapping
+6. The runtime plugin loader activates the enabled plugins
 
 Explorer startup is correct only when the user-facing application can safely rely on all enabled dependent agents, not only on Explorer's own port or MCP handshake.
 
@@ -291,10 +289,10 @@ Markdown preview must render common documentation visuals directly in the previe
 ### Required / Relevant Environment
 
 - `ASSISTOS_FS_ROOT`
-- `WEB_PUBLISHING_BASE_DOMAIN` for managed `qa`/`prod` deployments
-- Web Publishing provider outputs such as `ONLYOFFICE_PUBLIC_URL` and `WEBMEET_PUBLIC_LIVEKIT_URL`
 - `ONLYOFFICE_JWT_SECRET`
 - `SOUL_GATEWAY_API_KEY`
+- `PLOINKY_EDGE_TOPOLOGY_FILE` and `PLOINKY_INTERNAL_ROUTER_URL`, injected by
+  runtime v5 rather than configured by an Explorer deployment
 
 Depending on the enabled integrations, additional environment may be required indirectly by dependent agents or by infrastructure such as authentication and database services.
 

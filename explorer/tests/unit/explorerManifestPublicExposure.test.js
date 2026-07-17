@@ -10,14 +10,7 @@ async function readManifest() {
     return JSON.parse(await fs.readFile(path.join(repoRoot, 'manifest.json'), 'utf8'));
 }
 
-function refsAgent(value, expected) {
-    if (typeof value === 'string') {
-        return value.includes(expected);
-    }
-    return typeof value?.agent === 'string' && value.agent.includes(expected);
-}
-
-test('Explorer default profile uses Web Publishing as blocking public topology provider', async () => {
+test('Explorer v5 manifest has no agent-owned edge publication hooks', async () => {
     const manifest = await readManifest();
     const profiles = manifest.profiles || {};
     const profile = profiles.default;
@@ -25,51 +18,22 @@ test('Explorer default profile uses Web Publishing as blocking public topology p
     assert.deepEqual(Object.keys(profiles), ['default']);
     assert.ok(profile, 'default profile should exist');
 
-    assert.equal(
-        (profile.enable || []).some((entry) => refsAgent(entry, 'basic/cloudflared')),
-        false,
-        'default must not enable the standalone cloudflared agent'
-    );
-
-    assert.deepEqual(profile.enable, [
-        {
-            agent: 'basic/web-publishing global',
-            profile: 'default'
-        }
-    ]);
-
-    assert.deepEqual(profile.configProviders, [
-        {
-            agent: 'basic/web-publishing global',
-            profile: 'default'
-        }
-    ]);
+    assert.equal(Object.hasOwn(profile, 'enable'), false);
+    assert.equal(Object.hasOwn(profile, 'configProviders'), false);
 });
 
-test('Explorer declares Web Publishing support repos and never requests the legacy tunnel var', async () => {
+test('Explorer v5 manifest contains no removed publication contract', async () => {
     const manifest = await readManifest();
     const serialized = JSON.stringify(manifest);
-    const legacyTokenName = ['CLOUDFLARED', 'TUNNEL', 'TOKEN'].join('_');
 
+    // The basic repository remains required by WebTTY. It is not an edge owner.
     assert.equal(manifest.repos?.basic, 'https://github.com/AssistOS-AI/basic.git');
-    assert.deepEqual(
-        manifest.repos?.['container-image-builds'],
-        {
-            url: 'https://github.com/AssistOS-AI/container-image-builds.git',
-            branch: 'main'
-        }
-    );
-    assert.match(serialized, /basic\/web-publishing/);
-    assert.doesNotMatch(serialized, /basic\/cloudflared/);
-    assert.equal(serialized.includes(`"${legacyTokenName}"`), false);
-    assert.equal(serialized.includes(legacyTokenName), false);
-});
-
-test('Explorer blocks on OnlyOffice full-stack readiness', async () => {
-    const manifest = await readManifest();
-    const onlyOfficeEdges = (manifest.enable || [])
-        .filter((entry) => refsAgent(entry, 'onlyOffice'));
-
-    assert.deepEqual(onlyOfficeEdges, ['onlyOffice global']);
-    assert.equal(onlyOfficeEdges[0].includes('no-wait'), false);
+    const removedAgentNames = ['web', 'publishing'].join('-') + '|' + ['cloud', 'flared'].join('');
+    const removedOnlyOfficePrefix = ['ONLYOFFICE', '(?:PUBLIC|INTERNAL|CALLBACK_BASE)', 'URL'].join('_');
+    const removedWebMeetPrefix = ['WEBMEET', '[A-Z0-9_]*', 'LIVEKIT', '[A-Z0-9_]*'].join('_');
+    assert.doesNotMatch(serialized, new RegExp(removedAgentNames, 'i'));
+    assert.doesNotMatch(serialized, new RegExp(removedOnlyOfficePrefix));
+    assert.doesNotMatch(serialized, new RegExp(removedWebMeetPrefix));
+    assert.equal(Object.hasOwn(manifest, ['additional', 'Server', 'Port'].join('')), false);
+    assert.equal(Object.hasOwn(manifest, ['open', 'Ports'].join('')), false);
 });

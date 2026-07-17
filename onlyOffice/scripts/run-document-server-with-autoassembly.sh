@@ -3,53 +3,22 @@ set -euo pipefail
 
 source_script="${ONLYOFFICE_DOCUMENT_SERVER_BASE_SCRIPT:-/app/ds/run-document-server.sh}"
 patched_script="${TMPDIR:-/tmp}/onlyoffice-agent-run-document-server.$$.sh"
-rabbitmq_config_file="${ONLYOFFICE_RABBITMQ_CONFIG_FILE:-/etc/rabbitmq/rabbitmq.conf}"
-
-stat_mode() {
-  stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1"
-}
-
-stat_owner() {
-  stat -c '%u:%g' "$1" 2>/dev/null || stat -f '%u:%g' "$1"
-}
-
-# The bundled RabbitMQ is a single-node, in-container dependency. Nested
-# rootless container runtimes can retain an outer-container address for the
-# dynamically assigned inner hostname in /etc/hosts. Erlang then resolves its
-# default rabbit@<hostname> node to an address that is not local to this
-# container and fails to contact epmd even though epmd is listening locally.
-# A stable loopback node name avoids that namespace-dependent lookup while
-# preserving RabbitMQ's standard environment override for non-nested runtimes.
-export RABBITMQ_NODENAME="${RABBITMQ_NODENAME:-rabbit@localhost}"
+configure_v5_script="${ONLYOFFICE_V5_CONFIGURE_SCRIPT:-/code/scripts/configure-document-server-v5.sh}"
+configure_support_listeners_script="${ONLYOFFICE_SUPPORT_LISTENER_SCRIPT:-/code/scripts/configure-support-listeners-v5.sh}"
 
 if [ ! -f "$source_script" ]; then
   echo "OnlyOffice Document Server script not found: $source_script" >&2
   exit 1
 fi
 
-# Nested rootless Podman cannot expose the inner PID namespace through the
-# outer container's procfs. RabbitMQ's default rss strategy consequently tries
-# to read a PID that is not present in /proc and aborts before Document Server
-# starts. The supported erlang strategy obtains process memory from the VM and
-# does not depend on that procfs lookup.
-rabbitmq_config_dir="$(dirname "$rabbitmq_config_file")"
-install -d -m 0755 "$rabbitmq_config_dir"
-rabbitmq_config_tmp="$(mktemp "$rabbitmq_config_dir/.rabbitmq.conf.XXXXXX")"
-if [ -f "$rabbitmq_config_file" ]; then
-  awk '!/^[[:space:]]*vm_memory_calculation_strategy[[:space:]]*=/' \
-    "$rabbitmq_config_file" > "$rabbitmq_config_tmp"
-  chmod "$(stat_mode "$rabbitmq_config_file")" "$rabbitmq_config_tmp"
-  if [ "$(id -u)" -eq 0 ]; then
-    chown "$(stat_owner "$rabbitmq_config_file")" "$rabbitmq_config_tmp"
-  fi
-else
-  chmod 0640 "$rabbitmq_config_tmp"
-  chown root:rabbitmq "$rabbitmq_config_tmp"
+if [ ! -x "$configure_support_listeners_script" ]; then
+  echo "OnlyOffice support-listener configuration script is missing or not executable: $configure_support_listeners_script" >&2
+  exit 1
 fi
-printf '%s\n' 'vm_memory_calculation_strategy = erlang' >> "$rabbitmq_config_tmp"
-mv -f "$rabbitmq_config_tmp" "$rabbitmq_config_file"
 
-awk '
+awk \
+  -v configure_v5_script="$configure_v5_script" \
+  -v configure_support_listeners_script="$configure_support_listeners_script" '
   /^[[:space:]]*service \$i start[[:space:]]*$/ {
     print "  if [ \"$i\" = \"rabbitmq-server\" ]; then"
     print "    install -d -o rabbitmq -g rabbitmq -m 0755 /var/run/rabbitmq"
@@ -74,12 +43,20 @@ awk '
     print "${JSON} -I -e \"this.services.CoAuthoring.autoAssembly.enable = ${onlyoffice_agent_autoassembly_json}\""
     print "${JSON} -I -e \"this.services.CoAuthoring.autoAssembly.interval = \047${onlyoffice_agent_autoassembly_interval}\047\""
     print "${JSON} -I -e \"this.services.CoAuthoring.autoAssembly.step = \047${onlyoffice_agent_autoassembly_step}\047\""
+    print "/bin/bash \"" configure_v5_script "\" || { echo \"OnlyOffice v5 DocumentServer configuration failed; refusing startup.\" >&2; exit 1; }"
     inserted = 1
+  }
+  /#start needed local services/ && support_listeners_inserted == 0 {
+    print "/bin/bash \"" configure_support_listeners_script "\" || { echo \"OnlyOffice v5 support-listener configuration failed; refusing startup.\" >&2; exit 1; }"
+    support_listeners_inserted = 1
   }
   { print }
   END {
     if (rabbitmq_start_patched != 1) {
       exit 42
+    }
+    if (support_listeners_inserted != 1) {
+      exit 43
     }
   }
 ' "$source_script" > "$patched_script"

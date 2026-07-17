@@ -1,0 +1,382 @@
+const RUNTIME_CONTRACT_LABEL = 'io.assistos.ploinky.runtime-contract';
+const REQUESTED_IMAGE_LABEL = 'io.assistos.ploinky.requested-image';
+const REQUIRED_RUNTIME_CONTRACT = '5';
+const ROUTER_TARGET = '8080/tcp';
+const MEDIA_TARGET = '7882/udp';
+const TCP_SCAN_START = 1;
+const TCP_SCAN_END = 65_535;
+
+function record(value, name) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`${name} must be an object.`);
+  }
+  return value;
+}
+
+function exactString(value, name) {
+  const text = String(value || '').trim();
+  if (!text) throw new Error(`${name} is required.`);
+  return text;
+}
+
+function exactPort(value, name) {
+  const text = exactString(value, name);
+  if (!/^[1-9][0-9]*$/.test(text) || Number(text) > 65_535) {
+    throw new Error(`${name} must be an exact TCP/UDP port.`);
+  }
+  return text;
+}
+
+function exactImageId(value, name) {
+  const text = exactString(value, name).toLowerCase();
+  if (/^[0-9a-f]{64}$/.test(text)) return `sha256:${text}`;
+  if (!/^sha256:[0-9a-f]{64}$/.test(text)) {
+    throw new Error(`${name} must be an exact sha256 image ID.`);
+  }
+  return text;
+}
+
+function exactContainerId(value, name) {
+  const text = exactString(value, name).toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(text)) {
+    throw new Error(`${name} must be an exact 64-hex container ID.`);
+  }
+  return text;
+}
+
+function exactSha256(value, name) {
+  const text = exactString(value, name).toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(text)) throw new Error(`${name} must be a SHA-256 digest.`);
+  return text;
+}
+
+function exactSshHostKeySha256(value, name) {
+  const text = exactString(value, name);
+  if (!/^SHA256:[A-Za-z0-9+/]{43}$/.test(text)) {
+    throw new Error(`${name} must be an exact OpenSSH SHA256 host-key fingerprint.`);
+  }
+  return text;
+}
+
+function oneInspectRecord(value, name) {
+  const rows = Array.isArray(value) ? value : [value];
+  if (rows.length !== 1) throw new Error(`${name} must contain exactly one inspection record.`);
+  return record(rows[0], `${name}[0]`);
+}
+
+function sortedObject(value) {
+  return Object.fromEntries(Object.entries(value).sort(([left], [right]) => left.localeCompare(right)));
+}
+
+export function normalizeOuterPortBindings(bindings) {
+  const source = record(bindings, 'HostConfig.PortBindings');
+  const normalized = {};
+  for (const [target, rawValues] of Object.entries(source)) {
+    if (!/^\d+\/(?:tcp|udp)$/.test(target)) {
+      throw new Error(`HostConfig.PortBindings has invalid target ${JSON.stringify(target)}.`);
+    }
+    if (!Array.isArray(rawValues) || rawValues.length < 1) {
+      throw new Error(`HostConfig.PortBindings ${target} must contain at least one mapping.`);
+    }
+    normalized[target] = rawValues.map((rawValue, index) => {
+      const value = record(rawValue, `HostConfig.PortBindings ${target}[${index}]`);
+      const hostIp = value.HostIp === undefined || value.HostIp === null
+        ? ''
+        : String(value.HostIp);
+      return {
+        HostIp: hostIp === '' ? '0.0.0.0' : hostIp,
+        HostPort: exactPort(value.HostPort, `HostConfig.PortBindings ${target}[${index}].HostPort`),
+      };
+    }).sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+  }
+  return sortedObject(normalized);
+}
+
+function expectedBindings(selectedRouterHostPort) {
+  return normalizeOuterPortBindings({
+    [ROUTER_TARGET]: [{ HostIp: '127.0.0.1', HostPort: selectedRouterHostPort }],
+    [MEDIA_TARGET]: [{ HostIp: '0.0.0.0', HostPort: '7882' }],
+  });
+}
+
+function assertExactBindings(bindings) {
+  const normalized = normalizeOuterPortBindings(bindings);
+  const router = normalized[ROUTER_TARGET];
+  if (!router || router.length !== 1) {
+    throw new Error(`Runtime-v5 PortBindings must contain exactly one ${ROUTER_TARGET} mapping.`);
+  }
+  const selectedRouterHostPort = router[0].HostPort;
+  const expected = expectedBindings(selectedRouterHostPort);
+  if (JSON.stringify(normalized) !== JSON.stringify(expected)) {
+    throw new Error(`Runtime-v5 normalized PortBindings must equal ${JSON.stringify(expected)}; got ${JSON.stringify(normalized)}.`);
+  }
+  return { normalized, selectedRouterHostPort };
+}
+
+function isoTime(value, name) {
+  const text = exactString(value, name);
+  const milliseconds = Date.parse(text);
+  if (!Number.isFinite(milliseconds)) throw new Error(`${name} must be an ISO timestamp.`);
+  return { text: new Date(milliseconds).toISOString(), milliseconds };
+}
+
+export function buildV5BoxEvidence({
+  containerInspect,
+  imageInspect,
+  expectedContainerName,
+  expectedImageId,
+  expectedImageRef,
+  baseURL,
+  publicIPv4,
+}) {
+  const container = oneInspectRecord(containerInspect, 'outer container inspection');
+  const image = oneInspectRecord(imageInspect, 'outer image inspection');
+  const containerName = String(container.Name || '').replace(/^\//, '');
+  if (containerName !== expectedContainerName) {
+    throw new Error(`Outer inspection name must equal ${expectedContainerName}; got ${containerName || '<missing>'}.`);
+  }
+  if (container?.State?.Running !== true) throw new Error(`Outer container ${containerName} is not running.`);
+  const containerId = exactContainerId(container.Id || container.ID, 'outer container ID');
+  const startedAt = isoTime(container?.State?.StartedAt, 'outer container State.StartedAt');
+  const containerLabels = record(container?.Config?.Labels || {}, 'outer container Config.Labels');
+  if (String(containerLabels[RUNTIME_CONTRACT_LABEL] || '') !== REQUIRED_RUNTIME_CONTRACT) {
+    throw new Error(`Outer container ${containerName} does not carry runtime contract 5.`);
+  }
+  if (String(containerLabels[REQUESTED_IMAGE_LABEL] || '') !== expectedImageRef) {
+    throw new Error(`Outer container ${containerName} requested-image label does not equal ${expectedImageRef}.`);
+  }
+  const requiredImageId = exactImageId(expectedImageId, 'expected outer image ID');
+  const imageId = exactImageId(container.Image || container.ImageID, 'outer container image ID');
+  if (imageId !== requiredImageId) {
+    throw new Error(`Outer container image ID must equal ${requiredImageId}; got ${imageId}.`);
+  }
+  const inspectedImageId = exactImageId(image.Id || image.ID, 'outer image inspection ID');
+  if (inspectedImageId !== requiredImageId) {
+    throw new Error(`Inspected image ID must equal ${requiredImageId}; got ${inspectedImageId}.`);
+  }
+  const imageConfig = record(image.Config || {}, 'outer image Config');
+  const imageLabels = record(imageConfig.Labels || image.Labels || {}, 'outer image labels');
+  if (String(imageLabels[RUNTIME_CONTRACT_LABEL] || '') !== REQUIRED_RUNTIME_CONTRACT) {
+    throw new Error(`Outer image ${requiredImageId} does not carry runtime contract 5.`);
+  }
+  if (String(imageConfig.User || '') !== 'podman') throw new Error('Runtime-v5 image user must be podman.');
+  if (String(imageConfig.WorkingDir || '') !== '/workspace') throw new Error('Runtime-v5 image workdir must be /workspace.');
+  if (JSON.stringify(imageConfig.Entrypoint || []) !== JSON.stringify(['/usr/local/bin/ploinky-box-entrypoint'])) {
+    throw new Error('Runtime-v5 image entrypoint is invalid.');
+  }
+  const { normalized, selectedRouterHostPort } = assertExactBindings(container?.HostConfig?.PortBindings);
+  return validateV5BoxEvidence({
+    schemaVersion: 1,
+    containerName,
+    containerId,
+    startedAt: startedAt.text,
+    running: true,
+    runtimeContract: REQUIRED_RUNTIME_CONTRACT,
+    requestedImageRef: expectedImageRef,
+    imageId: requiredImageId,
+    baseURL,
+    publicIPv4,
+    selectedRouterHostPort,
+    normalizedPortBindings: normalized,
+  }, {
+    expectedContainerName,
+    expectedImageId,
+    expectedImageRef,
+    baseURL,
+    publicIPv4,
+  });
+}
+
+export function validateV5BoxEvidence(input, {
+  expectedContainerName,
+  expectedImageId,
+  expectedImageRef,
+  baseURL,
+  publicIPv4,
+} = {}) {
+  const evidence = record(input, 'runtime-v5 box evidence');
+  if (evidence.schemaVersion !== 1) throw new Error('Runtime-v5 box evidence schemaVersion must equal 1.');
+  if (evidence.containerName !== expectedContainerName) throw new Error('Runtime-v5 evidence container name mismatch.');
+  const containerId = exactContainerId(evidence.containerId, 'runtime-v5 evidence container ID');
+  const requiredImageId = exactImageId(expectedImageId, 'expected runtime-v5 evidence image ID');
+  if (exactImageId(evidence.imageId, 'runtime-v5 evidence image ID') !== requiredImageId) {
+    throw new Error('Runtime-v5 evidence image ID mismatch.');
+  }
+  if (evidence.requestedImageRef !== expectedImageRef) throw new Error('Runtime-v5 evidence requested image mismatch.');
+  if (evidence.runtimeContract !== REQUIRED_RUNTIME_CONTRACT) throw new Error('Runtime-v5 evidence contract mismatch.');
+  if (evidence.running !== true) throw new Error('Runtime-v5 evidence must describe a running outer container.');
+  if (String(evidence.baseURL || '').replace(/\/+$/, '') !== String(baseURL || '').replace(/\/+$/, '')) {
+    throw new Error('Runtime-v5 evidence base URL mismatch.');
+  }
+  if (evidence.publicIPv4 !== publicIPv4) throw new Error('Runtime-v5 evidence public IPv4 mismatch.');
+  const startedAt = isoTime(evidence.startedAt, 'runtime-v5 evidence startedAt');
+  const selectedRouterHostPort = exactPort(evidence.selectedRouterHostPort, 'runtime-v5 evidence selectedRouterHostPort');
+  const normalized = normalizeOuterPortBindings(evidence.normalizedPortBindings);
+  if (JSON.stringify(normalized) !== JSON.stringify(expectedBindings(selectedRouterHostPort))) {
+    throw new Error('Runtime-v5 evidence normalized PortBindings are not the exact two-publication boundary.');
+  }
+  return Object.freeze({
+    schemaVersion: 1,
+    containerName: evidence.containerName,
+    containerId,
+    startedAt: startedAt.text,
+    running: true,
+    runtimeContract: REQUIRED_RUNTIME_CONTRACT,
+    requestedImageRef: evidence.requestedImageRef,
+    imageId: requiredImageId,
+    baseURL: String(evidence.baseURL).replace(/\/+$/, ''),
+    publicIPv4: evidence.publicIPv4,
+    selectedRouterHostPort,
+    normalizedPortBindings: normalized,
+  });
+}
+
+export function validateExternalTcpNegativeEvidence(input, {
+  runId,
+  boxEvidence,
+  networkSources,
+  nowMs = Date.now(),
+  maxAgeMs = 15 * 60_000,
+} = {}) {
+  const evidence = record(input, 'external TCP-negative evidence');
+  if (evidence.schemaVersion !== 2) throw new Error('External TCP-negative evidence schemaVersion must equal 2.');
+  if (evidence.runId !== runId) throw new Error('External TCP-negative evidence runId mismatch.');
+  if (evidence.containerName !== boxEvidence.containerName) throw new Error('External TCP-negative evidence container mismatch.');
+  if (evidence.containerId !== boxEvidence.containerId) throw new Error('External TCP-negative evidence container ID mismatch.');
+  const containerStartedAt = isoTime(evidence.containerStartedAt, 'external TCP-negative containerStartedAt');
+  if (containerStartedAt.text !== boxEvidence.startedAt) {
+    throw new Error('External TCP-negative evidence container start mismatch.');
+  }
+  if (evidence.imageId !== boxEvidence.imageId) throw new Error('External TCP-negative evidence image mismatch.');
+  if (evidence.targetPublicIPv4 !== boxEvidence.publicIPv4) throw new Error('External TCP-negative target IPv4 mismatch.');
+  const observedAt = isoTime(evidence.observedAt, 'external TCP-negative observedAt');
+  const boxStartedAtMs = Date.parse(boxEvidence.startedAt);
+  if (observedAt.milliseconds < boxStartedAtMs) {
+    throw new Error('External TCP-negative scan predates the current outer container generation.');
+  }
+  if (observedAt.milliseconds > nowMs + 30_000 || nowMs - observedAt.milliseconds > maxAgeMs) {
+    throw new Error('External TCP-negative evidence is stale or from the future.');
+  }
+  if (!Array.isArray(networkSources) || networkSources.length !== 2) {
+    throw new Error('Exactly two expected external network sources are required.');
+  }
+  if (!Array.isArray(evidence.sources) || evidence.sources.length !== 2) {
+    throw new Error('External TCP-negative evidence must contain exactly two source scans.');
+  }
+  const expected = new Map(networkSources.map((source) => [source.networkId, source]));
+  if (expected.size !== 2) throw new Error('Expected external network source ids must be distinct.');
+  const seen = new Set();
+  const sources = evidence.sources.map((rawSource, index) => {
+    const source = record(rawSource, `external TCP-negative sources[${index}]`);
+    const networkId = exactString(source.networkId, `sources[${index}].networkId`);
+    if (seen.has(networkId)) throw new Error(`External TCP-negative source ${networkId} is duplicated.`);
+    seen.add(networkId);
+    if (!expected.has(networkId)) throw new Error(`External TCP-negative source ${networkId} is unexpected.`);
+    const expectedSource = expected.get(networkId);
+    if (source.egressIPv4 !== expectedSource.egressIPv4) throw new Error(`External TCP-negative source ${networkId} egress mismatch.`);
+    if (source.protocol !== 'tcp') throw new Error(`External TCP-negative source ${networkId} must scan TCP.`);
+    if (source.targetPublicIPv4 !== boxEvidence.publicIPv4) throw new Error(`External TCP-negative source ${networkId} target mismatch.`);
+    if (source.scanStart !== TCP_SCAN_START || source.scanEnd !== TCP_SCAN_END) {
+      throw new Error(`External TCP-negative source ${networkId} must scan every TCP port 1..65535.`);
+    }
+    if (!Array.isArray(source.openPorts) || source.openPorts.length !== 0) {
+      throw new Error(`External TCP-negative source ${networkId} found an inbound TCP port.`);
+    }
+    const sourceStartedAt = isoTime(source.startedAt, `sources[${index}].startedAt`);
+    const sourceObservedAt = isoTime(source.observedAt, `sources[${index}].observedAt`);
+    if (sourceStartedAt.milliseconds < boxStartedAtMs) {
+      throw new Error(`External TCP-negative source ${networkId} scan predates the current outer container generation.`);
+    }
+    if (sourceStartedAt.milliseconds > sourceObservedAt.milliseconds) {
+      throw new Error(`External TCP-negative source ${networkId} scan completion predates its start.`);
+    }
+    if (sourceObservedAt.milliseconds < boxStartedAtMs) {
+      throw new Error(`External TCP-negative source ${networkId} scan predates the current outer container generation.`);
+    }
+    if (sourceObservedAt.milliseconds > observedAt.milliseconds) {
+      throw new Error(`External TCP-negative source ${networkId} scan completion is later than the evidence observation.`);
+    }
+    if (sourceObservedAt.milliseconds > nowMs + 30_000 || nowMs - sourceObservedAt.milliseconds > maxAgeMs) {
+      throw new Error(`External TCP-negative source ${networkId} scan is stale or from the future.`);
+    }
+    const scanner = exactString(source.scanner, `sources[${index}].scanner`);
+    if (scanner !== 'ploinky-external-boundary-v1') {
+      throw new Error(`External TCP-negative source ${networkId} scanner identity mismatch.`);
+    }
+    if (source.scannerTransport !== 'ssh-pinned-host') {
+      throw new Error(`External TCP-negative source ${networkId} must use the pinned SSH scanner transport.`);
+    }
+    const scannerSourceSha256 = exactSha256(source.scannerSourceSha256, `sources[${index}].scannerSourceSha256`);
+    const scannerTargetSha256 = exactSha256(source.scannerTargetSha256, `sources[${index}].scannerTargetSha256`);
+    const scannerHostKeySha256 = exactSshHostKeySha256(
+      source.scannerHostKeySha256,
+      `sources[${index}].scannerHostKeySha256`,
+    );
+    const rawResultSha256 = exactSha256(source.rawResultSha256, `sources[${index}].rawResultSha256`);
+    if (scannerSourceSha256 !== exactSha256(expectedSource.scannerSourceSha256, `expected ${networkId} scannerSourceSha256`)) {
+      throw new Error(`External TCP-negative source ${networkId} scanner source mismatch.`);
+    }
+    if (scannerTargetSha256 !== exactSha256(expectedSource.scannerTargetSha256, `expected ${networkId} scannerTargetSha256`)) {
+      throw new Error(`External TCP-negative source ${networkId} scanner target mismatch.`);
+    }
+    if (scannerHostKeySha256 !== exactSshHostKeySha256(expectedSource.scannerHostKeySha256, `expected ${networkId} scannerHostKeySha256`)) {
+      throw new Error(`External TCP-negative source ${networkId} scanner host-key mismatch.`);
+    }
+    const scanId = exactString(source.scanId, `sources[${index}].scanId`);
+    const invalidIceProbe = record(source.invalidIceProbe, `sources[${index}].invalidIceProbe`);
+    if (
+      invalidIceProbe.protocol !== 'udp'
+      || invalidIceProbe.targetPort !== 7882
+      || invalidIceProbe.requestHadMessageIntegrity !== false
+      || invalidIceProbe.successResponse !== false
+      || !['timeout', 'error-response'].includes(invalidIceProbe.outcome)
+      || (invalidIceProbe.outcome === 'timeout' && invalidIceProbe.responseType !== null)
+      || (invalidIceProbe.outcome === 'error-response' && invalidIceProbe.responseType !== 0x0111)
+    ) {
+      throw new Error(`External TCP-negative source ${networkId} did not prove invalid ICE fails on UDP 7882.`);
+    }
+    return Object.freeze({
+      networkId,
+      egressIPv4: source.egressIPv4,
+      protocol: 'tcp',
+      targetPublicIPv4: source.targetPublicIPv4,
+      scanStart: TCP_SCAN_START,
+      scanEnd: TCP_SCAN_END,
+      openPorts: Object.freeze([]),
+      startedAt: sourceStartedAt.text,
+      observedAt: sourceObservedAt.text,
+      scanner,
+      scanId,
+      scannerTransport: 'ssh-pinned-host',
+      scannerSourceSha256,
+      scannerTargetSha256,
+      scannerHostKeySha256,
+      rawResultSha256,
+      invalidIceProbe: Object.freeze({
+        protocol: 'udp',
+        targetPort: 7882,
+        requestHadMessageIntegrity: false,
+        outcome: invalidIceProbe.outcome,
+        successResponse: false,
+        responseType: invalidIceProbe.responseType,
+      }),
+    });
+  });
+  if (seen.size !== expected.size || [...expected.keys()].some((networkId) => !seen.has(networkId))) {
+    throw new Error('External TCP-negative evidence is missing an expected network source.');
+  }
+  if (new Set(sources.map((source) => source.scanId)).size !== sources.length) {
+    throw new Error('External TCP-negative scan ids must be distinct.');
+  }
+  return Object.freeze({
+    schemaVersion: 2,
+    runId,
+    containerName: boxEvidence.containerName,
+    containerId: boxEvidence.containerId,
+    containerStartedAt: containerStartedAt.text,
+    imageId: boxEvidence.imageId,
+    targetPublicIPv4: boxEvidence.publicIPv4,
+    observedAt: observedAt.text,
+    sources: Object.freeze(sources.sort((left, right) => left.networkId.localeCompare(right.networkId))),
+  });
+}

@@ -110,7 +110,7 @@ Steps:
 5. Select the `.doc` file.
 6. Assert the preview/editor pane requests OnlyOffice through the Ploinky router and loads the OnlyOffice API script successfully.
 7. Fail immediately on any visible or console error containing:
-   - `ONLYOFFICE_PUBLIC_URL is not configured`
+   - `OnlyOffice active editor locator is unavailable`
    - `Failed to load OnlyOffice API script`
    - `OnlyOffice editor mount failed`
    - HTTP 401/403/404/5xx for the OnlyOffice API script, document download route, or callback route

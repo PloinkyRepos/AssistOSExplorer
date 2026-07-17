@@ -273,26 +273,26 @@ test('aggregateIdePlugins returns nested Soul Gateway manifest settings', async 
     }
 });
 
-test('aggregateIdePlugins returns nested Web Publishing manifest settings from basic repo', async () => {
+test('aggregateIdePlugins returns nested neutral manifest settings from a sibling repo', async () => {
     const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'explorer-ide-plugins-workspace-'));
     try {
-        const reposRoot = path.join(workspaceRoot, '.ploinky', 'repos', 'basic');
-        await writeAgentManifest(reposRoot, 'web-publishing', {
+        const reposRoot = path.join(workspaceRoot, '.ploinky', 'repos', 'analytics');
+        await writeAgentManifest(reposRoot, 'analytics-agent', {
             ideSettings: [
                 {
-                    key: 'web-publishing-settings',
-                    label: 'Web Publishing',
+                    key: 'analytics-settings',
+                    label: 'Analytics',
                     scope: 'workspace',
-                    pluginKey: 'web-publishing/web-publishing-settings',
-                    settingsComponent: 'web-publishing-settings',
+                    pluginKey: 'analytics-agent/analytics-settings',
+                    settingsComponent: 'analytics-settings',
                     adminOnly: true
                 }
             ]
         });
-        await writePluginConfig(reposRoot, 'web-publishing', 'web-publishing-settings', {
+        await writePluginConfig(reposRoot, 'analytics-agent', 'analytics-settings', {
             pluginCategory: 'application',
-            id: 'web-publishing',
-            component: 'web-publishing-settings',
+            id: 'analytics',
+            component: 'analytics-settings',
             location: [],
             type: 'global',
             adminOnly: true
@@ -302,12 +302,12 @@ test('aggregateIdePlugins returns nested Web Publishing manifest settings from b
         const settingsPlugins = aggregated.application[''] || [];
 
         assert.equal(aggregated.agentSettings.length, 1);
-        assert.equal(aggregated.agentSettings[0].ownerAgent, 'web-publishing');
-        assert.equal(aggregated.agentSettings[0].pluginKey, 'web-publishing/web-publishing-settings');
-        assert.equal(aggregated.agentSettings[0].settingsComponent, 'web-publishing-settings');
+        assert.equal(aggregated.agentSettings[0].ownerAgent, 'analytics-agent');
+        assert.equal(aggregated.agentSettings[0].pluginKey, 'analytics-agent/analytics-settings');
+        assert.equal(aggregated.agentSettings[0].settingsComponent, 'analytics-settings');
         assert.equal(settingsPlugins.length, 1);
-        assert.equal(settingsPlugins[0].agent, 'web-publishing');
-        assert.equal(settingsPlugins[0].id, 'web-publishing');
+        assert.equal(settingsPlugins[0].agent, 'analytics-agent');
+        assert.equal(settingsPlugins[0].id, 'analytics');
         assert.equal(settingsPlugins[0].adminOnly, true);
     } finally {
         await fs.rm(workspaceRoot, { recursive: true, force: true });

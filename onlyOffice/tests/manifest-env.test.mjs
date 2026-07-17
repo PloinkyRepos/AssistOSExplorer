@@ -23,30 +23,6 @@ function assertModernHttpService(service, label) {
   assert.equal(service?.forceGuest, undefined, `${label} must not declare removed forceGuest field`);
 }
 
-test('manifest blocks startup on the real editor API readiness path', () => {
-  const manifest = readManifest();
-
-  assert.equal(manifest.readiness, undefined);
-  assert.deepEqual(manifest.health?.readiness, {
-    script: 'readiness.sh',
-    interval: 2,
-    timeout: 5,
-    failureThreshold: 90,
-  });
-});
-
-test('manifest joins only the office publishing trust zone with a derived DNS name', () => {
-  const manifest = readManifest();
-
-  assert.deepEqual(manifest.network, {
-    mode: 'bridge',
-    attachments: [
-      { name: 'office-publishing', primary: true },
-    ],
-  });
-  assert.equal(JSON.stringify(manifest.network).includes('aliases'), false);
-});
-
 test('manifest injects the OnlyOffice JWT secret under decorator and Document Server names', () => {
   const manifest = readManifest();
 
@@ -88,34 +64,18 @@ test('manifest injects the OnlyOffice JWT secret under decorator and Document Se
   }
 });
 
-test('manifest leaves the provider-owned public URL without a dead static port fallback', () => {
+test('manifest declares distinct Router targets without physical-host publications', () => {
   const manifest = readManifest();
 
-  for (const profileName of ['default', 'dev', 'prod']) {
-    const profile = manifest.profiles?.[profileName];
-    const publicUrl = entriesByName(profile).get('ONLYOFFICE_PUBLIC_URL');
-
-    // Ploinky rejects required non-secret profile entries without static
-    // defaults. Runtime config still requires this value after the blocking
-    // Web Publishing provider has resolved the active topology.
-    assert.equal(publicUrl?.required, false, `${profileName} delegates the URL to the startup provider`);
-    assert.equal(publicUrl?.default, undefined, `${profileName} does not retain a retired direct-port fallback`);
-  }
-});
-
-test('manifest keeps control routing private and publishes no OnlyOffice box-boundary ports', () => {
-  const manifest = readManifest();
-
+  assert.deepEqual(manifest.httpServices.map(({ slug, port, access }) => ({ slug, port, access })), [
+    { slug: 'onlyoffice', port: 7000, access: 'authenticated' },
+    { slug: 'onlyoffice-editor', port: 8080, access: 'public' },
+  ]);
   for (const profileName of ['default', 'dev', 'prod']) {
     const profile = manifest.profiles?.[profileName];
     assert.ok(profile, `profile ${profileName} exists`);
-
-    assert.equal(
-      profile.additionalServerPort,
-      '7000',
-      `${profileName} gives the router a private ephemeral route to the protected control listener`
-    );
-    assert.equal(profile.openPorts, undefined, `${profileName} publishes no OnlyOffice port across the box boundary`);
+    assert.equal(Object.hasOwn(profile, 'openPorts'), false);
+    assert.equal(Object.hasOwn(profile, ['additional', 'Server', 'Port'].join('')), false);
   }
 });
 

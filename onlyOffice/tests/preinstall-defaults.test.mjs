@@ -9,17 +9,13 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const agentRoot = path.resolve(__dirname, '..');
 
-test('preinstall defaults only the decorator internal URL to the in-container Document Server', () => {
+test('preinstall is a hard-cut data-directory initializer only', () => {
   const script = fs.readFileSync(path.join(agentRoot, 'scripts/hooks/preinstall.sh'), 'utf8');
 
-  assert.match(
-    script,
-    /set_default_var ONLYOFFICE_INTERNAL_URL "http:\/\/127\.0\.0\.1:80" "http:\/\/host\.containers\.internal:\$\{legacy_host_port\}"/
-  );
-  assert.match(script, /ONLYOFFICE_PUBLIC_URL is owned by the blocking Web Publishing config provider/);
-  assert.doesNotMatch(script, /set_default_var ONLYOFFICE_PUBLIC_URL/);
-  assert.doesNotMatch(script, /set_default_var ONLYOFFICE_CALLBACK_BASE_URL/);
-  assert.doesNotMatch(script, /"http:\/\/host\.containers\.internal:8080"/);
+  assert.match(script, /Runtime contract v5 is a hard cut/);
+  assert.match(script, /\.ploinky\/data\/onlyOffice/);
+  assert.doesNotMatch(script, /ONLYOFFICE_(?:PUBLIC|INTERNAL)_URL/);
+  assert.doesNotMatch(script, /podman|docker|rm -rf|legacy.*(?:inspect|delete|migrate)/i);
 });
 
 test('preinstall hook is valid bash syntax', () => {
@@ -27,4 +23,28 @@ test('preinstall hook is valid bash syntax', () => {
   const result = spawnSync('bash', ['-n', scriptPath], { encoding: 'utf8' });
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
+});
+
+test('OnlyOffice guidance preserves the v5 hard cut and contains no shadow-checkout runbook', () => {
+  const guide = fs.readFileSync(path.join(agentRoot, 'CLAUDE.md'), 'utf8');
+  const handoff = fs.readFileSync(
+    path.resolve(agentRoot, '../docs/onlyoffice-confidential-doc-debug-handoff.md'),
+    'utf8',
+  );
+  const prompt = fs.readFileSync(
+    path.resolve(agentRoot, '../docs/onlyoffice-confidential-doc-debug-prompt.md'),
+    'utf8',
+  );
+
+  assert.match(guide, /preinstall hook only initializes new v5 data directories/i);
+  assert.doesNotMatch(guide, /removed by this agent(?:'s)? own preinstall/i);
+  assert.match(handoff, /Historical evidence only/);
+  assert.match(handoff, /No inbound\s+forwarding value is preserved or trusted/);
+  assert.match(prompt, /Historical evidence only/);
+  assert.match(prompt, /prompt is retired/i);
+  for (const historicalDoc of [handoff, prompt]) {
+    assert.doesNotMatch(historicalDoc, /```(?:bash|sh)|\brsync\b|\brm\s+-rf\b|\.ploinky\/repos|ploinky\s+(?:destroy|start|restart)/i);
+    assert.doesNotMatch(historicalDoc, /127\.0\.0\.1:9100|stable[^\n]*\b9100\b/i);
+    assert.doesNotMatch(historicalDoc, /preserv(?:e|es|ing) (?:incoming|inbound|caller)[^\n]*x-forwarded/i);
+  }
 });

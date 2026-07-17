@@ -24,10 +24,8 @@ export default defineConfig({
     actionTimeout: smokeConfig.timeouts.action,
     navigationTimeout: smokeConfig.timeouts.navigation,
     screenshot: 'only-on-failure',
-    // Playwright traces persist raw network URLs and provide no URL redaction hook.
-    // WebMeet signaling URLs contain browser-minted credentials, so traces stay off.
     trace: 'off',
-    video: 'retain-on-failure',
+    video: smokeConfig.flags.webmeetScreen ? 'retain-on-failure' : 'off',
     ignoreHTTPSErrors: true,
     permissions: ['camera', 'microphone'],
     launchOptions: {

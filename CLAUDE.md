@@ -61,13 +61,23 @@ Ploinky Explorer workspace + 17 coupled agents. Origin: `https://github.com/Assi
 
 ## Deploy and remote ops
 
-Public URL: `https://skills.axiologic.dev`. SSH: `admin@193.180.209.191` (key `~/demo_private_key.pem`), workspace `~/explorerWorkspace`, router port `8097`. Override via GitHub Actions vars `SSH_USER`/`SSH_HOST`/`EXPLORER_WORKSPACE`/`EXPLORER_ROUTER_PORT`.
+Runtime-contract-v5 deployment is operator-controlled. This repository intentionally
+contains no SSH deploy, update, provision, or remote-status workflow. Follow
+`docs/deploy-skills-explorer.md`; do not recreate or invoke the retired
+`deploy-skills-explorer.yml`, `deploy-explorer-qa.yml`, `update-explorer.yml`,
+`provision-skills-explorer-host.yml`, or `remote-skills-status.yml` paths.
 
-- **Canonical production deploy/recovery:** `.github/workflows/deploy-skills-explorer.yml` (passes `PLOINKY_MASTER_KEY` through stop→update→start).
-- **Explorer QA on the Soul/proxies host:** `.github/workflows/deploy-explorer-qa.yml` targets `admin@45.136.70.141` with QA workspace `~/explorerQaWorkspace` and router port `8097`. It is **co-located with production Soul Gateway** (`~/soulGateway`, port `8080`), so it uses only `EXPLORER_QA_*` GitHub config and enforces one invariant: no QA operation acts on a port/workspace/runtime it does not own. It skips `ploinky shutdown` unless the QA `routing.json` owns `8097`, never mutates the shared Ploinky/`achillesAgentLib` runtime (asserts the branch instead), and pre/post-checks Soul Gateway health on `8080`. Starting Explorer brings its full agent stack (WebMeet/LiveKit/OnlyOffice); Ploinky gates the blocking OnlyOffice and WebMeet signaling/media chain, while optional STT launches `no-wait` and the runner-side public Explorer, OnlyOffice, and LiveKit checks fail closed.
-- **Do not** use `.github/workflows/update-explorer.yml` to restart production unless it's confirmed to pass `PLOINKY_MASTER_KEY` for any command that reads encrypted secrets or runs preinstall hooks.
-- `.ploinky/.secrets` is encrypted. Never append/edit as plaintext; use `ploinky var` with `PLOINKY_MASTER_KEY` set.
-- Other workflows: `provision-skills-explorer-host.yml`, `remote-skills-status.yml`, `update-explorer.yml`, `destroy-explorer.yml`. Use the narrower workflow only when its secret requirements match the operation. After any deploy/restart, verify local router health, public `/dashboard`, container status, Ploinky status, and start logs.
+- Current workflows are `destroy-explorer.yml`, `destroy-explorer-qa.yml`, and
+  `verify-runtime-v5-source-absence.yml`. The destroy workflows are explicit
+  destructive operations; inspect their target and ownership checks before use.
+- `.ploinky/.secrets` is encrypted. Never append/edit it as plaintext; use
+  `ploinky var` with `PLOINKY_MASTER_KEY` set.
+- A v5 activation must use dedicated authorized test resources and must report
+  unavailable Cloudflare, TURN, architecture, network, or account prerequisites
+  as `BLOCKED`, never as a pass.
+- After an operator-controlled recreate, verify the exact outer bindings, in-box
+  listener ownership, local Router behavior, and the real-browser release gates
+  documented in `docs/deploy-skills-explorer.md`.
 
 ## Documentation rules
 

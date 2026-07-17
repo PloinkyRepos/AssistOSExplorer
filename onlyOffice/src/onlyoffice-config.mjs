@@ -1,4 +1,4 @@
-import { createHash, createHmac } from 'node:crypto';
+import { createHmac } from 'node:crypto';
 
 const FILE_TYPES = Object.freeze({
   csv: Object.freeze({ extension: 'csv', documentType: 'cell' }),
@@ -19,7 +19,7 @@ function fileTypeFor(name) {
   return match ? FILE_TYPES[match[1]] || null : null;
 }
 
-function signJwt(payload, secret) {
+export function signJwt(payload, secret) {
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
   const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
   const unsigned = `${header}.${body}`;
@@ -27,16 +27,12 @@ function signJwt(payload, secret) {
   return `${unsigned}.${signature}`;
 }
 
-function buildDocumentKey(session) {
-  return createHash('sha256')
-    .update([
-      session.storageKind,
-      session.storageId,
-      session.versionKey,
-      session.fileName,
-    ].join(':'))
-    .digest('hex')
-    .slice(0, 32);
+export function buildDocumentKey(session) {
+  const documentKey = String(session?.documentKey || '');
+  if (!/^[0-9a-f]{32}$/.test(documentKey)) {
+    throw new Error('OnlyOffice session requires its persisted v5 documentKey.');
+  }
+  return documentKey;
 }
 
 export function buildSignedOnlyOfficeConfig({
@@ -45,12 +41,16 @@ export function buildSignedOnlyOfficeConfig({
   authUser,
   documentUrl,
   callbackUrl,
+  publicEditorBaseUrl,
+  now = () => Date.now(),
 } = {}) {
   const fileType = fileTypeFor(session?.fileName);
   if (!fileType) {
     throw new Error(`Unsupported OnlyOffice file type for ${session?.fileName || '<unknown>'}.`);
   }
 
+  const issuedAt = Math.floor(Number(now()) / 1000);
+  const ttlSeconds = Number(config?.configJwtTtlSeconds || 300);
   const baseConfig = {
     document: {
       title: session.fileName,
@@ -80,8 +80,13 @@ export function buildSignedOnlyOfficeConfig({
 
   return {
     ...baseConfig,
-    token: signJwt(baseConfig, config.onlyofficeJwtSecret),
-    documentServerUrl: config.publicEditorBaseUrl,
+    token: signJwt({
+      ...baseConfig,
+      iat: issuedAt,
+      nbf: issuedAt - 5,
+      exp: issuedAt + ttlSeconds,
+    }, config.onlyofficeJwtSecret),
+    documentServerUrl: String(publicEditorBaseUrl || '').replace(/\/+$/, ''),
   };
 }
 

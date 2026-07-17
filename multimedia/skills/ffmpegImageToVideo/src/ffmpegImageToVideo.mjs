@@ -5,16 +5,35 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { Blob } from "node:buffer";
 import ffmpegStatic from "ffmpeg-static";
-import {
-  buildRouterBlobCollectionUrl,
-  resolveMediaSourceUrl,
-  resolvePloinkyRouterUrl,
-  resolveRouterDownloadUrl
-} from "./routerBlobContract.mjs";
 
 const toNumber = (value, fallback = undefined) => {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
+};
+
+const isHttp = (value) => typeof value === "string" && /^https?:\/\//i.test(value);
+
+const normalizeUrlForContainer = (url) => {
+  if (!url || typeof url !== "string") return url;
+  try {
+    const u = new URL(url);
+    if (u.hostname === "127.0.0.1" || u.hostname === "localhost") {
+      u.hostname = process.env.HOST_LOOPBACK || "host.docker.internal";
+    }
+    return u.toString();
+  } catch (_) {
+    return url;
+  }
+};
+
+const normalizeBaseUrl = (value) => {
+  if (!value || typeof value !== "string") return null;
+  try {
+    const url = new URL(value);
+    return url.toString().replace(/\/+$/, "");
+  } catch {
+    return null;
+  }
 };
 
 const resolveAgentId = (explicitAgentId) => {
@@ -33,9 +52,43 @@ const resolveAgentId = (explicitAgentId) => {
   return "soplangAgent";
 };
 
-const uploadToBlobStore = async (filePath, mimeType, routerBaseUrl, ctx = {}) => {
+const resolveBlobBaseUrl = (explicitBaseUrl) => {
+  const host = process.env.HOST_LOOPBACK || "host.docker.internal";
+  const port = process.env.BLOB_PORT || process.env.PLOINKY_ROUTER_PORT || process.env.PORT || "8080";
+  const defaults = `http://${host}:${port}`;
+  const candidates = [
+    explicitBaseUrl,
+    process.env.FILE_EXPLORER_URL,
+    process.env.BLOB_BASE_URL,
+    process.env.BLOB_STORE_URL,
+    process.env.PLOINKY_ROUTER_URL,
+    process.env.ROUTER_URL,
+    defaults
+  ];
+  for (const candidate of candidates) {
+    const normalized = normalizeBaseUrl(candidate);
+    if (normalized) return normalized;
+  }
+  return defaults;
+};
+
+const normalizeDownloadUrl = (localPath, downloadUrl, baseUrl) => {
+  const candidate = downloadUrl || localPath || "";
+  if (!candidate) return "";
+  if (isHttp(candidate)) return candidate;
+  const normalizedPath = candidate.startsWith("/") ? candidate : `/${candidate}`;
+  const base = resolveBlobBaseUrl(baseUrl);
+  try {
+    return new URL(normalizedPath, base).href;
+  } catch {
+    return normalizedPath;
+  }
+};
+
+const uploadToBlobStore = async (filePath, mimeType, ctx = {}) => {
   const agentId = resolveAgentId(ctx.agentId);
-  const blobStoreUrl = buildRouterBlobCollectionUrl(agentId, routerBaseUrl);
+  const baseUrl = resolveBlobBaseUrl(ctx.blobBaseUrl);
+  const blobStoreUrl = new URL(`/blobs/${encodeURIComponent(agentId)}`, baseUrl).href;
 
   const fileName = path.basename(filePath);
   const fileBuffer = await fsp.readFile(filePath);
@@ -60,7 +113,7 @@ const uploadToBlobStore = async (filePath, mimeType, routerBaseUrl, ctx = {}) =>
 
   const data = await response.json().catch(() => ({}));
   const localPath = typeof data.localPath === "string" ? data.localPath : null;
-  const normalizedDownloadUrl = resolveRouterDownloadUrl(localPath, data.downloadUrl, routerBaseUrl);
+  const normalizedDownloadUrl = normalizeDownloadUrl(localPath, data.downloadUrl, baseUrl);
 
   return {
     id: data.id ?? null,
@@ -127,21 +180,36 @@ const normalizeMediaList = (raw) => {
 };
 
 const downloadToFile = async (url, targetPath) => {
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`Failed to download ${url}: ${res.status} ${res.statusText}`);
+  const targetUrl = normalizeUrlForContainer(url);
+  const doFetch = async (u) => {
+    const res = await fetch(u);
+    if (!res.ok) {
+      throw new Error(`Failed to download ${u}: ${res.status} ${res.statusText}`);
+    }
+    const contentType = (res.headers?.get("content-type") || "").toLowerCase();
+    if (contentType.includes("image/svg")) {
+      throw new Error("SVG images are not supported; please convert to PNG/JPG.");
+    }
+    const arrayBuffer = await res.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    await fsp.writeFile(targetPath, buffer);
+  };
+  try {
+    await doFetch(url);
+  } catch (err) {
+    await doFetch(targetUrl);
   }
-  const contentType = (res.headers?.get("content-type") || "").toLowerCase();
-  if (contentType.includes("image/svg")) {
-    throw new Error("SVG images are not supported; please convert to PNG/JPG.");
-  }
-  const arrayBuffer = await res.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-  await fsp.writeFile(targetPath, buffer);
   return targetPath;
 };
 
-const ensureLocalPath = async (src, tempDir, label, routerBaseUrl) => {
+const buildBlobUrlFromId = (id) => {
+  const host = process.env.HOST_LOOPBACK || "host.docker.internal";
+  const port = process.env.BLOB_PORT || process.env.PLOINKY_ROUTER_PORT || process.env.PORT || "8080";
+  const agent = process.env.BLOB_AGENT || "explorer";
+  return `http://${host}:${port}/blobs/${encodeURIComponent(agent)}/${encodeURIComponent(String(id).trim())}`;
+};
+
+const ensureLocalPath = async (src, workDir, tempDir, label) => {
   if (!src || typeof src !== "string") {
     throw new Error(`Missing ${label} path/URL`);
   }
@@ -149,21 +217,16 @@ const ensureLocalPath = async (src, tempDir, label, routerBaseUrl) => {
   if (isSvg) {
     throw new Error("SVG images are not supported; please convert to PNG/JPG before using ffmpegImageToVideo.");
   }
-  if (/^https?:\/\//i.test(src)) {
+  if (isHttp(src)) {
+    const normalized = normalizeUrlForContainer(src);
     const fname = `${label}-${Date.now()}${path.extname(src) || ".bin"}`;
     const dest = path.join(tempDir, fname);
-    await downloadToFile(resolveMediaSourceUrl(src, {
-      agentId: process.env.BLOB_AGENT || "explorer",
-      routerBaseUrl
-    }), dest);
+    await downloadToFile(normalized, dest);
     return dest;
   }
   const fname = `${label}-${Date.now()}.bin`;
   const dest = path.join(tempDir, fname);
-  const blobUrl = resolveMediaSourceUrl(src, {
-    agentId: process.env.BLOB_AGENT || "explorer",
-    routerBaseUrl
-  });
+  const blobUrl = buildBlobUrlFromId(src);
   await downloadToFile(blobUrl, dest);
   return dest;
 };
@@ -204,7 +267,7 @@ export default async function ffmpegImageToVideo(input, context = {}) {
     throw new Error("ffmpegImageToVideo requires at least one image");
   }
 
-  const routerBaseUrl = resolvePloinkyRouterUrl(process.env);
+  const workDir = process.cwd();
   const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), "ffmpeg-image-to-video-"));
   const fps = toNumber(payload.fps, 25);
   const width = toNumber(payload.width, 1280);
@@ -216,7 +279,7 @@ export default async function ffmpegImageToVideo(input, context = {}) {
   try {
     const localImages = [];
     for (let index = 0; index < images.length; index += 1) {
-      const localPath = await ensureLocalPath(images[index], tempDir, `image-${index}`, routerBaseUrl);
+      const localPath = await ensureLocalPath(images[index], workDir, tempDir, `image-${index}`);
       localImages.push(localPath);
     }
 
@@ -226,7 +289,7 @@ export default async function ffmpegImageToVideo(input, context = {}) {
 
     let audioPath = null;
     if (audio) {
-      audioPath = await ensureLocalPath(audio, tempDir, "audio", routerBaseUrl);
+      audioPath = await ensureLocalPath(audio, workDir, tempDir, "audio");
     }
 
     const outputPath = path.join(tempDir, "out.mp4");
@@ -266,7 +329,7 @@ export default async function ffmpegImageToVideo(input, context = {}) {
       });
     });
 
-    const uploaded = await uploadToBlobStore(outputPath, "video/mp4", routerBaseUrl, context || {});
+    const uploaded = await uploadToBlobStore(outputPath, "video/mp4", context || {});
     return {
       value: uploaded.downloadUrl || uploaded.localPath || uploaded.id || "",
       ...uploaded

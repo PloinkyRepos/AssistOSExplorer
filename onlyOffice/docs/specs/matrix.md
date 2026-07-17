@@ -1,6 +1,6 @@
 # OnlyOffice Spec Matrix
 
-This page indexes the OnlyOffice service specification set. These specs describe the required decorator runtime boundary for the workspace Office session, editor proxy, loopback storage, and delegated Confidential persistence flow.
+This page indexes the OnlyOffice service specification set. These specs describe the runtime-v5 split control/editor targets, signed document lifecycle, loopback storage, and delegated Confidential persistence flow.
 
 ## Specification Set
 

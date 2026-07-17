@@ -1,4 +1,4 @@
-import ffmpegImageToVideo from "./ffmpegImageToVideo.mjs";
+import ffmpegImageToVideo from "./ffmpegImageToVideo.js";
 
 export async function action(args = {}) {
   const { input, ...context } = args || {};

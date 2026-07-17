@@ -3,334 +3,186 @@ import test from 'node:test';
 
 import { createEditorProxy } from '../src/proxy/editor-proxy.mjs';
 
+const ACTIVE_EDITOR_URL = 'https://office.example/public-services/onlyoffice-editor/';
+
 function createResponse() {
   const chunks = [];
   const headers = {};
   return {
     statusCode: 200,
-    setHeader(name, value) {
-      headers[String(name).toLowerCase()] = value;
-    },
-    getHeader(name) {
-      return headers[String(name).toLowerCase()];
-    },
+    setHeader(name, value) { headers[String(name).toLowerCase()] = value; },
     end(chunk) {
-      if (chunk) {
-        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
-      }
+      if (chunk) chunks.push(Buffer.from(String(chunk)));
       this.finished = true;
     },
-    get bodyText() {
-      return Buffer.concat(chunks).toString('utf8');
-    }
+    get bodyText() { return Buffer.concat(chunks).toString('utf8'); },
   };
 }
 
-test('editor proxy allows api js and editor asset prefixes', async () => {
-  const forwarded = [];
-  const proxy = createEditorProxy({
-    targetBaseUrl: 'http://127.0.0.1:8080',
-    async forwardHttp(plan) {
-      forwarded.push(plan);
-      return {
-        statusCode: 200,
-        body: 'proxied'
-      };
-    }
-  });
-
-	  for (const pathname of [
-	    '/web-apps/apps/api/documents/api.js',
-	    '/web-apps/apps/documenteditor/main/index.html',
-	    '/9.3.1-432bda2685f348ede7efa2a35cafe793/web-apps/apps/documenteditor/main/index.html',
-	    '/document_editor_service_worker.js',
-	    '/9.3.1-1c82c0b-/document_editor_service_worker.js',
-	    '/9.3.1-1c7d/plugins.json',
-	    '/9.3.1-1c7d/themes.json',
-	    '/sdkjs/main.js',
-	    '/sdkjs-plugins/plugin.js',
-	    '/fonts/font.woff2',
-	    '/themes/theme.css',
-	    '/cache/files/report.docx'
-  ]) {
-    const res = createResponse();
-    await proxy.handle({
-      method: 'GET',
-      url: pathname,
-      headers: {
-        host: 'office.example'
-      }
-    }, res);
-    assert.equal(res.statusCode, 200);
-    assert.equal(res.bodyText, 'proxied');
-  }
-
-  assert.deepEqual(
-    forwarded.map((entry) => entry.targetUrl),
-	    [
-	      'http://127.0.0.1:8080/web-apps/apps/api/documents/api.js',
-	      'http://127.0.0.1:8080/web-apps/apps/documenteditor/main/index.html',
-	      'http://127.0.0.1:8080/9.3.1-432bda2685f348ede7efa2a35cafe793/web-apps/apps/documenteditor/main/index.html',
-	      'http://127.0.0.1:8080/document_editor_service_worker.js',
-	      'http://127.0.0.1:8080/document_editor_service_worker.js',
-	      'http://127.0.0.1:8080/9.3.1-1c7d/plugins.json',
-	      'http://127.0.0.1:8080/9.3.1-1c7d/themes.json',
-	      'http://127.0.0.1:8080/sdkjs/main.js',
-	      'http://127.0.0.1:8080/sdkjs-plugins/plugin.js',
-	      'http://127.0.0.1:8080/fonts/font.woff2',
-	      'http://127.0.0.1:8080/themes/theme.css',
-      'http://127.0.0.1:8080/cache/files/report.docx'
-    ]
-  );
-});
-
-test('editor proxy forwards websocket upgrades under /doc/', async () => {
-  const forwarded = [];
-  const proxy = createEditorProxy({
-    targetBaseUrl: 'http://127.0.0.1:8080',
-    async forwardUpgrade(plan) {
-      forwarded.push(plan);
-    }
-  });
-  const socket = {
-    destroyed: false,
-    destroy() {
-      this.destroyed = true;
-    }
-  };
-
-  await proxy.handleUpgrade({
-    method: 'GET',
-    url: '/doc/123/c',
-    headers: {
-      upgrade: 'websocket',
-      connection: 'Upgrade',
-      host: 'office.example'
-    }
-  }, socket, Buffer.alloc(0));
-
-  assert.equal(socket.destroyed, false);
-  assert.deepEqual(forwarded, [
-    {
-      kind: 'ws',
-      targetUrl: 'ws://127.0.0.1:8080/doc/123/c',
-      headers: {
-        connection: 'Upgrade',
-        host: 'office.example',
-        upgrade: 'websocket',
-        'x-forwarded-host': 'office.example',
-        'x-forwarded-proto': 'http'
-      }
-    }
-  ]);
-});
-
-test('editor proxy advertises the original host to the document server', async () => {
-  const forwarded = [];
-  const proxy = createEditorProxy({
+function createTestProxy(options = {}) {
+  return createEditorProxy({
     targetBaseUrl: 'http://127.0.0.1:80',
+    resolveEditorService: async () => ({ activeBrowserUrl: ACTIVE_EDITOR_URL }),
+    ...options,
+  });
+}
+
+test('editor transport exposes only the pinned asset and cache allowlist', async () => {
+  const forwarded = [];
+  const proxy = createTestProxy({
     async forwardHttp(plan) {
       forwarded.push(plan);
       return { statusCode: 200, body: 'proxied' };
     },
-    async forwardUpgrade(plan) {
-      forwarded.push(plan);
-    }
   });
 
-  const res = createResponse();
-  await proxy.handle({
-    method: 'GET',
-    url: '/web-apps/apps/api/documents/api.js',
-    headers: { host: '127.0.0.1:8082' }
-  }, res);
-
-  await proxy.handleUpgrade({
-    method: 'GET',
-    url: '/doc/123/c',
-    headers: {
-      upgrade: 'websocket',
-      connection: 'Upgrade',
-      host: '127.0.0.1:8082'
-    }
-  }, { destroy() {} }, Buffer.alloc(0));
-
-  assert.equal(forwarded.length, 2);
-  for (const plan of forwarded) {
-    assert.equal(plan.headers['x-forwarded-host'], '127.0.0.1:8082');
-    assert.equal(plan.headers['x-forwarded-proto'], 'http');
+  const allowed = [
+    '/web-apps/apps/api/documents/api.js',
+    '/web-apps/apps/documenteditor/main/index.html',
+    '/9.3.1-8d9a2cf/web-apps/apps/documenteditor/main/index.html',
+    '/document_editor_service_worker.js',
+    '/sdkjs/main.js',
+    '/sdkjs-plugins/plugin.js',
+    '/fonts/font.woff2',
+    '/themes/theme.css',
+    '/cache/files/report.docx',
+  ];
+  for (const url of allowed) {
+    const res = createResponse();
+    await proxy.handle({ method: 'GET', url, headers: { host: 'office.example' } }, res);
+    assert.equal(res.statusCode, 200, url);
+    assert.equal(res.bodyText, 'proxied', url);
   }
+  assert.equal(forwarded.length, allowed.length);
 });
 
-test('editor proxy preserves forwarded headers set by an outer proxy', async () => {
-  const forwarded = [];
-  const proxy = createEditorProxy({
-    targetBaseUrl: 'http://127.0.0.1:80',
-    async forwardUpgrade(plan) {
-      forwarded.push(plan);
-    }
+test('editor transport rejects control, malformed host, method, and bare cache paths before dialing', async () => {
+  let dialed = false;
+  const proxy = createTestProxy({
+    async forwardHttp() { dialed = true; },
   });
-
-  await proxy.handleUpgrade({
-    method: 'GET',
-    url: '/doc/123/c',
-    headers: {
-      upgrade: 'websocket',
-      connection: 'Upgrade',
-      host: 'office.axiologic.dev',
-      'x-forwarded-host': 'office.axiologic.dev',
-      'x-forwarded-proto': 'https'
-    }
-  }, { destroy() {} }, Buffer.alloc(0));
-
-  assert.deepEqual(forwarded.map((plan) => ({
-    host: plan.headers['x-forwarded-host'],
-    proto: plan.headers['x-forwarded-proto']
-  })), [
-    { host: 'office.axiologic.dev', proto: 'https' }
-  ]);
+  const requests = [
+    { method: 'GET', url: '/coauthoring/CommandService.ashx', headers: { host: 'office.example' } },
+    { method: 'GET', url: '/ConvertService.ashx', headers: { host: 'office.example' } },
+    { method: 'GET', url: '/internal/health', headers: { host: 'office.example' } },
+    { method: 'GET', url: '/healthcheck', headers: { host: 'office.example' } },
+    { method: 'GET', url: '/cache/files/', headers: { host: 'office.example' } },
+    { method: 'POST', url: '/web-apps/apps/api/documents/api.js', headers: { host: 'office.example' } },
+    { method: 'GET', url: '/web-apps/apps/api/documents/api.js', headers: { host: 'office.example.evil' } },
+  ];
+  for (const req of requests) {
+    const res = createResponse();
+    await proxy.handle(req, res);
+    assert.equal(res.statusCode, 404, `${req.method} ${req.url}`);
+  }
+  assert.equal(dialed, false);
 });
 
-test('editor proxy omits forwarded host when the request has no host header', async () => {
+test('editor transport strips browser credentials and installs canonical forwarding headers', async () => {
   const forwarded = [];
-  const proxy = createEditorProxy({
-    targetBaseUrl: 'http://127.0.0.1:80',
+  const proxy = createTestProxy({
     async forwardHttp(plan) {
       forwarded.push(plan);
-      return { statusCode: 200, body: 'proxied' };
-    }
+      return { statusCode: 200, body: 'ok' };
+    },
   });
-
   const res = createResponse();
   await proxy.handle({
     method: 'GET',
     url: '/web-apps/apps/api/documents/api.js',
-    headers: {}
+    headers: {
+      host: 'office.example',
+      authorization: 'Bearer browser',
+      cookie: 'session=browser',
+      forwarded: 'for=evil',
+      'x-forwarded-host': 'evil.example',
+      'x-forwarded-proto': 'http',
+      'x-ploinky-auth-info': 'identity',
+      'Ploinky-Agent-Assertion': 'private-router-assertion',
+    },
   }, res);
 
-  assert.equal(forwarded.length, 1);
-  assert.equal('x-forwarded-host' in forwarded[0].headers, false);
-  assert.equal(forwarded[0].headers['x-forwarded-proto'], 'http');
+  assert.deepEqual(forwarded[0].headers, {
+    'x-forwarded-host': 'office.example',
+    'x-forwarded-proto': 'https',
+  });
 });
 
-test('editor proxy blocks command service from the internet', async () => {
-  const proxy = createEditorProxy({
-    targetBaseUrl: 'http://127.0.0.1:8080',
-    async forwardHttp() {
-      throw new Error('blocked request should not be forwarded');
-    }
-  });
-  const res = createResponse();
-
-  await proxy.handle({
-    method: 'GET',
-    url: '/coauthoring/CommandService.ashx',
-    headers: {}
-  }, res);
-
-  assert.equal(res.statusCode, 404);
-});
-
-test('editor proxy blocks convert service from the internet', async () => {
-  const proxy = createEditorProxy({
-    targetBaseUrl: 'http://127.0.0.1:8080',
-    async forwardHttp() {
-      throw new Error('blocked request should not be forwarded');
-    }
+test('editor transport rejects non-serialized exact Origin values before dialing', async () => {
+  let dialed = false;
+  const proxy = createTestProxy({
+    async forwardHttp() { dialed = true; },
   });
 
-  for (const pathname of ['/ConvertService.ashx', '/converter']) {
-    const res = createResponse();
-    await proxy.handle({
-      method: 'GET',
-      url: pathname,
-      headers: {}
-    }, res);
-    assert.equal(res.statusCode, 404);
-  }
-});
-
-test('editor proxy blocks example welcome info internal and healthcheck endpoints', async () => {
-  const proxy = createEditorProxy({
-    targetBaseUrl: 'http://127.0.0.1:8080',
-    async forwardHttp() {
-      throw new Error('blocked request should not be forwarded');
-    }
-  });
-
-  for (const pathname of [
-    '/example/index.html',
-    '/welcome/index.html',
-    '/info/info.json',
-    '/internal/health',
-    '/9.3.1-432bda2685f348ede7efa2a35cafe793/internal/health',
-    '/healthcheck'
+  for (const origin of [
+    'https://office.example/',
+    'https://office.example/path',
+    'https://user:pass@office.example',
+    ' https://office.example',
+    'https://office.example ',
+    'https://office.example.evil',
   ]) {
     const res = createResponse();
     await proxy.handle({
       method: 'GET',
-      url: pathname,
-      headers: {}
+      url: '/web-apps/apps/api/documents/api.js',
+      headers: { host: 'office.example', origin },
     }, res);
-    assert.equal(res.statusCode, 404);
+    assert.equal(res.statusCode, 404, origin);
   }
+  assert.equal(dialed, false);
 });
 
-test('editor proxy serves a cache file but blocks a bare cache directory request', async () => {
+test('editor websocket requires exact current host and Origin', async () => {
   const forwarded = [];
-  const proxy = createEditorProxy({
-    targetBaseUrl: 'http://127.0.0.1:8080',
-    async forwardHttp(plan) { forwarded.push(plan); return { statusCode: 200, body: 'ok' }; },
+  const proxy = createTestProxy({
+    async forwardUpgrade(plan) { forwarded.push(plan); },
   });
+  const accepted = { destroyed: false, destroy() { this.destroyed = true; } };
+  await proxy.handleUpgrade({
+    method: 'GET',
+    url: '/doc/123/c',
+    headers: {
+      host: 'office.example',
+      origin: 'https://office.example',
+      connection: 'Upgrade',
+      upgrade: 'websocket',
+      'Ploinky-Agent-Assertion': 'private-router-assertion',
+    },
+  }, accepted, Buffer.alloc(0));
+  assert.equal(accepted.destroyed, false);
+  assert.equal(forwarded.length, 1);
+  assert.equal(forwarded[0].targetUrl, 'ws://127.0.0.1/doc/123/c');
+  assert.equal(forwarded[0].headers['x-forwarded-proto'], 'https');
+  assert.equal(forwarded[0].headers['Ploinky-Agent-Assertion'], undefined);
 
-  const okRes = createResponse();
-  await proxy.handle({ method: 'GET', url: '/cache/files/doc123/output.png', headers: { host: 'o' } }, okRes);
-  assert.equal(okRes.statusCode, 200);
-
-  for (const url of ['/cache/files/', '/cache/files']) {
-    const res = createResponse();
-    await proxy.handle({ method: 'GET', url, headers: { host: 'o' } }, res);
-    assert.equal(res.statusCode, 404);
+  for (const headers of [
+    { host: 'office.example', upgrade: 'websocket' },
+    { host: 'office.example', origin: 'https://evil.example', upgrade: 'websocket' },
+    { host: 'office.example', origin: 'https://office.example/', upgrade: 'websocket' },
+    { host: 'office.example', origin: 'https://office.example/path', upgrade: 'websocket' },
+    { host: 'office.example', origin: 'https://user:pass@office.example', upgrade: 'websocket' },
+    { host: 'office.example', origin: ' https://office.example', upgrade: 'websocket' },
+    { host: 'office.example.evil', origin: 'https://office.example', upgrade: 'websocket' },
+  ]) {
+    const rejected = { destroyed: false, destroy() { this.destroyed = true; } };
+    await proxy.handleUpgrade({ method: 'GET', url: '/doc/123/c', headers }, rejected, Buffer.alloc(0));
+    assert.equal(rejected.destroyed, true);
   }
+  assert.equal(forwarded.length, 1);
 });
 
-test('editor proxy does not forward cookies authorization or ploinky identity headers', async () => {
-  const forwarded = [];
+test('invalid or stale topology prevents an upstream connection', async () => {
+  let dialed = false;
   const proxy = createEditorProxy({
-    targetBaseUrl: 'http://127.0.0.1:8080',
-    async forwardHttp(plan) {
-      forwarded.push(plan);
-      return {
-        statusCode: 200,
-        body: 'proxied'
-      };
-    }
+    targetBaseUrl: 'http://127.0.0.1:80',
+    resolveEditorService: async () => { throw new Error('generation inactive'); },
+    async forwardHttp() { dialed = true; },
   });
   const res = createResponse();
-
-  await proxy.handle({
-    method: 'GET',
-    url: '/web-apps/apps/api/documents/api.js',
-      headers: {
-        host: 'office.example',
-        'x-ploinky-auth-info': 'forged',
-        'x-ploinky-user-delegation': 'forged-grant',
-        'x-ploinky-random': 'drop-me',
-        cookie: 'editor=1',
-        authorization: 'Bearer browser-token'
-      }
-  }, res);
-
-  assert.equal(res.statusCode, 200);
-  assert.deepEqual(forwarded, [
-    {
-      kind: 'http',
-      targetUrl: 'http://127.0.0.1:8080/web-apps/apps/api/documents/api.js',
-      headers: {
-        host: 'office.example',
-        'x-forwarded-host': 'office.example',
-        'x-forwarded-proto': 'http'
-      }
-    }
-  ]);
+  await assert.rejects(
+    proxy.handle({ method: 'GET', url: '/web-apps/apps/api/documents/api.js', headers: { host: 'office.example' } }, res),
+    /generation inactive/,
+  );
+  assert.equal(dialed, false);
 });

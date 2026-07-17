@@ -97,35 +97,35 @@ test('buildAgentSettingsItems maps Soul Gateway from runtime plugin key and pres
     assert.equal(soulGateway.sourcePlugin.key, 'soul-gateway/soul-gateway');
 });
 
-test('buildAgentSettingsItems maps Web Publishing settings from the basic repo plugin', () => {
+test('buildAgentSettingsItems maps a neutral settings plugin fixture', () => {
     const items = buildAgentSettingsItems([
         {
-            key: 'web-publishing-settings',
-            label: 'Web Publishing',
-            ownerAgent: 'web-publishing',
-            pluginKey: 'web-publishing/web-publishing-settings',
+            key: 'analytics-settings',
+            label: 'Analytics',
+            ownerAgent: 'analytics',
+            pluginKey: 'analytics/analytics-settings',
             scope: 'workspace',
-            settingsComponent: 'web-publishing-settings',
+            settingsComponent: 'analytics-settings',
             adminOnly: true
         }
     ], [
         {
-            key: 'web-publishing/web-publishing-settings',
-            agent: 'web-publishing',
-            component: 'web-publishing-settings',
-            pluginId: 'web-publishing',
-            settingsComponent: 'web-publishing-settings',
+            key: 'analytics/analytics-settings',
+            agent: 'analytics',
+            component: 'analytics-settings',
+            pluginId: 'analytics',
+            settingsComponent: 'analytics-settings',
             adminOnly: true,
-            assetRootPath: '.ploinky/repos/basic/web-publishing/IDE-plugins/web-publishing-settings'
+            assetRootPath: '.ploinky/repos/example/analytics/IDE-plugins/analytics-settings'
         }
     ]);
-    const webPublishing = items.find((item) => item.key === 'web-publishing-settings');
+    const analytics = items.find((item) => item.key === 'analytics-settings');
 
-    assert.ok(webPublishing);
-    assert.equal(webPublishing.available, true);
-    assert.equal(webPublishing.settingsComponent, 'web-publishing-settings');
-    assert.equal(webPublishing.sourcePlugin.key, 'web-publishing/web-publishing-settings');
-    assert.equal(webPublishing.assetRootPath, '.ploinky/repos/basic/web-publishing/IDE-plugins/web-publishing-settings');
+    assert.ok(analytics);
+    assert.equal(analytics.available, true);
+    assert.equal(analytics.settingsComponent, 'analytics-settings');
+    assert.equal(analytics.sourcePlugin.key, 'analytics/analytics-settings');
+    assert.equal(analytics.assetRootPath, '.ploinky/repos/example/analytics/IDE-plugins/analytics-settings');
 });
 
 test('buildAgentSettingsItems marks missing source plugin unavailable', () => {

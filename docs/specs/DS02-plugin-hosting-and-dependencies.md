@@ -77,7 +77,7 @@ Each owning agent is responsible for:
 
 Explorer must discover plugins across these agent-owned roots. The hosting contract is centralized in Explorer, but the plugin source code is intentionally split by ownership instead of forced into a single `explorer/IDE-plugins` directory.
 
-When Explorer runs inside Ploinky box, its manifest must mount the workspace `.ploinky/repos` tree at `/workspace/.ploinky/repos` so the plugin discovery pipeline can see enabled sibling repositories such as `basic`. This mount is read as workspace-owned runtime configuration; it lets agent-owned settings dashboards be discovered without copying their files into `explorer`. In deployment profiles, that includes the admin-only `basic/web-publishing` settings surface.
+When Explorer runs inside Ploinky box, its manifest must mount the workspace `.ploinky/repos` tree at `/workspace/.ploinky/repos` so the plugin discovery pipeline can see enabled sibling repositories such as `basic`. This mount is read as workspace-owned runtime configuration; it lets agent-owned settings dashboards be discovered without copying their files into `explorer`. Edge publication is box-owned and is not represented by an Explorer plugin.
 
 ### Plugin Inventory
 
@@ -270,8 +270,8 @@ Plugin hosting behavior is primarily driven by:
 
 - Explorer `manifest.json` application plugin policy
 - enabled agents and repo-local agent/plugin folders in the workspace
-- default-profile `manifest.profiles.default.enable[]` entries, such as the
-  `basic/web-publishing` dependency and settings surface
+- default-profile `manifest.profiles.default.enable[]` entries for product
+  dependencies only
 - the manifest volume that makes `.ploinky/repos` visible to the Explorer container
 - runtime plugin settings and activation state
 - slot ordering rules applied by the host shell

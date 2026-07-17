@@ -1,4 +1,6 @@
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 
 function asDate(value) {
   return value instanceof Date ? new Date(value.getTime()) : new Date(value || Date.now());
@@ -14,6 +16,15 @@ function minDate(left, right) {
 
 function hashToken(token) {
   return crypto.createHash('sha256').update(String(token || ''), 'utf8').digest('base64url');
+}
+
+function mintDocumentKey(sessions) {
+  const existing = new Set(Array.from(sessions.values(), (record) => record.documentKey));
+  let documentKey;
+  do {
+    documentKey = crypto.randomBytes(16).toString('hex');
+  } while (existing.has(documentKey));
+  return documentKey;
 }
 
 function cloneRoles(input) {
@@ -64,12 +75,27 @@ function sanitizeStoredSession(record) {
     canWrite: Boolean(record.canWrite),
     canComment: Boolean(record.canComment),
     versionKey: record.versionKey,
+    documentKey: record.documentKey,
     preview: clonePreview(record.preview),
     authUser: cloneAuthUser(record.authUser),
     delegations: cloneDelegations(record.delegations),
     createdAt: record.createdAt,
     idleExpiresAt: record.idleExpiresAt,
     absoluteExpiresAt: record.absoluteExpiresAt,
+    callbackAcknowledgement: record.callbackAcknowledgement || null,
+  };
+}
+
+function recordForPersistence(record) {
+  const hadDelegation = Boolean(record.requiresReauthorization)
+    || Object.keys(cloneDelegations(record.delegations)).length > 0;
+  return {
+    ...record,
+    // Delegation bearers are generation-scoped capabilities, not durable
+    // session metadata. A DPU-backed editor must obtain fresh authenticated
+    // control material after recreate.
+    delegations: {},
+    requiresReauthorization: hadDelegation,
   };
 }
 
@@ -86,11 +112,13 @@ function publicSummaryFromRecord(record, token = '') {
     canWrite: Boolean(record.canWrite),
     canComment: Boolean(record.canComment),
     versionKey: record.versionKey,
+    documentKey: record.documentKey,
     preview: clonePreview(record.preview),
     authUser: cloneAuthUser(record.authUser),
     createdAt: record.createdAt,
     idleExpiresAt: record.idleExpiresAt,
     absoluteExpiresAt: record.absoluteExpiresAt,
+    callbackAcknowledgement: record.callbackAcknowledgement || null,
     publicSummary() {
       return {
         requestedPath: record.requestedPath,
@@ -103,11 +131,13 @@ function publicSummaryFromRecord(record, token = '') {
         canWrite: Boolean(record.canWrite),
         canComment: Boolean(record.canComment),
         versionKey: record.versionKey,
+        documentKey: record.documentKey,
         preview: clonePreview(record.preview),
         authUser: cloneAuthUser(record.authUser),
         createdAt: record.createdAt,
         idleExpiresAt: record.idleExpiresAt,
         absoluteExpiresAt: record.absoluteExpiresAt,
+        callbackAcknowledgement: record.callbackAcknowledgement || null,
       };
     },
   };
@@ -126,8 +156,216 @@ function clonePreview(preview = null) {
   };
 }
 
-export function createSessionStore({ now = () => new Date(), idleTtlMs = 30 * 60 * 1000, absoluteTtlMs = 8 * 60 * 60 * 1000 } = {}) {
+function stateError(message = 'OnlyOffice v5 session state is corrupt.') {
+  return new Error(message);
+}
+
+function lstatOrNull(file) {
+  try {
+    return fs.lstatSync(file);
+  } catch (error) {
+    if (error?.code === 'ENOENT') return null;
+    throw error;
+  }
+}
+
+function ensurePrivateStateDirectory(directory) {
+  if (!path.isAbsolute(directory)) {
+    throw stateError('OnlyOffice v5 session state path must be absolute.');
+  }
+
+  const missing = [];
+  let cursor = directory;
+  while (cursor !== path.parse(cursor).root) {
+    const stat = lstatOrNull(cursor);
+    if (stat) {
+      if (stat.isSymbolicLink() || !stat.isDirectory()) {
+        throw stateError(`OnlyOffice v5 session state directory is unsafe: ${cursor}`);
+      }
+    } else {
+      missing.push(cursor);
+    }
+    cursor = path.dirname(cursor);
+  }
+
+  for (const item of missing.reverse()) {
+    fs.mkdirSync(item, { mode: 0o700 });
+    const stat = fs.lstatSync(item);
+    if (stat.isSymbolicLink() || !stat.isDirectory()) {
+      throw stateError(`OnlyOffice v5 session state directory is unsafe: ${item}`);
+    }
+  }
+
+  const parent = fs.lstatSync(directory);
+  if (parent.isSymbolicLink() || !parent.isDirectory() || (parent.mode & 0o077) !== 0) {
+    throw stateError(`OnlyOffice v5 session state directory must be a private regular directory: ${directory}`);
+  }
+}
+
+function assertRegularPrivateStateFile(stat) {
+  if (!stat.isFile() || stat.isSymbolicLink()) {
+    throw stateError('OnlyOffice v5 session state must be a regular file, not a link or device.');
+  }
+  if ((stat.mode & 0o077) !== 0) {
+    throw stateError('OnlyOffice v5 session state permissions must be 0600.');
+  }
+  if (typeof process.getuid === 'function' && stat.uid !== process.getuid()) {
+    throw stateError('OnlyOffice v5 session state has an unexpected owner.');
+  }
+}
+
+function parseIsoDate(value, field) {
+  if (typeof value !== 'string') throw stateError(`OnlyOffice v5 session ${field} is corrupt.`);
+  const parsed = new Date(value);
+  if (!Number.isFinite(parsed.getTime()) || parsed.toISOString() !== value) {
+    throw stateError(`OnlyOffice v5 session ${field} is corrupt.`);
+  }
+  return parsed;
+}
+
+function validateStoredRecord(record) {
+  if (!record || typeof record !== 'object' || Array.isArray(record)) {
+    throw stateError();
+  }
+  if (!/^[A-Za-z0-9_-]{43}$/.test(String(record.tokenHash || ''))) {
+    throw stateError('OnlyOffice v5 session token hash is corrupt.');
+  }
+  for (const field of [
+    'requestedPath', 'path', 'storageKind', 'storageId', 'objectId',
+    'fileName', 'mimeType', 'versionKey',
+  ]) {
+    if (typeof record[field] !== 'string') throw stateError(`OnlyOffice v5 session ${field} is corrupt.`);
+  }
+  if (!/^[0-9a-f]{32}$/.test(String(record.documentKey || ''))) {
+    throw stateError('OnlyOffice v5 session documentKey is corrupt; recreate the agent state explicitly.');
+  }
+  for (const field of ['canWrite', 'canComment']) {
+    if (typeof record[field] !== 'boolean') throw stateError(`OnlyOffice v5 session ${field} is corrupt.`);
+  }
+  const createdAt = parseIsoDate(record.createdAt, 'createdAt');
+  const idleExpiresAt = parseIsoDate(record.idleExpiresAt, 'idleExpiresAt');
+  const absoluteExpiresAt = parseIsoDate(record.absoluteExpiresAt, 'absoluteExpiresAt');
+  if (createdAt > idleExpiresAt || idleExpiresAt > absoluteExpiresAt) {
+    throw stateError('OnlyOffice v5 session expiry ordering is corrupt.');
+  }
+  if (!record.authUser || typeof record.authUser !== 'object' || Array.isArray(record.authUser)) {
+    throw stateError('OnlyOffice v5 session authUser is corrupt.');
+  }
+  if (!Array.isArray(record.authUser.roles) || record.authUser.roles.some((role) => typeof role !== 'string')) {
+    throw stateError('OnlyOffice v5 session roles are corrupt.');
+  }
+  if (!record.delegations || typeof record.delegations !== 'object' || Array.isArray(record.delegations)) {
+    throw stateError('OnlyOffice v5 session delegations are corrupt.');
+  }
+  if (Object.keys(record.delegations).length !== 0 || typeof record.requiresReauthorization !== 'boolean') {
+    throw stateError('OnlyOffice v5 persisted session contains forbidden delegation material.');
+  }
+  if (record.callbackAcknowledgement !== null) {
+    const acknowledgement = record.callbackAcknowledgement;
+    if (!acknowledgement || typeof acknowledgement !== 'object'
+      || !Number.isFinite(acknowledgement.status)
+      || typeof acknowledgement.version !== 'string') {
+      throw stateError('OnlyOffice v5 callback acknowledgement is corrupt.');
+    }
+    parseIsoDate(acknowledgement.acknowledgedAt, 'callback acknowledgement timestamp');
+  }
+  return record;
+}
+
+function readStateFile(stateFile) {
+  const pathStat = fs.lstatSync(stateFile);
+  assertRegularPrivateStateFile(pathStat);
+  const noFollow = fs.constants.O_NOFOLLOW || 0;
+  const descriptor = fs.openSync(stateFile, fs.constants.O_RDONLY | noFollow);
+  try {
+    assertRegularPrivateStateFile(fs.fstatSync(descriptor));
+    return fs.readFileSync(descriptor, 'utf8');
+  } finally {
+    fs.closeSync(descriptor);
+  }
+}
+
+export function createSessionStore({
+  now = () => new Date(),
+  idleTtlMs = 30 * 60 * 1000,
+  absoluteTtlMs = 8 * 60 * 60 * 1000,
+  stateFile = '',
+} = {}) {
   const sessions = new Map();
+
+  function persist() {
+    if (!stateFile) return;
+    const directory = path.dirname(stateFile);
+    ensurePrivateStateDirectory(directory);
+    const temporary = path.join(
+      directory,
+      `.${path.basename(stateFile)}.tmp-${process.pid}-${crypto.randomUUID()}`,
+    );
+    const bytes = `${JSON.stringify({
+      schemaVersion: 5,
+      sessions: Array.from(sessions.values(), recordForPersistence),
+    })}\n`;
+    let descriptor;
+    try {
+      descriptor = fs.openSync(
+        temporary,
+        fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | (fs.constants.O_NOFOLLOW || 0),
+        0o600,
+      );
+      fs.writeFileSync(descriptor, bytes, 'utf8');
+      fs.fchmodSync(descriptor, 0o600);
+      fs.fsyncSync(descriptor);
+      fs.closeSync(descriptor);
+      descriptor = undefined;
+      assertRegularPrivateStateFile(fs.lstatSync(temporary));
+      fs.renameSync(temporary, stateFile);
+      const directoryDescriptor = fs.openSync(directory, fs.constants.O_RDONLY);
+      try {
+        fs.fsyncSync(directoryDescriptor);
+      } finally {
+        fs.closeSync(directoryDescriptor);
+      }
+    } catch (error) {
+      if (descriptor !== undefined) fs.closeSync(descriptor);
+      try {
+        fs.unlinkSync(temporary);
+      } catch (unlinkError) {
+        if (unlinkError?.code !== 'ENOENT') throw unlinkError;
+      }
+      throw error;
+    }
+  }
+
+  if (stateFile) {
+    if (!path.isAbsolute(stateFile)) {
+      throw stateError('OnlyOffice v5 session state path must be absolute.');
+    }
+    const stateStat = lstatOrNull(stateFile);
+    if (stateStat) {
+      let parsed;
+      try {
+        parsed = JSON.parse(readStateFile(stateFile));
+      } catch (error) {
+        if (String(error?.message || '').startsWith('OnlyOffice v5')) throw error;
+        throw stateError();
+      }
+      if (parsed?.schemaVersion !== 5 || !Array.isArray(parsed?.sessions)) {
+        throw new Error('OnlyOffice session state is not runtime contract v5. Recreate the agent state explicitly.');
+      }
+      const documentKeys = new Set();
+      for (const record of parsed.sessions) {
+        validateStoredRecord(record);
+        if (sessions.has(record.tokenHash)) {
+          throw stateError('OnlyOffice v5 session state contains a duplicate token hash.');
+        }
+        if (documentKeys.has(record.documentKey)) {
+          throw stateError('OnlyOffice v5 session state contains a duplicate documentKey.');
+        }
+        documentKeys.add(record.documentKey);
+        sessions.set(String(record.tokenHash), record);
+      }
+    }
+  }
 
   function resolveNow(value) {
     return asDate(value || now());
@@ -144,11 +382,16 @@ export function createSessionStore({ now = () => new Date(), idleTtlMs = 30 * 60
     }
     if (at.getTime() >= asDate(record.absoluteExpiresAt).getTime()) {
       sessions.delete(record.tokenHash);
+      persist();
       throw new Error('Unknown or expired OnlyOffice session token.');
     }
     if (at.getTime() >= asDate(record.idleExpiresAt).getTime()) {
       sessions.delete(record.tokenHash);
+      persist();
       throw new Error('Unknown or expired OnlyOffice session token.');
+    }
+    if (record.requiresReauthorization) {
+      throw new Error('OnlyOffice session requires fresh authenticated control material after recreate.');
     }
     return at;
   }
@@ -174,14 +417,18 @@ export function createSessionStore({ now = () => new Date(), idleTtlMs = 30 * 60
         canWrite: Boolean(input.canWrite),
         canComment: Boolean(input.canComment),
         versionKey: String(input.versionKey || '').trim(),
+        documentKey: mintDocumentKey(sessions),
         preview: clonePreview(input.preview),
         authUser: cloneAuthUser(input.authUser),
         delegations: cloneDelegations(input.delegations),
         createdAt: createdAt.toISOString(),
         idleExpiresAt: idleExpiresAt.toISOString(),
         absoluteExpiresAt: absoluteExpiresAt.toISOString(),
+        callbackAcknowledgement: null,
+        requiresReauthorization: false,
       };
       sessions.set(tokenHash, record);
+      persist();
       return publicSummaryFromRecord(record, token);
     },
 
@@ -194,6 +441,7 @@ export function createSessionStore({ now = () => new Date(), idleTtlMs = 30 * 60
       );
       record.idleExpiresAt = nextIdleExpiry.toISOString();
       sessions.set(record.tokenHash, record);
+      persist();
       return publicSummaryFromRecord(record);
     },
 
@@ -206,7 +454,36 @@ export function createSessionStore({ now = () => new Date(), idleTtlMs = 30 * 60
       );
       record.idleExpiresAt = nextIdleExpiry.toISOString();
       sessions.set(record.tokenHash, record);
+      persist();
       return sanitizeStoredSession(record);
+    },
+
+    acknowledgeCallback(token, acknowledgement = {}) {
+      const record = readRecordByToken(token);
+      assertActive(record);
+      record.callbackAcknowledgement = {
+        status: Number(acknowledgement.status || 0),
+        version: String(acknowledgement.version || '').trim(),
+        acknowledgedAt: toIso(acknowledgement.acknowledgedAt || now()),
+      };
+      sessions.set(record.tokenHash, record);
+      persist();
+      return { ...record.callbackAcknowledgement };
+    },
+
+    listActiveSessions({ now: valueNow } = {}) {
+      const at = resolveNow(valueNow);
+      const active = [];
+      for (const record of sessions.values()) {
+        if (
+          at.getTime() < asDate(record.absoluteExpiresAt).getTime()
+          && at.getTime() < asDate(record.idleExpiresAt).getTime()
+          && !record.requiresReauthorization
+        ) {
+          active.push(publicSummaryFromRecord(record));
+        }
+      }
+      return active;
     },
   };
 }
