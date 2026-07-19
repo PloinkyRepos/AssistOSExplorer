@@ -8,7 +8,9 @@ summary: Captures Explorer's runtime-v5 routing, topology, authorization, public
 
 # DS06 - Ploinky Runtime Invariants
 
-## Runtime boundary
+## Core Content
+
+### Runtime boundary
 
 Explorer and every enabled dependency run behind Ploinky Router. The outer box
 has one loopback TCP publication for Router and one wildcard UDP publication
@@ -21,23 +23,36 @@ current-instance/current-enable-generation caller ACL. Method, path, audience,
 body digest, nonce, expiry, and replay state are bound by the assertion. An
 assertion is never a user or administrator credential.
 
-On the currently observed rootless Podman topology,
+The private Router listener gate has three exact states:
+
+- `required-loopback`: `127.0.0.1:8081` is required whenever RoutingServer is
+  ready.
+- `required-assigned-managed-gateway`: a current managed bridge IPAM gateway is
+  eligible only when current Podman inspection and kernel address inventory
+  prove that it is assigned to the exact reported `network_interface`; every
+  eligible gateway requires exactly one private listener.
+- `inactive-unassigned-managed-gateway`: a gateway absent from that exact
+  interface is inactive and must have no listener. The inactive state remains
+  fail-closed and is not evidence of managed-bridge activation or reachability.
+
+Missing or stale address evidence, assignment on another interface, a missing
+eligible listener, an extra listener, a wildcard, or an unrelated bind fails
+closed. On the currently observed rootless Podman topology,
 `host.containers.internal:host-gateway` terminates on the box outer-facing
 interface rather than loopback or an address assigned to a managed inner
 bridge. Binding private `8081` there would violate the approved interface
-boundary, while binding the inner bridge IPAM gateway is not possible because
-that address is not assigned in the outer namespace. Managed-bridge private
-service activation therefore remains inactive and fail-closed. Explorer must
-not add a wider bind, forwarding sidecar, direct-target fallback, or alternate
-authorization path; Ploinky DS004 Question #8 owns the unresolved architecture
-decision.
+boundary, while the managed bridge gateway is unassigned in the outer
+namespace. Managed-bridge private service activation therefore remains
+inactive and fail-closed. Explorer must not add a wider bind, forwarding
+sidecar, direct-target fallback, or alternate authorization path; Ploinky DS004
+Question #8 owns the unresolved architecture decision.
 
 HTTP, SSE, and WebSocket requests use the same immutable route-and-policy
 generation. Host/interface class is resolved before pathname dispatch. Unknown,
 stale, malformed, suffix-confusable, unauthorized, or generation-drifted
 requests fail before any upstream connection is created.
 
-## Topology
+### Topology
 
 Ploinky atomically mounts schema-v2 topology before consumers start and injects
 `PLOINKY_EDGE_TOPOLOGY_FILE`, `PLOINKY_ROUTER_URL`, and
@@ -52,7 +67,7 @@ inactive selector, stale generation, missing locator, or publication error
 fails closed; consumers do not synthesize hostnames or fall back to startup
 environment.
 
-## Agent contracts
+### Agent contracts
 
 - Manifests use slim `httpServices`; an optional service `port` selects a
   distinct private TCP target.
@@ -66,7 +81,7 @@ environment.
 - Default bridge launch uses the single managed host-gateway mapping. Host mode
   is a capability for a precise generation, never authorization by localhost.
 
-## Identity and secrets
+### Identity and secrets
 
 Executable MCP operations require Router-minted request JWTs. Agents receive
 only their own Ploinky identity material and scoped generated/shared-generated
@@ -84,7 +99,7 @@ post-scans every textual archive member for credential-shaped residue before an
 artifact is attached. Detailed health is supervisor-only on an unmounted Unix
 socket.
 
-## Hard cut
+### Hard cut
 
 Runtime contract v5 accepts no previous runtime state. Operators must revoke
 obsolete connector credentials, delete obsolete plaintext state, and recreate
@@ -95,12 +110,23 @@ Explorer deployment automation must use box-owned publication and topology.
 Agent-owned edge publication is not part of the dependency graph, plugin set,
 workflow, or configuration surface.
 
-## Verification
+### Verification
 
 Changes affecting this contract require unit and integration tests plus the
-real-engine exact-publication smoke. WebMeet release additionally requires the
-two-account bidirectional ScreenShare gate, direct UDP on native Linux x64 and
-arm64, and external relay UDP and TLS lanes.
+real-engine exact-publication smoke. After the Ploinky full graph and listener
+gate succeed, the release harness must keep that graph alive and run this fixed
+Chromium Router/auth baseline before cleanup or graph destruction, without a
+retry or skip:
+
+```bash
+cd /Users/danielsava/work/file-parser/AssistOSExplorer/tests/smoke
+SMOKE_BASE_URL=http://127.0.0.1:18080 npm test -- --project=chromium specs/00-router-auth.spec.mjs
+```
+
+The baseline proves the dashboard, Explorer shell, and routed WebChat shell
+through Router. It is distinct from the WebMeet two-account bidirectional
+ScreenShare gate and the WebMeet external-network direct UDP, relay UDP, and
+relay TLS lanes on native Linux x64 and arm64; none substitutes for another.
 
 ## Decisions & Questions
 
@@ -113,3 +139,12 @@ interface. The observed rootless host-gateway mapping does not provide such an
 address. Marking the slice partial preserves the fail-closed implementation
 evidence and prevents documentation from silently treating a wider listener or
 forwarder as an accepted substitute.
+
+### Question #2: Why is the fixed Chromium baseline separate from the WebMeet gates?
+
+Response:
+The fixed baseline is the release oracle for Router authentication and the
+three primary routed browser shells while the full graph is alive. WebMeet
+screen sharing and external-network transport prove different media and
+network properties, so passing either WebMeet lane cannot replace a failure of
+the Router/auth oracle.

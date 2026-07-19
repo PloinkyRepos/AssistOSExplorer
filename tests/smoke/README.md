@@ -29,6 +29,29 @@ Artifacts are written outside tracked source by default:
 
 Playwright traces, screenshots, videos, and JSON reports stay under `tests/smoke/test-results/` and `tests/smoke/playwright-report/`.
 
+## Fixed Router/Auth Release Baseline
+
+The Ploinky release harness runs this exact Chromium baseline after the full
+graph and topology-aware listener gate succeed. The harness keeps the graph
+alive while it runs and executes it before cleanup or graph destruction, with
+no retry, skip, or weakened assertion:
+
+```bash
+cd /Users/danielsava/work/file-parser/AssistOSExplorer/tests/smoke
+SMOKE_BASE_URL=http://127.0.0.1:18080 npm test -- --project=chromium specs/00-router-auth.spec.mjs
+```
+
+It proves the dashboard, Explorer shell, and routed WebChat shell through
+Router. It is not the separate WebMeet external-network or two-account
+ScreenShare gate, and none of those gates substitutes for another.
+
+The listener gate always requires `required-loopback`, requires exactly one
+listener for each eligible `required-assigned-managed-gateway`, and requires no
+listener for an `inactive-unassigned-managed-gateway`. The inactive state
+remains fail-closed and does not prove managed-bridge activation or
+reachability. Missing or stale assignment evidence, cross-interface assignment,
+a missing or extra listener, a wildcard, or an unrelated bind fails closed.
+
 ## Coverage
 
 Default smoke checks:

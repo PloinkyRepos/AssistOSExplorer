@@ -15,8 +15,30 @@ test resources and credentials are supplied.
 5. Recreate the box explicitly under runtime contract v5.
 6. Inspect the real outer container and prove its normalized bindings are
    exactly loopback Router TCP and wildcard LiveKit UDP `7882`.
-7. Start the full Explorer graph and validate in-box listener ownership.
-8. Run the real-browser OnlyOffice, Umami, GPTResearcher, and WebMeet gates.
+7. Start the full Explorer graph and validate the topology-aware in-box
+   listener gate. Loopback is `required-loopback`; a managed gateway is
+   `required-assigned-managed-gateway` only when current Podman and kernel
+   evidence prove assignment to the exact reported `network_interface`; an
+   unassigned gateway is `inactive-unassigned-managed-gateway`, has no
+   listener, and remains inactive and fail-closed.
+8. While the graph remains alive, run the fixed Chromium Router/auth baseline
+   below with no retry or skip.
+9. Revalidate outer publication and listener ownership.
+10. Run the real-browser OnlyOffice, Umami, GPTResearcher, and WebMeet gates.
+11. Clean up and destroy the graph only after all graph-dependent gates finish.
+
+The Ploinky release harness runs this exact baseline after the full graph and
+listener gate succeed and before cleanup or graph destruction:
+
+```bash
+cd /Users/danielsava/work/file-parser/AssistOSExplorer/tests/smoke
+SMOKE_BASE_URL=http://127.0.0.1:18080 npm test -- --project=chromium specs/00-router-auth.spec.mjs
+```
+
+It proves the dashboard, Explorer shell, and routed WebChat shell through
+Router. This oracle is distinct from the WebMeet external-network and
+ScreenShare gates below; none substitutes for another. A missing or failing
+baseline is a release failure and must not be retried, skipped, or weakened.
 
 The WebMeet screen gate is:
 
@@ -40,3 +62,7 @@ matrix, which also rejects `7881` and private/discovered alternatives.
 Cloudflare, external relay, cross-network, native x64, and native arm64 gates
 must use dedicated test resources. A missing prerequisite is reported as
 BLOCKED with the reproducible command; it is never treated as a pass.
+
+An inactive managed gateway does not authorize a wider bind, forwarder, direct
+target, or alternate authorization path. Ploinky DS004 Question #8 remains the
+owner of any architecture change needed to activate that lane.
