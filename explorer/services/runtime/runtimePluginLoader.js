@@ -171,20 +171,34 @@ export function createRuntimePluginLoader({
             return null;
         }
 
-        if (meta.isDependency && isNonEmptyString(meta.ownerComponent)) {
-            const relatedEntries = Array.from(scheduled.values()).filter((entry) => (
-                entry.agent === meta.agent
-                && (
-                    entry.componentName === requestedComponentName
-                    || entry.componentName === meta.ownerComponent
-                    || entry.ownerComponent === meta.ownerComponent
-                )
-            ));
-            await Promise.all(relatedEntries.map((entry) => componentRegistry.loadComponent(entry)));
-            return componentRegistry.getCachedComponent(meta) || componentRegistry.loadComponent(meta);
+        const dependencyKeys = new Set();
+        if (!meta.isDependency) {
+            forEachRuntimePluginEntry(plugins, (plugin) => {
+                if (
+                    plugin?.component !== requestedComponentName
+                    || plugin?.agent !== meta.agent
+                    || !Array.isArray(plugin.dependencies)
+                ) {
+                    return;
+                }
+                for (const dependency of plugin.dependencies) {
+                    const dependencyName = dependency?.component || dependency?.name;
+                    const dependencyAgent = dependency?.agent || plugin.agent;
+                    if (isNonEmptyString(dependencyName) && isNonEmptyString(dependencyAgent)) {
+                        dependencyKeys.add(`${dependencyAgent.trim()}::${dependencyName.trim()}`);
+                    }
+                }
+            });
         }
 
-        return componentRegistry.loadComponent(meta);
+        const relatedEntries = [
+            meta,
+            ...Array.from(dependencyKeys)
+                .map((key) => scheduled.get(key))
+                .filter(Boolean)
+        ];
+        await Promise.all(relatedEntries.map((entry) => componentRegistry.loadComponent(entry)));
+        return componentRegistry.getCachedComponent(meta) || componentRegistry.loadComponent(meta);
     };
 
     const mergeIntoAssistOS = (assistOS, runtimePlugins) => {

@@ -26,6 +26,15 @@ export function buildToolDefinitions(zodToJsonSchema, schemas) {
     MergeMarkdownCrdtDocumentArgsSchema,
     SaveMarkdownCrdtDocumentArgsSchema,
     SyncMarkdownCrdtFromFileArgsSchema,
+    ScriptaCrdtOpenArgsSchema,
+    ScriptaCrdtEnsureFolderArgsSchema,
+    ScriptaCrdtWorkspaceListArgsSchema,
+    ScriptaCrdtCreateArgsSchema,
+    ScriptaCrdtMutateArgsSchema,
+    ScriptaCrdtDeleteArgsSchema,
+    ScriptaCollaborationOpenArgsSchema,
+    ScriptaCollaborationPullArgsSchema,
+    ScriptaCollaborationApplyArgsSchema,
     LlmAutocompleteArgsSchema,
     CollectIDEPluginsArgsSchema,
     GetPluginSettingsArgsSchema,
@@ -175,6 +184,51 @@ export function buildToolDefinitions(zodToJsonSchema, schemas) {
       name: 'sync_markdown_crdt_from_file',
       description: 'Synchronize an Automerge Markdown state from the current .md file contents.',
       inputSchema: zodToJsonSchema(SyncMarkdownCrdtFromFileArgsSchema)
+    },
+    {
+      name: 'scripta_crdt_ensure_folder',
+      description: 'Create a workspace-confined folder for SCRIPTA documents.',
+      inputSchema: zodToJsonSchema(ScriptaCrdtEnsureFolderArgsSchema)
+    },
+    {
+      name: 'scripta_crdt_workspace_list',
+      description: 'List workspace Markdown documents for the SCRIPTA picker.',
+      inputSchema: zodToJsonSchema(ScriptaCrdtWorkspaceListArgsSchema)
+    },
+    {
+      name: 'scripta_crdt_create',
+      description: 'Create and initialize a SCRIPTA Markdown document as an Automerge CRDT.',
+      inputSchema: zodToJsonSchema(ScriptaCrdtCreateArgsSchema)
+    },
+    {
+      name: 'scripta_crdt_open',
+      description: 'Open a workspace-confined SCRIPTA Markdown CRDT document.',
+      inputSchema: zodToJsonSchema(ScriptaCrdtOpenArgsSchema)
+    },
+    {
+      name: 'scripta_crdt_mutate',
+      description: 'Atomically mutate and save a SCRIPTA document through its Automerge state.',
+      inputSchema: zodToJsonSchema(ScriptaCrdtMutateArgsSchema)
+    },
+    {
+      name: 'scripta_crdt_delete',
+      description: 'Prepare, commit, or roll back an atomic SCRIPTA document deletion.',
+      inputSchema: zodToJsonSchema(ScriptaCrdtDeleteArgsSchema)
+    },
+    {
+      name: 'scripta_collaboration_open',
+      description: 'Open the public SCRIPTA Automerge replica without workspace metadata.',
+      inputSchema: zodToJsonSchema(ScriptaCollaborationOpenArgsSchema)
+    },
+    {
+      name: 'scripta_collaboration_pull',
+      description: 'Return public SCRIPTA Automerge changes after the supplied heads.',
+      inputSchema: zodToJsonSchema(ScriptaCollaborationPullArgsSchema)
+    },
+    {
+      name: 'scripta_collaboration_apply',
+      description: 'Validate, merge, and persist incremental public SCRIPTA Automerge changes.',
+      inputSchema: zodToJsonSchema(ScriptaCollaborationApplyArgsSchema)
     },
     {
       name: 'llm_autocomplete',

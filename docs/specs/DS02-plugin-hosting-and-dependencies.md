@@ -193,6 +193,8 @@ Plugins are expected to:
 - call their owning agent through MCP or domain-specific host bridges
 - emit host-facing events instead of mutating host state ad hoc
 
+When Explorer lazily registers a runtime plugin component, it must finish registering every dependency declared by that plugin before the component is mounted. Dependencies may belong to another agent, such as an Explorer-owned shared presentation component used by a SOPLang-owned adapter. A declared child component must never remain as an unupgraded custom-element tag while its parent plugin is considered ready. If a dependency is already registered by Explorer's static WebSkel configuration, the runtime loader reuses it and must not fetch or overwrite it through a plugin URL.
+
 For filesystem-oriented menu actions, the host context must include both:
 
 - the Explorer path used by shell navigation

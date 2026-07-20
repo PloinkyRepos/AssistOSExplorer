@@ -1,3 +1,6 @@
+import crypto from 'node:crypto';
+import os from 'node:os';
+
 import { generateId } from '../../../services/document/idUtils.js';
 import {
   changeDocument,
@@ -6,7 +9,8 @@ import {
   getDocumentHeads,
   loadDocument,
   mergeDocuments,
-  saveDocument
+  saveDocument,
+  viewDocumentAtHeads
 } from './automerge-adapter.mjs';
 import {
   materializeMarkdownModel,
@@ -17,6 +21,12 @@ import {
 } from './markdown-crdt-model.mjs';
 
 const STORE_ROOT = ['.ploinky', 'data', 'explorer', 'automerge', 'documents'];
+const DELETION_ROOT = 'pending-deletions';
+const STORE_LOCK_DIRECTORY = '.locks';
+const STORE_LOCK_TIMEOUT_MS = 10_000;
+const STORE_LOCK_STALE_MS = 30_000;
+const STORE_LOCK_RETRY_MS = 20;
+const TRANSACTION_STALE_MS = 5 * 60_000;
 
 function isMarkdownPath(filePath, pathApi) {
   return pathApi.extname(String(filePath || '')).toLowerCase() === '.md';
@@ -45,6 +55,21 @@ function getVersionKey(stats) {
 
 function cloneJson(value) {
   return JSON.parse(JSON.stringify(value ?? null));
+}
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) return value.map(canonicalJson);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(
+    Object.keys(value)
+      .filter((key) => key !== 'updatedAt')
+      .sort()
+      .map((key) => [key, canonicalJson(value[key])])
+  );
+}
+
+function modelDigest(model) {
+  return crypto.createHash('sha256').update(JSON.stringify(canonicalJson(model))).digest('hex');
 }
 
 function ensureDocumentId(model) {
@@ -357,9 +382,181 @@ export function createMarkdownCrdtStore({
   workspaceRoot,
   validatePath,
   writeFileContent,
-  invalidateCachesForPath
+  invalidateCachesForPath,
+  transactionStaleMs = TRANSACTION_STALE_MS
 }) {
   const storeRoot = path.join(workspaceRoot, ...STORE_ROOT);
+  const deletionRoot = path.join(storeRoot, DELETION_ROOT);
+  const localLocks = new Map();
+  let recoveryPromise = null;
+
+  function lockPathForScope(scope) {
+    const digest = crypto.createHash('sha256').update(String(scope || '')).digest('hex');
+    return path.join(storeRoot, STORE_LOCK_DIRECTORY, `${digest}.lock`);
+  }
+
+  function pathLockScope(validPath) {
+    return `path:${validPath}`;
+  }
+
+  async function lockScopeForPath(inputPath) {
+    const validPath = await validatePath(inputPath);
+    return pathLockScope(validPath);
+  }
+
+  async function lockScopeForDocumentId(documentId) {
+    const normalized = normalizeDocumentId(documentId);
+    if (!normalized) throw new Error('Invalid Markdown CRDT document id.');
+    const document = await readAutomergeState(normalized);
+    if (!document?.path) {
+      throw new Error(`Markdown CRDT document '${normalized}' was not found.`);
+    }
+    return lockScopeForPath(document.path);
+  }
+
+  async function lockScopeForArgs(args = {}) {
+    if (args.path) return lockScopeForPath(args.path);
+    if (args.documentId) return lockScopeForDocumentId(args.documentId);
+    throw new Error('A Markdown CRDT lock requires documentId or path.');
+  }
+
+  function isLockOwnerAlive(owner) {
+    if (String(owner?.hostname || '') !== os.hostname()) return null;
+    const pid = Number(owner?.pid);
+    if (!Number.isInteger(pid) || pid <= 0) return false;
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch (error) {
+      return error?.code === 'EPERM';
+    }
+  }
+
+  async function readDocumentLock(lockPath) {
+    try {
+      const [raw, stats] = await Promise.all([
+        fs.readFile(lockPath, 'utf8'),
+        fs.stat(lockPath)
+      ]);
+      const owner = JSON.parse(raw);
+      const acquiredAt = Date.parse(owner?.acquiredAt || '');
+      return {
+        exists: true,
+        owner,
+        stats,
+        ageMs: Date.now() - stats.mtimeMs,
+        acquiredAgeMs: Number.isFinite(acquiredAt) ? Date.now() - acquiredAt : Date.now() - stats.mtimeMs
+      };
+    } catch (error) {
+      if (error?.code === 'ENOENT') return { exists: false };
+      const stats = await fs.stat(lockPath).catch(() => null);
+      return {
+        exists: Boolean(stats),
+        owner: null,
+        stats,
+        ageMs: stats ? Date.now() - stats.mtimeMs : 0
+      };
+    }
+  }
+
+  function sameDocumentLock(left, right) {
+    return Boolean(left?.exists && right?.exists
+      && left.stats?.dev === right.stats?.dev
+      && left.stats?.ino === right.stats?.ino
+      && left.stats?.mtimeMs === right.stats?.mtimeMs
+      && String(left.owner?.token || '') === String(right.owner?.token || ''));
+  }
+
+  async function removeStaleDocumentLock(lockPath, observed) {
+    const latest = await readDocumentLock(lockPath);
+    if (!sameDocumentLock(observed, latest)) return false;
+    await fs.rm(lockPath, { force: true });
+    return true;
+  }
+
+  async function acquireDocumentLock(scope) {
+    const lockPath = lockPathForScope(scope);
+    await fs.mkdir(path.dirname(lockPath), { recursive: true });
+    const startedAt = Date.now();
+    const token = crypto.randomUUID();
+    while (true) {
+      try {
+        const handle = await fs.open(lockPath, 'wx');
+        try {
+          await handle.writeFile(JSON.stringify({
+            token,
+            hostname: os.hostname(),
+            pid: process.pid,
+            acquiredAt: new Date().toISOString()
+          }));
+        } finally {
+          await handle.close();
+        }
+        return { token, lockPath };
+      } catch (error) {
+        if (error?.code !== 'EEXIST') throw error;
+        const lock = await readDocumentLock(lockPath);
+        if (!lock.exists) continue;
+        const ownerAlive = isLockOwnerAlive(lock.owner);
+        if (lock.ageMs > STORE_LOCK_STALE_MS && ownerAlive !== true) {
+          if (await removeStaleDocumentLock(lockPath, lock).catch(() => false)) continue;
+        }
+        if (Date.now() - startedAt >= STORE_LOCK_TIMEOUT_MS) {
+          throw new Error('Timed out waiting for the Markdown CRDT document lock.');
+        }
+        await new Promise((resolve) => setTimeout(resolve, STORE_LOCK_RETRY_MS));
+      }
+    }
+  }
+
+  async function releaseDocumentLock(lock) {
+    if (!lock?.token) return;
+    try {
+      const current = await readDocumentLock(lock.lockPath);
+      if (current.owner?.token !== lock.token) return;
+      await fs.rm(lock.lockPath, { force: true });
+    } catch {
+      // A later call can recover a stale lock if this process is interrupted.
+    }
+  }
+
+  function startDocumentLockHeartbeat(lock) {
+    if (!lock?.lockPath) return () => {};
+    const interval = setInterval(async () => {
+      try {
+        const current = await readDocumentLock(lock.lockPath);
+        if (current.owner?.token !== lock.token) return;
+        const now = new Date();
+        await fs.utimes(lock.lockPath, now, now);
+      } catch {
+        // Release/recovery owns the final decision when the operation completes.
+      }
+    }, Math.max(1_000, Math.floor(STORE_LOCK_STALE_MS / 3)));
+    interval.unref?.();
+    return () => clearInterval(interval);
+  }
+
+  async function withCrdtLock(scope, operation) {
+    const key = String(scope || '');
+    if (!key) throw new Error('A Markdown CRDT lock scope is required.');
+    const previous = localLocks.get(key) || Promise.resolve();
+    let release;
+    const current = new Promise((resolve) => { release = resolve; });
+    localLocks.set(key, current);
+    await previous;
+    let documentLock = null;
+    let stopHeartbeat = () => {};
+    try {
+      documentLock = await acquireDocumentLock(key);
+      stopHeartbeat = startDocumentLockHeartbeat(documentLock);
+      return await operation();
+    } finally {
+      stopHeartbeat();
+      await releaseDocumentLock(documentLock);
+      release();
+      if (localLocks.get(key) === current) localLocks.delete(key);
+    }
+  }
 
   function statePathForDocumentId(documentId) {
     const safeId = normalizeDocumentId(documentId);
@@ -391,7 +588,25 @@ export function createMarkdownCrdtStore({
   async function writeAutomergeState(document) {
     await fs.mkdir(storeRoot, { recursive: true });
     const statePath = statePathForDocumentId(document.documentId);
-    await fs.writeFile(statePath, Buffer.from(saveDocument(document)));
+    const temporary = `${statePath}.${process.pid}.${crypto.randomUUID()}.tmp`;
+    try {
+      await fs.writeFile(temporary, Buffer.from(saveDocument(document)));
+      await fs.rename(temporary, statePath);
+    } finally {
+      await fs.rm(temporary, { force: true }).catch(() => {});
+    }
+  }
+
+  async function discardEmbeddedScriptaHistory(document) {
+    if (!Object.prototype.hasOwnProperty.call(document || {}, 'scriptaHistory')) {
+      return document;
+    }
+    const compactState = cloneJson(document);
+    delete compactState.scriptaHistory;
+    compactState.scriptaUndoHeads = [];
+    const compactDocument = createDocument(compactState);
+    await writeAutomergeState(compactDocument);
+    return compactDocument;
   }
 
   async function readMarkdownFile(validPath) {
@@ -432,6 +647,7 @@ export function createMarkdownCrdtStore({
     if (document.schemaVersion !== 2 || !Array.isArray(document.blocks)) {
       return await initializeDocument(validPath);
     }
+    document = await discardEmbeddedScriptaHistory(document);
     if (document.path !== validPath || document.fileVersionKey !== versionKey) {
       document = await syncFromMarkdown(document, validPath, raw, versionKey);
     }
@@ -439,10 +655,11 @@ export function createMarkdownCrdtStore({
   }
 
   async function loadByDocumentId(documentId) {
-    const document = await readAutomergeState(documentId);
+    let document = await readAutomergeState(documentId);
     if (!document) {
       throw new Error(`Markdown CRDT document '${documentId}' was not found.`);
     }
+    document = await discardEmbeddedScriptaHistory(document);
     return document;
   }
 
@@ -516,6 +733,72 @@ export function createMarkdownCrdtStore({
   async function open(inputPath) {
     const document = await loadByPath(inputPath);
     return responseFor(document);
+  }
+
+  async function create(args) {
+    const validPath = await validatePath(args.path);
+    if (!isMarkdownPath(validPath, path)) {
+      throw new Error('Markdown CRDT tools only support .md files.');
+    }
+    if (await pathExists(fs, validPath)) {
+      throw new Error('A document already exists at the selected path.');
+    }
+    await fs.mkdir(path.dirname(validPath), { recursive: true });
+    const temporaryPrefix = `${path.basename(validPath)}.`;
+    for (const entry of await fs.readdir(path.dirname(validPath), { withFileTypes: true }).catch(() => [])) {
+      if (!entry.isFile() || !entry.name.startsWith(temporaryPrefix) || !entry.name.endsWith('.scripta-create.tmp')) {
+        continue;
+      }
+      const stalePath = path.join(path.dirname(validPath), entry.name);
+      const stats = await fs.stat(stalePath).catch(() => null);
+      if (stats && Date.now() - stats.mtimeMs > transactionStaleMs) {
+        await fs.rm(stalePath, { force: true });
+      }
+    }
+    const model = ensureDocumentId(args.model || {});
+    const documentId = documentIdFromState(model);
+    const statePath = statePathForDocumentId(documentId);
+    const temporaryMarkdown = `${validPath}.${process.pid}.${crypto.randomUUID()}.scripta-create.tmp`;
+    let response = null;
+    try {
+      await fs.writeFile(temporaryMarkdown, markdownFromModel(model), 'utf8');
+      await fs.rename(temporaryMarkdown, validPath);
+      invalidateCachesForPath(validPath);
+      response = responseFor(await initializeDocument(validPath), { status: 'created' });
+      if (typeof args.onCompleted === 'function') {
+        await args.onCompleted(response);
+      }
+      return response;
+    } catch (error) {
+      const rollbackErrors = [];
+      if (typeof args.onRollback === 'function') {
+        try {
+          await args.onRollback(response || {
+            documentId,
+            path: validPath,
+            model
+          });
+        } catch (rollbackError) {
+          rollbackErrors.push(rollbackError);
+        }
+      }
+      try {
+        await fs.rm(validPath, { force: true });
+        await fs.rm(statePath, { force: true });
+        invalidateCachesForPath(validPath);
+      } catch (rollbackError) {
+        rollbackErrors.push(rollbackError);
+      }
+      if (rollbackErrors.length) {
+        throw new AggregateError(
+          [error, ...rollbackErrors],
+          'SCRIPTA creation failed and could not be rolled back completely.'
+        );
+      }
+      throw error;
+    } finally {
+      await fs.rm(temporaryMarkdown, { force: true }).catch(() => {});
+    }
   }
 
   async function applyChange(args) {
@@ -609,17 +892,15 @@ export function createMarkdownCrdtStore({
     });
   }
 
-  async function save(args) {
-    if (!args.documentId && !args.path) {
-      throw new Error('save_markdown_crdt_document requires documentId or path.');
-    }
-    let document = args.documentId
-      ? await loadByDocumentId(args.documentId)
-      : await loadByPath(args.path);
-    const validPath = args.path ? await validatePath(args.path) : document.path;
+  async function commitDocument(document, validPath, { onCommitted } = {}) {
     if (!isMarkdownPath(validPath, path)) {
       throw new Error('Markdown CRDT tools only support .md files.');
     }
+    const statePath = statePathForDocumentId(document.documentId);
+    const [previousMarkdown, previousState] = await Promise.all([
+      fs.readFile(validPath, 'utf8'),
+      fs.readFile(statePath).catch((error) => error?.code === 'ENOENT' ? null : Promise.reject(error))
+    ]);
     const markdown = markdownFromDocument(document);
     const saveWarnings = cloneJson(document.warnings || []);
     const saveIgnoredStructuralIdChanges = cloneJson(document.ignoredStructuralIdChanges || {
@@ -628,30 +909,335 @@ export function createMarkdownCrdtStore({
       paragraph: 0,
       duplicate: 0
     });
-    await writeFileContent(validPath, markdown);
-    invalidateCachesForPath(validPath);
-    const stats = await fs.stat(validPath);
-    const versionKey = getVersionKey(stats);
-    document = changeDocument(document, (draft) => {
-      draft.path = validPath;
-      draft.fileVersionKey = versionKey;
-      draft.lastSavedMarkdown = markdown;
-      draft.warnings = [];
-      draft.ignoredStructuralIdChanges = {
-        document: 0,
-        chapter: 0,
-        paragraph: 0,
-        duplicate: 0
+    try {
+      await writeFileContent(validPath, markdown);
+      invalidateCachesForPath(validPath);
+      const stats = await fs.stat(validPath);
+      const versionKey = getVersionKey(stats);
+      document = changeDocument(document, (draft) => {
+        draft.path = validPath;
+        draft.fileVersionKey = versionKey;
+        draft.lastSavedMarkdown = markdown;
+        draft.warnings = [];
+        draft.ignoredStructuralIdChanges = {
+          document: 0,
+          chapter: 0,
+          paragraph: 0,
+          duplicate: 0
+        };
+        draft.updatedAt = new Date().toISOString();
+      });
+      await writeAutomergeState(document);
+      const response = responseFor(document, {
+        status: 'saved',
+        versionKey,
+        warnings: saveWarnings,
+        ignoredStructuralIdChanges: saveIgnoredStructuralIdChanges
+      });
+      if (typeof onCommitted === 'function') await onCommitted(response);
+      return response;
+    } catch (error) {
+      const rollbackErrors = [];
+      try {
+        await writeFileContent(validPath, previousMarkdown);
+        invalidateCachesForPath(validPath);
+      } catch (rollbackError) {
+        rollbackErrors.push(rollbackError);
+      }
+      try {
+        if (previousState) {
+          const restored = loadDocument(previousState);
+          await writeAutomergeState(restored);
+        } else {
+          await fs.rm(statePath, { force: true });
+        }
+      } catch (rollbackError) {
+        rollbackErrors.push(rollbackError);
+      }
+      if (rollbackErrors.length) {
+        throw new AggregateError(
+          [error, ...rollbackErrors],
+          'Markdown CRDT commit failed and could not be rolled back completely.'
+        );
+      }
+      throw error;
+    }
+  }
+
+  async function save(args) {
+    if (!args.documentId && !args.path) {
+      throw new Error('save_markdown_crdt_document requires documentId or path.');
+    }
+    const document = args.documentId
+      ? await loadByDocumentId(args.documentId)
+      : await loadByPath(args.path);
+    const validPath = args.path ? await validatePath(args.path) : document.path;
+    return commitDocument(document, validPath);
+  }
+
+  async function mutateAndSave(args, mutateModel) {
+    const scope = await lockScopeForArgs(args);
+    return withCrdtLock(scope, async () => {
+      let document = args.documentId
+        ? await loadByDocumentId(args.documentId)
+        : await loadByPath(args.path);
+      const current = responseFor(document);
+      const history = cloneJson(document.scriptaUndoHeads || []);
+      let nextModel;
+      if (args.historyAction === 'undo') {
+        const undoEntry = history.at(-1);
+        const previousHeads = undoEntry?.beforeHeads;
+        const operationHeads = undoEntry?.afterHeads;
+        if (
+          !undoEntry
+          || !Array.isArray(previousHeads)
+          || !previousHeads.length
+          || !Array.isArray(operationHeads)
+          || !operationHeads.length
+        ) {
+          throw new Error('There is no SCRIPTA operation to undo.');
+        }
+        if (
+          typeof undoEntry.modelHash !== 'string'
+          || !undoEntry.modelHash
+          || modelDigest(current.model) !== undoEntry.modelHash
+        ) {
+          const error = new Error(
+            'SCRIPTA undo cannot be applied because the document changed after that operation.'
+          );
+          error.code = 'scripta_undo_conflict';
+          throw error;
+        }
+        history.pop();
+        nextModel = ensureDocumentId(viewDocumentAtHeads(document, previousHeads));
+      } else {
+        nextModel = await mutateModel(cloneJson(current.model), current);
+      }
+      if (nextModel === null || nextModel === undefined) {
+        if (typeof args.onCompleted === 'function') await args.onCompleted(current);
+        return current;
+      }
+      const previousHeads = getDocumentHeads(document);
+      document = changeDocument(document, (draft) => {
+        delete draft.scriptaHistory;
+        copyModelToDraft(draft, nextModel);
+        draft.updatedAt = new Date().toISOString();
+      });
+      if (args.historyAction === 'push') {
+        history.push({
+          beforeHeads: previousHeads,
+          afterHeads: getDocumentHeads(document),
+          modelHash: modelDigest(responseFor(document).model)
+        });
+        if (history.length > 50) history.splice(0, history.length - 50);
+      }
+      if (args.historyAction) {
+        document = changeDocument(document, (draft) => {
+          draft.scriptaUndoHeads = history;
+        });
+      }
+      return commitDocument(document, current.path, {
+        onCommitted: args.onCompleted || args.onCommitted
+      });
+    });
+  }
+
+  async function inspect(args, operation) {
+    const scope = await lockScopeForArgs(args);
+    return withCrdtLock(scope, async () => {
+      const document = args.documentId
+        ? await loadByDocumentId(args.documentId)
+        : await loadByPath(args.path);
+      return operation(responseFor(document));
+    });
+  }
+
+  function deletionPath(transactionId) {
+    const safeId = normalizeDocumentId(transactionId);
+    if (!safeId || safeId !== String(transactionId || '')) {
+      throw new Error('Invalid SCRIPTA deletion transaction id.');
+    }
+    return path.join(deletionRoot, safeId);
+  }
+
+  function normalizeRelatedArtifact(artifact = {}) {
+    const name = String(artifact.name || '').trim();
+    if (!/^[a-zA-Z0-9_.-]+$/.test(name)) {
+      throw new Error('Invalid related SCRIPTA artifact name.');
+    }
+    const sourcePath = path.resolve(String(artifact.path || ''));
+    const relative = path.relative(path.resolve(workspaceRoot), sourcePath);
+    if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
+      throw new Error('Related SCRIPTA artifacts must be inside the workspace.');
+    }
+    return {
+      name,
+      sourcePath,
+      optional: artifact.optional === true
+    };
+  }
+
+  async function prepareRemove(args) {
+    const scope = await lockScopeForArgs(args);
+    return withCrdtLock(scope, async () => {
+      const document = args.documentId
+        ? await loadByDocumentId(args.documentId)
+        : await loadByPath(args.path);
+      const documentId = normalizeDocumentId(document.documentId);
+      const validPath = await validatePath(document.path);
+      const transactionId = normalizeDocumentId(generateId('scripta-delete'));
+      const transactionDir = deletionPath(transactionId);
+      const stagedMarkdown = path.join(transactionDir, 'document.md');
+      const stagedState = path.join(transactionDir, 'document.automerge');
+      const statePath = statePathForDocumentId(documentId);
+      const relatedArtifacts = (Array.isArray(args.relatedArtifacts) ? args.relatedArtifacts : [])
+        .map(normalizeRelatedArtifact);
+      await fs.mkdir(transactionDir, { recursive: true });
+      let markdownMoved = false;
+      let stateMoved = false;
+      const movedRelatedArtifacts = [];
+      try {
+        await fs.rename(validPath, stagedMarkdown);
+        markdownMoved = true;
+        await fs.rename(statePath, stagedState);
+        stateMoved = true;
+        for (const artifact of relatedArtifacts) {
+          const exists = await pathExists(fs, artifact.sourcePath);
+          if (!exists && !artifact.optional) {
+            throw new Error(`Required SCRIPTA artifact '${artifact.name}' was not found.`);
+          }
+          if (!exists) continue;
+          const stagedPath = path.join(transactionDir, artifact.name);
+          await fs.rename(artifact.sourcePath, stagedPath);
+          movedRelatedArtifacts.push({
+            name: artifact.name,
+            sourcePath: artifact.sourcePath
+          });
+        }
+        await fs.writeFile(path.join(transactionDir, 'transaction.json'), JSON.stringify({
+          transactionId,
+          documentId,
+          path: validPath,
+          preparedAt: new Date().toISOString(),
+          relatedArtifacts: movedRelatedArtifacts
+        }));
+      } catch (error) {
+        for (const artifact of [...movedRelatedArtifacts].reverse()) {
+          await fs.mkdir(path.dirname(artifact.sourcePath), { recursive: true }).catch(() => {});
+          await fs.rename(path.join(transactionDir, artifact.name), artifact.sourcePath).catch(() => {});
+        }
+        if (stateMoved) await fs.rename(stagedState, statePath).catch(() => {});
+        if (markdownMoved) await fs.rename(stagedMarkdown, validPath).catch(() => {});
+        await fs.rm(transactionDir, { recursive: true, force: true }).catch(() => {});
+        throw error;
+      }
+      invalidateCachesForPath(validPath);
+      return { ok: true, documentId, transactionId, status: 'prepared' };
+    });
+  }
+
+  async function readDeletionTransaction(transactionId) {
+    const transactionDir = deletionPath(transactionId);
+    const raw = await fs.readFile(path.join(transactionDir, 'transaction.json'), 'utf8');
+    return { transactionDir, transaction: JSON.parse(raw) };
+  }
+
+  async function commitRemove(args) {
+    const initial = await readDeletionTransaction(args.transactionId);
+    const scope = await lockScopeForPath(initial.transaction.path);
+    return withCrdtLock(scope, async () => {
+      const { transactionDir, transaction } = await readDeletionTransaction(args.transactionId);
+      await fs.rm(transactionDir, { recursive: true, force: true });
+      return {
+        ok: true,
+        documentId: transaction.documentId,
+        transactionId: args.transactionId,
+        status: 'deleted'
       };
-      draft.updatedAt = new Date().toISOString();
     });
-    await writeAutomergeState(document);
-    return responseFor(document, {
-      status: 'saved',
-      versionKey,
-      warnings: saveWarnings,
-      ignoredStructuralIdChanges: saveIgnoredStructuralIdChanges
+  }
+
+  async function rollbackRemove(args) {
+    const initial = await readDeletionTransaction(args.transactionId);
+    const scope = await lockScopeForPath(initial.transaction.path);
+    return withCrdtLock(scope, async () => {
+      const { transactionDir, transaction } = await readDeletionTransaction(args.transactionId);
+      const validPath = await validatePath(transaction.path);
+      const statePath = statePathForDocumentId(transaction.documentId);
+      if (await pathExists(fs, validPath) || await pathExists(fs, statePath)) {
+        throw new Error('Cannot roll back SCRIPTA deletion because the destination already exists.');
+      }
+      await fs.mkdir(path.dirname(validPath), { recursive: true });
+      await fs.rename(path.join(transactionDir, 'document.md'), validPath);
+      try {
+        await fs.rename(path.join(transactionDir, 'document.automerge'), statePath);
+      } catch (error) {
+        await fs.rename(validPath, path.join(transactionDir, 'document.md')).catch(() => {});
+        throw error;
+      }
+      const restoredRelatedArtifacts = [];
+      try {
+        for (const artifact of Array.isArray(transaction.relatedArtifacts) ? transaction.relatedArtifacts : []) {
+          const normalized = normalizeRelatedArtifact({
+            name: artifact.name,
+            path: artifact.sourcePath
+          });
+          if (await pathExists(fs, normalized.sourcePath)) {
+            throw new Error(`Cannot restore SCRIPTA artifact '${normalized.name}' because the destination exists.`);
+          }
+          await fs.mkdir(path.dirname(normalized.sourcePath), { recursive: true });
+          await fs.rename(path.join(transactionDir, normalized.name), normalized.sourcePath);
+          restoredRelatedArtifacts.push(normalized);
+        }
+      } catch (error) {
+        for (const artifact of [...restoredRelatedArtifacts].reverse()) {
+          await fs.rename(
+            artifact.sourcePath,
+            path.join(transactionDir, artifact.name)
+          ).catch(() => {});
+        }
+        await fs.rename(statePath, path.join(transactionDir, 'document.automerge')).catch(() => {});
+        await fs.rename(validPath, path.join(transactionDir, 'document.md')).catch(() => {});
+        throw error;
+      }
+      await fs.rm(transactionDir, { recursive: true, force: true });
+      invalidateCachesForPath(validPath);
+      return {
+        ok: true,
+        documentId: transaction.documentId,
+        transactionId: args.transactionId,
+        status: 'restored'
+      };
     });
+  }
+
+  async function recoverPendingDeletions() {
+    const staleAfterMs = Math.max(0, Number(transactionStaleMs) || TRANSACTION_STALE_MS);
+    const entries = await fs.readdir(deletionRoot, { withFileTypes: true }).catch((error) => {
+      if (error?.code === 'ENOENT') return [];
+      throw error;
+    });
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const transactionId = entry.name;
+      const prepared = await readDeletionTransaction(transactionId).catch(() => null);
+      if (!prepared) continue;
+      const preparedAt = Date.parse(prepared.transaction?.preparedAt || '');
+      const stats = await fs.stat(prepared.transactionDir).catch(() => null);
+      const ageMs = Number.isFinite(preparedAt)
+        ? Date.now() - preparedAt
+        : stats ? Date.now() - stats.mtimeMs : 0;
+      if (ageMs <= staleAfterMs) continue;
+      await rollbackRemove({ transactionId }).catch(() => {
+        // A live owner or an occupied destination means recovery must be
+        // retried by a later process rather than deleting staged data.
+      });
+    }
+  }
+
+  async function ensureRecovered() {
+    if (!recoveryPromise) recoveryPromise = recoverPendingDeletions();
+    return recoveryPromise;
   }
 
   async function syncFromFile(args) {
@@ -681,10 +1267,44 @@ export function createMarkdownCrdtStore({
   }
 
   return {
-    open,
-    applyChange,
-    merge: mergeState,
-    save,
-    syncFromFile
+    open: async (inputPath) => {
+      await ensureRecovered();
+      return withCrdtLock(await lockScopeForPath(inputPath), () => open(inputPath));
+    },
+    create: async (args) => {
+      await ensureRecovered();
+      return withCrdtLock(await lockScopeForPath(args.path), () => create(args));
+    },
+    applyChange: async (args) => {
+      await ensureRecovered();
+      return withCrdtLock(await lockScopeForArgs(args), () => applyChange(args));
+    },
+    merge: async (args) => {
+      await ensureRecovered();
+      return withCrdtLock(await lockScopeForArgs(args), () => mergeState(args));
+    },
+    save: async (args) => {
+      await ensureRecovered();
+      return withCrdtLock(await lockScopeForArgs(args), () => save(args));
+    },
+    mutateAndSave: async (args, mutateModel) => {
+      await ensureRecovered();
+      return mutateAndSave(args, mutateModel);
+    },
+    prepareRemove: async (args) => {
+      await ensureRecovered();
+      return prepareRemove(args);
+    },
+    commitRemove,
+    rollbackRemove,
+    inspect: async (args, operation) => {
+      await ensureRecovered();
+      return inspect(args, operation);
+    },
+    cleanupTransactions: recoverPendingDeletions,
+    syncFromFile: async (args) => {
+      await ensureRecovered();
+      return withCrdtLock(await lockScopeForPath(args.path), () => syncFromFile(args));
+    }
   };
 }

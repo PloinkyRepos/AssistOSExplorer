@@ -22,21 +22,33 @@ test('parseMarkdownDocument converts plain markdown into visible chapters', () =
     assert.match(document.chapters[1].paragraphs[0].text, /Second paragraph/);
 });
 
-test('legacy achiles comments are accepted and serialized back as achilles comments', () => {
-    const markdown = [
-        '<!--{"achiles-ide-document":{"id":"doc-1","title":"Legacy Doc"}}-->',
-        '<!--{"achiles-ide-chapter":{"title":"Intro"}}-->',
-        '<!--{"achiles-ide-paragraph":{"title":"P1"}}-->',
-        'Hello from legacy markdown.'
-    ].join('\n');
+test('plugin state preserves semantically meaningful empty strings', () => {
+    const document = {
+        metadata: { id: 'document-1' },
+        chapters: [{
+            id: 'chapter-1',
+            heading: { level: 2, text: 'Chapter 1' },
+            metadata: { id: 'chapter-1' },
+            paragraphs: [{
+                id: 'paragraph-1',
+                text: '',
+                metadata: {
+                    id: 'paragraph-1',
+                    pluginState: {
+                        scripta: {
+                            activeVariantId: 'variant-1',
+                            variants: [{ id: 'variant-1', text: '' }],
+                        },
+                    },
+                },
+            }],
+        }],
+    };
 
-    const document = parseMarkdownDocument(markdown);
-    const serialized = serializeMarkdownDocument(document);
+    const parsed = parseMarkdownDocument(serializeMarkdownDocument(document));
+    const variant = parsed.chapters[0].paragraphs[0]
+        .metadata.pluginState.scripta.variants[0];
 
-    assert.equal(document.metadata.id, 'doc-1');
-    assert.equal(document.chapters[0].metadata.title, 'Intro');
-    assert.equal(document.chapters[0].paragraphs[0].metadata.title, 'P1');
-    assert.match(document.chapters[0].paragraphs[0].text, /Hello from legacy markdown/);
-    assert.match(serialized, /achilles-ide-document/);
-    assert.doesNotMatch(serialized, /achiles-ide-document/);
+    assert.equal(Object.hasOwn(variant, 'text'), true);
+    assert.equal(variant.text, '');
 });

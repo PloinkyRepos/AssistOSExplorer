@@ -4,6 +4,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { jsonResponse, textResponse } from './responses.mjs';
 import { createAvatarSettingsStore } from './avatar-settings/avatar-settings-store.mjs';
 import { createMarkdownCrdtStore } from './markdown-crdt/markdown-crdt-store.mjs';
+import { createScriptaCrdtService } from './markdown-crdt/scripta-crdt-service.mjs';
 
 function parseArgs(schema, args, name) {
   const parsed = schema.safeParse(args);
@@ -130,6 +131,15 @@ export function createToolHandlers({
     MergeMarkdownCrdtDocumentArgsSchema,
     SaveMarkdownCrdtDocumentArgsSchema,
     SyncMarkdownCrdtFromFileArgsSchema,
+    ScriptaCrdtOpenArgsSchema,
+    ScriptaCrdtEnsureFolderArgsSchema,
+    ScriptaCrdtWorkspaceListArgsSchema,
+    ScriptaCrdtCreateArgsSchema,
+    ScriptaCrdtMutateArgsSchema,
+    ScriptaCrdtDeleteArgsSchema,
+    ScriptaCollaborationOpenArgsSchema,
+    ScriptaCollaborationPullArgsSchema,
+    ScriptaCollaborationApplyArgsSchema,
     LlmAutocompleteArgsSchema,
     CollectIDEPluginsArgsSchema,
     GetPluginSettingsArgsSchema,
@@ -214,6 +224,13 @@ export function createToolHandlers({
     validatePath,
     writeFileContent,
     invalidateCachesForPath
+  });
+  const scriptaCrdtService = createScriptaCrdtService({
+    fs,
+    path,
+    workspaceRoot,
+    validatePath,
+    markdownCrdtStore
   });
 
   async function loadPloinkyReposService() {
@@ -1142,6 +1159,79 @@ export function createToolHandlers({
     return jsonResponse(await markdownCrdtStore.syncFromFile(data));
   }
 
+  function assertWebMeetScriptaCaller() {
+    const context = getInvocationContext?.() || {};
+    const invocation = context.invocation && typeof context.invocation === 'object'
+      ? context.invocation
+      : {};
+    const caller = invocation.caller && typeof invocation.caller === 'object'
+      ? invocation.caller.id
+      : invocation.caller || invocation.sub;
+    const agentName = String(caller || '')
+      .replace(/^agent:/i, '')
+      .trim()
+      .split('/')
+      .pop()
+      .toLowerCase();
+    if (agentName !== 'webmeetagent') {
+      throw new Error('SCRIPTA CRDT tools are restricted to webmeetAgent.');
+    }
+  }
+
+  async function handleScriptaCrdtEnsureFolder(args) {
+    assertWebMeetScriptaCaller();
+    const data = parseArgs(ScriptaCrdtEnsureFolderArgsSchema, args, 'scripta_crdt_ensure_folder');
+    return jsonResponse(await scriptaCrdtService.ensureFolder(data));
+  }
+
+  async function handleScriptaCrdtWorkspaceList(args) {
+    assertWebMeetScriptaCaller();
+    const data = parseArgs(ScriptaCrdtWorkspaceListArgsSchema, args, 'scripta_crdt_workspace_list');
+    return jsonResponse(await scriptaCrdtService.listWorkspace(data));
+  }
+
+  async function handleScriptaCrdtCreate(args) {
+    assertWebMeetScriptaCaller();
+    const data = parseArgs(ScriptaCrdtCreateArgsSchema, args, 'scripta_crdt_create');
+    return jsonResponse(await scriptaCrdtService.create(data));
+  }
+
+  async function handleScriptaCrdtOpen(args) {
+    assertWebMeetScriptaCaller();
+    const data = parseArgs(ScriptaCrdtOpenArgsSchema, args, 'scripta_crdt_open');
+    return jsonResponse(await scriptaCrdtService.open(data));
+  }
+
+  async function handleScriptaCrdtMutate(args) {
+    assertWebMeetScriptaCaller();
+    const data = parseArgs(ScriptaCrdtMutateArgsSchema, args, 'scripta_crdt_mutate');
+    return jsonResponse(await scriptaCrdtService.mutate(data));
+  }
+
+  async function handleScriptaCrdtDelete(args) {
+    assertWebMeetScriptaCaller();
+    const data = parseArgs(ScriptaCrdtDeleteArgsSchema, args, 'scripta_crdt_delete');
+    return jsonResponse(await scriptaCrdtService.remove(data));
+  }
+
+  async function handleScriptaCollaborationOpen(args) {
+    assertWebMeetScriptaCaller();
+    const data = parseArgs(ScriptaCollaborationOpenArgsSchema, args, 'scripta_collaboration_open');
+    return jsonResponse(await scriptaCrdtService.collaborationOpen(data));
+  }
+
+  async function handleScriptaCollaborationPull(args) {
+    assertWebMeetScriptaCaller();
+    const data = parseArgs(ScriptaCollaborationPullArgsSchema, args, 'scripta_collaboration_pull');
+    return jsonResponse(await scriptaCrdtService.collaborationPull(data));
+  }
+
+  async function handleScriptaCollaborationApply(args) {
+    assertWebMeetScriptaCaller();
+    const data = parseArgs(ScriptaCollaborationApplyArgsSchema, args, 'scripta_collaboration_apply');
+    return jsonResponse(await scriptaCrdtService.collaborationApply(data));
+  }
+
   async function handleCollectIdePlugins(args) {
     parseArgs(CollectIDEPluginsArgsSchema, args, 'collect_ide_plugins');
     const pluginsByLocation = await aggregateIdePlugins(workspaceRoot);
@@ -1349,6 +1439,15 @@ export function createToolHandlers({
     merge_markdown_crdt_document: handleMergeMarkdownCrdtDocument,
     save_markdown_crdt_document: handleSaveMarkdownCrdtDocument,
     sync_markdown_crdt_from_file: handleSyncMarkdownCrdtFromFile,
+    scripta_crdt_ensure_folder: handleScriptaCrdtEnsureFolder,
+    scripta_crdt_workspace_list: handleScriptaCrdtWorkspaceList,
+    scripta_crdt_create: handleScriptaCrdtCreate,
+    scripta_crdt_open: handleScriptaCrdtOpen,
+    scripta_crdt_mutate: handleScriptaCrdtMutate,
+    scripta_crdt_delete: handleScriptaCrdtDelete,
+    scripta_collaboration_open: handleScriptaCollaborationOpen,
+    scripta_collaboration_pull: handleScriptaCollaborationPull,
+    scripta_collaboration_apply: handleScriptaCollaborationApply,
     llm_autocomplete: handleLlmAutocomplete,
     collect_ide_plugins: handleCollectIdePlugins,
     get_plugin_settings: handleGetPluginSettings,

@@ -197,6 +197,16 @@ const pruneMetadata = (metadata) => {
             }
             return;
         }
+        if (
+            key === 'pluginState'
+            && value
+            && typeof value === 'object'
+            && !Array.isArray(value)
+            && Object.keys(value).length > 0
+        ) {
+            result[key] = value;
+            return;
+        }
         const pruned = pruneMetadataValue(value);
         if (pruned !== undefined) {
             result[key] = pruned;

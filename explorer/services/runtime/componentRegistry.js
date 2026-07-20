@@ -35,6 +35,28 @@ export function createComponentRegistry(webSkel) {
         });
     };
 
+    const getRegisteredHostComponent = (meta) => {
+        const componentName = meta?.componentName;
+        if (
+            !isNonEmptyString(componentName)
+            || typeof customElements === 'undefined'
+            || !customElements.get(componentName)
+        ) {
+            return null;
+        }
+        const config = webSkel.configs?.components?.find((entry) => entry?.name === componentName);
+        if (!config) {
+            return null;
+        }
+        return {
+            name: componentName,
+            componentType: config.type === 'modals' ? 'modals' : 'components',
+            presenterClassName: config.presenterClassName,
+            agent: meta.agent,
+            hostRegistered: true
+        };
+    };
+
     const fetchComponentAssets = async (meta) => {
         const componentBase = resolveBaseUrl(meta);
         const safeBase = componentBase.replace(/\/+/g, '/');
@@ -71,6 +93,11 @@ export function createComponentRegistry(webSkel) {
         }
         if (componentCache.has(cacheKey)) {
             return componentCache.get(cacheKey);
+        }
+        const registeredHostComponent = getRegisteredHostComponent(meta);
+        if (registeredHostComponent) {
+            componentCache.set(cacheKey, registeredHostComponent);
+            return registeredHostComponent;
         }
 
         const componentType = meta?.componentType === 'modals' ? 'modals' : 'components';
