@@ -67,15 +67,14 @@ async function expectOnlyOfficeEditorLoadsDocument(page) {
       return 'download failed';
     }
     if (frameText.some((entry) => (
-      /DocsAPI|documenteditor|web-apps/i.test(entry.url) ||
-      /ONLYOFFICE|Word count|Page \d+ of/i.test(entry.text)
+      /Word count|Page \d+ of/i.test(entry.text)
     ))) {
       return 'loaded';
     }
     return 'waiting';
   }, {
     timeout: smokeConfig.timeouts.navigation,
-    message: 'OnlyOffice editor iframe should load without a Document Server download failure.',
+    message: 'OnlyOffice should reach its interactive document UI without a Document Server download failure.',
   }).toBe('loaded');
 
   const stabilityDeadline = Date.now() + Math.min(15_000, smokeConfig.timeouts.navigation);
@@ -101,6 +100,13 @@ test.describe('DPU and OnlyOffice @external', () => {
 
       await openExplorer(page, { hash: 'file-exp/Confidential/My%20Space' });
       await expect(page.locator('#toolbarMenuButton')).toBeEnabled();
+
+      const sessionResponsePromise = page.waitForResponse((response) => {
+        const url = new URL(response.url());
+        return response.request().method() === 'GET'
+          && url.pathname === '/services/onlyoffice/office/session'
+          && url.searchParams.get('path') === documentPath;
+      }, { timeout: smokeConfig.timeouts.navigation });
 
       let dialogMessage = '';
       page.once('dialog', async (dialog) => {
@@ -131,7 +137,7 @@ test.describe('DPU and OnlyOffice @external', () => {
       expect(blob.includes(Buffer.from(fileName))).toBe(false);
       expect(hasPlainWorkspaceCopy(documentPath), `${documentPath} should not be stored as a normal workspace file`).toBe(false);
 
-      const response = await page.request.get(`/services/onlyoffice/office/session?path=${encodeURIComponent(documentPath)}`);
+      const response = await sessionResponsePromise;
       expect(response.status()).toBe(200);
       const payload = await response.json();
       expect(payload.ok).toBe(true);
