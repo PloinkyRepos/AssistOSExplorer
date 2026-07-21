@@ -3,6 +3,7 @@
     "id": "git",
     "component": "git-tool-button",
     "location": ["file-exp:toolbar"],
+    "locationOrder": 100,
     "label": "Git",
     "tooltip": "Git",
     "icon": "./icon.svg",

@@ -1,0 +1,26 @@
+help-tool-button {
+    display: block;
+    width: 100%;
+    text-align: center;
+}
+
+.app-toolbar-slot help-tool-button,
+help-tool-button[data-host-orientation="horizontal"] {
+    width: auto;
+    text-align: initial;
+}
+
+help-tool-button .help-tool {
+    display: inline-flex;
+    width: 100%;
+    justify-content: center;
+}
+
+.app-toolbar-slot help-tool-button .help-tool,
+help-tool-button[data-host-orientation="horizontal"] .help-tool {
+    width: auto;
+}
+
+help-tool-button .help-tool-button[hidden] {
+    display: none;
+}

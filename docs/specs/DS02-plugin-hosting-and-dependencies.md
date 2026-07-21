@@ -52,6 +52,7 @@ Explorer IDE shell
 The architecture is intentionally split so that:
 
 - Explorer owns layout, selection, preview shell, and navigation
+- Explorer may own static informational plugins that explain the composed workspace without performing domain operations
 - runtime plugins render domain affordances inside defined slots
 - dependent agents execute domain-specific reads and writes
 - the host shell reacts to domain mutations without taking over their logic
@@ -77,6 +78,8 @@ Each owning agent is responsible for:
 
 Explorer must discover plugins across these agent-owned roots. The hosting contract is centralized in Explorer, but the plugin source code is intentionally split by ownership instead of forced into a single `explorer/IDE-plugins` directory.
 
+Explorer-owned application plugins live under `explorer/IDE-plugins`. The `help` plugin is the reference informational case: it mounts a toolbar button and modal, contains static user guidance, and performs no backend calls or workspace mutations.
+
 ### Plugin Inventory
 
 According to [manifest.json](../../explorer/manifest.json), Explorer activates plugins such as:
@@ -85,6 +88,7 @@ According to [manifest.json](../../explorer/manifest.json), Explorer activates p
 - `dpu-runtime-support`
 - `soplang-builder`
 - `tasks`
+- `help`
 
 These plugins should be understood as IDE extensions mounted into Explorer, not as independent applications embedded without coordination.
 
@@ -192,6 +196,8 @@ Plugins are expected to:
 - contribute menu items semantically instead of injecting arbitrary menu DOM
 - call their owning agent through MCP or domain-specific host bridges
 - emit host-facing events instead of mutating host state ad hoc
+
+The last two expectations apply only when a plugin performs domain work. A static informational plugin may remain entirely browser-local, must not introduce an unnecessary backend dependency, and must not infer or expose protected state merely to explain role-gated features.
 
 When Explorer lazily registers a runtime plugin component, it must finish registering every dependency declared by that plugin before the component is mounted. Dependencies may belong to another agent, such as an Explorer-owned shared presentation component used by a SOPLang-owned adapter. A declared child component must never remain as an unupgraded custom-element tag while its parent plugin is considered ready. If a dependency is already registered by Explorer's static WebSkel configuration, the runtime loader reuses it and must not fetch or overwrite it through a plugin URL.
 
