@@ -69,9 +69,16 @@ function isBlockedPath(pathname) {
   return BLOCKED_EXACT_PATHS.has(normalizedPathname) || BLOCKED_PREFIXES.some((prefix) => normalizedPathname.startsWith(prefix));
 }
 
+function isDocumentCollaborationPath(pathname) {
+  const normalizedPathname = stripOnlyOfficeVersionPrefix(pathname);
+  return /^\/doc\/[A-Za-z0-9][A-Za-z0-9._-]{0,255}\/c\/?$/.test(normalizedPathname);
+}
+
 function isAllowedHttpPath(pathname) {
   const normalizedPathname = stripOnlyOfficeVersionPrefix(pathname);
-  if (normalizedPathname === '/web-apps/apps/api/documents/api.js' || ALLOWED_HTTP_EXACT_PATHS.has(normalizedPathname)) {
+  if (normalizedPathname === '/web-apps/apps/api/documents/api.js'
+      || ALLOWED_HTTP_EXACT_PATHS.has(normalizedPathname)
+      || isDocumentCollaborationPath(normalizedPathname)) {
     return true;
   }
   if (/^\/cache\/files\/.+/.test(normalizedPathname)) {
@@ -82,9 +89,8 @@ function isAllowedHttpPath(pathname) {
 }
 
 function isAllowedUpgradeRequest(req, pathname) {
-  const normalizedPathname = stripOnlyOfficeVersionPrefix(pathname);
   return req?.method === 'GET' &&
-    normalizedPathname.startsWith('/doc/') &&
+    isDocumentCollaborationPath(pathname) &&
     String(req?.headers?.upgrade || '').toLowerCase() === 'websocket';
 }
 

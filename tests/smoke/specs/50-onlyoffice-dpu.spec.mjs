@@ -90,7 +90,7 @@ async function expectOnlyOfficeEditorLoadsDocument(page) {
 test.describe('DPU and OnlyOffice @external', () => {
   test.skip(!smokeConfig.flags.onlyoffice, 'Set SMOKE_ONLYOFFICE=1 to run OnlyOffice/DPU smoke checks.');
 
-  test('Explorer-created Confidential document is stored in DPU and opens in OnlyOffice', async ({ browser }) => {
+  test('Explorer-created Confidential document is stored in DPU and opens in OnlyOffice', async ({ page }) => {
     expect(
       fs.existsSync(smokeConfig.dpuDataRoot),
       `DPU data root should exist at ${smokeConfig.dpuDataRoot}. Set SMOKE_WORKSPACE_ROOT or SMOKE_DPU_DATA_ROOT for local deployments.`
@@ -98,10 +98,7 @@ test.describe('DPU and OnlyOffice @external', () => {
 
     const fileName = `smoke-onlyoffice-${smokeConfig.runId}.doc`;
     const documentPath = `/Confidential/My Space/${fileName}`;
-    const context = await browser.newContext({ baseURL: smokeConfig.baseURL });
-    const page = await context.newPage();
 
-    try {
       await openExplorer(page, { hash: 'file-exp/Confidential/My%20Space' });
       await expect(page.locator('#toolbarMenuButton')).toBeEnabled();
 
@@ -152,8 +149,5 @@ test.describe('DPU and OnlyOffice @external', () => {
         await fileExp.openFile(path);
       }, { path: documentPath });
       await expectOnlyOfficeEditorLoadsDocument(page);
-    } finally {
-      await context.close();
-    }
   });
 });

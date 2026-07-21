@@ -125,6 +125,31 @@ test('editor proxy forwards websocket upgrades under /doc/', async () => {
   ]);
 });
 
+test('editor proxy forwards versioned Socket.IO polling under the document collaboration route', async () => {
+  const forwarded = [];
+  const proxy = createEditorProxy({
+    targetBaseUrl: 'http://127.0.0.1:8080',
+    async forwardHttp(plan) {
+      forwarded.push(plan);
+      return { statusCode: 200, body: 'polling' };
+    }
+  });
+  const res = createResponse();
+
+  await proxy.handle({
+    method: 'GET',
+    url: '/9.3.1-build/doc/document-key/c/?shardkey=document-key&EIO=4&transport=polling',
+    headers: { host: 'office.example' }
+  }, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.bodyText, 'polling');
+  assert.equal(
+    forwarded[0].targetUrl,
+    'http://127.0.0.1:8080/9.3.1-build/doc/document-key/c/?shardkey=document-key&EIO=4&transport=polling'
+  );
+});
+
 test('editor proxy advertises the original host to the document server', async () => {
   const forwarded = [];
   const proxy = createEditorProxy({
