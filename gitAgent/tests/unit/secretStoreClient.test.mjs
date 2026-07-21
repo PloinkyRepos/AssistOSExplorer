@@ -68,6 +68,7 @@ test('secret-store client calls DPU with an agent assertion and internal secret 
 
   await withEnv({
     PLOINKY_ROUTER_URL: `http://127.0.0.1:${port}`,
+    PLOINKY_ROUTER_AUTHORITY: `router.test:${port}`,
     PLOINKY_AGENT_ID: 'agent:AchillesIDE/gitAgent',
     PLOINKY_AGENT_PRINCIPAL: 'agent:AchillesIDE/gitAgent',
     PLOINKY_AGENT_SECRET: 'a'.repeat(64),
@@ -90,6 +91,7 @@ test('secret-store client calls DPU with an agent assertion and internal secret 
   const request = requests[0];
   assert.equal(request.method, 'POST');
   assert.equal(request.url, '/dpuAgent/mcp');
+  assert.equal(request.headers.host, `router.test:${port}`);
   assert.equal(request.body.method, 'tools/call');
   assert.equal(request.body.params?.name, 'dpu_agent_secret_put');
   assert.deepEqual(request.body.params?.arguments, { key: 'API_TOKEN', value: 'secret-value' });

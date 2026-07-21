@@ -14,7 +14,8 @@ Assertion. No capability binding lookup and no MCP session setup.
 
 ## Client behavior
 
-`lib/secret-store-client.mjs`:
+`lib/secret-store-client.mjs` uses Ploinky's shared `AgentMcpClient` for each
+direct tool call. That client:
 
 - resolves the DPU route name from `PLOINKY_DPU_ROUTE`, defaulting to
   `dpuAgent`
@@ -26,6 +27,9 @@ Assertion. No capability binding lookup and no MCP session setup.
   `Authorization: Bearer <assertion>` to the router
 - POSTs a single JSON-RPC `tools/call` request to
   `{router}/{dpuRoute}/mcp`
+- connects through `PLOINKY_ROUTER_URL` while sending the canonical
+  `PLOINKY_ROUTER_AUTHORITY` as the HTTP `Host`, so container transport names
+  such as `host.containers.internal` do not fail the router authority check
 - calls authenticated DPU `dpu_secret_*` tools when the user delegation is
   present
 - falls back to DPU's internal agent aliases only when explicitly allowed for

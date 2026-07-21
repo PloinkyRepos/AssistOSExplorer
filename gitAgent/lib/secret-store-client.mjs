@@ -12,6 +12,7 @@ import crypto from 'node:crypto';
  * Env contract (set by AgentServer/ploinky start scripts):
  *
  *   PLOINKY_ROUTER_URL            - e.g. http://127.0.0.1:8080
+ *   PLOINKY_ROUTER_AUTHORITY      - canonical Host authority accepted by the router
  *   PLOINKY_AGENT_PRINCIPAL       - e.g. agent:<repo>/gitAgent
  *   PLOINKY_DPU_ROUTE             - optional explicit DPU MCP route name
  */
@@ -63,14 +64,6 @@ function extractUserDelegationToken(authInfo, key = DEFAULT_DPU_SECRET_DELEGATIO
   return '';
 }
 
-function resolveRouterBaseUrl() {
-  const explicit = String(process.env.PLOINKY_ROUTER_URL || '').trim();
-  if (explicit) return explicit.replace(/\/+$/, '');
-  const host = String(process.env.PLOINKY_ROUTER_HOST || '127.0.0.1').trim();
-  const port = String(process.env.PLOINKY_ROUTER_PORT || '8080').trim();
-  return `http://${host}:${port}`;
-}
-
 function resolveDpuRouteName(explicitRouteName = '') {
   const explicit = String(explicitRouteName || process.env.PLOINKY_DPU_ROUTE || '').trim();
   return explicit || DEFAULT_DPU_ROUTE;
@@ -82,21 +75,21 @@ function resolveConsumerPrincipal() {
   throw new Error('PLOINKY_AGENT_PRINCIPAL is required and must use canonical agent:<repo>/<agent> form.');
 }
 
-async function loadAgentAssertionSigner() {
+async function loadCreateAgentClient() {
   const agentLibDir = String(process.env.PLOINKY_AGENT_LIB_DIR || '/Agent').replace(/\/+$/, '');
   const candidates = [
-    `${agentLibDir}/lib/agentAssertion.mjs`,
-    new URL('../../../ploinky/Agent/lib/agentAssertion.mjs', import.meta.url).href
+    `${agentLibDir}/client/AgentMcpClient.mjs`,
+    new URL('../../../ploinky/Agent/client/AgentMcpClient.mjs', import.meta.url).href
   ];
   for (const candidate of candidates) {
     try {
       const mod = await import(candidate);
-      if (typeof mod.signAgentAssertion === 'function') {
-        return mod.signAgentAssertion;
+      if (typeof mod.createAgentClient === 'function') {
+        return mod.createAgentClient;
       }
     } catch (_) {}
   }
-  throw new Error('secret-store-client: unable to load Ploinky agent assertion signer.');
+  throw new Error('secret-store-client: unable to load Ploinky agent-to-agent client.');
 }
 
 function extractInvocationToken(authInfo) {
@@ -142,9 +135,7 @@ export function createSecretStoreClient({
   requireUserDelegation = false,
   delegationKey = DEFAULT_DPU_SECRET_DELEGATION_KEY
 } = {}) {
-  const routerBase = resolveRouterBaseUrl();
   const dpuRouteName = resolveDpuRouteName(providerRouteName);
-  const baseUrl = `${routerBase}/${encodeURIComponent(dpuRouteName)}/mcp`;
 
   async function callContractOperation(operation, args = {}, { forceAgentAlias = false } = {}) {
     const userDelegationToken = forceAgentAlias ? '' : extractUserDelegationToken(authInfo, delegationKey);
@@ -160,42 +151,20 @@ export function createSecretStoreClient({
     if (!forwardedInvocationToken) {
       throw new Error('secret-store-client: missing invocation token for delegated DPU call.');
     }
-    const signAgentAssertion = await loadAgentAssertionSigner();
-    const assertion = signAgentAssertion({
-      method: 'POST',
-      path: '/mcp',
-      targetAgent: dpuRouteName,
-      tool: routedOperation,
-      argumentsObj: args
-    });
-    const response = await fetch(baseUrl, {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${assertion}`,
-        ...(userDelegationToken ? { 'x-ploinky-user-delegation': userDelegationToken } : {})
-      },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: crypto.randomUUID(),
-        method: 'tools/call',
-        params: {
-          name: routedOperation,
-          arguments: args
-        }
-      })
-    });
-    const responseText = await response.text();
-    const parsed = safeParseJson(responseText);
-    if (!response.ok) {
-      const detail = parsed?.error?.message || parsed?.error || responseText || `HTTP ${response.status}`;
-      throw new Error(String(detail));
+    const createAgentClient = await loadCreateAgentClient();
+    const client = await createAgentClient(dpuRouteName, { userDelegationToken });
+    try {
+      const result = await client.callTool(routedOperation, args);
+      if (result?.ok === false) {
+        throw new Error(String(result?.message || result?.error || `${operation} failed.`));
+      }
+      if (result?.content || result?.structuredContent) {
+        return unwrapToolPayload(operation, result);
+      }
+      return result;
+    } finally {
+      await client.close();
     }
-    if (parsed?.error && typeof parsed.error === 'object') {
-      throw new Error(String(parsed.error.message || parsed.error.detail || parsed.error.code || `${operation} failed.`));
-    }
-    return unwrapToolPayload(operation, parsed?.result || parsed);
   }
 
   return {
