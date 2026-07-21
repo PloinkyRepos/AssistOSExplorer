@@ -16,7 +16,7 @@ The authoritative upstream contracts are Ploinky `docs/specs/DS005-routing-and-w
 
 ## Core Content
 
-`AssistOSExplorer` must treat the Ploinky router as the browser and MCP trust broker. Browser surfaces, first-party MCP calls, delegated MCP calls, uploads, blobs, and manifest-declared HTTP services are expected to enter through the router so route authentication, session handling, invocation minting, and audit behavior can apply. Direct agent ports are implementation details even when they are bound to localhost.
+`AssistOSExplorer` must treat the Ploinky router as the browser and MCP trust broker. Browser surfaces, first-party MCP calls, delegated MCP calls, uploads, blobs, and manifest-declared HTTP services are expected to enter through the router so route authentication, session handling, invocation minting, and audit behavior can apply. Agent manifests must not publish TCP listeners. A browser that needs a non-primary listener uses `/base-agent-additional-server/<route-key>/<container-port>/...`; Ploinky authenticates the request first, then an in-container relay dials `127.0.0.1:<container-port>`.
 
 Agent MCP sessions are ephemeral runtime state. Ploinky clients should close sessions with `DELETE /mcp` when done, and the shared `AgentServer` may reap idle sessions defensively. Idle cleanup must not close sessions that still have an open HTTP response, because long-running tool calls and SSE streams remain active until their response finishes.
 
@@ -40,7 +40,9 @@ Runtime isolation is defense in depth, not a hostile multi-tenant guarantee. Con
 
 Default Explorer containerized agents should use the shared `docker.io/assistos/ploinky-node:24-bookworm-tools` runtime image unless a local spec documents a specific exception. That image is the supported Node 24 glibc baseline for the default dependency graph and preinstalls the system tools needed by Ploinky dependency-cache preparation and the enabled Explorer agents. Using one image keeps cache invalidation, deploy pre-pulls, and cold-start behavior predictable across `AchillesIDE` and `proxies/soul-gateway`.
 
-File and static-content handling must stay workspace-confined. Paths must be resolved relative to the workspace root, agent root, configured data directory, or explicit runtime volume. Explorer declares a custom `manifest.agent` command, so its `filesystem-http-server.mjs` process, not the shared Ploinky `AgentServer`, owns `/index.html` and frontend asset serving after the router proxies `/explorer/...` requests. That static serving must resolve from `PLOINKY_CODE_DIR` or `/code`, reject traversal segments and NUL bytes, and keep resolved paths inside the code root. Code must not assume host-specific absolute paths, follow symlink escapes, or place secrets in static roots, plugin assets, HTML documentation, logs, transcripts, screenshots, or test fixtures.
+File and static-content handling must stay workspace-confined. Paths must be resolved relative to the workspace root, agent root, configured data directory, or explicit runtime volume. Explorer, `gitAgent`, and `webmeetAgent` use the implicit shared `AgentServer`, preserving the primary port used by static, MCP, and readiness routing. Custom-command dependencies such as WebTTY and LiveKit have no primary service and are enabled with `no-wait`; their browser-facing listeners use the confined additional-server convention. Code must not assume host-specific absolute paths, follow symlink escapes, or place secrets in static roots, plugin assets, HTML documentation, logs, transcripts, screenshots, or test fixtures.
+
+Explorer deployments start the static agent by its route key, `explorer`, rather than the repository-qualified ref. This keeps the static routing record and local-auth lookup aligned. Every deployment workflow must apply the selected Explorer branch to the Ploinky checkout, Explorer checkout, `webmeetInfra`, `proxies`, and the other enabled dependency repositories so a proxy-contract branch cannot mix with `main` manifests.
 
 Logs and user-facing errors must not expose secrets, cookies, bearer tokens, invocation JWTs, API keys, raw prompts, hidden policy text, or internal payloads. Detailed diagnostics belong behind explicit debug modes and must still redact sensitive values before persistence.
 
@@ -49,7 +51,7 @@ Agent-local contract:
 - Manifest: `explorer/manifest.json`
 - Role: Multi-agent AchillesIDE repository and Explorer static-agent surface.
 - Authentication: Explorer and dependent agents inherit route policy from their manifests and Ploinky enable-time auth records.
-- HTTP service surface: Explorer and WebMeet HTTP service prefixes and product route-access entries must be manifest-declared and routed through Ploinky core generically.
+- HTTP service surface: Explorer and WebMeet HTTP service prefixes and product route-access entries must be manifest-declared and routed through Ploinky core generically. WebTTY is reached at `/base-agent-additional-server/webtty/7681/`; LiveKit signaling is resolved from the authenticated router locator for `liveKitServerAgent` and port `7880` (or `17880` in dev).
 - Persistent state: Workspace files, confidential DPU objects, WebMeet data, and visitor records stay in their owning agent boundaries.
 - Documentation: `docs/index.html`
 - Validation: `npm test` in the affected agent plus Ploinky smoke tests for routing or auth changes.

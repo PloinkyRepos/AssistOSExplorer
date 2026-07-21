@@ -29,7 +29,7 @@ on:
         default: ''
         type: string
       proxies_branch:
-        description: 'proxies repo branch. Falls back to vars.PROXIES_BRANCH, then main.'
+        description: 'proxies repo branch. Falls back to vars.PROXIES_BRANCH, then the Explorer branch.'
         required: false
         default: ''
         type: string
@@ -161,7 +161,7 @@ jobs:
           WEBMEET_TURN_MIN_PORT: ${{ vars.WEBMEET_TURN_MIN_PORT }}
           WEBMEET_TURN_MAX_PORT: ${{ vars.WEBMEET_TURN_MAX_PORT }}
           STRICT_INFRA_CHECKS: ${{ vars.STRICT_INFRA_CHECKS }}
-          PROXIES_BRANCH: ${{ inputs.proxies_branch || vars.PROXIES_BRANCH || 'main' }}
+          PROXIES_BRANCH: ${{ inputs.proxies_branch || vars.PROXIES_BRANCH || inputs.branch || 'main' }}
           PLOINKY_BRANCH: ${{ inputs.ploinky_branch || vars.PLOINKY_BRANCH || 'master' }}
           ACHILLES_BRANCH: ${{ inputs.achilles_branch || vars.ACHILLES_BRANCH || 'master' }}
         run: |
@@ -358,7 +358,7 @@ jobs:
           # 'install <url|repoName> [name] [--branch X]'. Repos are activated by install; the
           # explorer manifest's "enable" list brings up the agent stack at start time.
           "$PLOINKY" install https://github.com/AssistOS-AI/AssistOSExplorer.git AchillesIDE --branch "${EXPLORER_BRANCH:-main}" || true
-          "$PLOINKY" install https://github.com/AssistOS-AI/webmeetInfra.git webmeetInfra --branch main || true
+          "$PLOINKY" install https://github.com/AssistOS-AI/webmeetInfra.git webmeetInfra --branch "${EXPLORER_BRANCH:-main}" || true
           "$PLOINKY" install https://github.com/AssistOS-AI/proxies.git proxies --branch "${PROXIES_BRANCH:-main}" || true
 
           echo "[deploy] Updating Ploinky, Achilles dependencies, and installed repos..."
@@ -367,7 +367,7 @@ jobs:
             env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" update
           fi
 
-          for repo_spec in "AchillesIDE:${EXPLORER_BRANCH:-main}" "webmeetInfra:main" "proxies:${PROXIES_BRANCH:-main}"; do
+          for repo_spec in "AchillesIDE:${EXPLORER_BRANCH:-main}" "webmeetInfra:${EXPLORER_BRANCH:-main}" "proxies:${PROXIES_BRANCH:-${EXPLORER_BRANCH:-main}}"; do
             repo_name="${repo_spec%%:*}"
             repo_branch="${repo_spec#*:}"
             repo_dir="$WORK_DIR/.ploinky/repos/$repo_name"
@@ -544,10 +544,10 @@ jobs:
           podman image inspect "${DEFAULT_LOCAL_LLM_IMAGE}" --format '[deploy] default local LLM image architecture={{.Architecture}} os={{.Os}}'
 
           echo "[deploy] Starting Explorer..."
-          nohup env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" start AchillesIDE/explorer "$ROUTER_PORT" \
+          nohup env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" start explorer "$ROUTER_PORT" \
             --branch "${EXPLORER_BRANCH:-main}" \
-            --repo-branch "proxies=${PROXIES_BRANCH:-main}" \
-            --repo-branch "webmeetInfra=main" \
+            --repo-branch "proxies=${PROXIES_BRANCH:-${EXPLORER_BRANCH:-main}}" \
+            --repo-branch "webmeetInfra=${EXPLORER_BRANCH:-main}" \
             --reset-repos \
             > "$WORK_DIR/logs/skills-explorer-start.log" 2>&1 &
 
@@ -621,7 +621,6 @@ jobs:
       - name: Verify public URL
         env:
           ONLYOFFICE_PUBLIC_URL: ${{ vars.ONLYOFFICE_PUBLIC_URL }}
-          WEBMEET_PUBLIC_LIVEKIT_URL: ${{ vars.WEBMEET_PUBLIC_LIVEKIT_URL || 'wss://livekit-skills.axiologic.dev' }}
         run: |
           set -euo pipefail
           echo "[deploy] Verifying ${PUBLIC_URL}/dashboard from GitHub runner..."
@@ -639,26 +638,6 @@ jobs:
             fi
             sleep 5
           done
-
-          if [ -n "${WEBMEET_PUBLIC_LIVEKIT_URL:-}" ]; then
-            livekit_probe_url="${WEBMEET_PUBLIC_LIVEKIT_URL/#wss:/https:}"
-            livekit_probe_url="${livekit_probe_url/#ws:/http:}"
-            echo "[deploy] Verifying ${livekit_probe_url%/}/ from GitHub runner..."
-            for i in $(seq 1 60); do
-              code="$(curl -L -s -o /tmp/livekit-public-response.txt -w '%{http_code}' "${livekit_probe_url%/}/" || true)"
-              if [ "$code" = "200" ]; then
-                echo "[deploy] Public LiveKit endpoint responding with HTTP $code"
-                break
-              fi
-              if [ "$i" = "60" ]; then
-                echo "[deploy] ERROR: public LiveKit endpoint did not become reachable"
-                echo "[deploy] Last HTTP code: ${code:-none}"
-                sed -n '1,40p' /tmp/livekit-public-response.txt 2>/dev/null || true
-                exit 1
-              fi
-              sleep 5
-            done
-          fi
 
           if [ -z "${ONLYOFFICE_PUBLIC_URL:-}" ]; then
             echo "[deploy] ERROR: ONLYOFFICE_PUBLIC_URL is required for browser editors."

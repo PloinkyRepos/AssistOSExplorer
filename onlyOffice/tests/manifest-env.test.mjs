@@ -64,32 +64,14 @@ test('manifest injects the OnlyOffice JWT secret under decorator and Document Se
   }
 });
 
-test('manifest publishes router-facing control and browser-facing editor ports separately', () => {
+test('manifest keeps every OnlyOffice listener container-confined', () => {
   const manifest = readManifest();
-  const expectedEditorPorts = new Map([
-    ['default', '127.0.0.1:8082:8080'],
-    ['dev', '127.0.0.1:18082:8080'],
-    ['prod', '127.0.0.1:8082:8080'],
-  ]);
 
-  for (const [profileName, editorPort] of expectedEditorPorts) {
+  for (const profileName of ['default', 'dev', 'prod']) {
     const profile = manifest.profiles?.[profileName];
     assert.ok(profile, `profile ${profileName} exists`);
-
-    const ports = profile.ports || [];
-    assert.ok(
-      ports.includes('127.0.0.1:0:7000'),
-      `${profileName} publishes the protected control listener on an ephemeral localhost host port for Ploinky httpServices`
-    );
-    assert.ok(
-      ports.includes(editorPort),
-      `${profileName} keeps the browser-facing editor proxy on ${editorPort}`
-    );
-    assert.equal(
-      ports.some((entry) => /:9100$/.test(String(entry))),
-      false,
-      `${profileName} does not publish the loopback storage listener`
-    );
+    assert.equal(profile.openPorts, undefined, `${profileName} must not declare openPorts`);
+    assert.equal(profile.ports, undefined, `${profileName} must not declare legacy ports`);
   }
 });
 

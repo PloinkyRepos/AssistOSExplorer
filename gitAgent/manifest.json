@@ -1,5 +1,4 @@
 {
-    "agent": "sh /code/scripts/startAgent.sh",
     "container": "docker.io/assistos/ploinky-node:24-bookworm-tools",
     "lite-sandbox": true,
     "profiles": {

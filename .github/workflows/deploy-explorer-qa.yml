@@ -29,7 +29,7 @@ on:
         default: ''
         type: string
       proxies_branch:
-        description: 'proxies repo branch. Falls back to vars.EXPLORER_QA_PROXIES_BRANCH, then main.'
+        description: 'proxies repo branch. Falls back to vars.EXPLORER_QA_PROXIES_BRANCH, then the Explorer branch.'
         required: false
         default: ''
         type: string
@@ -169,7 +169,7 @@ jobs:
           WEBMEET_TURN_MIN_PORT: ${{ vars.EXPLORER_QA_WEBMEET_TURN_MIN_PORT }}
           WEBMEET_TURN_MAX_PORT: ${{ vars.EXPLORER_QA_WEBMEET_TURN_MAX_PORT }}
           STRICT_INFRA_CHECKS: ${{ vars.EXPLORER_QA_STRICT_INFRA_CHECKS }}
-          PROXIES_BRANCH: ${{ inputs.proxies_branch || vars.EXPLORER_QA_PROXIES_BRANCH || 'main' }}
+          PROXIES_BRANCH: ${{ inputs.proxies_branch || vars.EXPLORER_QA_PROXIES_BRANCH || inputs.branch || 'main' }}
           PLOINKY_BRANCH: ${{ inputs.ploinky_branch || vars.EXPLORER_QA_PLOINKY_BRANCH || 'master' }}
           ACHILLES_BRANCH: ${{ inputs.achilles_branch || vars.EXPLORER_QA_ACHILLES_BRANCH || 'master' }}
         run: |
@@ -385,7 +385,7 @@ jobs:
           # 'install <url|repoName> [name] [--branch X]'. Repos are activated by install; the
           # explorer manifest's "enable" list brings up the agent stack at start time.
           "$PLOINKY" install https://github.com/AssistOS-AI/AssistOSExplorer.git AchillesIDE --branch "${EXPLORER_BRANCH:-main}" || true
-          "$PLOINKY" install https://github.com/AssistOS-AI/webmeetInfra.git webmeetInfra --branch main || true
+          "$PLOINKY" install https://github.com/AssistOS-AI/webmeetInfra.git webmeetInfra --branch "${EXPLORER_BRANCH:-main}" || true
           "$PLOINKY" install https://github.com/AssistOS-AI/proxies.git proxies --branch "${PROXIES_BRANCH:-main}" || true
 
           echo "[deploy-qa] Updating Ploinky, Achilles dependencies, and installed repos..."
@@ -394,7 +394,7 @@ jobs:
             env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" update
           fi
 
-          for repo_spec in "AchillesIDE:${EXPLORER_BRANCH:-main}" "webmeetInfra:main" "proxies:${PROXIES_BRANCH:-main}"; do
+          for repo_spec in "AchillesIDE:${EXPLORER_BRANCH:-main}" "webmeetInfra:${EXPLORER_BRANCH:-main}" "proxies:${PROXIES_BRANCH:-${EXPLORER_BRANCH:-main}}"; do
             repo_name="${repo_spec%%:*}"
             repo_branch="${repo_spec#*:}"
             repo_dir="$WORK_DIR/.ploinky/repos/$repo_name"
@@ -567,10 +567,10 @@ jobs:
           podman pull "docker.io/assistos/livekit-server-agent:${WEBMEET_INFRA_IMAGE_TAG}"
 
           echo "[deploy] Starting Explorer..."
-          nohup env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" start AchillesIDE/explorer "$ROUTER_PORT" \
+          nohup env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" start explorer "$ROUTER_PORT" \
             --branch "${EXPLORER_BRANCH:-main}" \
-            --repo-branch "proxies=${PROXIES_BRANCH:-main}" \
-            --repo-branch "webmeetInfra=main" \
+            --repo-branch "proxies=${PROXIES_BRANCH:-${EXPLORER_BRANCH:-main}}" \
+            --repo-branch "webmeetInfra=${EXPLORER_BRANCH:-main}" \
             --reset-repos \
             > "$WORK_DIR/logs/explorer-qa-start.log" 2>&1 &
 

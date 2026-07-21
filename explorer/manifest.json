@@ -31,7 +31,7 @@
         "soplangAgent global no-wait",
         "tasksAgent global",
         "AchillesCLI/achilles-cli global no-wait",
-        "basic/webtty global",
+        "basic/webtty global no-wait",
         "webmeetInfra/liveKitServerAgent no-wait",
         "webmeetStt no-wait",
         "webmeetAgent global no-wait",

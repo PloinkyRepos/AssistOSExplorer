@@ -45,6 +45,7 @@ export const smokeConfig = Object.freeze({
   workspaceRoot,
   dpuDataRoot,
   baseURL: stripTrailingSlash(process.env.SMOKE_BASE_URL || process.env.PLAYWRIGHT_BASE_URL),
+  authAgent: process.env.SMOKE_AUTH_AGENT || 'explorer',
   primaryUser: {
     username: process.env.SMOKE_USERNAME || 'admin',
     password: process.env.SMOKE_PASSWORD || 'admin',

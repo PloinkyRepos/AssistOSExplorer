@@ -189,7 +189,7 @@ Explorer depends on these environment/runtime assumptions:
 
 Explorer no longer depends on Explorer-owned public callback/document base URLs because those routes no longer exist.
 
-OnlyOfficeAgent's manifest must keep the protected control listener and browser editor proxy on separate published ports. The Ploinky router must target the control listener on container port `7000` for `/services/onlyoffice/office/session`, while browser editor assets and `/doc/*` WebSockets use the editor proxy on container port `8080`. The storage listener on `9100` is loopback-only and must not be published or routed.
+OnlyOfficeAgent's manifest keeps the protected control listener on container port `7000`, the browser editor proxy on container port `8080`, and the storage listener on loopback port `9100` without publishing any of them. Router-mediated access to a confined listener uses `/base-agent-additional-server/onlyOffice/<container-port>/...`; the storage listener remains unrouted. The legacy `/services/onlyoffice` policy route still describes the authenticated/delegated product boundary and must not be replaced with a public direct-port URL.
 
 The editor proxy must advertise the public origin to the Document Server by forwarding `X-Forwarded-Host` and `X-Forwarded-Proto` on both HTTP and WebSocket upgrade forwards (preserving values set by an outer proxy, otherwise deriving them from the incoming `Host` header and plain `http`). The Document Server builds the browser-facing converted-document cache URLs from these headers, so dropping them strips the public editor port from those URLs and the editor fails with `Download failed.` after the shell loads. See `onlyOffice/docs/specs/DS01-ploinky-agent-invariant.md` for the full proxy header contract.
 

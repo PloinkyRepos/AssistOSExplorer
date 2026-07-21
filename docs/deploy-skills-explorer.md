@@ -31,19 +31,13 @@ The token value must stay only in GitHub Actions secrets.
 
 ## LiveKit Public Access
 
-WebMeet uses a separate public LiveKit endpoint:
-
-```text
-wss://livekit-skills.axiologic.dev
-```
-
-Production routing uses a DNS-only A record for `livekit-skills.axiologic.dev` pointing to `193.180.209.191`, not the Cloudflare tunnel. The unified `webmeetInfra/liveKitServerAgent` runs on the host network in the `prod` profile, owns ports `80` and `443`, terminates TLS with its supervised Nginx/Certbot processes, and proxies LiveKit WebSocket/API traffic to LiveKit on `127.0.0.1:7880`.
+WebMeet browser signaling no longer uses a separately published LiveKit TCP endpoint. Room joins return the `liveKitServerAgent` route key and container signaling port; the browser resolves that locator through the authenticated Explorer router and connects to the same-origin `/base-agent-additional-server/liveKitServerAgent/7880/` WebSocket route. Production host networking remains the explicitly designated direct UDP media plane.
 
 The deploy workflow migrates production away from the retired split WebMeet infra agents by disabling and scrubbing `webmeetInfra/stack`, `webmeetCoturn`, `webmeetRedis`, `webmeetLivekitServer`, `webmeetLivekitEgress`, `webmeetLivekitNginx`, and `webmeetLivekitCertbot` before starting Explorer. The replacement image is pulled from Docker Hub as `docker.io/assistos/livekit-server-agent:${WEBMEET_INFRA_IMAGE_TAG}`.
 
 The optional `webmeetLivekitAiAgent` worker is not launched by the default Explorer stack. If a separate worker stack enables it, the `prod` profile runs on the host network so its server-side WebRTC connection uses the same host-network topology as LiveKit. Its manifest supplies a separate `WEBMEET_LIVEKIT_AGENT_URL` default of `http://127.0.0.1:7880`; do not point it at the bridge-only `WEBMEET_LIVEKIT_URL` unless the worker network topology changes too.
 
-If `livekit-skills.axiologic.dev` is moved behind Cloudflare/Tunnel later, retest WebMeet before changing the manifest because Cloudflare Tunnel does not provide the public UDP media path used by LiveKit.
+The `WEBMEET_PUBLIC_LIVEKIT_URL` variable remains only as a compatibility input to ICE topology selection; it is not returned as the browser signaling URL. Cloudflare Tunnel does not provide the public UDP media path used by LiveKit.
 
 ## GitHub Variables
 
@@ -147,5 +141,5 @@ The workflow:
 9. Removes retired split WebMeet infra registrations and containers before the unified agent starts.
 10. Stores configured runtime variable overrides through `ploinky var`.
 11. Pulls `docker.io/assistos/ploinky-node:${PLOINKY_NODE_IMAGE_TAG}` and `docker.io/assistos/livekit-server-agent:${WEBMEET_INFRA_IMAGE_TAG}` before startup, so cold deployments use published runtime images instead of ad hoc package installation.
-12. Starts `AchillesIDE/explorer` on `EXPLORER_ROUTER_PORT` with branch-aware flags (`--branch`, `--repo-branch`, `--reset-repos`).
-13. Verifies local router health, checks `liveKitServerAgent` and OnlyOffice `api.js` as non-fatal infra gates unless `STRICT_INFRA_CHECKS=1`, verifies public `EXPLORER_PUBLIC_URL` access through the Cloudflare tunnel, verifies public `WEBMEET_PUBLIC_LIVEKIT_URL`, and verifies browser-visible OnlyOffice `api.js` through the required `ONLYOFFICE_PUBLIC_URL`.
+12. Starts the `explorer` route key on `EXPLORER_ROUTER_PORT` with branch-aware flags (`--branch`, `--repo-branch`, `--reset-repos`) so local-auth lookup and static routing use the same identity.
+13. Verifies local router health, checks `liveKitServerAgent` and OnlyOffice `api.js` as non-fatal infra gates unless `STRICT_INFRA_CHECKS=1`, verifies public `EXPLORER_PUBLIC_URL` access through the Cloudflare tunnel, and verifies browser-visible OnlyOffice `api.js` through the required `ONLYOFFICE_PUBLIC_URL`.
