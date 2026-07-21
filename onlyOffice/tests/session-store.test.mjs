@@ -15,6 +15,14 @@ test('config rejects missing onlyoffice jwt secret', () => {
   );
 });
 
+test('config defaults the browser editor URL to the Ploinky port convention', () => {
+  const config = loadConfig({ ONLYOFFICE_JWT_SECRET: 'test-secret' });
+  assert.equal(
+    config.publicEditorBaseUrl,
+    '/base-agent-additional-server/onlyOffice/8080'
+  );
+});
+
 test('session store mints opaque tokens and never exposes delegation tokens in summaries', () => {
   const store = createSessionStore({
     now: () => at('2026-06-09T12:00:00.000Z'),

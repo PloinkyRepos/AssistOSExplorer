@@ -14,9 +14,18 @@ test('preinstall defaults the decorator internal URL to the in-container Documen
 
   assert.match(
     script,
-    /set_default_var ONLYOFFICE_INTERNAL_URL "http:\/\/127\.0\.0\.1:80" "http:\/\/host\.containers\.internal:\$\{host_port\}"/
+    /set_default_var ONLYOFFICE_INTERNAL_URL "http:\/\/127\.0\.0\.1:80" "http:\/\/host\.containers\.internal:8082" "http:\/\/host\.containers\.internal:18082"/
   );
-  assert.match(script, /legacy self-loop default/);
+  assert.match(script, /agent listeners are no longer host-published/);
+});
+
+test('preinstall defaults the browser URL to the authenticated Ploinky port convention', () => {
+  const script = fs.readFileSync(path.join(agentRoot, 'scripts/hooks/preinstall.sh'), 'utf8');
+
+  assert.match(
+    script,
+    /set_default_var ONLYOFFICE_PUBLIC_URL "\/base-agent-additional-server\/onlyOffice\/\$\{editor_port\}" "http:\/\/127\.0\.0\.1:8082" "http:\/\/127\.0\.0\.1:18082"/
+  );
 });
 
 test('preinstall hook is valid bash syntax', () => {

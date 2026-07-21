@@ -2,12 +2,17 @@
 set -euo pipefail
 
 workspace_root="${PLOINKY_WORKSPACE_ROOT:?PLOINKY_WORKSPACE_ROOT is required}"
-profile="${PLOINKY_PROFILE:-default}"
 data_root="${workspace_root}/.ploinky/data/onlyOffice"
 onlyoffice_version="${ONLYOFFICE_VERSION:-9.3.1}"
+editor_port="${ONLYOFFICE_EDITOR_PORT:-8080}"
 
 if [[ ! "$onlyoffice_version" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]; then
     echo "[onlyOffice/preinstall] invalid ONLYOFFICE_VERSION tag '${onlyoffice_version}'" >&2
+    exit 1
+fi
+
+if [[ ! "$editor_port" =~ ^[0-9]+$ ]] || (( editor_port < 1 || editor_port > 65535 )); then
+    echo "[onlyOffice/preinstall] invalid ONLYOFFICE_EDITOR_PORT '${editor_port}'" >&2
     exit 1
 fi
 
@@ -45,15 +50,9 @@ if [ -n "$container_runtime" ]; then
     fi
 fi
 
-# Default the Explorer-facing OnlyOffice URLs so local-dev workspaces have working
-# values without requiring the deploy workflow's ploinky vars. Production runs
-# with these vars set explicitly by the deploy workflow, so the existing values
-# remain untouched unless they are the legacy self-loop default from the previous
-# host-managed Document Server wiring.
-case "$profile" in
-    dev) host_port=18082 ;;
-    *)   host_port=8082  ;;
-esac
+# Default the Explorer-facing editor URL to Ploinky's authenticated same-origin
+# port convention. Explicit production URLs remain untouched; the old local host
+# ports are migrated because agent listeners are no longer host-published.
 
 set_default_var() {
     local name="$1"
@@ -89,6 +88,6 @@ set_default_var() {
     done
 }
 
-set_default_var ONLYOFFICE_PUBLIC_URL "http://127.0.0.1:${host_port}"
-set_default_var ONLYOFFICE_INTERNAL_URL "http://127.0.0.1:80" "http://host.containers.internal:${host_port}"
+set_default_var ONLYOFFICE_PUBLIC_URL "/base-agent-additional-server/onlyOffice/${editor_port}" "http://127.0.0.1:8082" "http://127.0.0.1:18082"
+set_default_var ONLYOFFICE_INTERNAL_URL "http://127.0.0.1:80" "http://host.containers.internal:8082" "http://host.containers.internal:18082"
 set_default_var ONLYOFFICE_CALLBACK_BASE_URL "http://host.containers.internal:8080"
