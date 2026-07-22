@@ -361,29 +361,37 @@ jobs:
           "$PLOINKY" install https://github.com/AssistOS-AI/webmeetInfra.git webmeetInfra --branch main || true
           "$PLOINKY" install https://github.com/AssistOS-AI/proxies.git proxies --branch "${PROXIES_BRANCH:-main}" || true
 
+          sync_managed_repos() {
+            for repo_spec in "AchillesIDE:${EXPLORER_BRANCH:-main}" "webmeetInfra:main" "proxies:${PROXIES_BRANCH:-main}"; do
+              repo_name="${repo_spec%%:*}"
+              repo_branch="${repo_spec#*:}"
+              repo_dir="$WORK_DIR/.ploinky/repos/$repo_name"
+              if [ -d "$repo_dir/.git" ]; then
+                git -C "$repo_dir" fetch origin
+                # A failed prior update can leave a managed checkout with an
+                # unresolved index. Clear it before checkout; deployments treat
+                # origin/$repo_branch as canonical for these managed repos.
+                git -C "$repo_dir" reset --hard
+                git -C "$repo_dir" clean -fd
+                git -C "$repo_dir" checkout "$repo_branch"
+                git -C "$repo_dir" reset --hard "origin/$repo_branch"
+                git -C "$repo_dir" clean -fd
+                echo "[deploy] $repo_name at $(git -C "$repo_dir" rev-parse --short HEAD)"
+              fi
+            done
+          }
+
+          echo "[deploy] Normalizing managed repositories before update..."
+          sync_managed_repos
+
           echo "[deploy] Updating Ploinky, Achilles dependencies, and installed repos..."
           if ! env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" update; then
             echo "[deploy] Initial update failed; retrying once in case Ploinky self-updated during this run..."
             env PLOINKY_MASTER_KEY="$PLOINKY_MASTER_KEY" "$PLOINKY" update
           fi
 
-          for repo_spec in "AchillesIDE:${EXPLORER_BRANCH:-main}" "webmeetInfra:main" "proxies:${PROXIES_BRANCH:-main}"; do
-            repo_name="${repo_spec%%:*}"
-            repo_branch="${repo_spec#*:}"
-            repo_dir="$WORK_DIR/.ploinky/repos/$repo_name"
-            if [ -d "$repo_dir/.git" ]; then
-              git -C "$repo_dir" fetch origin
-              # `ploinky update` can leave a managed checkout with an
-              # unresolved index. Clear that transient state before checkout;
-              # the deployment already treats origin/$repo_branch as canonical.
-              git -C "$repo_dir" reset --hard
-              git -C "$repo_dir" clean -fd
-              git -C "$repo_dir" checkout "$repo_branch"
-              git -C "$repo_dir" reset --hard "origin/$repo_branch"
-              git -C "$repo_dir" clean -fd
-              echo "[deploy] $repo_name at $(git -C "$repo_dir" rev-parse --short HEAD)"
-            fi
-          done
+          echo "[deploy] Re-pinning managed repositories after update..."
+          sync_managed_repos
 
           cleanup_retired_webmeet_infra() {
             local retired_agents=(
