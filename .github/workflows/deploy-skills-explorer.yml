@@ -373,6 +373,11 @@ jobs:
             repo_dir="$WORK_DIR/.ploinky/repos/$repo_name"
             if [ -d "$repo_dir/.git" ]; then
               git -C "$repo_dir" fetch origin
+              # `ploinky update` can leave a managed checkout with an
+              # unresolved index. Clear that transient state before checkout;
+              # the deployment already treats origin/$repo_branch as canonical.
+              git -C "$repo_dir" reset --hard
+              git -C "$repo_dir" clean -fd
               git -C "$repo_dir" checkout "$repo_branch"
               git -C "$repo_dir" reset --hard "origin/$repo_branch"
               git -C "$repo_dir" clean -fd
