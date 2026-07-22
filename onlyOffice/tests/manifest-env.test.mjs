@@ -64,14 +64,18 @@ test('manifest injects the OnlyOffice JWT secret under decorator and Document Se
   }
 });
 
-test('manifest keeps every OnlyOffice listener container-confined', () => {
+test('manifest declares distinct Router targets without physical-host publications', () => {
   const manifest = readManifest();
 
+  assert.deepEqual(manifest.httpServices.map(({ slug, port, access }) => ({ slug, port, access })), [
+    { slug: 'onlyoffice', port: 7000, access: 'authenticated' },
+    { slug: 'onlyoffice-editor', port: 8080, access: 'public' },
+  ]);
   for (const profileName of ['default', 'dev', 'prod']) {
     const profile = manifest.profiles?.[profileName];
     assert.ok(profile, `profile ${profileName} exists`);
-    assert.equal(profile.openPorts, undefined, `${profileName} must not declare openPorts`);
-    assert.equal(profile.ports, undefined, `${profileName} must not declare legacy ports`);
+    assert.equal(Object.hasOwn(profile, 'openPorts'), false);
+    assert.equal(Object.hasOwn(profile, ['additional', 'Server', 'Port'].join('')), false);
   }
 });
 

@@ -48,6 +48,7 @@ function openSocket(url) {
 
 async function probeUpgrade(baseUrl, path) {
   const url = new URL(path, baseUrl);
+  const origin = new URL(baseUrl).origin;
   return new Promise((resolve, reject) => {
     const socket = openSocket(url);
     let data = '';
@@ -60,6 +61,7 @@ async function probeUpgrade(baseUrl, path) {
       socket.write([
         `GET ${url.pathname}${url.search} HTTP/1.1`,
         `Host: ${url.host}`,
+        `Origin: ${origin}`,
         'Connection: Upgrade',
         'Upgrade: websocket',
         'Sec-WebSocket-Version: 13',
@@ -109,5 +111,5 @@ runtimeTest('public editor host serves api js and websocket path while blocking 
 
   const websocketPath = String(process.env.ONLYOFFICE_E2E_WEBSOCKET_PATH || '/doc/e2e/c/?shardkey=e2e');
   const upgradeStatus = await probeUpgrade(requiredEnv('ONLYOFFICE_E2E_EDITOR_BASE_URL'), websocketPath);
-  assert.notEqual(upgradeStatus, 404, `websocket path was blocked by the editor proxy: ${upgradeStatus}`);
+  assert.equal(upgradeStatus, 101, `websocket path did not complete a real upgrade: ${upgradeStatus}`);
 });

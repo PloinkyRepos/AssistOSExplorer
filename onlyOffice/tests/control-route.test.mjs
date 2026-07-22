@@ -44,12 +44,20 @@ function makeEnv() {
     PLOINKY_AGENT_ID: AGENT_ID,
     PLOINKY_AGENT_SECRET: AGENT_SECRET_HEX,
     ONLYOFFICE_JWT_SECRET: 'onlyoffice-jwt-secret',
-    ONLYOFFICE_PUBLIC_URL: 'https://office.example.com',
     ONLYOFFICE_STORAGE_PORT: '9100',
     ONLYOFFICE_CONTROL_PORT: '7000',
     ONLYOFFICE_EDITOR_PORT: '8080',
     ONLYOFFICE_INVOCATION_AUTH_MODULE: INVOCATION_AUTH_MODULE,
   };
+}
+
+function createTestControlRouteHandler(options = {}) {
+  return createControlRouteHandler({
+    resolveEditorService: async () => ({
+      activeBrowserUrl: 'https://office.example.com/public-services/onlyoffice-editor/',
+    }),
+    ...options,
+  });
 }
 
 function mintAuthHeaders({
@@ -127,7 +135,7 @@ function verifySignedConfigToken(token, secret) {
 }
 
 test('office session route rejects forged auth-info without invocation token', async () => {
-  const handler = createControlRouteHandler({
+  const handler = createTestControlRouteHandler({
     env: makeEnv(),
   });
   const req = makeRequest({
@@ -147,7 +155,7 @@ test('office session route rejects forged auth-info without invocation token', a
 });
 
 test('office session route rejects auth-info when invocation path does not match', async () => {
-  const handler = createControlRouteHandler({
+  const handler = createTestControlRouteHandler({
     env: makeEnv(),
   });
   const req = makeRequest({
@@ -165,7 +173,7 @@ test('office session route rejects auth-info when invocation path does not match
 });
 
 test('office session route requires dpuConfidential delegation for Confidential paths', async () => {
-  const handler = createControlRouteHandler({
+  const handler = createTestControlRouteHandler({
     env: makeEnv(),
   });
   const req = makeRequest({
@@ -184,7 +192,7 @@ test('office session route requires dpuConfidential delegation for Confidential 
 });
 
 test('office session route builds signed config with loopback document and callback urls', async () => {
-  const handler = createControlRouteHandler({
+  const handler = createTestControlRouteHandler({
     env: makeEnv(),
   });
   const req = makeRequest({
@@ -208,15 +216,17 @@ test('office session route builds signed config with loopback document and callb
   const payload = JSON.parse(res.body);
   assert.equal(payload.ok, true);
   assert.equal(typeof payload.sessionId, 'string');
+  assert.match(payload.config.document.key, /^[0-9a-f]{32}$/);
   assert.match(payload.config.document.url, /^http:\/\/127\.0\.0\.1:9100\/internal\/document\//);
   assert.match(payload.config.editorConfig.callbackUrl, /^http:\/\/127\.0\.0\.1:9100\/internal\/callback\//);
-  assert.equal(payload.config.documentServerUrl, 'https://office.example.com');
+  assert.equal(payload.config.documentServerUrl, 'https://office.example.com/public-services/onlyoffice-editor');
   assert.deepEqual(payload.config.editorConfig.customization, {
     autosave: true,
     forcesave: true,
   });
 
   const signedPayload = verifySignedConfigToken(payload.config.token, 'onlyoffice-jwt-secret');
+  assert.equal(signedPayload.document.key, payload.config.document.key);
   assert.equal(signedPayload.document.url, payload.config.document.url);
   assert.equal(signedPayload.editorConfig.callbackUrl, payload.config.editorConfig.callbackUrl);
   assert.deepEqual(signedPayload.editorConfig.customization, payload.config.editorConfig.customization);
@@ -224,7 +234,7 @@ test('office session route builds signed config with loopback document and callb
 
 test('office session route resolves storage metadata before signing config', async () => {
   let capturedSession = null;
-  const handler = createControlRouteHandler({
+  const handler = createTestControlRouteHandler({
     env: makeEnv(),
     storageRouter: {
       forSession(session) {
@@ -292,12 +302,17 @@ test('office session route resolves storage metadata before signing config', asy
 
 test('workspace session is created WITHOUT a DPU delegation token', async () => {
   const captured = {};
-  const handler = createControlRouteHandler({
+  const handler = createTestControlRouteHandler({
     env: makeEnv(),
     sessionStore: {
       createSession(input) {
         captured.input = input;
-        return { token: 'sess-token', publicSummary: () => ({}) };
+        return {
+          ...input,
+          token: 'sess-token',
+          documentKey: 'd'.repeat(32),
+          publicSummary: () => ({}),
+        };
       },
     },
     resolveSessionDescriptor: async () => ({
@@ -320,7 +335,7 @@ test('workspace session is created WITHOUT a DPU delegation token', async () => 
 });
 
 test('office session route does not return delegation tokens to the browser', async () => {
-  const handler = createControlRouteHandler({
+  const handler = createTestControlRouteHandler({
     env: makeEnv(),
   });
   const req = makeRequest({

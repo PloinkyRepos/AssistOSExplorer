@@ -38,6 +38,30 @@ SMOKE_BASE_URL=http://127.0.0.1:8080 npm test
 
 The suite records traces, videos, screenshots, browser console events, failed requests, and upload/session evidence outside tracked source. See `tests/smoke/README.md` for flags such as `SMOKE_OPEN_INTERPRETER=1`, `SMOKE_WEBMEET_MEDIA=1`, `SMOKE_ONLYOFFICE=1`, and `SMOKE_GITHUB=1`.
 
+### Fixed Router/Auth Release Baseline
+
+The Ploinky release harness runs this exact Chromium baseline after the full
+graph and topology-aware listener gate succeed. It keeps the graph alive until
+the command finishes and runs the command before cleanup or graph destruction,
+without retrying, skipping, or weakening the oracle:
+
+```bash
+cd /Users/danielsava/work/file-parser/AssistOSExplorer/tests/smoke
+SMOKE_BASE_URL=http://127.0.0.1:18080 npm test -- --project=chromium specs/00-router-auth.spec.mjs
+```
+
+The listener gate requires `required-loopback`, requires exactly one listener
+for each eligible `required-assigned-managed-gateway`, and requires no listener
+for an `inactive-unassigned-managed-gateway`. An inactive gateway remains
+fail-closed and is not evidence of managed-bridge activation. Missing or stale
+assignment evidence, cross-interface assignment, missing or extra listeners,
+wildcard listeners, and unrelated binds fail the gate.
+
+The baseline proves the dashboard, Explorer shell, and routed WebChat shell
+through Router. It is distinct from the WebMeet two-account ScreenShare gate
+and the external-network direct UDP, relay UDP, and relay TLS matrix; none of
+those gates substitutes for another.
+
 Use Playwright Chromium or the Codex browser automation surface with an isolated browser context per Explorer account. For media tests, launch Chromium with fake media devices:
 
 ```js
@@ -110,7 +134,7 @@ Steps:
 5. Select the `.doc` file.
 6. Assert the preview/editor pane requests OnlyOffice through the Ploinky router and loads the OnlyOffice API script successfully.
 7. Fail immediately on any visible or console error containing:
-   - `ONLYOFFICE_PUBLIC_URL is not configured`
+   - `OnlyOffice active editor locator is unavailable`
    - `Failed to load OnlyOffice API script`
    - `OnlyOffice editor mount failed`
    - HTTP 401/403/404/5xx for the OnlyOffice API script, document download route, or callback route

@@ -2,7 +2,7 @@
 
 ## Scope
 
-OnlyOffice owns the runtime boundary for the workspace OnlyOffice Document Server integration. The implementation is a Ploinky-managed agent (`manifest.json`); the previous raw host-managed Document Server container started by Explorer's preinstall is no longer used and is removed by this agent's own preinstall hook on first start.
+OnlyOffice owns the runtime boundary for the workspace OnlyOffice Document Server integration. The implementation is a Ploinky-managed agent (`manifest.json`); the previous raw host-managed Document Server container is unsupported by runtime contract v5. Before v5 activation, an operator must explicitly stop and remove that deployment and remove its plaintext state. This agent's preinstall hook only initializes new v5 data directories: it never inspects, imports, stops, deletes, rewrites, or migrates legacy state.
 
 ## Mandatory Reading Order
 
@@ -17,7 +17,8 @@ OnlyOffice owns the runtime boundary for the workspace OnlyOffice Document Serve
 - OnlyOffice Document Server is owned by the Ploinky `onlyOffice` agent declared in `manifest.json`.
 - OnlyOfficeAgent is the office-session, document/callback, and storage bridge; Explorer is the IDE shell and document picker.
 - Keep generated secrets derived through Ploinky runtime contracts and never log JWT secrets, document tokens, callback tokens, or file contents.
-- Update `AGENTS.md` and `CLAUDE.md` together so coding agents receive the same local context.
+- Keep `AGENTS.md` as the canonical pointer stub; substantive local instructions
+  belong only in this `CLAUDE.md`.
 
 ## Key Paths
 
@@ -29,6 +30,6 @@ OnlyOffice owns the runtime boundary for the workspace OnlyOffice Document Serve
 
 ## Validation
 
-At minimum, validate without printing secrets that the Ploinky agent owns the Document Server container, Explorer and Document Server agree on the JWT secret, `api.js` loads, tokenized document routes work, callbacks work, and Confidential Office files still flow through `Explorer -> Ploinky router -> dpuAgent`.
+At minimum, validate without printing secrets that the Ploinky agent owns the Document Server container, Explorer and Document Server agree on the JWT secret, `api.js` loads, tokenized document routes work, callbacks work, and Confidential Office files flow through `Explorer -> public Router -> OnlyOffice -> private Router -> dpuAgent`.
 
 - Security e2e (cross-user Confidential denial, internal-route isolation, editor allow-list) live in `tests/e2e/` and are skipped unless run against a live runtime: `ONLYOFFICE_E2E=1 ONLYOFFICE_E2E_ROUTER_BASE_URL=<url> ONLYOFFICE_E2E_AUTH_COOKIE=<cookie> npm test`. Run them in the deployment/CI lane on any routing, proxy, or delegation change. The fast unit test `tests/dpu-store-acl.test.mjs` characterizes the agent-side `contentVisible` ACL reliance without a runtime.

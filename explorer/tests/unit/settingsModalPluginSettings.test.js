@@ -97,6 +97,37 @@ test('buildAgentSettingsItems maps Soul Gateway from runtime plugin key and pres
     assert.equal(soulGateway.sourcePlugin.key, 'soul-gateway/soul-gateway');
 });
 
+test('buildAgentSettingsItems maps a neutral settings plugin fixture', () => {
+    const items = buildAgentSettingsItems([
+        {
+            key: 'analytics-settings',
+            label: 'Analytics',
+            ownerAgent: 'analytics',
+            pluginKey: 'analytics/analytics-settings',
+            scope: 'workspace',
+            settingsComponent: 'analytics-settings',
+            adminOnly: true
+        }
+    ], [
+        {
+            key: 'analytics/analytics-settings',
+            agent: 'analytics',
+            component: 'analytics-settings',
+            pluginId: 'analytics',
+            settingsComponent: 'analytics-settings',
+            adminOnly: true,
+            assetRootPath: '.ploinky/repos/example/analytics/IDE-plugins/analytics-settings'
+        }
+    ]);
+    const analytics = items.find((item) => item.key === 'analytics-settings');
+
+    assert.ok(analytics);
+    assert.equal(analytics.available, true);
+    assert.equal(analytics.settingsComponent, 'analytics-settings');
+    assert.equal(analytics.sourcePlugin.key, 'analytics/analytics-settings');
+    assert.equal(analytics.assetRootPath, '.ploinky/repos/example/analytics/IDE-plugins/analytics-settings');
+});
+
 test('buildAgentSettingsItems marks missing source plugin unavailable', () => {
     const items = buildAgentSettingsItems([
         {

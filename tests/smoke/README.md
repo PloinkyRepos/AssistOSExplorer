@@ -29,6 +29,29 @@ Artifacts are written outside tracked source by default:
 
 Playwright traces, screenshots, videos, and JSON reports stay under `tests/smoke/test-results/` and `tests/smoke/playwright-report/`.
 
+## Fixed Router/Auth Release Baseline
+
+The Ploinky release harness runs this exact Chromium baseline after the full
+graph and topology-aware listener gate succeed. The harness keeps the graph
+alive while it runs and executes it before cleanup or graph destruction, with
+no retry, skip, or weakened assertion:
+
+```bash
+cd /Users/danielsava/work/file-parser/AssistOSExplorer/tests/smoke
+SMOKE_BASE_URL=http://127.0.0.1:18080 npm test -- --project=chromium specs/00-router-auth.spec.mjs
+```
+
+It proves the dashboard, Explorer shell, and routed WebChat shell through
+Router. It is not the separate WebMeet external-network or two-account
+ScreenShare gate, and none of those gates substitutes for another.
+
+The listener gate always requires `required-loopback`, requires exactly one
+listener for each eligible `required-assigned-managed-gateway`, and requires no
+listener for an `inactive-unassigned-managed-gateway`. The inactive state
+remains fail-closed and does not prove managed-bridge activation or
+reachability. Missing or stale assignment evidence, cross-interface assignment,
+a missing or extra listener, a wildcard, or an unrelated bind fails closed.
+
 ## Coverage
 
 Default smoke checks:
@@ -45,9 +68,172 @@ Opt-in checks:
 
 - `SMOKE_OPEN_INTERPRETER=1` runs Copilot semantic routing and AKU memory checks that require configured external provider runtime.
 - `SMOKE_WEBMEET_MEDIA=1` enables fake camera/microphone and asserts WebRTC stats increase.
-- `SMOKE_WEBMEET_SCREEN=1` is reserved for headless screen-share coverage once the runtime environment supports deterministic display capture.
-- `SMOKE_ONLYOFFICE=1` enables DPU/OnlyOffice route checks.
+- `SMOKE_WEBMEET_SCREEN=1` turns the existing two-account WebMeet test into a hard release gate. Both distinct accounts must authenticate and exchange real LiveKit screen tracks in both directions. The probe removes TURN servers, and each direction requires active non-relay selected pairs using a globally routable IPv4 and UDP 7882 in both browsers alongside exact ScreenShare publication identities and source-specific RTP packet/frame growth. It never stubs `getDisplayMedia` or skips a missing secondary account. This local gate does not claim the address equals the configured public IPv4; that stricter assertion belongs to the native external-network matrix below.
+- `SMOKE_WEBMEET_REFRESH=1` adds the real join-material lifecycle gate. Both browsers must receive a scheduled material rotation before the original TURN expiry, remain joined with growing RTP after that original expiry, then survive a real Playwright offline/online transition with another broker call, disconnect/recreate/rejoin, and renewed RTP. This gate requires `SMOKE_WEBMEET_MEDIA=1` and a test box started with a short supported credential lifetime (recommended `PLOINKY_TURN_CREDENTIAL_TTL_SECONDS=60`); it fails rather than mocking time or join responses when the original expiry exceeds `SMOKE_WEBMEET_REFRESH_MAX_WAIT_MS` (default 180000).
+  Only non-secret SHA-256 fingerprints are attached, and both the participant
+  token and credential-bearing RTC configuration must rotate independently.
+
+Run the screen-share release gate against a freshly built v5 box with:
+
+```sh
+SMOKE_BASE_URL=http://127.0.0.1:8080 SMOKE_WEBMEET_MEDIA=1 SMOKE_WEBMEET_SCREEN=1 SMOKE_TEST_TIMEOUT_MS=240000 npm test -- --headed --project=chromium specs/30-webmeet-room-chat.spec.mjs
+```
+
+With the screen flag enabled, the npm wrapper inspects running rootless Podman
+containers before Chromium starts. Exactly one container must publish
+`127.0.0.1:<SMOKE_BASE_URL port>:8080/tcp` and
+`0.0.0.0:7882:7882/udp`, carry runtime contract 5, and use a freshly built
+runtime-v5 image. By default the running generation must be at most 30 minutes
+old and the image at most four hours old. The wrapper binds the test to that
+container ID, start time, image ID/reference, and normalized two-publication
+boundary, re-inspects it after Playwright exits, and fails if any value changed.
+`SMOKE_PLOINKY_BOX_CONTAINER`, `SMOKE_EXPECT_BOX_IMAGE_ID`, and
+`SMOKE_EXPECT_BOX_IMAGE_REF` can pin expected values more narrowly. The command
+does not accept a pre-authored evidence file or a bypass for this live check.
+
+The native external-network release matrix is separate from the local screen-share gate. Run it once on native Linux amd64 (`SMOKE_EXPECT_ARCH=x64`) and once on native Linux arm64 (`SMOKE_EXPECT_ARCH=arm64`) against a freshly built v5 box. It requires two dedicated Chromium CDP endpoints on distinct external networks, their independently verified egress IPv4 addresses, a CORS-enabled test echo endpoint, the configured LiveKit public IPv4, two distinct accounts, external TURN test credentials, and lane-specific test topology. The command runs `direct-udp`, `turn-udp`, and `turn-tls` in sequence and hard-fails on missing prerequisites:
+
+```bash
+SMOKE_EXPECT_ARCH=x64 \
+SMOKE_BASE_URL=https://explorer.test.example \
+SMOKE_WEBMEET_PUBLIC_IPV4=203.0.113.10 \
+SMOKE_PLOINKY_BOX_CONTAINER=ploinky-box-explorer-0123456789ab \
+SMOKE_EXPECT_BOX_IMAGE_REF=docker.io/assistos/ploinky-box:test-v5 \
+SMOKE_EXPECT_BOX_IMAGE_ID=sha256:<exact-64-hex-image-id> \
+SMOKE_EXTERNAL_TCP_PROBE_RUN_ID=<fresh-nonce> \
+SMOKE_EXTERNAL_SCANNER_A_SSH_TARGET=scanner-a \
+SMOKE_EXTERNAL_SCANNER_B_SSH_TARGET=scanner-b \
+SMOKE_EXTERNAL_SCANNER_A_HOST_FINGERPRINT_SHA256='SHA256:<pinned-openssh-fingerprint-a>' \
+SMOKE_EXTERNAL_SCANNER_B_HOST_FINGERPRINT_SHA256='SHA256:<pinned-openssh-fingerprint-b>' \
+SMOKE_EXTERNAL_TURN_UDP_URL='turn:turn-udp.test.example:3478?transport=udp' \
+SMOKE_EXTERNAL_TURN_TLS_URL='turns:turn-tls.test.example:5349?transport=tcp' \
+SMOKE_BROWSER_A_CDP_URL=wss://browser-a.test/devtools/browser/id-a \
+SMOKE_BROWSER_B_CDP_URL=wss://browser-b.test/devtools/browser/id-b \
+SMOKE_BROWSER_A_NETWORK_ID=external-net-a \
+SMOKE_BROWSER_B_NETWORK_ID=external-net-b \
+SMOKE_BROWSER_A_EXPECTED_EGRESS_IPV4=198.51.100.21 \
+SMOKE_BROWSER_B_EXPECTED_EGRESS_IPV4=198.51.100.22 \
+SMOKE_NETWORK_ECHO_URL=https://echo.test.example/ip \
+SMOKE_USERNAME='<account-a>' SMOKE_PASSWORD='<account-a-password>' \
+SMOKE_SECONDARY_USERNAME='<account-b>' SMOKE_SECONDARY_PASSWORD='<account-b-password>' \
+npm run test:webmeet-network-matrix
+```
+
+Replace the documentation-only IPv4 values above with globally routable
+literals; the runner rejects RFC 1918, loopback, link-local, benchmark, and
+documentation ranges. The two TURN URLs are non-secret endpoint selectors.
+Short-lived usernames and credentials must arrive in each browser's real join
+material and are never accepted in these environment variables or artifacts.
+
+For the direct lane, the browser probe removes relay servers and every active
+selected pair must use the configured public IPv4 and UDP 7882; UDP 7881 and
+private/discovered alternatives fail. The TURN/UDP lane retains only explicit
+`turn:` UDP URLs matching the configured external host and port and sets the
+real peer connection to relay-only. The TURN/TLS lane retains only the exact
+`turns:` TLS-over-TCP endpoint and also sets relay-only. Each browser must show
+separate growing outbound audio, outbound video, inbound audio, and inbound
+video RTP rows. This forces real transport selection without mocking LiveKit
+signaling, peer connections, or media. The remote egress check proves the
+browsers are on distinct external networks instead of trusting labels alone.
+CDP endpoints and echo/TURN resources must be dedicated test resources. CDP
+endpoints must use credential-free, query-free HTTPS or WSS URLs; the echo URL
+must likewise be credential-free, query-free HTTPS. The runner redacts complete
+CDP URL values from diagnostics as a second defense for opaque endpoint paths.
+
+Before each lane starts, the wrapper connects non-interactively to one dedicated
+scanner on each named external browser network and sends the repository-owned
+scanner program directly to `python3` over stdin. The two SSH targets must be
+distinct aliases (or `user@host` values) with pinned host keys already present
+in the runner's `known_hosts`; the expected OpenSSH `SHA256:...` host-key
+fingerprints are also required explicitly. `BatchMode=yes`,
+`StrictHostKeyChecking=yes`, and a non-multiplexed SSH connection are mandatory,
+and the negotiated key must equal the configured fingerprint. No scanner
+credential is accepted in an environment variable. Each executed scanner verifies its HTTPS echo egress,
+scans the configured public IPv4 across the complete TCP range 1..65535, and
+sends an unauthenticated STUN Binding request without MESSAGE-INTEGRITY to UDP
+7882. The lane requires `openPorts:[]` and requires that invalid ICE request to
+time out or receive a STUN error—never a success response.
+
+The wrapper records schema-version-2 evidence bound to the fresh probe nonce,
+exact outer container ID/start/image, target IPv4, scanner source SHA-256,
+SSH target SHA-256, negotiated host-key fingerprint, exact returned-byte
+SHA-256, unique scan ID, and scan
+timestamps. It passes only those non-secret fingerprints to the browser spec,
+which independently revalidates them. Both scans must start after the current
+box generation and finish no more than 15 minutes before validation. A stale or
+partial scan, source/egress/fingerprint mismatch, invalid-ICE success, or any
+open TCP port fails before either browser opens.
+
+The matrix wrapper also requires a native rootless Podman server using Netavark. It
+captures Podman client/server versions, native server OS/architecture,
+Netavark version, and Aardvark DNS version. It also inspects the exact named
+running outer container and exact expected image ID/reference, requires runtime
+contract 5, and normalizes `HostConfig.PortBindings` to exactly loopback Router
+TCP plus wildcard UDP 7882. The image creation and container start times must
+also satisfy the same bounded fresh-build/fresh-generation contract as the
+local screen gate (`SMOKE_V5_MAX_IMAGE_AGE_MS` and
+`SMOKE_V5_MAX_GENERATION_AGE_MS` may only tighten those hard maximum bounds).
+Those records and the bound two-network TCP-negative
+scan are attached to each lane's `container-engine-evidence.json`; missing or
+mismatched evidence fails before either browser is opened. The wrapper
+re-inspects the box after every lane, including a failed browser lane, and
+aggregates a lane failure with any post-lane evidence failure. It fails if the
+exact container generation changes while that lane runs. The TURN/TLS lane automatically
+enables the real credential-expiry/network-transition gate.
+
+On headed Linux without `DISPLAY`, the npm runner starts a deterministic 1920×1080 Xvfb display. It fails with an actionable error if Xvfb is unavailable; it does not downgrade to headless capture.
+- `SMOKE_UMAMI=1` enables the real Umami Router gate. It authenticates first at
+  Ploinky and then at Umami, proves dashboard HTML, assets, heartbeat API, and
+  in-app navigation stay under `/services/umami/`, and sends a real guest
+  tracker event through the `3001` proxy. Both tracker and ingest responses must
+  contain value-free proof that Cookie, Authorization, forwarding, Ploinky
+  identity, and hop-by-hop headers were absent from the actual upstream request.
+- `SMOKE_GPT_RESEARCHER=1` enables the real GPTResearcher Router gate for HTML,
+  assets, reports API, same-origin redirect rewriting, and a browser WebSocket
+  ping/pong under `/services/gpt-researcher/`. Root-relative and private-origin
+  requests fail the gate.
+- `SMOKE_ONLYOFFICE=1` enables the real spec 50 editor gate. It creates an
+  encrypted DPU document, types through the pinned OnlyOffice UI, clicks the
+  actual `#btn-save`, proves the callback replaced the encrypted blob, then
+  prepares authenticated CSRF-bound restart proof before typing a second
+  distinct edit without clicking save. It proves DPU state is still unchanged,
+  invokes the targeted restart without another authentication request, proves
+  drain produced another callback acknowledgement, and reopens both markers.
 - `SMOKE_GITHUB=1` enables GitHub plugin authentication checks.
+
+Run the Umami publication gate against a fresh v5 Explorer stack:
+
+```bash
+SMOKE_BASE_URL=http://127.0.0.1:8080 \
+SMOKE_UMAMI=1 \
+SMOKE_UMAMI_USERNAME=admin \
+SMOKE_UMAMI_PASSWORD='<dedicated-test-password>' \
+SMOKE_UMAMI_WEBSITE_ID='<dedicated-test-website-uuid>' \
+npm test -- --project=chromium specs/33-umami-routing.spec.mjs
+```
+
+Run the GPTResearcher publication gate:
+
+```bash
+SMOKE_BASE_URL=http://127.0.0.1:8080 \
+SMOKE_GPT_RESEARCHER=1 \
+npm test -- --project=chromium specs/34-gpt-researcher-routing.spec.mjs
+```
+
+Run the OnlyOffice DPU/save/drain/reopen gate with paths from the same fresh
+workspace used by the box:
+
+```bash
+SMOKE_BASE_URL=http://127.0.0.1:8080 \
+SMOKE_ONLYOFFICE=1 \
+SMOKE_WORKSPACE_ROOT='<fresh-v5-workspace>' \
+SMOKE_TEST_TIMEOUT_MS=240000 \
+npm test -- --project=chromium specs/50-onlyoffice-dpu.spec.mjs
+```
+
+These opt-in gates skip only while their flag is off. Once a flag is `1`,
+missing credentials, topology, services, browser behavior, or sanitation
+evidence is a hard failure.
 
 ## GitHub DPU Token Ownership
 
@@ -103,5 +289,8 @@ SMOKE_ALLOW_BROWSER_ERRORS=1 npm test
 - Prefer stable IDs and data attributes already present in the UI.
 - Add a helper under `lib/` before duplicating a flow across specs.
 - Keep secret values out of screenshots, traces, console logs, and test annotations.
+  Trace attachment must preserve JSON/NDJSON parseability and pass the dynamic
+  credential-residue post-scan; environment-secret replacement alone is not
+  sufficient.
 - External provider checks must stay opt-in unless the repository owns all required credentials and runtime configuration.
 - Tests that create rooms, uploads, users, branches, or files must use `SMOKE_RUN_ID` in names and clean up when the UI exposes cleanup.

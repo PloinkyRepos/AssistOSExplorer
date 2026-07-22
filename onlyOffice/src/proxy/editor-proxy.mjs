@@ -36,11 +36,22 @@ function stripOnlyOfficeVersionPrefix(pathname) {
 }
 
 function sanitizeHeaders(headers = {}) {
-  const blocked = new Set(['authorization', 'cookie', 'proxy-authorization']);
+  const blocked = new Set([
+    'authorization',
+    'cookie',
+    'forwarded',
+    'host',
+    'ploinky-agent-assertion',
+    'proxy-authorization',
+  ]);
   const sanitized = {};
   for (const [name, value] of Object.entries(headers)) {
     const normalizedName = String(name).toLowerCase();
-    if (normalizedName.startsWith('x-ploinky-') || blocked.has(normalizedName)) {
+    if (
+      normalizedName.startsWith('x-ploinky-')
+      || normalizedName.startsWith('x-forwarded-')
+      || blocked.has(normalizedName)
+    ) {
       continue;
     }
     sanitized[name] = value;
@@ -48,20 +59,33 @@ function sanitizeHeaders(headers = {}) {
   return sanitized;
 }
 
-// The Document Server mints browser-facing URLs (cache files, redirects) from
-// X-Forwarded-Host/X-Forwarded-Proto, falling back to the Host header it sees.
-// The forwarders rewrite Host to the internal target, so the public host must
-// travel in the forwarded headers or generated URLs lose the public port.
-function withForwardedHeaders(headers, req) {
-  const out = { ...headers };
-  const incomingHost = String(req?.headers?.host || '').trim();
-  if (!String(out['x-forwarded-host'] || '').trim() && incomingHost) {
-    out['x-forwarded-host'] = incomingHost;
+function withCanonicalForwardingHeaders(headers, publicBrowserUrl) {
+  const browserUrl = new URL(publicBrowserUrl);
+  return {
+    ...headers,
+    'x-forwarded-host': browserUrl.host,
+    'x-forwarded-proto': browserUrl.protocol.replace(/:$/, ''),
+  };
+}
+
+function requestMatchesCommittedOrigin(req, publicBrowserUrl, { requireOrigin = false } = {}) {
+  const expected = new URL(publicBrowserUrl);
+  const host = String(req?.headers?.host || '').trim().toLowerCase();
+  if (host !== expected.host.toLowerCase()) {
+    return false;
   }
-  if (!String(out['x-forwarded-proto'] || '').trim()) {
-    out['x-forwarded-proto'] = 'http';
+  const origin = String(req?.headers?.origin || '');
+  if (!origin) {
+    return !requireOrigin;
   }
-  return out;
+  try {
+    // Origin is a serialized origin, not an arbitrary URL whose computed
+    // origin happens to match. Reject credentials, paths, trailing slashes,
+    // and surrounding whitespace before any upstream connection is opened.
+    return origin === expected.origin && new URL(origin).origin === expected.origin;
+  } catch (_) {
+    return false;
+  }
 }
 
 function isBlockedPath(pathname) {
@@ -124,7 +148,8 @@ function sendNotFound(res) {
 export function createEditorProxy({
   targetBaseUrl,
   forwardHttp,
-  forwardUpgrade
+  forwardUpgrade,
+  resolveEditorService = resolveOnlyOfficeEditorService,
 } = {}) {
   if (!targetBaseUrl) {
     throw new Error('Editor proxy requires targetBaseUrl.');
@@ -136,11 +161,16 @@ export function createEditorProxy({
       sendNotFound(res);
       return;
     }
+    const editorService = await resolveEditorService();
+    if (!requestMatchesCommittedOrigin(req, editorService.activeBrowserUrl)) {
+      sendNotFound(res);
+      return;
+    }
 
     const plan = {
       kind: 'http',
       targetUrl: buildTargetUrl(targetBaseUrl, rewriteRequestUrlForDocumentServer(req.url), 'http'),
-      headers: withForwardedHeaders(sanitizeHeaders(req.headers), req)
+      headers: withCanonicalForwardingHeaders(sanitizeHeaders(req.headers), editorService.activeBrowserUrl)
     };
 
     if (typeof forwardHttp !== 'function') {
@@ -167,11 +197,16 @@ export function createEditorProxy({
       socket.destroy();
       return;
     }
+    const editorService = await resolveEditorService();
+    if (!requestMatchesCommittedOrigin(req, editorService.activeBrowserUrl, { requireOrigin: true })) {
+      socket.destroy();
+      return;
+    }
 
     const plan = {
       kind: 'ws',
       targetUrl: buildTargetUrl(targetBaseUrl, req.url, 'ws'),
-      headers: withForwardedHeaders(sanitizeHeaders(req.headers), req)
+      headers: withCanonicalForwardingHeaders(sanitizeHeaders(req.headers), editorService.activeBrowserUrl)
     };
     await forwardUpgrade(plan, req, socket, head);
   }
@@ -181,3 +216,4 @@ export function createEditorProxy({
     handleUpgrade
   };
 }
+import { resolveOnlyOfficeEditorService } from '../edge-topology.mjs';

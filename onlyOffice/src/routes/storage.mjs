@@ -1,4 +1,18 @@
+import { createHmac, timingSafeEqual } from 'node:crypto';
+
+import { resolveOnlyOfficeEditorService } from '../edge-topology.mjs';
+import { buildDocumentKey } from '../onlyoffice-config.mjs';
+
 const SAVE_STATUSES = new Set([2, 6]);
+const ALLOWED_DOWNLOAD_CONTENT_TYPES = [
+  'application/msword',
+  'application/octet-stream',
+  'application/pdf',
+  'application/rtf',
+  'application/vnd.',
+  'application/zip',
+  'text/csv',
+];
 
 function isLoopbackAddress(address) {
   const normalized = String(address || '').trim();
@@ -29,12 +43,111 @@ function getTokenFromPath(pathname, prefix) {
   return decodeURIComponent(token || '');
 }
 
-async function readBody(req) {
+async function readBody(req, { maxBytes, timeoutMs }) {
   const chunks = [];
-  for await (const chunk of req) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  let bytes = 0;
+  const timer = setTimeout(() => req.destroy(new Error('OnlyOffice callback body timed out.')), timeoutMs);
+  timer.unref?.();
+  try {
+    for await (const chunk of req) {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      bytes += buffer.length;
+      if (bytes > maxBytes) {
+        throw new Error('OnlyOffice callback body exceeds the configured limit.');
+      }
+      chunks.push(buffer);
+    }
+  } finally {
+    clearTimeout(timer);
   }
   return Buffer.concat(chunks).toString('utf8');
+}
+
+function decodeAndVerifyCallbackToken(token, secret, { now = () => Date.now(), maxLifetimeSeconds = 300 } = {}) {
+  const parts = String(token || '').split('.');
+  if (parts.length !== 3 || parts.some((part) => !part)) {
+    throw new Error('OnlyOffice callback token is malformed.');
+  }
+  const [encodedHeader, encodedPayload, signature] = parts;
+  const header = JSON.parse(Buffer.from(encodedHeader, 'base64url').toString('utf8'));
+  if (header?.alg !== 'HS256' || (header?.typ && header.typ !== 'JWT')) {
+    throw new Error('OnlyOffice callback token algorithm is not allowed.');
+  }
+  const expected = createHmac('sha256', secret)
+    .update(`${encodedHeader}.${encodedPayload}`)
+    .digest();
+  const actual = Buffer.from(signature, 'base64url');
+  if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) {
+    throw new Error('OnlyOffice callback token signature is invalid.');
+  }
+  const payload = JSON.parse(Buffer.from(encodedPayload, 'base64url').toString('utf8'));
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error('OnlyOffice callback token payload is invalid.');
+  }
+  const nowSeconds = Math.floor(Number(now()) / 1000);
+  const iat = Number(payload.iat);
+  const nbf = Number(payload.nbf);
+  const exp = Number(payload.exp);
+  if (!Number.isInteger(iat) || !Number.isInteger(exp)) {
+    throw new Error('OnlyOffice callback token requires iat and exp.');
+  }
+  if (payload.nbf !== undefined && !Number.isInteger(nbf)) {
+    throw new Error('OnlyOffice callback token nbf is invalid.');
+  }
+  if (iat > nowSeconds + 5 || (payload.nbf !== undefined && nbf > nowSeconds + 5)) {
+    throw new Error('OnlyOffice callback token is not active yet.');
+  }
+  if (exp <= nowSeconds - 5 || exp <= iat || exp - iat > maxLifetimeSeconds) {
+    throw new Error('OnlyOffice callback token is expired or exceeds its allowed lifetime.');
+  }
+  return payload;
+}
+
+async function readBoundedDownload(response, maxBytes) {
+  const declaredLength = Number(response?.headers?.get?.('content-length') || 0);
+  if (declaredLength > maxBytes) {
+    throw new Error('OnlyOffice download exceeds the configured limit.');
+  }
+  if (response?.body && typeof response.body[Symbol.asyncIterator] === 'function') {
+    const chunks = [];
+    let size = 0;
+    for await (const chunk of response.body) {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      size += buffer.length;
+      if (size > maxBytes) {
+        throw new Error('OnlyOffice download exceeds the configured limit.');
+      }
+      chunks.push(buffer);
+    }
+    return Buffer.concat(chunks);
+  }
+  const buffer = Buffer.from(await response.arrayBuffer());
+  if (buffer.length > maxBytes) {
+    throw new Error('OnlyOffice download exceeds the configured limit.');
+  }
+  return buffer;
+}
+
+function assertAllowedDownloadContentType(response) {
+  const contentType = String(response?.headers?.get?.('content-type') || '')
+    .split(';', 1)[0]
+    .trim()
+    .toLowerCase();
+  if (!contentType || !ALLOWED_DOWNLOAD_CONTENT_TYPES.some((allowed) => (
+    allowed.endsWith('.') ? contentType.startsWith(allowed) : contentType === allowed
+  ))) {
+    throw new Error('OnlyOffice download content type is not allowed.');
+  }
+}
+
+function isLoopbackHostname(hostname) {
+  return hostname === '127.0.0.1' || hostname === 'localhost' || hostname === '[::1]';
+}
+
+function assertAllowedDownloadPath(url) {
+  if (!url.pathname.startsWith('/cache/files/') || url.pathname.includes('\0')) {
+    throw new Error('OnlyOffice callback download path is not allowed.');
+  }
 }
 
 function resolveTrustedDownloadUrl(rawUrl, {
@@ -51,9 +164,21 @@ function resolveTrustedDownloadUrl(rawUrl, {
   const downloadUrl = new URL(rawUrl);
   const publicBase = new URL(publicEditorBaseUrl);
   const internalBase = new URL(internalDocumentServerBaseUrl);
+  if (internalBase.protocol !== 'http:' || !isLoopbackHostname(internalBase.hostname)) {
+    throw new Error('OnlyOffice internal DocumentServer origin must be process-loopback HTTP.');
+  }
+  if (
+    downloadUrl.username
+    || downloadUrl.password
+    || downloadUrl.hash
+    || !['http:', 'https:'].includes(downloadUrl.protocol)
+  ) {
+    throw new Error('OnlyOffice callback download URL is malformed.');
+  }
   if (downloadUrl.origin !== publicBase.origin && downloadUrl.origin !== internalBase.origin) {
     throw new Error('OnlyOffice callback download URL origin is not trusted.');
   }
+  assertAllowedDownloadPath(downloadUrl);
   if (downloadUrl.origin === internalBase.origin || publicBase.origin === internalBase.origin) {
     return downloadUrl.toString();
   }
@@ -74,7 +199,9 @@ export function createStorageRouteHandler({
   config = {},
   sessionStore,
   storageRouter,
-  fetchImpl = globalThis.fetch
+  fetchImpl = globalThis.fetch,
+  resolveEditorService = resolveOnlyOfficeEditorService,
+  now = () => Date.now(),
 } = {}) {
   if (!sessionStore || !storageRouter) {
     throw new Error('Storage routes require sessionStore and storageRouter.');
@@ -114,15 +241,67 @@ export function createStorageRouteHandler({
     const backend = storageRouter.forSession(session);
 
     if (isDocumentRoute) {
-      const document = await backend.read();
-      send(res, 200, document.buffer, {
+      const controller = new AbortController();
+      let rejectTimeout;
+      const timeoutPromise = new Promise((_resolve, reject) => {
+        rejectTimeout = reject;
+      });
+      const timeout = setTimeout(() => {
+        controller.abort();
+        rejectTimeout(new Error('OnlyOffice source document read timed out.'));
+      }, Number(config.ioTimeoutMs || 15_000));
+      timeout.unref?.();
+      let document;
+      try {
+        document = await Promise.race([
+          backend.read({ signal: controller.signal }),
+          timeoutPromise,
+        ]);
+      } catch (_) {
+        send(res, controller.signal.aborted ? 504 : 502, 'OnlyOffice source document is unavailable.');
+        return;
+      } finally {
+        clearTimeout(timeout);
+      }
+      const buffer = Buffer.isBuffer(document?.buffer) ? document.buffer : Buffer.from(document?.buffer || '');
+      if (buffer.length > Number(config.downloadMaxBytes || 64 * 1024 * 1024)) {
+        send(res, 413, 'OnlyOffice document exceeds the configured limit.');
+        return;
+      }
+      send(res, 200, buffer, {
         'content-type': document.mimeType || 'application/octet-stream'
       });
       return;
     }
 
-    const payloadText = await readBody(req);
-    const payload = payloadText ? JSON.parse(payloadText) : {};
+    const contentType = String(req.headers?.['content-type'] || '').split(';', 1)[0].trim().toLowerCase();
+    if (contentType !== 'application/json') {
+      sendJson(res, 415, { error: 1 });
+      return;
+    }
+
+    let payload;
+    try {
+      const payloadText = await readBody(req, {
+        maxBytes: Number(config.callbackMaxBytes || 256 * 1024),
+        timeoutMs: Number(config.ioTimeoutMs || 15_000),
+      });
+      const envelope = payloadText ? JSON.parse(payloadText) : {};
+      if (Object.keys(envelope).length !== 1 || typeof envelope.token !== 'string') {
+        throw new Error('OnlyOffice callback must contain only the signed outbox token.');
+      }
+      payload = decodeAndVerifyCallbackToken(envelope.token, config.onlyofficeJwtSecret, {
+        now,
+        maxLifetimeSeconds: Number(config.configJwtTtlSeconds || 300),
+      });
+    } catch (_) {
+      sendJson(res, 400, { error: 1 });
+      return;
+    }
+    if (typeof payload?.key !== 'string' || payload.key !== buildDocumentKey(session)) {
+      sendJson(res, 400, { error: 1 });
+      return;
+    }
     if (!SAVE_STATUSES.has(Number(payload?.status))) {
       sendJson(res, 200, { error: 0 });
       return;
@@ -135,20 +314,47 @@ export function createStorageRouteHandler({
 
     let downloadUrl;
     try {
-      downloadUrl = resolveTrustedDownloadUrl(payload?.url, config);
+      const editorService = await resolveEditorService();
+      downloadUrl = resolveTrustedDownloadUrl(payload?.url, {
+        publicEditorBaseUrl: editorService.activeBrowserUrl,
+        internalDocumentServerBaseUrl: config.internalDocumentServerBaseUrl,
+      });
     } catch (_) {
       sendJson(res, 400, { error: 1 });
       return;
     }
 
-    const downloadResponse = await fetchImpl(downloadUrl);
-    if (!downloadResponse?.ok) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), Number(config.ioTimeoutMs || 15_000));
+    timeout.unref?.();
+    try {
+      const downloadResponse = await fetchImpl(downloadUrl, {
+        redirect: 'manual',
+        signal: controller.signal,
+      });
+      if (!downloadResponse?.ok || (downloadResponse.status >= 300 && downloadResponse.status < 400) || downloadResponse.redirected) {
+        throw new Error('OnlyOffice callback download failed.');
+      }
+      assertAllowedDownloadContentType(downloadResponse);
+      const bytes = await readBoundedDownload(downloadResponse, Number(config.downloadMaxBytes || 64 * 1024 * 1024));
+      await backend.write(bytes);
+      sessionStore.acknowledgeCallback?.(callbackToken, {
+        status: Number(payload.status),
+        version: String(payload.key || payload.history?.serverVersion || ''),
+        acknowledgedAt: new Date(Number(now())).toISOString(),
+      });
+      sendJson(res, 200, { error: 0 });
+    } catch (_) {
       sendJson(res, 502, { error: 1 });
-      return;
+    } finally {
+      clearTimeout(timeout);
     }
-
-    const bytes = Buffer.from(await downloadResponse.arrayBuffer());
-    await backend.write(bytes);
-    sendJson(res, 200, { error: 0 });
   };
 }
+
+export const _test = Object.freeze({
+  decodeAndVerifyCallbackToken,
+  assertAllowedDownloadContentType,
+  readBoundedDownload,
+  resolveTrustedDownloadUrl,
+});

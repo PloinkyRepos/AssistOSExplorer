@@ -9,23 +9,13 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const agentRoot = path.resolve(__dirname, '..');
 
-test('preinstall defaults the decorator internal URL to the in-container Document Server', () => {
+test('preinstall is a hard-cut data-directory initializer only', () => {
   const script = fs.readFileSync(path.join(agentRoot, 'scripts/hooks/preinstall.sh'), 'utf8');
 
-  assert.match(
-    script,
-    /set_default_var ONLYOFFICE_INTERNAL_URL "http:\/\/127\.0\.0\.1:80" "http:\/\/host\.containers\.internal:8082" "http:\/\/host\.containers\.internal:18082"/
-  );
-  assert.match(script, /agent listeners are no longer host-published/);
-});
-
-test('preinstall defaults the browser URL to the authenticated Ploinky port convention', () => {
-  const script = fs.readFileSync(path.join(agentRoot, 'scripts/hooks/preinstall.sh'), 'utf8');
-
-  assert.match(
-    script,
-    /set_default_var ONLYOFFICE_PUBLIC_URL "\/base-agent-additional-server\/onlyOffice\/\$\{editor_port\}" "http:\/\/127\.0\.0\.1:8082" "http:\/\/127\.0\.0\.1:18082"/
-  );
+  assert.match(script, /Runtime contract v5 is a hard cut/);
+  assert.match(script, /\.ploinky\/data\/onlyOffice/);
+  assert.doesNotMatch(script, /ONLYOFFICE_(?:PUBLIC|INTERNAL)_URL/);
+  assert.doesNotMatch(script, /podman|docker|rm -rf|legacy.*(?:inspect|delete|migrate)/i);
 });
 
 test('preinstall hook is valid bash syntax', () => {

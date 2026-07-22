@@ -84,11 +84,10 @@ export function buildConfigKey(config) {
     if (!config || typeof config !== 'object') {
         return '';
     }
-    // Identity of what the editor shows, not of the transport session.
-    // token/documentUrl/callbackUrl embed a freshly minted per-session token
-    // on every fetch, while document.key is derived server-side from the file
-    // version - so keying on the document identity lets an already mounted
-    // editor survive a session re-fetch for an unchanged document.
+    // The server store mints document.key for one exact session. It is the
+    // editor/remount identity; a fresh session intentionally gets a fresh key
+    // even when it names the same file and version. Transport URLs remain out
+    // of this comparison because they are not browser UI identity fields.
     return JSON.stringify({
         documentKey: config.document?.key || '',
         title: config.document?.title || '',

@@ -1,145 +1,68 @@
-# Deploy Skills Explorer
+# Deploy Explorer with Runtime Contract v5
 
-This document describes the GitHub Actions deployment for the Explorer agent on `skills.axiologic.dev`.
+The repository no longer contains an SSH workflow that mutates a remote
+workspace. Deployment is intentionally operator-controlled until dedicated v5
+test resources and credentials are supplied.
 
-## GitHub Secrets
+## Required sequence
 
-Create or update these repository secrets in `AssistOS-AI/AssistOSExplorer`.
+1. Back up application data, then complete the destructive credential/state
+   prerequisites documented by Ploinky operations.
+2. Build or pull the pinned multi-architecture box and dependency images.
+3. Configure either explicit local-only mode or a complete existing-tunnel
+   Cloudflare configuration. Never create a quick or new tunnel.
+4. Configure the literal public media IPv4 and external relay service.
+5. Recreate the box explicitly under runtime contract v5.
+6. Inspect the real outer container and prove its normalized bindings are
+   exactly loopback Router TCP and wildcard LiveKit UDP `7882`.
+7. Start the full Explorer graph and validate the topology-aware in-box
+   listener gate. Loopback is `required-loopback`; a managed gateway is
+   `required-assigned-managed-gateway` only when current Podman and kernel
+   evidence prove assignment to the exact reported `network_interface`; an
+   unassigned gateway is `inactive-unassigned-managed-gateway`, has no
+   listener, and remains inactive and fail-closed.
+8. While the graph remains alive, run the fixed Chromium Router/auth baseline
+   below with no retry or skip.
+9. Revalidate outer publication and listener ownership.
+10. Run the real-browser OnlyOffice, Umami, GPTResearcher, and WebMeet gates.
+11. Clean up and destroy the graph only after all graph-dependent gates finish.
 
-```sh
-gh secret set SSH_KEY --repo AssistOS-AI/AssistOSExplorer < ~/.ssh/skills-explorer-deploy
-gh secret set PLOINKY_MASTER_KEY --repo AssistOS-AI/AssistOSExplorer --body "$(openssl rand -hex 32)"
+The Ploinky release harness runs this exact baseline after the full graph and
+listener gate succeed and before cleanup or graph destruction:
+
+```bash
+cd /Users/danielsava/work/file-parser/AssistOSExplorer/tests/smoke
+SMOKE_BASE_URL=http://127.0.0.1:18080 npm test -- --project=chromium specs/00-router-auth.spec.mjs
 ```
 
-`PLOINKY_MASTER_KEY` must be exactly 64 hex characters. Keep it stable after the first deployment because it encrypts the Ploinky workspace secret stores and local-auth password store.
+It proves the dashboard, Explorer shell, and routed WebChat shell through
+Router. This oracle is distinct from the WebMeet external-network and
+ScreenShare gates below; none substitutes for another. A missing or failing
+baseline is a release failure and must not be retried, skipped, or weakened.
 
-`ONLYOFFICE_JWT_SECRET` is not configured as a GitHub secret for the managed Document Server. Explorer derives `ONLYOFFICE_JWT_SECRET` through its Ploinky manifest, and the `onlyOffice` Ploinky agent derives its container `JWT_SECRET` from the same `AchillesIDE/explorer/ONLYOFFICE_JWT_SECRET` identity. Explorer's host preinstall hook no longer computes or injects the Document Server secret.
-OnlyOfficeAgent also sets `ALLOW_PRIVATE_IP_ADDRESS=true` so the bundled Document Server can fetch the decorator's signed `127.0.0.1` document and callback URLs. Do not set `ALLOW_META_IP_ADDRESS`; metadata-address fetches are not part of the Office storage flow.
-WebMeet LiveKit and TURN credentials are also manifest-derived, using the same shared derivation identity across `webmeetAgent`, `webmeetLivekitAiAgent`, and `webmeetInfra/liveKitServerAgent`; do not configure them as GitHub secrets for the deploy workflow.
+The WebMeet screen gate is:
 
-The centralized image-build repository needs a Docker Hub token for the manual image publish workflows:
-
-```sh
-gh secret set DOCKERHUB_TOKEN --repo AssistOS-AI/container-image-builds
+```bash
+cd tests/smoke
+SMOKE_BASE_URL=http://127.0.0.1:8080 \
+SMOKE_WEBMEET_MEDIA=1 \
+SMOKE_WEBMEET_SCREEN=1 \
+SMOKE_TEST_TIMEOUT_MS=240000 \
+npm test -- --headed --project=chromium specs/30-webmeet-room-chat.spec.mjs
 ```
 
-The token value must stay only in GitHub Actions secrets.
+This command requires two distinct authenticated accounts. On Linux without a
+display, the runner creates a deterministic Xvfb display. Missing accounts,
+media, or real infrastructure are hard failures while the screen flag is set.
+The local gate removes TURN and requires both browsers to use active non-relay
+UDP `7882` pairs during each ScreenShare direction. Exact configured-public-IP
+selection is intentionally reserved for the distinct-network native x64/arm64
+matrix, which also rejects `7881` and private/discovered alternatives.
 
-## Explorer Public Access
+Cloudflare, external relay, cross-network, native x64, and native arm64 gates
+must use dedicated test resources. A missing prerequisite is reported as
+BLOCKED with the reproducible command; it is never treated as a pass.
 
-`skills.axiologic.dev` is fronted by a Cloudflare Zero Trust tunnel running as a podman container on the host. The tunnel terminates TLS at Cloudflare's edge and forwards directly to the Explorer router on `127.0.0.1:${EXPLORER_ROUTER_PORT}` (default `8097`). The workflow does **not** manage the tunnel; ingress is configured in the Cloudflare Zero Trust dashboard. To change the routing target, edit the tunnel's public hostname configuration in the dashboard rather than touching the workflow.
-
-## LiveKit Public Access
-
-WebMeet browser signaling no longer uses a separately published LiveKit TCP endpoint. Room joins return the `liveKitServerAgent` route key and container signaling port; the browser resolves that locator through the authenticated Explorer router and connects to the same-origin `/base-agent-additional-server/liveKitServerAgent/7880/` WebSocket route. Production host networking remains the explicitly designated direct UDP media plane.
-
-The deploy workflow migrates production away from the retired split WebMeet infra agents by disabling and scrubbing `webmeetInfra/stack`, `webmeetCoturn`, `webmeetRedis`, `webmeetLivekitServer`, `webmeetLivekitEgress`, `webmeetLivekitNginx`, and `webmeetLivekitCertbot` before starting Explorer. The replacement image is pulled from Docker Hub as `docker.io/assistos/livekit-server-agent:${WEBMEET_INFRA_IMAGE_TAG}`.
-
-The optional `webmeetLivekitAiAgent` worker is not launched by the default Explorer stack. If a separate worker stack enables it, the `prod` profile runs on the host network so its server-side WebRTC connection uses the same host-network topology as LiveKit. Its manifest supplies a separate `WEBMEET_LIVEKIT_AGENT_URL` default of `http://127.0.0.1:7880`; do not point it at the bridge-only `WEBMEET_LIVEKIT_URL` unless the worker network topology changes too.
-
-The `WEBMEET_PUBLIC_LIVEKIT_URL` variable remains only as a compatibility input to ICE topology selection; it is not returned as the browser signaling URL. Cloudflare Tunnel does not provide the public UDP media path used by LiveKit.
-
-## GitHub Variables
-
-Create or update these repository variables. WebMeet topology variables are optional overrides: the `prod` manifest profiles already carry the Axiologic production defaults for the public LiveKit URL, internal LiveKit API URL, egress URL, TLS hostname/email, TURN realm, and TURN hostname. Keep the variables below when intentionally overriding the profile defaults from GitHub Actions.
-The deploy workflow omits blank optional variables from the remote environment so empty repository variables do not shadow manifest profile defaults.
-
-```sh
-gh variable set SSH_USER --repo AssistOS-AI/AssistOSExplorer --body admin
-gh variable set SSH_HOST --repo AssistOS-AI/AssistOSExplorer --body 193.180.209.191
-gh variable set EXPLORER_WORKSPACE --repo AssistOS-AI/AssistOSExplorer --body explorerWorkspace
-gh variable set EXPLORER_ROUTER_PORT --repo AssistOS-AI/AssistOSExplorer --body 8097
-gh variable set EXPLORER_PUBLIC_URL --repo AssistOS-AI/AssistOSExplorer --body https://skills.axiologic.dev
-gh variable set PLOINKY_PROFILE --repo AssistOS-AI/AssistOSExplorer --body prod
-gh variable set ONLYOFFICE_PUBLIC_URL --repo AssistOS-AI/AssistOSExplorer --body https://office.axiologic.dev
-gh variable set ONLYOFFICE_CALLBACK_BASE_URL --repo AssistOS-AI/AssistOSExplorer --body https://skills.axiologic.dev
-gh variable set WEBMEET_PUBLIC_LIVEKIT_URL --repo AssistOS-AI/AssistOSExplorer --body wss://livekit-skills.axiologic.dev
-gh variable set WEBMEET_LIVEKIT_URL --repo AssistOS-AI/AssistOSExplorer --body http://host.containers.internal:7880
-gh variable set WEBMEET_EGRESS_URL --repo AssistOS-AI/AssistOSExplorer --body http://host.containers.internal:7980
-gh variable set WEBMEET_INFRA_IMAGE_TAG --repo AssistOS-AI/AssistOSExplorer --body webmeet-infra
-gh variable set PLOINKY_NODE_IMAGE_TAG --repo AssistOS-AI/AssistOSExplorer --body 24-bookworm-tools
-gh variable set WEBMEET_LIVEKIT_USE_EXTERNAL_IP --repo AssistOS-AI/AssistOSExplorer --body false
-gh variable set WEBMEET_LIVEKIT_NODE_IP --repo AssistOS-AI/AssistOSExplorer --body 193.180.209.191
-gh variable set WEBMEET_LIVEKIT_UPSTREAM --repo AssistOS-AI/AssistOSExplorer --body http://127.0.0.1:7880
-gh variable set WEBMEET_TLS_HOSTNAME --repo AssistOS-AI/AssistOSExplorer --body livekit-skills.axiologic.dev
-gh variable set WEBMEET_CERT_EMAIL --repo AssistOS-AI/AssistOSExplorer --body research@axiologic.net
-gh variable set WEBMEET_CERTBOT_AUTO_ISSUE --repo AssistOS-AI/AssistOSExplorer --body true
-gh variable set WEBMEET_TURN_HOST --repo AssistOS-AI/AssistOSExplorer --body livekit-skills.axiologic.dev
-gh variable set WEBMEET_TURN_REALM --repo AssistOS-AI/AssistOSExplorer --body skills.axiologic.dev
-gh variable set WEBMEET_TURN_USER --repo AssistOS-AI/AssistOSExplorer --body webmeet
-gh variable set WEBMEET_TURN_MIN_PORT --repo AssistOS-AI/AssistOSExplorer --body 20000
-gh variable set WEBMEET_TURN_MAX_PORT --repo AssistOS-AI/AssistOSExplorer --body 20010
-gh variable set STRICT_INFRA_CHECKS --repo AssistOS-AI/AssistOSExplorer --body 0
-```
-
-Set `WEBMEET_TURN_EXTERNAL_IP` only when coturn must use an explicit public IP instead of resolving `WEBMEET_TURN_HOST` at startup.
-Set `STRICT_INFRA_CHECKS=1` only when local LiveKit and OnlyOffice health failures should fail the deployment; the default `0` matches the QA-tested non-strict infra gate.
-Leave `ONLYOFFICE_INTERNAL_URL` unset for the managed OnlyOffice agent. The agent defaults its in-container Document Server target to `http://127.0.0.1:80`, while the workflow health probe falls back to the host-facing editor proxy at `http://127.0.0.1:8082`. Remove any legacy repository variable that points `ONLYOFFICE_INTERNAL_URL` at `http://127.0.0.1:8082` before deploying:
-
-```sh
-gh variable delete ONLYOFFICE_INTERNAL_URL --repo AssistOS-AI/AssistOSExplorer
-```
-
-## Provision Host
-
-Run `Provision Skills Explorer Host` only when the remote host needs OS packages, Node.js, Podman, Ploinky, or `achillesAgentLib` installed or refreshed.
-
-## Deploy Or Update
-
-Before deploying production changes that alter the shared Node runtime image, publish it from the centralized image-build repository:
-
-```sh
-gh workflow run publish-ploinky-node-image.yml \
-  --repo AssistOS-AI/container-image-builds \
-  -f image_tag=24-bookworm-tools
-```
-
-Before deploying production changes that alter `webmeetInfra/liveKitServerAgent`, publish the image from the centralized image-build repository:
-
-```sh
-gh workflow run publish-livekit-server-agent.yml \
-  --repo AssistOS-AI/container-image-builds \
-  -f source_ref=main \
-  -f image_tag=webmeet-infra
-```
-
-Run the `Deploy Skills Explorer` workflow for normal updates:
-
-Normal production deploys can omit `ploinky_branch` and `achilles_branch`; the workflow defaults both Ploinky runtime dependencies to `master` because those repositories do not publish `main` as their current canonical branch.
-
-```sh
-gh workflow run deploy-skills-explorer.yml \
-  --repo AssistOS-AI/AssistOSExplorer \
-  -f branch=main \
-  -f workspace_name=explorerWorkspace \
-  -f router_port=8097 \
-  -f public_url=https://skills.axiologic.dev \
-  -f profile=prod \
-  -f webmeet_infra_image_tag=webmeet-infra \
-  -f ploinky_node_image_tag=24-bookworm-tools
-
-# Feature-branch deploy (all repos on same branch):
-gh workflow run deploy-skills-explorer.yml \
-  --repo AssistOS-AI/AssistOSExplorer \
-  --ref soul-gateway-ploinky-agent \
-  -f branch=soul-gateway-ploinky-agent \
-  -f proxies_branch=soul-gateway-ploinky-agent \
-  -f ploinky_branch=soul-gateway-ploinky-agent \
-  -f achilles_branch=soul-gateway-ploinky-agent
-```
-
-The workflow:
-
-1. Connects to `SSH_USER@SSH_HOST` with `SSH_KEY`.
-2. Resolves the installed `ploinky` binary and verifies required host tools are already present.
-3. Pins `PLOINKY_WORKSPACE_ROOT` to the requested workspace so Ploinky commands cannot resolve to a stale parent workspace.
-4. Stops the current workspace only when its `.ploinky/routing.json` owns `EXPLORER_ROUTER_PORT`; otherwise it skips shutdown for cold workspaces and refuses to start when the port is already held by an unowned process.
-5. Puts the Ploinky runtime checkout on `ploinky_branch` and `achillesAgentLib` on `achilles_branch`.
-6. Installs the `AchillesIDE`, `webmeetInfra`, and `proxies` repos with the current `ploinky install ... --branch` command shape.
-7. Runs `ploinky update` so Ploinky updates the workspace repos and local Ploinky dependencies.
-8. Hard-resets the remote Ploinky-managed repo checkouts to the requested branches.
-9. Removes retired split WebMeet infra registrations and containers before the unified agent starts.
-10. Stores configured runtime variable overrides through `ploinky var`.
-11. Pulls `docker.io/assistos/ploinky-node:${PLOINKY_NODE_IMAGE_TAG}` and `docker.io/assistos/livekit-server-agent:${WEBMEET_INFRA_IMAGE_TAG}` before startup, so cold deployments use published runtime images instead of ad hoc package installation.
-12. Starts the `explorer` route key on `EXPLORER_ROUTER_PORT` with branch-aware flags (`--branch`, `--repo-branch`, `--reset-repos`) so local-auth lookup and static routing use the same identity.
-13. Verifies local router health, checks `liveKitServerAgent` and OnlyOffice `api.js` as non-fatal infra gates unless `STRICT_INFRA_CHECKS=1`, verifies public `EXPLORER_PUBLIC_URL` access through the Cloudflare tunnel, and verifies browser-visible OnlyOffice `api.js` through the required `ONLYOFFICE_PUBLIC_URL`.
+An inactive managed gateway does not authorize a wider bind, forwarder, direct
+target, or alternate authorization path. Ploinky DS004 Question #8 remains the
+owner of any architecture change needed to activate that lane.

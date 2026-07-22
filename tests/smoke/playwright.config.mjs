@@ -24,8 +24,8 @@ export default defineConfig({
     actionTimeout: smokeConfig.timeouts.action,
     navigationTimeout: smokeConfig.timeouts.navigation,
     screenshot: 'only-on-failure',
-    trace: 'retain-on-failure',
-    video: 'retain-on-failure',
+    trace: 'off',
+    video: smokeConfig.flags.webmeetScreen ? 'retain-on-failure' : 'off',
     ignoreHTTPSErrors: true,
     permissions: ['camera', 'microphone'],
     launchOptions: {

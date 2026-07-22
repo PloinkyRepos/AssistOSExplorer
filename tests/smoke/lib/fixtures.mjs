@@ -4,7 +4,10 @@ import path from 'node:path';
 import { expect, test as base } from '@playwright/test';
 
 import { smokeConfig } from './config.mjs';
+import { findTraceCredentialResidue, redactTraceText } from './redacted-trace.mjs';
 import { createRedactor, findSecretLeaks } from './security.mjs';
+
+const diagnosticControllers = new WeakMap();
 
 const ignoredUrlPatterns = [
   /\/favicon\.ico(?:$|\?)/i,
@@ -42,26 +45,163 @@ function shouldIgnoreConsole(event) {
   return ignoredConsolePatterns.some((pattern) => pattern.test(text));
 }
 
-export function installRtcProbe(context) {
-  return context.addInitScript(() => {
+function expectedOfflineFailure(text) {
+  return /net::ERR_(?:INTERNET_DISCONNECTED|NETWORK_CHANGED|NETWORK_ACCESS_DENIED|FAILED|ABORTED)\b/i.test(String(text || ''));
+}
+
+export function setPageDiagnosticsExpectedOffline(page, expected) {
+  for (const controller of diagnosticControllers.get(page) || []) {
+    controller.setExpectedOffline(expected);
+  }
+}
+
+export function installRtcProbe(context, { networkLane = '', expectedTurnEndpoint = null } = {}) {
+  const normalizedLane = String(networkLane || '').trim();
+  if (normalizedLane && !['direct-udp', 'turn-udp', 'turn-tls'].includes(normalizedLane)) {
+    throw new Error(`Unsupported RTC probe network lane: ${normalizedLane}`);
+  }
+  const relayLane = normalizedLane === 'turn-udp' || normalizedLane === 'turn-tls';
+  const turnEndpoint = expectedTurnEndpoint && typeof expectedTurnEndpoint === 'object'
+    ? {
+        scheme: String(expectedTurnEndpoint.scheme || '').toLowerCase(),
+        host: String(expectedTurnEndpoint.host || '').toLowerCase(),
+        port: Number(expectedTurnEndpoint.port || 0),
+        transport: String(expectedTurnEndpoint.transport || '').toLowerCase(),
+      }
+    : null;
+  if (relayLane && (
+    !turnEndpoint
+    || !['turn', 'turns'].includes(turnEndpoint.scheme)
+    || !turnEndpoint.host
+    || !Number.isInteger(turnEndpoint.port)
+    || turnEndpoint.port < 1
+    || turnEndpoint.port > 65_535
+    || !['udp', 'tcp'].includes(turnEndpoint.transport)
+  )) {
+    throw new Error(`RTC probe ${normalizedLane} requires an exact non-secret TURN endpoint.`);
+  }
+  return context.addInitScript(({ lane, requiredTurnEndpoint }) => {
     const NativeRTCPeerConnection = window.RTCPeerConnection;
     if (!NativeRTCPeerConnection || window.__e2ePeerConnectionProbeInstalled) return;
     window.__e2ePeerConnectionProbeInstalled = true;
     window.__e2ePeerConnections = [];
-    window.RTCPeerConnection = function patchedRTCPeerConnection(...args) {
-      const pc = new NativeRTCPeerConnection(...args);
+    window.__e2eRtcConfigurations = [];
+    window.__e2eIceCandidateEvents = [];
+
+    function parseTurnUrl(value) {
+      const text = String(value || '').trim();
+      const match = text.match(/^(turns?):(.*)$/i);
+      if (!match) return null;
+      try {
+        const scheme = match[1].toLowerCase();
+        const remainder = match[2].replace(/^\/\//, '');
+        const url = new URL(`${scheme}://${remainder}`);
+        const transport = String(url.searchParams.get('transport') || '').toLowerCase();
+        if (!transport) return null;
+        return {
+          scheme,
+          host: String(url.hostname || '').toLowerCase(),
+          port: Number(url.port || (scheme === 'turns' ? 5349 : 3478)),
+          transport,
+        };
+      } catch (_) {
+        return null;
+      }
+    }
+
+    function exactTurnUrl(value) {
+      const parsed = parseTurnUrl(value);
+      return Boolean(parsed && requiredTurnEndpoint
+        && parsed.scheme === requiredTurnEndpoint.scheme
+        && parsed.host === requiredTurnEndpoint.host
+        && parsed.port === requiredTurnEndpoint.port
+        && parsed.transport === requiredTurnEndpoint.transport);
+    }
+
+    function publicIceServerShape(server) {
+      const originalUrls = Array.isArray(server?.urls) ? server.urls : [server?.urls];
+      return {
+        endpoints: originalUrls.map(parseTurnUrl).filter(Boolean),
+        hasUsername: Boolean(String(server?.username || '')),
+        hasCredential: Boolean(String(server?.credential || '')),
+      };
+    }
+
+    function forceNetworkLane(configuration = {}) {
+      if (!lane) return configuration;
+      if (lane === 'direct-udp') {
+        window.__e2eRtcConfigurations.push({ lane, iceTransportPolicy: 'all', iceServers: [] });
+        return { ...configuration, iceTransportPolicy: 'all', iceServers: [] };
+      }
+      const iceServers = Array.from(configuration?.iceServers || [])
+        .map((server) => {
+          const originalUrls = Array.isArray(server?.urls) ? server.urls : [server?.urls];
+          const urls = originalUrls.filter(exactTurnUrl);
+          if (!urls.length) return null;
+          if (!String(server?.username || '') || !String(server?.credential || '')) {
+            throw new Error(`The exact ${lane} server has no short-lived TURN credentials.`);
+          }
+          return {
+            ...server,
+            urls: Array.isArray(server?.urls) ? urls : urls[0],
+          };
+        })
+        .filter(Boolean);
+      if (!iceServers.length) {
+        throw new Error(`Join material does not contain the exact configured ${lane} endpoint.`);
+      }
+      window.__e2eRtcConfigurations.push({
+        lane,
+        iceTransportPolicy: 'relay',
+        iceServers: iceServers.map(publicIceServerShape),
+      });
+      return { ...configuration, iceTransportPolicy: 'relay', iceServers };
+    }
+
+    function patchedRTCPeerConnection(...args) {
+      const [configuration, ...rest] = args;
+      const pc = new NativeRTCPeerConnection(forceNetworkLane(configuration), ...rest);
+      const peerConnectionIndex = window.__e2ePeerConnections.length;
+      const nativeSetConfiguration = pc.setConfiguration?.bind(pc);
+      if (nativeSetConfiguration) {
+        pc.setConfiguration = (nextConfiguration) => nativeSetConfiguration(forceNetworkLane(nextConfiguration));
+      }
+      Object.defineProperty(pc, '__e2ePeerConnectionId', {
+        value: peerConnectionIndex,
+        configurable: false,
+        enumerable: false,
+      });
+      pc.addEventListener('icecandidate', (event) => {
+        const candidate = event.candidate;
+        if (!candidate) return;
+        window.__e2eIceCandidateEvents.push({
+          peerConnectionIndex,
+          address: String(candidate.address || ''),
+          port: Number(candidate.port || 0),
+          candidateType: String(candidate.type || ''),
+          protocol: String(candidate.protocol || ''),
+          relayProtocol: String(candidate.relayProtocol || ''),
+          turnEndpoint: parseTurnUrl(candidate.url),
+        });
+      });
       window.__e2ePeerConnections.push(pc);
       return pc;
-    };
-    window.RTCPeerConnection.prototype = NativeRTCPeerConnection.prototype;
-  });
+    }
+    patchedRTCPeerConnection.prototype = NativeRTCPeerConnection.prototype;
+    Object.setPrototypeOf(patchedRTCPeerConnection, NativeRTCPeerConnection);
+    window.RTCPeerConnection = patchedRTCPeerConnection;
+    window.__e2eForcedNetworkLane = lane;
+    window.__e2eRequiredTurnEndpoint = requiredTurnEndpoint;
+  }, { lane: normalizedLane, requiredTurnEndpoint: turnEndpoint });
 }
 
 export function attachPageDiagnostics(page, testInfo, label = 'page') {
   const redact = createRedactor();
   const events = [];
+  let expectedOffline = false;
 
   page.on('console', (message) => {
+    if (expectedOffline && expectedOfflineFailure(message.text())) return;
     events.push({
       kind: 'console',
       type: message.type(),
@@ -82,6 +222,7 @@ export function attachPageDiagnostics(page, testInfo, label = 'page') {
     const url = request.url();
     const method = request.method();
     const failure = request.failure()?.errorText || '';
+    if (expectedOffline && expectedOfflineFailure(failure)) return;
     if (shouldIgnoreRequestFailure(url, method, failure)) return;
     events.push({
       kind: 'requestfailed',
@@ -109,10 +250,14 @@ export function attachPageDiagnostics(page, testInfo, label = 'page') {
     const outDir = testInfo.outputPath('diagnostics');
     fs.mkdirSync(outDir, { recursive: true });
     const filePath = path.join(outDir, `${label}.browser-events.json`);
-    const payload = JSON.stringify(events, null, 2);
-    fs.writeFileSync(filePath, payload);
+    const payload = redactTraceText(JSON.stringify(events, null, 2));
     const leaks = findSecretLeaks(payload);
     expect(leaks, `secret values leaked into ${label} browser diagnostics`).toEqual([]);
+    expect(
+      findTraceCredentialResidue(payload),
+      `credential-shaped values leaked into ${label} browser diagnostics`,
+    ).toEqual([]);
+    fs.writeFileSync(filePath, payload);
     return events;
   }
 
@@ -123,7 +268,16 @@ export function attachPageDiagnostics(page, testInfo, label = 'page') {
     ));
   }
 
-  return { events, flush, actionableEvents };
+  const controller = {
+    events,
+    flush,
+    actionableEvents,
+    setExpectedOffline(value) { expectedOffline = Boolean(value); },
+  };
+  const controllers = diagnosticControllers.get(page) || new Set();
+  controllers.add(controller);
+  diagnosticControllers.set(page, controllers);
+  return controller;
 }
 
 export const test = base.extend({

@@ -59,9 +59,13 @@ export const smokeConfig = Object.freeze({
   flags: {
     failOnBrowserErrors: !readBool('SMOKE_ALLOW_BROWSER_ERRORS', false),
     github: readBool('SMOKE_GITHUB', false),
+    gptResearcher: readBool('SMOKE_GPT_RESEARCHER', false),
     onlyoffice: readBool('SMOKE_ONLYOFFICE', false),
     openInterpreter: readBool('SMOKE_OPEN_INTERPRETER', false),
+    umami: readBool('SMOKE_UMAMI', false),
     webmeetMedia: readBool('SMOKE_WEBMEET_MEDIA', false),
+    webmeetNetworkMatrix: readBool('SMOKE_WEBMEET_NETWORK_MATRIX', false),
+    webmeetRefresh: readBool('SMOKE_WEBMEET_REFRESH', false),
     webmeetScreen: readBool('SMOKE_WEBMEET_SCREEN', false),
   },
   timeouts: {
@@ -71,6 +75,7 @@ export const smokeConfig = Object.freeze({
     test: readInt('SMOKE_TEST_TIMEOUT_MS', 120_000),
     relay: readInt('SMOKE_RELAY_TIMEOUT_MS', 420_000),
     media: readInt('SMOKE_MEDIA_TIMEOUT_MS', 60_000),
+    webmeetRefresh: readInt('SMOKE_WEBMEET_REFRESH_MAX_WAIT_MS', 180_000),
   },
 });
 

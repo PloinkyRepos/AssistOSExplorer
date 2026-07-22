@@ -273,6 +273,47 @@ test('aggregateIdePlugins returns nested Soul Gateway manifest settings', async 
     }
 });
 
+test('aggregateIdePlugins returns nested neutral manifest settings from a sibling repo', async () => {
+    const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'explorer-ide-plugins-workspace-'));
+    try {
+        const reposRoot = path.join(workspaceRoot, '.ploinky', 'repos', 'analytics');
+        await writeAgentManifest(reposRoot, 'analytics-agent', {
+            ideSettings: [
+                {
+                    key: 'analytics-settings',
+                    label: 'Analytics',
+                    scope: 'workspace',
+                    pluginKey: 'analytics-agent/analytics-settings',
+                    settingsComponent: 'analytics-settings',
+                    adminOnly: true
+                }
+            ]
+        });
+        await writePluginConfig(reposRoot, 'analytics-agent', 'analytics-settings', {
+            pluginCategory: 'application',
+            id: 'analytics',
+            component: 'analytics-settings',
+            location: [],
+            type: 'global',
+            adminOnly: true
+        });
+
+        const aggregated = await aggregateIdePlugins(workspaceRoot);
+        const settingsPlugins = aggregated.application[''] || [];
+
+        assert.equal(aggregated.agentSettings.length, 1);
+        assert.equal(aggregated.agentSettings[0].ownerAgent, 'analytics-agent');
+        assert.equal(aggregated.agentSettings[0].pluginKey, 'analytics-agent/analytics-settings');
+        assert.equal(aggregated.agentSettings[0].settingsComponent, 'analytics-settings');
+        assert.equal(settingsPlugins.length, 1);
+        assert.equal(settingsPlugins[0].agent, 'analytics-agent');
+        assert.equal(settingsPlugins[0].id, 'analytics');
+        assert.equal(settingsPlugins[0].adminOnly, true);
+    } finally {
+        await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+});
+
 test('aggregateIdePlugins rejects absolute plugin settings URLs', async () => {
     const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'explorer-ide-plugins-'));
     try {

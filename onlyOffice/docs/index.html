@@ -3,16 +3,14 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>OnlyOffice Documentation</title>
+    <title>OnlyOffice Runtime-v5 Documentation</title>
 </head>
 <body>
     <main>
-        <h1>OnlyOffice Documentation</h1>
-        <p>OnlyOfficeAgent is the Ploinky-managed decorator that fronts the workspace Document Server and owns Office session creation, signed editor config generation, loopback document/callback routes, the public editor proxy, and workspace-vs-DPU persistence routing. The agent declares its image (pinned via <code>${ONLYOFFICE_VERSION}</code>), derived JWT secret, protected control route, public editor port, unpublished storage listener, readiness probe, Document Server private-address loopback fetch setting, and persistent storage in <code>manifest.json</code>.</p>
-        <p>The editor proxy strips browser credentials and caller-supplied identity headers, serves only the stock editor assets required by the browser runtime, and advertises the public origin to the Document Server through <code>X-Forwarded-Host</code>/<code>X-Forwarded-Proto</code> on both asset and WebSocket forwards so converted-document cache URLs keep the public editor host and port.</p>
-        <p>Writable editor sessions enable OnlyOffice force-save, and the agent's Document Server wrapper enables auto-assembly before supervisor starts. Editor autosave is Document Server state; workspace or DPU persistence happens only after trusted save callbacks reach the loopback storage listener.</p>
-        <p>Explorer enables OnlyOfficeAgent in global mode so normal workspace documents are visible to the agent's path-confined direct-disk store. Confidential documents remain delegated to <code>dpuAgent</code> and are not served from the workspace mount.</p>
-        <p>Explorer remains the IDE shell and document picker. The DS specifications are the source of truth for runtime ownership, secret derivation, route separation, delegated DPU persistence, and Explorer integration.</p>
+        <h1>OnlyOffice Runtime-v5 Documentation</h1>
+        <p>The pinned OnlyOffice agent exposes an authenticated control service on private target 7000 and a narrowly public editor transport on private target 8080. DocumentServer, DocService support, callback storage, PostgreSQL, RabbitMQ/EPMD, and optional Redis remain process-local with owner-aware listener checks. Explicit service targets never create physical-host publications.</p>
+        <p>Editor sessions resolve the current immutable topology generation. Each session has its own persisted, store-minted document key, and temporal body-bound JWTs protect editor configuration and callback/outbox traffic; the configurable lifetime is an exact positive integer capped at 300 seconds. A token from another session cannot authorize the opaque callback URL, even for the same document. The public proxy applies exact method, path, serialized-Origin, and WebSocket controls while stripping credentials, forwarding data, caller identity, and the private Ploinky Agent Assertion before reaching DocumentServer.</p>
+        <p>Durable v5 session state is an atomic, fsynced, guarded 0600 file under the persisted agent workdir and never contains delegation bearers. Missing or duplicate per-session document keys fail closed without a derivation fallback. DocumentServer Data and bundled database/queue state use explicit managed mounts. The browser gate prepares authenticated restart proof before creating a second edit, proves that edit absent from durable state, issues targeted restart without an intervening authentication request, and reopens the drain-persisted edit after replacement activation; invalid topology, signing, fetch, callback, persistence, listener ownership, or drain state fails closed.</p>
         <ul>
             <li><a href="specs/matrix.md">Specification matrix</a></li>
             <li><a href="../AGENTS.md">Agent guide</a></li>

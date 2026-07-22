@@ -42,6 +42,8 @@
         "UmamiAgent/umamiAgent no-wait"
     ],
     "repos": {
+        "basic": "https://github.com/AssistOS-AI/basic.git",
+        "container-image-builds": "https://github.com/AssistOS-AI/container-image-builds.git",
         "webmeetInfra": "https://github.com/AssistOS-AI/webmeetInfra.git",
         "UmamiAgent": "https://github.com/AssistOS-AI/UmamiAgent.git"
     },
@@ -66,6 +68,9 @@
             }
         ]
     },
+    "volumes": {
+        ".ploinky/repos": "/workspace/.ploinky/repos"
+    },
     "profiles": {
         "default": {
             "env": [
@@ -76,23 +81,6 @@
                 },
                 {
                     "name": "AXIFACE_REPO_PATH",
-                    "required": false
-                },
-                {
-                    "name": "ONLYOFFICE_PUBLIC_URL",
-                    "required": false
-                },
-                {
-                    "name": "ONLYOFFICE_INTERNAL_URL",
-                    "required": false
-                },
-                {
-                    "name": "ONLYOFFICE_JWT_SECRET",
-                    "required": true,
-                    "sharedGeneratedSecret": true
-                },
-                {
-                    "name": "ONLYOFFICE_CALLBACK_BASE_URL",
                     "required": false
                 }
             ],

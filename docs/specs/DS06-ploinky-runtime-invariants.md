@@ -1,75 +1,150 @@
 ---
 id: DS06
 title: Ploinky Runtime Invariants
-status: implemented
+status: partially implemented (rootless private-router reachability blocked)
 owner: achilleside-team
-summary: Captures the Ploinky routing, authentication, guest, secure-wire, sandbox, and documentation invariants that must remain in local context when changing this agent.
+summary: Captures Explorer's runtime-v5 routing, topology, authorization, publication, and isolation invariants.
 ---
 
 # DS06 - Ploinky Runtime Invariants
 
-## Introduction
-
-This specification makes the Ploinky runtime and security invariants local to `AssistOSExplorer`. Future work from inside this agent directory must not rely on external memory of Ploinky core behavior; the local specs must carry the same high-level constraints that Ploinky defines in its routing and security model.
-
-The authoritative upstream contracts are Ploinky `docs/specs/DS005-routing-and-web-surfaces.md` and `docs/specs/DS011-security-model.md`. This file restates only the invariants that affect this agent's implementation and documentation.
-
 ## Core Content
 
-`AssistOSExplorer` must treat the Ploinky router as the browser and MCP trust broker. Browser surfaces, first-party MCP calls, delegated MCP calls, uploads, blobs, and manifest-declared HTTP services are expected to enter through the router so route authentication, session handling, invocation minting, and audit behavior can apply. Agent manifests must not publish TCP listeners. A browser that needs a non-primary listener uses `/base-agent-additional-server/<route-key>/<container-port>/...`; Ploinky authenticates the request first, then an in-container relay dials `127.0.0.1:<container-port>`.
+### Runtime boundary
 
-Agent MCP sessions are ephemeral runtime state. Ploinky clients should close sessions with `DELETE /mcp` when done, and the shared `AgentServer` may reap idle sessions defensively. Idle cleanup must not close sessions that still have an open HTTP response, because long-running tool calls and SSE streams remain active until their response finishes.
+Explorer and every enabled dependency run behind Ploinky Router. The outer box
+has one loopback TCP publication for Router and one wildcard UDP publication
+for the LiveKit mux. Manifests, profiles, dependency graphs, readiness state,
+and agent state cannot add another physical-host mapping.
 
-Executable MCP operations must be authorized by router-minted request JWTs. The launcher/router may derive per-agent request secrets from `PLOINKY_MASTER_KEY`, but the agent runtime must receive only its own `PLOINKY_AGENT_ID`, `PLOINKY_AGENT_SECRET`, and compatibility `PLOINKY_AGENT_PRINCIPAL`. Agents must never receive, derive, or require `PLOINKY_MASTER_KEY` or the legacy `PLOINKY_DERIVED_MASTER_KEY`. Code must not invent alternate bearer-token, client-secret, or caller-header authorization paths around the router's secure-wire model.
+Router owns public/control listener `8080` and box-private listener `8081`.
+Private operations require both effective authenticated policy and an exact
+current-instance/current-enable-generation caller ACL. Method, path, audience,
+body digest, nonce, expiry, and replay state are bound by the assertion. An
+assertion is never a user or administrator credential.
 
-Ploinky-owned generated secrets are resolved by the launcher before agent code runs. Agent-owned generated secrets use `generatedSecret: true` for manifest env entries or `{{generatedSecret:NAME}}` for runtime-resource templates; both are scoped to the current agent identity and ignore operator-supplied values. Shared generated credentials that must be identical across agents use `sharedGeneratedSecret: true` and derive from the source env name. Agents consume the resolved values but do not hold the master derivation key. Agents must not invent random persistent agent secrets or require manual configuration for workspace-owned LiveKit, TURN, OnlyOffice, DPU, recording, webhook, or data-encryption secrets. External third-party credentials remain explicitly configured.
+The private Router listener gate has three exact states:
 
-Ploinky profiles must be complete for non-sensitive topology and runtime configuration. Required URLs, hostnames, public IPs, realms, ports, and similar ordinary config must have profile defaults so a fresh workspace can run `ploinky profile prod` and `ploinky start <agent>` without manual `ploinky var` setup. Secrets, tokens, API keys, passwords, encryption keys, and `generatedSecret` entries remain secret-owned. Workspace vars are still valid overrides for changing hosts or domains. For Soul Gateway consumers, a generated `SOUL_GATEWAY_API_KEY` is marked with `PLOINKY_ENV_SOURCE_SOUL_GATEWAY_API_KEY=generated` and routes through the Ploinky HTTP service. Explorer deployments must treat that local Soul Gateway as the reference gateway and the LLM hub; it does not delegate to a remote gateway. Explorer-started generated gateway credentials must not use `explicitOverride`, because a stale or explicit `SOUL_GATEWAY_API_KEY` would bypass the local gateway. The Soul Gateway Settings button in Explorer opens the local protected dashboard at `/services/soul-gateway/management/` directly through the plugin `settingsUrl`; Explorer must not host a separate Soul Gateway settings modal.
+- `required-loopback`: `127.0.0.1:8081` is required whenever RoutingServer is
+  ready.
+- `required-assigned-managed-gateway`: a current managed bridge IPAM gateway is
+  eligible only when current Podman inspection and kernel address inventory
+  prove that it is assigned to the exact reported `network_interface`; every
+  eligible gateway requires exactly one private listener.
+- `inactive-unassigned-managed-gateway`: a gateway absent from that exact
+  interface is inactive and must have no listener. The inactive state remains
+  fail-closed and is not evidence of managed-bridge activation or reachability.
 
-The compact `x-ploinky-auth-info` header is not a secure grant by itself. Any HTTP service that receives that header must trust it only when it arrived through a declared Ploinky HTTP service route and, for guest services, only after validating the router-issued invocation token and the expected guest role or scope. Caller-supplied copies of identity headers must be rejected as authoritative input.
+Missing or stale address evidence, assignment on another interface, a missing
+eligible listener, an extra listener, a wildcard, or an unrelated bind fails
+closed. On the currently observed rootless Podman topology,
+`host.containers.internal:host-gateway` terminates on the box outer-facing
+interface rather than loopback or an address assigned to a managed inner
+bridge. Binding private `8081` there would violate the approved interface
+boundary, while the managed bridge gateway is unassigned in the outer
+namespace. Managed-bridge private service activation therefore remains
+inactive and fail-closed. Explorer must not add a wider bind, forwarding
+sidecar, direct-target fallback, or alternate authorization path; Ploinky DS004
+Question #8 owns the unresolved architecture decision.
 
-`x-ploinky-user-delegation` is even narrower: the router must strip it from external requests, and agent code must treat it as meaningful only on verified agent-to-agent MCP calls where the router has already authenticated the source agent. Browser traffic, generic public HTTP requests, and loopback document/callback routes must never accept that header as an authorization source. Delegated-user tool access remains narrower than a normal authenticated browser call because the grant is source-bound, target-bound, tool-bound, scope-bound, and short-lived; it may be reused within those bounds until expiry, while per-call Agent Assertions and Router Requests remain replay-protected.
+HTTP, SSE, and WebSocket requests use the same immutable route-and-policy
+generation. Host/interface class is resolved before pathname dispatch. Unknown,
+stale, malformed, suffix-confusable, unauthorized, or generation-drifted
+requests fail before any upstream connection is created.
 
-Guest access must remain scoped to the route shape declared by the owning manifest. Manifest-level `guest: true` exposes the agent as a normal guest agent and should still enforce limitations from `usr.roles`. A `routerAccess.httpRoutes` entry with `access: "guest"` exposes only the declared agent-owned HTTP path and mints or reuses a route-scoped guest session according to the Ploinky router's current guest policy. An `httpServices` entry with `access: "guest"` exposes only the declared HTTP prefix and mints or reuses a service-scoped guest session. Product-specific public paths must be declared in the agent manifest rather than hard-coded in Ploinky core.
+### Topology
 
-Agent code must enforce its own domain authorization. Ploinky route authentication identifies the caller and signs the invocation, but it does not grant every domain operation. Sensitive actions must check the verified user, roles, scopes, target resource, workspace path, and agent-local policy before reading or mutating state.
+Ploinky atomically mounts schema-v2 topology before consumers start and injects
+`PLOINKY_EDGE_TOPOLOGY_FILE`, `PLOINKY_ROUTER_URL`, and
+`PLOINKY_INTERNAL_ROUTER_URL`. The snapshot is non-secret, immutable by
+generation, and contains active browser locators but no private target ports,
+credentials, or product-specific core knowledge.
 
-For the OnlyOffice integration specifically, the internal document and callback routes are loopback-only implementation details, not router routes. They must rely only on the opaque Office session token and local listener binding, never on browser cookies or `x-ploinky-auth-info`. Public editor proxy requests must strip browser cookies, authorization headers, proxy authorization headers, and caller-supplied `x-ploinky-*` identity headers before forwarding to Document Server.
+Long-lived consumers resolve the current snapshot per join, editor-session
+creation, dashboard open, or other locator-producing operation. Browsers use
+only the authenticated one-locator no-store projection. Unknown schema,
+inactive selector, stale generation, missing locator, or publication error
+fails closed; consumers do not synthesize hostnames or fall back to startup
+environment.
 
-Runtime isolation is defense in depth, not a hostile multi-tenant guarantee. Containers, bubblewrap, and Seatbelt reduce host exposure, but enabled agent code remains trusted operator-controlled code inside one workspace. Manifest volumes, runtime resources, lifecycle hooks, and network access are intentional grants and must be reviewed as part of the agent contract. Manifest volume host paths must stay under `.ploinky/`; durable service data belongs under `.ploinky/data/<agent-or-service>/...`, and generated runtime inputs belong under `.data/<agent>/...`.
+### Agent contracts
 
-Default Explorer containerized agents should use the shared `docker.io/assistos/ploinky-node:24-bookworm-tools` runtime image unless a local spec documents a specific exception. That image is the supported Node 24 glibc baseline for the default dependency graph and preinstalls the system tools needed by Ploinky dependency-cache preparation and the enabled Explorer agents. Using one image keeps cache invalidation, deploy pre-pulls, and cold-start behavior predictable across `AchillesIDE` and `proxies/soul-gateway`.
+- Manifests use slim `httpServices`; an optional service `port` selects a
+  distinct private TCP target.
+- OnlyOffice declares authenticated control and narrowly public editor targets.
+- LiveKit declares public signaling and private Twirp services on loopback
+  `7880`; media alone owns box UDP `7882` under an exact generation capability.
+- Umami declares authenticated dashboard target `3000` and narrow guest
+  telemetry target `3001`.
+- Extra application servers such as GPTResearcher declare their explicit TCP
+  target and verified base path.
+- Default bridge launch uses the single managed host-gateway mapping. Host mode
+  is a capability for a precise generation, never authorization by localhost.
 
-File and static-content handling must stay workspace-confined. Paths must be resolved relative to the workspace root, agent root, configured data directory, or explicit runtime volume. Explorer, `gitAgent`, and `webmeetAgent` use the implicit shared `AgentServer`, preserving the primary port used by static, MCP, and readiness routing. Custom-command dependencies such as WebTTY and LiveKit have no primary service and are enabled with `no-wait`; their browser-facing listeners use the confined additional-server convention. Code must not assume host-specific absolute paths, follow symlink escapes, or place secrets in static roots, plugin assets, HTML documentation, logs, transcripts, screenshots, or test fixtures.
+### Identity and secrets
 
-Explorer deployments start the static agent by its route key, `explorer`, rather than the repository-qualified ref. This keeps the static routing record and local-auth lookup aligned. Every deployment workflow must apply the selected Explorer branch to the Ploinky checkout, Explorer checkout, `webmeetInfra`, `proxies`, and the other enabled dependency repositories so a proxy-contract branch cannot mix with `main` manifests.
+Executable MCP operations require Router-minted request JWTs. Agents receive
+only their own Ploinky identity material and scoped generated/shared-generated
+secrets; they never receive a derivation master key. Caller-supplied identity,
+delegation, forwarding, cookie, or authorization headers cannot bypass Router
+policy or agent domain authorization.
 
-Logs and user-facing errors must not expose secrets, cookies, bearer tokens, invocation JWTs, API keys, raw prompts, hidden policy text, or internal payloads. Detailed diagnostics belong behind explicit debug modes and must still redact sensitive values before persistence.
+Logs, traces, screenshots, and diagnostics redact cookies, bearer material,
+API keys, callback tokens, assertions, and private payloads. Trace resources
+also redact dynamic participant JWTs, TURN usernames/credentials, CSRF values,
+and router assertions even when those values were not present in the runner
+environment. Sanitization parses JSON and Playwright NDJSON structurally,
+preserves record parseability, covers named query/form and cookie entries, and
+post-scans every textual archive member for credential-shaped residue before an
+artifact is attached. Detailed health is supervisor-only on an unmounted Unix
+socket.
 
-Agent-local contract:
+### Hard cut
 
-- Manifest: `explorer/manifest.json`
-- Role: Multi-agent AchillesIDE repository and Explorer static-agent surface.
-- Authentication: Explorer and dependent agents inherit route policy from their manifests and Ploinky enable-time auth records.
-- HTTP service surface: Explorer and WebMeet HTTP service prefixes and product route-access entries must be manifest-declared and routed through Ploinky core generically. WebTTY is reached at `/base-agent-additional-server/webtty/7681/`; LiveKit signaling is resolved from the authenticated router locator for `liveKitServerAgent` and port `7880` (or `17880` in dev).
-- Persistent state: Workspace files, confidential DPU objects, WebMeet data, and visitor records stay in their owning agent boundaries.
-- Documentation: `docs/index.html`
-- Validation: `npm test` in the affected agent plus Ploinky smoke tests for routing or auth changes.
+Runtime contract v5 accepts no previous runtime state. Operators must revoke
+obsolete connector credentials, delete obsolete plaintext state, and recreate
+the box explicitly before activation. Runtime v5 has no import, cleanup,
+compatibility, dual-write, automatic recreate, or failure-mode fallback path.
 
-The documentation website at `docs/index.html` must keep direct references to the docs or agent guides for Explorer, `dpuAgent`, `gitAgent`, `multimedia`, `onlyOffice`, `soplangAgent`, `tasksAgent`, `webAssist`, `webmeetAgent`, `webmeetLivekitAiAgent`, `webmeetInfra`, the unified `webmeetInfra/liveKitServerAgent`, and the local Ploinky docs. The Ploinky references must include `docs/specs/DS005-routing-and-web-surfaces.md` and `docs/specs/DS011-security-model.md` so future work can reach the routing and security invariants from the website.
+Explorer deployment automation must use box-owned publication and topology.
+Agent-owned edge publication is not part of the dependency graph, plugin set,
+workflow, or configuration surface.
+
+### Verification
+
+Changes affecting this contract require unit and integration tests plus the
+real-engine exact-publication smoke. After the Ploinky full graph and listener
+gate succeed, the release harness must keep that graph alive and run this fixed
+Chromium Router/auth baseline before cleanup or graph destruction, without a
+retry or skip:
+
+```bash
+cd /Users/danielsava/work/file-parser/AssistOSExplorer/tests/smoke
+SMOKE_BASE_URL=http://127.0.0.1:18080 npm test -- --project=chromium specs/00-router-auth.spec.mjs
+```
+
+The baseline proves the dashboard, Explorer shell, and routed WebChat shell
+through Router. It is distinct from the WebMeet two-account bidirectional
+ScreenShare gate and the WebMeet external-network direct UDP, relay UDP, and
+relay TLS lanes on native Linux x64 and arm64; none substitutes for another.
 
 ## Decisions & Questions
 
-### Question #1: Why duplicate Ploinky invariants inside every agent spec set?
+### Question #1: Why is this specification only partially implemented?
 
 Response:
-Coding work often starts from an individual agent directory, where only local guidance may be read before changes are made. Keeping these Ploinky invariants in the local specification set prevents agents from accidentally treating router auth, guest mode, direct ports, or invocation headers as agent-specific implementation details that can be bypassed.
+The approved private Router contract requires managed bridge callers to reach
+an interface that is neither the physical-host edge nor the box outer-facing
+interface. The observed rootless host-gateway mapping does not provide such an
+address. Marking the slice partial preserves the fail-closed implementation
+evidence and prevents documentation from silently treating a wider listener or
+forwarder as an accepted substitute.
 
-### Question #2: Why is route authentication not enough for domain authorization?
+### Question #2: Why is the fixed Chromium baseline separate from the WebMeet gates?
 
 Response:
-Ploinky establishes who the caller is and signs the invocation path, but domain ownership remains inside the agent. The agent knows which files, records, rooms, leads, secrets, repositories, media objects, or infrastructure controls are safe for that caller. Each agent must therefore enforce its own resource policy after reading verified auth context.
-
-## Conclusion
-
-`AssistOSExplorer` remains compatible with Ploinky only while it preserves router-mediated entry, secure-wire invocation, scoped guest behavior, explicit manifest-declared route policy and HTTP-service boundaries, workspace-confined storage, redacted logging, and local domain authorization. Any source change that affects these contracts must update this specification, the local docs, and the local guide files in the same change set.
+The fixed baseline is the release oracle for Router authentication and the
+three primary routed browser shells while the full graph is alive. WebMeet
+screen sharing and external-network transport prove different media and
+network properties, so passing either WebMeet lane cannot replace a failure of
+the Router/auth oracle.
