@@ -319,7 +319,11 @@ jobs:
             local repo_dir="$1"
             local branch="$2"
             local label="$3"
+            local canonical_origin="${4:-}"
             git -C "$repo_dir" check-ref-format --branch "$branch" >/dev/null
+            if [ -n "$canonical_origin" ]; then
+              git -C "$repo_dir" remote set-url origin "$canonical_origin"
+            fi
             git -C "$repo_dir" fetch --prune origin
             if git -C "$repo_dir" show-ref --verify --quiet "refs/heads/$branch"; then
               git -C "$repo_dir" checkout "$branch"
@@ -338,7 +342,8 @@ jobs:
             PLOINKY="$PLOINKY_DIR/bin/ploinky"
           fi
           if [ -d "$PLOINKY_DIR/.git" ]; then
-            checkout_runtime_branch "$PLOINKY_DIR" "$PLOINKY_BRANCH" "Ploinky runtime"
+            checkout_runtime_branch "$PLOINKY_DIR" "$PLOINKY_BRANCH" "Ploinky runtime" \
+              "https://github.com/AssistOS-AI/ploinky.git"
           elif [ "$PLOINKY_BRANCH" != "master" ]; then
             echo "[deploy] ERROR: cannot checkout Ploinky branch '$PLOINKY_BRANCH'; '$PLOINKY_DIR' is not a git checkout."
             exit 1
@@ -347,7 +352,8 @@ jobs:
           ACHILLES_BRANCH="${ACHILLES_BRANCH:-master}"
           ACHILLES_DIR="$PLOINKY_DIR/node_modules/achillesAgentLib"
           if [ -d "$ACHILLES_DIR/.git" ]; then
-            checkout_runtime_branch "$ACHILLES_DIR" "$ACHILLES_BRANCH" "achillesAgentLib"
+            checkout_runtime_branch "$ACHILLES_DIR" "$ACHILLES_BRANCH" "achillesAgentLib" \
+              "https://github.com/AssistOS-AI/AchillesAgentLib.git"
           elif [ "$ACHILLES_BRANCH" != "master" ]; then
             echo "[deploy] ERROR: cannot checkout achillesAgentLib branch '$ACHILLES_BRANCH'; '$ACHILLES_DIR' is not a git checkout."
             exit 1
@@ -581,12 +587,12 @@ jobs:
           done
 
           case "$(printf '%s' "${STRICT_INFRA_CHECKS:-0}" | tr '[:upper:]' '[:lower:]')" in
-            1|true|yes|on) INFRA_FATAL=1 ;;
-            *) INFRA_FATAL=0 ;;
+            1|true|yes|on) INFRA_FATAL=1; INFRA_ATTEMPTS=120 ;;
+            *) INFRA_FATAL=0; INFRA_ATTEMPTS=15 ;;
           esac
           echo "[deploy] Verifying liveKitServerAgent health on 127.0.0.1:${WEBMEET_INFRA_HEALTH_PORT} (fatal=${INFRA_FATAL})..."
           LK_OK=0
-          for i in $(seq 1 120); do
+          for i in $(seq 1 "$INFRA_ATTEMPTS"); do
             code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${WEBMEET_INFRA_HEALTH_PORT}/" || true)"
             if [ "$code" = "200" ]; then
               LK_OK=1
@@ -639,8 +645,8 @@ jobs:
         run: |
           set -euo pipefail
           case "$(printf '%s' "${STRICT_INFRA_CHECKS:-0}" | tr '[:upper:]' '[:lower:]')" in
-            1|true|yes|on) INFRA_FATAL=1 ;;
-            *) INFRA_FATAL=0 ;;
+            1|true|yes|on) INFRA_FATAL=1; INFRA_ATTEMPTS=60 ;;
+            *) INFRA_FATAL=0; INFRA_ATTEMPTS=12 ;;
           esac
           echo "[deploy] Verifying ${PUBLIC_URL}/dashboard from GitHub runner..."
           for i in $(seq 1 60); do
@@ -658,17 +664,33 @@ jobs:
             sleep 5
           done
 
+          echo "[deploy] Verifying ${PUBLIC_URL}/public-services/soul-gateway-health/ from GitHub runner..."
+          for i in $(seq 1 60); do
+            code="$(curl -L -s -o /tmp/soul-gateway-health-response.txt -w '%{http_code}' "${PUBLIC_URL%/}/public-services/soul-gateway-health/" || true)"
+            if [ "$code" = "200" ]; then
+              echo "[deploy] Soul Gateway health responding with HTTP $code"
+              break
+            fi
+            if [ "$i" = "60" ]; then
+              echo "[deploy] ERROR: Soul Gateway public health did not become reachable"
+              echo "[deploy] Last HTTP code: ${code:-none}"
+              sed -n '1,40p' /tmp/soul-gateway-health-response.txt 2>/dev/null || true
+              exit 1
+            fi
+            sleep 5
+          done
+
           if [ -n "${WEBMEET_PUBLIC_LIVEKIT_URL:-}" ]; then
             livekit_probe_url="${WEBMEET_PUBLIC_LIVEKIT_URL/#wss:/https:}"
             livekit_probe_url="${livekit_probe_url/#ws:/http:}"
             echo "[deploy] Verifying ${livekit_probe_url%/}/ from GitHub runner..."
-            for i in $(seq 1 60); do
+            for i in $(seq 1 "$INFRA_ATTEMPTS"); do
               code="$(curl -L -s -o /tmp/livekit-public-response.txt -w '%{http_code}' "${livekit_probe_url%/}/" || true)"
               if [ "$code" = "200" ]; then
                 echo "[deploy] Public LiveKit endpoint responding with HTTP $code"
                 break
               fi
-              if [ "$i" = "60" ]; then
+              if [ "$i" = "$INFRA_ATTEMPTS" ]; then
                 echo "[deploy] Last HTTP code: ${code:-none}"
                 sed -n '1,40p' /tmp/livekit-public-response.txt 2>/dev/null || true
                 if [ "$INFRA_FATAL" = "1" ]; then
