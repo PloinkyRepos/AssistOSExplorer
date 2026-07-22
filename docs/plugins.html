@@ -84,6 +84,7 @@
                     <li><code>git-menu-contributions</code> contributes <code>Add to .gitignore</code>, <code>Remove from .gitignore</code>, and <code>New repository</code> into file and directory context menus and the <code>New</code> menu</li>
                     <li>both contributions share the same logical plugin identity through <code>id: "git"</code></li>
                 </ul>
+                <p>Explorer also owns the <code>help</code> application plugin. Its toolbar button opens a static, responsive user guide covering Explorer, Git, WebMeet, Confidential, Copilot, and Administration. Unlike domain plugins, Help does not call an agent or mutate workspace state: it summarizes user-facing workflows while identifying the separate agents that own Git, protected data, meetings, and Copilot behavior.</p>
                 <p>The screenshots below show the UI surfaces plugins occupy inside the shell.</p>
                 <div class="screenshot-gallery" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:1rem;margin-top:1rem;">
                     <figure style="background:var(--bg-primary);border:1px solid var(--border-primary);border-radius:12px;padding:0.75rem;">
@@ -124,6 +125,7 @@
                     <li>For <code>menu</code> contributions, Explorer resolves menu items asynchronously, shows a host-owned loading state while resolution is in progress, and executes the selected action with the same target context that was used to resolve the item.</li>
                     <li>The plugin or menu module calls the owning agent through the Explorer bridge, and Explorer refreshes the affected shell surfaces after the mutation.</li>
                 </ol>
+                <p>Static informational plugins stop after mounting their presentation surface. They do not need a domain-agent call or a host refresh when they have no runtime data or mutations.</p>
                 <p>The key architectural point is that Explorer never yields structural ownership of the shell. It may host a toolbar mount, a modal, or a context menu, but it still owns layout, routing, menu rendering, and refresh behavior. Plugins extend those surfaces; they do not replace them.</p>
             </div>
 

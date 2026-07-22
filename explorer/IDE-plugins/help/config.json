@@ -1,0 +1,20 @@
+{
+  "pluginCategory": "application",
+  "id": "help",
+  "component": "help-tool-button",
+  "location": ["file-exp:toolbar"],
+  "locationOrder": 400,
+  "label": "Help",
+  "tooltip": "Explorer help and user guide",
+  "icon": "./icon.svg",
+  "presenter": "HelpToolButton",
+  "type": "embedded",
+  "autoPin": false,
+  "dependencies": [
+    {
+      "component": "help-modal",
+      "presenter": "HelpModal",
+      "type": "modal"
+    }
+  ]
+}

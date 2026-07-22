@@ -1,0 +1,132 @@
+<div class="modal-header">
+    <div>
+        <div class="modal-title">Explorer Help</div>
+        <div class="help-modal-subtitle">A practical guide to your workspace</div>
+    </div>
+    <button type="button" class="close help-modal-close" data-help-close aria-label="Close help">
+        <img class="close-icon" src="/explorer/assets/icons/x-mark.svg" alt="">
+    </button>
+</div>
+
+<div class="modal-body help-modal-body">
+    <nav class="help-tabs" role="tablist" aria-label="Help topics">
+        <button id="help-tab-explorer" class="help-tab active" type="button" role="tab" data-help-tab="explorer" aria-controls="help-panel-explorer" aria-selected="true" tabindex="0">Explorer</button>
+        <button id="help-tab-git" class="help-tab" type="button" role="tab" data-help-tab="git" aria-controls="help-panel-git" aria-selected="false" tabindex="-1">Git</button>
+        <button id="help-tab-webmeet" class="help-tab" type="button" role="tab" data-help-tab="webmeet" aria-controls="help-panel-webmeet" aria-selected="false" tabindex="-1">WebMeet</button>
+        <button id="help-tab-confidential" class="help-tab" type="button" role="tab" data-help-tab="confidential" aria-controls="help-panel-confidential" aria-selected="false" tabindex="-1">Confidential</button>
+        <button id="help-tab-copilot" class="help-tab" type="button" role="tab" data-help-tab="copilot" aria-controls="help-panel-copilot" aria-selected="false" tabindex="-1">Copilot</button>
+        <button id="help-tab-admin" class="help-tab" type="button" role="tab" data-help-tab="admin" aria-controls="help-panel-admin" aria-selected="false" tabindex="-1">Admin</button>
+    </nav>
+
+    <div class="help-content">
+        <section id="help-panel-explorer" class="help-panel active" role="tabpanel" data-help-panel="explorer" aria-labelledby="help-tab-explorer" tabindex="0">
+            <div class="help-intro">
+                <span class="help-kicker">Your workspace</span>
+                <h2>Find, understand, and work with your files</h2>
+                <p>Explorer brings your files, documents, collaboration tools, and assistants into one place. Most actions follow the item you currently have selected.</p>
+            </div>
+            <div class="help-grid">
+                <article class="help-card">
+                    <h3>Browse and open</h3>
+                    <p>Use the folder tree and file list to move through the workspace. Select a file to preview it, or open a folder to continue browsing.</p>
+                </article>
+                <article class="help-card">
+                    <h3>Create and organize</h3>
+                    <p>Use the New menu and right-click menus to create, rename, copy, move, or delete files and folders. Available actions adapt to what you selected.</p>
+                </article>
+                <article class="help-card">
+                    <h3>Preview and edit</h3>
+                    <p>Markdown, code, text, media, and structured documents open in the view that best suits them. Switch to editing when you need to make changes, then save your work.</p>
+                </article>
+                <article class="help-card">
+                    <h3>Search and personalize</h3>
+                    <p>Use search to find content across the workspace. Open Settings to choose your theme, editor preferences, keyboard shortcuts, and the plugins you want to see.</p>
+                </article>
+            </div>
+            <div class="help-callout"><strong>Good to know:</strong> Explorer is the shared workspace surface. Features such as Git, Confidential, WebMeet, and Copilot are handled by separate agents and presented here when you need them.</div>
+        </section>
+
+        <section id="help-panel-git" class="help-panel" role="tabpanel" data-help-panel="git" aria-labelledby="help-tab-git" tabindex="0" hidden>
+            <div class="help-intro">
+                <span class="help-kicker">Version control</span>
+                <h2>Keep a clear history of your work</h2>
+                <p>The Git button opens the workspace Git view. It shows repositories, changed files, branches, and the actions available for the current state.</p>
+            </div>
+            <ol class="help-steps">
+                <li><span>1</span><div><h3>Set your identity</h3><p>Open Git settings and enter the name and email that should appear on your commits. These details identify your changes.</p></div></li>
+                <li><span>2</span><div><h3>Connect a remote account</h3><p>Choose GitHub sign-in for the guided flow, or use a personal access token for an HTTPS remote. Follow the on-screen confirmation before continuing.</p></div></li>
+                <li><span>3</span><div><h3>Start with a repository</h3><p>Create a repository on GitHub, clone one you can access, or enter a remote URL manually. You can also create a local repository from a folder's New menu.</p></div></li>
+                <li><span>4</span><div><h3>Review and share changes</h3><p>Select the files you want, write a meaningful commit message, and commit them. Pull before pushing when others may have updated the same repository.</p></div></li>
+            </ol>
+            <div class="help-grid help-grid-compact">
+                <article class="help-card"><h3>Branches</h3><p>Create or switch branches when you want to work separately from the main line of development.</p></article>
+                <article class="help-card"><h3>Conflicts</h3><p>If Git reports a conflict, review both versions carefully, keep the intended content, and complete the guided resolution before committing.</p></article>
+            </div>
+            <div class="help-callout"><strong>Behind the scenes:</strong> <code>gitAgent</code> manages repository operations and authentication while Explorer provides the interface.</div>
+        </section>
+
+        <section id="help-panel-webmeet" class="help-panel" role="tabpanel" data-help-panel="webmeet" aria-labelledby="help-tab-webmeet" tabindex="0" hidden>
+            <div class="help-intro">
+                <span class="help-kicker">Live collaboration</span>
+                <h2>Meet and work together inside the workspace</h2>
+                <p>WebMeet combines live audio and video with chat, shared workspace resources, and a collaborative blackboard.</p>
+            </div>
+            <div class="help-grid">
+                <article class="help-card"><h3>Create or join a room</h3><p>Open WebMeet to see available rooms. Create a room for a new session or join an existing one. A guest invitation lets someone enter only the room you shared.</p></article>
+                <article class="help-card"><h3>Prepare your media</h3><p>Choose your microphone and camera before joining. During the meeting you can mute, stop video, share your screen, and adjust participant audio.</p></article>
+                <article class="help-card"><h3>Use chat and resources</h3><p>Send messages to the room and attach relevant workspace resources when available. Guests can use room resources without browsing your workspace.</p></article>
+                <article class="help-card"><h3>Work on the blackboard</h3><p>Add notes, polls, lists, drawings, and supported documents to a shared canvas. Everyone in the room sees updates as collaboration progresses.</p></article>
+            </div>
+            <div class="help-callout"><strong>Privacy tip:</strong> Share only the screen, room link, and resources you intend participants to see. WebMeet and its live-media services run as separate agents from Explorer.</div>
+        </section>
+
+        <section id="help-panel-confidential" class="help-panel" role="tabpanel" data-help-panel="confidential" aria-labelledby="help-tab-confidential" tabindex="0" hidden>
+            <div class="help-intro">
+                <span class="help-kicker">Protected information</span>
+                <h2>Work with sensitive content deliberately</h2>
+                <p>The Confidential area looks familiar, but its content is protected separately from ordinary workspace files and follows explicit access rules.</p>
+            </div>
+            <div class="help-grid">
+                <article class="help-card"><h3>My Space</h3><p>Your private confidential area. Create or upload sensitive material here when it is intended only for your account.</p></article>
+                <article class="help-card"><h3>Shared</h3><p>Items other people have shared with you appear here. What you can view, edit, or manage depends on the permission you received.</p></article>
+                <article class="help-card"><h3>Secrets</h3><p>Use this area for sensitive values such as access tokens. Secret values are treated differently from normal documents and should never be copied into ordinary files.</p></article>
+                <article class="help-card"><h3>Permissions</h3><p>Open an item's permissions before sharing it. Give only the access required, review who can use the item, and remove access when it is no longer needed.</p></article>
+            </div>
+            <div class="help-callout help-callout-warning"><strong>Important:</strong> Moving through Confidential does not turn its items into normal files. <code>dpuAgent</code> protects the content and decides access according to the assigned roles.</div>
+        </section>
+
+        <section id="help-panel-copilot" class="help-panel" role="tabpanel" data-help-panel="copilot" aria-labelledby="help-tab-copilot" tabindex="0" hidden>
+            <div class="help-intro">
+                <span class="help-kicker">AI assistance</span>
+                <h2>Ask for help with the right workspace context</h2>
+                <p>Copilot is most useful when you start from the file or folder related to your task and explain the outcome you want.</p>
+            </div>
+            <ol class="help-steps">
+                <li><span>1</span><div><h3>Choose the context</h3><p>Right-click the relevant file or folder and choose <strong>Open Copilot here</strong>. The conversation starts with that workspace location in context.</p></div></li>
+                <li><span>2</span><div><h3>Describe the result</h3><p>State what you want to create, change, understand, or review. Mention important constraints and ask Copilot to clarify anything that would change the result.</p></div></li>
+                <li><span>3</span><div><h3>Follow progress</h3><p>Some coding or research requests continue as longer-running tasks. You can keep the conversation focused, review progress, and continue supported tasks with a new instruction.</p></div></li>
+                <li><span>4</span><div><h3>Review the outcome</h3><p>Read proposed changes and generated content before accepting or publishing them. You remain responsible for deciding what belongs in the workspace.</p></div></li>
+            </ol>
+            <div class="help-grid help-grid-compact">
+                <article class="help-card"><h3>Skills</h3><p>The Copilot section in Settings shows the skills discovered for the workspace. Skills give the assistant focused ways to handle particular tasks.</p></article>
+                <article class="help-card"><h3>Specialized assistants</h3><p>You can ask for coding, research, or other specialist help in natural language. Copilot selects an available specialist when the request needs one.</p></article>
+            </div>
+            <div class="help-callout"><strong>Behind the scenes:</strong> AchillesCLI manages Copilot conversations and coordinates separate specialist agents while Explorer supplies the selected workspace context.</div>
+        </section>
+
+        <section id="help-panel-admin" class="help-panel" role="tabpanel" data-help-panel="admin" aria-labelledby="help-tab-admin" tabindex="0" hidden>
+            <div class="help-intro">
+                <span class="help-kicker">Workspace administration</span>
+                <h2>Manage access and available capabilities</h2>
+                <p>Administration controls are shown only to authorized users. If you do not see one of these areas, your account does not currently have permission to use it.</p>
+            </div>
+            <div class="help-grid">
+                <article class="help-card"><h3>Users and roles</h3><p>In Settings → Administration, authorized users can add accounts, update names or passwords, assign roles, and remove accounts. A role determines which protected actions a user may perform.</p></article>
+                <article class="help-card"><h3>Branding and audit</h3><p>Administration also contains workspace login branding and audit settings. Use audit information to understand important activity without exposing confidential content.</p></article>
+                <article class="help-card"><h3>Marketplace agents</h3><p>Marketplace lists available agents. An admin can enable the capabilities the workspace needs and disable those that should not run.</p></article>
+                <article class="help-card"><h3>Repository sources</h3><p>The Repos area manages sources that provide agents, skills, or other workspace features. Install only repositories that your organization trusts.</p></article>
+            </div>
+            <div class="help-callout help-callout-warning"><strong>Use care:</strong> Role changes, agent availability, and repository sources can affect everyone in the workspace. Confirm the intended scope before saving an administrative change.</div>
+        </section>
+    </div>
+</div>

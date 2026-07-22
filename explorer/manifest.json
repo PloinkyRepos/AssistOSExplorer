@@ -49,6 +49,7 @@
         "git": true,
         "dpu-runtime-support": true,
         "dpu-audit-menu": true,
+        "help": true,
         "soplang-builder": true,
         "tasks": true,
         "webmeet": true,
