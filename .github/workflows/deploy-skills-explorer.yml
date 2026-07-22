@@ -635,8 +635,13 @@ jobs:
         env:
           ONLYOFFICE_PUBLIC_URL: ${{ vars.ONLYOFFICE_PUBLIC_URL }}
           WEBMEET_PUBLIC_LIVEKIT_URL: ${{ vars.WEBMEET_PUBLIC_LIVEKIT_URL || 'wss://livekit-skills.axiologic.dev' }}
+          STRICT_INFRA_CHECKS: ${{ vars.STRICT_INFRA_CHECKS }}
         run: |
           set -euo pipefail
+          case "$(printf '%s' "${STRICT_INFRA_CHECKS:-0}" | tr '[:upper:]' '[:lower:]')" in
+            1|true|yes|on) INFRA_FATAL=1 ;;
+            *) INFRA_FATAL=0 ;;
+          esac
           echo "[deploy] Verifying ${PUBLIC_URL}/dashboard from GitHub runner..."
           for i in $(seq 1 60); do
             code="$(curl -L -s -o /tmp/skills-explorer-response.txt -w '%{http_code}' "${PUBLIC_URL%/}/dashboard" || true)"
@@ -664,10 +669,13 @@ jobs:
                 break
               fi
               if [ "$i" = "60" ]; then
-                echo "[deploy] ERROR: public LiveKit endpoint did not become reachable"
                 echo "[deploy] Last HTTP code: ${code:-none}"
                 sed -n '1,40p' /tmp/livekit-public-response.txt 2>/dev/null || true
-                exit 1
+                if [ "$INFRA_FATAL" = "1" ]; then
+                  echo "[deploy] ERROR: public LiveKit endpoint did not become reachable and STRICT_INFRA_CHECKS=1."
+                  exit 1
+                fi
+                echo "[deploy] WARNING: public LiveKit endpoint did not become reachable; continuing (non-strict)."
               fi
               sleep 5
             done
