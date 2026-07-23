@@ -7,6 +7,8 @@ import { aggregateIdePlugins } from '../../utils/ide-plugins.mjs';
 import { normalizeRuntimePlugins } from '../../utils/pluginUtils.core.js';
 import {
     HELP_TABS,
+    HelpModal,
+    getHelpTabTemplateUrl,
     normalizeHelpTab
 } from '../../IDE-plugins/help/components/help-modal/help-modal.js';
 
@@ -49,10 +51,7 @@ test('Help plugin is a discoverable Explorer toolbar application with a modal de
 });
 
 test('Help modal exposes the six documented, accessible topics', async () => {
-    const template = await fs.readFile(
-        path.join(helpRoot, 'components/help-modal/help-modal.html'),
-        'utf8'
-    );
+    const template = await fs.readFile(path.join(helpRoot, 'components/help-modal/help-modal.html'), 'utf8');
 
     assert.deepEqual(HELP_TABS, [
         'explorer',
@@ -68,6 +67,13 @@ test('Help modal exposes the six documented, accessible topics', async () => {
         assert.match(template, new RegExp(`id="help-panel-${tab}"[^>]*role="tabpanel"`));
         assert.match(template, new RegExp(`aria-controls="help-panel-${tab}"`));
         assert.match(template, new RegExp(`aria-labelledby="help-tab-${tab}"`));
+
+        const tabTemplate = await fs.readFile(
+            path.join(helpRoot, `components/help-modal/tabs/${tab}.html`),
+            'utf8'
+        );
+        assert.notEqual(tabTemplate.trim(), '');
+        assert.equal(getHelpTabTemplateUrl(tab).pathname.endsWith(`/tabs/${tab}.html`), true);
     }
 
     assert.equal(normalizeHelpTab('Git'), 'git');
@@ -75,25 +81,74 @@ test('Help modal exposes the six documented, accessible topics', async () => {
     assert.equal(normalizeHelpTab(null), 'explorer');
 });
 
-test('Help guidance identifies domain ownership without adding a runtime data dependency', async () => {
-    const [template, modalSource, buttonSource, styles] = await Promise.all([
+test('Help modal toggles fullscreen on its host dialog', () => {
+    const classes = new Set();
+    const attributes = new Map();
+    const dialog = {
+        dataset: {},
+        style: {},
+        getBoundingClientRect: () => ({ left: 18, top: 24 }),
+        classList: {
+            add: (name) => classes.add(name),
+            contains: (name) => classes.has(name),
+            toggle(name, force) {
+                if (force) classes.add(name);
+                else classes.delete(name);
+            }
+        }
+    };
+    const modal = new HelpModal({
+        closest: (selector) => selector === 'dialog' ? dialog : null
+    }, () => {});
+    modal.fullscreenButton = {
+        setAttribute: (name, value) => attributes.set(name, value)
+    };
+
+    modal.toggleFullscreen();
+    assert.equal(classes.has('help-positioned'), true);
+    assert.equal(classes.has('is-fullscreen'), true);
+    assert.equal(dialog.style.left, '18px');
+    assert.equal(dialog.style.top, '24px');
+    assert.equal(attributes.get('aria-pressed'), 'true');
+
+    modal.toggleFullscreen();
+    assert.equal(classes.has('is-fullscreen'), false);
+    assert.equal(attributes.get('aria-pressed'), 'false');
+});
+
+test('Help guidance identifies domain ownership without adding a backend dependency', async () => {
+    const [template, modalSource, buttonSource, styles, ...tabTemplates] = await Promise.all([
         fs.readFile(path.join(helpRoot, 'components/help-modal/help-modal.html'), 'utf8'),
         fs.readFile(path.join(helpRoot, 'components/help-modal/help-modal.js'), 'utf8'),
         fs.readFile(path.join(helpRoot, 'help-tool-button.js'), 'utf8'),
-        fs.readFile(path.join(helpRoot, 'components/help-modal/help-modal.css'), 'utf8')
+        fs.readFile(path.join(helpRoot, 'components/help-modal/help-modal.css'), 'utf8'),
+        ...HELP_TABS.map((tab) => fs.readFile(
+            path.join(helpRoot, `components/help-modal/tabs/${tab}.html`),
+            'utf8'
+        ))
     ]);
+    const guidance = tabTemplates.join('\n');
 
-    assert.match(template, /gitAgent/);
-    assert.match(template, /dpuAgent/);
-    assert.match(template, /AchillesCLI manages Copilot/);
-    assert.match(template, /separate agents from Explorer/);
-    assert.match(template, /Administration controls are shown only to authorized users/);
-    assert.doesNotMatch(modalSource, /\bfetch\s*\(|callAgentTool|callExplorerTool/);
+    assert.match(guidance, /gitAgent/);
+    assert.match(guidance, /dpuAgent/);
+    assert.match(guidance, /AchillesCLI manages Copilot/);
+    assert.match(guidance, /separate agents from Explorer/);
+    assert.match(guidance, /Administration controls are shown only to authorized users/);
+    assert.doesNotMatch(modalSource, /callAgentTool|callExplorerTool/);
+    assert.match(modalSource, /fetch\(templateUrl/);
+    assert.match(modalSource, /\.\/tabs\/\$\{tab\}\.html/);
     assert.match(modalSource, /ArrowRight/);
     assert.match(modalSource, /ArrowLeft/);
     assert.match(modalSource, /Home/);
     assert.match(modalSource, /End/);
     assert.match(buttonSource, /createReactiveModal\('help-modal'/);
     assert.match(buttonSource, /this\.button\?\.focus/);
+    assert.match(template, /data-help-fullscreen/);
+    assert.match(template, /\/explorer\/assets\/icons\/fullscreen\.svg/);
+    assert.match(modalSource, /classList\.toggle\('is-fullscreen'/);
+    assert.match(modalSource, /aria-pressed/);
+    assert.match(styles, /help-modal-dialog\.is-fullscreen/);
+    assert.match(styles, /--help-panel-max-width:\s*1280px/);
+    assert.match(styles, /max-width:\s*var\(--help-panel-max-width\)/);
     assert.match(styles, /@media \(max-width: 720px\)/);
 });

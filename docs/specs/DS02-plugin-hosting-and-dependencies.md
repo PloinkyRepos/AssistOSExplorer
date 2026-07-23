@@ -78,7 +78,7 @@ Each owning agent is responsible for:
 
 Explorer must discover plugins across these agent-owned roots. The hosting contract is centralized in Explorer, but the plugin source code is intentionally split by ownership instead of forced into a single `explorer/IDE-plugins` directory.
 
-Explorer-owned application plugins live under `explorer/IDE-plugins`. The `help` plugin is the reference informational case: it mounts a toolbar button and modal, contains static user guidance, and performs no backend calls or workspace mutations.
+Explorer-owned application plugins live under `explorer/IDE-plugins`. The `help` plugin is the reference informational case: it mounts a toolbar button and responsive modal, loads each topic from a separate static HTML fragment in the plugin bundle, provides a browser-local normal/fullscreen window toggle, and performs no backend calls or workspace mutations.
 
 ### Plugin Inventory
 
