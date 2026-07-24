@@ -12,6 +12,12 @@ export function normalizeHelpTab(value) {
     return HELP_TABS.includes(tab) ? tab : 'explorer';
 }
 
+export function getHelpTabTemplateUrl(value) {
+    const tab = String(value || '').trim().toLowerCase();
+    if (!HELP_TABS.includes(tab)) return null;
+    return new URL(`./tabs/${tab}.html`, import.meta.url);
+}
+
 export class HelpModal {
     constructor(element, invalidate) {
         this.element = element;
@@ -28,17 +34,23 @@ export class HelpModal {
         this.tabList = this.element.querySelector('[role="tablist"]');
         this.tabButtons = Array.from(this.element.querySelectorAll('[data-help-tab]'));
         this.tabPanels = Array.from(this.element.querySelectorAll('[data-help-panel]'));
+        this.helpContent = this.element.querySelector('[data-help-content]');
+        this.fullscreenButton = this.element.querySelector('[data-help-fullscreen]');
         this.closeButton = this.element.querySelector('[data-help-close]');
 
         this.tabList?.addEventListener('click', this.handleClick);
         this.tabList?.addEventListener('keydown', this.handleKeydown);
+        this.fullscreenButton?.addEventListener('click', this.toggleFullscreen);
         this.closeButton?.addEventListener('click', this.closeModal);
         this.activateTab(this.activeTab);
+        void this.loadTabTemplates();
     }
 
     afterUnload() {
+        this.tabLoadController?.abort();
         this.tabList?.removeEventListener('click', this.handleClick);
         this.tabList?.removeEventListener('keydown', this.handleKeydown);
+        this.fullscreenButton?.removeEventListener('click', this.toggleFullscreen);
         this.closeButton?.removeEventListener('click', this.closeModal);
     }
 
@@ -82,6 +94,64 @@ export class HelpModal {
             panel.hidden = !active;
         }
     }
+
+    async loadTabTemplates() {
+        this.tabLoadController?.abort();
+        const controller = new AbortController();
+        this.tabLoadController = controller;
+        this.helpContent?.setAttribute('aria-busy', 'true');
+
+        const results = await Promise.allSettled((this.tabPanels || []).map(async (panel) => {
+            const tab = panel.dataset.helpPanel;
+            const templateUrl = getHelpTabTemplateUrl(tab);
+            if (!templateUrl) throw new Error(`Unknown Help tab: ${tab}`);
+
+            const response = await fetch(templateUrl, { signal: controller.signal });
+            if (!response.ok) {
+                throw new Error(`Failed to load Help tab ${tab}: ${response.status}`);
+            }
+            return response.text();
+        }));
+
+        if (controller.signal.aborted || this.tabLoadController !== controller) return;
+
+        results.forEach((result, index) => {
+            const panel = this.tabPanels[index];
+            if (!panel) return;
+            if (result.status === 'fulfilled') {
+                panel.innerHTML = result.value;
+                return;
+            }
+            panel.innerHTML = '<p class="help-load-error" role="alert">This Help topic could not be loaded.</p>';
+        });
+        this.helpContent?.setAttribute('aria-busy', 'false');
+    }
+
+    getDialogElement() {
+        return this.element?.closest?.('dialog') || null;
+    }
+
+    ensureDialogPositioning() {
+        const dialog = this.getDialogElement();
+        if (!dialog) return null;
+        if (dialog.dataset.helpPositioned === 'true') return dialog;
+
+        const rect = dialog.getBoundingClientRect();
+        dialog.style.left = `${rect.left}px`;
+        dialog.style.top = `${rect.top}px`;
+        dialog.classList.add('help-positioned');
+        dialog.dataset.helpPositioned = 'true';
+        return dialog;
+    }
+
+    toggleFullscreen = () => {
+        const dialog = this.ensureDialogPositioning();
+        if (!dialog) return;
+
+        const isFullscreen = !dialog.classList.contains('is-fullscreen');
+        dialog.classList.toggle('is-fullscreen', isFullscreen);
+        this.fullscreenButton?.setAttribute('aria-pressed', isFullscreen ? 'true' : 'false');
+    };
 
     closeModal = () => {
         assistOS.UI.closeModal(this.element);
