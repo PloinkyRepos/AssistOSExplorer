@@ -27,9 +27,9 @@ function readRawRequestBody(req) {
 
 export async function verifyControlRouteAuth(req, { env = process.env, parsedUrl } = {}) {
   invocationAuthPromise ||= loadInvocationAuth(env);
-  const { verifyHttpServiceAuthInfoFromHeaders } = await invocationAuthPromise;
+  const { verifyHttpRouteAuthInfoFromHeaders } = await invocationAuthPromise;
   const body = await readRawRequestBody(req);
-  const result = verifyHttpServiceAuthInfoFromHeaders(req.headers || {}, {
+  const result = verifyHttpRouteAuthInfoFromHeaders(req.headers || {}, {
     env,
     method: String(req.method || 'GET').toUpperCase(),
     path: parsedUrl?.pathname || '/',

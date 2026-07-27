@@ -22,7 +22,7 @@ function requiredEnv(name) {
 
 function serviceUrl(path) {
   const routerBaseUrl = requiredEnv('ONLYOFFICE_E2E_ROUTER_BASE_URL');
-  const servicePrefix = String(process.env.ONLYOFFICE_E2E_SERVICE_PREFIX || '/services/onlyoffice').replace(/\/+$/, '');
+  const servicePrefix = String(process.env.ONLYOFFICE_E2E_SERVICE_PREFIX || '/base-agent-additional-server/onlyOffice/7000/control').replace(/\/+$/, '');
   return new URL(`${servicePrefix}/office/session?path=${encodeURIComponent(path)}`, routerBaseUrl).toString();
 }
 

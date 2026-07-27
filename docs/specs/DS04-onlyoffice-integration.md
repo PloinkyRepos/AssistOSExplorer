@@ -14,14 +14,14 @@ Explorer delegates Office editing to the `onlyOffice` agent. Explorer owns file
 selection and DPU authorization; the agent owns editor-session construction,
 DocumentServer transport, callback validation, and persisted session metadata.
 
-## Router services
+## Router routes
 
-The manifest declares two distinct TCP targets:
+The manifest declares access policy for two convention paths:
 
-| Service | Target | Access | Surface |
+| Route | Target | Access | Surface |
 | --- | ---: | --- | --- |
-| `onlyoffice` | 7000 | authenticated | Control/session API under `/services/onlyoffice/` |
-| `onlyoffice-editor` | 8080 | narrowly public | Editor assets, cache fetches, and editor WebSockets under `/public-services/onlyoffice-editor/` |
+| `onlyoffice` | 7000 | authenticated | Control/session API under `/base-agent-additional-server/onlyOffice/7000/control/` |
+| `onlyoffice-editor` | 8080 | narrowly public | Editor assets, cache fetches, and editor WebSockets under `/base-agent-additional-server/onlyOffice/8080/` |
 
 The control route keeps Explorer/DPU authorization. The public transport route
 is not a general DocumentServer proxy: it uses exact path and method allowlists,
@@ -32,15 +32,15 @@ traffic, and removes credentials, forwarding headers, and Ploinky identity
 headers before proxying.
 
 DocumentServer itself listens process-locally on `127.0.0.1:80`. Storage and
-callback handling listen on `127.0.0.1:9100`. Neither listener is a Router
-service or a box publication.
+callback handling listen on `127.0.0.1:9100`. Neither listener has a Router
+policy path or a box publication.
 
 ## Topology and sessions
 
-Every editor-session operation resolves the current immutable edge-topology
-generation. It requires an active `onlyoffice-editor` locator and never caches
-a startup URL. Browser configuration contains only the Router-visible editor
-origin and opaque session URLs.
+Every editor-session operation derives the Router origin from trusted forwarding
+metadata and appends the fixed OnlyOffice editor convention path. It never
+caches a private startup URL. Browser configuration contains only the
+Router-visible editor origin and opaque session URLs.
 
 Configuration JWTs use the configured algorithm, `iat`, `nbf`, and bounded
 `exp`, and bind the document/session payload. The configurable lifetime is an

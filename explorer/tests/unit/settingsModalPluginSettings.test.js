@@ -38,8 +38,8 @@ test('resolveSettingsComponentBase keeps nested settings component convention fo
 
 test('resolvePluginSettingsUrl accepts only router-relative settings URLs', () => {
     assert.equal(
-        resolvePluginSettingsUrl({ settingsUrl: '/services/soul-gateway/management/' }),
-        '/services/soul-gateway/management/'
+        resolvePluginSettingsUrl({ settingsUrl: '/base-agent-additional-server/soul-gateway/7000/management/' }),
+        '/base-agent-additional-server/soul-gateway/7000/management/'
     );
     assert.equal(resolvePluginSettingsUrl({ settingsUrl: 'https://soul.axiologic.dev/management/' }), '');
     assert.equal(resolvePluginSettingsUrl({ settingsUrl: '//soul.axiologic.dev/management/' }), '');
@@ -50,7 +50,7 @@ test('openPluginSettingsUrl opens router-relative settings without a modal', () 
     const calls = [];
     const openedWindow = { opener: {} };
     const opened = openPluginSettingsUrl(
-        { settingsUrl: '/services/soul-gateway/management/' },
+        { settingsUrl: '/base-agent-additional-server/soul-gateway/7000/management/' },
         {
             open: (...args) => {
                 calls.push(args);
@@ -61,7 +61,7 @@ test('openPluginSettingsUrl opens router-relative settings without a modal', () 
 
     assert.equal(opened, true);
     assert.deepEqual(calls, [
-        ['/services/soul-gateway/management/', '_blank', 'noopener,noreferrer']
+        ['/base-agent-additional-server/soul-gateway/7000/management/', '_blank', 'noopener,noreferrer']
     ]);
     assert.equal(openedWindow.opener, null);
 });
@@ -74,7 +74,7 @@ test('buildAgentSettingsItems maps Soul Gateway from runtime plugin key and pres
             ownerAgent: 'soul-gateway',
             pluginKey: 'soul-gateway/soul-gateway',
             scope: 'workspace',
-            settingsUrl: '/services/soul-gateway/management/',
+            settingsUrl: '/base-agent-additional-server/soul-gateway/7000/management/',
             adminOnly: true
         }
     ], [
@@ -84,7 +84,7 @@ test('buildAgentSettingsItems maps Soul Gateway from runtime plugin key and pres
             component: 'soul-gateway-settings',
             pluginId: 'soul-gateway',
             settingsComponent: 'soul-gateway-settings',
-            settingsUrl: '/services/soul-gateway/management/',
+            settingsUrl: '/base-agent-additional-server/soul-gateway/7000/management/',
             adminOnly: true
         }
     ]);
@@ -93,7 +93,7 @@ test('buildAgentSettingsItems maps Soul Gateway from runtime plugin key and pres
     assert.ok(soulGateway);
     assert.equal(soulGateway.available, true);
     assert.equal(soulGateway.settingsComponent, 'soul-gateway-settings');
-    assert.equal(soulGateway.settingsUrl, '/services/soul-gateway/management/');
+    assert.equal(soulGateway.settingsUrl, '/base-agent-additional-server/soul-gateway/7000/management/');
     assert.equal(soulGateway.sourcePlugin.key, 'soul-gateway/soul-gateway');
 });
 

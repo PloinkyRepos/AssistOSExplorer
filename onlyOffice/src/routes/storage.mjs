@@ -314,7 +314,7 @@ export function createStorageRouteHandler({
 
     let downloadUrl;
     try {
-      const editorService = await resolveEditorService();
+      const editorService = await resolveEditorService({ req });
       downloadUrl = resolveTrustedDownloadUrl(payload?.url, {
         publicEditorBaseUrl: editorService.activeBrowserUrl,
         internalDocumentServerBaseUrl: config.internalDocumentServerBaseUrl,

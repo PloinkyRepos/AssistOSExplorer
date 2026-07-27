@@ -222,7 +222,7 @@ async function waitForOnlyOfficeSession(page, documentPath) {
   await expect.poll(async () => {
     try {
       const response = await page.request.get(
-        `/services/onlyoffice/office/session?path=${encodeURIComponent(documentPath)}`
+        `/base-agent-additional-server/onlyOffice/7000/control/office/session?path=${encodeURIComponent(documentPath)}`
       );
       lastPayload = await response.json().catch(() => ({}));
       return response.status();
@@ -258,7 +258,7 @@ test.describe('DPU and OnlyOffice @external', () => {
       `DPU data root should exist at ${smokeConfig.dpuDataRoot}. Set SMOKE_WORKSPACE_ROOT or SMOKE_DPU_DATA_ROOT for local deployments.`
     ).toBe(true);
 
-    const fileName = `smoke-onlyoffice-${smokeConfig.runId}.doc`;
+    const fileName = `smoke-onlyoffice-${smokeConfig.runId}.docx`;
     const documentPath = `/Confidential/My Space/${fileName}`;
     const context = await browser.newContext({ baseURL: smokeConfig.baseURL });
     const page = await context.newPage();
@@ -287,7 +287,9 @@ test.describe('DPU and OnlyOffice @external', () => {
         message: `DPU state should contain ${fileName}`,
       }).toBe(true);
       const dpuObject = findDpuObjectByName(fileName);
-      expect(dpuObject.mimeType).toBe('application/msword');
+      expect(dpuObject.mimeType).toBe(
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      );
 
       const blobPath = path.join(smokeConfig.dpuDataRoot, 'blobs', dpuObject.id);
       expect(fs.existsSync(blobPath), `DPU blob should exist at ${blobPath}`).toBe(true);
@@ -296,7 +298,7 @@ test.describe('DPU and OnlyOffice @external', () => {
       expect(blob.includes(Buffer.from(fileName))).toBe(false);
       expect(hasPlainWorkspaceCopy(documentPath), `${documentPath} should not be stored as a normal workspace file`).toBe(false);
 
-      const response = await page.request.get(`/services/onlyoffice/office/session?path=${encodeURIComponent(documentPath)}`);
+      const response = await page.request.get(`/base-agent-additional-server/onlyOffice/7000/control/office/session?path=${encodeURIComponent(documentPath)}`);
       expect(response.status()).toBe(200);
       const payload = await response.json();
       expect(payload.ok).toBe(true);

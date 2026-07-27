@@ -161,7 +161,7 @@ export function createEditorProxy({
       sendNotFound(res);
       return;
     }
-    const editorService = await resolveEditorService();
+    const editorService = await resolveEditorService({ req });
     if (!requestMatchesCommittedOrigin(req, editorService.activeBrowserUrl)) {
       sendNotFound(res);
       return;
@@ -197,7 +197,7 @@ export function createEditorProxy({
       socket.destroy();
       return;
     }
-    const editorService = await resolveEditorService();
+    const editorService = await resolveEditorService({ req });
     if (!requestMatchesCommittedOrigin(req, editorService.activeBrowserUrl, { requireOrigin: true })) {
       socket.destroy();
       return;

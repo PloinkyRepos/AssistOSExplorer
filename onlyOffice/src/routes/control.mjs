@@ -153,7 +153,7 @@ export function createControlRouteHandler({
 
     const documentUrl = buildLoopbackStorageUrl(config.storagePort, 'document', session.token);
     const callbackUrl = buildLoopbackStorageUrl(config.storagePort, 'callback', session.token);
-    const editorService = await resolveEditorService();
+    const editorService = await resolveEditorService({ req });
     const editorConfig = buildSignedOnlyOfficeConfig({
       session,
       config,

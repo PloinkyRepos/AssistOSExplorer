@@ -9,7 +9,7 @@ const SESSION_REUSE_MAX_AGE_MS = 5 * 60 * 1000;
 
 function buildSessionUrl(filePath) {
     const params = new URLSearchParams({ path: String(filePath || '') });
-    return `/services/onlyoffice/office/session?${params.toString()}`;
+    return `/base-agent-additional-server/onlyOffice/7000/control/office/session?${params.toString()}`;
 }
 
 async function readJsonResponse(response) {

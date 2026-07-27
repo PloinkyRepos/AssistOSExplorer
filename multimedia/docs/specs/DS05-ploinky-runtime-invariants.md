@@ -24,7 +24,7 @@ Ploinky-owned generated secrets are resolved by the launcher before agent code r
 
 The compact `x-ploinky-auth-info` header is not a secure grant by itself. Any HTTP service that receives that header must trust it only when it arrived through a declared Ploinky HTTP service route and, for guest services, only after validating the router-issued invocation token and the expected guest role or scope. Caller-supplied copies of identity headers must be rejected as authoritative input.
 
-Guest access must remain scoped to the route shape declared by the owning manifest. Manifest-level `guest: true` exposes the agent as a normal guest agent and should still enforce limitations from `usr.roles`. An `httpServices` entry with `access: "guest"` exposes only the declared HTTP prefix and mints or reuses a service-scoped guest session according to the Ploinky router's current guest policy. Product-specific public paths must be declared in the agent manifest rather than hard-coded in Ploinky core.
+Guest access must remain scoped to the route shape declared by the owning manifest. Manifest-level `guest: true` exposes the agent as a normal guest agent and should still enforce limitations from `usr.roles`. A `routerAccess.httpRoutes` entry with `access: "guest"` exposes only the declared agent-owned path and mints or reuses a route-scoped guest session according to the Ploinky router's current guest policy. Product-specific public paths must be declared in the agent manifest rather than hard-coded in Ploinky core.
 
 Agent code must enforce its own domain authorization. Ploinky route authentication identifies the caller and signs the invocation, but it does not grant every domain operation. Sensitive actions must check the verified user, roles, scopes, target resource, workspace path, and agent-local policy before reading or mutating state.
 
@@ -39,7 +39,7 @@ Agent-local contract:
 - Manifest: `multimedia/manifest.json`
 - Role: Media plugin and FFmpeg-backed processing boundary for Explorer document media.
 - Authentication: Media actions must remain behind Explorer/plugin and MCP context and must not expose workspace files through anonymous routes. Manifest guest: none.
-- HTTP service surface: No public HTTP service is declared; plugin assets are static resources and must not include secrets. Manifest httpServices: none.
+- HTTP route surface: No public HTTP route is declared; plugin assets are static resources and must not include secrets.
 - Persistent state: Media reads and writes must stay within explicit workspace, document, or runtime paths. Manifest volumes: none.
 - Documentation: `docs/index.html`
 - Validation: Run syntax checks and media workflow smoke checks for changed plugin or script paths.

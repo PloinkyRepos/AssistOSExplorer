@@ -16,8 +16,8 @@ callback validation, persistence, and targeted-restart draining.
 
 | Plane | Listener | Router declaration | Admission |
 | --- | --- | --- | --- |
-| Control | TCP `7000` | `onlyoffice`, `/services/onlyoffice/` → `/control/` | Authenticated Ploinky session; Explorer/DPU authorization remains effective |
-| Editor transport | TCP `8080` | `onlyoffice-editor`, `/public-services/onlyoffice-editor/` → `/` | Narrow public method/path allowlist with exact Origin enforcement |
+| Control | TCP `7000` | `onlyoffice`, `/base-agent-additional-server/onlyOffice/7000/control/` → `/control/` | Authenticated Ploinky session; Explorer/DPU authorization remains effective |
+| Editor transport | TCP `8080` | `onlyoffice-editor`, `/base-agent-additional-server/onlyOffice/8080/` → `/` | Narrow public method/path allowlist with exact Origin enforcement |
 | DocumentServer | `127.0.0.1:80` | None | Process-local decorator traffic only |
 | DocService support | `127.0.0.1:8000` | None | Exact-port build-time bind interposer, scoped only to DocService |
 | Storage and callbacks | `127.0.0.1:9100` | None | Process-loopback peer plus opaque active-session token and signed body |

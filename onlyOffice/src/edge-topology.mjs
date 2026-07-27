@@ -1,48 +1,28 @@
-const EDGE_RUNTIME_DIR = process.env.PLOINKY_AGENT_LIB_DIR || '/Agent';
-const ONLYOFFICE_ROUTE_KEY = 'onlyOffice';
-const ONLYOFFICE_EDITOR_SLUG = 'onlyoffice-editor';
+const ONLYOFFICE_EDITOR_PATH = '/base-agent-additional-server/onlyOffice/8080/';
 
-let runtimePromise = null;
-
-async function loadRuntime() {
-  if (!runtimePromise) {
-    runtimePromise = import(`${EDGE_RUNTIME_DIR}/lib/edgeTopology.mjs`);
-  }
-  return runtimePromise;
+function firstHeader(value) {
+  return Array.isArray(value) ? String(value[0] || '') : String(value || '');
 }
 
 export async function resolveOnlyOfficeEditorService({
-  file = process.env.PLOINKY_EDGE_TOPOLOGY_FILE,
-  resolveEdgeService,
+  req,
+  env = process.env,
 } = {}) {
-  const resolver = resolveEdgeService || (await loadRuntime()).resolveEdgeService;
-  const service = await resolver({
-    routeKey: ONLYOFFICE_ROUTE_KEY,
-    slug: ONLYOFFICE_EDITOR_SLUG,
-    requireActive: true,
-    file,
-  });
-  const activeBrowserUrl = String(service?.activeBrowserUrl || '').trim();
-  if (!activeBrowserUrl) {
-    throw new Error('OnlyOffice editor topology is not active.');
+  const protocol = firstHeader(req?.headers?.['x-forwarded-proto']).trim().toLowerCase()
+    || new URL(String(env.PLOINKY_ROUTER_URL || 'http://127.0.0.1:8080')).protocol.replace(':', '');
+  const authority = firstHeader(req?.headers?.['x-forwarded-host']).trim()
+    || new URL(String(env.PLOINKY_ROUTER_URL || 'http://127.0.0.1:8080')).host;
+  if (!['http', 'https'].includes(protocol) || !authority || /[/\\\s]/.test(authority)) {
+    throw new Error('OnlyOffice editor Router origin is invalid.');
   }
-  const browserUrl = new URL(activeBrowserUrl);
-  if (!['http:', 'https:'].includes(browserUrl.protocol)) {
-    throw new Error('OnlyOffice editor topology requires an HTTP(S) browser URL.');
-  }
-  browserUrl.pathname = browserUrl.pathname.replace(/\/+$/, '') || '/';
-  browserUrl.search = '';
-  browserUrl.hash = '';
+  const browserUrl = new URL(ONLYOFFICE_EDITOR_PATH, `${protocol}://${authority}`);
   return {
-    ...service,
     activeBrowserUrl: browserUrl.toString().replace(/\/$/, ''),
     browserOrigin: browserUrl.origin,
-    routeKey: ONLYOFFICE_ROUTE_KEY,
-    slug: ONLYOFFICE_EDITOR_SLUG,
+    routeKey: 'onlyOffice',
   };
 }
 
 export const _test = Object.freeze({
-  ONLYOFFICE_ROUTE_KEY,
-  ONLYOFFICE_EDITOR_SLUG,
+  ONLYOFFICE_EDITOR_PATH,
 });

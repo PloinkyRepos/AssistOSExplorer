@@ -144,7 +144,7 @@ jobs:
           echo "[destroy-qa] Workspace: $WORK_DIR (router port $ROUTER_PORT)"
 
           # --- Pre-flight: record whether production Soul Gateway is healthy now. ---
-          SOUL_HEALTH_URL="http://127.0.0.1:${SOUL_GATEWAY_ROUTER_PORT:-8080}/public-services/soul-gateway-health/"
+          SOUL_HEALTH_URL="http://127.0.0.1:${SOUL_GATEWAY_ROUTER_PORT:-8080}/base-agent-additional-server/soul-gateway/7000/healthz/"
           SOUL_UP_BEFORE=0
           if curl -sf "$SOUL_HEALTH_URL" >/dev/null 2>&1; then
             SOUL_UP_BEFORE=1

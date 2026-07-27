@@ -58,30 +58,29 @@ requests fail before any upstream connection is created.
 
 ### Topology
 
-Ploinky atomically mounts schema-v2 topology before consumers start and injects
+Ploinky atomically mounts the current topology before consumers start and injects
 `PLOINKY_EDGE_TOPOLOGY_FILE`, `PLOINKY_ROUTER_URL`, and
 `PLOINKY_INTERNAL_ROUTER_URL`. The snapshot is non-secret, immutable by
-generation, and contains active browser locators but no private target ports,
-credentials, or product-specific core knowledge.
+generation, and contains media/publication state but no browser-route registry,
+private target ports, credentials, or product-specific core knowledge.
 
-Long-lived consumers resolve the current snapshot per join, editor-session
-creation, dashboard open, or other locator-producing operation. Browsers use
-only the authenticated one-locator no-store projection. Unknown schema,
-inactive selector, stale generation, missing locator, or publication error
-fails closed; consumers do not synthesize hostnames or fall back to startup
-environment.
+Long-lived media consumers resolve the current snapshot per join. Browser HTTP
+and WebSocket routes use the same-origin
+`/base-agent-additional-server/<agent>/<port>/...` convention and are admitted
+by `routerAccess.httpRoutes`. Invalid topology, inactive publication, or stale
+generation fails closed; consumers do not synthesize private hostnames.
 
 ### Agent contracts
 
-- Manifests use slim `httpServices`; an optional service `port` selects a
-  distinct private TCP target.
-- OnlyOffice declares authenticated control and narrowly public editor targets.
-- LiveKit declares public signaling and private Twirp services on loopback
+- Manifests declare only access policy under `routerAccess.httpRoutes`; the
+  convention path selects the enabled agent and its loopback TCP port.
+- OnlyOffice declares authenticated control on port `7000` and narrowly public
+  editor transport on port `8080`.
+- LiveKit declares public signaling and authenticated Twirp access on loopback
   `7880`; media alone owns box UDP `7882` under an exact generation capability.
-- Umami declares authenticated dashboard target `3000` and narrow guest
-  telemetry target `3001`.
-- Extra application servers such as GPTResearcher declare their explicit TCP
-  target and verified base path.
+- Umami uses its conventional dashboard route on port `3000`.
+- Extra application servers such as GPTResearcher use their conventional port
+  path and preserve their application-owned base path.
 - Default bridge launch uses the single managed host-gateway mapping. Host mode
   is a capability for a precise generation, never authorization by localhost.
 

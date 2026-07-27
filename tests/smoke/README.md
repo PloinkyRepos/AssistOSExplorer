@@ -73,19 +73,28 @@ Opt-in checks:
   Only non-secret SHA-256 fingerprints are attached, and both the participant
   token and credential-bearing RTC configuration must rotate independently.
 
-Run the screen-share release gate against a freshly built v5 box with:
+Run the screen-share gate against a fresh host-local deployment with:
 
 ```sh
-SMOKE_BASE_URL=http://127.0.0.1:8080 SMOKE_WEBMEET_MEDIA=1 SMOKE_WEBMEET_SCREEN=1 SMOKE_TEST_TIMEOUT_MS=240000 npm test -- --headed --project=chromium specs/30-webmeet-room-chat.spec.mjs
+SMOKE_DEPLOYMENT_MODE=local SMOKE_BASE_URL=http://127.0.0.1:8080 SMOKE_WEBMEET_MEDIA=1 SMOKE_WEBMEET_SCREEN=1 SMOKE_TEST_TIMEOUT_MS=240000 npm test -- --headed --project=chromium specs/30-webmeet-room-chat.spec.mjs
 ```
 
-With the screen flag enabled, the npm wrapper inspects running rootless Podman
-containers before Chromium starts. Exactly one container must publish
+In local mode the wrapper requires exactly one freshly started, managed
+`liveKitServerAgent` container using host networking and no container port
+publications. It also rejects any concurrently running outer Ploinky Box. The
+real browser assertions then prove bidirectional non-relay UDP/7882 traffic.
+
+Run the same gate against a fresh Ploinky Box deployment with:
+
+```sh
+SMOKE_DEPLOYMENT_MODE=box SMOKE_BASE_URL=http://127.0.0.1:8080 SMOKE_WEBMEET_MEDIA=1 SMOKE_WEBMEET_SCREEN=1 SMOKE_TEST_TIMEOUT_MS=240000 npm test -- --headed --project=chromium specs/30-webmeet-room-chat.spec.mjs
+```
+
+In Box mode, exactly one outer container must publish
 `127.0.0.1:<SMOKE_BASE_URL port>:8080/tcp` and
 `0.0.0.0:7882:7882/udp`, carry Box image contract 6, and use a freshly built
-runtime-v5 image. Runtime v5 names the coordinated Ploinky architecture; the
-outer image's independently versioned container contract is 6. By default the
-running generation must be at most 30 minutes
+image. No additional outer-container port publication is accepted. By default
+the running generation must be at most 30 minutes
 old and the image at most four hours old. The wrapper binds the test to that
 container ID, start time, image ID/reference, and normalized two-publication
 boundary, re-inspects it after Playwright exits, and fails if any value changed.
@@ -186,13 +195,11 @@ enables the real credential-expiry/network-transition gate.
 On headed Linux without `DISPLAY`, the npm runner starts a deterministic 1920×1080 Xvfb display. It fails with an actionable error if Xvfb is unavailable; it does not downgrade to headless capture.
 - `SMOKE_UMAMI=1` enables the real Umami Router gate. It authenticates first at
   Ploinky and then at Umami, proves dashboard HTML, assets, heartbeat API, and
-  in-app navigation stay under `/services/umami/`, and sends a real guest
-  tracker event through the `3001` proxy. Both tracker and ingest responses must
-  contain value-free proof that Cookie, Authorization, forwarding, Ploinky
-  identity, and hop-by-hop headers were absent from the actual upstream request.
+  in-app navigation stay under
+  `/base-agent-additional-server/umamiAgent/3000/`.
 - `SMOKE_GPT_RESEARCHER=1` enables the real GPTResearcher Router gate for HTML,
   assets, reports API, same-origin redirect rewriting, and a browser WebSocket
-  ping/pong under `/services/gpt-researcher/`. Root-relative and private-origin
+  ping/pong under `/base-agent-additional-server/GPTResearcher/8000/`. Root-relative and private-origin
   requests fail the gate.
 - `SMOKE_ONLYOFFICE=1` enables the real spec 50 editor gate. It creates an
   encrypted DPU document, types through the pinned OnlyOffice UI, clicks the
@@ -210,7 +217,6 @@ SMOKE_BASE_URL=http://127.0.0.1:8080 \
 SMOKE_UMAMI=1 \
 SMOKE_UMAMI_USERNAME=admin \
 SMOKE_UMAMI_PASSWORD='<dedicated-test-password>' \
-SMOKE_UMAMI_WEBSITE_ID='<dedicated-test-website-uuid>' \
 npm test -- --project=chromium specs/33-umami-routing.spec.mjs
 ```
 
@@ -228,7 +234,7 @@ workspace used by the box:
 ```bash
 SMOKE_BASE_URL=http://127.0.0.1:8080 \
 SMOKE_ONLYOFFICE=1 \
-SMOKE_WORKSPACE_ROOT='<fresh-v5-workspace>' \
+SMOKE_WORKSPACE_ROOT='<fresh-workspace>' \
 SMOKE_TEST_TIMEOUT_MS=240000 \
 npm test -- --project=chromium specs/50-onlyoffice-dpu.spec.mjs
 ```

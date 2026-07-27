@@ -54,7 +54,7 @@ function makeEnv() {
 function createTestControlRouteHandler(options = {}) {
   return createControlRouteHandler({
     resolveEditorService: async () => ({
-      activeBrowserUrl: 'https://office.example.com/public-services/onlyoffice-editor/',
+      activeBrowserUrl: 'https://office.example.com/base-agent-additional-server/onlyOffice/8080/',
     }),
     ...options,
   });
@@ -63,7 +63,7 @@ function createTestControlRouteHandler(options = {}) {
 function mintAuthHeaders({
   method = 'GET',
   internalPath = '/control/office/session',
-  externalPath = '/services/onlyoffice/office/session',
+  externalPath = '/base-agent-additional-server/onlyOffice/7000/control/office/session',
   query = '?path=%2Fworkspace%2Freport.docx',
   delegations = {},
   user = {
@@ -86,7 +86,7 @@ function mintAuthHeaders({
       },
       method,
       path: internalPath,
-      tool: '__http_service__',
+      tool: '__http_route__',
       rch: computeRchHttp({
         method,
         path: internalPath,
@@ -219,7 +219,7 @@ test('office session route builds signed config with loopback document and callb
   assert.match(payload.config.document.key, /^[0-9a-f]{32}$/);
   assert.match(payload.config.document.url, /^http:\/\/127\.0\.0\.1:9100\/internal\/document\//);
   assert.match(payload.config.editorConfig.callbackUrl, /^http:\/\/127\.0\.0\.1:9100\/internal\/callback\//);
-  assert.equal(payload.config.documentServerUrl, 'https://office.example.com/public-services/onlyoffice-editor');
+  assert.equal(payload.config.documentServerUrl, 'https://office.example.com/base-agent-additional-server/onlyOffice/8080');
   assert.deepEqual(payload.config.editorConfig.customization, {
     autosave: true,
     forcesave: true,

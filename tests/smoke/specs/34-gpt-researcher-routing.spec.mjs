@@ -3,7 +3,7 @@ import { smokeConfig } from '../lib/config.mjs';
 import { expect, test } from '../lib/fixtures.mjs';
 import { findSecretLeaks } from '../lib/security.mjs';
 
-const SERVICE_PREFIX = '/services/gpt-researcher/';
+const SERVICE_PREFIX = '/base-agent-additional-server/GPTResearcher/8000/';
 
 function privateOrigin(value, routerOrigin) {
   const url = new URL(value);
@@ -134,7 +134,10 @@ test.describe('GPTResearcher Router publication @external', () => {
     ));
     expect(assets.length, 'GPTResearcher must load real browser assets through Router').toBeGreaterThan(0);
     for (const entry of sameOriginRequests) {
-      expect(new URL(entry.url).pathname, `root-relative GPTResearcher request leaked: ${entry.url}`).toMatch(/^\/services\/gpt-researcher\//);
+      expect(
+        new URL(entry.url).pathname.startsWith(SERVICE_PREFIX),
+        `root-relative GPTResearcher request leaked: ${entry.url}`,
+      ).toBe(true);
     }
     expect(requests.some((entry) => privateOrigin(entry.url, routerOrigin)), 'GPTResearcher must not expose a private browser origin').toBe(false);
 
@@ -148,7 +151,10 @@ test.describe('GPTResearcher Router publication @external', () => {
     for (const url of domUrls.filter((value) => new URL(value).origin === routerOrigin)) {
       const parsed = new URL(url);
       if (parsed.pathname === SERVICE_PREFIX && parsed.hash) continue;
-      expect(parsed.pathname, `root-relative GPTResearcher DOM URL leaked: ${url}`).toMatch(/^\/services\/gpt-researcher\//);
+      expect(
+        parsed.pathname.startsWith(SERVICE_PREFIX),
+        `root-relative GPTResearcher DOM URL leaked: ${url}`,
+      ).toBe(true);
     }
 
     expect(websocketEvents.some((event) => new URL(event.url).pathname === `${SERVICE_PREFIX}ws`)).toBe(true);

@@ -125,7 +125,7 @@ test('aggregateIdePlugins exposes nested Soul Gateway repo plugin as soul-gatewa
             pluginCategory: 'application',
             id: 'soul-gateway',
             component: 'soul-gateway-settings',
-            settingsUrl: '/services/soul-gateway/management/',
+            settingsUrl: '/base-agent-additional-server/soul-gateway/7000/management/',
             location: [],
             type: 'global',
             adminOnly: true
@@ -138,7 +138,7 @@ test('aggregateIdePlugins exposes nested Soul Gateway repo plugin as soul-gatewa
         assert.equal(settingsPlugins[0].agent, 'soul-gateway');
         assert.equal(settingsPlugins[0].id, 'soul-gateway');
         assert.equal(settingsPlugins[0].adminOnly, true);
-        assert.equal(settingsPlugins[0].settingsUrl, '/services/soul-gateway/management/');
+        assert.equal(settingsPlugins[0].settingsUrl, '/base-agent-additional-server/soul-gateway/7000/management/');
     } finally {
         await fs.rm(workspaceRoot, { recursive: true, force: true });
     }
@@ -247,7 +247,7 @@ test('aggregateIdePlugins returns nested Soul Gateway manifest settings', async 
                     label: 'Soul Gateway',
                     scope: 'workspace',
                     pluginKey: 'soul-gateway/soul-gateway',
-                    settingsUrl: '/services/soul-gateway/management/',
+                    settingsUrl: '/base-agent-additional-server/soul-gateway/7000/management/',
                     adminOnly: true
                 }
             ]
@@ -256,7 +256,7 @@ test('aggregateIdePlugins returns nested Soul Gateway manifest settings', async 
             pluginCategory: 'application',
             id: 'soul-gateway',
             component: 'soul-gateway-settings',
-            settingsUrl: '/services/soul-gateway/management/',
+            settingsUrl: '/base-agent-additional-server/soul-gateway/7000/management/',
             location: [],
             type: 'global',
             adminOnly: true
@@ -267,7 +267,7 @@ test('aggregateIdePlugins returns nested Soul Gateway manifest settings', async 
         assert.equal(aggregated.agentSettings.length, 1);
         assert.equal(aggregated.agentSettings[0].ownerAgent, 'soul-gateway');
         assert.equal(aggregated.agentSettings[0].pluginKey, 'soul-gateway/soul-gateway');
-        assert.equal(aggregated.agentSettings[0].settingsUrl, '/services/soul-gateway/management/');
+        assert.equal(aggregated.agentSettings[0].settingsUrl, '/base-agent-additional-server/soul-gateway/7000/management/');
     } finally {
         await fs.rm(workspaceRoot, { recursive: true, force: true });
     }

@@ -24,7 +24,7 @@ Ploinky-owned generated secrets are resolved by the launcher before agent code r
 
 The compact `x-ploinky-auth-info` header is not a secure grant by itself. Any HTTP service that receives that header must trust it only when it arrived through a declared Ploinky HTTP service route and, for guest services, only after validating the router-issued invocation token and the expected guest role or scope. Caller-supplied copies of identity headers must be rejected as authoritative input.
 
-Guest access must remain scoped to the route shape declared by the owning manifest. Manifest-level `guest: true` exposes the agent as a normal guest agent and should still enforce limitations from `usr.roles`. An `httpServices` entry with `access: "guest"` exposes only the declared HTTP prefix and mints or reuses a service-scoped guest session according to the Ploinky router's current guest policy. Product-specific public paths must be declared in the agent manifest rather than hard-coded in Ploinky core.
+Guest access must remain scoped to the route shape declared by the owning manifest. Manifest-level `guest: true` exposes the agent as a normal guest agent and should still enforce limitations from `usr.roles`. A `routerAccess.httpRoutes` entry with `access: "guest"` exposes only the declared agent-owned path and mints or reuses a route-scoped guest session according to the Ploinky router's current guest policy. Product-specific public paths must be declared in the agent manifest rather than hard-coded in Ploinky core.
 
 Agent code must enforce its own domain authorization. Ploinky route authentication identifies the caller and signs the invocation, but it does not grant every domain operation. Sensitive actions must check the verified user, roles, scopes, target resource, workspace path, and agent-local policy before reading or mutating state.
 
@@ -39,7 +39,7 @@ Agent-local contract:
 - Manifest: `gitAgent/manifest.json`
 - Role: Controlled Git operation boundary between Explorer intent and Git process execution.
 - Authentication: Remote and mutating operations must use verified invocation context and local Git policy rather than raw UI input. Manifest guest: none. Explorer deployments use a workspace-scoped generated Soul Gateway key. Achilles derives the active Ploinky router service URL when `PLOINKY_ENV_SOURCE_SOUL_GATEWAY_API_KEY=generated`; remote production gateways are configured as providers inside the local Soul Gateway, not as replacement `SOUL_GATEWAY_API_KEY` credentials for gitAgent.
-- HTTP service surface: No public HTTP service is declared; Git operations are exposed through MCP contracts only. Manifest httpServices: none.
+- HTTP route surface: No public HTTP route is declared; Git operations are exposed through MCP contracts only.
 - Persistent state: Repository state is the workspace Git tree; token material and auth details must not be logged or surfaced to the UI. Manifest volumes: none.
 - Documentation: `docs/index.html`
 - Validation: `node --test tests/unit/*.test.mjs` in gitAgent.

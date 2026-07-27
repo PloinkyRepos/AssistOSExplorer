@@ -8,7 +8,7 @@ import {
 } from '../lib/auth.mjs';
 import { stopAndAttachRedactedTrace } from '../lib/redacted-trace.mjs';
 import { createReleaseGateFailureCollector } from '../lib/release-gate-failures.mjs';
-import { validateLocalScreenV5Evidence } from '../lib/v5-live-box.mjs';
+import { validateScreenRuntimeEvidence } from '../lib/screen-runtime-evidence.mjs';
 import {
   attachJsonEvidence,
   attachFinalWebMeetRtcEvidence,
@@ -65,19 +65,19 @@ test.describe('WebMeet rooms', () => {
       }
 
       if (smokeConfig.flags.webmeetScreen) {
-        const serializedV5Evidence = String(process.env.SMOKE_SCREEN_V5_BOX_EVIDENCE || '').trim();
-        if (!serializedV5Evidence) {
-          throw new Error('SMOKE_WEBMEET_SCREEN requires live runtime-v5 evidence from scripts/run-playwright.mjs.');
+        const serializedRuntimeEvidence = String(process.env.SMOKE_SCREEN_RUNTIME_EVIDENCE || '').trim();
+        if (!serializedRuntimeEvidence) {
+          throw new Error('SMOKE_WEBMEET_SCREEN requires live deployment evidence from scripts/run-playwright.mjs.');
         }
-        let screenV5Evidence;
+        let screenRuntimeEvidence;
         try {
-          screenV5Evidence = validateLocalScreenV5Evidence(JSON.parse(serializedV5Evidence), {
+          screenRuntimeEvidence = validateScreenRuntimeEvidence(JSON.parse(serializedRuntimeEvidence), {
             baseURL: smokeConfig.baseURL,
           });
         } catch (error) {
-          throw new Error(`SMOKE_WEBMEET_SCREEN runtime-v5 evidence is invalid: ${error instanceof Error ? error.message : String(error)}`);
+          throw new Error(`SMOKE_WEBMEET_SCREEN deployment evidence is invalid: ${error instanceof Error ? error.message : String(error)}`);
         }
-        await attachJsonEvidence(testInfo, 'local-screen-runtime-v5-evidence', screenV5Evidence);
+        await attachJsonEvidence(testInfo, 'screen-runtime-evidence', screenRuntimeEvidence);
         await page.context().tracing.start({ screenshots: true, snapshots: true, sources: true });
         seedTraceStarted = true;
         const ownerPrincipal = await signIn(page, smokeConfig.primaryUser, '/dashboard', {

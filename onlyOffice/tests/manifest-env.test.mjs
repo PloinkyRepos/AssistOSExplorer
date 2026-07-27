@@ -16,13 +16,6 @@ function entriesByName(profileConfig) {
   return new Map((profileConfig.env || []).map((entry) => [entry.name, entry]));
 }
 
-function assertModernHttpService(service, label) {
-  assert.equal(service?.access, 'authenticated', `${label} must declare authenticated access`);
-  assert.equal(service?.auth, undefined, `${label} must not declare removed auth field`);
-  assert.equal(service?.mode, undefined, `${label} must not declare removed mode field`);
-  assert.equal(service?.forceGuest, undefined, `${label} must not declare removed forceGuest field`);
-}
-
 test('manifest launches mounted source and exposes a root-level readiness script', () => {
   const manifest = readManifest();
 
@@ -80,10 +73,17 @@ test('manifest injects the OnlyOffice JWT secret under decorator and Document Se
 test('manifest declares distinct Router targets without physical-host publications', () => {
   const manifest = readManifest();
 
-  assert.deepEqual(manifest.httpServices.map(({ slug, port, access }) => ({ slug, port, access })), [
-    { slug: 'onlyoffice', port: 7000, access: 'authenticated' },
-    { slug: 'onlyoffice-editor', port: 8080, access: 'public' },
+  assert.deepEqual(manifest.routerAccess?.httpRoutes?.map(({ path: routePath, access }) => ({ path: routePath, access })), [
+    {
+      path: '/base-agent-additional-server/onlyOffice/7000/control/*',
+      access: 'authenticated',
+    },
+    {
+      path: '/base-agent-additional-server/onlyOffice/8080/*',
+      access: 'public',
+    },
   ]);
+  assert.equal(Object.hasOwn(manifest, 'httpServices'), false);
   for (const profileName of ['default', 'dev', 'prod']) {
     const profile = manifest.profiles?.[profileName];
     assert.ok(profile, `profile ${profileName} exists`);
@@ -145,10 +145,12 @@ test('manifest enables configurable Document Server auto assembly for open edito
 
 test('manifest delegates Confidential storage to the deployed dpuAgent principal', () => {
   const manifest = readManifest();
-  const service = manifest.httpServices?.find((entry) => entry?.slug === 'onlyoffice');
-  assert.ok(service, 'onlyoffice http service exists');
+  const route = manifest.routerAccess?.httpRoutes?.find((entry) => (
+    entry?.path === '/base-agent-additional-server/onlyOffice/7000/control/*'
+  ));
+  assert.ok(route, 'onlyoffice control route exists');
 
-  const targets = (service.delegations || []).map((entry) => entry?.targetAgentId);
+  const targets = (route.delegations || []).map((entry) => entry?.targetAgentId);
   assert.deepEqual(
     targets,
     ['agent:./dpuAgent'],
@@ -156,25 +158,27 @@ test('manifest delegates Confidential storage to the deployed dpuAgent principal
   );
 });
 
-test('onlyoffice control service uses authenticated Ploinky access schema', () => {
+test('onlyoffice control route uses authenticated Ploinky access policy', () => {
   const manifest = readManifest();
-  const service = manifest.httpServices?.find((entry) => entry?.slug === 'onlyoffice');
-  assert.ok(service, 'onlyoffice http service exists');
-
-  assertModernHttpService(service, 'onlyoffice http service');
+  const route = manifest.routerAccess?.httpRoutes?.find((entry) => (
+    entry?.path === '/base-agent-additional-server/onlyOffice/7000/control/*'
+  ));
+  assert.equal(route?.access, 'authenticated');
 });
 
 test('onlyoffice delegation targets dpuAgent in the same repo via "." with an explicit key', () => {
   const manifest = JSON.parse(fs.readFileSync(new URL('../manifest.json', import.meta.url)));
-  const delegation = manifest.httpServices[0].delegations[0];
+  const delegation = manifest.routerAccess.httpRoutes[0].delegations[0];
   assert.equal(delegation.targetAgentId, 'agent:./dpuAgent');
   assert.equal(delegation.key, 'dpuConfidential');
 });
 
 test('onlyoffice DPU delegation is Confidential-path scoped and lasts for the workspace editing window', () => {
   const manifest = readManifest();
-  const service = manifest.httpServices?.find((entry) => entry?.slug === 'onlyoffice');
-  const delegation = service?.delegations?.[0];
+  const route = manifest.routerAccess?.httpRoutes?.find((entry) => (
+    entry?.path === '/base-agent-additional-server/onlyOffice/7000/control/*'
+  ));
+  const delegation = route?.delegations?.[0];
 
   assert.deepEqual(delegation?.when, {
     queryParam: 'path',

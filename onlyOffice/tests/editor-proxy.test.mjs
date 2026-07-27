@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import { createEditorProxy } from '../src/proxy/editor-proxy.mjs';
 
-const ACTIVE_EDITOR_URL = 'https://office.example/public-services/onlyoffice-editor/';
+const ACTIVE_EDITOR_URL = 'https://office.example/base-agent-additional-server/onlyOffice/8080/';
 
 function createResponse() {
   const chunks = [];

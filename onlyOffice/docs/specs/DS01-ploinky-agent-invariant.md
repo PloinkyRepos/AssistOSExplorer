@@ -11,14 +11,14 @@ summary: Defines the pinned v5 OnlyOffice image, split Router targets, signed ca
 ## Service topology
 
 `onlyOffice` runs from a pinned multi-architecture image digest and declares
-two `httpServices` targets:
+access policy for two Router convention paths:
 
-- authenticated control on TCP `7000`, mounted at `/services/onlyoffice/`;
+- authenticated control on TCP `7000`, mounted at `/base-agent-additional-server/onlyOffice/7000/control/`;
 - narrowly public editor transport on TCP `8080`, mounted at
-  `/public-services/onlyoffice-editor/`.
+  `/base-agent-additional-server/onlyOffice/8080/`.
 
-The explicit service ports create private inner mappings only. They never add
-an outer box publication. DocumentServer binds `127.0.0.1:80`; document storage
+The path-selected ports remain inside the agent container. They never add an
+outer box publication. DocumentServer binds `127.0.0.1:80`; document storage
 and callbacks bind `127.0.0.1:9100`. The pinned build-time DocService bind
 interposer is loaded only into DocService and rewrites only wildcard binds for
 its exact TCP `8000` support port to loopback. PostgreSQL `5432`, RabbitMQ
@@ -42,8 +42,9 @@ Responses use a strict asset-header allowlist. Redirects, cookies, browser-auth
 challenges, hop-by-hop fields, internal forwarding metadata, and unsanitized
 WebSocket upgrade headers never cross the public editor boundary.
 
-Every editor-session creation resolves the current topology generation. No URL
-is cached at process startup and no private origin is exposed to a browser.
+Every editor-session creation derives the current Router origin from trusted
+request metadata and appends the editor convention path. No URL is cached at
+process startup and no private origin is exposed to a browser.
 
 ## Signed document lifecycle
 

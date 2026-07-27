@@ -12,10 +12,9 @@ function readManifest() {
     return JSON.parse(fs.readFileSync(path.join(explorerRoot, 'manifest.json'), 'utf8'));
 }
 
-test('explorer does not expose AxiFace through a custom HTTP service', () => {
+test('explorer has no legacy HTTP service registry', () => {
     const manifest = readManifest();
-    const services = manifest.httpServices || [];
-    assert.equal(services.some((service) => String(service?.externalPrefix || '').includes('axi-face')), false);
+    assert.equal(Object.hasOwn(manifest, 'httpServices'), false);
 });
 
 test('explorer exposes shared assets through the whitelisted shared route', () => {

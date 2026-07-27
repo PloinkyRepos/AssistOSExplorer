@@ -7,9 +7,9 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 import {
-  collectLocalScreenV5Evidence,
-  sameLocalScreenGeneration,
-} from '../lib/v5-live-box.mjs';
+  collectScreenRuntimeEvidence,
+  sameScreenRuntimeGeneration,
+} from '../lib/screen-runtime-evidence.mjs';
 
 const smokeRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const cliPath = path.join(smokeRoot, 'node_modules', 'playwright', 'cli.js');
@@ -75,10 +75,11 @@ function terminate(child) {
 
 let xvfb = null;
 const childEnv = { ...process.env };
-let localScreenV5Evidence = null;
+let screenRuntimeEvidence = null;
 if (screenGate) {
   const baseURL = process.env.SMOKE_BASE_URL || process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:8080';
-  localScreenV5Evidence = collectLocalScreenV5Evidence({
+  screenRuntimeEvidence = collectScreenRuntimeEvidence({
+    deployment: String(process.env.SMOKE_DEPLOYMENT_MODE || '').trim(),
     baseURL,
     expectedContainerName: process.env.SMOKE_PLOINKY_BOX_CONTAINER,
     expectedImageId: process.env.SMOKE_EXPECT_BOX_IMAGE_ID,
@@ -87,7 +88,7 @@ if (screenGate) {
     generationMaxAgeMs: process.env.SMOKE_V5_MAX_GENERATION_AGE_MS,
     imageMaxAgeMs: process.env.SMOKE_V5_MAX_IMAGE_AGE_MS,
   });
-  childEnv.SMOKE_SCREEN_V5_BOX_EVIDENCE = JSON.stringify(localScreenV5Evidence);
+  childEnv.SMOKE_SCREEN_RUNTIME_EVIDENCE = JSON.stringify(screenRuntimeEvidence);
 }
 if (process.platform === 'linux' && headed && !childEnv.DISPLAY) {
   const xvfbPath = executableOnPath('Xvfb');
@@ -126,22 +127,28 @@ let exitCode = await new Promise((resolve, reject) => {
   });
 });
 terminate(xvfb);
-if (localScreenV5Evidence) {
+if (screenRuntimeEvidence) {
   try {
-    const postRunEvidence = collectLocalScreenV5Evidence({
-      baseURL: localScreenV5Evidence.box.baseURL,
-      expectedContainerName: localScreenV5Evidence.box.containerName,
-      expectedImageId: localScreenV5Evidence.box.imageId,
-      expectedImageRef: localScreenV5Evidence.box.requestedImageRef,
-      publicIPv4: localScreenV5Evidence.box.publicIPv4,
-      generationMaxAgeMs: localScreenV5Evidence.generationMaxAgeMs,
-      imageMaxAgeMs: localScreenV5Evidence.imageMaxAgeMs,
+    const boxEvidence = screenRuntimeEvidence.deployment === 'box'
+      ? screenRuntimeEvidence.box
+      : null;
+    const postRunEvidence = collectScreenRuntimeEvidence({
+      deployment: screenRuntimeEvidence.deployment,
+      baseURL: screenRuntimeEvidence.deployment === 'local'
+        ? screenRuntimeEvidence.baseURL
+        : boxEvidence.box.baseURL,
+      expectedContainerName: boxEvidence?.box.containerName,
+      expectedImageId: boxEvidence?.box.imageId,
+      expectedImageRef: boxEvidence?.box.requestedImageRef,
+      publicIPv4: boxEvidence?.box.publicIPv4,
+      generationMaxAgeMs: boxEvidence?.generationMaxAgeMs,
+      imageMaxAgeMs: boxEvidence?.imageMaxAgeMs,
     });
-    if (!sameLocalScreenGeneration(localScreenV5Evidence, postRunEvidence)) {
-      throw new Error('The exact runtime-v5 outer container/image/publication generation changed during the screen release gate.');
+    if (!sameScreenRuntimeGeneration(screenRuntimeEvidence, postRunEvidence)) {
+      throw new Error('The exact deployment generation changed during the screen-share smoke gate.');
     }
   } catch (error) {
-    console.error(`Runtime-v5 post-screen evidence failed: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(`Post-screen runtime evidence failed: ${error instanceof Error ? error.message : String(error)}`);
     exitCode = 1;
   }
 }

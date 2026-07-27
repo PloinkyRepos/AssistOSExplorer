@@ -5,7 +5,7 @@ publication, target addresses, and browser locators are box-owned runtime state.
 
 | Consumer | Required runtime input | Source |
 | --- | --- | --- |
-| All locator consumers | `PLOINKY_EDGE_TOPOLOGY_FILE` | Read-only schema-v2 generation mounted by Ploinky |
+| Media topology consumers | `PLOINKY_EDGE_TOPOLOGY_FILE` | Read-only unversioned generation mounted by Ploinky |
 | Managed private callers | `PLOINKY_INTERNAL_ROUTER_URL` | Fixed private Router listener selected by network class |
 | Browser-facing plugins | Authenticated `/api/edge/topology` projection | Current active one-service locator, `Cache-Control: no-store` |
 | WebMeet control | `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` | Shared generated secrets |

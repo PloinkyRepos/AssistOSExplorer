@@ -39,7 +39,7 @@ function createStorageRouteHandler(options = {}) {
       ...options.config,
     },
     resolveEditorService: options.resolveEditorService || (async () => ({
-      activeBrowserUrl: 'http://public-onlyoffice:8080/public-services/onlyoffice-editor/',
+      activeBrowserUrl: 'http://public-onlyoffice:8080/base-agent-additional-server/onlyOffice/8080/',
     })),
   });
 }

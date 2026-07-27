@@ -93,7 +93,7 @@ test('runtime plugin loader does not load URL-only global settings plugins as co
                 contributionType: 'mount',
                 component: 'soul-gateway-settings',
                 type: 'global',
-                settingsUrl: '/services/soul-gateway/management/'
+                settingsUrl: '/base-agent-additional-server/soul-gateway/7000/management/'
             }],
             'file-exp:toolbar': [{
                 id: 'git',

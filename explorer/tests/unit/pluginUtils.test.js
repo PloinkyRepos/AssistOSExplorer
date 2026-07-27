@@ -300,7 +300,7 @@ test('filterRuntimePluginsByPolicy keeps explicitly enabled Soul Gateway setting
                     location: '',
                     agent: 'soul-gateway',
                     component: 'soul-gateway-settings',
-                    settingsUrl: '/services/soul-gateway/management/',
+                    settingsUrl: '/base-agent-additional-server/soul-gateway/7000/management/',
                     adminOnly: true
                 }
             ]
@@ -313,7 +313,7 @@ test('filterRuntimePluginsByPolicy keeps explicitly enabled Soul Gateway setting
 
     assert.equal(filtered.application[''].length, 1);
     assert.equal(filtered.application[''][0].component, 'soul-gateway-settings');
-    assert.equal(filtered.application[''][0].settingsUrl, '/services/soul-gateway/management/');
+    assert.equal(filtered.application[''][0].settingsUrl, '/base-agent-additional-server/soul-gateway/7000/management/');
 });
 
 test('filterRuntimePluginsByPolicy removes disabled document plugins by stable policy key', () => {

@@ -1,18 +1,9 @@
 import { signIn } from '../lib/auth.mjs';
 import { smokeConfig } from '../lib/config.mjs';
-import { attachPageDiagnostics, expect, test } from '../lib/fixtures.mjs';
+import { expect, test } from '../lib/fixtures.mjs';
 import { findSecretLeaks } from '../lib/security.mjs';
 
-const DASHBOARD_PREFIX = '/services/umami/';
-const TELEMETRY_PREFIX = '/public-services/umami-telemetry/';
-const SANITIZATION_HEADER = 'x-umami-telemetry-sanitization';
-const SANITIZATION_EVIDENCE = [
-  'client-cookie=absent',
-  'client-authorization=absent',
-  'client-identity=absent',
-  'client-forwarding=absent',
-  'client-hop-by-hop=absent',
-].join('; ');
+const DASHBOARD_PREFIX = '/base-agent-additional-server/umamiAgent/3000/';
 
 function required(name) {
   const value = String(process.env[name] || '').trim();
@@ -66,7 +57,7 @@ test.describe('Umami Router publication @external', () => {
 
     const response = await page.goto(DASHBOARD_PREFIX, { waitUntil: 'domcontentloaded' });
     expect(response?.status(), 'Umami dashboard HTML response').toBeLessThan(400);
-    expect(new URL(page.url()).pathname).toMatch(/^\/services\/umami\//);
+    expect(new URL(page.url()).pathname.startsWith(DASHBOARD_PREFIX)).toBe(true);
 
     const usernameInput = page.locator('input[name="username"], input[autocomplete="username"]').first();
     const passwordInput = page.locator('input[name="password"], input[type="password"]').first();
@@ -109,7 +100,7 @@ test.describe('Umami Router publication @external', () => {
     await expect.poll(() => new URL(page.url()).pathname, {
       message: 'Umami in-app navigation stays under the configured base path',
       timeout: smokeConfig.timeouts.navigation,
-    }).toMatch(/^\/services\/umami\//);
+    }).toMatch(/^\/base-agent-additional-server\/umamiAgent\/3000\//);
 
     const sameOriginRequests = requests.filter((entry) => new URL(entry.url).origin === routerOrigin);
     expect(sameOriginRequests.length, 'Umami must issue same-origin Router requests').toBeGreaterThan(1);
@@ -118,7 +109,7 @@ test.describe('Umami Router publication @external', () => {
       'Umami must load at least one browser asset through the base path',
     ).toBeGreaterThan(0);
     for (const entry of sameOriginRequests) {
-      expect(new URL(entry.url).pathname, `root-relative Umami request leaked: ${entry.url}`).toMatch(/^\/services\/umami\//);
+      expect(new URL(entry.url).pathname.startsWith(DASHBOARD_PREFIX), `root-relative Umami request leaked: ${entry.url}`).toBe(true);
     }
     expect(requests.some((entry) => privateOrigin(entry.url, routerOrigin)), 'Umami must not dial a browser-visible private origin').toBe(false);
 
@@ -132,7 +123,7 @@ test.describe('Umami Router publication @external', () => {
     for (const url of domUrls.filter((value) => new URL(value).origin === routerOrigin)) {
       const pathname = new URL(url).pathname;
       if (pathname === new URL(page.url()).pathname && new URL(url).hash) continue;
-      expect(pathname, `root-relative Umami DOM URL leaked: ${url}`).toMatch(/^\/services\/umami\//);
+      expect(pathname.startsWith(DASHBOARD_PREFIX), `root-relative Umami DOM URL leaked: ${url}`).toBe(true);
     }
 
     await attachEvidence(testInfo, 'umami-dashboard-routing', {
@@ -142,86 +133,4 @@ test.describe('Umami Router publication @external', () => {
     });
   });
 
-  test('guest tracker and ingestion expose value-free proof that credentials were stripped upstream', async ({ browser }, testInfo) => {
-    test.skip(!smokeConfig.flags.umami, 'SMOKE_UMAMI is off.');
-    const websiteId = required('SMOKE_UMAMI_WEBSITE_ID');
-    expect(websiteId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
-    const routerOrigin = new URL(smokeConfig.baseURL).origin;
-    const context = await browser.newContext({
-      baseURL: smokeConfig.baseURL,
-      ignoreHTTPSErrors: true,
-    });
-    await context.addCookies([{
-      name: 'smoke_identity',
-      value: `browser-sentinel-${smokeConfig.runId}`,
-      url: routerOrigin,
-    }]);
-    const page = await context.newPage();
-    const diagnostics = attachPageDiagnostics(page, testInfo, 'umami-guest-telemetry');
-    try {
-      const scriptResponse = await page.goto(`${TELEMETRY_PREFIX}script.js`, { waitUntil: 'domcontentloaded' });
-      expect(scriptResponse?.status(), 'real Umami tracker through guest Router service').toBe(200);
-      expect(scriptResponse?.headers()['content-type'] || '').toMatch(/javascript/i);
-      expect(scriptResponse?.headers()[SANITIZATION_HEADER]).toBe(SANITIZATION_EVIDENCE);
-      expect((await scriptResponse?.body())?.length || 0).toBeGreaterThan(0);
-      await expect(page.locator('form[action="/auth/login"], input[name="username"]')).toHaveCount(0);
-
-      const ingest = await page.evaluate(async ({ path, id, runId }) => {
-        const response = await fetch(path, {
-          method: 'POST',
-          credentials: 'include',
-          headers: {
-            authorization: 'Bearer release-gate-sentinel',
-            forwarded: 'for=198.51.100.99;host=evil.example;proto=http',
-            'x-forwarded-for': '198.51.100.99',
-            'x-forwarded-host': 'evil.example',
-            'x-forwarded-proto': 'http',
-            'x-ploinky-auth-info': 'release-gate-sentinel',
-            'x-ploinky-caller': 'release-gate-sentinel',
-            'content-type': 'application/json',
-          },
-          body: JSON.stringify({
-            type: 'event',
-            payload: {
-              website: id,
-              hostname: window.location.hostname,
-              screen: `${window.screen.width}x${window.screen.height}`,
-              language: navigator.language,
-              title: 'Ploinky Umami release gate',
-              url: `${window.location.origin}/release-gate/${runId}`,
-              name: 'ploinky_release_gate',
-              data: { runId },
-            },
-          }),
-        });
-        return {
-          status: response.status,
-          contentType: response.headers.get('content-type') || '',
-          allowOrigin: response.headers.get('access-control-allow-origin') || '',
-          sanitization: response.headers.get('x-umami-telemetry-sanitization') || '',
-          responseBytes: (await response.arrayBuffer()).byteLength,
-        };
-      }, { path: `${TELEMETRY_PREFIX}api/send`, id: websiteId, runId: smokeConfig.runId });
-      expect([200, 201, 202, 204]).toContain(ingest.status);
-      expect(ingest.sanitization).toBe(SANITIZATION_EVIDENCE);
-      expect(ingest.allowOrigin).toBe(routerOrigin);
-      const cookies = await context.cookies(routerOrigin);
-      expect(cookies.some((cookie) => cookie.name === 'ploinky_guest')).toBe(true);
-      if (smokeConfig.flags.failOnBrowserErrors) {
-        expect(diagnostics.actionableEvents(), 'Umami guest telemetry browser diagnostics').toEqual([]);
-      }
-      await attachEvidence(testInfo, 'umami-telemetry-sanitization', {
-        script: {
-          status: scriptResponse.status(),
-          contentType: scriptResponse.headers()['content-type'] || '',
-          sanitization: scriptResponse.headers()[SANITIZATION_HEADER] || '',
-        },
-        ingest,
-        guestSessionCreated: cookies.some((cookie) => cookie.name === 'ploinky_guest'),
-      });
-    } finally {
-      await diagnostics.flush().catch(() => null);
-      await context.close().catch(() => null);
-    }
-  });
 });

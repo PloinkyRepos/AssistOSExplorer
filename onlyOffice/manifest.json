@@ -12,14 +12,12 @@
       "successThreshold": 1
     }
   },
-  "httpServices": [
-    {
-      "slug": "onlyoffice",
-      "port": 7000,
-      "externalPrefix": "/services/onlyoffice/",
-      "internalPrefix": "/control/",
-      "access": "authenticated",
-      "delegations": [
+  "routerAccess": {
+    "httpRoutes": [
+      {
+        "path": "/base-agent-additional-server/onlyOffice/7000/control/*",
+        "access": "authenticated",
+        "delegations": [
         {
           "key": "dpuConfidential",
           "targetAgentId": "agent:./dpuAgent",
@@ -41,16 +39,14 @@
             ]
           }
         }
-      ]
-    },
-    {
-      "slug": "onlyoffice-editor",
-      "port": 8080,
-      "externalPrefix": "/public-services/onlyoffice-editor/",
-      "internalPrefix": "/",
-      "access": "public"
-    }
-  ],
+        ]
+      },
+      {
+        "path": "/base-agent-additional-server/onlyOffice/8080/*",
+        "access": "public"
+      }
+    ]
+  },
   "volumes": {
     ".ploinky/data/onlyOffice/log": "/var/log/onlyoffice",
     ".ploinky/data/onlyOffice/data": "/var/www/onlyoffice/Data",
