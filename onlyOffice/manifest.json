@@ -1,11 +1,11 @@
 {
   "container": "docker.io/assistos/onlyoffice-agent@sha256:eb9ec11b5b58b42a285f580563dea93a67502cd8a296a0df55a39796501809df",
   "entrypoint": "/bin/bash",
-  "start": "-lc \"node src/index.mjs\"",
+  "start": "-lc \"node /code/src/index.mjs\"",
   "about": "OnlyOffice decorator with authenticated control and narrowly public editor transport services.",
   "health": {
     "readiness": {
-      "script": "scripts/healthcheck.sh",
+      "script": "healthcheck.sh",
       "interval": 2,
       "timeout": 5,
       "failureThreshold": 180,

@@ -23,8 +23,9 @@ and callbacks bind `127.0.0.1:9100`. The pinned build-time DocService bind
 interposer is loaded only into DocService and rewrites only wildcard binds for
 its exact TCP `8000` support port to loopback. PostgreSQL `5432`, RabbitMQ
 `5672`/`25672`, EPMD `4369`, and Redis `6379` when enabled are configured for
-loopback. Readiness verifies addresses and socket owners and fails closed on an
-unexpected wildcard or owner.
+loopback. The runtime launches the mounted `/code/src/index.mjs` entry point,
+then invokes a root-level Ploinky readiness wrapper that verifies addresses and
+socket owners and fails closed on an unexpected wildcard or owner.
 
 ## Routing and origin
 

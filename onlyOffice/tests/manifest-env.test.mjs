@@ -23,6 +23,14 @@ function assertModernHttpService(service, label) {
   assert.equal(service?.forceGuest, undefined, `${label} must not declare removed forceGuest field`);
 }
 
+test('manifest launches mounted source and exposes a root-level readiness script', () => {
+  const manifest = readManifest();
+
+  assert.equal(manifest.start, '-lc "node /code/src/index.mjs"');
+  assert.equal(manifest.health?.readiness?.script, 'healthcheck.sh');
+  assert.equal(fs.existsSync(path.join(agentRoot, 'healthcheck.sh')), true);
+});
+
 test('manifest injects the OnlyOffice JWT secret under decorator and Document Server names', () => {
   const manifest = readManifest();
 
