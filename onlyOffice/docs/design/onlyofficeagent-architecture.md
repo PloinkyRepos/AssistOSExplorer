@@ -112,9 +112,9 @@ fresh authenticated control material after a recreate. An uncommitted crash
 temporary is ignored and no old schema or derived document key is imported or
 reconstructed.
 
-DocumentServer Data and `/var/lib/onlyoffice`, PostgreSQL, RabbitMQ, and Redis
-state are separate explicit managed mounts so targeted recreate does not rely
-on an anonymous image volume.
+DocumentServer Data and `/var/lib/onlyoffice` are explicit managed mounts.
+PostgreSQL, RabbitMQ, and Redis state remains image-owned so rootless Podman
+does not present root-owned bind paths to their non-root services.
 
 Workspace documents are path-confined to the mounted workspace and protected
 secret paths are rejected. Confidential paths use the manifest-declared,

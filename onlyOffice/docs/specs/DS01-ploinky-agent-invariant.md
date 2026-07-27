@@ -74,10 +74,12 @@ records, and pre-v5 schemas fail closed. There is no derived-key fallback.
 
 ## Lifecycle and failure
 
-State/log/data mounts are box-owned and durable. DocumentServer Data,
-`/var/lib/onlyoffice`, PostgreSQL, RabbitMQ, and Redis state each have explicit
-managed mounts. A targeted restart drains sessions and waits for save/close
-callback acknowledgement. The real-browser release lane makes a second
+State/log/data mounts are box-owned and durable. DocumentServer Data and
+`/var/lib/onlyoffice` have explicit managed mounts. PostgreSQL, RabbitMQ, and
+Redis data remain image-owned because root-owned host bind mounts can prevent
+their non-root services from starting under rootless Podman. A targeted restart
+drains sessions and waits for save/close callback acknowledgement. The
+real-browser release lane makes a second
 distinct edit without an explicit save, proves the durable DPU blob is
 unchanged, then requires drain to persist and reopen that edit. Invalid topology,
 origin, JWT, fetch, callback, persistence, or drain state fails closed and

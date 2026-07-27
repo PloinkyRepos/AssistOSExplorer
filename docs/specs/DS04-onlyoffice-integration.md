@@ -67,7 +67,9 @@ the persistence boundary: reopening must use the last acknowledged version.
 The pinned multi-architecture image starts DocumentServer, the authenticated
 control service, the editor proxy, and loopback storage. Readiness proves all
 four semantics rather than accepting a single open socket. Durable OnlyOffice
-data, logs, and session metadata live under box-owned data mounts.
+Data, logs, and session metadata live under box-owned data mounts. PostgreSQL,
+RabbitMQ, and Redis state remains image-owned because rootless host bind
+ownership can prevent those services from starting.
 
 A targeted restart drains open sessions, requests save/close, waits for callback
 acknowledgement, then exits. The real-browser release lane obtains its

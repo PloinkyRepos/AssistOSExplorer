@@ -29,6 +29,23 @@ test('manifest launches mounted source and exposes a root-level readiness script
   );
 });
 
+test('manifest keeps image-owned service data away from rootless host bind mounts', () => {
+  const manifest = readManifest();
+
+  assert.deepEqual(manifest.volumes, {
+    '.ploinky/data/onlyOffice/log': '/var/log/onlyoffice',
+    '.ploinky/data/onlyOffice/data': '/var/www/onlyoffice/Data',
+    '.ploinky/data/onlyOffice/lib': '/var/lib/onlyoffice',
+  });
+  const preinstall = fs.readFileSync(
+    path.join(agentRoot, 'scripts', 'hooks', 'preinstall.sh'),
+    'utf8',
+  );
+  assert.equal(preinstall.includes('${data_root}/postgresql'), false);
+  assert.equal(preinstall.includes('${data_root}/rabbitmq'), false);
+  assert.equal(preinstall.includes('${data_root}/redis'), false);
+});
+
 test('manifest injects the OnlyOffice JWT secret under decorator and Document Server names', () => {
   const manifest = readManifest();
 

@@ -7,10 +7,7 @@ data_root="${workspace_root}/.ploinky/data/onlyOffice"
 mkdir -p \
   "${data_root}/log" \
   "${data_root}/data" \
-  "${data_root}/lib" \
-  "${data_root}/postgresql" \
-  "${data_root}/rabbitmq" \
-  "${data_root}/redis"
+  "${data_root}/lib"
 
 # Runtime contract v5 is a hard cut. This hook intentionally does not inspect,
 # import, stop, delete, or rewrite any legacy host-side OnlyOffice deployment.
