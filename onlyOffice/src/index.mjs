@@ -27,7 +27,7 @@ function requireWorkspaceRoot(env) {
 }
 
 export function assertOnlyOfficeImageContract({
-  contractPath = '/usr/local/share/ploinky/onlyoffice-v5.contract',
+  contractPath = '/usr/local/share/ploinky/onlyoffice.contract',
   interposerPath = '/usr/local/lib/onlyoffice-docservice-loopback-bind.so',
   expectedUid = 0,
   expectedGid = 0,
@@ -56,7 +56,7 @@ export function assertOnlyOfficeImageContract({
       || lines[0] !== 'contract_version=5'
       || lines[1] !== 'documentserver_index_sha256=53a06109f1f4029a78f913a061e14f01bff023d109024073a13d4416b54d2195'
       || lines[2] !== 'ubuntu_snapshot=20260712T000000Z'
-      || lines[3] !== 'docservice_bind_scope=docservice-v5-port-8000'
+      || lines[3] !== 'docservice_bind_scope=docservice-port-8000'
       || !/^interposer_sha256=[0-9a-f]{64}$/.test(lines[4])) {
     throw new Error('OnlyOffice v5 image contract marker does not match the approved runtime contract.');
   }

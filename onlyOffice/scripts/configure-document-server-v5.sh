@@ -4,7 +4,7 @@ set -euo pipefail
 config_file="${ONLYOFFICE_LOCAL_CONFIG_FILE:-/etc/onlyoffice/documentserver/local.json}"
 docservice_supervisor_file="/etc/supervisor/conf.d/ds-docservice.conf"
 docservice_bind_interposer="/usr/local/lib/onlyoffice-docservice-loopback-bind.so"
-image_contract_file="/usr/local/share/ploinky/onlyoffice-v5.contract"
+image_contract_file="/usr/local/share/ploinky/onlyoffice.contract"
 : "${JWT_SECRET:?JWT_SECRET is required}"
 
 if [ ! -f "${config_file}" ]; then
@@ -33,7 +33,7 @@ fi
 if [ "$(sed -n '1p' "$image_contract_file")" != 'contract_version=5' ] \
   || [ "$(sed -n '2p' "$image_contract_file")" != 'documentserver_index_sha256=53a06109f1f4029a78f913a061e14f01bff023d109024073a13d4416b54d2195' ] \
   || [ "$(sed -n '3p' "$image_contract_file")" != 'ubuntu_snapshot=20260712T000000Z' ] \
-  || [ "$(sed -n '4p' "$image_contract_file")" != 'docservice_bind_scope=docservice-v5-port-8000' ] \
+  || [ "$(sed -n '4p' "$image_contract_file")" != 'docservice_bind_scope=docservice-port-8000' ] \
   || [ "$(wc -l < "$image_contract_file")" -ne 5 ]; then
   echo 'OnlyOffice v5 image contract marker does not match the approved runtime contract.' >&2
   exit 1
@@ -60,9 +60,9 @@ if grep -q 'LD_PRELOAD\|ONLYOFFICE_DOCSERVICE_BIND_SCOPE' "$docservice_superviso
   exit 1
 fi
 sed -i \
-  '/^environment=/s#$#,LD_PRELOAD=/usr/local/lib/onlyoffice-docservice-loopback-bind.so,ONLYOFFICE_DOCSERVICE_BIND_SCOPE=docservice-v5-port-8000#' \
+  '/^environment=/s#$#,LD_PRELOAD=/usr/local/lib/onlyoffice-docservice-loopback-bind.so,ONLYOFFICE_DOCSERVICE_BIND_SCOPE=docservice-port-8000#' \
   "$docservice_supervisor_file"
-grep -q '^environment=.*LD_PRELOAD=/usr/local/lib/onlyoffice-docservice-loopback-bind\.so,ONLYOFFICE_DOCSERVICE_BIND_SCOPE=docservice-v5-port-8000$' \
+grep -q '^environment=.*LD_PRELOAD=/usr/local/lib/onlyoffice-docservice-loopback-bind\.so,ONLYOFFICE_DOCSERVICE_BIND_SCOPE=docservice-port-8000$' \
   "$docservice_supervisor_file"
 
 "${json_bin}" -I -f "${config_file}" -e 'this.services=this.services||{};this.services.CoAuthoring=this.services.CoAuthoring||{};this.services.CoAuthoring.token=this.services.CoAuthoring.token||{};this.services.CoAuthoring.token.enable=this.services.CoAuthoring.token.enable||{};this.services.CoAuthoring.token.enable.request=this.services.CoAuthoring.token.enable.request||{};this.services.CoAuthoring.token.enable.request.outbox=true'
