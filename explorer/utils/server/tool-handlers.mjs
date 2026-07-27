@@ -235,7 +235,7 @@ export function createToolHandlers({
 
   async function loadPloinkyReposService() {
     if (!ploinkyReposServicePromise) {
-      const modulePath = path.join(ploinkyRoot, 'cli', 'services', 'repos.js');
+      const modulePath = path.join(ploinkyRoot, 'cli', 'utils', 'repos.js');
       ploinkyReposServicePromise = import(pathToFileURL(modulePath).href);
     }
     return ploinkyReposServicePromise;
@@ -1302,7 +1302,12 @@ export function createToolHandlers({
     const repoPath = await ensureSkillRepoCached(repoEntry);
     const availableSkills = await listRepoSkillNames(repoPath);
     if (!availableSkills.length) {
-      throw new Error(`No skills found in repository '${name}'. Expected skills/*/SKILL.md.`);
+      return jsonResponse({
+        ok: true,
+        added: false,
+        cached: true,
+        message: `Repository '${name}' was cached but was not added to the skills manifest because no Anthropic skills were found. Expected at least one skills/*/SKILL.md file.`
+      });
     }
 
     const entries = await readSkillsManifestEntries(manifestPath);
@@ -1313,7 +1318,13 @@ export function createToolHandlers({
       : entries.map((entry, index) => index === existingIndex ? nextEntry : entry);
     await writeSkillsManifestEntries(manifestPath, nextEntries);
     await syncSkillsManifestInstall(folder, nextEntries);
-    return jsonResponse(await buildSkillsManifestState(folder, manifestPath, nextEntries));
+    return jsonResponse({
+      ...await buildSkillsManifestState(folder, manifestPath, nextEntries),
+      ok: true,
+      added: true,
+      cached: true,
+      message: `${name} added.`
+    });
   }
 
   async function handleSetSkillsManifestSkillEnabled(args) {

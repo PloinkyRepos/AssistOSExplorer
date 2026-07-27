@@ -258,6 +258,7 @@ When a dependency is unavailable, Explorer should degrade gracefully:
 - keep the host shell responsive
 - avoid corrupting local IDE state
 - surface actionable error messages
+- when the skills-manifest editor caches a repository that has no Anthropic-style `skills/*/SKILL.md` folders, leave the manifest unchanged and return a normal informational `message` stating that no Anthropic skills were found
 - recover automatically when the dependency becomes available again
 
 This is important for IDE behavior because a user may still be navigating, reading, or editing unrelated resources while one plugin or one dependent agent is unavailable.

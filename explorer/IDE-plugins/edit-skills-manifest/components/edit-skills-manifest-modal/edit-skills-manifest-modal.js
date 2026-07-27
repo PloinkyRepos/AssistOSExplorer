@@ -365,18 +365,22 @@ export class EditSkillsManifestModal {
         this.setBusy(true);
         this.setStatus(`Adding ${name || url}...`, 'info');
         try {
-            await this.callJsonTool('add_skills_manifest_repo', {
+            const result = await this.callJsonTool('add_skills_manifest_repo', {
                 folderPath: this.folderPath,
                 url,
                 ...(name ? { name } : {}),
                 ...(branch ? { branch } : {})
             });
+            if (result?.added === false) {
+                this.setStatus(result.message || 'The repository was cached but no skills were added.', 'info');
+                return;
+            }
             await this.refreshStateAfterMutation();
             this.changed = true;
             if (this.urlInput) this.urlInput.value = '';
             if (this.nameInput) this.nameInput.value = '';
             if (this.branchInput) this.branchInput.value = '';
-            this.setStatus(`${name || url} added.`, 'info');
+            this.setStatus(result?.message || `${name || url} added.`, 'info');
         } catch (error) {
             this.setStatus(error?.message || 'Could not add repository.', 'error');
         } finally {
@@ -389,7 +393,7 @@ export class EditSkillsManifestModal {
         const index = Number.parseInt(String(indexValue), 10);
         const preset = this.state.skillRepositories?.[index];
         if (!preset) return;
-        if (this.urlInput) this.urlInput.value = preset.name || preset.url;
+        if (this.urlInput) this.urlInput.value = preset.url;
         if (this.nameInput) this.nameInput.value = preset.name || deriveRepoNameFromUrl(preset.url);
         if (this.branchInput) this.branchInput.value = preset.branch || '';
         await this.addRepository();
