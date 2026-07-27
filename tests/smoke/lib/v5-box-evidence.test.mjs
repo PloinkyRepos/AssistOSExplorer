@@ -27,7 +27,7 @@ function containerInspect(bindings = {
     State: { Running: true, StartedAt: STARTED_AT },
     Config: {
       Labels: {
-        'io.assistos.ploinky.runtime-contract': '5',
+        'io.assistos.ploinky.runtime-contract': '6',
         'io.assistos.ploinky.requested-image': IMAGE_REF,
       },
     },
@@ -39,7 +39,7 @@ function imageInspect() {
   return [{
     Id: IMAGE_ID.slice('sha256:'.length),
     Config: {
-      Labels: { 'io.assistos.ploinky.runtime-contract': '5' },
+      Labels: { 'io.assistos.ploinky.runtime-contract': '6' },
       User: 'podman',
       WorkingDir: '/workspace',
       Entrypoint: ['/usr/local/bin/ploinky-box-entrypoint'],
@@ -87,7 +87,7 @@ test('box evidence rejects a third publication, wrong contract, and wrong image 
     containerInspect: wrongContract,
     imageInspect: imageInspect(),
     ...expected(),
-  }), /contract 5/);
+  }), /contract 6/);
 
   assert.throws(() => buildV5BoxEvidence({
     containerInspect: containerInspect(),

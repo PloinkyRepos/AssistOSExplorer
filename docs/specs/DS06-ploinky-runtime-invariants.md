@@ -17,6 +17,10 @@ has one loopback TCP publication for Router and one wildcard UDP publication
 for the LiveKit mux. Manifests, profiles, dependency graphs, readiness state,
 and agent state cannot add another physical-host mapping.
 
+Runtime v5 names this coordinated architecture. Its current outer container
+image must independently carry Box image contract label `6`; release evidence
+that still requires label `5` is stale and must fail closed.
+
 Router owns public/control listener `8080` and box-private listener `8081`.
 Private operations require both effective authenticated policy and an exact
 current-instance/current-enable-generation caller ACL. Method, path, audience,

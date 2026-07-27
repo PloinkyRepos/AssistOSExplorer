@@ -232,7 +232,7 @@ export function collectLocalScreenV5Evidence({
   const labels = selected?.Config?.Labels || {};
   const requestedImageRef = String(labels[REQUESTED_IMAGE_LABEL] || '').trim();
   const runtimeContract = String(labels[RUNTIME_CONTRACT_LABEL] || '').trim();
-  if (runtimeContract !== '5') throw new Error('Selected local screen outer container is not runtime contract 5.');
+  if (runtimeContract !== '6') throw new Error('Selected local screen outer container is not Box image contract 6.');
   if (!requestedImageRef) throw new Error('Selected local screen outer container has no requested-image label.');
   const selectedImageId = String(selected.Image || selected.ImageID || '').trim();
   if (expectedContainerName && containerName !== expectedContainerName) {

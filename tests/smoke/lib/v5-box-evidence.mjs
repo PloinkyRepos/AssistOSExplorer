@@ -1,6 +1,6 @@
 const RUNTIME_CONTRACT_LABEL = 'io.assistos.ploinky.runtime-contract';
 const REQUESTED_IMAGE_LABEL = 'io.assistos.ploinky.requested-image';
-const REQUIRED_RUNTIME_CONTRACT = '5';
+const REQUIRED_RUNTIME_CONTRACT = '6';
 const ROUTER_TARGET = '8080/tcp';
 const MEDIA_TARGET = '7882/udp';
 const TCP_SCAN_START = 1;
@@ -140,7 +140,7 @@ export function buildV5BoxEvidence({
   const startedAt = isoTime(container?.State?.StartedAt, 'outer container State.StartedAt');
   const containerLabels = record(container?.Config?.Labels || {}, 'outer container Config.Labels');
   if (String(containerLabels[RUNTIME_CONTRACT_LABEL] || '') !== REQUIRED_RUNTIME_CONTRACT) {
-    throw new Error(`Outer container ${containerName} does not carry runtime contract 5.`);
+    throw new Error(`Outer container ${containerName} does not carry Box image contract 6.`);
   }
   if (String(containerLabels[REQUESTED_IMAGE_LABEL] || '') !== expectedImageRef) {
     throw new Error(`Outer container ${containerName} requested-image label does not equal ${expectedImageRef}.`);
@@ -157,7 +157,7 @@ export function buildV5BoxEvidence({
   const imageConfig = record(image.Config || {}, 'outer image Config');
   const imageLabels = record(imageConfig.Labels || image.Labels || {}, 'outer image labels');
   if (String(imageLabels[RUNTIME_CONTRACT_LABEL] || '') !== REQUIRED_RUNTIME_CONTRACT) {
-    throw new Error(`Outer image ${requiredImageId} does not carry runtime contract 5.`);
+    throw new Error(`Outer image ${requiredImageId} does not carry Box image contract 6.`);
   }
   if (String(imageConfig.User || '') !== 'podman') throw new Error('Runtime-v5 image user must be podman.');
   if (String(imageConfig.WorkingDir || '') !== '/workspace') throw new Error('Runtime-v5 image workdir must be /workspace.');

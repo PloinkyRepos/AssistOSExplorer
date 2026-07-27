@@ -82,8 +82,10 @@ SMOKE_BASE_URL=http://127.0.0.1:8080 SMOKE_WEBMEET_MEDIA=1 SMOKE_WEBMEET_SCREEN=
 With the screen flag enabled, the npm wrapper inspects running rootless Podman
 containers before Chromium starts. Exactly one container must publish
 `127.0.0.1:<SMOKE_BASE_URL port>:8080/tcp` and
-`0.0.0.0:7882:7882/udp`, carry runtime contract 5, and use a freshly built
-runtime-v5 image. By default the running generation must be at most 30 minutes
+`0.0.0.0:7882:7882/udp`, carry Box image contract 6, and use a freshly built
+runtime-v5 image. Runtime v5 names the coordinated Ploinky architecture; the
+outer image's independently versioned container contract is 6. By default the
+running generation must be at most 30 minutes
 old and the image at most four hours old. The wrapper binds the test to that
 container ID, start time, image ID/reference, and normalized two-publication
 boundary, re-inspects it after Playwright exits, and fails if any value changed.
@@ -168,7 +170,7 @@ The matrix wrapper also requires a native rootless Podman server using Netavark.
 captures Podman client/server versions, native server OS/architecture,
 Netavark version, and Aardvark DNS version. It also inspects the exact named
 running outer container and exact expected image ID/reference, requires runtime
-contract 5, and normalizes `HostConfig.PortBindings` to exactly loopback Router
+Box image contract 6, and normalizes `HostConfig.PortBindings` to exactly loopback Router
 TCP plus wildcard UDP 7882. The image creation and container start times must
 also satisfy the same bounded fresh-build/fresh-generation contract as the
 local screen gate (`SMOKE_V5_MAX_IMAGE_AGE_MS` and

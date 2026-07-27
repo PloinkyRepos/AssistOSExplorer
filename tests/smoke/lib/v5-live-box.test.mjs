@@ -45,7 +45,7 @@ function evidence() {
       containerId: 'c'.repeat(64),
       startedAt: '2026-07-16T10:05:00.000Z',
       running: true,
-      runtimeContract: '5',
+      runtimeContract: '6',
       requestedImageRef: 'docker.io/assistos/ploinky-box:test-v5',
       imageId: IMAGE_ID,
       baseURL: 'http://127.0.0.1:8080',
