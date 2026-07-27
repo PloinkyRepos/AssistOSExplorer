@@ -29,6 +29,11 @@ test('manifest launches mounted source and exposes a root-level readiness script
   assert.equal(manifest.start, '-lc "node /code/src/index.mjs"');
   assert.equal(manifest.health?.readiness?.script, 'healthcheck.sh');
   assert.equal(fs.existsSync(path.join(agentRoot, 'healthcheck.sh')), true);
+  assert.notEqual(
+    fs.statSync(path.join(agentRoot, 'healthcheck.sh')).mode & 0o111,
+    0,
+    'the directly executed readiness probe must be executable',
+  );
 });
 
 test('manifest injects the OnlyOffice JWT secret under decorator and Document Server names', () => {

@@ -10,7 +10,7 @@ assert_loopback_owner() {
   port="$2"
   owner_pattern="$3"
   required="${4:-true}"
-  listeners="$(ss -H -lntp "sport = :${port}" 2>/dev/null || true)"
+  listeners="$(ss -H -lntpe "sport = :${port}" 2>/dev/null || true)"
 
   if [ -z "$listeners" ]; then
     if [ "$required" = true ]; then
@@ -23,9 +23,33 @@ assert_loopback_owner() {
     echo "$label listener ${port}/tcp is not process-local: $listeners" >&2
     exit 1
   fi
+
+  # Rootless nested Podman intentionally hides cross-user /proc fd links, so
+  # ss may omit users:(...) even for uid 0 in the inner container. Prefer the
+  # exact process name when available; otherwise bind the socket's kernel UID
+  # to the UID of a process with the expected comm name.
   if ! printf '%s\n' "$listeners" | grep -Eq "users:\(\(\"(${owner_pattern})\""; then
-    echo "$label listener ${port}/tcp has an unexpected socket owner: $listeners" >&2
-    exit 1
+    listener_uids="$(printf '%s\n' "$listeners" | sed -n 's/.* uid:\([0-9][0-9]*\) .*/\1/p' | sort -u)"
+    expected_uids="$(
+      for comm_path in /proc/[0-9]*/comm; do
+        [ -r "$comm_path" ] || continue
+        if grep -Eq "^(${owner_pattern})$" "$comm_path"; then
+          awk '/^Uid:/{print $2}' "${comm_path%/comm}/status"
+        fi
+      done | sort -u
+    )"
+    if [ -z "$listener_uids" ] || [ -z "$expected_uids" ]; then
+      echo "$label listener ${port}/tcp has an unverifiable socket owner: $listeners" >&2
+      exit 1
+    fi
+    while IFS= read -r listener_uid; do
+      if ! printf '%s\n' "$expected_uids" | grep -qx "$listener_uid"; then
+        echo "$label listener ${port}/tcp has an unexpected socket owner: $listeners" >&2
+        exit 1
+      fi
+    done <<EOF
+$listener_uids
+EOF
   fi
 }
 
