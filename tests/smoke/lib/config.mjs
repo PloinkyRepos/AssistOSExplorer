@@ -63,6 +63,7 @@ export const smokeConfig = Object.freeze({
     onlyoffice: readBool('SMOKE_ONLYOFFICE', false),
     openInterpreter: readBool('SMOKE_OPEN_INTERPRETER', false),
     umami: readBool('SMOKE_UMAMI', false),
+    webmeetHeadless: readBool('SMOKE_WEBMEET_HEADLESS', false),
     webmeetMedia: readBool('SMOKE_WEBMEET_MEDIA', false),
     webmeetNetworkMatrix: readBool('SMOKE_WEBMEET_NETWORK_MATRIX', false),
     webmeetRefresh: readBool('SMOKE_WEBMEET_REFRESH', false),

@@ -19,6 +19,7 @@ import {
   createRoom,
   deleteRoomIfPresent,
   enableMedia,
+  expectBidirectionalAudioVideoRtp,
   expectIncreasingRtpStats,
   expectJoinMaterialRefreshLifecycle,
   expectTwoDistinctWebMeetParticipants,
@@ -53,10 +54,14 @@ test.describe('WebMeet rooms', () => {
     const failureCollector = createReleaseGateFailureCollector();
 
     try {
-      if (smokeConfig.flags.webmeetScreen || smokeConfig.flags.webmeetRefresh) {
+      if (
+        smokeConfig.flags.webmeetHeadless
+        || smokeConfig.flags.webmeetScreen
+        || smokeConfig.flags.webmeetRefresh
+      ) {
         expect(
           smokeConfig.flags.failOnBrowserErrors,
-          'SMOKE_ALLOW_BROWSER_ERRORS is forbidden for WebMeet screen/refresh release gates',
+          'SMOKE_ALLOW_BROWSER_ERRORS is forbidden for WebMeet headless/screen/refresh release gates',
         ).toBe(true);
         expect(smokeConfig.primaryUser.username, 'primary smoke username must be configured').toBeTruthy();
         expect(smokeConfig.secondaryUser.username, 'secondary smoke username must be configured').toBeTruthy();
@@ -64,7 +69,11 @@ test.describe('WebMeet rooms', () => {
           normalizePrincipalComponent(smokeConfig.secondaryUser.username, 'secondary configured account username'),
           'WebMeet release gates require two distinct normalized configured account usernames',
         ).not.toBe(normalizePrincipalComponent(smokeConfig.primaryUser.username, 'primary configured account username'));
-        if (smokeConfig.flags.webmeetRefresh && !smokeConfig.flags.webmeetScreen) {
+        if (
+          smokeConfig.flags.webmeetRefresh
+          && !smokeConfig.flags.webmeetScreen
+          && !smokeConfig.flags.webmeetHeadless
+        ) {
           ownerDiagnostics = attachPageDiagnostics(ownerPage, testInfo, 'webmeet-primary-refresh');
         }
       }
@@ -82,6 +91,9 @@ test.describe('WebMeet rooms', () => {
           throw new Error(`SMOKE_WEBMEET_SCREEN deployment evidence is invalid: ${error instanceof Error ? error.message : String(error)}`);
         }
         await attachJsonEvidence(testInfo, 'screen-runtime-evidence', screenRuntimeEvidence);
+      }
+
+      if (smokeConfig.flags.webmeetScreen || smokeConfig.flags.webmeetHeadless) {
         await page.context().tracing.start({ screenshots: true, snapshots: true, sources: true });
         seedTraceStarted = true;
         const ownerPrincipal = await signIn(page, smokeConfig.primaryUser, '/dashboard', {
@@ -157,16 +169,20 @@ test.describe('WebMeet rooms', () => {
           storageState: memberStorageState,
           recordVideo: { dir: testInfo.outputPath('webmeet-secondary-video') },
         });
-        // The local screen gate must exercise the fixed LiveKit UDP mux rather
-        // than silently succeeding through TURN. Exact public-IP selection is
-        // proven separately by the native external-network matrix.
+        const rtcProbeOptions = smokeConfig.flags.webmeetScreen
+          ? { networkLane: 'direct-udp' }
+          : {};
         await Promise.all([
-          installRtcProbe(ownerContext, { networkLane: 'direct-udp' }),
-          installRtcProbe(memberContext, { networkLane: 'direct-udp' }),
+          installRtcProbe(ownerContext, rtcProbeOptions),
+          installRtcProbe(memberContext, rtcProbeOptions),
         ]);
         ownerPage = await ownerContext.newPage();
         memberPage = await memberContext.newPage();
-        ownerDiagnostics = attachPageDiagnostics(ownerPage, testInfo, 'webmeet-primary-screen');
+        ownerDiagnostics = attachPageDiagnostics(
+          ownerPage,
+          testInfo,
+          smokeConfig.flags.webmeetScreen ? 'webmeet-primary-screen' : 'webmeet-primary-headless',
+        );
         memberDiagnostics = attachPageDiagnostics(memberPage, testInfo, 'webmeet-secondary');
         await ownerContext.tracing.start({ screenshots: true, snapshots: true, sources: true });
         ownerTraceStarted = true;
@@ -202,7 +218,7 @@ test.describe('WebMeet rooms', () => {
       await openWebMeet(memberPage, smokeConfig.secondaryUser, { expectCreateRoom: false });
       await joinRoom(memberPage, roomTitle);
       identities = await expectTwoDistinctWebMeetParticipants(ownerPage, memberPage);
-      if (smokeConfig.flags.webmeetScreen) {
+      if (smokeConfig.flags.webmeetScreen || smokeConfig.flags.webmeetHeadless) {
         await attachJsonEvidence(testInfo, 'webmeet-authenticated-participant-identities', {
           authenticatedPrincipals,
           liveKitParticipants: identities,
@@ -217,8 +233,21 @@ test.describe('WebMeet rooms', () => {
       if (smokeConfig.flags.webmeetMedia) {
         await enableMedia(ownerPage);
         await enableMedia(memberPage);
-        await expectIncreasingRtpStats(ownerPage);
-        await expectIncreasingRtpStats(memberPage);
+        if (smokeConfig.flags.webmeetHeadless) {
+          await Promise.all([
+            expectBidirectionalAudioVideoRtp(ownerPage, {
+              label: 'headless-owner',
+              testInfo,
+            }),
+            expectBidirectionalAudioVideoRtp(memberPage, {
+              label: 'headless-member',
+              testInfo,
+            }),
+          ]);
+        } else {
+          await expectIncreasingRtpStats(ownerPage);
+          await expectIncreasingRtpStats(memberPage);
+        }
       }
 
       if (smokeConfig.flags.webmeetRefresh) {
@@ -277,7 +306,7 @@ test.describe('WebMeet rooms', () => {
       if (smokeConfig.flags.failOnBrowserErrors) {
         expect(memberDiagnostics.actionableEvents(), 'secondary browser console, page, or network errors').toEqual([]);
         if (ownerDiagnostics) {
-          expect(ownerDiagnostics.actionableEvents(), 'primary screen browser console, page, or network errors').toEqual([]);
+          expect(ownerDiagnostics.actionableEvents(), 'primary WebMeet browser console, page, or network errors').toEqual([]);
         }
       }
     } catch (error) {

@@ -10,12 +10,22 @@ import {
   collectScreenRuntimeEvidence,
   sameScreenRuntimeGeneration,
 } from '../lib/screen-runtime-evidence.mjs';
+import { validateHeadlessWebMeetProfile } from '../lib/webmeet-headless-profile.mjs';
 
 const smokeRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const cliPath = path.join(smokeRoot, 'node_modules', 'playwright', 'cli.js');
 const playwrightArgs = process.argv.slice(2);
 const screenGate = /^(1|true|yes|on)$/i.test(String(process.env.SMOKE_WEBMEET_SCREEN || '').trim());
+const headlessWebMeetGate = /^(1|true|yes|on)$/i.test(String(process.env.SMOKE_WEBMEET_HEADLESS || '').trim());
+const mediaGate = /^(1|true|yes|on)$/i.test(String(process.env.SMOKE_WEBMEET_MEDIA || '').trim());
 const headed = playwrightArgs.includes('--headed') || playwrightArgs.some((arg) => arg === '--headless=false');
+
+validateHeadlessWebMeetProfile({
+  enabled: headlessWebMeetGate,
+  headed,
+  media: mediaGate,
+  screen: screenGate,
+});
 
 const sourceGate = spawnSync(
   process.execPath,

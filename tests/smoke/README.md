@@ -68,12 +68,20 @@ Opt-in checks:
 
 - `SMOKE_OPEN_INTERPRETER=1` runs Copilot semantic routing and AKU memory checks that require configured external provider runtime.
 - `SMOKE_WEBMEET_MEDIA=1` enables fake camera/microphone and asserts WebRTC stats increase.
-- `SMOKE_WEBMEET_SCREEN=1` turns the existing two-account WebMeet test into a hard release gate. Both distinct accounts must authenticate and exchange real LiveKit screen tracks in both directions. The probe removes TURN servers, and each direction requires active non-relay selected pairs using a globally routable IPv4 and UDP 7882 in both browsers alongside exact ScreenShare publication identities and source-specific RTP packet/frame growth. When Chromium redacts a peer-reflexive remote address or port, every observable field must still be correct and the missing field is replaced only by a proof bound to the exact LiveKit container generation and its real UDP 7882 listener. An observable wrong address, port, protocol, relay candidate, changed generation, or invalid server proof fails. The gate never stubs `getDisplayMedia` or skips a missing secondary account. This local gate does not claim the address equals the configured public IPv4; that stricter assertion belongs to the native external-network matrix below.
+- `npm run test:webmeet-headless` is the automated WebMeet acceptance profile. It runs in headless Chromium with deterministic synthetic camera and microphone sources, requires two distinct configured accounts, proves room create/join and bidirectional chat, exercises settings/privacy and ordinary tagged-research chat, and requires separate growing outbound audio, outbound video, inbound audio, and inbound video RTP stats in both browsers. It forbids headed execution and screen sharing.
+- `npm run test:webmeet-screen` remains a separate explicit, headed, opt-in gate for physical-display ScreenShare capture. It is not part of `test:full` or automated headless acceptance. Both distinct accounts must authenticate and exchange real LiveKit screen tracks in both directions. The probe removes TURN servers, and each direction requires active non-relay selected pairs using a globally routable IPv4 and UDP 7882 in both browsers alongside exact ScreenShare publication identities and source-specific RTP packet/frame growth. When Chromium redacts a peer-reflexive remote address or port, every observable field must still be correct and the missing field is replaced only by a proof bound to the exact LiveKit container generation and its real UDP 7882 listener. An observable wrong address, port, protocol, relay candidate, changed generation, or invalid server proof fails. The gate never stubs `getDisplayMedia` or skips a missing secondary account. This local gate does not claim the address equals the configured public IPv4; that stricter assertion belongs to the native external-network matrix below.
 - `SMOKE_WEBMEET_REFRESH=1` adds the real join-material lifecycle gate. Both browsers must receive a scheduled material rotation before the original TURN expiry, remain joined with growing RTP after that original expiry, then survive a real Playwright offline/online transition with another broker call, disconnect/recreate/rejoin, and renewed RTP. This gate requires `SMOKE_WEBMEET_MEDIA=1` and a test box started with a short supported credential lifetime (recommended `PLOINKY_TURN_CREDENTIAL_TTL_SECONDS=60`); it fails rather than mocking time or join responses when the original expiry exceeds `SMOKE_WEBMEET_REFRESH_MAX_WAIT_MS` (default 180000).
   Only non-secret SHA-256 fingerprints are attached, and both the participant
   token and credential-bearing RTC configuration must rotate independently.
 
-Run the screen-share gate against a fresh host-local deployment with:
+On macOS, keep the automated headless profile running when physical monitors
+are off by holding system-sleep assertions for the lifetime of the command:
+
+```sh
+caffeinate -dimsu npm run test:webmeet-headless
+```
+
+Run the separate headed screen-share gate against a fresh host-local deployment with:
 
 ```sh
 SMOKE_DEPLOYMENT_MODE=local SMOKE_BASE_URL=http://127.0.0.1:8080 SMOKE_WEBMEET_MEDIA=1 SMOKE_WEBMEET_SCREEN=1 SMOKE_TEST_TIMEOUT_MS=240000 npm test -- --headed --project=chromium specs/30-webmeet-room-chat.spec.mjs
