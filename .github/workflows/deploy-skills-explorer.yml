@@ -33,8 +33,8 @@ on:
         required: false
         default: ''
         type: string
-      ploinky_branch:
-        description: 'Ploinky runtime branch. Falls back to vars.PLOINKY_BRANCH, then master.'
+      ploinky_tag:
+        description: 'Ploinky release tag. Falls back to vars.PLOINKY_TAG, then v1.0.0.'
         required: false
         default: ''
         type: string
@@ -162,7 +162,7 @@ jobs:
           WEBMEET_TURN_MAX_PORT: ${{ vars.WEBMEET_TURN_MAX_PORT }}
           STRICT_INFRA_CHECKS: ${{ vars.STRICT_INFRA_CHECKS }}
           PROXIES_BRANCH: ${{ inputs.proxies_branch || vars.PROXIES_BRANCH || 'main' }}
-          PLOINKY_BRANCH: ${{ inputs.ploinky_branch || vars.PLOINKY_BRANCH || 'master' }}
+          PLOINKY_TAG: ${{ inputs.ploinky_tag || vars.PLOINKY_TAG || 'v1.0.0' }}
           ACHILLES_BRANCH: ${{ inputs.achilles_branch || vars.ACHILLES_BRANCH || 'master' }}
         run: |
           set -euo pipefail
@@ -219,7 +219,7 @@ jobs:
 
           ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
             -i ~/.ssh/deploy_key "${SSH_USER}@${SSH_HOST}" \
-            "WORKSPACE='$WORKSPACE' EXPLORER_BRANCH='$EXPLORER_BRANCH' PROXIES_BRANCH='$PROXIES_BRANCH' PLOINKY_BRANCH='$PLOINKY_BRANCH' ACHILLES_BRANCH='$ACHILLES_BRANCH' ROUTER_PORT='$ROUTER_PORT' PUBLIC_URL='$PUBLIC_URL' PLOINKY_PROFILE='$PLOINKY_PROFILE' bash -s" << 'REMOTE'
+            "WORKSPACE='$WORKSPACE' EXPLORER_BRANCH='$EXPLORER_BRANCH' PROXIES_BRANCH='$PROXIES_BRANCH' PLOINKY_TAG='$PLOINKY_TAG' ACHILLES_BRANCH='$ACHILLES_BRANCH' ROUTER_PORT='$ROUTER_PORT' PUBLIC_URL='$PUBLIC_URL' PLOINKY_PROFILE='$PLOINKY_PROFILE' bash -s" << 'REMOTE'
           set -euo pipefail
           # Ensure the plaintext env file is removed even if a later step exits non-zero.
           trap 'rm -f /tmp/skills_explorer_env' EXIT
@@ -306,13 +306,33 @@ jobs:
             exit 1
           fi
 
-          echo "[deploy] Ensuring Ploinky runtime is on requested branch..."
+          echo "[deploy] Ensuring Ploinky runtime is on the requested release..."
           resolve_realpath() {
             if command -v realpath >/dev/null 2>&1; then
               realpath "$1"
             else
               readlink -f "$1"
             fi
+          }
+
+          checkout_runtime_tag() {
+            local repo_dir="$1"
+            local tag="$2"
+            local label="$3"
+            local canonical_origin="${4:-}"
+            local target_ref="refs/tags/$tag^{commit}"
+            git -C "$repo_dir" check-ref-format "refs/tags/$tag" >/dev/null
+            if [ -n "$canonical_origin" ]; then
+              git -C "$repo_dir" remote set-url origin "$canonical_origin"
+            fi
+            git -C "$repo_dir" fetch origin "refs/tags/$tag:refs/tags/$tag"
+            if ! git -C "$repo_dir" rev-parse --verify --quiet "$target_ref" >/dev/null; then
+              echo "[deploy] ERROR: $label release tag '$tag' does not resolve to a commit."
+              exit 1
+            fi
+            git -C "$repo_dir" checkout --detach "$target_ref"
+            git -C "$repo_dir" reset --hard "$target_ref"
+            echo "[deploy] $label at $(git -C "$repo_dir" rev-parse --short HEAD) ($tag)"
           }
 
           checkout_runtime_branch() {
@@ -334,7 +354,7 @@ jobs:
             echo "[deploy] $label at $(git -C "$repo_dir" rev-parse --short HEAD) ($branch)"
           }
 
-          PLOINKY_BRANCH="${PLOINKY_BRANCH:-master}"
+          PLOINKY_TAG="${PLOINKY_TAG:-v1.0.0}"
           PLOINKY_BIN="$(resolve_realpath "$PLOINKY")"
           PLOINKY_DIR="$(cd "$(dirname "$PLOINKY_BIN")/.." && pwd -P)"
           if [ ! -d "$PLOINKY_DIR/.git" ] && [ -d "$HOME/ploinky/.git" ]; then
@@ -342,10 +362,10 @@ jobs:
             PLOINKY="$PLOINKY_DIR/bin/ploinky"
           fi
           if [ -d "$PLOINKY_DIR/.git" ]; then
-            checkout_runtime_branch "$PLOINKY_DIR" "$PLOINKY_BRANCH" "Ploinky runtime" \
+            checkout_runtime_tag "$PLOINKY_DIR" "$PLOINKY_TAG" "Ploinky runtime" \
               "https://github.com/AssistOS-AI/ploinky.git"
-          elif [ "$PLOINKY_BRANCH" != "master" ]; then
-            echo "[deploy] ERROR: cannot checkout Ploinky branch '$PLOINKY_BRANCH'; '$PLOINKY_DIR' is not a git checkout."
+          else
+            echo "[deploy] ERROR: cannot checkout Ploinky release tag '$PLOINKY_TAG'; '$PLOINKY_DIR' is not a git checkout."
             exit 1
           fi
 
@@ -726,6 +746,8 @@ jobs:
 
       - name: Create summary
         if: always()
+        env:
+          PLOINKY_TAG: ${{ inputs.ploinky_tag || vars.PLOINKY_TAG || 'v1.0.0' }}
         run: |
           {
             echo "## Skills Explorer Deploy"
@@ -736,6 +758,7 @@ jobs:
             echo "- Local dashboard: \`http://127.0.0.1:${ROUTER_PORT}/dashboard\`"
             echo "- Public URL: \`${PUBLIC_URL}\`"
             echo "- Branch: \`${EXPLORER_BRANCH}\`"
+            echo "- Ploinky release: \`${PLOINKY_TAG}\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Cleanup
