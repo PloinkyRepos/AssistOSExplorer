@@ -159,7 +159,8 @@ async function typeDocumentMarker(page, editorFrame, marker) {
 }
 
 async function forceSaveDocument(editorFrame) {
-  const saveButton = editorFrame.locator('#btn-save');
+  const saveButton = editorFrame.getByRole('button', { name: /^Save(?: \(Ctrl\+S\))?$/ });
+  await expect(saveButton).toHaveCount(1);
   await expect(saveButton).toBeVisible({ timeout: smokeConfig.timeouts.action });
   await expect(saveButton).toBeEnabled();
   await saveButton.click();
