@@ -70,4 +70,10 @@ Ploinky establishes who the caller is and signs the invocation path, but domain 
 
 ## Conclusion
 
+The manual Explorer deployment workflow resolves the Ploinky runtime from an
+immutable release tag. Its default runtime is `v1.0.0`; selecting another
+runtime requires an explicitly published Ploinky release tag through the
+workflow input or repository variable. A moving Ploinky branch is not a valid
+default for this deployment path.
+
 `AssistOSExplorer` remains compatible with Ploinky only while it preserves router-mediated entry, secure-wire invocation, scoped guest behavior, explicit manifest-declared route policy and HTTP-service boundaries, workspace-confined storage, redacted logging, and local domain authorization. Any source change that affects these contracts must update this specification, the local docs, and the local guide files in the same change set.

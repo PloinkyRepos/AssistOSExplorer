@@ -2,6 +2,18 @@
 
 This document describes the GitHub Actions deployment for the Explorer agent on `skills.axiologic.dev`.
 
+## Ploinky Runtime Release
+
+The `deploy-skills-explorer.yml` workflow checks out the immutable Ploinky
+release tag `v1.0.0` by default. This release points to the Ploinky `master`
+commit selected for Explorer deployment. The workflow accepts only a Ploinky
+tag through the `ploinky_tag` dispatch input or `PLOINKY_TAG` repository
+variable; it does not deploy from a moving Ploinky branch.
+
+Publish a new Ploinky release tag before changing this pin. An explicit
+`ploinky_tag` dispatch input overrides the repository variable, and the
+repository variable overrides the workflow default.
+
 ## GitHub Secrets
 
 Create or update these repository secrets in `AssistOS-AI/AssistOSExplorer`.
@@ -49,6 +61,7 @@ If `livekit-skills.axiologic.dev` is moved behind Cloudflare/Tunnel later, retes
 
 Create or update these repository variables. WebMeet topology variables are optional overrides: the `prod` manifest profiles already carry the Axiologic production defaults for the public LiveKit URL, internal LiveKit API URL, egress URL, TLS hostname/email, TURN realm, and TURN hostname. Keep the variables below when intentionally overriding the profile defaults from GitHub Actions.
 The deploy workflow omits blank optional variables from the remote environment so empty repository variables do not shadow manifest profile defaults.
+`PLOINKY_TAG` is optional; when it is unset, the workflow deploys `v1.0.0`.
 
 ```sh
 gh variable set SSH_USER --repo AssistOS-AI/AssistOSExplorer --body admin
