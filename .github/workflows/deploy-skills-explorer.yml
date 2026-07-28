@@ -79,8 +79,6 @@ jobs:
         env:
           SSH_KEY: ${{ secrets.SSH_KEY }}
           PLOINKY_MASTER_KEY: ${{ secrets.PLOINKY_MASTER_KEY }}
-          ONLYOFFICE_PUBLIC_URL: ${{ vars.ONLYOFFICE_PUBLIC_URL }}
-          ONLYOFFICE_INTERNAL_URL: ${{ vars.ONLYOFFICE_INTERNAL_URL }}
         run: |
           set -euo pipefail
           if [ -z "${SSH_KEY:-}" ]; then
@@ -95,23 +93,6 @@ jobs:
             echo "::error::PLOINKY_MASTER_KEY must be exactly 64 hex characters"
             exit 1
           fi
-          if [ -z "${ONLYOFFICE_PUBLIC_URL:-}" ]; then
-            echo "::error::Missing required repository variable ONLYOFFICE_PUBLIC_URL"
-            exit 1
-          fi
-          case "${ONLYOFFICE_PUBLIC_URL}" in
-            https://localhost*|https://127.*|https://0.0.0.0*|http://*)
-              echo "::error::ONLYOFFICE_PUBLIC_URL must be a browser-reachable HTTPS URL, not ${ONLYOFFICE_PUBLIC_URL}"
-              exit 1
-              ;;
-          esac
-          case "${ONLYOFFICE_INTERNAL_URL:-}" in
-            http://127.0.0.1:8082|http://localhost:8082|http://0.0.0.0:8082)
-              echo "::error::ONLYOFFICE_INTERNAL_URL is the in-container Document Server URL; leave it unset for managed OnlyOffice or set it to http://127.0.0.1:80."
-              echo "::error::The host-facing health probe already falls back to http://127.0.0.1:8082 when ONLYOFFICE_INTERNAL_URL is unset."
-              exit 1
-              ;;
-          esac
           if [ -z "${SSH_HOST:-}" ] || [ -z "${SSH_USER:-}" ]; then
             echo "::error::SSH_USER and SSH_HOST must be configured"
             exit 1
@@ -128,38 +109,17 @@ jobs:
       - name: Deploy workspace
         env:
           PLOINKY_MASTER_KEY: ${{ secrets.PLOINKY_MASTER_KEY }}
-          ONLYOFFICE_PUBLIC_URL: ${{ vars.ONLYOFFICE_PUBLIC_URL }}
-          ONLYOFFICE_INTERNAL_URL: ${{ vars.ONLYOFFICE_INTERNAL_URL }}
-          ONLYOFFICE_CALLBACK_BASE_URL: ${{ vars.ONLYOFFICE_CALLBACK_BASE_URL }}
-          WEBMEET_PUBLIC_LIVEKIT_URL: ${{ vars.WEBMEET_PUBLIC_LIVEKIT_URL }}
-          WEBMEET_LIVEKIT_URL: ${{ vars.WEBMEET_LIVEKIT_URL }}
           WEBMEET_EGRESS_URL: ${{ vars.WEBMEET_EGRESS_URL }}
           WEBMEET_INFRA_IMAGE_TAG: ${{ inputs.webmeet_infra_image_tag || vars.WEBMEET_INFRA_IMAGE_TAG || 'webmeet-infra' }}
           PLOINKY_NODE_IMAGE_TAG: ${{ inputs.ploinky_node_image_tag || vars.PLOINKY_NODE_IMAGE_TAG || '24-bookworm-tools' }}
           DEFAULT_LOCAL_LLM_IMAGE: docker.io/assistos/default-local-llm:cpu-qwen25-coder-1.5b
           WEBMEET_INFRA_HEALTH_PORT: ${{ vars.WEBMEET_INFRA_HEALTH_PORT }}
-          WEBMEET_LIVEKIT_USE_EXTERNAL_IP: ${{ vars.WEBMEET_LIVEKIT_USE_EXTERNAL_IP }}
-          WEBMEET_LIVEKIT_NODE_IP: ${{ vars.WEBMEET_LIVEKIT_NODE_IP }}
-          WEBMEET_LIVEKIT_LOG_LEVEL: ${{ vars.WEBMEET_LIVEKIT_LOG_LEVEL }}
-          WEBMEET_LIVEKIT_FORCE_TCP: ${{ vars.WEBMEET_LIVEKIT_FORCE_TCP }}
-          WEBMEET_LIVEKIT_REDIS_ADDRESS: ${{ vars.WEBMEET_LIVEKIT_REDIS_ADDRESS }}
           WEBMEET_EGRESS_REDIS_ADDRESS: ${{ vars.WEBMEET_EGRESS_REDIS_ADDRESS }}
-          WEBMEET_LIVEKIT_INTERNAL_WS_URL: ${{ vars.WEBMEET_LIVEKIT_INTERNAL_WS_URL }}
-          WEBMEET_TLS_HOSTNAME: ${{ vars.WEBMEET_TLS_HOSTNAME }}
           WEBMEET_TLS_HTTPS_PORT: ${{ vars.WEBMEET_TLS_HTTPS_PORT }}
           WEBMEET_TLS_HTTP_PORT: ${{ vars.WEBMEET_TLS_HTTP_PORT }}
-          WEBMEET_LIVEKIT_UPSTREAM: ${{ vars.WEBMEET_LIVEKIT_UPSTREAM }}
-          WEBMEET_CERT_EMAIL: ${{ vars.WEBMEET_CERT_EMAIL }}
           WEBMEET_CERTBOT_AUTO_ISSUE: ${{ vars.WEBMEET_CERTBOT_AUTO_ISSUE }}
           WEBMEET_CERTBOT_RENEW_INTERVAL_SECONDS: ${{ vars.WEBMEET_CERTBOT_RENEW_INTERVAL_SECONDS }}
-          WEBMEET_TURN_EXTERNAL_IP: ${{ vars.WEBMEET_TURN_EXTERNAL_IP }}
-          WEBMEET_TURN_HOST: ${{ vars.WEBMEET_TURN_HOST }}
-          WEBMEET_TURN_PORT: ${{ vars.WEBMEET_TURN_PORT }}
-          WEBMEET_TURN_REALM: ${{ vars.WEBMEET_TURN_REALM }}
-          WEBMEET_TURN_USER: ${{ vars.WEBMEET_TURN_USER }}
           WEBMEET_ICE_TRANSPORT_POLICY: ${{ vars.WEBMEET_ICE_TRANSPORT_POLICY }}
-          WEBMEET_TURN_MIN_PORT: ${{ vars.WEBMEET_TURN_MIN_PORT }}
-          WEBMEET_TURN_MAX_PORT: ${{ vars.WEBMEET_TURN_MAX_PORT }}
           STRICT_INFRA_CHECKS: ${{ vars.STRICT_INFRA_CHECKS }}
           PROXIES_BRANCH: ${{ inputs.proxies_branch || vars.PROXIES_BRANCH || 'main' }}
           PLOINKY_BRANCH: ${{ inputs.ploinky_branch || vars.PLOINKY_BRANCH || 'master' }}
@@ -179,38 +139,17 @@ jobs:
 
           {
             write_env PLOINKY_MASTER_KEY
-            write_env ONLYOFFICE_PUBLIC_URL
-            write_env ONLYOFFICE_INTERNAL_URL
-            write_env ONLYOFFICE_CALLBACK_BASE_URL
-            write_env WEBMEET_PUBLIC_LIVEKIT_URL
-            write_env WEBMEET_LIVEKIT_URL
             write_env WEBMEET_EGRESS_URL
             write_env WEBMEET_INFRA_IMAGE_TAG
             write_env PLOINKY_NODE_IMAGE_TAG
             write_env DEFAULT_LOCAL_LLM_IMAGE
             write_env WEBMEET_INFRA_HEALTH_PORT
-            write_env WEBMEET_LIVEKIT_USE_EXTERNAL_IP
-            write_env WEBMEET_LIVEKIT_NODE_IP
-            write_env WEBMEET_LIVEKIT_LOG_LEVEL
-            write_env WEBMEET_LIVEKIT_FORCE_TCP
-            write_env WEBMEET_LIVEKIT_REDIS_ADDRESS
             write_env WEBMEET_EGRESS_REDIS_ADDRESS
-            write_env WEBMEET_LIVEKIT_INTERNAL_WS_URL
-            write_env WEBMEET_TLS_HOSTNAME
             write_env WEBMEET_TLS_HTTPS_PORT
             write_env WEBMEET_TLS_HTTP_PORT
-            write_env WEBMEET_LIVEKIT_UPSTREAM
-            write_env WEBMEET_CERT_EMAIL
             write_env WEBMEET_CERTBOT_AUTO_ISSUE
             write_env WEBMEET_CERTBOT_RENEW_INTERVAL_SECONDS
-            write_env WEBMEET_TURN_EXTERNAL_IP
-            write_env WEBMEET_TURN_HOST
-            write_env WEBMEET_TURN_PORT
-            write_env WEBMEET_TURN_REALM
-            write_env WEBMEET_TURN_USER
             write_env WEBMEET_ICE_TRANSPORT_POLICY
-            write_env WEBMEET_TURN_MIN_PORT
-            write_env WEBMEET_TURN_MAX_PORT
             write_env STRICT_INFRA_CHECKS
           } > /tmp/skills_explorer_env
           chmod 600 /tmp/skills_explorer_env
@@ -520,37 +459,15 @@ jobs:
           set_var WORKSPACE_ROOT "$WORK_DIR"
           set_var PLOINKY_WORKSPACE_ROOT "$WORK_DIR"
 
-          set_var ONLYOFFICE_PUBLIC_URL "${ONLYOFFICE_PUBLIC_URL:-}"
-          set_var ONLYOFFICE_INTERNAL_URL "${ONLYOFFICE_INTERNAL_URL:-}"
-          set_var ONLYOFFICE_CALLBACK_BASE_URL "${ONLYOFFICE_CALLBACK_BASE_URL:-$PUBLIC_URL}"
-
-          set_var WEBMEET_PUBLIC_LIVEKIT_URL "${WEBMEET_PUBLIC_LIVEKIT_URL:-}"
-          set_var WEBMEET_LIVEKIT_URL "${WEBMEET_LIVEKIT_URL:-}"
           set_var WEBMEET_EGRESS_URL "${WEBMEET_EGRESS_URL:-}"
           set_var WEBMEET_INFRA_IMAGE_TAG "${WEBMEET_INFRA_IMAGE_TAG:-webmeet-infra}"
           set_var WEBMEET_INFRA_HEALTH_PORT "${WEBMEET_INFRA_HEALTH_PORT:-17000}"
-          set_var WEBMEET_LIVEKIT_USE_EXTERNAL_IP "${WEBMEET_LIVEKIT_USE_EXTERNAL_IP:-}"
-          set_var WEBMEET_LIVEKIT_NODE_IP "${WEBMEET_LIVEKIT_NODE_IP:-}"
-          set_var WEBMEET_LIVEKIT_LOG_LEVEL "${WEBMEET_LIVEKIT_LOG_LEVEL:-}"
-          set_var WEBMEET_LIVEKIT_FORCE_TCP "${WEBMEET_LIVEKIT_FORCE_TCP:-}"
-          set_var WEBMEET_LIVEKIT_REDIS_ADDRESS "${WEBMEET_LIVEKIT_REDIS_ADDRESS:-}"
           set_var WEBMEET_EGRESS_REDIS_ADDRESS "${WEBMEET_EGRESS_REDIS_ADDRESS:-}"
-          set_var WEBMEET_LIVEKIT_INTERNAL_WS_URL "${WEBMEET_LIVEKIT_INTERNAL_WS_URL:-}"
-          set_var WEBMEET_TLS_HOSTNAME "${WEBMEET_TLS_HOSTNAME:-}"
           set_var WEBMEET_TLS_HTTPS_PORT "${WEBMEET_TLS_HTTPS_PORT:-}"
           set_var WEBMEET_TLS_HTTP_PORT "${WEBMEET_TLS_HTTP_PORT:-}"
-          set_var WEBMEET_LIVEKIT_UPSTREAM "${WEBMEET_LIVEKIT_UPSTREAM:-}"
-          set_var WEBMEET_CERT_EMAIL "${WEBMEET_CERT_EMAIL:-}"
           set_var WEBMEET_CERTBOT_AUTO_ISSUE "${WEBMEET_CERTBOT_AUTO_ISSUE:-}"
           set_var WEBMEET_CERTBOT_RENEW_INTERVAL_SECONDS "${WEBMEET_CERTBOT_RENEW_INTERVAL_SECONDS:-}"
-          set_var WEBMEET_TURN_EXTERNAL_IP "${WEBMEET_TURN_EXTERNAL_IP:-}"
-          set_var WEBMEET_TURN_HOST "${WEBMEET_TURN_HOST:-}"
-          set_var WEBMEET_TURN_PORT "${WEBMEET_TURN_PORT:-}"
-          set_var WEBMEET_TURN_REALM "${WEBMEET_TURN_REALM:-}"
-          set_var WEBMEET_TURN_USER "${WEBMEET_TURN_USER:-}"
           set_var WEBMEET_ICE_TRANSPORT_POLICY "${WEBMEET_ICE_TRANSPORT_POLICY:-all}"
-          set_var WEBMEET_TURN_MIN_PORT "${WEBMEET_TURN_MIN_PORT:-}"
-          set_var WEBMEET_TURN_MAX_PORT "${WEBMEET_TURN_MAX_PORT:-}"
 
           echo "[deploy] Pulling Ploinky Node image docker.io/assistos/ploinky-node:${PLOINKY_NODE_IMAGE_TAG}..."
           podman pull "docker.io/assistos/ploinky-node:${PLOINKY_NODE_IMAGE_TAG}"
@@ -610,27 +527,6 @@ jobs:
             echo "[deploy] WARNING: liveKitServerAgent health not responding; continuing (non-strict)."
           fi
 
-          ONLYOFFICE_API_BASE="${ONLYOFFICE_INTERNAL_URL:-http://127.0.0.1:8082}"
-          echo "[deploy] Verifying OnlyOffice api.js through ${ONLYOFFICE_API_BASE%/} (fatal=${INFRA_FATAL})..."
-          OO_OK=0
-          for i in $(seq 1 120); do
-            code="$(curl -s -o /dev/null -w '%{http_code}' "${ONLYOFFICE_API_BASE%/}/web-apps/apps/api/documents/api.js" || true)"
-            if [ "$code" = "200" ]; then
-              OO_OK=1
-              echo "[deploy] OnlyOffice api.js responding with HTTP $code"
-              break
-            fi
-            sleep 2
-          done
-          if [ "$OO_OK" != "1" ]; then
-            if [ "$INFRA_FATAL" = "1" ]; then
-              echo "[deploy] ERROR: OnlyOffice api.js did not respond and STRICT_INFRA_CHECKS=1."
-              tail -120 "$WORK_DIR/logs/skills-explorer-start.log" || true
-              exit 1
-            fi
-            echo "[deploy] WARNING: OnlyOffice api.js not responding; continuing (non-strict)."
-          fi
-
           echo "[deploy] Containers:"
           podman ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | head -100
           echo "[deploy] Workspace status:"
@@ -638,16 +534,8 @@ jobs:
           REMOTE
 
       - name: Verify public URL
-        env:
-          ONLYOFFICE_PUBLIC_URL: ${{ vars.ONLYOFFICE_PUBLIC_URL }}
-          WEBMEET_PUBLIC_LIVEKIT_URL: ${{ vars.WEBMEET_PUBLIC_LIVEKIT_URL || 'wss://livekit-skills.axiologic.dev' }}
-          STRICT_INFRA_CHECKS: ${{ vars.STRICT_INFRA_CHECKS }}
         run: |
           set -euo pipefail
-          case "$(printf '%s' "${STRICT_INFRA_CHECKS:-0}" | tr '[:upper:]' '[:lower:]')" in
-            1|true|yes|on) INFRA_FATAL=1; INFRA_ATTEMPTS=60 ;;
-            *) INFRA_FATAL=0; INFRA_ATTEMPTS=12 ;;
-          esac
           echo "[deploy] Verifying ${PUBLIC_URL}/dashboard from GitHub runner..."
           for i in $(seq 1 60); do
             code="$(curl -L -s -o /tmp/skills-explorer-response.txt -w '%{http_code}' "${PUBLIC_URL%/}/dashboard" || true)"
@@ -679,50 +567,6 @@ jobs:
             fi
             sleep 5
           done
-
-          if [ -n "${WEBMEET_PUBLIC_LIVEKIT_URL:-}" ]; then
-            livekit_probe_url="${WEBMEET_PUBLIC_LIVEKIT_URL/#wss:/https:}"
-            livekit_probe_url="${livekit_probe_url/#ws:/http:}"
-            echo "[deploy] Verifying ${livekit_probe_url%/}/ from GitHub runner..."
-            for i in $(seq 1 "$INFRA_ATTEMPTS"); do
-              code="$(curl -L -s -o /tmp/livekit-public-response.txt -w '%{http_code}' "${livekit_probe_url%/}/" || true)"
-              if [ "$code" = "200" ]; then
-                echo "[deploy] Public LiveKit endpoint responding with HTTP $code"
-                break
-              fi
-              if [ "$i" = "$INFRA_ATTEMPTS" ]; then
-                echo "[deploy] Last HTTP code: ${code:-none}"
-                sed -n '1,40p' /tmp/livekit-public-response.txt 2>/dev/null || true
-                if [ "$INFRA_FATAL" = "1" ]; then
-                  echo "[deploy] ERROR: public LiveKit endpoint did not become reachable and STRICT_INFRA_CHECKS=1."
-                  exit 1
-                fi
-                echo "[deploy] WARNING: public LiveKit endpoint did not become reachable; continuing (non-strict)."
-              fi
-              sleep 5
-            done
-          fi
-
-          if [ -z "${ONLYOFFICE_PUBLIC_URL:-}" ]; then
-            echo "[deploy] ERROR: ONLYOFFICE_PUBLIC_URL is required for browser editors."
-            exit 1
-          fi
-          if [ -n "${ONLYOFFICE_PUBLIC_URL:-}" ]; then
-            echo "[deploy] Verifying OnlyOffice public api.js from GitHub runner..."
-            for i in $(seq 1 60); do
-              code="$(curl -L -s -o /tmp/onlyoffice-public-api.js -w '%{http_code}' "${ONLYOFFICE_PUBLIC_URL%/}/web-apps/apps/api/documents/api.js" || true)"
-              if [ "$code" = "200" ]; then
-                echo "[deploy] OnlyOffice public api.js responding with HTTP $code"
-                exit 0
-              fi
-              if [ "$i" = "60" ]; then
-                echo "[deploy] ERROR: OnlyOffice public api.js did not become reachable"
-                echo "[deploy] Last HTTP code: ${code:-none}"
-                exit 1
-              fi
-              sleep 5
-            done
-          fi
 
       - name: Create summary
         if: always()
