@@ -661,6 +661,9 @@ class h {
   }
   registerListeners() {
     this._documentElement.addEventListener("click", this.interceptAppContentLinks.bind(this)), window.onpopstate = async (e) => {
+      if (typeof this._appContent?.querySelector !== "function") {
+        return;
+      }
       const hash = window.location.hash;
       if (hash) {
         const hashContent = hash.substring(1);
