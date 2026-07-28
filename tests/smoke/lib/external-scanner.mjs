@@ -10,7 +10,7 @@ import { requirePublicIpv4 } from './network.mjs';
 const SCANNER_PATH = fileURLToPath(new URL('../scripts/external-boundary-scanner.py', import.meta.url));
 const CONFIG_MARKER = '__SCAN_CONFIG__';
 const SCANNER_TRANSPORT = 'ssh-pinned-host';
-const SCANNER_NAME = 'ploinky-external-boundary-v1';
+const SCANNER_NAME = 'ploinky-external-boundary';
 
 function sha256(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
@@ -76,8 +76,8 @@ export function parseExternalScannerOutput(output, expected) {
   } catch (error) {
     throw new Error(`External scanner returned invalid JSON: ${error.message}`);
   }
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload) || payload.schemaVersion !== 1) {
-    throw new Error('External scanner output schemaVersion must equal 1.');
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error('External scanner output must be an object.');
   }
   if (payload.scanner !== SCANNER_NAME) throw new Error('External scanner identity mismatch.');
   if (payload.scanId !== expected.scanId) throw new Error('External scanner scanId mismatch.');
@@ -269,7 +269,6 @@ export function buildExternalBoundaryEvidence({ runId, boxEvidence, sources }) {
   const observedTimes = sources.map((source) => Date.parse(source.observedAt));
   if (observedTimes.some((value) => !Number.isFinite(value))) throw new Error('External scanner observedAt is invalid.');
   return Object.freeze({
-    schemaVersion: 2,
     runId: exactString(runId, 'external scanner runId'),
     containerName: boxEvidence.containerName,
     containerId: boxEvidence.containerId,

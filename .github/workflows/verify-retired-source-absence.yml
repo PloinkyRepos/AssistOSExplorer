@@ -1,4 +1,4 @@
-name: Verify runtime-v5 source absence
+name: Verify retired source absence
 
 on:
   pull_request:
@@ -21,7 +21,7 @@ jobs:
           trap 'rm -f "$report"' EXIT
 
           node --test --test-reporter=tap \
-            tests/smoke/lib/v5-source-absence.test.mjs | tee "$report"
+            tests/smoke/lib/retired-source-absence.test.mjs | tee "$report"
 
           require_summary() {
             local field="$1"

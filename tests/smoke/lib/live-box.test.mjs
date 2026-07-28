@@ -3,12 +3,12 @@ import test from 'node:test';
 
 import {
   parseLocalScreenBaseUrl,
-  sameLocalScreenGeneration,
+  sameLiveBoxGeneration,
   selectLocalScreenContainer,
-  validateLocalScreenV5Evidence,
-  validateV5BoxFreshness,
+  validateBoxFreshness,
+  validateLiveBoxEvidence,
   verifyNetworkLaneCompletion,
-} from './v5-live-box.mjs';
+} from './live-box.mjs';
 
 const NOW = Date.parse('2026-07-16T10:10:00.000Z');
 const IMAGE_ID = `sha256:${'a'.repeat(64)}`;
@@ -19,7 +19,7 @@ function container(bindings, overrides = {}) {
     Name: '/ploinky-box-screen',
     Image: IMAGE_ID,
     State: { Running: true, StartedAt: '2026-07-16T10:05:00.000Z' },
-    Config: { Labels: {} },
+    Config: { Labels: { 'io.assistos.ploinky-box.role': 'box' } },
     HostConfig: { PortBindings: bindings },
     ...overrides,
   };
@@ -34,19 +34,22 @@ function exactBindings(port = '8080') {
 
 function evidence() {
   return {
-    schemaVersion: 1,
     capturedAt: '2026-07-16T10:10:00.000Z',
     imageCreatedAt: '2026-07-16T10:00:00.000Z',
     generationMaxAgeMs: 600_000,
     imageMaxAgeMs: 3_600_000,
     box: {
-      schemaVersion: 1,
       containerName: 'ploinky-box-screen',
       containerId: 'c'.repeat(64),
       startedAt: '2026-07-16T10:05:00.000Z',
       running: true,
-      runtimeContract: '6',
-      requestedImageRef: 'docker.io/assistos/ploinky-box:test-v5',
+      semanticLabels: {
+        role: 'box',
+        pathHash: 'd'.repeat(64),
+        imageRef: 'docker.io/assistos/ploinky-box:runtime',
+        routerHostPort: '8080',
+      },
+      imageRef: 'docker.io/assistos/ploinky-box:runtime',
       imageId: IMAGE_ID,
       baseURL: 'http://127.0.0.1:8080',
       publicIPv4: '',
@@ -56,7 +59,7 @@ function evidence() {
   };
 }
 
-test('local screen URL and container discovery require the exact loopback v5 boundary', () => {
+test('live Box URL and container discovery require the exact loopback boundary', () => {
   assert.deepEqual(parseLocalScreenBaseUrl('http://127.0.0.1:18080'), {
     baseURL: 'http://127.0.0.1:18080', port: '18080',
   });
@@ -77,36 +80,36 @@ test('local screen URL and container discovery require the exact loopback v5 bou
   ], '8080'), /found 0/);
 });
 
-test('local screen evidence is exact, fresh, and generation-comparable', () => {
-  const validated = validateLocalScreenV5Evidence(evidence(), {
+test('live Box evidence is exact, fresh, and generation-comparable', () => {
+  const validated = validateLiveBoxEvidence(evidence(), {
     baseURL: 'http://127.0.0.1:8080', nowMs: NOW,
   });
   assert.equal(validated.box.imageId, IMAGE_ID);
-  assert.equal(sameLocalScreenGeneration(validated, structuredClone(validated)), true);
+  assert.equal(sameLiveBoxGeneration(validated, structuredClone(validated)), true);
 
   const staleGeneration = evidence();
   staleGeneration.box.startedAt = '2026-07-16T09:00:00.000Z';
-  assert.throws(() => validateLocalScreenV5Evidence(staleGeneration, {
+  assert.throws(() => validateLiveBoxEvidence(staleGeneration, {
     baseURL: 'http://127.0.0.1:8080', nowMs: NOW,
   }), /generation is not fresh/);
 
   const staleImage = evidence();
   staleImage.imageCreatedAt = '2026-07-16T08:00:00.000Z';
-  assert.throws(() => validateLocalScreenV5Evidence(staleImage, {
+  assert.throws(() => validateLiveBoxEvidence(staleImage, {
     baseURL: 'http://127.0.0.1:8080', nowMs: NOW,
   }), /image is not fresh/);
 });
 
 test('native gates enforce the same fresh image and container generation contract', () => {
   const box = evidence().box;
-  assert.equal(validateV5BoxFreshness({
+  assert.equal(validateBoxFreshness({
     capturedAt: '2026-07-16T10:10:00.000Z',
     imageCreatedAt: '2026-07-16T10:00:00.000Z',
     box,
     generationMaxAgeMs: 600_000,
     imageMaxAgeMs: 3_600_000,
   }, { nowMs: NOW }).imageCreatedAt, '2026-07-16T10:00:00.000Z');
-  assert.throws(() => validateV5BoxFreshness({
+  assert.throws(() => validateBoxFreshness({
     capturedAt: '2026-07-16T10:10:00.000Z',
     imageCreatedAt: '2026-07-16T08:00:00.000Z',
     box,
@@ -115,7 +118,7 @@ test('native gates enforce the same fresh image and container generation contrac
   }, { nowMs: NOW }), /image is not fresh/);
 
   const ancient = { ...box, startedAt: '2026-07-15T10:05:00.000Z' };
-  assert.throws(() => validateV5BoxFreshness({
+  assert.throws(() => validateBoxFreshness({
     capturedAt: '2026-07-16T10:10:00.000Z',
     imageCreatedAt: '2026-07-15T10:00:00.000Z',
     box: ancient,

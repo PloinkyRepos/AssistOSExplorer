@@ -19,9 +19,14 @@ const FORBIDDEN = [
   ['retired WebMeet TURN environment', new RegExp(`\\b${['WEBMEET', 'TURN'].join('_')}_[A-Z0-9_]*\\b`)],
   ['retired WebMeet TLS hostname', exact('WEBMEET', 'TLS', 'HOSTNAME')],
   ['retired WebMeet certificate email', exact('WEBMEET', 'CERT', 'EMAIL')],
+  ['retired Box evidence helper', new RegExp(`\\bv[56]-${['box', 'evidence'].join('-')}\\b`, 'i')],
+  ['retired live Box helper', new RegExp(`\\bv[56]-${['live', 'box'].join('-')}\\b`, 'i')],
+  ['retired Box smoke environment', new RegExp(`\\bSMOKE_V[56]_[A-Z0-9_]*\\b`)],
+  ['retired Box runtime label', new RegExp(['io', 'assistos', 'ploinky', 'runtime-contract'].join('\\.'))],
+  ['retired external scanner identity', new RegExp(`\\b${['ploinky', 'external', 'boundary', 'v1'].join('-')}\\b`)],
 ];
 
-test('tracked executable, config, workflow, test, and normative documentation scopes omit retired v5 symbols', () => {
+test('tracked executable, config, workflow, test, and normative documentation scopes omit retired publication symbols', () => {
   const tracked = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z'], {
     cwd: ROOT,
     encoding: 'utf8',

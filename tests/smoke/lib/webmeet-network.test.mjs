@@ -2,10 +2,35 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  assessSelectedPairsUseLocalUdpMux,
   joinMaterialAdvanced,
   newConnectedPeerConnectionIndices,
   selectedPairsUseLocalUdpMux,
 } from './webmeet.mjs';
+
+const LIVEKIT_ID = 'a'.repeat(64);
+
+function serverEvidence() {
+  return {
+    deployment: 'local',
+    capturedAt: '2026-07-27T12:00:00.000Z',
+    baseURL: 'http://127.0.0.1:8080',
+    outerBoxCount: 0,
+    liveKit: {
+      containerName: 'ploinky_webmeetInfra_liveKitServerAgent_fresh_12345678',
+      containerId: LIVEKIT_ID,
+      startedAt: '2026-07-27T11:59:00.000Z',
+      networkMode: 'host',
+      portBindings: {},
+      udpListener: {
+        namespace: 'host-local-livekit',
+        outerContainerId: '',
+        command: ['ss', '-H', '-lun', 'sport = :7882'],
+        lines: ['UNCONN 0 0 0.0.0.0:7882 0.0.0.0:*'],
+      },
+    },
+  };
+}
 
 function pair(overrides = {}) {
   return {
@@ -42,6 +67,84 @@ test('local screen mux predicate deliberately does not claim configured public I
 test('closed peer connections cannot satisfy the active local screen mux predicate', () => {
   assert.equal(selectedPairsUseLocalUdpMux([pair({ peerConnectionState: 'closed' })]), false);
   assert.equal(selectedPairsUseLocalUdpMux([pair({ peerConnectionState: 'connected' })]), true);
+});
+
+test('redacted peer-reflexive address and port use only an exact generation-bound UDP server proof', () => {
+  const redacted = pair({
+    remote: {
+      candidateType: 'prflx',
+      protocol: 'udp',
+      address: '',
+      port: 0,
+    },
+  });
+  assert.equal(selectedPairsUseLocalUdpMux([redacted], {
+    requirePublicAddress: true,
+    serverEvidence: serverEvidence(),
+  }), true);
+  assert.deepEqual(assessSelectedPairsUseLocalUdpMux([redacted], {
+    requirePublicAddress: true,
+    serverEvidence: serverEvidence(),
+  }), {
+    accepted: true,
+    fallbackUsed: true,
+  });
+  assert.equal(selectedPairsUseLocalUdpMux([redacted], {
+    requirePublicAddress: true,
+  }), false);
+
+  const wrongListener = serverEvidence();
+  wrongListener.liveKit.udpListener.lines[0] = 'UNCONN 0 0 0.0.0.0:7881 0.0.0.0:*';
+  assert.equal(selectedPairsUseLocalUdpMux([redacted], {
+    requirePublicAddress: true,
+    serverEvidence: wrongListener,
+  }), false);
+
+  const missingListener = serverEvidence();
+  missingListener.liveKit.udpListener.lines = [];
+  assert.equal(selectedPairsUseLocalUdpMux([redacted], {
+    requirePublicAddress: true,
+    serverEvidence: missingListener,
+  }), false);
+});
+
+test('observable wrong candidate address or port is rejected even with exact server proof', () => {
+  const proof = serverEvidence();
+  for (const port of [7881, -1, 7882.5, 65_536]) {
+    assert.equal(selectedPairsUseLocalUdpMux([pair({
+      remote: {
+        candidateType: 'prflx',
+        protocol: 'udp',
+        address: '',
+        port,
+      },
+    })], {
+      requirePublicAddress: true,
+      serverEvidence: proof,
+    }), false, `observable invalid/wrong port ${port} must fail`);
+  }
+  assert.equal(selectedPairsUseLocalUdpMux([pair({
+    remote: {
+      candidateType: 'prflx',
+      protocol: 'udp',
+      address: '192.168.122.10',
+      port: 0,
+    },
+  })], {
+    requirePublicAddress: true,
+    serverEvidence: proof,
+  }), false);
+  assert.equal(selectedPairsUseLocalUdpMux([pair({
+    remote: {
+      candidateType: 'host',
+      protocol: 'udp',
+      address: '',
+      port: 0,
+    },
+  })], {
+    requirePublicAddress: true,
+    serverEvidence: proof,
+  }), false);
 });
 
 function material(overrides = {}) {

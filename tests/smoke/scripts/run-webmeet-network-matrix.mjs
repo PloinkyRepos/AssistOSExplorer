@@ -13,13 +13,13 @@ import {
   requirePublicIpv4,
 } from '../lib/network.mjs';
 import {
-  buildV5BoxEvidence,
+  buildBoxEvidence,
   validateExternalTcpNegativeEvidence,
-} from '../lib/v5-box-evidence.mjs';
+} from '../lib/box-evidence.mjs';
 import {
-  validateV5BoxFreshness,
+  validateBoxFreshness,
   verifyNetworkLaneCompletion,
-} from '../lib/v5-live-box.mjs';
+} from '../lib/live-box.mjs';
 
 function required(name) {
   const value = String(process.env[name] || '').trim();
@@ -89,7 +89,7 @@ function collectContainerEngineAndBox({
   const containerInspect = commandJson('podman', ['container', 'inspect', containerName]);
   const imageInspect = commandJson('podman', ['image', 'inspect', expectedImageId]);
   const image = oneJsonRecord(imageInspect, 'outer image inspection');
-  const box = buildV5BoxEvidence({
+  const box = buildBoxEvidence({
     containerInspect,
     imageInspect,
     expectedContainerName: containerName,
@@ -98,14 +98,14 @@ function collectContainerEngineAndBox({
     baseURL,
     publicIPv4,
   });
-  const runtimeFreshness = validateV5BoxFreshness({
+  const boxFreshness = validateBoxFreshness({
     capturedAt: new Date(capturedAtMs).toISOString(),
     imageCreatedAt: image.Created,
     box,
-    generationMaxAgeMs: process.env.SMOKE_V5_MAX_GENERATION_AGE_MS,
-    imageMaxAgeMs: process.env.SMOKE_V5_MAX_IMAGE_AGE_MS,
+    generationMaxAgeMs: process.env.SMOKE_BOX_MAX_GENERATION_AGE_MS,
+    imageMaxAgeMs: process.env.SMOKE_BOX_MAX_IMAGE_AGE_MS,
   }, { nowMs: capturedAtMs });
-  return Object.freeze({ ...engineEvidence, runtimeFreshness, box });
+  return Object.freeze({ ...engineEvidence, boxFreshness, box });
 }
 
 async function collectContainerEngineEvidence(options, { lane }) {

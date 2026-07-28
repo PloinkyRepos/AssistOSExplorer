@@ -8,7 +8,11 @@ import {
 } from '../lib/auth.mjs';
 import { stopAndAttachRedactedTrace } from '../lib/redacted-trace.mjs';
 import { createReleaseGateFailureCollector } from '../lib/release-gate-failures.mjs';
-import { validateScreenRuntimeEvidence } from '../lib/screen-runtime-evidence.mjs';
+import {
+  collectScreenRuntimeEvidence,
+  sameScreenRuntimeGeneration,
+  validateScreenRuntimeEvidence,
+} from '../lib/screen-runtime-evidence.mjs';
 import {
   attachJsonEvidence,
   attachFinalWebMeetRtcEvidence,
@@ -45,6 +49,7 @@ test.describe('WebMeet rooms', () => {
     let authenticatedPrincipals = null;
     let roomCreationAttempted = false;
     let primaryError = null;
+    let screenRuntimeEvidence = null;
     const failureCollector = createReleaseGateFailureCollector();
 
     try {
@@ -69,7 +74,6 @@ test.describe('WebMeet rooms', () => {
         if (!serializedRuntimeEvidence) {
           throw new Error('SMOKE_WEBMEET_SCREEN requires live deployment evidence from scripts/run-playwright.mjs.');
         }
-        let screenRuntimeEvidence;
         try {
           screenRuntimeEvidence = validateScreenRuntimeEvidence(JSON.parse(serializedRuntimeEvidence), {
             baseURL: smokeConfig.baseURL,
@@ -235,6 +239,7 @@ test.describe('WebMeet rooms', () => {
           receiverIdentity: identities.memberIdentity,
           label: 'account-a-to-account-b',
           testInfo,
+          screenRuntimeEvidence,
         });
         await exerciseScreenShareDirection({
           sharerPage: memberPage,
@@ -243,7 +248,30 @@ test.describe('WebMeet rooms', () => {
           receiverIdentity: identities.ownerIdentity,
           label: 'account-b-to-account-a',
           testInfo,
+          screenRuntimeEvidence,
         });
+        const liveBox = screenRuntimeEvidence.deployment === 'box'
+          ? screenRuntimeEvidence.box
+          : null;
+        const postRunScreenRuntimeEvidence = collectScreenRuntimeEvidence({
+          deployment: screenRuntimeEvidence.deployment,
+          baseURL: screenRuntimeEvidence.baseURL,
+          expectedContainerName: liveBox?.box.containerName,
+          expectedImageId: liveBox?.box.imageId,
+          expectedImageRef: liveBox?.box.imageRef,
+          publicIPv4: liveBox?.box.publicIPv4,
+          generationMaxAgeMs: liveBox?.generationMaxAgeMs,
+          imageMaxAgeMs: liveBox?.imageMaxAgeMs,
+        });
+        expect(
+          sameScreenRuntimeGeneration(screenRuntimeEvidence, postRunScreenRuntimeEvidence),
+          'the exact outer Box and LiveKit generations must remain unchanged through both screen directions',
+        ).toBe(true);
+        await attachJsonEvidence(
+          testInfo,
+          'post-screen-runtime-evidence',
+          postRunScreenRuntimeEvidence,
+        );
       }
 
       if (smokeConfig.flags.failOnBrowserErrors) {

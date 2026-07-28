@@ -12,8 +12,8 @@ import { stopAndAttachRedactedTrace } from '../lib/redacted-trace.mjs';
 import { createReleaseGateFailureCollector } from '../lib/release-gate-failures.mjs';
 import {
   validateExternalTcpNegativeEvidence,
-  validateV5BoxEvidence,
-} from '../lib/v5-box-evidence.mjs';
+  validateBoxEvidence,
+} from '../lib/box-evidence.mjs';
 import {
   attachJsonEvidence,
   attachFinalWebMeetRtcEvidence,
@@ -104,7 +104,7 @@ test.describe('WebMeet native external-network matrix @external', () => {
     expect(containerEngineEvidence.podmanServerVersion).toBeTruthy();
     expect(containerEngineEvidence.netavarkVersion).toContain('netavark');
     expect(containerEngineEvidence.aardvarkDnsVersion).toContain('aardvark-dns');
-    const boxEvidence = validateV5BoxEvidence(containerEngineEvidence.box, {
+    const boxEvidence = validateBoxEvidence(containerEngineEvidence.box, {
       expectedContainerName: required('SMOKE_PLOINKY_BOX_CONTAINER'),
       expectedImageId: required('SMOKE_EXPECT_BOX_IMAGE_ID'),
       expectedImageRef: required('SMOKE_EXPECT_BOX_IMAGE_REF'),

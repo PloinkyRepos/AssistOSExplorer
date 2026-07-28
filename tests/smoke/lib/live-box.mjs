@@ -1,13 +1,13 @@
 import { spawnSync } from 'node:child_process';
 
 import {
-  buildV5BoxEvidence,
+  buildBoxEvidence,
   normalizeOuterPortBindings,
-  validateV5BoxEvidence,
-} from './v5-box-evidence.mjs';
+  validateBoxEvidence,
+} from './box-evidence.mjs';
 
-const RUNTIME_CONTRACT_LABEL = 'io.assistos.ploinky.runtime-contract';
-const REQUESTED_IMAGE_LABEL = 'io.assistos.ploinky.requested-image';
+const BOX_ROLE_LABEL = 'io.assistos.ploinky-box.role';
+const BOX_IMAGE_REF_LABEL = 'io.assistos.ploinky-box.image-ref';
 const DEFAULT_GENERATION_MAX_AGE_MS = 30 * 60_000;
 const DEFAULT_IMAGE_MAX_AGE_MS = 4 * 60 * 60_000;
 
@@ -32,7 +32,7 @@ function oneRecord(value, name) {
   return rows[0];
 }
 
-export function validateV5BoxFreshness({
+export function validateBoxFreshness({
   capturedAt,
   imageCreatedAt,
   box,
@@ -42,16 +42,16 @@ export function validateV5BoxFreshness({
   nowMs = Date.now(),
 } = {}) {
   if (!box || typeof box !== 'object' || Array.isArray(box)) {
-    throw new Error('Runtime-v5 freshness requires exact box evidence.');
+    throw new Error('Box freshness requires exact Box evidence.');
   }
-  const captured = exactDate(capturedAt, 'runtime-v5 freshness capturedAt');
-  const imageCreated = exactDate(imageCreatedAt, 'runtime-v5 freshness imageCreatedAt');
-  const started = exactDate(box.startedAt, 'runtime-v5 freshness box startedAt');
+  const captured = exactDate(capturedAt, 'Box freshness capturedAt');
+  const imageCreated = exactDate(imageCreatedAt, 'Box freshness imageCreatedAt');
+  const started = exactDate(box.startedAt, 'Box freshness box startedAt');
   const maxGenerationAge = Math.min(
     positiveDuration(
       generationMaxAgeMs,
       DEFAULT_GENERATION_MAX_AGE_MS,
-      'runtime-v5 generation max age',
+      'Box generation max age',
     ),
     DEFAULT_GENERATION_MAX_AGE_MS,
   );
@@ -59,21 +59,21 @@ export function validateV5BoxFreshness({
     positiveDuration(
       imageMaxAgeMs,
       DEFAULT_IMAGE_MAX_AGE_MS,
-      'runtime-v5 image max age',
+      'Box image max age',
     ),
     DEFAULT_IMAGE_MAX_AGE_MS,
   );
   if (captured.milliseconds > nowMs + 30_000 || nowMs - captured.milliseconds > 60_000) {
-    throw new Error('Runtime-v5 freshness evidence is stale or from the future.');
+    throw new Error('Box freshness evidence is stale or from the future.');
   }
   if (started.milliseconds > nowMs + 30_000 || nowMs - started.milliseconds > maxGenerationAge) {
-    throw new Error('Runtime-v5 outer container generation is not fresh enough for the release gate.');
+    throw new Error('Box outer container generation is not fresh enough for the release gate.');
   }
   if (imageCreated.milliseconds > nowMs + 30_000 || nowMs - imageCreated.milliseconds > maxImageAge) {
-    throw new Error('Runtime-v5 outer image is not fresh enough for the release gate.');
+    throw new Error('Box outer image is not fresh enough for the release gate.');
   }
   if (imageCreated.milliseconds > started.milliseconds + 30_000) {
-    throw new Error('Runtime-v5 outer image creation is later than the running container generation.');
+    throw new Error('Box outer image creation is later than the running container generation.');
   }
   return Object.freeze({
     capturedAt: captured.text,
@@ -99,7 +99,7 @@ export function verifyNetworkLaneCompletion({
   try {
     after = collectAfter();
     if (JSON.stringify(after?.box) !== JSON.stringify(beforeBox)) {
-      throw new Error(`The exact runtime-v5 outer container generation changed during the ${lane} lane.`);
+      throw new Error(`The exact Box outer container generation changed during the ${lane} lane.`);
     }
   } catch (error) {
     failures.push(error);
@@ -164,6 +164,7 @@ export function selectLocalScreenContainer(containerInspects, port) {
   const expected = JSON.stringify(exactScreenBindings(port));
   const candidates = containerInspects.filter((container) => {
     if (container?.State?.Running !== true) return false;
+    if (container?.Config?.Labels?.[BOX_ROLE_LABEL] !== 'box') return false;
     try {
       return JSON.stringify(normalizeOuterPortBindings(container?.HostConfig?.PortBindings)) === expected;
     } catch (_) {
@@ -171,32 +172,32 @@ export function selectLocalScreenContainer(containerInspects, port) {
     }
   });
   if (candidates.length !== 1) {
-    throw new Error(`SMOKE_WEBMEET_SCREEN requires exactly one running runtime-v5 outer container with the exact 127.0.0.1:${port}:8080/tcp and 0.0.0.0:7882:7882/udp publications; found ${candidates.length}.`);
+    throw new Error(`SMOKE_WEBMEET_SCREEN requires exactly one running Box outer container with the exact 127.0.0.1:${port}:8080/tcp and 0.0.0.0:7882:7882/udp publications; found ${candidates.length}.`);
   }
   return candidates[0];
 }
 
-export function validateLocalScreenV5Evidence(input, {
+export function validateLiveBoxEvidence(input, {
   baseURL,
   nowMs = Date.now(),
   generationMaxAgeMs,
   imageMaxAgeMs,
 } = {}) {
-  if (!input || typeof input !== 'object' || Array.isArray(input) || input.schemaVersion !== 1) {
-    throw new Error('Local screen runtime-v5 evidence schemaVersion must equal 1.');
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new Error('Live Box evidence must be an object.');
   }
   const local = parseLocalScreenBaseUrl(baseURL);
-  const box = validateV5BoxEvidence(input.box, {
+  const box = validateBoxEvidence(input.box, {
     expectedContainerName: input.box?.containerName,
     expectedImageId: input.box?.imageId,
-    expectedImageRef: input.box?.requestedImageRef,
+    expectedImageRef: input.box?.imageRef,
     baseURL: local.baseURL,
     publicIPv4: String(input.box?.publicIPv4 || ''),
   });
   if (box.selectedRouterHostPort !== local.port) {
-    throw new Error('Local screen runtime-v5 Router publication does not match SMOKE_BASE_URL.');
+    throw new Error('Live Box Router publication does not match SMOKE_BASE_URL.');
   }
-  const freshness = validateV5BoxFreshness({
+  const freshness = validateBoxFreshness({
     capturedAt: input.capturedAt,
     imageCreatedAt: input.imageCreatedAt,
     box,
@@ -204,13 +205,12 @@ export function validateLocalScreenV5Evidence(input, {
     imageMaxAgeMs: imageMaxAgeMs ?? input.imageMaxAgeMs,
   }, { nowMs });
   return Object.freeze({
-    schemaVersion: 1,
     ...freshness,
     box,
   });
 }
 
-export function collectLocalScreenV5Evidence({
+export function collectLiveBoxEvidence({
   baseURL,
   expectedContainerName = '',
   expectedImageId = '',
@@ -230,19 +230,17 @@ export function collectLocalScreenV5Evidence({
   const selected = selectLocalScreenContainer(containers, local.port);
   const containerName = String(selected.Name || '').replace(/^\//, '');
   const labels = selected?.Config?.Labels || {};
-  const requestedImageRef = String(labels[REQUESTED_IMAGE_LABEL] || '').trim();
-  const runtimeContract = String(labels[RUNTIME_CONTRACT_LABEL] || '').trim();
-  if (runtimeContract !== '6') throw new Error('Selected local screen outer container is not Box image contract 6.');
-  if (!requestedImageRef) throw new Error('Selected local screen outer container has no requested-image label.');
+  const imageRef = String(labels[BOX_IMAGE_REF_LABEL] || '').trim();
+  if (!imageRef) throw new Error('Selected live Box outer container has no image-ref label.');
   const selectedImageId = String(selected.Image || selected.ImageID || '').trim();
   if (expectedContainerName && containerName !== expectedContainerName) {
     throw new Error(`Selected local screen outer container does not equal ${expectedContainerName}.`);
   }
   const requiredImageId = expectedImageId || selectedImageId;
-  const requiredImageRef = expectedImageRef || requestedImageRef;
+  const requiredImageRef = expectedImageRef || imageRef;
   const imageInspection = command('podman', ['image', 'inspect', requiredImageId], { json: true });
   const image = oneRecord(imageInspection, 'outer image inspection');
-  const box = buildV5BoxEvidence({
+  const box = buildBoxEvidence({
     containerInspect: [selected],
     imageInspect: imageInspection,
     expectedContainerName: expectedContainerName || containerName,
@@ -251,17 +249,16 @@ export function collectLocalScreenV5Evidence({
     baseURL: local.baseURL,
     publicIPv4: String(publicIPv4 || ''),
   });
-  return validateLocalScreenV5Evidence({
-    schemaVersion: 1,
+  return validateLiveBoxEvidence({
     capturedAt: new Date(nowMs).toISOString(),
     imageCreatedAt: image.Created,
-    generationMaxAgeMs: positiveDuration(generationMaxAgeMs, DEFAULT_GENERATION_MAX_AGE_MS, 'SMOKE_V5_MAX_GENERATION_AGE_MS'),
-    imageMaxAgeMs: positiveDuration(imageMaxAgeMs, DEFAULT_IMAGE_MAX_AGE_MS, 'SMOKE_V5_MAX_IMAGE_AGE_MS'),
+    generationMaxAgeMs: positiveDuration(generationMaxAgeMs, DEFAULT_GENERATION_MAX_AGE_MS, 'SMOKE_BOX_MAX_GENERATION_AGE_MS'),
+    imageMaxAgeMs: positiveDuration(imageMaxAgeMs, DEFAULT_IMAGE_MAX_AGE_MS, 'SMOKE_BOX_MAX_IMAGE_AGE_MS'),
     box,
   }, { baseURL: local.baseURL, nowMs });
 }
 
-export function sameLocalScreenGeneration(left, right) {
+export function sameLiveBoxGeneration(left, right) {
   return Boolean(
     left?.box?.containerId
     && left.box.containerId === right?.box?.containerId

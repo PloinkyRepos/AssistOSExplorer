@@ -1,6 +1,9 @@
-const RUNTIME_CONTRACT_LABEL = 'io.assistos.ploinky.runtime-contract';
-const REQUESTED_IMAGE_LABEL = 'io.assistos.ploinky.requested-image';
-const REQUIRED_RUNTIME_CONTRACT = '6';
+const BOX_LABELS = Object.freeze({
+  role: 'io.assistos.ploinky-box.role',
+  pathHash: 'io.assistos.ploinky-box.path-hash',
+  imageRef: 'io.assistos.ploinky-box.image-ref',
+  routerHostPort: 'io.assistos.ploinky-box.router-host-port',
+});
 const ROUTER_TARGET = '8080/tcp';
 const MEDIA_TARGET = '7882/udp';
 const TCP_SCAN_START = 1;
@@ -48,6 +51,40 @@ function exactSha256(value, name) {
   const text = exactString(value, name).toLowerCase();
   if (!/^[0-9a-f]{64}$/.test(text)) throw new Error(`${name} must be a SHA-256 digest.`);
   return text;
+}
+
+function exactBoxLabels(labels, {
+  expectedImageRef,
+  selectedRouterHostPort,
+} = {}) {
+  const source = record(labels, 'outer container Config.Labels');
+  const semanticEntries = Object.entries(source)
+    .sort(([left], [right]) => left.localeCompare(right));
+  const expectedNames = Object.values(BOX_LABELS).sort();
+  if (JSON.stringify(semanticEntries.map(([name]) => name)) !== JSON.stringify(expectedNames)) {
+    throw new Error(`Outer container Box labels must be exactly ${JSON.stringify(expectedNames)}.`);
+  }
+  if (source[BOX_LABELS.role] !== 'box') {
+    throw new Error('Outer container Box role label must equal box.');
+  }
+  const pathHash = exactSha256(source[BOX_LABELS.pathHash], 'outer container Box path-hash label');
+  const imageRef = exactString(source[BOX_LABELS.imageRef], 'outer container Box image-ref label');
+  if (expectedImageRef !== undefined && imageRef !== expectedImageRef) {
+    throw new Error(`Outer container Box image-ref label does not equal ${expectedImageRef}.`);
+  }
+  const routerHostPort = exactPort(
+    source[BOX_LABELS.routerHostPort],
+    'outer container Box router-host-port label',
+  );
+  if (selectedRouterHostPort !== undefined && routerHostPort !== selectedRouterHostPort) {
+    throw new Error('Outer container Box router-host-port label does not match its exact publication.');
+  }
+  return Object.freeze({
+    role: 'box',
+    pathHash,
+    imageRef,
+    routerHostPort,
+  });
 }
 
 function exactSshHostKeySha256(value, name) {
@@ -103,12 +140,12 @@ function assertExactBindings(bindings) {
   const normalized = normalizeOuterPortBindings(bindings);
   const router = normalized[ROUTER_TARGET];
   if (!router || router.length !== 1) {
-    throw new Error(`Runtime-v5 PortBindings must contain exactly one ${ROUTER_TARGET} mapping.`);
+    throw new Error(`Box PortBindings must contain exactly one ${ROUTER_TARGET} mapping.`);
   }
   const selectedRouterHostPort = router[0].HostPort;
   const expected = expectedBindings(selectedRouterHostPort);
   if (JSON.stringify(normalized) !== JSON.stringify(expected)) {
-    throw new Error(`Runtime-v5 normalized PortBindings must equal ${JSON.stringify(expected)}; got ${JSON.stringify(normalized)}.`);
+    throw new Error(`Box normalized PortBindings must equal ${JSON.stringify(expected)}; got ${JSON.stringify(normalized)}.`);
   }
   return { normalized, selectedRouterHostPort };
 }
@@ -120,7 +157,7 @@ function isoTime(value, name) {
   return { text: new Date(milliseconds).toISOString(), milliseconds };
 }
 
-export function buildV5BoxEvidence({
+export function buildBoxEvidence({
   containerInspect,
   imageInspect,
   expectedContainerName,
@@ -138,13 +175,6 @@ export function buildV5BoxEvidence({
   if (container?.State?.Running !== true) throw new Error(`Outer container ${containerName} is not running.`);
   const containerId = exactContainerId(container.Id || container.ID, 'outer container ID');
   const startedAt = isoTime(container?.State?.StartedAt, 'outer container State.StartedAt');
-  const containerLabels = record(container?.Config?.Labels || {}, 'outer container Config.Labels');
-  if (String(containerLabels[RUNTIME_CONTRACT_LABEL] || '') !== REQUIRED_RUNTIME_CONTRACT) {
-    throw new Error(`Outer container ${containerName} does not carry Box image contract 6.`);
-  }
-  if (String(containerLabels[REQUESTED_IMAGE_LABEL] || '') !== expectedImageRef) {
-    throw new Error(`Outer container ${containerName} requested-image label does not equal ${expectedImageRef}.`);
-  }
   const requiredImageId = exactImageId(expectedImageId, 'expected outer image ID');
   const imageId = exactImageId(container.Image || container.ImageID, 'outer container image ID');
   if (imageId !== requiredImageId) {
@@ -156,23 +186,26 @@ export function buildV5BoxEvidence({
   }
   const imageConfig = record(image.Config || {}, 'outer image Config');
   const imageLabels = record(imageConfig.Labels || image.Labels || {}, 'outer image labels');
-  if (String(imageLabels[RUNTIME_CONTRACT_LABEL] || '') !== REQUIRED_RUNTIME_CONTRACT) {
-    throw new Error(`Outer image ${requiredImageId} does not carry Box image contract 6.`);
+  if (Object.keys(imageLabels).length !== 0) {
+    throw new Error(`Outer image ${requiredImageId} must not carry labels.`);
   }
-  if (String(imageConfig.User || '') !== 'podman') throw new Error('Runtime-v5 image user must be podman.');
-  if (String(imageConfig.WorkingDir || '') !== '/workspace') throw new Error('Runtime-v5 image workdir must be /workspace.');
+  if (String(imageConfig.User || '') !== 'podman') throw new Error('Box image user must be podman.');
+  if (String(imageConfig.WorkingDir || '') !== '/workspace') throw new Error('Box image workdir must be /workspace.');
   if (JSON.stringify(imageConfig.Entrypoint || []) !== JSON.stringify(['/usr/local/bin/ploinky-box-entrypoint'])) {
-    throw new Error('Runtime-v5 image entrypoint is invalid.');
+    throw new Error('Box image entrypoint is invalid.');
   }
   const { normalized, selectedRouterHostPort } = assertExactBindings(container?.HostConfig?.PortBindings);
-  return validateV5BoxEvidence({
-    schemaVersion: 1,
+  const semanticLabels = exactBoxLabels(container?.Config?.Labels || {}, {
+    expectedImageRef,
+    selectedRouterHostPort,
+  });
+  return validateBoxEvidence({
     containerName,
     containerId,
     startedAt: startedAt.text,
     running: true,
-    runtimeContract: REQUIRED_RUNTIME_CONTRACT,
-    requestedImageRef: expectedImageRef,
+    semanticLabels,
+    imageRef: expectedImageRef,
     imageId: requiredImageId,
     baseURL,
     publicIPv4,
@@ -187,42 +220,46 @@ export function buildV5BoxEvidence({
   });
 }
 
-export function validateV5BoxEvidence(input, {
+export function validateBoxEvidence(input, {
   expectedContainerName,
   expectedImageId,
   expectedImageRef,
   baseURL,
   publicIPv4,
 } = {}) {
-  const evidence = record(input, 'runtime-v5 box evidence');
-  if (evidence.schemaVersion !== 1) throw new Error('Runtime-v5 box evidence schemaVersion must equal 1.');
-  if (evidence.containerName !== expectedContainerName) throw new Error('Runtime-v5 evidence container name mismatch.');
-  const containerId = exactContainerId(evidence.containerId, 'runtime-v5 evidence container ID');
-  const requiredImageId = exactImageId(expectedImageId, 'expected runtime-v5 evidence image ID');
-  if (exactImageId(evidence.imageId, 'runtime-v5 evidence image ID') !== requiredImageId) {
-    throw new Error('Runtime-v5 evidence image ID mismatch.');
+  const evidence = record(input, 'Box evidence');
+  if (evidence.containerName !== expectedContainerName) throw new Error('Box evidence container name mismatch.');
+  const containerId = exactContainerId(evidence.containerId, 'Box evidence container ID');
+  const requiredImageId = exactImageId(expectedImageId, 'expected Box evidence image ID');
+  if (exactImageId(evidence.imageId, 'Box evidence image ID') !== requiredImageId) {
+    throw new Error('Box evidence image ID mismatch.');
   }
-  if (evidence.requestedImageRef !== expectedImageRef) throw new Error('Runtime-v5 evidence requested image mismatch.');
-  if (evidence.runtimeContract !== REQUIRED_RUNTIME_CONTRACT) throw new Error('Runtime-v5 evidence contract mismatch.');
-  if (evidence.running !== true) throw new Error('Runtime-v5 evidence must describe a running outer container.');
+  if (evidence.imageRef !== expectedImageRef) throw new Error('Box evidence image reference mismatch.');
+  if (evidence.running !== true) throw new Error('Box evidence must describe a running outer container.');
   if (String(evidence.baseURL || '').replace(/\/+$/, '') !== String(baseURL || '').replace(/\/+$/, '')) {
-    throw new Error('Runtime-v5 evidence base URL mismatch.');
+    throw new Error('Box evidence base URL mismatch.');
   }
-  if (evidence.publicIPv4 !== publicIPv4) throw new Error('Runtime-v5 evidence public IPv4 mismatch.');
-  const startedAt = isoTime(evidence.startedAt, 'runtime-v5 evidence startedAt');
-  const selectedRouterHostPort = exactPort(evidence.selectedRouterHostPort, 'runtime-v5 evidence selectedRouterHostPort');
+  if (evidence.publicIPv4 !== publicIPv4) throw new Error('Box evidence public IPv4 mismatch.');
+  const startedAt = isoTime(evidence.startedAt, 'Box evidence startedAt');
+  const selectedRouterHostPort = exactPort(evidence.selectedRouterHostPort, 'Box evidence selectedRouterHostPort');
   const normalized = normalizeOuterPortBindings(evidence.normalizedPortBindings);
   if (JSON.stringify(normalized) !== JSON.stringify(expectedBindings(selectedRouterHostPort))) {
-    throw new Error('Runtime-v5 evidence normalized PortBindings are not the exact two-publication boundary.');
+    throw new Error('Box evidence normalized PortBindings are not the exact two-publication boundary.');
   }
+  const semanticLabels = exactBoxLabels(
+    Object.fromEntries(Object.entries(BOX_LABELS).map(([name, label]) => [
+      label,
+      evidence.semanticLabels?.[name],
+    ])),
+    { expectedImageRef, selectedRouterHostPort },
+  );
   return Object.freeze({
-    schemaVersion: 1,
     containerName: evidence.containerName,
     containerId,
     startedAt: startedAt.text,
     running: true,
-    runtimeContract: REQUIRED_RUNTIME_CONTRACT,
-    requestedImageRef: evidence.requestedImageRef,
+    semanticLabels,
+    imageRef: evidence.imageRef,
     imageId: requiredImageId,
     baseURL: String(evidence.baseURL).replace(/\/+$/, ''),
     publicIPv4: evidence.publicIPv4,
@@ -239,7 +276,6 @@ export function validateExternalTcpNegativeEvidence(input, {
   maxAgeMs = 15 * 60_000,
 } = {}) {
   const evidence = record(input, 'external TCP-negative evidence');
-  if (evidence.schemaVersion !== 2) throw new Error('External TCP-negative evidence schemaVersion must equal 2.');
   if (evidence.runId !== runId) throw new Error('External TCP-negative evidence runId mismatch.');
   if (evidence.containerName !== boxEvidence.containerName) throw new Error('External TCP-negative evidence container mismatch.');
   if (evidence.containerId !== boxEvidence.containerId) throw new Error('External TCP-negative evidence container ID mismatch.');
@@ -300,7 +336,7 @@ export function validateExternalTcpNegativeEvidence(input, {
       throw new Error(`External TCP-negative source ${networkId} scan is stale or from the future.`);
     }
     const scanner = exactString(source.scanner, `sources[${index}].scanner`);
-    if (scanner !== 'ploinky-external-boundary-v1') {
+    if (scanner !== 'ploinky-external-boundary') {
       throw new Error(`External TCP-negative source ${networkId} scanner identity mismatch.`);
     }
     if (source.scannerTransport !== 'ssh-pinned-host') {
@@ -369,7 +405,6 @@ export function validateExternalTcpNegativeEvidence(input, {
     throw new Error('External TCP-negative scan ids must be distinct.');
   }
   return Object.freeze({
-    schemaVersion: 2,
     runId,
     containerName: boxEvidence.containerName,
     containerId: boxEvidence.containerId,

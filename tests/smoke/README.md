@@ -68,7 +68,7 @@ Opt-in checks:
 
 - `SMOKE_OPEN_INTERPRETER=1` runs Copilot semantic routing and AKU memory checks that require configured external provider runtime.
 - `SMOKE_WEBMEET_MEDIA=1` enables fake camera/microphone and asserts WebRTC stats increase.
-- `SMOKE_WEBMEET_SCREEN=1` turns the existing two-account WebMeet test into a hard release gate. Both distinct accounts must authenticate and exchange real LiveKit screen tracks in both directions. The probe removes TURN servers, and each direction requires active non-relay selected pairs using a globally routable IPv4 and UDP 7882 in both browsers alongside exact ScreenShare publication identities and source-specific RTP packet/frame growth. It never stubs `getDisplayMedia` or skips a missing secondary account. This local gate does not claim the address equals the configured public IPv4; that stricter assertion belongs to the native external-network matrix below.
+- `SMOKE_WEBMEET_SCREEN=1` turns the existing two-account WebMeet test into a hard release gate. Both distinct accounts must authenticate and exchange real LiveKit screen tracks in both directions. The probe removes TURN servers, and each direction requires active non-relay selected pairs using a globally routable IPv4 and UDP 7882 in both browsers alongside exact ScreenShare publication identities and source-specific RTP packet/frame growth. When Chromium redacts a peer-reflexive remote address or port, every observable field must still be correct and the missing field is replaced only by a proof bound to the exact LiveKit container generation and its real UDP 7882 listener. An observable wrong address, port, protocol, relay candidate, changed generation, or invalid server proof fails. The gate never stubs `getDisplayMedia` or skips a missing secondary account. This local gate does not claim the address equals the configured public IPv4; that stricter assertion belongs to the native external-network matrix below.
 - `SMOKE_WEBMEET_REFRESH=1` adds the real join-material lifecycle gate. Both browsers must receive a scheduled material rotation before the original TURN expiry, remain joined with growing RTP after that original expiry, then survive a real Playwright offline/online transition with another broker call, disconnect/recreate/rejoin, and renewed RTP. This gate requires `SMOKE_WEBMEET_MEDIA=1` and a test box started with a short supported credential lifetime (recommended `PLOINKY_TURN_CREDENTIAL_TTL_SECONDS=60`); it fails rather than mocking time or join responses when the original expiry exceeds `SMOKE_WEBMEET_REFRESH_MAX_WAIT_MS` (default 180000).
   Only non-secret SHA-256 fingerprints are attached, and both the participant
   token and credential-bearing RTC configuration must rotate independently.
@@ -82,7 +82,9 @@ SMOKE_DEPLOYMENT_MODE=local SMOKE_BASE_URL=http://127.0.0.1:8080 SMOKE_WEBMEET_M
 In local mode the wrapper requires exactly one freshly started, managed
 `liveKitServerAgent` container using host networking and no container port
 publications. It also rejects any concurrently running outer Ploinky Box. The
-real browser assertions then prove bidirectional non-relay UDP/7882 traffic.
+wrapper runs `ss` inside that exact network namespace to prove the UDP 7882
+listener before and after the browser run. The real browser assertions then
+prove bidirectional non-relay UDP/7882 traffic.
 
 Run the same gate against a fresh Ploinky Box deployment with:
 
@@ -92,24 +94,27 @@ SMOKE_DEPLOYMENT_MODE=box SMOKE_BASE_URL=http://127.0.0.1:8080 SMOKE_WEBMEET_MED
 
 In Box mode, exactly one outer container must publish
 `127.0.0.1:<SMOKE_BASE_URL port>:8080/tcp` and
-`0.0.0.0:7882:7882/udp`, carry Box image contract 6, and use a freshly built
+`0.0.0.0:7882:7882/udp`, carry the exact semantic Box ownership labels, and use a freshly built
 image. No additional outer-container port publication is accepted. By default
 the running generation must be at most 30 minutes
 old and the image at most four hours old. The wrapper binds the test to that
 container ID, start time, image ID/reference, and normalized two-publication
 boundary, re-inspects it after Playwright exits, and fails if any value changed.
+It also inspects nested Podman through that exact outer container, binds the
+nested LiveKit container ID and start time, requires host networking with zero
+inner bindings, and proves UDP 7882 with `ss` in the nested LiveKit namespace.
 `SMOKE_PLOINKY_BOX_CONTAINER`, `SMOKE_EXPECT_BOX_IMAGE_ID`, and
 `SMOKE_EXPECT_BOX_IMAGE_REF` can pin expected values more narrowly. The command
 does not accept a pre-authored evidence file or a bypass for this live check.
 
-The native external-network release matrix is separate from the local screen-share gate. Run it once on native Linux amd64 (`SMOKE_EXPECT_ARCH=x64`) and once on native Linux arm64 (`SMOKE_EXPECT_ARCH=arm64`) against a freshly built v5 box. It requires two dedicated Chromium CDP endpoints on distinct external networks, their independently verified egress IPv4 addresses, a CORS-enabled test echo endpoint, the configured LiveKit public IPv4, two distinct accounts, external TURN test credentials, and lane-specific test topology. The command runs `direct-udp`, `turn-udp`, and `turn-tls` in sequence and hard-fails on missing prerequisites:
+The native external-network release matrix is separate from the local screen-share gate. Run it once on native Linux amd64 (`SMOKE_EXPECT_ARCH=x64`) and once on native Linux arm64 (`SMOKE_EXPECT_ARCH=arm64`) against a freshly built Box. It requires two dedicated Chromium CDP endpoints on distinct external networks, their independently verified egress IPv4 addresses, a CORS-enabled test echo endpoint, the configured LiveKit public IPv4, two distinct accounts, external TURN test credentials, and lane-specific test topology. The command runs `direct-udp`, `turn-udp`, and `turn-tls` in sequence and hard-fails on missing prerequisites:
 
 ```bash
 SMOKE_EXPECT_ARCH=x64 \
 SMOKE_BASE_URL=https://explorer.test.example \
 SMOKE_WEBMEET_PUBLIC_IPV4=203.0.113.10 \
 SMOKE_PLOINKY_BOX_CONTAINER=ploinky-box-explorer-0123456789ab \
-SMOKE_EXPECT_BOX_IMAGE_REF=docker.io/assistos/ploinky-box:test-v5 \
+SMOKE_EXPECT_BOX_IMAGE_REF=docker.io/assistos/ploinky-box:runtime \
 SMOKE_EXPECT_BOX_IMAGE_ID=sha256:<exact-64-hex-image-id> \
 SMOKE_EXTERNAL_TCP_PROBE_RUN_ID=<fresh-nonce> \
 SMOKE_EXTERNAL_SCANNER_A_SSH_TARGET=scanner-a \
@@ -178,12 +183,12 @@ open TCP port fails before either browser opens.
 The matrix wrapper also requires a native rootless Podman server using Netavark. It
 captures Podman client/server versions, native server OS/architecture,
 Netavark version, and Aardvark DNS version. It also inspects the exact named
-running outer container and exact expected image ID/reference, requires runtime
-Box image contract 6, and normalizes `HostConfig.PortBindings` to exactly loopback Router
+running outer container and exact expected image ID/reference, requires the exact
+semantic Box labels and an unlabeled image, and normalizes `HostConfig.PortBindings` to exactly loopback Router
 TCP plus wildcard UDP 7882. The image creation and container start times must
 also satisfy the same bounded fresh-build/fresh-generation contract as the
-local screen gate (`SMOKE_V5_MAX_IMAGE_AGE_MS` and
-`SMOKE_V5_MAX_GENERATION_AGE_MS` may only tighten those hard maximum bounds).
+local screen gate (`SMOKE_BOX_MAX_IMAGE_AGE_MS` and
+`SMOKE_BOX_MAX_GENERATION_AGE_MS` may only tighten those hard maximum bounds).
 Those records and the bound two-network TCP-negative
 scan are attached to each lane's `container-engine-evidence.json`; missing or
 mismatched evidence fails before either browser is opened. The wrapper
@@ -210,7 +215,7 @@ On headed Linux without `DISPLAY`, the npm runner starts a deterministic 1920×1
   drain produced another callback acknowledgement, and reopens both markers.
 - `SMOKE_GITHUB=1` enables GitHub plugin authentication checks.
 
-Run the Umami publication gate against a fresh v5 Explorer stack:
+Run the Umami publication gate against a fresh Box Explorer stack:
 
 ```bash
 SMOKE_BASE_URL=http://127.0.0.1:8080 \

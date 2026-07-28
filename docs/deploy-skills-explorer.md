@@ -1,7 +1,7 @@
-# Deploy Explorer with Runtime Contract v5
+# Deploy Explorer with Ploinky Box
 
 The repository no longer contains an SSH workflow that mutates a remote
-workspace. Deployment is intentionally operator-controlled until dedicated v5
+workspace. Deployment is intentionally operator-controlled until dedicated Box
 test resources and credentials are supplied.
 
 ## Required sequence
@@ -12,7 +12,7 @@ test resources and credentials are supplied.
 3. Configure either explicit local-only mode or a complete existing-tunnel
    Cloudflare configuration. Never create a quick or new tunnel.
 4. Configure the literal public media IPv4 and external relay service.
-5. Recreate the box explicitly under runtime contract v5.
+5. Recreate the Box explicitly under the semantic Box contract.
 6. Inspect the real outer container and prove its normalized bindings are
    exactly loopback Router TCP and wildcard LiveKit UDP `7882`.
 7. Start the full Explorer graph and validate the topology-aware in-box

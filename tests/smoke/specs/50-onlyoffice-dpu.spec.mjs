@@ -311,7 +311,7 @@ test.describe('DPU and OnlyOffice @external', () => {
       const initialSnapshot = readDpuObjectSnapshot(fileName);
       expect(initialSnapshot).not.toBeNull();
 
-      const marker = `OnlyOffice-v5-${smokeConfig.runId}`;
+      const marker = `OnlyOffice-release-${smokeConfig.runId}`;
       const editorFrame = await openDocumentFromExplorer(page, documentPath);
       await typeDocumentMarker(page, editorFrame, marker);
       await forceSaveDocument(editorFrame);
@@ -334,7 +334,7 @@ test.describe('DPU and OnlyOffice @external', () => {
       // edit. No unrelated network request is permitted between the durable
       // snapshot assertion and the targeted restart command.
       const adminControlProof = await loadAdminControlProof(page);
-      const drainMarker = `OnlyOffice-drain-v5-${smokeConfig.runId}`;
+      const drainMarker = `OnlyOffice-drain-${smokeConfig.runId}`;
       await typeDocumentMarker(page, editorFrame, drainMarker);
       const preDrainSnapshot = readDpuObjectSnapshot(fileName);
       expect(preDrainSnapshot?.id).toBe(initialSnapshot.id);
@@ -373,7 +373,7 @@ test.describe('DPU and OnlyOffice @external', () => {
 
       const reopenedSnapshot = readDpuObjectSnapshot(fileName);
       expect(reopenedSnapshot?.blobSha256).toBe(drainSnapshot.blobSha256);
-      await testInfo.attach('onlyoffice-v5-release-evidence.json', {
+      await testInfo.attach('onlyoffice-release-evidence.json', {
         body: Buffer.from(JSON.stringify({
           documentPath,
           objectId: reopenedSnapshot.id,

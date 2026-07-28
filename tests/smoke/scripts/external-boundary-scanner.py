@@ -121,8 +121,7 @@ async def main():
         invalid_ice_probe(config["targetPublicIPv4"], config["scanId"]),
     )
     result = {
-        "schemaVersion": 1,
-        "scanner": "ploinky-external-boundary-v1",
+        "scanner": "ploinky-external-boundary",
         "scannerSourceSha256": config["scannerSourceSha256"],
         "scanId": config["scanId"],
         "targetPublicIPv4": config["targetPublicIPv4"],

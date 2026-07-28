@@ -2,15 +2,15 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
-  buildV5BoxEvidence,
+  buildBoxEvidence,
   normalizeOuterPortBindings,
   validateExternalTcpNegativeEvidence,
-  validateV5BoxEvidence,
-} from './v5-box-evidence.mjs';
+  validateBoxEvidence,
+} from './box-evidence.mjs';
 
 const IMAGE_ID = `sha256:${'a'.repeat(64)}`;
 const CONTAINER_ID = 'c'.repeat(64);
-const IMAGE_REF = 'docker.io/assistos/ploinky-box:test-v5';
+const IMAGE_REF = 'docker.io/assistos/ploinky-box:runtime';
 const CONTAINER = 'ploinky-box-release-audit';
 const STARTED_AT = '2026-07-16T10:00:00.000Z';
 const HOST_KEY_A = `SHA256:${'A'.repeat(43)}`;
@@ -27,8 +27,10 @@ function containerInspect(bindings = {
     State: { Running: true, StartedAt: STARTED_AT },
     Config: {
       Labels: {
-        'io.assistos.ploinky.runtime-contract': '6',
-        'io.assistos.ploinky.requested-image': IMAGE_REF,
+        'io.assistos.ploinky-box.role': 'box',
+        'io.assistos.ploinky-box.path-hash': 'd'.repeat(64),
+        'io.assistos.ploinky-box.image-ref': IMAGE_REF,
+        'io.assistos.ploinky-box.router-host-port': '18080',
       },
     },
     HostConfig: { PortBindings: bindings },
@@ -39,7 +41,7 @@ function imageInspect() {
   return [{
     Id: IMAGE_ID.slice('sha256:'.length),
     Config: {
-      Labels: { 'io.assistos.ploinky.runtime-contract': '6' },
+      Labels: {},
       User: 'podman',
       WorkingDir: '/workspace',
       Entrypoint: ['/usr/local/bin/ploinky-box-entrypoint'],
@@ -57,8 +59,8 @@ function expected() {
   };
 }
 
-test('box evidence binds the exact running v5 image and normalizes only empty wildcard HostIp', () => {
-  const evidence = buildV5BoxEvidence({
+test('box evidence binds the exact running semantic image and normalizes only empty wildcard HostIp', () => {
+  const evidence = buildBoxEvidence({
     containerInspect: containerInspect(),
     imageInspect: imageInspect(),
     ...expected(),
@@ -67,11 +69,11 @@ test('box evidence binds the exact running v5 image and normalizes only empty wi
     '8080/tcp': [{ HostIp: '127.0.0.1', HostPort: '18080' }],
     '7882/udp': [{ HostIp: '0.0.0.0', HostPort: '7882' }],
   }));
-  assert.equal(validateV5BoxEvidence(evidence, expected()).imageId, IMAGE_ID);
+  assert.equal(validateBoxEvidence(evidence, expected()).imageId, IMAGE_ID);
 });
 
-test('box evidence rejects a third publication, wrong contract, and wrong image id', () => {
-  assert.throws(() => buildV5BoxEvidence({
+test('box evidence rejects a third publication, wrong semantic ownership, and wrong image id', () => {
+  assert.throws(() => buildBoxEvidence({
     containerInspect: containerInspect({
       '8080/tcp': [{ HostIp: '127.0.0.1', HostPort: '18080' }],
       '7882/udp': [{ HostIp: '0.0.0.0', HostPort: '7882' }],
@@ -81,22 +83,30 @@ test('box evidence rejects a third publication, wrong contract, and wrong image 
     ...expected(),
   }), /exact two-publication|must equal/);
 
-  const wrongContract = containerInspect();
-  wrongContract[0].Config.Labels['io.assistos.ploinky.runtime-contract'] = '4';
-  assert.throws(() => buildV5BoxEvidence({
-    containerInspect: wrongContract,
+  const wrongOwnership = containerInspect();
+  wrongOwnership[0].Config.Labels['io.assistos.ploinky-box.role'] = 'workspace';
+  assert.throws(() => buildBoxEvidence({
+    containerInspect: wrongOwnership,
     imageInspect: imageInspect(),
     ...expected(),
-  }), /contract 6/);
+  }), /role label/);
 
-  assert.throws(() => buildV5BoxEvidence({
+  const unexpectedLabel = containerInspect();
+  unexpectedLabel[0].Config.Labels['io.podman.compose.project'] = 'unexpected';
+  assert.throws(() => buildBoxEvidence({
+    containerInspect: unexpectedLabel,
+    imageInspect: imageInspect(),
+    ...expected(),
+  }), /Box labels must be exactly/);
+
+  assert.throws(() => buildBoxEvidence({
     containerInspect: containerInspect(),
     imageInspect: imageInspect(),
     ...expected(),
     expectedImageId: `sha256:${'b'.repeat(64)}`,
   }), /image ID/);
 
-  assert.throws(() => buildV5BoxEvidence({
+  assert.throws(() => buildBoxEvidence({
     containerInspect: containerInspect({
       '8080/tcp': [{ HostIp: '127.0.0.1', HostPort: '18080' }],
       '7882/udp': [{ HostIp: '::', HostPort: '7882' }],
@@ -108,7 +118,6 @@ test('box evidence rejects a third publication, wrong contract, and wrong image 
 
 function tcpEvidence(overrides = {}) {
   return {
-    schemaVersion: 2,
     runId: 'tcp-scan-123',
     containerName: CONTAINER,
     containerId: CONTAINER_ID,
@@ -121,7 +130,7 @@ function tcpEvidence(overrides = {}) {
         networkId: 'net-a', egressIPv4: '1.1.1.1', protocol: 'tcp',
         targetPublicIPv4: '8.8.8.8', scanStart: 1, scanEnd: 65_535,
         openPorts: [], startedAt: '2026-07-16T10:03:30.000Z', observedAt: '2026-07-16T10:04:30.000Z',
-        scanner: 'ploinky-external-boundary-v1', scanId: 'scan-a', scannerTransport: 'ssh-pinned-host',
+        scanner: 'ploinky-external-boundary', scanId: 'scan-a', scannerTransport: 'ssh-pinned-host',
         scannerSourceSha256: '1'.repeat(64), scannerTargetSha256: 'a'.repeat(64), rawResultSha256: 'c'.repeat(64),
         scannerHostKeySha256: HOST_KEY_A,
         invalidIceProbe: {
@@ -133,7 +142,7 @@ function tcpEvidence(overrides = {}) {
         networkId: 'net-b', egressIPv4: '9.9.9.9', protocol: 'tcp',
         targetPublicIPv4: '8.8.8.8', scanStart: 1, scanEnd: 65_535,
         openPorts: [], startedAt: '2026-07-16T10:03:45.000Z', observedAt: '2026-07-16T10:04:45.000Z',
-        scanner: 'ploinky-external-boundary-v1', scanId: 'scan-b', scannerTransport: 'ssh-pinned-host',
+        scanner: 'ploinky-external-boundary', scanId: 'scan-b', scannerTransport: 'ssh-pinned-host',
         scannerSourceSha256: '1'.repeat(64), scannerTargetSha256: 'b'.repeat(64), rawResultSha256: 'd'.repeat(64),
         scannerHostKeySha256: HOST_KEY_B,
         invalidIceProbe: {
@@ -149,7 +158,7 @@ function tcpEvidence(overrides = {}) {
 function tcpContext() {
   return {
     runId: 'tcp-scan-123',
-    boxEvidence: buildV5BoxEvidence({
+    boxEvidence: buildBoxEvidence({
       containerInspect: containerInspect(),
       imageInspect: imageInspect(),
       ...expected(),
@@ -194,5 +203,4 @@ test('external TCP-negative evidence is generation-, nonce-, target-, and two-ne
   successfulInvalidIce.sources[0].invalidIceProbe.outcome = 'success-response';
   successfulInvalidIce.sources[0].invalidIceProbe.successResponse = true;
   assert.throws(() => validateExternalTcpNegativeEvidence(successfulInvalidIce, tcpContext()), /invalid ICE fails/);
-  assert.throws(() => validateExternalTcpNegativeEvidence({ ...tcpEvidence(), schemaVersion: 1 }, tcpContext()), /schemaVersion must equal 2/);
 });

@@ -10,7 +10,7 @@ async function readManifest() {
     return JSON.parse(await fs.readFile(path.join(repoRoot, 'manifest.json'), 'utf8'));
 }
 
-test('Explorer v5 manifest has no agent-owned edge publication hooks', async () => {
+test('Explorer manifest has no agent-owned edge publication hooks', async () => {
     const manifest = await readManifest();
     const profiles = manifest.profiles || {};
     const profile = profiles.default;
@@ -22,7 +22,7 @@ test('Explorer v5 manifest has no agent-owned edge publication hooks', async () 
     assert.equal(Object.hasOwn(profile, 'configProviders'), false);
 });
 
-test('Explorer v5 manifest contains no removed publication contract', async () => {
+test('Explorer manifest contains no removed publication contract', async () => {
     const manifest = await readManifest();
     const serialized = JSON.stringify(manifest);
 

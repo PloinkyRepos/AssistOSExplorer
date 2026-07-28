@@ -2,6 +2,7 @@ import { expect, setPageDiagnosticsExpectedOffline } from './fixtures.mjs';
 import { signIn } from './auth.mjs';
 import { smokeConfig } from './config.mjs';
 import { requirePublicIpv4 } from './network.mjs';
+import { screenRuntimeEvidenceProvesUdpMux } from './screen-runtime-evidence.mjs';
 import { findSecretLeaks } from './security.mjs';
 
 function webMeetDashboardPath() {
@@ -245,7 +246,7 @@ export async function expectTwoDistinctWebMeetParticipants(ownerPage, memberPage
 
 async function screenPublicationSnapshot(page) {
   return page.evaluate((screenSource) => {
-    const dashboard = document.querySelector('div.webmeet-dashboard');
+    const dashboard = document.querySelector('webmeet-dashboard');
     const presenter = dashboard?.webSkelPresenter || null;
     const room = presenter?.room
       || presenter?.roomLiveKit?.getRoom?.()
@@ -509,38 +510,74 @@ export async function expectWebMeetNetworkLane(page, {
   return evidence;
 }
 
-export function selectedPairsUseLocalUdpMux(evidence, { requirePublicAddress = false } = {}) {
+export function assessSelectedPairsUseLocalUdpMux(evidence, {
+  requirePublicAddress = false,
+  serverEvidence = null,
+} = {}) {
   const active = Array.from(evidence || []).filter((pair) => (
     pair?.selected
     && (!pair.peerConnectionState || pair.peerConnectionState === 'connected')
     && (Number(pair.bytesSent || 0) > 0 || Number(pair.bytesReceived || 0) > 0)
   ));
-  return active.length > 0 && active.every((pair) => (
-    pair.local?.candidateType !== 'relay'
-    && pair.local?.turnEndpoint === null
-    && pair.remote?.protocol === 'udp'
-    && Number(pair.remote?.port || 0) === 7882
-    && (!requirePublicAddress || (() => {
+  if (!active.length) return Object.freeze({ accepted: false, fallbackUsed: false });
+  const exactServerProof = screenRuntimeEvidenceProvesUdpMux(serverEvidence);
+  let fallbackUsed = false;
+  const accepted = active.every((pair) => {
+    if (
+      pair.local?.candidateType === 'relay'
+      || pair.local?.turnEndpoint !== null
+      || pair.remote?.protocol !== 'udp'
+    ) {
+      return false;
+    }
+    const remoteAddress = String(pair.remote?.address || '').trim();
+    const remotePort = Number(pair.remote?.port || 0);
+    const hasAddress = remoteAddress.length > 0;
+    if (!Number.isSafeInteger(remotePort) || remotePort < 0 || remotePort > 65_535) {
+      return false;
+    }
+    const hasPort = Number.isSafeInteger(remotePort) && remotePort > 0;
+    if (hasAddress && requirePublicAddress) {
       try {
-        requirePublicIpv4(pair.remote?.address, 'selected LiveKit candidate address');
-        return true;
+        requirePublicIpv4(remoteAddress, 'selected LiveKit candidate address');
       } catch (_) {
         return false;
       }
-    })())
-  ));
+    }
+    if (hasPort && remotePort !== 7882) return false;
+    if (hasAddress && hasPort) return true;
+    if (pair.remote?.candidateType !== 'prflx' || !exactServerProof) return false;
+    fallbackUsed = true;
+    return true;
+  });
+  return Object.freeze({ accepted, fallbackUsed: accepted && fallbackUsed });
 }
 
-async function expectLocalScreenUdpMux(page, { label, testInfo }) {
+export function selectedPairsUseLocalUdpMux(evidence, options = {}) {
+  return assessSelectedPairsUseLocalUdpMux(evidence, options).accepted;
+}
+
+async function expectLocalScreenUdpMux(page, {
+  label,
+  testInfo,
+  screenRuntimeEvidence,
+}) {
   let evidence = [];
   await expect.poll(async () => {
     evidence = await rtcCandidateEvidence(page);
-    return selectedPairsUseLocalUdpMux(evidence, { requirePublicAddress: true });
+    return selectedPairsUseLocalUdpMux(evidence, {
+      requirePublicAddress: true,
+      serverEvidence: screenRuntimeEvidence,
+    });
   }, {
-    message: `${label} screen traffic must use a non-relay UDP candidate pair on the fixed 7882 mux`,
+    message: `${label} screen traffic must use a non-relay UDP candidate pair on the fixed 7882 mux or a redacted peer-reflexive pair backed by the exact live server generation`,
     timeout: smokeConfig.timeouts.media,
   }).toBe(true);
   expect(evidence.some((pair) => pair.remote.port === 7881), `${label} must never select UDP 7881`).toBe(false);
+  const assessment = assessSelectedPairsUseLocalUdpMux(evidence, {
+    requirePublicAddress: true,
+    serverEvidence: screenRuntimeEvidence,
+  });
   const probe = await page.evaluate(() => ({
     rtcConfigurations: window.__e2eRtcConfigurations || [],
     generatedCandidates: window.__e2eIceCandidateEvents || [],
@@ -553,7 +590,9 @@ async function expectLocalScreenUdpMux(page, { label, testInfo }) {
     && configuration.iceServers.length === 0
   )), `${label} probe must remove all TURN servers`).toBe(true);
   await attachJsonEvidence(testInfo, `${label}-local-udp-7882-candidate-evidence`, {
-    assertionScope: 'local screen gate: globally routable non-relay UDP/7882; exact configured public IPv4 is asserted by the native external-network matrix',
+    assertionScope: 'screen gate: observable selected remote address/port must prove globally routable non-relay UDP/7882; only redacted peer-reflexive fields may use the exact generation-bound server proof',
+    serverFallbackUsed: assessment.fallbackUsed,
+    screenRuntimeEvidence,
     selectedCandidatePairs: evidence,
     probe,
   });
@@ -571,7 +610,7 @@ export async function attachJsonEvidence(testInfo, name, value) {
 
 async function joinMaterialSnapshot(page) {
   return page.evaluate(async () => {
-    const dashboard = document.querySelector('div.webmeet-dashboard');
+    const dashboard = document.querySelector('webmeet-dashboard');
     const presenter = dashboard?.webSkelPresenter || null;
     const session = presenter?.state?.session || null;
     const room = presenter?.room || presenter?.roomLiveKit?.getRoom?.() || null;
@@ -721,7 +760,7 @@ export async function expectJoinMaterialRefreshLifecycle({
     expect(remainingMs, `${label} browser ${index + 1} join material must retain the supported >30s lifetime`).toBeGreaterThan(30_000);
     expect(
       remainingMs,
-      `${label} requires a short-lived test credential (set PLOINKY_TURN_CREDENTIAL_TTL_SECONDS=60 before starting the v5 box)`,
+      `${label} requires a short-lived test credential (set PLOINKY_TURN_CREDENTIAL_TTL_SECONDS=60 before starting the Box)`,
     ).toBeLessThanOrEqual(smokeConfig.timeouts.webmeetRefresh);
   }
 
@@ -872,6 +911,7 @@ export async function exerciseScreenShareDirection({
   receiverIdentity,
   label,
   testInfo,
+  screenRuntimeEvidence,
 }) {
   const screenButton = sharerPage.locator('#webmeetScreenShareButton');
   await expect(screenButton).toBeEnabled();
@@ -910,8 +950,12 @@ export async function exerciseScreenShareDirection({
     expectExactTrackRtpGrowth(receiverPage, 'inbound', remoteVideo.trackId, inboundBefore),
   ]);
   const [sharerCandidatePairs, receiverCandidatePairs] = await Promise.all([
-    expectLocalScreenUdpMux(sharerPage, { label: `${label}-sharer`, testInfo }),
-    expectLocalScreenUdpMux(receiverPage, { label: `${label}-receiver`, testInfo }),
+    expectLocalScreenUdpMux(sharerPage, {
+      label: `${label}-sharer`, testInfo, screenRuntimeEvidence,
+    }),
+    expectLocalScreenUdpMux(receiverPage, {
+      label: `${label}-receiver`, testInfo, screenRuntimeEvidence,
+    }),
   ]);
 
   const evidence = {

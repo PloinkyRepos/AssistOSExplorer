@@ -1,4 +1,4 @@
-# Explorer Runtime-v5 Environment Contract
+# Explorer Box Environment Contract
 
 Explorer manifests own product configuration and secrets only. Edge topology,
 publication, target addresses, and browser locators are box-owned runtime state.

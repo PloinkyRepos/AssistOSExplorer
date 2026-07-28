@@ -19,12 +19,12 @@ const headed = playwrightArgs.includes('--headed') || playwrightArgs.some((arg) 
 
 const sourceGate = spawnSync(
   process.execPath,
-  ['--test', 'lib/v5-source-absence.test.mjs'],
+  ['--test', 'lib/retired-source-absence.test.mjs'],
   { cwd: smokeRoot, env: process.env, stdio: 'inherit' },
 );
 if (sourceGate.error) throw sourceGate.error;
 if (sourceGate.status !== 0) {
-  throw new Error(`Runtime-v5 retired-source gate failed with exit ${sourceGate.status ?? 'unknown'}.`);
+  throw new Error(`Retired-source gate failed with exit ${sourceGate.status ?? 'unknown'}.`);
 }
 
 if (screenGate && !headed) {
@@ -85,8 +85,8 @@ if (screenGate) {
     expectedImageId: process.env.SMOKE_EXPECT_BOX_IMAGE_ID,
     expectedImageRef: process.env.SMOKE_EXPECT_BOX_IMAGE_REF,
     publicIPv4: process.env.SMOKE_WEBMEET_PUBLIC_IPV4,
-    generationMaxAgeMs: process.env.SMOKE_V5_MAX_GENERATION_AGE_MS,
-    imageMaxAgeMs: process.env.SMOKE_V5_MAX_IMAGE_AGE_MS,
+    generationMaxAgeMs: process.env.SMOKE_BOX_MAX_GENERATION_AGE_MS,
+    imageMaxAgeMs: process.env.SMOKE_BOX_MAX_IMAGE_AGE_MS,
   });
   childEnv.SMOKE_SCREEN_RUNTIME_EVIDENCE = JSON.stringify(screenRuntimeEvidence);
 }
@@ -134,12 +134,10 @@ if (screenRuntimeEvidence) {
       : null;
     const postRunEvidence = collectScreenRuntimeEvidence({
       deployment: screenRuntimeEvidence.deployment,
-      baseURL: screenRuntimeEvidence.deployment === 'local'
-        ? screenRuntimeEvidence.baseURL
-        : boxEvidence.box.baseURL,
+      baseURL: screenRuntimeEvidence.baseURL,
       expectedContainerName: boxEvidence?.box.containerName,
       expectedImageId: boxEvidence?.box.imageId,
-      expectedImageRef: boxEvidence?.box.requestedImageRef,
+      expectedImageRef: boxEvidence?.box.imageRef,
       publicIPv4: boxEvidence?.box.publicIPv4,
       generationMaxAgeMs: boxEvidence?.generationMaxAgeMs,
       imageMaxAgeMs: boxEvidence?.imageMaxAgeMs,

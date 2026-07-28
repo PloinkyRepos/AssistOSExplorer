@@ -61,18 +61,18 @@ Ploinky Explorer workspace + 17 coupled agents. Origin: `https://github.com/Assi
 
 ## Deploy and remote ops
 
-Runtime-contract-v5 deployment is operator-controlled. This repository intentionally
+Ploinky Box deployment is operator-controlled. This repository intentionally
 contains no SSH deploy, update, provision, or remote-status workflow. Follow
 `docs/deploy-skills-explorer.md`; do not recreate or invoke the retired
 `deploy-skills-explorer.yml`, `deploy-explorer-qa.yml`, `update-explorer.yml`,
 `provision-skills-explorer-host.yml`, or `remote-skills-status.yml` paths.
 
 - Current workflows are `destroy-explorer.yml`, `destroy-explorer-qa.yml`, and
-  `verify-runtime-v5-source-absence.yml`. The destroy workflows are explicit
+  `verify-retired-source-absence.yml`. The destroy workflows are explicit
   destructive operations; inspect their target and ownership checks before use.
 - `.ploinky/.secrets` is encrypted. Never append/edit it as plaintext; use
   `ploinky var` with `PLOINKY_MASTER_KEY` set.
-- A v5 activation must use dedicated authorized test resources and must report
+- A Box activation must use dedicated authorized test resources and must report
   unavailable Cloudflare, TURN, architecture, network, or account prerequisites
   as `BLOCKED`, never as a pass.
 - After an operator-controlled recreate, verify the exact outer bindings, in-box

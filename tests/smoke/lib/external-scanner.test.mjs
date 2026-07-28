@@ -17,8 +17,7 @@ const HOST_KEY = `SHA256:${'A'.repeat(43)}`;
 
 function result(overrides = {}) {
   return {
-    schemaVersion: 1,
-    scanner: 'ploinky-external-boundary-v1',
+    scanner: 'ploinky-external-boundary',
     scannerSourceSha256: scannerAttestation({
       sshTarget: 'scanner-a', expectedHostKeySha256: HOST_KEY, source: SOURCE,
     }).scannerSourceSha256,
