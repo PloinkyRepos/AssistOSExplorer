@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Plugins - Explorer Agent</title>
     <link rel="stylesheet" href="style.css">
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({ startOnLoad: true, theme: 'neutral' });
+    </script>
 </head>
 <body>
 <header>
@@ -51,7 +55,7 @@
                 <p>This system now covers two distinct runtime families:</p>
                 <ul>
                     <li><strong>Document plugins</strong>, which mount into document-oriented surfaces such as <code>document</code>, <code>chapter</code>, <code>paragraph</code>, and <code>infoText</code>.</li>
-                    <li><strong>Application plugins</strong>, which extend the shell itself through host slots such as <code>file-exp:toolbar</code>, <code>file-exp:context-menu:file</code>, <code>file-exp:context-menu:directory</code>, <code>file-exp:copilot-launch-extension</code>, and <code>file-exp:new-menu</code>.</li>
+                    <li><strong>Application plugins</strong>, which extend the shell itself through host slots such as <code>file-exp:toolbar</code>, <code>file-exp:toolbar-plugins-dropdown</code>, <code>file-exp:context-menu:file</code>, <code>file-exp:context-menu:directory</code>, <code>file-exp:copilot-launch-extension</code>, and <code>file-exp:new-menu</code>.</li>
                 </ul>
                 <p>The discovery path, manifest validation, and asset resolution are shared. What changes is the hosting regime: document plugins render into document surfaces, while application plugins either mount a component into a shell slot or contribute semantic menu items into a host-owned menu.</p>
             </div>
@@ -72,7 +76,7 @@
                 <h2>Application Plugins</h2>
                 <p>Application plugins extend the shell rather than the document runtime. They currently use two contribution types:</p>
                 <ul>
-                    <li><strong><code>mount</code></strong>, where Explorer mounts a component into a host slot such as <code>file-exp:toolbar</code>, <code>file-exp:right-bar</code>, or <code>file-exp:internal</code></li>
+                    <li><strong><code>mount</code></strong>, where Explorer mounts a component into a host slot such as <code>file-exp:toolbar</code>, <code>file-exp:toolbar-plugins-dropdown</code>, <code>file-exp:right-bar</code>, or <code>file-exp:internal</code></li>
                     <li><strong><code>menu</code></strong>, where Explorer keeps ownership of the menu structure and lets the plugin contribute menu items semantically into <code>file-exp:context-menu:file</code>, <code>file-exp:context-menu:directory</code>, or <code>file-exp:new-menu</code></li>
                 </ul>
                 <p>The distinction is important. Menu contributions are not arbitrary fragments of injected DOM. Explorer owns the menu surface, focus behavior, loading state, and item execution context. The plugin contributes item metadata, visibility logic, and the action implementation, usually by calling its owning agent through the Explorer bridge.</p>
@@ -84,6 +88,8 @@
                     <li><code>git-menu-contributions</code> contributes <code>Add to .gitignore</code>, <code>Remove from .gitignore</code>, and <code>New repository</code> into file and directory context menus and the <code>New</code> menu</li>
                     <li>both contributions share the same logical plugin identity through <code>id: "git"</code></li>
                 </ul>
+                <p>The AchillesCLI Copilot integration follows the same multi-surface policy model. Its mounted component contributes <strong>Open Copilot here</strong> to the host-owned <strong>Tools</strong> dropdown, while a separate menu contribution keeps the same action on directory context menus. Both contributions use one application plugin id, so workspace plugin settings enable or disable them together.</p>
+                <p>Explorer supplies mounted plugins with <code>currentPath</code>, <code>currentFsPath</code>, and <code>workspaceFsRoot</code>. The Explorer path <code>/</code> denotes the workspace root rather than the host filesystem root. Consequently, a Tools action can operate on the displayed workspace root without creating a synthetic parent directory or requiring a selectable folder row.</p>
                 <p>Explorer also owns the <code>help</code> application plugin. Its toolbar button opens a static, responsive user guide covering Explorer, Git, WebMeet, Confidential, Copilot, and Administration. Each topic is maintained as an independent HTML fragment under the Help modal's <code>tabs/</code> directory and is loaded from the same plugin bundle when the modal opens. The Help modal includes a window action that toggles the guide between its normal size and a fullscreen layout. Unlike domain plugins, Help does not call an agent or mutate workspace state: it summarizes user-facing workflows while identifying the separate agents that own Git, protected data, meetings, and Copilot behavior.</p>
                 <p>Reactive child components keep a stable lifecycle during a plugin operation. Presenters update status text and disabled controls in place, then rebuild structural content once after new domain data has settled. For example, Marketplace follows the same model as Git modals: changing a loading label does not destroy and recreate a lazily loading <code>custom-select</code>.</p>
                 <p>The screenshots below show the UI surfaces plugins occupy inside the shell.</p>

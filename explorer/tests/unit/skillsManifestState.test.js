@@ -78,6 +78,17 @@ async function createLocalSkillRepo(rootDir) {
   return repoDir;
 }
 
+async function createNonAnthropicSkillRepo(rootDir) {
+  const repoDir = path.join(rootDir, 'source-code-skill-repo');
+  await writeFile(path.join(repoDir, 'skills', 'code-skill', 'cskill.md'), '# code-skill\n');
+  execFileSync('git', ['init'], { cwd: repoDir, stdio: 'ignore' });
+  execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: repoDir, stdio: 'ignore' });
+  execFileSync('git', ['config', 'user.name', 'Test User'], { cwd: repoDir, stdio: 'ignore' });
+  execFileSync('git', ['add', '.'], { cwd: repoDir, stdio: 'ignore' });
+  execFileSync('git', ['commit', '-m', 'initial'], { cwd: repoDir, stdio: 'ignore' });
+  return repoDir;
+}
+
 async function createAchillesCopilotBasicSkillsRepo(rootDir) {
   const repoDir = path.join(rootDir, 'source-AchillesCopilotBasicSkills');
   const skills = [
@@ -151,7 +162,7 @@ test('read_skills_manifest_state caches existing manifest repositories and lists
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'explorer-skills-manifest-'));
   try {
     const repoDir = await createLocalSkillRepo(workspaceRoot);
-    await writeFile(path.join(workspaceRoot, 'ploinky', 'cli', 'services', 'repos.js'), `
+    await writeFile(path.join(workspaceRoot, 'ploinky', 'cli', 'utils', 'repos.js'), `
 export function getPredefinedRepos() { return {}; }
 export function getRepoSources() { return {}; }
 export function getInstalledRepos() { return []; }
@@ -183,7 +194,7 @@ test('read_skills_manifest_state recognizes AchillesCopilotBasicSkills from an e
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'explorer-skills-manifest-achilles-'));
   try {
     const { repoDir, skills } = await createAchillesCopilotBasicSkillsRepo(workspaceRoot);
-    await writeFile(path.join(workspaceRoot, 'ploinky', 'cli', 'services', 'repos.js'), `
+    await writeFile(path.join(workspaceRoot, 'ploinky', 'cli', 'utils', 'repos.js'), `
 export function getPredefinedRepos() {
   return {
     AchillesCopilotBasicSkills: {
@@ -215,6 +226,81 @@ export function classifyRepoKind() { return 'skills'; }
     assert.deepEqual(state.repositories[0].availableSkills, skills);
     assert.deepEqual(state.repositories[0].skills, skills);
     assert.equal(state.skillRepositories[0].name, 'AchillesCopilotBasicSkills');
+  } finally {
+    await fs.rm(workspaceRoot, { recursive: true, force: true });
+  }
+});
+
+test('add_skills_manifest_repo resolves a known repository through the current Ploinky utils layout', async () => {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'explorer-skills-manifest-add-'));
+  try {
+    const { repoDir, skills } = await createAchillesCopilotBasicSkillsRepo(workspaceRoot);
+    await writeFile(path.join(workspaceRoot, 'ploinky', 'cli', 'utils', 'repos.js'), `
+export function getPredefinedRepos() {
+  return {
+    AchillesCopilotBasicSkills: {
+      url: '${repoDir.replaceAll('\\', '\\\\')}',
+      description: 'Default Anthropic-style skill catalog (SKILL.md folders)',
+      kind: 'skills'
+    }
+  };
+}
+export function getRepoSources() { return {}; }
+export function getInstalledRepos() { return []; }
+export function classifyRepoKind() { return 'skills'; }
+`);
+    const projectDir = path.join(workspaceRoot, 'project');
+    await fs.mkdir(projectDir, { recursive: true });
+
+    const handlers = createHandlers(workspaceRoot);
+    const state = parseJsonResponse(await handlers.add_skills_manifest_repo({
+      folderPath: projectDir,
+      url: 'AchillesCopilotBasicSkills',
+      name: 'AchillesCopilotBasicSkills'
+    }));
+
+    assert.equal(state.ok, true);
+    assert.equal(state.added, true);
+    assert.equal(state.cached, true);
+    assert.equal(state.message, 'AchillesCopilotBasicSkills added.');
+    assert.deepEqual(state.repositories[0].skills, skills);
+    assert.deepEqual(state.installedSkills, skills);
+    const manifest = JSON.parse(await fs.readFile(path.join(projectDir, 'ploinky-skills-manifest.json'), 'utf8'));
+    assert.equal(manifest[0].url, repoDir);
+    for (const skill of skills) {
+      const installedSkill = await fs.stat(path.join(projectDir, '.agents', 'skills', skill, 'SKILL.md'));
+      assert.equal(installedSkill.isFile(), true);
+    }
+  } finally {
+    await fs.rm(workspaceRoot, { recursive: true, force: true });
+  }
+});
+
+test('add_skills_manifest_repo explains when a cached repository has no Anthropic skills', async () => {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'explorer-skills-manifest-non-anthropic-'));
+  try {
+    const repoDir = await createNonAnthropicSkillRepo(workspaceRoot);
+    const projectDir = path.join(workspaceRoot, 'project');
+    await fs.mkdir(projectDir, { recursive: true });
+
+    const handlers = createHandlers(workspaceRoot);
+    const result = parseJsonResponse(await handlers.add_skills_manifest_repo({
+      folderPath: projectDir,
+      url: `file://${repoDir}`,
+      name: 'code-skills-only'
+    }));
+
+    assert.equal(result.ok, true);
+    assert.equal(result.added, false);
+    assert.equal(result.cached, true);
+    assert.match(result.message, /cached but was not added.*no Anthropic skills were found/i);
+
+    const cachedRepo = await fs.stat(path.join(workspaceRoot, '.ploinky', 'repos', 'code-skills-only'));
+    assert.equal(cachedRepo.isDirectory(), true);
+    await assert.rejects(
+      fs.stat(path.join(projectDir, 'ploinky-skills-manifest.json')),
+      (error) => error?.code === 'ENOENT'
+    );
   } finally {
     await fs.rm(workspaceRoot, { recursive: true, force: true });
   }
