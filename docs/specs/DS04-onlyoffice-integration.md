@@ -56,8 +56,13 @@ consume that token from the body with `inBody` set to boolean `true`, while the
 public editor proxy continues to strip browser `Authorization`, cookies, and
 other credentials. DocumentServer request/outbox signing is enabled in-body
 with the same bounded temporal rules. Callback handling remains the separately
-validated outbox path: it accepts only the signed payload, verifies it against
-the received body, and rejects unsigned sibling fields.
+validated outbox path: it verifies the one own string `token` before inspecting
+duplicated claims, permits only `iat`, optional `nbf`, and `exp` to remain
+signed-only, and then requires the envelope without `token` to be recursively
+type- and value-identical to every non-temporal verified claim. Object key order
+is immaterial; array order and all nested JSON structure are exact. Extra,
+missing, mismatched, temporal-envelope, and signed `token` claims fail closed,
+and only the verified payload is used after validation.
 
 The session store mints a distinct non-secret 128-bit `document.key` for every
 editor session and persists that exact key with the session. The signed editor
@@ -66,6 +71,12 @@ key. It is never derived from a file path, version, or other document metadata;
 missing, malformed, or duplicate keys and all pre-v5 state fail closed with no
 fallback. Two sessions for the same document therefore remain isolated and a
 fresh session deliberately remounts the editor with its new key.
+
+An editor `onError` invalidates reuse only for the exact render generation that
+raised it. The host preserves the caller handler and does not retry, request a
+session, or remount automatically. An error from a superseded generation cannot
+invalidate its replacement; the next explicit open of a failed no-version DPU
+document obtains a fresh session/configuration before remounting.
 
 Downloads and callbacks are loopback-only, content-type checked, size limited,
 time limited, and redirect-free. Callback download URLs are rewritten only to

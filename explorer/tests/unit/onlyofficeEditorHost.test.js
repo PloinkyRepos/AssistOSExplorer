@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+    isOnlyOfficeEditorActive,
     renderOnlyOfficeEditor
 } from '../../services/onlyoffice/onlyoffice-editor-host.js';
 
@@ -71,7 +72,9 @@ test('a superseded async OnlyOffice mount cannot instantiate a stale editor', as
             editor: null,
             containerId: '',
             scriptUrl: '',
-            configKey: ''
+            configKey: '',
+            renderGeneration: 0,
+            inactiveRenderGeneration: 0
         };
         const firstConfig = {
             document: { key: 'first', title: 'first.docx', fileType: 'docx' },
@@ -97,9 +100,170 @@ test('a superseded async OnlyOffice mount cannot instantiate a stale editor', as
         scripts[0].dispatch('load');
         await Promise.all([firstMount, secondMount]);
 
-        assert.deepEqual(createdConfigs, [secondConfig]);
+        assert.equal(createdConfigs.length, 1);
+        assert.equal(createdConfigs[0].document.key, secondConfig.document.key);
         assert.equal(host.__onlyOfficeRuntime.configKey.includes('"second"'), true);
         assert.equal(host.__onlyOfficeRuntime.renderGeneration, 2);
+    } finally {
+        if (originalWindow === undefined) {
+            delete globalThis.window;
+        } else {
+            globalThis.window = originalWindow;
+        }
+        if (originalDocument === undefined) {
+            delete globalThis.document;
+        } else {
+            globalThis.document = originalDocument;
+        }
+    }
+});
+
+test('the current editor error makes only its generation non-reusable without retrying and preserves the caller handler', async () => {
+    const originalWindow = globalThis.window;
+    const originalDocument = globalThis.document;
+    const createdConfigs = [];
+    const callerEvents = [];
+
+    try {
+        globalThis.window = {
+            DocsAPI: {
+                DocEditor: class {
+                    constructor(_containerId, config) {
+                        createdConfigs.push(config);
+                    }
+                    destroyEditor() {}
+                }
+            }
+        };
+        globalThis.document = {
+            createElement(tagName) {
+                return {
+                    tagName: String(tagName).toUpperCase(),
+                    className: '',
+                    id: ''
+                };
+            }
+        };
+
+        const host = createHost();
+        const config = {
+            document: {
+                key: 'current',
+                title: 'current.docx',
+                fileType: 'docx',
+                permissions: { edit: true },
+                info: {
+                    owner: 'User One'
+                }
+            },
+            documentServerUrl: 'http://office.test',
+            editorConfig: {
+                mode: 'edit',
+                user: { id: 'user-1', name: 'User One' }
+            },
+            token: 'signed-config-token',
+            events: {
+                onError(event) {
+                    callerEvents.push({ receiver: this, event });
+                }
+            }
+        };
+        const originalConfig = structuredClone({
+            ...config,
+            events: undefined
+        });
+
+        await renderOnlyOfficeEditor(host, config);
+        assert.equal(createdConfigs.length, 1);
+        assert.equal(isOnlyOfficeEditorActive(host, config), true);
+
+        const event = { data: { errorCode: -4 } };
+        const receiver = { source: 'onlyoffice-sdk' };
+        createdConfigs[0].events.onError.call(receiver, event);
+        await renderOnlyOfficeEditor(host, config);
+
+        assert.equal(isOnlyOfficeEditorActive(host, config), false);
+        assert.equal(host.__onlyOfficeRuntime.inactiveRenderGeneration, 1);
+        assert.deepEqual(callerEvents, [{ receiver, event }]);
+        assert.equal(createdConfigs.length, 1);
+        assert.deepEqual({
+            ...config,
+            events: undefined
+        }, originalConfig);
+        assert.equal(createdConfigs[0].token, config.token);
+        assert.notEqual(createdConfigs[0], config);
+        assert.notEqual(createdConfigs[0].document, config.document);
+        assert.notEqual(createdConfigs[0].document.info, config.document.info);
+        assert.notEqual(createdConfigs[0].editorConfig, config.editorConfig);
+    } finally {
+        if (originalWindow === undefined) {
+            delete globalThis.window;
+        } else {
+            globalThis.window = originalWindow;
+        }
+        if (originalDocument === undefined) {
+            delete globalThis.document;
+        } else {
+            globalThis.document = originalDocument;
+        }
+    }
+});
+
+test('an error from a superseded editor generation cannot invalidate the newer editor', async () => {
+    const originalWindow = globalThis.window;
+    const originalDocument = globalThis.document;
+    const createdConfigs = [];
+    const callerErrors = [];
+
+    try {
+        globalThis.window = {
+            DocsAPI: {
+                DocEditor: class {
+                    constructor(_containerId, config) {
+                        createdConfigs.push(config);
+                    }
+                    destroyEditor() {}
+                }
+            }
+        };
+        globalThis.document = {
+            createElement(tagName) {
+                return {
+                    tagName: String(tagName).toUpperCase(),
+                    className: '',
+                    id: ''
+                };
+            }
+        };
+
+        const host = createHost();
+        const firstConfig = {
+            document: { key: 'first', title: 'first.docx', fileType: 'docx' },
+            documentServerUrl: 'http://office.test',
+            events: {
+                onError(event) {
+                    callerErrors.push(['first', event]);
+                }
+            }
+        };
+        const secondConfig = {
+            document: { key: 'second', title: 'second.docx', fileType: 'docx' },
+            documentServerUrl: 'http://office.test'
+        };
+
+        await renderOnlyOfficeEditor(host, firstConfig);
+        await renderOnlyOfficeEditor(host, secondConfig);
+        assert.equal(createdConfigs.length, 2);
+        assert.equal(isOnlyOfficeEditorActive(host, secondConfig), true);
+
+        const staleEvent = { data: { errorCode: -4 } };
+        createdConfigs[0].events.onError(staleEvent);
+
+        assert.deepEqual(callerErrors, [['first', staleEvent]]);
+        assert.equal(host.__onlyOfficeRuntime.renderGeneration, 2);
+        assert.equal(host.__onlyOfficeRuntime.inactiveRenderGeneration, 0);
+        assert.equal(isOnlyOfficeEditorActive(host, secondConfig), true);
+        assert.equal(createdConfigs.length, 2);
     } finally {
         if (originalWindow === undefined) {
             delete globalThis.window;

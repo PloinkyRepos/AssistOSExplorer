@@ -64,9 +64,15 @@ to consume it from the body with `inBody` set to boolean `true`. The public
 editor proxy still strips browser `Authorization`, cookies, and other
 credentials. The token is body-bound and never placed in a URL. Callback
 delivery remains the separately validated signed outbox path.
-Callbacks accept only the signed payload, require loopback plus the opaque
-session token, enforce JSON/content and body limits, and compare the payload to
-the received body. Session creation mints a distinct non-secret 128-bit
+Callbacks require one own string `token`, authenticate its HS256 signature and
+temporal bounds first, and then require every envelope field except `token` to
+recursively equal the verified payload except for signed-only `iat`, optional
+`nbf`, and `exp`. Object key order may differ, but types, nested keys and values,
+and array order must match exactly. Extra, missing, mismatched, non-JSON,
+temporal-envelope, and signed `token` fields fail closed. Only verified claims
+continue to authorization, fetch, write, and acknowledgement. Callbacks also
+require loopback plus the opaque session token and enforce JSON/content and body
+limits. Session creation mints a distinct non-secret 128-bit
 `documentKey`; the same key is persisted with that exact session and is used by
 the signed editor config, callback validation, and force-save drain. An outbox
 JWT from another session is rejected even when both sessions name the same

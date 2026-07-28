@@ -73,7 +73,7 @@ hop-by-hop headers cannot reach the browser.
 | Editor configuration | HS256 JWT with `iat`, `nbf`, body-bound `exp`, and an exact positive lifetime capped at 300 seconds |
 | Document read | Process-loopback URL, opaque active-session token, timeout and byte bounds |
 | Session key | Store-minted, non-secret 128-bit key persisted for one exact session; never derived from document metadata |
-| Callback body | In-body HS256 outbox JWT; signed payload must equal the received payload and its key must equal the opaque-URL session key |
+| Callback body | One own string `token`; authenticate the in-body HS256 outbox JWT first, then require recursive exact equivalence between envelope fields and verified non-temporal claims |
 | Callback download | Redirect-free, bounded, approved office content type, exact process-local origin, and `/cache/files/` path only |
 | Persistence acknowledgement | Status `2` or `6` bytes are stored before success is acknowledged |
 | Reopen after restart | Uses the last persisted acknowledged session version |
@@ -81,9 +81,12 @@ hop-by-hop headers cannot reach the browser.
 JWTs and configured secrets are not placed in URLs, logs, HTML, or browser
 diagnostics. The opaque session bearer exists only in the process-loopback
 document/callback URL carried by the signed editor config and must be redacted
-from logs and artifacts. Unsigned sibling fields never override signed callback
-fields. Two sessions for the same document deliberately have different keys, so
-an outbox JWT from one cannot authorize the other's opaque callback URL.
+from logs and artifacts. `iat`, optional `nbf`, and `exp` are the only
+signed-only callback fields. The unsigned duplicates may differ only in object
+key order; exact recursive types, keys, values, and array order must otherwise
+match, and only verified claims continue downstream. Two sessions for the same
+document deliberately have different keys, so an outbox JWT from one cannot
+authorize the other's opaque callback URL.
 
 ## Targeted restart drain
 

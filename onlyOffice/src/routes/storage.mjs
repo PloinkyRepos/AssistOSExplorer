@@ -4,6 +4,7 @@ import { resolveOnlyOfficeEditorService } from '../edge-topology.mjs';
 import { buildDocumentKey } from '../onlyoffice-config.mjs';
 
 const SAVE_STATUSES = new Set([2, 6]);
+const CALLBACK_TEMPORAL_FIELDS = new Set(['iat', 'nbf', 'exp']);
 const ALLOWED_DOWNLOAD_CONTENT_TYPES = [
   'application/msword',
   'application/octet-stream',
@@ -81,13 +82,11 @@ function decodeAndVerifyCallbackToken(token, secret, { now = () => Date.now(), m
     throw new Error('OnlyOffice callback token signature is invalid.');
   }
   const payload = JSON.parse(Buffer.from(encodedPayload, 'base64url').toString('utf8'));
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+  if (!isPlainJsonObject(payload)) {
     throw new Error('OnlyOffice callback token payload is invalid.');
   }
   const nowSeconds = Math.floor(Number(now()) / 1000);
-  const iat = Number(payload.iat);
-  const nbf = Number(payload.nbf);
-  const exp = Number(payload.exp);
+  const { iat, nbf, exp } = payload;
   if (!Number.isInteger(iat) || !Number.isInteger(exp)) {
     throw new Error('OnlyOffice callback token requires iat and exp.');
   }
@@ -101,6 +100,93 @@ function decodeAndVerifyCallbackToken(token, secret, { now = () => Date.now(), m
     throw new Error('OnlyOffice callback token is expired or exceeds its allowed lifetime.');
   }
   return payload;
+}
+
+function isPlainJsonObject(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function assertExactJsonValue(value) {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') {
+    return;
+  }
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) {
+      throw new Error('OnlyOffice callback contains a non-finite number.');
+    }
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      assertExactJsonValue(item);
+    }
+    return;
+  }
+  if (!isPlainJsonObject(value)) {
+    throw new Error('OnlyOffice callback contains a non-JSON value.');
+  }
+  for (const key of Object.keys(value)) {
+    assertExactJsonValue(value[key]);
+  }
+}
+
+function exactJsonEqual(left, right) {
+  if (left === null || right === null || typeof left !== 'object' || typeof right !== 'object') {
+    return typeof left === typeof right && Object.is(left, right);
+  }
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return Array.isArray(left)
+      && Array.isArray(right)
+      && left.length === right.length
+      && left.every((value, index) => exactJsonEqual(value, right[index]));
+  }
+  if (!isPlainJsonObject(left) || !isPlainJsonObject(right)) {
+    return false;
+  }
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  return leftKeys.length === rightKeys.length
+    && leftKeys.every((key) => Object.hasOwn(right, key) && exactJsonEqual(left[key], right[key]));
+}
+
+function parseCallbackEnvelope(payloadText) {
+  const envelope = payloadText ? JSON.parse(payloadText) : null;
+  if (!isPlainJsonObject(envelope)
+      || !Object.hasOwn(envelope, 'token')
+      || typeof envelope.token !== 'string') {
+    throw new Error('OnlyOffice callback requires one own string token.');
+  }
+  return envelope;
+}
+
+function assertCallbackEnvelopeMatchesVerifiedPayload(envelope, payload) {
+  assertExactJsonValue(envelope);
+  assertExactJsonValue(payload);
+  if (Object.hasOwn(payload, 'token')) {
+    throw new Error('OnlyOffice callback signed payload cannot contain a token claim.');
+  }
+  for (const field of CALLBACK_TEMPORAL_FIELDS) {
+    if (Object.hasOwn(envelope, field)) {
+      throw new Error('OnlyOffice callback envelope cannot contain temporal fields.');
+    }
+  }
+
+  const envelopeKeys = Object.keys(envelope).filter((key) => key !== 'token');
+  const payloadKeys = Object.keys(payload).filter((key) => !CALLBACK_TEMPORAL_FIELDS.has(key));
+  if (envelopeKeys.length !== payloadKeys.length
+      || envelopeKeys.some((key) => !Object.hasOwn(payload, key))
+      || payloadKeys.some((key) => !Object.hasOwn(envelope, key))) {
+    throw new Error('OnlyOffice callback envelope fields do not match the verified payload.');
+  }
+  for (const key of payloadKeys) {
+    if (!exactJsonEqual(envelope[key], payload[key])) {
+      throw new Error('OnlyOffice callback envelope values do not match the verified payload.');
+    }
+  }
 }
 
 async function readBoundedDownload(response, maxBytes) {
@@ -286,14 +372,12 @@ export function createStorageRouteHandler({
         maxBytes: Number(config.callbackMaxBytes || 256 * 1024),
         timeoutMs: Number(config.ioTimeoutMs || 15_000),
       });
-      const envelope = payloadText ? JSON.parse(payloadText) : {};
-      if (Object.keys(envelope).length !== 1 || typeof envelope.token !== 'string') {
-        throw new Error('OnlyOffice callback must contain only the signed outbox token.');
-      }
+      const envelope = parseCallbackEnvelope(payloadText);
       payload = decodeAndVerifyCallbackToken(envelope.token, config.onlyofficeJwtSecret, {
         now,
         maxLifetimeSeconds: Number(config.configJwtTtlSeconds || 300),
       });
+      assertCallbackEnvelopeMatchesVerifiedPayload(envelope, payload);
     } catch (_) {
       sendJson(res, 400, { error: 1 });
       return;
@@ -354,6 +438,7 @@ export function createStorageRouteHandler({
 
 export const _test = Object.freeze({
   decodeAndVerifyCallbackToken,
+  assertCallbackEnvelopeMatchesVerifiedPayload,
   assertAllowedDownloadContentType,
   readBoundedDownload,
   resolveTrustedDownloadUrl,

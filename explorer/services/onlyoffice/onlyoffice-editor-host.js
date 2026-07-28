@@ -7,12 +7,17 @@ function ensureRuntimeState(host) {
             containerId: '',
             scriptUrl: '',
             configKey: '',
-            renderGeneration: 0
+            renderGeneration: 0,
+            inactiveRenderGeneration: 0
         };
     }
     if (!Number.isSafeInteger(host.__onlyOfficeRuntime.renderGeneration)
         || host.__onlyOfficeRuntime.renderGeneration < 0) {
         host.__onlyOfficeRuntime.renderGeneration = 0;
+    }
+    if (!Number.isSafeInteger(host.__onlyOfficeRuntime.inactiveRenderGeneration)
+        || host.__onlyOfficeRuntime.inactiveRenderGeneration < 0) {
+        host.__onlyOfficeRuntime.inactiveRenderGeneration = 0;
     }
     return host.__onlyOfficeRuntime;
 }
@@ -85,6 +90,18 @@ function destroyEditor(host) {
     runtime.editor = null;
 }
 
+function cloneConfigValue(value) {
+    if (Array.isArray(value)) {
+        return value.map((item) => cloneConfigValue(item));
+    }
+    if (value && typeof value === 'object') {
+        return Object.fromEntries(
+            Object.entries(value).map(([key, item]) => [key, cloneConfigValue(item)])
+        );
+    }
+    return value;
+}
+
 export function buildConfigKey(config) {
     if (!config || typeof config !== 'object') {
         return '';
@@ -120,6 +137,9 @@ export function isOnlyOfficeEditorActive(host, config) {
     if (!runtime?.editor) {
         return false;
     }
+    if (runtime.inactiveRenderGeneration === runtime.renderGeneration) {
+        return false;
+    }
     if (host.isConnected === false) {
         // A full page re-render replaces the preview DOM; a detached host may
         // still hold a runtime but its editor is gone with the old subtree.
@@ -148,11 +168,18 @@ export async function renderOnlyOfficeEditor(host, config) {
     if (!host) return;
     const runtime = ensureRuntimeState(host);
     const nextConfigKey = buildConfigKey(config);
-    if (runtime.editor && runtime.configKey === nextConfigKey && findEditorContainer(host)) {
+    if (isOnlyOfficeEditorActive(host, config)) {
+        return;
+    }
+    if (runtime.inactiveRenderGeneration === runtime.renderGeneration
+        && runtime.configKey === nextConfigKey) {
+        // A render pass with the same failed session is not an explicit retry.
+        // Only a fresh session/config key may replace this inactive generation.
         return;
     }
 
     const renderGeneration = ++runtime.renderGeneration;
+    runtime.inactiveRenderGeneration = 0;
     destroyEditor(host);
     const { scriptUrl, DocsAPI } = await loadScript(config?.documentServerUrl || '');
     if (runtime.renderGeneration !== renderGeneration || host.isConnected === false) {
@@ -162,7 +189,22 @@ export async function renderOnlyOfficeEditor(host, config) {
 
     runtime.scriptUrl = scriptUrl;
     runtime.configKey = nextConfigKey;
-    runtime.editor = new DocsAPI.DocEditor(container.id, config);
+    const callerOnError = typeof config?.events?.onError === 'function'
+        ? config.events.onError
+        : null;
+    const mountConfig = {
+        ...cloneConfigValue(config),
+        events: {
+            ...(config?.events && typeof config.events === 'object' ? config.events : {}),
+            onError(...args) {
+                if (runtime.renderGeneration === renderGeneration) {
+                    runtime.inactiveRenderGeneration = renderGeneration;
+                }
+                return callerOnError?.apply(this, args);
+            }
+        }
+    };
+    runtime.editor = new DocsAPI.DocEditor(container.id, mountConfig);
 }
 
 export function clearOnlyOfficeEditor(host) {
@@ -172,4 +214,5 @@ export function clearOnlyOfficeEditor(host) {
     destroyEditor(host);
     host.textContent = '';
     runtime.configKey = '';
+    runtime.inactiveRenderGeneration = 0;
 }

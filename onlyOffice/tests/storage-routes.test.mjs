@@ -3,7 +3,10 @@ import crypto from 'node:crypto';
 import { Readable } from 'node:stream';
 import test from 'node:test';
 
-import { createStorageRouteHandler as createStorageRouteHandlerRaw } from '../src/routes/storage.mjs';
+import {
+  _test as storageRouteTest,
+  createStorageRouteHandler as createStorageRouteHandlerRaw
+} from '../src/routes/storage.mjs';
 import { buildDocumentKey } from '../src/onlyoffice-config.mjs';
 
 const CALLBACK_SECRET = 'onlyoffice-callback-test-secret';
@@ -16,19 +19,43 @@ const DEFAULT_SESSION_IDENTITY = Object.freeze({
 });
 const DEFAULT_DOCUMENT_KEY = buildDocumentKey(DEFAULT_SESSION_IDENTITY);
 
-function signCallbackPayload(payload, nowSeconds = Math.floor(Date.now() / 1000)) {
+function signCallbackPayload(
+  payload,
+  nowSeconds = Math.floor(Date.now() / 1000),
+  {
+    temporal = {
+      iat: nowSeconds,
+      nbf: nowSeconds - 1,
+      exp: nowSeconds + 60,
+    },
+    signedClaims = {},
+    mutateEnvelope = null,
+    mutateToken = null,
+  } = {},
+) {
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
-  const claims = Buffer.from(JSON.stringify({
+  const payloadClaims = {
     key: DEFAULT_DOCUMENT_KEY,
     ...payload,
-    iat: nowSeconds,
-    nbf: nowSeconds - 1,
-    exp: nowSeconds + 60,
-  })).toString('base64url');
+    ...temporal,
+    ...signedClaims,
+  };
+  const claims = Buffer.from(JSON.stringify(payloadClaims)).toString('base64url');
   const signature = crypto.createHmac('sha256', CALLBACK_SECRET)
     .update(`${header}.${claims}`)
     .digest('base64url');
-  return JSON.stringify({ token: `${header}.${claims}.${signature}` });
+  let token = `${header}.${claims}.${signature}`;
+  if (typeof mutateToken === 'function') {
+    token = mutateToken(token);
+  }
+  const envelope = Object.fromEntries(Object.entries(payloadClaims).filter(([key]) => (
+    key !== 'iat' && key !== 'nbf' && key !== 'exp' && key !== 'token'
+  )));
+  if (typeof mutateEnvelope === 'function') {
+    mutateEnvelope(envelope);
+  }
+  envelope.token = token;
+  return JSON.stringify(envelope);
 }
 
 function createStorageRouteHandler(options = {}) {
@@ -96,7 +123,7 @@ function createMockResponse() {
   };
 }
 
-function createSessionStore(session) {
+function createSessionStore(session, { onAcknowledge = null } = {}) {
   const boundSession = {
     ...DEFAULT_SESSION_IDENTITY,
     ...session,
@@ -107,6 +134,9 @@ function createSessionStore(session) {
         throw new Error('Unknown or expired OnlyOffice session token.');
       }
       return boundSession;
+    },
+    acknowledgeCallback(token, acknowledgement) {
+      onAcknowledge?.(token, acknowledgement);
     }
   };
 }
@@ -203,19 +233,27 @@ test('document route rejects expired and unknown tokens', async () => {
   assert.equal(unknownRes.statusCode, 404);
 });
 
-test('callback route persists only status 2 and status 6 save events', async () => {
+test('callback route accepts status 1/4 and persists and acknowledges only status 2/6 save events', async () => {
   const fetchUrls = [];
   const savedBodies = [];
+  const acknowledgements = [];
   const handler = createStorageRouteHandler({
     config: {
       publicEditorBaseUrl: 'http://public-onlyoffice:8080',
       internalDocumentServerBaseUrl: 'http://127.0.0.1:80'
     },
-    sessionStore: createSessionStore({
-      requestedPath: '/workspace/report.docx',
-      mimeType: 'text/plain',
-      canWrite: true
-    }),
+    sessionStore: createSessionStore(
+      {
+        requestedPath: '/workspace/report.docx',
+        mimeType: 'text/plain',
+        canWrite: true
+      },
+      {
+        onAcknowledge(token, acknowledgement) {
+          acknowledgements.push({ token, acknowledgement });
+        }
+      }
+    ),
     storageRouter: {
       forSession() {
         return {
@@ -239,17 +277,40 @@ test('callback route persists only status 2 and status 6 save events', async () 
     }
   });
 
-  for (const status of [1, 2, 6]) {
+  for (const status of [1, 4, 2, 6]) {
+    const callbackPayload = status === 2 || status === 6
+      ? {
+          status,
+          url: 'http://public-onlyoffice:8080/cache/files/report.docx'
+        }
+      : {
+          actions: [{ type: 1, userid: `user-${status}` }],
+          status
+        };
+    const signedAt = Math.floor(Date.now() / 1000);
+    const bodyOptions = status === 1
+      ? {
+          mutateEnvelope(envelope) {
+            const key = envelope.key;
+            delete envelope.key;
+            envelope.key = key;
+          }
+        }
+      : status === 4
+        ? {
+            temporal: {
+              iat: signedAt,
+              exp: signedAt + 60
+            }
+          }
+      : {};
     const req = createMockRequest({
       method: 'POST',
       url: '/internal/callback/token-1',
       headers: {
         'content-type': 'application/json'
       },
-      body: signCallbackPayload({
-        status,
-        url: 'http://public-onlyoffice:8080/cache/files/report.docx'
-      })
+      body: signCallbackPayload(callbackPayload, signedAt, bodyOptions)
     });
     const res = createMockResponse();
     await handler(req, res);
@@ -265,6 +326,269 @@ test('callback route persists only status 2 and status 6 save events', async () 
     'saved from callback',
     'saved from callback'
   ]);
+  assert.deepEqual(
+    acknowledgements.map(({ token, acknowledgement }) => ({
+      token,
+      status: acknowledgement.status,
+      version: acknowledgement.version
+    })),
+    [
+      { token: 'token-1', status: 2, version: DEFAULT_DOCUMENT_KEY },
+      { token: 'token-1', status: 6, version: DEFAULT_DOCUMENT_KEY }
+    ]
+  );
+});
+
+test('callback route rejects any unsigned/signed structural difference before fetch, write, or acknowledgement', async (t) => {
+  const nowSeconds = 2_000_000_000;
+  const basePayload = {
+    actions: [
+      {
+        type: 1,
+        userid: 'user-1',
+        metadata: {
+          active: true,
+          labels: ['first', 'second'],
+          optional: null
+        }
+      }
+    ],
+    status: 2,
+    url: 'http://public-onlyoffice:8080/cache/files/report.docx'
+  };
+  const invalidBodies = [
+    {
+      name: 'tampered nested value',
+      body: signCallbackPayload(basePayload, nowSeconds, {
+        mutateEnvelope(envelope) {
+          envelope.actions[0].metadata.labels[1] = 'tampered';
+        }
+      })
+    },
+    {
+      name: 'extra outer field',
+      body: signCallbackPayload(basePayload, nowSeconds, {
+        mutateEnvelope(envelope) {
+          envelope.extra = true;
+        }
+      })
+    },
+    {
+      name: 'missing outer field',
+      body: signCallbackPayload(basePayload, nowSeconds, {
+        mutateEnvelope(envelope) {
+          delete envelope.actions;
+        }
+      })
+    },
+    {
+      name: 'signed-only non-temporal field',
+      body: signCallbackPayload(basePayload, nowSeconds, {
+        signedClaims: {
+          signedOnly: {
+            allowed: false
+          }
+        },
+        mutateEnvelope(envelope) {
+          delete envelope.signedOnly;
+        }
+      })
+    },
+    {
+      name: 'type mismatch',
+      body: signCallbackPayload(basePayload, nowSeconds, {
+        mutateEnvelope(envelope) {
+          envelope.status = '2';
+        }
+      })
+    },
+    {
+      name: 'array order mismatch',
+      body: signCallbackPayload(basePayload, nowSeconds, {
+        mutateEnvelope(envelope) {
+          envelope.actions[0].metadata.labels.reverse();
+        }
+      })
+    },
+    {
+      name: 'envelope temporal field',
+      body: signCallbackPayload(basePayload, nowSeconds, {
+        mutateEnvelope(envelope) {
+          envelope.iat = nowSeconds;
+        }
+      })
+    },
+    {
+      name: 'signed token claim',
+      body: signCallbackPayload(basePayload, nowSeconds, {
+        signedClaims: {
+          token: 'signed-non-temporal-token-claim'
+        }
+      })
+    },
+    {
+      name: 'malformed token',
+      body: signCallbackPayload(basePayload, nowSeconds, {
+        mutateToken() {
+          return 'not-a-jwt';
+        }
+      })
+    },
+    {
+      name: 'invalid signature',
+      body: signCallbackPayload(basePayload, nowSeconds, {
+        mutateToken(token) {
+          const [header, claims, signature] = token.split('.');
+          const replacement = signature[0] === 'A' ? 'B' : 'A';
+          return `${header}.${claims}.${replacement}${signature.slice(1)}`;
+        }
+      })
+    },
+    {
+      name: 'expired temporal claims',
+      body: signCallbackPayload(basePayload, nowSeconds, {
+        temporal: {
+          iat: nowSeconds - 120,
+          nbf: nowSeconds - 120,
+          exp: nowSeconds - 10
+        }
+      })
+    },
+    {
+      name: 'future temporal claims',
+      body: signCallbackPayload(basePayload, nowSeconds, {
+        temporal: {
+          iat: nowSeconds + 30,
+          nbf: nowSeconds + 30,
+          exp: nowSeconds + 60
+        }
+      })
+    },
+    {
+      name: 'non-numeric temporal claims',
+      body: signCallbackPayload(basePayload, nowSeconds, {
+        temporal: {
+          iat: String(nowSeconds),
+          nbf: nowSeconds - 1,
+          exp: nowSeconds + 60
+        }
+      })
+    },
+    {
+      name: 'invalid JSON',
+      body: '{"token":'
+    },
+    {
+      name: 'missing own token',
+      body: JSON.stringify({
+        key: DEFAULT_DOCUMENT_KEY,
+        status: 2
+      })
+    },
+    {
+      name: 'non-string token',
+      body: JSON.stringify({
+        key: DEFAULT_DOCUMENT_KEY,
+        status: 2,
+        token: 42
+      })
+    },
+    {
+      name: 'non-object envelope',
+      body: JSON.stringify(['not', 'an', 'object'])
+    }
+  ];
+
+  for (const invalid of invalidBodies) {
+    await t.test(invalid.name, async () => {
+      let fetchCalls = 0;
+      let writes = 0;
+      let acknowledgements = 0;
+      const handler = createStorageRouteHandler({
+        config: {
+          internalDocumentServerBaseUrl: 'http://127.0.0.1:80'
+        },
+        now: () => nowSeconds * 1000,
+        sessionStore: createSessionStore(
+          {
+            requestedPath: '/workspace/report.docx',
+            mimeType: 'text/plain',
+            canWrite: true
+          },
+          {
+            onAcknowledge() {
+              acknowledgements += 1;
+            }
+          }
+        ),
+        storageRouter: {
+          forSession() {
+            return {
+              async write() {
+                writes += 1;
+              }
+            };
+          }
+        },
+        fetchImpl: async () => {
+          fetchCalls += 1;
+          return createDownloadResponse();
+        }
+      });
+      const req = createMockRequest({
+        method: 'POST',
+        url: '/internal/callback/token-1',
+        headers: {
+          'content-type': 'application/json'
+        },
+        body: invalid.body
+      });
+      const res = createMockResponse();
+
+      await handler(req, res);
+
+      assert.equal(res.statusCode, 400);
+      assert.equal(res.bodyText, '{"error":1}');
+      assert.equal(fetchCalls, 0);
+      assert.equal(writes, 0);
+      assert.equal(acknowledgements, 0);
+    });
+  }
+});
+
+test('callback exact-value verification rejects non-finite and non-JSON values', () => {
+  const verifiedPayload = {
+    key: DEFAULT_DOCUMENT_KEY,
+    status: 2,
+    iat: 2_000_000_000,
+    exp: 2_000_000_060
+  };
+  assert.throws(
+    () => storageRouteTest.assertCallbackEnvelopeMatchesVerifiedPayload(
+      {
+        key: DEFAULT_DOCUMENT_KEY,
+        status: Number.POSITIVE_INFINITY,
+        token: 'verified-separately'
+      },
+      verifiedPayload
+    ),
+    /non-finite/
+  );
+  assert.throws(
+    () => storageRouteTest.assertCallbackEnvelopeMatchesVerifiedPayload(
+      {
+        key: DEFAULT_DOCUMENT_KEY,
+        status: 2,
+        nested: new Date(0),
+        token: 'verified-separately'
+      },
+      {
+        ...verifiedPayload,
+        nested: {}
+      }
+    ),
+    /non-JSON/
+  );
 });
 
 test('callback route rewrites public download url to internal download url before fetching', async () => {
