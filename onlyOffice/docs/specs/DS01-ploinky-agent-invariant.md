@@ -24,10 +24,13 @@ interposer is loaded only into DocService and rewrites its IPv6 wildcard bind
 for the exact TCP `8000` support port to `[::1]:8000`. The configuration hook
 requires the pinned nginx canonical file and its exact relative alias symlink
 to resolve to the same file, then requires exactly one expected
-`localhost:8000` upstream before replacing it once with `[::1]:8000`; readiness
-revalidates that topology and exact upstream/listener pair. PostgreSQL `5432`,
-RabbitMQ `5672`/`25672`, EPMD `4369`, and Redis `6379` when enabled are
-configured for loopback. The runtime launches the mounted
+`localhost:8000` upstream before replacing it once with `[::1]:8000`. The
+pinned DocumentServer entrypoint materializes that configured alias as a
+distinct `105:107`, `0644` regular file. Readiness requires both regular files
+to have distinct identities, byte-identical content, and the exact target
+directive, then verifies the `[::1]:8000` listener. PostgreSQL `5432`, RabbitMQ
+`5672`/`25672`, EPMD `4369`, and Redis `6379` when enabled are configured for
+loopback. The runtime launches the mounted
 `/code/src/index.mjs` entry point, then invokes a root-level Ploinky readiness
 wrapper that verifies addresses and
 socket owners and fails closed on an unexpected wildcard or owner.

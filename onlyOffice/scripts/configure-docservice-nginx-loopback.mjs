@@ -10,6 +10,11 @@ const PINNED_CONFIG_PATHS = Object.freeze({
   aliasPath: '/etc/nginx/includes/http-common.conf',
 });
 const PINNED_ALIAS_TARGET = '../../onlyoffice/documentserver/nginx/includes/http-common.conf';
+const PINNED_RUNTIME_IDENTITY = Object.freeze({
+  uid: 105,
+  gid: 107,
+  mode: 0o644,
+});
 
 function directiveLines(content) {
   return String(content).split(/\r\n|\n/).filter((line) => (
@@ -32,7 +37,7 @@ function pinnedPaths(configPaths = PINNED_CONFIG_PATHS) {
   return { canonicalPath, aliasPath };
 }
 
-function validatePinnedTopology(configPaths = PINNED_CONFIG_PATHS) {
+function validatePinnedConfigureTopology(configPaths = PINNED_CONFIG_PATHS) {
   const paths = pinnedPaths(configPaths);
   const canonicalStat = fs.lstatSync(paths.canonicalPath);
   if (!canonicalStat.isFile() || canonicalStat.isSymbolicLink()) {
@@ -54,6 +59,45 @@ function validatePinnedTopology(configPaths = PINNED_CONFIG_PATHS) {
   return paths;
 }
 
+function validatePinnedRuntimeTopology(
+  configPaths = PINNED_CONFIG_PATHS,
+  runtimeIdentity = PINNED_RUNTIME_IDENTITY,
+) {
+  const paths = pinnedPaths(configPaths);
+  const entries = [paths.canonicalPath, paths.aliasPath].map((configPath) => {
+    const stat = fs.lstatSync(configPath);
+    if (!stat.isFile() || stat.isSymbolicLink()) {
+      throw new Error(`OnlyOffice DocService runtime nginx configuration is not a regular file: ${configPath}`);
+    }
+    if (
+      stat.uid !== runtimeIdentity.uid
+      || stat.gid !== runtimeIdentity.gid
+      || (stat.mode & 0o7777) !== runtimeIdentity.mode
+    ) {
+      throw new Error(`OnlyOffice DocService runtime nginx configuration has unexpected ownership or mode: ${configPath}`);
+    }
+    return {
+      configPath,
+      stat,
+      realPath: fs.realpathSync(configPath),
+      content: fs.readFileSync(configPath),
+    };
+  });
+  if (entries[0].realPath === entries[1].realPath) {
+    throw new Error('OnlyOffice DocService runtime nginx paths must resolve to distinct files.');
+  }
+  if (
+    entries[0].stat.dev === entries[1].stat.dev
+    && entries[0].stat.ino === entries[1].stat.ino
+  ) {
+    throw new Error('OnlyOffice DocService runtime nginx paths must have distinct file identities.');
+  }
+  if (!entries[0].content.equals(entries[1].content)) {
+    throw new Error('OnlyOffice DocService runtime nginx configuration copies differ.');
+  }
+  return paths;
+}
+
 function readPinnedShape(configPath, expectedDirective) {
   const content = fs.readFileSync(configPath, 'utf8');
   const matches = directiveLines(content);
@@ -66,7 +110,7 @@ function readPinnedShape(configPath, expectedDirective) {
 }
 
 export function configureDocServiceNginxLoopback(configPaths = PINNED_CONFIG_PATHS) {
-  const paths = validatePinnedTopology(configPaths);
+  const paths = validatePinnedConfigureTopology(configPaths);
   const content = readPinnedShape(paths.canonicalPath, SOURCE_DIRECTIVE);
   fs.writeFileSync(
     paths.canonicalPath,
@@ -77,7 +121,16 @@ export function configureDocServiceNginxLoopback(configPaths = PINNED_CONFIG_PAT
 }
 
 export function verifyDocServiceNginxLoopback(configPaths = PINNED_CONFIG_PATHS) {
-  const paths = validatePinnedTopology(configPaths);
+  const paths = validatePinnedConfigureTopology(configPaths);
+  readPinnedShape(paths.canonicalPath, TARGET_DIRECTIVE);
+  readPinnedShape(paths.aliasPath, TARGET_DIRECTIVE);
+}
+
+export function verifyDocServiceNginxRuntime(
+  configPaths = PINNED_CONFIG_PATHS,
+  runtimeIdentity = PINNED_RUNTIME_IDENTITY,
+) {
+  const paths = validatePinnedRuntimeTopology(configPaths, runtimeIdentity);
   readPinnedShape(paths.canonicalPath, TARGET_DIRECTIVE);
   readPinnedShape(paths.aliasPath, TARGET_DIRECTIVE);
 }
@@ -88,7 +141,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     configureDocServiceNginxLoopback();
   } else if (args.length === 1 && args[0] === '--verify') {
     verifyDocServiceNginxLoopback();
+  } else if (args.length === 1 && args[0] === '--verify-runtime') {
+    verifyDocServiceNginxRuntime();
   } else {
-    throw new Error('Usage: configure-docservice-nginx-loopback.mjs [--verify]');
+    throw new Error('Usage: configure-docservice-nginx-loopback.mjs [--verify|--verify-runtime]');
   }
 }

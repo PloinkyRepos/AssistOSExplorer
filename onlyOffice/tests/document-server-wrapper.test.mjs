@@ -150,7 +150,7 @@ test('configuration and readiness require the exact IPv6 DocService nginx pairin
   );
   assert.match(
     healthcheck,
-    /configure-docservice-nginx-loopback\.mjs --verify/,
+    /configure-docservice-nginx-loopback\.mjs --verify-runtime/,
   );
   assert.match(
     healthcheck,
@@ -175,5 +175,17 @@ test('configuration and readiness require the exact IPv6 DocService nginx pairin
   assert.match(
     configurator,
     /canonicalRealPath !== aliasRealPath/,
+  );
+  assert.match(
+    configurator,
+    /uid: 105,[\s\S]*gid: 107,[\s\S]*mode: 0o644/,
+  );
+  assert.match(
+    configurator,
+    /entries\[0\]\.stat\.dev === entries\[1\]\.stat\.dev/,
+  );
+  assert.match(
+    configurator,
+    /entries\[0\]\.content\.equals\(entries\[1\]\.content\)/,
   );
 });

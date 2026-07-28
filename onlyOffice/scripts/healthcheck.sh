@@ -102,7 +102,7 @@ assert_loopback_owner 'OnlyOffice Redis' 6379 redis-server false
 # host setting. The pinned, exact-port build-time interposer forces its IPv6
 # wildcard port 8000 bind onto process loopback, and nginx must use that exact
 # address rather than resolving localhost to IPv4.
-/usr/local/bin/node /code/scripts/configure-docservice-nginx-loopback.mjs --verify
+/usr/local/bin/node /code/scripts/configure-docservice-nginx-loopback.mjs --verify-runtime
 assert_exact_docservice_listener
 assert_loopback_owner 'OnlyOffice DocService' 8000 docservice
 assert_no_wildcard_support_listener 'OnlyOffice AdminPanel' 9000

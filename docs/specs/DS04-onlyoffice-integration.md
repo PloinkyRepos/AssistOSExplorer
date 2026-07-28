@@ -34,10 +34,12 @@ headers before proxying.
 DocumentServer itself listens process-locally on `127.0.0.1:80`. Its embedded
 DocService support listener and nginx upstream are paired exactly on
 `[::1]:8000`; configuration and readiness require the pinned canonical nginx
-file plus its exact relative alias symlink, and reject a missing, duplicate,
-unexpected, IPv4, or wildcard form. Storage and callback handling listen on
-`127.0.0.1:9100`. None of these listeners has a Router policy path or a box
-publication.
+file plus its exact relative alias symlink before startup. After the pinned
+entrypoint materializes the alias, readiness requires two distinct `105:107`,
+`0644`, byte-identical regular files with the exact target directive. Either
+phase rejects a missing, duplicate, unexpected, IPv4, or wildcard form. Storage
+and callback handling listen on `127.0.0.1:9100`. None of these listeners has a
+Router policy path or a box publication.
 
 ## Topology and sessions
 
