@@ -14,7 +14,10 @@ export async function openExplorer(page, options = {}) {
     hash = '',
   } = options;
   const suffix = hash ? `#${String(hash).replace(/^#/, '')}` : '';
-  await signIn(page, account, `/explorer/index.html${suffix}`);
+  await signIn(page, account, '/explorer/index.html');
+  if (suffix) {
+    await page.goto(`/explorer/index.html${suffix}`, { waitUntil: 'domcontentloaded' });
+  }
   await expect(page.locator('#page_content')).toBeVisible();
   await page.waitForFunction(() => {
     return Boolean(window.webSkel && document.querySelector('#page_content')?.children.length);
