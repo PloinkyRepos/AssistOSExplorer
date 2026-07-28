@@ -8,16 +8,28 @@ export async function openDashboard(page, account = smokeConfig.primaryUser) {
   await expect(page.locator('body')).not.toContainText(/API Route not found|Unexpected token/i);
 }
 
+export function explorerUrl(hash = '') {
+  const suffix = hash ? `#${String(hash).replace(/^#/, '')}` : '';
+  return `/explorer/index.html${suffix}`;
+}
+
+export async function navigateToExplorer(
+  page,
+  {
+    account = smokeConfig.primaryUser,
+    hash = '',
+  } = {},
+  signInFn = signIn,
+) {
+  await signInFn(page, account, explorerUrl(hash));
+}
+
 export async function openExplorer(page, options = {}) {
   const {
     account = smokeConfig.primaryUser,
     hash = '',
   } = options;
-  const suffix = hash ? `#${String(hash).replace(/^#/, '')}` : '';
-  await signIn(page, account, '/explorer/index.html');
-  if (suffix) {
-    await page.goto(`/explorer/index.html${suffix}`, { waitUntil: 'domcontentloaded' });
-  }
+  await navigateToExplorer(page, { account, hash });
   await expect(page.locator('#page_content')).toBeVisible();
   await page.waitForFunction(() => {
     return Boolean(window.webSkel && document.querySelector('#page_content')?.children.length);
