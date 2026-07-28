@@ -97,6 +97,7 @@ These plugins should be understood as IDE extensions mounted into Explorer, not 
 Examples of host slots used by integrations:
 
 - `file-exp:toolbar`
+- `file-exp:toolbar-plugins-dropdown`
 - `file-exp:global`
 - `file-exp:account-menu`
 - `file-exp:context-menu:file`
@@ -214,6 +215,14 @@ For `file-exp:new-menu`, the host context must expose the current directory in b
 - `currentDirectory`
 - `currentFsPath`
 
+For mounted application plugins, including entries under `file-exp:toolbar` and `file-exp:toolbar-plugins-dropdown`, the host context must expose:
+
+- `currentPath`, the workspace-relative Explorer path
+- `currentFsPath`, the absolute filesystem path of the displayed directory
+- `workspaceFsRoot`, the absolute filesystem path represented by Explorer `/`
+
+Mounted plugins that act on the displayed directory must consume these host-provided filesystem paths. They must not navigate above Explorer `/` or infer the workspace root from a selected file row.
+
 ### Plugin-to-Agent Contract
 
 The intended integration path is:
@@ -281,6 +290,13 @@ Plugin hosting behavior is primarily driven by:
 - slot ordering rules applied by the host shell
 
 The host shell must remain deterministic even when plugin availability changes between sessions or after refresh.
+
+## Decisions & Questions
+
+### Question #1: Why does the Tools plugin context represent the current directory instead of adding a synthetic parent directory?
+
+Response:
+Explorer `/` is the workspace root and is already a valid action target even though it has no directory row. Providing `currentFsPath` and `workspaceFsRoot` lets a plugin act on that root while preserving workspace confinement. A synthetic parent would misrepresent the filesystem and could blur the boundary that prevents navigation above the workspace.
 
 ## Related Specs
 

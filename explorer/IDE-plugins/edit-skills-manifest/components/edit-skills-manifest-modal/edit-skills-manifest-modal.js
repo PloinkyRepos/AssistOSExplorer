@@ -319,7 +319,7 @@ export class EditSkillsManifestModal {
                             <div>
                                 <span class="edit-skills-manifest-skill-name">${escapeHtml(skill)}</span>
                             </div>
-                            <button class="edit-skills-manifest-skill-action ${installed ? 'is-remove' : 'is-add'}" type="button" data-repo-name="${escapeHtml(repo.name)}" data-skill-name="${escapeHtml(skill)}" data-skill-enabled="${installed ? 'false' : 'true'}" ${this.busy ? 'disabled' : ''}>${installed ? 'Remove' : 'Add'}</button>
+                            <button class="edit-skills-manifest-skill-action ${installed ? 'gray-button danger' : 'is-add'}" type="button" data-repo-name="${escapeHtml(repo.name)}" data-skill-name="${escapeHtml(skill)}" data-skill-enabled="${installed ? 'false' : 'true'}" ${this.busy ? 'disabled' : ''}>${installed ? 'Remove' : 'Add'}</button>
                         </div>
                     `;
                 }).join('')
@@ -335,7 +335,7 @@ export class EditSkillsManifestModal {
                                 ${repo.branch ? `<span class="edit-skills-manifest-branch">branch: ${escapeHtml(repo.branch)}</span>` : ''}
                             </span>
                         </button>
-                        <button class="edit-skills-manifest-remove-repo" type="button" title="Remove repository" aria-label="Remove repository" data-remove-repo="${escapeHtml(repo.name)}" ${this.busy ? 'disabled' : ''}>Remove Repo</button>
+                        <button class="gray-button danger edit-skills-manifest-remove-repo" type="button" title="Remove repository" aria-label="Remove repository" data-remove-repo="${escapeHtml(repo.name)}" ${this.busy ? 'disabled' : ''}>Remove Repo</button>
                     </div>
                     <div class="edit-skills-manifest-skill-list" aria-hidden="${repoExpanded ? 'false' : 'true'}" style="${repoExpanded ? '' : 'display: none;'}">${skillsHtml}</div>
                 </section>
