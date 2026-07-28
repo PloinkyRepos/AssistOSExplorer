@@ -319,7 +319,7 @@ export class EditSkillsManifestModal {
                             <div>
                                 <span class="edit-skills-manifest-skill-name">${escapeHtml(skill)}</span>
                             </div>
-                            <button class="edit-skills-manifest-skill-action ${installed ? 'is-remove' : 'is-add'}" type="button" data-repo-name="${escapeHtml(repo.name)}" data-skill-name="${escapeHtml(skill)}" data-skill-enabled="${installed ? 'false' : 'true'}" ${this.busy ? 'disabled' : ''}>${installed ? 'Remove' : 'Add'}</button>
+                            <button class="edit-skills-manifest-skill-action ${installed ? 'gray-button danger' : 'is-add'}" type="button" data-repo-name="${escapeHtml(repo.name)}" data-skill-name="${escapeHtml(skill)}" data-skill-enabled="${installed ? 'false' : 'true'}" ${this.busy ? 'disabled' : ''}>${installed ? 'Remove' : 'Add'}</button>
                         </div>
                     `;
                 }).join('')
@@ -335,7 +335,7 @@ export class EditSkillsManifestModal {
                                 ${repo.branch ? `<span class="edit-skills-manifest-branch">branch: ${escapeHtml(repo.branch)}</span>` : ''}
                             </span>
                         </button>
-                        <button class="edit-skills-manifest-remove-repo" type="button" title="Remove repository" aria-label="Remove repository" data-remove-repo="${escapeHtml(repo.name)}" ${this.busy ? 'disabled' : ''}>Remove Repo</button>
+                        <button class="gray-button danger edit-skills-manifest-remove-repo" type="button" title="Remove repository" aria-label="Remove repository" data-remove-repo="${escapeHtml(repo.name)}" ${this.busy ? 'disabled' : ''}>Remove Repo</button>
                     </div>
                     <div class="edit-skills-manifest-skill-list" aria-hidden="${repoExpanded ? 'false' : 'true'}" style="${repoExpanded ? '' : 'display: none;'}">${skillsHtml}</div>
                 </section>
@@ -365,18 +365,22 @@ export class EditSkillsManifestModal {
         this.setBusy(true);
         this.setStatus(`Adding ${name || url}...`, 'info');
         try {
-            await this.callJsonTool('add_skills_manifest_repo', {
+            const result = await this.callJsonTool('add_skills_manifest_repo', {
                 folderPath: this.folderPath,
                 url,
                 ...(name ? { name } : {}),
                 ...(branch ? { branch } : {})
             });
+            if (result?.added === false) {
+                this.setStatus(result.message || 'The repository was cached but no skills were added.', 'info');
+                return;
+            }
             await this.refreshStateAfterMutation();
             this.changed = true;
             if (this.urlInput) this.urlInput.value = '';
             if (this.nameInput) this.nameInput.value = '';
             if (this.branchInput) this.branchInput.value = '';
-            this.setStatus(`${name || url} added.`, 'info');
+            this.setStatus(result?.message || `${name || url} added.`, 'info');
         } catch (error) {
             this.setStatus(error?.message || 'Could not add repository.', 'error');
         } finally {
@@ -389,7 +393,7 @@ export class EditSkillsManifestModal {
         const index = Number.parseInt(String(indexValue), 10);
         const preset = this.state.skillRepositories?.[index];
         if (!preset) return;
-        if (this.urlInput) this.urlInput.value = preset.name || preset.url;
+        if (this.urlInput) this.urlInput.value = preset.url;
         if (this.nameInput) this.nameInput.value = preset.name || deriveRepoNameFromUrl(preset.url);
         if (this.branchInput) this.branchInput.value = preset.branch || '';
         await this.addRepository();

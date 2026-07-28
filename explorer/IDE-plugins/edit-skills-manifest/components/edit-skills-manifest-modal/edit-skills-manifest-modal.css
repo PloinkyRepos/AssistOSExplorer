@@ -213,37 +213,7 @@ edit-skills-manifest-modal .edit-skills-manifest-empty {
     padding: 12px 0;
 }
 
-edit-skills-manifest-modal .edit-skills-manifest-remove-repo {
-    align-items: center;
-    background: #dc2626;
-    border: 1px solid #dc2626;
-    border-radius: 6px;
-    color: #ffffff;
-    cursor: pointer;
-    display: inline-flex;
-    font: inherit;
-    font-size: 11px;
-    font-weight: 700;
-    height: 26px;
-    justify-content: center;
-    line-height: 1;
-    padding: 0 8px;
-    white-space: nowrap;
-}
-
-edit-skills-manifest-modal .edit-skills-manifest-remove-repo:hover,
-edit-skills-manifest-modal .edit-skills-manifest-remove-repo:focus-visible {
-    background: #b91c1c;
-    border-color: #b91c1c;
-    outline: none;
-}
-
-edit-skills-manifest-modal .edit-skills-manifest-remove-repo:disabled {
-    cursor: default;
-    opacity: 0.56;
-}
-
-edit-skills-manifest-modal .edit-skills-manifest-skill-action {
+edit-skills-manifest-modal .edit-skills-manifest-skill-action:not(.gray-button) {
     align-items: center;
     border: 1px solid transparent;
     border-radius: 6px;
@@ -271,20 +241,7 @@ edit-skills-manifest-modal .edit-skills-manifest-skill-action.is-add:focus-visib
     outline: none;
 }
 
-edit-skills-manifest-modal .edit-skills-manifest-skill-action.is-remove {
-    background: #ffffff;
-    border-color: #fecaca;
-    color: #b91c1c;
-}
-
-edit-skills-manifest-modal .edit-skills-manifest-skill-action.is-remove:hover,
-edit-skills-manifest-modal .edit-skills-manifest-skill-action.is-remove:focus-visible {
-    background: #fef2f2;
-    border-color: #fca5a5;
-    outline: none;
-}
-
-edit-skills-manifest-modal .edit-skills-manifest-skill-action:disabled {
+edit-skills-manifest-modal .edit-skills-manifest-skill-action:not(.gray-button):disabled {
     cursor: default;
     opacity: 0.56;
 }
@@ -362,18 +319,6 @@ edit-skills-manifest-modal .edit-skills-manifest-skill-action:disabled {
 
 :root.theme-dark edit-skills-manifest-modal .edit-skills-manifest-skill-list {
     border-color: #334155;
-}
-
-:root.theme-dark edit-skills-manifest-modal .edit-skills-manifest-skill-action.is-remove {
-    background: #0f172a;
-    border-color: #7f1d1d;
-    color: #fca5a5;
-}
-
-:root.theme-dark edit-skills-manifest-modal .edit-skills-manifest-skill-action.is-remove:hover,
-:root.theme-dark edit-skills-manifest-modal .edit-skills-manifest-skill-action.is-remove:focus-visible {
-    background: #450a0a;
-    border-color: #991b1b;
 }
 
 :root.theme-dark edit-skills-manifest-modal .edit-skills-manifest-section-title,

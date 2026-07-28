@@ -1,5 +1,9 @@
 import { unescapeHtmlEntities } from "../../../imports.js";
-import { stripAchilesComments as stripDocumentComments } from "../../../services/document/markdownDocumentParser.js";
+import {
+    parseMarkdownDocument,
+    stripAchilesComments as stripDocumentComments,
+} from "../../../services/document/markdownDocumentParser.js";
+import { decodeHtmlEntities } from "../../../services/document/markdown/metadataUtils.js";
 import { highlightCode } from "../../../utils/highlight.js";
 
 function escapeHtml(value) {
@@ -7,6 +11,11 @@ function escapeHtml(value) {
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
+}
+
+function decodePreviewEntities(value) {
+    const source = String(value ?? '');
+    return typeof document === 'undefined' ? decodeHtmlEntities(source) : unescapeHtmlEntities(source);
 }
 
 export function normalizePath(pathStr) {
@@ -268,15 +277,66 @@ export function isPdfFile(path) {
 
 export function prepareMarkdownPreviewContent(rawText) {
     if (!rawText) return '';
-    const unescaped = unescapeHtmlEntities(rawText);
+    const unescaped = decodePreviewEntities(rawText);
     const cleaned = stripDocumentComments(unescaped)
         .replace(/<!--[\s\S]*?achilles-ide-(?:document|chapter|paragraph|toc|references)[\s\S]*?-->\s*/g, '');
     return cleaned.replace(/\u00A0/g, ' ');
 }
 
+export function extractScriptaPreviewImages(rawText) {
+    if (!rawText) return [];
+    let documentModel;
+    try {
+        documentModel = parseMarkdownDocument(decodePreviewEntities(rawText));
+    } catch (_) {
+        return [];
+    }
+    const images = [];
+    for (const chapter of Array.isArray(documentModel?.chapters) ? documentModel.chapters : []) {
+        for (const paragraph of Array.isArray(chapter?.paragraphs) ? chapter.paragraphs : []) {
+            const scripta = paragraph?.metadata?.pluginState?.scripta;
+            const variants = Array.isArray(scripta?.variants) ? scripta.variants : [];
+            const activeVariant = variants.find((variant) => variant?.id === scripta?.activeVariantId) || variants[0];
+            for (const image of Array.isArray(activeVariant?.images) ? activeVariant.images : []) {
+                const workspaceUrl = String(image?.workspaceUrl || '').trim();
+                if (!workspaceUrl.startsWith('/document-multimedia/webmeet/')) continue;
+                const layout = image?.layout && typeof image.layout === 'object' ? image.layout : {};
+                images.push({
+                    workspaceUrl,
+                    widthPercent: Math.max(20, Math.min(100, Math.round(Number(layout.widthPercent) || 100))),
+                    aspectRatio: ['auto', '1:1', '4:3', '3:2', '16:9'].includes(layout.aspectRatio)
+                        ? layout.aspectRatio
+                        : 'auto',
+                    fit: layout.fit === 'cover' ? 'cover' : 'contain',
+                    alignment: ['left', 'center', 'right'].includes(layout.alignment)
+                        ? layout.alignment
+                        : 'center',
+                });
+            }
+        }
+    }
+    return images;
+}
+
 export function renderMarkdownPreview(markdown) {
     const options = arguments.length > 1 && arguments[1] && typeof arguments[1] === 'object' ? arguments[1] : {};
     if (!markdown) return '';
+    const normalizeImageKey = (value) => {
+        const source = String(value || '').trim();
+        try {
+            return decodeURIComponent(source);
+        } catch (_) {
+            return source;
+        }
+    };
+    const scriptaImageQueues = new Map();
+    for (const image of Array.isArray(options.scriptaImages) ? options.scriptaImages : []) {
+        const key = normalizeImageKey(image?.workspaceUrl);
+        if (!key) continue;
+        const queue = scriptaImageQueues.get(key) || [];
+        queue.push(image);
+        scriptaImageQueues.set(key, queue);
+    }
     const resolveResourceUrl = (value) => {
         const raw = String(value || '').trim();
         if (!raw) return '';
@@ -324,25 +384,40 @@ export function renderMarkdownPreview(markdown) {
         return svg.outerHTML;
     };
     const renderInline = (value) => {
+        const protectedSegments = [];
+        const protect = (markup) => {
+            const index = protectedSegments.push(markup) - 1;
+            return `\u0000${index}\u0000`;
+        };
         let result = value;
+        result = result.replace(/`([^`]+?)`/g, (_match, code) => protect(`<code>${code}</code>`));
         result = result.replace(/!\[([^\]]*)]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g, (match, alt, src, title) => {
             const safeSrc = escapeHtml(resolveResourceUrl(src));
             const safeAlt = escapeHtml(alt);
             const titleAttr = title ? ` title="${escapeHtml(title)}"` : '';
-            return `<img class="markdown-image" src="${safeSrc}" alt="${safeAlt}"${titleAttr} loading="lazy">`;
+            const queue = scriptaImageQueues.get(normalizeImageKey(src));
+            const layout = queue?.shift?.() || null;
+            if (!layout) {
+                return protect(`<img class="markdown-image" src="${safeSrc}" alt="${safeAlt}"${titleAttr} loading="lazy">`);
+            }
+            const ratio = layout.aspectRatio === 'auto' ? 'auto' : layout.aspectRatio.replace(':', ' / ');
+            const marginInline = layout.alignment === 'left'
+                ? '0 auto'
+                : layout.alignment === 'right' ? 'auto 0' : 'auto';
+            const style = `width:${layout.widthPercent}%;aspect-ratio:${ratio};object-fit:${layout.fit};margin-inline:${marginInline}`;
+            return protect(`<img class="markdown-image scripta-layout-image is-${layout.alignment}" src="${safeSrc}" alt="${safeAlt}"${titleAttr} loading="lazy" style="${style}">`);
         });
-        result = result.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-        result = result.replace(/(\*|_)([^*_]+?)\1/g, '<em>$2</em>');
-        result = result.replace(/`([^`]+?)`/g, '<code>$1</code>');
-        result = result.replace(/\[([^\]]+)]\(([^)]+)\)/g, (match, text, href) => {
+        result = result.replace(/\[([^\]]+)]\(([^)]+)\)/g, (_match, text, href) => {
             const isInternal = /^#/.test(href);
             const safeHref = escapeHtml(href);
             const safeText = escapeHtml(text);
-            return isInternal
+            return protect(isInternal
                 ? `<a href="${safeHref}">${safeText}</a>`
-                : `<a href="${safeHref}" target="_blank" rel="noopener">${safeText}</a>`;
+                : `<a href="${safeHref}" target="_blank" rel="noopener">${safeText}</a>`);
         });
-        return result;
+        result = result.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        result = result.replace(/(\*|_)([^*_]+?)\1/g, '<em>$2</em>');
+        return result.replace(/\u0000(\d+)\u0000/g, (_match, index) => protectedSegments[Number(index)] || '');
     };
 
     const lines = markdown.replace(/\r\n/g, '\n').split('\n');

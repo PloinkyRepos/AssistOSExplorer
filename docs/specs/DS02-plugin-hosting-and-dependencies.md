@@ -52,6 +52,7 @@ Explorer IDE shell
 The architecture is intentionally split so that:
 
 - Explorer owns layout, selection, preview shell, and navigation
+- Explorer may own static informational plugins that explain the composed workspace without performing domain operations
 - runtime plugins render domain affordances inside defined slots
 - dependent agents execute domain-specific reads and writes
 - the host shell reacts to domain mutations without taking over their logic
@@ -77,7 +78,9 @@ Each owning agent is responsible for:
 
 Explorer must discover plugins across these agent-owned roots. The hosting contract is centralized in Explorer, but the plugin source code is intentionally split by ownership instead of forced into a single `explorer/IDE-plugins` directory.
 
-When Explorer runs inside Ploinky box, its manifest must mount the workspace `.ploinky/repos` tree at `/workspace/.ploinky/repos` so the plugin discovery pipeline can see enabled sibling repositories such as `basic`. This mount is read as workspace-owned runtime configuration; it lets agent-owned settings dashboards be discovered without copying their files into `explorer`. Edge publication is box-owned and is not represented by an Explorer plugin.
+When Explorer runs inside Ploinky Box, its manifest mounts the workspace `.ploinky/repos` tree at `/workspace/.ploinky/repos` so the plugin discovery pipeline can see enabled sibling repositories such as `basic`. This mount is read as workspace-owned runtime configuration; it lets agent-owned settings dashboards be discovered without copying their files into `explorer`. Edge publication is Box-owned and is not represented by an Explorer plugin.
+
+Explorer-owned application plugins live under `explorer/IDE-plugins`. The `help` plugin is the reference informational case: it mounts a toolbar button and responsive modal, loads each topic from a separate static HTML fragment in the plugin bundle, provides a browser-local normal/fullscreen window toggle, and performs no backend calls or workspace mutations.
 
 ### Plugin Inventory
 
@@ -87,6 +90,7 @@ According to [manifest.json](../../explorer/manifest.json), Explorer activates p
 - `dpu-runtime-support`
 - `soplang-builder`
 - `tasks`
+- `help`
 
 These plugins should be understood as IDE extensions mounted into Explorer, not as independent applications embedded without coordination.
 
@@ -95,6 +99,7 @@ These plugins should be understood as IDE extensions mounted into Explorer, not 
 Examples of host slots used by integrations:
 
 - `file-exp:toolbar`
+- `file-exp:toolbar-plugins-dropdown`
 - `file-exp:global`
 - `file-exp:account-menu`
 - `file-exp:context-menu:file`
@@ -195,6 +200,12 @@ Plugins are expected to:
 - call their owning agent through MCP or domain-specific host bridges
 - emit host-facing events instead of mutating host state ad hoc
 
+The last two expectations apply only when a plugin performs domain work. A static informational plugin may remain entirely browser-local, must not introduce an unnecessary backend dependency, and must not infer or expose protected state merely to explain role-gated features.
+
+When Explorer lazily registers a runtime plugin component, it must finish registering every dependency declared by that plugin before the component is mounted. Dependencies may belong to another agent, such as an Explorer-owned shared presentation component used by a SOPLang-owned adapter. A declared child component must never remain as an unupgraded custom-element tag while its parent plugin is considered ready. If a dependency is already registered by Explorer's static WebSkel configuration, the runtime loader reuses it and must not fetch or overwrite it through a plugin URL.
+
+Plugin presenters that host reactive child components must preserve those child instances during status-only or busy-state updates. Status text and disabled controls are updated in place; a structural child-tree render occurs once after the corresponding data transition settles. This is the same lifecycle used by declarative modal children and prevents a lazily loading child from being disconnected and recreated during one logical state transition.
+
 For filesystem-oriented menu actions, the host context must include both:
 
 - the Explorer path used by shell navigation
@@ -207,6 +218,14 @@ For `file-exp:new-menu`, the host context must expose the current directory in b
 - `currentPath`
 - `currentDirectory`
 - `currentFsPath`
+
+For mounted application plugins, including entries under `file-exp:toolbar` and `file-exp:toolbar-plugins-dropdown`, the host context must expose:
+
+- `currentPath`, the workspace-relative Explorer path
+- `currentFsPath`, the absolute filesystem path of the displayed directory
+- `workspaceFsRoot`, the absolute filesystem path represented by Explorer `/`
+
+Mounted plugins that act on the displayed directory must consume these host-provided filesystem paths. They must not navigate above Explorer `/` or infer the workspace root from a selected file row.
 
 ### Plugin-to-Agent Contract
 
@@ -252,6 +271,7 @@ When a dependency is unavailable, Explorer should degrade gracefully:
 - keep the host shell responsive
 - avoid corrupting local IDE state
 - surface actionable error messages
+- when the skills-manifest editor caches a repository that has no Anthropic-style `skills/*/SKILL.md` folders, leave the manifest unchanged and return a normal informational `message` stating that no Anthropic skills were found
 - recover automatically when the dependency becomes available again
 
 This is important for IDE behavior because a user may still be navigating, reading, or editing unrelated resources while one plugin or one dependent agent is unavailable.
@@ -270,13 +290,18 @@ Plugin hosting behavior is primarily driven by:
 
 - Explorer `manifest.json` application plugin policy
 - enabled agents and repo-local agent/plugin folders in the workspace
-- default-profile `manifest.profiles.default.enable[]` entries for product
-  dependencies only
 - the manifest volume that makes `.ploinky/repos` visible to the Explorer container
 - runtime plugin settings and activation state
 - slot ordering rules applied by the host shell
 
 The host shell must remain deterministic even when plugin availability changes between sessions or after refresh.
+
+## Decisions & Questions
+
+### Question #1: Why does the Tools plugin context represent the current directory instead of adding a synthetic parent directory?
+
+Response:
+Explorer `/` is the workspace root and is already a valid action target even though it has no directory row. Providing `currentFsPath` and `workspaceFsRoot` lets a plugin act on that root while preserving workspace confinement. A synthetic parent would misrepresent the filesystem and could blur the boundary that prevents navigation above the workspace.
 
 ## Related Specs
 

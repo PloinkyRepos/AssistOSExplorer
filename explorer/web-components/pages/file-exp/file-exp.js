@@ -10,6 +10,7 @@ import {
     buildFileExpHash,
     parseDetailedDirectoryListing,
     isMarkdownFile,
+    extractScriptaPreviewImages,
     prepareMarkdownPreviewContent,
     renderMarkdownPreview
 } from "./file-exp-utils.js";
@@ -133,6 +134,7 @@ export class FileExp {
         this.sanitizeEntryName = sanitizeEntryName;
         this.generateCopyName = (baseName, existingNames = null) => generateCopyName(baseName, existingNames, this.state?.entries || []);
         this.isMarkdownFile = isMarkdownFile;
+        this.extractScriptaPreviewImages = extractScriptaPreviewImages;
         this.prepareMarkdownPreviewContent = prepareMarkdownPreviewContent;
         this.renderMarkdownPreview = renderMarkdownPreview;
 

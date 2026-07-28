@@ -24,6 +24,8 @@ Requirement U5: agent-provided UI actions must remain mapped to documented contr
 
 Requirement U6: SOPLang-specific document plugin bundles for variable editing and script execution must remain agent-owned under `soplangAgent/IDE-plugins` so Explorer base UI can stay decoupled from SOPLang implementation details.
 
+Requirement U7: the SCRIPTA variants plugin remains the Advanced Editor adapter, but its generic variants presentation is loaded from Explorer's whitelisted `shared/ui/scripta-variants-view` component. The adapter owns Advanced Editor document lookup, stable owner identity, and persistence; the shared component emits semantic `scripta-p-variant-*` UI events and owns no persistence path. Every participant may vote on a variant, while edit and delete controls are available only when the current user owns that variant.
+
 ## Constraints
 
 Constraint Q1: browser components are not allowed to bypass MCP and call private plugin internals.
@@ -42,4 +44,4 @@ Invariant P3: integration keeps soplangBuilder as intermediary between UI intent
 
 ## Validation Criteria
 
-Validation is satisfied when UI plugin actions trigger MCP tools successfully, when task updates are observable for asynchronous operations, when SOPLang-specific bundles (`edit-variables`, `run-script`) are loaded from `soplangAgent/IDE-plugins`, and when backend behavior remains aligned with declared contracts regardless of host UI refactors.
+Validation is satisfied when UI plugin actions trigger MCP tools successfully, when task updates are observable for asynchronous operations, when SOPLang-specific bundles (`edit-variables`, `run-script`) are loaded from `soplangAgent/IDE-plugins`, when the SCRIPTA adapter consumes the Explorer shared variants component without moving persistence into shared UI, and when backend behavior remains aligned with declared contracts regardless of host UI refactors.

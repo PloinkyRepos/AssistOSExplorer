@@ -663,6 +663,365 @@
       }
     },
     {
+      "name": "scripta_crdt_ensure_folder",
+      "description": "Create a workspace-confined SCRIPTA folder.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "tags": ["internal"],
+      "env": { "TOOL_NAME": "scripta_crdt_ensure_folder" },
+      "inputSchema": {
+        "folderPath": { "type": "string" }
+      }
+    },
+    {
+      "name": "scripta_crdt_workspace_list",
+      "description": "List Markdown documents for the SCRIPTA picker.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "tags": ["internal"],
+      "env": { "TOOL_NAME": "scripta_crdt_workspace_list" },
+      "inputSchema": {
+        "defaultFolder": { "type": "string" }
+      }
+    },
+    {
+      "name": "scripta_crdt_create",
+      "description": "Create a SCRIPTA Markdown document in Automerge.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "tags": ["internal"],
+      "env": { "TOOL_NAME": "scripta_crdt_create" },
+      "inputSchema": {
+        "path": { "type": "string" },
+        "title": { "type": "string" },
+        "template": { "type": "string", "enum": ["vision", "plan", "general"] },
+        "initialization": {
+          "type": "object",
+          "optional": true,
+          "properties": {
+            "title": { "type": "string", "optional": true },
+            "objective": { "type": "string", "optional": true },
+            "chapterTitle": { "type": "string", "optional": true },
+            "visionParagraphs": {
+              "type": "array",
+              "optional": true,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": { "type": "string", "optional": true },
+                  "text": { "type": "string", "optional": true }
+                }
+              }
+            },
+            "planParagraphs": {
+              "type": "array",
+              "optional": true,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": { "type": "string", "optional": true },
+                  "text": { "type": "string", "optional": true }
+                }
+              }
+            },
+            "chapters": {
+              "type": "array",
+              "optional": true,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": { "type": "string", "optional": true },
+                  "title": { "type": "string", "optional": true },
+                  "paragraphs": {
+                    "type": "array",
+                    "optional": true,
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": { "type": "string", "optional": true },
+                        "text": { "type": "string", "optional": true }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "createdBy": { "type": "string", "optional": true },
+        "resourceId": { "type": "string", "optional": true },
+        "viewerHash": { "type": "string", "optional": true },
+        "view": {
+          "type": "object",
+          "optional": true,
+          "properties": {
+            "mode": { "type": "string", "enum": ["document", "paragraph"], "optional": true },
+            "chapterId": { "type": "string", "optional": true },
+            "paragraphId": { "type": "string", "optional": true },
+            "selectedVariantId": { "type": "string", "optional": true },
+            "editingVariantId": { "type": "string", "optional": true },
+            "editorParticipantId": { "type": "string", "optional": true },
+            "focusTargetType": { "type": "string", "enum": ["chapter", "paragraph"], "optional": true },
+            "autoFocusRevision": { "type": "number", "optional": true }
+          }
+        }
+      }
+    },
+    {
+      "name": "scripta_crdt_open",
+      "description": "Open a SCRIPTA Markdown document through Automerge.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "tags": ["internal"],
+      "env": { "TOOL_NAME": "scripta_crdt_open" },
+      "inputSchema": {
+        "path": { "type": "string" },
+        "resourceId": { "type": "string", "optional": true },
+        "viewerHash": { "type": "string", "optional": true },
+        "view": {
+          "type": "object",
+          "optional": true,
+          "properties": {
+            "mode": { "type": "string", "enum": ["document", "paragraph"], "optional": true },
+            "chapterId": { "type": "string", "optional": true },
+            "paragraphId": { "type": "string", "optional": true },
+            "selectedVariantId": { "type": "string", "optional": true },
+            "editingVariantId": { "type": "string", "optional": true },
+            "editorParticipantId": { "type": "string", "optional": true },
+            "focusTargetType": { "type": "string", "enum": ["chapter", "paragraph"], "optional": true },
+            "autoFocusRevision": { "type": "number", "optional": true }
+          }
+        },
+        "participantMap": { "type": "object", "additionalProperties": true, "optional": true }
+      }
+    },
+    {
+      "name": "scripta_crdt_mutate",
+      "description": "Atomically mutate and save a SCRIPTA Automerge document.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "tags": ["internal"],
+      "env": { "TOOL_NAME": "scripta_crdt_mutate" },
+      "inputSchema": {
+        "path": { "type": "string" },
+        "resourceId": { "type": "string", "optional": true },
+        "operation": {
+          "type": "string",
+          "enum": [
+            "p-variant-add",
+            "p-variant-vote",
+            "p-variant-vote-withdraw",
+            "p-variant-edit",
+            "p-variant-delete",
+            "p-variant-image-insert",
+            "p-variant-image-replace",
+            "p-variant-image-delete",
+            "p-variant-image-layout",
+            "chapter-add",
+            "chapter-delete",
+            "chapter-rename",
+            "chapter-move",
+            "paragraph-add",
+            "paragraph-delete",
+            "paragraph-move",
+            "undo"
+          ]
+        },
+        "args": {
+          "type": "object",
+          "optional": true,
+          "properties": {
+            "chapterId": { "type": "string", "optional": true },
+            "paragraphId": { "type": "string", "optional": true },
+            "variantId": { "type": "string", "optional": true },
+            "variantOrdinal": { "type": "number", "optional": true },
+            "type": { "type": "string", "optional": true },
+            "text": { "type": "string", "optional": true },
+            "title": { "type": "string", "optional": true },
+            "targetChapterId": { "type": "string", "optional": true },
+            "targetIndex": { "type": "number", "optional": true },
+            "roomId": { "type": "string", "optional": true },
+            "assetId": { "type": "string", "optional": true },
+            "imageId": { "type": "string", "optional": true },
+            "imageOrdinal": { "type": "number", "optional": true },
+            "alt": { "type": "string", "optional": true },
+            "position": { "type": "number", "optional": true },
+            "widthPercent": { "type": "number", "optional": true },
+            "aspectRatio": { "type": "string", "enum": ["auto", "1:1", "4:3", "3:2", "16:9"], "optional": true },
+            "fit": { "type": "string", "enum": ["contain", "cover"], "optional": true },
+            "alignment": { "type": "string", "enum": ["left", "center", "right"], "optional": true },
+            "showCaption": { "type": "boolean", "optional": true }
+          }
+        },
+        "participant": {
+          "type": "object",
+          "properties": {
+            "id": { "type": "string" },
+            "hash": { "type": "string" },
+            "label": { "type": "string" }
+          }
+        },
+        "viewerHash": { "type": "string", "optional": true },
+        "view": {
+          "type": "object",
+          "optional": true,
+          "properties": {
+            "mode": { "type": "string", "enum": ["document", "paragraph"], "optional": true },
+            "chapterId": { "type": "string", "optional": true },
+            "paragraphId": { "type": "string", "optional": true },
+            "selectedVariantId": { "type": "string", "optional": true },
+            "editingVariantId": { "type": "string", "optional": true },
+            "editorParticipantId": { "type": "string", "optional": true },
+            "focusTargetType": { "type": "string", "enum": ["chapter", "paragraph"], "optional": true },
+            "autoFocusRevision": { "type": "number", "optional": true }
+          }
+        },
+        "participantMap": { "type": "object", "additionalProperties": true, "optional": true }
+      }
+    },
+    {
+      "name": "scripta_crdt_delete",
+      "description": "Prepare, commit, or roll back an atomic SCRIPTA document deletion.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "tags": ["internal"],
+      "env": { "TOOL_NAME": "scripta_crdt_delete" },
+      "inputSchema": {
+        "phase": { "type": "string", "enum": ["prepare", "commit", "rollback"] },
+        "documentId": { "type": "string", "optional": true },
+        "path": { "type": "string", "optional": true },
+        "transactionId": { "type": "string", "optional": true }
+      }
+    },
+    {
+      "name": "webmeet_media_commit",
+      "description": "Validate and commit a staged WebMeet image into Explorer workspace media.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "tags": ["internal"],
+      "env": { "TOOL_NAME": "webmeet_media_commit" },
+      "inputSchema": {
+        "roomId": { "type": "string" },
+        "blobRef": {
+          "type": "object",
+          "properties": {
+            "id": { "type": "string" },
+            "agent": { "type": "string" },
+            "localPath": { "type": "string" }
+          }
+        },
+        "filename": { "type": "string", "optional": true },
+        "createdBy": { "type": "string", "optional": true }
+      }
+    },
+    {
+      "name": "webmeet_media_get",
+      "description": "Resolve safe metadata for a WebMeet workspace media asset.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "tags": ["internal"],
+      "env": { "TOOL_NAME": "webmeet_media_get" },
+      "inputSchema": {
+        "roomId": { "type": "string" },
+        "assetId": { "type": "string" }
+      }
+    },
+    {
+      "name": "scripta_collaboration_open",
+      "description": "Open the public SCRIPTA Automerge replica without workspace metadata.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "tags": ["internal"],
+      "env": { "TOOL_NAME": "scripta_collaboration_open" },
+      "inputSchema": {
+        "path": { "type": "string" },
+        "resourceId": { "type": "string", "optional": true },
+        "viewerHash": { "type": "string", "optional": true },
+        "view": {
+          "type": "object",
+          "optional": true,
+          "properties": {
+            "mode": { "type": "string", "enum": ["document", "paragraph"], "optional": true },
+            "chapterId": { "type": "string", "optional": true },
+            "paragraphId": { "type": "string", "optional": true },
+            "selectedVariantId": { "type": "string", "optional": true },
+            "editingVariantId": { "type": "string", "optional": true },
+            "editorParticipantId": { "type": "string", "optional": true },
+            "focusTargetType": { "type": "string", "enum": ["chapter", "paragraph"], "optional": true },
+            "autoFocusRevision": { "type": "number", "optional": true }
+          }
+        },
+        "participantMap": { "type": "object", "additionalProperties": true, "optional": true }
+      }
+    },
+    {
+      "name": "scripta_collaboration_pull",
+      "description": "Return public SCRIPTA Automerge changes after known heads.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "tags": ["internal"],
+      "env": { "TOOL_NAME": "scripta_collaboration_pull" },
+      "inputSchema": {
+        "path": { "type": "string" },
+        "resourceId": { "type": "string", "optional": true },
+        "viewerHash": { "type": "string", "optional": true },
+        "knownHeads": { "type": "array", "items": { "type": "string" }, "optional": true },
+        "view": {
+          "type": "object",
+          "optional": true,
+          "properties": {
+            "mode": { "type": "string", "enum": ["document", "paragraph"], "optional": true },
+            "chapterId": { "type": "string", "optional": true },
+            "paragraphId": { "type": "string", "optional": true }
+          }
+        },
+        "participantMap": { "type": "object", "additionalProperties": true, "optional": true }
+      }
+    },
+    {
+      "name": "scripta_collaboration_apply",
+      "description": "Validate, merge, and persist incremental public SCRIPTA Automerge changes.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "tags": ["internal"],
+      "env": { "TOOL_NAME": "scripta_collaboration_apply" },
+      "inputSchema": {
+        "path": { "type": "string" },
+        "resourceId": { "type": "string", "optional": true },
+        "operation": { "type": "string", "enum": ["p-variant-edit"] },
+        "changesBase64": { "type": "array", "items": { "type": "string" } },
+        "baseHeads": { "type": "array", "items": { "type": "string" }, "optional": true },
+        "args": {
+          "type": "object",
+          "properties": {
+            "chapterId": { "type": "string" },
+            "paragraphId": { "type": "string" },
+            "variantId": { "type": "string" },
+            "text": { "type": "string" }
+          }
+        },
+        "participant": {
+          "type": "object",
+          "properties": {
+            "id": { "type": "string" },
+            "hash": { "type": "string" },
+            "label": { "type": "string" }
+          }
+        },
+        "viewerHash": { "type": "string", "optional": true },
+        "view": {
+          "type": "object",
+          "optional": true,
+          "properties": {
+            "mode": { "type": "string", "enum": ["document", "paragraph"], "optional": true },
+            "chapterId": { "type": "string", "optional": true },
+            "paragraphId": { "type": "string", "optional": true }
+          }
+        },
+        "participantMap": { "type": "object", "additionalProperties": true, "optional": true }
+      }
+    },
+    {
       "name": "llm_autocomplete",
       "title": "LLM Autocomplete",
       "description": "Generate a code completion for the current cursor position using file context.",

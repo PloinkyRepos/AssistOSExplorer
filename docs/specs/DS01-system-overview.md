@@ -112,6 +112,8 @@ Explorer also applies a shared interaction language across document, chapter, an
 
 For document media, Explorer must preserve backward compatibility with both repository-local document media storage (`document-multimedia/<document-context>/...`) and legacy blob-backed attachments (`/blobs/explorer/<id>`). Media consumers must resolve existing document references without requiring manual migration of older documents.
 
+New WebMeet image assets use the canonical room-scoped layout `document-multimedia/webmeet/<roomId>/assets/<assetId>.<ext>`, with an adjacent `<assetId>.json` metadata record. The generic `/blobs/explorer` route is staging only: an internal WebMeet media commit validates PNG, JPEG, WebP, or GIF content, enforces the 15 MB limit, and moves the staged blob into the final asset path. SCRIPTA and Blackboard reference the final asset; insertion into a Markdown document does not create another copy.
+
 - visible directory context
 - selected item identity
 - preview mode and preview payload

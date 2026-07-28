@@ -3,6 +3,7 @@
   "id": "marketplace",
   "component": "marketplace-tool-button",
   "location": ["file-exp:toolbar"],
+  "locationOrder": 200,
   "label": "Marketplace",
   "tooltip": "Ploinky Agent Marketplace",
   "icon": "./icon.svg",

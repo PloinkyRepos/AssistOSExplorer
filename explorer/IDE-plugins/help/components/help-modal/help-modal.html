@@ -1,0 +1,35 @@
+<div class="modal-header">
+    <div>
+        <div class="modal-title">Explorer Help</div>
+        <div class="help-modal-subtitle">A practical guide to your workspace</div>
+    </div>
+    <div class="help-modal-window-actions">
+        <button type="button" class="close help-modal-fullscreen" data-help-fullscreen
+                aria-label="Toggle fullscreen" aria-pressed="false" title="Toggle fullscreen">
+            <img class="close-icon" src="/explorer/assets/icons/fullscreen.svg" alt="" aria-hidden="true">
+        </button>
+        <button type="button" class="close help-modal-close" data-help-close aria-label="Close help">
+            <img class="close-icon" src="/explorer/assets/icons/x-mark.svg" alt="" aria-hidden="true">
+        </button>
+    </div>
+</div>
+
+<div class="modal-body help-modal-body">
+    <nav class="help-tabs" role="tablist" aria-label="Help topics">
+        <button id="help-tab-explorer" class="help-tab active" type="button" role="tab" data-help-tab="explorer" aria-controls="help-panel-explorer" aria-selected="true" tabindex="0">Explorer</button>
+        <button id="help-tab-git" class="help-tab" type="button" role="tab" data-help-tab="git" aria-controls="help-panel-git" aria-selected="false" tabindex="-1">Git</button>
+        <button id="help-tab-webmeet" class="help-tab" type="button" role="tab" data-help-tab="webmeet" aria-controls="help-panel-webmeet" aria-selected="false" tabindex="-1">WebMeet</button>
+        <button id="help-tab-confidential" class="help-tab" type="button" role="tab" data-help-tab="confidential" aria-controls="help-panel-confidential" aria-selected="false" tabindex="-1">Confidential</button>
+        <button id="help-tab-copilot" class="help-tab" type="button" role="tab" data-help-tab="copilot" aria-controls="help-panel-copilot" aria-selected="false" tabindex="-1">Copilot</button>
+        <button id="help-tab-admin" class="help-tab" type="button" role="tab" data-help-tab="admin" aria-controls="help-panel-admin" aria-selected="false" tabindex="-1">Admin</button>
+    </nav>
+
+    <div class="help-content" data-help-content aria-busy="true">
+        <section id="help-panel-explorer" class="help-panel active" role="tabpanel" data-help-panel="explorer" aria-labelledby="help-tab-explorer" tabindex="0"></section>
+        <section id="help-panel-git" class="help-panel" role="tabpanel" data-help-panel="git" aria-labelledby="help-tab-git" tabindex="0" hidden></section>
+        <section id="help-panel-webmeet" class="help-panel" role="tabpanel" data-help-panel="webmeet" aria-labelledby="help-tab-webmeet" tabindex="0" hidden></section>
+        <section id="help-panel-confidential" class="help-panel" role="tabpanel" data-help-panel="confidential" aria-labelledby="help-tab-confidential" tabindex="0" hidden></section>
+        <section id="help-panel-copilot" class="help-panel" role="tabpanel" data-help-panel="copilot" aria-labelledby="help-tab-copilot" tabindex="0" hidden></section>
+        <section id="help-panel-admin" class="help-panel" role="tabpanel" data-help-panel="admin" aria-labelledby="help-tab-admin" tabindex="0" hidden></section>
+    </div>
+</div>

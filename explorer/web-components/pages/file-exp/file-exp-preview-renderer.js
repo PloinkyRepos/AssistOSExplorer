@@ -420,7 +420,8 @@ export function renderStandardPreview(fileExp, refs, previewUiState) {
                 const content = typeof fileExp.state.fileContent === 'string'
                     ? fileExp.renderMarkdownPreview(fileExp.prepareMarkdownPreviewContent(fileExp.state.fileContent), {
                         sourcePath: fileExp.state.selectedPath,
-                        buildResourceUrl: (path) => fileExp.buildWebViewUrl(path)
+                        buildResourceUrl: (path) => fileExp.buildWebViewUrl(path),
+                        scriptaImages: fileExp.extractScriptaPreviewImages(fileExp.state.fileContent),
                     })
                     : '';
                 refs.filePreview.innerHTML = content;

@@ -11,6 +11,7 @@ const MOUNT_CONTRIBUTION_TYPE = 'mount';
 
 import { sortRuntimePluginEntries, getRuntimePluginPolicyKey } from "../../../utils/pluginUtils.core.js";
 import { emitPluginMountedAudit } from "../../../services/audit/auditService.js";
+import { resolveExplorerPathToFilesystemPath } from "../../../services/infrastructure/explorerApi.js";
 
 function getPluginSettingsMap() {
     const settings = window.assistOS?.pluginSettings;
@@ -63,10 +64,12 @@ function encodeContext(context) {
     }
 }
 
-function buildPluginContext(fileExp, slot) {
+export function buildPluginContext(fileExp, slot, { currentFsPath = '', workspaceFsRoot = '' } = {}) {
     return {
         slot,
         currentPath: fileExp.normalizePath(fileExp.state.path || '/'),
+        currentFsPath,
+        workspaceFsRoot,
         selectedPath: fileExp.normalizePath(fileExp.state.selectedPath || ''),
         workspaceVersion: Number.isFinite(fileExp.state.workspaceVersion) ? fileExp.state.workspaceVersion : 0
     };
@@ -259,12 +262,18 @@ async function performRenderApplicationPluginSlots(fileExp) {
     const internalPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.internal, { contributionType: MOUNT_CONTRIBUTION_TYPE });
     const globalPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.global, { contributionType: MOUNT_CONTRIBUTION_TYPE });
     const accountMenuPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.accountMenu, { contributionType: MOUNT_CONTRIBUTION_TYPE });
-    const toolbarContext = buildPluginContext(fileExp, APP_PLUGIN_SLOTS.toolbar);
-    const toolbarPluginsDropdownContext = buildPluginContext(fileExp, APP_PLUGIN_SLOTS.toolbarPluginsDropdown);
-    const rightBarContext = buildPluginContext(fileExp, APP_PLUGIN_SLOTS.rightBar);
-    const internalContext = buildPluginContext(fileExp, APP_PLUGIN_SLOTS.internal);
-    const globalContext = buildPluginContext(fileExp, APP_PLUGIN_SLOTS.global);
-    const accountMenuContext = buildPluginContext(fileExp, APP_PLUGIN_SLOTS.accountMenu);
+    const currentPath = fileExp.normalizePath(fileExp.state.path || '/');
+    const [currentFsPath, workspaceFsRoot] = await Promise.all([
+        resolveExplorerPathToFilesystemPath(currentPath),
+        resolveExplorerPathToFilesystemPath('/')
+    ]);
+    const filesystemContext = { currentFsPath, workspaceFsRoot };
+    const toolbarContext = buildPluginContext(fileExp, APP_PLUGIN_SLOTS.toolbar, filesystemContext);
+    const toolbarPluginsDropdownContext = buildPluginContext(fileExp, APP_PLUGIN_SLOTS.toolbarPluginsDropdown, filesystemContext);
+    const rightBarContext = buildPluginContext(fileExp, APP_PLUGIN_SLOTS.rightBar, filesystemContext);
+    const internalContext = buildPluginContext(fileExp, APP_PLUGIN_SLOTS.internal, filesystemContext);
+    const globalContext = buildPluginContext(fileExp, APP_PLUGIN_SLOTS.global, filesystemContext);
+    const accountMenuContext = buildPluginContext(fileExp, APP_PLUGIN_SLOTS.accountMenu, filesystemContext);
 
     await mountSlot(toolbarContainer, APP_PLUGIN_SLOTS.toolbar, visibleToolbarPlugins, toolbarContext);
     await mountSlot(toolbarPluginsDropdownContainer, APP_PLUGIN_SLOTS.toolbarPluginsDropdown, visibleToolbarDropdownPlugins, toolbarPluginsDropdownContext);

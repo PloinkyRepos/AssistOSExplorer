@@ -5,55 +5,6 @@
     <button type="button" class="close" data-local-action="closeModal" aria-label="Close"></button>
 </div>
 <div class="modal-body scripta-variants-modal-body">
-    <div class="scripta-proposal-toolbar">
-        <button type="button"
-                class="general-button scripta-add-variant-toggle"
-                data-local-action="toggleProposalPanel"
-                aria-expanded="false"
-                $$proposalDisabled>
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 5v14M5 12h14"></path>
-            </svg>
-            <span>Add variant</span>
-        </button>
-    </div>
-    <section class="scripta-proposal-popover hidden" data-role="proposalPanel" aria-label="Propose variant">
-        <div class="scripta-section-header">
-            <h3>Propose variant</h3>
-        </div>
-        <textarea class="scripta-proposal-input" data-role="proposalInput" rows="5" placeholder="Write an alternative formulation" $$proposalDisabled></textarea>
-        <div class="scripta-actions">
-            <button type="button" class="general-button secondary" data-local-action="cancelVariantProposal">Cancel</button>
-            <button type="button" class="general-button" data-local-action="addVariant" $$proposalDisabled>Submit</button>
-        </div>
-    </section>
     $$disabledNotice
-
-    <section class="scripta-tabs-section">
-        <div class="scripta-tabs-rail">
-            <button type="button"
-                    class="scripta-tabs-nav"
-                    data-local-action="scrollVariantTabs previous"
-                    aria-label="Previous variants"
-                    title="Previous variants">
-                <span aria-hidden="true">‹</span>
-            </button>
-            <div class="scripta-tabs-viewport" data-role="variantTabsViewport">
-                <div class="scripta-tabs" data-role="variantTabs" role="tablist">
-                    $$tabsHtml
-                </div>
-            </div>
-            <button type="button"
-                    class="scripta-tabs-nav"
-                    data-local-action="scrollVariantTabs next"
-                    aria-label="Next variants"
-                    title="Next variants">
-                <span aria-hidden="true">›</span>
-            </button>
-        </div>
-        <div class="scripta-tab-panel" data-role="variantPanel" role="tabpanel">
-            $$tabPanelHtml
-        </div>
-    </section>
-
+    <scripta-variants-view data-presenter="scripta-variants-view" data-role="scriptaVariantsView"></scripta-variants-view>
 </div>
