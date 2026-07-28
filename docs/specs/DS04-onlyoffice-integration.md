@@ -31,9 +31,12 @@ surrounding whitespace, requires Origin for WebSocket and state-changing
 traffic, and removes credentials, forwarding headers, and Ploinky identity
 headers before proxying.
 
-DocumentServer itself listens process-locally on `127.0.0.1:80`. Storage and
-callback handling listen on `127.0.0.1:9100`. Neither listener has a Router
-policy path or a box publication.
+DocumentServer itself listens process-locally on `127.0.0.1:80`. Its embedded
+DocService support listener and nginx upstream are paired exactly on
+`[::1]:8000`; configuration or readiness rejects a missing, duplicate,
+unexpected, IPv4, or wildcard form. Storage and callback handling listen on
+`127.0.0.1:9100`. None of these listeners has a Router policy path or a box
+publication.
 
 ## Topology and sessions
 

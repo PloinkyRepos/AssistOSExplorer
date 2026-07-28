@@ -20,8 +20,11 @@ access policy for two Router convention paths:
 The path-selected ports remain inside the agent container. They never add an
 outer box publication. DocumentServer binds `127.0.0.1:80`; document storage
 and callbacks bind `127.0.0.1:9100`. The pinned build-time DocService bind
-interposer is loaded only into DocService and rewrites only wildcard binds for
-its exact TCP `8000` support port to loopback. PostgreSQL `5432`, RabbitMQ
+interposer is loaded only into DocService and rewrites its IPv6 wildcard bind
+for the exact TCP `8000` support port to `[::1]:8000`. The configuration hook
+requires both pinned nginx configuration copies to contain exactly one expected
+`localhost:8000` upstream before replacing it with `[::1]:8000`; readiness
+requires that exact upstream/listener pair. PostgreSQL `5432`, RabbitMQ
 `5672`/`25672`, EPMD `4369`, and Redis `6379` when enabled are configured for
 loopback. The runtime launches the mounted `/code/src/index.mjs` entry point,
 then invokes a root-level Ploinky readiness wrapper that verifies addresses and

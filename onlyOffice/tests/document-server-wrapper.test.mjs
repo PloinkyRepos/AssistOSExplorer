@@ -135,3 +135,32 @@ test('support-listener configuration hardens every bundled dependency without du
   assert.deepEqual(rabbitEnv.match(/^NODE_PORT=.*$/gm), ['NODE_PORT=5672']);
   assert.deepEqual(rabbitEnv.match(/^ERL_EPMD_ADDRESS=.*$/gm), ['ERL_EPMD_ADDRESS=127.0.0.1']);
 });
+
+test('configuration and readiness require the exact IPv6 DocService nginx pairing', async () => {
+  const agentRoot = new URL('..', import.meta.url);
+  const [configureScript, healthcheck] = await Promise.all([
+    readFile(new URL('scripts/configure-document-server-v5.sh', agentRoot), 'utf8'),
+    readFile(new URL('scripts/healthcheck.sh', agentRoot), 'utf8'),
+  ]);
+
+  assert.match(
+    configureScript,
+    /\/usr\/local\/bin\/node "\$docservice_nginx_configurator"/,
+  );
+  assert.match(
+    healthcheck,
+    /configure-docservice-nginx-loopback\.mjs --verify/,
+  );
+  assert.match(
+    healthcheck,
+    /assert_exact_docservice_listener/,
+  );
+  assert.match(
+    healthcheck,
+    /\$4 == "\[::1\]:8000"/,
+  );
+  assert.match(
+    healthcheck,
+    /assert_loopback_owner 'OnlyOffice DocService' 8000 docservice/,
+  );
+});

@@ -63,6 +63,15 @@ assert_no_wildcard_support_listener() {
   fi
 }
 
+assert_exact_docservice_listener() {
+  listeners="$(ss -H -lnt "sport = :8000" 2>/dev/null || true)"
+  if [ "$(printf '%s\n' "$listeners" | sed '/^[[:space:]]*$/d' | wc -l)" -ne 1 ] \
+    || ! printf '%s\n' "$listeners" | awk '$4 == "[::1]:8000" { exact=1 } END { exit(exact ? 0 : 1) }'; then
+    echo "OnlyOffice DocService must expose exactly [::1]:8000 for its pinned nginx upstream: $listeners" >&2
+    exit 1
+  fi
+}
+
 for port in 7000 8080 9100; do
   ss -H -lnt "sport = :${port}" | grep -q . || {
     echo "OnlyOffice listener ${port}/tcp is absent." >&2
@@ -90,7 +99,10 @@ assert_loopback_owner 'OnlyOffice RabbitMQ distribution' 25672 'beam\.smp'
 assert_loopback_owner 'OnlyOffice Redis' 6379 redis-server false
 
 # DocumentServer 9.3.1's embedded DocService binary exposes no supported bind
-# host setting. The pinned, exact-port build-time interposer must force its
-# wildcard port 8000 bind onto process loopback.
+# host setting. The pinned, exact-port build-time interposer forces its IPv6
+# wildcard port 8000 bind onto process loopback, and nginx must use that exact
+# address rather than resolving localhost to IPv4.
+/usr/local/bin/node /code/scripts/configure-docservice-nginx-loopback.mjs --verify
+assert_exact_docservice_listener
 assert_loopback_owner 'OnlyOffice DocService' 8000 docservice
 assert_no_wildcard_support_listener 'OnlyOffice AdminPanel' 9000
