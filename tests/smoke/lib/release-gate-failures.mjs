@@ -34,9 +34,15 @@ export function createReleaseGateFailureCollector({ env = process.env } = {}) {
       : null;
     if (safePrimary && failures.length === 0) throw safePrimary;
     const errors = [...(safePrimary ? [safePrimary] : []), ...failures];
+    const summary = errors
+      .map((error, index) => {
+        const kind = safePrimary && index === 0 ? 'primary failure' : `required evidence/cleanup failure ${safePrimary ? index : index + 1}`;
+        return `${kind}: ${error.message}`;
+      })
+      .join('\n');
     throw new AggregateError(
       errors,
-      `${label} failed with ${primaryError ? 'a primary test failure and ' : ''}${failures.length} required evidence/cleanup failure(s).`,
+      `${label} failed with ${primaryError ? 'a primary test failure and ' : ''}${failures.length} required evidence/cleanup failure(s).\n${summary}`,
     );
   }
 

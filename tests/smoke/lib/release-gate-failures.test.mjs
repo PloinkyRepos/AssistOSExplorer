@@ -33,6 +33,8 @@ test('primary failures are preserved when evidence succeeds or aggregated when i
     error instanceof AggregateError
       && error.errors[0] !== primary
       && /primary failure/.test(error.errors[0].message)
+      && /primary failure: Error: primary failure/.test(error.message)
+      && /required evidence\/cleanup failure 1: screenshot: Error: closed page/.test(error.message)
       && error.errors.length === 2
   ));
 });

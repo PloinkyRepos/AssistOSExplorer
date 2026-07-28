@@ -247,7 +247,10 @@ async function screenPublicationSnapshot(page) {
   return page.evaluate((screenSource) => {
     const dashboard = document.querySelector('div.webmeet-dashboard');
     const presenter = dashboard?.webSkelPresenter || null;
-    const room = presenter?.room || presenter?.roomController?.room || null;
+    const room = presenter?.room
+      || presenter?.roomLiveKit?.getRoom?.()
+      || presenter?.roomController?.room
+      || null;
     const localParticipant = room?.localParticipant || null;
     const publications = Array.from(localParticipant?.trackPublications?.values?.() || [])
       .filter((publication) => String(publication?.source || '').trim() === screenSource)
