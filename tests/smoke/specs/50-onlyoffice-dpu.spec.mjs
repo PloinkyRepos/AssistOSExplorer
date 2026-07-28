@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { test, expect } from '../lib/fixtures.mjs';
 import { smokeConfig } from '../lib/config.mjs';
 import { dpuData } from '../lib/dpu-data.mjs';
+import { dpuSnapshotPersistenceAdvanced } from '../lib/dpu-persistence.mjs';
 import { openExplorer } from '../lib/explorer.mjs';
 
 function readDpuState() {
@@ -314,14 +315,12 @@ test.describe('DPU and OnlyOffice @external', () => {
       let callbackSnapshot = null;
       await expect.poll(() => {
         callbackSnapshot = readDpuObjectSnapshot(fileName);
-        if (!callbackSnapshot) {
-          return initialSnapshot.blobSha256;
-        }
-        return callbackSnapshot?.blobSha256 || '';
+        return dpuSnapshotPersistenceAdvanced(initialSnapshot, callbackSnapshot);
       }, {
         timeout: smokeConfig.timeouts.navigation,
-        message: 'OnlyOffice force-save callback should replace the encrypted DPU blob.',
-      }).not.toBe(initialSnapshot.blobSha256);
+        message: 'OnlyOffice force-save callback should replace the encrypted DPU blob and persist its metadata.',
+      }).toBe(true);
+      expect(callbackSnapshot?.blobSha256).not.toBe(initialSnapshot.blobSha256);
       expect(callbackSnapshot?.id).toBe(initialSnapshot.id);
       expect(callbackSnapshot?.updatedAt).not.toBe(initialSnapshot.updatedAt);
 
