@@ -7,11 +7,13 @@ import path from 'node:path';
 
 import { createMarkdownCrdtStore } from '../../utils/server/markdown-crdt/markdown-crdt-store.mjs';
 import { createScriptaCrdtService } from '../../utils/server/markdown-crdt/scripta-crdt-service.mjs';
+import { normalizeOptionalTransportEnum } from '../../utils/server/schemas.mjs';
 import {
     applyDocumentChanges,
     changeDocument,
     createDocument,
     getDocumentChanges,
+    getDocumentChangesSince,
     getDocumentHeads,
     loadDocument,
 } from '../../utils/server/markdown-crdt/automerge-adapter.mjs';
@@ -28,6 +30,10 @@ test('Explorer MCP manifests expose only canonical SCRIPTA mutation operations',
         'p-variant-vote-withdraw',
         'p-variant-edit',
         'p-variant-delete',
+        'p-variant-image-insert',
+        'p-variant-image-replace',
+        'p-variant-image-delete',
+        'p-variant-image-layout',
         'chapter-add',
         'chapter-delete',
         'chapter-rename',
@@ -37,6 +43,19 @@ test('Explorer MCP manifests expose only canonical SCRIPTA mutation operations',
         'paragraph-move',
         'undo',
     ]);
+    assert.deepEqual(mutationTool?.inputSchema?.args?.properties?.alignment?.enum, ['left', 'center', 'right']);
+    assert.deepEqual(mutationTool?.inputSchema?.args?.properties?.aspectRatio?.enum, ['auto', '1:1', '4:3', '3:2', '16:9']);
+    assert.equal(mutationTool?.inputSchema?.args?.properties?.showCaption?.type, 'boolean');
+    assert.equal(mutationTool?.inputSchema?.args?.properties?.widthPercent?.type, 'number');
+});
+
+test('SCRIPTA transport treats empty optional enum values as omitted', () => {
+    assert.equal(normalizeOptionalTransportEnum(''), undefined);
+    assert.equal(normalizeOptionalTransportEnum(null), undefined);
+    assert.equal(normalizeOptionalTransportEnum(undefined), undefined);
+    assert.equal(normalizeOptionalTransportEnum('16:9'), '16:9');
+    assert.equal(normalizeOptionalTransportEnum('cover'), 'cover');
+    assert.equal(normalizeOptionalTransportEnum('right'), 'right');
 });
 
 test('SCRIPTA mutations use the Explorer Automerge authority and persist the winning variant', async () => {
@@ -251,15 +270,16 @@ test('SCRIPTA mutations use the Explorer Automerge authority and persist the win
             `${created.documentId}.automerge`
         )));
         assert.equal('scriptaHistory' in canonicalState, false);
-        assert.ok(Array.isArray(canonicalState.scriptaUndoHeads));
-        assert.ok(canonicalState.scriptaUndoHeads.every((entry) => (
-            Array.isArray(entry.beforeHeads)
-            && entry.beforeHeads.every((head) => typeof head === 'string')
-            && Array.isArray(entry.afterHeads)
-            && entry.afterHeads.every((head) => typeof head === 'string')
-            && typeof entry.modelHash === 'string'
-            && entry.modelHash.length > 0
+        assert.equal('scriptaUndoHeads' in canonicalState, false);
+        assert.ok(Array.isArray(canonicalState.scriptaUndoSnapshots));
+        assert.ok(canonicalState.scriptaUndoSnapshots.length <= 5);
+        assert.ok(canonicalState.scriptaUndoSnapshots.every((entry) => (
+            entry.beforeModel
+            && typeof entry.beforeModel === 'object'
+            && typeof entry.afterModelHash === 'string'
+            && entry.afterModelHash.length > 0
         )));
+        assert.ok(getDocumentChangesSince(canonicalState, []).length <= 3);
 
         const secondStore = createMarkdownCrdtStore({
             fs,
@@ -573,6 +593,50 @@ test('SCRIPTA creation and open share one path lock after the document id become
         assert.equal(opened.documentId, created.documentId);
     } finally {
         releaseReplica();
+        await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+});
+
+test('Markdown CRDT recovers a recent lock left by a restarted process instance', async () => {
+    const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'explorer-restart-lock-'));
+    const validatePath = async (input) => {
+        const target = path.resolve(workspaceRoot, String(input || '').replace(/^\/+/, ''));
+        if (target !== workspaceRoot && !target.startsWith(`${workspaceRoot}${path.sep}`)) {
+            throw new Error('Path outside workspace.');
+        }
+        return target;
+    };
+    const store = createMarkdownCrdtStore({
+        fs,
+        path,
+        workspaceRoot,
+        validatePath,
+        writeFileContent: (target, content) => fs.writeFile(target, content, 'utf8'),
+        invalidateCachesForPath() {},
+    });
+    const documentPath = path.join(workspaceRoot, 'restart.md');
+    const lockRoot = path.join(workspaceRoot, '.ploinky/data/explorer/automerge/documents/.locks');
+    const scope = `path:${documentPath}`;
+    const lockPath = path.join(lockRoot, `${crypto.createHash('sha256').update(scope).digest('hex')}.lock`);
+
+    try {
+        await fs.writeFile(documentPath, '# Restart\n', 'utf8');
+        await store.open('/restart.md');
+        await fs.mkdir(lockRoot, { recursive: true });
+        await fs.writeFile(lockPath, JSON.stringify({
+            token: crypto.randomUUID(),
+            instanceId: 'previous-explorer-process',
+            hostname: os.hostname(),
+            pid: process.pid,
+            acquiredAt: new Date().toISOString(),
+        }), 'utf8');
+
+        const startedAt = Date.now();
+        const opened = await store.open('/restart.md');
+        assert.ok(opened.documentId);
+        assert.ok(Date.now() - startedAt < 1_000, 'restart lock should be recovered without waiting for its TTL');
+        await assert.rejects(fs.stat(lockPath), { code: 'ENOENT' });
+    } finally {
         await fs.rm(workspaceRoot, { recursive: true, force: true });
     }
 });

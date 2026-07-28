@@ -283,12 +283,15 @@ scripta-variants-view {
 }
 
 .scripta-variant-delete-button {
-    margin-left: auto;
     padding: 4px 8px;
     border: 1px solid color-mix(in srgb, #b42318 32%, transparent);
     border-radius: 7px;
     background: transparent;
     color: #b42318;
+}
+
+.scripta-variant-image-add-button {
+    margin-left: auto;
 }
 
 .scripta-variant-delete-button:hover {
@@ -327,8 +330,235 @@ scripta-variants-view {
 }
 
 .scripta-variant-content {
+    position: relative;
     display: grid;
     gap: 8px;
+}
+
+.scripta-variant-flow {
+    display: grid;
+    gap: 10px;
+}
+
+.scripta-variant-images {
+    display: grid;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.scripta-variant-image-container {
+    position: relative;
+    display: grid;
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    isolation: isolate;
+}
+
+.scripta-variant-image {
+    box-sizing: border-box;
+    margin-block: 0;
+    padding: 0;
+    border: 0;
+}
+
+.scripta-variant-image.is-left {
+    justify-self: start;
+    margin-inline: 0;
+}
+
+.scripta-variant-image.is-center {
+    justify-self: center;
+    margin-inline: 0;
+}
+
+.scripta-variant-image.is-right {
+    justify-self: end;
+    margin-inline: 0;
+}
+
+.scripta-variant-image img {
+    display: block;
+    max-width: 100%;
+    max-height: 360px;
+    margin-block: 0;
+    object-fit: contain;
+    width: 100%;
+    height: auto;
+    cursor: pointer;
+}
+
+.scripta-variant-image.is-left img { margin-inline: 0 auto; }
+.scripta-variant-image.is-center img { margin-inline: auto; }
+.scripta-variant-image.is-right img { margin-inline: auto 0; }
+
+.scripta-variant-image.is-selected img {
+    outline: 2px solid var(--accent, #6750a4);
+    outline-offset: 3px;
+}
+
+.scripta-variant-image figcaption {
+    margin-top: 6px;
+    color: var(--scripta-muted, #667085);
+    font-size: 12px;
+    text-align: center;
+}
+
+.scripta-variant-image-layout {
+    position: absolute;
+    top: 0;
+    right: 0;
+    z-index: 1000;
+    display: grid;
+    gap: 10px;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    border: 1px solid var(--border, #d0d5dd);
+    border-radius: 10px;
+    background: var(--surface, #fff);
+    box-shadow: 0 8px 24px #0002, 0 2px 6px #0002;
+    font-size: 12px;
+}
+
+.scripta-image-toolbar-header,
+.scripta-image-toolbar-actions {
+    display: flex;
+    align-items: center;
+}
+
+.scripta-image-toolbar-header {
+    justify-content: space-between;
+    min-height: 28px;
+}
+
+.scripta-image-toolbar-header strong {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.scripta-image-toolbar-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.scripta-image-toolbar-fields label {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+}
+
+.scripta-image-caption-control {
+    grid-column: 1 / 4;
+}
+
+.scripta-image-caption-control input[type="text"] {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 30px;
+    padding: 5px 8px;
+    border: 1px solid var(--border, #ccc);
+    border-radius: 6px;
+    background: var(--surface, #fff);
+    color: inherit;
+    font: inherit;
+}
+
+.scripta-variant-image-layout .scripta-image-caption-toggle {
+    display: inline-flex;
+    align-items: center;
+    align-self: end;
+    min-height: 30px;
+    white-space: nowrap;
+}
+
+.scripta-image-width-control {
+    grid-column: 1;
+}
+
+.scripta-image-number-field {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    min-height: 30px;
+    border: 1px solid var(--border, #ccc);
+    border-radius: 6px;
+    background: var(--surface, #fff);
+    overflow: hidden;
+}
+
+.scripta-image-number-field input {
+    box-sizing: border-box;
+    min-width: 0;
+    width: 100%;
+    min-height: 28px;
+    padding: 4px 2px 4px 7px;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+}
+
+.scripta-image-number-field span {
+    padding: 0 7px 0 3px;
+    color: var(--scripta-muted, #667085);
+}
+
+.scripta-variant-image-layout select {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 30px;
+    padding-inline: 6px;
+    border: 1px solid var(--border, #ccc);
+    border-radius: 6px;
+    background: var(--surface, #fff);
+    color: inherit;
+}
+
+.scripta-image-toolbar-actions {
+    justify-content: flex-end;
+    gap: 8px;
+    padding-top: 2px;
+    border-top: 1px solid color-mix(in srgb, var(--border, #d0d5dd) 70%, transparent);
+}
+
+.scripta-image-toolbar-close {
+    display: inline-grid;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    place-items: center;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: 18px;
+    cursor: pointer;
+}
+
+@media (max-width: 560px) {
+    .scripta-variant-image-layout {
+        inset-block-start: 8px;
+        inset-inline-end: 8px;
+    }
+
+    .scripta-image-toolbar-fields {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .scripta-image-caption-control {
+        grid-column: 1 / -1;
+    }
+
+    .scripta-image-width-control {
+        grid-column: auto;
+    }
+}
+
+.scripta-image-toolbar-close:hover {
+    background: color-mix(in srgb, currentColor 8%, transparent);
 }
 
 .scripta-variant-edit-actions {

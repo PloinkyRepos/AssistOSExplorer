@@ -268,6 +268,7 @@ export async function createExplorerToolRuntime({
     copyRecursive,
     aggregateIdePlugins,
     workspaceRoot,
+    agentName: String(env.PLOINKY_AGENT_NAME || '').trim() || 'explorer',
     buildDirectoryTree,
     directoryTreeCache,
     buildCacheKey,

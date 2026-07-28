@@ -14,6 +14,71 @@ export function createScriptaVariantId() {
     return `variant-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+export function createScriptaVariantImageId() {
+    const cryptoApi = globalThis.crypto;
+    if (cryptoApi?.randomUUID) return `variant-image-${cryptoApi.randomUUID()}`;
+    return `variant-image-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+export function normalizeScriptaVariantImageLayout(value = {}) {
+    const layout = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+    const aspectRatio = ["auto", "1:1", "4:3", "3:2", "16:9"].includes(String(layout.aspectRatio || ""))
+        ? String(layout.aspectRatio)
+        : "auto";
+    const fit = ["contain", "cover"].includes(String(layout.fit || "")) ? String(layout.fit) : "contain";
+    const alignment = ["left", "center", "right"].includes(String(layout.alignment || ""))
+        ? String(layout.alignment)
+        : "center";
+    return {
+        widthPercent: Math.max(20, Math.min(100, Math.round(Number(layout.widthPercent) || 100))),
+        aspectRatio,
+        fit,
+        alignment,
+        showCaption: layout.showCaption !== false,
+    };
+}
+
+export function normalizeScriptaVariantImages(value = [], fallbackPosition = 0) {
+    if (!Array.isArray(value)) return [];
+    return value
+        .filter((image) => image && typeof image === "object")
+        .map((image) => ({
+            imageId: String(image.imageId || createScriptaVariantImageId()),
+            assetId: String(image.assetId || ""),
+            alt: String(image.alt || "Image").trim() || "Image",
+            workspaceUrl: String(image.workspaceUrl || ""),
+            position: Number.isInteger(Number(image.position))
+                ? Math.max(0, Number(image.position))
+                : Math.max(0, Number(fallbackPosition) || 0),
+            layout: normalizeScriptaVariantImageLayout(image.layout),
+        }))
+        .filter((image) => image.assetId && image.workspaceUrl.startsWith("/document-multimedia/webmeet/"));
+}
+
+function markdownImage(image = {}) {
+    const safeAlt = String(image.alt || "Image").replace(/[\[\]\\]/g, (value) => `\\${value}`);
+    const safeUrl = String(image.workspaceUrl || "").replace(/[()\s]/g, (value) => encodeURIComponent(value));
+    return `![${safeAlt}](${safeUrl})`;
+}
+
+export function serializeScriptaVariant(variant = {}) {
+    const text = String(variant.text || "");
+    const images = normalizeScriptaVariantImages(variant.images, text.length)
+        .map((image, index) => ({...image, position: Math.min(text.length, image.position), index}))
+        .sort((left, right) => left.position - right.position || left.index - right.index);
+    if (!images.length) return text.trimEnd();
+    let cursor = 0;
+    let output = "";
+    for (const image of images) {
+        output += text.slice(cursor, image.position);
+        if (output && !output.endsWith("\n\n")) output += output.endsWith("\n") ? "\n" : "\n\n";
+        output += markdownImage(image);
+        if (image.position < text.length) output += text.startsWith("\n", image.position) ? "\n" : "\n\n";
+        cursor = image.position;
+    }
+    return `${output}${text.slice(cursor)}`.trimEnd();
+}
+
 export function normalizeScriptaReactionType(value) {
     const type = String(value || "").trim().toLowerCase();
     if (!type) return "";
@@ -73,10 +138,12 @@ export function normalizeScriptaState(paragraph) {
         ? raw.variants.filter((variant) => variant && typeof variant === "object")
         : [];
     const state = {
+        ...raw,
         activeVariantId: typeof raw.activeVariantId === "string" ? raw.activeVariantId : "",
         variants: variants.map((variant) => ({
             id: String(variant.id || createScriptaVariantId()),
             text: String(variant.text ?? ""),
+            images: normalizeScriptaVariantImages(variant.images, String(variant.text ?? "").length),
             createdBy: String(variant.createdBy || ""),
             createdAt: String(variant.createdAt || new Date().toISOString()),
             updatedAt: String(variant.updatedAt || variant.createdAt || new Date().toISOString()),
@@ -99,6 +166,7 @@ export function ensureScriptaInitialVariant(paragraph, { createdBy = "", now = n
         const variant = {
             id: createScriptaVariantId(),
             text: String(paragraph.text || ""),
+            images: [],
             createdBy: owner,
             createdAt: String(now),
             updatedAt: String(now),
@@ -177,7 +245,7 @@ export function setScriptaReaction(state, variantId, userHash, userLabel, nextTy
 export function updateScriptaActiveVariant(paragraph, state = normalizeScriptaState(paragraph)) {
     const winner = getScriptaWinningVariant(state);
     state.activeVariantId = winner?.id || "";
-    if (winner) paragraph.text = winner.text;
+    if (winner) paragraph.text = serializeScriptaVariant(winner);
     return winner;
 }
 
@@ -203,6 +271,7 @@ export function addScriptaVariant(paragraph, text, { createdBy = "", now = new D
     const variant = {
         id: createScriptaVariantId(),
         text: value,
+        images: [],
         createdBy: owner,
         createdAt: String(now),
         updatedAt: String(now),

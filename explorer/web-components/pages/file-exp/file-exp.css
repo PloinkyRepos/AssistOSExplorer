@@ -2520,9 +2520,6 @@ main {
 
     .markdown-preview .markdown-image {
         height: auto;
-        border: 1px solid var(--file-exp-border);
-        border-radius: 6px;
-        background: var(--file-exp-panel);
     }
 
     .markdown-preview .markdown-svg svg,

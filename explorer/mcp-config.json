@@ -813,6 +813,10 @@
             "p-variant-vote-withdraw",
             "p-variant-edit",
             "p-variant-delete",
+            "p-variant-image-insert",
+            "p-variant-image-replace",
+            "p-variant-image-delete",
+            "p-variant-image-layout",
             "chapter-add",
             "chapter-delete",
             "chapter-rename",
@@ -835,7 +839,18 @@
             "text": { "type": "string", "optional": true },
             "title": { "type": "string", "optional": true },
             "targetChapterId": { "type": "string", "optional": true },
-            "targetIndex": { "type": "number", "optional": true }
+            "targetIndex": { "type": "number", "optional": true },
+            "roomId": { "type": "string", "optional": true },
+            "assetId": { "type": "string", "optional": true },
+            "imageId": { "type": "string", "optional": true },
+            "imageOrdinal": { "type": "number", "optional": true },
+            "alt": { "type": "string", "optional": true },
+            "position": { "type": "number", "optional": true },
+            "widthPercent": { "type": "number", "optional": true },
+            "aspectRatio": { "type": "string", "enum": ["auto", "1:1", "4:3", "3:2", "16:9"], "optional": true },
+            "fit": { "type": "string", "enum": ["contain", "cover"], "optional": true },
+            "alignment": { "type": "string", "enum": ["left", "center", "right"], "optional": true },
+            "showCaption": { "type": "boolean", "optional": true }
           }
         },
         "participant": {
@@ -876,6 +891,39 @@
         "documentId": { "type": "string", "optional": true },
         "path": { "type": "string", "optional": true },
         "transactionId": { "type": "string", "optional": true }
+      }
+    },
+    {
+      "name": "webmeet_media_commit",
+      "description": "Validate and commit a staged WebMeet image into Explorer workspace media.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "tags": ["internal"],
+      "env": { "TOOL_NAME": "webmeet_media_commit" },
+      "inputSchema": {
+        "roomId": { "type": "string" },
+        "blobRef": {
+          "type": "object",
+          "properties": {
+            "id": { "type": "string" },
+            "agent": { "type": "string" },
+            "localPath": { "type": "string" }
+          }
+        },
+        "filename": { "type": "string", "optional": true },
+        "createdBy": { "type": "string", "optional": true }
+      }
+    },
+    {
+      "name": "webmeet_media_get",
+      "description": "Resolve safe metadata for a WebMeet workspace media asset.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "tags": ["internal"],
+      "env": { "TOOL_NAME": "webmeet_media_get" },
+      "inputSchema": {
+        "roomId": { "type": "string" },
+        "assetId": { "type": "string" }
       }
     },
     {

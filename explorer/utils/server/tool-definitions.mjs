@@ -32,6 +32,8 @@ export function buildToolDefinitions(zodToJsonSchema, schemas) {
     ScriptaCrdtCreateArgsSchema,
     ScriptaCrdtMutateArgsSchema,
     ScriptaCrdtDeleteArgsSchema,
+    WebMeetMediaCommitArgsSchema,
+    WebMeetMediaGetArgsSchema,
     ScriptaCollaborationOpenArgsSchema,
     ScriptaCollaborationPullArgsSchema,
     ScriptaCollaborationApplyArgsSchema,
@@ -214,6 +216,16 @@ export function buildToolDefinitions(zodToJsonSchema, schemas) {
       name: 'scripta_crdt_delete',
       description: 'Prepare, commit, or roll back an atomic SCRIPTA document deletion.',
       inputSchema: zodToJsonSchema(ScriptaCrdtDeleteArgsSchema)
+    },
+    {
+      name: 'webmeet_media_commit',
+      description: 'Validate and commit a staged WebMeet image into the Explorer workspace media library.',
+      inputSchema: zodToJsonSchema(WebMeetMediaCommitArgsSchema)
+    },
+    {
+      name: 'webmeet_media_get',
+      description: 'Resolve safe metadata for a WebMeet workspace media asset.',
+      inputSchema: zodToJsonSchema(WebMeetMediaGetArgsSchema)
     },
     {
       name: 'scripta_collaboration_open',

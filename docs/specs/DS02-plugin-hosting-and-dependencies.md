@@ -201,6 +201,8 @@ The last two expectations apply only when a plugin performs domain work. A stati
 
 When Explorer lazily registers a runtime plugin component, it must finish registering every dependency declared by that plugin before the component is mounted. Dependencies may belong to another agent, such as an Explorer-owned shared presentation component used by a SOPLang-owned adapter. A declared child component must never remain as an unupgraded custom-element tag while its parent plugin is considered ready. If a dependency is already registered by Explorer's static WebSkel configuration, the runtime loader reuses it and must not fetch or overwrite it through a plugin URL.
 
+Plugin presenters that host reactive child components must preserve those child instances during status-only or busy-state updates. Status text and disabled controls are updated in place; a structural child-tree render occurs once after the corresponding data transition settles. This is the same lifecycle used by declarative modal children and prevents a lazily loading child from being disconnected and recreated during one logical state transition.
+
 For filesystem-oriented menu actions, the host context must include both:
 
 - the Explorer path used by shell navigation

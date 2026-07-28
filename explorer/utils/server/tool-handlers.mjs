@@ -5,6 +5,7 @@ import { jsonResponse, textResponse } from './responses.mjs';
 import { createAvatarSettingsStore } from './avatar-settings/avatar-settings-store.mjs';
 import { createMarkdownCrdtStore } from './markdown-crdt/markdown-crdt-store.mjs';
 import { createScriptaCrdtService } from './markdown-crdt/scripta-crdt-service.mjs';
+import { createWebMeetMediaStore } from './webmeet-media-store.mjs';
 
 function parseArgs(schema, args, name) {
   const parsed = schema.safeParse(args);
@@ -86,6 +87,7 @@ export function createToolHandlers({
   copyRecursive,
   aggregateIdePlugins,
   workspaceRoot,
+  agentName = 'explorer',
   buildDirectoryTree,
   directoryTreeCache,
   buildCacheKey,
@@ -137,6 +139,8 @@ export function createToolHandlers({
     ScriptaCrdtCreateArgsSchema,
     ScriptaCrdtMutateArgsSchema,
     ScriptaCrdtDeleteArgsSchema,
+    WebMeetMediaCommitArgsSchema,
+    WebMeetMediaGetArgsSchema,
     ScriptaCollaborationOpenArgsSchema,
     ScriptaCollaborationPullArgsSchema,
     ScriptaCollaborationApplyArgsSchema,
@@ -153,6 +157,7 @@ export function createToolHandlers({
     UpdateAvatarSettingsAgentArgsSchema,
     SetAvatarSettingsAgentVisibilityArgsSchema
   } = schemas;
+  const webMeetMediaStore = createWebMeetMediaStore({ fs, path, validatePath, agentName });
   const inflightSearchFiles = new Map();
   const inflightSearchText = new Map();
   const searchTextJobs = new Map();
@@ -1205,7 +1210,28 @@ export function createToolHandlers({
   async function handleScriptaCrdtMutate(args) {
     assertWebMeetScriptaCaller();
     const data = parseArgs(ScriptaCrdtMutateArgsSchema, args, 'scripta_crdt_mutate');
+    if (
+      ['p-variant-image-insert', 'p-variant-image-replace'].includes(data.operation)
+      || (data.operation === 'paragraph-add' && data.args?.assetId)
+    ) {
+      const roomId = String(data.args?.roomId || '').trim();
+      const assetId = String(data.args?.assetId || '').trim();
+      const asset = await webMeetMediaStore.read(roomId, assetId);
+      data.args = { ...data.args, workspaceUrl: asset.workspaceUrl, alt: data.args?.alt || asset.filename };
+    }
     return jsonResponse(await scriptaCrdtService.mutate(data));
+  }
+
+  async function handleWebMeetMediaCommit(args) {
+    assertWebMeetScriptaCaller();
+    const data = parseArgs(WebMeetMediaCommitArgsSchema, args, 'webmeet_media_commit');
+    return jsonResponse({ ok: true, asset: await webMeetMediaStore.commit(data) });
+  }
+
+  async function handleWebMeetMediaGet(args) {
+    assertWebMeetScriptaCaller();
+    const data = parseArgs(WebMeetMediaGetArgsSchema, args, 'webmeet_media_get');
+    return jsonResponse({ ok: true, asset: await webMeetMediaStore.read(data.roomId, data.assetId) });
   }
 
   async function handleScriptaCrdtDelete(args) {
@@ -1445,6 +1471,8 @@ export function createToolHandlers({
     scripta_crdt_open: handleScriptaCrdtOpen,
     scripta_crdt_mutate: handleScriptaCrdtMutate,
     scripta_crdt_delete: handleScriptaCrdtDelete,
+    webmeet_media_commit: handleWebMeetMediaCommit,
+    webmeet_media_get: handleWebMeetMediaGet,
     scripta_collaboration_open: handleScriptaCollaborationOpen,
     scripta_collaboration_pull: handleScriptaCollaborationPull,
     scripta_collaboration_apply: handleScriptaCollaborationApply,

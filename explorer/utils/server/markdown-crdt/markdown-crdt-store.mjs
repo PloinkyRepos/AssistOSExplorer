@@ -9,8 +9,7 @@ import {
   getDocumentHeads,
   loadDocument,
   mergeDocuments,
-  saveDocument,
-  viewDocumentAtHeads
+  saveDocument
 } from './automerge-adapter.mjs';
 import {
   materializeMarkdownModel,
@@ -26,7 +25,10 @@ const STORE_LOCK_DIRECTORY = '.locks';
 const STORE_LOCK_TIMEOUT_MS = 10_000;
 const STORE_LOCK_STALE_MS = 30_000;
 const STORE_LOCK_RETRY_MS = 20;
+const MAX_SCRIPTA_UNDO_STEPS = 5;
 const TRANSACTION_STALE_MS = 5 * 60_000;
+const PROCESS_INSTANCE_ID = crypto.randomUUID();
+const PROCESS_STARTED_AT_MS = Date.now() - Math.max(0, Number(process.uptime?.() || 0) * 1_000);
 
 function isMarkdownPath(filePath, pathApi) {
   return pathApi.extname(String(filePath || '')).toLowerCase() === '.md';
@@ -424,6 +426,13 @@ export function createMarkdownCrdtStore({
     if (String(owner?.hostname || '') !== os.hostname()) return null;
     const pid = Number(owner?.pid);
     if (!Number.isInteger(pid) || pid <= 0) return false;
+    if (pid === process.pid) {
+      if (owner?.instanceId && owner.instanceId !== PROCESS_INSTANCE_ID) return false;
+      const acquiredAt = Date.parse(owner?.acquiredAt || '');
+      if (!owner?.instanceId && Number.isFinite(acquiredAt) && acquiredAt < PROCESS_STARTED_AT_MS - 1_000) {
+        return false;
+      }
+    }
     try {
       process.kill(pid, 0);
       return true;
@@ -485,6 +494,7 @@ export function createMarkdownCrdtStore({
         try {
           await handle.writeFile(JSON.stringify({
             token,
+            instanceId: PROCESS_INSTANCE_ID,
             hostname: os.hostname(),
             pid: process.pid,
             acquiredAt: new Date().toISOString()
@@ -498,7 +508,7 @@ export function createMarkdownCrdtStore({
         const lock = await readDocumentLock(lockPath);
         if (!lock.exists) continue;
         const ownerAlive = isLockOwnerAlive(lock.owner);
-        if (lock.ageMs > STORE_LOCK_STALE_MS && ownerAlive !== true) {
+        if (ownerAlive === false || (lock.ageMs > STORE_LOCK_STALE_MS && ownerAlive !== true)) {
           if (await removeStaleDocumentLock(lockPath, lock).catch(() => false)) continue;
         }
         if (Date.now() - startedAt >= STORE_LOCK_TIMEOUT_MS) {
@@ -597,16 +607,35 @@ export function createMarkdownCrdtStore({
     }
   }
 
-  async function discardEmbeddedScriptaHistory(document) {
-    if (!Object.prototype.hasOwnProperty.call(document || {}, 'scriptaHistory')) {
+  function compactDocument(document, model, undoSnapshots = []) {
+    let staged = changeDocument(document, (draft) => {
+      delete draft.scriptaHistory;
+      delete draft.scriptaUndoHeads;
+      copyModelToDraft(draft, model);
+      draft.scriptaUndoSnapshots = cloneJson(undoSnapshots.slice(-MAX_SCRIPTA_UNDO_STEPS));
+      draft.updatedAt = new Date().toISOString();
+    });
+    const compactState = cloneJson(staged);
+    delete compactState.scriptaHistory;
+    delete compactState.scriptaUndoHeads;
+    staged = createDocument(compactState);
+    return staged;
+  }
+
+  async function migrateLegacyScriptaHistory(document) {
+    if (
+      !Object.prototype.hasOwnProperty.call(document || {}, 'scriptaHistory')
+      && !Object.prototype.hasOwnProperty.call(document || {}, 'scriptaUndoHeads')
+    ) {
       return document;
     }
-    const compactState = cloneJson(document);
-    delete compactState.scriptaHistory;
-    compactState.scriptaUndoHeads = [];
-    const compactDocument = createDocument(compactState);
-    await writeAutomergeState(compactDocument);
-    return compactDocument;
+    const compacted = compactDocument(
+      document,
+      materializeMarkdownModel(document),
+      Array.isArray(document.scriptaUndoSnapshots) ? document.scriptaUndoSnapshots : []
+    );
+    await writeAutomergeState(compacted);
+    return compacted;
   }
 
   async function readMarkdownFile(validPath) {
@@ -647,7 +676,7 @@ export function createMarkdownCrdtStore({
     if (document.schemaVersion !== 2 || !Array.isArray(document.blocks)) {
       return await initializeDocument(validPath);
     }
-    document = await discardEmbeddedScriptaHistory(document);
+    document = await migrateLegacyScriptaHistory(document);
     if (document.path !== validPath || document.fileVersionKey !== versionKey) {
       document = await syncFromMarkdown(document, validPath, raw, versionKey);
     }
@@ -659,7 +688,7 @@ export function createMarkdownCrdtStore({
     if (!document) {
       throw new Error(`Markdown CRDT document '${documentId}' was not found.`);
     }
-    document = await discardEmbeddedScriptaHistory(document);
+    document = await migrateLegacyScriptaHistory(document);
     return document;
   }
 
@@ -982,25 +1011,21 @@ export function createMarkdownCrdtStore({
         ? await loadByDocumentId(args.documentId)
         : await loadByPath(args.path);
       const current = responseFor(document);
-      const history = cloneJson(document.scriptaUndoHeads || []);
+      const history = cloneJson(document.scriptaUndoSnapshots || []);
       let nextModel;
       if (args.historyAction === 'undo') {
         const undoEntry = history.at(-1);
-        const previousHeads = undoEntry?.beforeHeads;
-        const operationHeads = undoEntry?.afterHeads;
         if (
           !undoEntry
-          || !Array.isArray(previousHeads)
-          || !previousHeads.length
-          || !Array.isArray(operationHeads)
-          || !operationHeads.length
+          || !undoEntry.beforeModel
+          || typeof undoEntry.beforeModel !== 'object'
         ) {
           throw new Error('There is no SCRIPTA operation to undo.');
         }
         if (
-          typeof undoEntry.modelHash !== 'string'
-          || !undoEntry.modelHash
-          || modelDigest(current.model) !== undoEntry.modelHash
+          typeof undoEntry.afterModelHash !== 'string'
+          || !undoEntry.afterModelHash
+          || modelDigest(current.model) !== undoEntry.afterModelHash
         ) {
           const error = new Error(
             'SCRIPTA undo cannot be applied because the document changed after that operation.'
@@ -1009,7 +1034,7 @@ export function createMarkdownCrdtStore({
           throw error;
         }
         history.pop();
-        nextModel = ensureDocumentId(viewDocumentAtHeads(document, previousHeads));
+        nextModel = cloneJson(undoEntry.beforeModel);
       } else {
         nextModel = await mutateModel(cloneJson(current.model), current);
       }
@@ -1017,23 +1042,23 @@ export function createMarkdownCrdtStore({
         if (typeof args.onCompleted === 'function') await args.onCompleted(current);
         return current;
       }
-      const previousHeads = getDocumentHeads(document);
-      document = changeDocument(document, (draft) => {
-        delete draft.scriptaHistory;
-        copyModelToDraft(draft, nextModel);
-        draft.updatedAt = new Date().toISOString();
-      });
       if (args.historyAction === 'push') {
         history.push({
-          beforeHeads: previousHeads,
-          afterHeads: getDocumentHeads(document),
-          modelHash: modelDigest(responseFor(document).model)
+          beforeModel: cloneJson(current.model),
+          afterModelHash: modelDigest(nextModel)
         });
-        if (history.length > 50) history.splice(0, history.length - 50);
+        if (history.length > MAX_SCRIPTA_UNDO_STEPS) {
+          history.splice(0, history.length - MAX_SCRIPTA_UNDO_STEPS);
+        }
       }
       if (args.historyAction) {
+        document = compactDocument(document, nextModel, history);
+      } else {
         document = changeDocument(document, (draft) => {
-          draft.scriptaUndoHeads = history;
+          delete draft.scriptaHistory;
+          delete draft.scriptaUndoHeads;
+          copyModelToDraft(draft, nextModel);
+          draft.updatedAt = new Date().toISOString();
         });
       }
       return commitDocument(document, current.path, {

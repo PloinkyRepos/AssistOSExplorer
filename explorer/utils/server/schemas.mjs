@@ -1,3 +1,7 @@
+export function normalizeOptionalTransportEnum(value) {
+  return value === '' || value === null || value === undefined ? undefined : value;
+}
+
 export function createSchemas(z) {
   const ReadTextFileArgsSchema = z.object({
     path: z.string(),
@@ -125,14 +129,18 @@ export function createSchemas(z) {
     message: 'documentId or path is required'
   });
   const SyncMarkdownCrdtFromFileArgsSchema = z.object({ path: z.string() });
+  const optionalTransportEnum = (values) => z.preprocess(
+    normalizeOptionalTransportEnum,
+    z.enum(values).optional()
+  );
   const ScriptaViewSchema = z.object({
-    mode: z.enum(['document', 'paragraph']).optional(),
+    mode: optionalTransportEnum(['document', 'paragraph']),
     chapterId: z.string().optional(),
     paragraphId: z.string().optional(),
     selectedVariantId: z.string().optional(),
     editingVariantId: z.string().optional(),
     editorParticipantId: z.string().optional(),
-    focusTargetType: z.enum(['chapter', 'paragraph']).optional(),
+    focusTargetType: optionalTransportEnum(['chapter', 'paragraph']),
     autoFocusRevision: z.number().int().nonnegative().optional()
   });
   const optionalTransportInteger = (minimum) => z.preprocess((value) => {
@@ -147,14 +155,22 @@ export function createSchemas(z) {
     variantOrdinal: optionalTransportInteger(1),
     // Some MCP runtimes materialize an omitted optional enum as an empty string.
     // It means “not supplied” for non-vote mutations, not an invalid vote.
-    type: z.preprocess(
-      (value) => value === '' ? undefined : value,
-      z.enum(['like', 'dislike']).optional()
-    ),
+    type: optionalTransportEnum(['like', 'dislike']),
     text: z.string().optional(),
     title: z.string().optional(),
     targetChapterId: z.string().optional(),
-    targetIndex: optionalTransportInteger(0)
+    targetIndex: optionalTransportInteger(0),
+    roomId: z.string().optional(),
+    assetId: z.string().optional(),
+    imageId: z.string().optional(),
+    imageOrdinal: optionalTransportInteger(1),
+    alt: z.string().optional(),
+    position: optionalTransportInteger(0),
+    widthPercent: optionalTransportInteger(20),
+    aspectRatio: optionalTransportEnum(['auto', '1:1', '4:3', '3:2', '16:9']),
+    fit: optionalTransportEnum(['contain', 'cover']),
+    alignment: optionalTransportEnum(['left', 'center', 'right']),
+    showCaption: z.boolean().optional()
   });
   const ScriptaParagraphSeedSchema = z.object({
     id: z.string().optional(),
@@ -205,6 +221,10 @@ export function createSchemas(z) {
       'p-variant-vote-withdraw',
       'p-variant-edit',
       'p-variant-delete',
+      'p-variant-image-insert',
+      'p-variant-image-replace',
+      'p-variant-image-delete',
+      'p-variant-image-layout',
       'chapter-add',
       'chapter-delete',
       'chapter-rename',
@@ -235,6 +255,20 @@ export function createSchemas(z) {
       : Boolean(value.transactionId)
   ), {
     message: 'prepare requires documentId or path; commit and rollback require transactionId'
+  });
+  const WebMeetMediaCommitArgsSchema = z.object({
+    roomId: z.string().min(1),
+    blobRef: z.object({
+      id: z.string().regex(/^[a-f0-9]{48}$/),
+      agent: z.string().min(1),
+      localPath: z.string().min(1)
+    }).strict(),
+    filename: z.string().optional(),
+    createdBy: z.string().optional()
+  });
+  const WebMeetMediaGetArgsSchema = z.object({
+    roomId: z.string().min(1),
+    assetId: z.string().min(1)
   });
   const ScriptaCollaborationOpenArgsSchema = ScriptaCrdtOpenArgsSchema;
   const ScriptaCollaborationPullArgsSchema = ScriptaCrdtOpenArgsSchema.extend({
@@ -319,6 +353,8 @@ export function createSchemas(z) {
     ScriptaCrdtWorkspaceListArgsSchema,
     ScriptaCrdtCreateArgsSchema,
     ScriptaCrdtMutateArgsSchema,
+    WebMeetMediaCommitArgsSchema,
+    WebMeetMediaGetArgsSchema,
     ScriptaCrdtDeleteArgsSchema,
     ScriptaCollaborationOpenArgsSchema,
     ScriptaCollaborationPullArgsSchema,

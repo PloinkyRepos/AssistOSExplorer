@@ -65,9 +65,14 @@ export class MarketplaceModal {
       this.loadingStarted = true;
       this.loadMarketplace();
     } else if (this.canManageMarketplace() && !this.state.agentSettingsDataLoaded) {
-      this.loadAgentSettingsData().catch((error) => {
-        this.setStatus(error?.message || 'Failed to load agent settings.', 'error');
-      });
+      this.loadAgentSettingsData()
+        .then(() => {
+          this.renderAgents();
+          this.syncInteractiveState();
+        })
+        .catch((error) => {
+          this.setStatus(error?.message || 'Failed to load agent settings.', 'error');
+        });
     }
   }
 
@@ -113,14 +118,14 @@ export class MarketplaceModal {
     }
     this.state.status = message;
     this.state.statusType = type;
-    this.renderState();
+    this.renderStatus();
     if (type === 'error' && message) {
       this.statusClearTimer = setTimeout(() => {
         this.statusClearTimer = null;
         if (this.state.statusType === 'error') {
           this.state.status = '';
           this.state.statusType = '';
-          this.renderState();
+          this.renderStatus();
         }
       }, 5000);
     }
@@ -128,19 +133,21 @@ export class MarketplaceModal {
 
   setBusy(busy) {
     this.state.busy = Boolean(busy);
-    this.renderState();
+    this.syncInteractiveState();
   }
 
   switchTab = (event) => {
     const tab = event.currentTarget?.dataset?.tab || 'agents';
     this.state.activeTab = tab === 'repos' ? 'repos' : 'agents';
-    this.renderState();
+    this.renderTabs();
   };
 
   switchRepoKindTab = (event) => {
     const tab = event.currentTarget?.dataset?.repoKindTab || 'agents';
     this.state.activeRepoKindTab = ['agents', 'skills', 'others'].includes(tab) ? tab : 'agents';
-    this.renderState();
+    this.renderRepoKindTabs();
+    this.renderRepositories();
+    this.syncInteractiveState();
   };
 
   async requestMarketplace(actionBody = null, options = {}) {
@@ -173,7 +180,8 @@ export class MarketplaceModal {
     } catch (error) {
       this.setStatus(error?.message || 'Failed to load marketplace.', 'error');
     } finally {
-      this.setBusy(false);
+      this.state.busy = false;
+      this.renderState();
     }
   }
 
@@ -209,7 +217,8 @@ export class MarketplaceModal {
     this.agentSearchTimer = setTimeout(() => {
       this.agentSearchTimer = null;
       this.state.agentSearchQuery = this.state.agentSearchInput;
-      this.renderState();
+      this.renderAgents();
+      this.syncInteractiveState();
     }, 500);
   };
 
@@ -239,7 +248,8 @@ export class MarketplaceModal {
     } catch (error) {
       this.setStatus(error?.message || 'Failed to install repository.', 'error');
     } finally {
-      this.setBusy(false);
+      this.state.busy = false;
+      this.renderState();
     }
   };
 
@@ -279,7 +289,8 @@ export class MarketplaceModal {
     } catch (error) {
       this.setStatus(error?.message || 'Failed to update agent.', 'error');
     } finally {
-      this.setBusy(false);
+      this.state.busy = false;
+      this.renderState();
     }
   };
 
@@ -321,7 +332,7 @@ export class MarketplaceModal {
     }
 
     this.state.agentSettingsBusyKey = key;
-    this.renderState();
+    this.syncInteractiveState();
 
     try {
       if (item.settingsUrl) {
@@ -353,7 +364,7 @@ export class MarketplaceModal {
       this.setStatus(error?.message || `Failed to open settings for ${key}.`, 'error');
     } finally {
       this.state.agentSettingsBusyKey = '';
-      this.renderState();
+      this.syncInteractiveState();
     }
   }
 
@@ -402,7 +413,8 @@ export class MarketplaceModal {
     const expandedAgentRepos = { ...(this.state.expandedAgentRepos || {}) };
     expandedAgentRepos[name] = !Boolean(expandedAgentRepos[name]);
     this.state.expandedAgentRepos = expandedAgentRepos;
-    this.renderState();
+    this.renderAgents();
+    this.syncInteractiveState();
   };
 
   handleRepositoryClick = async (event) => {
@@ -424,18 +436,44 @@ export class MarketplaceModal {
     } catch (error) {
       this.setStatus(error?.message || 'Failed to update repository installation.', 'error');
     } finally {
-      this.setBusy(false);
+      this.state.busy = false;
+      this.renderState();
     }
   };
+
+  renderStatus() {
+    if (!this.statusEl) return;
+    this.statusEl.textContent = this.state.status || '';
+    this.statusEl.classList.toggle('error', this.state.statusType === 'error');
+  }
+
+  syncInteractiveState() {
+    const busy = this.state.busy === true;
+    const canManage = this.canManageMarketplace();
+    if (this.addRepoButton) this.addRepoButton.disabled = busy;
+
+    this.repositoriesEl?.querySelectorAll?.('[data-repo-name]')?.forEach((button) => {
+      const unavailable = button.dataset.installed !== 'true' && !button.dataset.repoUrl;
+      button.disabled = busy || unavailable;
+    });
+    this.agentsEl?.querySelectorAll?.('[data-agent-ref]')?.forEach((button) => {
+      button.disabled = busy;
+    });
+    this.agentsEl?.querySelectorAll?.('[data-agent-settings-key]')?.forEach((button) => {
+      button.disabled = busy || this.state.agentSettingsBusyKey === button.dataset.agentSettingsKey;
+    });
+    this.agentsEl?.querySelectorAll?.('[data-enable-mode-for]')?.forEach((select) => {
+      const toggle = select.closest?.('.marketplace-agent-controls')?.querySelector?.('[data-agent-ref]');
+      const disabled = busy || !canManage || toggle?.dataset.active === 'true';
+      select.toggleAttribute('disabled', disabled);
+      select.webSkelPresenter?.applyDisabledState?.();
+    });
+  }
 
   renderState() {
     this.renderTabs();
     const canManage = this.canManageMarketplace();
-    if (this.statusEl) {
-      this.statusEl.textContent = this.state.status || '';
-      this.statusEl.classList.toggle('error', this.state.statusType === 'error');
-    }
-    if (this.addRepoButton) this.addRepoButton.disabled = this.state.busy;
+    this.renderStatus();
     if (this.agentSearchInput && this.agentSearchInput.value !== this.state.agentSearchInput) {
       this.agentSearchInput.value = this.state.agentSearchInput;
     }
@@ -443,6 +481,7 @@ export class MarketplaceModal {
     this.renderRepoKindTabs();
     this.renderRepositories();
     this.renderAgents();
+    this.syncInteractiveState();
   }
 
   canManageMarketplace() {

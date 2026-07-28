@@ -115,8 +115,7 @@ marketplace-modal button {
 marketplace-modal #marketplaceAddRepo,
 marketplace-modal .marketplace-repo-toggle,
 marketplace-modal .marketplace-agent-toggle,
-marketplace-modal .marketplace-agent-settings,
-marketplace-modal .marketplace-enable-mode {
+marketplace-modal .marketplace-agent-settings{
   border: 1px solid var(--border-strong, var(--border));
   background: var(--surface);
   color: var(--text);
@@ -134,11 +133,6 @@ marketplace-modal .marketplace-agent-controls {
   flex: 0 0 auto;
 }
 
-marketplace-modal .marketplace-enable-mode {
-  min-width: 96px;
-  padding: 0 8px;
-}
-
 marketplace-modal .marketplace-repo-toggle.active,
 marketplace-modal .marketplace-agent-toggle.active {
   color: var(--red);
@@ -149,8 +143,7 @@ marketplace-modal .marketplace-agent-toggle.active {
 marketplace-modal #marketplaceAddRepo:hover,
 marketplace-modal .marketplace-repo-toggle:hover,
 marketplace-modal .marketplace-agent-toggle:hover,
-marketplace-modal .marketplace-agent-settings:hover,
-marketplace-modal .marketplace-enable-mode:hover {
+marketplace-modal .marketplace-agent-settings:hover{
   border-color: var(--accent, var(--border-strong));
   background: var(--bg);
 }
