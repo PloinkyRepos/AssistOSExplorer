@@ -78,7 +78,7 @@ hop-by-hop headers cannot reach the browser.
 | Document read | Process-loopback URL, opaque active-session token, timeout and byte bounds |
 | Session key | Store-minted, non-secret 128-bit key persisted for one exact session; never derived from document metadata |
 | Callback body | One own string `token`; authenticate the in-body HS256 outbox JWT first, then require recursive exact equivalence between envelope fields and verified non-temporal claims |
-| Callback download | Redirect-free, bounded, approved office content type, exact process-local origin, and `/cache/files/` path only |
+| Callback download | Exact active editor origin plus one committed Router prefix mapped to process-loopback, or direct process-loopback; confined non-empty `/cache/files/` suffix; redirect-free, bounded, approved office content type |
 | Persistence acknowledgement | Status `2` or `6` bytes are stored before success is acknowledged |
 | Reopen after restart | Uses the last persisted acknowledged session version |
 
@@ -91,6 +91,12 @@ key order; exact recursive types, keys, values, and array order must otherwise
 match, and only verified claims continue downstream. Two sessions for the same
 document deliberately have different keys, so an outbox JWT from one cannot
 authorize the other's opaque callback URL.
+The public callback download form must use exactly
+`/base-agent-additional-server/onlyOffice/8080/cache/files/<confined-suffix>`.
+The Agent removes that one prefix only while mapping to the configured
+process-loopback DocumentServer; it rejects missing, repeated, partial,
+lookalike, dot-segment, and encoded separator/traversal variants before fetch,
+write, or acknowledgement.
 
 ## Targeted restart drain
 

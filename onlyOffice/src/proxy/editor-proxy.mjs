@@ -1,3 +1,6 @@
+import { resolveOnlyOfficeEditorService } from '../edge-topology.mjs';
+import { resolveCanonicalEditorBrowserUrl } from '../public-editor-url.mjs';
+
 const BLOCKED_EXACT_PATHS = new Set([
   '/coauthoring/CommandService.ashx',
   '/ConvertService.ashx',
@@ -26,8 +29,6 @@ const ALLOWED_HTTP_EXACT_PATHS = new Set([
   '/plugins.json',
   '/themes.json'
 ]);
-
-const ONLYOFFICE_EDITOR_ROUTE_PREFIX = '/base-agent-additional-server/onlyOffice/8080';
 
 function stripOnlyOfficeVersionPrefix(pathname) {
   const match = String(pathname || '').match(/^\/\d+(?:\.\d+){1,3}-[A-Za-z0-9._-]+(?=\/)/);
@@ -61,31 +62,8 @@ function sanitizeHeaders(headers = {}) {
   return sanitized;
 }
 
-function resolveCanonicalForwardingMetadata(publicBrowserUrl) {
-  let browserUrl;
-  try {
-    browserUrl = new URL(publicBrowserUrl);
-  } catch (_) {
-    throw new Error('OnlyOffice editor browser URL is invalid.');
-  }
-  if (
-    !['http:', 'https:'].includes(browserUrl.protocol)
-    || browserUrl.username
-    || browserUrl.password
-    || browserUrl.search
-    || browserUrl.hash
-    || browserUrl.pathname !== ONLYOFFICE_EDITOR_ROUTE_PREFIX
-  ) {
-    throw new Error('OnlyOffice editor browser URL does not match the committed Router route.');
-  }
-  return {
-    browserUrl,
-    prefix: ONLYOFFICE_EDITOR_ROUTE_PREFIX,
-  };
-}
-
 function withCanonicalForwardingHeaders(headers, publicBrowserUrl) {
-  const { browserUrl, prefix } = resolveCanonicalForwardingMetadata(publicBrowserUrl);
+  const { browserUrl, prefix } = resolveCanonicalEditorBrowserUrl(publicBrowserUrl);
   return {
     ...headers,
     'x-forwarded-host': browserUrl.host,
@@ -95,7 +73,7 @@ function withCanonicalForwardingHeaders(headers, publicBrowserUrl) {
 }
 
 function requestMatchesCommittedOrigin(req, publicBrowserUrl, { requireOrigin = false } = {}) {
-  const { browserUrl: expected } = resolveCanonicalForwardingMetadata(publicBrowserUrl);
+  const { browserUrl: expected } = resolveCanonicalEditorBrowserUrl(publicBrowserUrl);
   const host = String(req?.headers?.host || '').trim().toLowerCase();
   if (host !== expected.host.toLowerCase()) {
     return false;
@@ -242,4 +220,3 @@ export function createEditorProxy({
     handleUpgrade
   };
 }
-import { resolveOnlyOfficeEditorService } from '../edge-topology.mjs';

@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 
 import { resolveOnlyOfficeEditorService } from '../edge-topology.mjs';
 import { buildDocumentKey } from '../onlyoffice-config.mjs';
+import { resolveCanonicalEditorBrowserUrl } from '../public-editor-url.mjs';
 
 const SAVE_STATUSES = new Set([2, 6]);
 const CALLBACK_TEMPORAL_FIELDS = new Set(['iat', 'nbf', 'exp']);
@@ -230,10 +231,51 @@ function isLoopbackHostname(hostname) {
   return hostname === '127.0.0.1' || hostname === 'localhost' || hostname === '[::1]';
 }
 
-function assertAllowedDownloadPath(url) {
-  if (!url.pathname.startsWith('/cache/files/') || url.pathname.includes('\0')) {
+function extractRawPathname(rawUrl) {
+  if (typeof rawUrl !== 'string' || rawUrl !== rawUrl.trim()) {
+    throw new Error('OnlyOffice callback download URL is malformed.');
+  }
+  const match = rawUrl.match(/^[A-Za-z][A-Za-z0-9+.-]*:\/\/[^/?#]*(\/[^?#]*)?(?:\?[^#]*)?$/);
+  if (!match) {
+    throw new Error('OnlyOffice callback download URL is malformed.');
+  }
+  return match[1] || '/';
+}
+
+function assertConfinedCachePath(rawPathname, expectedPrefix = '') {
+  const cachePrefix = `${expectedPrefix}/cache/files/`;
+  if (!rawPathname.startsWith(cachePrefix)) {
     throw new Error('OnlyOffice callback download path is not allowed.');
   }
+  const suffix = rawPathname.slice(cachePrefix.length);
+  if (!suffix || suffix.endsWith('/') || suffix.includes('\\')) {
+    throw new Error('OnlyOffice callback download path is not allowed.');
+  }
+  const rawSegments = suffix.split('/');
+  if (rawSegments.some((segment) => !segment || segment === '.' || segment === '..')) {
+    throw new Error('OnlyOffice callback download path is not allowed.');
+  }
+  for (const segment of rawSegments) {
+    if (/%(?![0-9A-Fa-f]{2})/.test(segment)) {
+      throw new Error('OnlyOffice callback download path is not allowed.');
+    }
+    let decoded;
+    try {
+      decoded = decodeURIComponent(segment);
+    } catch (_) {
+      throw new Error('OnlyOffice callback download path is not allowed.');
+    }
+    if (
+      !decoded
+      || decoded === '.'
+      || decoded === '..'
+      || /[\/\\\0?#]/.test(decoded)
+      || /%(?:25|2e|2f|5c|3f|23)/i.test(decoded)
+    ) {
+      throw new Error('OnlyOffice callback download path is not allowed.');
+    }
+  }
+  return `/cache/files/${suffix}`;
 }
 
 function resolveTrustedDownloadUrl(rawUrl, {
@@ -247,8 +289,9 @@ function resolveTrustedDownloadUrl(rawUrl, {
     throw new Error('OnlyOffice callback URL configuration is required.');
   }
 
+  const rawPathname = extractRawPathname(rawUrl);
   const downloadUrl = new URL(rawUrl);
-  const publicBase = new URL(publicEditorBaseUrl);
+  const { browserUrl: publicBase, prefix: publicPrefix } = resolveCanonicalEditorBrowserUrl(publicEditorBaseUrl);
   const internalBase = new URL(internalDocumentServerBaseUrl);
   if (internalBase.protocol !== 'http:' || !isLoopbackHostname(internalBase.hostname)) {
     throw new Error('OnlyOffice internal DocumentServer origin must be process-loopback HTTP.');
@@ -264,16 +307,21 @@ function resolveTrustedDownloadUrl(rawUrl, {
   if (downloadUrl.origin !== publicBase.origin && downloadUrl.origin !== internalBase.origin) {
     throw new Error('OnlyOffice callback download URL origin is not trusted.');
   }
-  assertAllowedDownloadPath(downloadUrl);
-  if (downloadUrl.origin === internalBase.origin || publicBase.origin === internalBase.origin) {
+  if (publicBase.origin === internalBase.origin) {
+    throw new Error('OnlyOffice callback public and internal origins must be distinct.');
+  }
+  if (downloadUrl.origin === internalBase.origin) {
+    assertConfinedCachePath(rawPathname);
     return downloadUrl.toString();
   }
+  const internalPathname = assertConfinedCachePath(rawPathname, publicPrefix);
 
   downloadUrl.protocol = internalBase.protocol;
   downloadUrl.username = internalBase.username;
   downloadUrl.password = internalBase.password;
   downloadUrl.hostname = internalBase.hostname;
   downloadUrl.port = internalBase.port;
+  downloadUrl.pathname = internalPathname;
   return downloadUrl.toString();
 }
 

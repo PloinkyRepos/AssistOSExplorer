@@ -123,9 +123,12 @@ test('editor transport rejects ambiguous or unexpected active browser routes bef
     'https://office.example/base-agent-additional-server/onlyOffice/8080/',
     'https://office.example/base-agent-additional-server/onlyOffice/8080//',
     'https://office.example/base-agent-additional-server/onlyOffice/8080/extra',
+    'https://office.example/ignored/../base-agent-additional-server/onlyOffice/8080',
+    'https://office.example/base-agent-additional-server/onlyOffice/%38%30%38%30',
     'https://office.example/base-agent-additional-server/onlyOffice/80800',
     'https://office.example/base-agent-additional-server/onlyOffice/8080?prefix=other',
     'https://office.example/base-agent-additional-server/onlyOffice/8080#other',
+    ' https://office.example/base-agent-additional-server/onlyOffice/8080',
   ];
 
   for (const activeBrowserUrl of invalidBrowserUrls) {

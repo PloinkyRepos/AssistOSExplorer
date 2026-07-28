@@ -84,10 +84,16 @@ JWT from another session is rejected even when both sessions name the same
 document and version.
 
 Document fetches are redirect-free, timeout bounded, byte bounded, and limited
-to the current process-local DocumentServer. A valid status `2` or `6` callback
-stores the version before acknowledgement. Persisted session metadata lets a
-restart reopen the last acknowledged version. Contract-v5 metadata has one
-location, `/root/.ploinky/state/onlyoffice-sessions-v5.json`, under the
+to the current process-local DocumentServer. For the exact active editor origin,
+the callback URL must begin with the committed
+`/base-agent-additional-server/onlyOffice/8080/cache/files/` route. The Agent
+strips exactly that one prefix when mapping the confined non-empty cache suffix
+to process-loopback DocumentServer; direct process-loopback `/cache/files/`
+URLs remain valid. Missing, duplicate, lookalike, dot-segment, and encoded
+separator/traversal forms fail before fetch or persistence. A valid status `2`
+or `6` callback stores the version before acknowledgement. Persisted session
+metadata lets a restart reopen the last acknowledged version. Contract-v5
+metadata has one location, `/root/.ploinky/state/onlyoffice-sessions-v5.json`, under the
 persisted agent workdir. It is a guarded regular `0600` file written through a
 unique exclusive temporary, file `fsync`, atomic rename, and directory `fsync`.
 Delegation bearers are never persisted; a DPU session requires fresh

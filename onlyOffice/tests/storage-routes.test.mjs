@@ -66,7 +66,7 @@ function createStorageRouteHandler(options = {}) {
       ...options.config,
     },
     resolveEditorService: options.resolveEditorService || (async () => ({
-      activeBrowserUrl: 'http://public-onlyoffice:8080/base-agent-additional-server/onlyOffice/8080/',
+      activeBrowserUrl: 'http://public-onlyoffice:8080/base-agent-additional-server/onlyOffice/8080',
     })),
   });
 }
@@ -281,7 +281,7 @@ test('callback route accepts status 1/4 and persists and acknowledges only statu
     const callbackPayload = status === 2 || status === 6
       ? {
           status,
-          url: 'http://public-onlyoffice:8080/cache/files/report.docx'
+          url: 'http://public-onlyoffice:8080/base-agent-additional-server/onlyOffice/8080/cache/files/report.docx'
         }
       : {
           actions: [{ type: 1, userid: `user-${status}` }],
@@ -354,7 +354,7 @@ test('callback route rejects any unsigned/signed structural difference before fe
       }
     ],
     status: 2,
-    url: 'http://public-onlyoffice:8080/cache/files/report.docx'
+    url: 'http://public-onlyoffice:8080/base-agent-additional-server/onlyOffice/8080/cache/files/report.docx'
   };
   const invalidBodies = [
     {
@@ -591,7 +591,7 @@ test('callback exact-value verification rejects non-finite and non-JSON values',
   );
 });
 
-test('callback route rewrites public download url to internal download url before fetching', async () => {
+test('callback route strips one exact public editor prefix and preserves direct internal cache urls', async () => {
   const fetchUrls = [];
   const handler = createStorageRouteHandler({
     config: {
@@ -624,25 +624,114 @@ test('callback route rewrites public download url to internal download url befor
     }
   });
 
-  const req = createMockRequest({
-    method: 'POST',
-    url: '/internal/callback/token-1',
-    headers: {
-      'content-type': 'application/json'
-    },
-    body: signCallbackPayload({
-      status: 2,
-      url: 'http://public-onlyoffice:8080/cache/files/report.docx?download=1'
-    })
-  });
-  const res = createMockResponse();
-  await handler(req, res);
+  for (const downloadUrl of [
+    'http://public-onlyoffice:8080/base-agent-additional-server/onlyOffice/8080/cache/files/report.docx?download=1',
+    'http://127.0.0.1/cache/files/direct.docx?download=2',
+  ]) {
+    const req = createMockRequest({
+      method: 'POST',
+      url: '/internal/callback/token-1',
+      headers: {
+        'content-type': 'application/json'
+      },
+      body: signCallbackPayload({
+        status: 2,
+        url: downloadUrl,
+      })
+    });
+    const res = createMockResponse();
+    await handler(req, res);
+    assert.equal(res.statusCode, 200);
+  }
 
-  assert.equal(res.statusCode, 200);
-  assert.equal(fetchUrls.length, 1);
-  const rewrittenUrl = new URL(fetchUrls[0]);
-  assert.equal(rewrittenUrl.origin, 'http://127.0.0.1');
-  assert.equal(`${rewrittenUrl.pathname}${rewrittenUrl.search}`, '/cache/files/report.docx?download=1');
+  assert.deepEqual(fetchUrls, [
+    'http://127.0.0.1/cache/files/report.docx?download=1',
+    'http://127.0.0.1/cache/files/direct.docx?download=2',
+  ]);
+});
+
+test('callback route rejects ambiguous or unconfined cache paths before fetch, write, or acknowledgement', async (t) => {
+  const routePrefix = '/base-agent-additional-server/onlyOffice/8080';
+  const publicOrigin = 'http://public-onlyoffice:8080';
+  const invalidUrls = [
+    ['missing public prefix', `${publicOrigin}/cache/files/report.docx`],
+    ['duplicate public prefix', `${publicOrigin}${routePrefix}${routePrefix}/cache/files/report.docx`],
+    ['partial public prefix', `${publicOrigin}/base-agent-additional-server/onlyOffice/808/cache/files/report.docx`],
+    ['lookalike public prefix', `${publicOrigin}${routePrefix}.evil/cache/files/report.docx`],
+    ['unexpected agent', `${publicOrigin}/base-agent-additional-server/notOnlyOffice/8080/cache/files/report.docx`],
+    ['unexpected port', `${publicOrigin}/base-agent-additional-server/onlyOffice/8081/cache/files/report.docx`],
+    ['extra path prefix', `${publicOrigin}/extra${routePrefix}/cache/files/report.docx`],
+    ['missing suffix', `${publicOrigin}${routePrefix}/cache/files/`],
+    ['empty suffix segment', `${publicOrigin}${routePrefix}/cache/files/data//report.docx`],
+    ['raw parent segment', `${publicOrigin}${routePrefix}/cache/files/data/../report.docx`],
+    ['raw current segment', `${publicOrigin}${routePrefix}/cache/files/data/./report.docx`],
+    ['encoded parent segment', `${publicOrigin}${routePrefix}/cache/files/data/%2e%2e/report.docx`],
+    ['double-encoded parent segment', `${publicOrigin}${routePrefix}/cache/files/data/%252e%252e/report.docx`],
+    ['encoded slash', `${publicOrigin}${routePrefix}/cache/files/data%2freport.docx`],
+    ['double-encoded slash', `${publicOrigin}${routePrefix}/cache/files/data%252freport.docx`],
+    ['encoded backslash', `${publicOrigin}${routePrefix}/cache/files/data%5creport.docx`],
+    ['encoded query separator', `${publicOrigin}${routePrefix}/cache/files/report%3fdownload.docx`],
+    ['encoded fragment separator', `${publicOrigin}${routePrefix}/cache/files/report%23fragment.docx`],
+    ['malformed encoding', `${publicOrigin}${routePrefix}/cache/files/report%2.docx`],
+    ['literal backslash', `${publicOrigin}${routePrefix}/cache/files/data\\report.docx`],
+    ['surrounding whitespace', ` ${publicOrigin}${routePrefix}/cache/files/report.docx`],
+  ];
+
+  for (const [name, downloadUrl] of invalidUrls) {
+    await t.test(name, async () => {
+      let fetchCalls = 0;
+      let writes = 0;
+      let acknowledgements = 0;
+      const handler = createStorageRouteHandler({
+        config: {
+          internalDocumentServerBaseUrl: 'http://127.0.0.1:80',
+        },
+        sessionStore: createSessionStore(
+          {
+            requestedPath: '/workspace/report.docx',
+            mimeType: 'text/plain',
+            canWrite: true,
+          },
+          {
+            onAcknowledge() {
+              acknowledgements += 1;
+            },
+          }
+        ),
+        storageRouter: {
+          forSession() {
+            return {
+              async write() {
+                writes += 1;
+              },
+            };
+          },
+        },
+        fetchImpl: async () => {
+          fetchCalls += 1;
+          return createDownloadResponse();
+        },
+      });
+      const req = createMockRequest({
+        method: 'POST',
+        url: '/internal/callback/token-1',
+        headers: { 'content-type': 'application/json' },
+        body: signCallbackPayload({
+          status: 6,
+          url: downloadUrl,
+        }),
+      });
+      const res = createMockResponse();
+
+      await handler(req, res);
+
+      assert.equal(res.statusCode, 400);
+      assert.equal(res.bodyText, '{"error":1}');
+      assert.equal(fetchCalls, 0);
+      assert.equal(writes, 0);
+      assert.equal(acknowledgements, 0);
+    });
+  }
 });
 
 test('callback route rejects an outbox JWT from another session for the same document before fetch or write', async () => {
@@ -677,7 +766,7 @@ test('callback route rejects an outbox JWT from another session for the same doc
     body: signCallbackPayload({
       key: DEFAULT_DOCUMENT_KEY,
       status: 2,
-      url: 'http://public-onlyoffice:8080/cache/files/report.docx',
+      url: 'http://public-onlyoffice:8080/base-agent-additional-server/onlyOffice/8080/cache/files/report.docx',
     }),
   });
   const res = createMockResponse();
@@ -737,7 +826,7 @@ test('callback route rejects read-only sessions before fetching save payload', a
     },
     body: signCallbackPayload({
       status: 2,
-      url: 'http://public-onlyoffice:8080/cache/files/report.docx'
+      url: 'http://public-onlyoffice:8080/base-agent-additional-server/onlyOffice/8080/cache/files/report.docx'
     })
   });
   const res = createMockResponse();
@@ -847,7 +936,7 @@ test('callback route rejects non-cache DocumentServer paths and unsafe response 
     headers: { 'content-type': 'application/json' },
     body: signCallbackPayload({
       status: 2,
-      url: 'http://public-onlyoffice:8080/cache/files/report.docx',
+      url: 'http://public-onlyoffice:8080/base-agent-additional-server/onlyOffice/8080/cache/files/report.docx',
     }),
   });
   const unsafeContentResponse = createMockResponse();
@@ -969,7 +1058,7 @@ test('callback route never accepts x-ploinky-auth-info as storage authorization'
     },
     body: JSON.stringify({
       status: 2,
-      url: 'http://public-onlyoffice:8080/cache/files/report.docx'
+      url: 'http://public-onlyoffice:8080/base-agent-additional-server/onlyOffice/8080/cache/files/report.docx'
     })
   });
   const res = createMockResponse();
