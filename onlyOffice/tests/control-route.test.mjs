@@ -54,7 +54,7 @@ function makeEnv() {
 function createTestControlRouteHandler(options = {}) {
   return createControlRouteHandler({
     resolveEditorService: async () => ({
-      activeBrowserUrl: 'https://office.example.com/base-agent-additional-server/onlyOffice/8080/',
+      activeBrowserUrl: 'https://office.example.com/base-agent-additional-server/onlyOffice/8080',
     }),
     ...options,
   });
@@ -350,6 +350,52 @@ test('workspace session is created WITHOUT a DPU delegation token', async () => 
   await res.done;
   assert.equal(res.statusCode, 200);
   assert.deepEqual(captured.input.delegations, {});
+  assert.equal(
+    captured.input.activeBrowserUrl,
+    'https://office.example.com/base-agent-additional-server/onlyOffice/8080',
+  );
+});
+
+test('office session route validates and binds editor authority before creating a session', async () => {
+  for (const activeBrowserUrl of [
+    'https://office.example.com/base-agent-additional-server/onlyOffice/8080/',
+    'https://evil.example/other',
+    'https://user@office.example.com/base-agent-additional-server/onlyOffice/8080',
+  ]) {
+    let createCalls = 0;
+    const handler = createTestControlRouteHandler({
+      env: makeEnv(),
+      resolveEditorService: async () => ({ activeBrowserUrl }),
+      sessionStore: {
+        createSession() {
+          createCalls += 1;
+          throw new Error('must not create a session');
+        },
+      },
+      resolveSessionDescriptor: async () => ({
+        requestedPath: '/workspace/report.docx',
+        path: '/workspace/report.docx',
+        storageKind: 'workspace',
+        storageId: 'workspace/report.docx',
+        fileName: 'report.docx',
+        canWrite: true,
+        canComment: true,
+        versionKey: 'v1',
+      }),
+    });
+    const req = makeRequest({
+      url: '/control/office/session?path=%2Fworkspace%2Freport.docx',
+      headers: mintAuthHeaders(),
+    });
+    const res = new MockWritableResponse();
+
+    await assert.rejects(
+      () => handler(req, res, new URL(req.url, 'http://localhost')),
+      /browser URL|committed Router route/i,
+      activeBrowserUrl,
+    );
+    assert.equal(createCalls, 0, activeBrowserUrl);
+  }
 });
 
 test('office session route does not return delegation tokens to the browser', async () => {

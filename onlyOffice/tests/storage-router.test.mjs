@@ -51,6 +51,7 @@ test('storage router sends persisted Confidential sessions to dpu store', async 
     now: () => new Date('2026-06-09T12:00:00.000Z')
   });
   const created = sessions.createSession({
+    activeBrowserUrl: 'https://office.example.com/base-agent-additional-server/onlyOffice/8080',
     path: '/Confidential/My Space/report.docx',
     storageKind: 'dpu',
     storageId: 'confidential:report',

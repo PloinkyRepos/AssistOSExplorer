@@ -56,8 +56,10 @@ challenges, hop-by-hop fields, internal forwarding metadata, and unsanitized
 WebSocket upgrade headers never cross the public editor boundary.
 
 Every editor-session creation derives the current Router origin from trusted
-request metadata and appends the editor convention path. No URL is cached at
-process startup and no private origin is exposed to a browser.
+request metadata, appends and fail-closed validates the exact editor convention
+path, and persists that canonical active browser URL as immutable
+session-bound authority. No URL is cached at process startup and no private
+origin is exposed to a browser. A session update cannot replace that authority.
 
 ## Signed document lifecycle
 
@@ -84,14 +86,19 @@ JWT from another session is rejected even when both sessions name the same
 document and version.
 
 Document fetches are redirect-free, timeout bounded, byte bounded, and limited
-to the current process-local DocumentServer. For the exact active editor origin,
-the callback URL must begin with the committed
+to the current process-local DocumentServer. For the exact active editor origin
+stored with the authenticated callback session, the callback URL must begin
+with the committed
 `/base-agent-additional-server/onlyOffice/8080/cache/files/` route. The Agent
 strips exactly that one prefix when mapping the confined non-empty cache suffix
 to process-loopback DocumentServer; direct process-loopback `/cache/files/`
 URLs remain valid. Missing, duplicate, lookalike, dot-segment, and encoded
-separator/traversal forms fail before fetch or persistence. A valid status `2`
-or `6` callback stores the version before acknowledgement. Persisted session
+separator/traversal forms fail before fetch or persistence. Callback
+forwarding headers, environment, and signed fields never supply or alter this
+authority. Missing, malformed, mutated, or conflicting stored authority fails
+before fetch, persistence, or acknowledgement without a compatibility or
+origin-translation fallback. A valid status `2` or `6` callback stores the
+version before acknowledgement. Persisted session
 metadata lets a restart reopen the last acknowledged version. Contract-v5
 metadata has one location, `/root/.ploinky/state/onlyoffice-sessions-v5.json`, under the
 persisted agent workdir. It is a guarded regular `0600` file written through a
@@ -99,7 +106,10 @@ unique exclusive temporary, file `fsync`, atomic rename, and directory `fsync`.
 Delegation bearers are never persisted; a DPU session requires fresh
 authenticated control material after recreate. Symlinks, weak modes, wrong
 ownership, corrupt bytes, missing or duplicate session document keys, duplicate
-records, and pre-v5 schemas fail closed. There is no derived-key fallback.
+records, missing or corrupt canonical active browser bindings, and pre-v5
+schemas fail closed. The canonical browser URL and its binding-integrity value
+survive reload and targeted recreate. There is no derived-key or authority
+fallback.
 
 ## Lifecycle and failure
 

@@ -2,6 +2,8 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { resolveCanonicalEditorBrowserUrl } from './public-editor-url.mjs';
+
 function asDate(value) {
   return value instanceof Date ? new Date(value.getTime()) : new Date(value || Date.now());
 }
@@ -25,6 +27,36 @@ function mintDocumentKey(sessions) {
     documentKey = crypto.randomBytes(16).toString('hex');
   } while (existing.has(documentKey));
   return documentKey;
+}
+
+function canonicalActiveBrowserUrl(value) {
+  try {
+    const { browserUrl, prefix } = resolveCanonicalEditorBrowserUrl(value);
+    return `${browserUrl.origin}${prefix}`;
+  } catch (_) {
+    throw stateError('OnlyOffice v5 session activeBrowserUrl is corrupt; recreate the agent state explicitly.');
+  }
+}
+
+function activeBrowserBindingHash({ tokenHash, activeBrowserUrl }) {
+  return crypto.createHash('sha256')
+    .update(`${tokenHash}\0${activeBrowserUrl}`, 'utf8')
+    .digest('base64url');
+}
+
+function assertActiveBrowserBinding(record) {
+  const activeBrowserUrl = canonicalActiveBrowserUrl(record?.activeBrowserUrl);
+  const expected = activeBrowserBindingHash({
+    tokenHash: record?.tokenHash,
+    activeBrowserUrl,
+  });
+  if (
+    !/^[A-Za-z0-9_-]{43}$/.test(String(record?.activeBrowserBindingHash || ''))
+    || record.activeBrowserBindingHash !== expected
+  ) {
+    throw stateError('OnlyOffice v5 session activeBrowserUrl binding is corrupt; recreate the agent state explicitly.');
+  }
+  return activeBrowserUrl;
 }
 
 function cloneRoles(input) {
@@ -76,6 +108,7 @@ function sanitizeStoredSession(record) {
     canComment: Boolean(record.canComment),
     versionKey: record.versionKey,
     documentKey: record.documentKey,
+    activeBrowserUrl: record.activeBrowserUrl,
     preview: clonePreview(record.preview),
     authUser: cloneAuthUser(record.authUser),
     delegations: cloneDelegations(record.delegations),
@@ -113,6 +146,7 @@ function publicSummaryFromRecord(record, token = '') {
     canComment: Boolean(record.canComment),
     versionKey: record.versionKey,
     documentKey: record.documentKey,
+    activeBrowserUrl: record.activeBrowserUrl,
     preview: clonePreview(record.preview),
     authUser: cloneAuthUser(record.authUser),
     createdAt: record.createdAt,
@@ -132,6 +166,7 @@ function publicSummaryFromRecord(record, token = '') {
         canComment: Boolean(record.canComment),
         versionKey: record.versionKey,
         documentKey: record.documentKey,
+        activeBrowserUrl: record.activeBrowserUrl,
         preview: clonePreview(record.preview),
         authUser: cloneAuthUser(record.authUser),
         createdAt: record.createdAt,
@@ -239,6 +274,13 @@ function validateStoredRecord(record) {
   if (!/^[0-9a-f]{32}$/.test(String(record.documentKey || ''))) {
     throw stateError('OnlyOffice v5 session documentKey is corrupt; recreate the agent state explicitly.');
   }
+  if (
+    typeof record.activeBrowserUrl !== 'string'
+    || canonicalActiveBrowserUrl(record.activeBrowserUrl) !== record.activeBrowserUrl
+  ) {
+    throw stateError('OnlyOffice v5 session activeBrowserUrl is corrupt; recreate the agent state explicitly.');
+  }
+  assertActiveBrowserBinding(record);
   for (const field of ['canWrite', 'canComment']) {
     if (typeof record[field] !== 'boolean') throw stateError(`OnlyOffice v5 session ${field} is corrupt.`);
   }
@@ -380,6 +422,7 @@ export function createSessionStore({
     if (!record) {
       throw new Error('Unknown or expired OnlyOffice session token.');
     }
+    assertActiveBrowserBinding(record);
     if (at.getTime() >= asDate(record.absoluteExpiresAt).getTime()) {
       sessions.delete(record.tokenHash);
       persist();
@@ -399,12 +442,14 @@ export function createSessionStore({
   return {
     createSession(input = {}) {
       const createdAt = resolveNow(input.createdAt);
+      const activeBrowserUrl = canonicalActiveBrowserUrl(input.activeBrowserUrl);
       const idleCandidate = new Date(createdAt.getTime() + idleTtlMs);
       const absoluteCandidate = new Date(createdAt.getTime() + absoluteTtlMs);
       const absoluteExpiresAt = earliestDelegationExpiry(input.delegations, absoluteCandidate);
       const idleExpiresAt = minDate(idleCandidate, absoluteExpiresAt);
       const token = crypto.randomBytes(32).toString('base64url');
       const tokenHash = hashToken(token);
+      const documentKey = mintDocumentKey(sessions);
       const record = {
         tokenHash,
         requestedPath: String(input.requestedPath || input.path || '').trim(),
@@ -417,7 +462,12 @@ export function createSessionStore({
         canWrite: Boolean(input.canWrite),
         canComment: Boolean(input.canComment),
         versionKey: String(input.versionKey || '').trim(),
-        documentKey: mintDocumentKey(sessions),
+        documentKey,
+        activeBrowserUrl,
+        activeBrowserBindingHash: activeBrowserBindingHash({
+          tokenHash,
+          activeBrowserUrl,
+        }),
         preview: clonePreview(input.preview),
         authUser: cloneAuthUser(input.authUser),
         delegations: cloneDelegations(input.delegations),
@@ -432,9 +482,15 @@ export function createSessionStore({
       return publicSummaryFromRecord(record, token);
     },
 
-    touchSession(token, { now: valueNow } = {}) {
+    touchSession(token, { now: valueNow, activeBrowserUrl } = {}) {
       const record = readRecordByToken(token);
       const touchedAt = assertActive(record, valueNow);
+      if (
+        activeBrowserUrl !== undefined
+        && canonicalActiveBrowserUrl(activeBrowserUrl) !== record.activeBrowserUrl
+      ) {
+        throw new Error('OnlyOffice session activeBrowserUrl is immutable.');
+      }
       const nextIdleExpiry = minDate(
         new Date(touchedAt.getTime() + idleTtlMs),
         asDate(record.absoluteExpiresAt)

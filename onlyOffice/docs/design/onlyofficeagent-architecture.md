@@ -78,7 +78,8 @@ hop-by-hop headers cannot reach the browser.
 | Document read | Process-loopback URL, opaque active-session token, timeout and byte bounds |
 | Session key | Store-minted, non-secret 128-bit key persisted for one exact session; never derived from document metadata |
 | Callback body | One own string `token`; authenticate the in-body HS256 outbox JWT first, then require recursive exact equivalence between envelope fields and verified non-temporal claims |
-| Callback download | Exact active editor origin plus one committed Router prefix mapped to process-loopback, or direct process-loopback; confined non-empty `/cache/files/` suffix; redirect-free, bounded, approved office content type |
+| Callback authority | The fail-closed canonical active browser URL is persisted immutably with the session and revalidated on load/use; callback headers, environment, and signed fields cannot replace it |
+| Callback download | Exact session-bound editor origin plus one committed Router prefix mapped to process-loopback, or direct process-loopback; confined non-empty `/cache/files/` suffix; redirect-free, bounded, approved office content type |
 | Persistence acknowledgement | Status `2` or `6` bytes are stored before success is acknowledged |
 | Reopen after restart | Uses the last persisted acknowledged session version |
 
@@ -93,10 +94,16 @@ document deliberately have different keys, so an outbox JWT from one cannot
 authorize the other's opaque callback URL.
 The public callback download form must use exactly
 `/base-agent-additional-server/onlyOffice/8080/cache/files/<confined-suffix>`.
-The Agent removes that one prefix only while mapping to the configured
+Session creation validates and persists the exact canonical public editor
+origin and prefix as immutable session-bound authority. The Agent removes that
+one prefix only while mapping to the configured
 process-loopback DocumentServer; it rejects missing, repeated, partial,
 lookalike, dot-segment, and encoded separator/traversal variants before fetch,
-write, or acknowledgement.
+write, or acknowledgement. Callback request forwarding headers, runtime
+environment, and signed callback fields are never re-resolved as download
+authority. Missing, malformed, mutated, or conflicting stored authority fails
+before fetch, write, or acknowledgement; there is no compatibility or origin
+translation fallback.
 
 ## Targeted restart drain
 
@@ -125,7 +132,10 @@ missing or duplicate per-session document keys, and every schema other than v5.
 Delegation bearer tokens never enter the state bytes; DPU sessions require
 fresh authenticated control material after a recreate. An uncommitted crash
 temporary is ignored and no old schema or derived document key is imported or
-reconstructed.
+reconstructed. Each record also contains the canonical active browser URL and
+its binding-integrity value. Loading and active-session lookup revalidate both;
+session updates cannot change that authority, including across a targeted
+recreate.
 
 DocumentServer Data and `/var/lib/onlyoffice` are explicit managed mounts.
 PostgreSQL, RabbitMQ, and Redis state remains image-owned so rootless Podman

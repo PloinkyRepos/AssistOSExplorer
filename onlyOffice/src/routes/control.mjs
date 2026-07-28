@@ -6,6 +6,7 @@ import { verifyControlRouteAuth } from '../http-auth.mjs';
 import { buildSignedOnlyOfficeConfig } from '../onlyoffice-config.mjs';
 import { isConfidentialRequestPath as isConfidentialPath } from '../storage/dpu-paths.mjs';
 import { resolveOnlyOfficeEditorService } from '../edge-topology.mjs';
+import { resolveCanonicalEditorBrowserUrl } from '../public-editor-url.mjs';
 
 function sendJson(res, statusCode, payload) {
   const body = Buffer.from(JSON.stringify(payload));
@@ -144,23 +145,29 @@ export function createControlRouteHandler({
       authUser,
       delegations,
     });
+    const editorService = await resolveEditorService({ req });
+    const {
+      browserUrl: editorBrowserUrl,
+      prefix: editorBrowserPrefix,
+    } = resolveCanonicalEditorBrowserUrl(editorService.activeBrowserUrl);
+    const activeBrowserUrl = `${editorBrowserUrl.origin}${editorBrowserPrefix}`;
     const sessionDelegations = isConfidentialPath(requestedPath) ? delegations : {};
     const session = sessionStore.createSession({
       ...descriptor,
       authUser,
       delegations: sessionDelegations,
+      activeBrowserUrl,
     });
 
     const documentUrl = buildLoopbackStorageUrl(config.storagePort, 'document', session.token);
     const callbackUrl = buildLoopbackStorageUrl(config.storagePort, 'callback', session.token);
-    const editorService = await resolveEditorService({ req });
     const editorConfig = buildSignedOnlyOfficeConfig({
       session,
       config,
       authUser,
       documentUrl,
       callbackUrl,
-      publicEditorBaseUrl: editorService.activeBrowserUrl,
+      publicEditorBaseUrl: session.activeBrowserUrl,
     });
 
     sendJson(res, 200, {

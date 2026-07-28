@@ -1,6 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
-import { resolveOnlyOfficeEditorService } from '../edge-topology.mjs';
 import { buildDocumentKey } from '../onlyoffice-config.mjs';
 import { resolveCanonicalEditorBrowserUrl } from '../public-editor-url.mjs';
 
@@ -334,7 +333,6 @@ export function createStorageRouteHandler({
   sessionStore,
   storageRouter,
   fetchImpl = globalThis.fetch,
-  resolveEditorService = resolveOnlyOfficeEditorService,
   now = () => Date.now(),
 } = {}) {
   if (!sessionStore || !storageRouter) {
@@ -446,9 +444,8 @@ export function createStorageRouteHandler({
 
     let downloadUrl;
     try {
-      const editorService = await resolveEditorService({ req });
       downloadUrl = resolveTrustedDownloadUrl(payload?.url, {
-        publicEditorBaseUrl: editorService.activeBrowserUrl,
+        publicEditorBaseUrl: session.activeBrowserUrl,
         internalDocumentServerBaseUrl: config.internalDocumentServerBaseUrl,
       });
     } catch (_) {

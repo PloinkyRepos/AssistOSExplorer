@@ -6,7 +6,22 @@ import path from 'node:path';
 
 import { loadConfig } from '../src/config.mjs';
 import { buildDocumentKey } from '../src/onlyoffice-config.mjs';
-import { createSessionStore } from '../src/session-store.mjs';
+import { createSessionStore as createSessionStoreRaw } from '../src/session-store.mjs';
+
+const ACTIVE_BROWSER_URL = 'https://office.example.com/base-agent-additional-server/onlyOffice/8080';
+
+function createSessionStore(options) {
+  const store = createSessionStoreRaw(options);
+  return {
+    ...store,
+    createSession(input = {}) {
+      return store.createSession({
+        activeBrowserUrl: ACTIVE_BROWSER_URL,
+        ...input,
+      });
+    },
+  };
+}
 
 function at(isoText) {
   return new Date(isoText);
@@ -94,6 +109,7 @@ test('session store mints opaque tokens and never exposes delegation tokens in s
   });
   assert.equal(typeof stored.tokenHash, 'string');
   assert.notEqual(stored.tokenHash, created.token);
+  assert.equal(stored.activeBrowserUrl, ACTIVE_BROWSER_URL);
 
   const summary = created.publicSummary();
   assert.equal(summary.delegations, undefined);
@@ -127,6 +143,50 @@ test('same-document sessions receive distinct store-minted document keys', () =>
     () => buildDocumentKey({ ...descriptor, documentKey: '' }),
     /persisted v5 documentKey/i,
   );
+});
+
+test('session browser authority is canonical, immutable, and rejects conflicting updates', () => {
+  const store = createSessionStore({
+    now: () => at('2026-06-09T12:00:00.000Z'),
+  });
+  const created = store.createSession({
+    path: '/docs/bound.docx',
+    storageKind: 'workspace',
+    fileName: 'bound.docx',
+    canWrite: true,
+  });
+
+  created.activeBrowserUrl = 'https://evil.example/base-agent-additional-server/onlyOffice/8080';
+  assert.equal(store.getForStorageRequest(created.token).activeBrowserUrl, ACTIVE_BROWSER_URL);
+  assert.throws(
+    () => store.touchSession(created.token, {
+      activeBrowserUrl: 'https://evil.example/base-agent-additional-server/onlyOffice/8080',
+    }),
+    /activeBrowserUrl is immutable/,
+  );
+  assert.equal(
+    store.touchSession(created.token, { activeBrowserUrl: ACTIVE_BROWSER_URL }).activeBrowserUrl,
+    ACTIVE_BROWSER_URL,
+  );
+
+  for (const activeBrowserUrl of [
+    undefined,
+    `${ACTIVE_BROWSER_URL}/`,
+    'https://office.example.com/base-agent-additional-server/onlyOffice/8081',
+    'https://user@office.example.com/base-agent-additional-server/onlyOffice/8080',
+  ]) {
+    const isolated = createSessionStoreRaw();
+    assert.throws(
+      () => isolated.createSession({
+        activeBrowserUrl,
+        path: '/docs/rejected.docx',
+        storageKind: 'workspace',
+        fileName: 'rejected.docx',
+        canWrite: true,
+      }),
+      /activeBrowserUrl.*recreate/i,
+    );
+  }
 });
 
 test('session store expires at the earlier of idle timeout and delegation expiry', () => {
@@ -236,6 +296,8 @@ test('session metadata survives a targeted recreate through an atomic private v5
   const reopened = second.getForStorageRequest(created.token);
   assert.equal(reopened.path, '/docs/recreate.docx');
   assert.equal(reopened.documentKey, created.documentKey);
+  assert.equal(reopened.activeBrowserUrl, ACTIVE_BROWSER_URL);
+  assert.equal(JSON.parse(await readFile(stateFile, 'utf8')).sessions[0].activeBrowserUrl, ACTIVE_BROWSER_URL);
   assert.equal((await readFile(stateFile, 'utf8')).endsWith('\n'), true);
   assert.equal((await readdir(directory)).some((name) => name.includes('.tmp-')), false);
 });
@@ -369,4 +431,55 @@ test('session state hard cut rejects missing, malformed, and duplicate per-sessi
     () => createSessionStore({ stateFile: duplicateKeyFile }),
     /duplicate documentKey/i,
   );
+});
+
+test('session state hard cut rejects missing or mutated browser authority without fallback', async () => {
+  const directory = await realpath(await mkdtemp(path.join(os.tmpdir(), 'onlyoffice-session-browser-url-')));
+  const sourceFile = path.join(directory, 'source.json');
+  const store = createSessionStore({
+    now: () => at('2026-06-09T12:00:00.000Z'),
+    stateFile: sourceFile,
+  });
+  store.createSession({
+    path: '/docs/authority.docx',
+    storageKind: 'workspace',
+    storageId: 'authority',
+    objectId: '',
+    fileName: 'authority.docx',
+    mimeType: '',
+    canWrite: true,
+    canComment: false,
+    versionKey: 'v1',
+    authUser: { id: 'alice', username: 'alice', roles: [] },
+  });
+  const pristine = JSON.parse(await readFile(sourceFile, 'utf8'));
+
+  const mutations = [
+    ['missing', (record) => delete record.activeBrowserUrl],
+    ['missing-binding', (record) => delete record.activeBrowserBindingHash],
+    ['mutated-binding', (record) => {
+      record.activeBrowserBindingHash = 'A'.repeat(43);
+    }],
+    ['trailing-slash', (record) => {
+      record.activeBrowserUrl = `${ACTIVE_BROWSER_URL}/`;
+    }],
+    ['different-origin', (record) => {
+      record.activeBrowserUrl = 'https://evil.example/base-agent-additional-server/onlyOffice/8080';
+    }],
+    ['different-prefix', (record) => {
+      record.activeBrowserUrl = 'https://office.example.com/base-agent-additional-server/onlyOffice/8081';
+    }],
+  ];
+
+  for (const [name, mutate] of mutations) {
+    const state = structuredClone(pristine);
+    mutate(state.sessions[0]);
+    const stateFile = path.join(directory, `${name}.json`);
+    await writeFile(stateFile, `${JSON.stringify(state)}\n`, { mode: 0o600 });
+    assert.throws(
+      () => createSessionStoreRaw({ stateFile }),
+      /activeBrowserUrl.*recreate/i,
+      name,
+    );
+  }
 });
