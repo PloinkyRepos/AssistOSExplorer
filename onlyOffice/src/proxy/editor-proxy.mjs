@@ -27,6 +27,8 @@ const ALLOWED_HTTP_EXACT_PATHS = new Set([
   '/themes.json'
 ]);
 
+const ONLYOFFICE_EDITOR_ROUTE_PREFIX = '/base-agent-additional-server/onlyOffice/8080';
+
 function stripOnlyOfficeVersionPrefix(pathname) {
   const match = String(pathname || '').match(/^\/\d+(?:\.\d+){1,3}-[A-Za-z0-9._-]+(?=\/)/);
   if (!match) {
@@ -59,17 +61,41 @@ function sanitizeHeaders(headers = {}) {
   return sanitized;
 }
 
+function resolveCanonicalForwardingMetadata(publicBrowserUrl) {
+  let browserUrl;
+  try {
+    browserUrl = new URL(publicBrowserUrl);
+  } catch (_) {
+    throw new Error('OnlyOffice editor browser URL is invalid.');
+  }
+  if (
+    !['http:', 'https:'].includes(browserUrl.protocol)
+    || browserUrl.username
+    || browserUrl.password
+    || browserUrl.search
+    || browserUrl.hash
+    || browserUrl.pathname !== ONLYOFFICE_EDITOR_ROUTE_PREFIX
+  ) {
+    throw new Error('OnlyOffice editor browser URL does not match the committed Router route.');
+  }
+  return {
+    browserUrl,
+    prefix: ONLYOFFICE_EDITOR_ROUTE_PREFIX,
+  };
+}
+
 function withCanonicalForwardingHeaders(headers, publicBrowserUrl) {
-  const browserUrl = new URL(publicBrowserUrl);
+  const { browserUrl, prefix } = resolveCanonicalForwardingMetadata(publicBrowserUrl);
   return {
     ...headers,
     'x-forwarded-host': browserUrl.host,
     'x-forwarded-proto': browserUrl.protocol.replace(/:$/, ''),
+    'x-forwarded-prefix': prefix,
   };
 }
 
 function requestMatchesCommittedOrigin(req, publicBrowserUrl, { requireOrigin = false } = {}) {
-  const expected = new URL(publicBrowserUrl);
+  const { browserUrl: expected } = resolveCanonicalForwardingMetadata(publicBrowserUrl);
   const host = String(req?.headers?.host || '').trim().toLowerCase();
   if (host !== expected.host.toLowerCase()) {
     return false;

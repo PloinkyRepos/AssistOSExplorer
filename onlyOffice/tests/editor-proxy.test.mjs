@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import { createEditorProxy } from '../src/proxy/editor-proxy.mjs';
 
-const ACTIVE_EDITOR_URL = 'https://office.example/base-agent-additional-server/onlyOffice/8080/';
+const ACTIVE_EDITOR_URL = 'https://office.example/base-agent-additional-server/onlyOffice/8080';
 
 function createResponse() {
   const chunks = [];
@@ -99,6 +99,7 @@ test('editor transport strips browser credentials and installs canonical forward
       'x-forwarded-for': '203.0.113.8',
       'x-forwarded-host': 'evil.example',
       'x-forwarded-proto': 'http',
+      'x-forwarded-prefix': '/evil',
       'x-ploinky-auth-info': 'identity',
       'x-ploinky-csrf-token': 'csrf',
       'Ploinky-Agent-Assertion': 'private-router-assertion',
@@ -110,7 +111,41 @@ test('editor transport strips browser credentials and installs canonical forward
     accept: '*/*',
     'x-forwarded-host': 'office.example',
     'x-forwarded-proto': 'https',
+    'x-forwarded-prefix': '/base-agent-additional-server/onlyOffice/8080',
   });
+});
+
+test('editor transport rejects ambiguous or unexpected active browser routes before dialing', async () => {
+  const invalidBrowserUrls = [
+    'not a URL',
+    'ftp://office.example/base-agent-additional-server/onlyOffice/8080',
+    'https://user@office.example/base-agent-additional-server/onlyOffice/8080',
+    'https://office.example/base-agent-additional-server/onlyOffice/8080/',
+    'https://office.example/base-agent-additional-server/onlyOffice/8080//',
+    'https://office.example/base-agent-additional-server/onlyOffice/8080/extra',
+    'https://office.example/base-agent-additional-server/onlyOffice/80800',
+    'https://office.example/base-agent-additional-server/onlyOffice/8080?prefix=other',
+    'https://office.example/base-agent-additional-server/onlyOffice/8080#other',
+  ];
+
+  for (const activeBrowserUrl of invalidBrowserUrls) {
+    let dialed = false;
+    const proxy = createTestProxy({
+      resolveEditorService: async () => ({ activeBrowserUrl }),
+      async forwardHttp() { dialed = true; },
+    });
+    const res = createResponse();
+    await assert.rejects(
+      proxy.handle({
+        method: 'GET',
+        url: '/cache/files/data/document/Editor.bin/Editor.bin',
+        headers: { host: 'office.example' },
+      }, res),
+      /browser URL|committed Router route/,
+      activeBrowserUrl,
+    );
+    assert.equal(dialed, false, activeBrowserUrl);
+  }
 });
 
 test('editor transport rejects non-serialized exact Origin values before dialing', async () => {
@@ -159,6 +194,10 @@ test('editor websocket requires exact current host and Origin', async () => {
   assert.equal(forwarded.length, 1);
   assert.equal(forwarded[0].targetUrl, 'ws://127.0.0.1/doc/123/c');
   assert.equal(forwarded[0].headers['x-forwarded-proto'], 'https');
+  assert.equal(
+    forwarded[0].headers['x-forwarded-prefix'],
+    '/base-agent-additional-server/onlyOffice/8080',
+  );
   assert.equal(forwarded[0].headers['Ploinky-Agent-Assertion'], undefined);
 
   for (const headers of [

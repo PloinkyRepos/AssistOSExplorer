@@ -45,7 +45,12 @@ a trailing slash, or surrounding whitespace are rejected. WebSockets and
 mutations require Origin. Browser cookies,
 authorization, forwarding, proxy-authorization, Host-derived identity, Ploinky
 identity headers, and the private `Ploinky-Agent-Assertion` are stripped before
-forwarding.
+forwarding. The proxy derives the exact
+`/base-agent-additional-server/onlyOffice/8080` forwarding prefix only from the
+committed active browser route and rejects malformed, alternate, nested, or
+trailing-path variants. Caller-supplied forwarding headers never survive. The
+canonical host, protocol, and prefix keep DocumentServer cache URLs on the
+same allowlisted Router path.
 Responses use a strict asset-header allowlist. Redirects, cookies, browser-auth
 challenges, hop-by-hop fields, internal forwarding metadata, and unsanitized
 WebSocket upgrade headers never cross the public editor boundary.

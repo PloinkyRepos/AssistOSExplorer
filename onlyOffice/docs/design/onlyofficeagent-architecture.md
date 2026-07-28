@@ -61,7 +61,11 @@ active origin, rejecting credentials, paths, trailing slashes, and surrounding
 whitespace. It requires Origin on WebSocket and mutation paths and strips
 cookies, authorization, proxy authorization, forwarding, Ploinky identity
 headers, and the private `Ploinky-Agent-Assertion` before dialing
-DocumentServer. The return path exposes only pinned asset headers, rejects
+DocumentServer. It reconstructs canonical forwarded host, protocol, and the
+exact `/base-agent-additional-server/onlyOffice/8080` prefix from the committed
+active browser route, rejecting any malformed, alternate, nested, or
+trailing-path form so signed cache URLs remain on the allowlisted Router path.
+The return path exposes only pinned asset headers, rejects
 redirects, and reconstructs WebSocket `101` handshakes from the exact required
 upgrade fields so internal cookies, auth challenges, forwarding metadata, and
 hop-by-hop headers cannot reach the browser.
