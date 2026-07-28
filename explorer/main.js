@@ -5,6 +5,10 @@ import { createRuntimePluginLoader } from './services/runtime/runtimePluginLoade
 import { filterRuntimePluginsByPolicy, forEachRuntimePluginEntry } from './utils/pluginUtils.core.js';
 import { initializeTheme } from './shared/ui/theme.js';
 import { fetchAuthenticatedUser } from './services/infrastructure/authApi.js';
+import {
+    mountInitialApplicationRoute,
+    resolveInitialHashedRoute
+} from './services/runtime/initial-application-route.js';
 
 const EXPLORER_AGENT_ID = 'explorer';
 const RUNTIME_PLUGIN_TOOL = 'collect_ide_plugins';
@@ -122,6 +126,7 @@ async function loadExplorerManifest() {
 
 async function start() {
     initializeTheme();
+    const initialHashedRoute = resolveInitialHashedRoute(window.location.hash);
     const webSkel = await WebSkel.initialise('webskel.json');
     webSkel.appServices = assistosSDK;
     const roomEntry = getRoomEntryFromUrl();
@@ -297,18 +302,17 @@ async function start() {
             </div>
         </div>
     `);
-    webSkel.setDomElementForPages(document.querySelector("#page_content"));
+    const pageContent = document.querySelector("#page_content");
+    webSkel.setDomElementForPages(pageContent);
     const loader = document.querySelector("#before_webskel_loader");
     loader.close();
     loader.remove();
 
-    const hash = window.location.hash;
     let pageName;
     let url;
     let suppressNavigationHash = false;
-    if (hash) {
-        url = hash.substring(1);
-        pageName = url.split('/')[0].split('?')[0];
+    if (initialHashedRoute) {
+        ({ pageName, url, preserveHash: suppressNavigationHash } = initialHashedRoute);
     } else if (ROOM_ID_PATTERN.test(String(new URLSearchParams(window.location.search || '').get('roomId') || '').trim())) {
         pageName = 'webmeet-dashboard';
         url = 'webmeet-dashboard';
@@ -320,7 +324,15 @@ async function start() {
     const loadedRuntimeComponents = await runtimePluginLoader.loadComponents(runtimePlugins, { includeDependencies: false });
     assistOS.runtimePluginComponents = loadedRuntimeComponents;
 
-    await webSkel.changeToDynamicPage(pageName || 'file-exp', url || 'file-exp', null, suppressNavigationHash);
+    await mountInitialApplicationRoute({
+        webSkel,
+        pageContent,
+        route: {
+            pageName: pageName || 'file-exp',
+            url: url || 'file-exp',
+            preserveHash: suppressNavigationHash
+        }
+    });
     window.webSkel = webSkel;
 }
 

@@ -37,6 +37,26 @@ export async function openExplorer(page, options = {}) {
   await expect(page.locator('#before_webskel_loader')).toHaveCount(0);
 }
 
+export async function assertExplorerDirectory(page, expectedPath) {
+  const normalizedPath = `/${String(expectedPath || '').split('/').filter(Boolean).join('/')}`;
+  const expectedBreadcrumbs = [
+    '/',
+    ...normalizedPath.split('/').filter(Boolean).map((segment) => `${segment} /`),
+  ];
+
+  await expect.poll(async () => page.locator('file-exp').evaluate((element) => (
+    element.webSkelPresenter?.state?.path || null
+  )), {
+    timeout: smokeConfig.timeouts.navigation,
+    message: `Explorer should activate directory ${normalizedPath}`,
+  }).toBe(normalizedPath);
+  await expect(page.locator('#breadcrumbs')).toBeVisible();
+  await expect.poll(async () => page.locator('#breadcrumbs button').allTextContents(), {
+    timeout: smokeConfig.timeouts.navigation,
+    message: `Explorer breadcrumbs should visibly represent ${normalizedPath}`,
+  }).toEqual(expectedBreadcrumbs);
+}
+
 export async function assertExplorerHealthy(page) {
   await expect(page.locator('#page_content')).toBeVisible();
   await expect(page.locator('body')).not.toContainText(/Explorer failed to load|API Route not found/i);

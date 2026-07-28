@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import { test, expect } from '../lib/fixtures.mjs';
 import { smokeConfig } from '../lib/config.mjs';
 import { dpuData } from '../lib/dpu-data.mjs';
-import { openExplorer } from '../lib/explorer.mjs';
+import { assertExplorerDirectory, openExplorer } from '../lib/explorer.mjs';
 import { callAgentToolViaRouter } from '../lib/mcp.mjs';
 
 function tokenKeyForUser(userId) {
@@ -47,6 +47,7 @@ test.describe('GitHub token DPU ownership @external', () => {
     expect(encryptedValues).not.toContain(token);
 
     await openExplorer(page, { hash: 'file-exp/Confidential/Secrets/' });
+    await assertExplorerDirectory(page, '/Confidential/Secrets');
     await expect(page.locator('body')).toContainText(key);
 
     const disconnect = await callAgentToolViaRouter(page, {

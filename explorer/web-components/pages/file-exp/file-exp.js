@@ -191,9 +191,9 @@ export class FileExp {
         attachFsActions(this);
         attachApplicationPluginHost(this);
 
+        this.initialLocationRouteApplied = false;
         this.boundLoadStateFromURL = this.loadStateFromURL.bind(this);
         this.setWindowListener('file-exp-popstate', 'popstate', this.boundLoadStateFromURL);
-        this.invalidate(this.boundLoadStateFromURL);
 
         this.boundOutsideMenuClick = this.handleOutsideMenuClick.bind(this);
         this.boundMenuKeydown = this.handleMenuKeydown.bind(this);
@@ -320,6 +320,15 @@ export class FileExp {
 
     async loadStateFromURL() {
         return loadStateFromURLImpl(this);
+    }
+
+    async applyInitialLocationRoute() {
+        if (this.initialLocationRouteApplied) {
+            return false;
+        }
+        this.initialLocationRouteApplied = true;
+        await this.boundLoadStateFromURL();
+        return true;
     }
 
     clearEditorAutoSaveTimer() {

@@ -4,7 +4,7 @@ import { test, expect } from '../lib/fixtures.mjs';
 import { smokeConfig } from '../lib/config.mjs';
 import { dpuData } from '../lib/dpu-data.mjs';
 import { dpuSnapshotPersistenceAdvanced } from '../lib/dpu-persistence.mjs';
-import { openExplorer } from '../lib/explorer.mjs';
+import { assertExplorerDirectory, openExplorer } from '../lib/explorer.mjs';
 
 function readDpuState() {
   if (!dpuData.exists('state.json')) {
@@ -261,6 +261,7 @@ test.describe('DPU and OnlyOffice @external', () => {
 
     try {
       await openExplorer(page, { hash: 'file-exp/Confidential/My%20Space' });
+      await assertExplorerDirectory(page, '/Confidential/My Space');
       await expect(page.locator('#toolbarMenuButton')).toBeEnabled();
 
       let dialogMessage = '';
@@ -355,6 +356,7 @@ test.describe('DPU and OnlyOffice @external', () => {
 
       await waitForOnlyOfficeSession(page, documentPath);
       await openExplorer(page, { hash: 'file-exp/Confidential/My%20Space' });
+      await assertExplorerDirectory(page, '/Confidential/My Space');
       const reopenedFrame = await openDocumentFromExplorer(page, documentPath);
       let reopenedText = '';
       await expect.poll(async () => {

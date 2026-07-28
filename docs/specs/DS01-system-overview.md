@@ -257,6 +257,8 @@ Navigation is not limited to local filesystem traversal. It also covers:
 - preview-specific transitions
 - transitions between selection, preview, and edit mode
 
+For a direct URL with an initial hash route, bootstrap captures that route before asynchronous startup work, mounts the selected WebSkel page, and applies the captured location exactly once after the page presenter has registered its route listener. Encoded path segments are decoded by the file presenter only after mount, so a direct URL such as `#file-exp/Confidential/My%20Space` activates `/Confidential/My Space` without a second browser navigation or a synthetic history event.
+
 For local workspace navigation, Explorer must also suppress reserved secret files from visible filesystem navigation. `.secrets` and `*.secrets` are hidden from the normal file explorer surface even when they physically exist in the mounted workspace.
 
 ### Editing
