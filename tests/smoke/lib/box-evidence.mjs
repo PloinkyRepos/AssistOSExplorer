@@ -53,6 +53,14 @@ function exactSha256(value, name) {
   return text;
 }
 
+function exactPathHash(value, name) {
+  const text = exactString(value, name);
+  if (!/^[0-9a-f]{12}$/.test(text)) {
+    throw new Error(`${name} must be exactly 12 lowercase hexadecimal characters.`);
+  }
+  return text;
+}
+
 function exactBoxLabels(labels, {
   expectedImageRef,
   selectedRouterHostPort,
@@ -67,7 +75,7 @@ function exactBoxLabels(labels, {
   if (source[BOX_LABELS.role] !== 'box') {
     throw new Error('Outer container Box role label must equal box.');
   }
-  const pathHash = exactSha256(source[BOX_LABELS.pathHash], 'outer container Box path-hash label');
+  const pathHash = exactPathHash(source[BOX_LABELS.pathHash], 'outer container Box path-hash label');
   const imageRef = exactString(source[BOX_LABELS.imageRef], 'outer container Box image-ref label');
   if (expectedImageRef !== undefined && imageRef !== expectedImageRef) {
     throw new Error(`Outer container Box image-ref label does not equal ${expectedImageRef}.`);

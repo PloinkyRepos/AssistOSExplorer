@@ -1,17 +1,15 @@
 import crypto from 'node:crypto';
-import fs from 'node:fs';
-import path from 'node:path';
 
 import { test, expect } from '../lib/fixtures.mjs';
 import { smokeConfig } from '../lib/config.mjs';
+import { dpuData } from '../lib/dpu-data.mjs';
 import { openExplorer } from '../lib/explorer.mjs';
 
 function readDpuState() {
-  const statePath = path.join(smokeConfig.dpuDataRoot, 'state.json');
-  if (!fs.existsSync(statePath)) {
+  if (!dpuData.exists('state.json')) {
     return null;
   }
-  return JSON.parse(fs.readFileSync(statePath, 'utf8'));
+  return dpuData.readJson('state.json');
 }
 
 function findDpuObjectByName(name) {
@@ -27,25 +25,21 @@ function readDpuObjectSnapshot(name) {
   if (!object?.id) {
     return null;
   }
-  const blobPath = path.join(smokeConfig.dpuDataRoot, 'blobs', object.id);
-  if (!fs.existsSync(blobPath)) {
+  if (!dpuData.exists('blobs', object.id)) {
     return null;
   }
-  const blob = fs.readFileSync(blobPath);
+  const blob = dpuData.readBuffer('blobs', object.id);
   return {
     id: object.id,
     updatedAt: object.updatedAt || '',
-    blobPath,
+    blobPath: dpuData.describe('blobs', object.id),
     blobBytes: blob.length,
     blobSha256: crypto.createHash('sha256').update(blob).digest('hex'),
   };
 }
 
 function hasPlainWorkspaceCopy(documentPath) {
-  if (!smokeConfig.workspaceRoot) {
-    return false;
-  }
-  return fs.existsSync(path.join(smokeConfig.workspaceRoot, documentPath.replace(/^\/+/, '')));
+  return dpuData.workspaceFileExists(documentPath);
 }
 
 async function frameBodyText(frame) {
@@ -254,8 +248,8 @@ test.describe('DPU and OnlyOffice @external', () => {
 
   test('Explorer-created Confidential document saves through callback, drains, and reopens after targeted restart', async ({ browser }, testInfo) => {
     expect(
-      fs.existsSync(smokeConfig.dpuDataRoot),
-      `DPU data root should exist at ${smokeConfig.dpuDataRoot}. Set SMOKE_WORKSPACE_ROOT or SMOKE_DPU_DATA_ROOT for local deployments.`
+      dpuData.exists(),
+      `DPU data root should exist at ${dpuData.describe()}. Set SMOKE_WORKSPACE_ROOT or SMOKE_DPU_DATA_ROOT for local deployments.`
     ).toBe(true);
 
     const fileName = `smoke-onlyoffice-${smokeConfig.runId}.docx`;
@@ -291,9 +285,9 @@ test.describe('DPU and OnlyOffice @external', () => {
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
       );
 
-      const blobPath = path.join(smokeConfig.dpuDataRoot, 'blobs', dpuObject.id);
-      expect(fs.existsSync(blobPath), `DPU blob should exist at ${blobPath}`).toBe(true);
-      const blob = fs.readFileSync(blobPath);
+      const blobPath = dpuData.describe('blobs', dpuObject.id);
+      expect(dpuData.exists('blobs', dpuObject.id), `DPU blob should exist at ${blobPath}`).toBe(true);
+      const blob = dpuData.readBuffer('blobs', dpuObject.id);
       expect(blob.subarray(0, 7).toString('ascii')).toBe('DPUENC1');
       expect(blob.includes(Buffer.from(fileName))).toBe(false);
       expect(hasPlainWorkspaceCopy(documentPath), `${documentPath} should not be stored as a normal workspace file`).toBe(false);

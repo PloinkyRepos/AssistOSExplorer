@@ -1,9 +1,31 @@
 export async function callAgentToolViaRouter(page, { agent, tool, args = {} }) {
   return page.evaluate(async ({ agent, tool, args }) => {
     const endpoint = `/${encodeURIComponent(agent)}/mcp`;
+    const proofResponse = await fetch(`/auth/token?agent=${encodeURIComponent(agent)}`, {
+      method: 'GET',
+      credentials: 'include',
+      cache: 'no-store',
+      headers: { accept: 'application/json' },
+    });
+    const proofPayload = await proofResponse.json().catch(() => ({}));
+    const proof = proofPayload?.browserMutation;
+    if (
+      !proofResponse.ok
+      || !proof?.csrfToken
+      || proof.routeKey !== agent
+      || proof.origin !== window.location.origin
+    ) {
+      throw new Error(`Browser mutation proof for ${endpoint} is unavailable.`);
+    }
+    const mutationHeaders = {
+      accept: 'application/json, text/event-stream',
+      'content-type': 'application/json',
+      'x-ploinky-browser-csrf-token': proof.csrfToken,
+    };
     const initResponse = await fetch(endpoint, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      credentials: 'include',
+      headers: mutationHeaders,
       body: JSON.stringify({
         jsonrpc: '2.0',
         id: 'smoke-init',
@@ -15,14 +37,21 @@ export async function callAgentToolViaRouter(page, { agent, tool, args = {} }) {
         },
       }),
     });
+    const initBody = await initResponse.json().catch(() => ({}));
     const sessionId = initResponse.headers.get('mcp-session-id');
-    if (!sessionId) throw new Error(`MCP initialize on ${endpoint} did not return a session id.`);
-    await initResponse.json();
+    if (!initResponse.ok || !sessionId || initBody.error) {
+      throw new Error(
+        `MCP initialize on ${endpoint} failed with HTTP ${initResponse.status}: ${initBody.error?.message || initBody.error || 'no session id'}.`,
+      );
+    }
+    const protocolVersion = initBody.result?.protocolVersion || '2025-06-18';
     const response = await fetch(endpoint, {
       method: 'POST',
+      credentials: 'include',
       headers: {
-        'content-type': 'application/json',
+        ...mutationHeaders,
         'mcp-session-id': sessionId,
+        'mcp-protocol-version': protocolVersion,
       },
       body: JSON.stringify({
         jsonrpc: '2.0',
@@ -31,8 +60,12 @@ export async function callAgentToolViaRouter(page, { agent, tool, args = {} }) {
         params: { name: tool, arguments: args },
       }),
     });
-    const body = await response.json();
-    if (body.error) throw new Error(body.error.message || JSON.stringify(body.error));
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok || body.error) {
+      throw new Error(
+        body.error?.message || body.error || `MCP tool call on ${endpoint} failed with HTTP ${response.status}.`,
+      );
+    }
     const result = body.result;
     const blocks = Array.isArray(result?.content) ? result.content : [];
     const jsonBlock = blocks.find((block) => block?.type === 'json' && block.json && typeof block.json === 'object');

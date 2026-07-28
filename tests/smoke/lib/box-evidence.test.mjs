@@ -28,7 +28,7 @@ function containerInspect(bindings = {
     Config: {
       Labels: {
         'io.assistos.ploinky-box.role': 'box',
-        'io.assistos.ploinky-box.path-hash': 'd'.repeat(64),
+        'io.assistos.ploinky-box.path-hash': 'd'.repeat(12),
         'io.assistos.ploinky-box.image-ref': IMAGE_REF,
         'io.assistos.ploinky-box.router-host-port': '18080',
       },
@@ -70,6 +70,24 @@ test('box evidence binds the exact running semantic image and normalizes only em
     '7882/udp': [{ HostIp: '0.0.0.0', HostPort: '7882' }],
   }));
   assert.equal(validateBoxEvidence(evidence, expected()).imageId, IMAGE_ID);
+});
+
+test('box evidence requires the exact 12-character lowercase path-hash contract', () => {
+  for (const invalidPathHash of [
+    'd'.repeat(11),
+    'd'.repeat(13),
+    'd'.repeat(64),
+    'ABCDEF123456',
+    '123456789abg',
+  ]) {
+    const invalidOwnership = containerInspect();
+    invalidOwnership[0].Config.Labels['io.assistos.ploinky-box.path-hash'] = invalidPathHash;
+    assert.throws(() => buildBoxEvidence({
+      containerInspect: invalidOwnership,
+      imageInspect: imageInspect(),
+      ...expected(),
+    }), /exactly 12 lowercase hexadecimal characters/);
+  }
 });
 
 test('box evidence rejects a third publication, wrong semantic ownership, and wrong image id', () => {

@@ -1,19 +1,10 @@
 import crypto from 'node:crypto';
-import fs from 'node:fs';
-import path from 'node:path';
 
 import { test, expect } from '../lib/fixtures.mjs';
 import { smokeConfig } from '../lib/config.mjs';
+import { dpuData } from '../lib/dpu-data.mjs';
 import { openExplorer } from '../lib/explorer.mjs';
 import { callAgentToolViaRouter } from '../lib/mcp.mjs';
-
-const statePath = () => path.join(smokeConfig.dpuDataRoot, 'state.json');
-const permissionsPath = () => path.join(smokeConfig.dpuDataRoot, 'permissions.manifest.json');
-const dpuSecretValuesPath = () => path.join(smokeConfig.dpuDataRoot, 'secrets.json');
-
-function readJson(filePath) {
-  return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-}
 
 function tokenKeyForUser(userId) {
   const suffix = crypto.createHash('sha256').update(`user:${userId}`).digest('hex').slice(0, 16).toUpperCase();
@@ -40,8 +31,8 @@ test.describe('GitHub token DPU ownership @external', () => {
     expect(result?.ok).toBe(true);
     expect(result?.tokenStored).toBe(true);
 
-    const state = readJson(statePath());
-    const permissions = readJson(permissionsPath());
+    const state = dpuData.readJson('state.json');
+    const permissions = dpuData.readJson('permissions.manifest.json');
     expect(state.secrets?.[key]).toBeTruthy();
     expect(state.secrets[key].ownerId).toMatch(/^(user:|[^:\s@]+@)/);
     expect(state.secrets[key].ownerId).not.toMatch(/^agent:/);
@@ -51,7 +42,7 @@ test.describe('GitHub token DPU ownership @external', () => {
     expect(permissions.agentPolicies[gitAgentPrincipal]?.secrets?.allowedRoles).toEqual(['read']);
     expect(permissions.permissions?.secrets?.[key]?.acl?.[gitAgentPrincipal]).toBe('read');
 
-    const encryptedValues = fs.readFileSync(dpuSecretValuesPath(), 'utf8');
+    const encryptedValues = dpuData.readText('secrets.json');
     expect(encryptedValues.startsWith('DPUSECS1:')).toBe(true);
     expect(encryptedValues).not.toContain(token);
 
@@ -64,8 +55,8 @@ test.describe('GitHub token DPU ownership @external', () => {
       args: {},
     });
     expect(disconnect?.ok).toBe(true);
-    const stateAfter = readJson(statePath());
-    const permissionsAfter = readJson(permissionsPath());
+    const stateAfter = dpuData.readJson('state.json');
+    const permissionsAfter = dpuData.readJson('permissions.manifest.json');
     expect(stateAfter.secrets?.[key]).toBeUndefined();
     expect(permissionsAfter.permissions?.secrets?.[key]).toBeUndefined();
   });
@@ -73,11 +64,11 @@ test.describe('GitHub token DPU ownership @external', () => {
   test('a stale agent-owned record from the pre-delegation bug is self-repaired on store', async ({ page }) => {
     await openExplorer(page);
     const key = tokenKeyForUser('local:admin');
-    const permissionsBefore = readJson(permissionsPath());
+    const permissionsBefore = dpuData.readJson('permissions.manifest.json');
     const gitAgentPrincipal = findGitAgentPrincipal(permissionsBefore);
     expect(gitAgentPrincipal).toBeTruthy();
 
-    const state = readJson(statePath());
+    const state = dpuData.readJson('state.json');
     const nowIso = new Date().toISOString();
     state.secrets = state.secrets || {};
     state.secrets[key] = {
@@ -89,10 +80,10 @@ test.describe('GitHub token DPU ownership @external', () => {
       createdAt: nowIso,
       updatedAt: nowIso,
     };
-    fs.writeFileSync(statePath(), JSON.stringify(state, null, 2));
+    dpuData.writeJson('state.json', state);
     permissionsBefore.permissions = permissionsBefore.permissions || { secrets: {}, objects: {} };
     permissionsBefore.permissions.secrets[key] = { acl: { [gitAgentPrincipal]: 'read' }, updatedAt: nowIso };
-    fs.writeFileSync(permissionsPath(), JSON.stringify(permissionsBefore, null, 2));
+    dpuData.writeJson('permissions.manifest.json', permissionsBefore);
 
     const token = `ghp_upgrade_${smokeConfig.runId.replace(/[^A-Za-z0-9]/g, '')}`;
     const result = await callAgentToolViaRouter(page, {
@@ -102,10 +93,10 @@ test.describe('GitHub token DPU ownership @external', () => {
     });
     expect(result?.ok).toBe(true);
 
-    const stateAfter = readJson(statePath());
+    const stateAfter = dpuData.readJson('state.json');
     expect(stateAfter.secrets[key].ownerId).not.toBe(gitAgentPrincipal);
     expect(stateAfter.secrets[key].ownerId).toMatch(/^(user:|[^:\s@]+@)/);
-    const permissionsAfter = readJson(permissionsPath());
+    const permissionsAfter = dpuData.readJson('permissions.manifest.json');
     expect(permissionsAfter.permissions?.secrets?.[key]?.acl?.[gitAgentPrincipal]).toBe('read');
 
     await callAgentToolViaRouter(page, { agent: 'gitAgent', tool: 'git_auth_disconnect', args: {} });
