@@ -13,9 +13,8 @@ export async function openExplorer(page, options = {}) {
     account = smokeConfig.primaryUser,
     hash = '',
   } = options;
-  await signIn(page, account, '/dashboard');
   const suffix = hash ? `#${String(hash).replace(/^#/, '')}` : '';
-  await page.goto(`/explorer/index.html${suffix}`, { waitUntil: 'domcontentloaded' });
+  await signIn(page, account, `/explorer/index.html${suffix}`);
   await expect(page.locator('#page_content')).toBeVisible();
   await page.waitForFunction(() => {
     return Boolean(window.webSkel && document.querySelector('#page_content')?.children.length);

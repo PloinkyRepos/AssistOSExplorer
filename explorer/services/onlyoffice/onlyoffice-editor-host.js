@@ -6,8 +6,13 @@ function ensureRuntimeState(host) {
             editor: null,
             containerId: '',
             scriptUrl: '',
-            configKey: ''
+            configKey: '',
+            renderGeneration: 0
         };
+    }
+    if (!Number.isSafeInteger(host.__onlyOfficeRuntime.renderGeneration)
+        || host.__onlyOfficeRuntime.renderGeneration < 0) {
+        host.__onlyOfficeRuntime.renderGeneration = 0;
     }
     return host.__onlyOfficeRuntime;
 }
@@ -147,8 +152,12 @@ export async function renderOnlyOfficeEditor(host, config) {
         return;
     }
 
+    const renderGeneration = ++runtime.renderGeneration;
     destroyEditor(host);
     const { scriptUrl, DocsAPI } = await loadScript(config?.documentServerUrl || '');
+    if (runtime.renderGeneration !== renderGeneration || host.isConnected === false) {
+        return;
+    }
     const container = ensureContainer(host, runtime);
 
     runtime.scriptUrl = scriptUrl;
@@ -158,9 +167,9 @@ export async function renderOnlyOfficeEditor(host, config) {
 
 export function clearOnlyOfficeEditor(host) {
     if (!host) return;
+    const runtime = ensureRuntimeState(host);
+    runtime.renderGeneration += 1;
     destroyEditor(host);
     host.textContent = '';
-    if (host.__onlyOfficeRuntime) {
-        host.__onlyOfficeRuntime.configKey = '';
-    }
+    runtime.configKey = '';
 }
