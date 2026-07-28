@@ -19,7 +19,7 @@ callback validation, persistence, and targeted-restart draining.
 | Control | TCP `7000` | `onlyoffice`, `/base-agent-additional-server/onlyOffice/7000/control/` → `/control/` | Authenticated Ploinky session; Explorer/DPU authorization remains effective |
 | Editor transport | TCP `8080` | `onlyoffice-editor`, `/base-agent-additional-server/onlyOffice/8080/` → `/` | Narrow public method/path allowlist with exact Origin enforcement |
 | DocumentServer | `127.0.0.1:80` | None | Process-local decorator traffic only |
-| DocService support | `[::1]:8000` | None | Exact IPv6 loopback pairing between the scoped build-time bind interposer and pinned nginx upstream |
+| DocService support | `[::1]:8000` | None | Exact IPv6 loopback pairing between the scoped bind interposer and the pinned canonical nginx upstream plus its exact relative alias |
 | Storage and callbacks | `127.0.0.1:9100` | None | Process-loopback peer plus opaque active-session token and signed body |
 | Bundled support | loopback `5432`, `5672`, `25672`, `4369`, and optional `6379` | None | Owner-aware readiness; wildcard bind blocks activation |
 

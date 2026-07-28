@@ -138,8 +138,9 @@ test('support-listener configuration hardens every bundled dependency without du
 
 test('configuration and readiness require the exact IPv6 DocService nginx pairing', async () => {
   const agentRoot = new URL('..', import.meta.url);
-  const [configureScript, healthcheck] = await Promise.all([
+  const [configureScript, configurator, healthcheck] = await Promise.all([
     readFile(new URL('scripts/configure-document-server-v5.sh', agentRoot), 'utf8'),
+    readFile(new URL('scripts/configure-docservice-nginx-loopback.mjs', agentRoot), 'utf8'),
     readFile(new URL('scripts/healthcheck.sh', agentRoot), 'utf8'),
   ]);
 
@@ -162,5 +163,17 @@ test('configuration and readiness require the exact IPv6 DocService nginx pairin
   assert.match(
     healthcheck,
     /assert_loopback_owner 'OnlyOffice DocService' 8000 docservice/,
+  );
+  assert.match(
+    configurator,
+    /aliasPath: '\/etc\/nginx\/includes\/http-common\.conf'/,
+  );
+  assert.match(
+    configurator,
+    /\.\.\/\.\.\/onlyoffice\/documentserver\/nginx\/includes\/http-common\.conf/,
+  );
+  assert.match(
+    configurator,
+    /canonicalRealPath !== aliasRealPath/,
   );
 });
