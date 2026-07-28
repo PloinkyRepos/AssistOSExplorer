@@ -4,6 +4,7 @@ set -euo pipefail
 curl -fsS --max-time 2 http://127.0.0.1:80/web-apps/apps/api/documents/api.js >/dev/null
 curl -sS --max-time 2 -o /dev/null -w '%{http_code}' http://127.0.0.1:7000/__ready | grep -qx '404'
 curl -sS --max-time 2 -o /dev/null -w '%{http_code}' http://127.0.0.1:9100/__ready | grep -qx '404'
+/usr/local/bin/node /code/scripts/verify-document-server-jwt-config.mjs
 
 assert_loopback_owner() {
   label="$1"

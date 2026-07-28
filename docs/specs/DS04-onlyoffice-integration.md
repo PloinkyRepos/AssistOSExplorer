@@ -50,10 +50,14 @@ Router-visible editor origin and opaque session URLs.
 
 Configuration JWTs use the configured algorithm, `iat`, `nbf`, and bounded
 `exp`, and bind the document/session payload. The configurable lifetime is an
-exact positive integer capped at 300 seconds. DocumentServer request/outbox
-signing is enabled in-body with the same bounded temporal rules. Callback
-handling accepts only the signed payload, verifies it against the received body,
-and rejects unsigned sibling fields.
+exact positive integer capped at 300 seconds. The editor configuration exposes
+exactly one signed top-level `token`; DocumentServer inbox validation must
+consume that token from the body with `inBody` set to boolean `true`, while the
+public editor proxy continues to strip browser `Authorization`, cookies, and
+other credentials. DocumentServer request/outbox signing is enabled in-body
+with the same bounded temporal rules. Callback handling remains the separately
+validated outbox path: it accepts only the signed payload, verifies it against
+the received body, and rejects unsigned sibling fields.
 
 The session store mints a distinct non-secret 128-bit `document.key` for every
 editor session and persists that exact key with the session. The signed editor

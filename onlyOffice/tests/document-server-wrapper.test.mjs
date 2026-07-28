@@ -165,6 +165,10 @@ test('configuration and readiness require the exact IPv6 DocService nginx pairin
     /assert_loopback_owner 'OnlyOffice DocService' 8000 docservice/,
   );
   assert.match(
+    healthcheck,
+    /\/usr\/local\/bin\/node \/code\/scripts\/verify-document-server-jwt-config\.mjs/,
+  );
+  assert.match(
     configurator,
     /aliasPath: '\/etc\/nginx\/includes\/http-common\.conf'/,
   );
@@ -187,5 +191,24 @@ test('configuration and readiness require the exact IPv6 DocService nginx pairin
   assert.match(
     configurator,
     /entries\[0\]\.content\.equals\(entries\[1\]\.content\)/,
+  );
+});
+
+test('configuration writes inbox JWTs into the body before fail-closed verification', async () => {
+  const configureScript = await readFile(
+    new URL('scripts/configure-document-server-v5.sh', new URL('..', import.meta.url)),
+    'utf8',
+  );
+  const matches = [...configureScript.matchAll(
+    /"\$\{json_bin\}" -I -f "\$\{config_file\}" -e '([^']*token\.inbox[^']*)'/g,
+  )];
+  assert.equal(matches.length, 1);
+
+  const config = { services: { CoAuthoring: { token: {} } } };
+  Function(matches[0][1]).call(config);
+  assert.equal(config.services.CoAuthoring.token.inbox.inBody, true);
+  assert.ok(
+    configureScript.indexOf(matches[0][0])
+      < configureScript.indexOf('"/usr/local/bin/node" "$jwt_config_verifier"'),
   );
 });

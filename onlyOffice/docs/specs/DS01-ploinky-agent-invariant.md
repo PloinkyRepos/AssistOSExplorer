@@ -58,8 +58,12 @@ process startup and no private origin is exposed to a browser.
 
 Configuration and callback/outbox JWTs use the allowed algorithm and bounded
 `iat`, `nbf`, and `exp`. The configurable lifetime must be an exact positive
-integer no greater than 300 seconds. The token is body-bound and never placed
-in a URL.
+integer no greater than 300 seconds. The editor configuration contains exactly
+one signed top-level `token`, and DocumentServer inbox validation is required
+to consume it from the body with `inBody` set to boolean `true`. The public
+editor proxy still strips browser `Authorization`, cookies, and other
+credentials. The token is body-bound and never placed in a URL. Callback
+delivery remains the separately validated signed outbox path.
 Callbacks accept only the signed payload, require loopback plus the opaque
 session token, enforce JSON/content and body limits, and compare the payload to
 the received body. Session creation mints a distinct non-secret 128-bit

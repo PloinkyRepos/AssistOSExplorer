@@ -95,14 +95,19 @@ test('editor transport strips browser credentials and installs canonical forward
       authorization: 'Bearer browser',
       cookie: 'session=browser',
       forwarded: 'for=evil',
+      'proxy-authorization': 'Basic browser',
+      'x-forwarded-for': '203.0.113.8',
       'x-forwarded-host': 'evil.example',
       'x-forwarded-proto': 'http',
       'x-ploinky-auth-info': 'identity',
+      'x-ploinky-csrf-token': 'csrf',
       'Ploinky-Agent-Assertion': 'private-router-assertion',
+      accept: '*/*',
     },
   }, res);
 
   assert.deepEqual(forwarded[0].headers, {
+    accept: '*/*',
     'x-forwarded-host': 'office.example',
     'x-forwarded-proto': 'https',
   });

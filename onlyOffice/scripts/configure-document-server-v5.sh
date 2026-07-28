@@ -5,6 +5,7 @@ config_file="${ONLYOFFICE_LOCAL_CONFIG_FILE:-/etc/onlyoffice/documentserver/loca
 docservice_supervisor_file="/etc/supervisor/conf.d/ds-docservice.conf"
 docservice_bind_interposer="/usr/local/lib/onlyoffice-docservice-loopback-bind.so"
 docservice_nginx_configurator="/code/scripts/configure-docservice-nginx-loopback.mjs"
+jwt_config_verifier="/code/scripts/verify-document-server-jwt-config.mjs"
 image_contract_file="/usr/local/share/ploinky/onlyoffice.contract"
 : "${JWT_SECRET:?JWT_SECRET is required}"
 
@@ -69,7 +70,9 @@ grep -q '^environment=.*LD_PRELOAD=/usr/local/lib/onlyoffice-docservice-loopback
 /usr/local/bin/node "$docservice_nginx_configurator"
 
 "${json_bin}" -I -f "${config_file}" -e 'this.services=this.services||{};this.services.CoAuthoring=this.services.CoAuthoring||{};this.services.CoAuthoring.token=this.services.CoAuthoring.token||{};this.services.CoAuthoring.token.enable=this.services.CoAuthoring.token.enable||{};this.services.CoAuthoring.token.enable.request=this.services.CoAuthoring.token.enable.request||{};this.services.CoAuthoring.token.enable.request.outbox=true'
+"${json_bin}" -I -f "${config_file}" -e 'this.services.CoAuthoring.token.inbox=this.services.CoAuthoring.token.inbox||{};this.services.CoAuthoring.token.inbox.inBody=true'
 "${json_bin}" -I -f "${config_file}" -e 'this.services.CoAuthoring.token.outbox=this.services.CoAuthoring.token.outbox||{};this.services.CoAuthoring.token.outbox.algorithm="HS256";this.services.CoAuthoring.token.outbox.expires="5m";this.services.CoAuthoring.token.outbox.inBody=true;this.services.CoAuthoring.token.outbox.urlExclusionRegex=""'
+"/usr/local/bin/node" "$jwt_config_verifier"
 
 # DocumentServer is an implementation detail behind the decorator. Bind every
 # port-80 nginx server to process loopback before supervisor starts it.

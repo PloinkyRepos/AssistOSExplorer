@@ -131,7 +131,22 @@ function verifySignedConfigToken(token, secret) {
   const unsigned = `${encodedHeader}.${encodedPayload}`;
   const expected = crypto.createHmac('sha256', secret).update(unsigned).digest('base64url');
   assert.equal(signature, expected);
+  assert.deepEqual(
+    JSON.parse(Buffer.from(encodedHeader, 'base64url').toString('utf8')),
+    { alg: 'HS256', typ: 'JWT' },
+  );
   return JSON.parse(Buffer.from(encodedPayload, 'base64url').toString('utf8'));
+}
+
+function countNamedFields(value, fieldName) {
+  if (!value || typeof value !== 'object') return 0;
+  if (Array.isArray(value)) {
+    return value.reduce((total, entry) => total + countNamedFields(entry, fieldName), 0);
+  }
+  return Object.entries(value).reduce(
+    (total, [name, entry]) => total + (name === fieldName ? 1 : 0) + countNamedFields(entry, fieldName),
+    0,
+  );
 }
 
 test('office session route rejects forged auth-info without invocation token', async () => {
@@ -224,6 +239,9 @@ test('office session route builds signed config with loopback document and callb
     autosave: true,
     forcesave: true,
   });
+  assert.equal(countNamedFields(payload.config, 'token'), 1);
+  assert.equal(typeof payload.config.token, 'string');
+  assert.equal(payload.config.token.split('.').length, 3);
 
   const signedPayload = verifySignedConfigToken(payload.config.token, 'onlyoffice-jwt-secret');
   assert.equal(signedPayload.document.key, payload.config.document.key);
