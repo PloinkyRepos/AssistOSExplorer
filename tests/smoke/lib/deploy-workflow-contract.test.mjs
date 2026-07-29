@@ -124,8 +124,9 @@ test('Explorer QA destroy removes only its Ploinky-owned Cloudflare publication'
     "DEPLOY_BRANCH: 'ploinky-proxy'",
     "PUBLIC_HOST: 'explorer-qa.axiologic.dev'",
     "CLOUDFLARE_TUNNEL_NAME: 'explorer-qa'",
-    '"$PLOINKY" stop',
     '"refs/heads/$PLOINKY_BRANCH:refs/remotes/origin/$PLOINKY_BRANCH"',
+    'git -C "$RUNTIME_DIR" merge-base --is-ancestor',
+    'The deployed runtime remains authoritative for its immutable edge generation during teardown',
     'hosts: {}',
     'tunnelName,',
     'deleteTunnelOnTeardown: true',
@@ -147,6 +148,7 @@ test('Explorer QA destroy removes only its Ploinky-owned Cloudflare publication'
   ]) {
     assert.equal(source.includes(required), true, `missing destroy workflow contract: ${required}`);
   }
+  assert.doesNotMatch(source, /checkout --detach --force "refs\/remotes\/origin\/\$PLOINKY_BRANCH"/);
   assert.doesNotMatch(source, /EXPLORER_QA_CLOUDFLARE_TUNNEL_(?:TOKEN|ID)/);
   assert.doesNotMatch(source, /tunnelTokenSecret|publication\/explorer-qa-tunnel/);
 });

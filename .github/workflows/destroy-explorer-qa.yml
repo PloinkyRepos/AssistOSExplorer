@@ -271,17 +271,15 @@ jobs:
           echo "[destroy-qa] Exact Box status before destruction:"
           "$PLOINKY" status || true
 
-          echo "[destroy-qa] Stopping the QA Box before updating the mounted runtime..."
-          "$PLOINKY" stop
-
-          git -C "$RUNTIME_DIR" checkout --detach --force "refs/remotes/origin/$PLOINKY_BRANCH"
-          git -C "$RUNTIME_DIR" reset --hard "refs/remotes/origin/$PLOINKY_BRANCH"
-          git -C "$RUNTIME_DIR" clean -ffd
-          if [ ! -x "$PLOINKY" ]; then
-            echo "[destroy-qa] ERROR: selected Ploinky branch does not provide bin/ploinky."
+          DEPLOYED_PLOINKY_HEAD="$(git -C "$RUNTIME_DIR" rev-parse HEAD)"
+          if ! git -C "$RUNTIME_DIR" merge-base --is-ancestor \
+            "$DEPLOYED_PLOINKY_HEAD" \
+            "refs/remotes/origin/$PLOINKY_BRANCH"; then
+            echo "[destroy-qa] ERROR: deployed Ploinky runtime is not from '$PLOINKY_BRANCH'."
             exit 1
           fi
-          echo "[destroy-qa] Ploinky runtime: $(git -C "$RUNTIME_DIR" rev-parse --short HEAD) ($PLOINKY_BRANCH)"
+          echo "[destroy-qa] Using deployed Ploinky runtime $(git -C "$RUNTIME_DIR" rev-parse --short HEAD) from $PLOINKY_BRANCH."
+          echo "[destroy-qa] The deployed runtime remains authoritative for its immutable edge generation during teardown."
 
           mkdir -p "$WORK_DIR/.ploinky"
           chmod 700 "$WORK_DIR/.ploinky"
