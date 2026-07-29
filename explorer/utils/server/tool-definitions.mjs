@@ -219,7 +219,7 @@ export function buildToolDefinitions(zodToJsonSchema, schemas) {
     },
     {
       name: 'webmeet_media_commit',
-      description: 'Validate and commit a staged WebMeet image into the Explorer workspace media library.',
+      description: 'Validate and commit a staged WebMeet attachment into the Explorer workspace media library.',
       inputSchema: zodToJsonSchema(WebMeetMediaCommitArgsSchema)
     },
     {

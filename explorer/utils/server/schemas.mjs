@@ -263,7 +263,6 @@ export function createSchemas(z) {
       agent: z.string().min(1),
       localPath: z.string().min(1)
     }).strict(),
-    filename: z.string().optional(),
     createdBy: z.string().optional()
   });
   const WebMeetMediaGetArgsSchema = z.object({

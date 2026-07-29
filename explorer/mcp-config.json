@@ -895,7 +895,7 @@
     },
     {
       "name": "webmeet_media_commit",
-      "description": "Validate and commit a staged WebMeet image into Explorer workspace media.",
+      "description": "Validate and commit a staged WebMeet attachment into Explorer workspace media.",
       "command": "tools/explorer_tool.sh",
       "cwd": "workspace",
       "tags": ["internal"],
@@ -910,7 +910,6 @@
             "localPath": { "type": "string" }
           }
         },
-        "filename": { "type": "string", "optional": true },
         "createdBy": { "type": "string", "optional": true }
       }
     },

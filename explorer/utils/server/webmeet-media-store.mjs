@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 
-const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
+const MAX_ASSET_BYTES = 15 * 1024 * 1024;
 const BLOB_ID_RE = /^[a-f0-9]{48}$/;
 const SAFE_ID_RE = /^[a-zA-Z0-9_.:-]+$/;
 
@@ -36,7 +36,7 @@ function webpSize(buffer) {
 
 export function inspectImage(buffer) {
   if (!Buffer.isBuffer(buffer) || buffer.length === 0) throw new Error('The uploaded image is empty.');
-  if (buffer.length > MAX_IMAGE_BYTES) throw new Error('Images may not exceed 15 MB.');
+  if (buffer.length > MAX_ASSET_BYTES) throw new Error('Files may not exceed 15 MB.');
   if (buffer.length >= 24 && buffer.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) {
     return { mimeType: 'image/png', extension: 'png', width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) };
   }
@@ -50,6 +50,42 @@ export function inspectImage(buffer) {
     return { mimeType: 'image/webp', extension: 'webp', ...webpSize(buffer) };
   }
   throw new Error('Only PNG, JPEG, WebP, and GIF images are supported.');
+}
+
+function safeFilename(value) {
+  const filename = String(value || '').replace(/\0/g, '').split(/[\\/]/).at(-1)?.trim() || '';
+  return filename.slice(0, 255) || 'file';
+}
+
+function safeMimeType(value) {
+  const mimeType = String(value || '').trim().toLowerCase();
+  return /^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*$/.test(mimeType)
+    ? mimeType.slice(0, 127)
+    : 'application/octet-stream';
+}
+
+function safeFileExtension(path, filename) {
+  const extension = String(path.extname(filename || '') || '').replace(/^\./, '').toLowerCase();
+  return /^[a-z0-9]{1,16}$/.test(extension) ? extension : 'bin';
+}
+
+function inspectAsset(buffer, metadata, path) {
+  let image = null;
+  try {
+    image = inspectImage(buffer);
+  } catch (error) {
+    if (buffer.length > MAX_ASSET_BYTES) throw error;
+  }
+  const filename = safeFilename(metadata?.filename);
+  if (image) {
+    return { kind: 'image', filename, ...image };
+  }
+  return {
+    kind: 'file',
+    filename,
+    mimeType: safeMimeType(metadata?.mime),
+    extension: safeFileExtension(path, filename),
+  };
 }
 
 function safeId(value, label) {
@@ -76,7 +112,7 @@ export function createWebMeetMediaStore({
 }) {
 
   async function metadataPath(roomId, assetId) {
-    return validatePath(`/document-multimedia/webmeet/${safeId(roomId, 'roomId')}/assets/${safeId(assetId, 'assetId')}.json`);
+    return validatePath(`/document-multimedia/webmeet/${safeId(roomId, 'roomId')}/assets/${safeId(assetId, 'assetId')}.metadata.json`);
   }
 
   async function read(roomId, assetId) {
@@ -86,16 +122,28 @@ export function createWebMeetMediaStore({
     return asset;
   }
 
-  async function commit({ roomId, blobRef, filename = '', createdBy = '' }) {
+  async function commit({ roomId, blobRef, createdBy = '' }) {
     const cleanRoomId = safeId(roomId, 'roomId');
     const staged = validateBlobRef(blobRef, String(agentName || 'explorer'));
     const blobPath = await validatePath(staged.localPath);
     const blobMetaPath = await validatePath(`${staged.localPath}.json`);
     const stat = await fs.lstat(blobPath);
-    if (!stat.isFile() || stat.size > MAX_IMAGE_BYTES) throw new Error('Images may not exceed 15 MB.');
-    const image = inspectImage(await fs.readFile(blobPath));
+    if (!stat.isFile() || stat.size > MAX_ASSET_BYTES) throw new Error('Files may not exceed 15 MB.');
+    const metadata = JSON.parse(await fs.readFile(blobMetaPath, 'utf8'));
+    if (
+      String(metadata?.id || '') !== staged.id
+      || String(metadata?.agent || '') !== String(agentName || 'explorer')
+      || String(metadata?.localPath || '') !== staged.localPath
+    ) {
+      throw new Error('The staged blob metadata does not match its reference.');
+    }
+    if (Number.isFinite(Number(metadata?.size)) && Number(metadata.size) !== stat.size) {
+      throw new Error('The staged blob size does not match its metadata.');
+    }
+    const inspected = inspectAsset(await fs.readFile(blobPath), metadata, path);
     const assetId = `asset_${crypto.randomUUID()}`;
-    const relativePath = `document-multimedia/webmeet/${cleanRoomId}/assets/${assetId}.${image.extension}`;
+    const storageExtension = inspected.kind === 'image' ? inspected.extension : 'bin';
+    const relativePath = `document-multimedia/webmeet/${cleanRoomId}/assets/${assetId}.${storageExtension}`;
     const targetPath = await validatePath(`/${relativePath}`);
     await fs.mkdir(path.dirname(targetPath), { recursive: true });
     try {
@@ -107,13 +155,16 @@ export function createWebMeetMediaStore({
     }
     await fs.unlink(blobMetaPath).catch(() => {});
     const asset = {
-      assetId, roomId: cleanRoomId, kind: 'image',
-      filename: path.basename(String(filename || 'image').replace(/\0/g, '')) || 'image',
-      mimeType: image.mimeType, extension: image.extension, size: stat.size,
-      width: image.width, height: image.height,
+      assetId, roomId: cleanRoomId, kind: inspected.kind,
+      filename: inspected.filename,
+      mimeType: inspected.mimeType, extension: inspected.extension, size: stat.size,
       workspaceUrl: `/${relativePath}`,
       createdAt: new Date().toISOString(), createdBy: String(createdBy || '').trim()
     };
+    if (inspected.kind === 'image') {
+      asset.width = inspected.width;
+      asset.height = inspected.height;
+    }
     await fs.writeFile(await metadataPath(cleanRoomId, assetId), JSON.stringify(asset, null, 2), 'utf8');
     return asset;
   }
