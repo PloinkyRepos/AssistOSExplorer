@@ -71,7 +71,7 @@ export async function deleteRoomIfPresent(page, title) {
     const confirmationDialog = page.locator('dialog:has(confirm-action-modal)').last();
     await expect(confirmationDialog).toBeVisible();
     await expect(confirmationDialog).toContainText(title);
-    await expect(confirmationDialog).toContainText(/cannot be undone/i);
+    await expect(confirmationDialog).toContainText(/cannot\s+be\s+undone/i);
     await confirmationDialog.getByRole('button', { name: 'Yes' }).click();
 
     await expect(item).toHaveCount(0, { timeout: smokeConfig.timeouts.navigation });

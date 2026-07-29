@@ -401,8 +401,8 @@ test.describe('Explorer QA acceptance', () => {
         body: Buffer.from(JSON.stringify({
           roomTitle,
           explorerPrincipals: {
-            owner: { id: ownerPrincipal.id, username: ownerPrincipal.username },
-            member: { id: memberPrincipal.id, username: memberPrincipal.username },
+            owner: { id: ownerPrincipal.canonicalId, username: ownerPrincipal.canonicalUsername },
+            member: { id: memberPrincipal.canonicalId, username: memberPrincipal.canonicalUsername },
           },
           liveKitParticipants: participants,
           chatVisibility: {

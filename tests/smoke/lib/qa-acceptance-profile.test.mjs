@@ -68,3 +68,19 @@ test('npm QA acceptance profile selects exactly the two public QA browser tests'
   assert.match(command, /\bspecs\/80-explorer-qa-acceptance\.spec\.mjs\b/);
   assert.doesNotMatch(command, /--headed|specs\/(?:00|10|15|20|30|31|32|33|34|40|50|60|61|70)-/);
 });
+
+test('QA WebMeet evidence retains both canonical Explorer principals', () => {
+  const acceptanceSpec = fs.readFileSync(
+    new URL('../specs/80-explorer-qa-acceptance.spec.mjs', import.meta.url),
+    'utf8',
+  );
+  assert.match(
+    acceptanceSpec,
+    /owner:\s*{\s*id:\s*ownerPrincipal\.canonicalId,\s*username:\s*ownerPrincipal\.canonicalUsername\s*}/,
+  );
+  assert.match(
+    acceptanceSpec,
+    /member:\s*{\s*id:\s*memberPrincipal\.canonicalId,\s*username:\s*memberPrincipal\.canonicalUsername\s*}/,
+  );
+  assert.doesNotMatch(acceptanceSpec, /(?:owner|member)Principal\.(?:id|username)\b/);
+});
