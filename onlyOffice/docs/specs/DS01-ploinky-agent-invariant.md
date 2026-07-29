@@ -46,11 +46,14 @@ mutations require Origin. Before dialing DocumentServer, the editor service
 requires the complete Router-installed request tuple: scalar internal
 `Host: 127.0.0.1:8080`, scalar `x-forwarded-host` and
 `x-forwarded-proto` equal to the committed active browser URL, and scalar
-`x-forwarded-prefix: /base-agent-additional-server/onlyOffice/8080`. Missing, duplicated,
-comma-joined, whitespace-padded, malformed, unexpected, or caller-spoofed
-forwarding fields fail closed. A public browser authority presented directly
-as `Host` is not accepted as a substitute for the Router's internal transport
-authority. Browser cookies,
+`x-forwarded-prefix: /base-agent-additional-server/onlyOffice/8080`. Raw HTTP
+occurrences of `Host`, `Origin`, and every expected forwarding field are
+validated before the normalized header view is trusted. Missing, duplicated,
+case-duplicated, comma-joined, whitespace-padded, malformed, unexpected, or
+caller-spoofed forwarding fields fail closed; bare `Forwarded`, bare
+`X-Forwarded`, and every unexpected `x-forwarded-*` field are forbidden. A
+public browser authority presented directly as `Host` is not accepted as a
+substitute for the Router's internal transport authority. Browser cookies,
 authorization, forwarding, proxy-authorization, Host-derived identity, Ploinky
 identity headers, and the private `Ploinky-Agent-Assertion` are stripped before
 forwarding. The proxy derives the exact

@@ -55,6 +55,7 @@ function sanitizeHeaders(headers = {}) {
     'host',
     'ploinky-agent-assertion',
     'proxy-authorization',
+    'x-forwarded',
   ]);
   const sanitized = {};
   for (const [name, value] of Object.entries(headers)) {
@@ -91,10 +92,71 @@ function exactScalarHeader(headers, expectedName) {
   return matches[0][1];
 }
 
-function hasOnlyRouterForwardingHeaders(headers) {
-  for (const name of Object.keys(headers || {})) {
+function collectHeaderOccurrences(req) {
+  if (req?.rawHeaders !== undefined) {
+    if (!Array.isArray(req.rawHeaders) || req.rawHeaders.length % 2 !== 0) {
+      return null;
+    }
+    const occurrences = new Map();
+    for (let index = 0; index < req.rawHeaders.length; index += 2) {
+      const name = req.rawHeaders[index];
+      const value = req.rawHeaders[index + 1];
+      if (typeof name !== 'string' || typeof value !== 'string') {
+        return null;
+      }
+      const normalizedName = name.toLowerCase();
+      const values = occurrences.get(normalizedName) || [];
+      values.push(value);
+      occurrences.set(normalizedName, values);
+    }
+    return occurrences;
+  }
+
+  if (req?.headersDistinct !== undefined) {
+    if (!req.headersDistinct || typeof req.headersDistinct !== 'object') {
+      return null;
+    }
+    const occurrences = new Map();
+    for (const [name, values] of Object.entries(req.headersDistinct)) {
+      if (!Array.isArray(values) || values.some((value) => typeof value !== 'string')) {
+        return null;
+      }
+      const normalizedName = String(name).toLowerCase();
+      const existingValues = occurrences.get(normalizedName) || [];
+      occurrences.set(normalizedName, [...existingValues, ...values]);
+    }
+    return occurrences;
+  }
+
+  const occurrences = new Map();
+  for (const [name, value] of Object.entries(req?.headers || {})) {
     const normalizedName = String(name).toLowerCase();
-    if (normalizedName === 'forwarded') {
+    const values = occurrences.get(normalizedName) || [];
+    values.push(value);
+    occurrences.set(normalizedName, values);
+  }
+  return occurrences;
+}
+
+function exactRequestHeader(req, occurrences, expectedName) {
+  const values = occurrences.get(expectedName) || [];
+  if (
+    values.length !== 1
+    || typeof values[0] !== 'string'
+    || exactScalarHeader(req?.headers, expectedName) !== values[0]
+  ) {
+    return null;
+  }
+  return values[0];
+}
+
+function hasOnlyRouterForwardingHeaders(headers, occurrences) {
+  const names = new Set([
+    ...Object.keys(headers || {}).map((name) => String(name).toLowerCase()),
+    ...occurrences.keys(),
+  ]);
+  for (const normalizedName of names) {
+    if (normalizedName === 'forwarded' || normalizedName === 'x-forwarded') {
       return false;
     }
     if (
@@ -128,20 +190,22 @@ function requestMatchesCommittedOrigin(req, publicBrowserUrl, { requireOrigin = 
     prefix,
   } = resolveCanonicalEditorBrowserUrl(publicBrowserUrl);
   const headers = req?.headers;
+  const occurrences = collectHeaderOccurrences(req);
   if (
     !headers
+    || !occurrences
     || !hasCanonicalRouterHostname(expected)
-    || !hasOnlyRouterForwardingHeaders(headers)
-    || exactScalarHeader(headers, 'host') !== ROUTER_INTERNAL_EDITOR_HOST
-    || exactScalarHeader(headers, 'x-forwarded-host') !== expected.host
-    || exactScalarHeader(headers, 'x-forwarded-proto') !== expected.protocol.replace(/:$/, '')
-    || exactScalarHeader(headers, 'x-forwarded-prefix') !== prefix
+    || !hasOnlyRouterForwardingHeaders(headers, occurrences)
+    || exactRequestHeader(req, occurrences, 'host') !== ROUTER_INTERNAL_EDITOR_HOST
+    || exactRequestHeader(req, occurrences, 'x-forwarded-host') !== expected.host
+    || exactRequestHeader(req, occurrences, 'x-forwarded-proto') !== expected.protocol.replace(/:$/, '')
+    || exactRequestHeader(req, occurrences, 'x-forwarded-prefix') !== prefix
   ) {
     return false;
   }
-  const origin = exactScalarHeader(headers, 'origin');
+  const origin = exactRequestHeader(req, occurrences, 'origin');
   if (origin === null) {
-    const hasOrigin = Object.keys(headers).some(
+    const hasOrigin = occurrences.has('origin') || Object.keys(headers).some(
       (name) => String(name).toLowerCase() === 'origin',
     );
     if (hasOrigin) {

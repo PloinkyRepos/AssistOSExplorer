@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import http from 'node:http';
+import net from 'node:net';
 import test from 'node:test';
 
 import { createEditorProxy } from '../src/proxy/editor-proxy.mjs';
@@ -38,6 +40,51 @@ function createTestProxy(options = {}) {
     targetBaseUrl: 'http://127.0.0.1:80',
     resolveEditorService: async () => ({ activeBrowserUrl: ACTIVE_EDITOR_URL }),
     ...options,
+  });
+}
+
+async function listenOnLoopback(server) {
+  await new Promise((resolve, reject) => {
+    const onError = (error) => reject(error);
+    server.once('error', onError);
+    server.listen(0, '127.0.0.1', () => {
+      server.off('error', onError);
+      resolve();
+    });
+  });
+  return server.address().port;
+}
+
+function sendRawRequest(port, requestLine, headerLines) {
+  return new Promise((resolve, reject) => {
+    const socket = net.connect({ host: '127.0.0.1', port });
+    const chunks = [];
+    let settled = false;
+    const finish = (callback, value) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      socket.setTimeout(0);
+      callback(value);
+    };
+
+    socket.setTimeout(3_000, () => {
+      socket.destroy();
+      finish(reject, new Error(`Timed out waiting for raw response to ${requestLine}.`));
+    });
+    socket.on('connect', () => {
+      socket.write(`${[
+        requestLine,
+        ...headerLines,
+        '',
+        '',
+      ].join('\r\n')}`);
+    });
+    socket.on('data', (chunk) => chunks.push(chunk));
+    socket.on('end', () => finish(resolve, Buffer.concat(chunks).toString('latin1')));
+    socket.on('close', () => finish(resolve, Buffer.concat(chunks).toString('latin1')));
+    socket.on('error', (error) => finish(reject, error));
   });
 }
 
@@ -237,6 +284,7 @@ test('editor transport requires the complete exact Router-installed request shap
     }],
     ['forwarded prefix whitespace', { ...completeHeaders, 'x-forwarded-prefix': ` ${EDITOR_PREFIX}` }],
     ['legacy Forwarded spoof', { ...completeHeaders, forwarded: 'for=203.0.113.8' }],
+    ['legacy X-Forwarded spoof', { ...completeHeaders, 'x-forwarded': 'for=203.0.113.8' }],
     ['extra forwarded spoof', { ...completeHeaders, 'x-forwarded-for': '203.0.113.8' }],
   ];
 
@@ -264,6 +312,97 @@ test('editor transport requires the complete exact Router-installed request shap
 
   assert.equal(httpDials, 0);
   assert.equal(websocketDials, 0);
+});
+
+test('real Node parsing rejects duplicate authority and forwarding fields before HTTP or WebSocket dial', async (t) => {
+  let httpDials = 0;
+  let websocketDials = 0;
+  const proxy = createTestProxy({
+    async forwardHttp() {
+      httpDials += 1;
+      return { statusCode: 200, body: 'proxied' };
+    },
+    async forwardUpgrade(_plan, _req, socket) {
+      websocketDials += 1;
+      socket.end([
+        'HTTP/1.1 101 Switching Protocols',
+        'Connection: Upgrade',
+        'Upgrade: websocket',
+        '',
+        '',
+      ].join('\r\n'));
+    },
+  });
+  const server = http.createServer((req, res) => {
+    proxy.handle(req, res).catch((error) => {
+      res.statusCode = 500;
+      res.end(error.message);
+    });
+  });
+  server.on('upgrade', (req, socket, head) => {
+    proxy.handleUpgrade(req, socket, head).catch(() => socket.destroy());
+  });
+  const port = await listenOnLoopback(server);
+  t.after(async () => {
+    await new Promise((resolve, reject) => {
+      server.close((error) => error ? reject(error) : resolve());
+    });
+  });
+
+  const canonicalHeaders = [
+    `Host: ${ROUTER_INTERNAL_HOST}`,
+    'X-Forwarded-Host: localhost:8080',
+    'X-Forwarded-Proto: http',
+    `X-Forwarded-Prefix: ${EDITOR_PREFIX}`,
+    `Origin: ${EDITOR_ORIGIN}`,
+  ];
+  const httpRequestLine = 'GET /web-apps/apps/api/documents/api.js HTTP/1.1';
+  const upgradeRequestLine = 'GET /doc/123/c HTTP/1.1';
+  const upgradeHeaders = [
+    'Connection: Upgrade',
+    'Upgrade: websocket',
+  ];
+
+  const canonicalHttpResponse = await sendRawRequest(port, httpRequestLine, [
+    ...canonicalHeaders,
+    'Connection: close',
+  ]);
+  assert.match(canonicalHttpResponse, /^HTTP\/1\.1 200 /);
+  const canonicalUpgradeResponse = await sendRawRequest(port, upgradeRequestLine, [
+    ...canonicalHeaders,
+    ...upgradeHeaders,
+  ]);
+  assert.match(canonicalUpgradeResponse, /^HTTP\/1\.1 101 /);
+  assert.equal(httpDials, 1);
+  assert.equal(websocketDials, 1);
+
+  const invalidRawHeaders = [
+    ['duplicate Host', `hOsT: ${ROUTER_INTERNAL_HOST}`],
+    ['case-duplicate Origin', `oRiGiN: ${EDITOR_ORIGIN}`],
+    ['case-duplicate forwarded host', 'x-FoRwArDeD-hOsT: localhost:8080'],
+    ['case-duplicate forwarded protocol', 'x-FoRwArDeD-pRoTo: http'],
+    ['case-duplicate forwarded prefix', `x-FoRwArDeD-pReFiX: ${EDITOR_PREFIX}`],
+    ['legacy Forwarded', 'Forwarded: for=203.0.113.8'],
+    ['legacy X-Forwarded', 'X-Forwarded: for=203.0.113.8'],
+    ['unexpected x-forwarded field', 'X-Forwarded-For: 203.0.113.8'],
+  ];
+
+  for (const [label, extraHeader] of invalidRawHeaders) {
+    const httpResponse = await sendRawRequest(port, httpRequestLine, [
+      ...canonicalHeaders,
+      extraHeader,
+      'Connection: close',
+    ]);
+    assert.match(httpResponse, /^HTTP\/1\.1 404 /, `HTTP: ${label}`);
+    assert.equal(httpDials, 1, `HTTP dial: ${label}`);
+
+    await sendRawRequest(port, upgradeRequestLine, [
+      ...canonicalHeaders,
+      extraHeader,
+      ...upgradeHeaders,
+    ]);
+    assert.equal(websocketDials, 1, `WebSocket dial: ${label}`);
+  }
 });
 
 test('editor transport rejects ambiguous or unexpected active browser routes before dialing', async () => {
