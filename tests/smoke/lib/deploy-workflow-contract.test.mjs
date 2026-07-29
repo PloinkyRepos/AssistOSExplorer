@@ -36,7 +36,6 @@ const WORKFLOWS = [
       "'workspace-assets'",
       "'blob-transfer'",
       "'marketplace-ui'",
-      "'topology-projection'",
       'const target = "/workspace/.ploinky"',
       'Ploinky authority directory has the wrong owner',
       'STAGED_EDGE_DESIRED="/workspace/.ploinky/.explorer-qa-edge-desired.json"',
