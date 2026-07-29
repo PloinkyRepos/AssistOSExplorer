@@ -2,11 +2,12 @@
 
 ## Status
 
-Confirmed during the corrected clean `ploinky-proxy` QA deployment on
+Verified during clean and in-place `ploinky-proxy` QA deployments on
 2026-07-29. Corrected in Ploinky
-`2627d00a4d87ee367d7b7f70abf3d5040f67d369`; another clean redeployment and
-strict acceptance run are required before the correction is accepted as
-verified in QA.
+`2627d00a4d87ee367d7b7f70abf3d5040f67d369`; the repaired retry path recovered
+multiple real host-probe and route-churn transitions autonomously, all 16
+agents reached running without manual starts, and the final strict acceptance
+run passed both cases.
 
 ## Environment
 
@@ -95,14 +96,33 @@ without an independent route activation. Focused publication tests passed
 74/74. The broad Ploinky Node suite passed 1,829 tests with 2 skips and no
 failures.
 
-## Verification Required
+## QA Verification
 
-With the correction committed and pushed to `ploinky-proxy`:
+The owning runtime completed destroy workflow `30491352744`. Independent
+empty-state checks proved the QA workspace, Box, named volumes, port, route,
+DNS record, managed tunnel, connector, and host Cloudflared process were
+absent. Clean deploy workflow `30491591848` then fetched Ploinky
+`2627d00a4d87ee367d7b7f70abf3d5040f67d369`.
 
-1. Destroy the current QA generation using its owning runtime.
-2. Deploy the corrected heads into an empty QA environment.
-3. Observe all 16 agents reach running without manual intervention.
-4. Require a stable Ploinky-managed connector identity across a sustained
-   window and repeated successful public edge probes.
-5. Run both strict headless Explorer QA acceptance cases and clean up their
-   run-scoped data.
+The clean startup exercised the repair repeatedly: the first external host
+probe failed and recovered with `retryAttempt: 1`; later route-generation
+churn also moved publication through reconciling/error states and recovered to
+`ready/running` without manual intervention. All 16 agents reached running.
+The Box-owned connector identity remained stable across the post-churn window,
+the host Cloudflared service remained inactive, and five probes pinned to
+`104.21.57.223` returned HTTP 302.
+
+An in-place Router reconcile in workflow `30493582310` later repeated the same
+release gates after Ploinky advanced to
+`b92b471f3c69a238588f87f9e19679b14869c19f`. It again reached 16/16
+automatically, recovered publication retries without operator action, held a
+stable Box-owned connector, and passed five edge-pinned probes.
+
+Final Explorer reconcile workflow `30495285398` repeated those gates at
+Explorer `cbc6d4e543e5e4497a35797cdb695b02a5e048c9`: 16/16 automatic
+recovery, ready publication, stable connector identity, inactive host
+Cloudflared, and five HTTP 302 edge-pinned probes.
+
+The final fresh headless run
+`SMOKE_QA_EDGE_IP=104.21.57.223 npm run test:qa` selected exactly two serial
+tests and passed both with zero unexpected, skipped, or flaky results.
