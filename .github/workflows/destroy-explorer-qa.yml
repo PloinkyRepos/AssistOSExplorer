@@ -425,6 +425,65 @@ jobs:
               fs.chmodSync(target, 0o700);
             '
 
+          STAGED_EDGE_DESIRED="/workspace/.ploinky/.explorer-qa-edge-desired.json"
+          "$BOX_ENGINE" container exec \
+            --user podman \
+            "$BOX_INSTANCE" \
+            node --input-type=module --eval '
+              import fs from "node:fs";
+              const staged = "/workspace/.ploinky/.explorer-qa-edge-desired.json";
+              try {
+                const current = fs.lstatSync(staged);
+                if (!current.isFile() || current.isSymbolicLink() || current.nlink !== 1) {
+                  throw new Error(`refusing unsafe staged edge desired file: ${staged}`);
+                }
+                if (typeof process.getuid === "function" && current.uid !== process.getuid()) {
+                  throw new Error(`staged edge desired file has the wrong owner: ${staged}`);
+                }
+                fs.unlinkSync(staged);
+              } catch (error) {
+                if (error?.code !== "ENOENT") throw error;
+              }
+            '
+          "$BOX_ENGINE" container cp \
+            "$EDGE_DESIRED_FILE" \
+            "$BOX_INSTANCE:$STAGED_EDGE_DESIRED"
+          "$BOX_ENGINE" container exec \
+            --user podman \
+            "$BOX_INSTANCE" \
+            node --input-type=module --eval '
+              import fs from "node:fs";
+              const staged = "/workspace/.ploinky/.explorer-qa-edge-desired.json";
+              const target = "/workspace/.ploinky/edge-desired.json";
+              try {
+                const stagedStat = fs.lstatSync(staged);
+                if (!stagedStat.isFile() || stagedStat.isSymbolicLink() || stagedStat.nlink !== 1) {
+                  throw new Error(`refusing unsafe staged edge desired file: ${staged}`);
+                }
+                if (typeof process.getuid === "function" && stagedStat.uid !== process.getuid()) {
+                  throw new Error(`staged edge desired file has the wrong owner: ${staged}`);
+                }
+                JSON.parse(fs.readFileSync(staged, "utf8"));
+                try {
+                  const current = fs.lstatSync(target);
+                  if (!current.isFile() || current.isSymbolicLink() || current.nlink !== 1) {
+                    throw new Error(`refusing unsafe edge desired target: ${target}`);
+                  }
+                  if (typeof process.getuid === "function" && current.uid !== process.getuid()) {
+                    throw new Error(`edge desired target has the wrong owner: ${target}`);
+                  }
+                } catch (error) {
+                  if (error?.code !== "ENOENT") throw error;
+                }
+                fs.renameSync(staged, target);
+                fs.chmodSync(target, 0o600);
+              } finally {
+                try { fs.unlinkSync(staged); } catch (error) {
+                  if (error?.code !== "ENOENT") throw error;
+                }
+              }
+            '
+
           CLOUDFLARE_CREDENTIAL_FILE="$(mktemp /tmp/explorer_qa_cloudflare.XXXXXX)"
           node --input-type=module - "$CLOUDFLARE_CREDENTIAL_FILE" <<'NODE'
           import fs from 'node:fs';
