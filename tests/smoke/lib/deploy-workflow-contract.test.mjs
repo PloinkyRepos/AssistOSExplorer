@@ -140,7 +140,10 @@ test('Explorer QA destroy removes only its Ploinky-owned Cloudflare publication'
     'Ploinky removed its owned Cloudflare route, DNS record, and managed tunnel',
     'Unrelated Cloudflare tunnels and routes: preserved',
     'printf \'yes\\n\' | "$PLOINKY" destroy',
-    'Named workspace, nested-container, and dependency volumes were retained',
+    'QA_VOLUME_ROLES=(workspace containers ploinky-deps)',
+    'io.assistos.ploinky-box.path-hash',
+    '"$BOX_ENGINE" volume rm "$volume_name"',
+    'QA workspace, nested-container, dependency volumes, and host identity directory were removed',
   ]) {
     assert.equal(source.includes(required), true, `missing destroy workflow contract: ${required}`);
   }

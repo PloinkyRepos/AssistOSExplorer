@@ -9,7 +9,7 @@ on:
         default: 'explorerQaWorkspace'
         type: string
       confirm_destroy:
-        description: 'Confirm removal of the outer Box (named data volumes are retained)'
+        description: 'Confirm removal of the QA Box, its Ploinky-managed tunnel, and all QA data volumes'
         required: true
         default: false
         type: boolean
@@ -595,8 +595,47 @@ jobs:
             exit 1
           fi
 
+          BOX_PATH_HASH="${BOX_INSTANCE##*-}"
+          if [[ ! "$BOX_PATH_HASH" =~ ^[a-f0-9]{12}$ ]]; then
+            echo "[destroy-qa] ERROR: refusing to derive QA volume ownership from malformed Box identity '$BOX_INSTANCE'."
+            exit 1
+          fi
+          QA_VOLUME_ROLES=(workspace containers ploinky-deps)
+          for volume_role in "${QA_VOLUME_ROLES[@]}"; do
+            volume_name="${BOX_INSTANCE}-${volume_role}"
+            if ! "$BOX_ENGINE" volume inspect "$volume_name" >/dev/null 2>&1; then
+              echo "[destroy-qa] ERROR: expected QA volume is missing: $volume_name"
+              exit 1
+            fi
+            observed_role="$(
+              "$BOX_ENGINE" volume inspect "$volume_name" \
+                --format '{{ index .Labels "io.assistos.ploinky-box.role" }}'
+            )"
+            observed_hash="$(
+              "$BOX_ENGINE" volume inspect "$volume_name" \
+                --format '{{ index .Labels "io.assistos.ploinky-box.path-hash" }}'
+            )"
+            if [ "$observed_role" != "$volume_role" ] || [ "$observed_hash" != "$BOX_PATH_HASH" ]; then
+              echo "[destroy-qa] ERROR: refusing to remove volume with mismatched Ploinky ownership: $volume_name"
+              exit 1
+            fi
+          done
+          for volume_role in "${QA_VOLUME_ROLES[@]}"; do
+            volume_name="${BOX_INSTANCE}-${volume_role}"
+            "$BOX_ENGINE" volume rm "$volume_name"
+            if "$BOX_ENGINE" volume inspect "$volume_name" >/dev/null 2>&1; then
+              echo "[destroy-qa] ERROR: QA volume deletion did not verify: $volume_name"
+              exit 1
+            fi
+          done
+          rm -rf -- "$WORK_DIR"
+          if [ -e "$WORK_DIR" ] || [ -L "$WORK_DIR" ]; then
+            echo "[destroy-qa] ERROR: QA identity directory deletion did not verify: $WORK_DIR"
+            exit 1
+          fi
+
           echo "[destroy-qa] Outer Box removed after Ploinky removed its owned Cloudflare route, DNS record, and managed tunnel."
-          echo "[destroy-qa] Named workspace, nested-container, and dependency volumes were retained."
+          echo "[destroy-qa] QA workspace, nested-container, dependency volumes, and host identity directory were removed."
           REMOTE
 
       - name: Create summary
@@ -612,8 +651,8 @@ jobs:
             echo "- Ploinky Cloudflare route and managed tunnel: removed"
             echo "- Unrelated Cloudflare tunnels and routes: preserved"
             echo "- Public hostname: \`${PUBLIC_HOST}\`"
-            echo "- Named data volumes: retained"
-            echo "- Host identity directory: retained"
+            echo "- Named QA data volumes: removed"
+            echo "- Host identity directory: removed"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Cleanup
