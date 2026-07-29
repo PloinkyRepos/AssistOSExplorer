@@ -462,6 +462,27 @@ jobs:
             exit 1
           fi
 
+          "$BOX_ENGINE" container exec \
+            --user podman \
+            "$BOX_INSTANCE" \
+            node --input-type=module --eval '
+              import fs from "node:fs";
+              const target = "/workspace/.ploinky";
+              try {
+                const current = fs.lstatSync(target);
+                if (!current.isDirectory() || current.isSymbolicLink()) {
+                  throw new Error(`refusing unsafe Ploinky authority directory: ${target}`);
+                }
+                if (typeof process.getuid === "function" && current.uid !== process.getuid()) {
+                  throw new Error(`Ploinky authority directory has the wrong owner: ${target}`);
+                }
+              } catch (error) {
+                if (error?.code !== "ENOENT") throw error;
+                fs.mkdirSync(target, { mode: 0o700 });
+              }
+              fs.chmodSync(target, 0o700);
+            '
+
           CLOUDFLARE_CREDENTIAL_FILE="$(mktemp /tmp/explorer_qa_cloudflare.XXXXXX)"
           node --input-type=module - "$CLOUDFLARE_CREDENTIAL_FILE" <<'NODE'
           import fs from 'node:fs';
