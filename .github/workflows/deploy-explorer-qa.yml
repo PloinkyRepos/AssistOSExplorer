@@ -3,30 +3,10 @@ name: Deploy Explorer QA Box
 on:
   workflow_dispatch:
     inputs:
-      branch:
-        description: 'AssistOSExplorer branch to deploy'
-        required: true
-        default: 'ploinky-proxy'
-        type: string
-      ploinky_branch:
-        description: 'Ploinky runtime branch that owns the Box implementation'
-        required: true
-        default: 'ploinky-proxy'
-        type: string
       workspace_name:
         description: 'Host identity directory for the QA Box'
         required: false
         default: 'explorerQaWorkspace'
-        type: string
-      router_port:
-        description: 'Loopback host port mapped to the Box Router'
-        required: false
-        default: '8097'
-        type: string
-      public_url:
-        description: 'Optional public QA URL to verify after the Box is ready'
-        required: false
-        default: ''
         type: string
 
 concurrency:
@@ -37,10 +17,13 @@ env:
   SSH_USER: ${{ vars.EXPLORER_QA_SSH_USER || 'admin' }}
   SSH_HOST: ${{ vars.EXPLORER_QA_SSH_HOST || '45.136.70.141' }}
   WORKSPACE: ${{ inputs.workspace_name || vars.EXPLORER_QA_WORKSPACE || 'explorerQaWorkspace' }}
-  ROUTER_PORT: ${{ inputs.router_port || vars.EXPLORER_QA_ROUTER_PORT || '8097' }}
-  PUBLIC_URL: ${{ inputs.public_url || vars.EXPLORER_QA_PUBLIC_URL || '' }}
-  EXPLORER_BRANCH: ${{ inputs.branch || 'ploinky-proxy' }}
-  PLOINKY_BRANCH: ${{ inputs.ploinky_branch || vars.EXPLORER_QA_PLOINKY_BRANCH || 'ploinky-proxy' }}
+  ROUTER_PORT: '8097'
+  DEPLOY_BRANCH: 'ploinky-proxy'
+  PLOINKY_BRANCH: 'ploinky-proxy'
+  PUBLIC_HOST: 'explorer-qa.axiologic.dev'
+  PUBLIC_URL: 'https://explorer-qa.axiologic.dev'
+  CLOUDFLARE_TUNNEL_NAME: 'explorer-qa'
+  CLOUDFLARE_API_SECRET_HANDLE: 'publication/explorer-qa-api'
   SOUL_GATEWAY_WORKSPACE: 'soulGateway'
   SOUL_GATEWAY_ROUTER_PORT: '8080'
 
@@ -56,6 +39,9 @@ jobs:
       - name: Validate GitHub configuration
         env:
           SSH_KEY: ${{ secrets.EXPLORER_QA_SSH_KEY }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.EXPLORER_QA_CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.EXPLORER_QA_CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ZONE_ID: ${{ vars.EXPLORER_QA_CLOUDFLARE_ZONE_ID }}
         run: |
           set -euo pipefail
           if [ -z "${SSH_KEY:-}" ]; then
@@ -64,6 +50,23 @@ jobs:
           fi
           if [ -z "${SSH_HOST:-}" ] || [ -z "${SSH_USER:-}" ]; then
             echo "::error::EXPLORER_QA_SSH_USER and EXPLORER_QA_SSH_HOST must be configured"
+            exit 1
+          fi
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+            echo "::error::Missing required repository secret EXPLORER_QA_CLOUDFLARE_API_TOKEN"
+            exit 1
+          fi
+          if [[ "$CLOUDFLARE_API_TOKEN" == cfk_* ]]; then
+            echo "::error::EXPLORER_QA_CLOUDFLARE_API_TOKEN is a Global API Key; Ploinky requires a scoped Account or User API Token used as a Bearer token"
+            exit 1
+          fi
+          if [[ ! "$CLOUDFLARE_ACCOUNT_ID" =~ ^[a-f0-9]{32}$ ]] ||
+            [[ ! "$CLOUDFLARE_ZONE_ID" =~ ^[a-f0-9]{32}$ ]]; then
+            echo "::error::Explorer QA Cloudflare account or zone variables are missing or malformed"
+            exit 1
+          fi
+          if [[ ! "$CLOUDFLARE_TUNNEL_NAME" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,47}$ ]]; then
+            echo "::error::Explorer QA managed Cloudflare tunnel name is malformed"
             exit 1
           fi
           case "${WORKSPACE:-}" in
@@ -92,16 +95,11 @@ jobs:
               exit 1
               ;;
           esac
-          git check-ref-format --branch "$EXPLORER_BRANCH" >/dev/null
+          git check-ref-format --branch "$DEPLOY_BRANCH" >/dev/null
           git check-ref-format --branch "$PLOINKY_BRANCH" >/dev/null
-          if [ -n "$PUBLIC_URL" ]; then
-            case "$PUBLIC_URL" in
-              https://*) ;;
-              *)
-                echo "::error::public_url must be an HTTPS URL when configured"
-                exit 1
-                ;;
-            esac
+          if [ "$PUBLIC_URL" != "https://$PUBLIC_HOST" ]; then
+            echo "::error::PUBLIC_URL and PUBLIC_HOST must identify the fixed Explorer QA hostname"
+            exit 1
           fi
 
       - name: Prepare SSH key
@@ -117,6 +115,10 @@ jobs:
           chmod 600 ~/.ssh/explorer_qa_known_hosts
 
       - name: Reconcile and start Explorer QA Box
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.EXPLORER_QA_CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.EXPLORER_QA_CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ZONE_ID: ${{ vars.EXPLORER_QA_CLOUDFLARE_ZONE_ID }}
         run: |
           set -euo pipefail
           umask 077
@@ -128,22 +130,32 @@ jobs:
             printf '%q\n' "$value"
           }
 
+          LOCAL_ENV_FILE="$(mktemp /tmp/explorer_qa_deploy.XXXXXX)"
+          REMOTE_ENV_FILE="/tmp/$(basename "$LOCAL_ENV_FILE")"
+          trap 'rm -f "$LOCAL_ENV_FILE"' EXIT
           {
             write_shell_var WORKSPACE
             write_shell_var ROUTER_PORT
-            write_shell_var EXPLORER_BRANCH
+            write_shell_var DEPLOY_BRANCH
             write_shell_var PLOINKY_BRANCH
+            write_shell_var PUBLIC_HOST
+            write_shell_var PUBLIC_URL
+            write_shell_var CLOUDFLARE_TUNNEL_NAME
+            write_shell_var CLOUDFLARE_API_SECRET_HANDLE
+            write_shell_var CLOUDFLARE_API_TOKEN
+            write_shell_var CLOUDFLARE_ACCOUNT_ID
+            write_shell_var CLOUDFLARE_ZONE_ID
             write_shell_var SOUL_GATEWAY_WORKSPACE
             write_shell_var SOUL_GATEWAY_ROUTER_PORT
-          } > /tmp/explorer_qa_deploy.env
+          } > "$LOCAL_ENV_FILE"
 
           scp \
             -i ~/.ssh/deploy_key \
             -o StrictHostKeyChecking=yes \
             -o "UserKnownHostsFile=$HOME/.ssh/explorer_qa_known_hosts" \
-            /tmp/explorer_qa_deploy.env \
-            "${SSH_USER}@${SSH_HOST}:/tmp/explorer_qa_deploy.env"
-          rm -f /tmp/explorer_qa_deploy.env
+            "$LOCAL_ENV_FILE" \
+            "${SSH_USER}@${SSH_HOST}:$REMOTE_ENV_FILE"
+          rm -f "$LOCAL_ENV_FILE"
 
           ssh \
             -i ~/.ssh/deploy_key \
@@ -151,18 +163,33 @@ jobs:
             -o "UserKnownHostsFile=$HOME/.ssh/explorer_qa_known_hosts" \
             -o ServerAliveInterval=30 \
             -o ServerAliveCountMax=10 \
-            "${SSH_USER}@${SSH_HOST}" 'bash -s' <<'REMOTE'
+            "${SSH_USER}@${SSH_HOST}" "bash -s -- '$REMOTE_ENV_FILE'" <<'REMOTE'
           set -euo pipefail
-          trap 'rm -f /tmp/explorer_qa_deploy.env' EXIT
+          REMOTE_ENV_FILE="${1:-}"
+          CLOUDFLARE_CREDENTIAL_FILE=""
+          cleanup_remote_files() {
+            rm -f "$REMOTE_ENV_FILE"
+            if [ -n "$CLOUDFLARE_CREDENTIAL_FILE" ]; then
+              rm -f "$CLOUDFLARE_CREDENTIAL_FILE"
+            fi
+          }
+          case "$REMOTE_ENV_FILE" in
+            /tmp/explorer_qa_deploy.[A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9]) ;;
+            *)
+              echo "[deploy-qa] ERROR: invalid deployment configuration path."
+              exit 1
+              ;;
+          esac
+          trap cleanup_remote_files EXIT
 
-          if [ ! -f /tmp/explorer_qa_deploy.env ]; then
+          if [ ! -f "$REMOTE_ENV_FILE" ] || [ -L "$REMOTE_ENV_FILE" ]; then
             echo "[deploy-qa] ERROR: deployment configuration was not transferred."
             exit 1
           fi
           set -a
-          . /tmp/explorer_qa_deploy.env
+          . "$REMOTE_ENV_FILE"
           set +a
-          rm -f /tmp/explorer_qa_deploy.env
+          rm -f "$REMOTE_ENV_FILE"
 
           case "${WORKSPACE:-}" in
             ''|.|..|*[!A-Za-z0-9._-]*)
@@ -184,8 +211,35 @@ jobs:
             echo "[deploy-qa] ERROR: router port must be between 1 and 65535."
             exit 1
           fi
-          git check-ref-format --branch "$EXPLORER_BRANCH" >/dev/null
+          case "$ROUTER_PORT" in
+            8042|8043|8080|8085|8317|8318)
+              echo "[deploy-qa] ERROR: refusing to use protected proxies-host port $ROUTER_PORT."
+              exit 1
+              ;;
+          esac
+          git check-ref-format --branch "$DEPLOY_BRANCH" >/dev/null
           git check-ref-format --branch "$PLOINKY_BRANCH" >/dev/null
+          if [ "$PUBLIC_URL" != "https://$PUBLIC_HOST" ]; then
+            echo "[deploy-qa] ERROR: public URL and hostname do not identify Explorer QA."
+            exit 1
+          fi
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+            echo "[deploy-qa] ERROR: a scoped Cloudflare API token is required."
+            exit 1
+          fi
+          if [[ "$CLOUDFLARE_API_TOKEN" == cfk_* ]]; then
+            echo "[deploy-qa] ERROR: the configured Cloudflare credential is a Global API Key, not a scoped Bearer API Token."
+            exit 1
+          fi
+          if [[ ! "$CLOUDFLARE_ACCOUNT_ID" =~ ^[a-f0-9]{32}$ ]] ||
+            [[ ! "$CLOUDFLARE_ZONE_ID" =~ ^[a-f0-9]{32}$ ]]; then
+            echo "[deploy-qa] ERROR: Cloudflare account or zone identifiers are malformed."
+            exit 1
+          fi
+          if [[ ! "$CLOUDFLARE_TUNNEL_NAME" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,47}$ ]]; then
+            echo "[deploy-qa] ERROR: managed Cloudflare tunnel name is malformed."
+            exit 1
+          fi
 
           for tool in git node curl; do
             if ! command -v "$tool" >/dev/null 2>&1; then
@@ -201,6 +255,10 @@ jobs:
           WORK_DIR="$HOME/$WORKSPACE"
           if [ -L "$WORK_DIR" ]; then
             echo "[deploy-qa] ERROR: workspace identity path must not be a symlink: $WORK_DIR"
+            exit 1
+          fi
+          if [ -L "$WORK_DIR/.ploinky" ]; then
+            echo "[deploy-qa] ERROR: workspace authority directory must not be a symlink: $WORK_DIR/.ploinky"
             exit 1
           fi
           mkdir -p "$WORK_DIR/.runtime"
@@ -224,22 +282,39 @@ jobs:
               ;;
           esac
 
-          echo "[deploy-qa] Resolving requested branches..."
-          if ! EXPLORER_BRANCH_RECORD="$(
-            git ls-remote --exit-code --heads \
-              https://github.com/AssistOS-AI/AssistOSExplorer.git \
-              "refs/heads/$EXPLORER_BRANCH"
-          )"; then
-            echo "[deploy-qa] ERROR: AssistOSExplorer branch '$EXPLORER_BRANCH' does not exist."
-            exit 1
-          fi
-          EXPLORER_EXPECTED_COMMIT="$(
-            printf '%s\n' "$EXPLORER_BRANCH_RECORD" | awk 'NR == 1 { print $1 }'
-          )"
-          if [ -z "$EXPLORER_EXPECTED_COMMIT" ]; then
-            echo "[deploy-qa] ERROR: AssistOSExplorer branch '$EXPLORER_BRANCH' does not exist."
-            exit 1
-          fi
+          GRAPH_REPOSITORIES=(
+            'AchillesIDE|https://github.com/AssistOS-AI/AssistOSExplorer.git'
+            'webmeetInfra|https://github.com/AssistOS-AI/webmeetInfra.git'
+            'UmamiAgent|https://github.com/AssistOS-AI/UmamiAgent.git'
+            'AchillesCLI|https://github.com/AssistOS-AI/AchillesCLI.git'
+            'copilot-agents|https://github.com/AssistOS-AI/copilot-agents.git'
+            'proxies|https://github.com/AssistOS-AI/proxies.git'
+            'basic|https://github.com/AssistOS-AI/basic.git'
+            'container-image-builds|https://github.com/AssistOS-AI/container-image-builds.git'
+          )
+          declare -A EXPECTED_COMMITS=()
+
+          echo "[deploy-qa] Resolving $DEPLOY_BRANCH across every managed Explorer repository..."
+          for repository_record in "${GRAPH_REPOSITORIES[@]}"; do
+            IFS='|' read -r repository_name repository_url <<< "$repository_record"
+            if ! branch_record="$(
+              git ls-remote --exit-code --heads \
+                "$repository_url" \
+                "refs/heads/$DEPLOY_BRANCH"
+            )"; then
+              echo "[deploy-qa] ERROR: $repository_name has no '$DEPLOY_BRANCH' branch."
+              exit 1
+            fi
+            expected_commit="$(
+              printf '%s\n' "$branch_record" | awk 'NR == 1 { print $1 }'
+            )"
+            if [[ ! "$expected_commit" =~ ^[a-f0-9]{40}$ ]]; then
+              echo "[deploy-qa] ERROR: unable to resolve $repository_name/$DEPLOY_BRANCH."
+              exit 1
+            fi
+            EXPECTED_COMMITS["$repository_name"]="$expected_commit"
+          done
+
           if [ -x "$RUNTIME_DIR/bin/ploinky" ] &&
             [ -f "$RUNTIME_DIR/ploinky-box/bin/ploinky-box.mjs" ]; then
             echo "[deploy-qa] Stopping the existing QA Box before updating its mounted runtime..."
@@ -247,7 +322,7 @@ jobs:
           fi
           git -C "$RUNTIME_DIR" fetch --prune origin \
             "refs/heads/$PLOINKY_BRANCH:refs/remotes/origin/$PLOINKY_BRANCH"
-          git -C "$RUNTIME_DIR" checkout --detach "refs/remotes/origin/$PLOINKY_BRANCH"
+          git -C "$RUNTIME_DIR" checkout --detach --force "refs/remotes/origin/$PLOINKY_BRANCH"
           git -C "$RUNTIME_DIR" reset --hard "refs/remotes/origin/$PLOINKY_BRANCH"
           git -C "$RUNTIME_DIR" clean -ffd
 
@@ -258,6 +333,66 @@ jobs:
           fi
           echo "[deploy-qa] Ploinky runtime: $(git -C "$RUNTIME_DIR" rev-parse --short HEAD) ($PLOINKY_BRANCH)"
 
+          mkdir -p "$WORK_DIR/.ploinky"
+          chmod 700 "$WORK_DIR/.ploinky"
+          EDGE_DESIRED_FILE="$WORK_DIR/.ploinky/edge-desired.json"
+          node --input-type=module - \
+            "$EDGE_DESIRED_FILE" \
+            "$PUBLIC_HOST" \
+            "$CLOUDFLARE_ACCOUNT_ID" \
+            "$CLOUDFLARE_ZONE_ID" \
+            "$CLOUDFLARE_TUNNEL_NAME" \
+            "$CLOUDFLARE_API_SECRET_HANDLE" <<'NODE'
+          import fs from 'node:fs';
+          import path from 'node:path';
+
+          const target = path.resolve(process.argv[2]);
+          const [
+            publicHost,
+            accountId,
+            zoneId,
+            tunnelName,
+            apiTokenSecret,
+          ] = process.argv.slice(3);
+          const desired = {
+            hosts: {
+              [publicHost]: {
+                agent: 'AchillesIDE/explorer',
+              },
+            },
+            cloudflare: {
+              accountId,
+              zoneId,
+              tunnelName,
+              apiTokenSecret,
+              deleteTunnelOnTeardown: true,
+            },
+          };
+          try {
+            const current = fs.lstatSync(target);
+            if (!current.isFile() || current.isSymbolicLink() || current.nlink !== 1) {
+              throw new Error(`refusing unsafe edge desired target: ${target}`);
+            }
+          } catch (error) {
+            if (error?.code !== 'ENOENT') throw error;
+          }
+          const temporary = `${target}.${process.pid}.tmp`;
+          try {
+            fs.writeFileSync(temporary, `${JSON.stringify(desired, null, 2)}\n`, {
+              encoding: 'utf8',
+              flag: 'wx',
+              mode: 0o600,
+            });
+            fs.renameSync(temporary, target);
+            fs.chmodSync(target, 0o600);
+          } finally {
+            try { fs.unlinkSync(temporary); } catch (error) {
+              if (error?.code !== 'ENOENT') throw error;
+            }
+          }
+          NODE
+          echo "[deploy-qa] Selected API-managed Ploinky Cloudflare publication for $PUBLIC_HOST."
+
           SOUL_HEALTH_URL="http://127.0.0.1:${SOUL_GATEWAY_ROUTER_PORT:-8080}/base-agent-additional-server/soul-gateway/7000/healthz/"
           SOUL_UP_BEFORE=0
           if curl -sf "$SOUL_HEALTH_URL" >/dev/null 2>&1; then
@@ -266,11 +401,19 @@ jobs:
           fi
 
           export PLOINKY_WORKSPACE_ROOT="$WORK_DIR"
+          BRANCH_ARGS=(
+            --branch-fallback fail
+            --reset-repos
+          )
+          for repository_record in "${GRAPH_REPOSITORIES[@]}"; do
+            IFS='|' read -r repository_name _ <<< "$repository_record"
+            BRANCH_ARGS+=(--repo-branch "$repository_name=$DEPLOY_BRANCH")
+          done
+
           PLAN_JSON="$(
             "$PLOINKY" --dry-run --port "$ROUTER_PORT" start explorer \
               --profile=default \
-              --branch "$EXPLORER_BRANCH" \
-              --reset-repos
+              "${BRANCH_ARGS[@]}"
           )"
           BOX_INSTANCE="$(
             printf '%s' "$PLAN_JSON" |
@@ -288,21 +431,20 @@ jobs:
           )"
           echo "[deploy-qa] Box plan: $PLAN_JSON"
 
-          echo "[deploy-qa] Starting Explorer from AssistOSExplorer/$EXPLORER_BRANCH..."
-          "$PLOINKY" --port "$ROUTER_PORT" start explorer \
-            --profile=default \
-            --branch "$EXPLORER_BRANCH" \
-            --reset-repos
+          echo "[deploy-qa] Preparing the exact QA Box..."
+          node --input-type=module - \
+            "$RUNTIME_DIR/ploinky-box/supervisor.mjs" \
+            "$ROUTER_PORT" <<'NODE'
+          import { pathToFileURL } from 'node:url';
 
-          BOX_STATUS="$("$PLOINKY" status)"
-          printf '%s\n' "$BOX_STATUS"
-          case "$BOX_STATUS" in
-            *"Ploinky Box: running-initialized"*) ;;
-            *)
-              echo "[deploy-qa] ERROR: Box did not reach running-initialized state."
-              exit 1
-              ;;
-          esac
+          const supervisorModule = process.argv[2];
+          const routerPort = Number(process.argv[3]);
+          if (!Number.isSafeInteger(routerPort) || routerPort < 1 || routerPort > 65535) {
+            throw new Error('invalid Router port');
+          }
+          const { createBoxSupervisor } = await import(pathToFileURL(supervisorModule).href);
+          await createBoxSupervisor().prepareBoxForCommand({ explicitPort: routerPort });
+          NODE
 
           BOX_ENGINE=""
           for candidate in podman docker; do
@@ -320,18 +462,107 @@ jobs:
             exit 1
           fi
 
-          DEPLOYED_COMMIT="$(
+          CLOUDFLARE_CREDENTIAL_FILE="$(mktemp /tmp/explorer_qa_cloudflare.XXXXXX)"
+          node --input-type=module - "$CLOUDFLARE_CREDENTIAL_FILE" <<'NODE'
+          import fs from 'node:fs';
+
+          const target = process.argv[2];
+          const values = {
+            'publication/explorer-qa-api': String(process.env.CLOUDFLARE_API_TOKEN || ''),
+          };
+          if (Object.values(values).some((value) => !value)) {
+            throw new Error('Cloudflare credentials are missing');
+          }
+          fs.writeFileSync(target, JSON.stringify(values), {
+            encoding: 'utf8',
+            flag: 'w',
+            mode: 0o600,
+          });
+          fs.chmodSync(target, 0o600);
+          NODE
+          STAGED_CREDENTIAL_FILE="/workspace/.ploinky/.explorer-qa-cloudflare-credentials.json"
+          CREDENTIAL_STATUS=0
+          "$BOX_ENGINE" container cp \
+            "$CLOUDFLARE_CREDENTIAL_FILE" \
+            "$BOX_INSTANCE:$STAGED_CREDENTIAL_FILE" || CREDENTIAL_STATUS=$?
+          if [ "$CREDENTIAL_STATUS" = "0" ]; then
             "$BOX_ENGINE" container exec \
               --user podman \
+              --workdir /workspace \
+              --env PLOINKY_WORKSPACE_ROOT=/workspace \
               "$BOX_INSTANCE" \
-              git -C /workspace/.ploinky/repos/AchillesIDE rev-parse HEAD
-          )"
-          if [ "$DEPLOYED_COMMIT" != "$EXPLORER_EXPECTED_COMMIT" ]; then
-            echo "[deploy-qa] ERROR: deployed AssistOSExplorer commit $DEPLOYED_COMMIT"
-            echo "[deploy-qa]        does not match $EXPLORER_BRANCH at $EXPLORER_EXPECTED_COMMIT."
-            exit 1
+              node --input-type=module --eval '
+                import fs from "node:fs";
+                import { setSecretValue } from "/opt/ploinky/cli/utils/security/encryptedSecretsFile.js";
+                const file = process.argv.at(-1);
+                const values = JSON.parse(fs.readFileSync(file, "utf8"));
+                const expected = [
+                  "publication/explorer-qa-api",
+                ];
+                if (JSON.stringify(Object.keys(values).sort()) !== JSON.stringify(expected)) {
+                  throw new Error("unexpected Cloudflare credential handles");
+                }
+                for (const [name, value] of Object.entries(values)) {
+                  if (!String(value || "")) throw new Error(`empty Cloudflare credential ${name}`);
+                  setSecretValue(name, value);
+                }
+              ' "$STAGED_CREDENTIAL_FILE" || CREDENTIAL_STATUS=$?
           fi
-          echo "[deploy-qa] Verified AssistOSExplorer/$EXPLORER_BRANCH at $DEPLOYED_COMMIT."
+          "$BOX_ENGINE" container exec \
+            --user podman \
+            "$BOX_INSTANCE" \
+            rm -f "$STAGED_CREDENTIAL_FILE" >/dev/null 2>&1 || true
+          rm -f "$CLOUDFLARE_CREDENTIAL_FILE"
+          CLOUDFLARE_CREDENTIAL_FILE=""
+          unset CLOUDFLARE_API_TOKEN
+          if [ "$CREDENTIAL_STATUS" != "0" ]; then
+            echo "[deploy-qa] ERROR: unable to persist Cloudflare credentials in the encrypted Ploinky store."
+            exit "$CREDENTIAL_STATUS"
+          fi
+
+          echo "[deploy-qa] Starting Explorer with every managed repository on $DEPLOY_BRANCH..."
+          "$PLOINKY" --port "$ROUTER_PORT" start explorer \
+            --profile=default \
+            "${BRANCH_ARGS[@]}"
+
+          BOX_STATUS="$("$PLOINKY" status)"
+          printf '%s\n' "$BOX_STATUS"
+          case "$BOX_STATUS" in
+            *"Ploinky Box: running-initialized"*) ;;
+            *)
+              echo "[deploy-qa] ERROR: Box did not reach running-initialized state."
+              exit 1
+              ;;
+          esac
+          for expected_status in \
+            'Cloudflare mode: cloudflare' \
+            'Cloudflare management: api-managed' \
+            'Cloudflare publication: ready' \
+            'Cloudflare connector: running'; do
+            case "$BOX_STATUS" in
+              *"$expected_status"*) ;;
+              *)
+                echo "[deploy-qa] ERROR: missing Box status '$expected_status'."
+                exit 1
+                ;;
+            esac
+          done
+          for repository_record in "${GRAPH_REPOSITORIES[@]}"; do
+            IFS='|' read -r repository_name _ <<< "$repository_record"
+            deployed_commit="$(
+              "$BOX_ENGINE" container exec \
+                --user podman \
+                "$BOX_INSTANCE" \
+                git -C "/workspace/.ploinky/repos/$repository_name" rev-parse HEAD
+            )"
+            expected_commit="${EXPECTED_COMMITS[$repository_name]}"
+            if [ "$deployed_commit" != "$expected_commit" ]; then
+              echo "[deploy-qa] ERROR: deployed $repository_name commit $deployed_commit"
+              echo "[deploy-qa]        does not match $DEPLOY_BRANCH at $expected_commit."
+              exit 1
+            fi
+            echo "[deploy-qa] Verified $repository_name/$DEPLOY_BRANCH at $deployed_commit."
+          done
 
           echo "[deploy-qa] Verifying the loopback Router publication..."
           ROUTER_OK=0
@@ -360,7 +591,6 @@ jobs:
           REMOTE
 
       - name: Verify public URL
-        if: ${{ env.PUBLIC_URL != '' }}
         run: |
           set -euo pipefail
           echo "[deploy-qa] Verifying ${PUBLIC_URL%/}/dashboard..."
@@ -391,9 +621,10 @@ jobs:
             echo "- Identity directory: \`~/${WORKSPACE}\`"
             echo "- Router publication: \`127.0.0.1:${ROUTER_PORT}:8080/tcp\`"
             echo "- Media publication: \`0.0.0.0:7882:7882/udp\`"
-            echo "- AssistOSExplorer branch: \`${EXPLORER_BRANCH}\`"
+            echo "- Managed graph branch: \`${DEPLOY_BRANCH}\`"
             echo "- Ploinky branch: \`${PLOINKY_BRANCH}\`"
-            echo "- Public URL: \`${PUBLIC_URL:-not configured}\`"
+            echo "- Cloudflare: tunnel, ingress, and DNS API-managed by Ploinky"
+            echo "- Public URL: \`${PUBLIC_URL}\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Cleanup

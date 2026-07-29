@@ -38,6 +38,44 @@ SMOKE_BASE_URL=http://127.0.0.1:8080 npm test
 
 The suite records traces, videos, screenshots, browser console events, failed requests, and upload/session evidence outside tracked source. See `tests/smoke/README.md` for flags such as `SMOKE_OPEN_INTERPRETER=1`, `SMOKE_WEBMEET_MEDIA=1`, `SMOKE_ONLYOFFICE=1`, and `SMOKE_GITHUB=1`.
 
+### Explorer UI Performance Comparison
+
+Use the repository-owned `tests/smoke` UI benchmark when comparing Explorer
+deployments. It runs a fixed, read-only ten-operation scenario in three fresh
+Chromium contexts with browser caching disabled:
+
+```bash
+cd tests/smoke
+UI_BENCHMARK_LABEL=<deployment-label> \
+UI_BENCHMARK_BASE_URL=http://127.0.0.1:8080 \
+UI_BENCHMARK_PLOINKY_SHA=<deployed-ploinky-sha> \
+UI_BENCHMARK_EXPLORER_SHA=<deployed-explorer-sha> \
+npm run benchmark:ui
+```
+
+Run each side only after the full graph reaches the same admitted state, using
+the same host and a clean equivalent workspace. Compare the resulting JSON
+files with:
+
+```bash
+npm run benchmark:ui:compare -- \
+  <baseline-result.json> \
+  <candidate-result.json> \
+  --output <comparison.json>
+```
+
+The scenario fingerprint prevents comparisons when the paths, viewport, cache
+policy, or operation sequence differ. Results include visible latency,
+network-settled latency, sanitized request waterfalls, Router/Explorer/DPU/Git
+route timing, browser long tasks, render/JavaScript CPU counters, and initial
+page metrics. They exclude bodies, headers, cookies, credentials, URL queries,
+console text, screenshots, and traces. Every step distinguishes a completed
+quiet network tail from the fixed 1,500 ms cutoff, and long-task metrics carry
+observer support/availability state. Comparisons fail closed when the full
+scenario descriptor or recorded browser, headless/cache, viewport, platform,
+architecture, OS, Node, target, or iteration controls differ. See
+`tests/smoke/README.md` for the complete controls and artifact location.
+
 ### Fixed Router/Auth Release Baseline
 
 The Ploinky release harness runs this exact Chromium baseline after the full

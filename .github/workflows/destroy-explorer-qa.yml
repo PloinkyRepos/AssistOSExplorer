@@ -23,6 +23,12 @@ env:
   SSH_HOST: ${{ vars.EXPLORER_QA_SSH_HOST || '45.136.70.141' }}
   WORKSPACE: ${{ inputs.workspace_name || vars.EXPLORER_QA_WORKSPACE || 'explorerQaWorkspace' }}
   CONFIRM_DESTROY: ${{ inputs.confirm_destroy }}
+  ROUTER_PORT: '8097'
+  DEPLOY_BRANCH: 'ploinky-proxy'
+  PLOINKY_BRANCH: 'ploinky-proxy'
+  PUBLIC_HOST: 'explorer-qa.axiologic.dev'
+  CLOUDFLARE_TUNNEL_NAME: 'explorer-qa'
+  CLOUDFLARE_API_SECRET_HANDLE: 'publication/explorer-qa-api'
   SOUL_GATEWAY_WORKSPACE: 'soulGateway'
   SOUL_GATEWAY_ROUTER_PORT: '8080'
 
@@ -30,7 +36,7 @@ jobs:
   destroy:
     name: Destroy Explorer QA outer Box
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 50
     permissions:
       contents: read
 
@@ -38,6 +44,9 @@ jobs:
       - name: Validate GitHub configuration
         env:
           SSH_KEY: ${{ secrets.EXPLORER_QA_SSH_KEY }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.EXPLORER_QA_CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.EXPLORER_QA_CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ZONE_ID: ${{ vars.EXPLORER_QA_CLOUDFLARE_ZONE_ID }}
         run: |
           set -euo pipefail
           if [ -z "${SSH_KEY:-}" ]; then
@@ -46,6 +55,23 @@ jobs:
           fi
           if [ -z "${SSH_HOST:-}" ] || [ -z "${SSH_USER:-}" ]; then
             echo "::error::EXPLORER_QA_SSH_USER and EXPLORER_QA_SSH_HOST must be configured"
+            exit 1
+          fi
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+            echo "::error::Missing required repository secret EXPLORER_QA_CLOUDFLARE_API_TOKEN"
+            exit 1
+          fi
+          if [[ "$CLOUDFLARE_API_TOKEN" == cfk_* ]]; then
+            echo "::error::EXPLORER_QA_CLOUDFLARE_API_TOKEN is a Global API Key; Ploinky requires a scoped Account or User API Token used as a Bearer token"
+            exit 1
+          fi
+          if [[ ! "$CLOUDFLARE_ACCOUNT_ID" =~ ^[a-f0-9]{32}$ ]] ||
+            [[ ! "$CLOUDFLARE_ZONE_ID" =~ ^[a-f0-9]{32}$ ]]; then
+            echo "::error::Explorer QA Cloudflare account or zone variables are missing or malformed"
+            exit 1
+          fi
+          if [[ ! "$CLOUDFLARE_TUNNEL_NAME" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,47}$ ]]; then
+            echo "::error::Explorer QA managed Cloudflare tunnel name is malformed"
             exit 1
           fi
           case "${WORKSPACE:-}" in
@@ -76,6 +102,10 @@ jobs:
           chmod 600 ~/.ssh/explorer_qa_known_hosts
 
       - name: Destroy Explorer QA Box
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.EXPLORER_QA_CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.EXPLORER_QA_CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ZONE_ID: ${{ vars.EXPLORER_QA_CLOUDFLARE_ZONE_ID }}
         run: |
           set -euo pipefail
           umask 077
@@ -87,19 +117,31 @@ jobs:
             printf '%q\n' "$value"
           }
 
+          LOCAL_ENV_FILE="$(mktemp /tmp/explorer_qa_destroy.XXXXXX)"
+          REMOTE_ENV_FILE="/tmp/$(basename "$LOCAL_ENV_FILE")"
+          trap 'rm -f "$LOCAL_ENV_FILE"' EXIT
           {
             write_shell_var WORKSPACE
+            write_shell_var ROUTER_PORT
+            write_shell_var DEPLOY_BRANCH
+            write_shell_var PLOINKY_BRANCH
+            write_shell_var PUBLIC_HOST
+            write_shell_var CLOUDFLARE_TUNNEL_NAME
+            write_shell_var CLOUDFLARE_API_SECRET_HANDLE
+            write_shell_var CLOUDFLARE_API_TOKEN
+            write_shell_var CLOUDFLARE_ACCOUNT_ID
+            write_shell_var CLOUDFLARE_ZONE_ID
             write_shell_var SOUL_GATEWAY_WORKSPACE
             write_shell_var SOUL_GATEWAY_ROUTER_PORT
-          } > /tmp/explorer_qa_destroy.env
+          } > "$LOCAL_ENV_FILE"
 
           scp \
             -i ~/.ssh/deploy_key \
             -o StrictHostKeyChecking=yes \
             -o "UserKnownHostsFile=$HOME/.ssh/explorer_qa_known_hosts" \
-            /tmp/explorer_qa_destroy.env \
-            "${SSH_USER}@${SSH_HOST}:/tmp/explorer_qa_destroy.env"
-          rm -f /tmp/explorer_qa_destroy.env
+            "$LOCAL_ENV_FILE" \
+            "${SSH_USER}@${SSH_HOST}:$REMOTE_ENV_FILE"
+          rm -f "$LOCAL_ENV_FILE"
 
           ssh \
             -i ~/.ssh/deploy_key \
@@ -107,18 +149,33 @@ jobs:
             -o "UserKnownHostsFile=$HOME/.ssh/explorer_qa_known_hosts" \
             -o ServerAliveInterval=30 \
             -o ServerAliveCountMax=10 \
-            "${SSH_USER}@${SSH_HOST}" 'bash -s' <<'REMOTE'
+            "${SSH_USER}@${SSH_HOST}" "bash -s -- '$REMOTE_ENV_FILE'" <<'REMOTE'
           set -euo pipefail
-          trap 'rm -f /tmp/explorer_qa_destroy.env' EXIT
+          REMOTE_ENV_FILE="${1:-}"
+          CLOUDFLARE_CREDENTIAL_FILE=""
+          cleanup_remote_files() {
+            rm -f "$REMOTE_ENV_FILE"
+            if [ -n "$CLOUDFLARE_CREDENTIAL_FILE" ]; then
+              rm -f "$CLOUDFLARE_CREDENTIAL_FILE"
+            fi
+          }
+          case "$REMOTE_ENV_FILE" in
+            /tmp/explorer_qa_destroy.[A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9]) ;;
+            *)
+              echo "[destroy-qa] ERROR: invalid destroy configuration path."
+              exit 1
+              ;;
+          esac
+          trap cleanup_remote_files EXIT
 
-          if [ ! -f /tmp/explorer_qa_destroy.env ]; then
+          if [ ! -f "$REMOTE_ENV_FILE" ] || [ -L "$REMOTE_ENV_FILE" ]; then
             echo "[destroy-qa] ERROR: destroy configuration was not transferred."
             exit 1
           fi
           set -a
-          . /tmp/explorer_qa_destroy.env
+          . "$REMOTE_ENV_FILE"
           set +a
-          rm -f /tmp/explorer_qa_destroy.env
+          rm -f "$REMOTE_ENV_FILE"
 
           case "${WORKSPACE:-}" in
             ''|.|..|*[!A-Za-z0-9._-]*)
@@ -130,10 +187,54 @@ jobs:
             echo "[destroy-qa] ERROR: refusing to operate on the production Soul Gateway workspace."
             exit 1
           fi
+          case "${ROUTER_PORT:-}" in
+            ''|*[!0-9]*)
+              echo "[destroy-qa] ERROR: invalid router port '${ROUTER_PORT:-}'."
+              exit 1
+              ;;
+          esac
+          if [ "$ROUTER_PORT" -lt 1 ] || [ "$ROUTER_PORT" -gt 65535 ]; then
+            echo "[destroy-qa] ERROR: router port must be between 1 and 65535."
+            exit 1
+          fi
+          git check-ref-format --branch "$DEPLOY_BRANCH" >/dev/null
+          git check-ref-format --branch "$PLOINKY_BRANCH" >/dev/null
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+            echo "[destroy-qa] ERROR: a scoped Cloudflare API token is required."
+            exit 1
+          fi
+          if [[ "$CLOUDFLARE_API_TOKEN" == cfk_* ]]; then
+            echo "[destroy-qa] ERROR: the configured Cloudflare credential is a Global API Key, not a scoped Bearer API Token."
+            exit 1
+          fi
+          if [[ ! "$CLOUDFLARE_ACCOUNT_ID" =~ ^[a-f0-9]{32}$ ]] ||
+            [[ ! "$CLOUDFLARE_ZONE_ID" =~ ^[a-f0-9]{32}$ ]]; then
+            echo "[destroy-qa] ERROR: Cloudflare account or zone identifiers are malformed."
+            exit 1
+          fi
+          if [[ ! "$CLOUDFLARE_TUNNEL_NAME" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,47}$ ]]; then
+            echo "[destroy-qa] ERROR: managed Cloudflare tunnel name is malformed."
+            exit 1
+          fi
+
+          for tool in git node curl; do
+            if ! command -v "$tool" >/dev/null 2>&1; then
+              echo "[destroy-qa] ERROR: missing required host tool '$tool'."
+              exit 1
+            fi
+          done
+          if ! command -v podman >/dev/null 2>&1 && ! command -v docker >/dev/null 2>&1; then
+            echo "[destroy-qa] ERROR: neither Podman nor Docker is installed."
+            exit 1
+          fi
 
           WORK_DIR="$HOME/$WORKSPACE"
           if [ -L "$WORK_DIR" ]; then
             echo "[destroy-qa] ERROR: workspace identity path must not be a symlink: $WORK_DIR"
+            exit 1
+          fi
+          if [ -L "$WORK_DIR/.ploinky" ]; then
+            echo "[destroy-qa] ERROR: workspace authority directory must not be a symlink: $WORK_DIR/.ploinky"
             exit 1
           fi
           if [ ! -d "$WORK_DIR" ]; then
@@ -148,6 +249,16 @@ jobs:
             echo "[destroy-qa] Refusing to substitute a shared host runtime for exact Box destruction."
             exit 1
           fi
+          RUNTIME_ORIGIN="$(git -C "$RUNTIME_DIR" remote get-url origin)"
+          case "${RUNTIME_ORIGIN%.git}" in
+            https://github.com/AssistOS-AI/ploinky) ;;
+            *)
+              echo "[destroy-qa] ERROR: unexpected Ploinky runtime origin '$RUNTIME_ORIGIN'."
+              exit 1
+              ;;
+          esac
+          git -C "$RUNTIME_DIR" fetch --prune origin \
+            "refs/heads/$PLOINKY_BRANCH:refs/remotes/origin/$PLOINKY_BRANCH"
 
           SOUL_HEALTH_URL="http://127.0.0.1:${SOUL_GATEWAY_ROUTER_PORT:-8080}/base-agent-additional-server/soul-gateway/7000/healthz/"
           SOUL_UP_BEFORE=0
@@ -159,6 +270,217 @@ jobs:
           export PLOINKY_WORKSPACE_ROOT="$WORK_DIR"
           echo "[destroy-qa] Exact Box status before destruction:"
           "$PLOINKY" status || true
+
+          echo "[destroy-qa] Stopping the QA Box before updating the mounted runtime..."
+          "$PLOINKY" stop
+
+          git -C "$RUNTIME_DIR" checkout --detach --force "refs/remotes/origin/$PLOINKY_BRANCH"
+          git -C "$RUNTIME_DIR" reset --hard "refs/remotes/origin/$PLOINKY_BRANCH"
+          git -C "$RUNTIME_DIR" clean -ffd
+          if [ ! -x "$PLOINKY" ]; then
+            echo "[destroy-qa] ERROR: selected Ploinky branch does not provide bin/ploinky."
+            exit 1
+          fi
+          echo "[destroy-qa] Ploinky runtime: $(git -C "$RUNTIME_DIR" rev-parse --short HEAD) ($PLOINKY_BRANCH)"
+
+          mkdir -p "$WORK_DIR/.ploinky"
+          chmod 700 "$WORK_DIR/.ploinky"
+          EDGE_DESIRED_FILE="$WORK_DIR/.ploinky/edge-desired.json"
+          node --input-type=module - \
+            "$EDGE_DESIRED_FILE" \
+            "$CLOUDFLARE_ACCOUNT_ID" \
+            "$CLOUDFLARE_ZONE_ID" \
+            "$CLOUDFLARE_TUNNEL_NAME" \
+            "$CLOUDFLARE_API_SECRET_HANDLE" <<'NODE'
+          import fs from 'node:fs';
+          import path from 'node:path';
+
+          const target = path.resolve(process.argv[2]);
+          const [
+            accountId,
+            zoneId,
+            tunnelName,
+            apiTokenSecret,
+          ] = process.argv.slice(3);
+          const desired = {
+            hosts: {},
+            cloudflare: {
+              accountId,
+              zoneId,
+              tunnelName,
+              apiTokenSecret,
+              deleteTunnelOnTeardown: true,
+            },
+          };
+          try {
+            const current = fs.lstatSync(target);
+            if (!current.isFile() || current.isSymbolicLink() || current.nlink !== 1) {
+              throw new Error(`refusing unsafe edge desired target: ${target}`);
+            }
+          } catch (error) {
+            if (error?.code !== 'ENOENT') throw error;
+          }
+          const temporary = `${target}.${process.pid}.tmp`;
+          try {
+            fs.writeFileSync(temporary, `${JSON.stringify(desired, null, 2)}\n`, {
+              encoding: 'utf8',
+              flag: 'wx',
+              mode: 0o600,
+            });
+            fs.renameSync(temporary, target);
+            fs.chmodSync(target, 0o600);
+          } finally {
+            try { fs.unlinkSync(temporary); } catch (error) {
+              if (error?.code !== 'ENOENT') throw error;
+            }
+          }
+          NODE
+
+          GRAPH_REPOSITORIES=(
+            AchillesIDE
+            webmeetInfra
+            UmamiAgent
+            AchillesCLI
+            copilot-agents
+            proxies
+            basic
+            container-image-builds
+          )
+          BRANCH_ARGS=(
+            --branch-fallback fail
+            --reset-repos
+          )
+          for repository_name in "${GRAPH_REPOSITORIES[@]}"; do
+            BRANCH_ARGS+=(--repo-branch "$repository_name=$DEPLOY_BRANCH")
+          done
+
+          PLAN_JSON="$(
+            "$PLOINKY" --dry-run --port "$ROUTER_PORT" start explorer \
+              --profile=default \
+              "${BRANCH_ARGS[@]}"
+          )"
+          BOX_INSTANCE="$(
+            printf '%s' "$PLAN_JSON" |
+              node -e '
+                let input = "";
+                process.stdin.on("data", (chunk) => { input += chunk; });
+                process.stdin.on("end", () => {
+                  const plan = JSON.parse(input);
+                  if (!/^ploinky-box-[a-z0-9-]+-[a-f0-9]{12}$/.test(plan.identity || "")) {
+                    throw new Error("invalid Box identity in dry-run plan");
+                  }
+                  process.stdout.write(plan.identity);
+                });
+              '
+          )"
+
+          node --input-type=module - \
+            "$RUNTIME_DIR/ploinky-box/supervisor.mjs" \
+            "$ROUTER_PORT" <<'NODE'
+          import { pathToFileURL } from 'node:url';
+
+          const supervisorModule = process.argv[2];
+          const routerPort = Number(process.argv[3]);
+          if (!Number.isSafeInteger(routerPort) || routerPort < 1 || routerPort > 65535) {
+            throw new Error('invalid Router port');
+          }
+          const { createBoxSupervisor } = await import(pathToFileURL(supervisorModule).href);
+          await createBoxSupervisor().prepareBoxForCommand({ explicitPort: routerPort });
+          NODE
+
+          BOX_ENGINE=""
+          for candidate in podman docker; do
+            if command -v "$candidate" >/dev/null 2>&1 &&
+              "$candidate" container inspect "$BOX_INSTANCE" >/dev/null 2>&1; then
+              if [ -n "$BOX_ENGINE" ]; then
+                echo "[destroy-qa] ERROR: Box identity exists in more than one container engine."
+                exit 1
+              fi
+              BOX_ENGINE="$candidate"
+            fi
+          done
+          if [ -z "$BOX_ENGINE" ]; then
+            echo "[destroy-qa] ERROR: exact Box instance '$BOX_INSTANCE' was not found."
+            exit 1
+          fi
+
+          CLOUDFLARE_CREDENTIAL_FILE="$(mktemp /tmp/explorer_qa_cloudflare.XXXXXX)"
+          node --input-type=module - "$CLOUDFLARE_CREDENTIAL_FILE" <<'NODE'
+          import fs from 'node:fs';
+
+          const target = process.argv[2];
+          const values = {
+            'publication/explorer-qa-api': String(process.env.CLOUDFLARE_API_TOKEN || ''),
+          };
+          if (Object.values(values).some((value) => !value)) {
+            throw new Error('Cloudflare credentials are missing');
+          }
+          fs.writeFileSync(target, JSON.stringify(values), {
+            encoding: 'utf8',
+            flag: 'w',
+            mode: 0o600,
+          });
+          fs.chmodSync(target, 0o600);
+          NODE
+          STAGED_CREDENTIAL_FILE="/workspace/.ploinky/.explorer-qa-cloudflare-credentials.json"
+          CREDENTIAL_STATUS=0
+          "$BOX_ENGINE" container cp \
+            "$CLOUDFLARE_CREDENTIAL_FILE" \
+            "$BOX_INSTANCE:$STAGED_CREDENTIAL_FILE" || CREDENTIAL_STATUS=$?
+          if [ "$CREDENTIAL_STATUS" = "0" ]; then
+            "$BOX_ENGINE" container exec \
+              --user podman \
+              --workdir /workspace \
+              --env PLOINKY_WORKSPACE_ROOT=/workspace \
+              "$BOX_INSTANCE" \
+              node --input-type=module --eval '
+                import fs from "node:fs";
+                import { setSecretValue } from "/opt/ploinky/cli/utils/security/encryptedSecretsFile.js";
+                const file = process.argv.at(-1);
+                const values = JSON.parse(fs.readFileSync(file, "utf8"));
+                const expected = [
+                  "publication/explorer-qa-api",
+                ];
+                if (JSON.stringify(Object.keys(values).sort()) !== JSON.stringify(expected)) {
+                  throw new Error("unexpected Cloudflare credential handles");
+                }
+                for (const [name, value] of Object.entries(values)) {
+                  if (!String(value || "")) throw new Error(`empty Cloudflare credential ${name}`);
+                  setSecretValue(name, value);
+                }
+              ' "$STAGED_CREDENTIAL_FILE" || CREDENTIAL_STATUS=$?
+          fi
+          "$BOX_ENGINE" container exec \
+            --user podman \
+            "$BOX_INSTANCE" \
+            rm -f "$STAGED_CREDENTIAL_FILE" >/dev/null 2>&1 || true
+          rm -f "$CLOUDFLARE_CREDENTIAL_FILE"
+          CLOUDFLARE_CREDENTIAL_FILE=""
+          unset CLOUDFLARE_API_TOKEN
+          if [ "$CREDENTIAL_STATUS" != "0" ]; then
+            echo "[destroy-qa] ERROR: unable to persist Cloudflare credentials in the encrypted Ploinky store."
+            exit "$CREDENTIAL_STATUS"
+          fi
+
+          echo "[destroy-qa] Reconciling the empty Ploinky route set before destruction..."
+          "$PLOINKY" --port "$ROUTER_PORT" start explorer \
+            --profile=default \
+            "${BRANCH_ARGS[@]}"
+          BOX_STATUS="$("$PLOINKY" status)"
+          printf '%s\n' "$BOX_STATUS"
+          for expected_status in \
+            'Cloudflare mode: local-only' \
+            'Cloudflare management: none' \
+            'Cloudflare publication: local-only' \
+            'Cloudflare connector: absent'; do
+            case "$BOX_STATUS" in
+              *"$expected_status"*) ;;
+              *)
+                echo "[destroy-qa] ERROR: Ploinky did not verify Cloudflare teardown: missing '$expected_status'."
+                exit 1
+                ;;
+            esac
+          done
 
           echo "[destroy-qa] Destroying the exact outer Box for $WORK_DIR..."
           printf 'yes\n' | "$PLOINKY" destroy
@@ -178,7 +500,8 @@ jobs:
             exit 1
           fi
 
-          echo "[destroy-qa] Outer Box removed. Named workspace, nested-container, and dependency volumes were retained."
+          echo "[destroy-qa] Outer Box removed after Ploinky removed its owned Cloudflare route, DNS record, and managed tunnel."
+          echo "[destroy-qa] Named workspace, nested-container, and dependency volumes were retained."
           REMOTE
 
       - name: Create summary
@@ -190,6 +513,10 @@ jobs:
             echo "- Host: \`${SSH_USER}@${SSH_HOST}\`"
             echo "- Identity directory: \`~/${WORKSPACE}\`"
             echo "- Outer Box: removed when present"
+            echo "- Ploinky branch: \`${PLOINKY_BRANCH}\`"
+            echo "- Ploinky Cloudflare route and managed tunnel: removed"
+            echo "- Unrelated Cloudflare tunnels and routes: preserved"
+            echo "- Public hostname: \`${PUBLIC_HOST}\`"
             echo "- Named data volumes: retained"
             echo "- Host identity directory: retained"
           } >> "$GITHUB_STEP_SUMMARY"

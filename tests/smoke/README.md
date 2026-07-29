@@ -29,6 +29,75 @@ Artifacts are written outside tracked source by default:
 
 Playwright traces, screenshots, videos, and JSON reports stay under `tests/smoke/test-results/` and `tests/smoke/playwright-report/`.
 
+## Explorer UI A/B Benchmark
+
+`benchmark:ui` measures the same read-only Explorer interaction sequence against
+two deployments. Each iteration uses a fresh Chromium context with the browser
+cache disabled. The sequence covers Router/login, Explorer interactive
+readiness, a root refresh, normal workspace directory navigation, DPU-backed
+Confidential navigation, a normal workspace file open, and Git modal readiness.
+
+Run the baseline only after its full agent graph is admitted and stable:
+
+```bash
+UI_BENCHMARK_LABEL=master \
+UI_BENCHMARK_BASE_URL=http://127.0.0.1:8080 \
+UI_BENCHMARK_PLOINKY_SHA=<deployed-ploinky-sha> \
+UI_BENCHMARK_EXPLORER_SHA=<deployed-explorer-sha> \
+npm run benchmark:ui
+```
+
+Cleanly replace the deployment, wait for the comparison graph to reach the same
+readiness state, and run the identical command with a different label and the
+deployed SHAs:
+
+```bash
+UI_BENCHMARK_LABEL=ploinky-proxy \
+UI_BENCHMARK_BASE_URL=http://127.0.0.1:8080 \
+UI_BENCHMARK_PLOINKY_SHA=<deployed-ploinky-sha> \
+UI_BENCHMARK_EXPLORER_SHA=<deployed-explorer-sha> \
+npm run benchmark:ui
+```
+
+The runner defaults to three fresh iterations and writes a mode-`0600`
+`result.json` below:
+
+```text
+../../.ploinky/test-artifacts/ui-benchmark/<run-id>/
+```
+
+Compare the reports with the first result as the baseline:
+
+```bash
+npm run benchmark:ui:compare -- \
+  <master-result.json> \
+  <ploinky-proxy-result.json> \
+  --output <comparison.json>
+```
+
+Negative comparison deltas mean the candidate is faster. The artifact contains
+per-operation visible and network-settled latency, request timing grouped by
+Router/Explorer/DPU/Git route, transfer and cache counts, duplicate and aborted
+requests, browser long tasks, rendering/JavaScript CPU counters, and initial
+page metrics. It deliberately excludes request and response bodies, headers,
+cookies, credentials, URL queries, console text, screenshots, and traces.
+
+Each step records whether its fixed 1,500 ms network tail completed the quiet
+window or reached the cutoff. Cutoff samples include only a bounded active
+request count and are excluded from settled-latency aggregates; their final
+request summaries are rebuilt from the same immutable waterfall snapshot
+written for the iteration. Long-task values also include observer support and
+availability state, so unavailable instrumentation is reported as missing
+rather than as zero work.
+
+For a valid A/B result, use the same host, clean workspace fixture, browser
+version, viewport, iteration count, paths, and fully admitted deployment state.
+The comparison command validates the complete scenario fingerprint and the
+recorded target, browser, headless/cache, viewport, platform, architecture, OS,
+and Node controls before producing output. Do not run the deployments
+concurrently. This benchmark is a performance probe; it does not replace the
+functional smoke or release suites.
+
 ## Fixed Router/Auth Release Baseline
 
 The Ploinky release harness runs this exact Chromium baseline after the full

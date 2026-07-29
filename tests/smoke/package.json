@@ -3,6 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "benchmark:ui": "node ./scripts/run-ui-benchmark.mjs",
+    "benchmark:ui:compare": "node ./scripts/compare-ui-benchmarks.mjs",
     "test": "node ./scripts/run-playwright.mjs",
     "test:gpt-researcher": "SMOKE_GPT_RESEARCHER=1 node ./scripts/run-playwright.mjs --project=chromium specs/34-gpt-researcher-routing.spec.mjs",
     "test:umami": "SMOKE_UMAMI=1 node ./scripts/run-playwright.mjs --project=chromium specs/33-umami-routing.spec.mjs",

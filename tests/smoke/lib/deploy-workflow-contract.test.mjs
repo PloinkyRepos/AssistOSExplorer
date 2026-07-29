@@ -8,12 +8,39 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.
 const WORKFLOWS = [
   {
     file: '.github/workflows/deploy-explorer-qa.yml',
-    name: 'Deploy Explorer QA',
+    name: 'Deploy Explorer QA Box',
     expected: [
+      "DEPLOY_BRANCH: 'ploinky-proxy'",
+      "PLOINKY_BRANCH: 'ploinky-proxy'",
+      "PUBLIC_HOST: 'explorer-qa.axiologic.dev'",
+      'BRANCH_ARGS+=(--repo-branch "$repository_name=$DEPLOY_BRANCH")',
+      '--branch-fallback fail',
+      "'AchillesIDE|https://github.com/AssistOS-AI/AssistOSExplorer.git'",
+      "'webmeetInfra|https://github.com/AssistOS-AI/webmeetInfra.git'",
+      "'UmamiAgent|https://github.com/AssistOS-AI/UmamiAgent.git'",
+      "'AchillesCLI|https://github.com/AssistOS-AI/AchillesCLI.git'",
+      "'copilot-agents|https://github.com/AssistOS-AI/copilot-agents.git'",
+      "'proxies|https://github.com/AssistOS-AI/proxies.git'",
+      "'basic|https://github.com/AssistOS-AI/basic.git'",
+      "'container-image-builds|https://github.com/AssistOS-AI/container-image-builds.git'",
+      "CLOUDFLARE_TUNNEL_NAME: 'explorer-qa'",
+      "CLOUDFLARE_API_SECRET_HANDLE: 'publication/explorer-qa-api'",
+      'EXPLORER_QA_CLOUDFLARE_API_TOKEN',
+      'EXPLORER_QA_CLOUDFLARE_ACCOUNT_ID',
+      'EXPLORER_QA_CLOUDFLARE_ZONE_ID',
+      'tunnelName,',
+      'deleteTunnelOnTeardown: true',
+      "agent: 'AchillesIDE/explorer'",
+      'Cloudflare mode: cloudflare',
+      'Cloudflare management: api-managed',
+      'Cloudflare publication: ready',
+      'Cloudflare connector: running',
+      'tunnel, ingress, and DNS API-managed by Ploinky',
+      '"${PUBLIC_URL%/}/dashboard"',
       'SOUL_GATEWAY_WORKSPACE:',
       'SOUL_GATEWAY_ROUTER_PORT:',
       'refusing to operate on the production Soul Gateway workspace',
-      'production Soul Gateway still healthy',
+      'protected Soul Gateway became unhealthy during QA deployment',
     ],
   },
   {
@@ -26,6 +53,9 @@ const WORKFLOWS = [
       'Provision Skills Explorer Host workflow first',
       'https://github.com/AssistOS-AI/ploinky.git',
       'https://github.com/AssistOS-AI/AchillesAgentLib.git',
+      '--repo-branch "proxies=${PROXIES_BRANCH:-main}"',
+      '--repo-branch "webmeetInfra=main"',
+      '${PUBLIC_URL%/}/dashboard',
     ],
   },
 ];
@@ -35,11 +65,8 @@ const SHARED_DEPLOYMENT_CONTRACT = [
   'permissions:',
   'contents: read',
   'export PLOINKY_WORKSPACE_ROOT="$WORK_DIR"',
-  '--repo-branch "proxies=${PROXIES_BRANCH:-main}"',
-  '--repo-branch "webmeetInfra=main"',
   '--reset-repos',
   '"$PLOINKY" status',
-  '${PUBLIC_URL%/}/dashboard',
   '- name: Create summary',
   '- name: Cleanup',
 ];
@@ -65,8 +92,41 @@ for (const workflow of WORKFLOWS) {
     for (const staleEndpoint of STALE_COMPONENT_ENDPOINTS) {
       assert.doesNotMatch(source, staleEndpoint);
     }
+    if (workflow.file.endsWith('deploy-explorer-qa.yml')) {
+      assert.doesNotMatch(source, /EXPLORER_QA_CLOUDFLARE_TUNNEL_(?:TOKEN|ID)/);
+      assert.doesNotMatch(source, /tunnelTokenSecret|publication\/explorer-qa-tunnel/);
+    }
 
-    assert.equal(source.match(/<< 'REMOTE'/g)?.length, 1, 'expected one remote deployment heredoc');
+    assert.equal(source.match(/<< ?'REMOTE'/g)?.length, 1, 'expected one remote deployment heredoc');
     assert.equal(source.match(/^          REMOTE$/gm)?.length, 1, 'expected one closed remote deployment heredoc');
   });
 }
+
+test('Explorer QA destroy removes only its Ploinky-owned Cloudflare publication', () => {
+  const source = fs.readFileSync(
+    path.join(ROOT, '.github/workflows/destroy-explorer-qa.yml'),
+    'utf8',
+  );
+
+  for (const required of [
+    "PLOINKY_BRANCH: 'ploinky-proxy'",
+    "DEPLOY_BRANCH: 'ploinky-proxy'",
+    "PUBLIC_HOST: 'explorer-qa.axiologic.dev'",
+    "CLOUDFLARE_TUNNEL_NAME: 'explorer-qa'",
+    '"$PLOINKY" stop',
+    '"refs/heads/$PLOINKY_BRANCH:refs/remotes/origin/$PLOINKY_BRANCH"',
+    'hosts: {}',
+    'tunnelName,',
+    'deleteTunnelOnTeardown: true',
+    'Cloudflare mode: local-only',
+    'Cloudflare connector: absent',
+    'Ploinky removed its owned Cloudflare route, DNS record, and managed tunnel',
+    'Unrelated Cloudflare tunnels and routes: preserved',
+    'printf \'yes\\n\' | "$PLOINKY" destroy',
+    'Named workspace, nested-container, and dependency volumes were retained',
+  ]) {
+    assert.equal(source.includes(required), true, `missing destroy workflow contract: ${required}`);
+  }
+  assert.doesNotMatch(source, /EXPLORER_QA_CLOUDFLARE_TUNNEL_(?:TOKEN|ID)/);
+  assert.doesNotMatch(source, /tunnelTokenSecret|publication\/explorer-qa-tunnel/);
+});
