@@ -4,8 +4,11 @@
 
 Confirmed on the clean `ploinky-proxy` QA deployment on 2026-07-29. The
 Ploinky correction is published as
-`00f0adfba3c4ad4825ae262a5b7b1ee9172dfd0d`. The QA acceptance suite remains
-blocked until a clean destroy/deploy reaches a stable 16/16 running graph.
+`00f0adfba3c4ad4825ae262a5b7b1ee9172dfd0d`. Clean deployment run
+`30484668139` verified that all 16 agents, including LiveKit, reached running
+without manual intervention. The QA acceptance suite remains blocked only by
+the separately recorded public Administration proof correction and its
+required redeployment.
 
 ## Environment
 
