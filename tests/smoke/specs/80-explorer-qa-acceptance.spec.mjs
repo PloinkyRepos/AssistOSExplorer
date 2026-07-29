@@ -19,6 +19,7 @@ import {
   assertExplorerDirectory,
   openExplorer,
 } from '../lib/explorer.mjs';
+import { createReleaseGateFailureCollector } from '../lib/release-gate-failures.mjs';
 import {
   createRoom,
   deleteRoomIfPresent,
@@ -140,14 +141,10 @@ async function typeOnlyOfficeMarker(page, editorFrame, marker) {
 }
 
 async function waitForOnlyOfficeAutosave(editorFrame) {
-  const saveButton = editorFrame.getByRole('button', { name: /^Save(?: \(Ctrl\+S\))?$/ });
-  await expect(saveButton).toHaveCount(1);
-  await expect(saveButton).toBeEnabled({ timeout: smokeConfig.timeouts.action });
-  await expect.poll(() => saveButton.isDisabled(), {
-    intervals: [1_000, 2_000, 5_000],
-    message: 'OnlyOffice must automatically return to a saved state without a Save click.',
+  const savedStatus = editorFrame.getByText('All changes saved', { exact: true }).last();
+  await expect(savedStatus, 'OnlyOffice must report automatic persistence without a Save click.').toBeVisible({
     timeout: Math.max(smokeConfig.timeouts.navigation, 90_000),
-  }).toBe(true);
+  });
 }
 
 async function createConfidentialDoc(page, fileName, documentPath) {
@@ -244,8 +241,12 @@ test.describe('Explorer QA acceptance', () => {
     const page = await context.newPage();
     try {
       const dialog = await openAdminUsers(page);
+      for (const account of [memberAccount, ownerAccount]) {
+        await deleteUserThroughAdministrationIfPresent(dialog, account.username);
+      }
       await createUserThroughAdministration(dialog, ownerAccount, {
         name: `E2E Owner ${smokeConfig.runId}`,
+        role: 'admin',
       });
       createdUsernames.push(ownerAccount.username);
       await createUserThroughAdministration(dialog, memberAccount, {
@@ -279,28 +280,38 @@ test.describe('Explorer QA acceptance', () => {
     test.setTimeout(Math.max(smokeConfig.timeouts.test, 180_000));
     const fileName = `e2e-confidential-${smokeConfig.runId}.doc`;
     const documentPath = `/Confidential/My Space/${fileName}`;
-    const marker = `confidential-doc-e2e-${smokeConfig.runId}`;
+    const marker = `Confidential-doc-e2e-${smokeConfig.runId}`;
     const context = await browser.newContext({
       baseURL: smokeConfig.baseURL,
       ignoreHTTPSErrors: true,
     });
     const page = await context.newPage();
-    const diagnostics = attachPageDiagnostics(page, testInfo, 'qa-onlyoffice');
+    let diagnostics = null;
     let editorConfiguration = null;
     let reopenedText = '';
+    let primaryError = null;
+    const failureCollector = createReleaseGateFailureCollector();
     try {
+      await deleteConfidentialDoc(page, documentPath);
       await createConfidentialDoc(page, fileName, documentPath);
       const opened = await openConfidentialDoc(page, documentPath);
       editorConfiguration = opened.editorConfiguration;
+      diagnostics = attachPageDiagnostics(page, testInfo, 'qa-onlyoffice');
       await typeOnlyOfficeMarker(page, opened.editorFrame, marker);
       await waitForOnlyOfficeAutosave(opened.editorFrame);
 
-      await openExplorer(page, {
-        account: ownerAccount,
-        hash: 'file-exp/Confidential/My%20Space',
-      });
-      await assertExplorerDirectory(page, '/Confidential/My Space');
-      const reopened = await openConfidentialDoc(page, documentPath);
+      diagnostics.pause();
+      let reopened;
+      try {
+        await openExplorer(page, {
+          account: ownerAccount,
+          hash: 'file-exp/Confidential/My%20Space',
+        });
+        await assertExplorerDirectory(page, '/Confidential/My Space');
+        reopened = await openConfidentialDoc(page, documentPath);
+      } finally {
+        diagnostics.resume();
+      }
       await expect.poll(async () => {
         reopenedText = await readOnlyOfficeDocumentText(reopened.editorFrame);
         return reopenedText;
@@ -322,17 +333,24 @@ test.describe('Explorer QA acceptance', () => {
         }, null, 2)),
         contentType: 'application/json',
       });
-      await deleteConfidentialDoc(page, documentPath);
     } catch (error) {
-      await page.screenshot({
-        path: testInfo.outputPath('qa-onlyoffice-failure.png'),
-        fullPage: true,
-      }).catch(() => null);
-      throw error;
+      primaryError = error;
+      await failureCollector.required('OnlyOffice failure screenshot', () => (
+        page.screenshot({
+          path: testInfo.outputPath('qa-onlyoffice-failure.png'),
+          fullPage: true,
+        })
+      ));
     } finally {
-      await diagnostics.flush();
-      await context.close();
+      await failureCollector.required('run-scoped Confidential document deletion', () => (
+        deleteConfidentialDoc(page, documentPath)
+      ));
+      if (diagnostics) {
+        await failureCollector.required('OnlyOffice diagnostics', () => diagnostics.flush());
+      }
+      await failureCollector.required('OnlyOffice browser context close', () => context.close());
     }
+    failureCollector.throwIfAny({ primaryError, label: 'Explorer QA OnlyOffice acceptance' });
   });
 
   test('two generated users join one WebMeet room and both see chat', async ({ browser }, testInfo) => {
@@ -353,8 +371,11 @@ test.describe('Explorer QA acceptance', () => {
     const ownerDiagnostics = attachPageDiagnostics(ownerPage, testInfo, 'qa-webmeet-owner');
     const memberDiagnostics = attachPageDiagnostics(memberPage, testInfo, 'qa-webmeet-member');
     let roomCreated = false;
+    let primaryError = null;
+    const failureCollector = createReleaseGateFailureCollector();
     try {
       await openWebMeet(ownerPage, ownerAccount);
+      await deleteRoomIfPresent(ownerPage, roomTitle);
       await createRoom(ownerPage, roomTitle);
       roomCreated = true;
       await openWebMeet(memberPage, memberAccount, { expectCreateRoom: false });
@@ -392,28 +413,31 @@ test.describe('Explorer QA acceptance', () => {
         contentType: 'application/json',
       });
     } catch (error) {
+      primaryError = error;
       await Promise.all([
-        ownerPage.screenshot({
+        failureCollector.required('owner WebMeet failure screenshot', () => ownerPage.screenshot({
           path: testInfo.outputPath('qa-webmeet-owner-failure.png'),
           fullPage: true,
-        }).catch(() => null),
-        memberPage.screenshot({
+        })),
+        failureCollector.required('member WebMeet failure screenshot', () => memberPage.screenshot({
           path: testInfo.outputPath('qa-webmeet-member-failure.png'),
           fullPage: true,
-        }).catch(() => null),
+        })),
       ]);
-      throw error;
     } finally {
       if (roomCreated && !ownerPage.isClosed()) {
-        await openWebMeet(ownerPage, ownerAccount).catch(() => null);
-        await deleteRoomIfPresent(ownerPage, roomTitle).catch(() => null);
+        await failureCollector.required('run-scoped WebMeet room deletion', async () => {
+          await openWebMeet(ownerPage, ownerAccount);
+          await deleteRoomIfPresent(ownerPage, roomTitle);
+        });
       }
-      await ownerDiagnostics.flush();
-      await memberDiagnostics.flush();
       await Promise.all([
-        ownerContext.close(),
-        memberContext.close(),
+        failureCollector.required('owner WebMeet diagnostics', () => ownerDiagnostics.flush()),
+        failureCollector.required('member WebMeet diagnostics', () => memberDiagnostics.flush()),
+        failureCollector.required('owner WebMeet browser context close', () => ownerContext.close()),
+        failureCollector.required('member WebMeet browser context close', () => memberContext.close()),
       ]);
     }
+    failureCollector.throwIfAny({ primaryError, label: 'Explorer QA WebMeet acceptance' });
   });
 });

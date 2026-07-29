@@ -199,8 +199,10 @@ export function attachPageDiagnostics(page, testInfo, label = 'page') {
   const redact = createRedactor();
   const events = [];
   let expectedOffline = false;
+  let paused = false;
 
   page.on('console', (message) => {
+    if (paused) return;
     if (expectedOffline && expectedOfflineFailure(message.text())) return;
     events.push({
       kind: 'console',
@@ -211,6 +213,7 @@ export function attachPageDiagnostics(page, testInfo, label = 'page') {
   });
 
   page.on('pageerror', (error) => {
+    if (paused) return;
     events.push({
       kind: 'pageerror',
       type: 'error',
@@ -219,6 +222,7 @@ export function attachPageDiagnostics(page, testInfo, label = 'page') {
   });
 
   page.on('requestfailed', (request) => {
+    if (paused) return;
     const url = request.url();
     const method = request.method();
     const failure = request.failure()?.errorText || '';
@@ -234,6 +238,7 @@ export function attachPageDiagnostics(page, testInfo, label = 'page') {
   });
 
   page.on('response', (response) => {
+    if (paused) return;
     const status = response.status();
     const url = response.url();
     if (status < 400 || shouldIgnoreUrl(url)) return;
@@ -272,6 +277,8 @@ export function attachPageDiagnostics(page, testInfo, label = 'page') {
     events,
     flush,
     actionableEvents,
+    pause() { paused = true; },
+    resume() { paused = false; },
     setExpectedOffline(value) { expectedOffline = Boolean(value); },
   };
   const controllers = diagnosticControllers.get(page) || new Set();

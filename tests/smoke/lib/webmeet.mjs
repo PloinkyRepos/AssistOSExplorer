@@ -14,8 +14,7 @@ function webMeetDashboardPath() {
 
 export async function openWebMeet(page, account = smokeConfig.primaryUser, options = {}) {
   const { expectCreateRoom = true } = options;
-  await signIn(page, account, '/dashboard');
-  await page.goto(webMeetDashboardPath(), { waitUntil: 'domcontentloaded' });
+  await signIn(page, account, webMeetDashboardPath());
   await expect(page.locator('div.webmeet-dashboard')).toBeVisible({ timeout: smokeConfig.timeouts.navigation });
   if (expectCreateRoom) {
     await expect(page.locator('#webmeetCreateRoomButton')).toBeVisible();
@@ -55,13 +54,31 @@ export async function selectActiveWebMeetSuggestion(page) {
 }
 
 export async function deleteRoomIfPresent(page, title) {
-  page.once('dialog', async (dialog) => {
-    await dialog.accept();
-  });
-  const item = page.locator('#webmeetMeetingList .webmeet-list-item', { hasText: title }).first();
-  if (!await item.isVisible({ timeout: 2_000 }).catch(() => false)) return;
-  await item.locator('[data-local-action="deleteMeeting"]').click();
-  await expect(page.locator('#webmeetMeetingList .webmeet-list-item', { hasText: title })).toHaveCount(0);
+  const matchingRooms = page
+    .locator('#webmeetMeetingList .webmeet-list-item')
+    .filter({ has: page.getByText(title, { exact: true }) });
+  let deleted = false;
+  while (await matchingRooms.count()) {
+    const item = matchingRooms.first();
+    await item.hover();
+    await item.getByRole('button', { name: 'Room settings' }).click();
+
+    const settingsDialog = page.locator('dialog:has(webmeet-room-settings-modal)').last();
+    await expect(settingsDialog).toBeVisible();
+    await settingsDialog.getByRole('tab', { name: 'Lifecycle' }).click();
+    await settingsDialog.getByRole('button', { name: 'Delete room' }).click();
+
+    const confirmationDialog = page.locator('dialog:has(confirm-action-modal)').last();
+    await expect(confirmationDialog).toBeVisible();
+    await expect(confirmationDialog).toContainText(title);
+    await expect(confirmationDialog).toContainText(/cannot be undone/i);
+    await confirmationDialog.getByRole('button', { name: 'Yes' }).click();
+
+    await expect(item).toHaveCount(0, { timeout: smokeConfig.timeouts.navigation });
+    deleted = true;
+  }
+  await expect(matchingRooms).toHaveCount(0);
+  return deleted;
 }
 
 export async function enableMedia(page) {
