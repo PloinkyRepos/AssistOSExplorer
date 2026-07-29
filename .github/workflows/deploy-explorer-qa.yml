@@ -358,6 +358,14 @@ jobs:
             hosts: {
               [publicHost]: {
                 agent: 'AchillesIDE/explorer',
+                routerSurfaces: [
+                  'browser-auth',
+                  'agent-mcp',
+                  'workspace-assets',
+                  'blob-transfer',
+                  'marketplace-ui',
+                  'topology-projection',
+                ],
               },
             },
             cloudflare: {
@@ -605,8 +613,23 @@ jobs:
             --profile=default \
             "${BRANCH_ARGS[@]}"
 
-          BOX_STATUS="$("$PLOINKY" status)"
+          CLOUDFLARE_READY=0
+          for _ in $(seq 1 60); do
+            BOX_STATUS="$("$PLOINKY" status)"
+            if [[ "$BOX_STATUS" == *"Cloudflare mode: cloudflare"* ]] &&
+              [[ "$BOX_STATUS" == *"Cloudflare management: api-managed"* ]] &&
+              [[ "$BOX_STATUS" == *"Cloudflare publication: ready"* ]] &&
+              [[ "$BOX_STATUS" == *"Cloudflare connector: running"* ]]; then
+              CLOUDFLARE_READY=1
+              break
+            fi
+            sleep 2
+          done
           printf '%s\n' "$BOX_STATUS"
+          if [ "$CLOUDFLARE_READY" != "1" ]; then
+            echo "[deploy-qa] ERROR: timed out waiting for the managed Cloudflare publication."
+            exit 1
+          fi
           case "$BOX_STATUS" in
             *"Ploinky Box: running-initialized"*) ;;
             *)
@@ -673,11 +696,11 @@ jobs:
       - name: Verify public URL
         run: |
           set -euo pipefail
-          echo "[deploy-qa] Verifying ${PUBLIC_URL%/}/dashboard..."
+          echo "[deploy-qa] Verifying the public Explorer login flow at ${PUBLIC_URL%/}/..."
           for attempt in $(seq 1 60); do
             code="$(
               curl -L -s -o /tmp/explorer-qa-response.txt -w '%{http_code}' \
-                "${PUBLIC_URL%/}/dashboard" || true
+                "${PUBLIC_URL%/}/" || true
             )"
             if [ "$code" = "200" ] || [ "$code" = "302" ]; then
               echo "[deploy-qa] Public URL responded with HTTP $code."

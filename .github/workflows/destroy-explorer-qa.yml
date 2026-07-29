@@ -546,8 +546,23 @@ jobs:
           "$PLOINKY" --port "$ROUTER_PORT" start explorer \
             --profile=default \
             "${BRANCH_ARGS[@]}"
-          BOX_STATUS="$("$PLOINKY" status)"
+          CLOUDFLARE_REMOVED=0
+          for _ in $(seq 1 60); do
+            BOX_STATUS="$("$PLOINKY" status)"
+            if [[ "$BOX_STATUS" == *"Cloudflare mode: local-only"* ]] &&
+              [[ "$BOX_STATUS" == *"Cloudflare management: none"* ]] &&
+              [[ "$BOX_STATUS" == *"Cloudflare publication: local-only"* ]] &&
+              [[ "$BOX_STATUS" == *"Cloudflare connector: absent"* ]]; then
+              CLOUDFLARE_REMOVED=1
+              break
+            fi
+            sleep 2
+          done
           printf '%s\n' "$BOX_STATUS"
+          if [ "$CLOUDFLARE_REMOVED" != "1" ]; then
+            echo "[destroy-qa] ERROR: timed out waiting for Ploinky to remove its Cloudflare publication."
+            exit 1
+          fi
           for expected_status in \
             'Cloudflare mode: local-only' \
             'Cloudflare management: none' \
