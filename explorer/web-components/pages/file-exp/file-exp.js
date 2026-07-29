@@ -194,6 +194,7 @@ export class FileExp {
         this.initialLocationRouteApplied = false;
         this.boundLoadStateFromURL = this.loadStateFromURL.bind(this);
         this.setWindowListener('file-exp-popstate', 'popstate', this.boundLoadStateFromURL);
+        this.invalidate(() => this.applyInitialLocationRoute());
 
         this.boundOutsideMenuClick = this.handleOutsideMenuClick.bind(this);
         this.boundMenuKeydown = this.handleMenuKeydown.bind(this);

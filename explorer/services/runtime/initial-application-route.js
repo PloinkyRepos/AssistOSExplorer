@@ -40,7 +40,9 @@ export async function mountInitialApplicationRoute({
         throw new Error('Explorer route presenter is not ready after page mount.');
     }
 
-    await presenter.applyInitialLocationRoute();
+    if (presenter.initialLocationRouteApplied !== true) {
+        await presenter.applyInitialLocationRoute();
+    }
     if (pageElement.renderCompletePromise?.then) {
         await pageElement.renderCompletePromise;
     }

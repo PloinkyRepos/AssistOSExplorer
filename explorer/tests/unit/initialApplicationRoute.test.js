@@ -49,6 +49,7 @@ test('direct encoded Explorer hash is applied after mount to the exact decoded d
     };
     const presenter = {
         state: fileExp.state,
+        initialLocationRouteApplied: false,
         async applyInitialLocationRoute() {
             events.push('apply-initial-route');
             await loadStateFromURL(fileExp);
@@ -120,4 +121,37 @@ test('initial hashed route parser preserves encoded path bytes for the mounted p
     );
     assert.equal(resolveInitialHashedRoute(''), null);
     assert.equal(resolveInitialHashedRoute('#'), null);
+});
+
+test('mounted route does not reapply a presenter route already consumed during its first render', async () => {
+    let applications = 0;
+    const presenter = {
+        initialLocationRouteApplied: true,
+        async applyInitialLocationRoute() {
+            applications += 1;
+        }
+    };
+    const pageElement = {
+        renderCompletePromise: Promise.resolve(),
+        webSkelPresenter: presenter
+    };
+    const webSkel = {
+        async changeToDynamicPage() {}
+    };
+
+    await mountInitialApplicationRoute({
+        webSkel,
+        pageContent: {
+            querySelector() {
+                return pageElement;
+            }
+        },
+        route: {
+            pageName: 'file-exp',
+            url: 'file-exp/Confidential/My%20Space',
+            preserveHash: true
+        }
+    });
+
+    assert.equal(applications, 0);
 });

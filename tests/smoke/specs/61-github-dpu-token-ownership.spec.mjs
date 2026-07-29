@@ -18,6 +18,35 @@ function findGitAgentPrincipal(permissions) {
 test.describe('GitHub token DPU ownership @external', () => {
   test.skip(!smokeConfig.flags.github, 'Set SMOKE_GITHUB=1 to run GitHub DPU token ownership checks.');
 
+  test('fresh signed-out Explorer deep link survives login and mounts the exact directory', async ({ page }) => {
+    const authCookieNames = new Set(['ploinky_jwt', 'ploinky_sso', 'ploinky_guest']);
+    const initialAuthCookies = (await page.context().cookies(smokeConfig.baseURL))
+      .filter((cookie) => authCookieNames.has(cookie.name));
+    expect(initialAuthCookies).toEqual([]);
+
+    const navigations = [];
+    page.on('framenavigated', (frame) => {
+      if (frame !== page.mainFrame()) return;
+      const location = new URL(frame.url());
+      navigations.push({
+        pathname: location.pathname,
+        hash: location.hash,
+      });
+    });
+
+    await openExplorer(page, { hash: 'file-exp/Confidential/My%20Space' });
+    await assertExplorerDirectory(page, '/Confidential/My Space');
+
+    expect(navigations).toContainEqual({
+      pathname: '/auth/login',
+      hash: '#file-exp/Confidential/My%20Space',
+    });
+    expect(navigations.at(-1)).toEqual({
+      pathname: '/explorer/index.html',
+      hash: '#file-exp/Confidential/My%20Space',
+    });
+  });
+
   test('manual token is stored user-owned, visible in Explorer, and removed on disconnect', async ({ page }) => {
     await openExplorer(page);
     const token = `ghp_smoke_${smokeConfig.runId.replace(/[^A-Za-z0-9]/g, '')}`;
