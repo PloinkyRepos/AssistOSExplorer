@@ -10,6 +10,7 @@ import {
   collectScreenRuntimeEvidence,
   sameScreenRuntimeGeneration,
 } from '../lib/screen-runtime-evidence.mjs';
+import { validateQaAcceptanceProfile } from '../lib/qa-acceptance-profile.mjs';
 import { validateHeadlessWebMeetProfile } from '../lib/webmeet-headless-profile.mjs';
 
 const smokeRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -18,13 +19,23 @@ const playwrightArgs = process.argv.slice(2);
 const screenGate = /^(1|true|yes|on)$/i.test(String(process.env.SMOKE_WEBMEET_SCREEN || '').trim());
 const headlessWebMeetGate = /^(1|true|yes|on)$/i.test(String(process.env.SMOKE_WEBMEET_HEADLESS || '').trim());
 const mediaGate = /^(1|true|yes|on)$/i.test(String(process.env.SMOKE_WEBMEET_MEDIA || '').trim());
+const qaAcceptanceGate = /^(1|true|yes|on)$/i.test(String(process.env.SMOKE_QA_ACCEPTANCE || '').trim());
 const headed = playwrightArgs.includes('--headed') || playwrightArgs.some((arg) => arg === '--headless=false');
+const baseURL = process.env.SMOKE_BASE_URL
+  || process.env.PLAYWRIGHT_BASE_URL
+  || (qaAcceptanceGate ? 'https://explorer-qa.axiologic.dev' : 'http://127.0.0.1:8080');
 
 validateHeadlessWebMeetProfile({
   enabled: headlessWebMeetGate,
   headed,
   media: mediaGate,
   screen: screenGate,
+});
+validateQaAcceptanceProfile({
+  enabled: qaAcceptanceGate,
+  headed,
+  baseURL,
+  edgeIP: process.env.SMOKE_QA_EDGE_IP,
 });
 
 const sourceGate = spawnSync(

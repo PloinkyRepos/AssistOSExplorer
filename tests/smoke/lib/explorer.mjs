@@ -8,9 +8,13 @@ export async function openDashboard(page, account = smokeConfig.primaryUser) {
   await expect(page.locator('body')).not.toContainText(/API Route not found|Unexpected token/i);
 }
 
-export function explorerUrl(hash = '') {
+export function explorerUrl(
+  hash = '',
+  { qaAcceptance = smokeConfig.flags.qaAcceptance } = {},
+) {
   const suffix = hash ? `#${String(hash).replace(/^#/, '')}` : '';
-  return `/explorer/index.html${suffix}`;
+  const pathname = qaAcceptance ? '/' : '/explorer/index.html';
+  return `${pathname}${suffix}`;
 }
 
 export async function navigateToExplorer(

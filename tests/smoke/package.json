@@ -7,6 +7,7 @@
     "benchmark:ui:compare": "node ./scripts/compare-ui-benchmarks.mjs",
     "test": "node ./scripts/run-playwright.mjs",
     "test:gpt-researcher": "SMOKE_GPT_RESEARCHER=1 node ./scripts/run-playwright.mjs --project=chromium specs/34-gpt-researcher-routing.spec.mjs",
+    "test:qa": "SMOKE_QA_ACCEPTANCE=1 node ./scripts/run-playwright.mjs --project=chromium specs/80-explorer-qa-acceptance.spec.mjs",
     "test:umami": "SMOKE_UMAMI=1 node ./scripts/run-playwright.mjs --project=chromium specs/33-umami-routing.spec.mjs",
     "test:webmeet-headless": "SMOKE_WEBMEET_HEADLESS=1 SMOKE_WEBMEET_MEDIA=1 node ./scripts/run-playwright.mjs --project=chromium specs/30-webmeet-room-chat.spec.mjs specs/31-webmeet-settings.spec.mjs specs/40-webmeet-tagged-research.spec.mjs",
     "test:webmeet-screen": "SMOKE_WEBMEET_MEDIA=1 SMOKE_WEBMEET_SCREEN=1 node ./scripts/run-playwright.mjs --headed --project=chromium specs/30-webmeet-room-chat.spec.mjs",

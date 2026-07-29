@@ -30,6 +30,7 @@ function resolveOptionalPath(value) {
 }
 
 const runId = String(process.env.SMOKE_RUN_ID || defaultRunId()).replace(/[^A-Za-z0-9_-]/g, '-');
+const qaAcceptance = readBool('SMOKE_QA_ACCEPTANCE', false);
 const workspaceRoot = resolveOptionalPath(process.env.SMOKE_WORKSPACE_ROOT);
 const dpuDataRoot = resolveOptionalPath(process.env.SMOKE_DPU_DATA_ROOT)
   || (workspaceRoot ? path.join(workspaceRoot, '.ploinky', 'data', 'dpu-data') : path.join(repoRoot, '.ploinky', 'data', 'dpu-data'));
@@ -44,7 +45,12 @@ export const smokeConfig = Object.freeze({
   artifactRoot,
   workspaceRoot,
   dpuDataRoot,
-  baseURL: stripTrailingSlash(process.env.SMOKE_BASE_URL || process.env.PLAYWRIGHT_BASE_URL),
+  baseURL: stripTrailingSlash(
+    process.env.SMOKE_BASE_URL
+      || process.env.PLAYWRIGHT_BASE_URL
+      || (qaAcceptance ? 'https://explorer-qa.axiologic.dev' : '')
+  ),
+  qaEdgeIP: String(process.env.SMOKE_QA_EDGE_IP || '').trim(),
   authAgent: process.env.SMOKE_AUTH_AGENT || 'explorer',
   primaryUser: {
     username: process.env.SMOKE_USERNAME || 'admin',
@@ -62,6 +68,7 @@ export const smokeConfig = Object.freeze({
     gptResearcher: readBool('SMOKE_GPT_RESEARCHER', false),
     onlyoffice: readBool('SMOKE_ONLYOFFICE', false),
     openInterpreter: readBool('SMOKE_OPEN_INTERPRETER', false),
+    qaAcceptance,
     umami: readBool('SMOKE_UMAMI', false),
     webmeetHeadless: readBool('SMOKE_WEBMEET_HEADLESS', false),
     webmeetMedia: readBool('SMOKE_WEBMEET_MEDIA', false),

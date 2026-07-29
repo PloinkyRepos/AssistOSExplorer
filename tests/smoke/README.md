@@ -21,6 +21,25 @@ SMOKE_BASE_URL=https://skills.axiologic.dev \
 npm test
 ```
 
+Run the dedicated public QA acceptance gate in headless Chromium with:
+
+```bash
+SMOKE_USERNAME=admin SMOKE_PASSWORD='<qa-admin-password>' npm run test:qa
+```
+
+`test:qa` is pinned to `https://explorer-qa.axiologic.dev`. It creates two
+run-scoped Explorer users through the Administration UI, runs exactly two
+browser tests, and removes the generated users afterward. The first test
+creates a legacy `.doc` under `/Confidential/My Space`, proves the active
+editor is writable OnlyOffice with autosave enabled, makes a browser edit
+without clicking Save, and reopens the document to prove persistence. The
+second test has the two generated users create and join one WebMeet room and
+proves that a message from each user is visible to the other.
+
+If the machine still has a negative DNS cache from before the QA record was
+created, set `SMOKE_QA_EDGE_IP` to one of the hostname's current public
+Cloudflare IPv4 addresses. The override is accepted only by the QA profile.
+
 Artifacts are written outside tracked source by default:
 
 ```text

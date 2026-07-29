@@ -15,6 +15,15 @@ test('Explorer URL construction preserves the final encoded hash in one target',
   );
 });
 
+test('QA acceptance enters through the public agent root while local smoke stays prefixed', () => {
+  assert.equal(explorerUrl('', { qaAcceptance: false }), '/explorer/index.html');
+  assert.equal(explorerUrl('', { qaAcceptance: true }), '/');
+  assert.equal(
+    explorerUrl('file-exp/Confidential/My%20Space', { qaAcceptance: true }),
+    '/#file-exp/Confidential/My%20Space',
+  );
+});
+
 test('Explorer navigation signs in once to the final target without a direct page navigation', async () => {
   const page = {
     goto() {

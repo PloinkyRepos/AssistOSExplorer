@@ -1,6 +1,14 @@
 import { defineConfig, devices } from '@playwright/test';
 
 import { smokeConfig } from './lib/config.mjs';
+import { validateQaAcceptanceProfile } from './lib/qa-acceptance-profile.mjs';
+
+const qaAcceptanceProfile = validateQaAcceptanceProfile({
+  enabled: smokeConfig.flags.qaAcceptance,
+  headed: false,
+  baseURL: smokeConfig.baseURL,
+  edgeIP: smokeConfig.qaEdgeIP,
+});
 
 export default defineConfig({
   testDir: './specs',
@@ -34,6 +42,9 @@ export default defineConfig({
         '--use-fake-device-for-media-stream',
         '--allow-http-screen-capture',
         '--auto-select-desktop-capture-source=Entire screen',
+        ...(qaAcceptanceProfile.edgeIP
+          ? [`--host-resolver-rules=MAP explorer-qa.axiologic.dev ${qaAcceptanceProfile.edgeIP}`]
+          : []),
       ],
     },
   },
