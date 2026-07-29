@@ -86,7 +86,7 @@ function boxEvidence() {
         running: true,
         semanticLabels: {
           role: 'box',
-          pathHash: 'd'.repeat(64),
+          pathHash: 'd'.repeat(12),
           imageRef: 'docker.io/assistos/ploinky-box:runtime',
           routerHostPort: '8080',
         },

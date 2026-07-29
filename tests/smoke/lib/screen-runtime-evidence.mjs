@@ -444,7 +444,7 @@ export function screenRuntimeEvidenceProvesUdpMux(evidence) {
       '7882/udp': [{ HostIp: '0.0.0.0', HostPort: '7882' }],
     });
     return box.semanticLabels?.role === 'box'
-      && /^[0-9a-f]{64}$/.test(String(box.semanticLabels.pathHash || '').toLowerCase())
+      && /^[0-9a-f]{12}$/.test(String(box.semanticLabels.pathHash || '').toLowerCase())
       && box.semanticLabels.imageRef === box.imageRef
       && box.semanticLabels.routerHostPort === selectedRouterHostPort
       && JSON.stringify(normalizeOuterPortBindings(box.normalizedPortBindings))
