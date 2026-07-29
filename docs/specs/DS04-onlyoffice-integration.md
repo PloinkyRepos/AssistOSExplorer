@@ -90,12 +90,14 @@ control service, the editor proxy, and loopback storage. Readiness proves all
 four semantics rather than accepting a single open socket. Durable OnlyOffice
 Data, logs, and session metadata live under box-owned data mounts. PostgreSQL,
 RabbitMQ, and Redis state remains image-owned because rootless host bind
-ownership can prevent those services from starting. Before PostgreSQL starts,
-the wrapper resolves exactly one bundled cluster and restores the package
-ownership and modes only for its three guarded configuration files, exact
-version/cluster log file, log directory, and runtime-socket directory.
-Symbolic links, hard-linked files, ambiguous clusters, missing configuration,
-or post-preparation ownership and mode drift fail closed before service startup.
+ownership can prevent those services from starting. Before local support
+services start, the wrapper resolves exactly one bundled PostgreSQL cluster and
+restores the package ownership and modes only for its three guarded
+configuration files, exact version/cluster log file, log directory,
+runtime-socket directory, TLS private directory and key, and RabbitMQ service
+log directory and four init-script log files. Symbolic links, hard-linked files,
+ambiguous clusters, missing required paths, unexpected path shapes, or
+post-preparation ownership and mode drift fail closed before service startup.
 
 A targeted restart drains open sessions, requests save/close, waits for callback
 acknowledgement, then exits. The real-browser release lane obtains its

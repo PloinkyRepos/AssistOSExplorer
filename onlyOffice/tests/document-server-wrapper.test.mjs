@@ -120,7 +120,7 @@ test('support-listener configuration hardens every bundled dependency without du
       ONLYOFFICE_RABBITMQ_CONFIG_FILE: rabbitmqConfig,
       ONLYOFFICE_RABBITMQ_ENV_FILE: rabbitmqEnv,
       ONLYOFFICE_NODE_BIN: process.execPath,
-      ONLYOFFICE_POSTGRESQL_RUNTIME_PREPARER: preparePostgresql,
+      ONLYOFFICE_SUPPORT_RUNTIME_PREPARER: preparePostgresql,
     },
   });
 

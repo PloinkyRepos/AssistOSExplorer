@@ -139,7 +139,12 @@ recreate.
 
 DocumentServer Data and `/var/lib/onlyoffice` are explicit managed mounts.
 PostgreSQL, RabbitMQ, and Redis state remains image-owned so rootless Podman
-does not present root-owned bind paths to their non-root services.
+does not present root-owned bind paths to their non-root services. Before those
+services start, the guarded runtime preparer restores the exact PostgreSQL
+configuration, log, socket, and TLS private-key contracts plus RabbitMQ's log
+directory and four init-script log files. It rejects symlinks, hard links,
+ambiguous clusters, missing required paths, and unexpected path shapes before
+changing any ownership or mode.
 
 Workspace documents are path-confined to the mounted workspace and protected
 secret paths are rejected. Confidential paths use the manifest-declared,

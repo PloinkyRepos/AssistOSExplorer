@@ -10,9 +10,15 @@ const PINNED_CONFIG_FILES = Object.freeze([
   Object.freeze({ name: 'pg_hba.conf', mode: 0o640 }),
   Object.freeze({ name: 'pg_ident.conf', mode: 0o640 }),
 ]);
+const PINNED_RABBITMQ_SERVICE_LOGS = Object.freeze([
+  'startup_log',
+  'startup_err',
+  'shutdown_log',
+  'shutdown_err',
+]);
 
 function fail(message) {
-  throw new Error(`OnlyOffice PostgreSQL runtime contract failed: ${message}`);
+  throw new Error(`OnlyOffice support-service runtime contract failed: ${message}`);
 }
 
 function assertNumericIdentity(name, value) {
@@ -169,10 +175,13 @@ function pinnedClusterPaths(configFile, logDirectory) {
   };
 }
 
-export function preparePostgresqlRuntime({
+export function prepareSupportServiceRuntime({
   configFile,
   logDirectory = '/var/log/postgresql',
   runtimeDirectory = '/var/run/postgresql',
+  sslPrivateDirectory = '/etc/ssl/private',
+  sslPrivateKeyFile = '/etc/ssl/private/ssl-cert-snakeoil.key',
+  rabbitmqLogDirectory = '/var/log/rabbitmq',
   identities,
 }) {
   if (!identities || typeof identities !== 'object') {
@@ -183,12 +192,18 @@ export function preparePostgresqlRuntime({
     postgresUid,
     postgresGid,
     logGid,
+    sslCertGid,
+    rabbitmqUid,
+    rabbitmqGid,
   } = identities;
   for (const [name, value] of Object.entries({
     rootUid,
     postgresUid,
     postgresGid,
     logGid,
+    sslCertGid,
+    rabbitmqUid,
+    rabbitmqGid,
   })) {
     assertNumericIdentity(name, value);
   }
@@ -198,14 +213,32 @@ export function preparePostgresqlRuntime({
     logDirectoryMode: 0o1775,
     logFileMode: 0o640,
     runtimeDirectoryMode: 0o2775,
+    sslPrivateDirectoryMode: 0o710,
+    sslPrivateKeyMode: 0o640,
+    rabbitmqLogDirectoryMode: 0o755,
+    rabbitmqServiceLogMode: 0o644,
   })) {
     assertMode(name, mode);
   }
-  if (!path.isAbsolute(logDirectory) || !path.isAbsolute(runtimeDirectory)) {
-    fail('log and runtime directory paths must be absolute.');
+  for (const [name, targetPath] of Object.entries({
+    logDirectory,
+    runtimeDirectory,
+    sslPrivateDirectory,
+    sslPrivateKeyFile,
+    rabbitmqLogDirectory,
+  })) {
+    if (typeof targetPath !== 'string' || !path.isAbsolute(targetPath)) {
+      fail(`${name} must be an absolute path.`);
+    }
+  }
+  if (path.dirname(sslPrivateKeyFile) !== sslPrivateDirectory) {
+    fail('the PostgreSQL private key must be an immediate child of its guarded directory.');
   }
 
   const paths = pinnedClusterPaths(configFile, logDirectory);
+  const rabbitmqServiceLogFiles = PINNED_RABBITMQ_SERVICE_LOGS.map(
+    (name) => path.join(rabbitmqLogDirectory, name),
+  );
 
   // Validate every existing target before changing any of them. Subsequent
   // descriptor operations repeat the no-follow/type checks to close the
@@ -222,6 +255,12 @@ export function preparePostgresqlRuntime({
     preflightPath(paths.logFile, 'file', { allowMissing: true });
   }
   preflightPath(runtimeDirectory, 'directory', { allowMissing: true });
+  preflightPath(sslPrivateDirectory, 'directory');
+  preflightPath(sslPrivateKeyFile, 'file');
+  preflightPath(rabbitmqLogDirectory, 'directory');
+  for (const serviceLogFile of rabbitmqServiceLogFiles) {
+    preflightPath(serviceLogFile, 'file', { allowMissing: true });
+  }
 
   for (const entry of paths.configFiles) {
     normalizeOpenPath(entry.path, {
@@ -246,12 +285,41 @@ export function preparePostgresqlRuntime({
     gid: postgresGid,
     mode: 0o2775,
   });
+  normalizeOpenPath(sslPrivateDirectory, {
+    type: 'directory',
+    uid: rootUid,
+    gid: sslCertGid,
+    mode: 0o710,
+  });
+  normalizeOpenPath(sslPrivateKeyFile, {
+    type: 'file',
+    uid: rootUid,
+    gid: sslCertGid,
+    mode: 0o640,
+  });
+  normalizeOpenPath(rabbitmqLogDirectory, {
+    type: 'directory',
+    uid: rabbitmqUid,
+    gid: rabbitmqGid,
+    mode: 0o755,
+  });
+  for (const serviceLogFile of rabbitmqServiceLogFiles) {
+    ensureRegularFile(serviceLogFile, {
+      uid: rabbitmqUid,
+      gid: rabbitmqGid,
+      mode: 0o644,
+    });
+  }
 
   return Object.freeze({
     configFiles: Object.freeze(paths.configFiles.map((entry) => entry.path)),
     logDirectory,
     logFile: paths.logFile,
     runtimeDirectory,
+    sslPrivateDirectory,
+    sslPrivateKeyFile,
+    rabbitmqLogDirectory,
+    rabbitmqServiceLogFiles: Object.freeze(rabbitmqServiceLogFiles),
   });
 }
 
@@ -273,45 +341,51 @@ function numericCommandOutput(command, args, description) {
   return value;
 }
 
-function systemIdentities() {
-  if (typeof process.getuid !== 'function' || process.getuid() !== 0) {
-    fail('preparation must run as root.');
-  }
+function numericGroupId(groupName) {
   const groupRecord = (() => {
     try {
-      return execFileSync('getent', ['group', 'adm'], {
+      return execFileSync('getent', ['group', groupName], {
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'ignore'],
       }).trim();
     } catch {
-      fail('could not resolve the adm group.');
+      fail(`could not resolve the ${groupName} group.`);
     }
   })();
   const groupFields = groupRecord.split(':');
   if (
     groupFields.length < 3
-    || groupFields[0] !== 'adm'
+    || groupFields[0] !== groupName
     || !/^(0|[1-9][0-9]*)$/.test(groupFields[2])
   ) {
-    fail('the adm group record is invalid.');
+    fail(`the ${groupName} group record is invalid.`);
   }
-  const logGid = Number(groupFields[2]);
-  assertNumericIdentity('adm gid', logGid);
+  const gid = Number(groupFields[2]);
+  assertNumericIdentity(`${groupName} gid`, gid);
+  return gid;
+}
 
+function systemIdentities() {
+  if (typeof process.getuid !== 'function' || process.getuid() !== 0) {
+    fail('preparation must run as root.');
+  }
   return {
     rootUid: process.getuid(),
     postgresUid: numericCommandOutput('id', ['-u', 'postgres'], 'postgres uid'),
     postgresGid: numericCommandOutput('id', ['-g', 'postgres'], 'postgres gid'),
-    logGid,
+    logGid: numericGroupId('adm'),
+    sslCertGid: numericGroupId('ssl-cert'),
+    rabbitmqUid: numericCommandOutput('id', ['-u', 'rabbitmq'], 'rabbitmq uid'),
+    rabbitmqGid: numericCommandOutput('id', ['-g', 'rabbitmq'], 'rabbitmq gid'),
   };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const args = process.argv.slice(2);
   if (args.length !== 1) {
-    fail('usage: prepare-postgresql-runtime.mjs /absolute/path/to/postgresql.conf');
+    fail('usage: prepare-support-service-runtime.mjs /absolute/path/to/postgresql.conf');
   }
-  preparePostgresqlRuntime({
+  prepareSupportServiceRuntime({
     configFile: args[0],
     identities: systemIdentities(),
   });
