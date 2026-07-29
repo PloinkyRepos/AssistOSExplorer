@@ -23,7 +23,13 @@ function requiredEnv(name) {
 }
 
 function editorUrl(path) {
-  return new URL(path, requiredEnv('ONLYOFFICE_E2E_EDITOR_BASE_URL')).toString();
+  const baseUrl = new URL(requiredEnv('ONLYOFFICE_E2E_EDITOR_BASE_URL'));
+  const prefix = baseUrl.pathname.replace(/\/+$/, '');
+  const suffix = String(path || '').startsWith('/') ? String(path) : `/${path}`;
+  baseUrl.pathname = `${prefix}${suffix}`;
+  baseUrl.search = '';
+  baseUrl.hash = '';
+  return baseUrl.toString();
 }
 
 function routerServiceUrl(path) {
@@ -47,7 +53,7 @@ function openSocket(url) {
 }
 
 async function probeUpgrade(baseUrl, path) {
-  const url = new URL(path, baseUrl);
+  const url = new URL(editorUrl(path));
   const origin = new URL(baseUrl).origin;
   return new Promise((resolve, reject) => {
     const socket = openSocket(url);
@@ -112,4 +118,19 @@ runtimeTest('public editor host serves api js and websocket path while blocking 
   const websocketPath = String(process.env.ONLYOFFICE_E2E_WEBSOCKET_PATH || '/doc/e2e/c/?shardkey=e2e');
   const upgradeStatus = await probeUpgrade(requiredEnv('ONLYOFFICE_E2E_EDITOR_BASE_URL'), websocketPath);
   assert.equal(upgradeStatus, 101, `websocket path did not complete a real upgrade: ${upgradeStatus}`);
+});
+
+runtimeTest('localhost Router authority serves the OnlyOffice API asset', async () => {
+  const editorBaseUrl = new URL(requiredEnv('ONLYOFFICE_E2E_EDITOR_BASE_URL'));
+  assert.equal(
+    editorBaseUrl.hostname,
+    'localhost',
+    `localhost regression gate requires a localhost editor URL, got ${editorBaseUrl.origin}`,
+  );
+
+  const api = await fetchText(editorUrl('/web-apps/apps/api/documents/api.js'), {
+    headers: { origin: editorBaseUrl.origin },
+  });
+  assert.equal(api.response.status, 200, api.text);
+  assert.match(api.text, /DocsAPI|Asc/i);
 });

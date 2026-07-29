@@ -42,7 +42,15 @@ editor service has an exact method/path allowlist for required assets, cache
 content, and editor WebSockets. Every supplied Origin must equal the exact
 serialized current editor origin; same-origin URLs with credentials, a path,
 a trailing slash, or surrounding whitespace are rejected. WebSockets and
-mutations require Origin. Browser cookies,
+mutations require Origin. Before dialing DocumentServer, the editor service
+requires the complete Router-installed request tuple: scalar internal
+`Host: 127.0.0.1:8080`, scalar `x-forwarded-host` and
+`x-forwarded-proto` equal to the committed active browser URL, and scalar
+`x-forwarded-prefix: /base-agent-additional-server/onlyOffice/8080`. Missing, duplicated,
+comma-joined, whitespace-padded, malformed, unexpected, or caller-spoofed
+forwarding fields fail closed. A public browser authority presented directly
+as `Host` is not accepted as a substitute for the Router's internal transport
+authority. Browser cookies,
 authorization, forwarding, proxy-authorization, Host-derived identity, Ploinky
 identity headers, and the private `Ploinky-Agent-Assertion` are stripped before
 forwarding. The proxy derives the exact

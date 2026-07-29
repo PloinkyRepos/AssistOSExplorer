@@ -84,6 +84,30 @@ runtimeTest('authenticated user receives Confidential Office session through del
   assert.equal(json.config.document.permissions.comment, Boolean(json.preview.canComment));
 });
 
+runtimeTest('Confidential session exposes a loadable localhost editor bootstrap without modifying the document', async () => {
+  const documentPath = requiredEnv('ONLYOFFICE_E2E_CONFIDENTIAL_DOC_PATH');
+  const { response, text, json } = await openSession(documentPath);
+
+  assert.equal(response.status, 200, text);
+  assertOfficeConfig(json, 'dpu');
+  const documentServerUrl = new URL(json.config.documentServerUrl);
+  assert.equal(
+    documentServerUrl.hostname,
+    'localhost',
+    `localhost regression gate requires a localhost editor URL, got ${documentServerUrl.origin}`,
+  );
+  const apiUrl = new URL(
+    `${documentServerUrl.pathname.replace(/\/+$/, '')}/web-apps/apps/api/documents/api.js`,
+    documentServerUrl.origin,
+  );
+  const apiResponse = await fetch(apiUrl, {
+    headers: { origin: documentServerUrl.origin },
+  });
+  const apiText = await apiResponse.text();
+  assert.equal(apiResponse.status, 200, apiText);
+  assert.match(apiText, /DocsAPI|Asc/i);
+});
+
 runtimeTest('user without Confidential acl cannot receive another user document session', async () => {
   const documentPath = requiredEnv('ONLYOFFICE_E2E_FORBIDDEN_CONFIDENTIAL_DOC_PATH');
   const { response, text } = await openSession(documentPath);

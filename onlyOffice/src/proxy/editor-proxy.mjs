@@ -1,3 +1,5 @@
+import net from 'node:net';
+
 import { resolveOnlyOfficeEditorService } from '../edge-topology.mjs';
 import { resolveCanonicalEditorBrowserUrl } from '../public-editor-url.mjs';
 
@@ -28,6 +30,13 @@ const ALLOWED_HTTP_EXACT_PATHS = new Set([
   '/document_editor_service_worker.js',
   '/plugins.json',
   '/themes.json'
+]);
+
+const ROUTER_INTERNAL_EDITOR_HOST = '127.0.0.1:8080';
+const ROUTER_FORWARDED_HEADER_NAMES = new Set([
+  'x-forwarded-host',
+  'x-forwarded-prefix',
+  'x-forwarded-proto',
 ]);
 
 function stripOnlyOfficeVersionPrefix(pathname) {
@@ -72,14 +81,72 @@ function withCanonicalForwardingHeaders(headers, publicBrowserUrl) {
   };
 }
 
+function exactScalarHeader(headers, expectedName) {
+  const matches = Object.entries(headers || {}).filter(
+    ([name]) => String(name).toLowerCase() === expectedName,
+  );
+  if (matches.length !== 1 || typeof matches[0][1] !== 'string') {
+    return null;
+  }
+  return matches[0][1];
+}
+
+function hasOnlyRouterForwardingHeaders(headers) {
+  for (const name of Object.keys(headers || {})) {
+    const normalizedName = String(name).toLowerCase();
+    if (normalizedName === 'forwarded') {
+      return false;
+    }
+    if (
+      normalizedName.startsWith('x-forwarded-')
+      && !ROUTER_FORWARDED_HEADER_NAMES.has(normalizedName)
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function hasCanonicalRouterHostname(browserUrl) {
+  const hostname = String(browserUrl?.hostname || '');
+  const literal = hostname.startsWith('[') && hostname.endsWith(']')
+    ? hostname.slice(1, -1)
+    : hostname;
+  if (net.isIP(literal)) {
+    return true;
+  }
+  return hostname.length <= 253 && hostname.split('.').every(
+    (label) => label.length >= 1
+      && label.length <= 63
+      && /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(label),
+  );
+}
+
 function requestMatchesCommittedOrigin(req, publicBrowserUrl, { requireOrigin = false } = {}) {
-  const { browserUrl: expected } = resolveCanonicalEditorBrowserUrl(publicBrowserUrl);
-  const host = String(req?.headers?.host || '').trim().toLowerCase();
-  if (host !== expected.host.toLowerCase()) {
+  const {
+    browserUrl: expected,
+    prefix,
+  } = resolveCanonicalEditorBrowserUrl(publicBrowserUrl);
+  const headers = req?.headers;
+  if (
+    !headers
+    || !hasCanonicalRouterHostname(expected)
+    || !hasOnlyRouterForwardingHeaders(headers)
+    || exactScalarHeader(headers, 'host') !== ROUTER_INTERNAL_EDITOR_HOST
+    || exactScalarHeader(headers, 'x-forwarded-host') !== expected.host
+    || exactScalarHeader(headers, 'x-forwarded-proto') !== expected.protocol.replace(/:$/, '')
+    || exactScalarHeader(headers, 'x-forwarded-prefix') !== prefix
+  ) {
     return false;
   }
-  const origin = String(req?.headers?.origin || '');
-  if (!origin) {
+  const origin = exactScalarHeader(headers, 'origin');
+  if (origin === null) {
+    const hasOrigin = Object.keys(headers).some(
+      (name) => String(name).toLowerCase() === 'origin',
+    );
+    if (hasOrigin) {
+      return false;
+    }
     return !requireOrigin;
   }
   try {
