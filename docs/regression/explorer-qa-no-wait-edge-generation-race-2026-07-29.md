@@ -2,10 +2,10 @@
 
 ## Status
 
-Confirmed on the clean `ploinky-proxy` QA deployment on 2026-07-29. A separate
-Codex fix task owns the Ploinky correction. The QA acceptance suite remains
-blocked until the correction is published and a clean destroy/deploy reaches a
-stable 16/16 running graph.
+Confirmed on the clean `ploinky-proxy` QA deployment on 2026-07-29. The
+Ploinky correction is published as
+`00f0adfba3c4ad4825ae262a5b7b1ee9172dfd0d`. The QA acceptance suite remains
+blocked until a clean destroy/deploy reaches a stable 16/16 running graph.
 
 ## Environment
 
@@ -64,6 +64,21 @@ Regression coverage must reproduce a generation becoming inactive between
 worker startup and route activation, prove that the next active generation is
 used, and prove that repeated conflicts still terminate within the retry
 budget.
+
+## Correction
+
+The no-wait host-runtime launch now retries only a pre-launch
+`EDGE_GENERATION_INACTIVE` result. It releases the edge apply lock before
+backoff, then recaptures a selector for the same immutable generation while
+requiring the same staged runtime identity. Every attempt validates exact
+selector stability while holding the lock, and runtime creation is never
+replayed.
+
+Focused regression coverage passes 59/59 cases. It proves same-generation
+recovery and exactly-once launch while rejecting a replacement generation,
+selector drift within the lock, `EDGE_GENERATION_BUSY`, staged-identity drift,
+and an inactive-coded error after launch begins. The complete Node suite passes
+1,844 tests with 2 intentional skips and no failures.
 
 ## Verification Required
 
