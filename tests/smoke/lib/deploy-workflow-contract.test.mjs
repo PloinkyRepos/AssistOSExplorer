@@ -33,6 +33,7 @@ const WORKFLOWS = [
       "agent: 'AchillesIDE/explorer'",
       "'browser-auth'",
       "'agent-mcp'",
+      "'user-admin'",
       "'workspace-assets'",
       "'blob-transfer'",
       "'marketplace-ui'",

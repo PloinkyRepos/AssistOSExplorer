@@ -361,6 +361,7 @@ jobs:
                 routerSurfaces: [
                   'browser-auth',
                   'agent-mcp',
+                  'user-admin',
                   'workspace-assets',
                   'blob-transfer',
                   'marketplace-ui',
