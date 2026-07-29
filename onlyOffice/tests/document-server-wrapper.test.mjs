@@ -77,6 +77,8 @@ test('support-listener configuration hardens every bundled dependency without du
   const redisConfig = path.join(tempDir, 'redis.conf');
   const rabbitmqConfig = path.join(tempDir, 'rabbitmq.conf');
   const rabbitmqEnv = path.join(tempDir, 'rabbitmq-env.conf');
+  const prepareLog = path.join(tempDir, 'prepare-postgresql.log');
+  const preparePostgresql = path.join(tempDir, 'prepare-postgresql.mjs');
 
   await writeFile(postgresqlConfig, [
     '#listen_addresses = localhost',
@@ -102,6 +104,10 @@ test('support-listener configuration hardens every bundled dependency without du
     '#NODE_PORT=5672',
     '',
   ].join('\n'));
+  await writeFile(preparePostgresql, [
+    "import { appendFileSync } from 'node:fs';",
+    `appendFileSync(${JSON.stringify(prepareLog)}, \`\${process.argv[2]}\\n\`);`,
+  ].join('\n'));
 
   await execFileAsync('/bin/bash', [
     'scripts/configure-support-listeners-v5.sh',
@@ -113,14 +119,17 @@ test('support-listener configuration hardens every bundled dependency without du
       ONLYOFFICE_REDIS_CONFIG_FILE: redisConfig,
       ONLYOFFICE_RABBITMQ_CONFIG_FILE: rabbitmqConfig,
       ONLYOFFICE_RABBITMQ_ENV_FILE: rabbitmqEnv,
+      ONLYOFFICE_NODE_BIN: process.execPath,
+      ONLYOFFICE_POSTGRESQL_RUNTIME_PREPARER: preparePostgresql,
     },
   });
 
-  const [postgresql, redis, rabbitmq, rabbitEnv] = await Promise.all([
+  const [postgresql, redis, rabbitmq, rabbitEnv, preparedPostgresql] = await Promise.all([
     readFile(postgresqlConfig, 'utf8'),
     readFile(redisConfig, 'utf8'),
     readFile(rabbitmqConfig, 'utf8'),
     readFile(rabbitmqEnv, 'utf8'),
+    readFile(prepareLog, 'utf8'),
   ]);
   assert.deepEqual(postgresql.match(/^listen_addresses\s*=.*$/gm), ["listen_addresses = '127.0.0.1'"]);
   assert.deepEqual(postgresql.match(/^port\s*=.*$/gm), ['port = 5432']);
@@ -134,6 +143,7 @@ test('support-listener configuration hardens every bundled dependency without du
   assert.deepEqual(rabbitEnv.match(/^NODENAME=.*$/gm), ['NODENAME=rabbit@localhost']);
   assert.deepEqual(rabbitEnv.match(/^NODE_PORT=.*$/gm), ['NODE_PORT=5672']);
   assert.deepEqual(rabbitEnv.match(/^ERL_EPMD_ADDRESS=.*$/gm), ['ERL_EPMD_ADDRESS=127.0.0.1']);
+  assert.equal(preparedPostgresql, `${postgresqlConfig}\n${postgresqlConfig}\n`);
 });
 
 test('configuration and readiness require the exact IPv6 DocService nginx pairing', async () => {

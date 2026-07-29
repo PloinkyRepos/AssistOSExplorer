@@ -2,9 +2,21 @@
 set -euo pipefail
 
 postgresql_config_glob="${ONLYOFFICE_POSTGRESQL_CONFIG_GLOB:-/etc/postgresql/*/*/postgresql.conf}"
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+node_bin="${ONLYOFFICE_NODE_BIN:-/usr/local/bin/node}"
+postgresql_runtime_preparer="${ONLYOFFICE_POSTGRESQL_RUNTIME_PREPARER:-${script_dir}/prepare-postgresql-runtime.mjs}"
 redis_config_file="${ONLYOFFICE_REDIS_CONFIG_FILE:-/etc/redis/redis.conf}"
 rabbitmq_config_file="${ONLYOFFICE_RABBITMQ_CONFIG_FILE:-/etc/rabbitmq/rabbitmq.conf}"
 rabbitmq_env_file="${ONLYOFFICE_RABBITMQ_ENV_FILE:-/etc/rabbitmq/rabbitmq-env.conf}"
+
+if [ ! -x "$node_bin" ]; then
+  echo "OnlyOffice Node.js runtime is missing or not executable: $node_bin" >&2
+  exit 1
+fi
+if [ ! -f "$postgresql_runtime_preparer" ]; then
+  echo "OnlyOffice PostgreSQL runtime preparer is missing: $postgresql_runtime_preparer" >&2
+  exit 1
+fi
 
 if [ "$rabbitmq_config_file" = '/etc/rabbitmq/rabbitmq.conf' ] && [ ! -e "$rabbitmq_config_file" ]; then
   install -o root -g rabbitmq -m 0640 /dev/null "$rabbitmq_config_file"
@@ -63,6 +75,7 @@ if [ "${#postgresql_configs[@]}" -ne 1 ]; then
   echo "Expected exactly one bundled PostgreSQL configuration, found ${#postgresql_configs[@]} for ${postgresql_config_glob}" >&2
   exit 1
 fi
+"$node_bin" "$postgresql_runtime_preparer" "${postgresql_configs[0]}"
 replace_or_append_setting \
   "${postgresql_configs[0]}" \
   listen_addresses \
@@ -73,6 +86,9 @@ replace_or_append_setting \
   port \
   'port = 5432' \
   postgres postgres 0644
+# Re-assert the contract after the atomic postgresql.conf replacements so
+# service startup cannot consume ownership or mode drift introduced in between.
+"$node_bin" "$postgresql_runtime_preparer" "${postgresql_configs[0]}"
 
 # Community DocumentServer currently disables Redis, but keep its bundled
 # configuration closed in case a pinned edition enables it later.

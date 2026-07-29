@@ -127,8 +127,14 @@ fallback.
 State/log/data mounts are box-owned and durable. DocumentServer Data and
 `/var/lib/onlyoffice` have explicit managed mounts. PostgreSQL, RabbitMQ, and
 Redis data remain image-owned because root-owned host bind mounts can prevent
-their non-root services from starting under rootless Podman. A targeted restart
-drains sessions and waits for save/close callback acknowledgement. The
+their non-root services from starting under rootless Podman. Before starting
+the bundled PostgreSQL cluster, the root-level wrapper resolves exactly one
+packaged cluster and prepares only its three guarded regular configuration
+files, exact version/cluster log file, log directory, and runtime-socket
+directory with the package-required owners and modes. Symbolic links,
+hard-linked files, ambiguous clusters, missing configuration, or ownership and
+mode drift after preparation fail closed before service startup. A targeted
+restart drains sessions and waits for save/close callback acknowledgement. The
 real-browser release lane makes a second
 distinct edit without an explicit save, proves the durable DPU blob is
 unchanged, then requires drain to persist and reopen that edit. Invalid topology,
