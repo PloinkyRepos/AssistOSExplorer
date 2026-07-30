@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -16,17 +18,161 @@ function entriesByName(profileConfig) {
   return new Map((profileConfig.env || []).map((entry) => [entry.name, entry]));
 }
 
-test('manifest launches mounted source and exposes a root-level readiness script', () => {
+test('manifest launches mounted source and separates recurring liveness from startup attestation', () => {
   const manifest = readManifest();
 
   assert.equal(manifest.start, '-lc "node /code/src/index.mjs"');
+  assert.deepEqual(manifest.health?.liveness, {
+    script: 'liveness.sh',
+    interval: 5,
+    timeout: 8,
+    failureThreshold: 3,
+    successThreshold: 1,
+  });
   assert.equal(manifest.health?.readiness?.script, 'healthcheck.sh');
-  assert.equal(fs.existsSync(path.join(agentRoot, 'healthcheck.sh')), true);
-  assert.notEqual(
-    fs.statSync(path.join(agentRoot, 'healthcheck.sh')).mode & 0o111,
-    0,
-    'the directly executed readiness probe must be executable',
+  assert.equal(manifest.health?.readiness?.continuous, false);
+  for (const scriptName of ['liveness.sh', 'healthcheck.sh']) {
+    assert.equal(fs.existsSync(path.join(agentRoot, scriptName)), true);
+    assert.notEqual(
+      fs.statSync(path.join(agentRoot, scriptName)).mode & 0o111,
+      0,
+      `the directly executed ${scriptName} probe must be executable`,
+    );
+  }
+});
+
+test('recurring liveness is transport-only while readiness retains full startup attestation', () => {
+  const liveness = fs.readFileSync(path.join(agentRoot, 'scripts', 'liveness.sh'), 'utf8');
+  const readiness = fs.readFileSync(path.join(agentRoot, 'scripts', 'healthcheck.sh'), 'utf8');
+
+  assert.match(liveness, /127\.0\.0\.1:80\/healthcheck/);
+  assert.match(liveness, /127\.0\.0\.1:7000/);
+  assert.match(liveness, /127\.0\.0\.1:8080/);
+  assert.match(liveness, /127\.0\.0\.1:9100/);
+  assert.doesNotMatch(liveness, /\/proc/);
+  assert.doesNotMatch(liveness, /(?:^|[\s`$(])ss(?:\s|$)/m);
+  assert.doesNotMatch(liveness, /verify-document-server-jwt-config/);
+  assert.doesNotMatch(liveness, /configure-docservice-nginx-loopback/);
+  assert.doesNotMatch(liveness, /\bnode\b/);
+  assert.match(readiness, /\/proc/);
+  assert.match(readiness, /verify-document-server-jwt-config/);
+  assert.match(readiness, /configure-docservice-nginx-loopback/);
+});
+
+function createFakeCurl(t) {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyoffice-liveness-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const executable = path.join(directory, 'curl');
+  fs.writeFileSync(executable, [
+    '#!/bin/sh',
+    'url=""',
+    'for argument do url="$argument"; done',
+    'printf "%s\\n" "$url" >> "$PLOINKY_FAKE_CURL_LOG"',
+    'if [ "${PLOINKY_FAKE_CURL_FAIL_URL:-}" = "$url" ]; then exit 28; fi',
+    'case "$url" in',
+    '  http://127.0.0.1:7000/*|http://127.0.0.1:8080/*|http://127.0.0.1:9100/*)',
+    '    printf "%s" 404',
+    '    ;;',
+    'esac',
+    '',
+  ].join('\n'), { mode: 0o755 });
+  return directory;
+}
+
+test('recurring liveness executes every required endpoint and fails on nonresponse', (t) => {
+  const fakeBin = createFakeCurl(t);
+  const livenessPath = path.join(agentRoot, 'scripts', 'liveness.sh');
+  const requiredUrls = [
+    'http://127.0.0.1:80/healthcheck',
+    'http://127.0.0.1:7000/__ploinky_liveness',
+    'http://127.0.0.1:8080/healthcheck',
+    'http://127.0.0.1:9100/__ploinky_liveness',
+  ];
+  const logPath = path.join(fakeBin, 'curl.log');
+  const baseEnv = {
+    ...process.env,
+    PATH: `${fakeBin}:${process.env.PATH}`,
+    PLOINKY_FAKE_CURL_LOG: logPath,
+  };
+
+  const healthy = spawnSync('bash', [livenessPath], {
+    encoding: 'utf8',
+    env: baseEnv,
+  });
+  assert.equal(healthy.status, 0, healthy.stderr);
+  assert.deepEqual(
+    fs.readFileSync(logPath, 'utf8').trim().split('\n'),
+    requiredUrls,
   );
+
+  for (const failUrl of requiredUrls) {
+    fs.writeFileSync(logPath, '');
+    const unavailable = spawnSync('bash', [livenessPath], {
+      encoding: 'utf8',
+      env: {
+        ...baseEnv,
+        PLOINKY_FAKE_CURL_FAIL_URL: failUrl,
+      },
+    });
+    assert.notEqual(
+      unavailable.status,
+      0,
+      `liveness must fail closed when ${failUrl} is stopped or nonresponsive`,
+    );
+  }
+});
+
+test('heavy activation readiness fails closed when DocumentServer is unavailable', (t) => {
+  const fakeBin = createFakeCurl(t);
+  const logPath = path.join(fakeBin, 'readiness-curl.log');
+  const readiness = spawnSync('bash', [path.join(agentRoot, 'scripts', 'healthcheck.sh')], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      PATH: `${fakeBin}:${process.env.PATH}`,
+      PLOINKY_FAKE_CURL_LOG: logPath,
+      PLOINKY_FAKE_CURL_FAIL_URL:
+        'http://127.0.0.1:80/web-apps/apps/api/documents/api.js',
+    },
+  });
+  assert.notEqual(readiness.status, 0);
+  assert.deepEqual(
+    fs.readFileSync(logPath, 'utf8').trim().split('\n'),
+    ['http://127.0.0.1:80/web-apps/apps/api/documents/api.js'],
+    'readiness must stop before validators when its required DocumentServer endpoint is absent',
+  );
+});
+
+test('root probe wrappers stay dash-safe because Ploinky executes them with sh', () => {
+  for (const wrapperName of ['liveness.sh', 'healthcheck.sh']) {
+    const wrapper = fs.readFileSync(path.join(agentRoot, wrapperName), 'utf8');
+    assert.match(
+      wrapper,
+      /^#!\/bin\/sh\n/,
+      `${wrapperName} must use the #!/bin/sh wrapper convention`,
+    );
+    assert.doesNotMatch(
+      wrapper,
+      /pipefail/,
+      `${wrapperName} runs under sh (dash on the pinned image), which rejects "set -o pipefail"`,
+    );
+    assert.match(
+      wrapper,
+      new RegExp(`exec bash /code/scripts/${wrapperName.replace(/\./g, '\\.')}`),
+      `${wrapperName} must delegate to its bash implementation in scripts/`,
+    );
+  }
+});
+
+test('probe scripts parse under their declared interpreters', () => {
+  for (const relativePath of ['scripts/liveness.sh', 'scripts/healthcheck.sh']) {
+    const check = spawnSync('bash', ['-n', path.join(agentRoot, relativePath)], { encoding: 'utf8' });
+    assert.equal(check.status, 0, `${relativePath} must parse: ${check.stderr}`);
+  }
+  for (const wrapperName of ['liveness.sh', 'healthcheck.sh']) {
+    const check = spawnSync('sh', ['-n', path.join(agentRoot, wrapperName)], { encoding: 'utf8' });
+    assert.equal(check.status, 0, `${wrapperName} must parse under sh: ${check.stderr}`);
+  }
 });
 
 test('manifest keeps image-owned service data away from rootless host bind mounts', () => {

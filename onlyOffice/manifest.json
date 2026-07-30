@@ -4,12 +4,20 @@
   "start": "-lc \"node /code/src/index.mjs\"",
   "about": "OnlyOffice decorator with authenticated control and narrowly public editor transport services.",
   "health": {
+    "liveness": {
+      "script": "liveness.sh",
+      "interval": 5,
+      "timeout": 8,
+      "failureThreshold": 3,
+      "successThreshold": 1
+    },
     "readiness": {
       "script": "healthcheck.sh",
       "interval": 2,
       "timeout": 5,
       "failureThreshold": 180,
-      "successThreshold": 1
+      "successThreshold": 1,
+      "continuous": false
     }
   },
   "routerAccess": {

@@ -32,8 +32,12 @@ directive, then verifies the `[::1]:8000` listener. PostgreSQL `5432`, RabbitMQ
 `5672`/`25672`, EPMD `4369`, and Redis `6379` when enabled are configured for
 loopback. The runtime launches the mounted
 `/code/src/index.mjs` entry point, then invokes a root-level Ploinky readiness
-wrapper that verifies addresses and
-socket owners and fails closed on an unexpected wildcard or owner.
+wrapper that verifies addresses and socket owners and fails closed on an
+unexpected wildcard or owner. This full readiness attestation is mandatory at
+activation and declares `continuous: false`. A separate recurring liveness
+wrapper performs only bounded loopback HTTP checks for DocumentServer, control,
+editor, and storage; its probe body intentionally performs no process-table,
+socket-owner, or configuration scan.
 
 ## Routing and origin
 
@@ -147,5 +151,6 @@ keeps a replacement selector inactive.
 
 `tests/` covers manifest shape, temporal JWTs, signed-body callbacks, bounds,
 redirect rejection, origin/header sanitation, WebSocket paths, persistence,
-wrapper configuration, and readiness. The release lane uses a real browser and
-DocumentServer image through Router.
+wrapper configuration, activation readiness, and the cheap recurring liveness
+boundary. The release lane uses a real browser and DocumentServer image through
+Router.
