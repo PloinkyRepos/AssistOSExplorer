@@ -632,21 +632,30 @@ jobs:
             --profile=default \
             "${BRANCH_ARGS[@]}"
 
-          CLOUDFLARE_READY=0
-          for _ in $(seq 1 60); do
+          QA_READY=0
+          QA_READY_STREAK=0
+          for _ in $(seq 1 90); do
             BOX_STATUS="$("$PLOINKY" status)"
-            if [[ "$BOX_STATUS" == *"Cloudflare mode: cloudflare"* ]] &&
+            if [[ "$BOX_STATUS" == *"Ploinky Box: running-initialized"* ]] &&
+              [[ "$BOX_STATUS" == *"Tracked agents: 16"* ]] &&
+              [[ "$BOX_STATUS" == *"Running agents: 16"* ]] &&
+              [[ "$BOX_STATUS" == *"Cloudflare mode: cloudflare"* ]] &&
               [[ "$BOX_STATUS" == *"Cloudflare management: api-managed"* ]] &&
               [[ "$BOX_STATUS" == *"Cloudflare publication: ready"* ]] &&
               [[ "$BOX_STATUS" == *"Cloudflare connector: running"* ]]; then
-              CLOUDFLARE_READY=1
-              break
+              QA_READY_STREAK=$((QA_READY_STREAK + 1))
+              if [ "$QA_READY_STREAK" -ge 3 ]; then
+                QA_READY=1
+                break
+              fi
+            else
+              QA_READY_STREAK=0
             fi
-            sleep 2
+            sleep 10
           done
           printf '%s\n' "$BOX_STATUS"
-          if [ "$CLOUDFLARE_READY" != "1" ]; then
-            echo "[deploy-qa] ERROR: timed out waiting for the managed Cloudflare publication."
+          if [ "$QA_READY" != "1" ]; then
+            echo "[deploy-qa] ERROR: timed out waiting for stable 16/16 Explorer QA admission."
             exit 1
           fi
           case "$BOX_STATUS" in
@@ -657,6 +666,8 @@ jobs:
               ;;
           esac
           for expected_status in \
+            'Tracked agents: 16' \
+            'Running agents: 16' \
             'Cloudflare mode: cloudflare' \
             'Cloudflare management: api-managed' \
             'Cloudflare publication: ready' \
