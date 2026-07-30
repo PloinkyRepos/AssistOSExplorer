@@ -36,14 +36,14 @@ test('WebMeet media validates images and moves one staged blob into the room ass
     });
     const asset = await store.commit({
         roomId: 'room_1',
-        blobRef: { id: blobId, agent: 'explorer', localPath: `blobs/${blobId}` },
-        createdBy: 'participant_1'
+        roomFolderPath: '/WebMeet/story-room-1',
+        blobRef: { id: blobId, agent: 'explorer', localPath: `blobs/${blobId}` }
     });
     assert.equal(asset.mimeType, 'image/png');
     assert.equal(asset.width, 2);
     assert.equal(asset.height, 3);
-    assert.match(asset.workspaceUrl, /^\/document-multimedia\/webmeet\/room_1\/assets\/asset_.+\.png$/);
-    assert.deepEqual(await store.read('room_1', asset.assetId), asset);
+    assert.match(asset.workspaceUrl, /^\/WebMeet\/story-room-1\/assets\/asset_.+\/diagram\.png$/);
+    assert.deepEqual(await store.read({roomId: 'room_1', roomFolderPath: '/WebMeet/story-room-1', assetId: asset.assetId}), asset);
     await assert.rejects(fs.stat(path.join(workspaceRoot, 'blobs', blobId)));
 });
 
@@ -57,11 +57,19 @@ test('WebMeet media rejects blob references for another agent or path', async ()
     });
     const id = 'b'.repeat(48);
     await assert.rejects(
-        store.commit({ roomId: 'room_1', blobRef: { id, agent: 'other', localPath: `blobs/${id}` } }),
+        store.commit({ roomId: 'room_1', blobRef: { id, agent: 'explorer', localPath: `blobs/${id}` } }),
+        /room folder path/
+    );
+    await assert.rejects(
+        store.commit({ roomId: 'room_1', roomFolderPath: '/document-multimedia/webmeet/room_1', blobRef: { id, agent: 'explorer', localPath: `blobs/${id}` } }),
+        /room folder path/
+    );
+    await assert.rejects(
+        store.commit({ roomId: 'room_1', roomFolderPath: '/WebMeet/story-room-1', blobRef: { id, agent: 'other', localPath: `blobs/${id}` } }),
         /different agent/
     );
     await assert.rejects(
-        store.commit({ roomId: 'room_1', blobRef: { id, agent: 'explorer', localPath: 'other/file' } }),
+        store.commit({ roomId: 'room_1', roomFolderPath: '/WebMeet/story-room-1', blobRef: { id, agent: 'explorer', localPath: 'other/file' } }),
         /does not match its id/
     );
 });
@@ -93,23 +101,23 @@ test('WebMeet media commits arbitrary files and does not trust an image MIME dec
     });
     const asset = await store.commit({
         roomId: 'room_1',
-        blobRef: {id: blobId, agent: 'explorer', localPath: `blobs/${blobId}`},
-        createdBy: 'participant_1'
+        roomFolderPath: '/WebMeet/story-room-1',
+        blobRef: {id: blobId, agent: 'explorer', localPath: `blobs/${blobId}`}
     });
     assert.equal(asset.kind, 'file');
     assert.equal(asset.filename, 'report.pdf');
     assert.equal(asset.extension, 'pdf');
-    assert.equal(asset.mimeType, 'image/png');
+    assert.equal(asset.mimeType, 'application/pdf');
     assert.equal(asset.width, undefined);
-    assert.match(asset.workspaceUrl, /^\/document-multimedia\/webmeet\/room_1\/assets\/asset_.+\.bin$/);
+    assert.match(asset.workspaceUrl, /^\/WebMeet\/story-room-1\/assets\/asset_.+\/report\.pdf$/);
     assert.deepEqual(
         await fs.readFile(path.join(workspaceRoot, asset.workspaceUrl.replace(/^\/+/, ''))),
         content
     );
-    assert.deepEqual(await store.read('room_1', asset.assetId), asset);
+    assert.deepEqual(await store.read({roomId: 'room_1', roomFolderPath: '/WebMeet/story-room-1', assetId: asset.assetId}), asset);
 });
 
-test('WebMeet media keeps JSON content separate from its asset metadata', async () => {
+test('WebMeet media stores one real file per asset without sidecar metadata', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'explorer-webmeet-json-'));
     const workspaceRoot = path.join(root, 'workspace');
     await fs.mkdir(path.join(workspaceRoot, 'blobs'), {recursive: true});
@@ -132,18 +140,19 @@ test('WebMeet media keeps JSON content separate from its asset metadata', async 
     });
     const asset = await store.commit({
         roomId: 'room_json',
+        roomFolderPath: '/WebMeet/json-room',
         blobRef: {id: blobId, agent: 'explorer', localPath: `blobs/${blobId}`}
     });
     const assetPath = path.join(workspaceRoot, asset.workspaceUrl.replace(/^\/+/, ''));
-    const metadataPath = path.join(path.dirname(assetPath), `${asset.assetId}.metadata.json`);
     assert.equal(asset.extension, 'json');
-    assert.match(asset.workspaceUrl, /\.bin$/);
+    assert.equal(asset.mimeType, 'application/json');
+    assert.match(asset.workspaceUrl, /\/payload\.json$/);
     assert.deepEqual(await fs.readFile(assetPath), content);
-    assert.equal(JSON.parse(await fs.readFile(metadataPath, 'utf8')).assetId, asset.assetId);
-    assert.deepEqual(await store.read('room_json', asset.assetId), asset);
+    assert.deepEqual(await fs.readdir(path.dirname(assetPath)), ['payload.json']);
+    assert.deepEqual(await store.read({roomId: 'room_json', roomFolderPath: '/WebMeet/json-room', assetId: asset.assetId}), asset);
 });
 
-test('WebMeet media stores active non-image content behind an inert extension', async () => {
+test('WebMeet media preserves a sanitized real filename for arbitrary files', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'explorer-webmeet-active-file-'));
     const workspaceRoot = path.join(root, 'workspace');
     await fs.mkdir(path.join(workspaceRoot, 'blobs'), {recursive: true});
@@ -166,14 +175,33 @@ test('WebMeet media stores active non-image content behind an inert extension', 
     });
     const asset = await store.commit({
         roomId: 'room_html',
+        roomFolderPath: '/WebMeet/html-room',
         blobRef: {id: blobId, agent: 'explorer', localPath: `blobs/${blobId}`}
     });
     assert.equal(asset.filename, 'page.html');
     assert.equal(asset.extension, 'html');
-    assert.equal(asset.mimeType, 'text/html');
-    assert.match(asset.workspaceUrl, /\.bin$/);
+    assert.equal(asset.mimeType, 'application/octet-stream');
+    assert.match(asset.workspaceUrl, /\/page\.html$/);
     assert.deepEqual(
         await fs.readFile(path.join(workspaceRoot, asset.workspaceUrl.replace(/^\/+/, ''))),
         content
+    );
+});
+
+test('WebMeet media rejects an asset directory that does not contain exactly one file', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'explorer-webmeet-invalid-asset-'));
+    const assetFolder = path.join(root, 'WebMeet', 'invalid-room', 'assets', 'asset_invalid');
+    await fs.mkdir(assetFolder, {recursive: true});
+    await fs.writeFile(path.join(assetFolder, 'one.txt'), 'one');
+    await fs.writeFile(path.join(assetFolder, 'two.txt'), 'two');
+    const store = createWebMeetMediaStore({
+        fs,
+        path,
+        agentName: 'explorer',
+        validatePath: async (value) => path.join(root, String(value).replace(/^\/+/, ''))
+    });
+    await assert.rejects(
+        store.read({roomId: 'room_invalid', roomFolderPath: '/WebMeet/invalid-room', assetId: 'asset_invalid'}),
+        /exactly one regular file/
     );
 });

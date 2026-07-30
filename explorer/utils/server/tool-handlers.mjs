@@ -1215,8 +1215,9 @@ export function createToolHandlers({
       || (data.operation === 'paragraph-add' && data.args?.assetId)
     ) {
       const roomId = String(data.args?.roomId || '').trim();
+      const roomFolderPath = String(data.args?.roomFolderPath || '').trim();
       const assetId = String(data.args?.assetId || '').trim();
-      const asset = await webMeetMediaStore.read(roomId, assetId);
+      const asset = await webMeetMediaStore.read({roomId, roomFolderPath, assetId});
       data.args = { ...data.args, workspaceUrl: asset.workspaceUrl, alt: data.args?.alt || asset.filename };
     }
     return jsonResponse(await scriptaCrdtService.mutate(data));
@@ -1231,7 +1232,7 @@ export function createToolHandlers({
   async function handleWebMeetMediaGet(args) {
     assertWebMeetScriptaCaller();
     const data = parseArgs(WebMeetMediaGetArgsSchema, args, 'webmeet_media_get');
-    return jsonResponse({ ok: true, asset: await webMeetMediaStore.read(data.roomId, data.assetId) });
+    return jsonResponse({ ok: true, asset: await webMeetMediaStore.read(data) });
   }
 
   async function handleScriptaCrdtDelete(args) {

@@ -61,7 +61,7 @@ function remapImagePositions(images, previousText, nextText) {
 }
 
 function mediaFromMarkdown(value = '') {
-    const match = String(value || '').trim().match(/^!\[((?:\\.|[^\]])*)\]\((\/document-multimedia\/webmeet\/[^\s)]+\/assets\/(asset_[a-zA-Z0-9-]+)\.(?:png|jpg|webp|gif))\)$/i);
+    const match = String(value || '').trim().match(/^!\[((?:\\.|[^\]])*)\]\((\/WebMeet\/[a-zA-Z0-9._-]+\/assets\/(asset_[a-zA-Z0-9_-]+)\/[a-zA-Z0-9._-]+\.(?:png|jpg|webp|gif))\)$/i);
     if (!match) return null;
     return {
         assetId: match[3],
@@ -403,7 +403,7 @@ export function mutateScriptaDocument(source, operation, args = {}, participant 
         } else {
             const assetId = String(args.assetId || '').trim();
             const workspaceUrl = String(args.workspaceUrl || '').trim();
-            if (!assetId || !workspaceUrl.startsWith('/document-multimedia/webmeet/')) {
+            if (!assetId || !/^\/WebMeet\/[a-zA-Z0-9._-]+\/assets\/asset_[a-zA-Z0-9_-]+\/[a-zA-Z0-9._-]+\.(?:png|jpg|webp|gif)$/i.test(workspaceUrl)) {
                 throw new Error('SCRIPTA media asset is invalid.');
             }
             const image = {
@@ -460,7 +460,7 @@ export function mutateScriptaDocument(source, operation, args = {}, participant 
         if (args.assetId || args.workspaceUrl) {
             const assetId = String(args.assetId || '').trim();
             const workspaceUrl = String(args.workspaceUrl || '').trim();
-            if (!assetId || !workspaceUrl.startsWith('/document-multimedia/webmeet/')) {
+            if (!assetId || !/^\/WebMeet\/[a-zA-Z0-9._-]+\/assets\/asset_[a-zA-Z0-9_-]+\/[a-zA-Z0-9._-]+\.(?:png|jpg|webp|gif)$/i.test(workspaceUrl)) {
                 throw new Error('SCRIPTA media asset is invalid.');
             }
             const state = ensureScriptaInitialVariant(created, { createdBy: actorHash });

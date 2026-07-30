@@ -8,7 +8,7 @@ import {
 } from '../../web-components/pages/file-exp/file-exp-utils.js';
 
 test('Markdown preview preserves underscores in image resource URLs', () => {
-    const workspaceUrl = '/document-multimedia/webmeet/room_e0cf0694-bd76-4e9d-8f74-a15bceeda8f4/assets/asset_0b5aab1a-18c7-4e44-8829-479931987e3e.png';
+    const workspaceUrl = '/WebMeet/example-room-e0cf0694/assets/asset_0b5aab1a-18c7-4e44-8829-479931987e3e/diagram.png';
     const html = renderMarkdownPreview(`![1.png](${workspaceUrl})`, {
         buildResourceUrl: (resourcePath) => `/workspace-files${resourcePath}`
     });
@@ -26,7 +26,7 @@ test('Markdown preview does not apply emphasis inside links or inline code', () 
 });
 
 test('Markdown preview consumes SCRIPTA image layout before structural comments are removed', () => {
-    const workspaceUrl = '/document-multimedia/webmeet/room_1/assets/asset_1.png';
+    const workspaceUrl = '/WebMeet/story-room-1/assets/asset_1/diagram.png';
     const raw = `<!-- {"achilles-ide-document":{"id":"document-1","title":"Layout"}} -->
 <!-- {"achilles-ide-chapter":{"id":"chapter-1","title":"Chapter"}} -->
 ## Chapter

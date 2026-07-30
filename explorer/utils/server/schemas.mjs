@@ -161,6 +161,7 @@ export function createSchemas(z) {
     targetChapterId: z.string().optional(),
     targetIndex: optionalTransportInteger(0),
     roomId: z.string().optional(),
+    roomFolderPath: z.string().regex(/^\/WebMeet\/[a-zA-Z0-9._-]+$/).optional(),
     assetId: z.string().optional(),
     imageId: z.string().optional(),
     imageOrdinal: optionalTransportInteger(1),
@@ -258,15 +259,16 @@ export function createSchemas(z) {
   });
   const WebMeetMediaCommitArgsSchema = z.object({
     roomId: z.string().min(1),
+    roomFolderPath: z.string().regex(/^\/WebMeet\/[a-zA-Z0-9._-]+$/),
     blobRef: z.object({
       id: z.string().regex(/^[a-f0-9]{48}$/),
       agent: z.string().min(1),
       localPath: z.string().min(1)
-    }).strict(),
-    createdBy: z.string().optional()
+    }).strict()
   });
   const WebMeetMediaGetArgsSchema = z.object({
     roomId: z.string().min(1),
+    roomFolderPath: z.string().regex(/^\/WebMeet\/[a-zA-Z0-9._-]+$/),
     assetId: z.string().min(1)
   });
   const ScriptaCollaborationOpenArgsSchema = ScriptaCrdtOpenArgsSchema;

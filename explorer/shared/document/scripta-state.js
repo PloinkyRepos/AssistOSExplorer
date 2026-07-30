@@ -52,7 +52,7 @@ export function normalizeScriptaVariantImages(value = [], fallbackPosition = 0) 
                 : Math.max(0, Number(fallbackPosition) || 0),
             layout: normalizeScriptaVariantImageLayout(image.layout),
         }))
-        .filter((image) => image.assetId && image.workspaceUrl.startsWith("/document-multimedia/webmeet/"));
+        .filter((image) => image.assetId && /^\/WebMeet\/[a-zA-Z0-9._-]+\/assets\/asset_[a-zA-Z0-9_-]+\/[a-zA-Z0-9._-]+\.(?:png|jpg|webp|gif)$/i.test(image.workspaceUrl));
 }
 
 function markdownImage(image = {}) {
