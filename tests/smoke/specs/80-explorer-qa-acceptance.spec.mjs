@@ -375,9 +375,15 @@ test.describe('Explorer QA acceptance', () => {
       ignoreHTTPSErrors: true,
     });
     const ownerPage = await ownerContext.newPage();
+    const ownerStandalonePage = await ownerContext.newPage();
     const memberPage = await memberContext.newPage();
     const guestPage = await guestContext.newPage();
     const ownerDiagnostics = attachPageDiagnostics(ownerPage, testInfo, 'qa-webmeet-owner');
+    const ownerStandaloneDiagnostics = attachPageDiagnostics(
+      ownerStandalonePage,
+      testInfo,
+      'qa-webmeet-owner-standalone',
+    );
     const memberDiagnostics = attachPageDiagnostics(memberPage, testInfo, 'qa-webmeet-member');
     const guestDiagnostics = attachPageDiagnostics(guestPage, testInfo, 'qa-webmeet-guest');
     let roomCreated = false;
@@ -389,8 +395,7 @@ test.describe('Explorer QA acceptance', () => {
       await openWebMeet(ownerPage, ownerAccount);
       await deleteRoomIfPresent(ownerPage, roomTitle);
       await deleteRoomIfPresent(ownerPage, guestRoomTitle);
-      await expectAuthenticatedStandaloneWebMeet(ownerPage);
-      await openWebMeet(ownerPage, ownerAccount);
+      await expectAuthenticatedStandaloneWebMeet(ownerStandalonePage);
       guestRoomId = await createRoom(ownerPage, guestRoomTitle, { roomType: 'guest' });
       guestRoomCreated = true;
       await joinStandaloneGuestRoom(guestPage, {
@@ -416,6 +421,10 @@ test.describe('Explorer QA acceptance', () => {
 
       if (smokeConfig.flags.failOnBrowserErrors) {
         expect(ownerDiagnostics.actionableEvents(), 'owner WebMeet browser errors').toEqual([]);
+        expect(
+          ownerStandaloneDiagnostics.actionableEvents(),
+          'owner standalone WebMeet browser errors',
+        ).toEqual([]);
         expect(memberDiagnostics.actionableEvents(), 'member WebMeet browser errors').toEqual([]);
         expect(guestDiagnostics.actionableEvents(), 'guest WebMeet browser errors').toEqual([]);
       }
@@ -447,6 +456,12 @@ test.describe('Explorer QA acceptance', () => {
           path: testInfo.outputPath('qa-webmeet-owner-failure.png'),
           fullPage: true,
         })),
+        failureCollector.required('owner standalone WebMeet failure screenshot', () => (
+          ownerStandalonePage.screenshot({
+            path: testInfo.outputPath('qa-webmeet-owner-standalone-failure.png'),
+            fullPage: true,
+          })
+        )),
         failureCollector.required('member WebMeet failure screenshot', () => memberPage.screenshot({
           path: testInfo.outputPath('qa-webmeet-member-failure.png'),
           fullPage: true,
@@ -466,6 +481,10 @@ test.describe('Explorer QA acceptance', () => {
       }
       await Promise.all([
         failureCollector.required('owner WebMeet diagnostics', () => ownerDiagnostics.flush()),
+        failureCollector.required(
+          'owner standalone WebMeet diagnostics',
+          () => ownerStandaloneDiagnostics.flush(),
+        ),
         failureCollector.required('member WebMeet diagnostics', () => memberDiagnostics.flush()),
         failureCollector.required('guest WebMeet diagnostics', () => guestDiagnostics.flush()),
         failureCollector.required('owner WebMeet browser context close', () => ownerContext.close()),
