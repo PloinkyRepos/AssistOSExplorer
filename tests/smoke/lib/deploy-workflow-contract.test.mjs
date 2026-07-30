@@ -53,6 +53,9 @@ const WORKFLOWS = [
       'SOUL_GATEWAY_ROUTER_PORT:',
       'refusing to operate on the production Soul Gateway workspace',
       'protected Soul Gateway became unhealthy during QA deployment',
+      'The inner graceful stop failed; proving the outer Box stopped',
+      'Ploinky Box: stopped',
+      'the Box remained running or ambiguous after the degraded stop',
     ],
   },
   {

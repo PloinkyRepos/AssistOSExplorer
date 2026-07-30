@@ -318,7 +318,26 @@ jobs:
           if [ -x "$RUNTIME_DIR/bin/ploinky" ] &&
             [ -f "$RUNTIME_DIR/ploinky-box/bin/ploinky-box.mjs" ]; then
             echo "[deploy-qa] Stopping the existing QA Box before updating its mounted runtime..."
-            env PLOINKY_WORKSPACE_ROOT="$WORK_DIR" "$RUNTIME_DIR/bin/ploinky" stop
+            if ! env PLOINKY_WORKSPACE_ROOT="$WORK_DIR" "$RUNTIME_DIR/bin/ploinky" stop; then
+              echo "[deploy-qa] The inner graceful stop failed; proving the outer Box stopped..."
+              if ! STOPPED_BOX_STATUS="$(
+                env PLOINKY_WORKSPACE_ROOT="$WORK_DIR" \
+                  "$RUNTIME_DIR/bin/ploinky" status
+              )"; then
+                echo "[deploy-qa] ERROR: unable to inspect the Box after the degraded stop."
+                exit 1
+              fi
+              case "$STOPPED_BOX_STATUS" in
+                *"Ploinky Box: stopped"*)
+                  echo "[deploy-qa] The exact outer Box is stopped; continuing recovery."
+                  ;;
+                *)
+                  printf '%s\n' "$STOPPED_BOX_STATUS"
+                  echo "[deploy-qa] ERROR: the Box remained running or ambiguous after the degraded stop."
+                  exit 1
+                  ;;
+              esac
+            fi
           fi
           git -C "$RUNTIME_DIR" fetch --prune origin \
             "refs/heads/$PLOINKY_BRANCH:refs/remotes/origin/$PLOINKY_BRANCH"
