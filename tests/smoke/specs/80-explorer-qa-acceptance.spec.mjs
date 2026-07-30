@@ -23,7 +23,9 @@ import { createReleaseGateFailureCollector } from '../lib/release-gate-failures.
 import {
   createRoom,
   deleteRoomIfPresent,
+  expectAuthenticatedStandaloneWebMeet,
   expectTwoDistinctWebMeetParticipants,
+  joinStandaloneGuestRoom,
   joinRoom,
   openWebMeet,
   sendWebMeetChat,
@@ -354,8 +356,10 @@ test.describe('Explorer QA acceptance', () => {
   });
 
   test('two generated users join one WebMeet room and both see chat', async ({ browser }, testInfo) => {
-    test.setTimeout(Math.max(smokeConfig.timeouts.test, 180_000));
+    test.setTimeout(Math.max(smokeConfig.timeouts.test, 240_000));
     const roomTitle = `e2e-room-${smokeConfig.runId}`;
+    const guestRoomTitle = `e2e-public-room-${smokeConfig.runId}`;
+    const guestDisplayName = `e2e-guest-${smokeConfig.runId}`;
     const ownerMessage = `chat-from-owner-${smokeConfig.runId}`;
     const memberMessage = `chat-from-member-${smokeConfig.runId}`;
     const ownerContext = await browser.newContext({
@@ -366,16 +370,33 @@ test.describe('Explorer QA acceptance', () => {
       baseURL: smokeConfig.baseURL,
       ignoreHTTPSErrors: true,
     });
+    const guestContext = await browser.newContext({
+      baseURL: smokeConfig.baseURL,
+      ignoreHTTPSErrors: true,
+    });
     const ownerPage = await ownerContext.newPage();
     const memberPage = await memberContext.newPage();
+    const guestPage = await guestContext.newPage();
     const ownerDiagnostics = attachPageDiagnostics(ownerPage, testInfo, 'qa-webmeet-owner');
     const memberDiagnostics = attachPageDiagnostics(memberPage, testInfo, 'qa-webmeet-member');
+    const guestDiagnostics = attachPageDiagnostics(guestPage, testInfo, 'qa-webmeet-guest');
     let roomCreated = false;
+    let guestRoomCreated = false;
+    let guestRoomId = '';
     let primaryError = null;
     const failureCollector = createReleaseGateFailureCollector();
     try {
       await openWebMeet(ownerPage, ownerAccount);
       await deleteRoomIfPresent(ownerPage, roomTitle);
+      await deleteRoomIfPresent(ownerPage, guestRoomTitle);
+      await expectAuthenticatedStandaloneWebMeet(ownerPage);
+      await openWebMeet(ownerPage, ownerAccount);
+      guestRoomId = await createRoom(ownerPage, guestRoomTitle, { roomType: 'guest' });
+      guestRoomCreated = true;
+      await joinStandaloneGuestRoom(guestPage, {
+        roomId: guestRoomId,
+        displayName: guestDisplayName,
+      });
       await createRoom(ownerPage, roomTitle);
       roomCreated = true;
       await openWebMeet(memberPage, memberAccount, { expectCreateRoom: false });
@@ -396,10 +417,17 @@ test.describe('Explorer QA acceptance', () => {
       if (smokeConfig.flags.failOnBrowserErrors) {
         expect(ownerDiagnostics.actionableEvents(), 'owner WebMeet browser errors').toEqual([]);
         expect(memberDiagnostics.actionableEvents(), 'member WebMeet browser errors').toEqual([]);
+        expect(guestDiagnostics.actionableEvents(), 'guest WebMeet browser errors').toEqual([]);
       }
       await testInfo.attach('qa-webmeet-evidence.json', {
         body: Buffer.from(JSON.stringify({
           roomTitle,
+          standaloneLoader: {
+            authenticated: true,
+            guestRoomId,
+            guestDisplayName,
+            guestJoined: true,
+          },
           explorerPrincipals: {
             owner: { id: ownerPrincipal.canonicalId, username: ownerPrincipal.canonicalUsername },
             member: { id: memberPrincipal.canonicalId, username: memberPrincipal.canonicalUsername },
@@ -423,19 +451,26 @@ test.describe('Explorer QA acceptance', () => {
           path: testInfo.outputPath('qa-webmeet-member-failure.png'),
           fullPage: true,
         })),
+        failureCollector.required('guest WebMeet failure screenshot', () => guestPage.screenshot({
+          path: testInfo.outputPath('qa-webmeet-guest-failure.png'),
+          fullPage: true,
+        })),
       ]);
     } finally {
-      if (roomCreated && !ownerPage.isClosed()) {
+      if ((roomCreated || guestRoomCreated) && !ownerPage.isClosed()) {
         await failureCollector.required('run-scoped WebMeet room deletion', async () => {
           await openWebMeet(ownerPage, ownerAccount);
-          await deleteRoomIfPresent(ownerPage, roomTitle);
+          if (roomCreated) await deleteRoomIfPresent(ownerPage, roomTitle);
+          if (guestRoomCreated) await deleteRoomIfPresent(ownerPage, guestRoomTitle);
         });
       }
       await Promise.all([
         failureCollector.required('owner WebMeet diagnostics', () => ownerDiagnostics.flush()),
         failureCollector.required('member WebMeet diagnostics', () => memberDiagnostics.flush()),
+        failureCollector.required('guest WebMeet diagnostics', () => guestDiagnostics.flush()),
         failureCollector.required('owner WebMeet browser context close', () => ownerContext.close()),
         failureCollector.required('member WebMeet browser context close', () => memberContext.close()),
+        failureCollector.required('guest WebMeet browser context close', () => guestContext.close()),
       ]);
     }
     failureCollector.throwIfAny({ primaryError, label: 'Explorer QA WebMeet acceptance' });

@@ -34,7 +34,9 @@ creates a legacy `.doc` under `/Confidential/My Space`, proves the active
 editor is writable OnlyOffice with autosave enabled, makes a browser edit
 without clicking Save, and reopens the document to prove persistence. The
 second test has the two generated users create and join one WebMeet room and
-proves that a message from each user is visible to the other.
+proves that a message from each user is visible to the other. It also opens the
+standalone WebMeet loader as an authenticated user, creates a public room, and
+proves an unauthenticated guest can join through its direct invitation URL.
 
 If the machine still has a negative DNS cache from before the QA record was
 created, set `SMOKE_QA_EDGE_IP` to one of the hostname's current public

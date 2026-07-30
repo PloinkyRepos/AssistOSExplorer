@@ -19,17 +19,80 @@ import {
   createRoom,
   deleteRoomIfPresent,
   enableMedia,
+  expectAuthenticatedStandaloneWebMeet,
   expectBidirectionalAudioVideoRtp,
   expectIncreasingRtpStats,
   expectJoinMaterialRefreshLifecycle,
   expectTwoDistinctWebMeetParticipants,
   exerciseScreenShareDirection,
+  joinStandaloneGuestRoom,
   joinRoom,
   openWebMeet,
   sendWebMeetChat,
 } from '../lib/webmeet.mjs';
 
 test.describe('WebMeet rooms', () => {
+  test('standalone loader serves the authenticated dashboard and a guest invitation', async ({ page, browser }, testInfo) => {
+    const roomTitle = `e2e-public-room-${smokeConfig.runId}`;
+    const guestDisplayName = `e2e-guest-${smokeConfig.runId}`;
+    const ownerDiagnostics = attachPageDiagnostics(page, testInfo, 'webmeet-standalone-owner');
+    const guestContext = await browser.newContext({
+      baseURL: smokeConfig.baseURL,
+      ignoreHTTPSErrors: true,
+    });
+    const guestPage = await guestContext.newPage();
+    const guestDiagnostics = attachPageDiagnostics(guestPage, testInfo, 'webmeet-standalone-guest');
+    let roomCreated = false;
+    let primaryError = null;
+    const failureCollector = createReleaseGateFailureCollector();
+
+    try {
+      await openWebMeet(page);
+      await deleteRoomIfPresent(page, roomTitle);
+      const roomId = await createRoom(page, roomTitle, { roomType: 'guest' });
+      roomCreated = true;
+      await expectAuthenticatedStandaloneWebMeet(page);
+      await joinStandaloneGuestRoom(guestPage, {
+        roomId,
+        displayName: guestDisplayName,
+      });
+
+      if (smokeConfig.flags.failOnBrowserErrors) {
+        expect(ownerDiagnostics.actionableEvents(), 'standalone owner browser errors').toEqual([]);
+        expect(guestDiagnostics.actionableEvents(), 'standalone guest browser errors').toEqual([]);
+      }
+    } catch (error) {
+      primaryError = error;
+      await Promise.all([
+        failureCollector.required('standalone owner failure screenshot', () => (
+          page.screenshot({
+            path: testInfo.outputPath('webmeet-standalone-owner-failure.png'),
+            fullPage: true,
+          })
+        )),
+        failureCollector.required('standalone guest failure screenshot', () => (
+          guestPage.screenshot({
+            path: testInfo.outputPath('webmeet-standalone-guest-failure.png'),
+            fullPage: true,
+          })
+        )),
+      ]);
+    } finally {
+      if (roomCreated && !page.isClosed()) {
+        await failureCollector.required('standalone run-scoped room deletion', async () => {
+          await openWebMeet(page);
+          await deleteRoomIfPresent(page, roomTitle);
+        });
+      }
+      await Promise.all([
+        failureCollector.required('standalone owner diagnostics', () => ownerDiagnostics.flush()),
+        failureCollector.required('standalone guest diagnostics', () => guestDiagnostics.flush()),
+        failureCollector.required('standalone guest context close', () => guestContext.close()),
+      ]);
+    }
+    failureCollector.throwIfAny({ primaryError, label: 'standalone WebMeet gate' });
+  });
+
   test('two Explorer accounts can join one room and exchange chat', async ({ page, browser }, testInfo) => {
     test.setTimeout(smokeConfig.flags.webmeetRefresh
       ? Math.max(smokeConfig.timeouts.test, (smokeConfig.timeouts.webmeetRefresh * 2) + 180_000)

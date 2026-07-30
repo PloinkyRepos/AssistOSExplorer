@@ -21,12 +21,59 @@ export async function openWebMeet(page, account = smokeConfig.primaryUser, optio
   }
 }
 
-export async function createRoom(page, title) {
+export async function openStandaloneWebMeet(page, { roomId = '' } = {}) {
+  const path = new URL('/webmeetAgent/roomLoader.html', smokeConfig.baseURL);
+  if (roomId) path.searchParams.set('roomId', roomId);
+  const response = await page.goto(`${path.pathname}${path.search}`, { waitUntil: 'domcontentloaded' });
+  expect(response, 'standalone WebMeet navigation must produce a document response').not.toBeNull();
+  expect(response.status(), 'standalone WebMeet document must be served by WebMeet').toBe(200);
+  expect(new URL(page.url()).pathname).toBe('/webmeetAgent/roomLoader.html');
+  await expect(page.locator('body')).not.toContainText(/^Not Found$/);
+  return response;
+}
+
+export async function expectAuthenticatedStandaloneWebMeet(page) {
+  await openStandaloneWebMeet(page);
+  await expect(page.locator('div.webmeet-dashboard')).toBeVisible({
+    timeout: smokeConfig.timeouts.navigation,
+  });
+  await expect(page.locator('#webmeetCreateRoomButton')).toBeVisible();
+}
+
+export async function joinStandaloneGuestRoom(page, { roomId, displayName }) {
+  await openStandaloneWebMeet(page, { roomId });
+  await expect(page.locator('#webmeetGuestEntryName')).toBeVisible({
+    timeout: smokeConfig.timeouts.navigation,
+  });
+  await page.locator('#webmeetGuestEntryName').fill(displayName);
+  await page.locator('#webmeetGuestEntrySubmit').click();
+  await expect(page.locator('#webmeetChatInput')).toBeVisible({
+    timeout: smokeConfig.timeouts.media,
+  });
+}
+
+export async function createRoom(page, title, { roomType = 'team' } = {}) {
   await page.locator('#webmeetCreateRoomButton').click();
   await expect(page.locator('[data-id="roomTitleInput"]')).toBeVisible();
+  if (roomType === 'guest') {
+    const guestRoomType = page.locator('[data-id="roomTypeGuest"]');
+    await page.locator('label.room-type-option', { hasText: 'Public meeting' }).click();
+    await expect(guestRoomType).toBeChecked();
+  } else if (roomType !== 'team') {
+    throw new Error(`Unsupported WebMeet room type: ${roomType}`);
+  }
   await page.locator('[data-id="roomTitleInput"]').fill(title);
   await page.locator('[data-local-action="confirmCreate"]').click();
-  await expect(page.locator('#webmeetMeetingList .webmeet-list-item', { hasText: title }).first()).toBeVisible();
+  if (roomType === 'guest') {
+    const confirmationDialog = page.locator('dialog:has(confirm-action-modal)').last();
+    await expect(confirmationDialog).toBeVisible();
+    await confirmationDialog.getByRole('button', { name: 'No' }).click();
+  }
+  const room = page.locator('#webmeetMeetingList .webmeet-list-item', { hasText: title }).first();
+  await expect(room).toBeVisible();
+  const roomId = String(await room.getAttribute('data-id') || '').trim();
+  expect(roomId, `created WebMeet room '${title}' must expose its room id`).toMatch(/^room_[0-9a-f-]{36}$/i);
+  return roomId;
 }
 
 export async function joinRoom(page, title) {
