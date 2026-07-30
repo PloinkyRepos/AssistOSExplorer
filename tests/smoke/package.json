@@ -3,6 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "benchmark:resources": "node ./scripts/run-resource-benchmark.mjs",
+    "benchmark:resources:compare": "node ./scripts/compare-resource-benchmarks.mjs",
     "benchmark:ui": "node ./scripts/run-ui-benchmark.mjs",
     "benchmark:ui:compare": "node ./scripts/compare-ui-benchmarks.mjs",
     "test": "node ./scripts/run-playwright.mjs",

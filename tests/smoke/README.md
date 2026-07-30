@@ -117,6 +117,76 @@ and Node controls before producing output. Do not run the deployments
 concurrently. This benchmark is a performance probe; it does not replace the
 functional smoke or release suites.
 
+## Explorer Deployment Resource A/B Benchmark
+
+`benchmark:resources` measures steady-state resource consumption for the full
+Explorer graph. The first report is required to come from the direct-host
+`master` deployment; the second is required to come from the nested
+`ploinky-proxy` Box deployment. Run both sequentially on the same dedicated
+Linux host with the same clean workspace data, exact 16-target graph, container
+runtime version, kernel, Node version, CPU, and memory.
+
+Keep the benchmark harness itself at one fixed commit outside the workspace
+being replaced. The harness source is not part of the deployment under test.
+After the direct-host master graph is admitted and has no active browser or
+external workload, record the reference:
+
+```bash
+RESOURCE_BENCHMARK_LABEL=master \
+RESOURCE_BENCHMARK_VARIANT=master \
+RESOURCE_BENCHMARK_DEPLOYMENT_ID=<non-secret-master-deployment-id> \
+RESOURCE_BENCHMARK_PLOINKY_SHA=<exact-deployed-master-sha> \
+RESOURCE_BENCHMARK_EXPLORER_SHA=<exact-deployed-master-explorer-sha> \
+npm run benchmark:resources
+```
+
+Cleanly replace the deployment with `ploinky-proxy`, admit the same exact graph,
+leave it idle, and record the candidate:
+
+```bash
+RESOURCE_BENCHMARK_LABEL=ploinky-proxy \
+RESOURCE_BENCHMARK_VARIANT=ploinky-proxy \
+RESOURCE_BENCHMARK_DEPLOYMENT_ID=<non-secret-proxy-deployment-id> \
+RESOURCE_BENCHMARK_PLOINKY_SHA=<exact-deployed-proxy-sha> \
+RESOURCE_BENCHMARK_EXPLORER_SHA=<exact-deployed-proxy-explorer-sha> \
+npm run benchmark:resources
+```
+
+The v1 protocol uses a five-minute warmup followed by 30 minutes of sampling
+every ten seconds. It reads whole-host CPU counters, memory, swap, load,
+processes, and zombies directly from `/proc`. It queries Podman only before
+warmup, after warmup, and after sampling. A report fails if the direct master
+contains an outer Box, the proxy does not contain exactly one outer Box, the
+running target count is not exactly 16, or any target/Box identity changes
+during the run.
+
+Results are mode-`0600` files below:
+
+```text
+../../.ploinky/test-artifacts/resource-benchmark/<run-id>/result.json
+```
+
+Compare them with the master report first:
+
+```bash
+npm run benchmark:resources:compare -- \
+  <master-result.json> \
+  <ploinky-proxy-result.json> \
+  --output <comparison.json>
+```
+
+The comparison rejects different host or scenario fingerprints and reports
+master-relative p95 CPU, memory, swap, load, and process counts; maximum zombie
+count; and memory, process, and zombie growth per minute. Positive deltas mean
+the proxy candidate consumed more. The initial comparison is evidence, not an
+arbitrary pass/fail budget: establish explicit release thresholds only after a
+valid master reference and a corrected proxy candidate have both been captured.
+
+No historical master resource artifact exists in this repository. Do not
+substitute the currently overloaded proxy measurements for the reference, and
+do not claim comparability if the exact historical master deployment cannot be
+reproduced on the controlled host.
+
 ## Fixed Router/Auth Release Baseline
 
 The Ploinky release harness runs this exact Chromium baseline after the full

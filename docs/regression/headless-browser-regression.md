@@ -76,6 +76,30 @@ scenario descriptor or recorded browser, headless/cache, viewport, platform,
 architecture, OS, Node, target, or iteration controls differ. See
 `tests/smoke/README.md` for the complete controls and artifact location.
 
+### Master-Relative Deployment Resource Comparison
+
+The resource benchmark is separate from the browser timing benchmark. Run its
+fixed harness on the Linux deployment host first against a reproduced
+direct-host `master` graph and then against `ploinky-proxy` on the same host:
+
+```bash
+cd tests/smoke
+RESOURCE_BENCHMARK_LABEL=master \
+RESOURCE_BENCHMARK_VARIANT=master \
+RESOURCE_BENCHMARK_DEPLOYMENT_ID=<master-deployment-id> \
+RESOURCE_BENCHMARK_PLOINKY_SHA=<exact-master-sha> \
+RESOURCE_BENCHMARK_EXPLORER_SHA=<exact-master-explorer-sha> \
+npm run benchmark:resources
+```
+
+Repeat with `RESOURCE_BENCHMARK_LABEL` and
+`RESOURCE_BENCHMARK_VARIANT` equal to `ploinky-proxy`, then compare the two
+`result.json` files with `npm run benchmark:resources:compare`. The harness
+requires the same host fingerprint, five-minute warmup, 30-minute
+idle-steady sampling window, ten-second interval, and exact stable 16-target
+graph. It reports master-relative CPU, memory, swap, load, process, zombie, and
+growth-rate deltas. See `tests/smoke/README.md` for the complete protocol.
+
 ### Fixed Router/Auth Release Baseline
 
 The Ploinky release harness runs this exact Chromium baseline after the full
