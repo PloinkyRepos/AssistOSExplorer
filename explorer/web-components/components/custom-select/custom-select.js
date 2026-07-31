@@ -111,6 +111,7 @@ export class CustomSelect {
         this.optionsList.classList.remove('hidden');
         this.optionsList.hidden = false;
 
+        this.portalOptionsListToDialog();
         this.positionOptionsList();
         this.optionsList.querySelector('.option[data-selected="true"]')?.focus({ preventScroll: true });
 
@@ -134,6 +135,22 @@ export class CustomSelect {
         for (const property of ['left', 'top', 'width', 'maxHeight']) {
             this.optionsList.style.removeProperty(property);
         }
+        this.restoreOptionsList();
+    }
+
+    portalOptionsListToDialog() {
+        const dialog = this.element.closest('dialog');
+        if (!dialog || this.optionsList.parentElement === dialog) return;
+        this.optionsListOrigin = this.optionsList.parentElement;
+        this.optionsListPortalRoot = dialog;
+        dialog.append(this.optionsList);
+    }
+
+    restoreOptionsList() {
+        if (!this.optionsListOrigin || !this.optionsList) return;
+        this.optionsListOrigin.append(this.optionsList);
+        this.optionsListOrigin = null;
+        this.optionsListPortalRoot = null;
     }
 
     handleOutsidePointer(event) {
@@ -224,21 +241,38 @@ export class CustomSelect {
         const triggerRect = this.trigger.getBoundingClientRect();
         const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
         const viewportHeight = document.documentElement.clientHeight || window.innerHeight;
+        const dialogRect = this.optionsListPortalRoot?.getBoundingClientRect();
+        const boundary = dialogRect || {
+            left: 0,
+            top: 0,
+            right: viewportWidth,
+            bottom: viewportHeight,
+            width: viewportWidth,
+            height: viewportHeight
+        };
         const margin = 8;
         const gap = 4;
         const mobile = window.matchMedia?.('(max-width: 720px)')?.matches || viewportWidth <= 720;
         const desiredMaxHeight = Number.parseInt(this.element.getAttribute('data-max-height'), 10) || 330;
-        const width = mobile ? viewportWidth - margin * 2 : Math.min(Math.max(triggerRect.width, 180), viewportWidth - margin * 2);
-        const left = mobile ? margin : Math.min(Math.max(triggerRect.left, margin), viewportWidth - width - margin);
-        const spaceBelow = viewportHeight - triggerRect.bottom - margin - gap;
-        const spaceAbove = triggerRect.top - margin - gap;
+        const availableWidth = Math.max(0, boundary.width - margin * 2);
+        const width = mobile && !dialogRect
+            ? availableWidth
+            : Math.min(Math.max(triggerRect.width, 180), availableWidth);
+        const left = mobile && !dialogRect
+            ? boundary.left + margin
+            : Math.min(
+                Math.max(triggerRect.left, boundary.left + margin),
+                boundary.right - width - margin
+            );
+        const spaceBelow = boundary.bottom - triggerRect.bottom - margin - gap;
+        const spaceAbove = triggerRect.top - boundary.top - margin - gap;
         const openAbove = spaceBelow < Math.min(180, desiredMaxHeight) && spaceAbove > spaceBelow;
         const available = Math.max(64, openAbove ? spaceAbove : spaceBelow);
         const maxHeight = Math.min(desiredMaxHeight, available);
         const listHeight = Math.min(this.optionsList.scrollHeight || maxHeight, maxHeight);
         const top = openAbove
-            ? Math.max(margin, triggerRect.top - gap - listHeight)
-            : Math.min(triggerRect.bottom + gap, viewportHeight - margin - listHeight);
+            ? Math.max(boundary.top + margin, triggerRect.top - gap - listHeight)
+            : Math.min(triggerRect.bottom + gap, boundary.bottom - margin - listHeight);
 
         this.optionsList.style.left = `${left}px`;
         this.optionsList.style.top = `${top}px`;

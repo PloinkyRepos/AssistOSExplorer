@@ -8,6 +8,7 @@ admin-users-settings * {
 }
 
 admin-users-settings .toolbar {
+    --admin-user-control-height: 36px;
     display: grid;
     grid-template-columns: 1fr 1fr 1fr 1fr auto;
     gap: 10px;
@@ -15,6 +16,27 @@ admin-users-settings .toolbar {
     border-bottom: 1px solid var(--border);
     background: var(--surface);
     align-items: end;
+}
+
+admin-users-settings .toolbar > .form-label {
+    display: grid;
+    grid-template-rows: auto var(--admin-user-control-height);
+    gap: 4px;
+    min-width: 0;
+    margin: 0;
+    line-height: 1.2;
+}
+
+admin-users-settings .toolbar .form-input,
+admin-users-settings .toolbar .password-field,
+admin-users-settings .toolbar custom-select,
+admin-users-settings .toolbar > .general-button {
+    height: var(--admin-user-control-height);
+}
+
+admin-users-settings .toolbar > .general-button {
+    align-self: end;
+    white-space: nowrap;
 }
 
 admin-users-settings [data-role="tableHost"] {
@@ -90,6 +112,11 @@ admin-users-settings .empty {
 
 admin-users-settings custom-select {
     min-width: 0;
+}
+
+admin-users-settings .toolbar custom-select .custom-select {
+    height: 100%;
+    margin-top: 0;
 }
 
 admin-users-settings .section-heading {
