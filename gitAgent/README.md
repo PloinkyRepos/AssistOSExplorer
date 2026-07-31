@@ -11,7 +11,7 @@ Model Context Protocol (MCP) agent for Git operations inside a Ploinky workspace
 
 ## Available tools
 
-- repository lifecycle and inspection: `git_init_repository`, `git_info`, `git_status`, `git_repos_overview`, `git_identity`
+- repository lifecycle and inspection: `git_init_repository`, `git_submodule_add`, `git_info`, `git_status`, `git_repos_overview`, `git_identity`
 - branch workflow: `git_branch_list`, `git_branch_checkout`, `git_branch_create`, `git_branch_merge`
 - diff and ignore inspection: `git_diff`, `git_check_ignore`, `git_add_ignore`, `git_remove_ignore`
 - staging workflow: `git_stage`, `git_stage_exact`, `git_unstage`, `git_untrack`, `git_restore`
@@ -50,6 +50,8 @@ Optional integration variables:
 - The agent is decoupled from the Explorer user interface (UI). Explorer or other clients should call Git through MCP, not through shared interface internals.
 - Execution tools operate only on the repository explicitly resolved from the provided path. They do not scan the workspace and do not fall back to a different repository when the target path is invalid.
 - Explorer menus use a separate menu contribution plugin. The menu stays host-owned in Explorer, while `gitAgent` owns actions such as `New repository`, `Add to .gitignore`, and `Remove from .gitignore`.
+- `New repository` switches to an explicit `Add Git submodule` flow when the current Explorer directory is already inside a repository. Independent init, clone, and GitHub-create operations reject nested targets.
+- `git_submodule_add` accepts an existing remote and leaves the resulting `.gitmodules` entry and gitlink staged for an explicit parent-repository commit.
 - Explorer selection semantics are strict: selecting any file or folder inside a repository selects that repository for repository-level actions, while commit and push flows remain limited to the selected files from that repository.
 - Autosync/autocommit runs only for repositories explicitly chosen in autosync settings. It does not infer targets from the current tree selection and does not default to all discovered repositories.
 - `git_add_ignore` both appends the ignore pattern and removes already tracked paths from the Git index, including staged-but-diverged entries that require forced index removal, so ignored items stop participating in future commits unless explicitly re-added.

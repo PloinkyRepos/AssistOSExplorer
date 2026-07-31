@@ -14,7 +14,8 @@ export class GitNewRepositoryModal {
         this.invalidate = invalidate;
         this.form = null;
         this.errorNode = null;
-        this.mode = 'create-github';
+        this.submoduleMode = this.element.getAttribute('data-submoduleMode') === 'true';
+        this.mode = this.submoduleMode ? 'clone-github' : 'create-github';
         this.targets = [];
         this.repositories = [];
         this.selectedTarget = '';
@@ -50,6 +51,7 @@ export class GitNewRepositoryModal {
         this.form?.addEventListener('submit', this.boundSubmit);
         this.element.removeEventListener('input', this.boundInput);
         this.element.addEventListener('input', this.boundInput);
+        this.syncContextUi();
         this.syncModeUi();
         this.loadGithubData();
     }
@@ -99,7 +101,7 @@ export class GitNewRepositoryModal {
 
     setMode(elementOrMode, maybeMode) {
         const mode = String(maybeMode || elementOrMode || '').trim();
-        if (!MODES.includes(mode)) return;
+        if (!MODES.includes(mode) || (this.submoduleMode && mode === 'create-github')) return;
         this.mode = mode;
         this.setError('');
         this.syncModeUi();
@@ -128,7 +130,9 @@ export class GitNewRepositoryModal {
         }
         const submit = this.element.querySelector('[data-git-new-repository-submit]');
         if (submit) {
-            submit.textContent = this.mode === 'clone-github' ? 'Clone' : 'Create';
+            submit.textContent = this.submoduleMode
+                ? 'Add submodule'
+                : this.mode === 'clone-github' ? 'Clone' : 'Create';
         }
         const focusSelector = this.mode === 'manual'
             ? '#gitNewRepositoryName'
@@ -136,6 +140,21 @@ export class GitNewRepositoryModal {
                 ? '#gitNewRepositorySearch'
                 : '#gitNewRepositoryGithubName';
         this.element.querySelector(focusSelector)?.focus();
+    }
+
+    syncContextUi() {
+        const title = this.element.querySelector('[data-git-new-repository-title]');
+        if (title) {
+            title.textContent = this.submoduleMode ? 'Add Git submodule' : 'New repository';
+        }
+        const createTab = this.element.querySelector('[data-git-new-repository-mode="create-github"]');
+        if (createTab) {
+            createTab.hidden = this.submoduleMode;
+        }
+        const searchLabel = this.element.querySelector('[data-git-new-repository-search-label]');
+        if (searchLabel) {
+            searchLabel.textContent = this.submoduleMode ? 'Select existing repository' : 'Find repository';
+        }
     }
 
     async loadGithubData({ force = false } = {}) {
@@ -512,7 +531,9 @@ export class GitNewRepositoryModal {
 
         if (this.mode === 'clone-github') {
             if (!this.selectedRepository) {
-                this.setError('Select a GitHub repository to clone.');
+                this.setError(this.submoduleMode
+                    ? 'Select a GitHub repository to add as a submodule.'
+                    : 'Select a GitHub repository to clone.');
                 return;
             }
             const localName = this.readValue('cloneLocalName') || this.selectedRepository.name;

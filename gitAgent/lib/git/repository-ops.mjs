@@ -3,10 +3,27 @@ import path from 'node:path';
 
 import { createGithubRepository, isGithubHttpsRemote, toBasicAuthHeader } from './github-remotes.mjs';
 import { runGit } from './run-git.mjs';
-import { normalizeRemoteName, normalizeRemoteUrl, normalizeRepositoryName } from './validators.mjs';
+import {
+  normalizeGitRepoRelativePath,
+  normalizeRemoteName,
+  normalizeRemoteUrl,
+  normalizeRepositoryName,
+} from './validators.mjs';
 
 export function createRepositoryOps(ctx) {
   const { validatePath, getGitBinary, resolveGitTargetContext, resolveRepoWorkTreePath } = ctx;
+
+  async function rejectNestedRepositoryParent(parentPath) {
+    const gitBinary = await getGitBinary(parentPath);
+    let insideWorkTree = false;
+    try {
+      const result = await runGit(parentPath, [gitBinary, 'rev-parse', '--is-inside-work-tree'], { timeoutMs: 5000 });
+      insideWorkTree = result.stdout.trim() === 'true';
+    } catch {}
+    if (insideWorkTree) {
+      throw new Error('Cannot create an independent repository inside another Git repository. Add it as a Git submodule instead.');
+    }
+  }
 
   async function gitInfo({ path: repoPathArg }) {
     let context = null;
@@ -75,6 +92,7 @@ export function createRepositoryOps(ctx) {
     if (!parentStats.isDirectory()) {
       throw new Error('Repository parent path must be a directory.');
     }
+    await rejectNestedRepositoryParent(parentPath);
   
     const repoName = normalizeRepositoryName(name);
     const configuredRemoteUrl = normalizeRemoteUrl(remoteUrl, { repositoryName: repoName });
@@ -118,6 +136,7 @@ export function createRepositoryOps(ctx) {
     if (!parentStats.isDirectory()) {
       throw new Error('Repository parent path must be a directory.');
     }
+    await rejectNestedRepositoryParent(parentPath);
 
     const repoName = normalizeRepositoryName(name);
     const targetPath = path.join(parentPath, repoName);
@@ -201,6 +220,77 @@ export function createRepositoryOps(ctx) {
       remoteUrl: configuredRemoteUrl
     };
   }
+
+  async function gitSubmoduleAdd({ path: parentPathArg, name, remoteUrl, token }) {
+    const context = await resolveGitTargetContext(parentPathArg);
+    if (!context.stats.isDirectory()) {
+      throw new Error('Submodule parent path must be a directory.');
+    }
+
+    const submoduleName = normalizeRepositoryName(name);
+    const configuredRemoteUrl = normalizeRemoteUrl(remoteUrl);
+    const targetPath = path.join(context.targetPath, submoduleName);
+    await validatePath(targetPath);
+    const relativeTarget = normalizeGitRepoRelativePath(path.relative(context.repoPath, targetPath));
+    if (!relativeTarget || relativeTarget.startsWith('../') || path.isAbsolute(relativeTarget)) {
+      throw new Error('Submodule target path must be inside the parent Git repository.');
+    }
+
+    try {
+      await fs.lstat(targetPath);
+      throw new Error(`Submodule directory already exists: ${submoduleName}`);
+    } catch (error) {
+      if (error?.code !== 'ENOENT') {
+        throw error;
+      }
+    }
+
+    const command = [context.gitBinary];
+    let localRemotePath = '';
+    if (path.isAbsolute(configuredRemoteUrl)) {
+      localRemotePath = configuredRemoteUrl;
+    } else if (configuredRemoteUrl.startsWith('file://')) {
+      try {
+        localRemotePath = decodeURIComponent(new URL(configuredRemoteUrl).pathname);
+      } catch {
+        throw new Error('Invalid local Git remote URL.');
+      }
+    }
+    if (localRemotePath) {
+      await validatePath(localRemotePath);
+      command.push('-c', 'protocol.file.allow=always');
+    }
+    const authToken = String(token || '').trim();
+    if (authToken && isGithubHttpsRemote(configuredRemoteUrl)) {
+      command.push('-c', `http.https://github.com/.extraheader=${toBasicAuthHeader({ token: authToken })}`);
+    }
+    command.push('submodule', 'add', configuredRemoteUrl, relativeTarget);
+
+    const commonDirResult = await runGit(context.repoPath, [context.gitBinary, 'rev-parse', '--git-common-dir'], { timeoutMs: 5000 });
+    const commonDirValue = commonDirResult.stdout.trim();
+    const commonDir = path.isAbsolute(commonDirValue)
+      ? commonDirValue
+      : path.resolve(context.repoPath, commonDirValue);
+    const submoduleGitDir = path.join(commonDir, 'modules', ...relativeTarget.split('/'));
+    await validatePath(submoduleGitDir);
+
+    try {
+      await runGit(context.repoPath, command, { timeoutMs: 120000 });
+    } catch (error) {
+      await fs.rm(targetPath, { recursive: true, force: true }).catch(() => {});
+      await fs.rm(submoduleGitDir, { recursive: true, force: true }).catch(() => {});
+      throw error;
+    }
+
+    return {
+      ok: true,
+      parentRepoPath: context.repoPath,
+      repoPath: await fs.realpath(targetPath),
+      submodulePath: relativeTarget,
+      name: submoduleName,
+      remoteUrl: configuredRemoteUrl,
+    };
+  }
   
   async function gitRemoteSet({ path: repoPathArg, remote = 'origin', url }) {
     const repoPath = await resolveRepoWorkTreePath(repoPathArg);
@@ -221,6 +311,7 @@ export function createRepositoryOps(ctx) {
     gitCreateGithubRepository,
     gitCloneRepository,
     gitInitRepository,
+    gitSubmoduleAdd,
     gitRemoteSet,
   };
 }

@@ -219,6 +219,39 @@
       }
     },
     {
+      "name": "git_submodule_add",
+      "title": "Git Add Submodule",
+      "description": "Add an existing remote repository as a Git submodule inside the selected parent repository.",
+      "command": "tools/git_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "path": {
+          "type": "string",
+          "optional": false
+        },
+        "name": {
+          "type": "string",
+          "optional": false
+        },
+        "remoteUrl": {
+          "type": "string",
+          "optional": false
+        }
+      },
+      "delegations": [
+        {
+          "key": "dpuGitSecrets",
+          "targetAgentId": "agent:./dpuAgent",
+          "tools": ["dpu_secret_get"],
+          "scopes": ["secret:read"],
+          "ttlSeconds": 120
+        }
+      ],
+      "env": {
+        "TOOL_NAME": "git_submodule_add"
+      }
+    },
+    {
       "name": "git_github_repository_targets",
       "title": "GitHub Repository Targets",
       "description": "List GitHub user and organization targets available for repository creation.",
