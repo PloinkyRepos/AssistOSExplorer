@@ -77,10 +77,6 @@
             "env": [
                 "ASSISTOS_FS_ROOT",
                 {
-                    "name": "SOUL_GATEWAY_BASE_URL",
-                    "required": false
-                },
-                {
                     "name": "AXIFACE_REPO_PATH",
                     "required": false
                 }

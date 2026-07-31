@@ -4,8 +4,7 @@
     "profiles": {
         "default": {
             "env": [
-                "ACHILLES_DEBUG",
-                "SOUL_GATEWAY_BASE_URL"
+                "ACHILLES_DEBUG"
             ]
         }
     }

@@ -38,7 +38,7 @@ Agent-local contract:
 
 - Manifest: `gitAgent/manifest.json`
 - Role: Controlled Git operation boundary between Explorer intent and Git process execution.
-- Authentication: Remote and mutating operations must use verified invocation context and local Git policy rather than raw UI input. Manifest guest: none. Explorer deployments use a workspace-scoped generated Soul Gateway key. Achilles derives the active Ploinky router service URL when `PLOINKY_ENV_SOURCE_SOUL_GATEWAY_API_KEY=generated`; remote production gateways are configured as providers inside the local Soul Gateway, not as replacement `SOUL_GATEWAY_API_KEY` credentials for gitAgent.
+- Authentication: Remote and mutating operations must use verified invocation context and local Git policy rather than raw UI input. Manifest guest: none. Generated-local credentials and Router transport values are Ploinky-owned, supplied through the mounted verified Router descriptor, and absent from protected legacy manifest overrides. Remote production gateways are configured as providers inside the local Soul Gateway, not as replacement credentials for gitAgent.
 - HTTP route surface: No public HTTP route is declared; Git operations are exposed through MCP contracts only.
 - Persistent state: Repository state is the workspace Git tree; token material and auth details must not be logged or surfaced to the UI. Manifest volumes: none.
 - Documentation: `docs/index.html`

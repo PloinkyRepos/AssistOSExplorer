@@ -45,7 +45,7 @@
   "container": "docker.io/assistos/ploinky-node:24-bookworm-tools",
   "profiles": {
     "default": {
-      "env": ["ACHILLES_DEBUG", "SOUL_GATEWAY_API_KEY", "SOUL_GATEWAY_BASE_URL"]
+      "env": ["ACHILLES_DEBUG"]
     }
   }
 }</code></pre>
@@ -62,10 +62,6 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <tr>
-                                <td><code>SOUL_GATEWAY_API_KEY</code></td>
-                                <td>Used for LLM calls through <a href="https://assistos-ai.github.io/soplang/" target="_blank" rel="noopener noreferrer">SOPLang</a>/LLM plugin paths.</td>
-                            </tr>
                             <tr>
                                 <td><code>ACHILLES_DEBUG</code></td>
                                 <td>Enables detailed debug logging via <code>plugins/debugLogger.mjs</code>.</td>

@@ -14,29 +14,12 @@
                 "PLOINKY_WORKSPACE_ROOT": {
                     "required": false
                 },
-                "SOUL_GATEWAY_BASE_URL": {
-                    "required": false
-                },
-                "PLOINKY_ROUTER_URL": {
-                    "required": false
-                },
-                "PLOINKY_ROUTER_HOST": {
-                    "required": false
-                },
-                "PLOINKY_ROUTER_PORT": {
-                    "required": false
-                },
                 "PLOINKY_AGENT_PRINCIPAL": {
                     "required": false
                 },
                 "PLOINKY_DPU_ROUTE": {
                     "required": false
                 }
-            }
-        },
-        "embedded": {
-            "env": {
-                "SOUL_GATEWAY_BASE_URL": ""
             }
         }
     }

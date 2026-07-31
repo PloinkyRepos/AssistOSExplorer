@@ -20,19 +20,7 @@
         "ACHILLES_DEBUG": {
           "required": false
         },
-        "SOUL_GATEWAY_BASE_URL": {
-          "required": false
-        },
         "OPENCODE_API_KEY": {
-          "required": false
-        },
-        "PLOINKY_ROUTER_URL": {
-          "required": false
-        },
-        "PLOINKY_ROUTER_HOST": {
-          "required": false
-        },
-        "PLOINKY_ROUTER_PORT": {
           "required": false
         },
         "PLOINKY_WORKSPACE_ROOT": {
@@ -42,7 +30,6 @@
     },
     "embedded": {
       "env": {
-        "SOUL_GATEWAY_BASE_URL": "",
         "PLOINKY_WORKSPACE_ROOT": ""
       }
     }

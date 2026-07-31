@@ -9,10 +9,9 @@ import crypto from 'node:crypto';
  *   - signs each delegated DPU call with this agent's Ploinky agent assertion
  *   - calls the canonical DPU secret operations
  *
- * Env contract (set by AgentServer/ploinky start scripts):
+ * Runtime contract (set by AgentServer/ploinky start scripts):
  *
- *   PLOINKY_ROUTER_URL            - e.g. http://127.0.0.1:8080
- *   PLOINKY_ROUTER_AUTHORITY      - canonical Host authority accepted by the router
+ *   AgentMcpClient descriptor     - verifies and owns Router transport configuration
  *   PLOINKY_AGENT_PRINCIPAL       - e.g. agent:<repo>/gitAgent
  *   PLOINKY_DPU_ROUTE             - optional explicit DPU MCP route name
  */

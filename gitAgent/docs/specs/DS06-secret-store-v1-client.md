@@ -27,9 +27,9 @@ direct tool call. That client:
   `Authorization: Bearer <assertion>` to the router
 - POSTs a single JSON-RPC `tools/call` request to
   `{router}/{dpuRoute}/mcp`
-- connects through `PLOINKY_ROUTER_URL` while sending the canonical
-  `PLOINKY_ROUTER_AUTHORITY` as the HTTP `Host`, so container transport names
-  such as `host.containers.internal` do not fail the router authority check
+- delegates Router transport and canonical authority verification to the mounted
+  `AgentMcpClient` descriptor client, so the Git agent owns no direct Router
+  socket or protected transport override
 - calls authenticated DPU `dpu_secret_*` tools when the user delegation is
   present
 - falls back to DPU's internal agent aliases only when explicitly allowed for

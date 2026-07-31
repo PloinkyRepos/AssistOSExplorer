@@ -39,10 +39,9 @@ Filesystem validation uses these roots when present:
 - `WORKSPACE_ROOT`
 - `PLOINKY_WORKSPACE_ROOT`
 
-Optional integration variables:
-
-- `SOUL_GATEWAY_API_KEY`
-- `SOUL_GATEWAY_BASE_URL`
+Generated-local Soul Gateway credentials and Router transport values are
+Ploinky-owned. They are supplied through the mounted, verified Router descriptor
+and are deliberately absent from this agent's manifest environment.
 
 ## Notes
 
