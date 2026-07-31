@@ -84,6 +84,7 @@ test.describe('Copilot launch from Explorer', () => {
     expect(releaseEvidence?.liveBox?.box?.baseURL).toBe(smokeConfig.baseURL);
     const networkEvidence = [];
     const requestFailures = [];
+    const successfulRequests = new WeakSet();
     const browserErrors = [];
     const observedPages = new Set();
     const captureConsoleError = (message) => {
@@ -109,6 +110,9 @@ test.describe('Copilot launch from Explorer', () => {
       const pathname = new URL(response.url()).pathname;
       if (pathname !== '/webchat/input'
         && !pathname.startsWith('/base-agent-additional-server/')) return;
+      if (response.status() >= 200 && response.status() < 300) {
+        successfulRequests.add(response.request());
+      }
       networkEvidence.push({
         kind: 'response',
         status: response.status(),
@@ -124,6 +128,7 @@ test.describe('Copilot launch from Explorer', () => {
       if (pathname !== '/webchat/input'
         && !pathname.startsWith('/base-agent-additional-server/')) return;
       requestFailures.push({
+        request,
         url: request.url(),
         error: request.failure()?.errorText || 'request failed',
       });
@@ -257,7 +262,15 @@ test.describe('Copilot launch from Explorer', () => {
       expect(
         resolvedNetworkEvidence.map((entry) => `${entry.status || ''} ${entry.body || ''}`).join('\n'),
       ).not.toMatch(COMPLETION_FAILURE);
-      expect(requestFailures, JSON.stringify(requestFailures)).toHaveLength(0);
+      const terminalRequestFailures = requestFailures
+        .filter(({ request, error }) => !(
+          error === 'net::ERR_ABORTED' && successfulRequests.has(request)
+        ))
+        .map(({ url, error }) => ({ url, error }));
+      expect(
+        terminalRequestFailures,
+        JSON.stringify(terminalRequestFailures),
+      ).toHaveLength(0);
       expect(browserErrors, JSON.stringify(browserErrors)).toHaveLength(0);
       await expect(copilotPage.locator('#chatList')).not.toContainText(STARTUP_FAILURE);
       await expect(copilotPage.locator('#chatList')).not.toContainText(COMPLETION_FAILURE);
