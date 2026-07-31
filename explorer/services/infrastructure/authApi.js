@@ -35,3 +35,25 @@ export async function fetchAuthenticatedUser() {
         return null;
     }
 }
+
+export async function probeAuthenticatedSession(fetchImplementation = globalThis.fetch) {
+    if (typeof fetchImplementation !== 'function') {
+        return null;
+    }
+    try {
+        const response = await fetchImplementation('/auth/token', {
+            cache: 'no-store',
+            credentials: 'include'
+        });
+        if (response.status === 401) {
+            return false;
+        }
+        if (!response.ok) {
+            return null;
+        }
+        const payload = await response.json().catch(() => null);
+        return payload?.ok === true ? true : null;
+    } catch {
+        return null;
+    }
+}

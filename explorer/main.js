@@ -5,6 +5,7 @@ import { createRuntimePluginLoader } from './services/runtime/runtimePluginLoade
 import { filterRuntimePluginsByPolicy, forEachRuntimePluginEntry } from './utils/pluginUtils.core.js';
 import { initializeTheme } from './shared/ui/theme.js';
 import { fetchAuthenticatedUser } from './services/infrastructure/authApi.js';
+import { installAuthNavigationGuard } from './services/infrastructure/authNavigationGuard.js';
 
 const EXPLORER_AGENT_ID = 'explorer';
 const RUNTIME_PLUGIN_TOOL = 'collect_ide_plugins';
@@ -12,6 +13,7 @@ const ROOM_ID_PATTERN = /^room_[0-9a-fA-F-]{36}$/;
 
 if (typeof window !== 'undefined') {
     window.ASSISTOS_AGENT_ID = window.ASSISTOS_AGENT_ID || EXPLORER_AGENT_ID;
+    installAuthNavigationGuard();
 }
 
 const hasRuntimePlugins = (runtimePlugins) => {
