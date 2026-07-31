@@ -72,3 +72,12 @@ test('legacy multimedia and OnlyOffice fallbacks are absent from executable sour
   assert.doesNotMatch(multimedia, /host\.docker\.internal|HOST_LOOPBACK|PLOINKY_ROUTER_URL|PLOINKY_ROUTER_PORT/);
   assert.doesNotMatch(onlyOffice, /PLOINKY_ROUTER_URL/);
 });
+
+test('gitAgent keeps the requested embedded profile without protected overrides', () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(REPOSITORY_ROOT, 'gitAgent/manifest.json'), 'utf8'));
+  assert.deepEqual(manifest.profiles?.embedded, {});
+  assert.doesNotMatch(
+    JSON.stringify(manifest),
+    /SOUL_GATEWAY_(?:API_KEY|BASE_URL)|PLOINKY_ROUTER_(?:URL|HOST|PORT)/,
+  );
+});

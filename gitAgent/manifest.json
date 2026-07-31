@@ -21,6 +21,7 @@
                     "required": false
                 }
             }
-        }
+        },
+        "embedded": {}
     }
 }
