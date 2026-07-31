@@ -6,12 +6,99 @@ import { runGit } from './run-git.mjs';
 import {
   normalizeGitRepoRelativePath,
   normalizeRemoteName,
+  normalizeRemoteIdentity,
   normalizeRemoteUrl,
   normalizeRepositoryName,
 } from './validators.mjs';
 
 export function createRepositoryOps(ctx) {
-  const { validatePath, getGitBinary, resolveGitTargetContext, resolveRepoWorkTreePath } = ctx;
+  const { validatePath, workspaceRoots = [], getGitBinary, resolveGitTargetContext, resolveRepoWorkTreePath } = ctx;
+
+  async function hasGitMarker(dirPath) {
+    try {
+      const stats = await fs.stat(path.join(dirPath, '.git'));
+      return stats.isDirectory() || stats.isFile();
+    } catch {
+      return false;
+    }
+  }
+
+  async function findWorkspaceRepositories(searchRoots, { maxDepth = 6, maxDirectories = 5000 } = {}) {
+    const queue = searchRoots.map((root) => ({ dir: path.resolve(root), depth: 0 }));
+    const repositories = [];
+    const seen = new Set();
+    let visitedDirectories = 0;
+
+    while (queue.length && visitedDirectories < maxDirectories) {
+      const { dir, depth } = queue.shift();
+      if (seen.has(dir) || depth > maxDepth) continue;
+      seen.add(dir);
+      visitedDirectories += 1;
+
+      if (await hasGitMarker(dir)) {
+        repositories.push(dir);
+        continue;
+      }
+
+      let entries;
+      try {
+        entries = await fs.readdir(dir, { withFileTypes: true });
+      } catch {
+        continue;
+      }
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        if (entry.name === '.git' || entry.name === 'node_modules') continue;
+        if (entry.name === 'deps' || entry.name === 'container-runtime') continue;
+        if (entry.name.startsWith('.') && entry.name !== '.ploinky') continue;
+        queue.push({ dir: path.join(dir, entry.name), depth: depth + 1 });
+      }
+    }
+    return repositories;
+  }
+
+  async function readRepositoryRemoteIdentities(repoPath, gitBinary) {
+    let remoteNames;
+    try {
+      const result = await runGit(repoPath, [gitBinary, 'remote'], { timeoutMs: 5000 });
+      remoteNames = result.stdout.split(/\r?\n/).map((value) => value.trim()).filter(Boolean);
+    } catch {
+      return [];
+    }
+
+    const identities = [];
+    for (const remoteName of remoteNames) {
+      try {
+        const result = await runGit(repoPath, [gitBinary, 'remote', 'get-url', '--all', remoteName], { timeoutMs: 5000 });
+        for (const remoteUrl of result.stdout.split(/\r?\n/).map((value) => value.trim()).filter(Boolean)) {
+          identities.push(normalizeRemoteIdentity(remoteUrl));
+        }
+      } catch {}
+    }
+    return identities;
+  }
+
+  async function rejectExistingWorkspaceRemote(remoteUrl, parentPath) {
+    const requestedIdentity = normalizeRemoteIdentity(remoteUrl);
+    const configuredRoots = workspaceRoots.length ? workspaceRoots : [parentPath];
+    const searchRoots = [];
+    for (const root of configuredRoots) {
+      try {
+        searchRoots.push(await fs.realpath(root));
+      } catch {}
+    }
+    const repositories = await findWorkspaceRepositories(searchRoots);
+    const gitBinary = await getGitBinary(parentPath);
+
+    for (const repoPath of repositories) {
+      const identities = await readRepositoryRemoteIdentities(repoPath, gitBinary);
+      if (!identities.includes(requestedIdentity)) continue;
+      const containingRoot = searchRoots.find((root) => repoPath === root || repoPath.startsWith(`${root}${path.sep}`));
+      const relativePath = containingRoot ? path.relative(containingRoot, repoPath).split(path.sep).join('/') : '';
+      const displayPath = relativePath && relativePath !== '.' ? relativePath : repoPath;
+      throw new Error(`Remote repository already exists in workspace at: ${displayPath}`);
+    }
+  }
 
   async function rejectNestedRepositoryParent(parentPath) {
     const gitBinary = await getGitBinary(parentPath);
@@ -108,6 +195,7 @@ export function createRepositoryOps(ctx) {
         throw error;
       }
     }
+    await rejectExistingWorkspaceRemote(configuredRemoteUrl, parentPath);
   
     await fs.mkdir(targetPath, { recursive: false });
     const gitBinary = await getGitBinary(parentPath);
@@ -197,6 +285,7 @@ export function createRepositoryOps(ctx) {
       .filter(Boolean)
       .pop();
     const { parentPath, repoName, targetPath } = await ensureRepositoryTargetPath(parentPathArg, name || defaultName);
+    await rejectExistingWorkspaceRemote(configuredRemoteUrl, parentPath);
     const configuredRemoteName = normalizeRemoteName(remote || 'origin');
     const gitBinary = await getGitBinary(parentPath);
     const cloneArgs = [gitBinary];

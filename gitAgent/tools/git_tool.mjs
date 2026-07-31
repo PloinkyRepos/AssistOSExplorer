@@ -349,7 +349,7 @@ async function main() {
 
     const roots = getWorkspaceRoots();
     const validatePath = (p) => validatePathArg(p, roots);
-    const gitService = createGitService({ validatePath });
+    const gitService = createGitService({ validatePath, workspaceRoots: roots });
     const workspaceRoot = roots[0] || process.cwd();
 
     const payload = normalizeArgs(toolName, args);

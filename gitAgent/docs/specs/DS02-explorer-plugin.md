@@ -73,6 +73,7 @@ For the host-owned Explorer `New` menu, the owning Git behavior is:
 - submodule addition follows standard Git staging behavior: `.gitmodules` and the gitlink are staged, but no commit or push is automatic
 - GitHub repository creation is unavailable in submodule mode because a new empty repository has no checkoutable commit
 - GitHub repository remotes are stored in canonical clone form, such as `https://github.com/owner/name.git`
+- manual initialization and clone flows reject a canonical remote that is already configured by another repository in the workspace, report the existing path, and create no target directory; equivalent GitHub HTTPS and SSH URLs count as the same remote
 - if a later push needs to create a missing GitHub remote repository, Git authentication must be requested before the GitHub create call is attempted
 - GitHub remote creation must target the owner encoded in the remote URL: use the authenticated user's repository endpoint only when that owner matches the authenticated login, otherwise use the organization repository endpoint for that owner
 

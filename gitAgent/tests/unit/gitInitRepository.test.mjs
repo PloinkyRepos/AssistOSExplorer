@@ -116,6 +116,30 @@ test('gitInitRepository stores canonical GitHub repository URLs', async () => {
     });
 });
 
+test('gitInitRepository rejects a remote that already exists in the workspace', async () => {
+    await withTempWorkspace(async (workspaceDir) => {
+        const existingRepo = path.join(workspaceDir, 'existing-repo');
+        await fs.mkdir(existingRepo);
+        runGit(existingRepo, ['init']);
+        runGit(existingRepo, ['remote', 'add', 'origin', 'https://github.com/Example/existing-repo.git']);
+
+        const gitService = createGitService({
+            validatePath: async (value) => value,
+            workspaceRoots: [workspaceDir]
+        });
+
+        await assert.rejects(
+            () => gitService.gitInitRepository({
+                path: workspaceDir,
+                name: 'duplicate-repo',
+                remoteUrl: 'git@github.com:example/existing-repo.git'
+            }),
+            /Remote repository already exists in workspace at: existing-repo/
+        );
+        await assert.rejects(() => fs.lstat(path.join(workspaceDir, 'duplicate-repo')), { code: 'ENOENT' });
+    });
+});
+
 test('gitDiff handles HEAD in a new repository without commits', async () => {
     await withTempWorkspace(async (workspaceDir) => {
         const gitService = createGitService({

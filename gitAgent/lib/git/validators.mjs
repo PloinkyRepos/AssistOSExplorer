@@ -80,6 +80,24 @@ export function normalizeRemoteUrl(candidate, { repositoryName = '' } = {}) {
   return value;
 }
 
+export function normalizeRemoteIdentity(candidate) {
+  const value = normalizeRemoteUrl(candidate).replace(/\/+$/g, '');
+  const githubMatch = value.match(/^(?:https?:\/\/github\.com\/|git@github\.com:)([^/\s]+)\/([^/\s]+?)(?:\.git)?$/i);
+  if (githubMatch) {
+    return `github.com/${githubMatch[1]}/${githubMatch[2]}`.toLowerCase();
+  }
+
+  try {
+    const parsed = new URL(value);
+    parsed.username = '';
+    parsed.password = '';
+    const pathname = parsed.pathname.replace(/\/+$/g, '').replace(/\.git$/i, '');
+    return `${parsed.protocol}//${parsed.host.toLowerCase()}${pathname}`;
+  } catch {
+    return value.replace(/\.git$/i, '');
+  }
+}
+
 export function normalizeGitConfigValue(value) {
   if (value === undefined || value === null) return '';
   const v = String(value).trim();

@@ -151,7 +151,8 @@ export async function executeMenuAction({ action, context, host }) {
                 remoteUrl: modalResult.remoteUrl
             });
             if (!result?.ok) {
-                throw new Error(result?.error || 'Failed to clone repository.');
+                host?.showStatus?.(result?.error || 'Failed to clone repository.', true);
+                return;
             }
             const fullName = modalResult.repository?.fullName || repoName;
             host?.showStatus?.(`Cloned repository: ${fullName}.`);
@@ -168,7 +169,8 @@ export async function executeMenuAction({ action, context, host }) {
             remoteUrl: modalResult.remoteUrl
         });
         if (!result?.ok) {
-            throw new Error(result?.error || 'Failed to create repository.');
+            host?.showStatus?.(result?.error || 'Failed to create repository.', true);
+            return;
         }
         host?.showStatus?.(`Created repository: ${result.name || repoName} with ${result.remote || modalResult.remote || 'origin'}.`);
         await host?.refreshDirectory?.();

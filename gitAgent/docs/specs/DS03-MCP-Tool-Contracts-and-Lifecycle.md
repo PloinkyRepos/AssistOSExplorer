@@ -28,6 +28,8 @@ Lifecycle Rule L4.2: repository-executing tools are not allowed to discover a su
 
 Lifecycle Rule L4.3: repository init, clone, and GitHub-create contracts shall reject a parent path inside an existing Git worktree before creating local or remote state. Nested repositories must use `git_submodule_add`.
 
+Lifecycle Rule L4.4: repository init and clone contracts shall reject a canonical remote already configured by another repository under the allowed workspace roots. The read-only workspace scan is permitted only as pre-mutation uniqueness validation, shall treat equivalent GitHub HTTPS and SSH URLs as one identity, and shall finish before creating the target directory.
+
 Lifecycle Rule L5: successful operation results shall be serialized to stdout as contract output.
 
 Lifecycle Rule L6: failures shall return explicit JSON error payloads with `ok: false`.
