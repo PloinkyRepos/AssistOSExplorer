@@ -78,9 +78,9 @@ scripta-variants-view {
     margin-top: 8px;
 }
 
-.scripta-tabs-section {
+scripta-variants-view .scripta-tabs-section {
     min-width: 0;
-    overflow: hidden;
+    overflow: visible;
     border: 1px solid var(--border, #ccc);
     border-radius: 10px;
     background: var(--surface, transparent);
@@ -93,6 +93,7 @@ scripta-variants-view {
     padding: 8px;
     border-bottom: 1px solid var(--border, #ccc);
     background: var(--bg-active);
+    border-radius: 9px 9px 0 0;
 }
 
 .scripta-tabs-viewport {

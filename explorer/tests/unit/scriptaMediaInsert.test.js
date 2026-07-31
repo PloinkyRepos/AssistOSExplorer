@@ -252,7 +252,7 @@ test('variant image layout control emits persistent resize and ratio data', () =
     assert.equal(imageNode.style.objectFit, 'contain');
 });
 
-test('image and its contextual toolbar share one isolated image container', () => {
+test('image container leaves contextual toolbar creation to the component template', () => {
     const view = new ScriptaVariantsView({dispatchEvent() {}, contains: () => true}, () => {});
     view.state.editable = true;
     view.state.selectedImageId = 'image-1';
@@ -265,16 +265,8 @@ test('image and its contextual toolbar share one isolated image container', () =
     };
     const html = view.renderPanel(variant);
     assert.doesNotMatch(html, /<figcaption|scripta-image-caption-control|Show caption/);
-    const figureEnd = html.indexOf('</figure>');
-    const toolbar = html.indexOf('class="scripta-variant-image-layout"');
-    assert.ok(figureEnd > 0 && toolbar > figureEnd);
-    assert.match(html, /class="scripta-variant-image-container is-selected"[\s\S]*<figure[\s\S]*<\/figure>[\s\S]*class="scripta-variant-image-layout"[\s\S]*<\/div>/);
-    const contextualMenu = view.renderImageLayoutMenu(variant, variant.images[0]);
-    assert.match(contextualMenu, /role="dialog" aria-label="Image options"/);
-    assert.match(contextualMenu, /data-scripta-action="close-image-layout"/);
-    assert.match(contextualMenu, /type="number" min="20" max="100" step="5"/);
-    assert.doesNotMatch(contextualMenu, /type="range"/);
-    assert.doesNotMatch(contextualMenu, /scripta-image-caption-control|showCaption|Show caption/);
+    assert.match(html, /class="scripta-variant-image-container is-selected"[\s\S]*<figure[\s\S]*<\/figure>[\s\S]*<\/div>/);
+    assert.doesNotMatch(html, /scripta-variant-image-layout|Image options/);
     assert.equal(view.positionImageLayoutMenu, undefined);
 });
 
@@ -295,7 +287,7 @@ test('image inspector reports its open state so a host rerender can restore it',
 test('opening and closing image options mutates only the selected image container', () => {
     const view = new ScriptaVariantsView({dispatchEvent() {}, contains: () => true}, () => {});
     let fullRenders = 0;
-    let insertedMenu = '';
+    let insertedMenu = null;
     let removedMenus = 0;
     const figureClasses = new Set(['scripta-variant-image']);
     const containerClasses = new Set(['scripta-variant-image-container']);
@@ -306,14 +298,15 @@ test('opening and closing image options mutates only the selected image containe
         querySelector: (selector) => {
             if (selector === '.scripta-variant-image') return figure;
             if (selector === '.scripta-variant-image-layout' && insertedMenu) {
-                return {remove: () => { insertedMenu = ''; removedMenus += 1; }};
+                return {remove: () => { insertedMenu = null; removedMenus += 1; }};
             }
             return null;
         },
-        insertAdjacentHTML: (_position, html) => { insertedMenu = html; },
+        append: (menu) => { insertedMenu = menu; },
     };
     view.root = {querySelectorAll: () => [container]};
     view.render = () => { fullRenders += 1; };
+    view.state.editable = true;
     view.state.selectedVariantId = 'variant-1';
     view.state.variants = [{
         id: 'variant-1', ordinal: 1, canEdit: true, images: [{
@@ -321,19 +314,52 @@ test('opening and closing image options mutates only the selected image containe
             layout: {widthPercent: 80, aspectRatio: 'auto', fit: 'contain', alignment: 'center'},
         }],
     }];
+    view.createImageLayoutMenu = () => ({className: 'scripta-variant-image-layout'});
 
     view.setSelectedImage('image-1', 'variant-1');
     assert.equal(fullRenders, 0);
     assert.equal(containerClasses.has('is-selected'), true);
     assert.equal(figureClasses.has('is-selected'), true);
-    assert.match(insertedMenu, /class="scripta-variant-image-layout"/);
+    assert.equal(insertedMenu.className, 'scripta-variant-image-layout');
 
     view.setSelectedImage('', '');
     assert.equal(fullRenders, 0);
     assert.equal(containerClasses.has('is-selected'), false);
     assert.equal(figureClasses.has('is-selected'), false);
-    assert.equal(insertedMenu, '');
+    assert.equal(insertedMenu, null);
     assert.equal(removedMenus, 1);
+});
+
+test('image option buttons use presenter actions and emit the canonical mutations', () => {
+    const emitted = [];
+    const view = new ScriptaVariantsView({dispatchEvent() {}, contains: () => true}, () => {});
+    view.emit = (type, detail) => emitted.push({type, detail});
+    view.root = {querySelector: () => null, querySelectorAll: () => []};
+    view.state.selectedVariantId = 'variant-1';
+    view.state.selectedImageId = 'image-1';
+    view.state.variants = [{
+        id: 'variant-1', ordinal: 2, text: '', canEdit: true, images: [{imageId: 'image-1'}],
+    }];
+    const target = {dataset: {variantId: 'variant-1', imageId: 'image-1', imageOrdinal: '3'}};
+
+    view.replaceImage(target);
+    view.deleteImage(target);
+    view.closeImageLayout();
+
+    assert.deepEqual(emitted, [
+        {
+            type: 'scripta-p-variant-image-replace',
+            detail: {variantId: 'variant-1', variantOrdinal: 2, imageId: 'image-1', imageOrdinal: 3},
+        },
+        {
+            type: 'scripta-p-variant-image-delete',
+            detail: {variantId: 'variant-1', variantOrdinal: 2, imageId: 'image-1', imageOrdinal: 3},
+        },
+        {
+            type: 'scripta-image-inspector-change',
+            detail: {open: false, variantId: '', imageId: ''},
+        },
+    ]);
 });
 
 test('SCRIPTA variant owns inserted, replaced, and deleted images', () => {
