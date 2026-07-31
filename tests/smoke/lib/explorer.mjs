@@ -34,11 +34,15 @@ export async function openExplorer(page, options = {}) {
     hash = '',
   } = options;
   await navigateToExplorer(page, { account, hash });
-  await expect(page.locator('#page_content')).toBeVisible();
+  await expect(page.locator('#page_content')).toBeVisible({
+    timeout: smokeConfig.timeouts.navigation,
+  });
   await page.waitForFunction(() => {
     return Boolean(window.webSkel && document.querySelector('#page_content')?.children.length);
   }, null, { timeout: smokeConfig.timeouts.navigation });
-  await expect(page.locator('#before_webskel_loader')).toHaveCount(0);
+  await expect(page.locator('#before_webskel_loader')).toHaveCount(0, {
+    timeout: smokeConfig.timeouts.navigation,
+  });
 }
 
 export async function assertExplorerDirectory(page, expectedPath) {
