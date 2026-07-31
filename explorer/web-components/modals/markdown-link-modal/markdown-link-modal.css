@@ -1,0 +1,113 @@
+markdown-link-modal {
+    display: block;
+    width: min(540px, calc(100vw - 40px));
+    color: var(--text);
+}
+
+.markdown-link-header {
+    align-items: flex-start;
+}
+
+.markdown-link-subtitle {
+    margin-top: 4px;
+    color: var(--text-soft);
+    font-size: 0.9rem;
+    font-weight: 400;
+}
+
+.markdown-link-close {
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+}
+
+.markdown-link-form,
+.markdown-link-fields {
+    display: grid;
+    gap: 16px;
+}
+
+.markdown-link-field {
+    display: grid;
+    gap: 7px;
+    color: var(--text);
+    font-size: 0.92rem;
+    font-weight: 600;
+}
+
+.markdown-link-field small {
+    margin-left: 5px;
+    color: var(--text-soft);
+    font-size: 0.78rem;
+    font-weight: 400;
+}
+
+.markdown-link-field strong {
+    color: var(--red);
+}
+
+.markdown-link-field .form-input {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+.markdown-link-field .form-input[aria-invalid="true"] {
+    border-color: var(--red);
+    outline-color: var(--red);
+}
+
+.markdown-link-error {
+    margin-top: -9px;
+    color: var(--red);
+    font-size: 0.84rem;
+}
+
+.markdown-link-preview-section {
+    display: grid;
+    gap: 7px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface-2, var(--surface));
+}
+
+.markdown-link-preview-label {
+    color: var(--text-soft);
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.markdown-link-preview {
+    overflow-wrap: anywhere;
+    color: var(--text);
+    font-size: 0.88rem;
+    white-space: pre-wrap;
+}
+
+.markdown-link-preview.is-placeholder {
+    color: var(--text-soft);
+}
+
+.markdown-link-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+@media (max-width: 600px) {
+    markdown-link-modal {
+        width: calc(100vw - 24px);
+    }
+
+    .markdown-link-actions {
+        flex-direction: column-reverse;
+    }
+
+    .markdown-link-actions button {
+        width: 100%;
+    }
+}
+

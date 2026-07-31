@@ -1,0 +1,34 @@
+<div class="modal-header markdown-link-header">
+    <div>
+        <div class="modal-title">Insert link</div>
+        <div class="markdown-link-subtitle">Add a destination to the selected Markdown text.</div>
+    </div>
+    <button type="button" class="close markdown-link-close" data-local-action="closeModal" aria-label="Close link dialog">
+        <img class="close-icon" src="./assets/icons/x-mark.svg" alt="">
+    </button>
+</div>
+<form class="modal-body markdown-link-form" novalidate>
+    <div class="markdown-link-fields">
+        <label class="markdown-link-field" for="markdown-link-label">
+            <span>Text</span>
+            <input id="markdown-link-label" class="form-input" type="text" autocomplete="off" placeholder="Link text">
+        </label>
+        <label class="markdown-link-field" for="markdown-link-url">
+            <span>URL or relative path <strong aria-hidden="true">*</strong></span>
+            <input id="markdown-link-url" class="form-input" type="text" inputmode="url" autocomplete="url" placeholder="https://example.com" aria-describedby="markdown-link-error" required>
+        </label>
+        <div id="markdown-link-error" class="markdown-link-error" data-role="link-error" role="alert" hidden></div>
+        <label class="markdown-link-field" for="markdown-link-title">
+            <span>Title <small>Optional</small></span>
+            <input id="markdown-link-title" class="form-input" type="text" autocomplete="off" placeholder="Shown when the pointer rests on the link">
+        </label>
+    </div>
+    <div class="markdown-link-preview-section">
+        <div class="markdown-link-preview-label">Markdown preview</div>
+        <code class="markdown-link-preview is-placeholder" data-role="link-preview">[Link text](https://example.com)</code>
+    </div>
+    <div class="bottom-modal-section modal-actions markdown-link-actions">
+        <button type="button" class="gray-button" data-local-action="closeModal">Cancel</button>
+        <button type="submit" class="general-button">Insert link</button>
+    </div>
+</form>
