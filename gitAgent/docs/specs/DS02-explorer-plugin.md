@@ -65,10 +65,15 @@ For ignore actions in Explorer context menus, the owning Git behavior is:
 
 For the host-owned Explorer `New` menu, the owning Git behavior is:
 
-- `New repository` asks for a repository name
-- the current Explorer directory is used as the parent path
-- execution creates a new child directory and initializes a Git repository inside it
+- `New repository` uses the current Explorer directory as the parent path
+- outside a Git worktree, it offers GitHub creation, GitHub cloning, and manual remote initialization in a new child directory
+- inside a Git worktree, the same entry opens an explicit `Add Git submodule` mode for an existing GitHub repository or a manual remote URL
+- submodule mode accepts an editable local directory name, runs against the nearest enclosing repository, and refreshes Explorer after success
+- creating or cloning an independent nested repository is forbidden; callers must use `git_submodule_add`
+- submodule addition follows standard Git staging behavior: `.gitmodules` and the gitlink are staged, but no commit or push is automatic
+- GitHub repository creation is unavailable in submodule mode because a new empty repository has no checkoutable commit
 - GitHub repository remotes are stored in canonical clone form, such as `https://github.com/owner/name.git`
+- manual initialization and clone flows reject a canonical remote that is already configured by another repository in the workspace, report the existing path, and create no target directory; equivalent GitHub HTTPS and SSH URLs count as the same remote
 - if a later push needs to create a missing GitHub remote repository, Git authentication must be requested before the GitHub create call is attempted
 - GitHub remote creation must target the owner encoded in the remote URL: use the authenticated user's repository endpoint only when that owner matches the authenticated login, otherwise use the organization repository endpoint for that owner
 

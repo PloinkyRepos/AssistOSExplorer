@@ -127,6 +127,7 @@
                 <ol>
                     <li>Explorer scans <code>IDE-plugins/*/config.json</code> folders and validates the manifests.</li>
                     <li>The browser loads the aggregated catalog through <code>collect_ide_plugins</code>.</li>
+                    <li>If runtime discovery returns an MCP execution error, Explorer reports that error and does not parse the response as plugin JSON.</li>
                     <li>Explorer applies workspace plugin policy using the logical plugin key.</li>
                     <li>For <code>mount</code> contributions, Explorer mounts the declared component into the host slot.</li>
                     <li>For <code>menu</code> contributions, Explorer resolves menu items asynchronously, shows a host-owned loading state while resolution is in progress, and executes the selected action with the same target context that was used to resolve the item.</li>

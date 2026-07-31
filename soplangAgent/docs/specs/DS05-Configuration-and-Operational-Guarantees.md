@@ -22,6 +22,8 @@ Requirement O5: local skills in the `skills` folder shall remain discoverable an
 
 Requirement O6: repository test validation shall run with `npm test` from `soplangAgent/`.
 
+Requirement O7: the logger supplied to Achilles subsystems shall implement `log`, `debug`, `info`, `warn`, and `error`, so failure reporting never replaces the original operational error with a logger interface error.
+
 ## Constraints
 
 Constraint R1: introducing hidden required environment dependencies is forbidden.
@@ -37,6 +39,8 @@ Invariant G1: configuration remains the source of truth for what operations are 
 Invariant G2: operational debugging capability can be enabled without changing tool contracts.
 
 Invariant G3: extension assets may grow, but intermediary agent role between user interface (UI) flows and SOPLang remains unchanged.
+
+Invariant G4: the logger contract preserves the original operational error when an upstream request fails.
 
 ## Validation Criteria
 

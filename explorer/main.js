@@ -9,6 +9,7 @@ import {
     mountInitialApplicationRoute,
     resolveInitialHashedRoute
 } from './services/runtime/initial-application-route.js';
+import { installAuthNavigationGuard } from './services/infrastructure/authNavigationGuard.js';
 
 const EXPLORER_AGENT_ID = 'explorer';
 const RUNTIME_PLUGIN_TOOL = 'collect_ide_plugins';
@@ -16,6 +17,7 @@ const ROOM_ID_PATTERN = /^room_[0-9a-fA-F-]{36}$/;
 
 if (typeof window !== 'undefined') {
     window.ASSISTOS_AGENT_ID = window.ASSISTOS_AGENT_ID || EXPLORER_AGENT_ID;
+    installAuthNavigationGuard();
 }
 
 const hasRuntimePlugins = (runtimePlugins) => {

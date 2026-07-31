@@ -137,6 +137,11 @@
       "presenterClassName": "ShowErrorModal"
     },
     {
+      "name": "markdown-link-modal",
+      "type": "modals",
+      "presenterClassName": "MarkdownLinkModal"
+    },
+    {
       "name": "export-document-modal",
       "type": "modals",
       "presenterClassName": "ExportDocumentModal"

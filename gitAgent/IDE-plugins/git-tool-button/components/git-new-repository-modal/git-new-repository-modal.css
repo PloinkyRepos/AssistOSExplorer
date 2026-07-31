@@ -40,6 +40,10 @@ dialog.modal.git-new-repository-modal-dialog {
     border-bottom-color: var(--accent);
 }
 
+.git-new-repository-tab[hidden] {
+    display: none;
+}
+
 .git-new-repository-panel {
     display: flex;
     flex-direction: column;

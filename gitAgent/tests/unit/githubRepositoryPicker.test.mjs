@@ -140,5 +140,15 @@ test('gitCloneRepository clones into a new local directory', async () => {
         assert.equal(path.basename(result.repoPath), 'cloned');
         assert.equal(await fs.readFile(path.join(result.repoPath, 'README.md'), 'utf8'), '# Source\n');
         assert.equal(runGit(result.repoPath, ['remote', 'get-url', 'origin']), bareRepo);
+
+        await assert.rejects(
+            () => gitService.gitCloneRepository({
+                path: workspaceDir,
+                name: 'cloned-again',
+                remoteUrl: bareRepo
+            }),
+            /Remote repository already exists in workspace at: cloned/
+        );
+        await assert.rejects(() => fs.lstat(path.join(workspaceDir, 'cloned-again')), { code: 'ENOENT' });
     });
 });

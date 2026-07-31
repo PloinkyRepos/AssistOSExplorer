@@ -13,6 +13,7 @@ export class ToolError extends Error {
 const isNonEmptyString = (value) => typeof value === 'string' && value.trim().length > 0;
 const EMPTY_TEXT_SENTINEL = '__ASSISTOS_EXPLORER_EMPTY_TEXT__';
 const MISSING_SESSION_TEXT = 'Missing or invalid MCP session';
+const MCP_ERROR_TEXT = /^MCP error(?:\s|$)/i;
 let sessionPromptActive = false;
 let cachedWorkspaceRootAbs = '';
 let workspaceRootPromise = null;
@@ -154,8 +155,11 @@ export function ensureSuccess(payload) {
         throw new ToolError('tool_error', text || 'Tool execution failed', { payload });
     }
     const text = extractToolText(payload);
-    if (isNonEmptyString(text) && text.trim().startsWith('Error:')) {
-        throw new ToolError('tool_error', text.trim().replace(/^Error:\s*/i, ''), { payload });
+    if (isNonEmptyString(text)) {
+        const normalizedText = text.trim();
+        if (normalizedText.startsWith('Error:') || MCP_ERROR_TEXT.test(normalizedText)) {
+            throw new ToolError('tool_error', normalizedText.replace(/^Error:\s*/i, ''), { payload });
+        }
     }
     const parsed = parseToolResult(payload);
     if (parsed && typeof parsed === 'object') {

@@ -1,0 +1,65 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+
+import { CustomSelect } from '../../web-components/components/custom-select/custom-select.js';
+
+test('custom select portals its options list to the containing dialog and restores it', () => {
+    const origin = {
+        append(node) {
+            node.parentElement = this;
+        }
+    };
+    const dialog = {
+        append(node) {
+            node.parentElement = this;
+        }
+    };
+    const optionsList = { parentElement: origin };
+    const select = Object.create(CustomSelect.prototype);
+    select.element = { closest: () => dialog };
+    select.optionsList = optionsList;
+
+    select.portalOptionsListToDialog();
+
+    assert.equal(optionsList.parentElement, dialog);
+    assert.equal(select.optionsListPortalRoot, dialog);
+
+    select.restoreOptionsList();
+
+    assert.equal(optionsList.parentElement, origin);
+    assert.equal(select.optionsListPortalRoot, null);
+});
+
+test('custom select positions a dialog dropdown inside the dialog bounds', () => {
+    const originalDocument = globalThis.document;
+    const originalWindow = globalThis.window;
+    globalThis.document = { documentElement: { clientWidth: 1200, clientHeight: 800 } };
+    globalThis.window = {
+        innerWidth: 1200,
+        innerHeight: 800,
+        matchMedia: () => ({ matches: false })
+    };
+
+    try {
+        const style = {};
+        const select = Object.create(CustomSelect.prototype);
+        select.element = { getAttribute: () => null };
+        select.trigger = {
+            getBoundingClientRect: () => ({ left: 750, top: 500, right: 890, bottom: 536, width: 140, height: 36 })
+        };
+        select.optionsList = { scrollHeight: 80, style };
+        select.optionsListPortalRoot = {
+            getBoundingClientRect: () => ({ left: 100, top: 50, right: 900, bottom: 650, width: 800, height: 600 })
+        };
+
+        select.positionOptionsList();
+
+        assert.equal(style.left, '712px');
+        assert.equal(style.top, '416px');
+        assert.equal(style.width, '180px');
+        assert.equal(style.maxHeight, '330px');
+    } finally {
+        globalThis.document = originalDocument;
+        globalThis.window = originalWindow;
+    }
+});

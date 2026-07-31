@@ -3,7 +3,8 @@ import debug from "../debugLogger.mjs";
 export const createAchillesSkills = async ({
     workspace,
     AgentClass,
-    startDir
+    startDir,
+    logger = debug
 } = {}) => {
     if (!workspace) {
         throw new Error("workspace is required");
@@ -23,13 +24,14 @@ export const createAchillesSkills = async ({
             return agent;
         }
 
-        debug.log("[AchillesSkills] Initializing MainAgent", {
+        logger.log("[AchillesSkills] Initializing MainAgent", {
             startDir,
             workspaceRoot: process.env.PLOINKY_WORKSPACE_ROOT || "(not set)"
         });
 
         agent = new AgentClass({
             startDir,
+            logger,
         });
 
         return agent;
@@ -60,14 +62,14 @@ export const createAchillesSkills = async ({
 
             workspace.registerCommand(commandName, async (inputValues) => {
                 const out = await executeSkill(inputValues);
-                debug.log(`[AchillesSkills] ${commandName} executed, result: ${out}`);
+                logger.log(`[AchillesSkills] ${commandName} executed, result: ${out}`);
                 return out;
             });
 
             registered.add(commandName);
         }
 
-        debug.log("[AchillesSkills] Command registration complete", {
+        logger.log("[AchillesSkills] Command registration complete", {
             skills: skills.length,
             commands: registered.size
         });

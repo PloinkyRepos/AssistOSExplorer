@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import { createSoplangBuilder, getVariablesWithValues } from "../plugins/lib/soplangBuilderCore.mjs";
 import { createAchillesSkills } from "../plugins/lib/achillesSkillsCore.mjs";
+import debug from "../plugins/debugLogger.mjs";
 import { deriveInvocation } from "../plugins/lib/toolInvocation.mjs";
 import { walkMarkdownFiles } from "../plugins/lib/workspaceRoots.mjs";
 
@@ -217,17 +218,17 @@ test("executeSkill forwards payload through the Achilles bridge", async () => {
 
     class FakeAgent {
         constructor() {
-            this.pendingPreparations = [Promise.resolve()];
-            this.skillCatalog = new Map([
-                ["demo", { name: "demo", shortName: "d", type: "code" }]
-            ]);
             this.calls = [];
             FakeAgent.instance = this;
         }
 
-        async executePrompt(promptText, payload) {
-            this.calls.push({ promptText, payload });
-            return { result: { ok: true, payload } };
+        getSkills() {
+            return [{ name: "demo", shortName: "d", type: "code" }];
+        }
+
+        async executeSkill(skillName, promptText) {
+            this.calls.push({ skillName, promptText });
+            return { result: { ok: true, skillName, promptText } };
         }
     }
 
@@ -243,16 +244,53 @@ test("executeSkill forwards payload through the Achilles bridge", async () => {
     assert.equal(registeredCommands.has("d"), false);
     assert.deepEqual(result, {
         ok: true,
-        payload: {
-            skillName: "demo"
-        }
+        skillName: "demo",
+        promptText: "alpha 1"
     });
     assert.deepEqual(FakeAgent.instance.calls[0], {
+        skillName: "demo",
         promptText: "alpha 1",
-        payload: {
-            skillName: "demo"
-        }
     });
+});
+
+test("Achilles bridge supplies the current startDir and logger contract", async () => {
+    const workspace = {
+        registerCommand() {}
+    };
+    const logger = {
+        log() {},
+        debug() {},
+        info() {},
+        warn() {},
+        error() {}
+    };
+
+    class FakeAgent {
+        constructor(options) {
+            FakeAgent.options = options;
+        }
+
+        getSkills() {
+            return [];
+        }
+    }
+
+    await createAchillesSkills({
+        workspace,
+        AgentClass: FakeAgent,
+        startDir: "/workspace",
+        logger
+    });
+
+    assert.equal(FakeAgent.options.startDir, "/workspace");
+    assert.equal(FakeAgent.options.logger, logger);
+    assert.equal(typeof FakeAgent.options.logger.error, "function");
+});
+
+test("SOPLang debug logger implements the Achilles logger contract", () => {
+    for (const method of ["log", "debug", "info", "warn", "error"]) {
+        assert.equal(typeof debug[method], "function", `${method} must be available`);
+    }
 });
 
 test("deriveInvocation maps MCP tools to plugin methods", async () => {

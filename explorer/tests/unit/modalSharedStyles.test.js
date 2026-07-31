@@ -64,8 +64,11 @@ test('Explorer serves the reusable SCRIPTA variants component from the shared wh
     assert.match(source, /scripta-p-variant-add/);
     assert.match(source, /scripta-p-variant-delete/);
     assert.match(source, /scripta-p-variant-image-/);
-    assert.match(source, /data-scripta-action="replace-image"/);
-    assert.match(source, /data-scripta-action="delete-image"/);
+    assert.match(template, /data-role="imageLayoutMenuTemplate"/);
+    assert.match(template, /data-local-action="closeImageLayout"/);
+    assert.match(template, /data-local-action="replaceImage"/);
+    assert.match(template, /data-local-action="deleteImage"/);
+    assert.doesNotMatch(source, /renderImageLayoutMenu|insertAdjacentHTML/);
     assert.match(styles, /\.scripta-variant-images/);
     assert.match(source, /variant\.canEdit/);
     assert.match(source, /variant\.canDelete/);
@@ -74,4 +77,6 @@ test('Explorer serves the reusable SCRIPTA variants component from the shared wh
         /<div class="scripta-panel-header">[\s\S]*class="scripta-reaction-actions"[\s\S]*class="scripta-variant-delete-button"[\s\S]*<\/div>\s*\$\{this\.renderVoters/
     );
     assert.match(styles, /\.scripta-variant-image-add-button\s*\{\s*margin-left:\s*auto;/);
+    assert.match(styles, /scripta-variants-view \.scripta-tabs-section\s*\{[^}]*overflow:\s*visible;/s);
+    assert.doesNotMatch(styles, /\.scripta-tabs-section\s*\{[^}]*overflow:\s*hidden;/s);
 });

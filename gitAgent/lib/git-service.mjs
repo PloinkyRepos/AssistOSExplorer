@@ -13,7 +13,7 @@ import { createStatusOps } from './git/status-ops.mjs';
 import { normalizeErrorMessage, runGit } from './git/run-git.mjs';
 import { normalizeGitRepoRelativePath } from './git/validators.mjs';
 
-export function createGitService({ validatePath }) {
+export function createGitService({ validatePath, workspaceRoots = [] }) {
   let gitBinaryPromise = null;
   let gitBinaryCwd = null;
 
@@ -93,6 +93,7 @@ export function createGitService({ validatePath }) {
 
   const context = {
     validatePath,
+    workspaceRoots,
     getGitBinary,
     resolveRepoPath,
     resolveRepoWorkTreePath,

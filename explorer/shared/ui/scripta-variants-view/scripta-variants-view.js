@@ -216,7 +216,6 @@ export class ScriptaVariantsView {
                     <img src="${escapeHtml(src)}" alt="${escapeHtml(image.alt)}" loading="lazy" style="aspect-ratio:${ratio};object-fit:${layout.fit}"
                          ${canEdit ? `data-scripta-action="select-image" data-variant-id="${escapeHtml(variant.id)}" data-image-id="${escapeHtml(image.imageId)}" data-image-ordinal="${image.ordinal}"` : ''}>
                 </figure>
-                ${selected && canEdit ? this.renderImageLayoutMenu(variant, image) : ''}
             </div>`;
         };
         const orderedImages = variant.images
@@ -248,35 +247,22 @@ export class ScriptaVariantsView {
         </section>`;
     }
 
-    renderImageLayoutMenu(variant, image) {
-        const layout = image.layout;
-        const option = (value, label, current) => `<option value="${value}" ${value === current ? 'selected' : ''}>${label}</option>`;
-        const identity = `data-variant-id="${escapeHtml(variant.id)}" data-variant-ordinal="${variant.ordinal}" data-image-id="${escapeHtml(image.imageId)}" data-image-ordinal="${image.ordinal}"`;
-        return `<div class="scripta-variant-image-layout" role="dialog" aria-label="Image options" ${identity}>
-            <div class="scripta-image-toolbar-header">
-                <strong>Image options</strong>
-                <button type="button" class="scripta-image-toolbar-close" data-scripta-action="close-image-layout" ${identity} aria-label="Close image options">×</button>
-            </div>
-            <div class="scripta-image-toolbar-fields">
-                <label class="scripta-image-width-control">Width
-                    <span class="scripta-image-number-field"><input type="number" min="20" max="100" step="5" value="${layout.widthPercent}"
-                           data-image-layout-field="widthPercent" ${identity} aria-label="Image width percentage"><span aria-hidden="true">%</span></span>
-                </label>
-                <label>Ratio<select data-image-layout-field="aspectRatio" ${identity}>
-                    ${option('auto', 'Original', layout.aspectRatio)}${option('1:1', '1:1', layout.aspectRatio)}${option('4:3', '4:3', layout.aspectRatio)}${option('3:2', '3:2', layout.aspectRatio)}${option('16:9', '16:9', layout.aspectRatio)}
-                </select></label>
-                <label>Fit<select data-image-layout-field="fit" ${identity}>
-                    ${option('contain', 'Contain', layout.fit)}${option('cover', 'Cover', layout.fit)}
-                </select></label>
-                <label>Align<select data-image-layout-field="alignment" ${identity}>
-                    ${option('left', 'Left', layout.alignment)}${option('center', 'Center', layout.alignment)}${option('right', 'Right', layout.alignment)}
-                </select></label>
-            </div>
-            <div class="scripta-image-toolbar-actions">
-                <button type="button" class="scripta-secondary-button" data-scripta-action="replace-image" ${identity}>Replace</button>
-                <button type="button" class="scripta-secondary-button is-danger" data-scripta-action="delete-image" ${identity}>Delete</button>
-            </div>
-        </div>`;
+    createImageLayoutMenu(variant, image) {
+        const template = this.element.querySelector?.('[data-role="imageLayoutMenuTemplate"]');
+        const fragment = template?.content?.cloneNode?.(true);
+        const menu = fragment?.querySelector?.('.scripta-variant-image-layout');
+        if (!menu) return null;
+        for (const node of menu.querySelectorAll('[data-image-action-context]')) {
+            node.dataset.variantId = variant.id;
+            node.dataset.variantOrdinal = String(variant.ordinal || '');
+            node.dataset.imageId = image.imageId;
+            node.dataset.imageOrdinal = String(image.ordinal || '');
+        }
+        menu.querySelector('[data-image-layout-field="widthPercent"]').value = String(image.layout.widthPercent);
+        menu.querySelector('[data-image-layout-field="aspectRatio"]').value = image.layout.aspectRatio;
+        menu.querySelector('[data-image-layout-field="fit"]').value = image.layout.fit;
+        menu.querySelector('[data-image-layout-field="alignment"]').value = image.layout.alignment;
+        return menu;
     }
 
     render() {
@@ -300,6 +286,7 @@ export class ScriptaVariantsView {
                 </div>
                 <div class="scripta-tab-panel" role="tabpanel">${this.renderPanel(selected)}</div>
             </section>`;
+        this.syncImageInspectorDom();
     }
 
     selectOffset(offset) {
@@ -313,10 +300,7 @@ export class ScriptaVariantsView {
 
     syncImageInspectorDom() {
         const containers = Array.from(this.root?.querySelectorAll?.('.scripta-variant-image-container') || []);
-        if (!containers.length) {
-            this.render();
-            return;
-        }
+        if (!containers.length) return;
         for (const container of containers) {
             const selected = container.dataset.imageId === this.state.selectedImageId;
             container.classList.toggle('is-selected', selected);
@@ -325,10 +309,43 @@ export class ScriptaVariantsView {
             if (!selected) continue;
             const variant = this.state.variants.find((entry) => entry.id === container.dataset.variantId);
             const image = variant?.images.find((entry) => entry.imageId === container.dataset.imageId);
-            if (variant?.canEdit && image) {
-                container.insertAdjacentHTML('beforeend', this.renderImageLayoutMenu(variant, image));
+            const canEdit = this.state.editable && variant?.canEdit && !this.state.disabled && !variant.pending;
+            if (canEdit && image) {
+                const menu = this.createImageLayoutMenu(variant, image);
+                if (menu) container.append(menu);
             }
         }
+    }
+
+    closeImageLayout() {
+        this.setSelectedImage('', '');
+    }
+
+    replaceImage(target) {
+        this.emitImageMutation('replace-image', target);
+    }
+
+    deleteImage(target) {
+        this.emitImageMutation('delete-image', target);
+    }
+
+    emitImageMutation(action, target) {
+        const variantId = String(target?.dataset?.variantId || this.state.selectedVariantId || '');
+        const variant = this.state.variants.find((entry) => entry.id === variantId);
+        if (!variant?.canEdit) return;
+        const operation = action === 'insert-image' ? 'insert' : action === 'replace-image' ? 'replace' : 'delete';
+        const editor = this.root?.querySelector?.('[data-role="variantText"]');
+        const editorText = editor ? String(editor.value || '') : undefined;
+        const position = Number(editor?.selectionStart ?? variant.text.length);
+        this.emit(`scripta-p-variant-image-${operation}`, {
+            variantId,
+            ...(variant.ordinal ? {variantOrdinal: variant.ordinal} : {}),
+            ...(operation === 'insert' ? {} : {
+                imageId: String(target?.dataset?.imageId || ''),
+                ...(Number(target?.dataset?.imageOrdinal || 0) ? {imageOrdinal: Number(target.dataset.imageOrdinal)} : {}),
+            }),
+            ...(operation === 'insert' ? {position, ...(editorText === undefined ? {} : {text: editorText})} : {}),
+        });
     }
 
     applyImageLayoutToDom(image) {
@@ -429,8 +446,6 @@ export class ScriptaVariantsView {
         const variantId = String(button.dataset.variantId || this.state.selectedVariantId || '');
         if (action === 'select-image') {
             this.setSelectedImage(String(button.dataset.imageId || ''), variantId);
-        } else if (action === 'close-image-layout') {
-            this.setSelectedImage('', '');
         } else if (action === 'select') {
             if (this.state.selectedImageId) this.emit('scripta-image-inspector-change', {open: false, variantId: '', imageId: ''});
             this.state.selectedImageId = '';
@@ -466,22 +481,8 @@ export class ScriptaVariantsView {
             const variant = this.state.variants.find((entry) => entry.id === variantId);
             if (!variant?.canDelete) return;
             this.emit('scripta-p-variant-delete', { variantId });
-        } else if (action === 'insert-image' || action === 'replace-image' || action === 'delete-image') {
-            const variant = this.state.variants.find((entry) => entry.id === variantId);
-            if (!variant?.canEdit) return;
-            const operation = action === 'insert-image' ? 'insert' : action === 'replace-image' ? 'replace' : 'delete';
-            const editor = this.root.querySelector('[data-role="variantText"]');
-            const editorText = editor ? String(editor.value || '') : undefined;
-            const position = Number(editor?.selectionStart ?? variant.text.length);
-            this.emit(`scripta-p-variant-image-${operation}`, {
-                variantId,
-                ...(variant.ordinal ? {variantOrdinal: variant.ordinal} : {}),
-                ...(operation === 'insert' ? {} : {
-                    imageId: String(button.dataset.imageId || ''),
-                    ...(Number(button.dataset.imageOrdinal || 0) ? {imageOrdinal: Number(button.dataset.imageOrdinal)} : {}),
-                }),
-                ...(operation === 'insert' ? {position, ...(editorText === undefined ? {} : {text: editorText})} : {}),
-            });
+        } else if (action === 'insert-image') {
+            this.emitImageMutation(action, button);
         } else if (action === 'toggle-add' || action === 'cancel-add') {
             const proposal = this.root.querySelector('[data-role="proposal"]');
             proposal.hidden = action === 'cancel-add' ? true : !proposal.hidden;

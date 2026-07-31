@@ -8,6 +8,8 @@ This document defines contract guarantees for Model Context Protocol (MCP) tool 
 
 Tool names declared in `mcp-config.json` are public agent contracts. Contracts cover repository creation, repository inspection, branch operations, staging and restore flows, conflict handling, stash and commit flows, remote operations, identity management, and GitHub auth lifecycle operations.
 
+`git_submodule_add` is the explicit nested-repository contract. It requires `path`, `name`, and `remoteUrl`, resolves the nearest enclosing parent repository, adds the remote at the child path, and returns canonical parent, child, and repository-relative submodule paths. GitHub HTTPS credentials may be supplied through invocation-backed auth enrichment and must never be persisted in `.gitmodules`.
+
 Each contract shall define input schema expectations and tool identity mapping through `TOOL_NAME` semantics and dispatcher resolution.
 
 ## Invocation Lifecycle Rules
@@ -24,6 +26,10 @@ Lifecycle Rule L4.1: repository-executing tools shall resolve the repository det
 
 Lifecycle Rule L4.2: repository-executing tools are not allowed to discover a substitute repository by scanning sibling directories, descendants, or workspace roots when the provided path is not inside a Git work tree.
 
+Lifecycle Rule L4.3: repository init, clone, and GitHub-create contracts shall reject a parent path inside an existing Git worktree before creating local or remote state. Nested repositories must use `git_submodule_add`.
+
+Lifecycle Rule L4.4: repository init and clone contracts shall reject a canonical remote already configured by another repository under the allowed workspace roots. The read-only workspace scan is permitted only as pre-mutation uniqueness validation, shall treat equivalent GitHub HTTPS and SSH URLs as one identity, and shall finish before creating the target directory.
+
 Lifecycle Rule L5: successful operation results shall be serialized to stdout as contract output.
 
 Lifecycle Rule L6: failures shall return explicit JSON error payloads with `ok: false`.
@@ -37,6 +43,8 @@ Failure Rule F2: missing required arguments fail explicitly.
 Failure Rule F3: Git subprocess failures remain attributable with normalized error messages.
 
 Failure Rule F4: timeout failures remain explicit and cannot degrade into silent partial success.
+
+Failure Rule F5: submodule addition shall reject occupied targets, paths outside the resolved parent worktree, and remotes without a checkoutable commit. Failed clone targets must not remain in the worktree.
 
 ## Constraints
 

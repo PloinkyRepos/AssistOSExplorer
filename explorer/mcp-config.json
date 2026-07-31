@@ -841,6 +841,7 @@
             "targetChapterId": { "type": "string", "optional": true },
             "targetIndex": { "type": "number", "optional": true },
             "roomId": { "type": "string", "optional": true },
+            "roomFolderPath": { "type": "string", "optional": true },
             "assetId": { "type": "string", "optional": true },
             "imageId": { "type": "string", "optional": true },
             "imageOrdinal": { "type": "number", "optional": true },
@@ -895,13 +896,14 @@
     },
     {
       "name": "webmeet_media_commit",
-      "description": "Validate and commit a staged WebMeet image into Explorer workspace media.",
+      "description": "Validate and commit a staged WebMeet attachment into Explorer workspace media.",
       "command": "tools/explorer_tool.sh",
       "cwd": "workspace",
       "tags": ["internal"],
       "env": { "TOOL_NAME": "webmeet_media_commit" },
       "inputSchema": {
         "roomId": { "type": "string" },
+        "roomFolderPath": { "type": "string" },
         "blobRef": {
           "type": "object",
           "properties": {
@@ -909,9 +911,7 @@
             "agent": { "type": "string" },
             "localPath": { "type": "string" }
           }
-        },
-        "filename": { "type": "string", "optional": true },
-        "createdBy": { "type": "string", "optional": true }
+        }
       }
     },
     {
@@ -923,6 +923,7 @@
       "env": { "TOOL_NAME": "webmeet_media_get" },
       "inputSchema": {
         "roomId": { "type": "string" },
+        "roomFolderPath": { "type": "string" },
         "assetId": { "type": "string" }
       }
     },

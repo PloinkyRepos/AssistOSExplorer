@@ -138,6 +138,9 @@ export const debug = {
     log: (...args) => {
         writeToFile('DEBUG', args);
     },
+    debug: (...args) => {
+        writeToFile('DEBUG', args);
+    },
     info: (...args) => {
         writeToFile('INFO', args);
     },

@@ -1,1 +1,44 @@
 <div class="scripta-variants-view-root"></div>
+
+<template data-role="imageLayoutMenuTemplate">
+    <div class="scripta-variant-image-layout" role="dialog" aria-label="Image options" data-image-action-context>
+        <div class="scripta-image-toolbar-header">
+            <strong>Image options</strong>
+            <button type="button" class="scripta-image-toolbar-close" data-local-action="closeImageLayout" aria-label="Close image options">×</button>
+        </div>
+        <div class="scripta-image-toolbar-fields">
+            <label class="scripta-image-width-control">Width
+                <span class="scripta-image-number-field">
+                    <input type="number" min="20" max="100" step="5" data-image-layout-field="widthPercent" data-image-action-context aria-label="Image width percentage">
+                    <span aria-hidden="true">%</span>
+                </span>
+            </label>
+            <label>Ratio
+                <select data-image-layout-field="aspectRatio" data-image-action-context>
+                    <option value="auto">Original</option>
+                    <option value="1:1">1:1</option>
+                    <option value="4:3">4:3</option>
+                    <option value="3:2">3:2</option>
+                    <option value="16:9">16:9</option>
+                </select>
+            </label>
+            <label>Fit
+                <select data-image-layout-field="fit" data-image-action-context>
+                    <option value="contain">Contain</option>
+                    <option value="cover">Cover</option>
+                </select>
+            </label>
+            <label>Align
+                <select data-image-layout-field="alignment" data-image-action-context>
+                    <option value="left">Left</option>
+                    <option value="center">Center</option>
+                    <option value="right">Right</option>
+                </select>
+            </label>
+        </div>
+        <div class="scripta-image-toolbar-actions">
+            <button type="button" class="scripta-secondary-button" data-local-action="replaceImage" data-image-action-context>Replace</button>
+            <button type="button" class="scripta-secondary-button is-danger" data-local-action="deleteImage" data-image-action-context>Delete</button>
+        </div>
+    </div>
+</template>

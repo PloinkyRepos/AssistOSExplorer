@@ -9,8 +9,8 @@ function normalizeRepositoryName(value) {
     return String(value || '').trim();
 }
 
-async function openNewRepositoryModal(basePath) {
-    const result = await assistOS.UI.showModal('git-new-repository-modal', { basePath }, true);
+async function openNewRepositoryModal(basePath, { submoduleMode = false } = {}) {
+    const result = await assistOS.UI.showModal('git-new-repository-modal', { basePath, submoduleMode }, true);
     if (!result || typeof result !== 'object') {
         return null;
     }
@@ -94,13 +94,31 @@ export async function executeMenuAction({ action, context, host }) {
         if (!basePath) {
             throw new Error('Missing target directory for repository creation.');
         }
-        const modalResult = await openNewRepositoryModal(basePath);
+        const parentRepoInfo = await callGitTool('git_info', { path: basePath });
+        const submoduleMode = Boolean(parentRepoInfo?.ok && parentRepoInfo?.repoPath);
+        const modalResult = await openNewRepositoryModal(basePath, { submoduleMode });
         if (!modalResult) {
             return;
         }
         const repoName = modalResult.name;
         if (!repoName) {
             throw new Error('Repository name is required.');
+        }
+        if (submoduleMode) {
+            if (!modalResult.remoteUrl) {
+                throw new Error('Remote URL is required.');
+            }
+            const result = await callGitTool('git_submodule_add', {
+                path: basePath,
+                name: modalResult.localName || repoName,
+                remoteUrl: modalResult.remoteUrl
+            });
+            if (!result?.ok) {
+                throw new Error(result?.error || 'Failed to add Git submodule.');
+            }
+            host?.showStatus?.(`Added Git submodule: ${result.submodulePath || result.name || repoName}.`);
+            await host?.refreshDirectory?.();
+            return;
         }
         if (modalResult.mode === 'create-github') {
             if (!modalResult.owner) {
@@ -133,7 +151,8 @@ export async function executeMenuAction({ action, context, host }) {
                 remoteUrl: modalResult.remoteUrl
             });
             if (!result?.ok) {
-                throw new Error(result?.error || 'Failed to clone repository.');
+                host?.showStatus?.(result?.error || 'Failed to clone repository.', true);
+                return;
             }
             const fullName = modalResult.repository?.fullName || repoName;
             host?.showStatus?.(`Cloned repository: ${fullName}.`);
@@ -150,7 +169,8 @@ export async function executeMenuAction({ action, context, host }) {
             remoteUrl: modalResult.remoteUrl
         });
         if (!result?.ok) {
-            throw new Error(result?.error || 'Failed to create repository.');
+            host?.showStatus?.(result?.error || 'Failed to create repository.', true);
+            return;
         }
         host?.showStatus?.(`Created repository: ${result.name || repoName} with ${result.remote || modalResult.remote || 'origin'}.`);
         await host?.refreshDirectory?.();

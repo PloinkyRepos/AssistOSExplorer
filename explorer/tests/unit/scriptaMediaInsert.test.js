@@ -18,7 +18,7 @@ test('adding an image at chapter level creates one paragraph whose initial varia
         text: '',
         assetId: 'asset_chapter',
         alt: 'Chapter image',
-        workspaceUrl: '/document-multimedia/webmeet/room_1/assets/asset_chapter.png',
+        workspaceUrl: '/WebMeet/story-room-1/assets/asset_chapter/chapter.png',
     }, {hash: 'owner'});
 
     assert.equal(changed.chapters[0].paragraphs.length, 2);
@@ -41,7 +41,7 @@ test('variant image position is serialized at the text cursor and follows later 
     changed = mutateScriptaDocument(changed, 'p-variant-image-insert', {
         chapterId: chapter.id, paragraphId: paragraph.id, variantId,
         assetId: 'asset_cursor', alt: 'Cursor image', position: 3,
-        workspaceUrl: '/document-multimedia/webmeet/room_1/assets/asset_cursor.png',
+        workspaceUrl: '/WebMeet/story-room-1/assets/asset_cursor/cursor.png',
     }, {hash: 'owner'}).document;
     let variant = changed.chapters[0].paragraphs[0].pluginState.scripta.variants[0];
     assert.equal(variant.images[0].position, 3);
@@ -68,7 +68,7 @@ test('image ordinals follow document order and resolve against the authoritative
     ]) {
         changed = mutateScriptaDocument(changed, 'p-variant-image-insert', {
             chapterId: chapter.id, paragraphId: paragraph.id, variantId, ...image,
-            workspaceUrl: `/document-multimedia/webmeet/room_1/assets/${image.assetId}.png`,
+            workspaceUrl: `/WebMeet/story-room-1/assets/${image.assetId}/image.png`,
         }, {hash: 'owner'}).document;
     }
     const projection = projectScriptaDocument(changed, {
@@ -99,11 +99,11 @@ test('conflicting variant or image selectors are rejected instead of mutating an
     const secondVariantId = changed.chapters[0].paragraphs[0].pluginState.scripta.variants[1].id;
     changed = mutateScriptaDocument(changed, 'p-variant-image-insert', {
         chapterId: chapter.id, paragraphId: paragraph.id, variantId: firstVariantId,
-        assetId: 'asset_one', workspaceUrl: '/document-multimedia/webmeet/room_1/assets/asset_one.png',
+        assetId: 'asset_one', workspaceUrl: '/WebMeet/story-room-1/assets/asset_one/one.png',
     }, {hash: 'owner'}).document;
     changed = mutateScriptaDocument(changed, 'p-variant-image-insert', {
         chapterId: chapter.id, paragraphId: paragraph.id, variantId: secondVariantId,
-        assetId: 'asset_two', workspaceUrl: '/document-multimedia/webmeet/room_1/assets/asset_two.png',
+        assetId: 'asset_two', workspaceUrl: '/WebMeet/story-room-1/assets/asset_two/two.png',
     }, {hash: 'owner'}).document;
     const firstImageId = changed.chapters[0].paragraphs[0].pluginState.scripta.variants[0].images[0].imageId;
 
@@ -252,29 +252,21 @@ test('variant image layout control emits persistent resize and ratio data', () =
     assert.equal(imageNode.style.objectFit, 'contain');
 });
 
-test('image and its contextual toolbar share one isolated image container', () => {
+test('image container leaves contextual toolbar creation to the component template', () => {
     const view = new ScriptaVariantsView({dispatchEvent() {}, contains: () => true}, () => {});
     view.state.editable = true;
     view.state.selectedImageId = 'image-1';
     const variant = {
         id: 'variant-1', text: '', canEdit: true, canDelete: true, images: [{
             imageId: 'image-1', assetId: 'asset-1', alt: 'Diagram',
-            workspaceUrl: '/document-multimedia/webmeet/room/assets/asset-1.png', position: 0,
+            workspaceUrl: '/WebMeet/story-room/assets/asset-1/image.png', position: 0,
             layout: {widthPercent: 80, aspectRatio: '4:3', fit: 'contain', alignment: 'center'},
         }],
     };
     const html = view.renderPanel(variant);
     assert.doesNotMatch(html, /<figcaption|scripta-image-caption-control|Show caption/);
-    const figureEnd = html.indexOf('</figure>');
-    const toolbar = html.indexOf('class="scripta-variant-image-layout"');
-    assert.ok(figureEnd > 0 && toolbar > figureEnd);
-    assert.match(html, /class="scripta-variant-image-container is-selected"[\s\S]*<figure[\s\S]*<\/figure>[\s\S]*class="scripta-variant-image-layout"[\s\S]*<\/div>/);
-    const contextualMenu = view.renderImageLayoutMenu(variant, variant.images[0]);
-    assert.match(contextualMenu, /role="dialog" aria-label="Image options"/);
-    assert.match(contextualMenu, /data-scripta-action="close-image-layout"/);
-    assert.match(contextualMenu, /type="number" min="20" max="100" step="5"/);
-    assert.doesNotMatch(contextualMenu, /type="range"/);
-    assert.doesNotMatch(contextualMenu, /scripta-image-caption-control|showCaption|Show caption/);
+    assert.match(html, /class="scripta-variant-image-container is-selected"[\s\S]*<figure[\s\S]*<\/figure>[\s\S]*<\/div>/);
+    assert.doesNotMatch(html, /scripta-variant-image-layout|Image options/);
     assert.equal(view.positionImageLayoutMenu, undefined);
 });
 
@@ -295,7 +287,7 @@ test('image inspector reports its open state so a host rerender can restore it',
 test('opening and closing image options mutates only the selected image container', () => {
     const view = new ScriptaVariantsView({dispatchEvent() {}, contains: () => true}, () => {});
     let fullRenders = 0;
-    let insertedMenu = '';
+    let insertedMenu = null;
     let removedMenus = 0;
     const figureClasses = new Set(['scripta-variant-image']);
     const containerClasses = new Set(['scripta-variant-image-container']);
@@ -306,14 +298,15 @@ test('opening and closing image options mutates only the selected image containe
         querySelector: (selector) => {
             if (selector === '.scripta-variant-image') return figure;
             if (selector === '.scripta-variant-image-layout' && insertedMenu) {
-                return {remove: () => { insertedMenu = ''; removedMenus += 1; }};
+                return {remove: () => { insertedMenu = null; removedMenus += 1; }};
             }
             return null;
         },
-        insertAdjacentHTML: (_position, html) => { insertedMenu = html; },
+        append: (menu) => { insertedMenu = menu; },
     };
     view.root = {querySelectorAll: () => [container]};
     view.render = () => { fullRenders += 1; };
+    view.state.editable = true;
     view.state.selectedVariantId = 'variant-1';
     view.state.variants = [{
         id: 'variant-1', ordinal: 1, canEdit: true, images: [{
@@ -321,19 +314,52 @@ test('opening and closing image options mutates only the selected image containe
             layout: {widthPercent: 80, aspectRatio: 'auto', fit: 'contain', alignment: 'center'},
         }],
     }];
+    view.createImageLayoutMenu = () => ({className: 'scripta-variant-image-layout'});
 
     view.setSelectedImage('image-1', 'variant-1');
     assert.equal(fullRenders, 0);
     assert.equal(containerClasses.has('is-selected'), true);
     assert.equal(figureClasses.has('is-selected'), true);
-    assert.match(insertedMenu, /class="scripta-variant-image-layout"/);
+    assert.equal(insertedMenu.className, 'scripta-variant-image-layout');
 
     view.setSelectedImage('', '');
     assert.equal(fullRenders, 0);
     assert.equal(containerClasses.has('is-selected'), false);
     assert.equal(figureClasses.has('is-selected'), false);
-    assert.equal(insertedMenu, '');
+    assert.equal(insertedMenu, null);
     assert.equal(removedMenus, 1);
+});
+
+test('image option buttons use presenter actions and emit the canonical mutations', () => {
+    const emitted = [];
+    const view = new ScriptaVariantsView({dispatchEvent() {}, contains: () => true}, () => {});
+    view.emit = (type, detail) => emitted.push({type, detail});
+    view.root = {querySelector: () => null, querySelectorAll: () => []};
+    view.state.selectedVariantId = 'variant-1';
+    view.state.selectedImageId = 'image-1';
+    view.state.variants = [{
+        id: 'variant-1', ordinal: 2, text: '', canEdit: true, images: [{imageId: 'image-1'}],
+    }];
+    const target = {dataset: {variantId: 'variant-1', imageId: 'image-1', imageOrdinal: '3'}};
+
+    view.replaceImage(target);
+    view.deleteImage(target);
+    view.closeImageLayout();
+
+    assert.deepEqual(emitted, [
+        {
+            type: 'scripta-p-variant-image-replace',
+            detail: {variantId: 'variant-1', variantOrdinal: 2, imageId: 'image-1', imageOrdinal: 3},
+        },
+        {
+            type: 'scripta-p-variant-image-delete',
+            detail: {variantId: 'variant-1', variantOrdinal: 2, imageId: 'image-1', imageOrdinal: 3},
+        },
+        {
+            type: 'scripta-image-inspector-change',
+            detail: {open: false, variantId: '', imageId: ''},
+        },
+    ]);
 });
 
 test('SCRIPTA variant owns inserted, replaced, and deleted images', () => {
@@ -347,7 +373,7 @@ test('SCRIPTA variant owns inserted, replaced, and deleted images', () => {
         variantId,
         assetId: 'asset_1',
         alt: 'Architecture',
-        workspaceUrl: '/document-multimedia/webmeet/room_1/assets/asset_1.png'
+        workspaceUrl: '/WebMeet/story-room-1/assets/asset_1/one.png'
     }, { hash: 'owner' });
     assert.equal(changed.chapters[0].paragraphs.length, 1);
     assert.equal(focusTarget, null);
@@ -355,7 +381,7 @@ test('SCRIPTA variant owns inserted, replaced, and deleted images', () => {
     assert.equal(variant.text, '');
     assert.equal(variant.images.length, 1);
     assert.equal(variant.images[0].assetId, 'asset_1');
-    assert.match(serializeMarkdownState(changed), /!\[Architecture\]\(\/document-multimedia\/webmeet\/room_1\/assets\/asset_1\.png\)/);
+    assert.match(serializeMarkdownState(changed), /!\[Architecture\]\(\/WebMeet\/story-room-1\/assets\/asset_1\/one\.png\)/);
     const projection = projectScriptaDocument(changed, {
         view: { chapterId: chapter.id, paragraphId: first.id }
     });
@@ -380,12 +406,12 @@ test('SCRIPTA variant owns inserted, replaced, and deleted images', () => {
     const { document: replaced } = mutateScriptaDocument(captioned, 'p-variant-image-replace', {
         chapterId: chapter.id, paragraphId: first.id, variantId, imageId,
         assetId: 'asset_2', alt: 'Replacement',
-        workspaceUrl: '/document-multimedia/webmeet/room_1/assets/asset_2.png'
+        workspaceUrl: '/WebMeet/story-room-1/assets/asset_2/two.png'
     }, { hash: 'owner' });
     assert.equal(replaced.chapters[0].paragraphs[0].pluginState.scripta.variants[0].images[0].assetId, 'asset_2');
     assert.equal(replaced.chapters[0].paragraphs[0].pluginState.scripta.variants[0].images[0].layout.widthPercent, 55);
     assert.equal(replaced.chapters[0].paragraphs[0].pluginState.scripta.variants[0].images[0].layout.showCaption, false);
-    assert.match(serializeMarkdownState(replaced), /!\[Replacement\].*asset_2\.png/);
+    assert.match(serializeMarkdownState(replaced), /!\[Replacement\].*asset_2\/two\.png/);
     assert.throws(() => mutateScriptaDocument(replaced, 'p-variant-image-delete', {
         chapterId: chapter.id, paragraphId: first.id, variantId, imageId,
     }, { hash: 'another-user' }), /Only the participant/);
@@ -393,12 +419,12 @@ test('SCRIPTA variant owns inserted, replaced, and deleted images', () => {
         chapterId: chapter.id, paragraphId: first.id, variantId, imageId,
     }, { hash: 'owner' });
     assert.equal(removed.chapters[0].paragraphs[0].pluginState.scripta.variants[0].images.length, 0);
-    assert.doesNotMatch(serializeMarkdownState(removed), /asset_2\.png/);
+    assert.doesNotMatch(serializeMarkdownState(removed), /asset_2\/two\.png/);
 
     const reopened = normalizeScriptaDocumentModel({
         metadata: { title: 'Document' },
         chapters: [{ title: 'Chapter 1', paragraphs: [{
-            text: '![Architecture](/document-multimedia/webmeet/room_1/assets/asset_1.png)'
+            text: '![Architecture](/WebMeet/story-room-1/assets/asset_1/one.png)'
         }] }]
     }, { createdBy: 'owner' });
     const migrated = reopened.chapters[0].paragraphs[0].pluginState.scripta.variants[0];
@@ -419,7 +445,7 @@ test('SCRIPTA variant owns inserted, replaced, and deleted images', () => {
         chapters: [{ title: 'Chapter 1', paragraphs: [
             { text: 'Paragraph text' },
             {
-                text: '![Legacy](/document-multimedia/webmeet/room_1/assets/asset_legacy.png)',
+                text: '![Legacy](/WebMeet/story-room-1/assets/asset_legacy/legacy.png)',
                 metadata: {
                     type: 'image',
                     pluginState: {
@@ -427,7 +453,7 @@ test('SCRIPTA variant owns inserted, replaced, and deleted images', () => {
                             media: {
                                 assetId: 'asset_legacy',
                                 alt: 'Legacy',
-                                workspaceUrl: '/document-multimedia/webmeet/room_1/assets/asset_legacy.png'
+                                workspaceUrl: '/WebMeet/story-room-1/assets/asset_legacy/legacy.png'
                             }
                         }
                     }
@@ -445,7 +471,7 @@ test('SCRIPTA variant owns inserted, replaced, and deleted images', () => {
         chapters: [{ title: 'Chapter 1', paragraphs: [{
             id: 'paragraph-stable',
             hasMetadata: false,
-            text: 'Paragraph text\n\n![Image](/document-multimedia/webmeet/room_1/assets/asset_1.png)',
+            text: 'Paragraph text\n\n![Image](/WebMeet/story-room-1/assets/asset_1/one.png)',
             metadata: { pluginState: changed.chapters[0].paragraphs[0].pluginState }
         }] }]
     }, { createdBy: 'owner' });

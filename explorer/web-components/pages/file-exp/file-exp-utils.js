@@ -299,7 +299,7 @@ export function extractScriptaPreviewImages(rawText) {
             const activeVariant = variants.find((variant) => variant?.id === scripta?.activeVariantId) || variants[0];
             for (const image of Array.isArray(activeVariant?.images) ? activeVariant.images : []) {
                 const workspaceUrl = String(image?.workspaceUrl || '').trim();
-                if (!workspaceUrl.startsWith('/document-multimedia/webmeet/')) continue;
+                if (!/^\/WebMeet\/[a-zA-Z0-9._-]+\/assets\/asset_[a-zA-Z0-9_-]+\/[a-zA-Z0-9._-]+\.(?:png|jpg|webp|gif)$/i.test(workspaceUrl)) continue;
                 const layout = image?.layout && typeof image.layout === 'object' ? image.layout : {};
                 images.push({
                     workspaceUrl,

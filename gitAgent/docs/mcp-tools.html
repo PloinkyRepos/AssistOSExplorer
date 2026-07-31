@@ -54,6 +54,11 @@
                                 <td>Read repository shape, branch/upstream state, diffs, and diagnostics.</td>
                             </tr>
                             <tr>
+                                <td>Repository lifecycle</td>
+                                <td><code>git_init_repository</code>, <code>git_clone_repository</code>, <code>git_create_github_repository</code>, <code>git_submodule_add</code></td>
+                                <td>Create top-level repositories or explicitly add an existing remote as a staged Git submodule. Independent nested repositories are rejected.</td>
+                            </tr>
+                            <tr>
                                 <td>Index and working tree control</td>
                                 <td><code>git_stage</code>, <code>git_unstage</code>, <code>git_untrack</code>, <code>git_check_ignore</code>, <code>git_add_ignore</code>, <code>git_remove_ignore</code>, <code>git_restore</code></td>
                                 <td>Manage stage state, ignore rules, ignore checks, and restore operations.</td>
@@ -85,6 +90,7 @@
                 <section>
                     <h2>Common Input Rules</h2>
                     <p>Most tools require a <code>path</code> argument and reject values outside allowed workspace roots. Operations that target subsets use <code>files</code> arrays, remote operations can accept token overrides through <code>token</code>, and conflict checkout requires <code>source</code> constrained to <code>{"ours","theirs"}</code>.</p>
+                    <p><code>git_submodule_add</code> requires a parent <code>path</code> inside a Git worktree, a child directory <code>name</code>, and an existing <code>remoteUrl</code> with a checkoutable commit. It stages the resulting <code>.gitmodules</code> entry and gitlink without committing them.</p>
                 </section>
 
                 <section>

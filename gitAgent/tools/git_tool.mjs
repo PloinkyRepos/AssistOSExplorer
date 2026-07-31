@@ -138,6 +138,7 @@ function normalizeArgs(toolName, args) {
     case 'git_init_repository':
     case 'git_clone_repository':
     case 'git_create_github_repository':
+    case 'git_submodule_add':
     case 'git_status':
     case 'git_diagnose':
     case 'git_identity':
@@ -165,6 +166,14 @@ function normalizeArgs(toolName, args) {
         }
         if (!input.name || typeof input.name !== 'string') {
           throw new Error('git_create_github_repository requires a "name" string.');
+        }
+      }
+      if (toolName === 'git_submodule_add') {
+        if (!input.name || typeof input.name !== 'string') {
+          throw new Error('git_submodule_add requires a "name" string.');
+        }
+        if (!input.remoteUrl || typeof input.remoteUrl !== 'string') {
+          throw new Error('git_submodule_add requires a "remoteUrl" string.');
         }
       }
       if (toolName === 'git_status') {
@@ -340,11 +349,11 @@ async function main() {
 
     const roots = getWorkspaceRoots();
     const validatePath = (p) => validatePathArg(p, roots);
-    const gitService = createGitService({ validatePath });
+    const gitService = createGitService({ validatePath, workspaceRoots: roots });
     const workspaceRoot = roots[0] || process.cwd();
 
     const payload = normalizeArgs(toolName, args);
-    if ((toolName === 'git_push' || toolName === 'git_pull' || toolName === 'git_clone_repository' || toolName === 'git_create_github_repository') && !payload.token) {
+    if ((toolName === 'git_push' || toolName === 'git_pull' || toolName === 'git_clone_repository' || toolName === 'git_create_github_repository' || toolName === 'git_submodule_add') && !payload.token) {
       const accessToken = String(authInfo?.github?.accessToken || '').trim();
       if (accessToken) {
         payload.token = accessToken;
@@ -416,6 +425,10 @@ async function main() {
         return;
       case 'git_clone_repository':
         result = await gitService.gitCloneRepository(payload);
+        writeJson(result);
+        return;
+      case 'git_submodule_add':
+        result = await gitService.gitSubmoduleAdd(payload);
         writeJson(result);
         return;
       case 'git_github_repository_targets':
