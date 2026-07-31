@@ -397,6 +397,7 @@ jobs:
                   'workspace-assets',
                   'blob-transfer',
                   'marketplace-ui',
+                  'webchat',
                 ],
               },
             },
