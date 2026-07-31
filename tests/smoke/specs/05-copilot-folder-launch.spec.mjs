@@ -113,7 +113,10 @@ test.describe('Copilot launch from Explorer', () => {
         kind: 'response',
         status: response.status(),
         url: response.url(),
-        body: response.text().catch(() => ''),
+        // A successful WebChat input is deliberately a bodyless 204. Do not ask
+        // Chromium/Playwright to read a body that cannot exist: doing so can
+        // surface a synthetic net::ERR_ABORTED after the 204 response event.
+        body: response.status() === 204 ? '' : response.text().catch(() => ''),
       });
     };
     const captureRequestFailure = (request) => {
@@ -175,7 +178,8 @@ test.describe('Copilot launch from Explorer', () => {
       const baseline = await assistantMessages(copilotPage);
       const baselineIds = new Set(baseline.map((message) => message.id));
       const correlation = crypto.randomUUID();
-      const prompt = `Give one brief practical tip for organizing this folder. Correlation: ${correlation}.`;
+      const completionToken = `COPILOT_CHAT_OK_${correlation}`;
+      const prompt = `Reply with exactly this token and no Markdown: ${completionToken}`;
 
       await setComposer(copilotPage, prompt);
       await copilotPage.locator('#send').click();
@@ -189,7 +193,7 @@ test.describe('Copilot launch from Explorer', () => {
             !baselineIds.has(message.id) && index >= baseline.length && message.text
           ));
           const candidate = created.at(-1)?.text || '';
-          if (!candidate || COMPLETION_FAILURE.test(candidate)) {
+          if (!candidate || !candidate.includes(completionToken) || COMPLETION_FAILURE.test(candidate)) {
             lastNewMessage = candidate;
             stableChecks = 0;
             return 0;
@@ -202,7 +206,7 @@ test.describe('Copilot launch from Explorer', () => {
           return stableChecks;
         },
         {
-          message: 'Copilot should produce one new stable nonempty ordinary-chat completion',
+          message: `Copilot should produce a stable ordinary-chat completion containing ${completionToken}`,
           timeout: smokeConfig.timeouts.relay,
           intervals: [250, 500, 750],
         },
@@ -213,6 +217,7 @@ test.describe('Copilot launch from Explorer', () => {
         !baselineIds.has(message.id) && index >= baseline.length && message.text
       ));
       expect(completed.length).toBeGreaterThan(0);
+      expect(completed.at(-1).text).toContain(completionToken);
       expect(completed.at(-1).text).not.toMatch(COMPLETION_FAILURE);
       const resolvedNetworkEvidence = await Promise.all(networkEvidence.map(async (entry) => ({
         ...entry,
