@@ -249,6 +249,21 @@ jobs:
             echo "[destroy-qa] Refusing to substitute a shared host runtime for exact Box destruction."
             exit 1
           fi
+          inspect_outer_box_status() {
+            env PLOINKY_WORKSPACE_ROOT="$WORK_DIR" \
+              node --input-type=module - \
+                "$RUNTIME_DIR/ploinky-box/supervisor.mjs" <<'NODE'
+          import { pathToFileURL } from 'node:url';
+
+          const supervisorModule = process.argv[2];
+          const {
+            createBoxSupervisor,
+            formatBoxStatus,
+          } = await import(pathToFileURL(supervisorModule).href);
+          const status = createBoxSupervisor().inspectBoxStatus();
+          process.stdout.write(formatBoxStatus(status));
+          NODE
+          }
           RUNTIME_ORIGIN="$(git -C "$RUNTIME_DIR" remote get-url origin)"
           case "${RUNTIME_ORIGIN%.git}" in
             https://github.com/AssistOS-AI/ploinky) ;;
@@ -269,7 +284,7 @@ jobs:
 
           export PLOINKY_WORKSPACE_ROOT="$WORK_DIR"
           echo "[destroy-qa] Exact Box status before destruction:"
-          "$PLOINKY" status || true
+          inspect_outer_box_status || true
 
           DEPLOYED_PLOINKY_HEAD="$(git -C "$RUNTIME_DIR" rev-parse HEAD)"
           if ! git -C "$RUNTIME_DIR" merge-base --is-ancestor \
@@ -546,7 +561,7 @@ jobs:
             "${BRANCH_ARGS[@]}"
           CLOUDFLARE_REMOVED=0
           for _ in $(seq 1 60); do
-            BOX_STATUS="$("$PLOINKY" status)"
+            BOX_STATUS="$(inspect_outer_box_status)"
             if [[ "$BOX_STATUS" == *"Cloudflare mode: local-only"* ]] &&
               [[ "$BOX_STATUS" == *"Cloudflare management: none"* ]] &&
               [[ "$BOX_STATUS" == *"Cloudflare publication: local-only"* ]] &&
@@ -578,7 +593,7 @@ jobs:
           echo "[destroy-qa] Destroying the exact outer Box for $WORK_DIR..."
           printf 'yes\n' | "$PLOINKY" destroy
 
-          BOX_STATUS="$("$PLOINKY" status)"
+          BOX_STATUS="$(inspect_outer_box_status)"
           printf '%s\n' "$BOX_STATUS"
           case "$BOX_STATUS" in
             *"Ploinky Box: absent"*|*"Ploinky Box: absent-retained-volumes"*) ;;

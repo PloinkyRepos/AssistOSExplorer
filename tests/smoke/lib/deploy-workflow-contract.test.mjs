@@ -62,6 +62,11 @@ const WORKFLOWS = [
       'The inner graceful stop failed; proving the outer Box stopped',
       'Ploinky Box: stopped',
       'the Box remained running or ambiguous after the degraded stop',
+      'inspect_outer_box_status() {',
+      'createBoxSupervisor().inspectBoxStatus()',
+      'process.stdout.write(formatBoxStatus(status))',
+      'BOX_STATUS="$(inspect_outer_box_status)"',
+      'STOPPED_BOX_STATUS="$(inspect_outer_box_status)"',
     ],
   },
   {
@@ -87,7 +92,6 @@ const SHARED_DEPLOYMENT_CONTRACT = [
   'contents: read',
   'export PLOINKY_WORKSPACE_ROOT="$WORK_DIR"',
   '--reset-repos',
-  '"$PLOINKY" status',
   '- name: Create summary',
   '- name: Cleanup',
 ];
@@ -116,6 +120,7 @@ for (const workflow of WORKFLOWS) {
     if (workflow.file.endsWith('deploy-explorer-qa.yml')) {
       assert.doesNotMatch(source, /EXPLORER_QA_CLOUDFLARE_TUNNEL_(?:TOKEN|ID)/);
       assert.doesNotMatch(source, /tunnelTokenSecret|publication\/explorer-qa-tunnel/);
+      assert.doesNotMatch(source, /BOX_STATUS="\$\("\$PLOINKY" status\)"/);
     }
 
     assert.equal(source.match(/<< ?'REMOTE'/g)?.length, 1, 'expected one remote deployment heredoc');
@@ -150,6 +155,10 @@ test('Explorer QA destroy removes only its Ploinky-owned Cloudflare publication'
     'timed out waiting for Ploinky to remove its Cloudflare publication',
     'Ploinky removed its owned Cloudflare route, DNS record, and managed tunnel',
     'Unrelated Cloudflare tunnels and routes: preserved',
+    'inspect_outer_box_status() {',
+    'createBoxSupervisor().inspectBoxStatus()',
+    'process.stdout.write(formatBoxStatus(status))',
+    'BOX_STATUS="$(inspect_outer_box_status)"',
     'printf \'yes\\n\' | "$PLOINKY" destroy',
     'QA_VOLUME_ROLES=(workspace containers ploinky-deps)',
     'io.assistos.ploinky-box.path-hash',
@@ -161,4 +170,5 @@ test('Explorer QA destroy removes only its Ploinky-owned Cloudflare publication'
   assert.doesNotMatch(source, /checkout --detach --force "refs\/remotes\/origin\/\$PLOINKY_BRANCH"/);
   assert.doesNotMatch(source, /EXPLORER_QA_CLOUDFLARE_TUNNEL_(?:TOKEN|ID)/);
   assert.doesNotMatch(source, /tunnelTokenSecret|publication\/explorer-qa-tunnel/);
+  assert.doesNotMatch(source, /BOX_STATUS="\$\("\$PLOINKY" status\)"/);
 });

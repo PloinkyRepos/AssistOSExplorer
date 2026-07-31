@@ -264,6 +264,22 @@ jobs:
           mkdir -p "$WORK_DIR/.runtime"
           RUNTIME_DIR="$WORK_DIR/.runtime/ploinky"
 
+          inspect_outer_box_status() {
+            env PLOINKY_WORKSPACE_ROOT="$WORK_DIR" \
+              node --input-type=module - \
+                "$RUNTIME_DIR/ploinky-box/supervisor.mjs" <<'NODE'
+          import { pathToFileURL } from 'node:url';
+
+          const supervisorModule = process.argv[2];
+          const {
+            createBoxSupervisor,
+            formatBoxStatus,
+          } = await import(pathToFileURL(supervisorModule).href);
+          const status = createBoxSupervisor().inspectBoxStatus();
+          process.stdout.write(formatBoxStatus(status));
+          NODE
+          }
+
           if [ -e "$RUNTIME_DIR" ] && [ ! -d "$RUNTIME_DIR/.git" ]; then
             echo "[deploy-qa] ERROR: managed runtime path is not a Ploinky git checkout: $RUNTIME_DIR"
             exit 1
@@ -320,10 +336,7 @@ jobs:
             echo "[deploy-qa] Stopping the existing QA Box before updating its mounted runtime..."
             if ! env PLOINKY_WORKSPACE_ROOT="$WORK_DIR" "$RUNTIME_DIR/bin/ploinky" stop; then
               echo "[deploy-qa] The inner graceful stop failed; proving the outer Box stopped..."
-              if ! STOPPED_BOX_STATUS="$(
-                env PLOINKY_WORKSPACE_ROOT="$WORK_DIR" \
-                  "$RUNTIME_DIR/bin/ploinky" status
-              )"; then
+              if ! STOPPED_BOX_STATUS="$(inspect_outer_box_status)"; then
                 echo "[deploy-qa] ERROR: unable to inspect the Box after the degraded stop."
                 exit 1
               fi
@@ -637,7 +650,7 @@ jobs:
           QA_TERMINAL_FAILURE=0
           NO_WAIT_FAILURES=""
           for _ in $(seq 1 90); do
-            BOX_STATUS="$("$PLOINKY" status)"
+            BOX_STATUS="$(inspect_outer_box_status)"
             if [[ "$BOX_STATUS" == *"Ploinky Box: running-initialized"* ]] &&
               [[ "$BOX_STATUS" == *"Tracked agents: 16"* ]] &&
               [[ "$BOX_STATUS" == *"Running agents: 16"* ]] &&
