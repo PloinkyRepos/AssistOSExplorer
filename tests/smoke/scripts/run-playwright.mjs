@@ -10,12 +10,36 @@ import {
   collectScreenRuntimeEvidence,
   sameScreenRuntimeGeneration,
 } from '../lib/screen-runtime-evidence.mjs';
+import {
+  collectCopilotReleaseEvidence,
+  sameCopilotReleaseGeneration,
+} from '../lib/copilot-release-evidence.mjs';
 import { validateQaAcceptanceProfile } from '../lib/qa-acceptance-profile.mjs';
 import { validateHeadlessWebMeetProfile } from '../lib/webmeet-headless-profile.mjs';
 
 const smokeRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const cliPath = path.join(smokeRoot, 'node_modules', 'playwright', 'cli.js');
 const playwrightArgs = process.argv.slice(2);
+const forbiddenOutputOptions = new Set([
+  '--config', '-c', '--output', '--reporter',
+  '--update-snapshots', '-u', '--update-source-method',
+]);
+const ordinaryCopilotGate = playwrightArgs.some((argument) => (
+  String(argument).replaceAll('\\', '/').endsWith('specs/05-copilot-folder-launch.spec.mjs')
+));
+for (let index = 0; index < playwrightArgs.length; index += 1) {
+  const argument = playwrightArgs[index];
+  const optionName = String(argument).split('=', 1)[0];
+  if (forbiddenOutputOptions.has(optionName)) {
+    throw new Error(`Explorer smoke gates forbid Playwright output override '${optionName}'; all artifacts must remain under SMOKE_ARTIFACT_DIR.`);
+  }
+  const retryValue = argument === '--retries'
+    ? playwrightArgs[index + 1]
+    : argument.startsWith('--retries=') ? argument.slice('--retries='.length) : null;
+  if (retryValue !== null && retryValue !== '0') {
+    throw new Error('Explorer smoke gates require exactly zero Playwright retries.');
+  }
+}
 const screenGate = /^(1|true|yes|on)$/i.test(String(process.env.SMOKE_WEBMEET_SCREEN || '').trim());
 const headlessWebMeetGate = /^(1|true|yes|on)$/i.test(String(process.env.SMOKE_WEBMEET_HEADLESS || '').trim());
 const mediaGate = /^(1|true|yes|on)$/i.test(String(process.env.SMOKE_WEBMEET_MEDIA || '').trim());
@@ -96,7 +120,33 @@ function terminate(child) {
 
 let xvfb = null;
 const childEnv = { ...process.env };
+for (const name of Object.keys(childEnv)) {
+  if (
+    /^PLAYWRIGHT_[A-Z0-9]+_OUTPUT_(?:DIR|FILE|NAME)$/.test(name)
+    || name === 'PLAYWRIGHT_HTML_REPORT'
+    || name === 'PW_TEST_REPORTER'
+  ) {
+    delete childEnv[name];
+  }
+}
 let screenRuntimeEvidence = null;
+let copilotReleaseEvidence = null;
+if (ordinaryCopilotGate) {
+  const verifierPath = path.resolve(
+    smokeRoot,
+    '../../../ploinky/tests/release/verifyCopilot421Bundle.mjs',
+  );
+  copilotReleaseEvidence = await collectCopilotReleaseEvidence({
+    manifestPath: String(process.env.SMOKE_RELEASE_MANIFEST || '').trim(),
+    verifierPath,
+    baseURL,
+    expectedContainerName: String(process.env.SMOKE_PLOINKY_BOX_CONTAINER || '').trim(),
+    expectedImageRef: String(process.env.SMOKE_EXPECT_BOX_IMAGE_REF || '').trim(),
+    generationMaxAgeMs: process.env.SMOKE_BOX_MAX_GENERATION_AGE_MS,
+    imageMaxAgeMs: process.env.SMOKE_BOX_MAX_IMAGE_AGE_MS,
+  });
+  childEnv.SMOKE_COPILOT_RELEASE_EVIDENCE = JSON.stringify(copilotReleaseEvidence);
+}
 if (screenGate) {
   const baseURL = process.env.SMOKE_BASE_URL || process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:8080';
   screenRuntimeEvidence = collectScreenRuntimeEvidence({
@@ -168,6 +218,28 @@ if (screenRuntimeEvidence) {
     }
   } catch (error) {
     console.error(`Post-screen runtime evidence failed: ${error instanceof Error ? error.message : String(error)}`);
+    exitCode = 1;
+  }
+}
+if (copilotReleaseEvidence) {
+  try {
+    const postRunEvidence = await collectCopilotReleaseEvidence({
+      manifestPath: String(process.env.SMOKE_RELEASE_MANIFEST || '').trim(),
+      verifierPath: path.resolve(
+        smokeRoot,
+        '../../../ploinky/tests/release/verifyCopilot421Bundle.mjs',
+      ),
+      baseURL,
+      expectedContainerName: copilotReleaseEvidence.liveBox.box.containerName,
+      expectedImageRef: copilotReleaseEvidence.liveBox.box.imageRef,
+      generationMaxAgeMs: process.env.SMOKE_BOX_MAX_GENERATION_AGE_MS,
+      imageMaxAgeMs: process.env.SMOKE_BOX_MAX_IMAGE_AGE_MS,
+    });
+    if (!sameCopilotReleaseGeneration(copilotReleaseEvidence, postRunEvidence)) {
+      throw new Error('The exact manifest-bound Box generation changed during the ordinary Copilot gate.');
+    }
+  } catch (error) {
+    console.error(`Post-Copilot release evidence failed: ${error instanceof Error ? error.message : String(error)}`);
     exitCode = 1;
   }
 }

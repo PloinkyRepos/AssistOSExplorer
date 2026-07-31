@@ -1,3 +1,5 @@
+import crypto from 'node:crypto';
+
 import { test, expect } from '../lib/fixtures.mjs';
 import { smokeConfig } from '../lib/config.mjs';
 import { openExplorer } from '../lib/explorer.mjs';
@@ -5,6 +7,14 @@ import { setComposer, waitForWebchatIdle } from '../lib/webchat.mjs';
 
 const BOT_MESSAGE = '#chatList > .wa-message.in:not(.wa-typing):not(.wa-task-item) .wa-message-bubble';
 const STARTUP_FAILURE = /\[input error\]|bwrap:|Agent process exited repeatedly|open \/proc\/\d+\/ns/i;
+const COMPLETION_FAILURE = /\[error\]|\b421\b|UNKNOWN_HOST|Misdirected Request|provider\s+(?:error|failure)|API\s+(?:error|failure)|startup\s+(?:error|failure)/i;
+
+async function assistantMessages(page) {
+  return page.locator(BOT_MESSAGE).evaluateAll((messages) => messages.map((message, index) => ({
+    id: message.dataset.messageId || `baseline-index-${index}`,
+    text: (message.dataset.fullText || message.textContent || '').trim(),
+  })));
+}
 
 function directoryRow(page, directoryPath) {
   return page.locator(`tr[data-entry-path="${directoryPath}"]`);
@@ -65,12 +75,54 @@ test.describe('Copilot launch from Explorer', () => {
     ));
     const directoryName = `copilot-smoke-${smokeConfig.runId}`;
     const directoryPath = `/${directoryName}`;
-    const inputResponses = [];
+    let releaseEvidence;
+    expect(() => {
+      releaseEvidence = JSON.parse(String(process.env.SMOKE_COPILOT_RELEASE_EVIDENCE || ''));
+    }).not.toThrow();
+    expect(releaseEvidence?.imageDigest).toMatch(/^sha256:[0-9a-f]{64}$/);
+    expect(releaseEvidence?.liveBox?.box?.imageId).toBe(releaseEvidence.imageDigest);
+    expect(releaseEvidence?.liveBox?.box?.baseURL).toBe(smokeConfig.baseURL);
+    const networkEvidence = [];
+    const requestFailures = [];
+    const browserErrors = [];
+    const observedPages = new Set();
+    const captureConsoleError = (message) => {
+      if (message.type() === 'error') browserErrors.push(`console: ${message.text()}`);
+    };
+    const capturePageError = (error) => browserErrors.push(`page: ${error.message}`);
+    const attachBrowserErrorListeners = (candidate) => {
+      if (observedPages.has(candidate)) return;
+      observedPages.add(candidate);
+      candidate.on('console', captureConsoleError);
+      candidate.on('pageerror', capturePageError);
+    };
+    const captureInputRequest = (request) => {
+      if (new URL(request.url()).pathname !== '/webchat/input') return;
+      networkEvidence.push({
+        kind: 'request',
+        method: request.method(),
+        url: request.url(),
+        body: request.postData() || '',
+      });
+    };
     const captureInputResponse = (response) => {
-      if (new URL(response.url()).pathname !== '/webchat/input') return;
-      inputResponses.push({
+      const pathname = new URL(response.url()).pathname;
+      if (pathname !== '/webchat/input'
+        && !pathname.startsWith('/base-agent-additional-server/')) return;
+      networkEvidence.push({
+        kind: 'response',
         status: response.status(),
+        url: response.url(),
         body: response.text().catch(() => ''),
+      });
+    };
+    const captureRequestFailure = (request) => {
+      const pathname = new URL(request.url()).pathname;
+      if (pathname !== '/webchat/input'
+        && !pathname.startsWith('/base-agent-additional-server/')) return;
+      requestFailures.push({
+        url: request.url(),
+        error: request.failure()?.errorText || 'request failed',
       });
     };
     let copilotPage = null;
@@ -79,7 +131,10 @@ test.describe('Copilot launch from Explorer', () => {
     await openExplorer(page);
     await expect(page.locator('#toolbarMenuButton')).toBeEnabled();
     await createDirectory(page, directoryName, directoryPath);
+    page.context().on('request', captureInputRequest);
     page.context().on('response', captureInputResponse);
+    page.context().on('requestfailed', captureRequestFailure);
+    page.context().on('page', attachBrowserErrorListeners);
 
     try {
       const row = directoryRow(page, directoryPath);
@@ -95,6 +150,7 @@ test.describe('Copilot launch from Explorer', () => {
       });
       await openCopilot.click();
       copilotPage = await popupPromise;
+      attachBrowserErrorListeners(copilotPage);
       await copilotPage.waitForLoadState('domcontentloaded');
 
       const launchUrl = new URL(copilotPage.url());
@@ -116,49 +172,91 @@ test.describe('Copilot launch from Explorer', () => {
       await expect(copilotPage.locator('#chatList')).not.toContainText(STARTUP_FAILURE);
 
       await waitForWebchatIdle(copilotPage);
-      const messageCount = await copilotPage.locator(BOT_MESSAGE).count();
-      await setComposer(copilotPage, '/help');
+      const baseline = await assistantMessages(copilotPage);
+      const baselineIds = new Set(baseline.map((message) => message.id));
+      const correlation = crypto.randomUUID();
+      const prompt = `Give one brief practical tip for organizing this folder. Correlation: ${correlation}.`;
+
+      await setComposer(copilotPage, prompt);
       await copilotPage.locator('#send').click();
 
+      let lastNewMessage = '';
+      let stableChecks = 0;
       await expect.poll(
-        async () => copilotPage.locator(BOT_MESSAGE).evaluateAll(
-          (messages, firstNewMessage) => messages
-            .slice(firstNewMessage)
-            .map((message) => message.textContent?.trim() || '')
-            .filter(Boolean)
-            .join('\n'),
-          messageCount,
-        ),
-        {
-          message: 'Copilot should answer the local /help command',
-          timeout: smokeConfig.timeouts.relay,
+        async () => {
+          const messages = await assistantMessages(copilotPage);
+          const created = messages.filter((message, index) => (
+            !baselineIds.has(message.id) && index >= baseline.length && message.text
+          ));
+          const candidate = created.at(-1)?.text || '';
+          if (!candidate || COMPLETION_FAILURE.test(candidate)) {
+            lastNewMessage = candidate;
+            stableChecks = 0;
+            return 0;
+          }
+          if (candidate === lastNewMessage) stableChecks += 1;
+          else {
+            lastNewMessage = candidate;
+            stableChecks = 1;
+          }
+          return stableChecks;
         },
-      ).toMatch(/help|command|permissions|session/i);
+        {
+          message: 'Copilot should produce one new stable nonempty ordinary-chat completion',
+          timeout: smokeConfig.timeouts.relay,
+          intervals: [250, 500, 750],
+        },
+      ).toBeGreaterThanOrEqual(3);
       await waitForWebchatIdle(copilotPage);
 
-      const replies = await copilotPage.locator(BOT_MESSAGE).evaluateAll(
-        (messages, firstNewMessage) => messages
-          .slice(firstNewMessage)
-          .map((message) => message.textContent?.trim() || '')
-          .filter(Boolean),
-        messageCount,
-      );
-      expect(replies.length).toBeGreaterThan(0);
-      const inputEvidence = await Promise.all(inputResponses.map(async (entry) => ({
-        status: entry.status,
-        body: await entry.body,
+      const completed = (await assistantMessages(copilotPage)).filter((message, index) => (
+        !baselineIds.has(message.id) && index >= baseline.length && message.text
+      ));
+      expect(completed.length).toBeGreaterThan(0);
+      expect(completed.at(-1).text).not.toMatch(COMPLETION_FAILURE);
+      const resolvedNetworkEvidence = await Promise.all(networkEvidence.map(async (entry) => ({
+        ...entry,
+        body: entry.body instanceof Promise ? await entry.body : entry.body,
       })));
+      const correlatedInputs = resolvedNetworkEvidence.filter((entry) => (
+        entry.kind === 'request'
+        && new URL(entry.url).pathname === '/webchat/input'
+        && entry.body.includes(correlation)
+      ));
+      expect(correlatedInputs, JSON.stringify(resolvedNetworkEvidence)).toHaveLength(1);
+      expect(correlatedInputs[0].method).toBe('POST');
+      const inputResponses = resolvedNetworkEvidence.filter((entry) => (
+        entry.kind === 'response' && new URL(entry.url).pathname === '/webchat/input'
+      ));
+      expect(inputResponses.length).toBeGreaterThan(0);
       expect(
-        inputEvidence.every((entry) => entry.status >= 200 && entry.status < 300),
-        `Copilot input responses: ${JSON.stringify(inputEvidence)}`,
+        inputResponses.every((entry) => entry.status >= 200 && entry.status < 300),
+        `Copilot network evidence: ${JSON.stringify(resolvedNetworkEvidence)}`,
+      ).toBe(true);
+      const routerResponses = resolvedNetworkEvidence.filter((entry) => (
+        entry.kind === 'response'
+        && new URL(entry.url).pathname.startsWith('/base-agent-additional-server/')
+      ));
+      expect(
+        routerResponses.every((entry) => entry.status >= 200 && entry.status < 300),
+        `Copilot Router response evidence: ${JSON.stringify(routerResponses)}`,
       ).toBe(true);
       expect(
-        replies.join('\n'),
-        `Copilot input responses: ${JSON.stringify(inputEvidence)}`,
-      ).toMatch(/help|command|permissions|session/i);
+        resolvedNetworkEvidence.map((entry) => `${entry.status || ''} ${entry.body || ''}`).join('\n'),
+      ).not.toMatch(COMPLETION_FAILURE);
+      expect(requestFailures, JSON.stringify(requestFailures)).toHaveLength(0);
+      expect(browserErrors, JSON.stringify(browserErrors)).toHaveLength(0);
       await expect(copilotPage.locator('#chatList')).not.toContainText(STARTUP_FAILURE);
+      await expect(copilotPage.locator('#chatList')).not.toContainText(COMPLETION_FAILURE);
     } finally {
+      page.context().off('request', captureInputRequest);
       page.context().off('response', captureInputResponse);
+      page.context().off('requestfailed', captureRequestFailure);
+      page.context().off('page', attachBrowserErrorListeners);
+      for (const observedPage of observedPages) {
+        observedPage.off('console', captureConsoleError);
+        observedPage.off('pageerror', capturePageError);
+      }
       await copilotPage?.close().catch(() => {});
       await waitForStableEdge(page);
       await deleteDirectoryIfPresent(page, directoryPath);

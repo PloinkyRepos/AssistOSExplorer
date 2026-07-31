@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import path from 'node:path';
 
 import { smokeConfig } from './lib/config.mjs';
 import { validateQaAcceptanceProfile } from './lib/qa-acceptance-profile.mjs';
@@ -10,11 +11,17 @@ const qaAcceptanceProfile = validateQaAcceptanceProfile({
   edgeIP: smokeConfig.qaEdgeIP,
 });
 
+export const playwrightOutputPaths = Object.freeze({
+  htmlReport: path.join(smokeConfig.artifactRoot, 'playwright-report'),
+  jsonReport: path.join(smokeConfig.artifactRoot, 'test-results', 'results.json'),
+  outputDir: path.join(smokeConfig.artifactRoot, 'test-results'),
+});
+
 export default defineConfig({
   testDir: './specs',
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
-  retries: process.env.CI ? 1 : 0,
+  retries: 0,
   workers: 1,
   timeout: smokeConfig.timeouts.test,
   expect: {
@@ -22,10 +29,10 @@ export default defineConfig({
   },
   reporter: [
     ['list'],
-    ['html', { open: 'never', outputFolder: 'playwright-report' }],
-    ['json', { outputFile: 'test-results/results.json' }],
+    ['html', { open: 'never', outputFolder: playwrightOutputPaths.htmlReport }],
+    ['json', { outputFile: playwrightOutputPaths.jsonReport }],
   ],
-  outputDir: 'test-results',
+  outputDir: playwrightOutputPaths.outputDir,
   use: {
     ...devices['Desktop Chrome'],
     baseURL: smokeConfig.baseURL,

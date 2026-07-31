@@ -197,7 +197,7 @@ alive while it runs and executes it before cleanup or graph destruction, with
 no retry, skip, or weakened assertion:
 
 ```bash
-cd /Users/danielsava/work/file-parser/AssistOSExplorer/tests/smoke
+cd ${WORKSPACE_ROOT}/AssistOSExplorer/tests/smoke
 SMOKE_BASE_URL=http://127.0.0.1:18080 npm test -- --project=chromium specs/00-router-auth.spec.mjs
 ```
 

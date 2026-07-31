@@ -13,19 +13,6 @@ const toNumber = (value, fallback = undefined) => {
 
 const isHttp = (value) => typeof value === "string" && /^https?:\/\//i.test(value);
 
-const normalizeUrlForContainer = (url) => {
-  if (!url || typeof url !== "string") return url;
-  try {
-    const u = new URL(url);
-    if (u.hostname === "127.0.0.1" || u.hostname === "localhost") {
-      u.hostname = process.env.HOST_LOOPBACK || "host.docker.internal";
-    }
-    return u.toString();
-  } catch (_) {
-    return url;
-  }
-};
-
 const normalizeBaseUrl = (value) => {
   if (!value || typeof value !== "string") return null;
   try {
@@ -53,23 +40,17 @@ const resolveAgentId = (explicitAgentId) => {
 };
 
 const resolveBlobBaseUrl = (explicitBaseUrl) => {
-  const host = process.env.HOST_LOOPBACK || "host.docker.internal";
-  const port = process.env.BLOB_PORT || process.env.PLOINKY_ROUTER_PORT || process.env.PORT || "8080";
-  const defaults = `http://${host}:${port}`;
   const candidates = [
     explicitBaseUrl,
     process.env.FILE_EXPLORER_URL,
     process.env.BLOB_BASE_URL,
-    process.env.BLOB_STORE_URL,
-    process.env.PLOINKY_ROUTER_URL,
-    process.env.ROUTER_URL,
-    defaults
+    process.env.BLOB_STORE_URL
   ];
   for (const candidate of candidates) {
     const normalized = normalizeBaseUrl(candidate);
     if (normalized) return normalized;
   }
-  return defaults;
+  return null;
 };
 
 const normalizeDownloadUrl = (localPath, downloadUrl, baseUrl) => {
@@ -88,6 +69,9 @@ const normalizeDownloadUrl = (localPath, downloadUrl, baseUrl) => {
 const uploadToBlobStore = async (filePath, mimeType, ctx = {}) => {
   const agentId = resolveAgentId(ctx.agentId);
   const baseUrl = resolveBlobBaseUrl(ctx.blobBaseUrl);
+  if (!baseUrl) {
+    throw new Error("Blob upload requires an explicit blobBaseUrl, FILE_EXPLORER_URL, BLOB_BASE_URL, or BLOB_STORE_URL.");
+  }
   const blobStoreUrl = new URL(`/blobs/${encodeURIComponent(agentId)}`, baseUrl).href;
 
   const fileName = path.basename(filePath);
@@ -180,33 +164,27 @@ const normalizeMediaList = (raw) => {
 };
 
 const downloadToFile = async (url, targetPath) => {
-  const targetUrl = normalizeUrlForContainer(url);
-  const doFetch = async (u) => {
-    const res = await fetch(u);
-    if (!res.ok) {
-      throw new Error(`Failed to download ${u}: ${res.status} ${res.statusText}`);
-    }
-    const contentType = (res.headers?.get("content-type") || "").toLowerCase();
-    if (contentType.includes("image/svg")) {
-      throw new Error("SVG images are not supported; please convert to PNG/JPG.");
-    }
-    const arrayBuffer = await res.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    await fsp.writeFile(targetPath, buffer);
-  };
-  try {
-    await doFetch(url);
-  } catch (err) {
-    await doFetch(targetUrl);
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Failed to download ${url}: ${res.status} ${res.statusText}`);
   }
+  const contentType = (res.headers?.get("content-type") || "").toLowerCase();
+  if (contentType.includes("image/svg")) {
+    throw new Error("SVG images are not supported; please convert to PNG/JPG.");
+  }
+  const arrayBuffer = await res.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+  await fsp.writeFile(targetPath, buffer);
   return targetPath;
 };
 
 const buildBlobUrlFromId = (id) => {
-  const host = process.env.HOST_LOOPBACK || "host.docker.internal";
-  const port = process.env.BLOB_PORT || process.env.PLOINKY_ROUTER_PORT || process.env.PORT || "8080";
+  const baseUrl = resolveBlobBaseUrl();
+  if (!baseUrl) {
+    throw new Error("Blob download by id requires an explicit FILE_EXPLORER_URL, BLOB_BASE_URL, or BLOB_STORE_URL.");
+  }
   const agent = process.env.BLOB_AGENT || "explorer";
-  return `http://${host}:${port}/blobs/${encodeURIComponent(agent)}/${encodeURIComponent(String(id).trim())}`;
+  return new URL(`/blobs/${encodeURIComponent(agent)}/${encodeURIComponent(String(id).trim())}`, baseUrl).href;
 };
 
 const ensureLocalPath = async (src, workDir, tempDir, label) => {
@@ -218,10 +196,9 @@ const ensureLocalPath = async (src, workDir, tempDir, label) => {
     throw new Error("SVG images are not supported; please convert to PNG/JPG before using ffmpegImageToVideo.");
   }
   if (isHttp(src)) {
-    const normalized = normalizeUrlForContainer(src);
     const fname = `${label}-${Date.now()}${path.extname(src) || ".bin"}`;
     const dest = path.join(tempDir, fname);
-    await downloadToFile(normalized, dest);
+    await downloadToFile(src, dest);
     return dest;
   }
   const fname = `${label}-${Date.now()}.bin`;

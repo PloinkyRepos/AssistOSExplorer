@@ -7,6 +7,7 @@ import {
   selectLocalScreenContainer,
   validateBoxFreshness,
   validateLiveBoxEvidence,
+  validateReadOnlyPloinkySourceMount,
   verifyNetworkLaneCompletion,
 } from './live-box.mjs';
 
@@ -98,6 +99,27 @@ test('live Box evidence is exact, fresh, and generation-comparable', () => {
   assert.throws(() => validateLiveBoxEvidence(staleImage, {
     baseURL: 'http://127.0.0.1:8080', nowMs: NOW,
   }), /image is not fresh/);
+});
+
+test('live Box source evidence requires the exact verified read-only Ploinky bind', () => {
+  const realpathSync = (value) => value.replace('/private', '');
+  assert.deepEqual(validateReadOnlyPloinkySourceMount([{
+    Type: 'bind',
+    Source: '/private/work/ploinky',
+    Destination: '/opt/ploinky',
+    RW: false,
+  }], '/work/ploinky', { realpathSync }), {
+    type: 'bind',
+    source: '/work/ploinky',
+    destination: '/opt/ploinky',
+    readWrite: false,
+  });
+  assert.throws(() => validateReadOnlyPloinkySourceMount([{
+    Type: 'bind', Source: '/work/ploinky', Destination: '/opt/ploinky', RW: true,
+  }], '/work/ploinky', { realpathSync }), /read-only bind/);
+  assert.throws(() => validateReadOnlyPloinkySourceMount([{
+    Type: 'bind', Source: '/work/other', Destination: '/opt/ploinky', RW: false,
+  }], '/work/ploinky', { realpathSync }), /does not equal/);
 });
 
 test('native gates enforce the same fresh image and container generation contract', () => {

@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
 
 import {
   buildBoxEvidence,
@@ -10,6 +11,7 @@ const BOX_ROLE_LABEL = 'io.assistos.ploinky-box.role';
 const BOX_IMAGE_REF_LABEL = 'io.assistos.ploinky-box.image-ref';
 const DEFAULT_GENERATION_MAX_AGE_MS = 30 * 60_000;
 const DEFAULT_IMAGE_MAX_AGE_MS = 4 * 60 * 60_000;
+const PLOINKY_SOURCE_DESTINATION = '/opt/ploinky';
 
 function exactDate(value, name) {
   const milliseconds = Date.parse(String(value || ''));
@@ -30,6 +32,51 @@ function oneRecord(value, name) {
     throw new Error(`${name} must contain exactly one record.`);
   }
   return rows[0];
+}
+
+export function validateReadOnlyPloinkySourceMount(mounts, expectedSource, {
+  realpathSync = fs.realpathSync,
+} = {}) {
+  if (!pathIsAbsolute(expectedSource)) {
+    throw new Error('Verified Ploinky repository path must be absolute.');
+  }
+  if (!Array.isArray(mounts)) {
+    throw new Error('Live Box inspection must include its exact mount inventory.');
+  }
+  const candidates = mounts.filter((mount) => (
+    String(mount?.Destination ?? mount?.destination ?? '') === PLOINKY_SOURCE_DESTINATION
+  ));
+  if (candidates.length !== 1) {
+    throw new Error(`Live Box must have exactly one ${PLOINKY_SOURCE_DESTINATION} source mount.`);
+  }
+  const mount = candidates[0];
+  const type = String(mount?.Type ?? mount?.type ?? '').toLowerCase();
+  const source = String(mount?.Source ?? mount?.source ?? '');
+  const readWrite = mount?.RW ?? mount?.rw;
+  if (type !== 'bind' || readWrite !== false || !pathIsAbsolute(source)) {
+    throw new Error(`Live Box ${PLOINKY_SOURCE_DESTINATION} must be one absolute read-only bind mount.`);
+  }
+  let expectedRealpath;
+  let sourceRealpath;
+  try {
+    expectedRealpath = realpathSync(expectedSource);
+    sourceRealpath = realpathSync(source);
+  } catch (error) {
+    throw new Error(`Unable to resolve the live Box Ploinky source mount: ${error.message}`);
+  }
+  if (sourceRealpath !== expectedRealpath) {
+    throw new Error('Live Box Ploinky source mount does not equal the verified Ploinky checkout.');
+  }
+  return Object.freeze({
+    type: 'bind',
+    source: sourceRealpath,
+    destination: PLOINKY_SOURCE_DESTINATION,
+    readWrite: false,
+  });
+}
+
+function pathIsAbsolute(value) {
+  return typeof value === 'string' && value.length > 0 && value.startsWith('/');
 }
 
 export function validateBoxFreshness({
@@ -114,6 +161,8 @@ function defaultCommand(command, args, { json = false } = {}) {
   const result = spawnSync(command, args, {
     encoding: 'utf8',
     maxBuffer: 32 * 1024 * 1024,
+    timeout: 10_000,
+    killSignal: 'SIGKILL',
   });
   if (result.error) throw result.error;
   if (result.status !== 0) {
@@ -218,8 +267,10 @@ export function collectLiveBoxEvidence({
   publicIPv4 = '',
   generationMaxAgeMs = DEFAULT_GENERATION_MAX_AGE_MS,
   imageMaxAgeMs = DEFAULT_IMAGE_MAX_AGE_MS,
+  expectedPloinkySource = '',
   nowMs = Date.now(),
   command = defaultCommand,
+  realpathSync = fs.realpathSync,
 } = {}) {
   const local = parseLocalScreenBaseUrl(baseURL);
   const ids = String(command('podman', [
@@ -249,13 +300,22 @@ export function collectLiveBoxEvidence({
     baseURL: local.baseURL,
     publicIPv4: String(publicIPv4 || ''),
   });
-  return validateLiveBoxEvidence({
+  const validated = validateLiveBoxEvidence({
     capturedAt: new Date(nowMs).toISOString(),
     imageCreatedAt: image.Created,
     generationMaxAgeMs: positiveDuration(generationMaxAgeMs, DEFAULT_GENERATION_MAX_AGE_MS, 'SMOKE_BOX_MAX_GENERATION_AGE_MS'),
     imageMaxAgeMs: positiveDuration(imageMaxAgeMs, DEFAULT_IMAGE_MAX_AGE_MS, 'SMOKE_BOX_MAX_IMAGE_AGE_MS'),
     box,
   }, { baseURL: local.baseURL, nowMs });
+  if (!expectedPloinkySource) return validated;
+  return Object.freeze({
+    ...validated,
+    ploinkySourceMount: validateReadOnlyPloinkySourceMount(
+      selected?.Mounts,
+      expectedPloinkySource,
+      { realpathSync },
+    ),
+  });
 }
 
 export function sameLiveBoxGeneration(left, right) {
@@ -265,5 +325,6 @@ export function sameLiveBoxGeneration(left, right) {
     && left.box.startedAt === right?.box?.startedAt
     && left.box.imageId === right?.box?.imageId
     && JSON.stringify(left.box.normalizedPortBindings) === JSON.stringify(right?.box?.normalizedPortBindings)
+    && JSON.stringify(left.ploinkySourceMount ?? null) === JSON.stringify(right?.ploinkySourceMount ?? null)
   );
 }
