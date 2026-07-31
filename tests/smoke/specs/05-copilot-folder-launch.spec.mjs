@@ -7,7 +7,7 @@ import { setComposer, waitForWebchatIdle } from '../lib/webchat.mjs';
 
 const BOT_MESSAGE = '#chatList > .wa-message.in:not(.wa-typing):not(.wa-task-item) .wa-message-bubble';
 const STARTUP_FAILURE = /\[input error\]|bwrap:|Agent process exited repeatedly|open \/proc\/\d+\/ns/i;
-const COMPLETION_FAILURE = /\[error\]|\b421\b|UNKNOWN_HOST|Misdirected Request|provider\s+(?:error|failure)|API\s+(?:error|failure)|startup\s+(?:error|failure)/i;
+const COMPLETION_FAILURE = /\[error\]|\b421\b|UNKNOWN_HOST|Misdirected Request|tier[_\s-]+exhausted|All models in tier exhausted|provider\s+(?:error|failure)|API\s+(?:error|failure)|startup\s+(?:error|failure)/i;
 
 async function assistantMessages(page) {
   return page.locator(BOT_MESSAGE).evaluateAll((messages) => messages.map((message, index) => ({
@@ -186,30 +186,38 @@ test.describe('Copilot launch from Explorer', () => {
 
       let lastNewMessage = '';
       let stableChecks = 0;
-      await expect.poll(
-        async () => {
-          const messages = await assistantMessages(copilotPage);
-          const created = messages.filter((message, index) => (
-            !baselineIds.has(message.id) && index >= baseline.length && message.text
-          ));
-          const candidate = created.at(-1)?.text || '';
-          if (!candidate || !candidate.includes(completionToken) || COMPLETION_FAILURE.test(candidate)) {
-            lastNewMessage = candidate;
-            stableChecks = 0;
-            return 0;
-          }
-          if (candidate === lastNewMessage) stableChecks += 1;
-          else {
-            lastNewMessage = candidate;
-            stableChecks = 1;
-          }
-          return stableChecks;
-        },
-        {
-          message: `Copilot should produce a stable ordinary-chat completion containing ${completionToken}`,
-          timeout: smokeConfig.timeouts.relay,
-          intervals: [250, 500, 750],
-        },
+      const completionDeadline = Date.now() + smokeConfig.timeouts.relay;
+      while (Date.now() < completionDeadline && stableChecks < 3) {
+        const terminalResponse = networkEvidence.find((entry) => (
+          entry.kind === 'response'
+          && new URL(entry.url).pathname.startsWith('/base-agent-additional-server/')
+          && entry.status >= 400
+        ));
+        if (terminalResponse) {
+          throw new Error(`Copilot Router request failed with HTTP ${terminalResponse.status}: ${terminalResponse.url}`);
+        }
+        const messages = await assistantMessages(copilotPage);
+        const created = messages.filter((message, index) => (
+          !baselineIds.has(message.id) && index >= baseline.length && message.text
+        ));
+        const candidate = created.at(-1)?.text || '';
+        if (candidate && COMPLETION_FAILURE.test(candidate)) {
+          throw new Error(`Copilot returned a terminal completion failure: ${candidate}`);
+        }
+        if (!candidate || !candidate.includes(completionToken)) {
+          lastNewMessage = candidate;
+          stableChecks = 0;
+        } else if (candidate === lastNewMessage) {
+          stableChecks += 1;
+        } else {
+          lastNewMessage = candidate;
+          stableChecks = 1;
+        }
+        if (stableChecks < 3) await copilotPage.waitForTimeout(250);
+      }
+      expect(
+        stableChecks,
+        `Copilot should produce a stable ordinary-chat completion containing ${completionToken}`,
       ).toBeGreaterThanOrEqual(3);
       await waitForWebchatIdle(copilotPage);
 
