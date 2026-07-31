@@ -81,6 +81,7 @@
                 <section>
                     <h2>Plugin and Command Registration</h2>
                     <p>At invocation time, the wrapper registers <a href="https://assistos-ai.github.io/soplang/" target="_blank" rel="noopener noreferrer">SOPLang</a> plugins and then loads project plugins from <code>soplangAgent/plugins/</code>. During builder initialization, custom commands are registered (<code>load</code>, <code>createJSCode</code>, <code>store</code>), and Achilles skills are also registered as <a href="https://assistos-ai.github.io/soplang/" target="_blank" rel="noopener noreferrer">SOPLang</a> commands.</p>
+                    <p>The Achilles bridge supplies the complete local logger interface, including <code>debug()</code> and <code>error()</code>, so generator failures retain their original cause. Semantic model tiers such as <code>code</code> remain owned and resolved by the local Soul Gateway.</p>
                 </section>
 
                 <section>

@@ -23,6 +23,18 @@ test('ensureSuccess throws ToolError on Error text', () => {
     });
 });
 
+test('ensureSuccess preserves MCP execution errors', () => {
+    const payload = {
+        content: [{ type: 'text', text: 'MCP error -32600: Invocation rejected' }]
+    };
+    assert.throws(() => ensureSuccess(payload), (err) => {
+        assert.ok(err instanceof ToolError);
+        assert.equal(err.code, 'tool_error');
+        assert.equal(err.message, 'MCP error -32600: Invocation rejected');
+        return true;
+    });
+});
+
 test('ensureSuccess throws ToolError on ok false', () => {
     const payload = { text: '{"ok":false,"error":"bad"}' };
     assert.throws(() => ensureSuccess(payload), (err) => {

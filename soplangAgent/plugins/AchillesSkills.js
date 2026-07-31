@@ -14,7 +14,8 @@ async function AchillesSkills() {
     return createAchillesSkills({
         workspace,
         AgentClass: MainAgent,
-        startDir
+        startDir,
+        logger: debug
     });
 }
 

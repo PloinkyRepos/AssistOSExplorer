@@ -533,6 +533,9 @@ class AssistosSDK {
             const firstText = nonStderrText || textBlocks[0];
             const firstJson = blocks.find(block => block?.type === 'json' && block.json !== undefined);
             const text = firstText ? firstText.text : JSON.stringify(result, null, 2);
+            if (result?.isError === true || /^MCP error(?:\s|$)/i.test(String(text || '').trim())) {
+                throw new Error(String(text || 'MCP tool execution failed.').trim());
+            }
             let json = firstJson ? firstJson.json : undefined;
             if (!json && typeof firstText?.text === 'string' && !firstText.text.startsWith('stderr:')) {
                 try {
