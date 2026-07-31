@@ -14,6 +14,7 @@ admin-users-settings .toolbar {
     padding: 14px;
     border-bottom: 1px solid var(--border);
     background: var(--surface);
+    backdrop-filter: none;
     align-items: end;
 }
 
