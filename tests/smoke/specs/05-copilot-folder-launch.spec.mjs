@@ -10,6 +10,28 @@ function directoryRow(page, directoryPath) {
   return page.locator(`tr[data-entry-path="${directoryPath}"]`);
 }
 
+async function waitForStableEdge(page, consecutiveChecks = 10) {
+  let activeChecks = 0;
+  await expect.poll(
+    async () => {
+      const response = await page.request.get('/auth/login?agent=explorer', {
+        failOnStatusCode: false,
+      }).catch(() => null);
+      if (!response || response.status() >= 500) {
+        activeChecks = 0;
+        return activeChecks;
+      }
+      activeChecks += 1;
+      return activeChecks;
+    },
+    {
+      message: 'Explorer edge generation should remain continuously active',
+      timeout: Math.max(smokeConfig.timeouts.navigation, 90_000),
+      intervals: [500],
+    },
+  ).toBeGreaterThanOrEqual(consecutiveChecks);
+}
+
 async function createDirectory(page, directoryName, directoryPath) {
   let promptMessage = '';
   page.once('dialog', async (dialog) => {
@@ -37,14 +59,27 @@ async function deleteDirectoryIfPresent(page, directoryPath) {
 
 test.describe('Copilot launch from Explorer', () => {
   test('opens a working Copilot from a newly created folder', async ({ page }) => {
-    test.setTimeout(Math.max(smokeConfig.timeouts.test, 180_000));
+    test.setTimeout(Math.max(
+      smokeConfig.timeouts.test,
+      smokeConfig.timeouts.relay + 120_000,
+    ));
     const directoryName = `copilot-smoke-${smokeConfig.runId}`;
     const directoryPath = `/${directoryName}`;
+    const inputResponses = [];
+    const captureInputResponse = (response) => {
+      if (new URL(response.url()).pathname !== '/webchat/input') return;
+      inputResponses.push({
+        status: response.status(),
+        body: response.text().catch(() => ''),
+      });
+    };
     let copilotPage = null;
 
+    await waitForStableEdge(page);
     await openExplorer(page);
     await expect(page.locator('#toolbarMenuButton')).toBeEnabled();
     await createDirectory(page, directoryName, directoryPath);
+    page.context().on('response', captureInputResponse);
 
     try {
       const row = directoryRow(page, directoryPath);
@@ -86,12 +121,19 @@ test.describe('Copilot launch from Explorer', () => {
       await copilotPage.locator('#send').click();
 
       await expect.poll(
-        async () => copilotPage.locator(BOT_MESSAGE).count(),
+        async () => copilotPage.locator(BOT_MESSAGE).evaluateAll(
+          (messages, firstNewMessage) => messages
+            .slice(firstNewMessage)
+            .map((message) => message.textContent?.trim() || '')
+            .filter(Boolean)
+            .join('\n'),
+          messageCount,
+        ),
         {
           message: 'Copilot should answer the local /help command',
-          timeout: smokeConfig.timeouts.navigation,
+          timeout: smokeConfig.timeouts.relay,
         },
-      ).toBeGreaterThan(messageCount);
+      ).toMatch(/help|command|permissions|session/i);
       await waitForWebchatIdle(copilotPage);
 
       const replies = await copilotPage.locator(BOT_MESSAGE).evaluateAll(
@@ -102,10 +144,23 @@ test.describe('Copilot launch from Explorer', () => {
         messageCount,
       );
       expect(replies.length).toBeGreaterThan(0);
-      expect(replies.join('\n')).toMatch(/help|command|permissions|session/i);
+      const inputEvidence = await Promise.all(inputResponses.map(async (entry) => ({
+        status: entry.status,
+        body: await entry.body,
+      })));
+      expect(
+        inputEvidence.every((entry) => entry.status >= 200 && entry.status < 300),
+        `Copilot input responses: ${JSON.stringify(inputEvidence)}`,
+      ).toBe(true);
+      expect(
+        replies.join('\n'),
+        `Copilot input responses: ${JSON.stringify(inputEvidence)}`,
+      ).toMatch(/help|command|permissions|session/i);
       await expect(copilotPage.locator('#chatList')).not.toContainText(STARTUP_FAILURE);
     } finally {
+      page.context().off('response', captureInputResponse);
       await copilotPage?.close().catch(() => {});
+      await waitForStableEdge(page);
       await deleteDirectoryIfPresent(page, directoryPath);
     }
   });
