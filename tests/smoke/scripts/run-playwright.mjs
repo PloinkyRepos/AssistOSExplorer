@@ -24,9 +24,13 @@ const forbiddenOutputOptions = new Set([
   '--config', '-c', '--output', '--reporter',
   '--update-snapshots', '-u', '--update-source-method',
 ]);
-const ordinaryCopilotGate = playwrightArgs.some((argument) => (
-  String(argument).replaceAll('\\', '/').endsWith('specs/05-copilot-folder-launch.spec.mjs')
+const selectedSpecFiles = playwrightArgs.filter((argument) => (
+  /(?:^|\/)specs\/[^/]+\.spec\.mjs$/i.test(String(argument).replaceAll('\\', '/'))
 ));
+const ordinaryCopilotGate = selectedSpecFiles.length === 0
+  || selectedSpecFiles.some((argument) => (
+    String(argument).replaceAll('\\', '/').endsWith('specs/05-copilot-folder-launch.spec.mjs')
+  ));
 for (let index = 0; index < playwrightArgs.length; index += 1) {
   const argument = playwrightArgs[index];
   const optionName = String(argument).split('=', 1)[0];

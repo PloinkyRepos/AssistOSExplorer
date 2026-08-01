@@ -2,7 +2,7 @@ import { test, expect } from '../lib/fixtures.mjs';
 import { smokeConfig } from '../lib/config.mjs';
 import { signIn } from '../lib/auth.mjs';
 
-const BOT_MSG = '.wa-message.in .wa-message-bubble[data-message-id]';
+const BOT_MSG = '#chatList > .wa-message.in:not(.wa-typing):not(.wa-task-item) .wa-message-bubble';
 
 function copilotWebchatPath() {
     const params = new URLSearchParams({
