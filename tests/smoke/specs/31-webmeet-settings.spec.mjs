@@ -14,9 +14,11 @@ async function expectCustomSelectValue(locator, expectedValue) {
   ).toBe(expectedValue);
 }
 
-async function selectCustomOption(locator, value) {
+async function selectCustomOption(locator, optionsRoot, value) {
   await locator.locator('.custom-select').click();
-  const option = locator.locator(`.custom-select-option[data-value="${value}"]`);
+  const option = optionsRoot.locator(
+    `.custom-select-options-list:not(.hidden) .custom-select-option[data-value="${value}"]`,
+  );
   await expect(option).toBeVisible();
   await option.click();
   await expectCustomSelectValue(locator, value);
@@ -54,10 +56,10 @@ test.describe('WebMeet settings', () => {
       const effectSelect = page.locator('#webmeetBackgroundEffectSelect');
       await expect(effectSelect).toBeVisible();
 
-      await selectCustomOption(effectSelect, 'blur');
+      await selectCustomOption(effectSelect, settingsDialog, 'blur');
       await expect(page.locator('#webmeetBackgroundBlurRow')).toBeVisible();
 
-      await selectCustomOption(effectSelect, 'image');
+      await selectCustomOption(effectSelect, settingsDialog, 'image');
       await expect(page.locator('#webmeetBackgroundImageRow')).toBeVisible();
     } finally {
       await deleteRoomIfPresent(page, roomTitle).catch(() => null);
