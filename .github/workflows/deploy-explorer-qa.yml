@@ -23,7 +23,10 @@ env:
   PUBLIC_HOST: 'explorer-qa.axiologic.dev'
   PUBLIC_URL: 'https://explorer-qa.axiologic.dev'
   CLOUDFLARE_TUNNEL_NAME: 'explorer-qa'
+  CLOUDFLARE_TUNNEL_ID: ${{ vars.EXPLORER_QA_CLOUDFLARE_TUNNEL_ID }}
+  CLOUDFLARE_TUNNEL_SECRET_HANDLE: 'publication/explorer-qa-tunnel'
   CLOUDFLARE_API_SECRET_HANDLE: 'publication/explorer-qa-api'
+  MEDIA_PUBLIC_IPV4: '45.136.70.141'
   SOUL_GATEWAY_WORKSPACE: 'soulGateway'
   SOUL_GATEWAY_ROUTER_PORT: '8080'
 
@@ -40,8 +43,10 @@ jobs:
         env:
           SSH_KEY: ${{ secrets.EXPLORER_QA_SSH_KEY }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.EXPLORER_QA_CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_TUNNEL_TOKEN: ${{ secrets.EXPLORER_QA_CLOUDFLARE_TUNNEL_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.EXPLORER_QA_CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_ZONE_ID: ${{ vars.EXPLORER_QA_CLOUDFLARE_ZONE_ID }}
+          PLOINKY_MASTER_KEY: ${{ secrets.EXPLORER_QA_PLOINKY_MASTER_KEY }}
         run: |
           set -euo pipefail
           if [ -z "${SSH_KEY:-}" ]; then
@@ -60,9 +65,21 @@ jobs:
             echo "::error::EXPLORER_QA_CLOUDFLARE_API_TOKEN is a Global API Key; Ploinky requires a scoped Account or User API Token used as a Bearer token"
             exit 1
           fi
+          if [ -z "${CLOUDFLARE_TUNNEL_TOKEN:-}" ]; then
+            echo "::error::Missing required repository secret EXPLORER_QA_CLOUDFLARE_TUNNEL_TOKEN"
+            exit 1
+          fi
+          if [[ ! "$PLOINKY_MASTER_KEY" =~ ^[A-Fa-f0-9]{64}$ ]]; then
+            echo "::error::EXPLORER_QA_PLOINKY_MASTER_KEY must be exactly 64 hex characters"
+            exit 1
+          fi
           if [[ ! "$CLOUDFLARE_ACCOUNT_ID" =~ ^[a-f0-9]{32}$ ]] ||
             [[ ! "$CLOUDFLARE_ZONE_ID" =~ ^[a-f0-9]{32}$ ]]; then
             echo "::error::Explorer QA Cloudflare account or zone variables are missing or malformed"
+            exit 1
+          fi
+          if [[ ! "$CLOUDFLARE_TUNNEL_ID" =~ ^[a-f0-9-]{36}$ ]]; then
+            echo "::error::Explorer QA Cloudflare tunnel ID is missing or malformed"
             exit 1
           fi
           if [[ ! "$CLOUDFLARE_TUNNEL_NAME" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,47}$ ]]; then
@@ -101,6 +118,22 @@ jobs:
             echo "::error::PUBLIC_URL and PUBLIC_HOST must identify the fixed Explorer QA hostname"
             exit 1
           fi
+          TUNNEL_RESPONSE="$(mktemp /tmp/explorer_qa_tunnel.XXXXXX)"
+          trap 'rm -f "$TUNNEL_RESPONSE"' EXIT
+          curl -fsS \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            -H 'Content-Type: application/json' \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/cfd_tunnel/$CLOUDFLARE_TUNNEL_ID" \
+            > "$TUNNEL_RESPONSE"
+          if ! jq -e \
+            --arg id "$CLOUDFLARE_TUNNEL_ID" \
+            --arg name "$CLOUDFLARE_TUNNEL_NAME" \
+            '.success == true and .result.id == $id and .result.name == $name and (.result.deleted_at == null)' \
+            "$TUNNEL_RESPONSE" >/dev/null; then
+            echo "::error::The authorized existing Explorer QA tunnel is absent, deleted, or has the wrong identity"
+            exit 1
+          fi
+          echo "Existing Explorer QA tunnel identity verified."
 
       - name: Prepare SSH key
         env:
@@ -117,8 +150,10 @@ jobs:
       - name: Reconcile and start Explorer QA Box
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.EXPLORER_QA_CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_TUNNEL_TOKEN: ${{ secrets.EXPLORER_QA_CLOUDFLARE_TUNNEL_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.EXPLORER_QA_CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_ZONE_ID: ${{ vars.EXPLORER_QA_CLOUDFLARE_ZONE_ID }}
+          PLOINKY_MASTER_KEY: ${{ secrets.EXPLORER_QA_PLOINKY_MASTER_KEY }}
         run: |
           set -euo pipefail
           umask 077
@@ -141,10 +176,15 @@ jobs:
             write_shell_var PUBLIC_HOST
             write_shell_var PUBLIC_URL
             write_shell_var CLOUDFLARE_TUNNEL_NAME
+            write_shell_var CLOUDFLARE_TUNNEL_ID
+            write_shell_var CLOUDFLARE_TUNNEL_SECRET_HANDLE
             write_shell_var CLOUDFLARE_API_SECRET_HANDLE
             write_shell_var CLOUDFLARE_API_TOKEN
+            write_shell_var CLOUDFLARE_TUNNEL_TOKEN
             write_shell_var CLOUDFLARE_ACCOUNT_ID
             write_shell_var CLOUDFLARE_ZONE_ID
+            write_shell_var MEDIA_PUBLIC_IPV4
+            write_shell_var PLOINKY_MASTER_KEY
             write_shell_var SOUL_GATEWAY_WORKSPACE
             write_shell_var SOUL_GATEWAY_ROUTER_PORT
           } > "$LOCAL_ENV_FILE"
@@ -236,6 +276,18 @@ jobs:
             echo "[deploy-qa] ERROR: Cloudflare account or zone identifiers are malformed."
             exit 1
           fi
+          if [[ ! "$CLOUDFLARE_TUNNEL_ID" =~ ^[a-f0-9-]{36}$ ]]; then
+            echo "[deploy-qa] ERROR: the authorized existing Cloudflare tunnel ID is malformed."
+            exit 1
+          fi
+          if [ -z "${CLOUDFLARE_TUNNEL_TOKEN:-}" ]; then
+            echo "[deploy-qa] ERROR: the authorized existing Cloudflare tunnel token is required."
+            exit 1
+          fi
+          if [[ ! "$PLOINKY_MASTER_KEY" =~ ^[A-Fa-f0-9]{64}$ ]]; then
+            echo "[deploy-qa] ERROR: the QA Ploinky master key is malformed."
+            exit 1
+          fi
           if [[ ! "$CLOUDFLARE_TUNNEL_NAME" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,47}$ ]]; then
             echo "[deploy-qa] ERROR: managed Cloudflare tunnel name is malformed."
             exit 1
@@ -261,6 +313,34 @@ jobs:
             echo "[deploy-qa] ERROR: workspace authority directory must not be a symlink: $WORK_DIR/.ploinky"
             exit 1
           fi
+          mkdir -p "$WORK_DIR"
+          chmod 700 "$WORK_DIR"
+          node --input-type=module - "$WORK_DIR/.env" <<'NODE'
+          import fs from 'node:fs';
+
+          const target = process.argv[2];
+          const key = String(process.env.PLOINKY_MASTER_KEY || '');
+          const content = `PLOINKY_MASTER_KEY=${key}\n`;
+          if (!/^[A-Fa-f0-9]{64}$/.test(key)) {
+            throw new Error('invalid QA Ploinky master key');
+          }
+          try {
+            const current = fs.lstatSync(target);
+            if (!current.isFile() || current.isSymbolicLink() || current.nlink !== 1
+              || (typeof process.getuid === 'function' && current.uid !== process.getuid())) {
+              throw new Error(`refusing unsafe workspace master-key target: ${target}`);
+            }
+            if (fs.readFileSync(target, 'utf8') !== content) {
+              throw new Error('existing QA workspace master key does not match the authorized key');
+            }
+            fs.chmodSync(target, 0o600);
+          } catch (error) {
+            if (error?.code !== 'ENOENT') throw error;
+            fs.writeFileSync(target, content, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
+            fs.chmodSync(target, 0o600);
+          }
+          NODE
+          unset PLOINKY_MASTER_KEY
           mkdir -p "$WORK_DIR/.runtime"
           RUNTIME_DIR="$WORK_DIR/.runtime/ploinky"
 
@@ -309,6 +389,19 @@ jobs:
             'container-image-builds|https://github.com/AssistOS-AI/container-image-builds.git'
           )
           declare -A EXPECTED_COMMITS=()
+
+          AGENTLIB_URL='https://github.com/AssistOS-AI/achillesAgentLib.git'
+          if ! agentlib_record="$(
+            git ls-remote --exit-code --heads "$AGENTLIB_URL" "refs/heads/$DEPLOY_BRANCH"
+          )"; then
+            echo "[deploy-qa] ERROR: achillesAgentLib has no '$DEPLOY_BRANCH' branch."
+            exit 1
+          fi
+          EXPECTED_AGENTLIB_COMMIT="$(printf '%s\n' "$agentlib_record" | awk 'NR == 1 { print $1 }')"
+          if [[ ! "$EXPECTED_AGENTLIB_COMMIT" =~ ^[a-f0-9]{40}$ ]]; then
+            echo "[deploy-qa] ERROR: unable to resolve achillesAgentLib/$DEPLOY_BRANCH."
+            exit 1
+          fi
 
           echo "[deploy-qa] Resolving $DEPLOY_BRANCH across every managed Explorer repository..."
           for repository_record in "${GRAPH_REPOSITORIES[@]}"; do
@@ -364,6 +457,20 @@ jobs:
             exit 1
           fi
           echo "[deploy-qa] Ploinky runtime: $(git -C "$RUNTIME_DIR" rev-parse --short HEAD) ($PLOINKY_BRANCH)"
+          node --input-type=module - \
+            "$RUNTIME_DIR/globalDeps/package.json" \
+            "$EXPECTED_AGENTLIB_COMMIT" <<'NODE'
+          import fs from 'node:fs';
+
+          const packageFile = process.argv[2];
+          const expectedCommit = process.argv[3];
+          const manifest = JSON.parse(fs.readFileSync(packageFile, 'utf8'));
+          const source = String(manifest?.dependencies?.achillesAgentLib || '');
+          if (!source.endsWith(`#${expectedCommit}`)) {
+            throw new Error('Ploinky does not pin the selected achillesAgentLib branch revision');
+          }
+          NODE
+          echo "[deploy-qa] Verified the Ploinky AgentLib pin at $EXPECTED_AGENTLIB_COMMIT."
 
           mkdir -p "$WORK_DIR/.ploinky"
           chmod 700 "$WORK_DIR/.ploinky"
@@ -373,8 +480,10 @@ jobs:
             "$PUBLIC_HOST" \
             "$CLOUDFLARE_ACCOUNT_ID" \
             "$CLOUDFLARE_ZONE_ID" \
-            "$CLOUDFLARE_TUNNEL_NAME" \
-            "$CLOUDFLARE_API_SECRET_HANDLE" <<'NODE'
+            "$CLOUDFLARE_TUNNEL_ID" \
+            "$CLOUDFLARE_TUNNEL_SECRET_HANDLE" \
+            "$CLOUDFLARE_API_SECRET_HANDLE" \
+            "$MEDIA_PUBLIC_IPV4" <<'NODE'
           import fs from 'node:fs';
           import path from 'node:path';
 
@@ -383,8 +492,10 @@ jobs:
             publicHost,
             accountId,
             zoneId,
-            tunnelName,
+            tunnelId,
+            tunnelTokenSecret,
             apiTokenSecret,
+            mediaPublicIPv4,
           ] = process.argv.slice(3);
           const desired = {
             hosts: {
@@ -404,9 +515,13 @@ jobs:
             cloudflare: {
               accountId,
               zoneId,
-              tunnelName,
+              tunnelId,
+              tunnelTokenSecret,
               apiTokenSecret,
-              deleteTunnelOnTeardown: true,
+            },
+            media: {
+              publicIPv4: mediaPublicIPv4,
+              addressMode: 'direct',
             },
           };
           try {
@@ -432,7 +547,7 @@ jobs:
             }
           }
           NODE
-          echo "[deploy-qa] Selected API-managed Ploinky Cloudflare publication for $PUBLIC_HOST."
+          echo "[deploy-qa] Selected the authorized existing Cloudflare tunnel for $PUBLIC_HOST."
 
           SOUL_HEALTH_URL="http://127.0.0.1:${SOUL_GATEWAY_ROUTER_PORT:-8080}/base-agent-additional-server/soul-gateway/7000/healthz/"
           SOUL_UP_BEFORE=0
@@ -442,19 +557,8 @@ jobs:
           fi
 
           export PLOINKY_WORKSPACE_ROOT="$WORK_DIR"
-          BRANCH_ARGS=(
-            --branch-fallback fail
-            --reset-repos
-          )
-          for repository_record in "${GRAPH_REPOSITORIES[@]}"; do
-            IFS='|' read -r repository_name _ <<< "$repository_record"
-            BRANCH_ARGS+=(--repo-branch "$repository_name=$DEPLOY_BRANCH")
-          done
-
           PLAN_JSON="$(
-            "$PLOINKY" --dry-run --port "$ROUTER_PORT" start explorer \
-              --profile=default \
-              "${BRANCH_ARGS[@]}"
+            "$PLOINKY" --dry-run --port "$ROUTER_PORT" start explorer --branch=ploinky-proxy
           )"
           BOX_INSTANCE="$(
             printf '%s' "$PLAN_JSON" |
@@ -590,6 +694,7 @@ jobs:
           const target = process.argv[2];
           const values = {
             'publication/explorer-qa-api': String(process.env.CLOUDFLARE_API_TOKEN || ''),
+            'publication/explorer-qa-tunnel': String(process.env.CLOUDFLARE_TUNNEL_TOKEN || ''),
           };
           if (Object.values(values).some((value) => !value)) {
             throw new Error('Cloudflare credentials are missing');
@@ -619,6 +724,7 @@ jobs:
                 const values = JSON.parse(fs.readFileSync(file, "utf8"));
                 const expected = [
                   "publication/explorer-qa-api",
+                  "publication/explorer-qa-tunnel",
                 ];
                 if (JSON.stringify(Object.keys(values).sort()) !== JSON.stringify(expected)) {
                   throw new Error("unexpected Cloudflare credential handles");
@@ -636,15 +742,14 @@ jobs:
           rm -f "$CLOUDFLARE_CREDENTIAL_FILE"
           CLOUDFLARE_CREDENTIAL_FILE=""
           unset CLOUDFLARE_API_TOKEN
+          unset CLOUDFLARE_TUNNEL_TOKEN
           if [ "$CREDENTIAL_STATUS" != "0" ]; then
             echo "[deploy-qa] ERROR: unable to persist Cloudflare credentials in the encrypted Ploinky store."
             exit "$CREDENTIAL_STATUS"
           fi
 
           echo "[deploy-qa] Starting Explorer with every managed repository on $DEPLOY_BRANCH..."
-          "$PLOINKY" --port "$ROUTER_PORT" start explorer \
-            --profile=default \
-            "${BRANCH_ARGS[@]}"
+          "$PLOINKY" start explorer --branch=ploinky-proxy
 
           QA_READY=0
           QA_READY_STREAK=0
@@ -752,6 +857,46 @@ jobs:
             fi
             echo "[deploy-qa] Verified $repository_name/$DEPLOY_BRANCH at $deployed_commit."
           done
+          "$BOX_ENGINE" container exec \
+            --user podman \
+            "$BOX_INSTANCE" \
+            node --input-type=module --eval '
+              import fs from "node:fs";
+              import path from "node:path";
+
+              const root = "/workspace/.ploinky/deps";
+              const expectedBranch = "ploinky-proxy";
+              let manifests = 0;
+              const pending = [root];
+              while (pending.length) {
+                const directory = pending.pop();
+                let entries;
+                try {
+                  entries = fs.readdirSync(directory, { withFileTypes: true });
+                } catch (error) {
+                  if (error?.code === "ENOENT") continue;
+                  throw error;
+                }
+                for (const entry of entries) {
+                  const target = path.join(directory, entry.name);
+                  if (entry.isDirectory()) {
+                    if (entry.name !== "node_modules") pending.push(target);
+                    continue;
+                  }
+                  if (entry.name !== "package.json") continue;
+                  const manifest = JSON.parse(fs.readFileSync(target, "utf8"));
+                  const source = String(manifest?.dependencies?.achillesAgentLib || "");
+                  if (!source) continue;
+                  manifests += 1;
+                  if (!source.endsWith(`#${expectedBranch}`)) {
+                    throw new Error(`dependency cache did not select achillesAgentLib#${expectedBranch}`);
+                  }
+                }
+              }
+              if (manifests < 1) throw new Error("no AgentLib dependency cache was materialized");
+              process.stdout.write(`[deploy-qa] Verified ${manifests} AgentLib dependency manifests on ${expectedBranch}.\n`);
+            '
+          echo "[deploy-qa] Verified achillesAgentLib/$DEPLOY_BRANCH at $EXPECTED_AGENTLIB_COMMIT."
 
           echo "[deploy-qa] Verifying the loopback Router publication..."
           ROUTER_OK=0
@@ -812,7 +957,7 @@ jobs:
             echo "- Media publication: \`0.0.0.0:7882:7882/udp\`"
             echo "- Managed graph branch: \`${DEPLOY_BRANCH}\`"
             echo "- Ploinky branch: \`${PLOINKY_BRANCH}\`"
-            echo "- Cloudflare: tunnel, ingress, and DNS API-managed by Ploinky"
+            echo "- Cloudflare: existing authorized tunnel, ingress, and DNS API-managed by Ploinky"
             echo "- Public URL: \`${PUBLIC_URL}\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
