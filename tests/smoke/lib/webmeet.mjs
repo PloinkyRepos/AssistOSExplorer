@@ -9,11 +9,19 @@ function webMeetDashboardPath() {
   const params = new URLSearchParams({
     webmeetSmoke: smokeConfig.runId,
   });
+  if (smokeConfig.flags.webmeetMedia) {
+    params.set('webmeetMediaDebug', '1');
+  }
   return `/explorer/index.html?${params.toString()}#webmeet-dashboard`;
 }
 
 export async function openWebMeet(page, account = smokeConfig.primaryUser, options = {}) {
   const { expectCreateRoom = true } = options;
+  if (smokeConfig.flags.webmeetMedia) {
+    await page.addInitScript(() => {
+      globalThis.WEBMEET_MEDIA_DEBUG = true;
+    });
+  }
   await signIn(page, account, webMeetDashboardPath());
   await expect(page.locator('div.webmeet-dashboard')).toBeVisible({ timeout: smokeConfig.timeouts.navigation });
   if (expectCreateRoom) {
