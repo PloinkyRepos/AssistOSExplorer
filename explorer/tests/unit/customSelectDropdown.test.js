@@ -16,7 +16,11 @@ test('custom select portals its options list to the containing dialog and restor
     };
     const optionsList = { parentElement: origin };
     const select = Object.create(CustomSelect.prototype);
-    select.element = { closest: () => dialog };
+    select.element = {
+        closest: () => dialog,
+        getAttribute: () => null,
+        hasAttribute: () => false
+    };
     select.optionsList = optionsList;
 
     select.portalOptionsListToDialog();
@@ -28,6 +32,59 @@ test('custom select portals its options list to the containing dialog and restor
 
     assert.equal(optionsList.parentElement, origin);
     assert.equal(select.optionsListPortalRoot, null);
+});
+
+test('opening a custom select portals its options list before positioning it', () => {
+    const originalDocument = globalThis.document;
+    const originalWindow = globalThis.window;
+    const origin = {
+        append(node) {
+            node.parentElement = this;
+        }
+    };
+    const dialog = {
+        append(node) {
+            node.parentElement = this;
+        }
+    };
+    const classes = new Set(['hidden']);
+    const optionsList = {
+        parentElement: origin,
+        hidden: true,
+        classList: {
+            add: (name) => classes.add(name),
+            contains: (name) => classes.has(name),
+            remove: (name) => classes.delete(name)
+        },
+        addEventListener() {},
+        querySelector: () => null
+    };
+    const select = Object.create(CustomSelect.prototype);
+    select.element = {
+        closest: () => dialog,
+        getAttribute: () => null,
+        hasAttribute: () => false
+    };
+    select.optionsList = optionsList;
+    select.trigger = {
+        classList: { add() {} },
+        setAttribute() {}
+    };
+    select.positionOptionsList = () => {
+        assert.equal(optionsList.parentElement, dialog);
+    };
+    globalThis.document = { addEventListener() {} };
+    globalThis.window = { addEventListener() {} };
+
+    try {
+        select.openSelect();
+        assert.equal(optionsList.parentElement, dialog);
+        assert.equal(optionsList.hidden, false);
+    } finally {
+        select.controller?.abort();
+        globalThis.document = originalDocument;
+        globalThis.window = originalWindow;
+    }
 });
 
 test('custom select positions a dialog dropdown inside the dialog bounds', () => {

@@ -16,9 +16,9 @@ async function expectCustomSelectValue(locator, expectedValue) {
 
 async function selectCustomOption(locator, optionsRoot, value) {
   await locator.locator('.custom-select').click();
-  const option = optionsRoot.locator(
-    `.custom-select-options-list:not(.hidden) .custom-select-option[data-value="${value}"]`,
-  );
+  const optionsList = optionsRoot.locator(':scope > .custom-select-options-list:not(.hidden)');
+  await expect(optionsList).toHaveCount(1);
+  const option = optionsList.locator(`.custom-select-option[data-value="${value}"]`);
   await expect(option).toBeVisible();
   await option.click();
   await expectCustomSelectValue(locator, value);
