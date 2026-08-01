@@ -26,8 +26,13 @@ Never expose secret values in commands, logs, reports, or artifacts.
 1. Back up application data, then complete the destructive credential/state
    prerequisites documented by Ploinky operations.
 2. Build or pull the pinned multi-architecture box and dependency images.
-3. Configure either explicit local-only mode or a complete existing-tunnel
-   Cloudflare configuration. Never create a quick or new tunnel.
+3. Configure either explicit local-only mode or a complete dedicated-tunnel
+   Cloudflare configuration. Never create a quick tunnel. The tracked Explorer
+   QA workflow may create or reuse exactly one persistent `explorer-qa` tunnel
+   only when the selected operation explicitly authorizes that test resource;
+   it must preserve the pinned shared `proxies` tunnel and unrelated DNS,
+   validate the new connector credential against the selected account/tunnel,
+   and keep connector and management credentials in separate encrypted handles.
 4. Configure the literal public media IPv4 and external relay service.
 5. Recreate the Box explicitly under the semantic Box contract.
 6. Inspect the real outer container and prove its normalized bindings are

@@ -3,11 +3,6 @@ name: Destroy Explorer QA Box
 on:
   workflow_dispatch:
     inputs:
-      workspace_name:
-        description: 'Host identity directory of the QA Box'
-        required: false
-        default: 'explorerQaWorkspace'
-        type: string
       confirm_destroy:
         description: 'Confirm removal of the QA Box, its Ploinky-managed tunnel, and all QA data volumes'
         required: true
@@ -19,9 +14,10 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  SSH_USER: ${{ vars.EXPLORER_QA_SSH_USER || 'admin' }}
-  SSH_HOST: ${{ vars.EXPLORER_QA_SSH_HOST || '45.136.70.141' }}
-  WORKSPACE: ${{ inputs.workspace_name || vars.EXPLORER_QA_WORKSPACE || 'explorerQaWorkspace' }}
+  SSH_USER: 'admin'
+  SSH_HOST: '45.136.70.141'
+  SSH_ED25519_FINGERPRINT: 'SHA256:pcVG+7QFbfi3Ojn3LeveNutqCWaTOIlgek1o3GKD/KA'
+  WORKSPACE: 'explorerQaWorkspace'
   CONFIRM_DESTROY: ${{ inputs.confirm_destroy }}
   ROUTER_PORT: '8097'
   DEPLOY_BRANCH: 'ploinky-proxy'
@@ -57,6 +53,11 @@ jobs:
             echo "::error::EXPLORER_QA_SSH_USER and EXPLORER_QA_SSH_HOST must be configured"
             exit 1
           fi
+          if [ "$SSH_HOST" != '45.136.70.141' ] || [ "$SSH_USER" != 'admin' ] ||
+            [ "$WORKSPACE" != 'explorerQaWorkspace' ]; then
+            echo "::error::Explorer QA destroy target is not the pinned admin@45.136.70.141/explorerQaWorkspace identity"
+            exit 1
+          fi
           if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
             echo "::error::Missing required repository secret EXPLORER_QA_CLOUDFLARE_API_TOKEN"
             exit 1
@@ -88,6 +89,21 @@ jobs:
             echo "::error::confirm_destroy must be enabled"
             exit 1
           fi
+          if [ "$PUBLIC_HOST" != 'explorer-qa.axiologic.dev' ] ||
+            [ "$CLOUDFLARE_TUNNEL_NAME" != 'explorer-qa' ] ||
+            [ "$ROUTER_PORT" != '8097' ]; then
+            echo "::error::Explorer QA destroy publication identity is not pinned"
+            exit 1
+          fi
+          HOST_KEY_CANDIDATE="$RUNNER_TEMP/explorer_qa_known_hosts"
+          ssh-keyscan -T 10 -t ed25519 "$SSH_HOST" > "$HOST_KEY_CANDIDATE"
+          HOST_KEY_FINGERPRINT="$({ ssh-keygen -lf "$HOST_KEY_CANDIDATE" -E sha256 || true; } | awk '{print $2}' | sort -u)"
+          if [ "$HOST_KEY_FINGERPRINT" != "$SSH_ED25519_FINGERPRINT" ]; then
+            echo "::error::Explorer QA ED25519 host fingerprint did not match the pinned identity"
+            exit 1
+          fi
+          chmod 600 "$HOST_KEY_CANDIDATE"
+          echo "Validated the pinned Explorer QA SSH host identity."
 
       - name: Prepare SSH key
         env:
@@ -98,8 +114,7 @@ jobs:
           chmod 700 ~/.ssh
           printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H "$SSH_HOST" > ~/.ssh/explorer_qa_known_hosts
-          chmod 600 ~/.ssh/explorer_qa_known_hosts
+          install -m 600 "$RUNNER_TEMP/explorer_qa_known_hosts" ~/.ssh/explorer_qa_known_hosts
 
       - name: Destroy Explorer QA Box
         env:
@@ -110,6 +125,27 @@ jobs:
           set -euo pipefail
           umask 077
 
+          LOCAL_ENV_FILE=''
+          REMOTE_ENV_FILE=''
+          REMOTE_ENV_UPLOADED='false'
+          cleanup_destroy_files() {
+            if [ -n "$LOCAL_ENV_FILE" ]; then rm -f "$LOCAL_ENV_FILE"; fi
+            if [ "$REMOTE_ENV_UPLOADED" = 'true' ]; then
+              case "$REMOTE_ENV_FILE" in
+                /tmp/explorer_qa_destroy.[A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9])
+                  ssh \
+                    -i ~/.ssh/deploy_key \
+                    -o BatchMode=yes \
+                    -o StrictHostKeyChecking=yes \
+                    -o "UserKnownHostsFile=$HOME/.ssh/explorer_qa_known_hosts" \
+                    "${SSH_USER}@${SSH_HOST}" \
+                    "rm -f -- '$REMOTE_ENV_FILE'" >/dev/null 2>&1 || true
+                  ;;
+              esac
+            fi
+          }
+          trap cleanup_destroy_files EXIT
+
           write_shell_var() {
             local name="$1"
             local value="${!name:-}"
@@ -119,7 +155,6 @@ jobs:
 
           LOCAL_ENV_FILE="$(mktemp /tmp/explorer_qa_destroy.XXXXXX)"
           REMOTE_ENV_FILE="/tmp/$(basename "$LOCAL_ENV_FILE")"
-          trap 'rm -f "$LOCAL_ENV_FILE"' EXIT
           {
             write_shell_var WORKSPACE
             write_shell_var ROUTER_PORT
@@ -135,6 +170,7 @@ jobs:
             write_shell_var SOUL_GATEWAY_ROUTER_PORT
           } > "$LOCAL_ENV_FILE"
 
+          REMOTE_ENV_UPLOADED='true'
           scp \
             -i ~/.ssh/deploy_key \
             -o StrictHostKeyChecking=yes \
@@ -142,6 +178,7 @@ jobs:
             "$LOCAL_ENV_FILE" \
             "${SSH_USER}@${SSH_HOST}:$REMOTE_ENV_FILE"
           rm -f "$LOCAL_ENV_FILE"
+          LOCAL_ENV_FILE=''
 
           ssh \
             -i ~/.ssh/deploy_key \
@@ -229,6 +266,24 @@ jobs:
           fi
 
           WORK_DIR="$HOME/$WORKSPACE"
+          if [ "$(id -un)" != 'admin' ] || [ "$HOME" != '/home/admin' ] ||
+            [ "$WORK_DIR" != '/home/admin/explorerQaWorkspace' ]; then
+            echo "[destroy-qa] ERROR: remote Explorer QA identity is not the pinned admin workspace."
+            exit 1
+          fi
+          PINNED_BOX_PATH_HASH="$(
+            node --input-type=module -e '
+              import crypto from "node:crypto";
+              import path from "node:path";
+              process.stdout.write(
+                crypto.createHash("sha256").update(path.resolve(process.argv[1])).digest("hex").slice(0, 12),
+              );
+            ' "$WORK_DIR"
+          )"
+          if [ "$PINNED_BOX_PATH_HASH" != '7a31ab7775eb' ]; then
+            echo "[destroy-qa] ERROR: Explorer QA workspace hash does not match the pinned identity."
+            exit 1
+          fi
           if [ -L "$WORK_DIR" ]; then
             echo "[destroy-qa] ERROR: workspace identity path must not be a symlink: $WORK_DIR"
             exit 1
@@ -386,6 +441,10 @@ jobs:
                 });
               '
           )"
+          if [ "$BOX_INSTANCE" != "ploinky-box-explorerqaworkspace-$PINNED_BOX_PATH_HASH" ]; then
+            echo "[destroy-qa] ERROR: dry-run Box identity is not the pinned Explorer QA instance."
+            exit 1
+          fi
 
           node --input-type=module - \
             "$RUNTIME_DIR/ploinky-box/supervisor.mjs" \
@@ -609,7 +668,7 @@ jobs:
           fi
 
           BOX_PATH_HASH="${BOX_INSTANCE##*-}"
-          if [[ ! "$BOX_PATH_HASH" =~ ^[a-f0-9]{12}$ ]]; then
+          if [ "$BOX_PATH_HASH" != "$PINNED_BOX_PATH_HASH" ]; then
             echo "[destroy-qa] ERROR: refusing to derive QA volume ownership from malformed Box identity '$BOX_INSTANCE'."
             exit 1
           fi
@@ -650,6 +709,7 @@ jobs:
           echo "[destroy-qa] Outer Box removed after Ploinky removed its owned Cloudflare route, DNS record, and managed tunnel."
           echo "[destroy-qa] QA workspace, nested-container, dependency volumes, and host identity directory were removed."
           REMOTE
+          REMOTE_ENV_UPLOADED='false'
 
       - name: Create summary
         if: always()

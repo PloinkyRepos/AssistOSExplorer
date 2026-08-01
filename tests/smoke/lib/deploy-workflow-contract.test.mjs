@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -27,19 +29,20 @@ const WORKFLOWS = [
       "'basic|https://github.com/AssistOS-AI/basic.git'",
       "'container-image-builds|https://github.com/AssistOS-AI/container-image-builds.git'",
       "CLOUDFLARE_TUNNEL_NAME: 'explorer-qa'",
-      'CLOUDFLARE_TUNNEL_ID:',
+      "CLOUDFLARE_PROTECTED_SHARED_TUNNEL_ID: '091c4096-d1c8-4dbc-bb12-0c6357431d96'",
       "CLOUDFLARE_TUNNEL_SECRET_HANDLE: 'publication/explorer-qa-tunnel'",
       "CLOUDFLARE_API_SECRET_HANDLE: 'publication/explorer-qa-api'",
       'EXPLORER_QA_CLOUDFLARE_API_TOKEN',
-      'EXPLORER_QA_CLOUDFLARE_TUNNEL_TOKEN',
       'EXPLORER_QA_CLOUDFLARE_ACCOUNT_ID',
       'EXPLORER_QA_CLOUDFLARE_ZONE_ID',
       'EXPLORER_QA_PLOINKY_MASTER_KEY',
       'Cloudflare management and connector authorities must be separate credentials',
-      'active explorer-qa tunnel inventory is absent or ambiguous',
-      'connector token claims do not match the selected Explorer QA tunnel/account',
-      'Explorer QA tunnel is shared or has ambiguous ingress',
-      'Explorer QA DNS is ambiguous or points outside the selected tunnel',
+      'dedicated Explorer QA tunnel create/reuse did not converge to one exact identity',
+      'connector token claims do not match the dedicated Explorer QA tunnel/account',
+      'dedicated Explorer QA tunnel has shared or ambiguous ingress',
+      'Explorer QA DNS does not target the selected dedicated tunnel',
+      'protected proxies ingress topology is not the authorized immutable baseline',
+      'protected proxies ingress or unrelated DNS identity changed during Explorer QA deployment',
       'Validated the pinned Explorer QA SSH host identity',
       'tunnelId,',
       'tunnelTokenSecret,',
@@ -72,8 +75,12 @@ const WORKFLOWS = [
       'no-wait failure ${status.repoName}/${status.shortAgent}',
       'a no-wait agent reached a terminal startup failure',
       'timed out waiting for stable 16/16 Explorer QA admission',
-      'existing authorized tunnel, ingress, and DNS API-managed by Ploinky',
-      '"${PUBLIC_URL%/}/"',
+      'dedicated persistent `%s` tunnel `%s`, ingress, and DNS API-managed by Ploinky',
+      '"${PUBLIC_URL%/}/auth/login?agent=explorer"',
+      'data-auth-login-form',
+      'Dedicated Explorer QA tunnel id=',
+      'EXPLORER_QA_DNS_RECORD_ID=',
+      'destroy-explorer-qa.yml',
       'SOUL_GATEWAY_WORKSPACE:',
       'SOUL_GATEWAY_ROUTER_PORT:',
       'refusing to operate on the production Soul Gateway workspace',
@@ -162,6 +169,10 @@ test('Explorer QA destroy removes only its Ploinky-owned Cloudflare publication'
   );
 
   for (const required of [
+    "SSH_USER: 'admin'",
+    "SSH_HOST: '45.136.70.141'",
+    "SSH_ED25519_FINGERPRINT: 'SHA256:pcVG+7QFbfi3Ojn3LeveNutqCWaTOIlgek1o3GKD/KA'",
+    "WORKSPACE: 'explorerQaWorkspace'",
     "PLOINKY_BRANCH: 'ploinky-proxy'",
     "DEPLOY_BRANCH: 'ploinky-proxy'",
     "PUBLIC_HOST: 'explorer-qa.axiologic.dev'",
@@ -191,6 +202,10 @@ test('Explorer QA destroy removes only its Ploinky-owned Cloudflare publication'
     'io.assistos.ploinky-box.path-hash',
     '"$BOX_ENGINE" volume rm "$volume_name"',
     'QA workspace, nested-container, dependency volumes, and host identity directory were removed',
+    "\"$PINNED_BOX_PATH_HASH\" != '7a31ab7775eb'",
+    'BOX_INSTANCE" != "ploinky-box-explorerqaworkspace-$PINNED_BOX_PATH_HASH',
+    'cleanup_destroy_files() {',
+    "REMOTE_ENV_UPLOADED='true'",
   ]) {
     assert.equal(source.includes(required), true, `missing destroy workflow contract: ${required}`);
   }
@@ -198,6 +213,13 @@ test('Explorer QA destroy removes only its Ploinky-owned Cloudflare publication'
   assert.doesNotMatch(source, /EXPLORER_QA_CLOUDFLARE_TUNNEL_(?:TOKEN|ID)/);
   assert.doesNotMatch(source, /tunnelTokenSecret|publication\/explorer-qa-tunnel/);
   assert.doesNotMatch(source, /BOX_STATUS="\$\("\$PLOINKY" status\)"/);
+  assert.doesNotMatch(source, /workspace_name|inputs\.workspace_name/);
+  assert.doesNotMatch(source, /vars\.EXPLORER_QA_(?:SSH_USER|SSH_HOST|WORKSPACE)/);
+  assert.equal(source.match(/ssh-keyscan/g)?.length, 1, 'destroy host key must be scanned only in pinned preflight');
+  assert.ok(
+    source.indexOf('SSH_ED25519_FINGERPRINT') < source.indexOf('- name: Destroy Explorer QA Box'),
+    'destroy target fingerprint must be established before remote mutation',
+  );
 });
 
 test('Explorer QA workflow rejects unsafe identity and tunnel state before SSH', () => {
@@ -210,14 +232,121 @@ test('Explorer QA workflow rejects unsafe identity and tunnel state before SSH',
   assert.doesNotMatch(source, /vars\.EXPLORER_QA_(?:SSH_USER|SSH_HOST|WORKSPACE)/);
   assert.equal(source.match(/ssh-keyscan/g)?.length, 1, 'host key must be scanned only in pinned preflight');
   assert.ok(
-    source.indexOf('connector token claims do not match') < source.indexOf('- name: Prepare SSH key'),
-    'connector identity must fail before SSH key preparation',
+    source.indexOf('connector token claims do not match') < source.indexOf('          scp \\'),
+    'connector identity must fail before the first SSH transfer',
   );
   assert.ok(
     source.indexOf('SSH_ED25519_FINGERPRINT') < source.indexOf('- name: Reconcile and start Explorer QA Box'),
     'pinned host identity must be established before the remote deployment step',
   );
   assert.match(source, /install -m 600 "\$RUNNER_TEMP\/explorer_qa_known_hosts"/);
+});
+
+test('Explorer QA dedicated tunnel provisioning is fail-closed and preserves the shared tunnel', () => {
+  const source = fs.readFileSync(
+    path.join(ROOT, '.github/workflows/deploy-explorer-qa.yml'),
+    'utf8',
+  );
+
+  for (const required of [
+    "--data '{\"name\":\"explorer-qa\",\"config_src\":\"cloudflare\"}'",
+    'named.length !== 1 || named[0]?.id !== selectedId',
+    "ingress[0]?.service !== 'http://127.0.0.1:8080'",
+    'records[0]?.content !== expectedTarget',
+    'cleanup_local_files() {',
+    'trap cleanup_local_files EXIT',
+    "REMOTE_ENV_UPLOADED='true'",
+    '"rm -f -- \'$REMOTE_ENV_FILE\'"',
+    'echo "::add-mask::$CLOUDFLARE_TUNNEL_TOKEN"',
+    'publication/explorer-qa-api',
+    'publication/explorer-qa-tunnel',
+    'beforeJson !== afterJson',
+    'digest(after) !== process.env.PROTECTED_CLOUDFLARE_DIGEST',
+    "result.filter((record) => record?.name !== publicHost)",
+    "records.filter((record) => record?.name !== process.env.PUBLIC_HOST)",
+    'dedicated Explorer QA connector has no active Cloudflare connection',
+  ]) {
+    assert.equal(source.includes(required), true, `missing dedicated tunnel invariant: ${required}`);
+  }
+  assert.doesNotMatch(source, /EXPLORER_QA_CLOUDFLARE_TUNNEL_TOKEN/);
+  assert.doesNotMatch(source, /cfd_tunnel\/091c4096-d1c8-4dbc-bb12-0c6357431d96(?:\/token|\"\s*,\s*\{\s*method:\s*['\"](?:PUT|POST|DELETE))/);
+  assert.ok(
+    source.indexOf("REMOTE_ENV_UPLOADED='true'") < source.indexOf('          scp \\\n'),
+    'partial remote credential transfers must be cleanup-eligible',
+  );
+});
+
+test('Explorer QA dedicated tunnel validator rejects malformed, shared, ambiguous, and wrong-DNS fixtures', () => {
+  const source = fs.readFileSync(
+    path.join(ROOT, '.github/workflows/deploy-explorer-qa.yml'),
+    'utf8',
+  );
+  const marker = 'const [listPath, detailPath, configPath, dnsPath, selectedId, created]';
+  const markerIndex = source.indexOf(marker);
+  assert.ok(markerIndex > 0, 'dedicated tunnel validator marker must exist');
+  const heredocStart = source.lastIndexOf("<<'NODE'\n", markerIndex);
+  const scriptStart = heredocStart + "<<'NODE'\n".length;
+  const scriptEnd = source.indexOf('\n          NODE', markerIndex);
+  assert.ok(heredocStart > 0 && scriptEnd > scriptStart, 'dedicated tunnel validator heredoc must close');
+  const script = source.slice(scriptStart, scriptEnd).replace(/^          /gm, '');
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'explorer-qa-tunnel-validator-'));
+  const selectedId = '11111111-2222-4333-8444-555555555555';
+  const accountId = 'a'.repeat(32);
+  const hostname = 'explorer-qa.axiologic.dev';
+  const response = (result) => ({ success: true, result });
+  const run = ({
+    named = [{ id: selectedId, name: 'explorer-qa' }],
+    detail = { id: selectedId, name: 'explorer-qa', deleted_at: null, account_tag: accountId },
+    ingress = [],
+    dns = [],
+    created = 'false',
+  } = {}) => {
+    const documents = [response(named), response(detail), response({ config: { ingress } }), response(dns)];
+    const files = documents.map((document, index) => {
+      const file = path.join(temporary, `${index}.json`);
+      fs.writeFileSync(file, JSON.stringify(document));
+      return file;
+    });
+    return spawnSync(
+      process.execPath,
+      ['--input-type=module', '-', ...files, selectedId, created],
+      {
+        encoding: 'utf8',
+        env: { ...process.env, CLOUDFLARE_ACCOUNT_ID: accountId, PUBLIC_HOST: hostname },
+        input: script,
+      },
+    );
+  };
+  try {
+    assert.equal(run({ created: 'true' }).status, 0, 'new empty dedicated tunnel must pass');
+    assert.equal(run({
+      ingress: [
+        { hostname, service: 'http://127.0.0.1:8080' },
+        { service: 'http_status:404' },
+      ],
+      dns: [{
+        id: 'dns_1',
+        type: 'CNAME',
+        name: hostname,
+        content: `${selectedId}.cfargotunnel.com`,
+        proxied: true,
+      }],
+    }).status, 0, 'exact reusable dedicated tunnel must pass');
+    assert.notEqual(run({ named: [{ id: selectedId }, { id: 'other' }] }).status, 0);
+    assert.notEqual(run({ detail: { id: selectedId, name: 'explorer-qa', account_tag: 'b'.repeat(32) } }).status, 0);
+    assert.notEqual(run({
+      ingress: [
+        { hostname: 'unrelated.example.test', service: 'http://127.0.0.1:8080' },
+        { service: 'http_status:404' },
+      ],
+    }).status, 0);
+    assert.notEqual(run({
+      dns: [{ type: 'CNAME', name: hostname, content: 'wrong.cfargotunnel.com', proxied: true }],
+    }).status, 0);
+    assert.notEqual(run({ created: 'true', dns: [{ type: 'CNAME' }] }).status, 0);
+  } finally {
+    fs.rmSync(temporary, { recursive: true, force: true });
+  }
 });
 
 test('Explorer QA credential staging does not use exclusive create on a mktemp file', () => {
