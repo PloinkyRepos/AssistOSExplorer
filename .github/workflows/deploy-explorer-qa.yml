@@ -125,15 +125,24 @@ jobs:
             -H 'Content-Type: application/json' \
             "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/cfd_tunnel/$CLOUDFLARE_TUNNEL_ID" \
             > "$TUNNEL_RESPONSE"
-          if ! jq -e \
-            --arg id "$CLOUDFLARE_TUNNEL_ID" \
-            --arg name "$CLOUDFLARE_TUNNEL_NAME" \
-            '.success == true and .result.id == $id and .result.name == $name and (.result.deleted_at == null)' \
+          if ! jq -e '.success == true and (.result | type == "object")' \
             "$TUNNEL_RESPONSE" >/dev/null; then
-            echo "::error::The authorized existing Explorer QA tunnel is absent, deleted, or has the wrong identity"
+            echo "::error::Cloudflare did not return the authorized existing Explorer QA tunnel"
             exit 1
           fi
-          echo "Existing Explorer QA tunnel identity verified."
+          if ! jq -e \
+            --arg id "$CLOUDFLARE_TUNNEL_ID" \
+            --arg account "$CLOUDFLARE_ACCOUNT_ID" \
+            '.result.id == $id and (.result.account_tag == null or .result.account_tag == $account)' \
+            "$TUNNEL_RESPONSE" >/dev/null; then
+            echo "::error::Cloudflare returned a tunnel outside the authorized Explorer QA identity"
+            exit 1
+          fi
+          if ! jq -e '.result.deleted_at == null' "$TUNNEL_RESPONSE" >/dev/null; then
+            echo "::error::The authorized existing Explorer QA tunnel has been deleted"
+            exit 1
+          fi
+          echo "Existing Explorer QA tunnel ID is active and account-scoped."
 
       - name: Prepare SSH key
         env:
