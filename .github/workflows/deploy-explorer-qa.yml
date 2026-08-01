@@ -208,7 +208,7 @@ jobs:
             if (detail?.id !== tunnelId || detail?.name !== tunnelName || detail?.deleted_at != null) {
               throw new Error('dedicated Explorer QA tunnel detail changed during inventory');
             }
-            const ingress = config?.config?.ingress;
+            const ingress = config?.config?.ingress ?? config?.ingress ?? [];
             if (!Array.isArray(ingress) || ingress.length > 2) {
               throw new Error('dedicated Explorer QA tunnel is shared or has ambiguous ingress');
             }
@@ -457,7 +457,7 @@ jobs:
             || (detail?.account_tag != null && detail.account_tag !== process.env.CLOUDFLARE_ACCOUNT_ID)) {
             throw new Error('dedicated Explorer QA tunnel create/reuse did not converge to one exact identity');
           }
-          const ingress = config?.config?.ingress;
+          const ingress = config?.config?.ingress ?? config?.ingress ?? [];
           if (!Array.isArray(ingress) || ingress.length > 2) {
             throw new Error('dedicated Explorer QA tunnel has shared or ambiguous ingress');
           }

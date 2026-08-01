@@ -253,6 +253,7 @@ test('Explorer QA dedicated tunnel provisioning is fail-closed and preserves the
     'named.length !== 1 || named[0]?.id !== selectedId',
     "ingress[0]?.service !== 'http://127.0.0.1:8080'",
     'records[0]?.content !== expectedTarget',
+    'config?.config?.ingress ?? config?.ingress ?? []',
     'cleanup_local_files() {',
     'trap cleanup_local_files EXIT',
     "REMOTE_ENV_UPLOADED='true'",
@@ -283,6 +284,11 @@ test('Explorer QA dedicated tunnel provisioning is fail-closed and preserves the
   assert.ok(
     source.indexOf("REMOTE_ENV_UPLOADED='true'") < source.indexOf('          scp \\\n'),
     'partial remote credential transfers must be cleanup-eligible',
+  );
+  assert.equal(
+    source.match(/config\?\.config\?\.ingress \?\? config\?\.ingress \?\? \[\]/g)?.length,
+    2,
+    'both existing-tunnel inventories must normalize Cloudflare missing configuration to empty ingress',
   );
 });
 
@@ -329,6 +335,12 @@ test('Explorer QA dedicated tunnel validator rejects malformed, shared, ambiguou
   };
   try {
     assert.equal(run({ created: 'true' }).status, 0, 'new empty dedicated tunnel must pass');
+    assert.equal(
+      run({ ingress: null, created: 'true' }).status,
+      0,
+      'new dedicated tunnel with no Cloudflare configuration object must pass as empty ingress',
+    );
+    assert.notEqual(run({ ingress: { unexpected: true } }).status, 0);
     assert.equal(run({
       ingress: [
         { hostname, service: 'http://127.0.0.1:8080' },
