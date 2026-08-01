@@ -270,6 +270,16 @@ test('Explorer QA dedicated tunnel provisioning is fail-closed and preserves the
   }
   assert.doesNotMatch(source, /EXPLORER_QA_CLOUDFLARE_TUNNEL_TOKEN/);
   assert.doesNotMatch(source, /cfd_tunnel\/091c4096-d1c8-4dbc-bb12-0c6357431d96(?:\/token|\"\s*,\s*\{\s*method:\s*['\"](?:PUT|POST|DELETE))/);
+  assert.doesNotMatch(
+    source,
+    /^ {11,}(?:NODE|REMOTE)$/gm,
+    'workflow heredoc delimiters must normalize to shell column zero',
+  );
+  assert.equal(
+    source.match(/<< ?'(?:NODE|REMOTE)'/g)?.length,
+    source.match(/^ {10}(?:NODE|REMOTE)$/gm)?.length,
+    'every workflow heredoc must have one runner-compatible closing delimiter',
+  );
   assert.ok(
     source.indexOf("REMOTE_ENV_UPLOADED='true'") < source.indexOf('          scp \\\n'),
     'partial remote credential transfers must be cleanup-eligible',

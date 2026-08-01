@@ -383,15 +383,15 @@ jobs:
               > "$TUNNEL_MUTATION_RESPONSE"
             CLOUDFLARE_TUNNEL_ID="$(
               node --input-type=module - "$TUNNEL_MUTATION_RESPONSE" <<'NODE'
-            import fs from 'node:fs';
+          import fs from 'node:fs';
 
-            const payload = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-            const tunnel = payload?.success === true ? payload.result : null;
-            if (!tunnel || tunnel.name !== 'explorer-qa' || tunnel.deleted_at != null) {
-              throw new Error('Cloudflare did not create the exact dedicated Explorer QA tunnel');
-            }
-            process.stdout.write(String(tunnel.id || ''));
-            NODE
+          const payload = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          const tunnel = payload?.success === true ? payload.result : null;
+          if (!tunnel || tunnel.name !== 'explorer-qa' || tunnel.deleted_at != null) {
+            throw new Error('Cloudflare did not create the exact dedicated Explorer QA tunnel');
+          }
+          process.stdout.write(String(tunnel.id || ''));
+          NODE
             )"
             CLOUDFLARE_TUNNEL_CREATED='true'
           fi
