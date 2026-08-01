@@ -12,6 +12,10 @@ const WORKFLOWS = [
     expected: [
       "DEPLOY_BRANCH: 'ploinky-proxy'",
       "PLOINKY_BRANCH: 'ploinky-proxy'",
+      "SSH_USER: 'admin'",
+      "SSH_HOST: '45.136.70.141'",
+      "SSH_ED25519_FINGERPRINT: 'SHA256:pcVG+7QFbfi3Ojn3LeveNutqCWaTOIlgek1o3GKD/KA'",
+      "WORKSPACE: 'explorerQaWorkspace'",
       "PUBLIC_HOST: 'explorer-qa.axiologic.dev'",
       '"$PLOINKY" start explorer --branch=ploinky-proxy',
       "'AchillesIDE|https://github.com/AssistOS-AI/AssistOSExplorer.git'",
@@ -31,12 +35,19 @@ const WORKFLOWS = [
       'EXPLORER_QA_CLOUDFLARE_ACCOUNT_ID',
       'EXPLORER_QA_CLOUDFLARE_ZONE_ID',
       'EXPLORER_QA_PLOINKY_MASTER_KEY',
+      'Cloudflare management and connector authorities must be separate credentials',
+      'active explorer-qa tunnel inventory is absent or ambiguous',
+      'connector token claims do not match the selected Explorer QA tunnel/account',
+      'Explorer QA tunnel is shared or has ambiguous ingress',
+      'Explorer QA DNS is ambiguous or points outside the selected tunnel',
+      'Validated the pinned Explorer QA SSH host identity',
       'tunnelId,',
       'tunnelTokenSecret,',
       'MEDIA_PUBLIC_IPV4:',
       "addressMode: 'direct'",
       'AGENTLIB_URL=',
-      'Verified achillesAgentLib/$DEPLOY_BRANCH at $EXPECTED_AGENTLIB_COMMIT',
+      'Explorer did not load AgentLib bytes from a verified immutable runtime package',
+      'loaded runtime identity at $EXPECTED_AGENTLIB_COMMIT',
       "agent: 'AchillesIDE/explorer'",
       "'browser-auth'",
       "'agent-mcp'",
@@ -75,6 +86,13 @@ const WORKFLOWS = [
       'process.stdout.write(formatBoxStatus(status))',
       'BOX_STATUS="$(inspect_outer_box_status)"',
       'STOPPED_BOX_STATUS="$(inspect_outer_box_status)"',
+      "[ \"$BOX_PATH_HASH\" != '7a31ab7775eb' ]",
+      'QA_VOLUME_ROLES=(workspace containers ploinky-deps)',
+      'io.assistos.ploinky-box.path-hash',
+      'Exact prior Explorer QA deployment cleanup verified',
+      "target !== '/home/admin/explorerQaWorkspace'",
+      'snapshot_protected_resources()',
+      'Protected host resource identities remained unchanged',
     ],
   },
   {
@@ -180,4 +198,52 @@ test('Explorer QA destroy removes only its Ploinky-owned Cloudflare publication'
   assert.doesNotMatch(source, /EXPLORER_QA_CLOUDFLARE_TUNNEL_(?:TOKEN|ID)/);
   assert.doesNotMatch(source, /tunnelTokenSecret|publication\/explorer-qa-tunnel/);
   assert.doesNotMatch(source, /BOX_STATUS="\$\("\$PLOINKY" status\)"/);
+});
+
+test('Explorer QA workflow rejects unsafe identity and tunnel state before SSH', () => {
+  const source = fs.readFileSync(
+    path.join(ROOT, '.github/workflows/deploy-explorer-qa.yml'),
+    'utf8',
+  );
+
+  assert.doesNotMatch(source, /workspace_name|inputs\.workspace_name/);
+  assert.doesNotMatch(source, /vars\.EXPLORER_QA_(?:SSH_USER|SSH_HOST|WORKSPACE)/);
+  assert.equal(source.match(/ssh-keyscan/g)?.length, 1, 'host key must be scanned only in pinned preflight');
+  assert.ok(
+    source.indexOf('connector token claims do not match') < source.indexOf('- name: Prepare SSH key'),
+    'connector identity must fail before SSH key preparation',
+  );
+  assert.ok(
+    source.indexOf('SSH_ED25519_FINGERPRINT') < source.indexOf('- name: Reconcile and start Explorer QA Box'),
+    'pinned host identity must be established before the remote deployment step',
+  );
+  assert.match(source, /install -m 600 "\$RUNNER_TEMP\/explorer_qa_known_hosts"/);
+});
+
+test('Explorer QA credential staging does not use exclusive create on a mktemp file', () => {
+  const source = fs.readFileSync(
+    path.join(ROOT, '.github/workflows/deploy-explorer-qa.yml'),
+    'utf8',
+  );
+  const start = source.indexOf('CLOUDFLARE_CREDENTIAL_FILE="$(mktemp');
+  const end = source.indexOf('STAGED_CREDENTIAL_FILE=', start);
+  assert.ok(start > 0 && end > start, 'credential staging block must exist');
+  const block = source.slice(start, end);
+  assert.doesNotMatch(block, /flag:\s*['"]wx['"]/, 'mktemp already created the credential file');
+  assert.match(block, /flag:\s*['"]w['"]/);
+});
+
+test('Explorer QA cleanup handles an absent workspace with exact orphan resources', () => {
+  const source = fs.readFileSync(
+    path.join(ROOT, '.github/workflows/deploy-explorer-qa.yml'),
+    'utf8',
+  );
+  const cleanup = source.slice(
+    source.indexOf('declare -a QA_CONTAINER_RECORDS'),
+    source.indexOf('mkdir -p "$WORK_DIR"', source.indexOf('declare -a QA_CONTAINER_RECORDS')),
+  );
+  assert.match(cleanup, /container ls -aq --filter "label=io\.assistos\.ploinky-box\.path-hash=\$BOX_PATH_HASH"/);
+  assert.match(cleanup, /volume ls -q --filter "label=io\.assistos\.ploinky-box\.path-hash=\$BOX_PATH_HASH"/);
+  assert.match(cleanup, /error\?\.code !== 'ENOENT'/);
+  assert.doesNotMatch(cleanup, /rm\s+-rf|rm\s+-fr/, 'cleanup must use the exact guarded Node target');
 });

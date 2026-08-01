@@ -2,21 +2,16 @@ name: Deploy Explorer QA Box
 
 on:
   workflow_dispatch:
-    inputs:
-      workspace_name:
-        description: 'Host identity directory for the QA Box'
-        required: false
-        default: 'explorerQaWorkspace'
-        type: string
 
 concurrency:
   group: deploy-explorer-qa
   cancel-in-progress: false
 
 env:
-  SSH_USER: ${{ vars.EXPLORER_QA_SSH_USER || 'admin' }}
-  SSH_HOST: ${{ vars.EXPLORER_QA_SSH_HOST || '45.136.70.141' }}
-  WORKSPACE: ${{ inputs.workspace_name || vars.EXPLORER_QA_WORKSPACE || 'explorerQaWorkspace' }}
+  SSH_USER: 'admin'
+  SSH_HOST: '45.136.70.141'
+  SSH_ED25519_FINGERPRINT: 'SHA256:pcVG+7QFbfi3Ojn3LeveNutqCWaTOIlgek1o3GKD/KA'
+  WORKSPACE: 'explorerQaWorkspace'
   ROUTER_PORT: '8097'
   DEPLOY_BRANCH: 'ploinky-proxy'
   PLOINKY_BRANCH: 'ploinky-proxy'
@@ -57,6 +52,11 @@ jobs:
             echo "::error::EXPLORER_QA_SSH_USER and EXPLORER_QA_SSH_HOST must be configured"
             exit 1
           fi
+          if [ "$SSH_HOST" != '45.136.70.141' ] || [ "$SSH_USER" != 'admin' ] ||
+            [ "$WORKSPACE" != 'explorerQaWorkspace' ]; then
+            echo "::error::Explorer QA target identity is not the pinned admin@45.136.70.141/explorerQaWorkspace target"
+            exit 1
+          fi
           if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
             echo "::error::Missing required repository secret EXPLORER_QA_CLOUDFLARE_API_TOKEN"
             exit 1
@@ -67,6 +67,10 @@ jobs:
           fi
           if [ -z "${CLOUDFLARE_TUNNEL_TOKEN:-}" ]; then
             echo "::error::Missing required repository secret EXPLORER_QA_CLOUDFLARE_TUNNEL_TOKEN"
+            exit 1
+          fi
+          if [ "$CLOUDFLARE_API_TOKEN" = "$CLOUDFLARE_TUNNEL_TOKEN" ]; then
+            echo "::error::Cloudflare management and connector authorities must be separate credentials"
             exit 1
           fi
           if [[ ! "$PLOINKY_MASTER_KEY" =~ ^[A-Fa-f0-9]{64}$ ]]; then
@@ -119,30 +123,123 @@ jobs:
             exit 1
           fi
           TUNNEL_RESPONSE="$(mktemp /tmp/explorer_qa_tunnel.XXXXXX)"
-          trap 'rm -f "$TUNNEL_RESPONSE"' EXIT
+          TUNNEL_LIST_RESPONSE="$(mktemp /tmp/explorer_qa_tunnel_list.XXXXXX)"
+          TUNNEL_CONFIG_RESPONSE="$(mktemp /tmp/explorer_qa_tunnel_config.XXXXXX)"
+          DNS_RESPONSE="$(mktemp /tmp/explorer_qa_dns.XXXXXX)"
+          trap 'rm -f "$TUNNEL_RESPONSE" "$TUNNEL_LIST_RESPONSE" "$TUNNEL_CONFIG_RESPONSE" "$DNS_RESPONSE"' EXIT
           curl -fsS \
             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             -H 'Content-Type: application/json' \
             "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/cfd_tunnel/$CLOUDFLARE_TUNNEL_ID" \
             > "$TUNNEL_RESPONSE"
-          if ! jq -e '.success == true and (.result | type == "object")' \
-            "$TUNNEL_RESPONSE" >/dev/null; then
-            echo "::error::Cloudflare did not return the authorized existing Explorer QA tunnel"
+          curl -fsS \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            -H 'Content-Type: application/json' \
+            --get \
+            --data-urlencode 'is_deleted=false' \
+            --data-urlencode "name=$CLOUDFLARE_TUNNEL_NAME" \
+            --data-urlencode 'per_page=100' \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/cfd_tunnel" \
+            > "$TUNNEL_LIST_RESPONSE"
+          curl -fsS \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            -H 'Content-Type: application/json' \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/cfd_tunnel/$CLOUDFLARE_TUNNEL_ID/configurations" \
+            > "$TUNNEL_CONFIG_RESPONSE"
+          curl -fsS \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            -H 'Content-Type: application/json' \
+            --get \
+            --data-urlencode 'type=CNAME' \
+            --data-urlencode "name=$PUBLIC_HOST" \
+            --data-urlencode 'per_page=100' \
+            "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records" \
+            > "$DNS_RESPONSE"
+
+          node --input-type=module - \
+            "$TUNNEL_RESPONSE" \
+            "$TUNNEL_LIST_RESPONSE" \
+            "$TUNNEL_CONFIG_RESPONSE" \
+            "$DNS_RESPONSE" <<'NODE'
+          import fs from 'node:fs';
+
+          const [detailPath, listPath, configPath, dnsPath] = process.argv.slice(2);
+          const accountId = String(process.env.CLOUDFLARE_ACCOUNT_ID || '');
+          const tunnelId = String(process.env.CLOUDFLARE_TUNNEL_ID || '');
+          const tunnelName = String(process.env.CLOUDFLARE_TUNNEL_NAME || '');
+          const publicHost = String(process.env.PUBLIC_HOST || '');
+          const routerPort = String(process.env.ROUTER_PORT || '');
+          const connectorToken = String(process.env.CLOUDFLARE_TUNNEL_TOKEN || '');
+          const parse = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
+          const requireSuccess = (payload, label) => {
+            if (payload?.success !== true) throw new Error(`${label} inventory failed`);
+            return payload.result;
+          };
+          const decodeConnectorClaims = (token) => {
+            for (const candidate of [token, ...token.split('.')]) {
+              try {
+                const claims = JSON.parse(Buffer.from(candidate, 'base64url').toString('utf8'));
+                const account = String(claims?.a || claims?.accountId || '');
+                const tunnel = String(claims?.t || claims?.tunnelId || '');
+                if (account && tunnel) return { account, tunnel };
+              } catch { }
+            }
+            throw new Error('Explorer QA connector token has no parseable account/tunnel claims');
+          };
+
+          const detail = requireSuccess(parse(detailPath), 'tunnel detail');
+          if (!detail || detail.id !== tunnelId || detail.name !== tunnelName
+            || detail.deleted_at != null
+            || (detail.account_tag != null && detail.account_tag !== accountId)) {
+            throw new Error('selected tunnel is not the exact active explorer-qa tunnel identity');
+          }
+          const named = requireSuccess(parse(listPath), 'named tunnel');
+          if (!Array.isArray(named) || named.length !== 1 || named[0]?.id !== tunnelId) {
+            throw new Error('active explorer-qa tunnel inventory is absent or ambiguous');
+          }
+
+          const claims = decodeConnectorClaims(connectorToken);
+          if (claims.account !== accountId || claims.tunnel !== tunnelId) {
+            throw new Error('connector token claims do not match the selected Explorer QA tunnel/account');
+          }
+
+          const config = requireSuccess(parse(configPath), 'tunnel configuration');
+          const ingress = config?.config?.ingress;
+          if (!Array.isArray(ingress) || ingress.length < 1 || ingress.length > 2) {
+            throw new Error('Explorer QA tunnel is shared or has ambiguous ingress');
+          }
+          const catchAll = ingress.at(-1);
+          if (catchAll?.hostname != null || catchAll?.service !== 'http_status:404') {
+            throw new Error('Explorer QA tunnel lacks the required terminal 404 ingress');
+          }
+          if (ingress.length === 2) {
+            const route = ingress[0];
+            if (route?.hostname !== publicHost || route?.service !== `http://localhost:${routerPort}`) {
+              throw new Error('Explorer QA tunnel contains unrelated or incorrect ingress');
+            }
+          }
+
+          const records = requireSuccess(parse(dnsPath), 'Explorer QA DNS');
+          const expectedTarget = `${tunnelId}.cfargotunnel.com`;
+          if (!Array.isArray(records) || records.length > 1
+            || (records.length === 1 && (records[0]?.name !== publicHost
+              || records[0]?.type !== 'CNAME'
+              || records[0]?.content !== expectedTarget
+              || records[0]?.proxied !== true))) {
+            throw new Error('Explorer QA DNS is ambiguous or points outside the selected tunnel');
+          }
+          console.log('Validated one dedicated existing Explorer QA tunnel and matching connector claims.');
+          NODE
+
+          HOST_KEY_CANDIDATE="$RUNNER_TEMP/explorer_qa_known_hosts"
+          ssh-keyscan -T 10 -t ed25519 "$SSH_HOST" > "$HOST_KEY_CANDIDATE"
+          HOST_KEY_FINGERPRINT="$({ ssh-keygen -lf "$HOST_KEY_CANDIDATE" -E sha256 || true; } | awk '{print $2}' | sort -u)"
+          if [ "$HOST_KEY_FINGERPRINT" != "$SSH_ED25519_FINGERPRINT" ]; then
+            echo "::error::Explorer QA ED25519 host fingerprint did not match the pinned identity"
             exit 1
           fi
-          if ! jq -e \
-            --arg id "$CLOUDFLARE_TUNNEL_ID" \
-            --arg account "$CLOUDFLARE_ACCOUNT_ID" \
-            '.result.id == $id and (.result.account_tag == null or .result.account_tag == $account)' \
-            "$TUNNEL_RESPONSE" >/dev/null; then
-            echo "::error::Cloudflare returned a tunnel outside the authorized Explorer QA identity"
-            exit 1
-          fi
-          if ! jq -e '.result.deleted_at == null' "$TUNNEL_RESPONSE" >/dev/null; then
-            echo "::error::The authorized existing Explorer QA tunnel has been deleted"
-            exit 1
-          fi
-          echo "Existing Explorer QA tunnel ID is active and account-scoped."
+          chmod 600 "$HOST_KEY_CANDIDATE"
+          echo "Validated the pinned Explorer QA SSH host identity."
 
       - name: Prepare SSH key
         env:
@@ -153,8 +250,7 @@ jobs:
           chmod 700 ~/.ssh
           printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H "$SSH_HOST" > ~/.ssh/explorer_qa_known_hosts
-          chmod 600 ~/.ssh/explorer_qa_known_hosts
+          install -m 600 "$RUNNER_TEMP/explorer_qa_known_hosts" ~/.ssh/explorer_qa_known_hosts
 
       - name: Reconcile and start Explorer QA Box
         env:
@@ -216,10 +312,18 @@ jobs:
           set -euo pipefail
           REMOTE_ENV_FILE="${1:-}"
           CLOUDFLARE_CREDENTIAL_FILE=""
+          PROTECTED_BEFORE_FILE=""
+          PROTECTED_AFTER_FILE=""
           cleanup_remote_files() {
             rm -f "$REMOTE_ENV_FILE"
             if [ -n "$CLOUDFLARE_CREDENTIAL_FILE" ]; then
               rm -f "$CLOUDFLARE_CREDENTIAL_FILE"
+            fi
+            if [ -n "$PROTECTED_BEFORE_FILE" ]; then
+              rm -f "$PROTECTED_BEFORE_FILE"
+            fi
+            if [ -n "$PROTECTED_AFTER_FILE" ]; then
+              rm -f "$PROTECTED_AFTER_FILE"
             fi
           }
           case "$REMOTE_ENV_FILE" in
@@ -314,6 +418,25 @@ jobs:
           fi
 
           WORK_DIR="$HOME/$WORKSPACE"
+          if [ "$(id -un)" != 'admin' ] || [ "$HOME" != '/home/admin' ] ||
+            [ "$WORK_DIR" != '/home/admin/explorerQaWorkspace' ]; then
+            echo "[deploy-qa] ERROR: remote Explorer QA identity is not the pinned admin workspace."
+            exit 1
+          fi
+          BOX_PATH_HASH="$(
+            node --input-type=module -e '
+              import crypto from "node:crypto";
+              import path from "node:path";
+              process.stdout.write(
+                crypto.createHash("sha256").update(path.resolve(process.argv[1])).digest("hex").slice(0, 12),
+              );
+            ' "$WORK_DIR"
+          )"
+          if [ "$BOX_PATH_HASH" != '7a31ab7775eb' ]; then
+            echo "[deploy-qa] ERROR: Explorer QA workspace hash does not match the pinned identity."
+            exit 1
+          fi
+          BOX_INSTANCE="ploinky-box-explorerqaworkspace-$BOX_PATH_HASH"
           if [ -L "$WORK_DIR" ]; then
             echo "[deploy-qa] ERROR: workspace identity path must not be a symlink: $WORK_DIR"
             exit 1
@@ -322,6 +445,170 @@ jobs:
             echo "[deploy-qa] ERROR: workspace authority directory must not be a symlink: $WORK_DIR/.ploinky"
             exit 1
           fi
+
+          snapshot_protected_resources() {
+            local target="$1"
+            node --input-type=module - "$BOX_PATH_HASH" "$BOX_INSTANCE" <<'NODE' > "$target"
+          import { execFileSync } from 'node:child_process';
+
+          const [qaHash, qaName] = process.argv.slice(2);
+          const run = (engine, args) => execFileSync(engine, args, { encoding: 'utf8' }).trim();
+          const engines = ['podman', 'docker'].filter((engine) => {
+            try { run('sh', ['-lc', `command -v ${engine}`]); return true; } catch { return false; }
+          });
+          const protectedState = [];
+          for (const engine of engines) {
+            const containerIds = run(engine, ['container', 'ls', '-aq']).split('\n').filter(Boolean);
+            for (const id of containerIds) {
+              const item = JSON.parse(run(engine, ['container', 'inspect', id]))[0];
+              const labels = item?.Config?.Labels || item?.Labels || {};
+              const name = String(item?.Name || '').replace(/^\//, '');
+              if (labels['io.assistos.ploinky-box.path-hash'] === qaHash || name === qaName) continue;
+              protectedState.push({
+                engine,
+                kind: 'container',
+                id: item.Id,
+                name,
+                image: item.Image,
+                labels: Object.fromEntries(Object.entries(labels).sort()),
+              });
+            }
+            const volumeNames = run(engine, ['volume', 'ls', '-q']).split('\n').filter(Boolean);
+            for (const name of volumeNames) {
+              const item = JSON.parse(run(engine, ['volume', 'inspect', name]))[0];
+              const labels = item?.Labels || {};
+              if (labels['io.assistos.ploinky-box.path-hash'] === qaHash
+                || name.startsWith(`${qaName}-`)) continue;
+              protectedState.push({
+                engine,
+                kind: 'volume',
+                name,
+                labels: Object.fromEntries(Object.entries(labels).sort()),
+              });
+            }
+          }
+          protectedState.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+          process.stdout.write(`${JSON.stringify(protectedState)}\n`);
+          NODE
+          }
+
+          PROTECTED_BEFORE_FILE="$(mktemp /tmp/explorer_qa_protected_before.XXXXXX)"
+          PROTECTED_AFTER_FILE="$(mktemp /tmp/explorer_qa_protected_after.XXXXXX)"
+          snapshot_protected_resources "$PROTECTED_BEFORE_FILE"
+          echo "[deploy-qa] Protected host resource identity sha256=$(sha256sum "$PROTECTED_BEFORE_FILE" | awk '{print $1}')"
+
+          declare -a QA_CONTAINER_RECORDS=()
+          declare -a QA_VOLUME_RECORDS=()
+          QA_VOLUME_ROLES=(workspace containers ploinky-deps)
+          for engine in podman docker; do
+            command -v "$engine" >/dev/null 2>&1 || continue
+            while IFS= read -r container_id; do
+              [ -n "$container_id" ] || continue
+              container_name="$($engine container inspect "$container_id" --format '{{.Name}}' | sed 's#^/##')"
+              container_hash="$($engine container inspect "$container_id" --format '{{ index .Config.Labels "io.assistos.ploinky-box.path-hash" }}')"
+              container_role="$($engine container inspect "$container_id" --format '{{ index .Config.Labels "io.assistos.ploinky-box.role" }}')"
+              if [ "$container_hash" != "$BOX_PATH_HASH" ] || [ "$container_role" != 'box' ] ||
+                [ "$container_name" != "$BOX_INSTANCE" ]; then
+                echo "[deploy-qa] ERROR: exact QA Box identity has conflicting ownership labels."
+                exit 1
+              fi
+              QA_CONTAINER_RECORDS+=("$engine|$container_id|$container_name")
+              echo "[deploy-qa] Rollback Box: engine=$engine id=$container_id name=$container_name pathHash=$container_hash role=$container_role"
+              "$engine" container exec "$container_id" sh -lc '
+                for nested_engine in podman docker; do
+                  command -v "$nested_engine" >/dev/null 2>&1 || continue
+                  "$nested_engine" container ls -a --format "[deploy-qa] Rollback nested container: id={{.ID}} name={{.Names}} image={{.Image}} status={{.Status}} labels={{.Labels}}"
+                  "$nested_engine" volume ls --format "[deploy-qa] Rollback nested volume: name={{.Name}} labels={{.Labels}}"
+                done
+              '
+            done < <(
+              {
+                "$engine" container ls -aq --filter "label=io.assistos.ploinky-box.path-hash=$BOX_PATH_HASH"
+                if "$engine" container inspect "$BOX_INSTANCE" >/dev/null 2>&1; then
+                  "$engine" container inspect "$BOX_INSTANCE" --format '{{.Id}}'
+                fi
+              } | sort -u
+            )
+
+            while IFS= read -r volume_name; do
+              [ -n "$volume_name" ] || continue
+              volume_hash="$($engine volume inspect "$volume_name" --format '{{ index .Labels "io.assistos.ploinky-box.path-hash" }}')"
+              volume_role="$($engine volume inspect "$volume_name" --format '{{ index .Labels "io.assistos.ploinky-box.role" }}')"
+              role_allowed=0
+              for allowed_role in "${QA_VOLUME_ROLES[@]}"; do
+                if [ "$volume_role" = "$allowed_role" ]; then role_allowed=1; fi
+              done
+              if [ "$volume_hash" != "$BOX_PATH_HASH" ] || [ "$role_allowed" != '1' ] ||
+                [ "$volume_name" != "$BOX_INSTANCE-$volume_role" ]; then
+                echo "[deploy-qa] ERROR: exact QA volume identity has conflicting ownership labels: $volume_name"
+                exit 1
+              fi
+              QA_VOLUME_RECORDS+=("$engine|$volume_name|$volume_role")
+              echo "[deploy-qa] Rollback volume: engine=$engine name=$volume_name pathHash=$volume_hash role=$volume_role"
+            done < <(
+              {
+                "$engine" volume ls -q --filter "label=io.assistos.ploinky-box.path-hash=$BOX_PATH_HASH"
+                for volume_role in "${QA_VOLUME_ROLES[@]}"; do
+                  exact_volume="$BOX_INSTANCE-$volume_role"
+                  if "$engine" volume inspect "$exact_volume" >/dev/null 2>&1; then printf '%s\n' "$exact_volume"; fi
+                done
+              } | sort -u
+            )
+          done
+
+          if [ "${#QA_CONTAINER_RECORDS[@]}" -gt 1 ]; then
+            echo "[deploy-qa] ERROR: exact QA Box identity is ambiguous across engines."
+            exit 1
+          fi
+          echo "[deploy-qa] Removing only the exact Explorer QA Box, labeled volumes, and identity directory..."
+          for record in "${QA_CONTAINER_RECORDS[@]}"; do
+            IFS='|' read -r engine container_id _ <<< "$record"
+            "$engine" container rm -f "$container_id"
+          done
+          for record in "${QA_VOLUME_RECORDS[@]}"; do
+            IFS='|' read -r engine volume_name _ <<< "$record"
+            "$engine" volume rm "$volume_name"
+          done
+          node --input-type=module - "$WORK_DIR" <<'NODE'
+          import fs from 'node:fs';
+          import path from 'node:path';
+
+          const target = path.resolve(process.argv[2]);
+          if (target !== '/home/admin/explorerQaWorkspace') {
+            throw new Error(`refusing recursive cleanup outside exact QA identity: ${target}`);
+          }
+          try {
+            const current = fs.lstatSync(target);
+            if (!current.isDirectory() || current.isSymbolicLink()
+              || (typeof process.getuid === 'function' && current.uid !== process.getuid())) {
+              throw new Error(`refusing unsafe QA identity directory: ${target}`);
+            }
+            fs.rmSync(target, { recursive: true, force: false, maxRetries: 3 });
+          } catch (error) {
+            if (error?.code !== 'ENOENT') throw error;
+          }
+          NODE
+          for engine in podman docker; do
+            command -v "$engine" >/dev/null 2>&1 || continue
+            if [ -n "$($engine container ls -aq --filter "label=io.assistos.ploinky-box.path-hash=$BOX_PATH_HASH")" ] ||
+              "$engine" container inspect "$BOX_INSTANCE" >/dev/null 2>&1 ||
+              [ -n "$($engine volume ls -q --filter "label=io.assistos.ploinky-box.path-hash=$BOX_PATH_HASH")" ]; then
+              echo "[deploy-qa] ERROR: exact QA orphan resources remained after cleanup."
+              exit 1
+            fi
+            for volume_role in "${QA_VOLUME_ROLES[@]}"; do
+              if "$engine" volume inspect "$BOX_INSTANCE-$volume_role" >/dev/null 2>&1; then
+                echo "[deploy-qa] ERROR: exact QA volume remained after cleanup."
+                exit 1
+              fi
+            done
+          done
+          if [ -e "$WORK_DIR" ] || [ -L "$WORK_DIR" ]; then
+            echo "[deploy-qa] ERROR: exact QA identity directory remained after cleanup."
+            exit 1
+          fi
+          echo "[deploy-qa] Exact prior Explorer QA deployment cleanup verified."
+
           mkdir -p "$WORK_DIR"
           chmod 700 "$WORK_DIR"
           node --input-type=module - "$WORK_DIR/.env" <<'NODE'
@@ -583,6 +870,10 @@ jobs:
                 });
               '
           )"
+          if [ "$BOX_INSTANCE" != "ploinky-box-explorerqaworkspace-$BOX_PATH_HASH" ]; then
+            echo "[deploy-qa] ERROR: Ploinky dry-run selected an identity outside the pinned Explorer QA Box."
+            exit 1
+          fi
           echo "[deploy-qa] Box plan: $PLAN_JSON"
 
           echo "[deploy-qa] Preparing the exact QA Box..."
@@ -864,18 +1155,45 @@ jobs:
               echo "[deploy-qa]        does not match $DEPLOY_BRANCH at $expected_commit."
               exit 1
             fi
+            deployed_branch="$(
+              "$BOX_ENGINE" container exec --user podman "$BOX_INSTANCE" \
+                git -C "/workspace/.ploinky/repos/$repository_name" branch --show-current
+            )"
+            deployed_upstream="$(
+              "$BOX_ENGINE" container exec --user podman "$BOX_INSTANCE" \
+                git -C "/workspace/.ploinky/repos/$repository_name" rev-parse \
+                  --abbrev-ref --symbolic-full-name '@{upstream}'
+            )"
+            deployed_dirty="$(
+              "$BOX_ENGINE" container exec --user podman "$BOX_INSTANCE" \
+                git -C "/workspace/.ploinky/repos/$repository_name" status --porcelain
+            )"
+            if [ "$deployed_branch" != "$DEPLOY_BRANCH" ] ||
+              [ "$deployed_upstream" != "origin/$DEPLOY_BRANCH" ] ||
+              [ -n "$deployed_dirty" ]; then
+              echo "[deploy-qa] ERROR: deployed $repository_name checkout is not clean and tracking origin/$DEPLOY_BRANCH."
+              exit 1
+            fi
             echo "[deploy-qa] Verified $repository_name/$DEPLOY_BRANCH at $deployed_commit."
           done
           "$BOX_ENGINE" container exec \
             --user podman \
+            --env "EXPECTED_AGENTLIB_COMMIT=$EXPECTED_AGENTLIB_COMMIT" \
             "$BOX_INSTANCE" \
             node --input-type=module --eval '
+              import crypto from "node:crypto";
+              import { execFileSync } from "node:child_process";
               import fs from "node:fs";
               import path from "node:path";
 
               const root = "/workspace/.ploinky/deps";
               const expectedBranch = "ploinky-proxy";
+              const expectedCommit = String(process.env.EXPECTED_AGENTLIB_COMMIT || "");
+              if (!/^[a-f0-9]{40}$/.test(expectedCommit)) {
+                throw new Error("invalid expected AgentLib commit");
+              }
               let manifests = 0;
+              const packageRoots = [];
               const pending = [root];
               while (pending.length) {
                 const directory = pending.pop();
@@ -889,11 +1207,15 @@ jobs:
                 for (const entry of entries) {
                   const target = path.join(directory, entry.name);
                   if (entry.isDirectory()) {
-                    if (entry.name !== "node_modules") pending.push(target);
+                    pending.push(target);
                     continue;
                   }
                   if (entry.name !== "package.json") continue;
                   const manifest = JSON.parse(fs.readFileSync(target, "utf8"));
+                  if (manifest?.name === "ploinky-agent-lib"
+                    && path.basename(path.dirname(target)) === "achillesAgentLib") {
+                    packageRoots.push(path.dirname(target));
+                  }
                   const source = String(manifest?.dependencies?.achillesAgentLib || "");
                   if (!source) continue;
                   manifests += 1;
@@ -903,9 +1225,67 @@ jobs:
                 }
               }
               if (manifests < 1) throw new Error("no AgentLib dependency cache was materialized");
-              process.stdout.write(`[deploy-qa] Verified ${manifests} AgentLib dependency manifests on ${expectedBranch}.\n`);
+              if (packageRoots.length < 1) throw new Error("no installed AgentLib runtime package was materialized");
+
+              const packageDigests = new Map();
+              const digestPackage = (packageRoot) => {
+                const files = [];
+                const directories = [packageRoot];
+                while (directories.length) {
+                  const directory = directories.pop();
+                  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+                    const target = path.join(directory, entry.name);
+                    const relative = path.relative(packageRoot, target);
+                    if (entry.isDirectory()) {
+                      if (!relative.split(path.sep).includes("node_modules")) directories.push(target);
+                    } else if (entry.isFile()) {
+                      files.push(relative);
+                    }
+                  }
+                }
+                files.sort();
+                if (!files.length) throw new Error(`empty AgentLib runtime package: ${packageRoot}`);
+                const hash = crypto.createHash("sha256");
+                for (const relative of files) {
+                  hash.update(relative); hash.update("\0");
+                  hash.update(fs.readFileSync(path.join(packageRoot, relative))); hash.update("\0");
+                }
+                return { files: files.length, sha256: hash.digest("hex") };
+              };
+              for (const packageRoot of packageRoots) {
+                const lockPath = path.join(path.dirname(packageRoot), ".package-lock.json");
+                if (!fs.existsSync(lockPath)) throw new Error(`missing runtime lock for ${packageRoot}`);
+                const lock = JSON.parse(fs.readFileSync(lockPath, "utf8"));
+                const record = lock?.packages?.["node_modules/achillesAgentLib"];
+                if (!String(record?.resolved || "").endsWith(`#${expectedCommit}`)) {
+                  throw new Error(`AgentLib runtime lock is not pinned to ${expectedCommit}`);
+                }
+                const realRoot = fs.realpathSync(packageRoot);
+                packageDigests.set(realRoot, digestPackage(realRoot));
+              }
+
+              const nested = JSON.parse(execFileSync("podman", ["container", "ls", "--format", "json"], { encoding: "utf8" }));
+              const explorer = nested.find((item) => {
+                const labels = item.Labels || item.labels || {};
+                const names = Array.isArray(item.Names) ? item.Names.join(" ") : String(item.Names || item.Name || "");
+                return labels["io.assistos.ploinky.resource"] === "agent" && names.includes("_explorer_");
+              });
+              const explorerName = Array.isArray(explorer?.Names) ? explorer.Names[0] : String(explorer?.Names || explorer?.Name || "");
+              if (!explorerName) throw new Error("running Explorer container was not found for AgentLib resolution");
+              const resolved = JSON.parse(execFileSync("podman", [
+                "container", "exec", explorerName, "node", "-e",
+                "const fs=require(\"fs\");const p=require.resolve(\"achillesAgentLib/package.json\");console.log(JSON.stringify({packageJson:p,realPackageJson:fs.realpathSync(p),entry:require.resolve(\"achillesAgentLib\")}));",
+              ], { encoding: "utf8" }));
+              const loadedRoot = path.dirname(resolved.realPackageJson);
+              const loadedDigest = packageDigests.get(loadedRoot);
+              if (!loadedDigest || !resolved.entry) {
+                throw new Error("Explorer did not load AgentLib bytes from a verified immutable runtime package");
+              }
+              process.stdout.write(
+                `[deploy-qa] Verified ${manifests} AgentLib manifests and ${packageDigests.size} installed packages at ${expectedCommit}; Explorer loaded ${loadedDigest.files} files sha256=${loadedDigest.sha256}.\n`,
+              );
             '
-          echo "[deploy-qa] Verified achillesAgentLib/$DEPLOY_BRANCH at $EXPECTED_AGENTLIB_COMMIT."
+          echo "[deploy-qa] Verified remote achillesAgentLib/$DEPLOY_BRANCH and loaded runtime identity at $EXPECTED_AGENTLIB_COMMIT."
 
           echo "[deploy-qa] Verifying the loopback Router publication..."
           ROUTER_OK=0
@@ -929,6 +1309,13 @@ jobs:
             echo "[deploy-qa] ERROR: protected Soul Gateway became unhealthy during QA deployment."
             exit 1
           fi
+
+          snapshot_protected_resources "$PROTECTED_AFTER_FILE"
+          if ! cmp -s "$PROTECTED_BEFORE_FILE" "$PROTECTED_AFTER_FILE"; then
+            echo "[deploy-qa] ERROR: an unrelated host container or volume identity changed during QA cleanup/deployment."
+            exit 1
+          fi
+          echo "[deploy-qa] Protected host resource identities remained unchanged (sha256=$(sha256sum "$PROTECTED_AFTER_FILE" | awk '{print $1}'))."
 
           echo "[deploy-qa] Explorer QA Box is ready."
           REMOTE
