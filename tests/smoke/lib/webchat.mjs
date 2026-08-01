@@ -102,6 +102,15 @@ export async function selectActiveWebchatSuggestion(page) {
   await page.keyboard.press('Enter');
 }
 
+async function confirmDefaultUploadDestination(page) {
+  const dialog = page.getByRole('dialog', { name: 'Choose upload destination' });
+  await expect(dialog).toBeVisible();
+  const confirm = dialog.getByRole('button', { name: 'Upload here' });
+  await expect(confirm).toBeEnabled();
+  await confirm.click();
+  await expect(dialog).toBeHidden();
+}
+
 export async function uploadOneFile(page, testInfo, name = `smoke-${smokeConfig.runId}.txt`) {
   const fixtureDir = testInfo.outputPath('fixtures');
   fs.mkdirSync(fixtureDir, { recursive: true });
@@ -109,15 +118,16 @@ export async function uploadOneFile(page, testInfo, name = `smoke-${smokeConfig.
   fs.writeFileSync(filePath, `smoke upload ${smokeConfig.runId}\n`);
 
   await page.locator('#fileUploadInput').setInputFiles(filePath);
+  await confirmDefaultUploadDestination(page);
   await expect(page.locator('.wa-file-preview-name', { hasText: name })).toBeVisible();
 
   const responsePromise = captureNextUploadResponse(page);
   await page.locator('#send').click();
   const { status, payload } = await responsePromise;
-  expect(status).toBe(201);
+  expect(status, `WebChat upload failed: ${payload?.error || 'unknown error'}`).toBe(201);
   expect(payload.relativePath).toBe(name);
-  expect(payload.workspacePath).toMatch(/^uploads\/[A-Za-z0-9_-]{1,128}\//);
-  expect(payload.downloadUrl).toContain('/webchat/uploads');
+  expect(payload.workspacePath).toBe(name);
+  expect(payload.downloadUrl).toBe(`/workspace-files/${encodeURIComponent(name)}`);
   await cancelWebchatGenerationIfActive(page);
   return { filePath, name, payload };
 }
@@ -131,14 +141,15 @@ export async function uploadFolder(page, testInfo, folderName = `smoke-folder-${
   fs.writeFileSync(path.join(folderPath, 'nested', leafName), `smoke folder upload ${smokeConfig.runId}\n`);
 
   await page.locator('#folderUploadInput').setInputFiles(folderPath);
+  await confirmDefaultUploadDestination(page);
   await expect(page.locator('.wa-file-preview-name', { hasText: relativePath })).toBeVisible();
 
   const responsePromise = captureNextUploadResponse(page);
   await page.locator('#send').click();
   const { status, payload } = await responsePromise;
-  expect(status).toBe(201);
+  expect(status, `WebChat upload failed: ${payload?.error || 'unknown error'}`).toBe(201);
   expect(payload.relativePath).toBe(relativePath);
-  expect(payload.workspacePath).toMatch(/^uploads\/[A-Za-z0-9_-]{1,128}\//);
+  expect(payload.workspacePath).toBe(relativePath);
   await cancelWebchatGenerationIfActive(page);
   return { folderPath, folderName, relativePath, payload };
 }
