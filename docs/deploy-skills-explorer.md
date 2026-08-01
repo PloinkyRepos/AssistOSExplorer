@@ -1,8 +1,25 @@
 # Deploy Explorer with Ploinky Box
 
-The repository no longer contains an SSH workflow that mutates a remote
-workspace. Deployment is intentionally operator-controlled until dedicated Box
-test resources and credentials are supplied.
+Deployment is operator-controlled. Codex sessions are authorized operators when
+the user's task selects the target deployment operation. They may invoke the
+tracked GitHub Actions deployment workflows with `gh` or use direct SSH,
+Ploinky CLI, container, registry, Cloudflare, DNS, and other remote operations
+needed to complete that selected task.
+
+The tracked `deploy-explorer-qa.yml` and `deploy-skills-explorer.yml` workflows
+are supported execution channels. Before dispatch, inspect the workflow at the
+requested revision and verify its exact inputs, target guards, credentials,
+branch selection, and fallback behavior against the user's requirements. A
+workflow name or historical successful run is not evidence that its current
+implementation satisfies those requirements. If an explicit request forbids
+`--branch-fallback`, do not dispatch a workflow that injects that option; use an
+authorized direct channel or update and verify the workflow first.
+
+Direct operator execution has the same authority and safety boundary. Before a
+destructive or externally visible mutation, positively identify the exact host,
+workspace, environment, revisions, images, and rollback state. Authorization
+for QA or local deployment never authorizes production or unrelated workloads.
+Never expose secret values in commands, logs, reports, or artifacts.
 
 ## Required sequence
 

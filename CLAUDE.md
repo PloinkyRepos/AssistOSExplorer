@@ -61,21 +61,32 @@ Ploinky Explorer workspace + 17 coupled agents. Origin: `https://github.com/Assi
 
 ## Deploy and remote ops
 
-Ploinky Box deployment is operator-controlled. This repository intentionally
-contains no SSH deploy, update, provision, or remote-status workflow. Follow
-`docs/deploy-skills-explorer.md`; do not recreate or invoke the retired
-`deploy-skills-explorer.yml`, `deploy-explorer-qa.yml`, `update-explorer.yml`,
-`provision-skills-explorer-host.yml`, or `remote-skills-status.yml` paths.
+Ploinky Box deployment is operator-controlled. Codex sessions are authorized
+operators when the user's task selects the deployment, redeployment, recovery,
+destruction, or E2E operation. Follow `docs/deploy-skills-explorer.md`; sessions
+may trigger tracked GitHub Actions workflows with `gh` and may use direct SSH,
+Ploinky CLI, container, registry, Cloudflare, DNS, or other remote operations
+needed to complete that selected task.
 
-- Current workflows are `destroy-explorer.yml`, `destroy-explorer-qa.yml`, and
-  `verify-retired-source-absence.yml`. The destroy workflows are explicit
-  destructive operations; inspect their target and ownership checks before use.
+- Supported tracked workflows include `deploy-explorer-qa.yml`,
+  `deploy-skills-explorer.yml`, `destroy-explorer.yml`,
+  `destroy-explorer-qa.yml`, and `verify-retired-source-absence.yml`. Inspect the
+  dispatched revision, inputs, exact target, ownership guards, secret
+  prerequisites, and branch/fallback behavior before invocation.
+- Operator authority does not broaden the task target. Positively identify the
+  environment, host, workspace, branch, revisions, images, and rollback state
+  before destructive or externally visible mutation. QA/local authorization
+  never implies production authorization.
+- An absent workflow such as `update-explorer.yml`,
+  `provision-skills-explorer-host.yml`, or `remote-skills-status.yml` may be
+  restored when needed through the normal reviewed and tested change process;
+  do not bypass workflow validation or target guards.
 - `.ploinky/.secrets` is encrypted. Never append/edit it as plaintext; use
   `ploinky var` with `PLOINKY_MASTER_KEY` set.
 - A Box activation must use dedicated authorized test resources and must report
   unavailable Cloudflare, TURN, architecture, network, or account prerequisites
   as `BLOCKED`, never as a pass.
-- After an operator-controlled recreate, verify the exact outer bindings, in-box
+- After a recreate, verify the exact outer bindings, in-box
   listener ownership, local Router behavior, and the real-browser release gates
   documented in `docs/deploy-skills-explorer.md`.
 
