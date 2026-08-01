@@ -398,3 +398,58 @@ test('Explorer QA cleanup handles an absent workspace with exact orphan resource
   assert.match(cleanup, /error\?\.code !== 'ENOENT'/);
   assert.doesNotMatch(cleanup, /rm\s+-rf|rm\s+-fr/, 'cleanup must use the exact guarded Node target');
 });
+
+test('Explorer QA cleanup canonicalizes short and full container identities before ambiguity checks', () => {
+  const source = fs.readFileSync(
+    path.join(ROOT, '.github/workflows/deploy-explorer-qa.yml'),
+    'utf8',
+  );
+  const cleanup = source.slice(
+    source.indexOf('canonicalize_container_candidates()'),
+    source.indexOf('mkdir -p "$WORK_DIR"', source.indexOf('canonicalize_container_candidates()')),
+  );
+  assert.match(cleanup, /container inspect "\$candidate" --format '\{\{\.Id\}\}'/);
+  assert.match(
+    cleanup,
+    /\}\s*\| canonicalize_container_candidates "\$engine" \| sort -u/,
+    'candidate names, short IDs, and full IDs must collapse to one immutable identity',
+  );
+  assert.match(cleanup, /QA_CONTAINER_RECORDS\+=\("\$engine\|\$container_id\|\$container_name"\)/);
+
+  const functionEnd = cleanup.indexOf('\n\n          declare -a QA_CONTAINER_RECORDS');
+  assert.ok(functionEnd > 0, 'canonicalization function boundary must exist');
+  const functionSource = cleanup.slice(0, functionEnd).replace(/^ {10}/gm, '');
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'explorer-qa-container-id-'));
+  try {
+    const fakeEngine = path.join(temporary, 'podman');
+    fs.writeFileSync(fakeEngine, `#!/bin/sh
+set -eu
+[ "$1" = container ]
+[ "$2" = inspect ]
+case "$3" in
+  unrelated) printf '%s\\n' 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' ;;
+  *) printf '%s\\n' 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' ;;
+esac
+`, { mode: 0o700 });
+    const run = (candidates) => spawnSync('bash', ['-c', `set -euo pipefail
+${functionSource}
+printf '%s\\n' "$@" | canonicalize_container_candidates podman | sort -u
+`, 'canonicalize-test', ...candidates], {
+      encoding: 'utf8',
+      env: { ...process.env, PATH: `${temporary}:${process.env.PATH}` },
+    });
+    const duplicate = run([
+      '2d9102773f02',
+      '2d9102773f0273493f640935623749c4696dcafe0683d539123f4b58624ab0b8',
+      'ploinky-box-explorerqaworkspace-7a31ab7775eb',
+    ]);
+    assert.equal(duplicate.status, 0, duplicate.stderr);
+    assert.deepEqual(duplicate.stdout.trim().split('\n'), ['a'.repeat(64)]);
+
+    const ambiguous = run(['2d9102773f02', 'unrelated']);
+    assert.equal(ambiguous.status, 0, ambiguous.stderr);
+    assert.deepEqual(ambiguous.stdout.trim().split('\n'), ['a'.repeat(64), 'b'.repeat(64)]);
+  } finally {
+    fs.rmSync(temporary, { recursive: true, force: true });
+  }
+});
