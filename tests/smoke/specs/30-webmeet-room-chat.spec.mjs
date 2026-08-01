@@ -21,6 +21,7 @@ import {
   enableMedia,
   expectAuthenticatedStandaloneWebMeet,
   expectBidirectionalAudioVideoRtp,
+  expectWebMeetMediaState,
   expectIncreasingRtpStats,
   expectJoinMaterialRefreshLifecycle,
   expectTwoDistinctWebMeetParticipants,
@@ -303,6 +304,16 @@ test.describe('WebMeet rooms', () => {
               testInfo,
             }),
             expectBidirectionalAudioVideoRtp(memberPage, {
+              label: 'headless-member',
+              testInfo,
+            }),
+          ]);
+          await Promise.all([
+            expectWebMeetMediaState(ownerPage, {
+              label: 'headless-owner',
+              testInfo,
+            }),
+            expectWebMeetMediaState(memberPage, {
               label: 'headless-member',
               testInfo,
             }),

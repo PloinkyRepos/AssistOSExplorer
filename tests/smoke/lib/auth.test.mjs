@@ -3,9 +3,32 @@ import test from 'node:test';
 
 import {
   assertDistinctAuthenticatedPrincipals,
+  hasAuthenticatedSession,
   normalizePrincipalComponent,
   validateAuthenticatedPrincipal,
 } from './auth.mjs';
+
+test('session detection uses the account-neutral auth endpoint', async () => {
+  const requested = [];
+  assert.equal(await hasAuthenticatedSession({
+    async get(url) {
+      requested.push(url);
+      return { ok: () => true };
+    },
+  }), true);
+  assert.deepEqual(requested, ['/auth/token']);
+
+  assert.equal(await hasAuthenticatedSession({
+    async get() {
+      return { ok: () => false };
+    },
+  }), false);
+  assert.equal(await hasAuthenticatedSession({
+    async get() {
+      throw new Error('offline');
+    },
+  }), false);
+});
 
 test('authenticated principals are normalized and matched to the configured account', () => {
   const principal = validateAuthenticatedPrincipal({

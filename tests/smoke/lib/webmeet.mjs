@@ -266,6 +266,139 @@ export async function expectBidirectionalAudioVideoRtp(page, { label, testInfo, 
   return { before, after };
 }
 
+async function webMeetMediaStateSnapshot(page) {
+  return page.evaluate(async () => {
+    const dashboard = document.querySelector('webmeet-dashboard');
+    const presenter = dashboard?.webSkelPresenter || null;
+    const room = presenter?.room
+      || presenter?.roomLiveKit?.getRoom?.()
+      || presenter?.roomController?.room
+      || null;
+    const localParticipant = room?.localParticipant || null;
+    const publicationRows = (participant, local) => Array.from(participant?.trackPublications?.values?.() || [])
+      .map((publication) => ({
+        participantIdentity: String(participant?.identity || '').trim(),
+        local,
+        publicationSid: String(publication?.trackSid || publication?.sid || '').trim(),
+        source: String(publication?.source || '').trim(),
+        kind: String(publication?.kind || publication?.track?.kind || '').trim(),
+        muted: Boolean(publication?.isMuted),
+        subscribed: local ? true : Boolean(publication?.isSubscribed),
+        trackId: String(publication?.track?.mediaStreamTrack?.id || '').trim(),
+        trackState: String(publication?.track?.mediaStreamTrack?.readyState || '').trim(),
+        trackPresent: Boolean(publication?.track?.mediaStreamTrack),
+      }));
+    const publications = [
+      ...publicationRows(localParticipant, true),
+      ...Array.from(room?.remoteParticipants?.values?.() || [])
+        .flatMap((participant) => publicationRows(participant, false)),
+    ];
+    const videos = Array.from(document.querySelectorAll('#webmeetVideoGrid webmeet-participant-card video'))
+      .map((video) => {
+        const participant = video.closest('webmeet-participant-card[data-participant-id]');
+        const tracks = Array.from(video.srcObject?.getVideoTracks?.() || []);
+        const rect = video.getBoundingClientRect();
+        const style = getComputedStyle(video);
+        return {
+          participantIdentity: String(participant?.dataset?.participantId || '').trim(),
+          local: String(participant?.dataset?.local || participant?.getAttribute?.('data-is-local') || '') === 'true',
+          connected: video.isConnected,
+          visible: video.isConnected
+            && rect.width > 0
+            && rect.height > 0
+            && style.visibility !== 'hidden'
+            && style.display !== 'none'
+            && Number(style.opacity || 1) > 0,
+          paused: Boolean(video.paused),
+          ended: Boolean(video.ended),
+          readyState: Number(video.readyState || 0),
+          currentTime: Number(video.currentTime || 0),
+          videoWidth: Number(video.videoWidth || 0),
+          videoHeight: Number(video.videoHeight || 0),
+          tracks: tracks.map((track) => ({
+            id: String(track?.id || '').trim(),
+            readyState: String(track?.readyState || '').trim(),
+            enabled: Boolean(track?.enabled),
+            muted: Boolean(track?.muted),
+          })),
+        };
+      });
+    const dataChannels = [];
+    for (const [peerConnectionIndex, peerConnection] of (window.__e2ePeerConnections || []).entries()) {
+      const stats = await peerConnection.getStats();
+      stats.forEach((entry) => {
+        if (entry.type !== 'data-channel') return;
+        dataChannels.push({
+          peerConnectionIndex,
+          statId: String(entry.id || '').trim(),
+          label: String(entry.label || '').trim(),
+          protocol: String(entry.protocol || '').trim(),
+          state: String(entry.state || '').trim(),
+          messagesSent: Number(entry.messagesSent || 0),
+          messagesReceived: Number(entry.messagesReceived || 0),
+          bytesSent: Number(entry.bytesSent || 0),
+          bytesReceived: Number(entry.bytesReceived || 0),
+        });
+      });
+    }
+    return { publications, videos, dataChannels };
+  });
+}
+
+export async function expectWebMeetMediaState(page, { label, testInfo }) {
+  let snapshot = null;
+  await expect.poll(async () => {
+    snapshot = await webMeetMediaStateSnapshot(page);
+    const livePublication = (publication) => (
+      publication.publicationSid
+      && publication.trackPresent
+      && publication.trackId
+      && publication.trackState !== 'ended'
+    );
+    const localSources = new Set(snapshot.publications
+      .filter((publication) => publication.local && livePublication(publication))
+      .map((publication) => publication.source));
+    const remoteSources = new Set(snapshot.publications
+      .filter((publication) => !publication.local && publication.subscribed && livePublication(publication))
+      .map((publication) => publication.source));
+    const playingVideo = (video) => (
+      video.participantIdentity
+      && video.connected
+      && video.visible
+      && !video.paused
+      && !video.ended
+      && video.readyState >= 2
+      && video.currentTime > 0
+      && video.videoWidth > 0
+      && video.videoHeight > 0
+      && video.tracks.some((track) => track.id && track.readyState === 'live' && track.enabled)
+    );
+    const openChannelLabels = snapshot.dataChannels
+      .filter((channel) => channel.state === 'open')
+      .map((channel) => channel.label.toLowerCase());
+    return localSources.has('microphone')
+      && localSources.has('camera')
+      && remoteSources.has('microphone')
+      && remoteSources.has('camera')
+      && snapshot.videos.some((video) => video.local && playingVideo(video))
+      && snapshot.videos.some((video) => !video.local && playingVideo(video))
+      && openChannelLabels.some((channelLabel) => channelLabel.includes('reliable'))
+      && openChannelLabels.some((channelLabel) => channelLabel.includes('lossy'));
+  }, {
+    message: `${label} must retain live local/remote publications, playing DOM videos, and open reliable/lossy DataChannels`,
+    timeout: smokeConfig.timeouts.media,
+    intervals: [500, 1_000, 2_000],
+  }).toBe(true);
+  await attachJsonEvidence(testInfo, `${label}-media-publication-dom-datachannel`, snapshot);
+  const screenshotPath = testInfo.outputPath(`${label}-media-dom.png`);
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await testInfo.attach(`${label}-media-dom-screenshot`, {
+    path: screenshotPath,
+    contentType: 'image/png',
+  });
+  return snapshot;
+}
+
 const SCREEN_SOURCE = 'screen_share';
 
 async function participantSnapshot(page) {

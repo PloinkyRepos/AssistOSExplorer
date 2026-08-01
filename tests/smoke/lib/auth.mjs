@@ -74,6 +74,11 @@ export async function readAuthenticatedPrincipal(page, account) {
   return validateAuthenticatedPrincipal(result.user, { expectedUsername: account?.username });
 }
 
+export async function hasAuthenticatedSession(request) {
+  const response = await request.get('/auth/token').catch(() => null);
+  return Boolean(response?.ok());
+}
+
 export async function signIn(
   page,
   account = smokeConfig.primaryUser,
@@ -82,8 +87,8 @@ export async function signIn(
 ) {
   await page.goto(returnTo, { waitUntil: 'load' });
 
-  const session = await page.request.get('/dashboard/whoami').then((response) => response.json()).catch(() => null);
-  if (!session?.ok && !(await loginForm(page).isVisible({ timeout: 1_000 }).catch(() => false))) {
+  const sessionOk = await hasAuthenticatedSession(page.request);
+  if (!sessionOk && !(await loginForm(page).isVisible({ timeout: 1_000 }).catch(() => false))) {
     const params = new URLSearchParams({
       agent: smokeConfig.authAgent,
       returnTo,

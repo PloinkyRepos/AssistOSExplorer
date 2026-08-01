@@ -69,8 +69,15 @@ test('headless WebMeet acceptance keeps synthetic media, strict accounts, and fo
   assert.match(roomSpec, /assertDistinctAuthenticatedPrincipals\(ownerPrincipal,\s*memberPrincipal\)/);
   assert.match(roomSpec, /expectBidirectionalAudioVideoRtp\(ownerPage/);
   assert.match(roomSpec, /expectBidirectionalAudioVideoRtp\(memberPage/);
+  assert.match(roomSpec, /expectWebMeetMediaState\(ownerPage/);
+  assert.match(roomSpec, /expectWebMeetMediaState\(memberPage/);
+  const webMeetHelpers = fs.readFileSync(new URL('./webmeet.mjs', import.meta.url), 'utf8');
   assert.match(
-    fs.readFileSync(new URL('./webmeet.mjs', import.meta.url), 'utf8'),
+    webMeetHelpers,
     /'outbound-rtp:audio'[\s\S]*'outbound-rtp:video'[\s\S]*'inbound-rtp:audio'[\s\S]*'inbound-rtp:video'/,
   );
+  assert.match(webMeetHelpers, /entry\.type !== 'data-channel'/);
+  assert.match(webMeetHelpers, /#webmeetVideoGrid webmeet-participant-card video/);
+  assert.match(webMeetHelpers, /publication\.trackPresent/);
+  assert.match(webMeetHelpers, /openChannelLabels[\s\S]*includes\('reliable'\)[\s\S]*includes\('lossy'\)/);
 });
