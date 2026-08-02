@@ -84,3 +84,24 @@ test('QA WebMeet evidence retains both canonical Explorer principals', () => {
   );
   assert.doesNotMatch(acceptanceSpec, /(?:owner|member)Principal\.(?:id|username)\b/);
 });
+
+test('QA OnlyOffice acceptance unloads and proves durable DPU persistence before reopening', () => {
+  const acceptanceSpec = fs.readFileSync(
+    new URL('../specs/80-explorer-qa-acceptance.spec.mjs', import.meta.url),
+    'utf8',
+  );
+  const start = acceptanceSpec.indexOf("test('legacy Confidential .doc edits in OnlyOffice");
+  const end = acceptanceSpec.indexOf("test('two generated users join one WebMeet room", start);
+  assert.ok(start >= 0 && end > start, 'OnlyOffice QA acceptance test body must be present.');
+  const onlyOfficeTest = acceptanceSpec.slice(start, end);
+  const reload = onlyOfficeTest.indexOf("await page.reload({ waitUntil: 'domcontentloaded' });");
+  const durableGate = onlyOfficeTest.indexOf(
+    'dpuSnapshotPersistenceAdvanced(initialSnapshot, callbackSnapshot)',
+  );
+  const identityGate = onlyOfficeTest.indexOf('callbackSnapshot?.id === initialSnapshot.id');
+  const reopen = onlyOfficeTest.indexOf('reopened = await openConfidentialDoc(page, documentPath);');
+  assert.ok(reload >= 0, 'OnlyOffice QA acceptance must perform a real document unload.');
+  assert.ok(identityGate > reload, 'OnlyOffice QA acceptance must preserve the DPU object identity.');
+  assert.ok(durableGate > reload, 'OnlyOffice QA acceptance must verify persistence after unloading.');
+  assert.ok(reopen > durableGate, 'OnlyOffice QA acceptance must not reopen before persistence is durable.');
+});

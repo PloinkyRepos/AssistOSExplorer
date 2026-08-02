@@ -15,6 +15,8 @@ import {
   openAdminUsers,
 } from '../lib/admin-users.mjs';
 import { smokeConfig } from '../lib/config.mjs';
+import { dpuData } from '../lib/dpu-data.mjs';
+import { dpuSnapshotPersistenceAdvanced } from '../lib/dpu-persistence.mjs';
 import {
   assertExplorerDirectory,
   openExplorer,
@@ -45,6 +47,22 @@ const createdUsernames = [];
 
 function documentRow(page, documentPath) {
   return page.locator(`tr[data-entry-path="${documentPath}"]`);
+}
+
+function readDpuDocumentSnapshot(fileName) {
+  if (!dpuData.exists('state.json')) return null;
+  const state = dpuData.readJson('state.json');
+  const object = Object.values(state?.objects || {}).find((entry) => (
+    entry?.type === 'file' && entry?.name === fileName
+  ));
+  if (!object?.id || !dpuData.exists('blobs', object.id)) return null;
+  const blob = dpuData.readBuffer('blobs', object.id);
+  return {
+    id: object.id,
+    updatedAt: String(object.updatedAt || ''),
+    blobBytes: blob.length,
+    blobSha256: crypto.createHash('sha256').update(blob).digest('hex'),
+  };
 }
 
 async function collectOnlyOfficeFrameText(page) {
@@ -293,12 +311,18 @@ test.describe('Explorer QA acceptance', () => {
     const page = await context.newPage();
     let diagnostics = null;
     let editorConfiguration = null;
+    let callbackSnapshot = null;
     let reopenedText = '';
     let primaryError = null;
     const failureCollector = createReleaseGateFailureCollector();
     try {
       await deleteConfidentialDoc(page, documentPath);
       await createConfidentialDoc(page, fileName, documentPath);
+      const initialSnapshot = readDpuDocumentSnapshot(fileName);
+      expect(
+        initialSnapshot,
+        'The newly created Confidential document must have an encrypted DPU blob.',
+      ).not.toBeNull();
       const opened = await openConfidentialDoc(page, documentPath);
       editorConfiguration = opened.editorConfiguration;
       diagnostics = attachPageDiagnostics(page, testInfo, 'qa-onlyoffice');
@@ -308,11 +332,20 @@ test.describe('Explorer QA acceptance', () => {
       diagnostics.pause();
       let reopened;
       try {
+        await page.reload({ waitUntil: 'domcontentloaded' });
         await openExplorer(page, {
           account: ownerAccount,
           hash: 'file-exp/Confidential/My%20Space',
         });
         await assertExplorerDirectory(page, '/Confidential/My Space');
+        await expect.poll(() => {
+          callbackSnapshot = readDpuDocumentSnapshot(fileName);
+          return callbackSnapshot?.id === initialSnapshot.id
+            && dpuSnapshotPersistenceAdvanced(initialSnapshot, callbackSnapshot);
+        }, {
+          message: 'OnlyOffice unload must durably replace the encrypted DPU blob before reopening.',
+          timeout: smokeConfig.timeouts.navigation,
+        }).toBe(true);
         reopened = await openConfidentialDoc(page, documentPath);
       } finally {
         diagnostics.resume();
@@ -333,6 +366,14 @@ test.describe('Explorer QA acceptance', () => {
           documentPath,
           editorConfiguration,
           marker,
+          durableCallback: {
+            objectIdentityPreserved: callbackSnapshot?.id === initialSnapshot.id,
+            initialBlobSha256: initialSnapshot.blobSha256,
+            callbackBlobSha256: callbackSnapshot?.blobSha256 || '',
+            initialUpdatedAt: initialSnapshot.updatedAt,
+            callbackUpdatedAt: callbackSnapshot?.updatedAt || '',
+            callbackBlobBytes: callbackSnapshot?.blobBytes || 0,
+          },
           markerPersistedAfterReopen: reopenedText.includes(marker),
           saveButtonClicked: false,
         }, null, 2)),
