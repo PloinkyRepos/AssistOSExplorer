@@ -105,3 +105,10 @@ test('QA OnlyOffice acceptance unloads and proves durable DPU persistence before
   assert.ok(durableGate > reload, 'OnlyOffice QA acceptance must verify persistence after unloading.');
   assert.ok(reopen > durableGate, 'OnlyOffice QA acceptance must not reopen before persistence is durable.');
 });
+
+test('QA DPU evidence keeps the public application and loopback Box authorities separate', () => {
+  const dpuDataSource = fs.readFileSync(new URL('./dpu-data.mjs', import.meta.url), 'utf8');
+  assert.match(dpuDataSource, /SMOKE_DEPLOYMENT_MODE=box requires an explicit loopback SMOKE_BOX_BASE_URL/);
+  assert.match(dpuDataSource, /collectLiveBoxEvidence\(\{ baseURL: local\.baseURL \}\)/);
+  assert.doesNotMatch(dpuDataSource, /collectLiveBoxEvidence\(\{ baseURL: smokeConfig\.baseURL \}\)/);
+});

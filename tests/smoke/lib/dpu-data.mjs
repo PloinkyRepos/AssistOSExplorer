@@ -25,6 +25,27 @@ function isBoxDeployment() {
   return String(process.env.SMOKE_DEPLOYMENT_MODE || '').trim() === 'box';
 }
 
+export function resolveDpuBoxEndpoint({
+  deploymentMode = String(process.env.SMOKE_DEPLOYMENT_MODE || '').trim(),
+  boxBaseURL = process.env.SMOKE_BOX_BASE_URL,
+} = {}) {
+  if (deploymentMode !== 'box') {
+    throw new Error('DPU Box evidence is available only with SMOKE_DEPLOYMENT_MODE=box.');
+  }
+  const value = String(boxBaseURL || '').trim();
+  if (!value) {
+    throw new Error('SMOKE_DEPLOYMENT_MODE=box requires an explicit loopback SMOKE_BOX_BASE_URL.');
+  }
+  try {
+    return parseLocalScreenBaseUrl(value);
+  } catch (error) {
+    throw new Error(
+      'SMOKE_BOX_BASE_URL must be an exact credential-free http://127.0.0.1:<port> URL.',
+      { cause: error },
+    );
+  }
+}
+
 function safeRelativePath(segments) {
   const parts = segments
     .flatMap((segment) => String(segment || '').split(/[\\/]+/))
@@ -91,7 +112,7 @@ function inspectExplicitOuterContainer(expectedName) {
   } catch (error) {
     throw new Error(`Explicit Box outer container inspection returned invalid JSON: ${error.message}`);
   }
-  const local = parseLocalScreenBaseUrl(smokeConfig.baseURL);
+  const local = resolveDpuBoxEndpoint();
   const selected = selectLocalScreenContainer(records, local.port);
   const actualName = String(selected.Name || '').replace(/^\//, '');
   if (actualName !== expectedName) {
@@ -103,9 +124,10 @@ function inspectExplicitOuterContainer(expectedName) {
 function outerContainerName() {
   if (!selectedOuterContainer) {
     const explicitName = String(process.env.SMOKE_PLOINKY_BOX_CONTAINER || '').trim();
+    const local = resolveDpuBoxEndpoint();
     selectedOuterContainer = explicitName
       ? inspectExplicitOuterContainer(explicitName)
-      : collectLiveBoxEvidence({ baseURL: smokeConfig.baseURL }).box.containerName;
+      : collectLiveBoxEvidence({ baseURL: local.baseURL }).box.containerName;
   }
   return selectedOuterContainer;
 }
