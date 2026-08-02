@@ -8,6 +8,7 @@ import {
 } from '../lib/auth.mjs';
 import { stopAndAttachRedactedTrace } from '../lib/redacted-trace.mjs';
 import { createReleaseGateFailureCollector } from '../lib/release-gate-failures.mjs';
+import { explorerUrl } from '../lib/explorer.mjs';
 import {
   collectScreenRuntimeEvidence,
   sameScreenRuntimeGeneration,
@@ -160,7 +161,7 @@ test.describe('WebMeet rooms', () => {
       if (smokeConfig.flags.webmeetScreen || smokeConfig.flags.webmeetHeadless) {
         await page.context().tracing.start({ screenshots: true, snapshots: true, sources: true });
         seedTraceStarted = true;
-        const ownerPrincipal = await signIn(page, smokeConfig.primaryUser, '/dashboard', {
+        const ownerPrincipal = await signIn(page, smokeConfig.primaryUser, explorerUrl(), {
           requireConfiguredPrincipal: true,
         });
         const ownerStorageState = await page.context().storageState();
@@ -182,7 +183,7 @@ test.describe('WebMeet rooms', () => {
           memberSeedPage = await memberSeedContext.newPage();
           memberSeedVideo = memberSeedPage.video();
           memberSeedDiagnostics = attachPageDiagnostics(memberSeedPage, testInfo, 'webmeet-secondary-auth-seed');
-          memberPrincipal = await signIn(memberSeedPage, smokeConfig.secondaryUser, '/dashboard', {
+          memberPrincipal = await signIn(memberSeedPage, smokeConfig.secondaryUser, explorerUrl(), {
             requireConfiguredPrincipal: true,
           });
           memberStorageState = await memberSeedContext.storageState();
@@ -268,7 +269,7 @@ test.describe('WebMeet rooms', () => {
         await installRtcProbe(memberContext);
         memberPage = await memberContext.newPage();
         memberDiagnostics = attachPageDiagnostics(memberPage, testInfo, 'webmeet-secondary');
-        const secondaryLoginOk = await trySignIn(memberPage, smokeConfig.secondaryUser, '/dashboard');
+        const secondaryLoginOk = await trySignIn(memberPage, smokeConfig.secondaryUser, explorerUrl());
         if (smokeConfig.flags.webmeetRefresh) {
           expect(
             secondaryLoginOk,

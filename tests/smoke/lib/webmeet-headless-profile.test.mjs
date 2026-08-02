@@ -65,6 +65,12 @@ test('headless WebMeet acceptance keeps synthetic media, strict accounts, and fo
 
   const roomSpec = fs.readFileSync(new URL('../specs/30-webmeet-room-chat.spec.mjs', import.meta.url), 'utf8');
   assert.match(roomSpec, /smokeConfig\.flags\.webmeetHeadless/);
+  assert.doesNotMatch(roomSpec, /['"]\/dashboard['"]/, 'WebMeet auth seeding must use an admitted Explorer route');
+  assert.equal(
+    [...roomSpec.matchAll(/explorerUrl\(\)/g)].length,
+    3,
+    'both strict auth seeds and the fallback secondary login must use the admitted Explorer route',
+  );
   assert.match(roomSpec, /requireConfiguredPrincipal:\s*true/);
   assert.match(roomSpec, /assertDistinctAuthenticatedPrincipals\(ownerPrincipal,\s*memberPrincipal\)/);
   assert.match(roomSpec, /expectBidirectionalAudioVideoRtp\(ownerPage/);
