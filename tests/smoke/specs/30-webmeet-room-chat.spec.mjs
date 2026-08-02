@@ -431,6 +431,13 @@ test.describe('WebMeet rooms', () => {
           stopAndAttachRedactedTrace(memberContext, testInfo, 'webmeet-secondary')
         ));
       }
+      if (memberContext) {
+        await failureCollector.required('secondary WebMeet context close before room deletion', () => (
+          memberContext.close()
+        ));
+        memberContext = null;
+        memberPage = null;
+      }
       if (roomCreationAttempted) {
         await failureCollector.required('WebMeet room deletion', async () => {
           let cleanupPage = ownerPage && !ownerPage.isClosed() ? ownerPage : null;
@@ -441,7 +448,6 @@ test.describe('WebMeet rooms', () => {
           await deleteRoomIfPresent(cleanupPage, roomTitle);
         });
       }
-      if (memberContext) await failureCollector.required('secondary WebMeet context close', () => memberContext.close());
       if (ownerContext) await failureCollector.required('primary WebMeet context close', () => ownerContext.close());
     }
     failureCollector.throwIfAny({ primaryError, label: 'two-account WebMeet gate' });

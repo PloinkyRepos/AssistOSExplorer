@@ -81,3 +81,16 @@ test('headless WebMeet acceptance keeps synthetic media, strict accounts, and fo
   assert.match(webMeetHelpers, /publication\.trackPresent/);
   assert.match(webMeetHelpers, /openChannelLabels[\s\S]*includes\('reliable'\)[\s\S]*includes\('lossy'\)/);
 });
+
+test('two-account cleanup preserves final evidence and closes the member before owner deletion', () => {
+  const roomSpec = fs.readFileSync(new URL('../specs/30-webmeet-room-chat.spec.mjs', import.meta.url), 'utf8');
+  const finalMemberRtc = roomSpec.indexOf("'secondary WebMeet final RTC evidence'");
+  const memberClose = roomSpec.indexOf("'secondary WebMeet context close before room deletion'");
+  const roomDeletion = roomSpec.indexOf("'WebMeet room deletion'");
+  const ownerClose = roomSpec.indexOf("'primary WebMeet context close'");
+
+  assert.ok(finalMemberRtc >= 0, 'secondary final RTC evidence must remain mandatory');
+  assert.ok(memberClose > finalMemberRtc, 'the member context must stay live through final RTC capture');
+  assert.ok(roomDeletion > memberClose, 'the member context must close before exact room deletion');
+  assert.ok(ownerClose > roomDeletion, 'the authenticated owner context must stay live through room deletion');
+});
