@@ -72,6 +72,7 @@ const WORKFLOWS = [
       'Running agents: 16',
       'QA_READY_STREAK',
       'QA_TERMINAL_FAILURE',
+      'for _ in $(seq 1 120); do',
       'no-wait failure ${status.repoName}/${status.shortAgent}',
       'a no-wait agent reached a terminal startup failure',
       'timed out waiting for stable 16/16 Explorer QA admission',

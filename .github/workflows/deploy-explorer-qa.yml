@@ -1337,7 +1337,7 @@ jobs:
           QA_READY_STREAK=0
           QA_TERMINAL_FAILURE=0
           NO_WAIT_FAILURES=""
-          for _ in $(seq 1 90); do
+          for _ in $(seq 1 120); do
             BOX_STATUS="$(inspect_outer_box_status)"
             if [[ "$BOX_STATUS" == *"Ploinky Box: running-initialized"* ]] &&
               [[ "$BOX_STATUS" == *"Tracked agents: 16"* ]] &&
