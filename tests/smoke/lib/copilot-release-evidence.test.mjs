@@ -41,7 +41,8 @@ test('ordinary Copilot release evidence binds the verified manifest digest to th
   const result = await collectCopilotReleaseEvidence({
     manifestPath: '/candidate/release.json',
     verifierPath: '/candidate/verifier.mjs',
-    baseURL: 'http://127.0.0.1:8080',
+    baseURL: 'https://explorer-qa.axiologic.dev',
+    boxBaseURL: 'http://127.0.0.1:8080',
     loadVerifier: async (filePath) => {
       calls.push(['load', filePath]);
       return {
@@ -64,12 +65,15 @@ test('ordinary Copilot release evidence binds the verified manifest digest to th
     realpathSync: (value) => value,
   });
   assert.equal(result.imageDigest, DIGEST);
+  assert.equal(result.applicationBaseURL, 'https://explorer-qa.axiologic.dev');
+  assert.equal(result.boxBaseURL, 'http://127.0.0.1:8080');
   assert.equal(result.liveBox.box.imageId, DIGEST);
   assert.deepEqual(calls.slice(0, 2), [
     ['load', '/candidate/verifier.mjs'],
     ['verify', '/candidate/release.json'],
   ]);
   assert.equal(calls[2][1].expectedImageId, DIGEST);
+  assert.equal(calls[2][1].baseURL, 'http://127.0.0.1:8080');
   assert.equal(calls[2][1].expectedPloinkySource, PLOINKY_SOURCE);
   assert.equal(result.ploinkySource.path, PLOINKY_SOURCE);
 });
@@ -123,6 +127,8 @@ test('ordinary Copilot release evidence rejects a Box without the verified read-
 
 test('ordinary Copilot evidence requires the same immutable Box generation after the gate', () => {
   const before = {
+    applicationBaseURL: 'https://explorer-qa.axiologic.dev',
+    boxBaseURL: 'http://127.0.0.1:8080',
     imageDigest: DIGEST,
     ploinkySource: { path: PLOINKY_SOURCE, commit: '2'.repeat(40) },
     liveBox: liveBox(),
@@ -131,6 +137,12 @@ test('ordinary Copilot evidence requires the same immutable Box generation after
   const replacement = structuredClone(before);
   replacement.liveBox.box.containerId = 'd'.repeat(64);
   assert.equal(sameCopilotReleaseGeneration(before, replacement), false);
+  const wrongPublicApplication = structuredClone(before);
+  wrongPublicApplication.applicationBaseURL = 'https://wrong-app.example';
+  assert.equal(sameCopilotReleaseGeneration(before, wrongPublicApplication), false);
+  const wrongLoopbackInspector = structuredClone(before);
+  wrongLoopbackInspector.boxBaseURL = 'http://127.0.0.1:18080';
+  assert.equal(sameCopilotReleaseGeneration(before, wrongLoopbackInspector), false);
 });
 
 test('canonical runner consumes SMOKE_RELEASE_MANIFEST and passes bound evidence to the spec', () => {
@@ -143,6 +155,7 @@ test('canonical runner consumes SMOKE_RELEASE_MANIFEST and passes bound evidence
     'utf8',
   );
   assert.match(runner, /SMOKE_RELEASE_MANIFEST/);
+  assert.match(runner, /SMOKE_BOX_BASE_URL/);
   assert.match(runner, /collectCopilotReleaseEvidence/);
   assert.match(runner, /sameCopilotReleaseGeneration/);
   assert.match(spec, /SMOKE_COPILOT_RELEASE_EVIDENCE/);

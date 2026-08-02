@@ -227,6 +227,13 @@ Default smoke checks:
 Opt-in checks:
 
 - `SMOKE_OPEN_INTERPRETER=1` runs Copilot semantic routing and AKU memory checks that require configured external provider runtime.
+- The ordinary Copilot folder-launch spec requires `SMOKE_RELEASE_MANIFEST` and
+  binds that immutable 421 release bundle to the running outer Box before and
+  after Playwright. For public QA, keep `SMOKE_BASE_URL` on the real public
+  application and set `SMOKE_BOX_BASE_URL` to the exact host-loopback Router
+  publication used only for local Podman generation inspection. The live Box
+  inspector still rejects non-loopback, ambiguous, stale, or mismatched outer
+  containers; the browser never substitutes the loopback URL for public QA.
 - `SMOKE_WEBMEET_MEDIA=1` enables fake camera/microphone and asserts WebRTC stats increase.
 - `npm run test:webmeet-headless` is the automated WebMeet acceptance profile. It runs in headless Chromium with deterministic synthetic camera and microphone sources, requires two distinct configured accounts, proves room create/join and bidirectional chat, exercises settings/privacy and ordinary tagged-research chat, and requires separate growing outbound audio, outbound video, inbound audio, and inbound video RTP stats in both browsers. It forbids headed execution and screen sharing.
 - `npm run test:webmeet-screen` remains a separate explicit, headed, opt-in gate for physical-display ScreenShare capture. It is not part of `test:full` or automated headless acceptance. Both distinct accounts must authenticate and exchange real LiveKit screen tracks in both directions. The probe removes TURN servers, and each direction requires active non-relay selected pairs using a globally routable IPv4 and UDP 7882 in both browsers alongside exact ScreenShare publication identities and source-specific RTP packet/frame growth. When Chromium redacts a peer-reflexive remote address or port, every observable field must still be correct and the missing field is replaced only by a proof bound to the exact LiveKit container generation and its real UDP 7882 listener. An observable wrong address, port, protocol, relay candidate, changed generation, or invalid server proof fails. The gate never stubs `getDisplayMedia` or skips a missing secondary account. This local gate does not claim the address equals the configured public IPv4; that stricter assertion belongs to the native external-network matrix below.

@@ -52,6 +52,7 @@ const headed = playwrightArgs.includes('--headed') || playwrightArgs.some((arg) 
 const baseURL = process.env.SMOKE_BASE_URL
   || process.env.PLAYWRIGHT_BASE_URL
   || (qaAcceptanceGate ? 'https://explorer-qa.axiologic.dev' : 'http://127.0.0.1:8080');
+const boxBaseURL = String(process.env.SMOKE_BOX_BASE_URL || baseURL).trim();
 
 validateHeadlessWebMeetProfile({
   enabled: headlessWebMeetGate,
@@ -144,6 +145,7 @@ if (ordinaryCopilotGate) {
     manifestPath: String(process.env.SMOKE_RELEASE_MANIFEST || '').trim(),
     verifierPath,
     baseURL,
+    boxBaseURL,
     expectedContainerName: String(process.env.SMOKE_PLOINKY_BOX_CONTAINER || '').trim(),
     expectedImageRef: String(process.env.SMOKE_EXPECT_BOX_IMAGE_REF || '').trim(),
     generationMaxAgeMs: process.env.SMOKE_BOX_MAX_GENERATION_AGE_MS,
@@ -234,6 +236,7 @@ if (copilotReleaseEvidence) {
         '../../../ploinky/tests/release/verifyCopilot421Bundle.mjs',
       ),
       baseURL,
+      boxBaseURL,
       expectedContainerName: copilotReleaseEvidence.liveBox.box.containerName,
       expectedImageRef: copilotReleaseEvidence.liveBox.box.imageRef,
       generationMaxAgeMs: process.env.SMOKE_BOX_MAX_GENERATION_AGE_MS,

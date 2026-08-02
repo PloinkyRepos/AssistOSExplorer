@@ -20,6 +20,7 @@ import {
   openExplorer,
 } from '../lib/explorer.mjs';
 import { createReleaseGateFailureCollector } from '../lib/release-gate-failures.mjs';
+import { stopAndAttachRedactedTrace } from '../lib/redacted-trace.mjs';
 import {
   createRoom,
   deleteRoomIfPresent,
@@ -287,6 +288,8 @@ test.describe('Explorer QA acceptance', () => {
       baseURL: smokeConfig.baseURL,
       ignoreHTTPSErrors: true,
     });
+    await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
+    let traceStarted = true;
     const page = await context.newPage();
     let diagnostics = null;
     let editorConfiguration = null;
@@ -335,6 +338,12 @@ test.describe('Explorer QA acceptance', () => {
         }, null, 2)),
         contentType: 'application/json',
       });
+      const screenshotPath = testInfo.outputPath('qa-onlyoffice-success.png');
+      await page.screenshot({ path: screenshotPath, fullPage: true });
+      await testInfo.attach('qa-onlyoffice-success-screenshot', {
+        path: screenshotPath,
+        contentType: 'image/png',
+      });
     } catch (error) {
       primaryError = error;
       await failureCollector.required('OnlyOffice failure screenshot', () => (
@@ -349,6 +358,12 @@ test.describe('Explorer QA acceptance', () => {
       ));
       if (diagnostics) {
         await failureCollector.required('OnlyOffice diagnostics', () => diagnostics.flush());
+      }
+      if (traceStarted) {
+        traceStarted = false;
+        await failureCollector.required('OnlyOffice redacted trace', () => (
+          stopAndAttachRedactedTrace(context, testInfo, 'qa-onlyoffice')
+        ));
       }
       await failureCollector.required('OnlyOffice browser context close', () => context.close());
     }

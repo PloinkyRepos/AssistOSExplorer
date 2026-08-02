@@ -13,6 +13,7 @@ export async function collectCopilotReleaseEvidence({
   manifestPath,
   verifierPath,
   baseURL,
+  boxBaseURL = baseURL,
   expectedContainerName = '',
   expectedImageRef = '',
   generationMaxAgeMs,
@@ -41,7 +42,7 @@ export async function collectCopilotReleaseEvidence({
   }
   const verifiedPloinkySource = realpathSync(verifiedPloinky.repositoryPath);
   const liveBox = collectLiveBox({
-    baseURL,
+    baseURL: boxBaseURL,
     expectedContainerName,
     expectedImageId: verified.imageDigest,
     expectedImageRef,
@@ -57,6 +58,8 @@ export async function collectCopilotReleaseEvidence({
     throw new Error('The running Box is not bound read-only to the verified Ploinky checkout.');
   }
   return Object.freeze({
+    applicationBaseURL: baseURL,
+    boxBaseURL,
     imageDigest: verified.imageDigest,
     repositories: verified.repositories,
     ploinkySource: Object.freeze({
@@ -69,7 +72,11 @@ export async function collectCopilotReleaseEvidence({
 
 export function sameCopilotReleaseGeneration(before, after) {
   return Boolean(
-    before?.imageDigest
+    before?.applicationBaseURL
+    && before.applicationBaseURL === after?.applicationBaseURL
+    && before?.boxBaseURL
+    && before.boxBaseURL === after?.boxBaseURL
+    && before?.imageDigest
     && before.imageDigest === after?.imageDigest
     && before.imageDigest === before?.liveBox?.box?.imageId
     && after.imageDigest === after?.liveBox?.box?.imageId

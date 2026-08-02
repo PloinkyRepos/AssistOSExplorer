@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { test, expect } from '../lib/fixtures.mjs';
 import { smokeConfig } from '../lib/config.mjs';
 import { openExplorer } from '../lib/explorer.mjs';
+import { stopAndAttachRedactedTrace } from '../lib/redacted-trace.mjs';
 import { setComposer, waitForWebchatIdle } from '../lib/webchat.mjs';
 
 const BOT_MESSAGE = '#chatList > .wa-message.in:not(.wa-typing):not(.wa-task-item) .wa-message-bubble';
@@ -68,7 +69,7 @@ async function deleteDirectoryIfPresent(page, directoryPath) {
 }
 
 test.describe('Copilot launch from Explorer', () => {
-  test('opens a working Copilot from a newly created folder', async ({ page }) => {
+  test('opens a working Copilot from a newly created folder', async ({ page }, testInfo) => {
     test.setTimeout(Math.max(
       smokeConfig.timeouts.test,
       smokeConfig.timeouts.relay + 120_000,
@@ -81,7 +82,8 @@ test.describe('Copilot launch from Explorer', () => {
     }).not.toThrow();
     expect(releaseEvidence?.imageDigest).toMatch(/^sha256:[0-9a-f]{64}$/);
     expect(releaseEvidence?.liveBox?.box?.imageId).toBe(releaseEvidence.imageDigest);
-    expect(releaseEvidence?.liveBox?.box?.baseURL).toBe(smokeConfig.baseURL);
+    expect(releaseEvidence?.applicationBaseURL).toBe(smokeConfig.baseURL);
+    expect(releaseEvidence?.liveBox?.box?.baseURL).toBe(releaseEvidence?.boxBaseURL);
     const networkEvidence = [];
     const requestFailures = [];
     const successfulRequests = new WeakSet();
@@ -144,6 +146,8 @@ test.describe('Copilot launch from Explorer', () => {
     page.context().on('requestfailed', captureRequestFailure);
     page.context().on('page', attachBrowserErrorListeners);
 
+    await page.context().tracing.start({ screenshots: true, snapshots: true, sources: true });
+    let traceStarted = true;
     try {
       const row = directoryRow(page, directoryPath);
       await row.locator('.action-menu-trigger').click();
@@ -274,6 +278,24 @@ test.describe('Copilot launch from Explorer', () => {
       expect(browserErrors, JSON.stringify(browserErrors)).toHaveLength(0);
       await expect(copilotPage.locator('#chatList')).not.toContainText(STARTUP_FAILURE);
       await expect(copilotPage.locator('#chatList')).not.toContainText(COMPLETION_FAILURE);
+      const screenshotPath = testInfo.outputPath('copilot-421-success.png');
+      await copilotPage.screenshot({ path: screenshotPath, fullPage: true });
+      await testInfo.attach('copilot-421-success-screenshot', {
+        path: screenshotPath,
+        contentType: 'image/png',
+      });
+      await testInfo.attach('copilot-421-success-evidence.json', {
+        body: Buffer.from(JSON.stringify({
+          applicationBaseURL: releaseEvidence.applicationBaseURL,
+          boxBaseURL: releaseEvidence.boxBaseURL,
+          imageDigest: releaseEvidence.imageDigest,
+          ploinkyCommit: releaseEvidence.ploinkySource.commit,
+          directoryPath,
+          completionTokenObserved: true,
+          terminal421Observed: false,
+        }, null, 2)),
+        contentType: 'application/json',
+      });
     } finally {
       page.context().off('request', captureInputRequest);
       page.context().off('response', captureInputResponse);
@@ -286,6 +308,10 @@ test.describe('Copilot launch from Explorer', () => {
       await copilotPage?.close().catch(() => {});
       await waitForStableEdge(page);
       await deleteDirectoryIfPresent(page, directoryPath);
+      if (traceStarted) {
+        traceStarted = false;
+        await stopAndAttachRedactedTrace(page.context(), testInfo, 'copilot-421');
+      }
     }
   });
 });
