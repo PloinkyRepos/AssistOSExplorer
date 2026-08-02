@@ -60,9 +60,10 @@ export async function createUserThroughAdministration(dialog, account, { name, r
   await expect(currentRole).not.toHaveText('');
   if ((await currentRole.innerText()).trim().toLowerCase() !== role.toLowerCase()) {
     const trigger = roles.locator('.custom-select');
-    const optionsList = roles.locator('.custom-select-options-list');
     await trigger.click();
-    const roleOption = roles.locator(
+    const optionsList = dialog.locator(':scope > .custom-select-options-list:not(.hidden)');
+    await expect(optionsList).toHaveCount(1);
+    const roleOption = optionsList.locator(
       `button.option[data-value="${escapeCssAttributeValue(role)}"]`
     );
     await expect(roleOption).toBeVisible();
