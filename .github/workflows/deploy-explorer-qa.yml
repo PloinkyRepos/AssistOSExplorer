@@ -1338,7 +1338,10 @@ jobs:
           QA_READY_STREAK=0
           QA_TERMINAL_FAILURE=0
           NO_WAIT_FAILURES=""
-          for _ in $(seq 1 120); do
+          # Detached no-wait runtimes activate serially. Allow the complete
+          # bounded sequence to settle without weakening terminal-failure
+          # detection or the job's independent 50-minute hard limit.
+          for _ in $(seq 1 180); do
             BOX_STATUS="$(inspect_outer_box_status)"
             if [[ "$BOX_STATUS" == *"Ploinky Box: running-initialized"* ]] &&
               [[ "$BOX_STATUS" == *"Tracked agents: 16"* ]] &&
