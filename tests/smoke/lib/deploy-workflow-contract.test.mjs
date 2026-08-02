@@ -19,6 +19,7 @@ const WORKFLOWS = [
       "SSH_ED25519_FINGERPRINT: 'SHA256:pcVG+7QFbfi3Ojn3LeveNutqCWaTOIlgek1o3GKD/KA'",
       "WORKSPACE: 'explorerQaWorkspace'",
       "PUBLIC_HOST: 'explorer-qa.axiologic.dev'",
+      "PLOINKY_NO_WAIT_SEQUENCE_TERMINAL_GRACE_MS='300000'",
       '"$PLOINKY" start explorer --branch=ploinky-proxy',
       "'AchillesIDE|https://github.com/AssistOS-AI/AssistOSExplorer.git'",
       "'webmeetInfra|https://github.com/AssistOS-AI/webmeetInfra.git'",

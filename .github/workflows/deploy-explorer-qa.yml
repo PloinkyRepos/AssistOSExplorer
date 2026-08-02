@@ -1331,6 +1331,7 @@ jobs:
           fi
 
           echo "[deploy-qa] Starting Explorer with every managed repository on $DEPLOY_BRANCH..."
+          export PLOINKY_NO_WAIT_SEQUENCE_TERMINAL_GRACE_MS='300000'
           "$PLOINKY" start explorer --branch=ploinky-proxy
 
           QA_READY=0
