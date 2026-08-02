@@ -162,5 +162,6 @@ test('canonical runner consumes SMOKE_RELEASE_MANIFEST and passes bound evidence
   assert.match(spec, /routerResponses\.every\(\(entry\) => entry\.status >= 200 && entry\.status < 300\)/);
   assert.match(spec, /completionToken = `COPILOT_CHAT_OK_\$\{correlation\}`/);
   assert.match(spec, /completed\.at\(-1\)\.text\)\.toContain\(completionToken\)/);
+  assert.match(spec, /const COMPLETION_FAILURE = \/\\\[input error\\\]\|/);
   assert.match(spec, /response\.status\(\) === 204 \? '' : response\.text\(\)/);
 });

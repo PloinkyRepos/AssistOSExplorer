@@ -8,7 +8,7 @@ import { setComposer, waitForWebchatIdle } from '../lib/webchat.mjs';
 
 const BOT_MESSAGE = '#chatList > .wa-message.in:not(.wa-typing):not(.wa-task-item) .wa-message-bubble';
 const STARTUP_FAILURE = /\[input error\]|bwrap:|Agent process exited repeatedly|open \/proc\/\d+\/ns/i;
-const COMPLETION_FAILURE = /\[error\]|\b421\b|UNKNOWN_HOST|Misdirected Request|tier[_\s-]+exhausted|All models in tier exhausted|provider\s+(?:error|failure)|API\s+(?:error|failure)|startup\s+(?:error|failure)/i;
+const COMPLETION_FAILURE = /\[input error\]|\[error\]|\b421\b|UNKNOWN_HOST|Misdirected Request|tier[_\s-]+exhausted|All models in tier exhausted|provider\s+(?:error|failure)|API\s+(?:error|failure)|startup\s+(?:error|failure)/i;
 
 async function assistantMessages(page) {
   return page.locator(BOT_MESSAGE).evaluateAll((messages) => messages.map((message, index) => ({
