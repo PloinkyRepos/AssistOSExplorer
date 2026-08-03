@@ -65,6 +65,7 @@ export const smokeConfig = Object.freeze({
   flags: {
     failOnBrowserErrors: !readBool('SMOKE_ALLOW_BROWSER_ERRORS', false),
     github: readBool('SMOKE_GITHUB', false),
+    codexDelegation: readBool('SMOKE_CODEX_DELEGATION', false),
     gptResearcher: readBool('SMOKE_GPT_RESEARCHER', false),
     onlyoffice: readBool('SMOKE_ONLYOFFICE', false),
     openInterpreter: readBool('SMOKE_OPEN_INTERPRETER', false),

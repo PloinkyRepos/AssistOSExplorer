@@ -227,6 +227,7 @@ Default smoke checks:
 Opt-in checks:
 
 - `SMOKE_OPEN_INTERPRETER=1` runs Copilot semantic routing and AKU memory checks that require configured external provider runtime.
+- `SMOKE_CODEX_DELEGATION=1` enables spec 06, which opens Copilot from an Explorer folder, requires delegation to exact `codexAgent`, verifies the structured task reaches `COMPLETED`, and proves the requested file contents through Explorer UI. Configure and validate Soul Gateway's `fast` tier before running it.
 - The ordinary Copilot folder-launch spec requires `SMOKE_RELEASE_MANIFEST` and
   binds that immutable 421 release bundle to the running outer Box before and
   after Playwright. For public QA, keep `SMOKE_BASE_URL` on the real public
