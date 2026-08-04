@@ -103,7 +103,7 @@ Explorer must run in `global` mode if it should browse the whole workspace, incl
 <!-- {"achilles-ide-paragraph":{"id":"paragraph-76746b20-b599-4604-91c9-6b005951f0c0","type":"markdown","title":"Paragraph 1"}} -->
 Explorer uses `ASSISTOS_FS_ROOT` to decide what path to expose.
 
-- default local deployment: `ploinky start explorer` provides the workspace root through profile/default configuration
+- default local deployment: `ploinky start explorer` runs Explorer globally with the workspace root as its working directory, which is the backend fallback
 - custom override: use a workspace variable only when intentionally diverging from the default local deployment
 
 
