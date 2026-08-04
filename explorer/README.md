@@ -55,7 +55,7 @@ These files are blocked from Explorer filesystem MCP access and hidden from the 
 ## Requirements
 <!-- {"achilles-ide-paragraph":{"id":"paragraph-9316f30c-8457-4f28-9bba-c90287950be4","type":"markdown","title":"Paragraph 1"}} -->
 - a working Ploinky installation, with `ploinky` available in the shell
-- a configured Ploinky host sandbox runtime for `lite-sandbox` agents, or a container runtime such as Podman or Docker when host sandboxing is disabled
+- a container runtime such as Podman or Docker for Explorer and its container-backed dependencies
 
 
 <!-- {"achilles-ide-chapter":{"id":"chapter-c2f7c319-3f62-419d-94a1-ce5b077d7686","title":"Running Explorer","anchorId":"chapter-chapter-c2f7c319-3f62-419d-94a1-ce5b077d7686"}} -->

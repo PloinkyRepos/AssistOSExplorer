@@ -47,7 +47,6 @@
                     <p><code>manifest.json</code> declares a single default profile on top of <code>docker.io/assistos/ploinky-node:24-bookworm-tools</code>. Runtime resources provide persistent storage and derive the DPU key:</p>
                     <pre><code>{
   "container": "docker.io/assistos/ploinky-node:24-bookworm-tools",
-  "lite-sandbox": true,
   "runtime": {
     "resources": {
       "persistentStorage": { "key": "dpu-data", "containerPath": "/dpu-data" },

@@ -28,7 +28,7 @@ Requirement O5: configuration and documentation shall remain aligned with `manif
 
 Requirement O6: repository validation shall run through the Git agent test suite under `gitAgent/tests`.
 
-Requirement O7: when the manifest starts under a host sandbox runtime, startup shall fail explicitly if no Git executable is available on the host and shall tell the operator to install Git or set `ASSISTOS_GIT_BINARY`.
+Requirement O7: the container-backed runtime shall fail explicitly if no Git executable is available from the shared tools image or `ASSISTOS_GIT_BINARY` and shall tell the operator to repair the container image or configure that executable path.
 
 ## Constraints
 

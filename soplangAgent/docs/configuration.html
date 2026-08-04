@@ -41,7 +41,6 @@
                     <h2>Manifest</h2>
                     <p>Main configuration file: <code>soplangAgent/manifest.json</code>.</p>
                     <pre><code>{
-  "lite-sandbox": true,
   "container": "docker.io/assistos/ploinky-node:24-bookworm-tools",
   "profiles": {
     "default": {
@@ -49,7 +48,7 @@
     }
   }
 }</code></pre>
-                    <p>The <code>lite-sandbox</code> flag asks <a href="https://ploinky.com/" target="_blank" rel="noopener noreferrer">Ploinky</a> to prefer the host sandbox runtime when available. The <code>container</code> field remains the fallback image used when host sandboxing is disabled, and <code>profiles.default.env</code> declares forwarded environment variables used by the agent.</p>
+                    <p>The <code>container</code> field keeps the agent on the shared Ploinky Node 24 container image, and <code>profiles.default.env</code> declares forwarded environment variables used by the agent. The manifest does not select a host sandbox runtime.</p>
                 </section>
 
                 <section>

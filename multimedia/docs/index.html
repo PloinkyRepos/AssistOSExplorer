@@ -45,7 +45,7 @@
                     <h2>Runtime Behavior</h2>
                     <p>The main surface lives in <code>multimedia/IDE-plugins/</code>, where modal and embedded components handle document, chapter, and paragraph contexts. In parallel, the <code>ffmpegImageToVideo</code> skill drives image-to-video generation. This keeps user interface integration close to Explorer while media-specific processing remains inside the agent runtime.</p>
                     <div class="doc-callout doc-callout--important">
-                        <p><strong>Critical startup dependency:</strong> on agent startup, <code>/code/scripts/install.sh</code> is executed, and <code>git</code> plus <code>ffmpeg</code> are installed in containers or validated on the host sandbox to support video, audio, and image workflows.</p>
+                        <p><strong>Critical startup dependency:</strong> on agent startup, <code>/code/scripts/install.sh</code> validates the <code>git</code> and <code>ffmpeg</code> executables supplied by the agent's container image to support video, audio, and image workflows.</p>
                     </div>
                 </section>
             </div>

@@ -30,4 +30,4 @@ The editor needs dedicated plugins for upload, metadata editing, preview, and vi
 
 ## Operational Note
 
-At agent startup, `scripts/install.sh` is executed, where `ffmpeg` is installed (or validated in bwrap mode) to support audio/video/image processing flows.
+At agent startup, `scripts/install.sh` validates the `ffmpeg` executable supplied by the container image to support audio/video/image processing flows.

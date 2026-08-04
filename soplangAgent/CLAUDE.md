@@ -29,7 +29,7 @@ soplangAgent mediates Explorer and UI requests to SOPLang build, execution, plug
 
 ## Runtime Defaults
 
-Uses `docker.io/assistos/ploinky-node:24-bookworm-tools`, `lite-sandbox: true`, and Achilles/SOPLang runtime helpers.
+Runs as a container-backed agent in `docker.io/assistos/ploinky-node:24-bookworm-tools` with Achilles/SOPLang runtime helpers.
 
 ## Key Paths
 

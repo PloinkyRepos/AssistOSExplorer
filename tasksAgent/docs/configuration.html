@@ -42,7 +42,6 @@
                     <p>Main runtime file: <code>tasksAgent/manifest.json</code>.</p>
                     <pre><code>{
   "container": "docker.io/assistos/ploinky-node:24-bookworm-tools",
-  "lite-sandbox": true,
   "profiles": {
     "default": {
       "env": [
@@ -54,6 +53,7 @@
     }
   }
 }</code></pre>
+                    <p>The container field keeps task and backlog operations on the shared Ploinky Node 24 image; the manifest does not select a host sandbox runtime.</p>
                 </section>
 
                 <section>
