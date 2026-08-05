@@ -15,6 +15,13 @@ implementation satisfies those requirements. If an explicit request forbids
 `--branch-fallback`, do not dispatch a workflow that injects that option; use an
 authorized direct channel or update and verify the workflow first.
 
+The Explorer QA deploy workflow accepts `deploy_branch` for the managed Explorer
+repository graph and `ploinky_branch` for the Ploinky runtime checkout. They are
+independent so a runtime fix can be exercised without moving the application
+graph to a different branch. Both default to `ploinky-proxy`.
+The paired destroy workflow accepts the same two branch inputs and must be
+dispatched with the selections used by the deployment being removed.
+
 Direct operator execution has the same authority and safety boundary. Before a
 destructive or externally visible mutation, positively identify the exact host,
 workspace, environment, revisions, images, and rollback state. Authorization

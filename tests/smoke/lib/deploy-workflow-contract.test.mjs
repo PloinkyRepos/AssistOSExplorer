@@ -12,15 +12,17 @@ const WORKFLOWS = [
     file: '.github/workflows/deploy-explorer-qa.yml',
     name: 'Deploy Explorer QA Box',
     expected: [
-      "DEPLOY_BRANCH: 'ploinky-proxy'",
-      "PLOINKY_BRANCH: 'ploinky-proxy'",
+      'deploy_branch:',
+      'ploinky_branch:',
+      'DEPLOY_BRANCH: ${{ inputs.deploy_branch }}',
+      'PLOINKY_BRANCH: ${{ inputs.ploinky_branch }}',
       "SSH_USER: 'admin'",
       "SSH_HOST: '45.136.70.141'",
       "SSH_ED25519_FINGERPRINT: 'SHA256:pcVG+7QFbfi3Ojn3LeveNutqCWaTOIlgek1o3GKD/KA'",
       "WORKSPACE: 'explorerQaWorkspace'",
       "PUBLIC_HOST: 'explorer-qa.axiologic.dev'",
       "PLOINKY_NO_WAIT_SEQUENCE_TERMINAL_GRACE_MS='300000'",
-      '"$PLOINKY" start explorer --branch=ploinky-proxy',
+      '"$PLOINKY" start explorer --branch="$DEPLOY_BRANCH"',
       "'AchillesIDE|https://github.com/AssistOS-AI/AssistOSExplorer.git'",
       "'webmeetInfra|https://github.com/AssistOS-AI/webmeetInfra.git'",
       "'UmamiAgent|https://github.com/AssistOS-AI/UmamiAgent.git'",
@@ -50,6 +52,8 @@ const WORKFLOWS = [
       'MEDIA_PUBLIC_IPV4:',
       "addressMode: 'direct'",
       'AGENTLIB_URL=',
+      'Ploinky AgentLib source is neither the expected remote nor its selected exact revision',
+      '--env "EXPECTED_AGENTLIB_BRANCH=$DEPLOY_BRANCH"',
       'Explorer did not load AgentLib bytes from a verified immutable runtime package',
       'loaded runtime identity at $EXPECTED_AGENTLIB_COMMIT',
       "agent: 'AchillesIDE/explorer'",
@@ -178,8 +182,8 @@ test('Explorer QA destroy removes only its Ploinky-owned Cloudflare publication'
     "SSH_HOST: '45.136.70.141'",
     "SSH_ED25519_FINGERPRINT: 'SHA256:pcVG+7QFbfi3Ojn3LeveNutqCWaTOIlgek1o3GKD/KA'",
     "WORKSPACE: 'explorerQaWorkspace'",
-    "PLOINKY_BRANCH: 'ploinky-proxy'",
-    "DEPLOY_BRANCH: 'ploinky-proxy'",
+    'PLOINKY_BRANCH: ${{ inputs.ploinky_branch }}',
+    'DEPLOY_BRANCH: ${{ inputs.deploy_branch }}',
     "PUBLIC_HOST: 'explorer-qa.axiologic.dev'",
     "CLOUDFLARE_TUNNEL_NAME: 'explorer-qa'",
     '"refs/heads/$PLOINKY_BRANCH:refs/remotes/origin/$PLOINKY_BRANCH"',
@@ -227,6 +231,19 @@ test('Explorer QA destroy removes only its Ploinky-owned Cloudflare publication'
   );
 });
 
+test('Explorer QA destroy requires the branch selections used by deploy', () => {
+  const source = fs.readFileSync(
+    path.join(ROOT, '.github/workflows/destroy-explorer-qa.yml'),
+    'utf8',
+  );
+
+  assert.match(source, /deploy_branch:\n\s+description: Branch used by the deployed Explorer repository graph\n\s+required: false\n\s+default: ploinky-proxy\n\s+type: string/);
+  assert.match(source, /ploinky_branch:\n\s+description: Branch used by the deployed Ploinky runtime\n\s+required: false\n\s+default: ploinky-proxy\n\s+type: string/);
+  assert.match(source, /DEPLOY_BRANCH: \$\{\{ inputs\.deploy_branch \}\}/);
+  assert.match(source, /PLOINKY_BRANCH: \$\{\{ inputs\.ploinky_branch \}\}/);
+  assert.match(source, /merge-base --is-ancestor[\s\S]*refs\/remotes\/origin\/\$PLOINKY_BRANCH/);
+});
+
 test('Explorer QA workflow rejects unsafe identity and tunnel state before SSH', () => {
   const source = fs.readFileSync(
     path.join(ROOT, '.github/workflows/deploy-explorer-qa.yml'),
@@ -245,6 +262,57 @@ test('Explorer QA workflow rejects unsafe identity and tunnel state before SSH',
     'pinned host identity must be established before the remote deployment step',
   );
   assert.match(source, /install -m 600 "\$RUNNER_TEMP\/explorer_qa_known_hosts"/);
+});
+
+test('Explorer QA deploy selects graph and Ploinky branches independently', () => {
+  const source = fs.readFileSync(
+    path.join(ROOT, '.github/workflows/deploy-explorer-qa.yml'),
+    'utf8',
+  );
+
+  assert.match(source, /deploy_branch:\n\s+description: Branch used by every managed Explorer repository\n\s+required: false\n\s+default: ploinky-proxy\n\s+type: string/);
+  assert.match(source, /ploinky_branch:\n\s+description: Branch used for the Ploinky runtime\n\s+required: false\n\s+default: ploinky-proxy\n\s+type: string/);
+  assert.match(source, /DEPLOY_BRANCH: \$\{\{ inputs\.deploy_branch \}\}/);
+  assert.match(source, /PLOINKY_BRANCH: \$\{\{ inputs\.ploinky_branch \}\}/);
+  assert.match(source, /checkout --detach --force "refs\/remotes\/origin\/\$PLOINKY_BRANCH"/);
+  assert.match(source, /--dry-run --port "\$ROUTER_PORT" start explorer --branch="\$DEPLOY_BRANCH"/);
+  assert.match(source, /"\$PLOINKY" start explorer --branch="\$DEPLOY_BRANCH"/);
+  assert.match(source, /--env "EXPECTED_AGENTLIB_BRANCH=\$DEPLOY_BRANCH"/);
+  assert.doesNotMatch(source, /start explorer --branch=ploinky-proxy/);
+  assert.doesNotMatch(source, /const expectedBranch = "ploinky-proxy"/);
+});
+
+test('Explorer QA Ploinky preflight accepts only the configured AgentLib remote or exact commit', (t) => {
+  const source = fs.readFileSync(
+    path.join(ROOT, '.github/workflows/deploy-explorer-qa.yml'),
+    'utf8',
+  );
+  const marker = 'const packageFile = process.argv[2];';
+  const markerIndex = source.indexOf(marker);
+  const heredocStart = source.lastIndexOf("<<'NODE'\n", markerIndex);
+  const scriptStart = heredocStart + "<<'NODE'\n".length;
+  const scriptEnd = source.indexOf('\n          NODE', markerIndex);
+  assert.ok(heredocStart > 0 && scriptEnd > scriptStart, 'AgentLib validator heredoc must close');
+  const script = source.slice(scriptStart, scriptEnd).replace(/^          /gm, '');
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'explorer-qa-agentlib-validator-'));
+  t.after(() => fs.rmSync(temporary, { recursive: true, force: true }));
+  const packageFile = path.join(temporary, 'package.json');
+  const expectedCommit = 'a'.repeat(40);
+  const expectedSource = 'git+https://github.com/AssistOS-AI/achillesAgentLib.git';
+  const run = (dependency) => {
+    fs.writeFileSync(packageFile, JSON.stringify({ dependencies: { achillesAgentLib: dependency } }));
+    return spawnSync(
+      process.execPath,
+      ['--input-type=module', '-', packageFile, expectedCommit, expectedSource],
+      { encoding: 'utf8', input: script },
+    );
+  };
+
+  assert.equal(run(expectedSource).status, 0, 'default-branch source must pass');
+  assert.equal(run(`${expectedSource}#${expectedCommit}`).status, 0, 'exact revision must pass');
+  assert.notEqual(run(`${expectedSource}#ploinky-proxy`).status, 0, 'mutable ref must fail');
+  assert.notEqual(run(`${expectedSource}#${'b'.repeat(40)}`).status, 0, 'wrong revision must fail');
+  assert.notEqual(run('git+https://example.invalid/achillesAgentLib.git').status, 0, 'wrong remote must fail');
 });
 
 test('Explorer QA dedicated tunnel provisioning is fail-closed and preserves the shared tunnel', () => {

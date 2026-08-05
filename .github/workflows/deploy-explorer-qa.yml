@@ -2,6 +2,17 @@ name: Deploy Explorer QA Box
 
 on:
   workflow_dispatch:
+    inputs:
+      deploy_branch:
+        description: Branch used by every managed Explorer repository
+        required: false
+        default: ploinky-proxy
+        type: string
+      ploinky_branch:
+        description: Branch used for the Ploinky runtime
+        required: false
+        default: ploinky-proxy
+        type: string
 
 concurrency:
   group: deploy-explorer-qa
@@ -13,8 +24,8 @@ env:
   SSH_ED25519_FINGERPRINT: 'SHA256:pcVG+7QFbfi3Ojn3LeveNutqCWaTOIlgek1o3GKD/KA'
   WORKSPACE: 'explorerQaWorkspace'
   ROUTER_PORT: '8097'
-  DEPLOY_BRANCH: 'ploinky-proxy'
-  PLOINKY_BRANCH: 'ploinky-proxy'
+  DEPLOY_BRANCH: ${{ inputs.deploy_branch }}
+  PLOINKY_BRANCH: ${{ inputs.ploinky_branch }}
   PUBLIC_HOST: 'explorer-qa.axiologic.dev'
   PUBLIC_URL: 'https://explorer-qa.axiologic.dev'
   CLOUDFLARE_TUNNEL_NAME: 'explorer-qa'
@@ -1037,18 +1048,20 @@ jobs:
           echo "[deploy-qa] Ploinky runtime: $(git -C "$RUNTIME_DIR" rev-parse --short HEAD) ($PLOINKY_BRANCH)"
           node --input-type=module - \
             "$RUNTIME_DIR/globalDeps/package.json" \
-            "$EXPECTED_AGENTLIB_COMMIT" <<'NODE'
+            "$EXPECTED_AGENTLIB_COMMIT" \
+            'git+https://github.com/AssistOS-AI/achillesAgentLib.git' <<'NODE'
           import fs from 'node:fs';
 
           const packageFile = process.argv[2];
           const expectedCommit = process.argv[3];
+          const expectedSource = process.argv[4];
           const manifest = JSON.parse(fs.readFileSync(packageFile, 'utf8'));
           const source = String(manifest?.dependencies?.achillesAgentLib || '');
-          if (!source.endsWith(`#${expectedCommit}`)) {
-            throw new Error('Ploinky does not pin the selected achillesAgentLib branch revision');
+          if (source !== expectedSource && source !== `${expectedSource}#${expectedCommit}`) {
+            throw new Error('Ploinky AgentLib source is neither the expected remote nor its selected exact revision');
           }
           NODE
-          echo "[deploy-qa] Verified the Ploinky AgentLib pin at $EXPECTED_AGENTLIB_COMMIT."
+          echo "[deploy-qa] Verified the Ploinky AgentLib source for $EXPECTED_AGENTLIB_COMMIT."
 
           mkdir -p "$WORK_DIR/.ploinky"
           chmod 700 "$WORK_DIR/.ploinky"
@@ -1136,7 +1149,7 @@ jobs:
 
           export PLOINKY_WORKSPACE_ROOT="$WORK_DIR"
           PLAN_JSON="$(
-            "$PLOINKY" --dry-run --port "$ROUTER_PORT" start explorer --branch=ploinky-proxy
+            "$PLOINKY" --dry-run --port "$ROUTER_PORT" start explorer --branch="$DEPLOY_BRANCH"
           )"
           BOX_INSTANCE="$(
             printf '%s' "$PLAN_JSON" |
@@ -1332,7 +1345,7 @@ jobs:
 
           echo "[deploy-qa] Starting Explorer with every managed repository on $DEPLOY_BRANCH..."
           export PLOINKY_NO_WAIT_SEQUENCE_TERMINAL_GRACE_MS='300000'
-          "$PLOINKY" start explorer --branch=ploinky-proxy
+          "$PLOINKY" start explorer --branch="$DEPLOY_BRANCH"
 
           QA_READY=0
           QA_READY_STREAK=0
@@ -1465,6 +1478,7 @@ jobs:
           "$BOX_ENGINE" container exec \
             --user podman \
             --env "EXPECTED_AGENTLIB_COMMIT=$EXPECTED_AGENTLIB_COMMIT" \
+            --env "EXPECTED_AGENTLIB_BRANCH=$DEPLOY_BRANCH" \
             "$BOX_INSTANCE" \
             node --input-type=module --eval '
               import crypto from "node:crypto";
@@ -1473,8 +1487,11 @@ jobs:
               import path from "node:path";
 
               const root = "/workspace/.ploinky/deps";
-              const expectedBranch = "ploinky-proxy";
+              const expectedBranch = String(process.env.EXPECTED_AGENTLIB_BRANCH || "");
               const expectedCommit = String(process.env.EXPECTED_AGENTLIB_COMMIT || "");
+              if (!expectedBranch) {
+                throw new Error("invalid expected AgentLib branch");
+              }
               if (!/^[a-f0-9]{40}$/.test(expectedCommit)) {
                 throw new Error("invalid expected AgentLib commit");
               }
@@ -1777,7 +1794,7 @@ jobs:
             printf -- '- Cloudflare DNS record: `%s`\n' "${EXPLORER_QA_DNS_RECORD_ID:-not-created}"
             printf -- '- Protected shared tunnel: `%s` unchanged at `%s`\n' \
               "$CLOUDFLARE_PROTECTED_SHARED_TUNNEL_ID" "${PROTECTED_CLOUDFLARE_DIGEST:-not-snapshotted}"
-            echo '- Rollback: dispatch `destroy-explorer-qa.yml` with `confirm_destroy=true` on `ploinky-proxy`; after owned ingress/DNS teardown verifies, delete only the recorded dedicated tunnel ID and re-verify the protected digest.'
+            echo "- Rollback: dispatch \`destroy-explorer-qa.yml\` with \`confirm_destroy=true\`, \`deploy_branch=${DEPLOY_BRANCH}\`, and \`ploinky_branch=${PLOINKY_BRANCH}\`; teardown must use the deployed graph and runtime selections."
             echo "- Public URL: \`${PUBLIC_URL}\`"
           } >> "$GITHUB_STEP_SUMMARY"
 

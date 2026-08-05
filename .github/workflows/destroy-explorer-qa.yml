@@ -8,6 +8,16 @@ on:
         required: true
         default: false
         type: boolean
+      deploy_branch:
+        description: Branch used by the deployed Explorer repository graph
+        required: false
+        default: ploinky-proxy
+        type: string
+      ploinky_branch:
+        description: Branch used by the deployed Ploinky runtime
+        required: false
+        default: ploinky-proxy
+        type: string
 
 concurrency:
   group: deploy-explorer-qa
@@ -20,8 +30,8 @@ env:
   WORKSPACE: 'explorerQaWorkspace'
   CONFIRM_DESTROY: ${{ inputs.confirm_destroy }}
   ROUTER_PORT: '8097'
-  DEPLOY_BRANCH: 'ploinky-proxy'
-  PLOINKY_BRANCH: 'ploinky-proxy'
+  DEPLOY_BRANCH: ${{ inputs.deploy_branch }}
+  PLOINKY_BRANCH: ${{ inputs.ploinky_branch }}
   PUBLIC_HOST: 'explorer-qa.axiologic.dev'
   CLOUDFLARE_TUNNEL_NAME: 'explorer-qa'
   CLOUDFLARE_API_SECRET_HANDLE: 'publication/explorer-qa-api'
