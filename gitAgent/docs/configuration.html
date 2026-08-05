@@ -43,14 +43,15 @@
                     <pre><code>{
   "agent": "sh /code/scripts/startAgent.sh",
   "container": "docker.io/assistos/ploinky-node:24-bookworm-tools",
+  "lite-sandbox": true,
   "profiles": {
     "default": {
-      "install": "container-local Git availability and package check"
+      "install": "host sandbox git check, container apk install"
     },
     "embedded": {}
   }
 }</code></pre>
-                    <p>The agent bootstrap script resolves workspace root and loads ordinary environment variables from process env first, then from <code>.ploinky/.secrets</code> when needed. Generated-local Soul Gateway credentials and Router transport values are Ploinky-owned and arrive through the mounted, verified Router descriptor rather than manifest environment declarations. The agent remains container-backed by the shared tools image, which provides Git; the default profile retains container-local package handling for compatible image variants. Node dependency installation is handled by <code>ploinky</code> before the agent command starts.</p>
+                    <p>The agent bootstrap script resolves workspace root and loads ordinary environment variables from process env first, then from <code>.ploinky/.secrets</code> when needed. Generated-local Soul Gateway credentials and Router transport values are Ploinky-owned and arrive through the mounted, verified Router descriptor rather than manifest environment declarations. In host sandbox mode, startup verifies that <code>git</code> is available on the host; in container mode, the profile installs the container Git packages when needed. Node dependency installation is handled by <code>ploinky</code> before the agent command starts.</p>
                 </section>
 
                 <section>

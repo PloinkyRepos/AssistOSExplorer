@@ -1,5 +1,6 @@
 {
     "container": "docker.io/assistos/ploinky-node:24-bookworm-tools",
+    "lite-sandbox": true,
     "profiles": {
         "default": {
             "install": "/code/scripts/install.sh"

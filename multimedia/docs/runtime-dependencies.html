@@ -39,6 +39,7 @@
                 <section>
                     <h2>Manifest Contract</h2>
                     <pre><code>{
+  "lite-sandbox": true,
   "container": "docker.io/assistos/ploinky-node:24-bookworm-tools",
   "profiles": {
     "default": {
@@ -52,10 +53,10 @@
                 <section>
                     <h2>Startup Install Behavior</h2>
                     <ul>
-                        <li>the agent runs in the shared container image, which already includes <code>git</code> and <code>ffmpeg</code>, so the script normally just validates them;</li>
-                        <li>a compatible Debian-based container image installs either missing package through its container-local <code>apt-get</code> command;</li>
-                        <li>if <code>git</code> is missing from the container runtime, startup fails;</li>
-                        <li>if <code>ffmpeg</code> is missing from the container runtime, a warning is emitted and multimedia capabilities may be limited.</li>
+                        <li>in standard container runtime: the shared image already includes <code>git</code> and <code>ffmpeg</code>, so the script normally just validates them;</li>
+                        <li>in host sandbox runtime (<code>bwrap</code> on Linux, <code>seatbelt</code> on macOS): it skips apt and validates tools on the host;</li>
+                        <li>if <code>git</code> is missing on the host: startup fails;</li>
+                        <li>if <code>ffmpeg</code> is missing on the host: a warning is emitted and multimedia capabilities may be limited.</li>
                     </ul>
                     <div class="doc-callout doc-callout--important">
                         <p><strong>Important:</strong> FFmpeg is a runtime dependency for processing audio/video/image attachments and for the video generation skill. That is why it is installed or validated during agent startup.</p>
@@ -64,7 +65,9 @@
 
                 <section>
                     <h2>Operational Notes</h2>
-                    <p>For stability, treat missing <code>ffmpeg</code> as a container-image issue, not a plugin bug. Repair or replace the runtime image so the executable is available inside the agent container.</p>
+                    <p>For stability, treat missing <code>ffmpeg</code> as an environment issue, not a plugin bug. In host sandbox mode, the recommended fix is host installation:</p>
+                    <pre><code>sudo apt install -y ffmpeg
+brew install ffmpeg</code></pre>
                 </section>
             </div>
         </div>

@@ -29,7 +29,7 @@ dpuAgent owns the confidential data service used by Explorer for `/Confidential`
 
 ## Runtime Defaults
 
-Runs as a container-backed agent in `docker.io/assistos/ploinky-node:24-bookworm-tools`, with runtime persistent storage mounted at `/dpu-data`.
+Uses `docker.io/assistos/ploinky-node:24-bookworm-tools`, `lite-sandbox: true`, and runtime persistent storage mounted at `/dpu-data`.
 
 ## Key Paths
 

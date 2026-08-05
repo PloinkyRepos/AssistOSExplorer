@@ -10,6 +10,7 @@ The agent uses this manifest:
 
 ```json
 {
+  "lite-sandbox": true,
   "container": "docker.io/assistos/ploinky-node:24-bookworm-tools",
   "profiles": {
     "default": {
@@ -25,15 +26,15 @@ Requirement R1: the install script must run at startup to prepare the multimedia
 
 Requirement R2: in container mode, the shared Ploinky Node image must provide `git` and `ffmpeg`, and the script must validate their presence before the agent becomes available. It may fall back to package installation only when a non-standard image is used.
 
-Requirement R3: the script must fail startup when `git` is missing from the container runtime.
+Requirement R3: in host sandbox mode (`bwrap` on Linux, `seatbelt` on macOS), the script must validate that `git` and `ffmpeg` are present on the host.
 
-Requirement R4: missing `ffmpeg` from the container runtime is an explicit warning.
+Requirement R4: missing `git` in host sandbox mode is a blocking error; missing `ffmpeg` is an explicit warning.
 
 ## Constraints
 
 Constraint C1: FFmpeg-dependent video processing features are not guaranteed when `ffmpeg` is missing from the runtime.
 
-Constraint C2: runtime dependencies are supplied by the pinned container image or installed inside a compatible agent container; host packages are not part of the runtime contract.
+Constraint C2: in host sandbox mode, OS package installation is not managed by the agent; responsibility remains on the host.
 
 ## Invariants
 

@@ -55,7 +55,7 @@ These files are blocked from Explorer filesystem MCP access and hidden from the 
 ## Requirements
 <!-- {"achilles-ide-paragraph":{"id":"paragraph-9316f30c-8457-4f28-9bba-c90287950be4","type":"markdown","title":"Paragraph 1"}} -->
 - a working Ploinky installation, with `ploinky` available in the shell
-- a container runtime such as Podman or Docker for Explorer and its container-backed dependencies
+- a configured Ploinky host sandbox runtime for `lite-sandbox` agents, or a container runtime such as Podman or Docker when host sandboxing is disabled
 
 
 <!-- {"achilles-ide-chapter":{"id":"chapter-c2f7c319-3f62-419d-94a1-ce5b077d7686","title":"Running Explorer","anchorId":"chapter-chapter-c2f7c319-3f62-419d-94a1-ce5b077d7686"}} -->
@@ -103,7 +103,7 @@ Explorer must run in `global` mode if it should browse the whole workspace, incl
 <!-- {"achilles-ide-paragraph":{"id":"paragraph-76746b20-b599-4604-91c9-6b005951f0c0","type":"markdown","title":"Paragraph 1"}} -->
 Explorer uses `ASSISTOS_FS_ROOT` to decide what path to expose.
 
-- default local deployment: `ploinky start explorer` runs Explorer globally with the workspace root as its working directory, which is the backend fallback
+- default local deployment: `ploinky start explorer` provides the workspace root through profile/default configuration
 - custom override: use a workspace variable only when intentionally diverging from the default local deployment
 
 

@@ -81,7 +81,7 @@ Audit collection starts disabled by default. A trusted actor must explicitly ena
 
 ## Practical Guarantees
 
-`dpuAgent/manifest.json` keeps the agent container-backed in `docker.io/assistos/ploinky-node:24-bookworm-tools`; it does not select the host sandbox runtime.
+`dpuAgent/manifest.json` requests `lite-sandbox: true`, so Ploinky should prefer the host sandbox runtime for the agent when the host supports it and use the container image only when host sandboxing is disabled.
 
 `mcp-config.json` sets `maxParallelTasks` to `1`. Mutating operations also run under the DPU file lock. This gives the runtime a simple single-writer discipline even though the agent is file-backed.
 

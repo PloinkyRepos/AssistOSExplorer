@@ -1,5 +1,6 @@
 {
   "container": "docker.io/assistos/ploinky-node:24-bookworm-tools",
+  "lite-sandbox": true,
   "runtime": {
     "resources": {
       "persistentStorage": {

@@ -29,7 +29,7 @@ tasksAgent exposes backlog and task-file workflows to Explorer through MCP tools
 
 ## Runtime Defaults
 
-Runs as a container-backed agent in `docker.io/assistos/ploinky-node:24-bookworm-tools` with workspace path environment variables.
+Uses `docker.io/assistos/ploinky-node:24-bookworm-tools`, `lite-sandbox: true`, and workspace path environment variables.
 
 ## Key Paths
 
