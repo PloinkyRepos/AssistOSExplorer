@@ -22,7 +22,7 @@ const WORKFLOWS = [
       "WORKSPACE: 'explorerQaWorkspace'",
       "PUBLIC_HOST: 'explorer-qa.axiologic.dev'",
       "PLOINKY_NO_WAIT_SEQUENCE_TERMINAL_GRACE_MS='300000'",
-      '"$PLOINKY" start explorer --branch="$DEPLOY_BRANCH"',
+      '"$PLOINKY" start explorer "${BRANCH_ARGS[@]}"',
       "'AchillesIDE|https://github.com/AssistOS-AI/AssistOSExplorer.git'",
       "'webmeetInfra|https://github.com/AssistOS-AI/webmeetInfra.git'",
       "'UmamiAgent|https://github.com/AssistOS-AI/UmamiAgent.git'",
@@ -159,7 +159,7 @@ for (const workflow of WORKFLOWS) {
       assert.doesNotMatch(source, staleEndpoint);
     }
     if (workflow.file.endsWith('deploy-explorer-qa.yml')) {
-      assert.doesNotMatch(source, /--branch-fallback|--repo-branch|--reset-repos/);
+      assert.doesNotMatch(source, /--branch-fallback|--reset-repos/);
       assert.doesNotMatch(source, /deleteTunnelOnTeardown|create-managed-tunnel/);
       assert.doesNotMatch(source, /BOX_STATUS="\$\("\$PLOINKY" status\)"/);
     } else {
@@ -275,11 +275,36 @@ test('Explorer QA deploy selects graph and Ploinky branches independently', () =
   assert.match(source, /DEPLOY_BRANCH: \$\{\{ inputs\.deploy_branch \}\}/);
   assert.match(source, /PLOINKY_BRANCH: \$\{\{ inputs\.ploinky_branch \}\}/);
   assert.match(source, /checkout --detach --force "refs\/remotes\/origin\/\$PLOINKY_BRANCH"/);
-  assert.match(source, /--dry-run --port "\$ROUTER_PORT" start explorer --branch="\$DEPLOY_BRANCH"/);
-  assert.match(source, /"\$PLOINKY" start explorer --branch="\$DEPLOY_BRANCH"/);
+  assert.match(source, /BRANCH_ARGS=\(--branch "\$DEPLOY_BRANCH"\)/);
+  assert.match(source, /BRANCH_ARGS\+=\(--repo-branch "\$repository_name=\$DEPLOY_BRANCH"\)/);
+  assert.match(source, /--dry-run --port "\$ROUTER_PORT" start explorer "\$\{BRANCH_ARGS\[@\]\}"/);
+  assert.match(source, /"\$PLOINKY" start explorer "\$\{BRANCH_ARGS\[@\]\}"/);
   assert.match(source, /--env "EXPECTED_AGENTLIB_BRANCH=\$DEPLOY_BRANCH"/);
   assert.doesNotMatch(source, /start explorer --branch=ploinky-proxy/);
   assert.doesNotMatch(source, /const expectedBranch = "ploinky-proxy"/);
+});
+
+test('Explorer QA deploy explicitly reconciles every managed checkout to the selected graph branch', () => {
+  const source = fs.readFileSync(
+    path.join(ROOT, '.github/workflows/deploy-explorer-qa.yml'),
+    'utf8',
+  );
+  const graphStart = source.indexOf('GRAPH_REPOSITORIES=(');
+  const graphEnd = source.indexOf('declare -A EXPECTED_COMMITS=()', graphStart);
+  const graphBlock = source.slice(graphStart, graphEnd);
+
+  assert.match(graphBlock, /BRANCH_ARGS=\(--branch "\$DEPLOY_BRANCH"\)/);
+  assert.match(
+    graphBlock,
+    /for repository_record in "\$\{GRAPH_REPOSITORIES\[@\]\}"; do[\s\S]*BRANCH_ARGS\+=\(--repo-branch "\$repository_name=\$DEPLOY_BRANCH"\)[\s\S]*done/,
+  );
+  assert.equal(
+    source.match(/start explorer "\$\{BRANCH_ARGS\[@\]\}"/g)?.length,
+    2,
+    'dry-run and real start must use the same exact branch arguments',
+  );
+  assert.match(source, /observed branch: \$\{deployed_branch:-<detached>\}/);
+  assert.match(source, /observed upstream: \$\{deployed_upstream:-<none>\}/);
 });
 
 test('Explorer QA Ploinky preflight accepts only the configured AgentLib remote or exact commit', (t) => {

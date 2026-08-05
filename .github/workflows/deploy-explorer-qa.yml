@@ -977,6 +977,11 @@ jobs:
             'basic|https://github.com/AssistOS-AI/basic.git'
             'container-image-builds|https://github.com/AssistOS-AI/container-image-builds.git'
           )
+          BRANCH_ARGS=(--branch "$DEPLOY_BRANCH")
+          for repository_record in "${GRAPH_REPOSITORIES[@]}"; do
+            IFS='|' read -r repository_name _ <<< "$repository_record"
+            BRANCH_ARGS+=(--repo-branch "$repository_name=$DEPLOY_BRANCH")
+          done
           declare -A EXPECTED_COMMITS=()
 
           AGENTLIB_URL='https://github.com/AssistOS-AI/achillesAgentLib.git'
@@ -1149,7 +1154,7 @@ jobs:
 
           export PLOINKY_WORKSPACE_ROOT="$WORK_DIR"
           PLAN_JSON="$(
-            "$PLOINKY" --dry-run --port "$ROUTER_PORT" start explorer --branch="$DEPLOY_BRANCH"
+            "$PLOINKY" --dry-run --port "$ROUTER_PORT" start explorer "${BRANCH_ARGS[@]}"
           )"
           BOX_INSTANCE="$(
             printf '%s' "$PLAN_JSON" |
@@ -1345,7 +1350,7 @@ jobs:
 
           echo "[deploy-qa] Starting Explorer with every managed repository on $DEPLOY_BRANCH..."
           export PLOINKY_NO_WAIT_SEQUENCE_TERMINAL_GRACE_MS='300000'
-          "$PLOINKY" start explorer --branch="$DEPLOY_BRANCH"
+          "$PLOINKY" start explorer "${BRANCH_ARGS[@]}"
 
           QA_READY=0
           QA_READY_STREAK=0
@@ -1471,6 +1476,12 @@ jobs:
               [ "$deployed_upstream" != "origin/$DEPLOY_BRANCH" ] ||
               [ -n "$deployed_dirty" ]; then
               echo "[deploy-qa] ERROR: deployed $repository_name checkout is not clean and tracking origin/$DEPLOY_BRANCH."
+              echo "[deploy-qa]        observed branch: ${deployed_branch:-<detached>}"
+              echo "[deploy-qa]        observed upstream: ${deployed_upstream:-<none>}"
+              if [ -n "$deployed_dirty" ]; then
+                echo "[deploy-qa]        dirty paths:"
+                printf '%s\n' "$deployed_dirty" | sed 's/^/[deploy-qa]          /'
+              fi
               exit 1
             fi
             echo "[deploy-qa] Verified $repository_name/$DEPLOY_BRANCH at $deployed_commit."
