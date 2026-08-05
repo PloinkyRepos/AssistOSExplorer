@@ -25,7 +25,6 @@ import {
     listRoomRecords,
     loadRoomRecord as loadMeetingRecord,
     mutateRoom as mutateMeeting,
-    purgeExpiredRooms as purgeExpiredMeetings,
     deleteRoomRecord as permanentlyDeleteMeetingRecord,
     removeRoomRecord as rollbackMeetingRecord,
     recordWorkspaceEvent
@@ -373,7 +372,6 @@ export async function recordProfileAvatarUpdated(context, {
 export async function createStoreContext(startDir = '') {
     const paths = getWorkspacePaths(startDir);
     await ensureDirs(paths);
-    await purgeExpiredMeetings(paths);
     return {
         ...paths,
         roomPrefix: String(process.env.WEBMEET_ROOM_PREFIX || 'webmeet').trim() || 'webmeet',

@@ -15,9 +15,7 @@ import {
 } from '../../IDE-plugins/webmeet-tool-button/components/webmeet-dashboard/services/webmeet-events.js';
 
 const MASTER_KEY_VAR = 'PLOINKY_WEBMEET_MASTER_KEY';
-const RETENTION_DAYS_VAR = 'PLOINKY_WEBMEET_RETENTION_DAYS';
 const PRESENCE_TTL_MS_VAR = 'PLOINKY_WEBMEET_PRESENCE_TTL_MS';
-const DEFAULT_RETENTION_DAYS = 30;
 const DEFAULT_PRESENCE_TTL_MS = 30_000;
 const ROOM_SCHEMA_VERSION = 2;
 const ROOMS_WORKSPACE_ID = 'rooms';
@@ -38,15 +36,6 @@ function readConfigValue(workspaceRoot, name) {
     }
     const env = process.env[name];
     return env && String(env).trim() ? String(env).trim() : '';
-}
-
-function getRetentionDays(workspaceRoot) {
-    const raw = readConfigValue(workspaceRoot, RETENTION_DAYS_VAR);
-    const parsed = parseInt(raw || '', 10);
-    if (Number.isFinite(parsed) && parsed >= 1) {
-        return parsed;
-    }
-    return DEFAULT_RETENTION_DAYS;
 }
 
 function ensureMasterKey(workspaceRoot) {
@@ -116,34 +105,6 @@ export async function ensureStoreDirs(paths) {
         fs.mkdir(paths.jobsDoneDir, { recursive: true }),
         fs.mkdir(paths.jobsFailedDir, { recursive: true })
     ]);
-}
-
-export async function purgeExpiredRooms(paths) {
-    const now = Date.now();
-    for (const filePath of await listJsonFiles(paths.meetingsDir)) {
-        try {
-            const record = await readJsonFile(filePath);
-            if (record?.expiresAt && now > Date.parse(record.expiresAt)) {
-                const roomId = String(record?.meetingId || path.basename(filePath, '.json')).trim();
-                if (roomId) {
-                    await withQueuedRoomLock(paths, roomId, async () => {
-                        let latestRecord = null;
-                        try {
-                            latestRecord = await readJsonFile(filePath);
-                        } catch (error) {
-                            if (error?.code !== 'ENOENT') throw error;
-                        }
-                        if (latestRecord?.expiresAt && now > Date.parse(latestRecord.expiresAt)) {
-                            await fs.rm(path.join(paths.eventsDir, roomId), { recursive: true, force: true });
-                            await fs.rm(filePath, { force: true });
-                        }
-                    });
-                }
-            }
-        } catch (_) {
-            // Ignore malformed or concurrently removed records during startup cleanup.
-        }
-    }
 }
 
 function createRoomPayload() {
@@ -277,7 +238,6 @@ export function buildRoomView(record) {
 export async function createRoomRecord(context, title, roomType = 'team') {
     const roomId = randomId('room');
     const createdAt = nowIso();
-    const expiresAt = new Date(Date.now() + getRetentionDays(context.workspaceRoot) * 24 * 60 * 60 * 1000).toISOString();
     const masterKey = ensureMasterKey(context.workspaceRoot);
     const { wrapped, dek } = createWrappedDek(masterKey, buildEncryptionAad(context, roomId, 'room_dek'));
     const payload = createRoomPayload();
@@ -297,7 +257,6 @@ export async function createRoomRecord(context, title, roomType = 'team') {
         createdAt,
         updatedAt: createdAt,
         archivedAt: null,
-        expiresAt,
         dek: wrapped,
         encryption: {
             masterKey: MASTER_KEY_VAR,
