@@ -37,6 +37,7 @@ export function buildToolDefinitions(zodToJsonSchema, schemas) {
     ScriptaCollaborationOpenArgsSchema,
     ScriptaCollaborationPullArgsSchema,
     ScriptaCollaborationApplyArgsSchema,
+    ScriptaCollaborationMergeMarkdownArgsSchema,
     LlmAutocompleteArgsSchema,
     CollectIDEPluginsArgsSchema,
     GetPluginSettingsArgsSchema,
@@ -241,6 +242,11 @@ export function buildToolDefinitions(zodToJsonSchema, schemas) {
       name: 'scripta_collaboration_apply',
       description: 'Validate, merge, and persist incremental public SCRIPTA Automerge changes.',
       inputSchema: zodToJsonSchema(ScriptaCollaborationApplyArgsSchema)
+    },
+    {
+      name: 'scripta_collaboration_merge_markdown',
+      description: 'Merge a complete Markdown revision made from a SCRIPTA collaboration snapshot.',
+      inputSchema: zodToJsonSchema(ScriptaCollaborationMergeMarkdownArgsSchema)
     },
     {
       name: 'llm_autocomplete',

@@ -205,6 +205,44 @@ export function serializeMarkdownState(document = {}) {
   return serializeMarkdownDocument(materializeMarkdownModel(document));
 }
 
+function isScriptaMetadataComment(comment = '') {
+  const body = String(comment || '').replace(/^<!--|-->$/g, '').trim();
+  if (/^<achilles-ide-references>$/i.test(body)) return true;
+  if (!body.startsWith('{') || !body.endsWith('}')) return false;
+  try {
+    const parsed = JSON.parse(body);
+    return parsed !== null
+      && typeof parsed === 'object'
+      && !Array.isArray(parsed)
+      && Object.keys(parsed).some((key) => [
+        'achilles-ide-document',
+        'achilles-ide-chapter',
+        'achilles-ide-paragraph',
+        'achilles-ide-toc',
+        'achilles-ide-references',
+      ].includes(key));
+  } catch {
+    return false;
+  }
+}
+
+export function stripScriptaMetadataComments(markdown = '') {
+  return String(markdown || '').replace(
+    /<!--[\s\S]*?-->/g,
+    (comment) => (isScriptaMetadataComment(comment) ? '' : comment)
+  );
+}
+
+export function serializeMarkdownContent(document = {}) {
+  const model = materializeMarkdownModel(document);
+  const body = stripScriptaMetadataComments(serializeMarkdownState(model))
+    .replace(/<a\s+id="chapter-[^"]+"><\/a>\s*/g, '')
+    .trim();
+  if (/^#(?!#)\s+\S/.test(body)) return body;
+  const title = String(model.metadata?.title || model.title || 'Untitled').trim() || 'Untitled';
+  return `# ${title}${body ? `\n\n${body}` : ''}`;
+}
+
 export function parseMarkdownState(markdown, existingState = null) {
   const bucket = warningBucket();
   const parsed = parseMarkdownDocument(String(markdown ?? ''));
