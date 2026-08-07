@@ -5,7 +5,8 @@ import {
   createScriptaDocumentModel,
   mutateScriptaDocument,
   normalizeScriptaDocumentModel,
-  projectScriptaDocument
+  projectScriptaDocument,
+  remapScriptaVariantImagePositions
 } from '../../../shared/document/scripta-document.js';
 import {
   applyDocumentChanges,
@@ -15,8 +16,14 @@ import {
   getDocumentChangesSince,
   getDocumentHeads,
   loadDocument,
-  saveDocument
+  mergeDocuments,
+  saveDocument,
+  updateText
 } from './automerge-adapter.mjs';
+import {
+  parseMarkdownState,
+  serializeMarkdownContent
+} from './markdown-crdt-model.mjs';
 
 const EXCLUDED_WORKSPACE_FOLDERS = new Set(['.data', '.git', '.ploinky', 'node_modules']);
 const MAX_COLLABORATION_CHANGES = 128;
@@ -98,7 +105,7 @@ export function createScriptaCrdtService({
     await fs.rm(collaborationPath(documentId), { force: true });
   }
 
-  function reconcilePublicObject(draft, next) {
+  function reconcilePublicObject(draft, next, root = draft, objectPath = []) {
     for (const key of Object.keys(draft)) {
       if (!Object.prototype.hasOwnProperty.call(next, key)) delete draft[key];
     }
@@ -118,7 +125,7 @@ export function createScriptaCrdtService({
         ).every(Boolean);
         if (keyed && commonOrder) {
           for (let index = 0; index < commonLength; index += 1) {
-            reconcilePublicObject(current[index], value[index]);
+            reconcilePublicObject(current[index], value[index], root, [...objectPath, key, index]);
           }
           if (value.length > current.length) {
             current.push(...clone(value.slice(current.length)));
@@ -134,7 +141,7 @@ export function createScriptaCrdtService({
               nextEntry && typeof nextEntry === 'object' && !Array.isArray(nextEntry)
               && current[index] && typeof current[index] === 'object' && !Array.isArray(current[index])
             ) {
-              reconcilePublicObject(current[index], nextEntry);
+              reconcilePublicObject(current[index], nextEntry, root, [...objectPath, key, index]);
             } else if (!isDeepStrictEqual(clone(current[index]), nextEntry)) {
               current[index] = clone(nextEntry);
             }
@@ -148,17 +155,107 @@ export function createScriptaCrdtService({
         if (!current || typeof current !== 'object' || Array.isArray(current)) {
           draft[key] = clone(value);
         } else {
-          reconcilePublicObject(current, value);
+          reconcilePublicObject(current, value, root, [...objectPath, key]);
         }
         continue;
       }
-      if (current !== value) draft[key] = value;
+      if (current !== value) {
+        if (key === 'text' && typeof current === 'string' && typeof value === 'string') {
+          updateText(root, [...objectPath, key], value);
+        } else {
+          draft[key] = value;
+        }
+      }
     }
   }
 
   function replacePublicModel(document, model) {
     const next = publicModelForCollaboration(model);
     return changeDocument(document, (draft) => reconcilePublicObject(draft, next));
+  }
+
+  function activeVariant(paragraph) {
+    const state = paragraph?.pluginState?.scripta || paragraph?.metadata?.pluginState?.scripta;
+    const variants = Array.isArray(state?.variants) ? state.variants : [];
+    return variants.find((variant) => variant.id === state.activeVariantId) || variants[0] || null;
+  }
+
+  function markdownModelOnBase(baseModel, markdown, createdBy) {
+    const parsed = normalizeScriptaDocumentModel(
+      parseMarkdownState(markdown, baseModel).model,
+      { createdBy, fallbackTitle: 'Meeting Notes' }
+    );
+    const base = clone(baseModel);
+    base.chapters = parsed.chapters.map((parsedChapter, chapterIndex) => {
+      const existingChapter = (baseModel.chapters || []).find((chapter) => chapter.id === parsedChapter.id)
+        || baseModel.chapters?.[chapterIndex];
+      if (!existingChapter) return parsedChapter;
+      const chapter = clone(existingChapter);
+      chapter.title = parsedChapter.title;
+      chapter.heading = clone(parsedChapter.heading);
+      chapter.metadata = {
+        ...(chapter.metadata || {}),
+        id: chapter.id,
+        title: parsedChapter.metadata?.title || parsedChapter.title,
+      };
+      chapter.paragraphs = parsedChapter.paragraphs.map((parsedParagraph, paragraphIndex) => {
+        const existingParagraph = (existingChapter.paragraphs || [])
+          .find((paragraph) => paragraph.id === parsedParagraph.id)
+          || existingChapter.paragraphs?.[paragraphIndex];
+        if (!existingParagraph) return parsedParagraph;
+        const paragraph = clone(existingParagraph);
+        const variant = activeVariant(paragraph);
+        if (!variant) return parsedParagraph;
+        const nextText = String(parsedParagraph.text || '');
+        variant.images = remapScriptaVariantImagePositions(variant.images, variant.text, nextText);
+        variant.text = nextText;
+        paragraph.text = variant.text;
+        paragraph.pluginState ||= paragraph.metadata?.pluginState;
+        paragraph.metadata = { ...(paragraph.metadata || {}), id: paragraph.id };
+        paragraph.metadata.pluginState = paragraph.pluginState;
+        return paragraph;
+      });
+      return chapter;
+    });
+    return base;
+  }
+
+  function privateModelForMergedPublic(currentModel, publicModel, createdBy) {
+    const current = clone(currentModel);
+    const merged = clone(publicModel);
+    const privateVariantById = new Map();
+    const privateReactionsByParagraphId = new Map();
+    for (const chapter of current.chapters || []) {
+      for (const paragraph of chapter.paragraphs || []) {
+        const state = paragraph?.pluginState?.scripta || paragraph?.metadata?.pluginState?.scripta;
+        privateReactionsByParagraphId.set(paragraph.id, clone(state?.reactionsByVariant || {}));
+        for (const variant of state?.variants || []) privateVariantById.set(variant.id, variant);
+      }
+    }
+    for (const chapter of merged.chapters || []) {
+      for (const paragraph of chapter.paragraphs || []) {
+        paragraph.pluginState ||= paragraph.metadata?.pluginState;
+        paragraph.metadata = { ...(paragraph.metadata || {}), id: paragraph.id };
+        const state = paragraph.pluginState?.scripta;
+        if (!state) continue;
+        state.variants = (state.variants || []).map((variant) => ({
+          ...variant,
+          createdBy: String(privateVariantById.get(variant.id)?.createdBy || createdBy),
+        }));
+        state.reactionsByVariant = privateReactionsByParagraphId.get(paragraph.id) || {};
+        paragraph.metadata.pluginState = paragraph.pluginState;
+      }
+    }
+    const normalized = normalizeScriptaDocumentModel(merged, {
+      createdBy,
+      fallbackTitle: String(current.metadata?.title || current.title || 'Meeting Notes'),
+    });
+    const version = Math.max(0, Number(current.metadata?.version || current.version || 0)) + 1;
+    const updatedAt = new Date().toISOString();
+    normalized.metadata = { ...(normalized.metadata || {}), version, updatedAt };
+    normalized.version = version;
+    normalized.updatedAt = updatedAt;
+    return normalized;
   }
 
   async function publicDocumentForModel(model) {
@@ -190,6 +287,21 @@ export function createScriptaCrdtService({
       }
       return binary;
     });
+  }
+
+  function decodeCollaborationState(value) {
+    const binary = Buffer.from(String(value || ''), 'base64');
+    if (!binary.byteLength || binary.byteLength > MAX_COLLABORATION_BYTES) {
+      throw new Error('SCRIPTA collaboration snapshot is invalid or too large.');
+    }
+    return binary;
+  }
+
+  function meetingNotesActorId(documentId) {
+    return crypto.createHash('sha256')
+      .update(`webmeet-meeting-notes:${safeDocumentId(documentId)}`)
+      .digest('hex')
+      .slice(0, 32);
   }
 
   function variantFor(model, chapterId, paragraphId, variantId) {
@@ -225,6 +337,7 @@ export function createScriptaCrdtService({
       documentId: result.documentId,
       heads: getDocumentHeads(document),
       stateBase64: encodeBinary(saveDocument(document)),
+      markdown: serializeMarkdownContent(model),
       projection: projectScriptaDocument(model, {
         resourceId: args.resourceId,
         view: args.view,
@@ -484,6 +597,52 @@ export function createScriptaCrdtService({
     });
   }
 
+  async function collaborationMergeMarkdown(args) {
+    const markdown = String(args.markdown || '').trim();
+    if (!markdown) throw new Error('SCRIPTA collaboration Markdown cannot be empty.');
+    const createdBy = String(args.participant?.hash || args.participant?.id || '').trim();
+    if (!createdBy) throw new Error('SCRIPTA collaboration Markdown requires a participant identity.');
+    let committedPublicDocument = null;
+    let documentId = '';
+    let changed = false;
+    const saved = await markdownCrdtStore.mutateAndSave({
+      path: args.path,
+      historyAction: 'push',
+      onCommitted: async () => {
+        if (changed) await writeCollaborationDocument(documentId, committedPublicDocument);
+      }
+    }, async (model) => {
+      const currentPublicDocument = await publicDocumentForModel(model);
+      const proposalActor = meetingNotesActorId(model.documentId);
+      const baseDocument = args.baseStateBase64
+        ? loadDocument(decodeCollaborationState(args.baseStateBase64), { actor: proposalActor })
+        : loadDocument(saveDocument(currentPublicDocument), { actor: proposalActor });
+      if (safeDocumentId(baseDocument.documentId) !== safeDocumentId(currentPublicDocument.documentId)) {
+        throw new Error('SCRIPTA collaboration snapshot belongs to another document.');
+      }
+      if (!documentHasHeads(currentPublicDocument, getDocumentHeads(baseDocument))) {
+        throw new Error('SCRIPTA collaboration snapshot is not part of the current document history.');
+      }
+      const proposalModel = markdownModelOnBase(clone(baseDocument), markdown, createdBy);
+      const proposalDocument = replacePublicModel(baseDocument, proposalModel);
+      const mergedPublicDocument = mergeDocuments(currentPublicDocument, proposalDocument);
+      documentId = safeDocumentId(model.documentId);
+      if (isDeepStrictEqual(clone(mergedPublicDocument), clone(currentPublicDocument))) {
+        committedPublicDocument = currentPublicDocument;
+        return null;
+      }
+      changed = true;
+      const nextModel = privateModelForMergedPublic(model, mergedPublicDocument, createdBy);
+      committedPublicDocument = replacePublicModel(mergedPublicDocument, nextModel);
+      return nextModel;
+    });
+    if (!committedPublicDocument) {
+      committedPublicDocument = await publicDocumentForModel(saved.model);
+      documentId = safeDocumentId(saved.documentId);
+    }
+    return collaborationResponse(committedPublicDocument, saved, args, { changed });
+  }
+
   async function remove(args) {
     if (args.phase === 'prepare') {
       let documentId = String(args.documentId || '').trim();
@@ -518,6 +677,7 @@ export function createScriptaCrdtService({
     remove,
     collaborationOpen,
     collaborationPull,
-    collaborationApply
+    collaborationApply,
+    collaborationMergeMarkdown
   };
 }

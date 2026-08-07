@@ -280,6 +280,20 @@ export function createSchemas(z) {
     changesBase64: z.array(z.string()).min(1).max(128),
     baseHeads: z.array(z.string()).optional()
   });
+  const ScriptaCollaborationMergeMarkdownArgsSchema = z.object({
+    path: z.string(),
+    resourceId: z.string().optional(),
+    markdown: z.string().min(1),
+    baseStateBase64: z.string().optional(),
+    participant: z.object({
+      id: z.string(),
+      hash: z.string(),
+      label: z.string()
+    }),
+    viewerHash: z.string().optional(),
+    view: ScriptaViewSchema.optional(),
+    participantMap: z.record(z.string()).optional()
+  });
   const LlmAutocompleteArgsSchema = z.object({
     path: z.string(),
     content: z.string(),
@@ -360,6 +374,7 @@ export function createSchemas(z) {
     ScriptaCollaborationOpenArgsSchema,
     ScriptaCollaborationPullArgsSchema,
     ScriptaCollaborationApplyArgsSchema,
+    ScriptaCollaborationMergeMarkdownArgsSchema,
     LlmAutocompleteArgsSchema,
     CollectIDEPluginsArgsSchema,
     GetPluginSettingsArgsSchema,

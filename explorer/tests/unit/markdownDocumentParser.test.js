@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseMarkdownDocument, serializeMarkdownDocument } from '../../services/document/markdownDocumentParser.js';
+import { stripScriptaMetadataComments } from '../../utils/server/markdown-crdt/markdown-crdt-model.mjs';
 
 test('parseMarkdownDocument converts plain markdown into visible chapters', () => {
     const markdown = [
@@ -51,4 +52,26 @@ test('plugin state preserves semantically meaningful empty strings', () => {
 
     assert.equal(Object.hasOwn(variant, 'text'), true);
     assert.equal(variant.text, '');
+});
+
+test('metadata stripping preserves user comments and content before SCRIPTA comments', () => {
+    const source = [
+        '<!-- Ana: verify achilles-ide-paragraph wording with the team -->',
+        '',
+        'Important user-authored note.',
+        '',
+        '<!-- {"achilles-ide-paragraph":{"id":"paragraph-1"}} -->',
+        '',
+        '<!-- <achilles-ide-references> -->',
+        '',
+        'Visible paragraph.',
+    ].join('\n');
+
+    const stripped = stripScriptaMetadataComments(source);
+
+    assert.match(stripped, /Ana: verify achilles-ide-paragraph wording with the team/);
+    assert.match(stripped, /Important user-authored note/);
+    assert.match(stripped, /Visible paragraph/);
+    assert.doesNotMatch(stripped, /"achilles-ide-paragraph":\{"id":"paragraph-1"\}/);
+    assert.doesNotMatch(stripped, /<achilles-ide-references>/);
 });

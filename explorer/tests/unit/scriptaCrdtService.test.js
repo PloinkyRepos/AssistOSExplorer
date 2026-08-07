@@ -16,14 +16,18 @@ import {
     getDocumentChangesSince,
     getDocumentHeads,
     loadDocument,
+    updateText,
 } from '../../utils/server/markdown-crdt/automerge-adapter.mjs';
 
 test('Explorer MCP manifests expose only canonical SCRIPTA mutation operations', async () => {
     const config = JSON.parse(await fs.readFile(new URL('../../mcp-config.json', import.meta.url), 'utf8'));
     const collaborationTool = config.tools.find(({ name }) => name === 'scripta_collaboration_apply');
+    const markdownMergeTool = config.tools.find(({ name }) => name === 'scripta_collaboration_merge_markdown');
     const mutationTool = config.tools.find(({ name }) => name === 'scripta_crdt_mutate');
 
     assert.deepEqual(collaborationTool?.inputSchema?.operation?.enum, ['p-variant-edit']);
+    assert.equal(markdownMergeTool?.tags?.includes('internal'), true);
+    assert.equal(config.tools.some(({ name }) => name === 'webmeet_scripta_write_markdown'), false);
     assert.deepEqual(mutationTool?.inputSchema?.operation?.enum, [
         'p-variant-add',
         'p-variant-vote',
@@ -264,6 +268,104 @@ test('SCRIPTA mutations use the Explorer Automerge authority and persist the win
             (error) => error?.code === 'scripta_variant_forbidden'
         );
 
+        const concurrentTextBase = await service.collaborationOpen({
+            path: '/WebMeet/room-1234/draft.md',
+            resourceId: 'resource-1',
+            viewerHash: participant.hash,
+            view: { mode: 'document' },
+        });
+        const concurrentBrowserDocument = loadDocument(
+            Buffer.from(concurrentTextBase.stateBase64, 'base64'),
+            { actor: crypto.randomBytes(16).toString('hex') },
+        );
+        const concurrentParagraph = concurrentBrowserDocument.chapters[0].paragraphs[0];
+        const concurrentVariantId = concurrentParagraph.pluginState.scripta.activeVariantId;
+        const concurrentVariantIndex = concurrentParagraph.pluginState.scripta.variants
+            .findIndex((variant) => variant.id === concurrentVariantId);
+        const concurrentBaseText = concurrentParagraph.pluginState.scripta.variants[concurrentVariantIndex].text;
+        const browserConcurrentText = `${concurrentBaseText} [browser addition]`;
+        const concurrentBrowserEdited = changeDocument(concurrentBrowserDocument, (draft) => {
+            updateText(draft, [
+                'chapters', 0, 'paragraphs', 0,
+                'pluginState', 'scripta', 'variants', concurrentVariantIndex, 'text',
+            ], browserConcurrentText);
+        });
+        await service.collaborationApply({
+            path: '/WebMeet/room-1234/draft.md',
+            resourceId: 'resource-1',
+            operation: 'p-variant-edit',
+            changesBase64: getDocumentChanges(concurrentBrowserDocument, concurrentBrowserEdited)
+                .map((change) => Buffer.from(change).toString('base64')),
+            baseHeads: concurrentTextBase.heads,
+            args: {
+                chapterId: chapter.chapterId,
+                paragraphId: paragraph.paragraphId,
+                variantId: concurrentVariantId,
+                text: browserConcurrentText,
+            },
+            participant,
+            viewerHash: participant.hash,
+            view: { mode: 'document' },
+        });
+        const concurrentTextMerged = await service.collaborationMergeMarkdown({
+            path: '/WebMeet/room-1234/draft.md',
+            resourceId: 'resource-1',
+            markdown: `# Draft\n\n## Chapter 1\n\n${concurrentBaseText} [agent addition]`,
+            baseStateBase64: concurrentTextBase.stateBase64,
+            participant,
+            viewerHash: participant.hash,
+            view: { mode: 'document' },
+        });
+        assert.match(concurrentTextMerged.markdown, /\[browser addition\]/);
+        assert.match(concurrentTextMerged.markdown, /\[agent addition\]/);
+
+        const meetingNotesBase = await service.collaborationOpen({
+            path: '/WebMeet/room-1234/draft.md',
+            resourceId: 'resource-1',
+            viewerHash: participant.hash,
+            view: { mode: 'document' },
+        });
+        await service.mutate({
+            path: '/WebMeet/room-1234/draft.md',
+            resourceId: 'resource-1',
+            operation: 'paragraph-add',
+            args: { chapterId: chapter.chapterId, text: 'Manual note added while the agent was working' },
+            participant,
+            viewerHash: participant.hash,
+            view: { mode: 'document' },
+        });
+        const meetingNotesMerged = await service.collaborationMergeMarkdown({
+            path: '/WebMeet/room-1234/draft.md',
+            resourceId: 'resource-1',
+            markdown: '# Reconciled meeting\n\n## Chapter 1\n\nAgent cumulative notes',
+            baseStateBase64: meetingNotesBase.stateBase64,
+            participant,
+            viewerHash: participant.hash,
+            view: { mode: 'document' },
+        });
+        assert.equal(meetingNotesMerged.changed, true);
+        assert.match(meetingNotesMerged.markdown, /^# Draft/m);
+        assert.match(meetingNotesMerged.markdown, /Agent cumulative notes/);
+        assert.match(meetingNotesMerged.markdown, /Manual note added while the agent was working/);
+        const savedMeetingNotes = await fs.readFile(path.join(workspaceRoot, 'WebMeet/room-1234/draft.md'), 'utf8');
+        assert.match(savedMeetingNotes, /achilles-ide-document/);
+        assert.match(savedMeetingNotes, /Agent cumulative notes/);
+        assert.match(savedMeetingNotes, /Manual note added while the agent was working/);
+        const repeatedMeetingNotesMerge = await service.collaborationMergeMarkdown({
+            path: '/WebMeet/room-1234/draft.md',
+            resourceId: 'resource-1',
+            markdown: '# Reconciled meeting\n\n## Chapter 1\n\nAgent cumulative notes',
+            baseStateBase64: meetingNotesBase.stateBase64,
+            participant,
+            viewerHash: participant.hash,
+            view: { mode: 'document' },
+        });
+        assert.equal(repeatedMeetingNotesMerge.changed, false);
+        assert.equal(repeatedMeetingNotesMerge.markdown, meetingNotesMerged.markdown);
+        assert.equal(
+            await fs.readFile(path.join(workspaceRoot, 'WebMeet/room-1234/draft.md'), 'utf8'),
+            savedMeetingNotes,
+        );
         const canonicalState = loadDocument(await fs.readFile(path.join(
             workspaceRoot,
             '.ploinky/data/explorer/automerge/documents',

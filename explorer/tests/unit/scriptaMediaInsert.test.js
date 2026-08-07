@@ -6,6 +6,7 @@ import {
     mutateScriptaDocument,
     normalizeScriptaDocumentModel,
     projectScriptaDocument,
+    remapScriptaVariantImagePositions,
 } from '../../shared/document/scripta-document.js';
 import { parseMarkdownState, serializeMarkdownState } from '../../utils/server/markdown-crdt/markdown-crdt-model.mjs';
 import { ScriptaVariantsView } from '../../shared/ui/scripta-variants-view/scripta-variants-view.js';
@@ -52,6 +53,19 @@ test('variant image position is serialized at the text cursor and follows later 
     }, {hash: 'owner'}).document;
     variant = changed.chapters[0].paragraphs[0].pluginState.scripta.variants[0];
     assert.equal(variant.images[0].position, 5);
+});
+
+test('complete Markdown revisions keep inline images anchored to the surrounding text', () => {
+    const images = [{ imageId: 'image-1', position: 6 }];
+    const remapped = remapScriptaVariantImagePositions(
+        images,
+        'alpha beta',
+        'prefix alpha beta',
+    );
+
+    assert.equal(remapped[0].position, 13);
+    assert.notEqual(remapped, images);
+    assert.equal(images[0].position, 6);
 });
 
 test('image ordinals follow document order and resolve against the authoritative variant', () => {

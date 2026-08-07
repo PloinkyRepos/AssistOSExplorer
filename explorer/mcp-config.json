@@ -1023,6 +1023,40 @@
       }
     },
     {
+      "name": "scripta_collaboration_merge_markdown",
+      "description": "Merge a complete Markdown revision made from a SCRIPTA collaboration snapshot.",
+      "command": "tools/explorer_tool.sh",
+      "cwd": "workspace",
+      "tags": ["internal"],
+      "env": { "TOOL_NAME": "scripta_collaboration_merge_markdown" },
+      "inputSchema": {
+        "path": { "type": "string" },
+        "resourceId": { "type": "string", "optional": true },
+        "markdown": { "type": "string" },
+        "baseStateBase64": { "type": "string", "optional": true },
+        "participant": {
+          "type": "object",
+          "properties": {
+            "id": { "type": "string" },
+            "hash": { "type": "string" },
+            "label": { "type": "string" }
+          },
+          "required": ["id", "hash", "label"]
+        },
+        "viewerHash": { "type": "string", "optional": true },
+        "view": {
+          "type": "object",
+          "optional": true,
+          "properties": {
+            "mode": { "type": "string", "enum": ["document", "paragraph"], "optional": true },
+            "chapterId": { "type": "string", "optional": true },
+            "paragraphId": { "type": "string", "optional": true }
+          }
+        },
+        "participantMap": { "type": "object", "additionalProperties": true, "optional": true }
+      }
+    },
+    {
       "name": "llm_autocomplete",
       "title": "LLM Autocomplete",
       "description": "Generate a code completion for the current cursor position using file context.",

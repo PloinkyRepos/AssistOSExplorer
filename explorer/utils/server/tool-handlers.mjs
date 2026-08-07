@@ -144,6 +144,7 @@ export function createToolHandlers({
     ScriptaCollaborationOpenArgsSchema,
     ScriptaCollaborationPullArgsSchema,
     ScriptaCollaborationApplyArgsSchema,
+    ScriptaCollaborationMergeMarkdownArgsSchema,
     LlmAutocompleteArgsSchema,
     CollectIDEPluginsArgsSchema,
     GetPluginSettingsArgsSchema,
@@ -1259,6 +1260,16 @@ export function createToolHandlers({
     return jsonResponse(await scriptaCrdtService.collaborationApply(data));
   }
 
+  async function handleScriptaCollaborationMergeMarkdown(args) {
+    assertWebMeetScriptaCaller();
+    const data = parseArgs(
+      ScriptaCollaborationMergeMarkdownArgsSchema,
+      args,
+      'scripta_collaboration_merge_markdown'
+    );
+    return jsonResponse(await scriptaCrdtService.collaborationMergeMarkdown(data));
+  }
+
   async function handleCollectIdePlugins(args) {
     parseArgs(CollectIDEPluginsArgsSchema, args, 'collect_ide_plugins');
     const pluginsByLocation = await aggregateIdePlugins(workspaceRoot);
@@ -1488,6 +1499,7 @@ export function createToolHandlers({
     scripta_collaboration_open: handleScriptaCollaborationOpen,
     scripta_collaboration_pull: handleScriptaCollaborationPull,
     scripta_collaboration_apply: handleScriptaCollaborationApply,
+    scripta_collaboration_merge_markdown: handleScriptaCollaborationMergeMarkdown,
     llm_autocomplete: handleLlmAutocomplete,
     collect_ide_plugins: handleCollectIdePlugins,
     get_plugin_settings: handleGetPluginSettings,

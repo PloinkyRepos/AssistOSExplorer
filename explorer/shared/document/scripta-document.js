@@ -36,7 +36,7 @@ function setChapterTitle(chapter, title) {
     chapter.title = value;
 }
 
-function remapImagePositions(images, previousText, nextText) {
+export function remapScriptaVariantImagePositions(images, previousText, nextText) {
     const before = String(previousText || '');
     const after = String(nextText || '');
     let prefix = 0;
@@ -345,7 +345,7 @@ export function mutateScriptaDocument(source, operation, args = {}, participant 
         if (!variant) throw new Error('SCRIPTA variant was not found.');
         assertScriptaVariantOwner(variant, actorHash);
         const nextText = String(args.text ?? '');
-        variant.images = remapImagePositions(variant.images, variant.text, nextText);
+        variant.images = remapScriptaVariantImagePositions(variant.images, variant.text, nextText);
         variant.text = nextText;
         variant.updatedAt = nowIso();
         updateScriptaActiveVariant(paragraph, state);
