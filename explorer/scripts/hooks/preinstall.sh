@@ -2,8 +2,9 @@
 set -euo pipefail
 
 # This hook runs on the HOST before container creation.
-# Purpose: ensure ASSISTOS_FS_ROOT defaults to the current workspace directory
-# so the Explorer exposes the user's project instead of the agent's /code folder.
+# Purpose: configure Explorer's global run mode and prepare its AxiFace assets.
+# The workspace root is supplied to the Explorer runtime by Ploinky; this hook
+# must not read or write Ploinky's encrypted secrets.
 #
 # Note: prior versions of this hook also started a raw OnlyOffice Document Server
 # sidecar (`ploinky_onlyoffice_<workspace>`). Document Server lifecycle now
@@ -14,7 +15,6 @@ set -euo pipefail
 workspace_root="${PLOINKY_WORKSPACE_ROOT:?PLOINKY_WORKSPACE_ROOT is required}"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 explorer_root="$(cd "${script_dir}/../.." && pwd)"
-secrets_tool="${script_dir}/encrypted-secrets.mjs"
 axiface_url="${AXIFACE_REPO_URL:-https://github.com/AssistOS-AI/AxiFace.git}"
 axiface_default_root="${explorer_root}/shared/vendor/axi-face"
 axiface_root="${AXIFACE_REPO_PATH:-${axiface_default_root}}"
@@ -81,13 +81,6 @@ if (changed) {
     }
 }
 NODE
-fi
-
-mkdir -p "${workspace_root}/.ploinky"
-
-# If already configured in secrets, don't overwrite.
-if [[ -z "$(node "$secrets_tool" "$workspace_root" get "ASSISTOS_FS_ROOT")" ]]; then
-    node "$secrets_tool" "$workspace_root" set "ASSISTOS_FS_ROOT" "$workspace_root"
 fi
 
 if [[ ! -f "${axiface_root}/src/axi-face.mjs" ]]; then

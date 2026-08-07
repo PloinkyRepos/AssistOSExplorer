@@ -11,6 +11,10 @@ export function getRequestedRoots(argv, env) {
   if (args.length) {
     return args;
   }
+  const workspaceRoot = String(env?.PLOINKY_WORKSPACE_ROOT || '').trim();
+  if (workspaceRoot) {
+    return [workspaceRoot];
+  }
   return [process.cwd()];
 }
 
