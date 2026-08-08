@@ -3,6 +3,9 @@ const BOX_LABELS = Object.freeze({
   pathHash: 'io.assistos.ploinky-box.path-hash',
   imageRef: 'io.assistos.ploinky-box.image-ref',
   routerHostPort: 'io.assistos.ploinky-box.router-host-port',
+  mediaHostPort: 'io.assistos.ploinky-box.media-host-port',
+  dependenciesFingerprint: 'io.assistos.ploinky-box.dependencies-fingerprint',
+  imagesFingerprint: 'io.assistos.ploinky-box.images-fingerprint',
 });
 const ROUTER_TARGET = '8080/tcp';
 const MEDIA_TARGET = '7882/udp';
@@ -87,11 +90,29 @@ function exactBoxLabels(labels, {
   if (selectedRouterHostPort !== undefined && routerHostPort !== selectedRouterHostPort) {
     throw new Error('Outer container Box router-host-port label does not match its exact publication.');
   }
+  const mediaHostPort = exactPort(
+    source[BOX_LABELS.mediaHostPort],
+    'outer container Box media-host-port label',
+  );
+  if (mediaHostPort !== '7882') {
+    throw new Error('Outer container Box media-host-port label does not match its exact publication.');
+  }
+  const dependenciesFingerprint = exactSha256(
+    source[BOX_LABELS.dependenciesFingerprint],
+    'outer container Box dependencies-fingerprint label',
+  );
+  const imagesFingerprint = exactSha256(
+    source[BOX_LABELS.imagesFingerprint],
+    'outer container Box images-fingerprint label',
+  );
   return Object.freeze({
     role: 'box',
     pathHash,
     imageRef,
     routerHostPort,
+    mediaHostPort,
+    dependenciesFingerprint,
+    imagesFingerprint,
   });
 }
 

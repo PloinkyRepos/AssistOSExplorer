@@ -31,6 +31,9 @@ function containerInspect(bindings = {
         'io.assistos.ploinky-box.path-hash': 'd'.repeat(12),
         'io.assistos.ploinky-box.image-ref': IMAGE_REF,
         'io.assistos.ploinky-box.router-host-port': '18080',
+        'io.assistos.ploinky-box.media-host-port': '7882',
+        'io.assistos.ploinky-box.dependencies-fingerprint': 'e'.repeat(64),
+        'io.assistos.ploinky-box.images-fingerprint': 'f'.repeat(64),
       },
     },
     HostConfig: { PortBindings: bindings },
@@ -69,7 +72,11 @@ test('box evidence binds the exact running semantic image and normalizes only em
     '8080/tcp': [{ HostIp: '127.0.0.1', HostPort: '18080' }],
     '7882/udp': [{ HostIp: '0.0.0.0', HostPort: '7882' }],
   }));
-  assert.equal(validateBoxEvidence(evidence, expected()).imageId, IMAGE_ID);
+  const validated = validateBoxEvidence(evidence, expected());
+  assert.equal(validated.imageId, IMAGE_ID);
+  assert.equal(validated.semanticLabels.mediaHostPort, '7882');
+  assert.equal(validated.semanticLabels.dependenciesFingerprint, 'e'.repeat(64));
+  assert.equal(validated.semanticLabels.imagesFingerprint, 'f'.repeat(64));
 });
 
 test('box evidence requires the exact 12-character lowercase path-hash contract', () => {
@@ -116,6 +123,22 @@ test('box evidence rejects a third publication, wrong semantic ownership, and wr
     imageInspect: imageInspect(),
     ...expected(),
   }), /Box labels must be exactly/);
+
+  const invalidFingerprint = containerInspect();
+  invalidFingerprint[0].Config.Labels['io.assistos.ploinky-box.dependencies-fingerprint'] = 'not-a-digest';
+  assert.throws(() => buildBoxEvidence({
+    containerInspect: invalidFingerprint,
+    imageInspect: imageInspect(),
+    ...expected(),
+  }), /dependencies-fingerprint label must be a SHA-256 digest/);
+
+  const wrongMediaPort = containerInspect();
+  wrongMediaPort[0].Config.Labels['io.assistos.ploinky-box.media-host-port'] = '7881';
+  assert.throws(() => buildBoxEvidence({
+    containerInspect: wrongMediaPort,
+    imageInspect: imageInspect(),
+    ...expected(),
+  }), /media-host-port label does not match/);
 
   assert.throws(() => buildBoxEvidence({
     containerInspect: containerInspect(),

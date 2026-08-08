@@ -26,6 +26,14 @@ const DISPOSITIONS = Object.freeze({
     signals: ['verified-router-client'],
     disposition: 'Loads the mounted Ploinky AgentMcpClient for Explorer MCP calls.',
   },
+  'webmeetScribeAgent/lib/runtime-config.mjs': {
+    signals: ['direct-router-env'],
+    disposition: 'Validates the generated Router origin and request authority before the loopback LiveKit relay opens an upstream socket.',
+  },
+  'webmeetScribeAgent/server/livekit-scribe.mjs': {
+    signals: ['verified-router-client'],
+    disposition: 'Loads the mounted Ploinky AgentMcpClient for delegated WebMeet MCP calls; it owns no direct Router transport.',
+  },
 });
 
 function executableFiles(directory, relative = '') {

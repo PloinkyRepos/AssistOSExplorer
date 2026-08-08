@@ -447,6 +447,9 @@ export function screenRuntimeEvidenceProvesUdpMux(evidence) {
       && /^[0-9a-f]{12}$/.test(String(box.semanticLabels.pathHash || '').toLowerCase())
       && box.semanticLabels.imageRef === box.imageRef
       && box.semanticLabels.routerHostPort === selectedRouterHostPort
+      && box.semanticLabels.mediaHostPort === '7882'
+      && /^[0-9a-f]{64}$/.test(String(box.semanticLabels.dependenciesFingerprint || ''))
+      && /^[0-9a-f]{64}$/.test(String(box.semanticLabels.imagesFingerprint || ''))
       && JSON.stringify(normalizeOuterPortBindings(box.normalizedPortBindings))
         === JSON.stringify(expectedBindings);
   } catch (_) {
