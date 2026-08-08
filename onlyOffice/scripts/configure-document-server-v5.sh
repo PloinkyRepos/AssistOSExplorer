@@ -5,6 +5,7 @@ config_file="${ONLYOFFICE_LOCAL_CONFIG_FILE:-/etc/onlyoffice/documentserver/loca
 docservice_supervisor_file="/etc/supervisor/conf.d/ds-docservice.conf"
 docservice_bind_interposer="/usr/local/lib/onlyoffice-docservice-loopback-bind.so"
 docservice_nginx_configurator="/code/scripts/configure-docservice-nginx-loopback.mjs"
+nginx_listener_rewriter="${ONLYOFFICE_NGINX_LISTENER_REWRITER:-/code/scripts/rewrite-nginx-listener-loopback.mjs}"
 jwt_config_verifier="/code/scripts/verify-document-server-jwt-config.mjs"
 image_contract_file="/usr/local/share/ploinky/onlyoffice.contract"
 : "${JWT_SECRET:?JWT_SECRET is required}"
@@ -53,6 +54,10 @@ if [ ! -f "$docservice_supervisor_file" ]; then
   echo "OnlyOffice image is missing the pinned DocService supervisor definition: $docservice_supervisor_file" >&2
   exit 1
 fi
+if [ ! -f "$nginx_listener_rewriter" ] || [ -L "$nginx_listener_rewriter" ]; then
+  echo 'OnlyOffice nginx listener rewriter is missing or unsafe.' >&2
+  exit 1
+fi
 if [ "$(grep -c '^environment=' "$docservice_supervisor_file")" -ne 1 ]; then
   echo 'OnlyOffice DocService supervisor environment shape changed; refusing an unscoped runtime patch.' >&2
   exit 1
@@ -77,26 +82,10 @@ grep -q '^environment=.*LD_PRELOAD=/usr/local/lib/onlyoffice-docservice-loopback
 # DocumentServer is an implementation detail behind the decorator. Bind every
 # port-80 nginx server to process loopback before supervisor starts it.
 while IFS= read -r -d '' nginx_config; do
-  # `sed -i` rewrites through a temporary file and renames it over the target,
-  # so the file it leaves behind does not carry the ds:ds 0644 identity the
-  # DocumentServer startup established, and the runtime verifier then fails
-  # with "unexpected ownership or mode". Capture the identity per file and
-  # restore it after both substitutions.
-  #
-  # Dereference when capturing: `find -L` also reports the packaged alias
-  # symlinks, whose own mode is 0755. The runtime topology expects those
-  # aliases to become regular files carrying the target's identity, so the
-  # value worth restoring is always the target's, never the link's.
-  nginx_config_owner="$(stat -Lc '%u:%g' "${nginx_config}")"
-  nginx_config_mode="$(stat -Lc '%a' "${nginx_config}")"
-  sed -E -i \
-    's/^([[:space:]]*)listen[[:space:]]+(0\.0\.0\.0:)?(80|443)([[:space:]][^;]*)?;/\1listen 127.0.0.1:\3\4;/' \
-    "${nginx_config}"
-  sed -E -i \
-    's/^([[:space:]]*)listen[[:space:]]+\[::\]:(80|443)([[:space:]][^;]*)?;/\1listen [::1]:\2\3;/' \
-    "${nginx_config}"
-  chown "${nginx_config_owner}" "${nginx_config}"
-  chmod "${nginx_config_mode}" "${nginx_config}"
+  # `find -L` includes packaged alias symlinks. The rewriter deliberately
+  # materializes each alias as a regular file while preserving the dereferenced
+  # target's uid, gid, and mode across its atomic replacement.
+  /usr/local/bin/node "$nginx_listener_rewriter" "$nginx_config"
 done < <(find -L /etc/nginx /etc/onlyoffice/documentserver/nginx \
   -type f \( -name '*.conf' -o -name '*.tmpl' \) -print0)
 
