@@ -382,11 +382,16 @@ function systemIdentities() {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const args = process.argv.slice(2);
-  if (args.length !== 1) {
-    fail('usage: prepare-support-service-runtime.mjs /absolute/path/to/postgresql.conf');
+  if (args.length < 1 || args.length > 2) {
+    fail('usage: prepare-support-service-runtime.mjs /absolute/path/to/postgresql.conf [runtime-socket-directory]');
   }
+  // An overridden socket directory is prepared through the same guarded,
+  // no-follow, post-verified path handling as every other pinned path, so a
+  // symlink pre-created in a world-writable parent cannot redirect the
+  // ownership and mode change onto another target.
   prepareSupportServiceRuntime({
     configFile: args[0],
+    ...(args[1] ? { runtimeDirectory: args[1] } : {}),
     identities: systemIdentities(),
   });
 }

@@ -2,6 +2,7 @@
 set -euo pipefail
 
 postgresql_config_glob="${ONLYOFFICE_POSTGRESQL_CONFIG_GLOB:-/etc/postgresql/*/*/postgresql.conf}"
+postgresql_socket_dir="${ONLYOFFICE_POSTGRESQL_SOCKET_DIR:-/dev/shm/postgresql}"
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 node_bin="${ONLYOFFICE_NODE_BIN:-/usr/local/bin/node}"
 support_runtime_preparer="${ONLYOFFICE_SUPPORT_RUNTIME_PREPARER:-${script_dir}/prepare-support-service-runtime.mjs}"
@@ -75,7 +76,7 @@ if [ "${#postgresql_configs[@]}" -ne 1 ]; then
   echo "Expected exactly one bundled PostgreSQL configuration, found ${#postgresql_configs[@]} for ${postgresql_config_glob}" >&2
   exit 1
 fi
-"$node_bin" "$support_runtime_preparer" "${postgresql_configs[0]}"
+"$node_bin" "$support_runtime_preparer" "${postgresql_configs[0]}" "$postgresql_socket_dir"
 replace_or_append_setting \
   "${postgresql_configs[0]}" \
   listen_addresses \
@@ -86,9 +87,29 @@ replace_or_append_setting \
   port \
   'port = 5432' \
   postgres postgres 0644
+# The bundled cluster defaults its socket directory to /var/run/postgresql,
+# which resolves onto the container's fuse-overlayfs root. PostgreSQL chmods
+# its Unix-domain socket after binding it, that chmod returns EPERM there, and
+# the failure is fatal, so the Document Server waits forever for port 5432:
+#
+#   could not set permissions of file "/var/run/postgresql/.s.PGSQL.5432"
+#   FATAL: could not create any Unix-domain sockets
+#
+# /dev/shm is a real tmpfs in this runtime and does permit the chmod, so keep
+# the socket there instead of disabling local connections entirely.
+#
+# The directory is created only by the guarded preparer below, never by an
+# install -d here: /dev/shm is world-writable, so an unprivileged process could
+# pre-create the path as a symlink and redirect a root-run chown onto its
+# target. The preparer opens with O_NOFOLLOW and re-verifies after preparation.
+replace_or_append_setting \
+  "${postgresql_configs[0]}" \
+  unix_socket_directories \
+  "unix_socket_directories = '${postgresql_socket_dir}'" \
+  postgres postgres 0644
 # Re-assert the contract after the atomic postgresql.conf replacements so
 # service startup cannot consume ownership or mode drift introduced in between.
-"$node_bin" "$support_runtime_preparer" "${postgresql_configs[0]}"
+"$node_bin" "$support_runtime_preparer" "${postgresql_configs[0]}" "$postgresql_socket_dir"
 
 # Community DocumentServer currently disables Redis, but keep its bundled
 # configuration closed in case a pinned edition enables it later.
@@ -113,6 +134,7 @@ replace_or_append_setting "$rabbitmq_env_file" ERL_EPMD_ADDRESS \
   'ERL_EPMD_ADDRESS=127.0.0.1' root rabbitmq 0640
 
 grep -qx "listen_addresses = '127.0.0.1'" "${postgresql_configs[0]}"
+grep -qx "unix_socket_directories = '${postgresql_socket_dir}'" "${postgresql_configs[0]}"
 grep -qx 'bind 127.0.0.1' "$redis_config_file"
 grep -qx 'protected-mode yes' "$redis_config_file"
 grep -qx 'listeners.tcp.default = 127.0.0.1:5672' "$rabbitmq_config_file"
