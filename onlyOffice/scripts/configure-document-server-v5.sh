@@ -77,12 +77,26 @@ grep -q '^environment=.*LD_PRELOAD=/usr/local/lib/onlyoffice-docservice-loopback
 # DocumentServer is an implementation detail behind the decorator. Bind every
 # port-80 nginx server to process loopback before supervisor starts it.
 while IFS= read -r -d '' nginx_config; do
+  # `sed -i` rewrites through a temporary file and renames it over the target,
+  # so the file it leaves behind does not carry the ds:ds 0644 identity the
+  # DocumentServer startup established, and the runtime verifier then fails
+  # with "unexpected ownership or mode". Capture the identity per file and
+  # restore it after both substitutions.
+  #
+  # Dereference when capturing: `find -L` also reports the packaged alias
+  # symlinks, whose own mode is 0755. The runtime topology expects those
+  # aliases to become regular files carrying the target's identity, so the
+  # value worth restoring is always the target's, never the link's.
+  nginx_config_owner="$(stat -Lc '%u:%g' "${nginx_config}")"
+  nginx_config_mode="$(stat -Lc '%a' "${nginx_config}")"
   sed -E -i \
     's/^([[:space:]]*)listen[[:space:]]+(0\.0\.0\.0:)?(80|443)([[:space:]][^;]*)?;/\1listen 127.0.0.1:\3\4;/' \
     "${nginx_config}"
   sed -E -i \
     's/^([[:space:]]*)listen[[:space:]]+\[::\]:(80|443)([[:space:]][^;]*)?;/\1listen [::1]:\2\3;/' \
     "${nginx_config}"
+  chown "${nginx_config_owner}" "${nginx_config}"
+  chmod "${nginx_config_mode}" "${nginx_config}"
 done < <(find -L /etc/nginx /etc/onlyoffice/documentserver/nginx \
   -type f \( -name '*.conf' -o -name '*.tmpl' \) -print0)
 
