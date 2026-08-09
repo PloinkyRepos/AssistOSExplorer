@@ -633,49 +633,49 @@ jobs:
             rm -f "$STAGED_CREDENTIAL_FILE" >/dev/null 2>&1 || true
           rm -f "$CLOUDFLARE_CREDENTIAL_FILE"
           CLOUDFLARE_CREDENTIAL_FILE=""
-          unset CLOUDFLARE_API_TOKEN
           if [ "$CREDENTIAL_STATUS" != "0" ]; then
             echo "[destroy-qa] ERROR: unable to persist Cloudflare credentials in the encrypted Ploinky store."
             exit "$CREDENTIAL_STATUS"
           fi
 
           echo "[destroy-qa] Reconciling the empty Ploinky route set before destruction..."
+          PLOINKY_RECONCILE_STATUS=0
           "$PLOINKY" --port "$ROUTER_PORT" start explorer \
             --profile=default \
-            "${BRANCH_ARGS[@]}"
+            "${BRANCH_ARGS[@]}" || PLOINKY_RECONCILE_STATUS=$?
           CLOUDFLARE_REMOVED=0
-          for _ in $(seq 1 60); do
-            BOX_STATUS="$(inspect_outer_box_status)"
-            if [[ "$BOX_STATUS" == *"Cloudflare mode: local-only"* ]] &&
-              [[ "$BOX_STATUS" == *"Cloudflare management: none"* ]] &&
-              [[ "$BOX_STATUS" == *"Cloudflare publication: local-only"* ]] &&
-              [[ "$BOX_STATUS" == *"Cloudflare connector: absent"* ]]; then
-              CLOUDFLARE_REMOVED=1
-              break
-            fi
-            sleep 2
-          done
-          printf '%s\n' "$BOX_STATUS"
-          if [ "$CLOUDFLARE_REMOVED" != "1" ]; then
-            echo "[destroy-qa] ERROR: timed out waiting for Ploinky to remove its Cloudflare publication."
-            exit 1
+          BOX_STATUS="$(inspect_outer_box_status || true)"
+          if [ "$PLOINKY_RECONCILE_STATUS" = "0" ]; then
+            for _ in $(seq 1 60); do
+              BOX_STATUS="$(inspect_outer_box_status || true)"
+              if [[ "$BOX_STATUS" == *"Cloudflare mode: local-only"* ]] &&
+                [[ "$BOX_STATUS" == *"Cloudflare management: none"* ]] &&
+                [[ "$BOX_STATUS" == *"Cloudflare publication: local-only"* ]] &&
+                [[ "$BOX_STATUS" == *"Cloudflare connector: absent"* ]]; then
+                CLOUDFLARE_REMOVED=1
+                break
+              fi
+              sleep 2
+            done
           fi
-          for expected_status in \
-            'Cloudflare mode: local-only' \
-            'Cloudflare management: none' \
-            'Cloudflare publication: local-only' \
-            'Cloudflare connector: absent'; do
-            case "$BOX_STATUS" in
-              *"$expected_status"*) ;;
-              *)
-                echo "[destroy-qa] ERROR: Ploinky did not verify Cloudflare teardown: missing '$expected_status'."
-                exit 1
-                ;;
-            esac
-          done
+          printf '%s\n' "$BOX_STATUS"
+          if [ "$CLOUDFLARE_REMOVED" = "1" ]; then
+            echo "[destroy-qa] Ploinky removed the exact Explorer QA Cloudflare publication."
+          else
+            echo "[destroy-qa] WARNING: managed empty-route reconciliation did not converge; using the exact-identity teardown fallback."
+          fi
 
-          echo "[destroy-qa] Destroying the exact outer Box for $WORK_DIR..."
-          printf 'yes\n' | "$PLOINKY" destroy
+          PLOINKY_DESTROY_STATUS=1
+          if [ "$CLOUDFLARE_REMOVED" = "1" ]; then
+            echo "[destroy-qa] Destroying the exact outer Box for $WORK_DIR through Ploinky..."
+            PLOINKY_DESTROY_STATUS=0
+            printf 'yes\n' | "$PLOINKY" destroy || PLOINKY_DESTROY_STATUS=$?
+          fi
+          if [ "$PLOINKY_DESTROY_STATUS" != "0" ] ||
+            "$BOX_ENGINE" container inspect "$BOX_INSTANCE" >/dev/null 2>&1; then
+            echo "[destroy-qa] Removing only the pinned outer Box '$BOX_INSTANCE' through $BOX_ENGINE."
+            "$BOX_ENGINE" container rm -f "$BOX_INSTANCE"
+          fi
 
           BOX_STATUS="$(inspect_outer_box_status)"
           printf '%s\n' "$BOX_STATUS"
@@ -686,6 +686,114 @@ jobs:
               exit 1
               ;;
           esac
+
+          if [ "$CLOUDFLARE_REMOVED" != "1" ]; then
+            echo "[destroy-qa] Removing only the exact dedicated Explorer QA Cloudflare publication..."
+            node --input-type=module <<'NODE'
+          const accountId = String(process.env.CLOUDFLARE_ACCOUNT_ID || '');
+          const zoneId = String(process.env.CLOUDFLARE_ZONE_ID || '');
+          const tunnelName = String(process.env.CLOUDFLARE_TUNNEL_NAME || '');
+          const publicHost = String(process.env.PUBLIC_HOST || '');
+          const apiToken = String(process.env.CLOUDFLARE_API_TOKEN || '');
+          if (!/^[a-f0-9]{32}$/.test(accountId) || !/^[a-f0-9]{32}$/.test(zoneId)
+            || tunnelName !== 'explorer-qa' || publicHost !== 'explorer-qa.axiologic.dev'
+            || !apiToken) {
+            throw new Error('exact Explorer QA Cloudflare identity is not pinned');
+          }
+          const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+          const request = async (pathname, { method = 'GET' } = {}) => {
+            const response = await fetch(`https://api.cloudflare.com/client/v4${pathname}`, {
+              method,
+              headers: { Authorization: `Bearer ${apiToken}` },
+              redirect: 'error',
+            });
+            const payload = await response.json().catch(() => null);
+            if (!response.ok || payload?.success !== true) {
+              const codes = Array.isArray(payload?.errors)
+                ? payload.errors.map((entry) => String(entry?.code || 'unknown')).join(',')
+                : 'unknown';
+              throw new Error(`Cloudflare ${method} ${pathname.split('?')[0]} failed (${codes})`);
+            }
+            return payload.result;
+          };
+          const listTunnels = () => request(
+            `/accounts/${accountId}/cfd_tunnel?${new URLSearchParams({
+              name: tunnelName,
+              is_deleted: 'false',
+              per_page: '100',
+            })}`,
+          );
+          const listRecords = () => request(
+            `/zones/${zoneId}/dns_records?${new URLSearchParams({
+              name: publicHost,
+              per_page: '100',
+            })}`,
+          );
+          const tunnels = await listTunnels();
+          const records = await listRecords();
+          if (!Array.isArray(tunnels) || tunnels.length > 1
+            || !Array.isArray(records) || records.length > 1) {
+            throw new Error('Explorer QA Cloudflare inventory is ambiguous');
+          }
+          if (tunnels.length === 0) {
+            if (records.length !== 0) {
+              throw new Error('Explorer QA DNS exists without its exact dedicated tunnel');
+            }
+            process.stdout.write('[destroy-qa] Exact Explorer QA Cloudflare publication was already absent.\n');
+            process.exit(0);
+          }
+          const tunnel = tunnels[0];
+          const tunnelId = String(tunnel?.id || '');
+          if (!/^[a-f0-9-]{36}$/.test(tunnelId) || tunnel?.name !== tunnelName
+            || tunnel?.deleted_at != null
+            || (tunnel?.account_tag != null && tunnel.account_tag !== accountId)) {
+            throw new Error('Explorer QA dedicated tunnel identity changed');
+          }
+          const detail = await request(`/accounts/${accountId}/cfd_tunnel/${tunnelId}`);
+          const configuration = await request(
+            `/accounts/${accountId}/cfd_tunnel/${tunnelId}/configurations`,
+          );
+          if (detail?.id !== tunnelId || detail?.name !== tunnelName || detail?.deleted_at != null) {
+            throw new Error('Explorer QA dedicated tunnel detail changed');
+          }
+          const ingress = configuration?.config?.ingress ?? configuration?.ingress ?? [];
+          if (!Array.isArray(ingress) || ingress.length > 2) {
+            throw new Error('Explorer QA dedicated tunnel contains shared or ambiguous ingress');
+          }
+          if (ingress.length) {
+            const catchAll = ingress.at(-1);
+            if (catchAll?.hostname != null || catchAll?.service !== 'http_status:404') {
+              throw new Error('Explorer QA dedicated tunnel lacks its terminal 404 ingress');
+            }
+          }
+          if (ingress.length === 2
+            && (ingress[0]?.hostname !== publicHost
+              || ingress[0]?.service !== 'http://127.0.0.1:8080')) {
+            throw new Error('Explorer QA dedicated tunnel contains an unrelated route');
+          }
+          const expectedTarget = `${tunnelId}.cfargotunnel.com`;
+          if (records.length === 1 && (records[0]?.name !== publicHost
+            || records[0]?.type !== 'CNAME' || records[0]?.content !== expectedTarget
+            || records[0]?.proxied !== true || !/^[a-f0-9]{32}$/.test(String(records[0]?.id || '')))) {
+            throw new Error('Explorer QA DNS points outside the exact dedicated tunnel');
+          }
+          if (records.length === 1) {
+            await request(`/zones/${zoneId}/dns_records/${records[0].id}`, { method: 'DELETE' });
+          }
+          await request(`/accounts/${accountId}/cfd_tunnel/${tunnelId}`, { method: 'DELETE' });
+          for (let attempt = 0; attempt < 15; attempt += 1) {
+            const [remainingTunnels, remainingRecords] = await Promise.all([listTunnels(), listRecords()]);
+            if (Array.isArray(remainingTunnels) && remainingTunnels.length === 0
+              && Array.isArray(remainingRecords) && remainingRecords.length === 0) {
+              process.stdout.write('[destroy-qa] Exact Explorer QA Cloudflare publication deletion verified.\n');
+              process.exit(0);
+            }
+            await wait(2000);
+          }
+          throw new Error('Explorer QA Cloudflare publication deletion did not verify');
+          NODE
+          fi
+          unset CLOUDFLARE_API_TOKEN
 
           if [ "$SOUL_UP_BEFORE" = "1" ] && ! curl -sf "$SOUL_HEALTH_URL" >/dev/null 2>&1; then
             echo "[destroy-qa] ERROR: protected Soul Gateway became unhealthy during QA destruction."
@@ -698,46 +806,111 @@ jobs:
             exit 1
           fi
           QA_VOLUME_ROLES=(workspace containers ploinky-deps)
-          for volume_role in "${QA_VOLUME_ROLES[@]}"; do
-            volume_name="${BOX_INSTANCE}-${volume_role}"
-            if ! "$BOX_ENGINE" volume inspect "$volume_name" >/dev/null 2>&1; then
-              echo "[destroy-qa] ERROR: expected QA volume is missing: $volume_name"
-              exit 1
-            fi
-            observed_role="$(
-              "$BOX_ENGINE" volume inspect "$volume_name" \
-                --format '{{ index .Labels "io.assistos.ploinky-box.role" }}'
-            )"
-            observed_hash="$(
-              "$BOX_ENGINE" volume inspect "$volume_name" \
-                --format '{{ index .Labels "io.assistos.ploinky-box.path-hash" }}'
-            )"
-            if [ "$observed_role" != "$volume_role" ] || [ "$observed_hash" != "$BOX_PATH_HASH" ]; then
-              echo "[destroy-qa] ERROR: refusing to remove volume with mismatched Ploinky ownership: $volume_name"
-              exit 1
-            fi
+          QA_VOLUME_RECORDS=()
+          for engine in podman docker; do
+            command -v "$engine" >/dev/null 2>&1 || continue
+            while IFS= read -r volume_name; do
+              [ -n "$volume_name" ] || continue
+              volume_role="$(
+                "$engine" volume inspect "$volume_name" \
+                  --format '{{ index .Labels "io.assistos.ploinky-box.role" }}'
+              )"
+              role_allowed=0
+              for allowed_role in "${QA_VOLUME_ROLES[@]}"; do
+                if [ "$volume_role" = "$allowed_role" ]; then role_allowed=1; fi
+              done
+              if [ "$role_allowed" != "1" ] || [ "$volume_name" != "$BOX_INSTANCE-$volume_role" ]; then
+                echo "[destroy-qa] ERROR: refusing a volume with conflicting exact QA ownership: $volume_name"
+                exit 1
+              fi
+              observed_role="$(
+                "$engine" volume inspect "$volume_name" \
+                  --format '{{ index .Labels "io.assistos.ploinky-box.role" }}'
+              )"
+              observed_hash="$(
+                "$engine" volume inspect "$volume_name" \
+                  --format '{{ index .Labels "io.assistos.ploinky-box.path-hash" }}'
+              )"
+              if [ "$observed_role" != "$volume_role" ] || [ "$observed_hash" != "$BOX_PATH_HASH" ]; then
+                echo "[destroy-qa] ERROR: refusing to remove volume with mismatched Ploinky ownership: $volume_name"
+                exit 1
+              fi
+              QA_VOLUME_RECORDS+=("$engine|$volume_name")
+            done < <(
+              {
+                "$engine" volume ls -q --filter "label=io.assistos.ploinky-box.path-hash=$BOX_PATH_HASH"
+                for volume_role in "${QA_VOLUME_ROLES[@]}"; do
+                  volume_name="$BOX_INSTANCE-$volume_role"
+                  if "$engine" volume inspect "$volume_name" >/dev/null 2>&1; then
+                    printf '%s\n' "$volume_name"
+                  fi
+                done
+              } | sort -u
+            )
           done
-          for volume_role in "${QA_VOLUME_ROLES[@]}"; do
-            volume_name="${BOX_INSTANCE}-${volume_role}"
-            "$BOX_ENGINE" volume rm "$volume_name"
-            if "$BOX_ENGINE" volume inspect "$volume_name" >/dev/null 2>&1; then
+          for record in "${QA_VOLUME_RECORDS[@]}"; do
+            IFS='|' read -r engine volume_name <<< "$record"
+            "$engine" volume rm "$volume_name"
+            if "$engine" volume inspect "$volume_name" >/dev/null 2>&1; then
               echo "[destroy-qa] ERROR: QA volume deletion did not verify: $volume_name"
               exit 1
             fi
           done
-          rm -rf -- "$WORK_DIR"
+          if ! node --input-type=module - "$WORK_DIR" <<'NODE'
+          import fs from 'node:fs';
+          import path from 'node:path';
+
+          const target = path.resolve(process.argv[2]);
+          if (target !== '/home/admin/explorerQaWorkspace') {
+            throw new Error(`refusing recursive cleanup outside exact QA identity: ${target}`);
+          }
+          try {
+            const current = fs.lstatSync(target);
+            if (!current.isDirectory() || current.isSymbolicLink()
+              || (typeof process.getuid === 'function' && current.uid !== process.getuid())) {
+              throw new Error(`refusing unsafe QA identity directory: ${target}`);
+            }
+            fs.rmSync(target, { recursive: true, force: false, maxRetries: 3 });
+          } catch (error) {
+            if (error?.code !== 'ENOENT') throw error;
+          }
+          NODE
+          then
+            echo "[destroy-qa] Root-owned nested runtime data requires the pinned privileged cleanup fallback."
+            sudo -n /usr/bin/node --input-type=module - "$WORK_DIR" <<'NODE'
+          import fs from 'node:fs';
+          import path from 'node:path';
+
+          if (typeof process.getuid !== 'function' || process.getuid() !== 0) {
+            throw new Error('privileged QA cleanup did not run as root');
+          }
+          const target = path.resolve(process.argv[2]);
+          if (target !== '/home/admin/explorerQaWorkspace') {
+            throw new Error(`refusing privileged cleanup outside exact QA identity: ${target}`);
+          }
+          try {
+            const current = fs.lstatSync(target);
+            if (!current.isDirectory() || current.isSymbolicLink()) {
+              throw new Error(`refusing unsafe privileged QA identity directory: ${target}`);
+            }
+            fs.rmSync(target, { recursive: true, force: false, maxRetries: 3 });
+          } catch (error) {
+            if (error?.code !== 'ENOENT') throw error;
+          }
+          NODE
+          fi
           if [ -e "$WORK_DIR" ] || [ -L "$WORK_DIR" ]; then
             echo "[destroy-qa] ERROR: QA identity directory deletion did not verify: $WORK_DIR"
             exit 1
           fi
 
-          echo "[destroy-qa] Outer Box removed after Ploinky removed its owned Cloudflare route, DNS record, and managed tunnel."
+          echo "[destroy-qa] Outer Box and its exact dedicated Cloudflare route, DNS record, and managed tunnel were removed."
           echo "[destroy-qa] QA workspace, nested-container, dependency volumes, and host identity directory were removed."
           REMOTE
           REMOTE_ENV_UPLOADED='false'
 
       - name: Create summary
-        if: always()
+        if: success()
         run: |
           {
             echo "## Explorer QA Box Destroy"

@@ -12,10 +12,10 @@ const WORKFLOWS = [
     file: '.github/workflows/deploy-explorer-qa.yml',
     name: 'Deploy Explorer QA Box',
     expected: [
-      'deploy_branch:',
-      'ploinky_branch:',
-      'DEPLOY_BRANCH: ${{ inputs.deploy_branch }}',
-      'PLOINKY_BRANCH: ${{ inputs.ploinky_branch }}',
+      'resolve_default_branch() {',
+      'Resolving every managed repository from its configured default branch',
+      'default_branch="$(resolve_default_branch "$repository_url")"',
+      'PLOINKY_BRANCH="$(resolve_default_branch "$PLOINKY_URL")"',
       "SSH_USER: 'admin'",
       "SSH_HOST: '45.136.70.141'",
       "SSH_ED25519_FINGERPRINT: 'SHA256:pcVG+7QFbfi3Ojn3LeveNutqCWaTOIlgek1o3GKD/KA'",
@@ -53,7 +53,7 @@ const WORKFLOWS = [
       "addressMode: 'direct'",
       'AGENTLIB_URL=',
       'Ploinky AgentLib source is neither the expected remote nor its selected exact revision',
-      '--env "EXPECTED_AGENTLIB_BRANCH=$DEPLOY_BRANCH"',
+      '--env "EXPECTED_AGENTLIB_BRANCH=$EXPECTED_AGENTLIB_BRANCH"',
       'Explorer did not load AgentLib bytes from a verified immutable runtime package',
       'loaded runtime identity at $EXPECTED_AGENTLIB_COMMIT',
       "agent: 'AchillesIDE/explorer'",
@@ -73,14 +73,14 @@ const WORKFLOWS = [
       'Cloudflare management: api-managed',
       'Cloudflare publication: ready',
       'Cloudflare connector: running',
-      'Tracked agents: 16',
-      'Running agents: 16',
+      'Tracked agents: 17',
+      'Running agents: 17',
       'QA_READY_STREAK',
       'QA_TERMINAL_FAILURE',
       'for _ in $(seq 1 180); do',
       'no-wait failure ${status.repoName}/${status.shortAgent}',
       'a no-wait agent reached a terminal startup failure',
-      'timed out waiting for stable 16/16 Explorer QA admission',
+      'timed out waiting for stable 17/17 Explorer QA admission',
       'dedicated persistent `%s` tunnel `%s`, ingress, and DNS API-managed by Ploinky',
       '"${PUBLIC_URL%/}/auth/login?agent=explorer"',
       '"${PUBLIC_URL%/}/auth/login?agent=webAssist"',
@@ -182,8 +182,9 @@ test('Explorer QA destroy removes only its Ploinky-owned Cloudflare publication'
     "SSH_HOST: '45.136.70.141'",
     "SSH_ED25519_FINGERPRINT: 'SHA256:pcVG+7QFbfi3Ojn3LeveNutqCWaTOIlgek1o3GKD/KA'",
     "WORKSPACE: 'explorerQaWorkspace'",
-    'PLOINKY_BRANCH: ${{ inputs.ploinky_branch }}',
-    'DEPLOY_BRANCH: ${{ inputs.deploy_branch }}',
+    'resolve_default_branch() {',
+    'PLOINKY_BRANCH="$(resolve_default_branch "$PLOINKY_URL")"',
+    'export PLOINKY_AGENTLIB_REF="$(resolve_default_branch "$AGENTLIB_URL")"',
     "PUBLIC_HOST: 'explorer-qa.axiologic.dev'",
     "CLOUDFLARE_TUNNEL_NAME: 'explorer-qa'",
     '"refs/heads/$PLOINKY_BRANCH:refs/remotes/origin/$PLOINKY_BRANCH"',
@@ -199,8 +200,8 @@ test('Explorer QA destroy removes only its Ploinky-owned Cloudflare publication'
     'staged edge desired file has the wrong owner',
     'Cloudflare mode: local-only',
     'Cloudflare connector: absent',
-    'timed out waiting for Ploinky to remove its Cloudflare publication',
-    'Ploinky removed its owned Cloudflare route, DNS record, and managed tunnel',
+    'managed empty-route reconciliation did not converge; using the exact-identity teardown fallback',
+    'Exact Explorer QA Cloudflare publication deletion verified',
     'Unrelated Cloudflare tunnels and routes: preserved',
     'inspect_outer_box_status() {',
     'createBoxSupervisor().inspectBoxStatus()',
@@ -209,7 +210,9 @@ test('Explorer QA destroy removes only its Ploinky-owned Cloudflare publication'
     'printf \'yes\\n\' | "$PLOINKY" destroy',
     'QA_VOLUME_ROLES=(workspace containers ploinky-deps)',
     'io.assistos.ploinky-box.path-hash',
-    '"$BOX_ENGINE" volume rm "$volume_name"',
+    '"$engine" volume rm "$volume_name"',
+    'QA_VOLUME_RECORDS=()',
+    "target !== '/home/admin/explorerQaWorkspace'",
     'QA workspace, nested-container, dependency volumes, and host identity directory were removed',
     "\"$PINNED_BOX_PATH_HASH\" != '7a31ab7775eb'",
     'BOX_INSTANCE" != "ploinky-box-explorerqaworkspace-$PINNED_BOX_PATH_HASH',
@@ -231,17 +234,19 @@ test('Explorer QA destroy removes only its Ploinky-owned Cloudflare publication'
   );
 });
 
-test('Explorer QA destroy requires the branch selections used by deploy', () => {
+test('Explorer QA destroy resolves every repository from its configured default branch', () => {
   const source = fs.readFileSync(
     path.join(ROOT, '.github/workflows/destroy-explorer-qa.yml'),
     'utf8',
   );
 
-  assert.match(source, /deploy_branch:\n\s+description: Branch used by the deployed Explorer repository graph\n\s+required: false\n\s+default: ploinky-proxy\n\s+type: string/);
-  assert.match(source, /ploinky_branch:\n\s+description: Branch used by the deployed Ploinky runtime\n\s+required: false\n\s+default: ploinky-proxy\n\s+type: string/);
-  assert.match(source, /DEPLOY_BRANCH: \$\{\{ inputs\.deploy_branch \}\}/);
-  assert.match(source, /PLOINKY_BRANCH: \$\{\{ inputs\.ploinky_branch \}\}/);
+  assert.match(source, /resolve_default_branch\(\) \{/);
+  assert.match(source, /PLOINKY_BRANCH="\$\(resolve_default_branch "\$PLOINKY_URL"\)"/);
+  assert.match(source, /export PLOINKY_AGENTLIB_REF="\$\(resolve_default_branch "\$AGENTLIB_URL"\)"/);
+  assert.match(source, /default_branch="\$\(resolve_default_branch "\$repository_url"\)"/);
+  assert.match(source, /BRANCH_ARGS\+=\(--repo-branch "\$repository_name=\$default_branch"\)/);
   assert.match(source, /merge-base --is-ancestor[\s\S]*refs\/remotes\/origin\/\$PLOINKY_BRANCH/);
+  assert.doesNotMatch(source, /inputs\.(?:deploy_branch|ploinky_branch)|ploinky-proxy/);
 });
 
 test('Explorer QA workflow rejects unsafe identity and tunnel state before SSH', () => {
@@ -264,24 +269,22 @@ test('Explorer QA workflow rejects unsafe identity and tunnel state before SSH',
   assert.match(source, /install -m 600 "\$RUNNER_TEMP\/explorer_qa_known_hosts"/);
 });
 
-test('Explorer QA deploy selects graph and Ploinky branches independently', () => {
+test('Explorer QA deploy resolves graph, AgentLib, and Ploinky defaults independently', () => {
   const source = fs.readFileSync(
     path.join(ROOT, '.github/workflows/deploy-explorer-qa.yml'),
     'utf8',
   );
 
-  assert.match(source, /deploy_branch:\n\s+description: Branch used by every managed Explorer repository\n\s+required: false\n\s+default: ploinky-proxy\n\s+type: string/);
-  assert.match(source, /ploinky_branch:\n\s+description: Branch used for the Ploinky runtime\n\s+required: false\n\s+default: ploinky-proxy\n\s+type: string/);
-  assert.match(source, /DEPLOY_BRANCH: \$\{\{ inputs\.deploy_branch \}\}/);
-  assert.match(source, /PLOINKY_BRANCH: \$\{\{ inputs\.ploinky_branch \}\}/);
+  assert.match(source, /resolve_default_branch\(\) \{/);
+  assert.match(source, /EXPECTED_AGENTLIB_BRANCH="\$\(resolve_default_branch "\$AGENTLIB_URL"\)"/);
+  assert.match(source, /PLOINKY_BRANCH="\$\(resolve_default_branch "\$PLOINKY_URL"\)"/);
   assert.match(source, /checkout --detach --force "refs\/remotes\/origin\/\$PLOINKY_BRANCH"/);
-  assert.match(source, /BRANCH_ARGS=\(--branch "\$DEPLOY_BRANCH"\)/);
-  assert.match(source, /BRANCH_ARGS\+=\(--repo-branch "\$repository_name=\$DEPLOY_BRANCH"\)/);
+  assert.match(source, /BRANCH_ARGS=\(--branch "\$EXPLORER_BRANCH" "\$\{BRANCH_ARGS\[@\]\}"\)/);
+  assert.match(source, /BRANCH_ARGS\+=\(--repo-branch "\$repository_name=\$default_branch"\)/);
   assert.match(source, /--dry-run --port "\$ROUTER_PORT" start explorer "\$\{BRANCH_ARGS\[@\]\}"/);
   assert.match(source, /"\$PLOINKY" start explorer "\$\{BRANCH_ARGS\[@\]\}"/);
-  assert.match(source, /--env "EXPECTED_AGENTLIB_BRANCH=\$DEPLOY_BRANCH"/);
-  assert.doesNotMatch(source, /start explorer --branch=ploinky-proxy/);
-  assert.doesNotMatch(source, /const expectedBranch = "ploinky-proxy"/);
+  assert.match(source, /--env "EXPECTED_AGENTLIB_BRANCH=\$EXPECTED_AGENTLIB_BRANCH"/);
+  assert.doesNotMatch(source, /inputs\.(?:deploy_branch|ploinky_branch)|ploinky-proxy/);
 });
 
 test('Explorer QA deploy explicitly reconciles every managed checkout to the selected graph branch', () => {
@@ -290,14 +293,15 @@ test('Explorer QA deploy explicitly reconciles every managed checkout to the sel
     'utf8',
   );
   const graphStart = source.indexOf('GRAPH_REPOSITORIES=(');
-  const graphEnd = source.indexOf('declare -A EXPECTED_COMMITS=()', graphStart);
+  const graphEnd = source.indexOf("PLOINKY_URL='", graphStart);
   const graphBlock = source.slice(graphStart, graphEnd);
 
-  assert.match(graphBlock, /BRANCH_ARGS=\(--branch "\$DEPLOY_BRANCH"\)/);
+  assert.match(graphBlock, /BRANCH_ARGS=\(\)/);
   assert.match(
     graphBlock,
-    /for repository_record in "\$\{GRAPH_REPOSITORIES\[@\]\}"; do[\s\S]*BRANCH_ARGS\+=\(--repo-branch "\$repository_name=\$DEPLOY_BRANCH"\)[\s\S]*done/,
+    /for repository_record in "\$\{GRAPH_REPOSITORIES\[@\]\}"; do[\s\S]*default_branch="\$\(resolve_default_branch "\$repository_url"\)"[\s\S]*BRANCH_ARGS\+=\(--repo-branch "\$repository_name=\$default_branch"\)[\s\S]*done/,
   );
+  assert.match(graphBlock, /BRANCH_ARGS=\(--branch "\$EXPLORER_BRANCH" "\$\{BRANCH_ARGS\[@\]\}"\)/);
   assert.equal(
     source.match(/start explorer "\$\{BRANCH_ARGS\[@\]\}"/g)?.length,
     2,

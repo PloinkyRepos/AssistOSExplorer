@@ -1378,8 +1378,8 @@ jobs:
           for _ in $(seq 1 180); do
             BOX_STATUS="$(inspect_outer_box_status)"
             if [[ "$BOX_STATUS" == *"Ploinky Box: running-initialized"* ]] &&
-              [[ "$BOX_STATUS" == *"Tracked agents: 16"* ]] &&
-              [[ "$BOX_STATUS" == *"Running agents: 16"* ]] &&
+              [[ "$BOX_STATUS" == *"Tracked agents: 17"* ]] &&
+              [[ "$BOX_STATUS" == *"Running agents: 17"* ]] &&
               [[ "$BOX_STATUS" == *"Cloudflare mode: cloudflare"* ]] &&
               [[ "$BOX_STATUS" == *"Cloudflare management: api-managed"* ]] &&
               [[ "$BOX_STATUS" == *"Cloudflare publication: ready"* ]] &&
@@ -1436,7 +1436,7 @@ jobs:
             exit 1
           fi
           if [ "$QA_READY" != "1" ]; then
-            echo "[deploy-qa] ERROR: timed out waiting for stable 16/16 Explorer QA admission."
+            echo "[deploy-qa] ERROR: timed out waiting for stable 17/17 Explorer QA admission."
             exit 1
           fi
           case "$BOX_STATUS" in
@@ -1447,8 +1447,8 @@ jobs:
               ;;
           esac
           for expected_status in \
-            'Tracked agents: 16' \
-            'Running agents: 16' \
+            'Tracked agents: 17' \
+            'Running agents: 17' \
             'Cloudflare mode: cloudflare' \
             'Cloudflare management: api-managed' \
             'Cloudflare publication: ready' \
