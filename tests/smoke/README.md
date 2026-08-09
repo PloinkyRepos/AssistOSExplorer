@@ -12,6 +12,20 @@ npm run install:browsers
 SMOKE_BASE_URL=http://127.0.0.1:8080 npm test
 ```
 
+Run the exact Confidential `.docx` persistence gate with the repository-owned
+selector. The command scopes collection to the OnlyOffice spec and uses the
+distinctive test title without a start anchor because Playwright prepends the
+project and spec filename to its internal grep title:
+
+```bash
+SMOKE_BASE_URL=http://127.0.0.1:8080 \
+SMOKE_WORKSPACE_ROOT=/path/to/explorer-workspace \
+SMOKE_DEPLOYMENT_MODE=box \
+SMOKE_BOX_BASE_URL=http://127.0.0.1:8080 \
+SMOKE_PLOINKY_BOX_CONTAINER=<exact-box-container> \
+npm run test:onlyoffice-confidential
+```
+
 The default local credentials are `admin` / `admin` and `user` / `user`. Override them with:
 
 ```bash
