@@ -90,10 +90,16 @@ test('QA OnlyOffice acceptance unloads and proves durable DPU persistence before
     new URL('../specs/80-explorer-qa-acceptance.spec.mjs', import.meta.url),
     'utf8',
   );
-  const start = acceptanceSpec.indexOf("test('legacy Confidential .doc edits in OnlyOffice");
+  const start = acceptanceSpec.indexOf("test('Confidential .docx edits in OnlyOffice");
   const end = acceptanceSpec.indexOf("test('two generated users join one WebMeet room", start);
   assert.ok(start >= 0 && end > start, 'OnlyOffice QA acceptance test body must be present.');
   const onlyOfficeTest = acceptanceSpec.slice(start, end);
+  assert.match(onlyOfficeTest, /\.docx`;/, 'OnlyOffice QA acceptance must create a .docx file.');
+  assert.match(
+    onlyOfficeTest,
+    /application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document/,
+    'OnlyOffice QA acceptance must verify the OOXML Word MIME type.',
+  );
   const reload = onlyOfficeTest.indexOf("await page.reload({ waitUntil: 'domcontentloaded' });");
   const durableGate = onlyOfficeTest.indexOf(
     'dpuSnapshotPersistenceAdvanced(initialSnapshot, callbackSnapshot)',

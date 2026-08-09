@@ -59,6 +59,7 @@ function readDpuDocumentSnapshot(fileName) {
   const blob = dpuData.readBuffer('blobs', object.id);
   return {
     id: object.id,
+    mimeType: String(object.mimeType || ''),
     updatedAt: String(object.updatedAt || ''),
     blobBytes: blob.length,
     blobSha256: crypto.createHash('sha256').update(blob).digest('hex'),
@@ -99,7 +100,7 @@ async function waitForOnlyOfficeEditor(page) {
       || /ONLYOFFICE|Word count|Page \d+ of/i.test(entry.text)
     )) ? 'loaded' : 'waiting';
   }, {
-    message: 'OnlyOffice must load the legacy .doc without a download failure.',
+    message: 'OnlyOffice must load the .docx without a download failure.',
     timeout: smokeConfig.timeouts.navigation,
   }).toBe('loaded');
 
@@ -297,11 +298,11 @@ test.describe('Explorer QA acceptance', () => {
     }
   });
 
-  test('legacy Confidential .doc edits in OnlyOffice and saves automatically', async ({ browser }, testInfo) => {
+  test('Confidential .docx edits in OnlyOffice and saves automatically', async ({ browser }, testInfo) => {
     test.setTimeout(Math.max(smokeConfig.timeouts.test, 180_000));
-    const fileName = `e2e-confidential-${smokeConfig.runId}.doc`;
+    const fileName = `e2e-confidential-${smokeConfig.runId}.docx`;
     const documentPath = `/Confidential/My Space/${fileName}`;
-    const marker = `Confidential-doc-e2e-${smokeConfig.runId}`;
+    const marker = `Confidential-docx-e2e-${smokeConfig.runId}`;
     const context = await browser.newContext({
       baseURL: smokeConfig.baseURL,
       ignoreHTTPSErrors: true,
@@ -323,6 +324,9 @@ test.describe('Explorer QA acceptance', () => {
         initialSnapshot,
         'The newly created Confidential document must have an encrypted DPU blob.',
       ).not.toBeNull();
+      expect(initialSnapshot.mimeType).toBe(
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      );
       const opened = await openConfidentialDoc(page, documentPath);
       editorConfiguration = opened.editorConfiguration;
       diagnostics = attachPageDiagnostics(page, testInfo, 'qa-onlyoffice');
@@ -364,6 +368,7 @@ test.describe('Explorer QA acceptance', () => {
       await testInfo.attach('qa-onlyoffice-evidence.json', {
         body: Buffer.from(JSON.stringify({
           documentPath,
+          mimeType: initialSnapshot.mimeType,
           editorConfiguration,
           marker,
           durableCallback: {

@@ -30,7 +30,7 @@ SMOKE_USERNAME=admin SMOKE_PASSWORD='<qa-admin-password>' npm run test:qa
 `test:qa` is pinned to `https://explorer-qa.axiologic.dev`. It creates two
 run-scoped Explorer users through the Administration UI, runs exactly two
 browser tests, and removes the generated users afterward. The first test
-creates a legacy `.doc` under `/Confidential/My Space`, proves the active
+creates a `.docx` under `/Confidential/My Space`, proves the active
 editor is writable OnlyOffice with autosave enabled, makes a browser edit
 without clicking Save, and reopens the document to prove persistence. The
 second test has the two generated users create and join one WebMeet room and
