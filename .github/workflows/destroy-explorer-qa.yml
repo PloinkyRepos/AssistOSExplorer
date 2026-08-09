@@ -780,6 +780,10 @@ jobs:
           if (records.length === 1) {
             await request(`/zones/${zoneId}/dns_records/${records[0].id}`, { method: 'DELETE' });
           }
+          await request(
+            `/accounts/${accountId}/cfd_tunnel/${tunnelId}/connections`,
+            { method: 'DELETE' },
+          );
           await request(`/accounts/${accountId}/cfd_tunnel/${tunnelId}`, { method: 'DELETE' });
           for (let attempt = 0; attempt < 15; attempt += 1) {
             const [remainingTunnels, remainingRecords] = await Promise.all([listTunnels(), listRecords()]);

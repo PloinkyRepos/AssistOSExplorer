@@ -201,6 +201,7 @@ test('Explorer QA destroy removes only its Ploinky-owned Cloudflare publication'
     'Cloudflare mode: local-only',
     'Cloudflare connector: absent',
     'managed empty-route reconciliation did not converge; using the exact-identity teardown fallback',
+    '/cfd_tunnel/${tunnelId}/connections',
     'Exact Explorer QA Cloudflare publication deletion verified',
     'Unrelated Cloudflare tunnels and routes: preserved',
     'inspect_outer_box_status() {',
