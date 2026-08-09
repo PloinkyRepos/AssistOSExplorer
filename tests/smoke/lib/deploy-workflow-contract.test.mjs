@@ -107,6 +107,8 @@ const WORKFLOWS = [
       'io.assistos.ploinky-box.path-hash',
       'Exact prior Explorer QA deployment cleanup verified',
       "target !== '/home/admin/explorerQaWorkspace'",
+      'Root-owned nested runtime data requires the pinned privileged cleanup fallback',
+      'refusing privileged cleanup outside exact QA identity',
       'snapshot_protected_resources()',
       'Protected host resource identities remained unchanged',
     ],

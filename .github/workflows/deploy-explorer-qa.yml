@@ -843,7 +843,7 @@ jobs:
             IFS='|' read -r engine volume_name _ <<< "$record"
             "$engine" volume rm "$volume_name"
           done
-          node --input-type=module - "$WORK_DIR" <<'NODE'
+          if ! node --input-type=module - "$WORK_DIR" <<'NODE'
           import fs from 'node:fs';
           import path from 'node:path';
 
@@ -862,6 +862,30 @@ jobs:
             if (error?.code !== 'ENOENT') throw error;
           }
           NODE
+          then
+            echo "[deploy-qa] Root-owned nested runtime data requires the pinned privileged cleanup fallback."
+            sudo -n /usr/bin/node --input-type=module - "$WORK_DIR" <<'NODE'
+          import fs from 'node:fs';
+          import path from 'node:path';
+
+          if (typeof process.getuid !== 'function' || process.getuid() !== 0) {
+            throw new Error('privileged QA cleanup did not run as root');
+          }
+          const target = path.resolve(process.argv[2]);
+          if (target !== '/home/admin/explorerQaWorkspace') {
+            throw new Error(`refusing privileged cleanup outside exact QA identity: ${target}`);
+          }
+          try {
+            const current = fs.lstatSync(target);
+            if (!current.isDirectory() || current.isSymbolicLink()) {
+              throw new Error(`refusing unsafe privileged QA identity directory: ${target}`);
+            }
+            fs.rmSync(target, { recursive: true, force: false, maxRetries: 3 });
+          } catch (error) {
+            if (error?.code !== 'ENOENT') throw error;
+          }
+          NODE
+          fi
           for engine in podman docker; do
             command -v "$engine" >/dev/null 2>&1 || continue
             if [ -n "$($engine container ls -aq --filter "label=io.assistos.ploinky-box.path-hash=$BOX_PATH_HASH")" ] ||
