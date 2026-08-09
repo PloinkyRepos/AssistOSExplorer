@@ -8,16 +8,6 @@ on:
         required: true
         default: false
         type: boolean
-      deploy_branch:
-        description: Branch used by the deployed Explorer repository graph
-        required: false
-        default: ploinky-proxy
-        type: string
-      ploinky_branch:
-        description: Branch used by the deployed Ploinky runtime
-        required: false
-        default: ploinky-proxy
-        type: string
 
 concurrency:
   group: deploy-explorer-qa
@@ -30,8 +20,6 @@ env:
   WORKSPACE: 'explorerQaWorkspace'
   CONFIRM_DESTROY: ${{ inputs.confirm_destroy }}
   ROUTER_PORT: '8097'
-  DEPLOY_BRANCH: ${{ inputs.deploy_branch }}
-  PLOINKY_BRANCH: ${{ inputs.ploinky_branch }}
   PUBLIC_HOST: 'explorer-qa.axiologic.dev'
   CLOUDFLARE_TUNNEL_NAME: 'explorer-qa'
   CLOUDFLARE_API_SECRET_HANDLE: 'publication/explorer-qa-api'
@@ -168,8 +156,6 @@ jobs:
           {
             write_shell_var WORKSPACE
             write_shell_var ROUTER_PORT
-            write_shell_var DEPLOY_BRANCH
-            write_shell_var PLOINKY_BRANCH
             write_shell_var PUBLIC_HOST
             write_shell_var CLOUDFLARE_TUNNEL_NAME
             write_shell_var CLOUDFLARE_API_SECRET_HANDLE
@@ -244,8 +230,6 @@ jobs:
             echo "[destroy-qa] ERROR: router port must be between 1 and 65535."
             exit 1
           fi
-          git check-ref-format --branch "$DEPLOY_BRANCH" >/dev/null
-          git check-ref-format --branch "$PLOINKY_BRANCH" >/dev/null
           if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
             echo "[destroy-qa] ERROR: a scoped Cloudflare API token is required."
             exit 1
@@ -337,6 +321,34 @@ jobs:
               exit 1
               ;;
           esac
+
+          resolve_default_branch() {
+            local repository_url="$1"
+            local symref_record default_ref default_branch
+            if ! symref_record="$(git ls-remote --symref "$repository_url" HEAD)"; then
+              echo "[destroy-qa] ERROR: unable to resolve the default branch for $repository_url." >&2
+              return 1
+            fi
+            default_ref="$({
+              printf '%s\n' "$symref_record" |
+                awk '$1 == "ref:" && $3 == "HEAD" { print $2; exit }'
+            })"
+            case "$default_ref" in
+              refs/heads/*) ;;
+              *)
+                echo "[destroy-qa] ERROR: remote HEAD for $repository_url is not a branch." >&2
+                return 1
+                ;;
+            esac
+            default_branch="${default_ref#refs/heads/}"
+            git check-ref-format --branch "$default_branch" >/dev/null
+            printf '%s\n' "$default_branch"
+          }
+
+          PLOINKY_URL='https://github.com/AssistOS-AI/ploinky.git'
+          PLOINKY_BRANCH="$(resolve_default_branch "$PLOINKY_URL")"
+          AGENTLIB_URL='https://github.com/AssistOS-AI/achillesAgentLib.git'
+          export PLOINKY_AGENTLIB_REF="$(resolve_default_branch "$AGENTLIB_URL")"
           git -C "$RUNTIME_DIR" fetch --prune origin \
             "refs/heads/$PLOINKY_BRANCH:refs/remotes/origin/$PLOINKY_BRANCH"
 
@@ -415,21 +427,24 @@ jobs:
           NODE
 
           GRAPH_REPOSITORIES=(
-            AchillesIDE
-            webmeetInfra
-            UmamiAgent
-            AchillesCLI
-            copilot-agents
-            proxies
-            basic
-            container-image-builds
+            'AchillesIDE|https://github.com/AssistOS-AI/AssistOSExplorer.git'
+            'webmeetInfra|https://github.com/AssistOS-AI/webmeetInfra.git'
+            'UmamiAgent|https://github.com/AssistOS-AI/UmamiAgent.git'
+            'AchillesCLI|https://github.com/AssistOS-AI/AchillesCLI.git'
+            'copilot-agents|https://github.com/AssistOS-AI/copilot-agents.git'
+            'proxies|https://github.com/AssistOS-AI/proxies.git'
+            'basic|https://github.com/AssistOS-AI/basic.git'
+            'container-image-builds|https://github.com/AssistOS-AI/container-image-builds.git'
           )
           BRANCH_ARGS=(
             --branch-fallback fail
             --reset-repos
           )
-          for repository_name in "${GRAPH_REPOSITORIES[@]}"; do
-            BRANCH_ARGS+=(--repo-branch "$repository_name=$DEPLOY_BRANCH")
+          for repository_record in "${GRAPH_REPOSITORIES[@]}"; do
+            IFS='|' read -r repository_name repository_url <<< "$repository_record"
+            default_branch="$(resolve_default_branch "$repository_url")"
+            BRANCH_ARGS+=(--repo-branch "$repository_name=$default_branch")
+            echo "[destroy-qa] Selected $repository_name/$default_branch for teardown reconciliation."
           done
 
           PLAN_JSON="$(
@@ -730,7 +745,7 @@ jobs:
             echo "- Host: \`${SSH_USER}@${SSH_HOST}\`"
             echo "- Identity directory: \`~/${WORKSPACE}\`"
             echo "- Outer Box: removed when present"
-            echo "- Ploinky branch: \`${PLOINKY_BRANCH}\`"
+            echo "- Ploinky branch: configured repository default, verified against the deployed runtime"
             echo "- Ploinky Cloudflare route and managed tunnel: removed"
             echo "- Unrelated Cloudflare tunnels and routes: preserved"
             echo "- Public hostname: \`${PUBLIC_HOST}\`"

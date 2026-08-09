@@ -2,17 +2,6 @@ name: Deploy Explorer QA Box
 
 on:
   workflow_dispatch:
-    inputs:
-      deploy_branch:
-        description: Branch used by every managed Explorer repository
-        required: false
-        default: ploinky-proxy
-        type: string
-      ploinky_branch:
-        description: Branch used for the Ploinky runtime
-        required: false
-        default: ploinky-proxy
-        type: string
 
 concurrency:
   group: deploy-explorer-qa
@@ -24,8 +13,6 @@ env:
   SSH_ED25519_FINGERPRINT: 'SHA256:pcVG+7QFbfi3Ojn3LeveNutqCWaTOIlgek1o3GKD/KA'
   WORKSPACE: 'explorerQaWorkspace'
   ROUTER_PORT: '8097'
-  DEPLOY_BRANCH: ${{ inputs.deploy_branch }}
-  PLOINKY_BRANCH: ${{ inputs.ploinky_branch }}
   PUBLIC_HOST: 'explorer-qa.axiologic.dev'
   PUBLIC_URL: 'https://explorer-qa.axiologic.dev'
   CLOUDFLARE_TUNNEL_NAME: 'explorer-qa'
@@ -118,8 +105,6 @@ jobs:
               exit 1
               ;;
           esac
-          git check-ref-format --branch "$DEPLOY_BRANCH" >/dev/null
-          git check-ref-format --branch "$PLOINKY_BRANCH" >/dev/null
           if [ "$PUBLIC_URL" != "https://$PUBLIC_HOST" ]; then
             echo "::error::PUBLIC_URL and PUBLIC_HOST must identify the fixed Explorer QA hostname"
             exit 1
@@ -558,8 +543,6 @@ jobs:
           {
             write_shell_var WORKSPACE
             write_shell_var ROUTER_PORT
-            write_shell_var DEPLOY_BRANCH
-            write_shell_var PLOINKY_BRANCH
             write_shell_var PUBLIC_HOST
             write_shell_var PUBLIC_URL
             write_shell_var CLOUDFLARE_TUNNEL_NAME
@@ -654,8 +637,6 @@ jobs:
               exit 1
               ;;
           esac
-          git check-ref-format --branch "$DEPLOY_BRANCH" >/dev/null
-          git check-ref-format --branch "$PLOINKY_BRANCH" >/dev/null
           if [ "$PUBLIC_URL" != "https://$PUBLIC_HOST" ]; then
             echo "[deploy-qa] ERROR: public URL and hostname do not identify Explorer QA."
             exit 1
@@ -967,6 +948,29 @@ jobs:
               ;;
           esac
 
+          resolve_default_branch() {
+            local repository_url="$1"
+            local symref_record default_ref default_branch
+            if ! symref_record="$(git ls-remote --symref "$repository_url" HEAD)"; then
+              echo "[deploy-qa] ERROR: unable to resolve the default branch for $repository_url." >&2
+              return 1
+            fi
+            default_ref="$({
+              printf '%s\n' "$symref_record" |
+                awk '$1 == "ref:" && $3 == "HEAD" { print $2; exit }'
+            })"
+            case "$default_ref" in
+              refs/heads/*) ;;
+              *)
+                echo "[deploy-qa] ERROR: remote HEAD for $repository_url is not a branch." >&2
+                return 1
+                ;;
+            esac
+            default_branch="${default_ref#refs/heads/}"
+            git check-ref-format --branch "$default_branch" >/dev/null
+            printf '%s\n' "$default_branch"
+          }
+
           GRAPH_REPOSITORIES=(
             'AchillesIDE|https://github.com/AssistOS-AI/AssistOSExplorer.git'
             'webmeetInfra|https://github.com/AssistOS-AI/webmeetInfra.git'
@@ -977,46 +981,58 @@ jobs:
             'basic|https://github.com/AssistOS-AI/basic.git'
             'container-image-builds|https://github.com/AssistOS-AI/container-image-builds.git'
           )
-          BRANCH_ARGS=(--branch "$DEPLOY_BRANCH")
-          for repository_record in "${GRAPH_REPOSITORIES[@]}"; do
-            IFS='|' read -r repository_name _ <<< "$repository_record"
-            BRANCH_ARGS+=(--repo-branch "$repository_name=$DEPLOY_BRANCH")
-          done
+          BRANCH_ARGS=()
+          declare -A EXPECTED_BRANCHES=()
           declare -A EXPECTED_COMMITS=()
 
           AGENTLIB_URL='https://github.com/AssistOS-AI/achillesAgentLib.git'
+          EXPECTED_AGENTLIB_BRANCH="$(resolve_default_branch "$AGENTLIB_URL")"
           if ! agentlib_record="$(
-            git ls-remote --exit-code --heads "$AGENTLIB_URL" "refs/heads/$DEPLOY_BRANCH"
+            git ls-remote --exit-code --heads \
+              "$AGENTLIB_URL" \
+              "refs/heads/$EXPECTED_AGENTLIB_BRANCH"
           )"; then
-            echo "[deploy-qa] ERROR: achillesAgentLib has no '$DEPLOY_BRANCH' branch."
+            echo "[deploy-qa] ERROR: achillesAgentLib has no '$EXPECTED_AGENTLIB_BRANCH' branch."
             exit 1
           fi
           EXPECTED_AGENTLIB_COMMIT="$(printf '%s\n' "$agentlib_record" | awk 'NR == 1 { print $1 }')"
           if [[ ! "$EXPECTED_AGENTLIB_COMMIT" =~ ^[a-f0-9]{40}$ ]]; then
-            echo "[deploy-qa] ERROR: unable to resolve achillesAgentLib/$DEPLOY_BRANCH."
+            echo "[deploy-qa] ERROR: unable to resolve achillesAgentLib/$EXPECTED_AGENTLIB_BRANCH."
             exit 1
           fi
 
-          echo "[deploy-qa] Resolving $DEPLOY_BRANCH across every managed Explorer repository..."
+          echo "[deploy-qa] Resolving every managed repository from its configured default branch..."
           for repository_record in "${GRAPH_REPOSITORIES[@]}"; do
             IFS='|' read -r repository_name repository_url <<< "$repository_record"
+            default_branch="$(resolve_default_branch "$repository_url")"
             if ! branch_record="$(
               git ls-remote --exit-code --heads \
                 "$repository_url" \
-                "refs/heads/$DEPLOY_BRANCH"
+                "refs/heads/$default_branch"
             )"; then
-              echo "[deploy-qa] ERROR: $repository_name has no '$DEPLOY_BRANCH' branch."
+              echo "[deploy-qa] ERROR: $repository_name has no '$default_branch' branch."
               exit 1
             fi
             expected_commit="$(
               printf '%s\n' "$branch_record" | awk 'NR == 1 { print $1 }'
             )"
             if [[ ! "$expected_commit" =~ ^[a-f0-9]{40}$ ]]; then
-              echo "[deploy-qa] ERROR: unable to resolve $repository_name/$DEPLOY_BRANCH."
+              echo "[deploy-qa] ERROR: unable to resolve $repository_name/$default_branch."
               exit 1
             fi
+            EXPECTED_BRANCHES["$repository_name"]="$default_branch"
             EXPECTED_COMMITS["$repository_name"]="$expected_commit"
+            BRANCH_ARGS+=(--repo-branch "$repository_name=$default_branch")
+            echo "[deploy-qa] Selected $repository_name/$default_branch at $expected_commit."
           done
+          EXPLORER_BRANCH="${EXPECTED_BRANCHES[AchillesIDE]}"
+          BRANCH_ARGS=(--branch "$EXPLORER_BRANCH" "${BRANCH_ARGS[@]}")
+
+          PLOINKY_URL='https://github.com/AssistOS-AI/ploinky.git'
+          PLOINKY_BRANCH="$(resolve_default_branch "$PLOINKY_URL")"
+          export PLOINKY_AGENTLIB_REF="$EXPECTED_AGENTLIB_BRANCH"
+          echo "[deploy-qa] Selected achillesAgentLib/$EXPECTED_AGENTLIB_BRANCH at $EXPECTED_AGENTLIB_COMMIT."
+          echo "[deploy-qa] Selected Ploinky/$PLOINKY_BRANCH."
 
           if [ -x "$RUNTIME_DIR/bin/ploinky" ] &&
             [ -f "$RUNTIME_DIR/ploinky-box/bin/ploinky-box.mjs" ]; then
@@ -1348,7 +1364,7 @@ jobs:
             exit "$CREDENTIAL_STATUS"
           fi
 
-          echo "[deploy-qa] Starting Explorer with every managed repository on $DEPLOY_BRANCH..."
+          echo "[deploy-qa] Starting Explorer from each managed repository's configured default branch..."
           export PLOINKY_NO_WAIT_SEQUENCE_TERMINAL_GRACE_MS='300000'
           "$PLOINKY" start explorer "${BRANCH_ARGS[@]}"
 
@@ -1447,6 +1463,7 @@ jobs:
           done
           for repository_record in "${GRAPH_REPOSITORIES[@]}"; do
             IFS='|' read -r repository_name _ <<< "$repository_record"
+            expected_branch="${EXPECTED_BRANCHES[$repository_name]}"
             deployed_commit="$(
               "$BOX_ENGINE" container exec \
                 --user podman \
@@ -1456,7 +1473,7 @@ jobs:
             expected_commit="${EXPECTED_COMMITS[$repository_name]}"
             if [ "$deployed_commit" != "$expected_commit" ]; then
               echo "[deploy-qa] ERROR: deployed $repository_name commit $deployed_commit"
-              echo "[deploy-qa]        does not match $DEPLOY_BRANCH at $expected_commit."
+              echo "[deploy-qa]        does not match $expected_branch at $expected_commit."
               exit 1
             fi
             deployed_branch="$(
@@ -1472,10 +1489,10 @@ jobs:
               "$BOX_ENGINE" container exec --user podman "$BOX_INSTANCE" \
                 git -C "/workspace/.ploinky/repos/$repository_name" status --porcelain
             )"
-            if [ "$deployed_branch" != "$DEPLOY_BRANCH" ] ||
-              [ "$deployed_upstream" != "origin/$DEPLOY_BRANCH" ] ||
+            if [ "$deployed_branch" != "$expected_branch" ] ||
+              [ "$deployed_upstream" != "origin/$expected_branch" ] ||
               [ -n "$deployed_dirty" ]; then
-              echo "[deploy-qa] ERROR: deployed $repository_name checkout is not clean and tracking origin/$DEPLOY_BRANCH."
+              echo "[deploy-qa] ERROR: deployed $repository_name checkout is not clean and tracking origin/$expected_branch."
               echo "[deploy-qa]        observed branch: ${deployed_branch:-<detached>}"
               echo "[deploy-qa]        observed upstream: ${deployed_upstream:-<none>}"
               if [ -n "$deployed_dirty" ]; then
@@ -1484,12 +1501,12 @@ jobs:
               fi
               exit 1
             fi
-            echo "[deploy-qa] Verified $repository_name/$DEPLOY_BRANCH at $deployed_commit."
+            echo "[deploy-qa] Verified $repository_name/$expected_branch at $deployed_commit."
           done
           "$BOX_ENGINE" container exec \
             --user podman \
             --env "EXPECTED_AGENTLIB_COMMIT=$EXPECTED_AGENTLIB_COMMIT" \
-            --env "EXPECTED_AGENTLIB_BRANCH=$DEPLOY_BRANCH" \
+            --env "EXPECTED_AGENTLIB_BRANCH=$EXPECTED_AGENTLIB_BRANCH" \
             "$BOX_INSTANCE" \
             node --input-type=module --eval '
               import crypto from "node:crypto";
@@ -1599,7 +1616,7 @@ jobs:
                 `[deploy-qa] Verified ${manifests} AgentLib manifests and ${packageDigests.size} installed packages at ${expectedCommit}; Explorer loaded ${loadedDigest.files} files sha256=${loadedDigest.sha256}.\n`,
               );
             '
-          echo "[deploy-qa] Verified remote achillesAgentLib/$DEPLOY_BRANCH and loaded runtime identity at $EXPECTED_AGENTLIB_COMMIT."
+          echo "[deploy-qa] Verified remote achillesAgentLib/$EXPECTED_AGENTLIB_BRANCH and loaded runtime identity at $EXPECTED_AGENTLIB_COMMIT."
 
           echo "[deploy-qa] Verifying the loopback Router publication..."
           ROUTER_OK=0
@@ -1798,14 +1815,14 @@ jobs:
             echo "- Identity directory: \`~/${WORKSPACE}\`"
             echo "- Router publication: \`127.0.0.1:${ROUTER_PORT}:8080/tcp\`"
             echo "- Media publication: \`0.0.0.0:7882:7882/udp\`"
-            echo "- Managed graph branch: \`${DEPLOY_BRANCH}\`"
-            echo "- Ploinky branch: \`${PLOINKY_BRANCH}\`"
+            echo "- Managed graph branches: configured repository defaults, resolved and pinned at deploy time"
+            echo "- Ploinky branch: configured repository default, resolved and pinned at deploy time"
             printf -- '- Cloudflare: dedicated persistent `%s` tunnel `%s`, ingress, and DNS API-managed by Ploinky\n' \
               "$CLOUDFLARE_TUNNEL_NAME" "${CLOUDFLARE_TUNNEL_ID:-not-created}"
             printf -- '- Cloudflare DNS record: `%s`\n' "${EXPLORER_QA_DNS_RECORD_ID:-not-created}"
             printf -- '- Protected shared tunnel: `%s` unchanged at `%s`\n' \
               "$CLOUDFLARE_PROTECTED_SHARED_TUNNEL_ID" "${PROTECTED_CLOUDFLARE_DIGEST:-not-snapshotted}"
-            echo "- Rollback: dispatch \`destroy-explorer-qa.yml\` with \`confirm_destroy=true\`, \`deploy_branch=${DEPLOY_BRANCH}\`, and \`ploinky_branch=${PLOINKY_BRANCH}\`; teardown must use the deployed graph and runtime selections."
+            echo "- Rollback: dispatch \`destroy-explorer-qa.yml\` with \`confirm_destroy=true\`; teardown uses the deployed runtime and configured repository defaults."
             echo "- Public URL: \`${PUBLIC_URL}\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
