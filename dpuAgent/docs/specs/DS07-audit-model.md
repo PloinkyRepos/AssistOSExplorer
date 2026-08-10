@@ -1,33 +1,27 @@
 # DS07 - Audit Model and Persistence
 
-## Rezumat
+## Summary
 
-Se implementează un sistem de audit pentru Explorer și DPU, care colectează evenimente de securitate, operații pe fișiere și interacțiuni cu LLM. Datele sunt persistate în `dpuAgent` ca fișiere JSONL append-only.
+DPU maintains an always-enabled append-only audit for security operations, file access, Explorer actions, and plugin usage. It never records AI, LLM, or Copilot prompts or responses. Daily files are retained for 90 days by default; deployments may set `DPU_AUDIT_RETENTION_DAYS` to another positive number of days.
 
-## Arhitectură
+## Architecture
 
-Sistemul de audit este compus din:
-1. **Puncte de captură client-side**: În Explorer, pentru acțiuni UI și Copilot.
-2. **Puncte de captură server-side**: În `dpuAgent`, integrate în mutațiile de stare pentru obiecte confidențiale și secrete.
-3. **Persistență**: Fișiere `.jsonl` zilnice stocate într-o zonă securizată a agentului.
-4. **Control de Acces**: Vizualizarea log-urilor este permisă doar utilizatorilor cu rol `admin` sau `security`.
+Audit events originate from DPU domain mutations or the dedicated `dpu_audit_event_append` MCP tool. DPU sanitizes metadata and writes one JSON object per line to append-only daily JSONL files in its private persistent data root, exposed through the virtual `/Confidential/Audit` view.
 
-## Modelul de Date (JSONL)
+## Fixed Policy
 
-Fiecare eveniment este o linie JSON cu următoarea structură:
-- `timestamp`: ISO 8601
-- `eventType`: Tipul evenimentului (ex: `copilot.prompt`, `file.open`)
-- `actor`: Informații despre utilizatorul/agentul care a declanșat evenimentul.
-- `target`: Resursa afectată (cale, ID obiect).
-- `metadata`: Date suplimentare (fără conținut sensibil precum textul fișierelor, dar incluzând prompt-uri/response-uri LLM).
-- `status`: `ok` sau `error`.
+- DPU operations: enabled
+- file access: enabled
+- Explorer actions: enabled
+- plugin usage: enabled
+- AI activity: disabled
 
-## Persistență în DPU
+This policy is not user-configurable. `dpu_audit_config_get` exposes the effective read-only policy and access capability. There is no configuration mutation tool.
 
-Auditul este expus ca un root virtual `/Confidential/Audit`. Fișierele sunt numite după data curentă: `YYYY-MM-DD.jsonl`.
+## Data Model
 
-## Controlul de Acces
+Records contain an ISO timestamp, event or operation name, sanitized actor, target, metadata, status, and a redacted error where applicable. Values, document bodies, messages, prompts, and responses are removed by the DPU boundary.
 
-- **Scriere**: Permisă prin unelte dedicate (`dpu_audit_event_append`) sau automat de către sistem.
-- **Citire/Listare**: Permisă doar dacă `authInfo.user.roles` conține `admin` sau `security`. Utilizatorul `local:admin` are acces implicit.
-- **Modificare**: Auditul este append-only. Nu există unelte de ștergere sau editare a intrărilor de audit.
+## Access Control
+
+Only authenticated users with `admin` or `security` roles, including `local:admin`, may list or read audit files. Audit files cannot be edited or deleted through MCP tools.

@@ -85,7 +85,7 @@
                     <h2>Execution Constraints</h2>
                     <p><code>mcp-config.json</code> sets <code>maxParallelTasks</code> to <code>1</code>. Mutating operations are also serialized through the DPU file lock. This does not turn DPU into a database, but it does keep the state files and permissions manifest from being updated concurrently through competing writes.</p>
                     <p>For delegated Git/DPU calls, the router verifies the source agent's DS013 Agent Assertion and mints a DPU-audience Router Request for an internal secret alias. DPU verifies that Router Request, then applies per-secret ACLs and agent policy before authorizing the operation.</p>
-                    <p>Audit collection starts disabled and is enabled explicitly through <code>dpu_audit_config_set</code>. Once enabled, DPU appends JSONL records for audited secret and confidential mutations.</p>
+                    <p>Audit collection is permanently enabled for DPU operations, file access, Explorer actions, and plugin usage. AI prompts and responses are never stored, and the policy has no mutation tool.</p>
                 </section>
             </div>
         </div>

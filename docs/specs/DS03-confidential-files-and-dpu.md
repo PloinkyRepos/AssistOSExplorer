@@ -132,7 +132,8 @@ Main mutation tools:
 - `dpu_confidential_update`
 - `dpu_confidential_delete`
 - `dpu_secret_put`
-- `dpu_audit_config_set` for the audit plugin toggle
+
+Audit policy is fixed and has no write contract; audit records are listed and read through dedicated read-only tools.
 
 Relevant implementation points:
 

@@ -12,3 +12,4 @@ This page indexes the local design specification set. The DS files are the sourc
 - [DS06 - Ploinky Runtime Invariants](specsLoader.html?spec=DS06-ploinky-runtime-invariants.md)
 - [DS07 - AxiFace Avatar Settings](specsLoader.html?spec=DS07-axiface-avatar-settings.md)
 - [DS08 - SCRIPTA Collaboration](specsLoader.html?spec=DS08-scripta-collaboration.md)
+- [DS09 - Workspace Monitor](specsLoader.html?spec=DS09-workspace-monitor.md)

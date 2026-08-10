@@ -1,0 +1,20 @@
+{
+  "pluginCategory": "application",
+  "id": "workspace-monitor",
+  "component": "workspace-monitor-button",
+  "location": ["file-exp:account-menu"],
+  "label": "Workspace monitor",
+  "tooltip": "Open workspace monitoring",
+  "icon": "./icon.svg",
+  "presenter": "WorkspaceMonitorButton",
+  "type": "embedded",
+  "adminOnly": true,
+  "autoPin": false,
+  "dependencies": [
+    {
+      "component": "workspace-monitor-dashboard",
+      "presenter": "WorkspaceMonitorDashboard",
+      "type": "embedded"
+    }
+  ]
+}

@@ -31,8 +31,7 @@ function shouldIgnoreRequestFailure(url, method, failure) {
   if (failure !== 'net::ERR_ABORTED' || String(method || '').toUpperCase() !== 'POST') return false;
   try {
     const pathname = new URL(url).pathname;
-    return pathname === '/dashboard/run'
-      || pathname === '/webchat/input'
+    return pathname === '/webchat/input'
       || pathname === '/mcp'
       || pathname.endsWith('/mcp');
   } catch (_) {

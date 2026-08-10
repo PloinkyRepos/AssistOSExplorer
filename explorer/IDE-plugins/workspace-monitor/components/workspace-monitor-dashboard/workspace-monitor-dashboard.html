@@ -1,0 +1,54 @@
+<div class="workspace-monitor-page">
+  <header>
+    <h1>Workspace monitor</h1>
+    <p>Live, read-only runtime and audit information.</p>
+  </header>
+  <main class="workspace-monitor-content">
+    <section class="panel workspace-monitor-panel">
+      <nav class="workspace-monitor-tabs" role="tablist" aria-label="Workspace monitoring">
+        <div class="workspace-monitor-tab-shell"><button type="button" class="workspace-monitor-tab active" data-local-action="selectTab overview" data-tab="overview" role="tab" aria-selected="true">Overview</button></div>
+        <div class="workspace-monitor-tab-shell"><button type="button" class="workspace-monitor-tab" data-local-action="selectTab resources" data-tab="resources" role="tab" aria-selected="false">Resources</button></div>
+        <div class="workspace-monitor-tab-shell"><button type="button" class="workspace-monitor-tab" data-local-action="selectTab router" data-tab="router" role="tab" aria-selected="false">Router Logs</button></div>
+        <div class="workspace-monitor-tab-shell"><button type="button" class="workspace-monitor-tab" data-local-action="selectTab policy" data-tab="policy" role="tab" aria-selected="false">Policy Audit</button></div>
+        <div class="workspace-monitor-tab-shell"><button type="button" class="workspace-monitor-tab" data-local-action="selectTab dpu" data-tab="dpu" role="tab" aria-selected="false">DPU Audit</button></div>
+      </nav>
+      <section class="monitor-panel active" data-panel="overview">
+        <div class="summary-grid" data-role="overview"></div>
+        <section class="cpu-monitor" aria-labelledby="cpu-load-title">
+          <dl class="cpu-monitor-stats cpu-monitor-stats-primary">
+            <div><dt>Workspace CPU:</dt><dd data-role="workspace-cpu">0.0%</dd></div>
+            <div><dt>Router CPU:</dt><dd data-role="router-cpu">0.0%</dd></div>
+            <div><dt>Memory:</dt><dd data-role="workspace-memory">0 B</dd></div>
+          </dl>
+          <div class="cpu-monitor-chart">
+            <h2 id="cpu-load-title">CPU load</h2>
+            <div class="chart" data-role="resource-chart" aria-label="Recent Workspace and Router CPU samples"></div>
+          </div>
+          <dl class="cpu-monitor-stats">
+            <div><dt>Runtimes:</dt><dd data-role="runtime-count">0</dd></div>
+            <div><dt>Running:</dt><dd data-role="running-count">0</dd></div>
+            <div><dt>Unavailable:</dt><dd data-role="unavailable-count">0</dd></div>
+          </dl>
+        </section>
+      </section>
+      <section class="monitor-panel" data-panel="resources" hidden>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Runtime</th><th>Status</th><th>CPU</th><th>Memory</th></tr></thead>
+            <tbody data-role="resource-rows"></tbody>
+          </table>
+        </div>
+      </section>
+      <section class="monitor-panel" data-panel="router" hidden><pre data-role="router-log"></pre></section>
+      <section class="monitor-panel" data-panel="policy" hidden><pre data-role="policy-log"></pre></section>
+      <section class="monitor-panel" data-panel="dpu" hidden>
+        <div class="audit-toolbar">
+          <select data-role="audit-files" aria-label="DPU audit file"></select>
+          <button type="button" class="general-button secondary" data-local-action="reloadAudit">Reload</button>
+        </div>
+        <pre data-role="dpu-log"></pre>
+      </section>
+      <div class="status visible" data-role="status" role="status" aria-live="polite">Ready</div>
+    </section>
+  </main>
+</div>

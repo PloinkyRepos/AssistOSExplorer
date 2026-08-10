@@ -50,7 +50,7 @@
     "applicationPlugins": {
         "git": true,
         "dpu-runtime-support": true,
-        "dpu-audit-menu": true,
+        "workspace-monitor": true,
         "help": true,
         "soplang-builder": true,
         "tasks": true,

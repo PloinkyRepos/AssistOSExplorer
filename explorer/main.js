@@ -32,6 +32,25 @@ const hasRuntimePlugins = (runtimePlugins) => {
     ));
 };
 
+const isAdminUser = (user) => {
+    const roles = Array.isArray(user?.roles) ? user.roles.map((role) => String(role).toLowerCase()) : [];
+    return roles.includes('admin')
+        || String(user?.username || '').toLowerCase() === 'admin'
+        || String(user?.id || '').toLowerCase() === 'local:admin';
+};
+
+const getRuntimeComponentPolicy = (runtimePlugins, componentName) => {
+    let policy = null;
+    forEachRuntimePluginEntry(runtimePlugins, (plugin) => {
+        if (policy || !plugin || typeof plugin !== 'object') return;
+        const ownsComponent = plugin.component === componentName
+            || (Array.isArray(plugin.dependencies)
+                && plugin.dependencies.some((dependency) => (dependency?.component || dependency?.name) === componentName));
+        if (ownsComponent) policy = { adminOnly: plugin.adminOnly === true };
+    });
+    return policy;
+};
+
 const normalizePluginSettings = (payload) => {
     const plugins = payload?.plugins;
     if (!plugins || typeof plugins !== 'object' || Array.isArray(plugins)) {
@@ -179,6 +198,12 @@ async function start() {
             if (!normalizedName) {
                 return null;
             }
+            const componentPolicy = getRuntimeComponentPolicy(runtimePlugins, normalizedName);
+            if (componentPolicy?.adminOnly && !isAdminUser(authenticatedUser)) {
+                const error = new Error('Administrator access is required for this component.');
+                error.code = 'ADMIN_REQUIRED';
+                throw error;
+            }
             return runtimePluginLoader.ensureComponentRegistered(normalizedName, runtimePlugins);
         };
 
@@ -321,6 +346,14 @@ async function start() {
     } else {
         pageName = 'file-exp';
         url = 'file-exp';
+    }
+
+    const routePolicy = getRuntimeComponentPolicy(runtimePlugins, pageName);
+    if (routePolicy?.adminOnly && !isAdminUser(authenticatedUser)) {
+        window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
+        pageName = 'file-exp';
+        url = 'file-exp';
+        suppressNavigationHash = false;
     }
 
     const loadedRuntimeComponents = await runtimePluginLoader.loadComponents(runtimePlugins, { includeDependencies: false });

@@ -24,48 +24,6 @@
       }
     },
     {
-      "name": "dpu_audit_config_set",
-      "title": "DPU Audit Config Set",
-      "description": "Enable or disable DPU audit logging and configure captured audit categories.",
-      "command": "tools/dpu_tool.sh",
-      "cwd": "workspace",
-      "inputSchema": {
-        "enabled": {
-          "type": "boolean",
-          "optional": false
-        },
-        "capture": {
-          "type": "object",
-          "optional": true,
-          "properties": {
-            "dpuOperations": {
-              "type": "boolean",
-              "optional": true
-            },
-            "fileAccess": {
-              "type": "boolean",
-              "optional": true
-            },
-            "explorerActions": {
-              "type": "boolean",
-              "optional": true
-            },
-            "pluginUsage": {
-              "type": "boolean",
-              "optional": true
-            },
-            "aiActivity": {
-              "type": "boolean",
-              "optional": true
-            }
-          }
-        }
-      },
-      "env": {
-        "TOOL_NAME": "dpu_audit_config_set"
-      }
-    },
-    {
       "name": "dpu_audit_list",
       "title": "DPU Audit List",
       "description": "List DPU audit log files visible to the current actor.",
@@ -86,6 +44,10 @@
         "name": {
           "type": "string",
           "optional": false
+        },
+        "maxBytes": {
+          "type": "number",
+          "optional": true
         }
       },
       "env": {
@@ -95,7 +57,7 @@
     {
       "name": "dpu_audit_event_append",
       "title": "DPU Audit Event Append",
-      "description": "Append an Explorer-side audit event to the current audit log when auditing is enabled.",
+      "description": "Append a non-AI Explorer-side audit event to the current audit log.",
       "command": "tools/dpu_tool.sh",
       "cwd": "workspace",
       "inputSchema": {
@@ -137,18 +99,6 @@
         },
         "language": {
           "type": "string",
-          "optional": true
-        },
-        "prompt": {
-          "type": "string",
-          "optional": true
-        },
-        "response": {
-          "type": "string",
-          "optional": true
-        },
-        "metadata": {
-          "type": "object",
           "optional": true
         }
       },

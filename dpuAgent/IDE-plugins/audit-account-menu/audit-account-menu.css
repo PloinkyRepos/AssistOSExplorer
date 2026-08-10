@@ -1,9 +1,0 @@
-:host {
-    display: contents;
-}
-
-.audit-account-menu {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-xs, 4px);
-}

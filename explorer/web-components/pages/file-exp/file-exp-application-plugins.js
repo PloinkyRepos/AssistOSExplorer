@@ -35,6 +35,14 @@ function isPluginEnabled(plugin) {
     return !entry || entry.enabled !== false;
 }
 
+function isAdminUser() {
+    const user = window.assistOS?.user;
+    const roles = Array.isArray(user?.roles) ? user.roles.map((role) => String(role).toLowerCase()) : [];
+    return roles.includes('admin')
+        || String(user?.username || '').toLowerCase() === 'admin'
+        || String(user?.id || '').toLowerCase() === 'local:admin';
+}
+
 export function getApplicationPluginsForSlot(slot, { contributionType = null } = {}) {
     const appPlugins = window.assistOS?.workspace?.appPlugins;
     const plugins = appPlugins && typeof appPlugins === 'object' && !Array.isArray(appPlugins)
@@ -42,7 +50,7 @@ export function getApplicationPluginsForSlot(slot, { contributionType = null } =
         : null;
     const filteredPlugins = Array.isArray(plugins)
         ? plugins.filter((plugin) => {
-            if (!plugin || !isPluginEnabled(plugin)) {
+            if (!plugin || !isPluginEnabled(plugin) || (plugin.adminOnly === true && !isAdminUser())) {
                 return false;
             }
             if (!contributionType) {

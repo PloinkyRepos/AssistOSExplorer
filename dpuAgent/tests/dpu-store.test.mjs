@@ -8,13 +8,13 @@ const tempWorkspaceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dpu-store-worksp
 const tempDpuDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dpu-store-data-'));
 const moduleSuffix = `?test=${Date.now()}`;
 const storeUrl = new URL('../lib/dpu-store.mjs', import.meta.url);
+const storageUrl = new URL('../lib/dpu-store-internal/storage.mjs', import.meta.url);
 const {
   appendAuditClientEvent,
   getAuditConfig,
   getAuditEntry,
   getWorkspaceRoots,
   listAuditEntries,
-  setAuditConfig,
   addConfidentialComment,
   createConfidential,
   deleteConfidentialComment,
@@ -29,6 +29,7 @@ const {
   setAgentPolicyAllowedRoles,
   updateConfidential
 } = await import(`${storeUrl.href}${moduleSuffix}`);
+const { pruneExpiredAuditFiles } = await import(`${storageUrl.href}${moduleSuffix}`);
 
 const previousWorkspaceRoot = process.env.DPU_WORKSPACE_ROOT;
 const previousDpuDataRoot = process.env.DPU_DATA_ROOT;
@@ -259,7 +260,6 @@ test('delegated secret reads with no explicit scope fall through to secret ACL',
 });
 
 test('delegated confidential get uses usr as the acting principal', async () => {
-  await setAuditConfig(adminAuth, { enabled: true });
   const created = await createConfidential(authInfo, {
     type: 'file',
     name: 'delegated-read.txt',
@@ -909,16 +909,12 @@ test('agent secret grants are rejected when no DPU agent policy exists', async (
   );
 });
 
-test('audit config is manageable by local admin and writes JSONL records for DPU operations', async () => {
+test('audit policy is always enabled and writes JSONL records for DPU operations', async () => {
   const configBefore = await getAuditConfig(adminAuth);
   assert.equal(configBefore.ok, true);
-  assert.equal(configBefore.audit.canManage, true);
-  assert.equal(configBefore.audit.enabled, false);
-
-  const updated = await setAuditConfig(adminAuth, { enabled: true });
-  assert.equal(updated.ok, true);
-  assert.equal(updated.audit.enabled, true);
-  assert.deepEqual(updated.audit.capture, {
+  assert.equal(configBefore.audit.canManage, false);
+  assert.equal(configBefore.audit.enabled, true);
+  assert.deepEqual(configBefore.audit.capture, {
     dpuOperations: true,
     fileAccess: true,
     explorerActions: true,
@@ -942,7 +938,6 @@ test('audit config is manageable by local admin and writes JSONL records for DPU
 });
 
 test('audit files are not visible to non-admin users', async () => {
-  await setAuditConfig(adminAuth, { enabled: true });
   await putSecret(adminAuth, { key: 'ADMIN_ONLY_AUDIT', value: 'value' });
 
   await assert.rejects(
@@ -956,13 +951,7 @@ test('audit files are not visible to non-admin users', async () => {
   );
 });
 
-test('client-side audit events are appended through the dedicated ingest tool', async () => {
-  await setAuditConfig(adminAuth, {
-    enabled: true,
-    capture: {
-      aiActivity: true
-    }
-  });
+test('AI client events and their content are never appended', async () => {
   const appended = await appendAuditClientEvent(adminAuth, {
     eventType: 'copilot.prompt',
     source: 'explorer',
@@ -974,27 +963,60 @@ test('client-side audit events are appended through the dedicated ingest tool', 
     }
   });
   assert.equal(appended.ok, true);
-
-  const listed = await listAuditEntries(adminAuth);
-  const fetched = await getAuditEntry(adminAuth, { name: listed.items[0].name });
-  assert.match(fetched.item.content, /copilot\.prompt/);
-  assert.doesNotMatch(fetched.item.content, /const answer = /);
+  assert.equal(appended.appended, false);
 });
 
-test('audit capture settings can suppress selected client event categories', async () => {
-  await setAuditConfig(adminAuth, {
-    enabled: true,
-    capture: {
-      fileAccess: false
-    }
-  });
+test('non-AI client audit events are appended under the fixed policy', async () => {
   const appended = await appendAuditClientEvent(adminAuth, {
     eventType: 'file.open',
     source: 'explorer',
     path: '/src/app.js'
   });
   assert.equal(appended.ok, true);
-  assert.equal(appended.appended, false);
+  assert.equal(appended.appended, true);
+});
+
+test('client-supplied free-form metadata is not persisted in audit records', async () => {
+  await appendAuditClientEvent(adminAuth, {
+    eventType: 'file.open',
+    source: 'explorer',
+    path: '/src/app.js',
+    metadata: { Prompt: 'do not persist this prompt', custom: 'untrusted metadata' }
+  });
+  const listed = await listAuditEntries(adminAuth);
+  const fetched = await getAuditEntry(adminAuth, { name: listed.items[0].name });
+  assert.doesNotMatch(fetched.item.content, /do not persist this prompt|untrusted metadata/);
+});
+
+test('audit reads can be bounded to the newest complete records', async () => {
+  const auditRoot = getAuditDirPath();
+  fs.mkdirSync(auditRoot, { recursive: true });
+  const name = '2099-01-01.jsonl';
+  fs.writeFileSync(path.join(auditRoot, name), `${JSON.stringify({ id: 1, text: 'a'.repeat(200) })}\n${JSON.stringify({ id: 2, text: 'b'.repeat(200) })}\n`, 'utf8');
+  const fetched = await getAuditEntry(adminAuth, { name, maxBytes: 260 });
+  assert.doesNotMatch(fetched.item.content, /"id":1/);
+  assert.match(fetched.item.content, /"id":2/);
+});
+
+test('audit reads preserve a complete record when the byte window begins at its boundary', async () => {
+  const auditRoot = getAuditDirPath();
+  fs.mkdirSync(auditRoot, { recursive: true });
+  const name = '2099-01-02.jsonl';
+  const first = `${JSON.stringify({ id: 1, text: 'first' })}\n`;
+  const second = `${JSON.stringify({ id: 2, text: 'second' })}\n`;
+  fs.writeFileSync(path.join(auditRoot, name), `${first}${second}`, 'utf8');
+  const fetched = await getAuditEntry(adminAuth, { name, maxBytes: Buffer.byteLength(second) });
+  assert.equal(fetched.item.content, second);
+});
+
+test('audit retention removes expired daily files and keeps recent files', async () => {
+  const auditRoot = getAuditDirPath();
+  fs.mkdirSync(auditRoot, { recursive: true });
+  fs.writeFileSync(path.join(auditRoot, '2099-01-01.jsonl'), '{}\n');
+  fs.writeFileSync(path.join(auditRoot, '2100-06-15.jsonl'), '{}\n');
+  await pruneExpiredAuditFiles(new Date('2100-06-16T00:00:00.000Z'));
+  assert.equal(fs.existsSync(path.join(auditRoot, '2099-01-01.jsonl')), false);
+  assert.equal(fs.existsSync(path.join(auditRoot, '2100-06-15.jsonl')), true);
 });
 
 test('comment role can add annotations without write access and read role can see them', async () => {

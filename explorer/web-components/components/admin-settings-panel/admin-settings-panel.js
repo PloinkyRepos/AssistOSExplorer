@@ -1,8 +1,4 @@
-import {
-    normalizeAuditCapture,
-    normalizeToolResult,
-    parseRoles
-} from './admin-settings-utils.js';
+import { parseRoles } from './admin-settings-utils.js';
 
 function getCurrentAgentName(win = globalThis.window) {
     try {
@@ -29,13 +25,7 @@ export class AdminSettingsPanel {
             loading: false,
             users: [],
             availableRoles: [],
-            loginBrandingName: 'Login',
-            auditConfig: {
-                enabled: false,
-                canManage: false,
-                error: '',
-                capture: normalizeAuditCapture()
-            }
+            loginBrandingName: 'Login'
         };
         this.invalidate();
     }
@@ -58,7 +48,6 @@ export class AdminSettingsPanel {
         this.tabPanels = Array.from(this.element.querySelectorAll('.administration-tab-panel'));
         this.usersComponent = this.element.querySelector('admin-users-settings');
         this.brandingComponent = this.element.querySelector('admin-branding-settings');
-        this.auditComponent = this.element.querySelector('admin-audit-settings');
     }
 
     bindEvents() {
@@ -74,9 +63,6 @@ export class AdminSettingsPanel {
         });
         this.element.addEventListener('admin-branding-save', (event) => {
             this.saveBranding(event.detail || {}).catch((error) => this.setStatus(error.message, 'error'));
-        });
-        this.element.addEventListener('admin-audit-save', (event) => {
-            this.saveAudit(event.detail || {}).catch((error) => this.setStatus(error.message, 'error'));
         });
         this.element.addEventListener('admin-settings-error', (event) => {
             this.setStatus(event.detail?.message || 'Administration action failed.', 'error');
@@ -100,32 +86,11 @@ export class AdminSettingsPanel {
             this.state.loginBrandingName = settingsPayload.settings?.loginBrandingName || 'Login';
             this.state.users = Array.isArray(usersPayload.users) ? usersPayload.users : [];
             this.state.availableRoles = parseRoles(usersPayload.availableRoles);
-            await this.loadAuditConfig();
             this.state.loaded = true;
             this.pushChildState();
-            this.setStatus(
-                this.state.auditConfig.error || `${this.state.users.length} user${this.state.users.length === 1 ? '' : 's'} loaded.`,
-                this.state.auditConfig.error ? 'error' : 'ok'
-            );
+            this.setStatus(`${this.state.users.length} user${this.state.users.length === 1 ? '' : 's'} loaded.`, 'ok');
         } finally {
             this.state.loading = false;
-        }
-    }
-
-    async loadAuditConfig() {
-        try {
-            const auditPayload = await this.callDpuTool('dpu_audit_config_get');
-            this.state.auditConfig = {
-                ...this.state.auditConfig,
-                ...(auditPayload.audit || {}),
-                error: '',
-                capture: normalizeAuditCapture(auditPayload.audit?.capture)
-            };
-        } catch (error) {
-            this.state.auditConfig = {
-                ...this.state.auditConfig,
-                error: error.message || 'Audit settings could not be loaded.'
-            };
         }
     }
 
@@ -137,9 +102,6 @@ export class AdminSettingsPanel {
             }),
             this.setChildState(this.brandingComponent, {
                 loginBrandingName: this.state.loginBrandingName
-            }),
-            this.setChildState(this.auditComponent, {
-                auditConfig: this.state.auditConfig
             })
         ]);
     }
@@ -198,31 +160,13 @@ export class AdminSettingsPanel {
         this.setStatus('Login branding saved.', 'ok');
     }
 
-    async saveAudit(detail) {
-        this.setStatus('Saving audit settings...');
-        const payload = await this.callDpuTool('dpu_audit_config_set', {
-            enabled: detail.enabled === true,
-            capture: normalizeAuditCapture(detail.capture)
-        });
-        this.state.auditConfig = {
-            ...this.state.auditConfig,
-            ...(payload.audit || {}),
-            error: '',
-            capture: normalizeAuditCapture(payload.audit?.capture)
-        };
-        await this.setChildState(this.auditComponent, {
-            auditConfig: this.state.auditConfig
-        });
-        this.setStatus('Audit settings saved.', 'ok');
-    }
-
     async reloadAfterMutation() {
         this.state.loaded = false;
         await this.loadPage({ force: true });
     }
 
     switchAdministrationTab(_target, tab) {
-        this.state.activeTab = ['users', 'branding', 'audit'].includes(tab) ? tab : 'users';
+        this.state.activeTab = ['users', 'branding'].includes(tab) ? tab : 'users';
         this.updateTabUI();
     }
 
@@ -261,35 +205,4 @@ export class AdminSettingsPanel {
         return payload;
     }
 
-    async callDpuTool(name, args = {}) {
-        const services = this.getAppServices();
-        if (!services) {
-            throw new Error('DPU MCP client is not available in this view.');
-        }
-        if (typeof services.callTool === 'function') {
-            const result = await services.callTool('dpuAgent', name, args);
-            return normalizeToolResult(result);
-        }
-        const client = services.getClient?.('dpuAgent');
-        if (!client || typeof client.callTool !== 'function') {
-            throw new Error('DPU MCP client is not available in this view.');
-        }
-        return normalizeToolResult(await client.callTool(name, args));
-    }
-
-    getAppServices() {
-        const candidates = [
-            () => window.webSkel?.appServices,
-            () => window.assistOS?.appServices
-        ];
-        for (const resolve of candidates) {
-            try {
-                const services = resolve();
-                if (services?.callTool || services?.getClient) return services;
-            } catch (_) {
-                // Ignore unavailable integration.
-            }
-        }
-        return null;
-    }
 }

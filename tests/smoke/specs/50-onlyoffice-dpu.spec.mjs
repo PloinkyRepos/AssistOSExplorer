@@ -1,10 +1,14 @@
 import crypto from 'node:crypto';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 
 import { test, expect } from '../lib/fixtures.mjs';
 import { smokeConfig } from '../lib/config.mjs';
 import { dpuData } from '../lib/dpu-data.mjs';
 import { dpuSnapshotPersistenceAdvanced } from '../lib/dpu-persistence.mjs';
 import { assertExplorerDirectory, openExplorer } from '../lib/explorer.mjs';
+
+const execFileAsync = promisify(execFile);
 
 function readDpuState() {
   if (!dpuData.exists('state.json')) {
@@ -167,50 +171,16 @@ async function forceSaveDocument(editorFrame) {
   await saveButton.click();
 }
 
-async function loadAdminControlProof(page) {
-  return page.evaluate(async () => {
-    const authResponse = await fetch('/auth/token', {
-      method: 'GET',
-      credentials: 'include',
-      cache: 'no-store',
-    });
-    const authPayload = await authResponse.json().catch(() => ({}));
-    const proof = authPayload?.adminControl;
-    if (!authResponse.ok || !proof?.csrfToken || proof.origin !== window.location.origin) {
-      throw new Error('Authenticated local administrator control proof is unavailable.');
-    }
-    return {
-      csrfToken: proof.csrfToken,
-      origin: proof.origin,
-    };
+async function restartOnlyOffice() {
+  if (!smokeConfig.workspaceRoot) {
+    throw new Error('SMOKE_WORKSPACE_ROOT is required for the targeted OnlyOffice restart.');
+  }
+  const executable = String(process.env.SMOKE_PLOINKY_BIN || 'ploinky').trim();
+  const { stdout, stderr } = await execFileAsync(executable, ['restart', 'onlyOffice'], {
+    cwd: smokeConfig.workspaceRoot,
+    env: { ...process.env, PLOINKY_CWD: smokeConfig.workspaceRoot }
   });
-}
-
-async function restartOnlyOfficeWithAdminControl(page, proof) {
-  return page.evaluate(async ({ adminControlProof }) => {
-    if (!adminControlProof?.csrfToken || adminControlProof.origin !== window.location.origin) {
-      throw new Error('Prepared administrator control proof does not match the current origin.');
-    }
-    const restartResponse = await fetch('/dashboard/run', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Ploinky-CSRF-Token': adminControlProof.csrfToken,
-      },
-      credentials: 'include',
-      keepalive: true,
-      body: JSON.stringify({ cmd: 'restart onlyOffice' }),
-    });
-    const restartPayload = await restartResponse.json().catch(() => ({}));
-    return {
-      status: restartResponse.status,
-      ok: restartPayload?.ok === true,
-      code: restartPayload?.code,
-      error: String(restartPayload?.error || ''),
-      stdout: String(restartPayload?.stdout || ''),
-      stderr: String(restartPayload?.stderr || ''),
-    };
-  }, { adminControlProof: proof });
+  return { stdout: String(stdout || ''), stderr: String(stderr || '') };
 }
 
 async function waitForOnlyOfficeSession(page, documentPath) {
@@ -325,10 +295,6 @@ test.describe('DPU and OnlyOffice @external', () => {
       expect(callbackSnapshot?.id).toBe(initialSnapshot.id);
       expect(callbackSnapshot?.updatedAt).not.toBe(initialSnapshot.updatedAt);
 
-      // Fetch authentication/CSRF material before creating the outstanding
-      // edit. No unrelated network request is permitted between the durable
-      // snapshot assertion and the targeted restart command.
-      const adminControlProof = await loadAdminControlProof(page);
       const drainMarker = `OnlyOffice-drain-${smokeConfig.runId}`;
       await typeDocumentMarker(page, editorFrame, drainMarker);
       const preDrainSnapshot = readDpuObjectSnapshot(fileName);
@@ -339,10 +305,7 @@ test.describe('DPU and OnlyOffice @external', () => {
       ).toBe(callbackSnapshot.blobSha256);
       expect(preDrainSnapshot?.updatedAt).toBe(callbackSnapshot.updatedAt);
 
-      const restartResult = await restartOnlyOfficeWithAdminControl(page, adminControlProof);
-      expect(restartResult.status, restartResult.error || restartResult.stderr).toBe(200);
-      expect(restartResult.ok, restartResult.error || restartResult.stderr).toBe(true);
-      expect(restartResult.code, restartResult.stderr).toBe(0);
+      const restartResult = await restartOnlyOffice();
       expect(restartResult.stderr).not.toMatch(/failed to (?:restart|start)|managed restart failed/i);
       expect(restartResult.stdout).toMatch(/✓ Agent restarted(?: \([^)]+\))?\./);
 

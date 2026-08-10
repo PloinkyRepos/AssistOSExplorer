@@ -2,7 +2,6 @@
     <div class="administration-tabs" role="tablist" aria-label="Administration settings">
         <button type="button" class="administration-tab active" data-local-action="switchAdministrationTab users" data-tab="users" role="tab" aria-selected="true">Users</button>
         <button type="button" class="administration-tab" data-local-action="switchAdministrationTab branding" data-tab="branding" role="tab" aria-selected="false">Branding</button>
-        <button type="button" class="administration-tab" data-local-action="switchAdministrationTab audit" data-tab="audit" role="tab" aria-selected="false">Audit settings</button>
     </div>
     <div class="status" data-role="status" role="status" aria-live="polite"></div>
     <section class="administration-tab-panel active" data-panel="users" role="tabpanel">
@@ -10,8 +9,5 @@
     </section>
     <section class="administration-tab-panel" data-panel="branding" role="tabpanel" hidden>
         <admin-branding-settings data-presenter="admin-branding-settings"></admin-branding-settings>
-    </section>
-    <section class="administration-tab-panel" data-panel="audit" role="tabpanel" hidden>
-        <admin-audit-settings data-presenter="admin-audit-settings"></admin-audit-settings>
     </section>
 </section>

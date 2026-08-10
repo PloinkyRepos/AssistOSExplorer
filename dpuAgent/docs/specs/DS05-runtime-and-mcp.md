@@ -44,7 +44,7 @@ When DPU grants a secret role to an agent principal, it validates the requested 
 The current tool families are:
 
 - actor identity and roots
-- audit configuration and audit file access
+- fixed audit policy and audit file access
 - secrets
 - confidential objects
 - confidential comments
@@ -57,7 +57,6 @@ This is a domain surface, not a storage-debug surface. The caller asks for secre
 `dpuAgent` exposes dedicated audit tools instead of treating audit logs as generic confidential files:
 
 - `dpu_audit_config_get`
-- `dpu_audit_config_set`
 - `dpu_audit_list`
 - `dpu_audit_get`
 - `dpu_audit_event_append`
@@ -65,19 +64,19 @@ This is a domain surface, not a storage-debug surface. The caller asks for secre
 Audit file writes happen through two controlled paths:
 
 - internal DPU domain auditing for secret and confidential operations
-- the dedicated `dpu_audit_event_append` ingest tool for Explorer-side events such as file open, file update, plugin usage, UI actions, and copilot prompt/response
+- the dedicated `dpu_audit_event_append` ingest tool for non-AI Explorer-side events such as file open, file update, plugin usage, and UI actions
 
 Browser clients and other agents must not write audit files directly. They can only submit events through the dedicated ingest tool, and DPU remains the component that materializes JSONL files on disk.
 
-Audit viewing and audit configuration are restricted to trusted actors:
+Audit viewing is restricted to trusted actors:
 
 - a local authenticated `admin` user
 - or actors with role `admin`
 - or actors with role `security`
 
-The runtime must enforce this before listing or reading `/Confidential/Audit` and before mutating audit configuration.
+The runtime must enforce this before listing or reading `/Confidential/Audit`.
 
-Audit collection starts disabled by default. A trusted actor must explicitly enable it through `dpu_audit_config_set` before DPU begins appending operational audit records.
+Audit collection is permanently enabled. DPU operations, file access, Explorer actions, and plugin usage are captured. AI, LLM, and Copilot events are rejected and prompt or response content is never stored. There is no audit-configuration mutation tool.
 
 ## Practical Guarantees
 

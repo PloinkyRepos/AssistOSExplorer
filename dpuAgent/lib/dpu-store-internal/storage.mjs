@@ -24,6 +24,8 @@ const CONFIDENTIAL_FILE_PREFIX = 'DPUENC1';
 const SECRET_MAP_FILE_PREFIX = 'DPUSECS1';
 const CONFIDENTIAL_CONTEXT = 'dpu:confidential:';
 const SECRET_MAP_CONTEXT = 'dpu:secret-map:';
+const DEFAULT_AUDIT_RETENTION_DAYS = 90;
+const auditRetentionChecks = new Map();
 
 export function getWorkspaceRoot() {
   const candidates = [
@@ -163,28 +165,22 @@ export function defaultState() {
     users: {},
     secrets: {},
     objects: {},
-    settings: {
-      audit: {
-        enabled: false
-      }
-    }
+    settings: {}
   };
 }
 
 export async function loadState() {
   const state = await readJsonFile(getStateFilePath(), defaultState());
+  const loadedSettings = state.settings && typeof state.settings === 'object' && !Array.isArray(state.settings)
+    ? state.settings
+    : {};
+  const { audit: _retiredAuditSettings, ...settings } = loadedSettings;
   return {
     version: Number(state.version || 4),
     users: state.users && typeof state.users === 'object' ? state.users : {},
     secrets: state.secrets && typeof state.secrets === 'object' ? state.secrets : {},
     objects: state.objects && typeof state.objects === 'object' ? state.objects : {},
-    settings: state.settings && typeof state.settings === 'object' && !Array.isArray(state.settings)
-      ? state.settings
-      : {
-        audit: {
-          enabled: false
-        }
-      }
+    settings
   };
 }
 
@@ -210,11 +206,54 @@ export async function listAuditFiles() {
     .sort((left, right) => right.localeCompare(left));
 }
 
-export async function readAuditFile(fileName) {
-  return fs.readFile(getAuditFilePath(fileName), 'utf8');
+export async function readAuditFile(fileName, { maxBytes = 0 } = {}) {
+  const targetPath = getAuditFilePath(fileName);
+  const requestedBytes = Number(maxBytes);
+  if (!Number.isFinite(requestedBytes) || requestedBytes <= 0) {
+    return fs.readFile(targetPath, 'utf8');
+  }
+  const stat = await fs.stat(targetPath);
+  const length = Math.min(stat.size, Math.floor(requestedBytes));
+  const offset = Math.max(0, stat.size - length);
+  const handle = await fs.open(targetPath, 'r');
+  try {
+    const buffer = Buffer.alloc(length);
+    const { bytesRead } = await handle.read(buffer, 0, length, offset);
+    let content = buffer.subarray(0, bytesRead).toString('utf8');
+    if (offset > 0) {
+      const previousByte = Buffer.alloc(1);
+      const { bytesRead: previousBytesRead } = await handle.read(previousByte, 0, 1, offset - 1);
+      if (previousBytesRead !== 1 || previousByte[0] !== 0x0a) {
+        const firstLineEnd = content.indexOf('\n');
+        content = firstLineEnd === -1 ? '' : content.slice(firstLineEnd + 1);
+      }
+    }
+    return content;
+  } finally {
+    await handle.close();
+  }
+}
+
+function auditRetentionDays() {
+  const configured = Number.parseInt(String(process.env.DPU_AUDIT_RETENTION_DAYS || ''), 10);
+  return Number.isFinite(configured) && configured > 0 ? Math.min(configured, 3650) : DEFAULT_AUDIT_RETENTION_DAYS;
+}
+
+export async function pruneExpiredAuditFiles(now = new Date()) {
+  const auditRoot = getAuditRoot();
+  const dayKey = now.toISOString().slice(0, 10);
+  if (auditRetentionChecks.get(auditRoot) === dayKey) return;
+  const cutoff = new Date(now.getTime() - auditRetentionDays() * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const files = await listAuditFiles();
+  await Promise.all(files.map(async (fileName) => {
+    const match = /^(\d{4}-\d{2}-\d{2})\.jsonl$/.exec(fileName);
+    if (match && match[1] < cutoff) await fs.unlink(getAuditFilePath(fileName)).catch(() => {});
+  }));
+  auditRetentionChecks.set(auditRoot, dayKey);
 }
 
 export async function appendAuditLine(fileName, line) {
+  await pruneExpiredAuditFiles();
   const targetPath = getAuditFilePath(fileName);
   await ensureFileParentExists(targetPath);
   await fs.appendFile(targetPath, `${String(line || '')}\n`, 'utf8');

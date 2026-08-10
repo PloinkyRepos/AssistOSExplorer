@@ -28,6 +28,7 @@ The global slot is distinct from:
 3. Global slot lifecycle (mount, rerender, cleanup) must follow the same plugin settings and runtime policy gates as other application mounts.
 4. The host overlay container must not block pointer events globally; only mounted plugin components may capture interaction.
 5. Global plugin cleanup must run when `file-exp` unloads.
+6. An application plugin declaring `adminOnly: true` must not be mounted for a non-admin user. Hiding controls inside the plugin is not an authorization substitute; its data sources must enforce their own admin boundary as well.
 
 ## Validation Rules
 

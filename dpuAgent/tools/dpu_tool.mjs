@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import {
   getAuditConfig,
-  setAuditConfig,
   listAuditEntries,
   getAuditEntry,
   appendAuditClientEvent,
@@ -117,21 +116,6 @@ function normalizeArgs(toolName, args) {
     case 'dpu_audit_event_append':
       requireString('eventType');
       return input;
-    case 'dpu_audit_config_set':
-      if (typeof input.enabled !== 'boolean') {
-        throw new Error('dpu_audit_config_set requires an "enabled" boolean.');
-      }
-      if (input.capture !== undefined) {
-        if (!input.capture || typeof input.capture !== 'object' || Array.isArray(input.capture)) {
-          throw new Error('dpu_audit_config_set requires "capture" to be an object when provided.');
-        }
-        for (const [key, value] of Object.entries(input.capture)) {
-          if (typeof value !== 'boolean') {
-            throw new Error(`dpu_audit_config_set capture.${key} must be a boolean.`);
-          }
-        }
-      }
-      return input;
     case 'dpu_audit_get':
       requireString('name');
       return input;
@@ -238,9 +222,6 @@ async function main() {
       break;
     case 'dpu_audit_config_get':
       result = await getAuditConfig(authInfo);
-      break;
-    case 'dpu_audit_config_set':
-      result = await setAuditConfig(authInfo, args);
       break;
     case 'dpu_audit_list':
       result = await listAuditEntries(authInfo, args);

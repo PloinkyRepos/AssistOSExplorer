@@ -105,7 +105,7 @@ function assertInvocationScopeFor(operation, authInfo) {
 
 const AUDIT_VIEWER_ROLES = Object.freeze(['admin', 'security']);
 const AUDIT_ROOT_PATH = '/Confidential/Audit';
-const DEFAULT_AUDIT_CAPTURE = Object.freeze({
+const AUDIT_CAPTURE_POLICY = Object.freeze({
   dpuOperations: true,
   fileAccess: true,
   explorerActions: true,
@@ -138,40 +138,11 @@ async function readConfidentialFile(objectRecord) {
   throw new Error(`Confidential file storage is invalid for object ${objectRecord.id || ''}`.trim());
 }
 
-function normalizeAuditSettings(settings) {
-  const source = settings && typeof settings === 'object' && !Array.isArray(settings)
-    ? settings
-    : {};
-  const audit = source.audit && typeof source.audit === 'object' && !Array.isArray(source.audit)
-    ? source.audit
-    : {};
+function getAuditSettings() {
   return {
-    audit: {
-      enabled: Boolean(audit.enabled),
-      capture: normalizeAuditCapture(audit.capture)
-    }
+    enabled: true,
+    capture: { ...AUDIT_CAPTURE_POLICY }
   };
-}
-
-function getAuditSettings(state) {
-  const normalized = normalizeAuditSettings(state?.settings);
-  if (JSON.stringify(state.settings || {}) !== JSON.stringify(normalized)) {
-    state.settings = normalized;
-  }
-  return normalized.audit;
-}
-
-function normalizeAuditCapture(capture) {
-  const source = capture && typeof capture === 'object' && !Array.isArray(capture)
-    ? capture
-    : {};
-  const normalized = {};
-  for (const [key, defaultValue] of Object.entries(DEFAULT_AUDIT_CAPTURE)) {
-    normalized[key] = Object.prototype.hasOwnProperty.call(source, key)
-      ? Boolean(source[key])
-      : defaultValue;
-  }
-  return normalized;
 }
 
 function hasAuditViewerRole(actor) {
@@ -202,7 +173,8 @@ function sanitizeAuditMetadata(value) {
   if (typeof value === 'object') {
     const output = {};
     for (const [key, entry] of Object.entries(value)) {
-      if (['content', 'value', 'draft', 'body', 'message', 'prompt', 'response'].includes(key)) {
+      const normalizedKey = String(key).toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (/(content|value|draft|body|message|prompt|response|completion|input|output|transcript|instruction|query)$/.test(normalizedKey)) {
         continue;
       }
       output[key] = sanitizeAuditMetadata(entry);
@@ -249,16 +221,10 @@ function createAuditRecord({ actor, operation, target = {}, metadata = {}, statu
   };
 }
 
-async function appendAuditRecordIfEnabled(state, record, { force = false } = {}) {
-  if (!force) {
-    const audit = getAuditSettings(state);
-    if (!audit.enabled) {
-      return false;
-    }
-    const category = getAuditRecordCaptureCategory(record);
-    if (category && audit.capture?.[category] === false) {
-      return false;
-    }
+async function appendAuditRecord(record) {
+  const category = getAuditRecordCaptureCategory(record);
+  if (category === 'aiActivity') {
+    return false;
   }
   const timestamp = String(record?.timestamp || nowIso());
   const fileName = `${timestamp.slice(0, 10) || 'audit'}.jsonl`;
@@ -291,7 +257,7 @@ function getAuditRecordCaptureCategory(record) {
 async function runAuditedMutation(state, actor, { operation, target, metadata }, worker) {
   try {
     const result = await worker();
-    await appendAuditRecordIfEnabled(state, createAuditRecord({
+    await appendAuditRecord(createAuditRecord({
       actor,
       operation,
       target,
@@ -300,7 +266,7 @@ async function runAuditedMutation(state, actor, { operation, target, metadata },
     }));
     return result;
   } catch (error) {
-    await appendAuditRecordIfEnabled(state, createAuditRecord({
+    await appendAuditRecord(createAuditRecord({
       actor,
       operation,
       target,
@@ -820,13 +786,13 @@ export async function getAuditConfig(authInfo = null) {
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
     await ensureUserRecord(state, permissionsManifest, actor, ctx);
-    const audit = getAuditSettings(state);
+    const audit = getAuditSettings();
     return {
       ok: true,
       audit: {
         enabled: Boolean(audit.enabled),
-        capture: normalizeAuditCapture(audit.capture),
-        canManage: hasAuditViewerRole(actor),
+        capture: { ...audit.capture },
+        canManage: false,
         canViewFiles: hasAuditViewerRole(actor)
       }
     };
@@ -887,46 +853,6 @@ export async function setAgentPolicyAllowedRoles(authInfo = null, { principalId,
   });
 }
 
-export async function setAuditConfig(authInfo = null, { enabled, capture } = {}) {
-  return withLockedState(async (state, permissionsManifest, ctx) => {
-    const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
-    await ensureUserRecord(state, permissionsManifest, actor, ctx);
-    assertAuditViewer(actor);
-    const audit = getAuditSettings(state);
-    audit.enabled = Boolean(enabled);
-    audit.capture = normalizeAuditCapture(capture ?? audit.capture);
-    state.settings = {
-      ...normalizeAuditSettings(state.settings),
-      audit: {
-        enabled: audit.enabled,
-        capture: audit.capture
-      }
-    };
-    ctx.dirty = true;
-    await appendAuditRecordIfEnabled(state, createAuditRecord({
-      actor,
-      operation: 'dpu.audit.config.set',
-      target: {
-        path: AUDIT_ROOT_PATH
-      },
-      metadata: {
-        enabled: audit.enabled,
-        capture: audit.capture
-      },
-      status: 'ok'
-    }), { force: true });
-    return {
-      ok: true,
-      audit: {
-        enabled: audit.enabled,
-        capture: audit.capture,
-        canManage: true,
-        canViewFiles: true
-      }
-    };
-  });
-}
-
 export async function listAuditEntries(authInfo = null) {
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
@@ -940,7 +866,7 @@ export async function listAuditEntries(authInfo = null) {
   });
 }
 
-export async function getAuditEntry(authInfo = null, { name }) {
+export async function getAuditEntry(authInfo = null, { name, maxBytes = 0 }) {
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
     await ensureUserRecord(state, permissionsManifest, actor, ctx);
@@ -953,7 +879,7 @@ export async function getAuditEntry(authInfo = null, { name }) {
     if (!availableFiles.includes(normalizedName)) {
       return { ok: false, error: `Audit file not found: ${normalizedName}` };
     }
-    const content = await readAuditStorageFile(normalizedName);
+    const content = await readAuditStorageFile(normalizedName, { maxBytes });
     return {
       ok: true,
       item: buildAuditFileEntry(normalizedName, content)
@@ -967,6 +893,9 @@ export async function appendAuditClientEvent(authInfo = null, payload = {}) {
     await ensureUserRecord(state, permissionsManifest, actor, ctx);
     const eventType = normalizeName(payload.eventType, 'eventType');
     const source = String(payload.source || 'explorer').trim() || 'explorer';
+    if (/^(ai|llm|copilot)[.:_-]/i.test(eventType) || ['ai', 'llm', 'copilot'].includes(source.toLowerCase())) {
+      return { ok: true, appended: false };
+    }
     const target = {
       path: String(payload.path || '').trim(),
       targetPath: String(payload.targetPath || '').trim(),
@@ -977,14 +906,9 @@ export async function appendAuditClientEvent(authInfo = null, payload = {}) {
       language: String(payload.language || '').trim(),
       slot: String(payload.slot || '').trim(),
       currentPath: String(payload.currentPath || '').trim(),
-      selectedPath: String(payload.selectedPath || '').trim(),
-      prompt: payload.prompt === undefined ? undefined : String(payload.prompt || ''),
-      response: payload.response === undefined ? undefined : String(payload.response || ''),
-      metadata: payload.metadata && typeof payload.metadata === 'object' && !Array.isArray(payload.metadata)
-        ? payload.metadata
-        : {}
+      selectedPath: String(payload.selectedPath || '').trim()
     };
-    const appended = await appendAuditRecordIfEnabled(state, {
+    const appended = await appendAuditRecord({
       timestamp: nowIso(),
       eventType,
       source,

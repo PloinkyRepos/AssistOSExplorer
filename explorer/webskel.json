@@ -87,11 +87,6 @@
       "presenterClassName": "AdminBrandingSettings"
     },
     {
-      "name": "admin-audit-settings",
-      "type": "components",
-      "presenterClassName": "AdminAuditSettings"
-    },
-    {
       "name": "table-editor",
       "type": "components",
       "presenterClassName": "TableEditor"
