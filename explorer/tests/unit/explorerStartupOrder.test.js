@@ -8,7 +8,7 @@ const explorerRoot = path.resolve(import.meta.dirname, '..', '..');
 test('file explorer mounts before runtime plugin discovery completes', () => {
     const source = fs.readFileSync(path.join(explorerRoot, 'main.js'), 'utf8');
     const mountIndex = source.indexOf('await mountInitialApplicationRoute({');
-    const deferredRuntimeIndex = source.indexOf('Promise.all([\n                waitForAgentRuntimeAvailability({', mountIndex);
+    const deferredRuntimeIndex = source.indexOf("waitForAgentRuntimeAvailability({\n                label: 'Explorer plugins'", mountIndex);
 
     assert.ok(mountIndex > 0);
     assert.ok(deferredRuntimeIndex > mountIndex);
@@ -16,6 +16,8 @@ test('file explorer mounts before runtime plugin discovery completes', () => {
     assert.match(source, /const \[explorerManifest, pluginPayload, pluginSettingsResult, authenticatedUser\] = await Promise\.all/);
     assert.match(source, /RUNTIME_PLUGIN_MOUNT_GRACE_MS = 2500/);
     assert.match(source, /label: 'Explorer plugins',\s*operation: loadRuntimeContext/);
+    assert.match(source, /detail: \{ phase: 'discovered' \}/);
+    assert.match(source, /detail: \{ phase: 'ready' \}/);
     assert.doesNotMatch(source, /runtimePluginLoader\.loadComponents\(/);
 });
 
@@ -49,7 +51,16 @@ test('optional plugin failures do not reject file explorer rendering', () => {
         'utf8'
     );
 
-    assert.match(hostSource, /try \{\s*await ensureRuntimeComponent\(plugin\.component\);\s*\} catch \(error\)/);
+    assert.match(hostSource, /stageSlotMounts\(container, slot, plugins\)/);
+    assert.match(hostSource, /event\?\.detail\?\.phase === 'discovered'/);
+    assert.match(hostSource, /for \(const plugin of plugins\)/);
+    assert.match(hostSource, /pluginElement\.setAttribute\('data-app-plugin-loading'/);
+    assert.match(hostSource, /container\?\.classList\?\.contains\('app-plugin-account-slot'\)/);
+    assert.match(hostSource, /container\?\.classList\?\.contains\('app-plugin-bar'\)/);
+    assert.match(hostSource, /pluginElement\.classList\.add\(\.\.\.loadingClasses, 'app-plugin-loading-state'\)/);
+    assert.match(hostSource, /if \(!mount && showLoadingPlaceholder\) mount = createPluginMount\(key, slot\)/);
+    assert.match(hostSource, /if \(!mount\) \{\s*mount = createPluginMount\(key, slot\)/);
+    assert.doesNotMatch(hostSource, /createPluginLoadingButton/);
     assert.match(layoutSource, /renderApplicationPluginSlots\(fileExp\)\.catch/);
     assert.doesNotMatch(layoutSource, /await renderApplicationPluginSlots\(fileExp\)/);
 });

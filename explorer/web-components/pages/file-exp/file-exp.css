@@ -244,6 +244,50 @@ main {
     flex: 0 0 auto;
 }
 
+.app-plugin-mount > [data-app-plugin-loading] {
+    cursor: wait;
+    opacity: 0.82;
+}
+
+.app-plugin-mount > [data-app-plugin-loading]::before {
+    content: '';
+    width: 16px;
+    height: 16px;
+    flex: 0 0 auto;
+    border: 2px solid color-mix(in srgb, var(--text-soft) 55%, transparent);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: app-plugin-loading-spin 0.75s linear infinite;
+}
+
+.app-plugin-mount > [data-app-plugin-loading]::after {
+    content: attr(data-plugin-label);
+    font-size: 0.95rem;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.app-plugin-mount > [data-app-plugin-loading] > * {
+    display: none !important;
+}
+
+.app-plugin-mount > [data-app-plugin-loading].is-error {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.app-plugin-mount > [data-app-plugin-loading].is-error::before {
+    animation: none;
+    border-color: var(--file-exp-border, var(--border));
+}
+
+@keyframes app-plugin-loading-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
 .app-plugin-tool-button {
     width: 100%;
     min-height: 58px;

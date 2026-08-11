@@ -191,65 +191,202 @@ function collectExistingMounts(container) {
     return mounts;
 }
 
+function getPluginPresentation(plugin) {
+    const label = typeof plugin?.label === 'string' && plugin.label.trim()
+        ? plugin.label.trim()
+        : typeof plugin?.tooltip === 'string' && plugin.tooltip.trim()
+            ? plugin.tooltip.trim()
+            : typeof plugin?.component === 'string' && plugin.component.trim()
+                ? plugin.component.trim()
+                : 'Plugin';
+    const tooltip = typeof plugin?.tooltip === 'string' && plugin.tooltip.trim()
+        ? plugin.tooltip.trim()
+        : label;
+    return { label, tooltip };
+}
+
+function markPluginLoadingFailed(mount, plugin, error) {
+    const pluginElement = mount?.querySelector?.('[data-app-plugin-loading]');
+    if (!pluginElement) return;
+    const { label } = getPluginPresentation(plugin);
+    pluginElement.classList.add('is-error');
+    pluginElement.removeAttribute('aria-busy');
+    pluginElement.setAttribute('aria-disabled', 'true');
+    pluginElement.setAttribute('aria-label', `${label} unavailable`);
+    pluginElement.title = error?.message || `${label} could not be loaded`;
+}
+
+function createPluginMount(key, slot) {
+    const mount = document.createElement('div');
+    mount.className = 'app-plugin-mount';
+    mount.setAttribute('data-app-plugin-key', key);
+    mount.setAttribute('data-app-plugin-slot', slot);
+    return mount;
+}
+
+function getPluginLoadingClasses(container) {
+    if (container?.classList?.contains('app-plugin-account-slot')) {
+        return ['toolbar-dropdown-item', 'action-menu-item'];
+    }
+    if (
+        container?.classList?.contains('app-toolbar-slot')
+        || container?.classList?.contains('app-menu-list')
+        || container?.classList?.contains('app-plugin-bar')
+    ) {
+        return ['app-plugin-tool-button'];
+    }
+    return [];
+}
+
+function stageSlotMounts(container, slot, plugins) {
+    if (!container) return new Map();
+
+    container.classList.toggle('is-empty', plugins.length === 0);
+    const loadingClasses = getPluginLoadingClasses(container);
+    const showLoadingPlaceholder = loadingClasses.length > 0;
+    const existingMounts = collectExistingMounts(container);
+    const stagedMounts = new Map();
+    const seen = new Set();
+
+    for (const plugin of plugins) {
+        const key = getPluginKey(plugin);
+        if (!key) continue;
+        seen.add(key);
+
+        let mount = existingMounts.get(key);
+        if (!mount && showLoadingPlaceholder) mount = createPluginMount(key, slot);
+        if (!mount) continue;
+
+        const expectedComponent = typeof plugin?.component === 'string' ? plugin.component.trim() : '';
+        const mountedComponent = expectedComponent ? mount.querySelector(expectedComponent) : null;
+        if (showLoadingPlaceholder && expectedComponent && !mountedComponent) {
+            const { label, tooltip } = getPluginPresentation(plugin);
+            const pluginElement = document.createElement(expectedComponent);
+            pluginElement.setAttribute('data-presenter', expectedComponent);
+            pluginElement.classList.add(...loadingClasses, 'app-plugin-loading-state');
+            pluginElement.setAttribute('data-app-plugin-loading', '');
+            pluginElement.setAttribute('data-plugin-label', label);
+            pluginElement.setAttribute('aria-label', `Loading ${label}`);
+            pluginElement.setAttribute('aria-busy', 'true');
+            pluginElement.title = `Loading ${tooltip}`;
+            mount.replaceChildren(pluginElement);
+        }
+        stagedMounts.set(key, mount);
+    }
+
+    for (const [key, node] of existingMounts.entries()) {
+        if (!seen.has(key)) node.remove();
+    }
+    for (const plugin of plugins) {
+        const mount = stagedMounts.get(getPluginKey(plugin));
+        if (mount) container.appendChild(mount);
+    }
+
+    return stagedMounts;
+}
+
+function stageApplicationPluginPlaceholders(fileExp) {
+    const toolbarContainer = fileExp?.element?.querySelector?.('#fileExpToolbarPlugins');
+    const toolbarPluginsDropdownContainer = fileExp?.element?.querySelector?.('#fileExpToolbarPluginsDropdown');
+    const rightBarContainer = fileExp?.element?.querySelector?.('#fileExpPluginBar');
+    const accountMenuContainer = fileExp?.element?.querySelector?.('#fileExpAccountMenuPlugins');
+    const toolbarPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.toolbar, {
+        contributionType: MOUNT_CONTRIBUTION_TYPE
+    });
+    const toolbarDropdownPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.toolbarPluginsDropdown, {
+        contributionType: MOUNT_CONTRIBUTION_TYPE
+    });
+    const useMobileToolbar = isMobileToolbarLayout();
+    const visibleToolbarPlugins = useMobileToolbar ? [] : toolbarPlugins;
+    const visibleToolbarDropdownPlugins = useMobileToolbar
+        ? mergeUniquePlugins(toolbarPlugins, toolbarDropdownPlugins)
+        : toolbarDropdownPlugins;
+    const rightBarPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.rightBar, {
+        contributionType: MOUNT_CONTRIBUTION_TYPE
+    });
+    const accountMenuPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.accountMenu, {
+        contributionType: MOUNT_CONTRIBUTION_TYPE
+    });
+    stageSlotMounts(toolbarContainer, APP_PLUGIN_SLOTS.toolbar, visibleToolbarPlugins);
+    stageSlotMounts(toolbarPluginsDropdownContainer, APP_PLUGIN_SLOTS.toolbarPluginsDropdown, visibleToolbarDropdownPlugins);
+    stageSlotMounts(rightBarContainer, APP_PLUGIN_SLOTS.rightBar, rightBarPlugins);
+    stageSlotMounts(accountMenuContainer, APP_PLUGIN_SLOTS.accountMenu, accountMenuPlugins);
+}
+
 async function mountSlot(container, slot, plugins, context) {
     if (!container) {
         return;
     }
 
-    container.classList.toggle('is-empty', plugins.length === 0);
     const contextWithOrientation = {
         ...(context || {}),
         orientation: getContainerOrientation(container, slot)
     };
-
-    const existingMounts = collectExistingMounts(container);
-    const seen = new Set();
-    const orderedMounts = [];
+    const loadingClasses = getPluginLoadingClasses(container);
+    const showLoadingPlaceholder = loadingClasses.length > 0;
+    const stagedMounts = stageSlotMounts(container, slot, plugins);
 
     for (const plugin of plugins) {
         const key = getPluginKey(plugin);
-        if (!key) {
+        let mount = key ? stagedMounts.get(key) : null;
+        if (!key) continue;
+
+        let pluginElement = mount?.querySelector?.(plugin.component) || null;
+        if (pluginElement && !pluginElement.hasAttribute('data-app-plugin-loading')) {
+            updateMountedPluginElement(pluginElement, plugin, contextWithOrientation);
             continue;
         }
+
         try {
             await ensureRuntimeComponent(plugin.component);
         } catch (error) {
             console.error(`[app-plugins] Failed to load ${key}:`, error);
+            if (showLoadingPlaceholder) markPluginLoadingFailed(mount, plugin, error);
             continue;
         }
-        seen.add(key);
 
-        let mount = existingMounts.get(key);
         if (!mount) {
-            mount = document.createElement('div');
-            mount.className = 'app-plugin-mount';
-            mount.setAttribute('data-app-plugin-key', key);
-            mount.setAttribute('data-app-plugin-slot', slot);
-            const pluginElement = document.createElement(plugin.component);
-            pluginElement.setAttribute('data-presenter', plugin.component);
-            mount.appendChild(pluginElement);
+            mount = createPluginMount(key, slot);
+            stagedMounts.set(key, mount);
             container.appendChild(mount);
         }
-
-        const pluginElement = mount.querySelector(plugin.component);
-        if (pluginElement) {
+        pluginElement ||= document.createElement(plugin.component);
+        if (!pluginElement.hasAttribute('data-presenter')) {
+            pluginElement.setAttribute('data-presenter', plugin.component);
+        }
+        updateMountedPluginElement(pluginElement, plugin, contextWithOrientation);
+        if (!pluginElement.isConnected) {
+            if (showLoadingPlaceholder) {
+                pluginElement.classList.add(...loadingClasses, 'app-plugin-loading-state');
+                pluginElement.setAttribute('data-app-plugin-loading', '');
+                pluginElement.setAttribute('aria-busy', 'true');
+            }
+            mount.appendChild(pluginElement);
+        }
+        try {
+            const ownsLoadingState = pluginElement.hasAttribute('data-app-plugin-loading');
+            if (pluginElement.renderCompletePromise && typeof pluginElement.renderCompletePromise.then === 'function') {
+                await pluginElement.renderCompletePromise;
+            }
             updateMountedPluginElement(pluginElement, plugin, contextWithOrientation);
+            if (ownsLoadingState) {
+                pluginElement.classList.remove(...loadingClasses, 'app-plugin-loading-state', 'is-error');
+                pluginElement.removeAttribute('data-app-plugin-loading');
+                pluginElement.removeAttribute('aria-busy');
+                pluginElement.removeAttribute('aria-disabled');
+                pluginElement.removeAttribute('aria-label');
+                pluginElement.removeAttribute('title');
+            }
+            void emitPluginMountedAudit(key, contextWithOrientation);
+        } catch (error) {
+            markPluginLoadingFailed(mount, plugin, error);
+            console.error(`[app-plugins] Failed to render ${key}:`, error);
         }
-        void emitPluginMountedAudit(key, contextWithOrientation);
-
-        orderedMounts.push(mount);
     }
 
-    for (const [key, node] of existingMounts.entries()) {
-        if (!seen.has(key)) {
-            node.remove();
-        }
-    }
-
-    for (const node of orderedMounts) {
-        if (node && node.parentNode === container) {
-            container.appendChild(node);
-        }
+    for (const plugin of plugins) {
+        const mount = stagedMounts.get(getPluginKey(plugin));
+        if (mount) container.appendChild(mount);
     }
 }
 
@@ -275,6 +412,7 @@ async function performRenderApplicationPluginSlots(fileExp) {
     const internalPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.internal, { contributionType: MOUNT_CONTRIBUTION_TYPE });
     const globalPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.global, { contributionType: MOUNT_CONTRIBUTION_TYPE });
     const accountMenuPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.accountMenu, { contributionType: MOUNT_CONTRIBUTION_TYPE });
+    stageApplicationPluginPlaceholders(fileExp);
     const currentPath = fileExp.normalizePath(fileExp.state.path || '/');
     const [currentFsPath, workspaceFsRoot] = await Promise.all([
         resolveExplorerPathToFilesystemPath(currentPath),
@@ -348,10 +486,17 @@ export function attachApplicationPluginHost(fileExp) {
             console.error('[app-plugins] Failed to render application plugin slots after viewport change', error);
         });
     };
+    const handleRuntimePluginsUpdated = (event) => {
+        if (event?.detail?.phase === 'discovered') {
+            stageApplicationPluginPlaceholders(fileExp);
+            return;
+        }
+        rerender();
+    };
 
     fileExp.__appPluginMobileToolbarLayout = isMobileToolbarLayout();
     fileExp.setWindowListener?.('file-exp-app-plugins-settings', 'assistos:plugin-settings-updated', rerender);
-    fileExp.setWindowListener?.('file-exp-runtime-plugins', 'assistos:runtime-plugins-updated', rerender);
+    fileExp.setWindowListener?.('file-exp-runtime-plugins', 'assistos:runtime-plugins-updated', handleRuntimePluginsUpdated);
     fileExp.setWindowListener?.('file-exp-app-plugins-toolbar-viewport', 'resize', rerenderForToolbarViewport, {
         passive: true
     });

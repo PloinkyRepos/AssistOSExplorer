@@ -492,14 +492,20 @@ async function start() {
     clearBootstrapReloadState(window);
     if (isFileExplorerRoute) {
         window.setTimeout(() => {
-            Promise.all([
-                waitForAgentRuntimeAvailability({
-                    label: 'Explorer plugins',
-                    operation: loadRuntimeContext
-                }),
-                new Promise((resolve) => window.setTimeout(resolve, RUNTIME_PLUGIN_MOUNT_GRACE_MS))
-            ])
-                .then(() => window.dispatchEvent(new CustomEvent(RUNTIME_PLUGINS_UPDATED_EVENT)))
+            waitForAgentRuntimeAvailability({
+                label: 'Explorer plugins',
+                operation: loadRuntimeContext
+            })
+                .then(() => {
+                    window.dispatchEvent(new CustomEvent(RUNTIME_PLUGINS_UPDATED_EVENT, {
+                        detail: { phase: 'discovered' }
+                    }));
+                    window.setTimeout(() => {
+                        window.dispatchEvent(new CustomEvent(RUNTIME_PLUGINS_UPDATED_EVENT, {
+                            detail: { phase: 'ready' }
+                        }));
+                    }, RUNTIME_PLUGIN_MOUNT_GRACE_MS);
+                })
                 .catch((error) => {
                     console.error('[runtime-plugins] Failed to initialize plugins after Explorer mount:', error);
                 });
