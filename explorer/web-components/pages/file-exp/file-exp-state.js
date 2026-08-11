@@ -275,6 +275,7 @@ export function createFileExpState() {
         fileLoadInfo: null,
         onlyOfficeConfig: null,
         onlyOfficeStatusText: '',
+        onlyOfficeRuntimeState: null,
         sortBy: 'name',
         sortDir: 'asc',
         listWidth: loadListWidthPreference(),

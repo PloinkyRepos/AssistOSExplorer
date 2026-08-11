@@ -491,6 +491,7 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
     overflow: auto;
     flex: 1 1 auto;
     min-height: 0;
+    position: relative;
 }
 
 .git-credentials {
@@ -505,6 +506,52 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
     gap: 12px;
     min-height: 0;
     flex: 1 1 auto;
+    transition: filter 120ms ease, opacity 120ms ease;
+}
+
+.git-modal.git-commit-message-busy .git-modal-content {
+    filter: blur(2px);
+    opacity: 0.58;
+    pointer-events: none;
+    user-select: none;
+}
+
+.git-commit-message-loader {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    color: var(--text);
+    font-weight: 600;
+}
+
+.git-commit-message-loader[hidden] {
+    display: none;
+}
+
+.git-commit-message-spinner {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 auto;
+    border: 2px solid color-mix(in srgb, var(--text-soft) 28%, transparent);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: git-commit-message-spin 0.8s linear infinite;
+}
+
+@keyframes git-commit-message-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .git-commit-message-spinner {
+        animation: none;
+    }
 }
 
 .git-modal.git-credentials-open .git-modal-content {

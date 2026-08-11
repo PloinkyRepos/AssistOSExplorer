@@ -1,16 +1,14 @@
-import { getDefaultLLMAgent, registerDefaultLLMAgent } from 'achillesAgentLib/LLMAgents';
 import { spawn } from 'node:child_process';
 
-const MAX_FILES = 20;
-const MAX_DIFF_CHARS_PER_FILE = 600;
-const MAX_DIFF_CHARS_PER_FILE_SMALL_BATCH = 4_000;
-const FILE_SUMMARY_TIMEOUT_MS = 12_000;
-const FILE_SUMMARY_TIMEOUT_MS_SMALL_BATCH = 25_000;
-const FILE_SUMMARY_CONCURRENCY = 2;
-const FILE_SUMMARY_CONCURRENCY_SMALL_BATCH = 1;
-const FINAL_MESSAGE_TIMEOUT_MS = 12_000;
-const FINAL_MESSAGE_TIMEOUT_MS_SMALL_BATCH = 25_000;
-const FILE_SUMMARY_TOTAL_TIMEOUT_MS = 60_000;
+const DIRECT_PROMPT_CHAR_LIMIT = 16_000;
+const BATCH_CHAR_LIMIT = 12_000;
+const MAX_FILES_PER_BATCH = 10;
+const MAX_DIFF_CHARS_PER_FILE = 5_000;
+const BATCH_TIMEOUT_MS = 25_000;
+const FINAL_MESSAGE_TIMEOUT_MS = 25_000;
+const TOTAL_TIMEOUT_MS = 90_000;
+
+const CATEGORY_ORDER = ['runtime', 'ui', 'configuration', 'tests', 'documentation', 'source'];
 
 function safeParseJson(text) {
   try { return JSON.parse(text); } catch { return null; }
@@ -19,12 +17,13 @@ function safeParseJson(text) {
 function stripFences(text) {
   return String(text || '')
     .trim()
-    .replace(/^\s*```[\s\S]*?\n/, '')
-    .replace(/\n```[\s\S]*$/m, '')
+    .replace(/^\s*```[^\n]*\n/, '')
+    .replace(/\n```\s*$/m, '')
     .trim();
 }
 
-function getDefaultAgent() {
+async function getDefaultAgent() {
+  const { getDefaultLLMAgent, registerDefaultLLMAgent } = await import('achillesAgentLib/LLMAgents');
   return (typeof getDefaultLLMAgent === 'function' && getDefaultLLMAgent())
     || (typeof registerDefaultLLMAgent === 'function' && registerDefaultLLMAgent());
 }
@@ -35,7 +34,13 @@ function normalizePath(value) {
 
 function getRepoName(repoPath) {
   const parts = normalizePath(repoPath).split('/').filter(Boolean);
-  return parts.at(-1) || 'repository';
+  return parts.at(-1) || '';
+}
+
+function displayPath(item) {
+  const filePath = normalizePath(item?.filePath);
+  const repoName = getRepoName(item?.repoPath);
+  return repoName ? `${repoName}/${filePath}` : filePath;
 }
 
 function truncateText(text, maxChars) {
@@ -45,94 +50,172 @@ function truncateText(text, maxChars) {
   return `${value.slice(0, half)}\n[diff truncated]\n${value.slice(-half)}`;
 }
 
-function buildFileSummaryPrompt(item, maxDiffChars = MAX_DIFF_CHARS_PER_FILE) {
-  const filePath = normalizePath(item?.filePath);
+function categorizePath(filePath) {
+  const value = normalizePath(filePath).toLowerCase();
+  const segments = value.split('/').filter(Boolean);
+  const fileName = segments.at(-1) || '';
+
+  if (segments.some((part) => part === 'test' || part === 'tests' || part === '__tests__')
+    || /(?:^|[._-])(test|spec)\.[^.]+$/.test(fileName)) return 'tests';
+  if (segments.includes('docs') || /\.(md|mdx|rst|adoc)$/.test(fileName)) return 'documentation';
+  if (segments.includes('ide-plugins') || segments.includes('web-components')
+    || value.includes('/shared/ui/') || /\.(css|scss|sass|less|html)$/.test(fileName)) return 'ui';
+  if (fileName === 'manifest.json' || fileName === 'package.json' || fileName === 'package-lock.json'
+    || /(?:^|[._-])(config|settings)(?:[._-]|$)/.test(fileName)
+    || /\.(ya?ml|toml|ini)$/.test(fileName)) return 'configuration';
+  if (segments.some((part) => ['runtime', 'services', 'server', 'lib', 'tools'].includes(part))) return 'runtime';
+  return 'source';
+}
+
+function renderDiffItem(item, maxDiffChars = MAX_DIFF_CHARS_PER_FILE) {
   return [
-    `File: ${filePath}`,
-    'Diff:',
-    truncateText(item?.diff, maxDiffChars),
-    '',
-    'Write one short commit-message sentence for this file.',
-    'Return only that sentence. No labels. No file path. No raw diff lines.'
+    `FILE: ${displayPath(item)}`,
+    'DIFF:',
+    truncateText(item?.diff, maxDiffChars) || '[no textual diff available]',
   ].join('\n');
 }
 
-function buildFinalPrompt(summaries) {
+function renderAllDiffs(diffs, maxDiffChars = MAX_DIFF_CHARS_PER_FILE) {
+  return diffs.map((item) => renderDiffItem(item, maxDiffChars)).join('\n\n');
+}
+
+function buildDirectPrompt(diffs) {
   return [
-    `Write one Git commit subject by synthesizing these ${summaries.length} per-file change summaries.`,
-    'Return only the subject line. Do not return bullets.',
-    'The subject must describe the dominant shared feature or behavior change across the files.',
-    'Do not choose a subject from one isolated implementation cleanup when other summaries describe a larger feature change.',
+    'Write one complete Git commit message for the supplied changes.',
+    'Return only the commit message: an imperative subject line, then a blank line and concise body bullets when multiple substantive changes exist.',
+    'Describe the dominant shared behavior first and include important secondary behavior. Treat tests and documentation as support for the implementation, not as the dominant feature.',
+    'Do not invent behavior, include labels, use Markdown headings, or enumerate files mechanically.',
     '',
-    'PER_FILE_SUMMARIES_START',
-    ...summaries.map((item) => `- ${item.filePath}: ${item.summary}`),
-    'PER_FILE_SUMMARIES_END',
-    '',
-    'Return only the commit subject text that should be used as the first line.',
-    'Do not write labels such as "Commit Message:", "Message:", or "Summary:".',
-    'Do not include explanations, markdown headings, numbered sections, or bullets.',
-    'Use only the per-file summaries as commit content.',
-    'Write one imperative sentence about the shared capability or behavior changed.',
-    'The subject must be supported by most of the summaries, not just one file.',
-    'The subject must start with the real action, not with a generic file phrase.',
-    'Bad subjects:',
-    '- Update files',
-    '- Update selected files',
-    '- Update project files',
-    '- Update files Add validation and error handling',
-    'Cover the combined change across the summaries, not just the first file.'
+    'CHANGES_START',
+    renderAllDiffs(diffs),
+    'CHANGES_END',
   ].join('\n');
 }
 
-function buildTimeoutMessage(diffs) {
-  const files = diffs
-    .map((item) => normalizePath(item?.filePath))
-    .filter(Boolean);
-  if (files.length === 1) {
-    return `Update ${files[0]}`;
+function buildSemanticBatches(diffs, options = {}) {
+  const charLimit = options.charLimit || BATCH_CHAR_LIMIT;
+  const fileLimit = options.fileLimit || MAX_FILES_PER_BATCH;
+  const groups = new Map(CATEGORY_ORDER.map((category) => [category, []]));
+  for (const item of diffs) {
+    groups.get(categorizePath(item?.filePath)).push(item);
   }
+
+  const batches = [];
+  for (const category of CATEGORY_ORDER) {
+    const items = groups.get(category);
+    if (!items.length) continue;
+    let current = [];
+    let currentChars = 0;
+    for (const item of items) {
+      const renderedLength = renderDiffItem(item).length + 2;
+      if (current.length && (current.length >= fileLimit || currentChars + renderedLength > charLimit)) {
+        batches.push({ category, items: current });
+        current = [];
+        currentChars = 0;
+      }
+      current.push(item);
+      currentChars += renderedLength;
+    }
+    if (current.length) batches.push({ category, items: current });
+  }
+
+  const categoryParts = new Map();
+  return batches.map((batch) => {
+    const part = (categoryParts.get(batch.category) || 0) + 1;
+    categoryParts.set(batch.category, part);
+    const totalParts = batches.filter((candidate) => candidate.category === batch.category).length;
+    return {
+      ...batch,
+      label: totalParts > 1 ? `${batch.category} ${part}/${totalParts}` : batch.category,
+    };
+  });
+}
+
+function buildBatchPrompt(batch) {
+  return [
+    `Summarize this ${batch.label} change batch for a Git commit message.`,
+    'Return only 2-6 concise lines, one substantive behavior per line, without headings or labels.',
+    'Connect related files into shared behavior. Mention tests or documentation only as supporting coverage. Do not invent behavior and do not merely repeat file names.',
+    '',
+    'BATCH_CHANGES_START',
+    renderAllDiffs(batch.items),
+    'BATCH_CHANGES_END',
+  ].join('\n');
+}
+
+function summaryLines(text) {
+  const seen = new Set();
+  const lines = [];
+  for (const rawLine of stripFences(text).split(/\r?\n/)) {
+    const line = rawLine.trim().replace(/^[-*]\s+/, '').replace(/^\d+[.)]\s+/, '').trim();
+    if (!line || /^(summary|changes|commit message):?$/i.test(line)) continue;
+    const key = line.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    lines.push(line);
+  }
+  return lines.slice(0, 6);
+}
+
+function renderFileInventory(diffs) {
+  const grouped = new Map();
+  for (const item of diffs) {
+    const category = categorizePath(item?.filePath);
+    if (!grouped.has(category)) grouped.set(category, []);
+    grouped.get(category).push(displayPath(item));
+  }
+  return CATEGORY_ORDER
+    .filter((category) => grouped.has(category))
+    .map((category) => `${category}: ${grouped.get(category).join(', ')}`)
+    .join('\n');
+}
+
+function buildFinalPrompt(summaries, diffs) {
+  return [
+    'Write one complete Git commit message by synthesizing the available batch summaries and complete file inventory.',
+    'Return only the commit message. Use an imperative subject of at most 72 characters, followed by a blank line and 2-7 concise bullets when the change needs a body.',
+    'The subject must describe the dominant shared capability. The body must cover important secondary behavior across implementation, UI, configuration, tests, and documentation when present.',
+    'Do not let tests or documentation overshadow the implementation. Do not invent behavior, add labels, use Markdown headings, or mechanically list files.',
+    '',
+    'BATCH_SUMMARIES_START',
+    ...summaries.map((item) => `[${item.label}]\n${item.lines.map((line) => `- ${line}`).join('\n')}`),
+    'BATCH_SUMMARIES_END',
+    '',
+    'COMPLETE_FILE_INVENTORY_START',
+    renderFileInventory(diffs),
+    'COMPLETE_FILE_INVENTORY_END',
+  ].join('\n');
+}
+
+function buildFileFallbackMessage(diffs) {
+  const files = diffs.map((item) => displayPath(item)).filter(Boolean);
+  if (files.length === 1) return `Update ${files[0]}`;
+  const shown = files.slice(0, 10);
+  const remainder = files.length - shown.length;
   return [
     'Update project files',
     '',
-    ...files.slice(0, 10).map((file) => `- ${file}`)
+    ...shown.map((file) => `- ${file}`),
+    ...(remainder > 0 ? [`- Include ${remainder} additional changed files`] : []),
   ].join('\n');
 }
 
-function buildMessageFromSummaries(summaries) {
-  const cleanSummaries = summaries
-    .map((item) => String(item?.summary || '').trim())
-    .filter(Boolean);
-  if (!cleanSummaries.length) {
-    return 'Update selected files';
-  }
-  const firstSpecificSummary = cleanSummaries.find((summary) => !/^Updated\s+\S+/i.test(summary)) || cleanSummaries[0];
-  const subject = firstSpecificSummary
+function normalizeSubject(line) {
+  return String(line || '')
+    .replace(/^(commit message|subject|summary):\s*/i, '')
     .replace(/\.$/, '')
-    .replace(/^(Add|Fix|Update|Improve|Refactor|Implement)\b/i, (match) => match[0].toUpperCase() + match.slice(1).toLowerCase());
-  return [
-    subject,
-    '',
-    ...cleanSummaries.slice(0, 5).map((summary) => `- ${summary}`)
-  ].join('\n');
+    .trim();
 }
 
-function buildMessageWithSummaryBullets(subject, summaries) {
-  const normalizedSummaries = summaries
-    .map((item) => ({
-      filePath: normalizePath(item?.filePath),
-      summary: String(item?.summary || '').trim()
-    }))
-    .filter((item) => item.filePath && item.summary);
-  if (normalizedSummaries.length <= 1) {
-    return String(subject || '').trim();
-  }
-
-  const cleanSubject = String(subject || '').split(/\r?\n/).find((line) => line.trim() && !/^\s*[-*]\s+/.test(line))?.trim();
-  return [
-    cleanSubject || buildMessageFromSummaries(normalizedSummaries).split(/\r?\n/)[0],
-    '',
-    ...normalizedSummaries.map((item) => `- ${item.summary}`)
-  ].join('\n').trim();
+function buildMessageFromBatchSummaries(summaries, diffs) {
+  const lines = summaries.flatMap((item) => item.lines).filter(Boolean);
+  if (!lines.length) return buildFileFallbackMessage(diffs);
+  const subject = normalizeSubject(lines[0]);
+  const bullets = [...new Set(lines.map((line) => line.trim()))]
+    .filter((line) => normalizeSubject(line).toLowerCase() !== subject.toLowerCase())
+    .slice(0, 7);
+  if (!bullets.length) return subject;
+  return [subject, '', ...bullets.map((line) => `- ${line}`)].join('\n');
 }
 
 async function executePromptWithTimeout(agent, prompt, timeoutMs) {
@@ -184,35 +267,16 @@ async function executePromptWithTimeout(agent, prompt, timeoutMs) {
   });
 }
 
-async function summarizeFile(agent, item, deadline, options = {}) {
-  const filePath = normalizePath(item?.filePath);
-  if (Date.now() >= deadline) {
-    return { filePath, summary: `Updated ${filePath}` };
-  }
+async function summarizeBatch(agent, batch, execute, deadline) {
+  if (Date.now() >= deadline) return null;
   try {
-    const baseTimeoutMs = options.timeoutMs || FILE_SUMMARY_TIMEOUT_MS;
-    const maxDiffChars = options.maxDiffChars || MAX_DIFF_CHARS_PER_FILE;
-    const timeoutMs = Math.max(1_000, Math.min(baseTimeoutMs, deadline - Date.now()));
-    const raw = await executePromptWithTimeout(agent, buildFileSummaryPrompt(item, maxDiffChars), timeoutMs);
-    const summary = stripFences(raw).split(/\r?\n/).map((line) => line.trim()).filter(Boolean)[0] || '';
-    return { filePath, summary: summary || `Updated ${filePath}` };
+    const timeoutMs = Math.max(1_000, Math.min(BATCH_TIMEOUT_MS, deadline - Date.now()));
+    const raw = await execute(agent, buildBatchPrompt(batch), timeoutMs);
+    const lines = summaryLines(raw);
+    return lines.length ? { label: batch.label, lines } : null;
   } catch {
-    return { filePath, summary: `Updated ${filePath}` };
+    return null;
   }
-}
-
-async function mapWithConcurrency(items, limit, mapper) {
-  const out = new Array(items.length);
-  let nextIndex = 0;
-  const workerCount = Math.max(1, Math.min(Number(limit) || 1, items.length));
-  await Promise.all(Array.from({ length: workerCount }, async () => {
-    while (nextIndex < items.length) {
-      const index = nextIndex;
-      nextIndex += 1;
-      out[index] = await mapper(items[index], index);
-    }
-  }));
-  return out;
 }
 
 export default async function gitCommitMessage(input, context = {}) {
@@ -226,44 +290,41 @@ export default async function gitCommitMessage(input, context = {}) {
   }
 
   const diffs = Array.isArray(payload.diffs) ? payload.diffs : [];
-  if (!diffs.length) {
-    throw new Error('No diffs provided.');
-  }
+  if (!diffs.length) throw new Error('No diffs provided.');
 
-  const agent = getDefaultAgent();
-  if (!agent) {
-    throw new Error('No default LLM agent available.');
-  }
+  const agent = context.llmAgent || await getDefaultAgent();
+  if (!agent) throw new Error('No default LLM agent available.');
+  const execute = typeof context.executePromptWithTimeout === 'function'
+    ? context.executePromptWithTimeout
+    : executePromptWithTimeout;
+  const directPromptCharLimit = context.directPromptCharLimit ?? DIRECT_PROMPT_CHAR_LIMIT;
+  const batchCharLimit = context.batchCharLimit ?? BATCH_CHAR_LIMIT;
+  const deadline = Date.now() + TOTAL_TIMEOUT_MS;
 
-  const selectedDiffs = diffs.slice(0, MAX_FILES);
-  const fileSummaryDeadline = Date.now() + FILE_SUMMARY_TOTAL_TIMEOUT_MS;
-  const smallBatch = selectedDiffs.length <= 5;
-  const summaryOptions = {
-    timeoutMs: smallBatch ? FILE_SUMMARY_TIMEOUT_MS_SMALL_BATCH : FILE_SUMMARY_TIMEOUT_MS,
-    maxDiffChars: smallBatch ? MAX_DIFF_CHARS_PER_FILE_SMALL_BATCH : MAX_DIFF_CHARS_PER_FILE
-  };
-  const summaries = await mapWithConcurrency(
-    selectedDiffs,
-    smallBatch ? FILE_SUMMARY_CONCURRENCY_SMALL_BATCH : FILE_SUMMARY_CONCURRENCY,
-    (item) => summarizeFile(agent, item, fileSummaryDeadline, summaryOptions)
-  );
-  if (summaries.length === 1) {
-    return summaries[0]?.summary || buildTimeoutMessage(selectedDiffs);
-  }
-
-  let raw = '';
-  try {
-    const finalTimeoutMs = smallBatch ? FINAL_MESSAGE_TIMEOUT_MS_SMALL_BATCH : FINAL_MESSAGE_TIMEOUT_MS;
-    raw = await executePromptWithTimeout(agent, buildFinalPrompt(summaries), finalTimeoutMs);
-  } catch (error) {
-    if (error?.message === 'llm_timeout') {
-      return buildMessageFromSummaries(summaries);
+  const directPrompt = buildDirectPrompt(diffs);
+  if (directPrompt.length <= directPromptCharLimit) {
+    try {
+      const direct = stripFences(await execute(agent, directPrompt, BATCH_TIMEOUT_MS));
+      if (direct) return direct;
+    } catch {
+      // Continue with batch synthesis so a partial provider failure does not discard the operation.
     }
-    throw error;
   }
-  const subject = stripFences(raw);
-  if (!subject) {
-    throw new Error('AI returned an empty commit message.');
+
+  const batches = buildSemanticBatches(diffs, { charLimit: batchCharLimit });
+  const summaries = [];
+  for (const batch of batches) {
+    const summary = await summarizeBatch(agent, batch, execute, deadline);
+    if (summary) summaries.push(summary);
   }
-  return buildMessageWithSummaryBullets(subject, summaries);
+  if (!summaries.length) return buildFileFallbackMessage(diffs);
+
+  try {
+    const timeoutMs = Math.max(1_000, Math.min(FINAL_MESSAGE_TIMEOUT_MS, deadline - Date.now()));
+    const finalMessage = stripFences(await execute(agent, buildFinalPrompt(summaries, diffs), timeoutMs));
+    if (finalMessage) return finalMessage;
+  } catch {
+    // The valid batch summaries are sufficient for a deterministic commit message.
+  }
+  return buildMessageFromBatchSummaries(summaries, diffs);
 }

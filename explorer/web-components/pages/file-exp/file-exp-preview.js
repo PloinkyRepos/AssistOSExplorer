@@ -141,6 +141,7 @@ export async function openFile(fileExp, filePath, {
                 fileLoadInfo: null,
                 onlyOfficeConfig: null,
                 onlyOfficeStatusText: '',
+                onlyOfficeRuntimeState: null,
                 externallyModified: false,
                 savePending: preserveSaveStatus ? fileExp.state.savePending : false,
                 lastSaveError: preserveSaveStatus ? fileExp.state.lastSaveError : '',

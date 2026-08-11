@@ -55,6 +55,7 @@ The Git plugin owns:
 - menu action semantics such as `New repository` in the host-owned Explorer `New` menu
 - menu action semantics such as `Add to .gitignore` and `Remove from .gitignore`
 - direct ignore actions in `git-commit-modal`, without a separate pattern-editing prompt
+- AI commit-message generation with a modal-local busy overlay that keeps the Git content visible, prevents duplicate generation requests, and clears after either success or failure
 
 For ignore actions in Explorer context menus, the owning Git behavior is:
 

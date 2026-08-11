@@ -306,9 +306,14 @@ dialog.spinner:not(.spinner-default-style) {
     position: fixed;
     inset: 0;
     display: flex;
+    width: 100vw;
+    height: 100vh;
+    max-width: none;
+    max-height: none;
+    margin: 0;
     align-items: center;
     justify-content: center;
-    border-radius: 50%;
+    border-radius: 0;
 }
 
 dialog.spinner.spinner-default-style {
@@ -588,17 +593,15 @@ dialog.modal::backdrop {
 .spinner-container {
     display: inline-flex;
     align-items: center;
-    background: radial-gradient(circle at 80% 30%, rgba(115, 189, 121, 0.12), transparent 45%),
-    var(--surface);
     border: none;
     background: none;
-    overflow: hidden;
-    border-radius: 50%;
+    overflow: visible;
 }
 
 .spinner-shell {
     display: inline-flex;
     align-items: center;
+    gap: 14px;
 }
 
 .spinner-orbit {
@@ -646,6 +649,7 @@ dialog.modal::backdrop {
     display: flex;
     flex-direction: column;
     gap: 4px;
+    max-width: min(34rem, calc(100vw - 8rem));
     color: var(--text);
 }
 
@@ -656,7 +660,26 @@ dialog.modal::backdrop {
 
 .spinner-subtitle {
     font-size: 0.9rem;
+    line-height: 1.4;
     color: var(--text-soft);
+}
+
+.spinner-retry {
+    align-self: flex-start;
+    margin-top: 8px;
+}
+
+@media (max-width: 520px) {
+    .spinner-shell {
+        flex-direction: column;
+        gap: 12px;
+        padding: 1.5rem;
+        text-align: center;
+    }
+
+    .spinner-caption {
+        max-width: calc(100vw - 3rem);
+    }
 }
 
 .spinner-default-style {

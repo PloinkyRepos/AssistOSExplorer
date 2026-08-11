@@ -73,8 +73,8 @@ test('Workspace Monitor keeps read-only concerns in separate tabs', () => {
 
 test('Explorer rejects direct admin-only component routes for non-admin users', () => {
     const mainSource = fs.readFileSync(path.join(explorerRoot, 'main.js'), 'utf8');
-    assert.match(mainSource, /getRuntimeComponentPolicy\(runtimePlugins, pageName\)/);
-    assert.match(mainSource, /routePolicy\?\.adminOnly && !isAdminUser\(authenticatedUser\)/);
-    assert.match(mainSource, /componentPolicy\?\.adminOnly && !isAdminUser\(authenticatedUser\)/);
+    assert.match(mainSource, /getRuntimeComponentPolicy\(context\.plugins, pageName\)/);
+    assert.match(mainSource, /routePolicy\?\.adminOnly && !isAdminUser\(context\.authenticatedUser\)/);
+    assert.match(mainSource, /componentPolicy\?\.adminOnly && !isAdminUser\(context\.authenticatedUser\)/);
     assert.match(mainSource, /error\.code = 'ADMIN_REQUIRED'/);
 });

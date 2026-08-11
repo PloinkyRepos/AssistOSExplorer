@@ -38,10 +38,15 @@
             <git-credentials-prompt data-presenter="git-credentials-prompt"></git-credentials-prompt>
         </div>
         <div class="git-modal-content">
-        <git-conflict-banner data-presenter="git-conflict-banner"></git-conflict-banner>
-        <git-pull-blocked-panel data-presenter="git-pull-blocked-panel"></git-pull-blocked-panel>
-        <git-conflict-helper data-presenter="git-conflict-helper"></git-conflict-helper>
-        <git-commit-body data-presenter="git-commit-body"></git-commit-body>
+            <git-conflict-banner data-presenter="git-conflict-banner"></git-conflict-banner>
+            <git-pull-blocked-panel data-presenter="git-pull-blocked-panel"></git-pull-blocked-panel>
+            <git-conflict-helper data-presenter="git-conflict-helper"></git-conflict-helper>
+            <git-commit-body data-presenter="git-commit-body"></git-commit-body>
+        </div>
+        <div class="git-commit-message-loader" data-role="git-commit-message-loader" role="status"
+             aria-live="polite" aria-hidden="true" hidden>
+            <span class="git-commit-message-spinner" aria-hidden="true"></span>
+            <span>Generating commit message…</span>
         </div>
     </div>
 </div>

@@ -126,3 +126,80 @@ test('an explicit no-version DPU reopen obtains a fresh session after the curren
         }
     }
 });
+
+test('OnlyOffice startup failures switch the preview to the shared runtime loader', async () => {
+    const originalFetch = globalThis.fetch;
+    const previewStates = [];
+    let invalidations = 0;
+    const fileExp = {
+        normalizePath(path) {
+            return path;
+        },
+        caches: {
+            officeSession: {
+                get() { return null; },
+                set() {},
+                clear() {},
+                invalidateForPath() {}
+            }
+        },
+        setPreviewState(state) {
+            previewStates.push(state);
+        },
+        invalidate() {
+            invalidations += 1;
+        },
+        refreshPreviewUi() {}
+    };
+
+    try {
+        globalThis.fetch = async () => new Response(JSON.stringify({ error: 'agent_not_ready' }), {
+            status: 503,
+            headers: { 'content-type': 'application/json' }
+        });
+        const loaded = await tryLoadOnlyOfficePreview(fileExp, '/report.docx');
+        assert.equal(loaded, true);
+        assert.equal(invalidations, 1);
+        assert.deepEqual(previewStates[0].onlyOfficeRuntimeState, { path: '/report.docx' });
+        assert.equal(previewStates[0].onlyOfficeConfig, null);
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test('OnlyOffice document 404 remains a domain error instead of entering the runtime loader', async () => {
+    const originalFetch = globalThis.fetch;
+    const previewStates = [];
+    const fileExp = {
+        normalizePath(path) {
+            return path;
+        },
+        caches: {
+            officeSession: {
+                get() { return null; },
+                set() {},
+                clear() {},
+                invalidateForPath() {}
+            }
+        },
+        setPreviewState(state) {
+            previewStates.push(state);
+        },
+        invalidate() {},
+        refreshPreviewUi() {}
+    };
+
+    try {
+        globalThis.fetch = async () => new Response(JSON.stringify({ error: 'document not found' }), {
+            status: 404,
+            headers: { 'content-type': 'application/json' }
+        });
+        await assert.rejects(
+            () => tryLoadOnlyOfficePreview(fileExp, '/missing.docx'),
+            (error) => error.status === 404 && error.message === 'document not found'
+        );
+        assert.deepEqual(previewStates, []);
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});

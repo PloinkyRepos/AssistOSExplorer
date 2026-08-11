@@ -98,6 +98,8 @@
                 <section>
                     <h2>Intermediary Guarantee</h2>
                     <p>Explorer never needs to execute raw shell Git commands directly. It calls MCP tools and receives normalized responses. This separation keeps Git process control, path security, and auth behavior centralized in the agent.</p>
+                    <p>Commit-message assistance sends a small selected diff in one synthesis request. Larger selections include every selected file and are grouped into bounded semantic batches such as runtime, user interface, configuration, tests, and documentation, then reduced into one subject and concise body. This keeps related changes connected while avoiding one provider request per file.</p>
+                    <p>The flow tolerates partial provider failure. Empty or failed batch summaries are discarded, successful summaries remain eligible for synthesis, and an empty or failed final synthesis falls back to a deterministic message built from the available summaries. When no summary succeeds, the complete affected-file inventory provides the fallback message.</p>
                     <div class="doc-callout doc-callout--important">
                         <p>The architecture goal is operational control and contract stability, not replacing Git itself and not embedding Git runtime logic inside Explorer UI code.</p>
                     </div>

@@ -1,6 +1,8 @@
 import { clearOnlyOfficeEditor, renderOnlyOfficeEditor } from "../../../services/onlyoffice/onlyoffice-editor-host.js";
 import { buildSecretPreviewMarkup } from "./file-exp-dpu-provider.js";
 import { renderMarkdownDiagrams } from "./file-exp-utils.js";
+import { mountAgentRuntimeLoader } from "../../../shared/ui/agent-runtime-loader/agent-runtime-loader.js";
+import { tryLoadOnlyOfficePreview } from "../../../services/onlyoffice/onlyoffice-preview-service.js";
 
 export function toggleHidden(fileExp, element, hidden = true) {
     if (!element) return;
@@ -387,8 +389,30 @@ export function renderStandardPreview(fileExp, refs, previewUiState) {
                 refs.componentMount.innerHTML = `<div class="preview-placeholder">${error?.message || 'OnlyOffice preview is unavailable.'}</div>`;
             });
         } else {
-            clearMountElement(refs.componentMount);
-            refs.componentMount.innerHTML = `<div class="preview-placeholder">${fileExp.state.onlyOfficeStatusText || 'OnlyOffice preview is unavailable.'}</div>`;
+            const runtimePath = String(fileExp.state.onlyOfficeRuntimeState?.path || '');
+            if (runtimePath) {
+                if (refs.componentMount.firstElementChild?.tagName?.toLowerCase() !== 'agent-runtime-loader') {
+                    clearMountElement(refs.componentMount);
+                }
+                const selectedPath = String(fileExp.state.selectedPath || '');
+                void mountAgentRuntimeLoader(refs.componentMount, {
+                    key: `onlyoffice:${runtimePath}`,
+                    agentRef: 'AchillesIDE/onlyOffice',
+                    label: 'OnlyOffice',
+                    operation: async () => {
+                        if (String(fileExp.state.selectedPath || '') !== selectedPath) return;
+                        await tryLoadOnlyOfficePreview(fileExp, runtimePath, {
+                            invalidate: true,
+                            deferRuntimeStartup: false
+                        });
+                    }
+                }).catch((error) => {
+                    console.error('OnlyOffice runtime loader failed', error);
+                });
+            } else {
+                clearMountElement(refs.componentMount);
+                refs.componentMount.innerHTML = `<div class="preview-placeholder">${fileExp.state.onlyOfficeStatusText || 'OnlyOffice preview is unavailable.'}</div>`;
+            }
         }
         return;
     }

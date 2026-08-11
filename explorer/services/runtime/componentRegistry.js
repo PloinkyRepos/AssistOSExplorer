@@ -4,9 +4,17 @@ import {
     scopeCssToComponent
 } from '../../utils/pluginUtils.core.js';
 import { registerRuntimeComponent } from '../../utils/pluginUtils.ui.js';
+import { withRetry } from '../utils/retry.js';
+import { isTransientAssetLoadError } from './bootstrapRecovery.js';
 
 const isNonEmptyString = (value) => typeof value === 'string' && value.trim().length > 0;
 const runtimeImportCacheBust = Date.now().toString(36);
+let runtimeImportSequence = 0;
+const assetRetryOptions = Object.freeze({
+    retries: 2,
+    delayMs: 250,
+    shouldRetry: isTransientAssetLoadError
+});
 
 export function createComponentRegistry(webSkel) {
     if (!webSkel) {
@@ -61,8 +69,14 @@ export function createComponentRegistry(webSkel) {
         const componentBase = resolveBaseUrl(meta);
         const safeBase = componentBase.replace(/\/+/g, '/');
         const [template, css] = await Promise.all([
-            fetchTextOrThrow(`${safeBase}.html`, `[runtime-plugins] Failed to load template for ${meta.componentName}`),
-            fetchTextOrThrow(`${safeBase}.css`, `[runtime-plugins] Failed to load stylesheet for ${meta.componentName}`)
+            withRetry(
+                () => fetchTextOrThrow(`${safeBase}.html`, `[runtime-plugins] Failed to load template for ${meta.componentName}`),
+                assetRetryOptions
+            ),
+            withRetry(
+                () => fetchTextOrThrow(`${safeBase}.css`, `[runtime-plugins] Failed to load stylesheet for ${meta.componentName}`),
+                assetRetryOptions
+            )
         ]);
 
         return {
@@ -76,14 +90,12 @@ export function createComponentRegistry(webSkel) {
         if (!isNonEmptyString(meta.presenterName)) {
             return null;
         }
-        try {
-            const moduleUrl = `${safeBase}.js?runtimeImport=${encodeURIComponent(runtimeImportCacheBust)}`;
-            const module = await import(/* webpackIgnore: true */ moduleUrl);
-            return module;
-        } catch (error) {
-            console.error(`[runtime-plugins] Failed to import presenter for ${meta.componentName}:`, error);
-            return null;
-        }
+        const importSequence = ++runtimeImportSequence;
+        return withRetry(async (attempt) => {
+            const importVersion = `${runtimeImportCacheBust}-${importSequence}-${attempt}`;
+            const moduleUrl = `${safeBase}.js?runtimeImport=${encodeURIComponent(importVersion)}`;
+            return import(/* webpackIgnore: true */ moduleUrl);
+        }, assetRetryOptions);
     };
 
     const loadComponent = async (meta) => {

@@ -4,13 +4,13 @@ import {
     parseJsonToolResult,
     stripTrailingSlash
 } from "./git-commit-modal-utils.js";
-import { withGlobalLoader } from "/explorer/utils/globalLoader.js";
 
 export function createCommitMessageActions(ctx) {
     const {
         service,
         setStatusLine,
         setCommitMessage,
+        setCommitMessageBusy,
         updateCommitButtons,
         getSelectedReposForBatch,
         getPathsForCommitInRepo
@@ -102,14 +102,11 @@ export function createCommitMessageActions(ctx) {
     const generateCommitMessageForSelections = async (selections) => {
         const cleanSelections = Array.isArray(selections) ? selections : [];
         const diffs = [];
-        const maxFilesPerRepo = 80;
-        const maxFilesTotal = 20;
         for (const selection of cleanSelections) {
             const repoPath = selection?.repoPath;
-            const files = Array.isArray(selection?.files) ? selection.files.slice(0, maxFilesPerRepo) : [];
+            const files = Array.isArray(selection?.files) ? selection.files : [];
             if (!repoPath || !files.length) continue;
             for (const filePath of files) {
-                if (diffs.length >= maxFilesTotal) break;
                 const diff = await service.gitDiff({
                     path: repoPath,
                     file: filePath,
@@ -119,7 +116,6 @@ export function createCommitMessageActions(ctx) {
                 const summary = summarizeDiffForAi(diff, { maxLines: 120 });
                 diffs.push({ repoPath, filePath, diff: summary || '' });
             }
-            if (diffs.length >= maxFilesTotal) break;
         }
         if (!diffs.length) return '';
         const payloadText = await service.generateCommitMessage(diffs);
@@ -150,33 +146,29 @@ export function createCommitMessageActions(ctx) {
             return;
         }
 
-        const result = await withGlobalLoader(async () => {
-            try {
-                const diffs = [];
-                const maxFilesPerRepo = 80;
-                const maxFilesTotal = 20;
+        let result;
+        setCommitMessageBusy?.(true);
+        try {
+            const diffs = [];
 
-                for (const selection of selections) {
-                    const repoPath = selection.repoPath;
-                    const files = Array.isArray(selection.files) ? selection.files.slice(0, maxFilesPerRepo) : [];
-                    for (const filePath of files) {
-                        if (diffs.length >= maxFilesTotal) break;
-                        const diff = await service.gitDiff({
-                            path: repoPath,
-                            file: filePath,
-                            cached: false,
-                            ref: 'HEAD'
-                        });
-                        const summary = summarizeDiffForAi(diff, { maxLines: 120 });
-                        diffs.push({ repoPath, filePath, diff: summary || '' });
-                    }
-                    if (diffs.length >= maxFilesTotal) break;
+            for (const selection of selections) {
+                const repoPath = selection.repoPath;
+                const files = Array.isArray(selection.files) ? selection.files : [];
+                for (const filePath of files) {
+                    const diff = await service.gitDiff({
+                        path: repoPath,
+                        file: filePath,
+                        cached: false,
+                        ref: 'HEAD'
+                    });
+                    const summary = summarizeDiffForAi(diff, { maxLines: 120 });
+                    diffs.push({ repoPath, filePath, diff: summary || '' });
                 }
+            }
 
-                if (!diffs.length) {
-                    return { ok: false, emptySelection: true };
-                }
-
+            if (!diffs.length) {
+                result = { ok: false, emptySelection: true };
+            } else {
                 const payloadText = await service.generateCommitMessage(diffs);
                 const payload = parseJsonToolResult(payloadText);
                 if (!payload || typeof payload !== 'object') {
@@ -188,11 +180,13 @@ export function createCommitMessageActions(ctx) {
                 const next = String(payload.message || '').trim();
                 if (!next) throw new Error('AI returned an empty commit message.');
 
-                return { ok: true, message: next };
-            } catch (error) {
-                return { ok: false, error };
+                result = { ok: true, message: next };
             }
-        });
+        } catch (error) {
+            result = { ok: false, error };
+        } finally {
+            setCommitMessageBusy?.(false);
+        }
 
         if (result?.ok) {
             setCommitMessage(result.message);

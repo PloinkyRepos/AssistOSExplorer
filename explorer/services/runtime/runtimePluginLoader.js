@@ -3,6 +3,7 @@ import {
     mergeRuntimePluginsIntoAssistOS,
     normalizeRuntimePlugins
 } from '../../utils/pluginUtils.core.js';
+import { isTransientAssetLoadError } from './bootstrapRecovery.js';
 
 const isNonEmptyString = (value) => typeof value === 'string' && value.trim().length > 0;
 const isWorkspaceFilesUrl = (value) => isNonEmptyString(value) && value.trim().startsWith('/workspace-files/');
@@ -140,6 +141,7 @@ export function createRuntimePluginLoader({
                 return [key, component];
             } catch (error) {
                 console.error(`[runtime-plugins] Failed to load component ${meta.componentName} from agent ${meta.agent}:`, error);
+                if (isTransientAssetLoadError(error)) throw error;
                 return [key, null];
             }
         });
@@ -148,7 +150,7 @@ export function createRuntimePluginLoader({
         const loaded = new Map();
         for (const result of results) {
             if (result.status !== 'fulfilled') {
-                continue;
+                throw result.reason;
             }
             const [key, component] = result.value;
             if (component) {

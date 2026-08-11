@@ -1,5 +1,6 @@
 import { isOnlyOfficeFile } from './onlyoffice-file-types.js';
 import { isOnlyOfficeEditorActive } from './onlyoffice-editor-host.js';
+import { isAgentRuntimeStartupError } from '../../shared/ui/agent-runtime-loader/agent-runtime-loader.js';
 
 // Reusing a cached session re-points the editor at a documentUrl/callbackUrl
 // that embed the server-side session token (idle TTL is 30 minutes server
@@ -32,7 +33,10 @@ export async function fetchOnlyOfficeSession(filePath) {
     const payload = await readJsonResponse(response);
     if (!response.ok || payload?.ok === false) {
         const errorMessage = payload?.error || `OnlyOffice session request failed with ${response.status}.`;
-        throw new Error(errorMessage);
+        const error = new Error(errorMessage);
+        error.status = response.status;
+        error.code = payload?.error || '';
+        throw error;
     }
     return payload;
 }
@@ -142,13 +146,28 @@ async function resolveOnlyOfficeSession(fileExp, normalizedPath) {
     }
 }
 
-export async function tryLoadOnlyOfficePreview(fileExp, filePath, { invalidate = true } = {}) {
+export async function tryLoadOnlyOfficePreview(fileExp, filePath, { invalidate = true, deferRuntimeStartup = true } = {}) {
     if (!isOnlyOfficeFile(filePath)) {
         return false;
     }
 
     const normalizedPath = normalizeSessionPath(fileExp, filePath);
-    const session = await resolveOnlyOfficeSession(fileExp, normalizedPath);
+    let session;
+    try {
+        session = await resolveOnlyOfficeSession(fileExp, normalizedPath);
+    } catch (error) {
+        if (!deferRuntimeStartup || !isAgentRuntimeStartupError(error)) throw error;
+        fileExp.setPreviewState({
+            previewMode: 'onlyoffice',
+            mediaType: null,
+            onlyOfficeConfig: null,
+            onlyOfficeStatusText: 'Starting OnlyOffice…',
+            onlyOfficeRuntimeState: { path: normalizedPath }
+        });
+        if (invalidate) fileExp.invalidate();
+        else fileExp.refreshPreviewUi();
+        return true;
+    }
     const preview = session?.preview && typeof session.preview === 'object' ? session.preview : {};
     // When the editor already shows this exact config, skip the full
     // invalidate(): a full render rebuilds the component DOM and would force
@@ -167,6 +186,7 @@ export async function tryLoadOnlyOfficePreview(fileExp, filePath, { invalidate =
         isEditing: false,
         onlyOfficeConfig: session?.config || null,
         onlyOfficeStatusText: '',
+        onlyOfficeRuntimeState: null,
         dpuSelectedObjectId: preview.objectId || null,
         dpuSelectedCanWrite: Boolean(preview.canWrite),
         dpuSelectedCanComment: Boolean(preview.canComment),

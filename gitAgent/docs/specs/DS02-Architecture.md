@@ -32,6 +32,10 @@ Requirement A7: manifest startup configuration shall not duplicate generic Node 
 
 Requirement A8: Git helper flows that use LLM assistance shall request the Achilles `fast` model explicitly through `executePrompt({ model: "fast" })`; legacy `mode` options are not part of the Achilles invocation contract.
 
+Requirement A9: commit-message generation shall use one synthesis request when the selected diff fits the direct prompt budget. Larger changes shall include every selected file, group them into bounded semantic batches, and reduce them into one complete commit message so implementation, UI, configuration, tests, and documentation remain connected without one provider request per file. No global file-count limit may silently discard selected changes.
+
+Requirement A10: commit-message generation shall discard empty or failed batch results and synthesize from the valid summaries that remain. If final synthesis is empty or fails, the agent shall return a deterministic message derived from the valid summaries, or from the complete affected-file inventory when no valid summary exists.
+
 ## Constraints
 
 Constraint K1: invocation paths that bypass wrapper parsing and validation are forbidden.

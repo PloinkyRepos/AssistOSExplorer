@@ -1,0 +1,44 @@
+agent-runtime-loader {
+    display: grid;
+    width: 100%;
+    min-height: 14rem;
+    place-items: center;
+    color: var(--text, inherit);
+    background: var(--surface, transparent);
+}
+
+.agent-runtime-loader-root {
+    display: flex;
+    max-width: 32rem;
+    padding: 2rem;
+    align-items: center;
+    flex-direction: column;
+    gap: 0.75rem;
+    text-align: center;
+}
+
+.agent-runtime-loader-root h2,
+.agent-runtime-loader-root p {
+    margin: 0;
+}
+
+.agent-runtime-loader-root p {
+    color: var(--text-soft, currentColor);
+}
+
+.agent-runtime-loader-spinner {
+    width: 2rem;
+    height: 2rem;
+    border: 0.2rem solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: agent-runtime-loader-spin 0.8s linear infinite;
+}
+
+.agent-runtime-loader-root[data-phase="error"] .agent-runtime-loader-spinner {
+    display: none;
+}
+
+@keyframes agent-runtime-loader-spin {
+    to { transform: rotate(360deg); }
+}

@@ -206,6 +206,8 @@ When Explorer lazily registers a runtime plugin component, it must finish regist
 
 Plugin presenters that host reactive child components must preserve those child instances during status-only or busy-state updates. Status text and disabled controls are updated in place; a structural child-tree render occurs once after the corresponding data transition settles. This is the same lifecycle used by declarative modal children and prevents a lazily loading child from being disconnected and recreated during one logical state transition.
 
+Explorer also owns the shared agent-runtime waiting logic. An authenticated plugin launch may open `#agent-runtime-wait` in the destination tab and provide a same-origin target beneath the watched agent's route. Explorer handles that route directly in its initial bootstrap loader, without mounting a second waiting page, and retries the real target and the agent's standard MCP `tools/list` handshake while the agent starts. Before navigation, two `/auth/token` reads must also report the same Router generation across a short settling window so a route update cannot interrupt the target's module graph. A terminal startup or authorization failure remains visible in the same loader with its cause and Retry. This is browser orchestration only: it adds no Ploinky route, readiness endpoint, or runtime supervision behavior. WebMeet uses this path for launches from its Explorer toolbar, while public room links remain direct `/<webmeetAgent>/roomLoader.html?roomId=...` links.
+
 For filesystem-oriented menu actions, the host context must include both:
 
 - the Explorer path used by shell navigation
@@ -273,6 +275,44 @@ When a dependency is unavailable, Explorer should degrade gracefully:
 - surface actionable error messages
 - when the skills-manifest editor caches a repository that has no Anthropic-style `skills/*/SKILL.md` folders, leave the manifest unchanged and return a normal informational `message` stating that no Anthropic skills were found
 - recover automatically when the dependency becomes available again
+
+During initial shell loading, transient `502`, `503`, and `504` responses for
+Explorer or runtime-plugin assets are retried by the host. Presenter retries use
+a distinct module URL so a failed browser module-map entry is not reused. If a
+transient module failure still prevents the initial route from mounting,
+Explorer keeps its existing bootstrap loader visible and performs at most three
+page reloads in the current browser session. A successful bootstrap clears the
+counter; permanent failures and exhausted retries use the normal application
+error surface.
+
+Explorer owns component asset status validation. Its resource loader preloads
+native component templates and stylesheets, rejects unsuccessful HTTP
+responses, and passes successful content to WebSkel through the existing
+`loadedTemplate` and `loadedCSSs` fields. Runtime plugin components use the same
+Explorer-owned fetch contract before registration. The shared WebSkel library
+must not contain Explorer-specific HTTP retry or status handling.
+
+The initial `file-exp` route must not wait for runtime plugin discovery or eager
+plugin component registration. Explorer resolves the workspace and mounts the
+file browser first. After that route is usable, it collects the plugin catalog,
+plugin settings, manifest policy, and authenticated user in parallel, merges the
+result into the existing AssistOS workspace, waits for a short post-startup
+grace window, and notifies the file browser to refresh its plugin slots and
+menus. Plugin component assets remain lazy and are registered only when their
+contribution is mounted or opened. A failed optional contribution is omitted
+and logged; it must not reject the `file-exp` render. A later registration
+attempt must use a fresh module URL rather than reuse a browser-cached failed
+module-map entry. A direct route owned by a runtime plugin must still wait for
+discovery, authorization, and registration of that requested component before
+it is mounted.
+
+Only one bootstrap spinner may be mounted at a time. Explorer removes its
+static document loader immediately before the initial WebSkel route mount, at
+which point WebSkel owns the loading indication for that route.
+
+The ordinary Explorer bootstrap loader renders only the spinner; it does not
+show redundant shell-startup title or subtitle text. Agent-runtime wait routes
+may populate the same loader with the watched agent's status and Retry action.
 
 This is important for IDE behavior because a user may still be navigating, reading, or editing unrelated resources while one plugin or one dependent agent is unavailable.
 

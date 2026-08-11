@@ -457,7 +457,9 @@ export function filterRuntimePluginsByPolicy(runtimePlugins, runtimePluginPolicy
 export async function fetchTextOrThrow(url, description) {
     const response = await fetch(url, {cache: 'no-cache'});
     if (!response.ok) {
-        throw new Error(`${description} (${response.status})`);
+        const error = new Error(`${description} (${response.status})`);
+        error.status = response.status;
+        throw error;
     }
     return response.text();
 }

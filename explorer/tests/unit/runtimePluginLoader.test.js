@@ -161,6 +161,40 @@ test('runtime plugin loader registers a component together with its cross-agent 
     );
 });
 
+test('runtime plugin loader propagates transient asset failures to bootstrap recovery', async () => {
+    const loader = createRuntimePluginLoader({
+        agentId: 'explorer',
+        runtimePluginTool: 'collect_ide_plugins',
+        assistosSDK: {
+            async fetchRuntimePlugins() {
+                return {};
+            }
+        },
+        componentRegistry: {
+            async loadComponent() {
+                throw new Error('Failed to load plugin template (503)');
+            },
+            getCachedComponent() {
+                return undefined;
+            }
+        }
+    });
+
+    await assert.rejects(
+        loader.loadComponents({
+            application: {
+                'file-exp:toolbar': [{
+                    id: 'git',
+                    agent: 'gitAgent',
+                    component: 'git-tool-button',
+                    presenter: 'GitToolButton'
+                }]
+            }
+        }),
+        /\(503\)/
+    );
+});
+
 test('component registry reuses host-registered WebSkel components without fetching runtime assets', async () => {
     const previousCustomElements = globalThis.customElements;
     globalThis.customElements = {

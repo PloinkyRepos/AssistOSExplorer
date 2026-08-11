@@ -37,6 +37,7 @@ export class GitCommitModal {
         this.githubPollTimer = null;
         this.githubStartPromise = null;
         this.menuAbortController = null;
+        this.commitMessageBusy = false;
         this.stateStore = createGitCommitState(props);
         this.state = this.stateStore.state;
         this.service = createGitCommitService({
@@ -114,6 +115,7 @@ export class GitCommitModal {
             getPrimaryExplicitActionRepoPath: this.getPrimaryExplicitActionRepoPath.bind(this),
             getPathsForCommitInRepo: this.getPathsForCommitInRepo.bind(this),
             setCommitMessage: this.setCommitMessage.bind(this),
+            setCommitMessageBusy: this.setCommitMessageBusy.bind(this),
             clearCommitMessageInput: this.clearCommitMessageInput.bind(this),
             clearDiffCache: () => this.diffCache.clear(),
             loadRepoInfo: this.loadRepoInfo.bind(this),
@@ -994,7 +996,33 @@ export class GitCommitModal {
     }
 
     async generateCommitMessage() {
+        if (this.commitMessageBusy) return;
         return this.actions.generateCommitMessage();
+    }
+
+    setCommitMessageBusy(isBusy) {
+        const busy = Boolean(isBusy);
+        this.commitMessageBusy = busy;
+
+        const modal = this.element.querySelector('.git-modal');
+        modal?.classList.toggle('git-commit-message-busy', busy);
+        if (busy) {
+            modal?.setAttribute('aria-busy', 'true');
+        } else {
+            modal?.removeAttribute('aria-busy');
+        }
+
+        const overlay = this.element.querySelector('[data-role="git-commit-message-loader"]');
+        if (overlay) {
+            overlay.hidden = !busy;
+            overlay.setAttribute('aria-hidden', busy ? 'false' : 'true');
+        }
+
+        const generateButton = this.element.querySelector('[data-local-action="generateCommitMessage"]');
+        if (generateButton) {
+            generateButton.disabled = busy;
+            generateButton.setAttribute('aria-disabled', busy ? 'true' : 'false');
+        }
     }
 
     async refreshAll({ force = false, keepStatus = false } = {}) {

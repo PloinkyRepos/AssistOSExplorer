@@ -31,6 +31,7 @@ export function createGitCommitActions(ctx) {
         getSelectedReposForBatch,
         getPathsForCommitInRepo,
         setCommitMessage,
+        setCommitMessageBusy,
         clearCommitMessageInput,
         clearDiffCache,
         loadRepoInfo,
@@ -97,6 +98,7 @@ export function createGitCommitActions(ctx) {
         service,
         setStatusLine,
         setCommitMessage,
+        setCommitMessageBusy,
         updateCommitButtons,
         getSelectedReposForBatch,
         getPathsForCommitInRepo

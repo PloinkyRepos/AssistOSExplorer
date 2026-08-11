@@ -2,6 +2,7 @@ import WebSkel from './shared/libs/webskel/webskel.mjs';
 import assistosSDK, { initialiseAssistOS } from './services/assistosSDK.js';
 import { createComponentRegistry } from './services/runtime/componentRegistry.js';
 import { createRuntimePluginLoader } from './services/runtime/runtimePluginLoader.js';
+import { installExplorerResourceLoader } from './services/runtime/explorerResourceLoader.js';
 import { filterRuntimePluginsByPolicy, forEachRuntimePluginEntry } from './utils/pluginUtils.core.js';
 import { initializeTheme } from './shared/ui/theme.js';
 import { fetchAuthenticatedUser } from './services/infrastructure/authApi.js';
@@ -10,10 +11,80 @@ import {
     resolveInitialHashedRoute
 } from './services/runtime/initial-application-route.js';
 import { installAuthNavigationGuard } from './services/infrastructure/authNavigationGuard.js';
+import {
+    clearBootstrapReloadState,
+    scheduleBootstrapReload
+} from './services/runtime/bootstrapRecovery.js';
+import { waitForAgentRuntimeAvailability } from './shared/ui/agent-runtime-loader/agent-runtime-loader.js';
+import {
+    parseAgentRuntimeWaitRoute,
+    probeAgentRuntimeMcp,
+    probeAgentRuntimeRouteStability,
+    probeAgentRuntimeTarget
+} from './shared/ui/agent-runtime-loader/agent-runtime-wait-route.js';
 
 const EXPLORER_AGENT_ID = 'explorer';
 const RUNTIME_PLUGIN_TOOL = 'collect_ide_plugins';
 const ROOM_ID_PATTERN = /^room_[0-9a-fA-F-]{36}$/;
+const RUNTIME_PLUGINS_UPDATED_EVENT = 'assistos:runtime-plugins-updated';
+const RUNTIME_PLUGIN_MOUNT_GRACE_MS = 2500;
+
+function resolveRuntimeWaitRoute(hashValue) {
+    try {
+        return parseAgentRuntimeWaitRoute(hashValue, window.location.origin);
+    } catch (_) {
+        return null;
+    }
+}
+
+function updateSpinnerStatus(root, { title, message }) {
+    const caption = root?.querySelector?.('.spinner-caption');
+    if (!caption) return;
+    caption.hidden = false;
+    const titleElement = caption.querySelector('.spinner-title');
+    const messageElement = caption.querySelector('.spinner-subtitle');
+    if (titleElement) titleElement.textContent = title;
+    if (messageElement) messageElement.textContent = message;
+}
+
+async function waitForInitialAgentRuntime(route) {
+    const loader = document.querySelector('#before_webskel_loader');
+    const spinner = loader?.querySelector?.('.spinner-orbit');
+    const retryButton = loader?.querySelector?.('[data-role="runtime-retry"]');
+
+    while (true) {
+        if (spinner) spinner.hidden = false;
+        if (retryButton) retryButton.hidden = true;
+        updateSpinnerStatus(loader, {
+            title: `Starting ${route.label}`,
+            message: `Waiting for ${route.label} to become available. This page will open automatically.`
+        });
+        try {
+            await waitForAgentRuntimeAvailability({
+                agentRef: route.agentRef,
+                label: route.label,
+                timeoutMs: Number.POSITIVE_INFINITY,
+                operation: async () => {
+                    await probeAgentRuntimeTarget(route.targetUrl);
+                    await probeAgentRuntimeMcp(route.agentRef, assistosSDK);
+                    await probeAgentRuntimeRouteStability(route.agentRef);
+                    return route.targetUrl;
+                }
+            });
+            window.location.replace(route.targetUrl.toString());
+            return;
+        } catch (error) {
+            if (spinner) spinner.hidden = true;
+            updateSpinnerStatus(loader, {
+                title: `${route.label} could not start`,
+                message: String(error?.message || `${route.label} is unavailable.`)
+            });
+            if (!retryButton) return;
+            retryButton.hidden = false;
+            await new Promise((resolve) => retryButton.addEventListener('click', resolve, { once: true }));
+        }
+    }
+}
 
 if (typeof window !== 'undefined') {
     window.ASSISTOS_AGENT_ID = window.ASSISTOS_AGENT_ID || EXPLORER_AGENT_ID;
@@ -148,12 +219,23 @@ async function loadExplorerManifest() {
 async function start() {
     initializeTheme();
     const initialHashedRoute = resolveInitialHashedRoute(window.location.hash);
-    const webSkel = await WebSkel.initialise('webskel.json');
-    webSkel.appServices = assistosSDK;
-    const roomEntry = getRoomEntryFromUrl();
-    if (!roomEntry) {
-        await bootstrapWorkspaceRoot();
+    const runtimeWaitRoute = initialHashedRoute?.pageName === 'agent-runtime-wait'
+        ? resolveRuntimeWaitRoute(window.location.hash)
+        : null;
+    if (runtimeWaitRoute) {
+        updateSpinnerStatus(document.querySelector('#before_webskel_loader'), {
+            title: `Starting ${runtimeWaitRoute.label}`,
+            message: `Waiting for ${runtimeWaitRoute.label} to become available. This page will open automatically.`
+        });
+        await waitForInitialAgentRuntime(runtimeWaitRoute);
+        return;
     }
+    const roomEntry = getRoomEntryFromUrl();
+    const workspaceRootPromise = roomEntry ? Promise.resolve('') : bootstrapWorkspaceRoot();
+    const webSkel = await WebSkel.initialise('webskel.json');
+    installExplorerResourceLoader(webSkel);
+    webSkel.appServices = assistosSDK;
+    await workspaceRootPromise;
 
     const componentRegistry = createComponentRegistry(webSkel);
     const runtimePluginLoader = createRuntimePluginLoader({
@@ -162,35 +244,64 @@ async function start() {
         assistosSDK,
         componentRegistry
     });
-
-    const explorerManifest = await loadExplorerManifest();
-    const runtimePluginPolicy = normalizeRuntimePluginPolicy(explorerManifest);
-    const { raw: rawRuntimePlugins, normalized: runtimePluginsRaw } = await runtimePluginLoader.fetchRuntimePlugins();
-    const runtimePlugins = filterRuntimePluginsByPolicy(runtimePluginsRaw, runtimePluginPolicy);
-    const filteredRawRuntimePlugins = filterRuntimePluginsByPolicy(rawRuntimePlugins, runtimePluginPolicy);
-    if (roomEntry && !hasWebMeetRuntimePlugin(runtimePlugins)) {
-        throw new Error('WebMeet runtime plugin is unavailable.');
-    }
-    const pluginSettingsResult = roomEntry
-        ? { json: {} }
-        : await assistosSDK.callTool(EXPLORER_AGENT_ID, 'get_plugin_settings', {});
-    const pluginSettings = normalizePluginSettings(pluginSettingsResult?.json);
     const assistOS = initialiseAssistOS({
-        ui: webSkel,
-        runtimePlugins: hasRuntimePlugins(runtimePlugins) ? runtimePlugins : undefined
+        ui: webSkel
     });
-    const authenticatedUser = await fetchAuthenticatedUser();
-    if (authenticatedUser) {
-        assistOS.user = authenticatedUser;
-    }
     assistOS.webSkel = webSkel;
     assistOS.appServices = assistosSDK;
-    assistOS.explorerManifest = explorerManifest;
-    assistOS.applicationPluginPolicy = runtimePluginPolicy;
-    assistOS.runtimePlugins = runtimePlugins;
-    assistOS.rawRuntimePlugins = filteredRawRuntimePlugins || {};
-    assistOS.pluginSettings = pluginSettings;
-    runtimePluginLoader.mergeIntoAssistOS(assistOS, runtimePlugins);
+    assistOS.runtimePlugins = null;
+    assistOS.rawRuntimePlugins = {};
+    assistOS.pluginSettings = {};
+
+    const runtimeContext = {
+        authenticatedUser: null,
+        plugins: null,
+        policy: {},
+        promise: null
+    };
+
+    const loadRuntimeContext = () => {
+        if (runtimeContext.promise) {
+            return runtimeContext.promise;
+        }
+        const pending = (async () => {
+            const [explorerManifest, pluginPayload, pluginSettingsResult, authenticatedUser] = await Promise.all([
+                loadExplorerManifest(),
+                runtimePluginLoader.fetchRuntimePlugins(),
+                roomEntry
+                    ? Promise.resolve({ json: {} })
+                    : assistosSDK.callTool(EXPLORER_AGENT_ID, 'get_plugin_settings', {}),
+                fetchAuthenticatedUser()
+            ]);
+            const runtimePluginPolicy = normalizeRuntimePluginPolicy(explorerManifest);
+            const runtimePlugins = filterRuntimePluginsByPolicy(pluginPayload.normalized, runtimePluginPolicy);
+            const filteredRawRuntimePlugins = filterRuntimePluginsByPolicy(pluginPayload.raw, runtimePluginPolicy);
+
+            runtimeContext.authenticatedUser = authenticatedUser;
+            runtimeContext.plugins = runtimePlugins;
+            runtimeContext.policy = runtimePluginPolicy;
+
+            if (authenticatedUser) {
+                assistOS.user = authenticatedUser;
+            }
+            assistOS.explorerManifest = explorerManifest;
+            assistOS.applicationPluginPolicy = runtimePluginPolicy;
+            assistOS.runtimePlugins = runtimePlugins;
+            assistOS.rawRuntimePlugins = filteredRawRuntimePlugins || {};
+            assistOS.pluginSettings = normalizePluginSettings(pluginSettingsResult?.json);
+            if (hasRuntimePlugins(runtimePlugins)) {
+                runtimePluginLoader.mergeIntoAssistOS(assistOS, runtimePlugins);
+            }
+            return runtimeContext;
+        })();
+        runtimeContext.promise = pending;
+        pending.catch(() => {
+            if (runtimeContext.promise === pending) {
+                runtimeContext.promise = null;
+            }
+        });
+        return pending;
+    };
 
     const installRuntimeComponentGuards = () => {
         const ensureComponentRegistered = async (componentName) => {
@@ -198,13 +309,18 @@ async function start() {
             if (!normalizedName) {
                 return null;
             }
-            const componentPolicy = getRuntimeComponentPolicy(runtimePlugins, normalizedName);
-            if (componentPolicy?.adminOnly && !isAdminUser(authenticatedUser)) {
+            const hostComponent = webSkel.configs?.components?.find((component) => component.name === normalizedName);
+            if (hostComponent) {
+                return null;
+            }
+            const context = await loadRuntimeContext();
+            const componentPolicy = getRuntimeComponentPolicy(context.plugins, normalizedName);
+            if (componentPolicy?.adminOnly && !isAdminUser(context.authenticatedUser)) {
                 const error = new Error('Administrator access is required for this component.');
                 error.code = 'ADMIN_REQUIRED';
                 throw error;
             }
-            return runtimePluginLoader.ensureComponentRegistered(normalizedName, runtimePlugins);
+            return runtimePluginLoader.ensureComponentRegistered(normalizedName, context.plugins);
         };
 
         webSkel.ensureComponentRegistered = ensureComponentRegistered;
@@ -324,16 +440,12 @@ async function start() {
                 <div class="spinner-orbit">
                     <span></span><span></span><span></span>
                 </div>
-                <div class="spinner-caption">
-                </div>
             </div>
         </div>
     `);
     const pageContent = document.querySelector("#page_content");
     webSkel.setDomElementForPages(pageContent);
     const loader = document.querySelector("#before_webskel_loader");
-    loader.close();
-    loader.remove();
 
     let pageName;
     let url;
@@ -348,17 +460,25 @@ async function start() {
         url = 'file-exp';
     }
 
-    const routePolicy = getRuntimeComponentPolicy(runtimePlugins, pageName);
-    if (routePolicy?.adminOnly && !isAdminUser(authenticatedUser)) {
-        window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
-        pageName = 'file-exp';
-        url = 'file-exp';
-        suppressNavigationHash = false;
+    const isFileExplorerRoute = !roomEntry && pageName === 'file-exp';
+    if (!isFileExplorerRoute) {
+        const context = await loadRuntimeContext();
+        if (roomEntry && !hasWebMeetRuntimePlugin(context.plugins)) {
+            throw new Error('WebMeet runtime plugin is unavailable.');
+        }
+        const routePolicy = getRuntimeComponentPolicy(context.plugins, pageName);
+        if (routePolicy?.adminOnly && !isAdminUser(context.authenticatedUser)) {
+            window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
+            pageName = 'file-exp';
+            url = 'file-exp';
+            suppressNavigationHash = false;
+        } else {
+            await runtimePluginLoader.ensureComponentRegistered(pageName, context.plugins);
+        }
     }
 
-    const loadedRuntimeComponents = await runtimePluginLoader.loadComponents(runtimePlugins, { includeDependencies: false });
-    assistOS.runtimePluginComponents = loadedRuntimeComponents;
-
+    loader?.close?.();
+    loader?.remove?.();
     await mountInitialApplicationRoute({
         webSkel,
         pageContent,
@@ -369,10 +489,29 @@ async function start() {
         }
     });
     window.webSkel = webSkel;
+    clearBootstrapReloadState(window);
+    if (isFileExplorerRoute) {
+        window.setTimeout(() => {
+            Promise.all([
+                waitForAgentRuntimeAvailability({
+                    label: 'Explorer plugins',
+                    operation: loadRuntimeContext
+                }),
+                new Promise((resolve) => window.setTimeout(resolve, RUNTIME_PLUGIN_MOUNT_GRACE_MS))
+            ])
+                .then(() => window.dispatchEvent(new CustomEvent(RUNTIME_PLUGINS_UPDATED_EVENT)))
+                .catch((error) => {
+                    console.error('[runtime-plugins] Failed to initialize plugins after Explorer mount:', error);
+                });
+        }, 0);
+    }
 }
 
 start().catch(async (error) => {
     console.error('[explorer] Failed to bootstrap application', error);
+    if (scheduleBootstrapReload(error, { windowRef: window })) {
+        return;
+    }
     const beforeLoader = document.querySelector('#before_webskel_loader');
     beforeLoader?.close?.();
     beforeLoader?.remove?.();

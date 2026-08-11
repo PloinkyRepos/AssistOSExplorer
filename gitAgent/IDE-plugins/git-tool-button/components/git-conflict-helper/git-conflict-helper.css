@@ -60,6 +60,7 @@ git-conflict-helper.is-visible {
     cursor: pointer;
     transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
     justify-content: left !important;
+    text-align: left;
 }
 
 .git-conflict-helper-file.active {

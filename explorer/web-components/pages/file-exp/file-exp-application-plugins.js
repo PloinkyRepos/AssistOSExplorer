@@ -211,8 +211,13 @@ async function mountSlot(container, slot, plugins, context) {
         if (!key) {
             continue;
         }
+        try {
+            await ensureRuntimeComponent(plugin.component);
+        } catch (error) {
+            console.error(`[app-plugins] Failed to load ${key}:`, error);
+            continue;
+        }
         seen.add(key);
-        await ensureRuntimeComponent(plugin.component);
 
         let mount = existingMounts.get(key);
         if (!mount) {
@@ -346,6 +351,7 @@ export function attachApplicationPluginHost(fileExp) {
 
     fileExp.__appPluginMobileToolbarLayout = isMobileToolbarLayout();
     fileExp.setWindowListener?.('file-exp-app-plugins-settings', 'assistos:plugin-settings-updated', rerender);
+    fileExp.setWindowListener?.('file-exp-runtime-plugins', 'assistos:runtime-plugins-updated', rerender);
     fileExp.setWindowListener?.('file-exp-app-plugins-toolbar-viewport', 'resize', rerenderForToolbarViewport, {
         passive: true
     });

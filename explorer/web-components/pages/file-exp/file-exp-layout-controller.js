@@ -544,5 +544,7 @@ export async function runAfterRender(fileExp, options = {}) {
         fileExp.setElementListener('entries-contextmenu', entriesContainer, 'contextmenu', fileExp.boundContextMenu, true);
     }
 
-    await renderApplicationPluginSlots(fileExp);
+    renderApplicationPluginSlots(fileExp).catch((error) => {
+        console.error('[app-plugins] Failed to render application plugin slots:', error);
+    });
 }
