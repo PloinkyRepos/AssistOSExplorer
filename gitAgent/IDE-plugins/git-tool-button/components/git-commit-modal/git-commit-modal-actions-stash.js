@@ -1,5 +1,4 @@
 import { normalizeErrorMessage, parseJsonToolResult, isReposRootPath } from "./git-commit-modal-utils.js";
-import { withGlobalLoader } from "/explorer/utils/globalLoader.js";
 
 export function createStashActions(ctx) {
     const {
@@ -12,7 +11,8 @@ export function createStashActions(ctx) {
         refreshAll,
         selectStashRef,
         restoreStash,
-        getSelectedReposForBatch
+        getSelectedReposForBatch,
+        withModalLoader
     } = ctx;
 
     const stashRepos = async (repoPaths) => {
@@ -52,7 +52,7 @@ export function createStashActions(ctx) {
         }
         applyState({ autoStash: null }, { silent: true });
         setStatusLine(`Stashing ${targets.length} repo(s)...`);
-        return withGlobalLoader(async () => {
+        return withModalLoader(async () => {
             try {
                 const result = await stashRepos(targets);
                 if (!result.ok) return;
@@ -86,7 +86,7 @@ export function createStashActions(ctx) {
         }
         applyState({ autoStash: null }, { silent: true });
         setStatusLine(`Unstashing ${targets.length} repo(s)...`);
-        return withGlobalLoader(async () => {
+        return withModalLoader(async () => {
             try {
                 for (const repoPath of targets) {
                     const selection = await selectStashRef(repoPath);

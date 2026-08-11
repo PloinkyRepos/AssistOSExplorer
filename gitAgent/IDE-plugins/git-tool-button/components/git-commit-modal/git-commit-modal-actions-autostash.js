@@ -64,6 +64,16 @@ export function createAutoStashActions(ctx) {
 
         if (result.ok) return true;
 
+        if (result.reason === 'restore_failed') {
+            if (result.stashCreated) {
+                applyState({
+                    autoStash: { repoPath: result.repoPath || repoPath, ref: result.stashRef || null }
+                }, { silent: true });
+            }
+            setStatusLine(result.message || 'Failed to restore stashed changes.', true);
+            return false;
+        }
+
         if (result.reason === 'identity') {
             await ensureGitIdentityOrPrompt(repoPath, { type: 'pull', mode: 'batch', repoPaths });
             return false;
@@ -85,8 +95,10 @@ export function createAutoStashActions(ctx) {
             const resolved = await handlePullConflicts(result.message, [repoPath], 'merge');
             if (!resolved) return false;
             if (result.stashCreated) {
-                applyState({ autoStash: null }, { silent: true });
                 const restored = await rollbackAutoStash(repoPath, result.stashRef, { restoreStatusLine: true });
+                if (restored.ok) {
+                    applyState({ autoStash: null }, { silent: true });
+                }
                 return restored.ok;
             }
             return true;
@@ -113,10 +125,10 @@ export function createAutoStashActions(ctx) {
         const pending = state.autoStash;
         if (!pending?.repoPath) return false;
         if (hasConflictsForRepos([pending.repoPath])) return false;
-        applyState({ autoStash: null }, { silent: true });
         setStatusLine('Restoring stashed changes...');
         const restored = await restoreStash(pending.repoPath, pending.ref);
         if (restored.ok) {
+            applyState({ autoStash: null }, { silent: true });
             await loadRepoOverviews({ force: true });
             syncStaticUI();
             updateCommitButtons();

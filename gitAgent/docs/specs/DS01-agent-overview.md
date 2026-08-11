@@ -80,7 +80,7 @@ Primary tools include:
 5. GitHub device-flow completion writes the token into DPU and keeps only metadata in local state.
 6. Manual token save writes the token into DPU and updates local connection metadata with a non-sensitive source marker.
 7. Disconnect removes the per-user token from DPU and clears local metadata.
-8. Auto-stash pull handling in the Explorer Git plugin uses a single shared implementation for stash creation, pull execution, rollback restore, and stash-pop recovery. Modal and controller-specific UI flows adapt that shared result instead of duplicating Git logic.
+8. Auto-stash pull handling in the Explorer Git plugin uses a single shared implementation for stash creation, pull execution, rollback restore, and stash-pop recovery. When pull, commit, or push cannot continue, the flow awaits restoration before reporting the operation error. If restoration itself fails, that failure takes precedence and the stash reference remains recorded for recovery. Modal and controller-specific UI flows adapt that shared result instead of duplicating Git logic.
 9. Branch operations execute only against the repository resolved from the provided path. Remote branch checkout creates a local tracking branch through Git when no matching local branch exists.
 
 ## Configuration

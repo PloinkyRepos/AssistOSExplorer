@@ -154,17 +154,46 @@ export async function pullWithAutoStashFlow({
         return restoreStash(repoPath, stashRef);
     };
 
+    const failAfterRestoringStash = async ({ reason, message, ...details }) => {
+        const rollback = stashCreated ? await rollbackAutoStash() : null;
+        if (stashCreated && !rollback?.ok) {
+            return {
+                ok: false,
+                reason: 'restore_failed',
+                message: rollback?.message || 'Failed to restore stashed changes.',
+                conflicts: Boolean(rollback?.conflicts),
+                originalReason: reason,
+                originalMessage: message,
+                rollback,
+                repoPath,
+                repoPaths,
+                stashCreated,
+                stashRef,
+                ...details
+            };
+        }
+        return {
+            ok: false,
+            reason,
+            message,
+            rollback,
+            repoPath,
+            repoPaths,
+            stashCreated,
+            stashRef,
+            ...details
+        };
+    };
+
     try {
         await gitPullWithToken(repoPath, token);
     } catch (error) {
         const msg = humanizeGitError(normalizeErrorMessage(error), { action: 'pull' });
         if (isGitIdentityError(msg)) {
-            const rollback = stashCreated ? await rollbackAutoStash() : null;
-            return { ok: false, reason: 'identity', message: msg, rollback, repoPath, repoPaths };
+            return failAfterRestoringStash({ reason: 'identity', message: msg });
         }
         if (isGitAuthError(msg)) {
-            const rollback = stashCreated ? await rollbackAutoStash() : null;
-            return { ok: false, reason: 'auth', message: msg, rollback, repoPath, repoPaths };
+            return failAfterRestoringStash({ reason: 'auth', message: msg });
         }
         if (isGitConflictError(msg)) {
             return {
@@ -180,20 +209,14 @@ export async function pullWithAutoStashFlow({
             };
         }
         if (isGitPullBlockedError(msg)) {
-            const rollback = stashCreated ? await rollbackAutoStash() : null;
-            return {
-                ok: false,
+            return failAfterRestoringStash({
                 reason: 'pull_blocked',
                 message: 'Pull blocked: could not auto-stash your local changes.',
                 detailedMessage: msg,
-                blockedFiles: extractGitPullBlockedFiles(msg),
-                rollback,
-                repoPath,
-                repoPaths
-            };
+                blockedFiles: extractGitPullBlockedFiles(msg)
+            });
         }
-        const rollback = stashCreated ? await rollbackAutoStash() : null;
-        return { ok: false, reason: 'pull_error', message: msg, rollback, repoPath, repoPaths };
+        return failAfterRestoringStash({ reason: 'pull_error', message: msg });
     }
 
     if (stashCreated) {
@@ -205,7 +228,9 @@ export async function pullWithAutoStashFlow({
                 message: restored.message || 'Failed to restore stash.',
                 conflicts: restored.conflicts,
                 repoPath,
-                repoPaths
+                repoPaths,
+                stashCreated,
+                stashRef
             };
         }
     }

@@ -129,15 +129,22 @@ test('AI commit generation sends every selected file without a global count limi
     assert.equal(receivedDiffs.at(-1).filePath, 'src/file-85.js');
 });
 
-test('Git commit modal declares a local loader over blurred content', async () => {
-    const [source, template, styles] = await Promise.all([
+test('Git commit modal uses one local loader for AI and Git operations', async () => {
+    const [source, actions, branches, stash, gitOps, template, styles] = await Promise.all([
         readAgentFile('IDE-plugins/git-tool-button/components/git-commit-modal/git-commit-modal-actions-commit-message.js'),
+        readAgentFile('IDE-plugins/git-tool-button/components/git-commit-modal/git-commit-modal-actions.js'),
+        readAgentFile('IDE-plugins/git-tool-button/components/git-commit-modal/git-commit-modal-actions-branches.js'),
+        readAgentFile('IDE-plugins/git-tool-button/components/git-commit-modal/git-commit-modal-actions-stash.js'),
+        readAgentFile('IDE-plugins/git-tool-button/components/git-commit-modal/git-commit-modal-actions-gitops.js'),
         readAgentFile('IDE-plugins/git-tool-button/components/git-commit-modal/git-commit-modal.html'),
         readAgentFile('IDE-plugins/git-tool-button/components/git-commit-modal/git-commit-modal.css')
     ]);
 
-    assert.doesNotMatch(source, /withGlobalLoader/);
-    assert.match(template, /data-role="git-commit-message-loader"/);
-    assert.match(styles, /\.git-modal\.git-commit-message-busy \.git-modal-content\s*\{[^}]*filter:\s*blur/s);
-    assert.match(styles, /\.git-commit-message-loader\s*\{[^}]*position:\s*absolute/s);
+    const modalSources = [source, actions, branches, stash, gitOps].join('\n');
+    assert.doesNotMatch(modalSources, /withGlobalLoader|globalLoader\.js/);
+    assert.match(modalSources, /withModalLoader/);
+    assert.match(template, /data-role="git-modal-loader"/);
+    assert.match(template, /data-role="git-modal-loader-label"/);
+    assert.match(styles, /\.git-modal\.git-modal-busy \.git-modal-content\s*\{[^}]*filter:\s*blur/s);
+    assert.match(styles, /\.git-modal-loader\s*\{[^}]*position:\s*absolute/s);
 });

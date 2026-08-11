@@ -509,14 +509,14 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
     transition: filter 120ms ease, opacity 120ms ease;
 }
 
-.git-modal.git-commit-message-busy .git-modal-content {
+.git-modal.git-modal-busy .git-modal-content {
     filter: blur(2px);
     opacity: 0.58;
     pointer-events: none;
     user-select: none;
 }
 
-.git-commit-message-loader {
+.git-modal-loader {
     position: absolute;
     inset: 0;
     z-index: 2;
@@ -526,23 +526,24 @@ dialog.modal.git-commit-modal-dialog.is-fullscreen .git-resize-handle {
     gap: 10px;
     color: var(--text);
     font-weight: 600;
+    background: color-mix(in srgb, var(--file-exp-panel) 60%, transparent);
 }
 
-.git-commit-message-loader[hidden] {
+.git-modal-loader[hidden] {
     display: none;
 }
 
-.git-commit-message-spinner {
+.git-modal-loader-spinner {
     width: 18px;
     height: 18px;
     flex: 0 0 auto;
-    border: 2px solid color-mix(in srgb, var(--text-soft) 28%, transparent);
+    border: 2px solid color-mix(in srgb, var(--text-soft) 60%, transparent);
     border-top-color: var(--accent);
     border-radius: 50%;
-    animation: git-commit-message-spin 0.8s linear infinite;
+    animation: git-modal-loader-spin 0.8s linear infinite;
 }
 
-@keyframes git-commit-message-spin {
+@keyframes git-modal-loader-spin {
     to {
         transform: rotate(360deg);
     }

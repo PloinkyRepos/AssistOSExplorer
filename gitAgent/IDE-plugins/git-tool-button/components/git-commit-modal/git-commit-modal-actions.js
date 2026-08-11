@@ -5,7 +5,6 @@ import {
     normalizeGitStatusPayload
 } from "./git-commit-modal-utils.js";
 import { restoreStashFlow } from "../../utils/git-auto-stash-flow.js";
-import { withGlobalLoader } from "/explorer/utils/globalLoader.js";
 import { createCredentialsActions } from "./git-commit-modal-actions-credentials.js";
 import { createCommitMessageActions } from "./git-commit-modal-actions-commit-message.js";
 import { createConflictActions } from "./git-commit-modal-actions-conflicts.js";
@@ -32,6 +31,7 @@ export function createGitCommitActions(ctx) {
         getPathsForCommitInRepo,
         setCommitMessage,
         setCommitMessageBusy,
+        withModalLoader,
         clearCommitMessageInput,
         clearDiffCache,
         loadRepoInfo,
@@ -454,7 +454,8 @@ export function createGitCommitActions(ctx) {
         refreshAll,
         selectStashRef,
         restoreStash,
-        getSelectedReposForBatch
+        getSelectedReposForBatch,
+        withModalLoader
     });
     const { stashSelectedRepos, unstashSelectedRepos } = stashActions;
 
@@ -482,7 +483,8 @@ export function createGitCommitActions(ctx) {
         refreshAfterGitOperation,
         handlePullConflicts,
         restoreStash,
-        applyState
+        applyState,
+        withModalLoader
     });
     const {
         checkoutBranchFromRepoRow,
@@ -543,7 +545,8 @@ export function createGitCommitActions(ctx) {
         generateCommitMessageForSelections,
         promptForFallbackCommitMessage,
         stashSelectedRepos,
-        unstashSelectedRepos
+        unstashSelectedRepos,
+        withModalLoader
     });
     ({
         gitPushWithToken,

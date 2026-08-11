@@ -6,7 +6,6 @@ import { createGitCommitService } from "./git-commit-modal-service.js";
 import { createGitCommitState } from "./git-commit-modal-state.js";
 import { createGitCommitUI } from "./git-commit-modal-ui.js";
 import { callExplorerTool, callAgentTool } from "/explorer/services/infrastructure/explorerApi.js";
-import { withGlobalLoader } from "/explorer/utils/globalLoader.js";
 import { joinPath } from "/explorer/web-components/pages/file-exp/file-exp-utils.js";
 import {
     normalizeErrorMessage,
@@ -38,6 +37,7 @@ export class GitCommitModal {
         this.githubStartPromise = null;
         this.menuAbortController = null;
         this.commitMessageBusy = false;
+        this.modalBusyMessages = [];
         this.stateStore = createGitCommitState(props);
         this.state = this.stateStore.state;
         this.service = createGitCommitService({
@@ -116,6 +116,7 @@ export class GitCommitModal {
             getPathsForCommitInRepo: this.getPathsForCommitInRepo.bind(this),
             setCommitMessage: this.setCommitMessage.bind(this),
             setCommitMessageBusy: this.setCommitMessageBusy.bind(this),
+            withModalLoader: this.withModalLoader.bind(this),
             clearCommitMessageInput: this.clearCommitMessageInput.bind(this),
             clearDiffCache: () => this.diffCache.clear(),
             loadRepoInfo: this.loadRepoInfo.bind(this),
@@ -288,7 +289,7 @@ export class GitCommitModal {
                 this.setState({ suppressInlineLoading: true }, { silent: true });
                 this.syncStaticUI();
                 try {
-                    await withGlobalLoader(() => this.refreshAll({ force: true }));
+                    await this.withModalLoader(() => this.refreshAll({ force: true }), 'Loading Git repositories…');
                     if (this.props?.openConflictHelper) {
                         if (this.props.selectedRepoPath) {
                             this.setState({ selectedRepoPath: this.props.selectedRepoPath }, { silent: true });
@@ -399,7 +400,7 @@ export class GitCommitModal {
     }
 
     async refreshAction() {
-        await withGlobalLoader(() => this.refreshAfterGitOperation());
+        await this.withModalLoader(() => this.refreshAfterGitOperation(), 'Refreshing Git status…');
     }
 
     clearGithubPollTimer() {
@@ -1004,24 +1005,50 @@ export class GitCommitModal {
         const busy = Boolean(isBusy);
         this.commitMessageBusy = busy;
 
+        this.renderModalBusyState({
+            busy: busy || this.modalBusyMessages.length > 0,
+            message: busy ? 'Generating commit message…' : this.modalBusyMessages.at(-1)
+        });
+    }
+
+    renderModalBusyState({ busy, message = '' }) {
+        const active = Boolean(busy);
+
         const modal = this.element.querySelector('.git-modal');
-        modal?.classList.toggle('git-commit-message-busy', busy);
-        if (busy) {
+        modal?.classList.toggle('git-modal-busy', active);
+        if (active) {
             modal?.setAttribute('aria-busy', 'true');
         } else {
             modal?.removeAttribute('aria-busy');
         }
 
-        const overlay = this.element.querySelector('[data-role="git-commit-message-loader"]');
+        const overlay = this.element.querySelector('[data-role="git-modal-loader"]');
         if (overlay) {
-            overlay.hidden = !busy;
-            overlay.setAttribute('aria-hidden', busy ? 'false' : 'true');
+            overlay.hidden = !active;
+            overlay.setAttribute('aria-hidden', active ? 'false' : 'true');
+            const label = overlay.querySelector('[data-role="git-modal-loader-label"]');
+            if (label) label.textContent = String(message || 'Working…');
         }
 
         const generateButton = this.element.querySelector('[data-local-action="generateCommitMessage"]');
         if (generateButton) {
-            generateButton.disabled = busy;
-            generateButton.setAttribute('aria-disabled', busy ? 'true' : 'false');
+            generateButton.disabled = active;
+            generateButton.setAttribute('aria-disabled', active ? 'true' : 'false');
+        }
+    }
+
+    async withModalLoader(operation, message = '') {
+        const busyMessage = String(message || this.state.lastStatusLine || 'Working…');
+        this.modalBusyMessages.push(busyMessage);
+        this.renderModalBusyState({ busy: true, message: busyMessage });
+        try {
+            return await operation();
+        } finally {
+            this.modalBusyMessages.pop();
+            this.renderModalBusyState({
+                busy: this.commitMessageBusy || this.modalBusyMessages.length > 0,
+                message: this.commitMessageBusy ? 'Generating commit message…' : this.modalBusyMessages.at(-1)
+            });
         }
     }
 
