@@ -365,7 +365,11 @@ async function mountSlot(container, slot, plugins, context) {
         }
         try {
             const ownsLoadingState = pluginElement.hasAttribute('data-app-plugin-loading');
-            if (pluginElement.renderCompletePromise && typeof pluginElement.renderCompletePromise.then === 'function') {
+            if (
+                ownsLoadingState
+                && pluginElement.renderCompletePromise
+                && typeof pluginElement.renderCompletePromise.then === 'function'
+            ) {
                 await pluginElement.renderCompletePromise;
             }
             updateMountedPluginElement(pluginElement, plugin, contextWithOrientation);

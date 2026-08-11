@@ -60,6 +60,10 @@ test('optional plugin failures do not reject file explorer rendering', () => {
     assert.match(hostSource, /pluginElement\.classList\.add\(\.\.\.loadingClasses, 'app-plugin-loading-state'\)/);
     assert.match(hostSource, /if \(!mount && showLoadingPlaceholder\) mount = createPluginMount\(key, slot\)/);
     assert.match(hostSource, /if \(!mount\) \{\s*mount = createPluginMount\(key, slot\)/);
+    assert.match(
+        hostSource,
+        /ownsLoadingState\s*&&\s*pluginElement\.renderCompletePromise\s*&&\s*typeof pluginElement\.renderCompletePromise\.then === 'function'/
+    );
     assert.doesNotMatch(hostSource, /createPluginLoadingButton/);
     assert.match(layoutSource, /renderApplicationPluginSlots\(fileExp\)\.catch/);
     assert.doesNotMatch(layoutSource, /await renderApplicationPluginSlots\(fileExp\)/);
