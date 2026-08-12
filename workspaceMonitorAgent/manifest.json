@@ -1,0 +1,16 @@
+{
+  "container": "docker.io/assistos/ploinky-node:24-bookworm-tools",
+  "agent": "node /code/server/supervisor.mjs",
+  "about": "Persistent, administrator-only workspace resource monitoring.",
+  "runtime": {
+    "resources": {
+      "persistentStorage": {
+        "key": "workspace-monitor",
+        "containerPath": "/data"
+      },
+      "env": {
+        "WORKSPACE_MONITOR_DATA_ROOT": "{{STORAGE_CONTAINER_PATH}}"
+      }
+    }
+  }
+}

@@ -1,0 +1,643 @@
+workspace-monitor-dashboard {
+  display: block;
+  width: 100%;
+  height: 100vh;
+  min-height: 0;
+  box-sizing: border-box;
+  color: var(--text);
+  background: var(--bg);
+}
+
+workspace-monitor-dashboard .workspace-monitor-page {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+workspace-monitor-dashboard .workspace-monitor-content,
+workspace-monitor-dashboard .workspace-monitor-panel {
+  flex: 1;
+  min-height: 0;
+}
+
+workspace-monitor-dashboard .workspace-monitor-tabs {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-end;
+  min-width: 0;
+  min-height: 46px;
+  gap: 5px;
+  padding: 7px var(--space-lg) 0;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg) 92%, var(--border));
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+workspace-monitor-dashboard .workspace-monitor-tab-shell {
+  --workspace-monitor-tab-fill: color-mix(in srgb, var(--text) 7%, var(--bg));
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  min-height: 36px;
+  margin-bottom: -1px;
+  border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  border-bottom: 0;
+  border-radius: 10px 10px 0 0;
+  background: var(--workspace-monitor-tab-fill);
+  box-shadow: 0 -2px 8px color-mix(in srgb, var(--text) 5%, transparent);
+  transition: background-color 130ms ease, color 130ms ease;
+}
+
+workspace-monitor-dashboard .workspace-monitor-tab-shell:not(:has(.workspace-monitor-tab[aria-selected="true"])):hover {
+  --workspace-monitor-tab-fill: color-mix(in srgb, var(--text) 11%, var(--bg));
+}
+
+workspace-monitor-dashboard .workspace-monitor-tab-shell:has(.workspace-monitor-tab[aria-selected="true"]) {
+  --workspace-monitor-tab-fill: var(--surface);
+}
+
+workspace-monitor-dashboard .workspace-monitor-tab-shell::before,
+workspace-monitor-dashboard .workspace-monitor-tab-shell::after {
+  position: absolute;
+  bottom: 0;
+  width: 6px;
+  height: 6px;
+  content: '';
+  pointer-events: none;
+}
+
+workspace-monitor-dashboard .workspace-monitor-tab-shell::before {
+  left: -6px;
+  border-bottom-right-radius: 6px;
+  box-shadow: 3px 3px 0 3px var(--workspace-monitor-tab-fill);
+}
+
+workspace-monitor-dashboard .workspace-monitor-tab-shell::after {
+  right: -6px;
+  border-bottom-left-radius: 6px;
+  box-shadow: -3px 3px 0 3px var(--workspace-monitor-tab-fill);
+}
+
+workspace-monitor-dashboard .workspace-monitor-tab {
+  min-width: 116px;
+  max-width: 220px;
+  padding: 9px 14px 8px;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  color: color-mix(in srgb, var(--text) 72%, transparent);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color 130ms ease;
+}
+
+workspace-monitor-dashboard .workspace-monitor-tab:hover,
+workspace-monitor-dashboard .workspace-monitor-tab[aria-selected="true"] {
+  color: var(--text);
+}
+
+workspace-monitor-dashboard .workspace-monitor-tab[aria-selected="true"] {
+  font-weight: 600;
+}
+
+workspace-monitor-dashboard .workspace-monitor-tab:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 78%, white);
+  outline-offset: -3px;
+}
+
+workspace-monitor-dashboard .monitor-panel {
+  flex: 1;
+  padding: var(--space-lg);
+  overflow: auto;
+  min-height: 0;
+}
+
+workspace-monitor-dashboard .summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: var(--space-md);
+}
+
+workspace-monitor-dashboard .metric-card {
+  padding: var(--space-lg);
+}
+
+workspace-monitor-dashboard .metric-card span {
+  display: block;
+  color: var(--text-soft);
+  font-size: var(--font-sm);
+}
+
+workspace-monitor-dashboard .metric-card strong {
+  display: block;
+  margin-top: var(--space-sm);
+  font-size: var(--font-xl);
+}
+
+workspace-monitor-dashboard .cpu-monitor {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(320px, 2fr) minmax(180px, 1fr);
+  margin-bottom: var(--space-lg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+workspace-monitor-dashboard .summary-grid + .cpu-monitor {
+  margin-top: var(--space-lg);
+}
+
+workspace-monitor-dashboard .cpu-monitor-chart {
+  min-width: 0;
+  padding: var(--space-md);
+  border-right: 1px solid var(--border);
+  border-left: 1px solid var(--border);
+}
+
+workspace-monitor-dashboard .cpu-monitor-chart h2 {
+  margin: 0 0 var(--space-sm);
+  padding-bottom: var(--space-sm);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-soft);
+  font-size: var(--font-base);
+  font-weight: var(--font-semibold);
+  text-align: center;
+  text-transform: uppercase;
+}
+
+workspace-monitor-dashboard .cpu-monitor-stats {
+  margin: 0;
+  padding: var(--space-md);
+}
+
+workspace-monitor-dashboard .cpu-monitor-stats div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-sm) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+workspace-monitor-dashboard .cpu-monitor-stats div:last-child {
+  border-bottom: 0;
+}
+
+workspace-monitor-dashboard .cpu-monitor-stats dt,
+workspace-monitor-dashboard .cpu-monitor-stats dd {
+  margin: 0;
+}
+
+workspace-monitor-dashboard .cpu-monitor-stats dd {
+  font-variant-numeric: tabular-nums;
+}
+
+workspace-monitor-dashboard .cpu-monitor-stats-primary div:nth-child(2) dd,
+workspace-monitor-dashboard .cpu-monitor-stats-primary div:nth-child(5) dd {
+  color: var(--accent);
+}
+
+workspace-monitor-dashboard .cpu-monitor-stats-primary div:nth-child(3) dd,
+workspace-monitor-dashboard .cpu-monitor-stats-primary div:nth-child(6) dd {
+  color: var(--red);
+}
+
+workspace-monitor-dashboard .chart {
+  display: flex;
+  flex-direction: column;
+  height: 120px;
+  overflow: hidden;
+}
+
+workspace-monitor-dashboard .chart svg {
+  display: block;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  height: auto;
+  color: var(--accent);
+}
+
+workspace-monitor-dashboard .chart-timeline {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-sm);
+  padding-top: 3px;
+  color: var(--text-soft);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+workspace-monitor-dashboard .chart-time-axis,
+workspace-monitor-dashboard .chart-time-tick {
+  stroke: var(--text-soft);
+  stroke-width: 1;
+  opacity: 0.8;
+  vector-effect: non-scaling-stroke;
+}
+
+workspace-monitor-dashboard .chart-timeline time:nth-child(2) {
+  text-align: center;
+}
+
+workspace-monitor-dashboard .chart-timeline time:last-child {
+  text-align: right;
+}
+
+workspace-monitor-dashboard .chart-timeline time:only-child {
+  grid-column: 1 / -1;
+  text-align: center;
+}
+
+workspace-monitor-dashboard .chart-timeline-scrollable {
+  position: relative;
+  display: block;
+  flex: 0 0 22px;
+  min-height: 22px;
+  background-image: repeating-linear-gradient(
+    to right,
+    transparent 0 calc(var(--minute-width) - var(--minute-tick-width)),
+    var(--border) calc(var(--minute-width) - var(--minute-tick-width)) var(--minute-width)
+  );
+}
+
+workspace-monitor-dashboard .chart-timeline-scrollable time {
+  position: absolute;
+  top: 5px;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+workspace-monitor-dashboard .chart-line {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+workspace-monitor-dashboard .chart-area {
+  stroke: none;
+}
+
+workspace-monitor-dashboard .chart-line-total {
+  color: var(--text);
+}
+
+workspace-monitor-dashboard .chart-area-total {
+  fill: var(--text);
+  opacity: 0.08;
+}
+
+workspace-monitor-dashboard .chart-line-agents {
+  color: var(--accent);
+}
+
+workspace-monitor-dashboard .chart-area-agents {
+  fill: var(--accent);
+  opacity: 0.16;
+}
+
+workspace-monitor-dashboard .chart-line-router {
+  color: var(--red);
+}
+
+workspace-monitor-dashboard .chart-area-router {
+  fill: var(--red);
+  opacity: 0.12;
+}
+
+workspace-monitor-dashboard .history-panel,
+workspace-monitor-dashboard .threshold-panel {
+  margin-top: var(--space-lg);
+  padding: var(--space-lg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+workspace-monitor-dashboard .history-toolbar,
+workspace-monitor-dashboard .threshold-panel {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-lg);
+}
+
+workspace-monitor-dashboard .history-toolbar h2,
+workspace-monitor-dashboard .threshold-panel h2,
+workspace-monitor-dashboard .history-chart-card h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--font-base);
+}
+
+workspace-monitor-dashboard .history-toolbar p,
+workspace-monitor-dashboard .threshold-panel p {
+  margin: var(--space-xs) 0 0;
+  color: var(--text-soft);
+  font-size: var(--font-sm);
+}
+
+workspace-monitor-dashboard .history-date-range,
+workspace-monitor-dashboard .history-legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+workspace-monitor-dashboard .history-date-range label,
+workspace-monitor-dashboard .threshold-grid label {
+  display: grid;
+  gap: var(--space-xs);
+  color: var(--text-soft);
+  font-size: var(--font-sm);
+}
+
+workspace-monitor-dashboard .history-date-range input,
+workspace-monitor-dashboard .threshold-grid input {
+  min-height: 36px;
+  box-sizing: border-box;
+  padding: var(--space-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--input-bg);
+  color: var(--text);
+  font: inherit;
+}
+
+workspace-monitor-dashboard .history-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-md);
+  margin-top: var(--space-lg);
+}
+
+workspace-monitor-dashboard .history-chart-card {
+  position: relative;
+  min-width: 0;
+  padding: var(--space-md);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+workspace-monitor-dashboard .history-chart {
+  position: relative;
+  height: 180px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-gutter: stable;
+}
+
+workspace-monitor-dashboard .history-chart-card h3 {
+  margin-bottom: var(--space-sm);
+}
+
+workspace-monitor-dashboard .history-line {
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.45;
+}
+
+workspace-monitor-dashboard .history-spike {
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+workspace-monitor-dashboard .history-area {
+  stroke: none;
+}
+
+workspace-monitor-dashboard .history-area.history-workspace {
+  fill: var(--accent);
+  opacity: 0.16;
+}
+
+workspace-monitor-dashboard .history-area.history-router {
+  fill: var(--red);
+  opacity: 0.12;
+}
+
+workspace-monitor-dashboard .history-workspace {
+  stroke: var(--accent);
+}
+
+workspace-monitor-dashboard .history-router {
+  stroke: var(--red);
+}
+
+workspace-monitor-dashboard .history-point {
+  cursor: pointer;
+  stroke: var(--surface);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+workspace-monitor-dashboard .history-point.history-workspace {
+  fill: var(--accent);
+}
+
+workspace-monitor-dashboard .history-point.history-router {
+  fill: var(--red);
+}
+
+workspace-monitor-dashboard .history-point:hover,
+workspace-monitor-dashboard .history-point:focus {
+  stroke: var(--text);
+  outline: none;
+}
+
+workspace-monitor-dashboard .chart-point-details {
+  position: absolute;
+  top: 4px;
+  right: auto;
+  z-index: 1;
+  max-width: calc(100% - 8px);
+  padding: 4px 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+workspace-monitor-dashboard .history-threshold {
+  opacity: 0.55;
+  stroke-width: 1;
+  stroke-dasharray: 5 5;
+  vector-effect: non-scaling-stroke;
+}
+
+workspace-monitor-dashboard .history-threshold-label {
+  fill: currentColor;
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  paint-order: stroke;
+  stroke: var(--surface);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
+workspace-monitor-dashboard .history-y-axis {
+  position: absolute;
+  top: 42px;
+  bottom: 35px;
+  left: var(--space-md);
+  z-index: 2;
+  width: 42px;
+  border-right: 1px solid color-mix(in srgb, var(--text-soft) 55%, transparent);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  color: var(--text-soft);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+workspace-monitor-dashboard .history-y-axis span {
+  position: absolute;
+  right: 5px;
+  line-height: 1;
+  white-space: nowrap;
+  transform: translateY(-50%);
+}
+
+workspace-monitor-dashboard .history-y-axis span:first-child {
+  transform: none;
+}
+
+workspace-monitor-dashboard .history-y-axis span:last-child {
+  transform: translateY(-100%);
+}
+
+workspace-monitor-dashboard .history-legend {
+  margin-top: var(--space-md);
+  color: var(--text-soft);
+  font-size: var(--font-sm);
+}
+
+workspace-monitor-dashboard .history-legend span::before {
+  display: inline-block;
+  width: 18px;
+  height: 2px;
+  margin-right: var(--space-xs);
+  vertical-align: middle;
+  background: currentColor;
+  content: '';
+}
+
+workspace-monitor-dashboard .history-legend .workspace-series {
+  color: var(--accent);
+}
+
+workspace-monitor-dashboard .history-legend .router-series {
+  color: var(--red);
+}
+
+workspace-monitor-dashboard .history-legend .threshold-series::before {
+  background: repeating-linear-gradient(90deg, currentColor 0 4px, transparent 4px 7px);
+}
+
+workspace-monitor-dashboard .threshold-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(150px, 1fr));
+  flex: 1;
+  gap: var(--space-md);
+}
+
+workspace-monitor-dashboard .table-wrap {
+  overflow: auto;
+}
+
+workspace-monitor-dashboard table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+workspace-monitor-dashboard th,
+workspace-monitor-dashboard td {
+  text-align: left;
+  padding: var(--space-md);
+  border-bottom: 1px solid var(--border);
+}
+
+workspace-monitor-dashboard th {
+  color: var(--text-soft);
+  font-size: var(--font-sm);
+  text-transform: uppercase;
+}
+
+workspace-monitor-dashboard .monitor-panel > pre {
+  margin: 0;
+}
+
+workspace-monitor-dashboard .audit-toolbar {
+  display: flex;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-lg);
+}
+
+workspace-monitor-dashboard .audit-toolbar select {
+  flex: 1;
+  background: var(--input-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm);
+}
+
+workspace-monitor-dashboard .workspace-monitor-panel > .status {
+  flex: 0 0 auto;
+  margin: 0 var(--space-lg) var(--space-lg);
+}
+
+@media (max-width: 700px) {
+  workspace-monitor-dashboard .monitor-panel {
+    padding-left: var(--space-md);
+    padding-right: var(--space-md);
+  }
+
+  workspace-monitor-dashboard .workspace-monitor-panel > .status {
+    margin-left: var(--space-md);
+    margin-right: var(--space-md);
+  }
+
+  workspace-monitor-dashboard .cpu-monitor {
+    grid-template-columns: 1fr;
+  }
+
+  workspace-monitor-dashboard .history-grid,
+  workspace-monitor-dashboard .threshold-grid {
+    grid-template-columns: 1fr;
+  }
+
+  workspace-monitor-dashboard .history-toolbar,
+  workspace-monitor-dashboard .threshold-panel {
+    flex-direction: column;
+  }
+
+  workspace-monitor-dashboard .cpu-monitor-chart {
+    border: 0;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+}

@@ -1,7 +1,7 @@
 <div class="workspace-monitor-page">
   <header>
     <h1>Workspace monitor</h1>
-    <p>Live, read-only runtime and audit information.</p>
+    <p>Live resource usage, persisted history and audit information.</p>
   </header>
   <main class="workspace-monitor-content">
     <section class="panel workspace-monitor-panel">
@@ -16,19 +16,62 @@
         <div class="summary-grid" data-role="overview"></div>
         <section class="cpu-monitor" aria-labelledby="cpu-load-title">
           <dl class="cpu-monitor-stats cpu-monitor-stats-primary">
-            <div><dt>Workspace CPU:</dt><dd data-role="workspace-cpu">0.0%</dd></div>
+            <div><dt>Total CPU:</dt><dd data-role="total-cpu">0.0%</dd></div>
+            <div><dt>Agents CPU:</dt><dd data-role="agents-cpu">0.0%</dd></div>
             <div><dt>Router CPU:</dt><dd data-role="router-cpu">0.0%</dd></div>
-            <div><dt>Memory:</dt><dd data-role="workspace-memory">0 B</dd></div>
+            <div><dt>Total memory:</dt><dd data-role="total-memory">0 B</dd></div>
+            <div><dt>Agents memory:</dt><dd data-role="agents-memory">0 B</dd></div>
+            <div><dt>Router memory:</dt><dd data-role="router-memory">0 B</dd></div>
           </dl>
           <div class="cpu-monitor-chart">
             <h2 id="cpu-load-title">CPU load</h2>
-            <div class="chart" data-role="resource-chart" aria-label="Recent Workspace and Router CPU samples"></div>
+            <div class="chart" data-role="resource-chart" aria-label="Recent total, Agents and Router CPU samples"></div>
           </div>
           <dl class="cpu-monitor-stats">
             <div><dt>Runtimes:</dt><dd data-role="runtime-count">0</dd></div>
             <div><dt>Running:</dt><dd data-role="running-count">0</dd></div>
             <div><dt>Unavailable:</dt><dd data-role="unavailable-count">0</dd></div>
           </dl>
+        </section>
+        <section class="history-panel" aria-labelledby="resource-history-title">
+          <div class="history-toolbar">
+            <div>
+              <h2 id="resource-history-title">Resource history</h2>
+              <p data-role="history-state">Loading history…</p>
+            </div>
+            <div class="history-date-range" role="group" aria-label="History date interval">
+              <label>From <input type="datetime-local" data-role="history-from"></label>
+              <label>To <input type="datetime-local" data-role="history-to"></label>
+            </div>
+          </div>
+          <div class="history-grid">
+            <article class="history-chart-card">
+              <h3>CPU</h3>
+              <div class="chart history-chart" data-role="cpu-history-chart" aria-label="CPU history"></div>
+            </article>
+            <article class="history-chart-card">
+              <h3>Memory (GiB)</h3>
+              <div class="chart history-chart" data-role="memory-history-chart" aria-label="Memory history"></div>
+            </article>
+          </div>
+          <div class="history-legend" aria-label="Chart legend">
+            <span class="workspace-series">Agents</span>
+            <span class="router-series">Router</span>
+            <span class="threshold-series">Configured threshold</span>
+          </div>
+        </section>
+        <section class="threshold-panel" aria-labelledby="threshold-settings-title">
+          <div>
+            <h2 id="threshold-settings-title">Reference thresholds</h2>
+            <p>All samples are retained; these values draw the threshold lines.</p>
+          </div>
+          <div class="threshold-grid">
+            <label>Agents CPU (%)<input type="number" min="0" step="0.1" data-role="workspace-cpu-threshold"></label>
+            <label>Router CPU (%)<input type="number" min="0" step="0.1" data-role="router-cpu-threshold"></label>
+            <label>Agents memory (GiB)<input type="number" min="0.01" step="0.01" data-role="workspace-memory-threshold"></label>
+            <label>Router memory (GiB)<input type="number" min="0.01" step="0.01" data-role="router-memory-threshold"></label>
+          </div>
+          <button type="button" class="general-button primary" data-local-action="saveThresholds">Save thresholds</button>
         </section>
       </section>
       <section class="monitor-panel" data-panel="resources" hidden>

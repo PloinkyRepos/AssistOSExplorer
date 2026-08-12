@@ -1,0 +1,48 @@
+{
+  "maxParallelTasks": 4,
+  "tools": [
+    {
+      "name": "workspace_monitor_settings_get",
+      "title": "Workspace Monitor Settings Get",
+      "description": "Read administrator-controlled workspace resource thresholds.",
+      "command": "tools/workspace_monitor_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {},
+      "env": {
+        "TOOL_NAME": "workspace_monitor_settings_get"
+      }
+    },
+    {
+      "name": "workspace_monitor_settings_update",
+      "title": "Workspace Monitor Settings Update",
+      "description": "Update administrator-controlled workspace resource thresholds.",
+      "command": "tools/workspace_monitor_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "workspaceCpuPercent": { "type": "number", "optional": false },
+        "workspaceMemoryBytes": { "type": "number", "optional": false },
+        "routerCpuPercent": { "type": "number", "optional": false },
+        "routerMemoryBytes": { "type": "number", "optional": false }
+      },
+      "env": {
+        "TOOL_NAME": "workspace_monitor_settings_update"
+      }
+    },
+    {
+      "name": "workspace_monitor_history_query",
+      "title": "Workspace Monitor History Query",
+      "description": "Query persisted resource samples and their recorded thresholds for a bounded time range.",
+      "command": "tools/workspace_monitor_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "from": { "type": "string", "optional": false },
+        "to": { "type": "string", "optional": false },
+        "maxPoints": { "type": "number", "optional": true },
+        "series": { "type": "array", "items": { "type": "string" }, "optional": true }
+      },
+      "env": {
+        "TOOL_NAME": "workspace_monitor_history_query"
+      }
+    }
+  ]
+}

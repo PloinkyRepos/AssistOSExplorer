@@ -39,7 +39,8 @@
         "onlyOffice global no-wait",
         "proxies/soul-gateway no-wait",
         "webAssist no-wait",
-        "UmamiAgent/umamiAgent no-wait"
+        "UmamiAgent/umamiAgent no-wait",
+        "workspaceMonitorAgent no-wait"
     ],
     "repos": {
         "basic": "https://github.com/AssistOS-AI/basic.git",
