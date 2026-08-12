@@ -4,8 +4,9 @@
 <body>
   <main>
     <h1>Workspace Monitor Agent</h1>
-    <p>Administrator-only live workspace monitoring with durable SQLite history for all available Agents and Router CPU and memory samples.</p>
-    <p>Thresholds are stored with each sample and used to classify and display spikes; they do not control persistence. History queries support up to 50,000 points per series.</p>
+    <p>Administrator-only live workspace monitoring with durable SQLite history for all available Agents aggregate, Router, and individual runtime CPU and memory samples.</p>
+    <p>Thresholds classify and display spikes only for the aggregate Agents and Router series; individual runtime history is independent of those thresholds. History queries support up to 50,000 points per series.</p>
+    <p>The Resources tab selects the first runtime by default and provides a recent CPU chart, current CPU and memory values, and persisted CPU and memory history for each selectable runtime.</p>
     <p>See <a href="specs/DS001-runtime.md">the runtime contract</a>.</p>
   </main>
 </body>

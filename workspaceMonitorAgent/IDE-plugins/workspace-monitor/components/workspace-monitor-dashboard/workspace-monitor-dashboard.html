@@ -75,6 +75,43 @@
         </section>
       </section>
       <section class="monitor-panel" data-panel="resources" hidden>
+        <section class="cpu-monitor resource-item-monitor" aria-labelledby="resource-item-chart-title">
+          <dl class="cpu-monitor-stats">
+            <div><dt>Runtime:</dt><dd data-role="selected-runtime-name">—</dd></div>
+            <div><dt>Status:</dt><dd data-role="selected-runtime-status">—</dd></div>
+            <div><dt>CPU:</dt><dd data-role="selected-runtime-cpu">—</dd></div>
+            <div><dt>Memory:</dt><dd data-role="selected-runtime-memory">—</dd></div>
+          </dl>
+          <div class="cpu-monitor-chart">
+            <h2 id="resource-item-chart-title" data-role="selected-runtime-chart-title">Runtime CPU load</h2>
+            <div class="chart" data-role="selected-runtime-chart" aria-label="Recent CPU samples for the selected runtime"></div>
+          </div>
+        </section>
+        <section class="history-panel" aria-labelledby="runtime-history-title">
+          <div class="history-toolbar">
+            <div>
+              <h2 id="runtime-history-title">Selected runtime history</h2>
+              <p data-role="runtime-history-state">Select a runtime to load its history.</p>
+            </div>
+            <div class="history-date-range" role="group" aria-label="Selected runtime history date interval">
+              <label>From <input type="datetime-local" data-role="runtime-history-from"></label>
+              <label>To <input type="datetime-local" data-role="runtime-history-to"></label>
+            </div>
+          </div>
+          <div class="history-grid">
+            <article class="history-chart-card">
+              <h3>CPU</h3>
+              <div class="chart history-chart" data-role="selected-runtime-cpu-history-chart" aria-label="Selected runtime CPU history"></div>
+            </article>
+            <article class="history-chart-card">
+              <h3>Memory (GiB)</h3>
+              <div class="chart history-chart" data-role="selected-runtime-memory-history-chart" aria-label="Selected runtime memory history"></div>
+            </article>
+          </div>
+          <div class="history-legend" aria-label="Selected runtime history legend">
+            <span class="workspace-series">Selected runtime</span>
+          </div>
+        </section>
         <div class="table-wrap">
           <table>
             <thead><tr><th>Runtime</th><th>Status</th><th>CPU</th><th>Memory</th></tr></thead>

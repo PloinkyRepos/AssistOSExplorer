@@ -157,6 +157,26 @@ workspace-monitor-dashboard .summary-grid + .cpu-monitor {
   margin-top: var(--space-lg);
 }
 
+workspace-monitor-dashboard .resource-item-monitor {
+  grid-template-columns: minmax(220px, 1fr) minmax(360px, 3fr);
+  margin-bottom: 0;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+workspace-monitor-dashboard .resource-item-monitor .cpu-monitor-chart {
+  border-right: 0;
+}
+
+workspace-monitor-dashboard .resource-item-monitor + .history-panel {
+  margin-top: 0;
+  border-top: 0;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+
+workspace-monitor-dashboard .resource-item-monitor + .history-panel + .table-wrap {
+  margin-top: var(--space-lg);
+}
+
 workspace-monitor-dashboard .cpu-monitor-chart {
   min-width: 0;
   padding: var(--space-md);
@@ -586,6 +606,42 @@ workspace-monitor-dashboard th {
   text-transform: uppercase;
 }
 
+workspace-monitor-dashboard tr.selected {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+workspace-monitor-dashboard tbody tr:has(.resource-runtime-selector) {
+  cursor: pointer;
+}
+
+workspace-monitor-dashboard .resource-runtime-selector {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-weight: var(--font-semibold);
+  text-align: left;
+}
+
+workspace-monitor-dashboard .resource-runtime-selector:hover,
+workspace-monitor-dashboard .resource-runtime-selector[aria-pressed="true"] {
+  color: var(--accent);
+}
+
+workspace-monitor-dashboard .resource-runtime-selector:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+workspace-monitor-dashboard .resource-chart-empty {
+  margin: auto;
+  color: var(--text-soft);
+  font-size: var(--font-sm);
+}
+
 workspace-monitor-dashboard .monitor-panel > pre {
   margin: 0;
 }
@@ -623,6 +679,11 @@ workspace-monitor-dashboard .workspace-monitor-panel > .status {
 
   workspace-monitor-dashboard .cpu-monitor {
     grid-template-columns: 1fr;
+  }
+
+  workspace-monitor-dashboard .resource-item-monitor .cpu-monitor-chart {
+    border-top: 1px solid var(--border);
+    border-left: 0;
   }
 
   workspace-monitor-dashboard .history-grid,

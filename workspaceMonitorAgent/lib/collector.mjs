@@ -5,6 +5,16 @@ export const PERSIST_INTERVAL_MS = 10_000;
 const PRIVATE_PATH = '/api/edge/workspace-metrics';
 const PRIVATE_QUERY = '?follow=1';
 
+export function runtimeSeriesId(runtime, index = 0) {
+    const repoName = String(runtime?.repoName || '').trim();
+    const agentName = String(runtime?.agentName || '').trim();
+    const containerName = String(runtime?.containerName || '').trim();
+    const identity = repoName && agentName && agentName !== '-'
+        ? `${repoName}/${agentName}`
+        : containerName || agentName || `runtime-${index}`;
+    return encodeURIComponent(identity);
+}
+
 function metricDefinitions(snapshot, settings) {
     const runtimes = Array.isArray(snapshot?.runtimes) ? snapshot.runtimes : [];
     const runtimeTotals = runtimes.reduce((sum, runtime) => ({
@@ -15,12 +25,23 @@ function metricDefinitions(snapshot, settings) {
     const routerMemory = Number(snapshot?.router?.metrics?.memoryBytes);
     const agentsCpu = runtimes.length ? runtimeTotals.cpuPercent : Number(snapshot?.total?.cpuPercent) - routerCpu;
     const agentsMemory = runtimes.length ? runtimeTotals.memoryBytes : Number(snapshot?.total?.memoryBytes) - routerMemory;
-    return [
+    const aggregateMetrics = [
         { key: 'workspace.cpu', scope: 'workspace', resource: 'cpu', value: agentsCpu, threshold: settings.workspaceCpuPercent },
         { key: 'workspace.memory', scope: 'workspace', resource: 'memory', value: agentsMemory, threshold: settings.workspaceMemoryBytes },
         { key: 'router.cpu', scope: 'router', resource: 'cpu', value: routerCpu, threshold: settings.routerCpuPercent },
         { key: 'router.memory', scope: 'router', resource: 'memory', value: routerMemory, threshold: settings.routerMemoryBytes },
     ];
+    const runtimeMetrics = runtimes.flatMap((runtime, index) => {
+        if (runtime?.metrics?.available === false) return [];
+        const cpuPercent = Number(runtime?.metrics?.cpuPercent);
+        const memoryBytes = Number(runtime?.metrics?.memoryBytes);
+        const id = runtimeSeriesId(runtime, index);
+        return [
+            { key: `runtime:${id}:cpu`, scope: 'runtime', runtimeId: id, resource: 'cpu', value: cpuPercent, threshold: 0 },
+            { key: `runtime:${id}:memory`, scope: 'runtime', runtimeId: id, resource: 'memory', value: memoryBytes, threshold: 0 },
+        ];
+    });
+    return [...aggregateMetrics, ...runtimeMetrics];
 }
 
 export function createSnapshotProcessor({

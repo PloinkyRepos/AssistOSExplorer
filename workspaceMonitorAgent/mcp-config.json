@@ -31,7 +31,7 @@
     {
       "name": "workspace_monitor_history_query",
       "title": "Workspace Monitor History Query",
-      "description": "Query persisted resource samples and their recorded thresholds for a bounded time range.",
+      "description": "Query aggregate or per-runtime persisted resource samples and their recorded thresholds for a bounded time range.",
       "command": "tools/workspace_monitor_tool.sh",
       "cwd": "workspace",
       "inputSchema": {

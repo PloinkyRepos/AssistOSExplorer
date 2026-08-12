@@ -10,6 +10,11 @@ const SERIES_KEYS = Object.freeze([
     'router.cpu',
     'router.memory',
 ]);
+const RUNTIME_SERIES_PATTERN = /^runtime:[^:]{1,512}:(cpu|memory)$/;
+
+function isSupportedSeriesKey(key) {
+    return SERIES_KEYS.includes(key) || RUNTIME_SERIES_PATTERN.test(key);
+}
 
 export const RETENTION_MONTHS = 13;
 export const RETENTION_MS = RETENTION_MONTHS * 31 * 24 * 60 * 60 * 1000;
@@ -71,7 +76,7 @@ export function persistSamples(samples, sampledAt, {
         database.exec('BEGIN IMMEDIATE');
         try {
             for (const sample of samples) {
-                if (!SERIES_KEYS.includes(sample.key)
+                if (!isSupportedSeriesKey(sample.key)
                     || !Number.isFinite(sample.value)
                     || !Number.isFinite(sample.threshold)) {
                     throw new Error('Invalid resource sample.');
@@ -106,7 +111,7 @@ export function normalizeHistoryRequest(input = {}) {
     const maxPoints = Math.max(2, Math.min(50_000, Math.round(Number(input.maxPoints || 600))));
     const requested = Array.isArray(input.series) && input.series.length ? input.series : SERIES_KEYS;
     const series = [...new Set(requested.map(String))];
-    if (series.some((key) => !SERIES_KEYS.includes(key))) {
+    if (series.some((key) => !isSupportedSeriesKey(key))) {
         throw new Error('series contains an unsupported value.');
     }
     const stepMs = Math.max(1_000, Math.ceil((toMs - fromMs) / (maxPoints - 1) / 1_000) * 1_000);

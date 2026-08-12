@@ -76,3 +76,23 @@ test('SQLite persistence removes samples outside the thirteen-month retention wi
         database.close();
     }
 });
+
+test('SQLite persists and queries per-runtime resource series', async (t) => {
+    const env = await temporaryEnvironment(t);
+    const start = Date.parse('2026-08-11T10:00:00Z');
+    const cpuKey = 'runtime:AchillesIDE%2Fexplorer:cpu';
+    const memoryKey = 'runtime:AchillesIDE%2Fexplorer:memory';
+    persistExceededSamples([
+        { key: cpuKey, value: 42, threshold: 80 },
+        { key: memoryKey, value: 2_048, threshold: 4_096 },
+    ], start, { env, now: () => start });
+
+    const result = queryHistory({
+        from: new Date(start - 1_000).toISOString(),
+        to: new Date(start + 1_000).toISOString(),
+        series: [cpuKey, memoryKey],
+    }, { env });
+
+    assert.deepEqual(result.series[cpuKey].values, [[start, 42]]);
+    assert.deepEqual(result.series[memoryKey].values, [[start, 2_048]]);
+});
