@@ -22,14 +22,14 @@ test('Workspace Monitor keeps read-only concerns in separate tabs', () => {
     const base = path.join(agentRoot, 'IDE-plugins', 'workspace-monitor', 'components', 'workspace-monitor-dashboard');
     const html = fs.readFileSync(path.join(base, 'workspace-monitor-dashboard.html'), 'utf8');
     const dashboardScript = fs.readFileSync(path.join(base, 'workspace-monitor-dashboard.js'), 'utf8');
-    const moduleNames = ['workspace-monitor-api.js', 'workspace-monitor-charts.js', 'workspace-monitor-resources.js'];
+    const moduleNames = ['workspace-monitor-api.js', 'workspace-monitor-charts.js', 'workspace-monitor-logs.js', 'workspace-monitor-resources.js'];
     const moduleScripts = moduleNames.map((name) => fs.readFileSync(path.join(base, name), 'utf8'));
     const script = [dashboardScript, ...moduleScripts].join('\n');
     const css = fs.readFileSync(path.join(base, 'workspace-monitor-dashboard.css'), 'utf8');
     const buttonScript = fs.readFileSync(path.join(agentRoot, 'IDE-plugins', 'workspace-monitor', 'workspace-monitor-button.js'), 'utf8');
     const buttonHtml = fs.readFileSync(path.join(agentRoot, 'IDE-plugins', 'workspace-monitor', 'workspace-monitor-button.html'), 'utf8');
     for (const label of ['Overview', 'Resources', 'Router Logs', 'Policy Audit', 'DPU Audit']) {
-        assert.match(html, new RegExp(`>${label}<`));
+        assert.match(html, new RegExp(`>${label}\\s*<`));
     }
     for (const sharedClass of ['panel', 'workspace-monitor-tabs', 'workspace-monitor-tab-shell', 'workspace-monitor-tab', 'status visible']) {
         assert.match(html, new RegExp(`class="[^"]*${sharedClass}`));
@@ -61,7 +61,7 @@ test('Workspace Monitor keeps read-only concerns in separate tabs', () => {
     assert.match(html, /data-role="runtime-history-to"/);
     assert.match(html, /data-role="selected-runtime-cpu-history-chart"/);
     assert.match(html, /data-role="selected-runtime-memory-history-chart"/);
-    assert.match(html, /class="cpu-monitor resource-item-monitor"[\s\S]*class="history-panel"[\s\S]*class="table-wrap"/);
+    assert.match(html, /class="table-wrap"[\s\S]*class="cpu-monitor resource-item-monitor"[\s\S]*class="history-panel"/);
     assert.match(script, /this\.runtimeSamples = new Map\(\)/);
     assert.match(script, /function runtimeSeriesId/);
     assert.match(script, /this\.selectedKey = this\.entries\[0\]\?\.key \|\| null/);
@@ -118,11 +118,20 @@ test('Workspace Monitor keeps read-only concerns in separate tabs', () => {
     assert.match(css, /\.chart-line-total\s*\{[^}]*var\(--text\)/s);
     assert.match(css, /\.chart-line-agents\s*\{[^}]*var\(--accent\)/s);
     assert.match(css, /\.chart-line-router\s*\{[^}]*var\(--red\)/s);
-    assert.match(script, /\/dashboard\/tail\?source=/);
+    assert.doesNotMatch(script, /\/dashboard\/tail\?source=/);
+    assert.match(script, /workspace_monitor_logs_get/);
     assert.match(script, /dpu_audit_list/);
     assert.match(script, /dpu_audit_get/);
+    assert.match(script, /dpu_audit_search/);
+    assert.match(script, /workspace_monitor_logs_search/);
+    assert.match(html, /data-role="router-log-search"/);
+    assert.match(html, /data-role="policy-log-search"/);
+    assert.match(html, /data-role="dpu-log-search"/);
     assert.match(script, /workspace_monitor_settings_get/);
     assert.match(script, /workspace_monitor_settings_update/);
+    assert.match(html, /data-role="log-retention-days"/);
+    assert.match(script, /logRetentionDays/);
+    assert.match(script, /generation !== this\.generation/);
     assert.match(script, /workspace_monitor_history_query/);
     assert.match(script, /MONITOR_RETRY_DELAYS_MS = \[300, 900, 1_800\]/);
     assert.match(script, /browser_csrf_invalid\|edge_generation_changed/);
@@ -130,6 +139,11 @@ test('Workspace Monitor keeps read-only concerns in separate tabs', () => {
     assert.doesNotMatch(html, /data-history-range=/);
     assert.match(html, /data-role="history-from"/);
     assert.match(html, /data-role="history-to"/);
+    for (const preset of ['1h', '1d', '7d', '1mo', '1y']) {
+        assert.equal(html.match(new RegExp(`data-history-preset="${preset}"`, 'g'))?.length, 2);
+    }
+    assert.match(script, /selectHistoryPreset\(_target, scope, preset\)/);
+    assert.match(script, /setHistoryPresetState\(scope, selectedPreset\)/);
     assert.doesNotMatch(html, /data-local-action="applyHistoryWindow"/);
     assert.match(script, /input\.addEventListener\('change'/);
     assert.match(script, /input\.addEventListener\('focus', refreshMaximum\)/);
@@ -149,7 +163,7 @@ test('Workspace Monitor keeps read-only concerns in separate tabs', () => {
     assert.match(script, /deleteData\(0,/);
     assert.doesNotMatch(script, /output\.textContent\s*\+/);
     assert.match(script, /MAX_AUDIT_BYTES/);
-    assert.match(script, /maxBytes:MAX_AUDIT_BYTES/);
+    assert.match(script, /maxBytes: MAX_AUDIT_BYTES/);
     assert.match(dashboardScript, /import \{ WorkspaceMonitorResources \} from '\.\/workspace-monitor-resources\.js'/);
     assert.match(dashboardScript, /this\.resources = new WorkspaceMonitorResources/);
     assert.doesNotMatch(dashboardScript, /renderResources\(payload\)|renderResourceRows\(entries\)|function appendChartSeries/);

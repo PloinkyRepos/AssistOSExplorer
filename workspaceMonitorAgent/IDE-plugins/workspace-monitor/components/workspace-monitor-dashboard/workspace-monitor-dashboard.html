@@ -1,134 +1,295 @@
 <div class="workspace-monitor-page">
-  <header>
-    <h1>Workspace monitor</h1>
-    <p>Live resource usage, persisted history and audit information.</p>
-  </header>
-  <main class="workspace-monitor-content">
-    <section class="panel workspace-monitor-panel">
-      <nav class="workspace-monitor-tabs" role="tablist" aria-label="Workspace monitoring">
-        <div class="workspace-monitor-tab-shell"><button type="button" class="workspace-monitor-tab active" data-local-action="selectTab overview" data-tab="overview" role="tab" aria-selected="true">Overview</button></div>
-        <div class="workspace-monitor-tab-shell"><button type="button" class="workspace-monitor-tab" data-local-action="selectTab resources" data-tab="resources" role="tab" aria-selected="false">Resources</button></div>
-        <div class="workspace-monitor-tab-shell"><button type="button" class="workspace-monitor-tab" data-local-action="selectTab router" data-tab="router" role="tab" aria-selected="false">Router Logs</button></div>
-        <div class="workspace-monitor-tab-shell"><button type="button" class="workspace-monitor-tab" data-local-action="selectTab policy" data-tab="policy" role="tab" aria-selected="false">Policy Audit</button></div>
-        <div class="workspace-monitor-tab-shell"><button type="button" class="workspace-monitor-tab" data-local-action="selectTab dpu" data-tab="dpu" role="tab" aria-selected="false">DPU Audit</button></div>
-      </nav>
-      <section class="monitor-panel active" data-panel="overview">
-        <div class="summary-grid" data-role="overview"></div>
-        <section class="cpu-monitor" aria-labelledby="cpu-load-title">
-          <dl class="cpu-monitor-stats cpu-monitor-stats-primary">
-            <div><dt>Total CPU:</dt><dd data-role="total-cpu">0.0%</dd></div>
-            <div><dt>Agents CPU:</dt><dd data-role="agents-cpu">0.0%</dd></div>
-            <div><dt>Router CPU:</dt><dd data-role="router-cpu">0.0%</dd></div>
-            <div><dt>Total memory:</dt><dd data-role="total-memory">0 B</dd></div>
-            <div><dt>Agents memory:</dt><dd data-role="agents-memory">0 B</dd></div>
-            <div><dt>Router memory:</dt><dd data-role="router-memory">0 B</dd></div>
-          </dl>
-          <div class="cpu-monitor-chart">
-            <h2 id="cpu-load-title">CPU load</h2>
-            <div class="chart" data-role="resource-chart" aria-label="Recent total, Agents and Router CPU samples"></div>
-          </div>
-          <dl class="cpu-monitor-stats">
-            <div><dt>Runtimes:</dt><dd data-role="runtime-count">0</dd></div>
-            <div><dt>Running:</dt><dd data-role="running-count">0</dd></div>
-            <div><dt>Unavailable:</dt><dd data-role="unavailable-count">0</dd></div>
-          </dl>
+    <header>
+        <h1>Workspace monitor</h1>
+        <p>Live resource usage, persisted history and audit information.</p>
+    </header>
+    <main class="workspace-monitor-content">
+        <section class="panel workspace-monitor-panel">
+            <nav class="workspace-monitor-tabs" role="tablist" aria-label="Workspace monitoring">
+                <div class="workspace-monitor-tab-shell">
+                    <button type="button" class="workspace-monitor-tab active" data-local-action="selectTab overview"
+                            data-tab="overview" role="tab" aria-selected="true">Overview
+                    </button>
+                </div>
+                <div class="workspace-monitor-tab-shell">
+                    <button type="button" class="workspace-monitor-tab" data-local-action="selectTab resources"
+                            data-tab="resources" role="tab" aria-selected="false">Resources
+                    </button>
+                </div>
+                <div class="workspace-monitor-tab-shell">
+                    <button type="button" class="workspace-monitor-tab" data-local-action="selectTab router"
+                            data-tab="router" role="tab" aria-selected="false">Router Logs
+                    </button>
+                </div>
+                <div class="workspace-monitor-tab-shell">
+                    <button type="button" class="workspace-monitor-tab" data-local-action="selectTab policy"
+                            data-tab="policy" role="tab" aria-selected="false">Policy Audit
+                    </button>
+                </div>
+                <div class="workspace-monitor-tab-shell">
+                    <button type="button" class="workspace-monitor-tab" data-local-action="selectTab dpu" data-tab="dpu"
+                            role="tab" aria-selected="false">DPU Audit
+                    </button>
+                </div>
+            </nav>
+            <section class="monitor-panel active" data-panel="overview">
+                <div class="summary-grid" data-role="overview"></div>
+                <section class="cpu-monitor" aria-labelledby="cpu-load-title">
+                    <dl class="cpu-monitor-stats cpu-monitor-stats-primary">
+                        <div>
+                            <dt>Total CPU:</dt>
+                            <dd data-role="total-cpu">0.0%</dd>
+                        </div>
+                        <div>
+                            <dt>Agents CPU:</dt>
+                            <dd data-role="agents-cpu">0.0%</dd>
+                        </div>
+                        <div>
+                            <dt>Router CPU:</dt>
+                            <dd data-role="router-cpu">0.0%</dd>
+                        </div>
+                        <div>
+                            <dt>Total memory:</dt>
+                            <dd data-role="total-memory">0 B</dd>
+                        </div>
+                        <div>
+                            <dt>Agents memory:</dt>
+                            <dd data-role="agents-memory">0 B</dd>
+                        </div>
+                        <div>
+                            <dt>Router memory:</dt>
+                            <dd data-role="router-memory">0 B</dd>
+                        </div>
+                    </dl>
+                    <div class="cpu-monitor-chart">
+                        <h2 id="cpu-load-title">CPU load</h2>
+                        <div class="chart" data-role="resource-chart"
+                             aria-label="Recent total, Agents and Router CPU samples"></div>
+                    </div>
+                    <dl class="cpu-monitor-stats">
+                        <div>
+                            <dt>Runtimes:</dt>
+                            <dd data-role="runtime-count">0</dd>
+                        </div>
+                        <div>
+                            <dt>Running:</dt>
+                            <dd data-role="running-count">0</dd>
+                        </div>
+                        <div>
+                            <dt>Unavailable:</dt>
+                            <dd data-role="unavailable-count">0</dd>
+                        </div>
+                    </dl>
+                </section>
+                <section class="history-panel" aria-labelledby="resource-history-title">
+                    <div class="history-toolbar">
+                        <div class="history-window-controls">
+
+                            <div class="history-presets" role="group" aria-label="History interval presets">
+                                <button type="button" class="general-button secondary history-preset"
+                                        data-history-preset-scope="overview" data-history-preset="1h"
+                                        data-local-action="selectHistoryPreset overview 1h" aria-pressed="false">1 h
+                                </button>
+                                <button type="button" class="general-button secondary history-preset"
+                                        data-history-preset-scope="overview" data-history-preset="1d"
+                                        data-local-action="selectHistoryPreset overview 1d" aria-pressed="true">1 d
+                                </button>
+                                <button type="button" class="general-button secondary history-preset"
+                                        data-history-preset-scope="overview" data-history-preset="7d"
+                                        data-local-action="selectHistoryPreset overview 7d" aria-pressed="false">7 d
+                                </button>
+                                <button type="button" class="general-button secondary history-preset"
+                                        data-history-preset-scope="overview" data-history-preset="1mo"
+                                        data-local-action="selectHistoryPreset overview 1mo" aria-pressed="false">1 m
+                                </button>
+                                <button type="button" class="general-button secondary history-preset"
+                                        data-history-preset-scope="overview" data-history-preset="1y"
+                                        data-local-action="selectHistoryPreset overview 1y" aria-pressed="false">1 y
+                                </button>
+                            </div>
+                            <div class="history-date-range" role="group" aria-label="Custom history date interval">
+                                <label>From <input type="datetime-local" data-role="history-from"></label>
+                                <label>To <input type="datetime-local" data-role="history-to"></label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="history-grid">
+                        <article class="history-chart-card">
+                            <h3>CPU</h3>
+                            <div class="chart history-chart" data-role="cpu-history-chart"
+                                 aria-label="CPU history"></div>
+                        </article>
+                        <article class="history-chart-card">
+                            <h3>Memory (GiB)</h3>
+                            <div class="chart history-chart" data-role="memory-history-chart"
+                                 aria-label="Memory history"></div>
+                        </article>
+                    </div>
+                    <div class="history-legend" aria-label="Chart legend">
+                        <span class="workspace-series">Agents</span>
+                        <span class="router-series">Router</span>
+                        <span class="threshold-series">Configured threshold</span>
+                    </div>
+                </section>
+                <section class="threshold-panel" aria-labelledby="threshold-settings-title">
+                    <div>
+                        <h2 id="threshold-settings-title">Monitor settings</h2>
+                        <p>All resource samples are retained; thresholds draw reference lines. Router and Policy logs
+                            are retained for 7 days by default.</p>
+                    </div>
+                    <div class="threshold-grid">
+                        <label>Agents CPU (%)<input type="number" min="0" step="0.1"
+                                                    data-role="workspace-cpu-threshold"></label>
+                        <label>Router CPU (%)<input type="number" min="0" step="0.1"
+                                                    data-role="router-cpu-threshold"></label>
+                        <label>Agents memory (GiB)<input type="number" min="0.01" step="0.01"
+                                                         data-role="workspace-memory-threshold"></label>
+                        <label>Router memory (GiB)<input type="number" min="0.01" step="0.01"
+                                                         data-role="router-memory-threshold"></label>
+                        <label>Log retention (days)<input type="number" min="1" max="365" step="1"
+                                                          data-role="log-retention-days"></label>
+                    </div>
+                    <button type="button" class="general-button primary" data-local-action="saveThresholds">Save
+                        settings
+                    </button>
+                </section>
+            </section>
+            <section class="monitor-panel" data-panel="resources" hidden>
+
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th>Runtime</th>
+                            <th>Status</th>
+                            <th>CPU</th>
+                            <th>Memory</th>
+                        </tr>
+                        </thead>
+                        <tbody data-role="resource-rows"></tbody>
+                    </table>
+                </div>
+                <section class="cpu-monitor resource-item-monitor" aria-labelledby="resource-item-chart-title">
+                    <dl class="cpu-monitor-stats">
+                        <div>
+                            <dt>Runtime:</dt>
+                            <dd data-role="selected-runtime-name">—</dd>
+                        </div>
+                        <div>
+                            <dt>Status:</dt>
+                            <dd data-role="selected-runtime-status">—</dd>
+                        </div>
+                        <div>
+                            <dt>CPU:</dt>
+                            <dd data-role="selected-runtime-cpu">—</dd>
+                        </div>
+                        <div>
+                            <dt>Memory:</dt>
+                            <dd data-role="selected-runtime-memory">—</dd>
+                        </div>
+                    </dl>
+                    <div class="cpu-monitor-chart">
+                        <h2 id="resource-item-chart-title" data-role="selected-runtime-chart-title">Runtime CPU
+                            load</h2>
+                        <div class="chart" data-role="selected-runtime-chart"
+                             aria-label="Recent CPU samples for the selected runtime"></div>
+                    </div>
+                </section>
+                <section class="history-panel" aria-labelledby="runtime-history-title">
+                    <div class="history-toolbar">
+                        <div>
+                            <h2 id="runtime-history-title">Selected runtime history</h2>
+                            <p data-role="runtime-history-state">Select a runtime to load its history.</p>
+                        </div>
+                        <div class="history-window-controls">
+                            <div class="history-presets" role="group"
+                                 aria-label="Selected runtime history interval presets">
+                                <button type="button" class="general-button secondary history-preset"
+                                        data-history-preset-scope="runtime" data-history-preset="1h"
+                                        data-local-action="selectHistoryPreset runtime 1h" aria-pressed="false">1 hour
+                                </button>
+                                <button type="button" class="general-button secondary history-preset"
+                                        data-history-preset-scope="runtime" data-history-preset="1d"
+                                        data-local-action="selectHistoryPreset runtime 1d" aria-pressed="true">1 day
+                                </button>
+                                <button type="button" class="general-button secondary history-preset"
+                                        data-history-preset-scope="runtime" data-history-preset="7d"
+                                        data-local-action="selectHistoryPreset runtime 7d" aria-pressed="false">7 days
+                                </button>
+                                <button type="button" class="general-button secondary history-preset"
+                                        data-history-preset-scope="runtime" data-history-preset="1mo"
+                                        data-local-action="selectHistoryPreset runtime 1mo" aria-pressed="false">1 month
+                                </button>
+                                <button type="button" class="general-button secondary history-preset"
+                                        data-history-preset-scope="runtime" data-history-preset="1y"
+                                        data-local-action="selectHistoryPreset runtime 1y" aria-pressed="false">1 year
+                                </button>
+                            </div>
+                            <div class="history-date-range" role="group"
+                                 aria-label="Custom selected runtime history date interval">
+                                <label>From <input type="datetime-local" data-role="runtime-history-from"></label>
+                                <label>To <input type="datetime-local" data-role="runtime-history-to"></label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="history-grid">
+                        <article class="history-chart-card">
+                            <h3>CPU</h3>
+                            <div class="chart history-chart" data-role="selected-runtime-cpu-history-chart"
+                                 aria-label="Selected runtime CPU history"></div>
+                        </article>
+                        <article class="history-chart-card">
+                            <h3>Memory (GiB)</h3>
+                            <div class="chart history-chart" data-role="selected-runtime-memory-history-chart"
+                                 aria-label="Selected runtime memory history"></div>
+                        </article>
+                    </div>
+                    <div class="history-legend" aria-label="Selected runtime history legend">
+                        <span class="workspace-series">Selected runtime</span>
+                    </div>
+                </section>
+            </section>
+            <section class="monitor-panel" data-panel="router" hidden>
+                <div class="log-toolbar">
+                    <select data-role="router-log-files" aria-label="Router log file">
+                        <option value="live">Live</option>
+                    </select>
+                    <input type="search" data-role="router-log-search" aria-label="Search Router logs"
+                           placeholder="Search all retained Router logs">
+                    <button type="button" class="general-button primary" data-role="router-log-search-button">Search
+                    </button>
+                    <button type="button" class="general-button secondary" data-role="router-log-clear">Clear</button>
+                    <button type="button" class="general-button secondary" data-role="router-log-reload">Reload</button>
+                </div>
+                <pre data-role="router-log"></pre>
+            </section>
+            <section class="monitor-panel" data-panel="policy" hidden>
+                <div class="log-toolbar">
+                    <select data-role="policy-log-files" aria-label="Policy audit file">
+                        <option value="live">Live</option>
+                    </select>
+                    <input type="search" data-role="policy-log-search" aria-label="Search Policy Audit"
+                           placeholder="Search all retained Policy Audit logs">
+                    <button type="button" class="general-button primary" data-role="policy-log-search-button">Search
+                    </button>
+                    <button type="button" class="general-button secondary" data-role="policy-log-clear">Clear</button>
+                    <button type="button" class="general-button secondary" data-role="policy-log-reload">Reload</button>
+                </div>
+                <pre data-role="policy-log"></pre>
+            </section>
+            <section class="monitor-panel" data-panel="dpu" hidden>
+                <div class="log-toolbar">
+                    <select data-role="dpu-log-files" aria-label="DPU audit file"></select>
+                    <input type="search" data-role="dpu-log-search" aria-label="Search DPU Audit"
+                           placeholder="Search all retained DPU Audit logs">
+                    <button type="button" class="general-button primary" data-role="dpu-log-search-button">Search
+                    </button>
+                    <button type="button" class="general-button secondary" data-role="dpu-log-clear">Clear</button>
+                    <button type="button" class="general-button secondary" data-role="dpu-log-reload">Reload</button>
+                </div>
+                <pre data-role="dpu-log"></pre>
+            </section>
+            <div class="status visible" data-role="status" role="status" aria-live="polite">Ready</div>
         </section>
-        <section class="history-panel" aria-labelledby="resource-history-title">
-          <div class="history-toolbar">
-            <div>
-              <h2 id="resource-history-title">Resource history</h2>
-              <p data-role="history-state">Loading history…</p>
-            </div>
-            <div class="history-date-range" role="group" aria-label="History date interval">
-              <label>From <input type="datetime-local" data-role="history-from"></label>
-              <label>To <input type="datetime-local" data-role="history-to"></label>
-            </div>
-          </div>
-          <div class="history-grid">
-            <article class="history-chart-card">
-              <h3>CPU</h3>
-              <div class="chart history-chart" data-role="cpu-history-chart" aria-label="CPU history"></div>
-            </article>
-            <article class="history-chart-card">
-              <h3>Memory (GiB)</h3>
-              <div class="chart history-chart" data-role="memory-history-chart" aria-label="Memory history"></div>
-            </article>
-          </div>
-          <div class="history-legend" aria-label="Chart legend">
-            <span class="workspace-series">Agents</span>
-            <span class="router-series">Router</span>
-            <span class="threshold-series">Configured threshold</span>
-          </div>
-        </section>
-        <section class="threshold-panel" aria-labelledby="threshold-settings-title">
-          <div>
-            <h2 id="threshold-settings-title">Reference thresholds</h2>
-            <p>All samples are retained; these values draw the threshold lines.</p>
-          </div>
-          <div class="threshold-grid">
-            <label>Agents CPU (%)<input type="number" min="0" step="0.1" data-role="workspace-cpu-threshold"></label>
-            <label>Router CPU (%)<input type="number" min="0" step="0.1" data-role="router-cpu-threshold"></label>
-            <label>Agents memory (GiB)<input type="number" min="0.01" step="0.01" data-role="workspace-memory-threshold"></label>
-            <label>Router memory (GiB)<input type="number" min="0.01" step="0.01" data-role="router-memory-threshold"></label>
-          </div>
-          <button type="button" class="general-button primary" data-local-action="saveThresholds">Save thresholds</button>
-        </section>
-      </section>
-      <section class="monitor-panel" data-panel="resources" hidden>
-        <section class="cpu-monitor resource-item-monitor" aria-labelledby="resource-item-chart-title">
-          <dl class="cpu-monitor-stats">
-            <div><dt>Runtime:</dt><dd data-role="selected-runtime-name">—</dd></div>
-            <div><dt>Status:</dt><dd data-role="selected-runtime-status">—</dd></div>
-            <div><dt>CPU:</dt><dd data-role="selected-runtime-cpu">—</dd></div>
-            <div><dt>Memory:</dt><dd data-role="selected-runtime-memory">—</dd></div>
-          </dl>
-          <div class="cpu-monitor-chart">
-            <h2 id="resource-item-chart-title" data-role="selected-runtime-chart-title">Runtime CPU load</h2>
-            <div class="chart" data-role="selected-runtime-chart" aria-label="Recent CPU samples for the selected runtime"></div>
-          </div>
-        </section>
-        <section class="history-panel" aria-labelledby="runtime-history-title">
-          <div class="history-toolbar">
-            <div>
-              <h2 id="runtime-history-title">Selected runtime history</h2>
-              <p data-role="runtime-history-state">Select a runtime to load its history.</p>
-            </div>
-            <div class="history-date-range" role="group" aria-label="Selected runtime history date interval">
-              <label>From <input type="datetime-local" data-role="runtime-history-from"></label>
-              <label>To <input type="datetime-local" data-role="runtime-history-to"></label>
-            </div>
-          </div>
-          <div class="history-grid">
-            <article class="history-chart-card">
-              <h3>CPU</h3>
-              <div class="chart history-chart" data-role="selected-runtime-cpu-history-chart" aria-label="Selected runtime CPU history"></div>
-            </article>
-            <article class="history-chart-card">
-              <h3>Memory (GiB)</h3>
-              <div class="chart history-chart" data-role="selected-runtime-memory-history-chart" aria-label="Selected runtime memory history"></div>
-            </article>
-          </div>
-          <div class="history-legend" aria-label="Selected runtime history legend">
-            <span class="workspace-series">Selected runtime</span>
-          </div>
-        </section>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Runtime</th><th>Status</th><th>CPU</th><th>Memory</th></tr></thead>
-            <tbody data-role="resource-rows"></tbody>
-          </table>
-        </div>
-      </section>
-      <section class="monitor-panel" data-panel="router" hidden><pre data-role="router-log"></pre></section>
-      <section class="monitor-panel" data-panel="policy" hidden><pre data-role="policy-log"></pre></section>
-      <section class="monitor-panel" data-panel="dpu" hidden>
-        <div class="audit-toolbar">
-          <select data-role="audit-files" aria-label="DPU audit file"></select>
-          <button type="button" class="general-button secondary" data-local-action="reloadAudit">Reload</button>
-        </div>
-        <pre data-role="dpu-log"></pre>
-      </section>
-      <div class="status visible" data-role="status" role="status" aria-live="polite">Ready</div>
-    </section>
-  </main>
+    </main>
 </div>

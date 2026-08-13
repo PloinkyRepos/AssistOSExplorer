@@ -13,6 +13,7 @@ const {
   appendAuditClientEvent,
   getAuditConfig,
   getAuditEntry,
+  searchAuditEntries,
   getWorkspaceRoots,
   listAuditEntries,
   addConfidentialComment,
@@ -1007,6 +1008,19 @@ test('audit reads preserve a complete record when the byte window begins at its 
   fs.writeFileSync(path.join(auditRoot, name), `${first}${second}`, 'utf8');
   const fetched = await getAuditEntry(adminAuth, { name, maxBytes: Buffer.byteLength(second) });
   assert.equal(fetched.item.content, second);
+});
+
+test('audit search returns newest case-insensitive matches with timestamps and a bounded result', async () => {
+  const auditRoot = getAuditDirPath();
+  fs.mkdirSync(auditRoot, { recursive: true });
+  const first = JSON.stringify({ timestamp: '2099-01-01T10:00:00.000Z', event: 'Access DENIED' });
+  const second = JSON.stringify({ timestamp: '2099-01-01T11:00:00.000Z', event: 'access denied again' });
+  fs.writeFileSync(path.join(auditRoot, '2099-01-01.jsonl'), `${first}\n${second}\n`, 'utf8');
+  const searched = await searchAuditEntries(adminAuth, { query: 'ACCESS denied', limit: 1 });
+  assert.equal(searched.matches.length, 1);
+  assert.equal(searched.matches[0].lineNumber, 2);
+  assert.equal(searched.matches[0].timestamp, '2099-01-01T11:00:00.000Z');
+  assert.equal(searched.truncated, true);
 });
 
 test('audit retention removes expired daily files and keeps recent files', async () => {

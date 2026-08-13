@@ -55,6 +55,20 @@
       }
     },
     {
+      "name": "dpu_audit_search",
+      "title": "DPU Audit Search",
+      "description": "Search retained DPU audit records using case-insensitive text matching.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "query": { "type": "string", "optional": false },
+        "limit": { "type": "number", "optional": true }
+      },
+      "env": {
+        "TOOL_NAME": "dpu_audit_search"
+      }
+    },
+    {
       "name": "dpu_audit_event_append",
       "title": "DPU Audit Event Append",
       "description": "Append a non-AI Explorer-side audit event to the current audit log.",

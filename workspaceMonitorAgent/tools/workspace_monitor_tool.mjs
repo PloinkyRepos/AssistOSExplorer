@@ -2,6 +2,7 @@
 import { assertAdministrator } from '../lib/admin.mjs';
 import { readSettings, writeSettings } from '../lib/settings.mjs';
 import { queryHistory } from '../lib/sqliteStore.mjs';
+import { getPloinkyLog, listPloinkyLogs, searchPloinkyLogs } from '../lib/ploinkyLogs.mjs';
 
 async function readInput() {
     if (process.stdin.isTTY) return {};
@@ -39,6 +40,15 @@ async function main() {
             break;
         case 'workspace_monitor_history_query':
             result = await queryHistory(input);
+            break;
+        case 'workspace_monitor_logs_list':
+            result = await listPloinkyLogs(input.source);
+            break;
+        case 'workspace_monitor_logs_get':
+            result = await getPloinkyLog(input.source, input);
+            break;
+        case 'workspace_monitor_logs_search':
+            result = await searchPloinkyLogs(input.source, input);
             break;
         default:
             throw new Error('Unsupported Workspace Monitor tool.');

@@ -4,7 +4,7 @@
     {
       "name": "workspace_monitor_settings_get",
       "title": "Workspace Monitor Settings Get",
-      "description": "Read administrator-controlled workspace resource thresholds.",
+      "description": "Read administrator-controlled workspace thresholds and log retention.",
       "command": "tools/workspace_monitor_tool.sh",
       "cwd": "workspace",
       "inputSchema": {},
@@ -15,14 +15,15 @@
     {
       "name": "workspace_monitor_settings_update",
       "title": "Workspace Monitor Settings Update",
-      "description": "Update administrator-controlled workspace resource thresholds.",
+      "description": "Update administrator-controlled workspace thresholds and log retention.",
       "command": "tools/workspace_monitor_tool.sh",
       "cwd": "workspace",
       "inputSchema": {
         "workspaceCpuPercent": { "type": "number", "optional": false },
         "workspaceMemoryBytes": { "type": "number", "optional": false },
         "routerCpuPercent": { "type": "number", "optional": false },
-        "routerMemoryBytes": { "type": "number", "optional": false }
+        "routerMemoryBytes": { "type": "number", "optional": false },
+        "logRetentionDays": { "type": "number", "optional": false }
       },
       "env": {
         "TOOL_NAME": "workspace_monitor_settings_update"
@@ -43,6 +44,43 @@
       "env": {
         "TOOL_NAME": "workspace_monitor_history_query"
       }
+    },
+    {
+      "name": "workspace_monitor_logs_list",
+      "title": "Workspace Monitor Logs List",
+      "description": "List Ploinky-owned Router or Policy daily log archives.",
+      "command": "tools/workspace_monitor_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "source": { "type": "string", "enum": ["router", "policy"], "optional": false }
+      },
+      "env": { "TOOL_NAME": "workspace_monitor_logs_list" }
+    },
+    {
+      "name": "workspace_monitor_logs_get",
+      "title": "Workspace Monitor Logs Get",
+      "description": "Read the active Ploinky-owned Router or Policy log, or one daily archive.",
+      "command": "tools/workspace_monitor_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "source": { "type": "string", "enum": ["router", "policy"], "optional": false },
+        "name": { "type": "string", "optional": false },
+        "maxBytes": { "type": "number", "optional": true }
+      },
+      "env": { "TOOL_NAME": "workspace_monitor_logs_get" }
+    },
+    {
+      "name": "workspace_monitor_logs_search",
+      "title": "Workspace Monitor Logs Search",
+      "description": "Search the active Ploinky-owned Router or Policy log and all retained daily archives.",
+      "command": "tools/workspace_monitor_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "source": { "type": "string", "enum": ["router", "policy"], "optional": false },
+        "query": { "type": "string", "optional": false },
+        "limit": { "type": "number", "optional": true }
+      },
+      "env": { "TOOL_NAME": "workspace_monitor_logs_search" }
     }
   ]
 }

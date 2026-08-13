@@ -1,11 +1,17 @@
 import { callDpu, callMonitor, consumeNdjson } from './workspace-monitor-api.js';
 import { renderHistoryChart } from './workspace-monitor-charts.js';
+import { WorkspaceMonitorLogs } from './workspace-monitor-logs.js';
 import { WorkspaceMonitorResources } from './workspace-monitor-resources.js';
 
-const MAX_LOG_CHARS = 2 * 1024 * 1024;
-const MAX_AUDIT_BYTES = 2 * 1024 * 1024;
 const DEFAULT_HISTORY_DURATION_MS = 24 * 60 * 60 * 1000;
 const MAX_HISTORY_POINTS = 50_000;
+const HISTORY_PRESET_DURATIONS_MS = Object.freeze({
+  '1h': 60 * 60 * 1000,
+  '1d': DEFAULT_HISTORY_DURATION_MS,
+  '7d': 7 * DEFAULT_HISTORY_DURATION_MS,
+  '1mo': 30 * DEFAULT_HISTORY_DURATION_MS,
+  '1y': 365 * DEFAULT_HISTORY_DURATION_MS
+});
 
 function setText(root, role, value) {
   const target = root.querySelector(`[data-role="${role}"]`);
@@ -23,7 +29,11 @@ export class WorkspaceMonitorDashboard {
     this.invalidate = invalidate;
     this.activeTab = 'overview';
     this.controllers = new Map();
-    this.logScrollFrames = new Map();
+    this.logs = new WorkspaceMonitorLogs(element, {
+      callMonitor,
+      callDpu,
+      setStatus: (message) => this.setStatus(message)
+    });
     this.resources = new WorkspaceMonitorResources(element, {
       onSelectionChange: () => void this.loadSelectedRuntimeHistory(),
       onSelectionCleared: () => this.renderSelectedRuntimeHistoryUnavailable('Select a runtime to load its history.'),
@@ -39,6 +49,7 @@ export class WorkspaceMonitorDashboard {
 
   afterRender() {
     this.status = this.element.querySelector('[data-role="status"]');
+    this.logs.initialize();
     this.initializeHistoryWindow();
     this.initializeRuntimeHistoryWindow();
     for (const role of ['history-from', 'history-to', 'runtime-history-from', 'runtime-history-to']) {
@@ -51,7 +62,9 @@ export class WorkspaceMonitorDashboard {
           this.updateHistoryInputLimits();
           this.clampHistoryInputToPresent(input);
           input.blur();
-          if (role.startsWith('runtime-')) this.handleRuntimeHistoryWindowChange();
+          const scope = role.startsWith('runtime-') ? 'runtime' : 'overview';
+          this.setHistoryPresetState(scope, null);
+          if (scope === 'runtime') this.handleRuntimeHistoryWindowChange();
           else this.handleHistoryWindowChange();
         });
       }
@@ -75,8 +88,7 @@ export class WorkspaceMonitorDashboard {
       this.startResourceStream();
       void this.loadSelectedRuntimeHistory();
     }
-    if (tab === 'router' || tab === 'policy') this.startLogStream(tab);
-    if (tab === 'dpu') this.reloadAudit();
+    if (tab === 'router' || tab === 'policy' || tab === 'dpu') void this.logs.start(tab);
   }
 
   setStatus(message) { if (this.status) this.status.textContent = message; }
@@ -84,8 +96,7 @@ export class WorkspaceMonitorDashboard {
   stopStreams() {
     for (const controller of this.controllers.values()) controller.abort();
     this.controllers.clear();
-    for (const frame of this.logScrollFrames.values()) cancelAnimationFrame(frame);
-    this.logScrollFrames.clear();
+    this.logs.stop();
   }
 
   startOverview() {
@@ -111,11 +122,14 @@ export class WorkspaceMonitorDashboard {
       'workspace-cpu-threshold': this.settings.workspaceCpuPercent,
       'router-cpu-threshold': this.settings.routerCpuPercent,
       'workspace-memory-threshold': this.settings.workspaceMemoryBytes / 1024 ** 3,
-      'router-memory-threshold': this.settings.routerMemoryBytes / 1024 ** 3
+      'router-memory-threshold': this.settings.routerMemoryBytes / 1024 ** 3,
+      'log-retention-days': this.settings.logRetentionDays
     };
     for (const [role, value] of Object.entries(values)) {
       const input = this.element.querySelector(`[data-role="${role}"]`);
-      if (input) input.value = Number(value).toFixed(role.includes('memory') ? 2 : 1).replace(/\.00$/, '');
+      if (input) input.value = role === 'log-retention-days'
+        ? String(Math.round(Number(value)))
+        : Number(value).toFixed(role.includes('memory') ? 2 : 1).replace(/\.00$/, '');
     }
   }
 
@@ -148,6 +162,7 @@ export class WorkspaceMonitorDashboard {
     const from = new Date(to.getTime() - DEFAULT_HISTORY_DURATION_MS);
     fromInput.value = localDateTimeValue(from);
     toInput.value = localDateTimeValue(to);
+    this.setHistoryPresetState('overview', '1d');
   }
 
   runtimeHistoryWindow() {
@@ -164,6 +179,30 @@ export class WorkspaceMonitorDashboard {
     if (!fromInput || !toInput || fromInput.value || toInput.value) return;
     fromInput.value = localDateTimeValue(new Date(to.getTime() - DEFAULT_HISTORY_DURATION_MS));
     toInput.value = localDateTimeValue(to);
+    this.setHistoryPresetState('runtime', '1d');
+  }
+
+  selectHistoryPreset(_target, scope, preset) {
+    const duration = HISTORY_PRESET_DURATIONS_MS[preset];
+    const runtime = scope === 'runtime';
+    if (!duration || (scope !== 'overview' && !runtime)) return;
+    const prefix = runtime ? 'runtime-' : '';
+    const fromInput = this.element.querySelector(`[data-role="${prefix}history-from"]`);
+    const toInput = this.element.querySelector(`[data-role="${prefix}history-to"]`);
+    if (!fromInput || !toInput) return;
+    const to = new Date();
+    fromInput.value = localDateTimeValue(new Date(to.getTime() - duration));
+    toInput.value = localDateTimeValue(to);
+    this.updateHistoryInputLimits(to);
+    this.setHistoryPresetState(scope, preset);
+    if (runtime) this.handleRuntimeHistoryWindowChange();
+    else this.handleHistoryWindowChange();
+  }
+
+  setHistoryPresetState(scope, selectedPreset) {
+    this.element.querySelectorAll(`[data-history-preset-scope="${scope}"]`).forEach((button) => {
+      button.setAttribute('aria-pressed', String(button.dataset.historyPreset === selectedPreset));
+    });
   }
 
   handleRuntimeHistoryWindowChange() {
@@ -192,17 +231,18 @@ export class WorkspaceMonitorDashboard {
       workspaceCpuPercent: number('workspace-cpu-threshold'),
       routerCpuPercent: number('router-cpu-threshold'),
       workspaceMemoryBytes: Math.round(number('workspace-memory-threshold') * 1024 ** 3),
-      routerMemoryBytes: Math.round(number('router-memory-threshold') * 1024 ** 3)
+      routerMemoryBytes: Math.round(number('router-memory-threshold') * 1024 ** 3),
+      logRetentionDays: number('log-retention-days')
     };
     try {
-      this.setStatus('Saving resource thresholds…');
+      this.setStatus('Saving Workspace Monitor settings…');
       const payload = await callMonitor('workspace_monitor_settings_update', args);
       this.settings = payload.settings;
       this.renderSettings();
       await this.loadHistory();
-      this.setStatus('Resource thresholds saved');
+      this.setStatus('Workspace Monitor settings saved; log retention applies at the next maintenance cycle');
     } catch (error) {
-      this.setStatus(`Threshold update failed: ${error.message}`);
+      this.setStatus(`Settings update failed: ${error.message}`);
     }
   }
 
@@ -349,56 +389,4 @@ export class WorkspaceMonitorDashboard {
     }
   }
 
-  appendLogChunk(source, output, chunk) {
-    if (!chunk) return;
-    let textNode = output.firstChild;
-    if (!textNode || textNode.nodeType !== 3) {
-      textNode = document.createTextNode('');
-      output.replaceChildren(textNode);
-    }
-    textNode.appendData(chunk);
-    if (textNode.length > MAX_LOG_CHARS) {
-      const excess = textNode.length - MAX_LOG_CHARS;
-      const lineBoundary = textNode.data.indexOf('\n', excess);
-      textNode.deleteData(0, lineBoundary === -1 ? excess : lineBoundary + 1);
-    }
-    if (!this.logScrollFrames.has(source)) {
-      const frame = requestAnimationFrame(() => {
-        this.logScrollFrames.delete(source);
-        const panel = output.closest('.monitor-panel');
-        if (panel) panel.scrollTop = panel.scrollHeight;
-      });
-      this.logScrollFrames.set(source, frame);
-    }
-  }
-
-  async startLogStream(source) {
-    const controller = new AbortController();
-    this.controllers.set(source, controller);
-    const output = this.element.querySelector(`[data-role="${source}-log"]`);
-    output.replaceChildren(document.createTextNode(''));
-    this.setStatus(`Following ${source} log…`);
-    try {
-      const response = await fetch(`/dashboard/tail?source=${encodeURIComponent(source)}&lines=200&follow=1`, { credentials: 'include', cache: 'no-store', signal: controller.signal });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      while (true) {
-        const { value, done } = await reader.read();
-        if (value) this.appendLogChunk(source, output, decoder.decode(value, { stream: true }));
-        if (done) {
-          this.appendLogChunk(source, output, decoder.decode());
-          break;
-        }
-      }
-    } catch (error) {
-      if (error.name !== 'AbortError') this.setStatus(`Log stream stopped: ${error.message}`);
-    }
-  }
-
-  async reloadAudit() {
-    try{this.setStatus('Loading DPU audit…');const listed=await callDpu('dpu_audit_list');const files=Array.isArray(listed.items)?listed.items:[];const select=this.element.querySelector('[data-role="audit-files"]');const previous=select.value;select.replaceChildren();for(const file of files){const option=document.createElement('option');option.value=file.name;option.textContent=file.name;select.append(option);}if(previous&&files.some((f)=>f.name===previous))select.value=previous;select.onchange=()=>this.loadAuditFile(select.value);await this.loadAuditFile(select.value);this.setStatus('DPU audit updated');}catch(error){this.setStatus(`DPU audit unavailable: ${error.message}`);}
-  }
-
-  async loadAuditFile(name) { const output=this.element.querySelector('[data-role="dpu-log"]');if(!name){output.textContent='No audit records yet.';return;}const payload=await callDpu('dpu_audit_get',{name,maxBytes:MAX_AUDIT_BYTES});output.textContent=payload.item?.content||''; }
 }

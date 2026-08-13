@@ -99,11 +99,20 @@ export class WorkspaceMonitorResources {
   }
 
   select(key) {
-    if (this.selectedKey === key) return;
-    this.selectedKey = key;
-    this.renderRows();
-    this.renderSelected();
-    this.onSelectionChange?.();
+    if (this.selectedKey !== key) {
+      this.selectedKey = key;
+      this.renderRows();
+      this.renderSelected();
+      this.onSelectionChange?.();
+    }
+    this.scrollToSelectedMonitor();
+  }
+
+  scrollToSelectedMonitor() {
+    this.element.querySelector('.resource-item-monitor')?.scrollIntoView?.({
+      behavior: 'smooth',
+      block: 'start'
+    });
   }
 
   renderRows() {

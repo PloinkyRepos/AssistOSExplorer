@@ -38,6 +38,7 @@ function stopAll(signal = 'SIGTERM') {
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => stopAll(signal));
 
 supervise('collector', process.execPath, ['/code/server/collector.mjs']);
+supervise('log maintenance', process.execPath, ['/code/server/logMaintenance.mjs']);
 const agentServer = start('/bin/sh', ['/Agent/server/AgentServer.sh']);
 
 agentServer.once('close', (code, signal) => {

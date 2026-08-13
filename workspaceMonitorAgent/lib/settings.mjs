@@ -6,6 +6,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
     workspaceMemoryBytes: 4 * 1024 ** 3,
     routerCpuPercent: 80,
     routerMemoryBytes: 512 * 1024 ** 2,
+    logRetentionDays: 7,
 });
 
 export function dataRoot(env = process.env) {
@@ -24,12 +25,21 @@ function finiteNumber(value, name, { min, max }) {
     return number;
 }
 
+function integer(value, name, { min, max }) {
+    const number = Number(value);
+    if (!Number.isSafeInteger(number) || number < min || number > max) {
+        throw new Error(`${name} must be an integer between ${min} and ${max}.`);
+    }
+    return number;
+}
+
 export function normalizeSettings(value = {}) {
     return {
         workspaceCpuPercent: finiteNumber(value.workspaceCpuPercent, 'workspaceCpuPercent', { min: 0, max: 100_000 }),
         workspaceMemoryBytes: Math.round(finiteNumber(value.workspaceMemoryBytes, 'workspaceMemoryBytes', { min: 1, max: Number.MAX_SAFE_INTEGER })),
         routerCpuPercent: finiteNumber(value.routerCpuPercent, 'routerCpuPercent', { min: 0, max: 100_000 }),
         routerMemoryBytes: Math.round(finiteNumber(value.routerMemoryBytes, 'routerMemoryBytes', { min: 1, max: Number.MAX_SAFE_INTEGER })),
+        logRetentionDays: integer(value.logRetentionDays, 'logRetentionDays', { min: 1, max: 365 }),
     };
 }
 

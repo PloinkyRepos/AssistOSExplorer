@@ -3,6 +3,7 @@ import {
   getAuditConfig,
   listAuditEntries,
   getAuditEntry,
+  searchAuditEntries,
   appendAuditClientEvent,
   getWhoAmI,
   getWorkspaceRoots,
@@ -119,6 +120,9 @@ function normalizeArgs(toolName, args) {
     case 'dpu_audit_get':
       requireString('name');
       return input;
+    case 'dpu_audit_search':
+      requireString('query');
+      return input;
     case 'dpu_secret_get':
     case 'dpu_agent_secret_get':
     case 'dpu_secret_delete':
@@ -228,6 +232,9 @@ async function main() {
       break;
     case 'dpu_audit_get':
       result = await getAuditEntry(authInfo, args);
+      break;
+    case 'dpu_audit_search':
+      result = await searchAuditEntries(authInfo, args);
       break;
     case 'dpu_audit_event_append':
       result = await appendAuditClientEvent(authInfo, args);

@@ -887,6 +887,43 @@ export async function getAuditEntry(authInfo = null, { name, maxBytes = 0 }) {
   });
 }
 
+export async function searchAuditEntries(authInfo = null, { query, limit = 500 } = {}) {
+  return withLockedState(async (state, permissionsManifest, ctx) => {
+    const actor = requireAuthenticatedActor(authInfo, permissionsManifest);
+    await ensureUserRecord(state, permissionsManifest, actor, ctx);
+    assertAuditViewer(actor);
+    const needle = String(query || '').trim().toLocaleLowerCase();
+    if (!needle) throw new Error('Audit search query is required.');
+    const boundedLimit = Math.max(1, Math.min(500, Number.parseInt(String(limit), 10) || 500));
+    const files = await listAuditStorageFiles();
+    const matches = [];
+    let truncated = false;
+    for (const fileName of files) {
+      const content = await readAuditStorageFile(fileName);
+      const lines = content.split('\n').filter(Boolean);
+      for (let index = lines.length - 1; index >= 0; index -= 1) {
+        const line = lines[index];
+        if (!line.toLocaleLowerCase().includes(needle)) continue;
+        if (matches.length >= boundedLimit) {
+          truncated = true;
+          break;
+        }
+        let record = null;
+        try { record = JSON.parse(line); } catch (_) {}
+        const rawTimestamp = record?.timestamp || record?.ts;
+        matches.push({
+          file: fileName,
+          lineNumber: index + 1,
+          timestamp: Number.isFinite(Date.parse(rawTimestamp)) ? new Date(rawTimestamp).toISOString() : null,
+          line
+        });
+      }
+      if (truncated) break;
+    }
+    return { ok: true, query: String(query), matches, truncated };
+  });
+}
+
 export async function appendAuditClientEvent(authInfo = null, payload = {}) {
   return withLockedState(async (state, permissionsManifest, ctx) => {
     const actor = requireAuthenticatedActor(authInfo, permissionsManifest);

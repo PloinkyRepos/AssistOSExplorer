@@ -59,6 +59,7 @@ This is a domain surface, not a storage-debug surface. The caller asks for secre
 - `dpu_audit_config_get`
 - `dpu_audit_list`
 - `dpu_audit_get`
+- `dpu_audit_search`
 - `dpu_audit_event_append`
 
 Audit file writes happen through two controlled paths:

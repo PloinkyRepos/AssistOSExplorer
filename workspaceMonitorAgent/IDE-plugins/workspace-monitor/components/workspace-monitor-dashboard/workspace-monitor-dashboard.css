@@ -158,6 +158,7 @@ workspace-monitor-dashboard .summary-grid + .cpu-monitor {
 }
 
 workspace-monitor-dashboard .resource-item-monitor {
+  scroll-margin-top: 1rem;
   grid-template-columns: minmax(220px, 1fr) minmax(360px, 3fr);
   margin-bottom: 0;
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
@@ -378,10 +379,30 @@ workspace-monitor-dashboard .history-legend {
   gap: var(--space-sm);
 }
 
+workspace-monitor-dashboard .history-window-controls {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  width: 100%;
+  justify-content: space-between;
+}
+
+workspace-monitor-dashboard .history-presets {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-xs);
+  align-self: start;
+}
+
+workspace-monitor-dashboard .history-preset[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface));
+  color: var(--text);
+}
+
 workspace-monitor-dashboard .history-date-range label,
 workspace-monitor-dashboard .threshold-grid label {
-  display: grid;
-  gap: var(--space-xs);
   color: var(--text-soft);
   font-size: var(--font-sm);
 }
@@ -584,6 +605,46 @@ workspace-monitor-dashboard .threshold-grid {
   gap: var(--space-md);
 }
 
+workspace-monitor-dashboard .threshold-panel {
+  display: grid;
+  grid-template-areas:
+    "intro fields"
+    ". action";
+  grid-template-columns: minmax(210px, 0.8fr) minmax(0, 2fr);
+  align-items: start;
+}
+
+workspace-monitor-dashboard .threshold-panel > div:first-child {
+  grid-area: intro;
+  max-width: 34rem;
+}
+
+workspace-monitor-dashboard .threshold-panel .threshold-grid {
+  grid-area: fields;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  width: 100%;
+  align-items: stretch;
+}
+
+workspace-monitor-dashboard .threshold-panel .threshold-grid label {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  min-width: 0;
+  gap: var(--space-xs);
+}
+
+workspace-monitor-dashboard .threshold-panel .threshold-grid input {
+  width: 100%;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+workspace-monitor-dashboard .threshold-panel > button {
+  grid-area: action;
+  min-width: 140px;
+  justify-self: end;
+}
+
 workspace-monitor-dashboard .table-wrap {
   overflow: auto;
 }
@@ -646,14 +707,17 @@ workspace-monitor-dashboard .monitor-panel > pre {
   margin: 0;
 }
 
-workspace-monitor-dashboard .audit-toolbar {
-  display: flex;
+workspace-monitor-dashboard .log-toolbar {
+  display: grid;
+  grid-template-columns: minmax(150px, auto) minmax(220px, 1fr) auto auto auto;
   gap: var(--space-sm);
   margin-bottom: var(--space-lg);
+  align-items: center;
 }
 
-workspace-monitor-dashboard .audit-toolbar select {
-  flex: 1;
+workspace-monitor-dashboard .log-toolbar select,
+workspace-monitor-dashboard .log-toolbar input {
+  min-width: 0;
   background: var(--input-bg);
   color: var(--text);
   border: 1px solid var(--border);
@@ -696,9 +760,39 @@ workspace-monitor-dashboard .workspace-monitor-panel > .status {
     flex-direction: column;
   }
 
+  workspace-monitor-dashboard .threshold-panel {
+    grid-template-areas:
+      "intro"
+      "fields"
+      "action";
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  workspace-monitor-dashboard .threshold-panel > button {
+    width: 100%;
+    justify-self: stretch;
+  }
+
+  workspace-monitor-dashboard .history-window-controls {
+    width: 100%;
+    justify-items: stretch;
+  }
+
+  workspace-monitor-dashboard .history-presets {
+    justify-content: flex-start;
+  }
+
   workspace-monitor-dashboard .cpu-monitor-chart {
     border: 0;
     border-top: 1px solid var(--border);
     border-bottom: 1px solid var(--border);
+  }
+
+  workspace-monitor-dashboard .log-toolbar {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  workspace-monitor-dashboard .log-toolbar input {
+    grid-column: 1 / -1;
   }
 }
