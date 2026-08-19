@@ -93,7 +93,7 @@ test('secret-store client calls DPU with an agent assertion and internal secret 
   assert.equal(request.url, '/dpuAgent/mcp');
   assert.equal(request.headers.host, `router.test:${port}`);
   assert.equal(request.body.method, 'tools/call');
-  assert.equal(request.body.params?.name, 'dpu_agent_secret_put');
+  assert.equal(request.body.params?.name, 'dpu_secret_put');
   assert.deepEqual(request.body.params?.arguments, { key: 'API_TOKEN', value: 'secret-value' });
   assert.equal(typeof request.headers['mcp-session-id'], 'undefined');
   assert.match(String(request.headers.authorization || ''), /^Bearer\s+\S+\.\S+\.\S+$/);
@@ -286,7 +286,7 @@ test('guest callers degrade gracefully on read and fail explicitly on writes', a
   });
 });
 
-test('putStoredGitToken self-repairs a stale agent-owned record then retries the user-owned write', async () => {
+test('putStoredGitToken does not use a legacy repair path after access is denied', async () => {
   const requests = [];
   let putAttempts = 0;
   const server = http.createServer((req, res) => {
@@ -315,20 +315,18 @@ test('putStoredGitToken self-repairs a stale agent-owned record then retries the
   const { port } = server.address();
 
   await withEnv({ ...GIT_AGENT_ENV, PLOINKY_ROUTER_URL: `http://127.0.0.1:${port}` }, async () => {
-    await putStoredGitToken({ authInfo: DELEGATED_AUTH, token: 'ghp_test' });
+    await assert.rejects(() => putStoredGitToken({ authInfo: DELEGATED_AUTH, token: 'ghp_test' }), /Access denied/);
   });
   server.close();
 
   assert.deepEqual(
     requests.map((entry) => entry.body.params?.name),
-    ['dpu_secret_put', 'dpu_agent_secret_delete', 'dpu_secret_put', 'dpu_secret_grant']
+    ['dpu_secret_put']
   );
   assert.equal(requests[0].headers['x-ploinky-user-delegation'], 'user-delegation-jwt');
-  assert.equal(requests[1].headers['x-ploinky-user-delegation'], undefined);
-  assert.equal(requests[2].headers['x-ploinky-user-delegation'], 'user-delegation-jwt');
 });
 
-test('deleteStoredGitToken treats missing secrets as success and self-repairs stale agent-owned records', async () => {
+test('deleteStoredGitToken treats missing secrets as success and rejects inaccessible records', async () => {
   const scripts = [
     {
       firstError: 'Secret not found: GIT_GITHUB_TOKEN_TEST',
@@ -337,8 +335,8 @@ test('deleteStoredGitToken treats missing secrets as success and self-repairs st
     },
     {
       firstError: 'Access denied: missing write on secret GIT_GITHUB_TOKEN_TEST',
-      expectTools: ['dpu_secret_delete', 'dpu_agent_secret_delete'],
-      expectResult: { ok: true, deleted: true, migratedStaleAgentRecord: true }
+      expectTools: ['dpu_secret_delete'],
+      expectError: /Access denied/
     }
   ];
   for (const script of scripts) {
@@ -362,10 +360,11 @@ test('deleteStoredGitToken treats missing secrets as success and self-repairs st
     const { port } = server.address();
     let result;
     await withEnv({ ...GIT_AGENT_ENV, PLOINKY_ROUTER_URL: `http://127.0.0.1:${port}` }, async () => {
-      result = await deleteStoredGitToken({ authInfo: DELEGATED_AUTH });
+      if (script.expectError) await assert.rejects(() => deleteStoredGitToken({ authInfo: DELEGATED_AUTH }), script.expectError);
+      else result = await deleteStoredGitToken({ authInfo: DELEGATED_AUTH });
     });
     server.close();
     assert.deepEqual(requests.map((entry) => entry.body.params?.name), script.expectTools);
-    assert.deepEqual(result, script.expectResult);
+    if (!script.expectError) assert.deepEqual(result, script.expectResult);
   }
 });

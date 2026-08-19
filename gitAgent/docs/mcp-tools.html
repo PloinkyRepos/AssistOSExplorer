@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.esm.min.mjs"; mermaid.initialize({ startOnLoad: true, theme: "neutral" });</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>gitAgent Docs - MCP Tools</title>
@@ -23,12 +24,6 @@
                         <a href="configuration.html">Manifest and Environment</a>
                     </nav>
                 </div>
-                <div class="doc-sidebar__group">
-                    <p class="doc-sidebar__group-title">Specifications</p>
-                    <nav>
-                        <a href="specsLoader.html?spec=matrix.md">Design Specifications</a>
-                    </nav>
-                </div>
             </aside>
 
             <div class="doc-main">
@@ -39,7 +34,7 @@
 
                 <section>
                     <h2>Tool Groups</h2>
-                    <table>
+                    <div class="table-wrap"><table>
                         <thead>
                             <tr>
                                 <th>Group</th>
@@ -59,24 +54,34 @@
                                 <td>Create top-level repositories or explicitly add an existing remote as a staged Git submodule. Independent nested repositories are rejected.</td>
                             </tr>
                             <tr>
+                                <td>Branch operations</td>
+                                <td><code>git_branch_list</code>, <code>git_branch_checkout</code>, <code>git_branch_create</code>, <code>git_branch_merge</code></td>
+                                <td>List local and remote branches, switch branches, create branches from an optional start point, and merge into the current branch.</td>
+                            </tr>
+                            <tr>
+                                <td>GitHub repository discovery</td>
+                                <td><code>git_github_repository_targets</code>, <code>git_github_repositories</code></td>
+                                <td>List authenticated user or organization creation targets and repositories available through GitHub.</td>
+                            </tr>
+                            <tr>
                                 <td>Index and working tree control</td>
-                                <td><code>git_stage</code>, <code>git_unstage</code>, <code>git_untrack</code>, <code>git_check_ignore</code>, <code>git_add_ignore</code>, <code>git_remove_ignore</code>, <code>git_restore</code></td>
-                                <td>Manage stage state, ignore rules, ignore checks, and restore operations.</td>
+                                <td><code>git_stage</code>, <code>git_stage_exact</code>, <code>git_unstage</code>, <code>git_untrack</code>, <code>git_check_ignore</code>, <code>git_add_ignore</code>, <code>git_remove_ignore</code>, <code>git_restore</code></td>
+                                <td>Manage exact or incremental stage state, ignore rules, ignore checks, and restore operations.</td>
                             </tr>
                             <tr>
                                 <td>Conflict handling</td>
-                                <td><code>git_conflict_versions</code>, <code>git_checkout_conflict</code></td>
-                                <td>Read conflict sides and apply ours/theirs selection.</td>
+                                <td><code>git_conflict_versions</code>, <code>git_checkout_conflict</code>, <code>git_resolve_conflict</code></td>
+                                <td>Read conflict sides, apply ours/theirs selection, or request an LLM-assisted base/ours/theirs merge.</td>
                             </tr>
                             <tr>
                                 <td>Stash and commit flow</td>
-                                <td><code>git_stash</code>, <code>git_stash_pop</code>, <code>git_stash_list</code>, <code>git_commit</code></td>
-                                <td>Temporarily store changes and create commits.</td>
+                                <td><code>git_stash</code>, <code>git_stash_pop</code>, <code>git_stash_list</code>, <code>git_commit_message</code>, <code>git_commit</code></td>
+                                <td>Temporarily store changes, generate an LLM-assisted message from supplied diffs, and create commits.</td>
                             </tr>
                             <tr>
                                 <td>Remote and identity</td>
-                                <td><code>git_push</code>, <code>git_pull</code>, <code>git_identity</code>, <code>git_set_identity</code></td>
-                                <td>Run remote operations and manage author identity settings.</td>
+                                <td><code>git_remote_set</code>, <code>git_push</code>, <code>git_pull</code>, <code>git_identity</code>, <code>git_set_identity</code></td>
+                                <td>Add or update remote URLs, run remote synchronization, and manage author identity settings.</td>
                             </tr>
                             <tr>
                                 <td>GitHub auth bridge</td>
@@ -84,7 +89,7 @@
                                 <td>Manage GitHub token lifecycle used by push and pull operations.</td>
                             </tr>
                         </tbody>
-                    </table>
+                    </table></div>
                 </section>
 
                 <section>
@@ -101,7 +106,7 @@
         </div>
     </main>
 
-    <div id="site-footer"></div>
+    <footer id="site-footer" class="site-footer"></footer>
     <script src="partials-loader.js"></script>
 </body>
 </html>

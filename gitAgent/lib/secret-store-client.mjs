@@ -17,14 +17,6 @@ import crypto from 'node:crypto';
  */
 
 const DEFAULT_DPU_ROUTE = 'dpuAgent';
-const AGENT_SECRET_TOOL_NAMES = {
-  dpu_secret_get: 'dpu_agent_secret_get',
-  dpu_secret_put: 'dpu_agent_secret_put',
-  dpu_secret_delete: 'dpu_agent_secret_delete',
-  dpu_secret_grant: 'dpu_agent_secret_grant',
-  dpu_secret_revoke: 'dpu_agent_secret_revoke',
-  dpu_secret_list: 'dpu_agent_secret_list'
-};
 const DEFAULT_DPU_SECRET_DELEGATION_KEY = 'dpuGitSecrets';
 const MISSING_DELEGATION_MESSAGE = 'secret-store-client: missing DPU user delegation for GitHub token secret.';
 
@@ -136,14 +128,11 @@ export function createSecretStoreClient({
 } = {}) {
   const dpuRouteName = resolveDpuRouteName(providerRouteName);
 
-  async function callContractOperation(operation, args = {}, { forceAgentAlias = false } = {}) {
-    const userDelegationToken = forceAgentAlias ? '' : extractUserDelegationToken(authInfo, delegationKey);
-    if (!forceAgentAlias && requireUserDelegation && !userDelegationToken) {
+  async function callContractOperation(operation, args = {}) {
+    const userDelegationToken = extractUserDelegationToken(authInfo, delegationKey);
+    if (requireUserDelegation && !userDelegationToken) {
       throw new Error(MISSING_DELEGATION_MESSAGE);
     }
-    const routedOperation = userDelegationToken
-      ? operation
-      : (AGENT_SECRET_TOOL_NAMES[operation] || operation);
     const forwardedInvocationToken = isNonEmptyString(invocationToken)
       ? invocationToken.trim()
       : extractInvocationToken(authInfo) || undefined;
@@ -153,7 +142,7 @@ export function createSecretStoreClient({
     const createAgentClient = await loadCreateAgentClient();
     const client = await createAgentClient(dpuRouteName, { userDelegationToken });
     try {
-      const result = await client.callTool(routedOperation, args);
+      const result = await client.callTool(operation, args);
       if (result?.ok === false) {
         throw new Error(String(result?.message || result?.error || `${operation} failed.`));
       }
@@ -175,9 +164,6 @@ export function createSecretStoreClient({
     },
     delete(key) {
       return callContractOperation('dpu_secret_delete', { key });
-    },
-    deleteAsAgent(key) {
-      return callContractOperation('dpu_secret_delete', { key }, { forceAgentAlias: true });
     },
     grant(key, principal, role) {
       return callContractOperation('dpu_secret_grant', { key, principal, role });
@@ -254,18 +240,6 @@ export function resolveGitTokenSecretKey({ key = GIT_GITHUB_TOKEN_SECRET_KEY, au
   return suffix ? `${GIT_GITHUB_TOKEN_SECRET_KEY}_${suffix}` : GIT_GITHUB_TOKEN_SECRET_KEY;
 }
 
-function resolveGitTokenSecretKeyCandidates({ key = GIT_GITHUB_TOKEN_SECRET_KEY, authInfo = null } = {}) {
-  const normalizedKey = String(key || '').trim() || GIT_GITHUB_TOKEN_SECRET_KEY;
-  if (normalizedKey !== GIT_GITHUB_TOKEN_SECRET_KEY) {
-    return [normalizedKey];
-  }
-  const resolvedKey = resolveGitTokenSecretKey({ key, authInfo });
-  if (resolvedKey === GIT_GITHUB_TOKEN_SECRET_KEY) {
-    return [resolvedKey];
-  }
-  return [resolvedKey, GIT_GITHUB_TOKEN_SECRET_KEY];
-}
-
 function resolveTokenHelperMode(authInfo) {
   if (isGuestAuthInfo(authInfo)) return 'guest';
   const principal = resolveGitAuthPrincipal(authInfo);
@@ -279,20 +253,14 @@ export async function getStoredGitToken({ key = GIT_GITHUB_TOKEN_SECRET_KEY, aut
   const mode = resolveTokenHelperMode(authInfo);
   if (mode === 'guest') return '';
   const client = createSecretStoreClient({ authInfo, requireUserDelegation: mode === 'user' });
-  for (const candidateKey of resolveGitTokenSecretKeyCandidates({ key, authInfo })) {
-    try {
-      const payload = await client.get(candidateKey);
-      const value = String(payload?.secret?.value || payload?.value || '').trim();
-      if (value) {
-        return value;
-      }
-    } catch (error) {
-      if (isMissingDelegationError(error)) throw error;
-      if (isSecretMissingError(error) || isSecretAccessDeniedError(error)) continue;
-      throw error;
-    }
+  try {
+    const payload = await client.get(resolveGitTokenSecretKey({ key, authInfo }));
+    return String(payload?.secret?.value || payload?.value || '').trim();
+  } catch (error) {
+    if (isMissingDelegationError(error)) throw error;
+    if (isSecretMissingError(error) || isSecretAccessDeniedError(error)) return '';
+    throw error;
   }
-  return '';
 }
 
 export async function putStoredGitToken({ token, key = GIT_GITHUB_TOKEN_SECRET_KEY, authInfo = null } = {}) {
@@ -304,18 +272,7 @@ export async function putStoredGitToken({ token, key = GIT_GITHUB_TOKEN_SECRET_K
   const mode = resolveTokenHelperMode(authInfo);
   const client = createSecretStoreClient({ authInfo, requireUserDelegation: mode === 'user' });
   const resolvedKey = resolveGitTokenSecretKey({ key, authInfo });
-  let payload;
-  try {
-    payload = await client.put(resolvedKey, value);
-  } catch (error) {
-    if (!isSecretAccessDeniedError(error)) throw error;
-    try {
-      await client.deleteAsAgent(resolvedKey);
-    } catch {
-      throw error;
-    }
-    payload = await client.put(resolvedKey, value);
-  }
+  const payload = await client.put(resolvedKey, value);
   await client.grant(resolvedKey, resolveConsumerPrincipal(), 'read');
   return payload;
 }
@@ -332,14 +289,6 @@ export async function deleteStoredGitToken({ key = GIT_GITHUB_TOKEN_SECRET_KEY, 
   } catch (error) {
     if (isMissingDelegationError(error)) throw error;
     if (isSecretMissingError(error)) return { ok: true, deleted: false };
-    if (isSecretAccessDeniedError(error)) {
-      try {
-        await client.deleteAsAgent(resolvedKey);
-      } catch {
-        throw error;
-      }
-      return { ok: true, deleted: true, migratedStaleAgentRecord: true };
-    }
     throw error;
   }
 }

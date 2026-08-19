@@ -1,0 +1,68 @@
+---
+title: DS005-explorer-integration
+summary: Defines the gitAgent contract covered by DS005-explorer-integration.
+---
+
+# DS005-explorer-integration
+
+## Introduction
+
+This specification defines the active contract for gitAgent.
+
+## Core Content
+
+### DS04 - Explorer Integration and IDE Plugin Channel
+
+### Role of This Document
+
+This document defines integration rules for Explorer-facing usage of `gitAgent` and IDE plugin behavior.
+
+### Integration Position
+
+Explorer is the user interface (UI) host. `gitAgent` is the backend Git intermediary. IDE plugin artifacts in `gitAgent/IDE-plugins/` are the UI extension channel that connects Explorer interactions to Model Context Protocol (MCP) tool calls.
+
+### Integration Requirements
+
+Requirement U1: Explorer-facing UI components shall call `gitAgent` through MCP application programming interfaces (APIs).
+
+Requirement U2: Git operation decisions and execution shall remain in the agent backend, not in UI presenters.
+
+Requirement U3: toolbar plugin integration in slot `file-exp:toolbar` shall remain documented and operational.
+
+Requirement U4: plugin dependency components shall remain declarative through plugin configuration.
+
+Requirement U5: asynchronous operation outcomes shall remain representable in UI state through MCP success and failure payloads.
+
+Requirement U6: Explorer selection shall be the source of truth for Git action targeting. Selecting any file or folder inside a repository shall also select that repository for repository-level actions.
+
+Requirement U7: repository-level pull actions may execute for a selected repository, but commit and push actions shall remain restricted to the selected files within each selected repository.
+
+Requirement U8: autosync/autocommit scheduling shall target only repositories explicitly chosen in autosync settings and shall not infer targets from transient tree selection.
+
+### Constraints
+
+Constraint Q1: UI components are not allowed to bypass agent contracts and execute shell Git directly.
+
+Constraint Q2: host UI refactors are not allowed to alter backend contract semantics.
+
+Constraint Q3: plugin metadata changes are not allowed to break the declared integration slot without coordinated contract updates.
+
+Constraint Q4: UI flows for identity, credentials, and pending Git retries are not allowed to infer a repository by taking the first discovered repository from overview data when no explicit selection exists.
+
+### Invariants
+
+Invariant I1: communication between Explorer and Git backend remains MCP-based.
+
+Invariant I2: IDE plugin channel remains an integration surface, while tool contracts remain the operational source of truth.
+
+Invariant I3: the intermediary role of `gitAgent` between Explorer intent and Git runtime remains unchanged.
+
+Invariant I4: manual selection state and autosync repository configuration remain separate sources of truth; one cannot silently substitute for the other.
+
+### Validation Criteria
+
+Validation is satisfied when Explorer-triggered plugin actions call `gitAgent` tools successfully, tool outcomes map to UI state transitions, repository targeting follows explicit selection rules, autosync runs only for explicitly configured repositories, and Git execution behavior remains isolated from frontend internals.
+
+## Conclusion
+
+gitAgent must preserve the responsibilities, boundaries, and observable results stated in this specification.

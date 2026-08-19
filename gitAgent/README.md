@@ -58,5 +58,5 @@ and are deliberately absent from this agent's manifest environment.
 
 ## Documentation
 
-- [DS01 - Git Agent Overview](./docs/specs/DS01-agent-overview.md)
-- [DS02 - Explorer Plugin](./docs/specs/DS02-explorer-plugin.md)
+- [Git specification matrix](./docs/specs/matrix.md)
+- [Git documentation](./docs/index.html)

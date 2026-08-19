@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.esm.min.mjs"; mermaid.initialize({ startOnLoad: true, theme: "neutral" });</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>gitAgent Docs - Tool Execution Workflow</title>
@@ -23,12 +24,6 @@
                         <a href="configuration.html">Manifest and Environment</a>
                     </nav>
                 </div>
-                <div class="doc-sidebar__group">
-                    <p class="doc-sidebar__group-title">Specifications</p>
-                    <nav>
-                        <a href="specsLoader.html?spec=matrix.md">Design Specifications</a>
-                    </nav>
-                </div>
             </aside>
 
             <div class="doc-main">
@@ -38,35 +33,22 @@
                 </section>
 
                 <section>
-                    <h2>End-to-End Flow Diagram</h2>
-                    <pre><code>Explorer user interface (UI)
-    |
-    | callAgentTool("gitAgent", toolName, args)
-    v
-Ploinky Router -> AgentServer (/mcp)
-    |
-    | execute command from mcp-config.json
-    v
-gitAgent/tools/git_tool.sh
-    |
-    | start Node process
-    v
-gitAgent/tools/git_tool.mjs
-    |
-    | read MCP envelope from stdin
-    | resolve TOOL_NAME + normalize args
-    | prefer verified invocation metadata
-    | validate repo path against allowed roots
-    | create git service / auth service
-    v
-git-service / github-auth handler
-    |
-    | optionally call DPU secret tools with
-    | x-ploinky-user-delegation
-    |
-    | run git subprocess or auth workflow
-    v
-JSON result -> MCP response -> Explorer user interface</code></pre>
+                    <h2>End-to-End Flow</h2>
+                    <figure class="diagram end-to-end-flow"><pre class="mermaid">flowchart LR
+  Explorer[Explorer] --> Router[Ploinky Router]
+  Router --> AgentServer[AgentServer MCP]
+  AgentServer --> Wrapper[Git tool wrapper]
+  Wrapper --> Dispatcher[Git dispatcher]
+  Dispatcher --> Service[Git and auth services]
+  Service --> Result[Normalized result]
+  classDef client fill:#e8f1ff,stroke:#2457a5,color:#17202a
+  classDef routing fill:#edf3f8,stroke:#536273,color:#17202a
+  classDef runtime fill:#eaf7f0,stroke:#18794e,color:#17202a
+  classDef result fill:#fff4e5,stroke:#a65d03,color:#17202a
+  class Explorer client
+  class Router,AgentServer routing
+  class Wrapper,Dispatcher,Service runtime
+  class Result result</pre><figcaption><em>A Git request crosses the routed MCP boundary before the agent runs a validated operation.</em></figcaption></figure>
                 </section>
 
                 <section>
@@ -78,7 +60,7 @@ JSON result -> MCP response -> Explorer user interface</code></pre>
                         <li><strong>Path policy:</strong> repository path arguments are constrained to allowed roots from <code>ASSISTOS_FS_ROOT</code>, <code>WORKSPACE_ROOT</code>, or <code>PLOINKY_WORKSPACE_ROOT</code>.</li>
                         <li><strong>Operation execution:</strong> Git tools call <code>createGitService</code>; auth tools call GitHub auth handlers.</li>
                         <li><strong>Remote token fallback:</strong> push and pull can resolve tokens from auth metadata or stored token state.</li>
-                        <li><strong>Delegated DPU call:</strong> when GitHub auth or token storage needs a user-owned secret operation, the client forwards the router-minted <code>dpuGitSecrets</code> grant as <code>x-ploinky-user-delegation</code>, signs a DS013 Agent Assertion with <code>gitAgent</code>'s own <code>PLOINKY_AGENT_SECRET</code>, and calls DPU's authenticated <code>dpu_secret_*</code> tools through the router. The router verifies the source agent assertion and user delegation, applies MCP policy, and mints the DPU-audience invocation used by domain code. Internal <code>dpu_agent_secret_*</code> aliases are reserved for compatibility repair paths such as deleting stale agent-owned token records.</li>
+                        <li><strong>Delegated DPU call:</strong> when GitHub auth or token storage needs a user-owned secret operation, the client forwards the router-minted <code>dpuGitSecrets</code> grant as <code>x-ploinky-user-delegation</code>, signs a DS013 Agent Assertion with <code>gitAgent</code>'s own <code>PLOINKY_AGENT_SECRET</code>, and calls only DPU's canonical authenticated <code>dpu_secret_*</code> tools through the router. The router verifies the source agent assertion and user delegation, applies MCP policy, and mints the DPU-audience invocation used by domain code.</li>
                         <li><strong>Response emission:</strong> tool result is serialized to stdout; failures return <code>{ "ok": false, "error": ... }</code>.</li>
                     </ol>
                 </section>
@@ -94,7 +76,7 @@ JSON result -> MCP response -> Explorer user interface</code></pre>
         </div>
     </main>
 
-    <div id="site-footer"></div>
+    <footer id="site-footer" class="site-footer"></footer>
     <script src="partials-loader.js"></script>
 </body>
 </html>
