@@ -1,52 +1,175 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AchillesIDE Documentation</title>
-  <link rel="stylesheet" href="styles.css">
-  <script type="module">import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs'; mermaid.initialize({ startOnLoad: true, theme: 'neutral' });</script>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AchillesIDE Documentation</title>
+    <link rel="stylesheet" href="styles.css">
+    <script type="module">import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+
+    mermaid.initialize({startOnLoad: true, theme: 'neutral'});</script>
 </head>
 <body>
-  <div data-include="partials/header.html"></div>
-  <main class="page"><div class="page__panel">
-    <h1>AchillesIDE</h1>
-    <p>AchillesIDE provides an authenticated Ploinky workspace where Explorer combines filesystem navigation, previews, editing, and enabled agent workflows in one browser application. Explorer remains the shared shell; each domain agent remains responsible for its own protected operations.</p>
-    <h2>How the workspace fits together</h2>
-    <figure class="diagram"><pre class="mermaid">flowchart LR
-      User[Workspace user] --> Router[Ploinky router]
-      Router --> Explorer[Explorer]
-      Explorer --> Files[Workspace files]
-      Explorer --> Plugins[Runtime plugins]
-      Plugins --> Agents[Owning domain agents]
-      Explorer --> DPU[dpuAgent virtual resources]
-      classDef user fill:#e8f1ff,stroke:#2457a5,color:#17202a
-      classDef runtime fill:#eaf7f0,stroke:#18794e,color:#17202a
+<div data-include="partials/header.html"></div>
+<main class="page">
+    <div class="page__panel">
+        <h1>AchillesIDE</h1>
+        <p class="overview-lead">A secure, extensible workspace where files, editors, AI-assisted workflows, and
+            specialized agents work together without giving up clear ownership or authorization boundaries.</p>
+
+
+        <p>People and AI agents need a shared workspace where they can work on the same project, use the same context,
+            and collaborate without exposing credentials or protected data. Files, conversations, decisions, and domain
+            tools should remain connected, while every action still respects the identity, permissions, and
+            responsibilities of its owner.</p>
+        <p>AchillesIDE brings files, previews, editing, AI-assisted workflows, and specialized tools into one
+            authenticated browser workspace. Explorer provides a consistent surface for working with the project, so
+            users and agents can act on the current context without repeatedly moving information between separate
+            applications.</p>
+        <p>Explorer owns the shared workspace experience, while each specialized agent owns its domain operations and
+            protected state. The Ploinky router authenticates requests, and verified plugins connect Explorer to enabled
+            agents. Before performing a protected action, the owning agent validates the caller and applicable policy,
+            then returns only the result needed by the workspace.</p>
+
+
+        <h2>How the workspace fits together</h2>
+        <figure class="diagram"><pre class="mermaid">flowchart TB
+      User([Workspace user]) -->|authenticated session| Runtime["Ploinky runtime<br/>routing · authentication · lifecycle"]
+
+      subgraph Shell["Explorer — shared workspace shell"]
+        direction LR
+        WorkspaceUI["Navigation & selection"] --> Content["Previews & editors"]
+        WorkspaceUI --> PluginHost["Verified runtime plugins<br/>manifest policy · WebSkel slots"]
+        WorkspaceUI --> FileTools["Root-confined<br/>filesystem MCP"]
+      end
+
+      Runtime -->|workspace route| WorkspaceUI
+      FileTools -->|ordinary paths| Files[(Workspace files)]
+
+      subgraph Domains["Agent-owned domains"]
+        direction LR
+        DomainAgents["Git · SOPLang · Tasks<br/>WebMeet · Multimedia"]
+        DPU["dpuAgent<br/>Confidential & research data"]
+      end
+
+      PluginHost -->|scoped, router-mediated calls| DomainAgents
+      PluginHost -->|scoped, router-mediated calls| DPU
+      DomainAgents --> DomainState[(Domain state & mutations)]
+      DPU --> ProtectedState[(ACLs · secrets · jobs · provenance)]
+
+      classDef user fill:#e8f1ff,stroke:#2457a5,color:#17202a,stroke-width:2px
+      classDef runtime fill:#eaf7f0,stroke:#18794e,color:#17202a,stroke-width:2px
+      classDef explorer fill:#eef6ff,stroke:#145ea8,color:#17202a
       classDef service fill:#fff4e5,stroke:#a65d03,color:#17202a
+      classDef state fill:#f4f1fb,stroke:#7656a6,color:#17202a
       class User user
-      class Router,Explorer runtime
-      class Files,Plugins,Agents,DPU service</pre><figcaption><em>Explorer is the shared workspace surface; protected domain work remains with its owning agent.</em></figcaption></figure>
-    <h2>Core workspace capabilities</h2>
-    <div class="agent-grid">
-      <a class="agent-card" href="workspace-operations.html#file-management"><h3>Files and folders</h3><p>Create, rename, copy, cut, paste, upload, and delete supported workspace entries.</p></a>
-      <a class="agent-card" href="workspace-operations.html#search-replace"><h3>Find and replace</h3><p>Find paths by name, search file content, select matches, and replace within a workspace scope.</p></a>
-      <a class="agent-card" href="workspace-operations.html#settings"><h3>Settings</h3><p>Configure agents, plugins, shortcuts, editor auto-save, theme, avatars, and authorized administration surfaces.</p></a>
-      <a class="agent-card" href="documents.html"><h3>Preview and editing</h3><p>Open source files, Markdown, structured documents, media, and supported Office documents.</p></a>
+      class Runtime runtime
+      class WorkspaceUI,Content,PluginHost,FileTools explorer
+      class DomainAgents,DPU service
+      class Files,DomainState,ProtectedState state
+      style Shell fill:#f8fafc,stroke:#145ea8,stroke-width:1px
+      style Domains fill:#fffaf3,stroke:#a65d03,stroke-width:1px</pre>
+            <figcaption><em>Explorer owns the shared interface and root-confined filesystem operations. Verified plugins
+                delegate protected work to the agent that owns its authorization, state, and mutations.</em></figcaption>
+        </figure>
+        <h2>Core workspace capabilities</h2>
+        <div class="agent-grid">
+            <a class="agent-card" href="workspace-operations.html#file-management"><h3>Files and folders</h3>
+                <p>Create, rename, copy, cut, paste, upload, and delete supported workspace entries.</p></a>
+            <a class="agent-card" href="workspace-operations.html#search-replace"><h3>Find and replace</h3>
+                <p>Find paths by name, search file content, select matches, and replace within a workspace scope.</p>
+            </a>
+            <a class="agent-card" href="workspace-operations.html#settings"><h3>Settings</h3>
+                <p>Configure agents, plugins, shortcuts, editor auto-save, theme, avatars, and authorized administration
+                    surfaces.</p></a>
+            <a class="agent-card" href="documents.html"><h3>Preview and editing</h3>
+                <p>Open source files, Markdown, structured documents, media, and supported Office documents.</p></a>
+        </div>
+
+        <section id="agents-and-plugins">
+            <h2>Agents and Plugins</h2>
+            <p>Explorer provides the shared workspace shell. The integrations below are declared by <code>explorer/manifest.json</code>
+                or discovered from verified <code>IDE-plugins</code> manifests. Each owning agent remains responsible
+                for its domain behavior, authorization, and protected state.</p>
+
+            <h3>Application Agents and Plugins</h3>
+            <div class="agent-grid">
+                <a class="agent-card" href="../gitAgent/docs/index.html"><span class="agent-card__key">git</span>
+                    <h3>Git</h3>
+                    <p>Repository status, commits, branches, credentials, and Git menus.</p></a>
+                <a class="agent-card" href="../dpuAgent/docs/index.html"><span class="agent-card__key">dpu-runtime-support</span>
+                    <h3>DPU</h3>
+                    <p>Confidential resources, permissions, secrets, research data, and jobs.</p></a>
+                <a class="agent-card" href="../soplangAgent/docs/index.html"><span class="agent-card__key">soplang-builder</span>
+                    <h3>SOPLang</h3>
+                    <p>Structured document actions, variables, build, and execution workflows.</p></a>
+                <a class="agent-card" href="../tasksAgent/docs/index.html"><span class="agent-card__key">tasks</span>
+                    <h3>Tasks</h3>
+                    <p>Backlog navigation, task creation, updates, and document task actions.</p></a>
+                <a class="agent-card" href="../webmeetAgent/docs/index.html"><span
+                        class="agent-card__key">webmeet</span>
+                    <h3>WebMeet</h3>
+                    <p>Meeting rooms, participants, media, Blackboard resources, and settings.</p></a>
+                <a class="agent-card" href="../workspaceMonitorAgent/docs/index.html"><span class="agent-card__key">workspace-monitor</span>
+                    <h3>Workspace Monitor</h3>
+                    <p>Administrator-only live metrics, history, thresholds, and log access.</p></a>
+            </div>
+
+            <h3>Document and Supporting Agents</h3>
+            <div class="agent-grid">
+                <a class="agent-card" href="../multimedia/docs/index.html"><h3>Multimedia</h3>
+                    <p>Document-level audio, image, video, preview, and FFmpeg integrations.</p></a>
+                <a class="agent-card" href="../webAssist/docs/index.html"><h3>WebAssist</h3>
+                    <p>Workspace and guest-facing assistant chat integration.</p></a>
+                <a class="agent-card" href="../webmeetStt/docs/index.html"><h3>WebMeet STT</h3>
+                    <p>Speech-to-text runtime used by supported WebMeet workflows.</p></a>
+                <a class="agent-card" href="../webmeetScribeAgent/docs/index.html"><h3>WebMeet Scribe</h3>
+                    <p>Meeting Secretary transcription journal and notes reconciliation worker.</p></a>
+                <a class="agent-card" href="../onlyOffice/docs/index.html"><h3>OnlyOffice</h3>
+                    <p>Office editor sessions, authenticated transport, callbacks, and persistence.</p></a>
+            </div>
+
+            <h3>Explorer-Owned and External Entries</h3>
+            <p>The <code>help</code> plugin is owned by Explorer and is covered by the <a href="plugins.html">runtime
+                plugins guide</a>. The manifest also enables Achilles CLI, WebTTY, LiveKit Server, Soul Gateway, and
+                Umami as supporting dependencies. This checkout does not provide local documentation entry pages for
+                those dependencies, so the overview does not create unsupported links for them.</p>
+        </section>
+
+        <section id="site-map">
+            <h2>Site Map</h2>
+            <nav class="site-map" aria-label="AchillesIDE documentation map">
+                <section class="site-map__group">
+                    <h3>Explorer</h3>
+                    <ul>
+                        <li><a href="workspace-operations.html">Workspace operations</a><span>Navigation, file management, search, replace, and settings.</span></li>
+                        <li><a href="documents.html">Documents</a><span>Markdown, SOPLang, previews, editing, and collaboration.</span></li>
+                        <li><a href="architecture.html">Architecture</a><span>Workspace ownership, components, and runtime boundaries.</span></li>
+                        <li><a href="backend.html">Backend</a><span>Explorer services and agent integrations.</span></li>
+                        <li><a href="mcp-tools.html">MCP tools</a><span>Filesystem-facing tools and safety constraints.</span></li>
+                    </ul>
+                </section>
+                <section class="site-map__group">
+                    <h3>Extensions</h3>
+                    <ul>
+                        <li><a href="#agents-and-plugins">Agents and plugins</a><span>Integrated capabilities and their owning agents.</span></li>
+                        <li><a href="plugins.html">Runtime plugins</a><span>Discovery, policy, host slots, and plugin ownership.</span></li>
+                        <li><a href="plugins.html#example">Authoring example</a><span>A practical Explorer plugin implementation.</span></li>
+                        <li><a href="development.html">Development</a><span>Working context, bootstrap flow, and validation.</span></li>
+                    </ul>
+                </section>
+                <section class="site-map__group">
+                    <h3>Reference</h3>
+                    <ul>
+                        <li><a href="wiki.html">Wiki</a><span>Canonical AchillesIDE terminology.</span></li>
+                        <li><a href="specsLoader.html?spec=matrix.md">Specifications</a><span>Normative requirements and implementation coverage.</span></li>
+                    </ul>
+                </section>
+            </nav>
+        </section>
     </div>
-    <h2>Read by task</h2>
-    <ul>
-      <li>Read <a href="workspace-operations.html">Workspace operations</a> for navigation, file management, search and replace, and Settings.</li>
-      <li>Read <a href="architecture.html">Architecture</a> for workspace ownership and runtime boundaries.</li>
-      <li>Read <a href="documents.html">Documents</a> for Markdown, SOPLang, and collaboration workflows.</li>
-      <li>Read <a href="plugins.html">Runtime plugins</a> for host slots and agent ownership.</li>
-      <li>Open <a href="agents.html">Agents and plugins</a> to navigate to the documentation owned by each integrated agent.</li>
-      <li>Read <a href="mcp-tools.html">MCP tools</a> for Explorer's filesystem-facing tool contract.</li>
-      <li>Read the <a href="wiki.html">Wiki</a> for canonical terminology and the <a href="specsLoader.html?spec=matrix.md">Specifications</a> for normative requirements.</li>
-    </ul>
-    <h2>Verification</h2>
-    <p>Explorer tests are under `explorer/tests/`; agent tests stay with their owning agents. The coding and test rules are defined by `DS001-coding-style.md` in the specification set.</p>
-  </div></main>
-  <footer class="site-footer" data-include="partials/footer.html"></footer>
-  <script src="partials-loader.js"></script>
+</main>
+<footer class="site-footer" data-include="partials/footer.html"></footer>
+<script src="partials-loader.js"></script>
 </body>
 </html>

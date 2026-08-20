@@ -84,3 +84,42 @@ test('architecture and development docs mention split file-exp presenters', () =
         );
     }
 });
+
+test('agent documentation linked from Explorer can navigate back through a breadcrumb', () => {
+    const overviewHtml = readText('docs/index.html');
+    const agentDocPaths = [...overviewHtml.matchAll(/href="\.\.\/([^"?#]+\/docs\/index\.html)"/g)]
+        .map((match) => match[1]);
+
+    assert.ok(agentDocPaths.length > 0, 'Explorer overview does not link to any agent documentation');
+
+    for (const agentDocPath of agentDocPaths) {
+        const agentHtml = readText(agentDocPath);
+        const agentDocsDirectory = path.dirname(agentDocPath);
+        const agentStyles = readText(path.join(agentDocsDirectory, 'styles.css'));
+        const partialLoader = readText(path.join(agentDocsDirectory, 'partials-loader.js'));
+        assert.match(agentHtml, /<h1(?:\s|>)/);
+        assert.match(agentStyles, /\.breadcrumbs\s*\{/);
+        assert.match(agentStyles, /\.site-header \.breadcrumbs\s*\{/);
+        assert.match(partialLoader, /documentation-breadcrumb\.js/);
+        assert.match(partialLoader, /initializeDocumentationBreadcrumb\(/);
+    }
+
+    const breadcrumbSource = readText('docs/documentation-breadcrumb.js');
+    assert.match(breadcrumbSource, /export function initializeDocumentationBreadcrumb/);
+    assert.match(breadcrumbSource, /\.site-header/);
+    assert.match(breadcrumbSource, /'\.\.\/\.\.\/docs\/index\.html'/);
+    assert.match(breadcrumbSource, /brand\.replaceWith\(navigation\)/);
+    assert.match(breadcrumbSource, /header\.prepend\(navigation\)/);
+});
+
+test('Explorer documentation replaces its header brand with a breadcrumb', () => {
+    const partialLoader = readText('docs/partials-loader.js');
+    const styles = readText('docs/styles.css');
+    const workspaceOperations = readText('docs/workspace-operations.html');
+
+    assert.match(workspaceOperations, /<h1>Workspace Operations<\/h1>/);
+    assert.match(partialLoader, /initializeDocumentationBreadcrumb\('AchillesIDE'/);
+    assert.match(partialLoader, /overviewHref:\s*'index\.html'/);
+    assert.match(partialLoader, /includeAgentLevel:\s*false/);
+    assert.match(styles, /\.site-header \.breadcrumbs\s*\{/);
+});

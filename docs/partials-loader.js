@@ -45,6 +45,12 @@ async function installSharedChrome() {
     if (headerHost) headerHost.innerHTML = header;
     else if (existingHeader && header) existingHeader.outerHTML = header;
     if (footerHost) footerHost.innerHTML = footer;
+    const { initializeDocumentationBreadcrumb } = await import('./documentation-breadcrumb.js');
+    initializeDocumentationBreadcrumb('AchillesIDE', {
+      overviewHref: 'index.html',
+      overviewLabel: 'AchillesIDE',
+      includeAgentLevel: false
+    });
     installDocumentationNavigation();
   } catch (_) {}
 }

@@ -27,4 +27,4 @@ function initializeDocumentationSidebar() {
   main.insertBefore(layout, content);
   layout.append(sidebar, content);
 }
-document.addEventListener('DOMContentLoaded', async () => { await Promise.all([loadPartial('[data-include="partials/header.html"]', 'partials/header.html'), loadPartial('[data-include="partials/footer.html"]', 'partials/footer.html')]); initializeMenus(); initializeDocumentationSidebar(); });
+document.addEventListener('DOMContentLoaded', async () => { await Promise.all([loadPartial('[data-include="partials/header.html"]', 'partials/header.html'), loadPartial('[data-include="partials/footer.html"]', 'partials/footer.html')]); (await import('../../docs/documentation-breadcrumb.js')).initializeDocumentationBreadcrumb('Workspace Monitor'); initializeMenus(); initializeDocumentationSidebar(); });
