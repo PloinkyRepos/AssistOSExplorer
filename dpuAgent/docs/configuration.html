@@ -91,6 +91,10 @@
                                 <td><code>ASSISTOS_FS_ROOT</code>, <code>WORKSPACE_ROOT</code></td>
                                 <td>Fallback workspace-root inputs used when <code>DPU_WORKSPACE_ROOT</code> is not set.</td>
                             </tr>
+                            <tr>
+                                <td><code>DPU_NVFLARE_PYTHON</code></td>
+                                <td>Optional Python executable containing the pinned NVFlare 2.8.1 package. The default is <code>python3</code>.</td>
+                            </tr>
                         </tbody>
                     </table>
                 </section>
@@ -98,6 +102,10 @@
                 <section>
                     <h2>Ploinky Runtime</h2>
                     <p><code>dpuAgent</code> is MCP-first and runs through the bundled Ploinky <code>AgentServer.mjs</code>. The agent does not expose a standalone HTTP MCP server; Ploinky owns <code>POST /mcp</code>, <code>GET /health</code>, secure-wire verification, and tool registration from <code>mcp-config.json</code>.</p>
+                </section>
+                <section>
+                    <h2>NVFlare credential secret</h2>
+                    <p>An NVFlare compute backend references a DPU secret whose value is a JSON object containing <code>username</code>, <code>startupKitPath</code>, <code>templatesRoot</code>, and optional <code>study</code>. Backend settings map stable template IDs to relative job folders below <code>templatesRoot</code>. DPU rejects a template that resolves outside that root and does not return these physical paths or the secret value through MCP.</p>
                 </section>
             </div>
         </div>

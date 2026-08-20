@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateSecureExecutionRequest, createSecureProviderContract } from '../lib/p2/secure-execution-broker.mjs';
-import { validateFederatedExperiment, createFederatedLearningBroker } from '../lib/p2/federated-learning.mjs';
-import { assessExperimentPrivacy } from '../lib/p2/privacy-assessment.mjs';
+import { validateSecureExecutionRequest, createSecureProviderContract } from '../lib/secure-execution/secure-execution-broker.mjs';
+import { validateFederatedExperiment, createFederatedLearningBroker } from '../lib/federated/federated-learning.mjs';
+import { assessExperimentPrivacy } from '../lib/federated/privacy-assessment.mjs';
+import { createNvFlareBackend } from '../lib/federated/nvflare-backend.mjs';
 
 test('secure execution rejects missing attestation, policy, identity or confirmation', () => {
   assert.throws(() => validateSecureExecutionRequest({ workloadId: 'w1' }), /confirmation/);
@@ -35,10 +36,36 @@ test('federation keeps raw data local and requires three secure participants', (
 test('federation broker resolves trusted local-only participant resources', async () => {
   const base = { confirmationProposalId: 'p1', model: { id: 'model', version: 'sha-1' }, strategy: 'fedavg', privacy: { secureAggregation: true }, participants: ['a', 'b', 'c'].map((id) => ({ id, resourceId: `r-${id}`, rawDataTransfer: false })) };
   const broker = createFederatedLearningBroker({
-    endpoint: 'https://nvflare.example',
-    fetchImpl: async () => new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    backend: {
+      async submit() { return { ok: true }; },
+      async get() { return { ok: true }; },
+      async cancel() { return { ok: true }; }
+    },
     verifyConfirmation: async () => ({ valid: true }),
     resolveParticipantResource: async (participant) => ({ localToParticipant: participant.id !== 'c', rawDataExportAllowed: false })
   });
   await assert.rejects(() => broker.submit(base), /participant c/i);
+});
+
+test('NVFlare backend resolves only administrator-catalogued templates below the private root', async () => {
+  const calls = [];
+  const backend = createNvFlareBackend({ runBridge: async (payload) => {
+    calls.push(payload);
+    return payload.operation === 'test'
+      ? { ok: true, identity: 'admin@nvidia.com', version: '2.8.1' }
+      : { ok: true, externalJobId: 'job-1', state: 'RUNNING' };
+  } });
+  const secretValue = JSON.stringify({
+    username: 'admin@nvidia.com', startupKitPath: '/private/nvflare/admin', templatesRoot: '/private/nvflare/jobs'
+  });
+  const configured = { settings: { templateCatalog: { medical: 'medical-job' } } };
+  assert.equal((await backend.test({ backend: configured, secretValue })).version, '2.8.1');
+  await backend.submit({ backend: configured, secretValue, experiment: { templateId: 'medical' }, submitToken: 'submit-1' });
+  assert.equal(calls[1].jobPath, '/private/nvflare/jobs/medical-job');
+  await assert.rejects(() => backend.submit({
+    backend: { settings: { templateCatalog: { escape: '../outside' } } },
+    secretValue,
+    experiment: { templateId: 'escape' },
+    submitToken: 'submit-2'
+  }), /inside templatesRoot/);
 });

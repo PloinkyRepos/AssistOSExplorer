@@ -111,13 +111,15 @@ test('planner arguments require one strict fenced JSON object', () => {
   );
 });
 
-test('research search accepts only exact DPU source UUIDs', () => {
+test('research search accepts provider filters and only exact DPU source UUIDs', () => {
   assert.deepEqual(normalizeDpuResearchToolArgs('dpu_research_search', {
     query: 'Romanian datasets',
+    providerTypes: ['HuggingFace'],
     sourceIds: ['72807eb2-8eb0-4a4c-8cb8-8bb5778b2c62'],
     limit: 10
   }), {
     query: 'Romanian datasets',
+    providerTypes: ['huggingface'],
     sourceIds: ['72807eb2-8eb0-4a4c-8cb8-8bb5778b2c62'],
     limit: 10
   });
@@ -130,7 +132,7 @@ test('research search accepts only exact DPU source UUIDs', () => {
   );
 });
 
-test('planner validation failures become recoverable results without dispatch', async () => {
+test('known provider labels placed in sourceIds are recovered without another planning turn', async () => {
   const calls = [];
   const tools = createDpuResearchPlannerTools({
     getAuthInfo: () => ({ principalId: 'user:admin' }),
@@ -149,15 +151,83 @@ test('planner validation failures become recoverable results without dispatch', 
     '```'
   ].join('\n')));
 
-  assert.equal(result.ok, false);
+  assert.equal(result.ok, true);
+  assert.deepEqual(calls.map((call) => call.slice(0, 3)), [[
+    'dpu_research_search',
+    { principalId: 'user:admin' },
+    { query: 'Romanian language datasets', providerTypes: ['huggingface'], limit: 10 }
+  ]]);
+});
+
+test('unknown source labels remain recoverable and never dispatch provider work', async () => {
+  const calls = [];
+  const tools = createDpuResearchPlannerTools({
+    getAuthInfo: () => ({ principalId: 'user:admin' }),
+    executeTool: async (...args) => {
+      calls.push(args);
+      return { ok: true, items: [] };
+    }
+  });
+  const result = JSON.parse(await tools.dpu_research_search.handler(null, [
+    '```json',
+    '{"query":"Romanian datasets","sourceIds":["huggingface","unknown-provider"],"limit":1}',
+    '```'
+  ].join('\n')));
+
   assert.equal(result.recoverable, true);
   assert.equal(result.code, 'invalid_source_ids');
-  assert.deepEqual(result.retry.arguments, {
-    query: 'Romanian language datasets',
-    limit: 10
-  });
-  assert.match(result.retry.instruction, /Do not restore rejected fields/);
+  assert.deepEqual(result.retry.arguments, { query: 'Romanian datasets', providerTypes: ['huggingface'], limit: 1 });
   assert.deepEqual(calls, []);
+});
+
+test('a completed research search is returned when the planner rejects an empty provider response', async () => {
+  const warnings = [];
+  class EmptyAfterSearchMainAgent {
+    _buildToolsForSession() { return {}; }
+    async executePrompt() {
+      const tools = this._buildToolsForSession();
+      await tools.dpu_research_search.handler(null, '```json\n{"query":"small Romanian text dataset","providerTypes":["huggingface"],"limit":1}\n```');
+      throw new Error('provider returned empty content');
+    }
+  }
+  const resource = { id: 'resource-1', provider: 'huggingface', externalId: 'owner/ro-small', revision: 'sha-1', accessState: 'available' };
+  const agent = await createDpuResearchAgent({
+    MainAgentClass: EmptyAfterSearchMainAgent,
+    verifyInvocation: async () => ({ principalId: 'user:admin' }),
+    executeTool: async () => ({ ok: true, items: [resource] }),
+    logger: { warn: (message) => warnings.push(message) }
+  });
+
+  const result = await agent.handleMessage({ message: 'find one small Romanian text dataset', invocationToken: 'router-token' });
+  assert.equal(result.evidence[0].id, 'resource-1');
+  assert.match(result.recommendation, /1 matching research resource/);
+  assert.match(warnings[0], /Planner failed/);
+  assert.doesNotMatch(warnings[0], /provider returned/);
+});
+
+test('search fallback never hides a later DPU tool result', async () => {
+  class FailureAfterLaterToolMainAgent {
+    _buildToolsForSession() { return {}; }
+    async executePrompt() {
+      const tools = this._buildToolsForSession();
+      await tools.dpu_research_search.handler(null, '```json\n{"query":"Romanian","limit":1}\n```');
+      await tools.dpu_resource_get.handler(null, '```json\n{"id":"resource-1"}\n```');
+      throw new Error('empty provider content after resource inspection');
+    }
+  }
+  const agent = await createDpuResearchAgent({
+    MainAgentClass: FailureAfterLaterToolMainAgent,
+    verifyInvocation: async () => ({ principalId: 'user:admin' }),
+    executeTool: async (name) => name === 'dpu_research_search'
+      ? { ok: true, items: [{ id: 'resource-1' }] }
+      : { ok: true, resource: { id: 'resource-1' } },
+    logger: { warn() {} }
+  });
+
+  await assert.rejects(
+    agent.handleMessage({ message: 'inspect a Romanian dataset', invocationToken: 'router-token' }),
+    /empty provider content/
+  );
 });
 
 test('WebChat invocation verification fails closed without a router token', async () => {
@@ -171,14 +241,16 @@ test('WebChat launch arguments do not become a research message', () => {
   assert.deepEqual(parseArguments([
     '--pageInstanceId=0cde6fb6-d639-4f90-a540-46d718142eb9',
     '--forward-envelope=1',
-    '--dir=/workspace'
+    '--dir=/workspace',
+    '--dpu-resource-id=913628a2-6c8f-491b-b684-352efa391a3d'
   ]), {
     once: false,
     json: false,
     message: '',
     workspaceDir: '/workspace',
     pageInstanceId: '0cde6fb6-d639-4f90-a540-46d718142eb9',
-    forwardEnvelope: true
+    forwardEnvelope: true,
+    dpuResourceId: '913628a2-6c8f-491b-b684-352efa391a3d'
   });
 });
 
@@ -227,7 +299,8 @@ test('WebChat processes an envelope before its non-TTY input pipe closes', async
   const running = runWebChat(agent, {
     input,
     output: outputStream,
-    workspace: { root: '/workspace' }
+    workspace: { root: '/workspace' },
+    selection: { kind: 'dpu-research-resource', resourceId: 'resource-1' }
   });
   input.write(`${JSON.stringify({ __webchatMessage: 1, version: 1, text: 'find datasets' })}\n`);
 
@@ -235,6 +308,7 @@ test('WebChat processes an envelope before its non-TTY input pipe closes', async
   await outputPromise;
   assert.equal(turn.message, 'find datasets');
   assert.equal(turn.workspace.root, '/workspace');
+  assert.deepEqual(turn.selection, { kind: 'dpu-research-resource', resourceId: 'resource-1' });
   assert.match(output, /"recommendation": "done"/);
 
   input.end();

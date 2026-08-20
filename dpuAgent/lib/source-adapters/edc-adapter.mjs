@@ -1,4 +1,9 @@
 import { normalizeCapabilities, sanitizeProviderFacts } from './source-adapter.mjs';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { createHash } from 'node:crypto';
+import { Readable, Transform } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 
 const DEFAULT_PATHS = Object.freeze({
   catalog: '/v3/catalog/request',
@@ -159,6 +164,45 @@ export function createEdcAdapter({ fetchImplementation = globalThis.fetch } = {}
         ? (source.settings?.negotiationsPath || DEFAULT_PATHS.negotiations)
         : (source.settings?.transfersPath || DEFAULT_PATHS.transfers);
       return requestJson(fetchImplementation, `${endpoint}${base}/${encodeURIComponent(operationId)}/terminate`, { method: 'POST', headers: headersFor(credential), body: '{}' });
+    },
+
+    async materializeCompletedTransfer({ remoteStatus, destinationRoot, isCancelled }) {
+      const address = remoteStatus?.dataAddress || remoteStatus?.dataDestination || remoteStatus?.transferData || null;
+      const endpoint = String(address?.endpoint || address?.properties?.endpoint || '').trim();
+      if (!endpoint) return null;
+      const parsed = new URL(endpoint);
+      if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) {
+        throw new Error('EDC data-plane endpoint must be an HTTP(S) URL without embedded credentials.');
+      }
+      const rawName = String(address?.fileName || address?.properties?.fileName || 'edc-transfer.bin').replaceAll('\\', '/');
+      const fileName = path.posix.basename(rawName);
+      if (!fileName || fileName === '.' || fileName === '..') throw new Error('EDC data-plane filename is invalid.');
+      const token = String(address?.authorization || address?.properties?.authorization || '').trim();
+      const response = await fetchImplementation(endpoint, {
+        headers: token ? { Authorization: token } : {},
+        redirect: 'follow'
+      });
+      if (!response.ok) throw new Error(`EDC data-plane download failed with status ${response.status}.`);
+      await fs.mkdir(destinationRoot, { recursive: true });
+      const target = path.join(destinationRoot, fileName);
+      const hash = createHash('sha256');
+      let size = 0;
+      const meter = new Transform({
+        transform(chunk, _encoding, callback) {
+          Promise.resolve(typeof isCancelled === 'function' ? isCancelled() : false).then((cancelled) => {
+            if (cancelled) return callback(new Error('DPU transfer materialization was cancelled.'));
+            size += chunk.length;
+            hash.update(chunk);
+            callback(null, chunk);
+          }, callback);
+        }
+      });
+      const input = response.body ? Readable.fromWeb(response.body) : Readable.from(Buffer.from(await response.arrayBuffer()));
+      await pipeline(input, meter, (await import('node:fs')).createWriteStream(target, { flags: 'wx' }));
+      return {
+        revision: String(remoteStatus?.revision || '').trim(),
+        fileManifest: [{ path: fileName, size, checksum: `sha256:${hash.digest('hex')}` }]
+      };
     },
 
     getCitation({ resource }) {

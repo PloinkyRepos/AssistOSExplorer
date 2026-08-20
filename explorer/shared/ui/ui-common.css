@@ -320,7 +320,7 @@
 
 .settings-card {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(200px, auto) 1fr;
     gap: var(--space-lg);
     align-items: center;
     padding: var(--space-lg);

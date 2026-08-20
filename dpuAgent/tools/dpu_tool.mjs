@@ -116,6 +116,7 @@ function normalizeArgs(toolName, args) {
     case 'dpu_resource_list':
     case 'dpu_source_list':
     case 'dpu_job_list':
+    case 'dpu_compute_backend_list':
       return input;
     case 'dpu_audit_event_append':
       requireString('eventType');
@@ -200,6 +201,7 @@ function normalizeArgs(toolName, args) {
       }
       return input;
     case 'dpu_resource_get':
+    case 'dpu_resource_file_list':
     case 'dpu_resource_resolve_access':
     case 'dpu_resource_get_provenance':
     case 'dpu_source_get':
@@ -210,7 +212,28 @@ function normalizeArgs(toolName, args) {
     case 'dpu_action_get':
     case 'dpu_action_confirm':
     case 'dpu_action_reject':
+    case 'dpu_compute_backend_test':
       requireString('id');
+      return input;
+    case 'dpu_compute_backend_upsert':
+      requireString('type');
+      return input;
+    case 'dpu_compute_backend_set_enabled':
+      requireString('id');
+      if (typeof input.enabled !== 'boolean') throw new Error('dpu_compute_backend_set_enabled requires an "enabled" boolean.');
+      return input;
+    case 'dpu_federated_experiment_propose':
+      for (const field of ['backendId', 'templateId', 'modelId', 'modelRevision', 'strategy']) requireString(field);
+      if (!Array.isArray(input.participantResourceIds)) throw new Error('dpu_federated_experiment_propose requires a "participantResourceIds" array.');
+      return input;
+    case 'dpu_secure_execution_propose':
+      for (const field of ['backendId', 'workloadId']) requireString(field);
+      if (!Array.isArray(input.resourceIds)) throw new Error('dpu_secure_execution_propose requires a "resourceIds" array.');
+      return input;
+    case 'dpu_resource_file_stat':
+    case 'dpu_resource_file_read':
+      requireString('id');
+      requireString('path');
       return input;
     case 'dpu_resource_register':
       requireString('provider');
@@ -224,6 +247,12 @@ function normalizeArgs(toolName, args) {
       return input;
     case 'dpu_resource_share':
       requireString('id'); requireString('principal'); requireString('role');
+      return input;
+    case 'dpu_resource_revoke':
+      requireString('id'); requireString('principal');
+      return input;
+    case 'dpu_resource_release_output':
+      requireString('id'); requireString('destination');
       return input;
     case 'dpu_source_upsert':
       requireString('type');

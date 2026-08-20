@@ -9,6 +9,31 @@ import { createHuggingFaceAdapter } from '../lib/source-adapters/huggingface-ada
 import { createEdcAdapter } from '../lib/source-adapters/edc-adapter.mjs';
 import { createEdcLocalFixture } from './fixtures/edc-local-fixture.mjs';
 
+test('Hugging Face discovery translates Romanian text and size intent into provider filtering and ranking', async () => {
+  const calls = [];
+  const fetchImplementation = async (url) => {
+    const target = new URL(String(url));
+    calls.push(target);
+    return Response.json([
+      { id: 'owner/large-ro-text', sha: 'large', tags: ['language:ro', 'modality:text', 'size_categories:1M<n<10M'] },
+      { id: 'owner/small-ro-text', sha: 'small', tags: ['language:ro', 'modality:text', 'size_categories:n<1K'] },
+      { id: 'owner/small-audio', sha: 'audio', tags: ['language:ro', 'modality:audio', 'size_categories:n<1K'] }
+    ]);
+  };
+  const adapter = createHuggingFaceAdapter({ fetchImplementation });
+  const result = await adapter.discover({
+    source: { id: 'hf', endpoint: 'https://hf.example' },
+    query: 'one small Romanian text dataset',
+    limit: 1
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].searchParams.get('filter'), 'language:ro');
+  assert.equal(calls[0].searchParams.has('search'), false);
+  assert.equal(calls[0].searchParams.get('limit'), '20');
+  assert.equal(result[0].externalId, 'owner/small-ro-text');
+});
+
 test('Hugging Face acquisition streams files and verifies provider sha256', async () => {
   const bytes = Buffer.from('a,b\n1,2\n');
   const checksum = createHash('sha256').update(bytes).digest('hex');
@@ -66,5 +91,16 @@ test('EDC adapter preserves catalog policy and uses negotiation before transfer'
   const transfer = await adapter.acquire({ source, resource: { ...resource, providerFacts: { ...resource.providerFacts, contractAgreementId: finalized.contractAgreementId } }, destinationRoot: '/tmp/unused' });
   assert.equal(transfer.remoteOperation['@id'], 'transfer-1');
   assert.equal((await adapter.getOperation({ source, operationId: 'transfer-1' })).state, 'COMPLETED');
+  const destinationRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'dpu-edc-data-'));
+  try {
+    const materialized = await adapter.materializeCompletedTransfer({
+      remoteStatus: await adapter.getOperation({ source, operationId: 'transfer-1' }), destinationRoot
+    });
+    assert.equal(materialized.fileManifest[0].path, 'protected.csv');
+    assert.equal(await fs.readFile(path.join(destinationRoot, 'protected.csv'), 'utf8'), 'x,y\n1,2\n');
+    assert.equal(JSON.stringify(materialized).includes('fixture-transfer-token'), false);
+  } finally {
+    await fs.rm(destinationRoot, { recursive: true, force: true });
+  }
   assert.equal(fixture.calls.some((call) => call.path === '/control/negotiations'), true);
 });

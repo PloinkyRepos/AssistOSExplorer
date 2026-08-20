@@ -86,13 +86,18 @@
                             </tr>
                             <tr>
                                 <td>Research resources</td>
-                                <td><code>dpu_resource_list</code>, <code>dpu_resource_get</code>, <code>dpu_resource_register</code>, <code>dpu_resource_update_use</code>, <code>dpu_resource_resolve_access</code>, <code>dpu_resource_acquire</code>, <code>dpu_resource_share</code>, <code>dpu_resource_get_provenance</code></td>
-                                <td>Manage the authorized research-resource lifecycle, intended use, access, sharing proposals, and provenance.</td>
+                                <td><code>dpu_resource_list</code>, <code>dpu_resource_get</code>, <code>dpu_resource_file_list</code>, <code>dpu_resource_file_stat</code>, <code>dpu_resource_file_read</code>, <code>dpu_resource_register</code>, <code>dpu_resource_update_use</code>, <code>dpu_resource_resolve_access</code>, <code>dpu_resource_acquire</code>, <code>dpu_resource_share</code>, <code>dpu_resource_revoke</code>, <code>dpu_resource_release_output</code>, <code>dpu_resource_get_provenance</code></td>
+                                <td>Manage the authorized research-resource lifecycle, bounded verified-file reads, intended use, access, permission proposals, protected-output release, and provenance.</td>
                             </tr>
                             <tr>
                                 <td>Sources and discovery</td>
                                 <td><code>dpu_source_list</code>, <code>dpu_source_get</code>, <code>dpu_source_upsert</code>, <code>dpu_source_test</code>, <code>dpu_source_set_enabled</code>, <code>dpu_source_remove</code>, <code>dpu_research_search</code>, <code>dpu_research_compare</code></td>
-                                <td>Configure research providers through administrator controls and search or compare normalized provider resources.</td>
+                                <td>Configure research providers through administrator controls and search or compare normalized provider resources. Search supports bounded provider-type filtering independently from exact DPU source UUID selection.</td>
+                            </tr>
+                            <tr>
+                                <td>Compute and protected execution</td>
+                                <td><code>dpu_compute_backend_list</code>, <code>dpu_compute_backend_upsert</code>, <code>dpu_compute_backend_test</code>, <code>dpu_compute_backend_set_enabled</code>, <code>dpu_federated_experiment_propose</code>, <code>dpu_secure_execution_propose</code></td>
+                                <td>Configure verified compute backends and create confirmation-bound federated or secure jobs without exposing backend credentials.</td>
                             </tr>
                             <tr>
                                 <td>Jobs and confirmation</td>
@@ -110,7 +115,7 @@
 
                 <section>
                     <h2>Execution Constraints</h2>
-                    <p><code>mcp-config.json</code> sets <code>maxParallelTasks</code> to <code>1</code>. Mutating operations are also serialized through the DPU file lock. This does not turn DPU into a database, but it does keep the state files and permissions manifest from being updated concurrently through competing writes.</p>
+                    <p><code>mcp-config.json</code> sets <code>maxParallelTasks</code> to <code>1</code>. Mutating operations are also serialized through the DPU file lock. Each lock records its process owner and acquisition time; a later process removes it only when the owner is no longer alive.</p>
                     <p>For delegated Git/DPU calls, the router verifies the source agent's DS013 Agent Assertion and mints a DPU-audience Router Request for the canonical secret operation. DPU verifies that Router Request, invocation scope, per-secret ACLs and agent policy before authorizing the operation. No legacy agent-secret aliases are exposed.</p>
                     <p>Audit collection is permanently enabled for DPU operations, file access, Explorer actions, and plugin usage. AI prompts and responses are never stored, and the policy has no mutation tool.</p>
                 </section>

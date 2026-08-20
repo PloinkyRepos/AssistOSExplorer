@@ -191,7 +191,12 @@ test('DPU research actions reuse WebSkel modals and shared UI classes', () => {
     assert.doesNotMatch(presenter, /window\.prompt\('Principal to share|window\.confirm\(`Confirm DPU action|window\.alert\(JSON\.stringify/);
     assert.match(presenter, /showModal\('confirm-action-modal'/);
     assert.match(presenter, /showModal\('dpu-permissions-modal',[\s\S]*?kind: 'resource'/);
-    assert.match(provider, /class="general-button secondary" data-local-action="showDpuResearchProvenance"/);
+    assert.doesNotMatch(presenter, /shareDpuResearchResource/);
+    assert.doesNotMatch(provider, /data-local-action="shareDpuResearchResource"/);
+    assert.match(provider, /data-local-action="showDpuResearchPermissions">Manage access<\/button>/);
+    assert.doesNotMatch(provider, /data-local-action="showDpuResearchProvenance"/);
+    assert.match(provider, /<details class="settings-card settings-card-static dpu-research-card dpu-research-provenance">/);
+    assert.match(provider, /callDpuTool\('dpu_resource_get_provenance'/);
     assert.match(provider, /class="settings-card settings-card-static dpu-research-card"/);
     assert.match(permissions, /dpu_resource_share/);
     assert.match(permissions, /dpu_action_confirm/);

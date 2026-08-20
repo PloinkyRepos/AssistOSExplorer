@@ -1,6 +1,6 @@
 # DPU Agent
 
-`dpuAgent` is the confidential and research-data service used by Explorer for `/Confidential` and secret storage. It owns unified research-resource records, confirmation-bound actions, jobs, source adapters and append-only provenance. It uses a clean-break `dpu-research-v1` root and does not migrate or read legacy state.
+`dpuAgent` is the confidential and research-data service used by Explorer for `/Confidential` and secret storage. It owns unified research-resource records, bounded file consumption, confirmation-bound actions, compute backends, jobs, source adapters and append-only provenance. It uses a clean-break `dpu-research-v1` root and does not migrate or read legacy state.
 
 The agent owns three things that Explorer should not implement locally:
 
@@ -8,6 +8,8 @@ The agent owns three things that Explorer should not implement locally:
 - encrypted storage for secret values and confidential file content
 - stable virtual roots such as `/Confidential/My Space`, `/Confidential/Shared`, `/Confidential/Secrets`, and admin-only `/Confidential/Audit`
 - research projections at `/Confidential/Research Data` and `/Confidential/Jobs`
+
+Materialized research files remain in private DPU storage. Authorized users and agents consume them through `dpu_resource_file_list`, `dpu_resource_file_stat`, and bounded `dpu_resource_file_read` calls; physical storage paths are never returned.
 
 ## Runtime
 
@@ -20,6 +22,17 @@ Required or relevant environment variables:
 - `DPU_WORKSPACE_ROOT`
 - `ASSISTOS_FS_ROOT`
 - `WORKSPACE_ROOT`
+- `DPU_NVFLARE_PYTHON` (optional path to the Python interpreter that contains NVFlare 2.8.1)
+
+## NVFlare integration
+
+Install the pinned Python dependency into an operator-controlled environment:
+
+```bash
+python3 -m pip install -r requirements-nvflare.txt
+```
+
+Set `DPU_NVFLARE_PYTHON` when that environment does not use the default `python3`. Store the NVFlare configuration as a DPU secret containing JSON with `username`, `startupKitPath`, `templatesRoot`, and optional `study`. The compute-backend record references that secret and maps administrator-defined template IDs to job folders below `templatesRoot`. A backend must pass its identity test before it can be enabled.
 
 ## Documentation
 

@@ -25,12 +25,17 @@ export function createEdcLocalFixture() {
     if (target.pathname === '/data/transfers' && init.method === 'POST') {
       if (body?.contractId !== 'agreement-protected') return Response.json({ error: 'agreement required' }, { status: 403 });
       const operation = { '@id': `transfer-${transfers.size + 1}`, state: 'STARTED' };
-      transfers.set(operation['@id'], { ...operation, state: 'COMPLETED' });
+      transfers.set(operation['@id'], {
+        ...operation,
+        state: 'COMPLETED',
+        dataAddress: { endpoint: 'http://edc.fixture/data/download/asset-protected', fileName: 'protected.csv', authorization: 'Bearer fixture-transfer-token' }
+      });
       return Response.json(operation);
     }
     if (target.pathname.startsWith('/data/transfers/')) {
       return Response.json(transfers.get(target.pathname.split('/').pop()) || { state: 'ERROR' });
     }
+    if (target.pathname === '/data/download/asset-protected') return new Response('x,y\n1,2\n', { status: 200 });
     return Response.json({ error: 'not found' }, { status: 404 });
   };
   return {

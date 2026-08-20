@@ -486,6 +486,16 @@ export class DpuPermissionsModal {
                 this.state.role = String(resource.role || '').trim();
                 this.state.acl = Array.isArray(resource.acl) ? resource.acl : [];
                 this.state.name = resource.name || this.state.name;
+            } else if (this.state.kind === 'resource') {
+                const result = await callDpuTool('dpu_resource_revoke', {
+                    id: this.state.id,
+                    principal: normalizedPrincipal
+                });
+                const confirmed = await assistOS.UI.showModal('confirm-action-modal', {
+                    message: `Confirm ${result.proposal?.type || 'permission change'}?\n\n${(result.proposal?.effects || []).join('\n')}`
+                }, true);
+                if (!confirmed) await callDpuTool('dpu_action_reject', { id: result.proposal.id });
+                else await callDpuTool('dpu_action_confirm', { id: result.proposal.id });
             } else {
                 const result = await callDpuTool('dpu_confidential_get', { id: this.state.id });
                 const objectRecord = result.object || {};
@@ -546,6 +556,17 @@ export class DpuPermissionsModal {
                     return;
                 }
                 await callDpuTool('dpu_action_confirm', { id: proposal.id });
+            } else if (this.state.kind === 'resource') {
+                const result = await callDpuTool('dpu_resource_share', {
+                    id: this.state.id,
+                    principal: normalizedPrincipal,
+                    role: nextRole
+                });
+                const confirmed = await assistOS.UI.showModal('confirm-action-modal', {
+                    message: `Confirm ${result.proposal?.type || 'permission change'}?\n\n${(result.proposal?.effects || []).join('\n')}`
+                }, true);
+                if (!confirmed) await callDpuTool('dpu_action_reject', { id: result.proposal.id });
+                else await callDpuTool('dpu_action_confirm', { id: result.proposal.id });
             } else {
                 await callDpuTool('dpu_confidential_grant', {
                     id: this.state.id,

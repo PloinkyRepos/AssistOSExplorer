@@ -16,6 +16,7 @@ const DPU_DATA_ROOT_NAME = '.dpu-storage';
 const STATE_FILENAME = 'state.json';
 const PERMISSIONS_MANIFEST_FILENAME = 'permissions.manifest.json';
 const LOCK_DIRNAME = '.lock';
+const LOCK_OWNER_FILENAME = 'owner.json';
 const BLOBS_DIRNAME = 'blobs';
 const AUDIT_DIRNAME = 'audit';
 const PROVENANCE_DIRNAME = 'provenance';
@@ -164,10 +165,31 @@ export async function withFileLock(task) {
   while (true) {
     try {
       await fs.mkdir(lockDir);
+      await writeJsonFile(path.join(lockDir, LOCK_OWNER_FILENAME), {
+        pid: process.pid,
+        acquiredAt: new Date().toISOString()
+      });
       break;
     } catch (error) {
       if (error?.code !== 'EEXIST') {
         throw error;
+      }
+      const owner = await readJsonFile(path.join(lockDir, LOCK_OWNER_FILENAME), null);
+      const ownerPid = Number(owner?.pid);
+      if (!owner) {
+        const lockStat = await fs.stat(lockDir).catch(() => null);
+        if (lockStat && Date.now() - lockStat.mtimeMs < 1000) {
+          await sleep(50);
+          continue;
+        }
+      }
+      let ownerAlive = Number.isInteger(ownerPid) && ownerPid > 0;
+      if (ownerAlive) {
+        try { process.kill(ownerPid, 0); } catch { ownerAlive = false; }
+      }
+      if (!ownerAlive) {
+        await fs.rm(lockDir, { recursive: true, force: true }).catch(() => {});
+        continue;
       }
       if (Date.now() - startedAt > timeoutMs) {
         throw new Error('DPU store lock timeout.');
@@ -191,6 +213,7 @@ export function defaultState() {
     confidentialObjects: {},
     resources: {},
     sources: {},
+    computeBackends: {},
     jobs: {},
     actionProposals: {},
     provenanceIndex: {},
@@ -219,6 +242,7 @@ export async function loadState() {
     confidentialObjects: state.confidentialObjects && typeof state.confidentialObjects === 'object' ? state.confidentialObjects : {},
     resources: state.resources && typeof state.resources === 'object' ? state.resources : {},
     sources: state.sources && typeof state.sources === 'object' ? state.sources : {},
+    computeBackends: state.computeBackends && typeof state.computeBackends === 'object' ? state.computeBackends : {},
     jobs: state.jobs && typeof state.jobs === 'object' ? state.jobs : {},
     actionProposals: state.actionProposals && typeof state.actionProposals === 'object' ? state.actionProposals : {},
     provenanceIndex: state.provenanceIndex && typeof state.provenanceIndex === 'object' ? state.provenanceIndex : {},

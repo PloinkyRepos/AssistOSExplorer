@@ -8,7 +8,16 @@
       "name": "dpu_resource_get", "title": "DPU Resource Get", "description": "Inspect an authorized research resource at its exact revision.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "id": { "type": "string", "optional": false } }, "env": { "TOOL_NAME": "dpu_resource_get" }
     },
     {
-      "name": "dpu_resource_register", "title": "DPU Resource Register", "description": "Register a research resource in the unified DPU model.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "provider": { "type": "string", "optional": false }, "externalId": { "type": "string", "optional": false }, "name": { "type": "string", "optional": true }, "sourceId": { "type": "string", "optional": true }, "revision": { "type": "string", "optional": true }, "executionMode": { "type": "string", "optional": true }, "accessState": { "type": "string", "optional": true } }, "env": { "TOOL_NAME": "dpu_resource_register" }
+      "name": "dpu_resource_file_list", "title": "DPU Resource File List", "description": "List verified files in a locally materialized research resource without exposing its storage path.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "id": { "type": "string", "optional": false }, "path": { "type": "string", "optional": true } }, "env": { "TOOL_NAME": "dpu_resource_file_list" }
+    },
+    {
+      "name": "dpu_resource_file_stat", "title": "DPU Resource File Stat", "description": "Read verified metadata for one materialized resource file.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "id": { "type": "string", "optional": false }, "path": { "type": "string", "optional": false } }, "env": { "TOOL_NAME": "dpu_resource_file_stat" }
+    },
+    {
+      "name": "dpu_resource_file_read", "title": "DPU Resource File Read", "description": "Read a bounded base64 chunk from one verified materialized resource file.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "id": { "type": "string", "optional": false }, "path": { "type": "string", "optional": false }, "offset": { "type": "number", "optional": true }, "length": { "type": "number", "optional": true } }, "env": { "TOOL_NAME": "dpu_resource_file_read" }
+    },
+    {
+      "name": "dpu_resource_register", "title": "DPU Local Resource Register", "description": "Register a local or manual research resource; provider revision, access and materialization facts remain adapter-managed.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "provider": { "type": "string", "optional": false, "enum": ["local", "manual"] }, "externalId": { "type": "string", "optional": false }, "name": { "type": "string", "optional": true }, "executionMode": { "type": "string", "optional": true } }, "env": { "TOOL_NAME": "dpu_resource_register" }
     },
     {
       "name": "dpu_resource_update_use", "title": "DPU Resource Update Use", "description": "Update the intended use of a research resource.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "id": { "type": "string", "optional": false }, "intendedUse": { "type": "string", "optional": true } }, "env": { "TOOL_NAME": "dpu_resource_update_use" }
@@ -21,6 +30,12 @@
     },
     {
       "name": "dpu_resource_share", "title": "DPU Resource Share", "description": "Create a human-confirmed resource sharing proposal.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "id": { "type": "string", "optional": false }, "principal": { "type": "string", "optional": false }, "role": { "type": "string", "optional": false, "enum": ["access", "read", "write"] } }, "env": { "TOOL_NAME": "dpu_resource_share" }
+    },
+    {
+      "name": "dpu_resource_revoke", "title": "DPU Resource Revoke", "description": "Create an actor-bound proposal to revoke a principal from a research resource.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "id": { "type": "string", "optional": false }, "principal": { "type": "string", "optional": false } }, "env": { "TOOL_NAME": "dpu_resource_revoke" }
+    },
+    {
+      "name": "dpu_resource_release_output", "title": "DPU Resource Release Output", "description": "Create a separately confirmed proposal to release a protected derived output.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "id": { "type": "string", "optional": false }, "destination": { "type": "string", "optional": false } }, "env": { "TOOL_NAME": "dpu_resource_release_output" }
     },
     {
       "name": "dpu_resource_get_provenance", "title": "DPU Resource Provenance", "description": "Read append-only provenance for an authorized resource.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "id": { "type": "string", "optional": false } }, "env": { "TOOL_NAME": "dpu_resource_get_provenance" }
@@ -44,10 +59,28 @@
       "name": "dpu_source_remove", "title": "DPU Source Remove", "description": "Admin-only removal of a source with no active jobs.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "id": { "type": "string", "optional": false } }, "env": { "TOOL_NAME": "dpu_source_remove" }
     },
     {
-      "name": "dpu_research_search", "title": "DPU Research Search", "description": "Search enabled providers and normalize results as DPU resources.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "query": { "type": "string", "optional": false }, "sourceIds": { "type": "array", "optional": true }, "limit": { "type": "number", "optional": true } }, "env": { "TOOL_NAME": "dpu_research_search" }
+      "name": "dpu_research_search", "title": "DPU Research Search", "description": "Search enabled providers and normalize results as DPU resources. Use providerTypes for provider-specific searches; sourceIds accepts only exact DPU source UUIDs.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "query": { "type": "string", "optional": false }, "providerTypes": { "type": "array", "items": { "type": "string", "enum": ["huggingface", "edc"] }, "optional": true }, "sourceIds": { "type": "array", "items": { "type": "string" }, "optional": true }, "limit": { "type": "number", "optional": true } }, "env": { "TOOL_NAME": "dpu_research_search" }
     },
     {
       "name": "dpu_research_compare", "title": "DPU Research Compare", "description": "Compare authorized datasets by relevance, access, licence, provenance and FAIR evidence.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "ids": { "type": "array", "optional": false }, "query": { "type": "string", "optional": true } }, "env": { "TOOL_NAME": "dpu_research_compare" }
+    },
+    {
+      "name": "dpu_compute_backend_list", "title": "DPU Compute Backend List", "description": "List compute backends available to the current actor; administrative callers can inspect disabled configurations.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": {}, "env": { "TOOL_NAME": "dpu_compute_backend_list" }
+    },
+    {
+      "name": "dpu_compute_backend_upsert", "title": "DPU Compute Backend Upsert", "description": "Configure an NVFlare or inactive secure backend using a DPU secret reference.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "id": { "type": "string", "optional": true }, "name": { "type": "string", "optional": true }, "type": { "type": "string", "optional": false, "enum": ["nvflare", "secure"] }, "secretRef": { "type": "string", "optional": true }, "expectedIdentity": { "type": "string", "optional": true }, "attestationVerifier": { "type": "string", "optional": true }, "policyId": { "type": "string", "optional": true }, "settings": { "type": "object", "optional": true } }, "env": { "TOOL_NAME": "dpu_compute_backend_upsert" }
+    },
+    {
+      "name": "dpu_compute_backend_test", "title": "DPU Compute Backend Test", "description": "Verify backend connectivity and deployment identity before enablement.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "id": { "type": "string", "optional": false } }, "env": { "TOOL_NAME": "dpu_compute_backend_test" }
+    },
+    {
+      "name": "dpu_compute_backend_set_enabled", "title": "DPU Compute Backend Enable", "description": "Enable only a previously verified backend or disable an existing backend.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "id": { "type": "string", "optional": false }, "enabled": { "type": "boolean", "optional": false } }, "env": { "TOOL_NAME": "dpu_compute_backend_set_enabled" }
+    },
+    {
+      "name": "dpu_federated_experiment_propose", "title": "DPU Federated Experiment Propose", "description": "Validate a local-only federated experiment and create an actor-bound confirmation proposal.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "backendId": { "type": "string", "optional": false }, "templateId": { "type": "string", "optional": false }, "participantResourceIds": { "type": "array", "optional": false }, "modelId": { "type": "string", "optional": false }, "modelRevision": { "type": "string", "optional": false }, "strategy": { "type": "string", "optional": false, "enum": ["fedavg", "fedprox", "scaffold"] }, "rounds": { "type": "number", "optional": true }, "privacy": { "type": "object", "optional": false }, "evaluation": { "type": "object", "optional": true }, "idempotencyKey": { "type": "string", "optional": true } }, "env": { "TOOL_NAME": "dpu_federated_experiment_propose" }
+    },
+    {
+      "name": "dpu_secure_execution_propose", "title": "DPU Secure Execution Propose", "description": "Create an actor-bound secure workload proposal only when a verified attestation backend is active.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "backendId": { "type": "string", "optional": false }, "workloadId": { "type": "string", "optional": false }, "resourceIds": { "type": "array", "optional": false }, "parameters": { "type": "object", "optional": true }, "outputPolicy": { "type": "object", "optional": true }, "idempotencyKey": { "type": "string", "optional": true } }, "env": { "TOOL_NAME": "dpu_secure_execution_propose" }
     },
     {
       "name": "dpu_job_list", "title": "DPU Job List", "description": "List jobs visible to the invocation actor.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "state": { "type": "string", "optional": true }, "resourceId": { "type": "string", "optional": true } }, "env": { "TOOL_NAME": "dpu_job_list" }

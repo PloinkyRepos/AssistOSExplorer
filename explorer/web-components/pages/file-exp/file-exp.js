@@ -1343,9 +1343,20 @@ export class FileExp {
         }
     }
 
-    async acquireDpuResearchResource() {
-        const id = this.state.dpuResearchResourceId;
-        if (!id) return;
+    async acquireDpuResearchResource(target, resourceId) {
+        const id = String(resourceId || '').trim();
+        if (!id) {
+            this.showStatus('The selected DPU research resource is no longer available. Reopen it and try again.', true);
+            return;
+        }
+        if (target?.disabled) return;
+        const initialLabel = String(target?.textContent || 'Acquire');
+        if (target) {
+            target.disabled = true;
+            target.setAttribute('aria-busy', 'true');
+            target.textContent = initialLabel === 'Request Access' ? 'Requesting…' : 'Acquiring…';
+        }
+        this.showStatus(initialLabel === 'Request Access' ? 'Requesting DPU resource access…' : 'Starting DPU resource acquisition…');
         try {
             const idempotencyKey = this.state.dpuResearchIdempotencyKey || `explorer:${id}:${crypto.randomUUID()}`;
             this.state.dpuResearchIdempotencyKey = idempotencyKey;
@@ -1360,15 +1371,117 @@ export class FileExp {
             await openDpuFile(this, this.state.selectedPath, { invalidate: false });
         } catch (error) {
             this.showStatus(error?.message || 'Failed to acquire the resource.', true);
+        } finally {
+            if (target?.isConnected) {
+                target.disabled = false;
+                target.removeAttribute('aria-busy');
+                target.textContent = initialLabel;
+            }
         }
     }
 
-    async requestDpuResearchAccess() {
-        return this.acquireDpuResearchResource();
+    async requestDpuResearchAccess(target, resourceId) {
+        return this.acquireDpuResearchResource(target, resourceId);
     }
 
-    async shareDpuResearchResource() {
-        return this.showDpuResearchPermissions();
+    async verifyDpuResearchFileRead(target, encodedResourceId, encodedFilePath) {
+        let resourceId = '';
+        let filePath = '';
+        try {
+            resourceId = decodeURIComponent(String(encodedResourceId || '')).trim();
+            filePath = decodeURIComponent(String(encodedFilePath || '')).trim();
+        } catch {
+            this.showStatus('The verification target is invalid. Reopen the resource and try again.', true);
+            return;
+        }
+        if (!resourceId || !filePath) {
+            this.showStatus('The verification target is missing. Reopen the resource and try again.', true);
+            return;
+        }
+        if (target?.disabled) return;
+
+        const initialLabel = String(target?.textContent || 'Verify read');
+        if (target) {
+            target.disabled = true;
+            target.setAttribute('aria-busy', 'true');
+            target.textContent = 'Verifying…';
+        }
+        this.showStatus(`Verifying read access to ${filePath}…`);
+
+        let verified = false;
+        try {
+            const result = await callDpuTool('dpu_resource_file_read', {
+                id: resourceId,
+                path: filePath,
+                offset: 0,
+                length: 4096
+            });
+            if (result.encoding !== 'base64' || !Number.isSafeInteger(result.bytesRead) || typeof result.data !== 'string') {
+                throw new Error('DPU returned an invalid verified-read response.');
+            }
+            verified = true;
+            if (target?.isConnected) {
+                target.textContent = `Verified · ${result.bytesRead} bytes`;
+                target.dataset.verificationState = 'verified';
+            }
+            const continuation = result.eof ? 'end of file reached' : `next offset ${result.nextOffset}`;
+            this.showStatus(`Verified read of ${filePath}: ${result.bytesRead} bytes, ${continuation}.`);
+        } catch (error) {
+            this.showStatus(error?.message || `Failed to verify read access to ${filePath}.`, true);
+        } finally {
+            if (target?.isConnected) {
+                target.disabled = false;
+                target.removeAttribute('aria-busy');
+                if (!verified) target.textContent = initialLabel;
+            }
+        }
+    }
+
+    async runDpuFederatedExperiment(target) {
+        const selectedId = this.state.dpuResearchResourceId;
+        const backendId = String(target?.dataset?.backendId || '').trim();
+        if (!selectedId || !backendId) return;
+        const participantText = prompt('Participant resource UUIDs (comma separated, minimum three):', selectedId);
+        if (participantText === null) return;
+        const participantResourceIds = participantText.split(',').map((value) => value.trim()).filter(Boolean);
+        const templateId = prompt('Configured NVFlare template ID:', 'default');
+        if (!templateId) return;
+        const modelId = prompt('Model ID:', 'federated-model');
+        if (!modelId) return;
+        const modelRevision = prompt('Exact model revision:', '1');
+        if (!modelRevision) return;
+        const strategy = String(prompt('Strategy (fedavg, fedprox, scaffold):', 'fedavg') || '').trim().toLowerCase();
+        if (!strategy) return;
+        const rounds = Number(prompt('Training rounds:', '3'));
+        try {
+            const result = await callDpuTool('dpu_federated_experiment_propose', {
+                backendId, templateId, participantResourceIds, modelId, modelRevision, strategy, rounds,
+                privacy: { secureAggregation: true, differentialPrivacy: { enabled: true } },
+                evaluation: { leakageTests: ['membership', 'reconstruction'] },
+                idempotencyKey: `explorer:federated:${crypto.randomUUID()}`
+            });
+            await this.confirmDpuActionProposal(result.proposal);
+            this.showStatus(`Federated job ${result.job?.id || ''} was proposed.`);
+        } catch (error) {
+            this.showStatus(error?.message || 'Failed to propose federated execution.', true);
+        }
+    }
+
+    async runDpuSecureExecution(target) {
+        const selectedId = this.state.dpuResearchResourceId;
+        const backendId = String(target?.dataset?.backendId || '').trim();
+        if (!selectedId || !backendId) return;
+        const workloadId = prompt('Secure workload ID:');
+        if (!workloadId) return;
+        try {
+            const result = await callDpuTool('dpu_secure_execution_propose', {
+                backendId, workloadId, resourceIds: [selectedId], parameters: {}, outputPolicy: {},
+                idempotencyKey: `explorer:secure:${crypto.randomUUID()}`
+            });
+            await this.confirmDpuActionProposal(result.proposal);
+        } catch (error) {
+            this.showStatus(error?.message || 'Failed to propose secure execution.', true);
+        }
     }
 
     async confirmDpuActionProposal(proposal) {
@@ -1407,47 +1520,6 @@ export class FileExp {
         }
     }
 
-    async showDpuResearchProvenance() {
-        const id = this.state.dpuResearchResourceId;
-        if (!id) return;
-        try {
-            const result = await callDpuTool('dpu_resource_get_provenance', { id });
-            const fileContent = JSON.stringify(result.events || [], null, 2);
-            const escapeMarkup = (value) => String(value || '')
-                .replaceAll('&', '&amp;')
-                .replaceAll('<', '&lt;')
-                .replaceAll('>', '&gt;')
-                .replaceAll('"', '&quot;');
-            const events = Array.isArray(result.events) ? result.events : [];
-            const previewContent = `
-                <section class="dpu-research-view">
-                    <article class="settings-card settings-card-static dpu-research-card">
-                        <div class="settings-card-title">Provenance</div>
-                        <div class="settings-card-meta">Append-only events for the selected resource.</div>
-                    </article>
-                    ${events.length ? events.map((event) => `
-                        <article class="settings-card settings-card-static dpu-research-card">
-                            <div class="dpu-research-header">
-                                <div class="settings-card-title">${escapeMarkup(event.relation || 'event')}</div>
-                                <span class="settings-card-meta">${escapeMarkup(event.timestamp || '')}</span>
-                            </div>
-                            <div class="dpu-research-fields">
-                                <div class="dpu-research-field"><span class="dpu-research-field-label">Job</span><span class="dpu-research-field-value">${escapeMarkup(event.jobId || '—')}</span></div>
-                                <div class="dpu-research-field"><span class="dpu-research-field-label">Source</span><span class="dpu-research-field-value">${escapeMarkup(event.sourceId || '—')}</span></div>
-                                <div class="dpu-research-field"><span class="dpu-research-field-label">Revision</span><span class="dpu-research-field-value">${escapeMarkup(event.revision || '—')}</span></div>
-                                <div class="dpu-research-field"><span class="dpu-research-field-label">Checksum entries</span><span class="dpu-research-field-value">${escapeMarkup(Array.isArray(event.fileManifest) ? event.fileManifest.length : 0)}</span></div>
-                            </div>
-                        </article>
-                    `).join('') : '<div class="settings-empty-state">No provenance events recorded.</div>'}
-                </section>
-            `;
-            this.setPreviewState({ fileContent, previewContent }, { invalidate: false });
-            this.refreshPreviewUi();
-        } catch (error) {
-            this.showStatus(error?.message || 'Failed to load provenance.', true);
-        }
-    }
-
     async cancelDpuResearchJob() {
         const id = this.state.dpuResearchJobId;
         if (!id) return;
@@ -1460,14 +1532,26 @@ export class FileExp {
         }
     }
 
-    askDpuResearchAgent() {
+    askDpuResearchAgent(_target, encodedResourceId) {
+        let resourceId = '';
+        try {
+            resourceId = decodeURIComponent(String(encodedResourceId || '')).trim();
+        } catch {
+            this.showStatus('The selected DPU research resource is invalid. Reopen it and try again.', true);
+            return;
+        }
+        if (!resourceId) {
+            this.showStatus('No DPU research resource is selected.', true);
+            return;
+        }
         const params = new URLSearchParams({
             agent: 'dpuAgent',
             'forward-envelope': '1',
-            'workspace-dir': '.'
+            'workspace-dir': '.',
+            'dpu-resource-id': resourceId
         });
         const opened = window.open(`/webchat?${params.toString()}`, '_blank', 'noopener,noreferrer');
-        this.showStatus(opened === null ? 'Allow pop-ups to open DPU Agent WebChat.' : 'DPU Agent WebChat opened.');
+        this.showStatus(opened === null ? 'Allow pop-ups to open DPU Agent WebChat.' : 'DPU Agent WebChat opened with the selected resource.');
     }
 
     setPreviewViewMode(_target, mode) {

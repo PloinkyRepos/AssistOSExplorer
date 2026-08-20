@@ -7,6 +7,78 @@ import { pipeline } from 'node:stream/promises';
 import { normalizeCapabilities, sanitizeProviderFacts } from './source-adapter.mjs';
 
 const DEFAULT_ENDPOINT = 'https://huggingface.co';
+const SMALL_SIZE_RANK = new Map([
+  ['size_categories:n<1K', 0],
+  ['size_categories:1K<n<10K', 1],
+  ['size_categories:10K<n<100K', 2],
+  ['size_categories:100K<n<1M', 3],
+  ['size_categories:1M<n<10M', 4],
+  ['size_categories:10M<n<100M', 5],
+  ['size_categories:n>100M', 6]
+]);
+const QUERY_NOISE = new Set([
+  'a', 'an', 'and', 'data', 'dataset', 'datasets', 'find', 'first', 'for', 'hugging', 'face',
+  'match', 'one', 'return', 'search', 'small', 'text', 'the'
+]);
+
+function queryIntent(query = '') {
+  const normalized = String(query).normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const romanian = /\b(romanian|romana|romanesc|romaneste)\b/.test(normalized);
+  const small = /\b(small|tiny|compact|mic|mica|mici)\b/.test(normalized);
+  const text = /\b(text|texts|textual|corpus|corpora)\b/.test(normalized);
+  const topic = normalized
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length > 1 && !QUERY_NOISE.has(token) && token !== 'romanian' && !token.startsWith('roman'))
+    .join(' ');
+  return { romanian, small, text, topic };
+}
+
+function sizeRank(tags = []) {
+  for (const [tag, rank] of SMALL_SIZE_RANK) {
+    if (tags.includes(tag)) return rank;
+  }
+  return Number.POSITIVE_INFINITY;
+}
+
+function hasTextModality(tags = []) {
+  if (tags.includes('modality:text')) return true;
+  if (tags.some((tag) => /^modality:(audio|image|video|tabular|time-series)$/.test(tag))) return false;
+  return tags.some((tag) => (
+    tag.startsWith('task_categories:')
+    && !/(audio|image|video|speech|vision)/.test(tag)
+  ));
+}
+
+function relevanceRank(item = {}, intent = {}) {
+  const tags = Array.isArray(item.tags) ? item.tags.map(String) : [];
+  const haystack = `${item.id || item.repoId || ''} ${tags.join(' ')}`.toLowerCase();
+  const languagePenalty = intent.romanian && !tags.includes('language:ro') && !/romanian|romana/.test(haystack) ? 1 : 0;
+  const textPenalty = intent.text && !hasTextModality(tags) ? 1 : 0;
+  const smallness = intent.small ? sizeRank(tags) : 0;
+  return [languagePenalty, textPenalty, smallness, String(item.id || item.repoId || '')];
+}
+
+function compareRank(left, right, intent) {
+  const a = relevanceRank(left, intent);
+  const b = relevanceRank(right, intent);
+  for (let index = 0; index < a.length; index += 1) {
+    if (a[index] < b[index]) return -1;
+    if (a[index] > b[index]) return 1;
+  }
+  return 0;
+}
+
+function discoveryRequests(query, limit) {
+  const intent = queryIntent(query);
+  const poolLimit = String(Math.max(20, Math.min(100, (Number(limit) || 20) * 10)));
+  const base = { limit: poolLimit, full: 'true' };
+  const requests = [];
+  if (intent.romanian) {
+    requests.push(new URLSearchParams({ ...base, ...(intent.topic ? { search: intent.topic } : {}), filter: 'language:ro' }));
+  }
+  requests.push(new URLSearchParams({ ...base, search: String(query || '').trim() }));
+  return { intent, requests };
+}
 
 function headersFor(token = '') {
   const headers = { Accept: 'application/json' };
@@ -132,9 +204,21 @@ export function createHuggingFaceAdapter({ fetchImplementation = globalThis.fetc
 
     async discover({ source, query, credential = '', limit = 20 }) {
       const endpoint = String(source.endpoint || DEFAULT_ENDPOINT).replace(/\/$/, '');
-      const params = new URLSearchParams({ search: String(query || '').trim(), limit: String(Math.max(1, Math.min(100, Number(limit) || 20))), full: 'true' });
-      const items = await fetchJson(fetchImplementation, `${endpoint}/api/datasets?${params}`, { headers: headersFor(credential) });
-      return (Array.isArray(items) ? items : []).map((item) => normalizeDataset(item, source));
+      const requestedLimit = Math.max(1, Math.min(100, Number(limit) || 20));
+      const { intent, requests } = discoveryRequests(query, requestedLimit);
+      const candidates = new Map();
+      for (const params of requests) {
+        const items = await fetchJson(fetchImplementation, `${endpoint}/api/datasets?${params}`, { headers: headersFor(credential) });
+        for (const item of Array.isArray(items) ? items : []) {
+          const repoId = String(item?.id || item?.repoId || '').trim();
+          if (repoId && !candidates.has(repoId)) candidates.set(repoId, item);
+        }
+        if (candidates.size >= requestedLimit && intent.romanian) break;
+      }
+      return [...candidates.values()]
+        .sort((left, right) => compareRank(left, right, intent))
+        .slice(0, requestedLimit)
+        .map((item) => normalizeDataset(item, source));
     },
 
     async describe({ source, externalId, revision = '', credential = '' }) {

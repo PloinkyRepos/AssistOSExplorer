@@ -25,7 +25,7 @@ The affected user is a workspace operator who needs to inspect and change files 
 
 ### Agent-owned workflows
 
-The affected user is a workspace operator who needs Git, DPU, task, SOPLang, media, meeting, or other enabled domain actions in the same application. Runtime plugin discovery starts from enabled `IDE-plugins/*/config.json` bundles and the Explorer `applicationPlugins` policy controls which application plugins can mount. The observable result is a contextual control or settings surface that calls the owning agent. Explorer must preserve the boundary that domain authorization, state, and mutation remain with the owning agent.
+The affected user is a workspace operator who needs Git, DPU, task, SOPLang, media, meeting, or other enabled domain actions in the same application. Runtime plugin discovery starts from enabled `IDE-plugins/*/config.json` bundles and the Explorer `applicationPlugins` policy controls which application plugins can mount. The observable result is a contextual control or settings surface that calls the owning agent. For research data, this includes verified file consumption and confirmed federated jobs whose raw participant data remains local. Explorer must preserve the boundary that domain authorization, state, and mutation remain with the owning agent; DPU remains responsible for every file-read ACL check, backend capability decision, confirmation, job transition, protected result, and provenance event.
 
 ### Protected runtime access
 

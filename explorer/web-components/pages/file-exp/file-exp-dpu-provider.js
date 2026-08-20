@@ -707,17 +707,54 @@ function buildResearchFields(fields) {
     `).join('');
 }
 
-function buildResearchResourcePreview(record) {
+function buildResearchProvenance(events, unavailable = false) {
+    const items = Array.isArray(events) ? events : [];
+    const countLabel = unavailable ? 'Unavailable' : `${items.length} event${items.length === 1 ? '' : 's'}`;
+    const content = unavailable
+        ? '<div class="settings-empty-state">Provenance could not be loaded. Reopen the resource to retry.</div>'
+        : items.length
+            ? items.map((event) => `
+                <div class="dpu-provenance-event">
+                    <div class="dpu-research-header">
+                        <div class="dpu-research-field-label">${escapeHtml(event.relation || 'event')}</div>
+                        <span class="settings-card-meta">${escapeHtml(event.timestamp || '')}</span>
+                    </div>
+                    <div class="dpu-research-fields">
+                        ${buildResearchFields([
+                            ['Job', event.jobId],
+                            ['Source', event.sourceId],
+                            ['Revision', event.revision],
+                            ['Checksum entries', Array.isArray(event.fileManifest) ? event.fileManifest.length : 0]
+                        ])}
+                    </div>
+                </div>
+            `).join('')
+            : '<div class="settings-empty-state">No provenance events recorded.</div>';
+    return `
+        <details class="settings-card settings-card-static dpu-research-card dpu-research-provenance">
+            <summary class="dpu-research-provenance-summary">
+                <span class="settings-card-title">Provenance</span>
+                <span class="settings-card-meta">${escapeHtml(countLabel)}</span>
+            </summary>
+            <div class="dpu-research-provenance-content">${content}</div>
+        </details>
+    `;
+}
+
+function buildResearchResourcePreview(record, { files = [], backends = [], provenanceEvents = [], provenanceUnavailable = false } = {}) {
     const state = record.effectiveState || record.accessState || 'unknown';
     const canAcquire = record.accessState === 'available' && !['local', 'shared'].includes(record.effectiveState);
     const canRequestAccess = ['pending', 'blocked'].includes(record.accessState);
+    const federatedBackend = backends.find((backend) => backend.type === 'nvflare' && backend.available);
+    const secureBackend = backends.find((backend) => backend.type === 'secure' && backend.available);
     const actions = `
         <div class="settings-card-actions dpu-research-actions" aria-label="Resource actions">
-            <button type="button" class="general-button secondary" data-local-action="askDpuResearchAgent">Ask DPU Agent</button>
-            ${canAcquire ? '<button type="button" class="general-button" data-local-action="acquireDpuResearchResource">Acquire</button>' : ''}
-            ${canRequestAccess ? '<button type="button" class="general-button" data-local-action="requestDpuResearchAccess">Request Access</button>' : ''}
-            ${record.canWrite ? '<button type="button" class="general-button secondary" data-local-action="shareDpuResearchResource">Share</button><button type="button" class="general-button secondary" data-local-action="showDpuResearchPermissions">Permissions</button>' : ''}
-            <button type="button" class="general-button secondary" data-local-action="showDpuResearchProvenance">Show Provenance</button>
+            <button type="button" class="general-button secondary" data-local-action="askDpuResearchAgent ${escapeHtml(encodeURIComponent(String(record.id || '')))}">Ask about this resource</button>
+            ${canAcquire ? `<button type="button" class="general-button" data-local-action="acquireDpuResearchResource ${escapeHtml(record.id)}">Acquire</button>` : ''}
+            ${canRequestAccess ? `<button type="button" class="general-button" data-local-action="requestDpuResearchAccess ${escapeHtml(record.id)}">Request Access</button>` : ''}
+            ${record.canWrite ? '<button type="button" class="general-button secondary" data-local-action="showDpuResearchPermissions">Manage access</button>' : ''}
+            ${record.executionMode === 'federated' && federatedBackend ? `<button type="button" class="general-button" data-local-action="runDpuFederatedExperiment" data-backend-id="${escapeHtml(federatedBackend.id)}">Run Federated</button>` : ''}
+            ${record.executionMode === 'secure' && secureBackend ? `<button type="button" class="general-button" data-local-action="runDpuSecureExecution" data-backend-id="${escapeHtml(secureBackend.id)}">Run Secure</button>` : ''}
         </div>
     `;
     const identityFields = [
@@ -737,6 +774,26 @@ function buildResearchResourcePreview(record) {
     const restrictions = Array.isArray(record.securityRestrictions) && record.securityRestrictions.length
         ? record.securityRestrictions.map((item) => `<span class="settings-chip">${escapeHtml(item)}</span>`).join('')
         : '<span class="settings-card-meta">No execution restrictions reported.</span>';
+    const fair = record.fair || {};
+    const fairFields = [
+        ['Persistent identifier', fair.persistentIdentifier],
+        ['Metadata available', fair.metadataAvailable ? 'Yes' : 'No'],
+        ['Licence available', fair.licenceAvailable ? 'Yes' : 'No'],
+        ['Citation available', fair.citationAvailable ? 'Yes' : 'No'],
+        ['Machine-readable formats', Array.isArray(fair.machineReadableFormats) ? fair.machineReadableFormats.join(', ') : '']
+    ];
+    const encodedResourceId = encodeURIComponent(String(record.id || ''));
+    const fileRows = files.length
+        ? files.map((file) => {
+            const isFile = file.type === 'file';
+            const verifyAction = `verifyDpuResearchFileRead ${encodedResourceId} ${encodeURIComponent(String(file.path || ''))}`;
+            return `<div class="dpu-research-field dpu-research-file">
+                <span class="dpu-research-field-label">${escapeHtml(file.path)}</span>
+                <span class="dpu-research-field-value">${escapeHtml(isFile ? `${file.size || 0} bytes · ${file.mimeType || 'application/octet-stream'}` : 'Directory')}</span>
+                ${isFile ? `<button type="button" class="gray-button" data-local-action="${escapeHtml(verifyAction)}">Verify read</button>` : ''}
+            </div>`;
+        }).join('')
+        : '<div class="settings-card-meta">No local verified files are available.</div>';
     return `
         <section class="dpu-research-view">
             <article class="settings-card settings-card-static dpu-research-card">
@@ -757,6 +814,15 @@ function buildResearchResourcePreview(record) {
                 <div class="settings-card-title">Access and use</div>
                 <div class="dpu-research-fields">${buildResearchFields(policyFields)}</div>
             </article>
+            <article class="settings-card settings-card-static dpu-research-card">
+                <div class="settings-card-title">FAIR evidence</div>
+                <div class="dpu-research-fields">${buildResearchFields(fairFields)}</div>
+            </article>
+            <article class="settings-card settings-card-static dpu-research-card">
+                <div class="settings-card-title">Verified files</div>
+                <div class="dpu-research-fields">${fileRows}</div>
+            </article>
+            ${buildResearchProvenance(provenanceEvents, provenanceUnavailable)}
             <article class="settings-card settings-card-static dpu-research-card">
                 <div class="settings-card-title">Security restrictions</div>
                 <div class="dpu-research-chips">${restrictions}</div>
@@ -912,13 +978,31 @@ export async function openDpuFile(fileExp, filePath, { invalidate = true } = {})
     }
 
     if (node.kind === 'research-resource' || node.kind === 'research-job') {
+        let files = [];
+        let backends = [];
+        let provenanceEvents = [];
+        let provenanceUnavailable = false;
         const parsed = node.kind === 'research-resource'
             ? await callDpuTool('dpu_resource_get', { id: node.resourceId })
             : await callDpuTool('dpu_job_get', { id: node.jobId });
+        if (node.kind === 'research-resource') {
+            const [fileResult, backendResult, provenanceResult] = await Promise.all([
+                parsed.resource?.effectiveState === 'local'
+                    ? callDpuTool('dpu_resource_file_list', { id: node.resourceId }).catch(() => ({ items: [] }))
+                    : Promise.resolve({ items: [] }),
+                callDpuTool('dpu_compute_backend_list').catch(() => ({ items: [] })),
+                callDpuTool('dpu_resource_get_provenance', { id: node.resourceId })
+                    .catch(() => ({ events: [], unavailable: true }))
+            ]);
+            files = Array.isArray(fileResult.items) ? fileResult.items : [];
+            backends = Array.isArray(backendResult.items) ? backendResult.items : [];
+            provenanceEvents = Array.isArray(provenanceResult.events) ? provenanceResult.events : [];
+            provenanceUnavailable = provenanceResult.unavailable === true;
+        }
         const record = parsed.resource || parsed.job || {};
         const fileContent = JSON.stringify(record, null, 2);
         const previewContent = node.kind === 'research-resource'
-            ? buildResearchResourcePreview(record)
+            ? buildResearchResourcePreview(record, { files, backends, provenanceEvents, provenanceUnavailable })
             : buildResearchJobPreview(record);
         fileExp.setPreviewState({ fileContent, previewContent, selectedIsMarkdown: false, previewMode: 'dpu-research', mediaType: null, fileLoadInfo: null, markdownTextView: false, documentId: null, dpuSelectedObjectId: null, dpuSelectedCanWrite: false, dpuResearchResourceId: node.resourceId || null, dpuResearchJobId: node.jobId || null, dpuResearchRecord: record, dpuResearchIdempotencyKey: fileExp.state?.dpuResearchResourceId === node.resourceId ? (fileExp.state.dpuResearchIdempotencyKey || '') : '', hasUnsavedChanges: false, isEditing: false });
         if (invalidate) fileExp.invalidate(); else fileExp.refreshPreviewUi();
