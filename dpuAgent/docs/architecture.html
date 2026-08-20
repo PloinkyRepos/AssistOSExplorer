@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.esm.min.mjs"; mermaid.initialize({ startOnLoad: true, theme: "neutral" });</script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>dpuAgent Docs - Architecture</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="site-header"></div>
+
+    <main class="content content--with-sidebar">
+        <div class="doc-layout">
+            <aside class="doc-sidebar" aria-label="dpuAgent documentation navigation">
+                <div class="doc-sidebar__group">
+                    <p class="doc-sidebar__group-title">Documentation</p>
+                    <nav>
+                        <a href="index.html">Overview</a>
+                        <a href="architecture.html" aria-current="page">Architecture</a>
+                        <a href="execution-workflow.html">Tool Execution Workflow</a>
+                        <a href="mcp-tools.html">MCP Tools</a>
+                        <a href="integrations.html">Ploinky and Explorer Integration</a>
+                        <a href="configuration.html">Manifest and Environment</a>
+                        <a href="research-data.html">Research Data</a>
+                    </nav>
+                </div>
+            </aside>
+
+            <div class="doc-main">
+                <section class="lead">
+                    <h1>Architecture</h1>
+                    <p>`dpuAgent` separates confidential metadata, permissions, secret values, and confidential file content so each layer can be controlled independently.</p>
+                </section>
+
+                <section>
+                    <h2>Why The Layers Are Separate</h2>
+                    <p>Secrets and confidential objects have different operational needs. Lists and navigation need metadata that can be loaded quickly. Access control list checks need a canonical permission store. Secret values and confidential file content need encrypted persistence and should not leak into metadata files. The agent therefore keeps these concerns in separate storage files instead of collapsing everything into one general-purpose store.</p>
+                </section>
+
+                <section>
+                    <h2>Main Modules</h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Module</th>
+                                <th>Role</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>lib/dpu-store.mjs</code></td>
+                                <td>Main domain surface for secrets, confidential objects, comments, grants, revokes, and access checks.</td>
+                            </tr>
+                            <tr>
+                                <td><code>lib/dpu-store-internal/storage.mjs</code></td>
+                                <td>Storage root resolution, file locking, state load/save, encrypted secret map handling, and confidential blob helpers.</td>
+                            </tr>
+                            <tr>
+                                <td><code>lib/dpu-store-internal/permissions-manifest.mjs</code></td>
+                                <td>Canonical principal identities and access control list (ACL) mutation helpers.</td>
+                            </tr>
+                            <tr>
+                                <td><code>lib/dpu-store-internal/identity-acl.mjs</code></td>
+                                <td>Actor resolution, role checks, and actor-filtered serialization rules.</td>
+                            </tr>
+                            <tr>
+                                <td><code>tools/dpu_tool.mjs</code></td>
+                                <td>Model Context Protocol (MCP) tool dispatch, argument normalization, and auth envelope extraction.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </section>
+
+                <section>
+                    <h2>Storage Layout</h2>
+                    <p>The storage root keeps metadata files and encrypted content in separate places:</p>
+                    <pre><code>.dpu-storage/
+  state.json
+  permissions.manifest.json
+  secrets.json
+  blobs/
+  .lock/</code></pre>
+                    <p><code>state.json</code> stores users, secret metadata, and confidential object metadata. <code>permissions.manifest.json</code> stores canonical access control list state and DPU-owned agent role ceilings such as the read-only <code>gitAgent</code> secret policy. <code>secrets.json</code> stores encrypted secret values. Confidential file bodies are stored as encrypted blobs under <code>blobs/</code>.</p>
+                </section>
+
+                <section>
+                    <h2>What Explorer Delegates</h2>
+                    <p>Explorer does not decide who can read a secret value, who can update a confidential object, or how those records are stored. It asks DPU for actor-filtered results and drives the user interface from that response. That keeps the security and storage logic in one place instead of scattering it across plugins and views.</p>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <footer id="site-footer" class="site-footer"></footer>
+    <script src="partials-loader.js"></script>
+</body>
+</html>

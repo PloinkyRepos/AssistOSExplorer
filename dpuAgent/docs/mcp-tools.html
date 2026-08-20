@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.esm.min.mjs"; mermaid.initialize({ startOnLoad: true, theme: "neutral" });</script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>dpuAgent Docs - MCP Tools</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="site-header"></div>
+
+    <main class="content content--with-sidebar">
+        <div class="doc-layout">
+            <aside class="doc-sidebar" aria-label="dpuAgent documentation navigation">
+                <div class="doc-sidebar__group">
+                    <p class="doc-sidebar__group-title">Documentation</p>
+                    <nav>
+                        <a href="index.html">Overview</a>
+                        <a href="architecture.html">Architecture</a>
+                        <a href="execution-workflow.html">Tool Execution Workflow</a>
+                        <a href="mcp-tools.html" aria-current="page">MCP Tools</a>
+                        <a href="integrations.html">Ploinky and Explorer Integration</a>
+                        <a href="configuration.html">Manifest and Environment</a>
+                        <a href="research-data.html">Research Data</a>
+                    </nav>
+                </div>
+            </aside>
+
+            <div class="doc-main">
+                <section class="lead">
+                    <h1>MCP Tools</h1>
+                    <p>The DPU tool surface is intentionally small. It groups operations by domain rather than exposing storage internals directly. Here, MCP stands for Model Context Protocol.</p>
+                </section>
+
+                <section>
+                    <h2>Why The Tool Surface Is Grouped</h2>
+                    <p>Explorer needs stable operations such as “list visible secrets” or “update this confidential object”. It does not need direct read/write access to DPU storage files. The tool surface therefore reflects the domain model: identity, secrets, confidential objects, comments, and permission checks.</p>
+                </section>
+
+                <section>
+                    <h2>Tool Groups</h2>
+                    <div class="table-wrap"><table>
+                        <thead>
+                            <tr>
+                                <th>Group</th>
+                                <th>Tools</th>
+                                <th>Purpose</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Identity and roots</td>
+                                <td><code>dpu_whoami</code>, <code>dpu_workspace_roots</code></td>
+                                <td>Resolve the invocation actor and return the virtual Confidential roots visible to that actor.</td>
+                            </tr>
+                            <tr>
+                                <td>Secrets</td>
+                                <td><code>dpu_secret_list</code>, <code>dpu_secret_get</code>, <code>dpu_secret_put</code>, <code>dpu_secret_delete</code>, <code>dpu_secret_grant</code>, <code>dpu_secret_revoke</code></td>
+                                <td>Manage actor-filtered secret records and their access, read, and write grants.</td>
+                            </tr>
+                            <tr>
+                                <td>Confidential objects</td>
+                                <td><code>dpu_confidential_list</code>, <code>dpu_confidential_get</code>, <code>dpu_confidential_create</code>, <code>dpu_confidential_update</code>, <code>dpu_confidential_delete</code></td>
+                                <td>List, read, create, update, and delete authorized Confidential files and folders.</td>
+                            </tr>
+                            <tr>
+                                <td>Comments</td>
+                                <td><code>dpu_confidential_comment_add</code>, <code>dpu_confidential_comment_delete</code></td>
+                                <td>Add or remove comments on Confidential objects when the effective permissions allow it.</td>
+                            </tr>
+                            <tr>
+                                <td>Permission checks</td>
+                                <td><code>dpu_access_check</code>, <code>dpu_confidential_grant</code>, <code>dpu_confidential_revoke</code></td>
+                                <td>Evaluate effective access and manage object-level access, read, comment, or write roles.</td>
+                            </tr>
+                            <tr>
+                                <td>Agent secret policies</td>
+                                <td><code>dpu_agent_policy_get</code>, <code>dpu_agent_policy_set</code></td>
+                                <td>Allow administrators to inspect or replace the DPU-owned secret-role policy for an agent principal.</td>
+                            </tr>
+                            <tr>
+                                <td>Audit</td>
+                                <td><code>dpu_audit_config_get</code>, <code>dpu_audit_list</code>, <code>dpu_audit_get</code>, <code>dpu_audit_search</code>, <code>dpu_audit_event_append</code></td>
+                                <td>Expose authorized audit capabilities, retained records, text search, and non-AI Explorer event ingestion.</td>
+                            </tr>
+                            <tr>
+                                <td>Research resources</td>
+                                <td><code>dpu_resource_list</code>, <code>dpu_resource_get</code>, <code>dpu_resource_register</code>, <code>dpu_resource_update_use</code>, <code>dpu_resource_resolve_access</code>, <code>dpu_resource_acquire</code>, <code>dpu_resource_share</code>, <code>dpu_resource_get_provenance</code></td>
+                                <td>Manage the authorized research-resource lifecycle, intended use, access, sharing proposals, and provenance.</td>
+                            </tr>
+                            <tr>
+                                <td>Sources and discovery</td>
+                                <td><code>dpu_source_list</code>, <code>dpu_source_get</code>, <code>dpu_source_upsert</code>, <code>dpu_source_test</code>, <code>dpu_source_set_enabled</code>, <code>dpu_source_remove</code>, <code>dpu_research_search</code>, <code>dpu_research_compare</code></td>
+                                <td>Configure research providers through administrator controls and search or compare normalized provider resources.</td>
+                            </tr>
+                            <tr>
+                                <td>Jobs and confirmation</td>
+                                <td><code>dpu_job_list</code>, <code>dpu_job_get</code>, <code>dpu_job_cancel</code>, <code>dpu_action_get</code>, <code>dpu_action_confirm</code>, <code>dpu_action_reject</code></td>
+                                <td>Inspect and cancel visible jobs and resolve immutable confirmation proposals for sensitive actions.</td>
+                            </tr>
+                        </tbody>
+                    </table></div>
+                </section>
+
+                <section>
+                    <h2>Input And Response Behavior</h2>
+                    <p><code>tools/dpu_tool.mjs</code> normalizes the MCP envelope, reads the verified <code>metadata.invocation</code> grant, validates required strings and enum-like values, and only then dispatches into the domain layer. Tool responses are actor-filtered. For example, a caller may see a secret record in a list without seeing its plaintext value unless the resolved role allows <code>read</code>.</p>
+                </section>
+
+                <section>
+                    <h2>Execution Constraints</h2>
+                    <p><code>mcp-config.json</code> sets <code>maxParallelTasks</code> to <code>1</code>. Mutating operations are also serialized through the DPU file lock. This does not turn DPU into a database, but it does keep the state files and permissions manifest from being updated concurrently through competing writes.</p>
+                    <p>For delegated Git/DPU calls, the router verifies the source agent's DS013 Agent Assertion and mints a DPU-audience Router Request for the canonical secret operation. DPU verifies that Router Request, invocation scope, per-secret ACLs and agent policy before authorizing the operation. No legacy agent-secret aliases are exposed.</p>
+                    <p>Audit collection is permanently enabled for DPU operations, file access, Explorer actions, and plugin usage. AI prompts and responses are never stored, and the policy has no mutation tool.</p>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <footer id="site-footer" class="site-footer"></footer>
+    <script src="partials-loader.js"></script>
+</body>
+</html>

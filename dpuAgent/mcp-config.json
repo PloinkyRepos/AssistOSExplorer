@@ -1,0 +1,602 @@
+{
+  "maxParallelTasks": 1,
+  "tools": [
+    {
+      "name": "dpu_resource_list", "title": "DPU Resource List", "description": "List research resources visible to the current actor.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "effectiveState": { "type": "string", "optional": true }, "sourceId": { "type": "string", "optional": true } }, "env": { "TOOL_NAME": "dpu_resource_list" }
+    },
+    {
+      "name": "dpu_resource_get", "title": "DPU Resource Get", "description": "Inspect an authorized research resource at its exact revision.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "id": { "type": "string", "optional": false } }, "env": { "TOOL_NAME": "dpu_resource_get" }
+    },
+    {
+      "name": "dpu_resource_register", "title": "DPU Resource Register", "description": "Register a research resource in the unified DPU model.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "provider": { "type": "string", "optional": false }, "externalId": { "type": "string", "optional": false }, "name": { "type": "string", "optional": true }, "sourceId": { "type": "string", "optional": true }, "revision": { "type": "string", "optional": true }, "executionMode": { "type": "string", "optional": true }, "accessState": { "type": "string", "optional": true } }, "env": { "TOOL_NAME": "dpu_resource_register" }
+    },
+    {
+      "name": "dpu_resource_update_use", "title": "DPU Resource Update Use", "description": "Update the intended use of a research resource.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "id": { "type": "string", "optional": false }, "intendedUse": { "type": "string", "optional": true } }, "env": { "TOOL_NAME": "dpu_resource_update_use" }
+    },
+    {
+      "name": "dpu_resource_resolve_access", "title": "DPU Resource Resolve Access", "description": "Resolve provider access without accepting terms automatically.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "id": { "type": "string", "optional": false } }, "env": { "TOOL_NAME": "dpu_resource_resolve_access" }
+    },
+    {
+      "name": "dpu_resource_acquire", "title": "DPU Resource Acquire", "description": "Acquire an available resource, or create a confirmation proposal when access is pending.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "id": { "type": "string", "optional": false }, "allowPatterns": { "type": "array", "optional": true }, "idempotencyKey": { "type": "string", "optional": true } }, "env": { "TOOL_NAME": "dpu_resource_acquire" }
+    },
+    {
+      "name": "dpu_resource_share", "title": "DPU Resource Share", "description": "Create a human-confirmed resource sharing proposal.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "id": { "type": "string", "optional": false }, "principal": { "type": "string", "optional": false }, "role": { "type": "string", "optional": false, "enum": ["access", "read", "write"] } }, "env": { "TOOL_NAME": "dpu_resource_share" }
+    },
+    {
+      "name": "dpu_resource_get_provenance", "title": "DPU Resource Provenance", "description": "Read append-only provenance for an authorized resource.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "id": { "type": "string", "optional": false } }, "env": { "TOOL_NAME": "dpu_resource_get_provenance" }
+    },
+    {
+      "name": "dpu_source_list", "title": "DPU Source List", "description": "Admin-only list of configured research sources.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": {}, "env": { "TOOL_NAME": "dpu_source_list" }
+    },
+    {
+      "name": "dpu_source_get", "title": "DPU Source Get", "description": "Admin-only source details without credential values.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "id": { "type": "string", "optional": false } }, "env": { "TOOL_NAME": "dpu_source_get" }
+    },
+    {
+      "name": "dpu_source_upsert", "title": "DPU Source Upsert", "description": "Admin-only source configuration using secretRef.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "id": { "type": "string", "optional": true }, "name": { "type": "string", "optional": true }, "type": { "type": "string", "optional": false }, "endpoint": { "type": "string", "optional": true }, "secretRef": { "type": "string", "optional": true }, "enabled": { "type": "boolean", "optional": true }, "settings": { "type": "object", "optional": true } }, "env": { "TOOL_NAME": "dpu_source_upsert" }
+    },
+    {
+      "name": "dpu_source_test", "title": "DPU Source Test", "description": "Admin-only connection and identity test.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "id": { "type": "string", "optional": false } }, "env": { "TOOL_NAME": "dpu_source_test" }
+    },
+    {
+      "name": "dpu_source_set_enabled", "title": "DPU Source Enable", "description": "Admin-only source enable or disable operation.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "id": { "type": "string", "optional": false }, "enabled": { "type": "boolean", "optional": false } }, "env": { "TOOL_NAME": "dpu_source_set_enabled" }
+    },
+    {
+      "name": "dpu_source_remove", "title": "DPU Source Remove", "description": "Admin-only removal of a source with no active jobs.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "id": { "type": "string", "optional": false } }, "env": { "TOOL_NAME": "dpu_source_remove" }
+    },
+    {
+      "name": "dpu_research_search", "title": "DPU Research Search", "description": "Search enabled providers and normalize results as DPU resources.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "query": { "type": "string", "optional": false }, "sourceIds": { "type": "array", "optional": true }, "limit": { "type": "number", "optional": true } }, "env": { "TOOL_NAME": "dpu_research_search" }
+    },
+    {
+      "name": "dpu_research_compare", "title": "DPU Research Compare", "description": "Compare authorized datasets by relevance, access, licence, provenance and FAIR evidence.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "ids": { "type": "array", "optional": false }, "query": { "type": "string", "optional": true } }, "env": { "TOOL_NAME": "dpu_research_compare" }
+    },
+    {
+      "name": "dpu_job_list", "title": "DPU Job List", "description": "List jobs visible to the invocation actor.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "state": { "type": "string", "optional": true }, "resourceId": { "type": "string", "optional": true } }, "env": { "TOOL_NAME": "dpu_job_list" }
+    },
+    {
+      "name": "dpu_job_get", "title": "DPU Job Get", "description": "Get a job visible to the invocation actor.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "id": { "type": "string", "optional": false } }, "env": { "TOOL_NAME": "dpu_job_get" }
+    },
+    {
+      "name": "dpu_job_cancel", "title": "DPU Job Cancel", "description": "Cancel one job and its own staging or remote operation.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "id": { "type": "string", "optional": false } }, "env": { "TOOL_NAME": "dpu_job_cancel" }
+    },
+    {
+      "name": "dpu_action_get", "title": "DPU Action Get", "description": "Inspect an immutable action proposal.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "id": { "type": "string", "optional": false } }, "env": { "TOOL_NAME": "dpu_action_get" }
+    },
+    {
+      "name": "dpu_action_confirm", "title": "DPU Action Confirm", "description": "Confirm an unexpired proposal created for the invocation actor.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "id": { "type": "string", "optional": false } }, "env": { "TOOL_NAME": "dpu_action_confirm" }
+    },
+    {
+      "name": "dpu_action_reject", "title": "DPU Action Reject", "description": "Reject a pending proposal created for the invocation actor.", "command": "tools/dpu_tool.sh", "cwd": "workspace", "inputSchema": { "id": { "type": "string", "optional": false } }, "env": { "TOOL_NAME": "dpu_action_reject" }
+    },
+    {
+      "name": "dpu_whoami",
+      "title": "DPU Who Am I",
+      "description": "Resolve the current actor identity as seen by the DPU agent.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {},
+      "env": {
+        "TOOL_NAME": "dpu_whoami"
+      }
+    },
+    {
+      "name": "dpu_audit_config_get",
+      "title": "DPU Audit Config Get",
+      "description": "Return the current audit configuration and audit viewing capabilities for the current actor.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {},
+      "env": {
+        "TOOL_NAME": "dpu_audit_config_get"
+      }
+    },
+    {
+      "name": "dpu_audit_list",
+      "title": "DPU Audit List",
+      "description": "List DPU audit log files visible to the current actor.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {},
+      "env": {
+        "TOOL_NAME": "dpu_audit_list"
+      }
+    },
+    {
+      "name": "dpu_audit_get",
+      "title": "DPU Audit Get",
+      "description": "Read a DPU audit log file by name.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "name": {
+          "type": "string",
+          "optional": false
+        },
+        "maxBytes": {
+          "type": "number",
+          "optional": true
+        }
+      },
+      "env": {
+        "TOOL_NAME": "dpu_audit_get"
+      }
+    },
+    {
+      "name": "dpu_audit_search",
+      "title": "DPU Audit Search",
+      "description": "Search retained DPU audit records using case-insensitive text matching.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "query": { "type": "string", "optional": false },
+        "limit": { "type": "number", "optional": true }
+      },
+      "env": {
+        "TOOL_NAME": "dpu_audit_search"
+      }
+    },
+    {
+      "name": "dpu_audit_event_append",
+      "title": "DPU Audit Event Append",
+      "description": "Append a non-AI Explorer-side audit event to the current audit log.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "eventType": {
+          "type": "string",
+          "optional": false
+        },
+        "source": {
+          "type": "string",
+          "optional": true
+        },
+        "path": {
+          "type": "string",
+          "optional": true
+        },
+        "targetPath": {
+          "type": "string",
+          "optional": true
+        },
+        "action": {
+          "type": "string",
+          "optional": true
+        },
+        "pluginKey": {
+          "type": "string",
+          "optional": true
+        },
+        "slot": {
+          "type": "string",
+          "optional": true
+        },
+        "currentPath": {
+          "type": "string",
+          "optional": true
+        },
+        "selectedPath": {
+          "type": "string",
+          "optional": true
+        },
+        "language": {
+          "type": "string",
+          "optional": true
+        }
+      },
+      "env": {
+        "TOOL_NAME": "dpu_audit_event_append"
+      }
+    },
+    {
+      "name": "dpu_workspace_roots",
+      "title": "DPU Workspace Roots",
+      "description": "Return the virtual Confidential roots for the current actor.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {},
+      "env": {
+        "TOOL_NAME": "dpu_workspace_roots"
+      }
+    },
+    {
+      "name": "dpu_secret_list",
+      "title": "DPU Secret List",
+      "description": "List secrets visible to the current actor.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {},
+      "env": {
+        "TOOL_NAME": "dpu_secret_list"
+      }
+    },
+    {
+      "name": "dpu_secret_get",
+      "title": "DPU Secret Get",
+      "description": "Get a secret by key, filtered by the current actor permissions.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "key": {
+          "type": "string",
+          "optional": false
+        }
+      },
+      "env": {
+        "TOOL_NAME": "dpu_secret_get"
+      }
+    },
+    {
+      "name": "dpu_secret_put",
+      "title": "DPU Secret Put",
+      "description": "Create or update a secret.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "key": {
+          "type": "string",
+          "optional": false
+        },
+        "value": {
+          "type": "string",
+          "optional": false
+        },
+        "displayName": {
+          "type": "string",
+          "optional": true
+        }
+      },
+      "env": {
+        "TOOL_NAME": "dpu_secret_put"
+      }
+    },
+    {
+      "name": "dpu_secret_delete",
+      "title": "DPU Secret Delete",
+      "description": "Delete a secret by key.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "key": {
+          "type": "string",
+          "optional": false
+        }
+      },
+      "env": {
+        "TOOL_NAME": "dpu_secret_delete"
+      }
+    },
+    {
+      "name": "dpu_secret_grant",
+      "title": "DPU Secret Grant",
+      "description": "Grant Access, Write-Access, Read, or Write on a secret.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "key": {
+          "type": "string",
+          "optional": false
+        },
+        "principal": {
+          "type": "string",
+          "optional": false
+        },
+        "role": {
+          "type": "string",
+          "optional": false,
+          "enum": [
+            "access",
+            "write-access",
+            "read",
+            "write"
+          ]
+        }
+      },
+      "env": {
+        "TOOL_NAME": "dpu_secret_grant"
+      }
+    },
+    {
+      "name": "dpu_secret_revoke",
+      "title": "DPU Secret Revoke",
+      "description": "Revoke a previously granted secret role from a principal.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "key": {
+          "type": "string",
+          "optional": false
+        },
+        "principal": {
+          "type": "string",
+          "optional": false
+        }
+      },
+      "env": {
+        "TOOL_NAME": "dpu_secret_revoke"
+      }
+    },
+    {
+      "name": "dpu_confidential_list",
+      "title": "DPU Confidential List",
+      "description": "List confidential objects in My Space or Shared.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "scope": {
+          "type": "string",
+          "optional": true,
+          "enum": [
+            "my-space",
+            "shared"
+          ]
+        },
+        "parentId": {
+          "type": "string",
+          "optional": true
+        }
+      },
+      "env": {
+        "TOOL_NAME": "dpu_confidential_list"
+      }
+    },
+    {
+      "name": "dpu_confidential_get",
+      "title": "DPU Confidential Get",
+      "description": "Get a confidential object by id.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "id": {
+          "type": "string",
+          "optional": false
+        }
+      },
+      "env": {
+        "TOOL_NAME": "dpu_confidential_get"
+      }
+    },
+    {
+      "name": "dpu_confidential_create",
+      "title": "DPU Confidential Create",
+      "description": "Create a confidential file or folder.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "type": {
+          "type": "string",
+          "optional": false,
+          "enum": [
+            "file",
+            "folder"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "optional": false
+        },
+        "parentId": {
+          "type": "string",
+          "optional": true
+        },
+        "content": {
+          "type": "string",
+          "optional": true
+        },
+        "mimeType": {
+          "type": "string",
+          "optional": true
+        }
+      },
+      "env": {
+        "TOOL_NAME": "dpu_confidential_create"
+      }
+    },
+    {
+      "name": "dpu_confidential_update",
+      "title": "DPU Confidential Update",
+      "description": "Update a confidential file or folder.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "id": {
+          "type": "string",
+          "optional": false
+        },
+        "name": {
+          "type": "string",
+          "optional": true
+        },
+        "content": {
+          "type": "string",
+          "optional": true
+        },
+        "mimeType": {
+          "type": "string",
+          "optional": true
+        }
+      },
+      "env": {
+        "TOOL_NAME": "dpu_confidential_update"
+      }
+    },
+    {
+      "name": "dpu_confidential_delete",
+      "title": "DPU Confidential Delete",
+      "description": "Delete a confidential file or folder recursively.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "id": {
+          "type": "string",
+          "optional": false
+        }
+      },
+      "env": {
+        "TOOL_NAME": "dpu_confidential_delete"
+      }
+    },
+    {
+      "name": "dpu_confidential_comment_add",
+      "title": "DPU Confidential Comment Add",
+      "description": "Add a comment to a confidential object.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "id": {
+          "type": "string",
+          "optional": false
+        },
+        "message": {
+          "type": "string",
+          "optional": false
+        }
+      },
+      "env": {
+        "TOOL_NAME": "dpu_confidential_comment_add"
+      }
+    },
+    {
+      "name": "dpu_confidential_comment_delete",
+      "title": "DPU Confidential Comment Delete",
+      "description": "Delete a comment from a confidential object.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "id": {
+          "type": "string",
+          "optional": false
+        },
+        "commentId": {
+          "type": "string",
+          "optional": false
+        }
+      },
+      "env": {
+        "TOOL_NAME": "dpu_confidential_comment_delete"
+      }
+    },
+    {
+      "name": "dpu_confidential_grant",
+      "title": "DPU Confidential Grant",
+      "description": "Grant access, read, comment, or write on a confidential object.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "id": {
+          "type": "string",
+          "optional": false
+        },
+        "principal": {
+          "type": "string",
+          "optional": false
+        },
+        "role": {
+          "type": "string",
+          "optional": false,
+          "enum": [
+            "access",
+            "read",
+            "comment",
+            "write"
+          ]
+        }
+      },
+      "env": {
+        "TOOL_NAME": "dpu_confidential_grant"
+      }
+    },
+    {
+      "name": "dpu_confidential_revoke",
+      "title": "DPU Confidential Revoke",
+      "description": "Revoke a previously granted confidential object role from a principal.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "id": {
+          "type": "string",
+          "optional": false
+        },
+        "principal": {
+          "type": "string",
+          "optional": false
+        }
+      },
+      "env": {
+        "TOOL_NAME": "dpu_confidential_revoke"
+      }
+    },
+    {
+      "name": "dpu_agent_policy_get",
+      "title": "DPU Agent Policy Get",
+      "description": "Admin-only: return the DPU-owned secret policy for an agent principal.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "principalId": {
+          "type": "string",
+          "optional": false
+        }
+      },
+      "env": {
+        "TOOL_NAME": "dpu_agent_policy_get"
+      }
+    },
+    {
+      "name": "dpu_agent_policy_set",
+      "title": "DPU Agent Policy Set",
+      "description": "Admin-only: replace the allowed secret roles for an agent principal.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "principalId": {
+          "type": "string",
+          "optional": false
+        },
+        "allowedRoles": {
+          "type": "array",
+          "optional": false
+        }
+      },
+      "env": {
+        "TOOL_NAME": "dpu_agent_policy_set"
+      }
+    },
+    {
+      "name": "dpu_access_check",
+      "title": "DPU Access Check",
+      "description": "Check whether the current actor has a specific permission on a secret or confidential object.",
+      "command": "tools/dpu_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {
+        "kind": {
+          "type": "string",
+          "optional": false,
+          "enum": [
+            "secret",
+            "confidential"
+          ]
+        },
+        "key": {
+          "type": "string",
+          "optional": true
+        },
+        "id": {
+          "type": "string",
+          "optional": true
+        },
+        "permission": {
+          "type": "string",
+          "optional": false,
+          "enum": [
+            "access",
+            "read",
+            "comment",
+            "write"
+          ]
+        }
+      },
+      "env": {
+        "TOOL_NAME": "dpu_access_check"
+      }
+    }
+  ]
+}

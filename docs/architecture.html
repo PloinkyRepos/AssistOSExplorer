@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Architecture - Explorer Agent</title>
+    <link rel="stylesheet" href="styles.css">
+    <script type="module">import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs'; mermaid.initialize({ startOnLoad: true, theme: 'neutral' });</script>
+    <style>
+        .subsection {
+            margin-left: 1rem;
+            margin-top: 0.4rem;
+        }
+        .subsection h3 {
+            margin-bottom: 0.25rem;
+        }
+    </style>
+    <script defer src="partials-loader.js"></script>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="header-content">
+                <div class="header-top">
+                    <a href="index.html" class="logo">
+                        <div class="logo-icon">🚀</div>
+                        <span>Explorer Agent</span>
+                    </a>
+                    <button class="theme-toggle" id="themeToggle">🌙</button>
+                </div>
+                <nav>
+                    <ul>
+                        <li><a href="index.html">Home</a></li>
+                    <li><a href="workspace-operations.html">Workspace Operations</a></li>
+                    <li><a href="documents.html">Document Model &amp; Editing</a></li>
+                    <li><a href="architecture.html" class="active">Architecture</a></li>
+                    <li><a href="backend.html">Backend</a></li>
+                    <li><a href="plugins.html">Plugins</a></li>
+                    <li><a href="agents.html">Agents &amp; Plugins</a></li>
+                    <li><a href="plugins.html#example">Authoring Example</a></li>
+                </ul>
+            </nav>
+        </div>
+    </div>
+</header>
+
+    <main>
+        <div class="doc-layout">
+                <aside class="sidebar">
+                    <h3>Architecture</h3>
+                    <ul>
+                        <li><a href="#workspace-role">Workspace Role</a></li>
+                        <li><a href="#runtime-structure">Runtime Structure</a></li>
+                        <li><a href="#host-implementation">Host Implementation</a></li>
+                        <li><a href="#document-collaboration">Document Collaboration</a></li>
+                        <li><a href="#development">Development Context</a></li>
+                    </ul>
+                </aside>
+            <div class="content-wrapper">
+                <div class="doc-section" id="workspace-role">
+                    <h1>Architecture</h1>
+                    <p>Explorer is the static host shell of the workspace, not just another agent with a narrow tool surface. A Ploinky workspace needs one application that can own navigation, preview, editing, and runtime plugin mounting without absorbing the domain logic of Git, DPU, SOPLang, tasks, assistant flows, or media tooling. Architecture matters here because the product boundary is easy to get wrong: if Explorer becomes too thin, users end up stitching together unrelated agent surfaces; if it becomes too broad, domain rules drift into the host and become harder to maintain.</p>
+                    <p>The implemented architecture answers that tension by keeping Explorer responsible for the shared IDE shell while dependent agents keep responsibility for permissions, state, and mutations in their own domains. Explorer therefore sits at the center of the workspace experience, but it is intentionally not the owner of every operation the workspace can perform.</p>
+                    <figure class="architecture-diagram">
+                        <img src="assets/architecture-diagram.svg" alt="Explorer high-level flow diagram">
+                        <figcaption><em>Explorer uses separate paths for ordinary TinyMDE source editing, Automerge-backed structured collaboration, and agent-owned domain operations.</em></figcaption>
+                    </figure>
+                </div>
+
+                <div class="doc-section" id="runtime-structure">
+                    <h2>Runtime Structure</h2>
+                    <p>Explorer runs inside <strong><a href="https://github.com/AssistOS-AI/ploinky/blob/master/README.md" target="_blank" rel="noopener noreferrer">Ploinky</a></strong>, which provides the router, workspace routing table, agent lifecycle, and startup orchestration. Explorer is configured as the static agent, so the router redirects the workspace entry point to <code>/explorer/index.html</code> and then proxies Explorer-prefixed requests to the Explorer agent. The Explorer container itself is defined by <code><a href="../explorer/manifest.json">explorer/manifest.json</a></code>, which declares the runtime image, custom server command, environment, and the dependency agents that must be enabled alongside it.</p>
+                    <p>At startup, <code>ploinky start explorer</code> prepares the recursive manifest graph and captures an early inactive generation with exact identities and every retained route targetless. Static preinstall and startup config providers run against that topology. Ploinky then aborts the early lease, reloads and re-evaluates retained predecessor runtimes, rotates newly stale tuples, and captures the final inactive targetless generation. Only its exact lease may authorize targets when blocking dependency waves start. Each wave applies its private targets and passes readiness before dependents start. Explorer starts only after its blocking prerequisites are ready; detached <code>no-wait</code> helpers launch afterward. Router activation uses coordinated generation apply and cannot add a physical-host mapping. That readiness model matters because Explorer is only useful as an IDE shell when the domain agents it surfaces are also available.</p>
+                    <p>The Ploinky Box keeps edge ownership outside Explorer. Ploinky mounts an immutable, non-secret topology generation before consumer hooks start. Long-lived integrations resolve their active locator for each join, editor session, or settings launch, while browser plugins use only the authenticated one-locator no-store projection. Product manifests declare private HTTP service targets; they cannot add physical-host publications.</p>
+                    <p>The private Router listener gate has three exact states. <code>required-loopback</code> always requires <code>127.0.0.1:8081</code> while RoutingServer is ready. <code>required-assigned-managed-gateway</code> applies only when current Podman inspection and kernel inventory prove that the bridge gateway is assigned to the exact reported <code>network_interface</code>, in which case exactly one listener is required. <code>inactive-unassigned-managed-gateway</code> requires no listener when that assignment is absent; the inactive state remains fail-closed and does not prove managed-bridge activation or reachability. Missing or stale evidence, cross-interface assignment, missing or extra listeners, wildcard listeners, and unrelated binds fail closed.</p>
+                    <p><strong>Current rootless limitation:</strong> the observed Podman <code>host.containers.internal:host-gateway</code> mapping terminates on the box outer-facing interface, so managed-bridge access to private Router <code>8081</code> cannot satisfy the approved bind boundary. That lane remains inactive and fail-closed pending Ploinky DS004 Question #8; Explorer does not substitute the public listener, a direct target, a widened bind, a forwarding sidecar, or alternate authorization.</p>
+                    <p>This runtime relationship is asymmetric. Explorer owns the host UI and filesystem-facing shell, but agents such as <code>gitAgent</code>, <code>dpuAgent</code>, <code>soplangAgent</code>, <code>tasksAgent</code>, and <code>multimedia</code> remain separate runtime units. For example, <code>soplangAgent</code> receives its own MCP calls for document synchronization and build execution and reads the mounted workspace directly; it is not a hidden module inside the Explorer backend.</p>
+                    <p>For research data, Explorer projects <code>/Confidential/Research Data</code> and <code>/Confidential/Jobs</code> as virtual records and hosts the administrator Data Sources component. Authorization, source credentials, confirmation proposals, job transitions, and provenance remain owned by <code>dpuAgent</code>; Explorer does not reproduce those rules.</p>
+                </div>
+
+                <div class="doc-section" id="host-implementation">
+                    <h2>Host Implementation</h2>
+                    <p>The Explorer implementation is split between the browser application built with <strong><a href="https://github.com/AssistOS-AI/WebSkel/blob/master/README.md" target="_blank" rel="noopener noreferrer">WebSkel</a></strong> and the CLI-based MCP tool runtime. Explorer defines tools in <code>utils/server/tool-definitions.mjs</code>, dispatches them through <code>utils/server/tool-runtime.mjs</code>, and exposes the process entry point through <code>tools/explorer_tool.mjs</code> and <code>tools/explorer_tool.sh</code>. The runtime enforces filesystem-safe operations and allowed-directory constraints; static assets and browser routing are provided by the configured Ploinky agent runtime. Application-category plugins are filtered through Explorer's <code>applicationPlugins</code> manifest policy before they are mounted into the browser experience.</p>
+                    <p>On the frontend side, the <a href="wiki.html#definition-spa">single-page application (SPA)</a> under <code>explorer/</code> owns navigation, selection state, preview routing, editors, and runtime component loading. Bootstrap captures an initial hash route before asynchronous startup, mounts the selected WebSkel page, and applies that route exactly once after the page presenter has registered its listener; encoded file paths are therefore decoded only after the Explorer page is ready, without a second navigation or synthetic history event. Ordinary Markdown source editing flows through the embedded <code>markdown-editor</code> component and its <a href="wiki.html#definition-tinymde">TinyMDE</a> editor, while SOPLang-aware structured editing is opened explicitly through <code>document-view-page</code>. Other text and code files use the general-purpose editor components. HTML preview, media preview, and other content-aware experiences are orchestrated from the same host shell, which is why the frontend structure lives as a unified application rather than as a collection of unrelated agent UIs.</p>
+                    <p>Three libraries and services define architectural boundaries rather than incidental implementation detail. <a href="wiki.html#definition-webskel">WebSkel</a> owns component registration and presenter lifecycle in the browser shell. <a href="wiki.html#definition-tinymde">TinyMDE</a> provides ordinary Markdown source editing and returns text to Explorer's normal save path. <a href="wiki.html#definition-automerge">Automerge</a> provides the conflict-free replicated data type used only by structured Markdown and SCRIPTA collaboration; Explorer owns that private state and materializes the accepted result back to Markdown.</p>
+                    <p>The boundary between these two layers is operational rather than theoretical. The MCP runtime provides the constrained file and plugin catalog surface the browser needs. The frontend decides how those resources become a coherent IDE experience. Where the browser needs a domain action, it invokes the owning agent instead of reimplementing the domain logic locally. Blob handling follows a separate router convention and is not part of Explorer's filesystem tool runtime.</p>
+                    <p>The application structure is declared in <code><a href="../explorer/webskel.json">webskel.json</a></code>, which lists the pages, components, and modals that make up the host shell. Representative components include:</p>
+                    <table class="command-table">
+                        <thead>
+                            <tr>
+                                <th>Component</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>file-exp</code></td>
+                                <td>The main page orchestrating the file explorer view.</td>
+                            </tr>
+                            <tr>
+                                <td><code>file-exp-entries</code></td>
+                                <td>Dedicated presenter for rendering and updating the entries table/list.</td>
+                            </tr>
+                            <tr>
+                                <td><code>file-exp-preview</code></td>
+                                <td>Dedicated presenter for preview area orchestration (code/media/markdown/html).</td>
+                            </tr>
+                            <tr>
+                                <td><code>html-web-view</code></td>
+                                <td>Sandboxed iframe presenter used by HTML preview (Code/Web/Split modes).</td>
+                            </tr>
+                            <tr>
+                                <td><code>document-view-page</code></td>
+                                <td>Renders a structured SOPLang-aware document with its chapters and paragraphs.</td>
+                            </tr>
+                            <tr>
+                                <td><code>markdown-editor</code></td>
+                                <td>Embeds <a href="wiki.html#definition-tinymde">TinyMDE</a> for normal Markdown source editing and keeps the textarea value aligned with Explorer save flows.</td>
+                            </tr>
+                             <tr>
+                                <td><code>chapter-item</code> / <code>paragraph-item</code></td>
+                                <td>Represents a single chapter or paragraph within a document.</td>
+                            </tr>
+                            <tr>
+                                <td><code>file-editor</code></td>
+                                <td>A general-purpose text editor for any file type.</td>
+                            </tr>
+                            <tr>
+                                <td><code>files-menu</code></td>
+                                <td>Component responsible for displaying a browsable list of files and directories.</td>
+                            </tr>
+                            <tr>
+                                <td><code>insert-image-modal</code></td>
+                                <td>A modal for uploading and inserting images into a document.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p>Each component is driven by a JavaScript presenter class that manages its state and lifecycle. Presenters use an <code>invalidate()</code> method to trigger re-renders, making the UI reactive to data changes.</p>
+                </div>
+
+                <div class="doc-section" id="document-collaboration">
+                    <h2>Document Collaboration</h2>
+                    <p>Explorer has two distinct collaboration mechanisms. Structured Markdown and SCRIPTA documents use the Explorer-owned <a href="wiki.html#definition-automerge">Automerge</a> <a href="wiki.html#definition-crdt">CRDT</a> service, which keeps collaboration state in private workspace data, validates document paths, serializes mutations, merges concurrent changes, and writes the resulting Markdown representation back to the workspace. Its MCP contract includes open, change, merge, save, synchronization, and SCRIPTA collaboration operations.</p>
+                    <p>Office documents use OnlyOffice instead. OnlyOffice provides the co-editing WebSocket transport and sends signed save callbacks through OnlyOfficeAgent, which persists the document to the workspace or delegates Confidential persistence to dpuAgent. Explorer does not apply the Markdown CRDT to Office files, ordinary source files, or unstructured Markdown editing.</p>
+                </div>
+
+                <div class="doc-section" id="development">
+                    <h2>Development Context</h2>
+                    <p>Explorer development happens inside a Ploinky workspace, not as a standalone web app detached from the rest of the runtime. That means local changes need to be understood in the same environment where the router, dependency agents, and workspace mounts are present. Install Node.js 20+ and npm, then start the workspace through the Explorer entrypoint.</p>
+                    <p>From a Ploinky workspace that contains the AchillesIDE repository, the normal startup path is:</p>
+<pre><code>ploinky start explorer
+# Dashboard: http://127.0.0.1:8080/dashboard
+# Main Explorer UI: http://127.0.0.1:8080/#file-exp/
+</code></pre>
+                    <p>The Explorer entrypoint applies the required global workspace mode, default workspace-root configuration, dependency startup, and router launch. Runtime plugins are discovered from enabled agent-owned <code>IDE-plugins/</code> directories in the workspace, and application plugins are filtered by Explorer's <code>applicationPlugins</code> policy from <code>explorer/manifest.json</code>. If you change a plugin <code>config.json</code> or add a new plugin, restart Explorer so discovery runs again. Most ordinary UI, JS, and CSS changes are then visible through a normal browser refresh.</p>
+                    <p>The Box release harness uses a separate fixed Router and authentication baseline after the full Ploinky graph and listener gate succeed. That release-only smoke gate is owned by its harness and is not part of the workspace-local Explorer startup procedure.</p>
+                    <p>This baseline proves the dashboard, Explorer shell, and routed WebChat shell through Router. It is not the separate WebMeet two-account ScreenShare gate or the WebMeet external-network direct/relay matrix, and none of those gates substitutes for another.</p>
+                    <p>For local orientation, the repository layout relevant to the Explorer host is:</p>
+<pre><code>.../AchillesIDE/
+├─ explorer/
+│  ├─ tools/explorer_tool.mjs      # CLI MCP entry point
+│  ├─ utils/server/tool-runtime.mjs # MCP dispatch and filesystem runtime
+│  ├─ index.html / main.js         # SPA entry point
+│  ├─ webskel.json                 # Core UI components
+│  ├─ web-components/              # Component implementations
+│  ├─ services/                    # Frontend services, parsing, document store
+│  └─ utils/                       # Shared utilities
+├─ dpuAgent/IDE-plugins/        # DPU UI/runtime plugins
+├─ gitAgent/IDE-plugins/        # Git UI/runtime plugins
+├─ multimedia/IDE-plugins/      # Media creation and preview plugins
+├─ soplangAgent/IDE-plugins/    # SOPLang actions and variable editor
+└─ tasksAgent/IDE-plugins/      # Backlog/task plugins
+</code></pre>
+                    <p>HTML Web Preview uses repo-scoped paths such as <code>/.ploinky/repos/AchillesIDE/docs/development.html</code>. Plugin-specific authoring and manifest details are documented separately in the <a href="plugins.html">Plugins guide</a>.</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <div class="container">
+        <p>&copy; 2025 <a href="https://github.com/AssistOS-AI/ploinky/blob/master/README.md" target="_blank" rel="noopener noreferrer">Ploinky Project</a>. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script>
+        // Theme toggle
+        const themeToggle = document.getElementById('themeToggle');
+        const body = document.body;
+        const themes = ['light', 'dark', 'blue'];
+        const themeIcons = {
+            light: '🌙', // Icon to show for switching to dark
+            dark: '🔵',  // Icon to show for switching to blue
+            blue: '☀️'   // Icon to show for switching to light
+        };
+
+        const applyTheme = (theme) => {
+            body.setAttribute('data-theme', theme);
+            localStorage.setItem('theme', theme);
+            themeToggle.textContent = themeIcons[theme];
+        };
+        
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        applyTheme(savedTheme);
+        
+        themeToggle.addEventListener('click', () => {
+            const currentTheme = body.getAttribute('data-theme');
+            const currentIndex = themes.indexOf(currentTheme);
+            const nextIndex = (currentIndex + 1) % themes.length;
+            const newTheme = themes[nextIndex];
+            applyTheme(newTheme);
+        });
+    </script>
+</body>
+</html>

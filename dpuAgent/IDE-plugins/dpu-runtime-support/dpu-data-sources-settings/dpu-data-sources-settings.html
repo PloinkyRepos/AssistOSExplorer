@@ -1,0 +1,188 @@
+<div class="modal-header">
+    <div class="modal-header-left">
+        <div class="modal-title">Data Sources</div>
+        <div class="modal-subtitle">Configure research providers without exposing credential values.</div>
+    </div>
+    <div class="dpu-source-window-actions">
+        <button type="button"
+                class="icon-button"
+                data-local-action="toggleFullscreen"
+                data-source-fullscreen
+                data-window-control
+                aria-label="Toggle fullscreen"
+                aria-pressed="false"
+                title="Toggle fullscreen">
+            <img class="close-icon" src="/explorer/assets/icons/fullscreen.svg" alt="" aria-hidden="true">
+        </button>
+        <div class="close" data-local-action="closeModal" role="button" tabindex="0" aria-label="Close">
+            <img class="close-icon" src="/explorer/assets/icons/x-mark.svg" alt="">
+        </div>
+    </div>
+</div>
+<div class="modal-body dpu-sources-body">
+    <div class="settings-status" id="dpuSourcesStatus" role="status" aria-live="polite"></div>
+
+    <div class="settings-tabs" id="dpuSourceTabs" role="tablist" aria-label="Data source providers">
+        <button type="button"
+                class="settings-tab active"
+                id="dpuSourceTabHuggingFace"
+                data-source-tab="huggingface"
+                data-local-action="switchTab huggingface"
+                role="tab"
+                aria-controls="dpuSourcePanelHuggingFace"
+                aria-selected="true"
+                tabindex="0">Hugging Face</button>
+        <button type="button"
+                class="settings-tab"
+                id="dpuSourceTabEdc"
+                data-source-tab="edc"
+                data-local-action="switchTab edc"
+                role="tab"
+                aria-controls="dpuSourcePanelEdc"
+                aria-selected="false"
+                tabindex="-1">European Data Space (EDC)</button>
+    </div>
+
+    <section class="dpu-source-panel"
+             id="dpuSourcePanelHuggingFace"
+             data-source-panel="huggingface"
+             role="tabpanel"
+             aria-labelledby="dpuSourceTabHuggingFace">
+        <div class="dpu-sources-section-heading">
+            <div>
+                <div class="dpu-source-panel-title">
+                    <h3 class="settings-section-title">Hugging Face sources</h3>
+                    <span class="status-badge" data-source-count="huggingface">0 sources</span>
+                </div>
+                <p class="settings-section-description">Configure public, private, or gated dataset discovery through the Hugging Face adapter.</p>
+            </div>
+            <div class="settings-card-actions" aria-label="Hugging Face source actions">
+                <button type="button" class="general-button secondary" data-local-action="refreshSources">
+                    <img class="dpu-source-button-icon" src="/explorer/assets/icons/refresh.svg" alt="">
+                    Refresh
+                </button>
+                <button type="button"
+                        class="general-button"
+                        data-source-add="huggingface"
+                        data-local-action="addSource huggingface"
+                        aria-controls="dpuSourceFormHuggingFace"
+                        aria-expanded="false">Add source</button>
+            </div>
+        </div>
+
+        <form class="settings-card settings-card-static dpu-source-editor"
+              id="dpuSourceFormHuggingFace"
+              data-source-form="huggingface"
+              hidden>
+            <input name="id" type="hidden">
+            <div class="dpu-source-editor-heading">
+                <h3 class="settings-section-title" data-source-editor-title>Add Hugging Face source</h3>
+                <p class="settings-section-description">Credentials remain in DPU Secrets and are referenced only by key.</p>
+            </div>
+            <label class="dpu-source-field">
+                <span class="form-label">Name</span>
+                <input class="form-input" name="name" required placeholder="Hugging Face">
+            </label>
+            <label class="dpu-source-field">
+                <span class="form-label">Endpoint</span>
+                <input class="form-input" name="endpoint" type="url" placeholder="https://huggingface.co">
+            </label>
+            <label class="dpu-source-field">
+                <span class="form-label">Secret reference</span>
+                <custom-select id="dpuSourceSecretHuggingFace"
+                               data-presenter="custom-select"
+                               aria-label="Hugging Face secret reference"
+                               data-name="secretRef"
+                               data-source-secret="huggingface"
+                               data-options="%5B%7B%22value%22%3A%22%22%2C%22label%22%3A%22No%20credential%22%7D%5D"></custom-select>
+            </label>
+            <div class="modal-actions dpu-source-form-actions">
+                <button type="button" class="gray-button" data-local-action="cancelEdit huggingface">Cancel</button>
+                <button type="submit" class="general-button">Add source</button>
+            </div>
+        </form>
+
+        <div class="dpu-sources-list settings-busy-region"
+             id="dpuSourcesListHuggingFace"
+             data-source-list="huggingface"
+             aria-busy="false"></div>
+    </section>
+
+    <section class="dpu-source-panel"
+             id="dpuSourcePanelEdc"
+             data-source-panel="edc"
+             role="tabpanel"
+             aria-labelledby="dpuSourceTabEdc"
+             hidden>
+        <div class="dpu-sources-section-heading">
+            <div>
+                <div class="dpu-source-panel-title">
+                    <h3 class="settings-section-title">European Data Space sources</h3>
+                    <span class="status-badge" data-source-count="edc">0 sources</span>
+                </div>
+                <p class="settings-section-description">Configure EDC catalog discovery, contract negotiation, and transfer connections.</p>
+            </div>
+            <div class="settings-card-actions" aria-label="EDC source actions">
+                <button type="button" class="general-button secondary" data-local-action="refreshSources">
+                    <img class="dpu-source-button-icon" src="/explorer/assets/icons/refresh.svg" alt="">
+                    Refresh
+                </button>
+                <button type="button"
+                        class="general-button"
+                        data-source-add="edc"
+                        data-local-action="addSource edc"
+                        aria-controls="dpuSourceFormEdc"
+                        aria-expanded="false">Add source</button>
+            </div>
+        </div>
+
+        <form class="settings-card settings-card-static dpu-source-editor"
+              id="dpuSourceFormEdc"
+              data-source-form="edc"
+              hidden>
+            <input name="id" type="hidden">
+            <div class="dpu-source-editor-heading">
+                <h3 class="settings-section-title" data-source-editor-title>Add EDC source</h3>
+                <p class="settings-section-description">Provider policies remain authoritative; credentials are referenced from DPU Secrets.</p>
+            </div>
+            <label class="dpu-source-field">
+                <span class="form-label">Name</span>
+                <input class="form-input" name="name" required placeholder="European Data Space">
+            </label>
+            <label class="dpu-source-field">
+                <span class="form-label">Endpoint</span>
+                <input class="form-input" name="endpoint" type="url" required placeholder="https://consumer.example/management">
+            </label>
+            <label class="dpu-source-field">
+                <span class="form-label">Counterparty DSP address</span>
+                <input class="form-input" name="counterPartyAddress" type="url" placeholder="https://provider.example/protocol">
+            </label>
+            <label class="dpu-source-field">
+                <span class="form-label">Provider participant ID</span>
+                <input class="form-input" name="providerId" placeholder="provider-participant-id">
+            </label>
+            <label class="dpu-source-field">
+                <span class="form-label">Local participant ID</span>
+                <input class="form-input" name="participantId" placeholder="consumer-participant-id">
+            </label>
+            <label class="dpu-source-field">
+                <span class="form-label">Secret reference</span>
+                <custom-select id="dpuSourceSecretEdc"
+                               data-presenter="custom-select"
+                               aria-label="EDC secret reference"
+                               data-name="secretRef"
+                               data-source-secret="edc"
+                               data-options="%5B%7B%22value%22%3A%22%22%2C%22label%22%3A%22No%20credential%22%7D%5D"></custom-select>
+            </label>
+            <div class="modal-actions dpu-source-form-actions">
+                <button type="button" class="gray-button" data-local-action="cancelEdit edc">Cancel</button>
+                <button type="submit" class="general-button">Add source</button>
+            </div>
+        </form>
+
+        <div class="dpu-sources-list settings-busy-region"
+             id="dpuSourcesListEdc"
+             data-source-list="edc"
+             aria-busy="false"></div>
+    </section>
+</div>

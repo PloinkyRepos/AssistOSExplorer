@@ -66,5 +66,5 @@ The repo also contains the Explorer plugin button in [IDE-plugins/tasks-tool-but
 
 ## Documentation
 
-- [DS01 - Vision](./docs/specs/DS01-Vision.md)
-- [DS04 - Explorer Integration And IDE Plugin Channel](./docs/specs/DS04-Explorer-Integration-and-IDE-Plugin-Channel.md)
+- [DS000 Vision](./docs/specsLoader.html?spec=DS000-vision.md)
+- [DS004 Explorer Integration](./docs/specsLoader.html?spec=DS004-explorer-integration.md)

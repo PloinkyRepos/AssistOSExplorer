@@ -1,20 +1,25 @@
 <!doctype html>
 <html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>OnlyOffice Runtime-v5 Documentation</title>
-</head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>OnlyOffice Documentation - Overview</title><link rel="stylesheet" href="styles.css"><script type="module">import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs'; mermaid.initialize({ startOnLoad: true, theme: 'neutral' });</script></head>
 <body>
-    <main>
-        <h1>OnlyOffice Runtime-v5 Documentation</h1>
-        <p>The pinned OnlyOffice agent launches its mounted source entry point, then exposes an authenticated control service on private target 7000 and a narrowly public editor transport on private target 8080. Configuration verifies the exact canonical nginx file and relative alias before startup; after the pinned entrypoint materializes the alias, activation readiness requires distinct, byte-identical <code>105:107</code>/<code>0644</code> copies paired with the <code>[::1]:8000</code> DocService listener. That full activation-only wrapper also verifies callback storage, PostgreSQL, RabbitMQ/EPMD, optional Redis, configuration, addresses, and process ownership. Recurring liveness performs only bounded loopback HTTP checks for DocumentServer, control, editor, and storage, avoiding the full readiness script's service-ownership and process-table scans while preserving fail-closed restart behavior. Explicit service targets never create physical-host publications.</p>
-        <p>Editor sessions resolve the current immutable topology generation. Before dialing DocumentServer, the editor proxy requires the exact Router-installed tuple: internal <code>Host: 127.0.0.1:8080</code>, canonical scalar forwarded host and protocol, and the exact <code>/base-agent-additional-server/onlyOffice/8080</code> forwarded prefix. It validates raw occurrences of <code>Host</code>, <code>Origin</code>, and every expected forwarding field; malformed, case-duplicated, missing, unexpected, or caller-spoofed forwarding metadata fails closed, including bare <code>Forwarded</code> or <code>X-Forwarded</code> fields. Each session has its own persisted, store-minted document key, and temporal body-bound JWTs protect editor configuration and callback/outbox traffic; the configurable lifetime is an exact positive integer capped at 300 seconds. The editor configuration JWT enters DocumentServer only as the single signed top-level body <code>token</code>, with inbox in-body validation required as boolean <code>true</code>; the public proxy continues to strip browser <code>Authorization</code>, cookies, and other credentials. A token from another session cannot authorize the opaque callback URL, even for the same document. Callback delivery authenticates its one own string <code>token</code> first, permits only <code>iat</code>, optional <code>nbf</code>, and <code>exp</code> as signed-only fields, requires every unsigned duplicate to match the verified non-temporal claims recursively and exactly, and uses only those verified claims downstream.</p>
-        <p>Durable v5 session state is an atomic, fsynced, guarded 0600 file under the persisted agent workdir and never contains delegation bearers. Missing or duplicate per-session document keys fail closed without a derivation fallback. DocumentServer Data and <code>/var/lib/onlyoffice</code> use explicit managed mounts; bundled PostgreSQL, RabbitMQ, and Redis data remain image-owned so rootless host ownership cannot block service startup. Before local services start, the wrapper restores package ownership and modes only for the exact guarded PostgreSQL cluster configuration, log, runtime-socket, TLS private-directory/key, and RabbitMQ service-log paths. Ambiguous clusters, symbolic links, hard-linked files, unexpected path shapes, and post-preparation drift fail closed. The browser gate prepares authenticated restart proof before creating a second edit, proves that edit absent from durable state, issues targeted restart without an intervening authentication request, and reopens the drain-persisted edit after replacement activation; invalid topology, signing, fetch, callback, persistence, listener ownership, or drain state fails closed.</p>
-        <ul>
-            <li><a href="specs/matrix.md">Specification matrix</a></li>
-            <li><a href="../AGENTS.md">Agent guide</a></li>
-        </ul>
-    </main>
+  <div id="site-header"></div>
+  <main class="content content--with-sidebar"><div class="doc-layout">
+    <aside class="doc-sidebar" aria-label="OnlyOffice documentation navigation"><div class="doc-sidebar__group"><p class="doc-sidebar__group-title">Documentation</p><nav><a href="index.html" aria-current="page">Overview</a><a href="architecture.html">Architecture</a><a href="execution-workflow.html">Execution workflow</a><a href="integrations.html">Integrations</a><a href="configuration.html">Configuration</a></nav></div></aside>
+    <div class="doc-main">
+      <section class="lead"><h1>OnlyOffice Runtime-v5</h1><p>Workspace users need to edit Office documents without exposing authenticated control operations, browser credentials, or Confidential storage access to the public editor transport.</p></section>
+      <section><h2>Document Editing Boundary</h2><p>The pinned <a href="wiki.html#definition-onlyoffice">OnlyOffice integration</a> provides an authenticated control service and a narrowly public editor transport. It owns session state, tokenized document configuration, callbacks, drain behavior, and the boundary between ordinary workspace files and <a href="wiki.html#definition-dpu">DPU</a> Confidential storage.</p></section>
+      <section><h2>Runtime Behavior</h2><p>The <a href="wiki.html#definition-runtime-v5">Runtime-v5 contract</a> exposes authenticated control on target 7000 and public editor transport on target 8080. The agent validates the exact <a href="wiki.html#definition-forwarding-tuple">Router-installed forwarding tuple</a> and uses generation-bound sessions before contacting <a href="wiki.html#definition-documentserver">DocumentServer</a>.</p><p>Ordinary workspace documents use workspace storage. Confidential documents require a Router-minted <a href="wiki.html#definition-confidential-delegation"><code>dpuConfidential</code> delegation</a> and are read or written through <code>dpuAgent</code>. Browser credentials are removed before requests reach DocumentServer.</p></section>
+      <section><h2>System Outline</h2><figure class="diagram"><pre class="mermaid">flowchart LR
+  Explorer[Explorer] --> Control[Authenticated control]
+  Control --> Session[Session state and signed configuration]
+  Session --> Editor[Public editor transport]
+  Editor --> DocumentServer[OnlyOffice DocumentServer]
+  DocumentServer -->|signed callback| Storage[Internal callback storage]
+  Storage --> Workspace[Workspace files]
+  Storage --> DPU[DPU Confidential objects]</pre><figcaption><em>OnlyOffice separates authenticated control and public editor transport, then returns saved content through the selected storage owner.</em></figcaption></figure></section>
+      <section><h2>Development Contract</h2><p>The design specifications define Runtime-v5, editor, callback, storage, and restart contracts. <a href="specsLoader.html?spec=DS001-coding-style.md"><code>DS001-coding-style.md</code></a> is the canonical coding and test-organization reference. Focused Node.js regression tests live under <code>tests/</code> and run with <code>node --test tests/*.test.mjs</code>. The <a href="wiki.html">OnlyOffice wiki</a> is the canonical source for local terminology.</p></section>
+    </div>
+  </div></main>
+  <footer id="site-footer" class="site-footer"></footer><script src="partials-loader.js"></script>
 </body>
 </html>

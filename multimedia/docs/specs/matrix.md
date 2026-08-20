@@ -1,11 +1,10 @@
-# multimedia Spec Matrix
+# Specification Matrix
 
-This page indexes the local design specification set. The DS files are the source of truth for rules, contracts, and invariants.
-
-## Specification Set
-
-- [DS01 - Agent Overview](specsLoader.html?spec=DS01-agent-overview.md)
-- [DS02 - IDE Plugin Contracts](specsLoader.html?spec=DS02-ide-plugin-contracts.md)
-- [DS03 - Runtime Dependencies and Startup Install](specsLoader.html?spec=DS03-runtime-dependencies-and-startup.md)
-- [DS04 - FFmpeg Media Processing](specsLoader.html?spec=DS04-ffmpeg-media-processing.md)
-- [DS05 - Ploinky Runtime Invariants](specsLoader.html?spec=DS05-ploinky-runtime-invariants.md)
+| Name | Description |
+| --- | --- |
+| [DS000-vision](specsLoader.html?spec=DS000-vision.md) | Defines the multimedia contract covered by DS000-vision. |
+| [DS001-coding-style](specsLoader.html?spec=DS001-coding-style.md) | Defines source layout, runtime configuration, security, and test conventions for multimedia. |
+| [DS002-ide-plugin-contracts](specsLoader.html?spec=DS002-ide-plugin-contracts.md) | Defines the multimedia contract covered by DS002-ide-plugin-contracts. |
+| [DS003-main-behavior](specsLoader.html?spec=DS003-main-behavior.md) | Defines the multimedia contract covered by DS003-main-behavior. |
+| [DS004-ffmpeg-media-processing](specsLoader.html?spec=DS004-ffmpeg-media-processing.md) | Defines the multimedia contract covered by DS004-ffmpeg-media-processing. |
+| [DS005-runtime-invariants](specsLoader.html?spec=DS005-runtime-invariants.md) | Defines the multimedia contract covered by DS005-runtime-invariants. |

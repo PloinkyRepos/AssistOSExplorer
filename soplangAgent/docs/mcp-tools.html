@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.esm.min.mjs"; mermaid.initialize({ startOnLoad: true, theme: "neutral" });</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>soplangBuilder Docs - MCP Tools</title>
@@ -23,12 +24,6 @@
                         <a href="configuration.html">Manifest and Environment</a>
                     </nav>
                 </div>
-                <div class="doc-sidebar__group">
-                    <p class="doc-sidebar__group-title">Specifications</p>
-                    <nav>
-                        <a href="specsLoader.html?spec=matrix.md">Design Specifications</a>
-                    </nav>
-                </div>
             </aside>
 
             <div class="doc-main">
@@ -40,7 +35,7 @@
 
                 <section>
                     <h2>Current Tool Matrix</h2>
-                    <table>
+                    <div class="table-wrap"><table>
                         <thead>
                             <tr>
                                 <th>Tool Name</th>
@@ -85,7 +80,7 @@
                                 <td>Execute one discovered Achilles skill by name.</td>
                             </tr>
                         </tbody>
-                    </table>
+                    </table></div>
                 </section>
 
                 <section>
@@ -108,7 +103,7 @@
         </div>
     </main>
 
-    <div id="site-footer"></div>
+    <footer id="site-footer" class="site-footer"></footer>
     <script src="partials-loader.js"></script>
 </body>
 </html>

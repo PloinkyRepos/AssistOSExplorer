@@ -1,0 +1,39 @@
+{
+  "container": "docker.io/assistos/ploinky-node:24-bookworm-tools",
+  "lite-sandbox": true,
+  "runtime": {
+    "resources": {
+      "persistentStorage": {
+        "key": "dpu-data",
+        "containerPath": "/dpu-data"
+      },
+      "env": {
+        "DPU_DATA_ROOT": "{{STORAGE_CONTAINER_PATH}}",
+        "DPU_WORKSPACE_ROOT": "{{WORKSPACE_ROOT}}",
+        "DPU_MASTER_KEY": "{{generatedSecret:DPU_MASTER_KEY}}"
+      }
+    }
+  },
+  "profiles": {
+    "default": {
+      "env": [
+        "ASSISTOS_FS_ROOT",
+        "WORKSPACE_ROOT"
+      ]
+    }
+  },
+  "cli": "node /code/src/index.mjs",
+  "webchat": {
+    "forwardEnvelope": true
+  },
+  "ideSettings": [
+    {
+      "key": "dpu-data-sources",
+      "label": "Data Sources",
+      "scope": "workspace",
+      "pluginKey": "dpuAgent/dpu-runtime-support",
+      "settingsComponent": "dpu-data-sources-settings",
+      "adminOnly": true
+    }
+  ]
+}

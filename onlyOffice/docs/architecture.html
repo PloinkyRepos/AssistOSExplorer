@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>OnlyOffice Documentation - Architecture</title><link rel="stylesheet" href="styles.css"><script type="module">import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs'; mermaid.initialize({ startOnLoad: true, theme: 'neutral' });</script></head>
+<body>
+  <div id="site-header"></div>
+  <main class="content content--with-sidebar"><div class="doc-layout">
+    <aside class="doc-sidebar" aria-label="OnlyOffice documentation navigation"><div class="doc-sidebar__group"><p class="doc-sidebar__group-title">Documentation</p><nav><a href="index.html">Overview</a><a href="architecture.html" aria-current="page">Architecture</a><a href="execution-workflow.html">Execution workflow</a><a href="integrations.html">Integrations</a><a href="configuration.html">Configuration</a></nav></div></aside>
+    <div class="doc-main">
+      <p class="breadcrumbs"><a href="index.html">Documentation</a> / Architecture</p><section class="lead"><h1>Architecture</h1><p>The OnlyOffice integration separates authenticated <a href="wiki.html#definition-explorer">Explorer</a> session control, public editor transport, internal DocumentServer services, and the storage authority selected for each document.</p></section>
+      <section><h2>Control And Editor Boundaries</h2><p>The control service on target 7000 authenticates Explorer requests, resolves workspace or Confidential storage, creates session state, and signs short-lived editor configuration material. The public editor transport on target 8080 accepts only the <a href="wiki.html#definition-forwarding-tuple">forwarding tuple</a> installed by the Router and strips browser credentials before proxying.</p></section>
+      <section><h2>DocumentServer Services</h2><p><a href="wiki.html#definition-documentserver">DocumentServer</a>, PostgreSQL, RabbitMQ with the Erlang Port Mapper Daemon, and optional Redis remain internal <a href="wiki.html#definition-support-services">support services</a> of the pinned image. OnlyOffice starts them through the manifest entrypoint and verifies their listeners, files, and process ownership before declaring the runtime ready. Router targets do not create physical-host port publications.</p></section>
+      <section><h2>Storage Ownership</h2><p>Ordinary workspace paths use the configured workspace store. Confidential paths use a Router-minted <a href="wiki.html#definition-confidential-delegation"><code>dpuConfidential</code> delegation</a>. The agent passes that delegation to <code>dpuAgent</code> for authorized reads, writes, and listing and rejects a Confidential session without a valid delegation.</p></section>
+    </div>
+  </div></main>
+  <footer id="site-footer" class="site-footer"></footer><script src="partials-loader.js"></script>
+</body>
+</html>

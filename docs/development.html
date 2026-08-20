@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Development - Explorer Agent</title>
+    <link rel="stylesheet" href="styles.css">
+    <script type="module">import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs'; mermaid.initialize({ startOnLoad: true, theme: 'neutral' });</script>
+    <script defer src="partials-loader.js"></script>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="header-content">
+                <div class="header-top">
+                    <a href="index.html" class="logo">
+                        <div class="logo-icon">🚀</div>
+                        <span>Explorer Agent</span>
+                    </a>
+                    <button class="theme-toggle" id="themeToggle">🌙</button>
+                </div>
+                <nav>
+                    <ul>
+                        <li><a href="index.html">Home</a></li>
+                        <li><a href="workspace-operations.html">Workspace Operations</a></li>
+                        <li><a href="documents.html">Document Model &amp; Editing</a></li>
+                        <li><a href="architecture.html">Architecture</a></li>
+                        <li><a href="backend.html">Backend</a></li>
+                        <li><a href="plugins.html">Plugins</a></li>
+                        <li><a href="agents.html">Agents &amp; Plugins</a></li>
+                        <li><a href="plugins.html#example">Authoring Example</a></li>
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <div class="doc-layout">
+            <aside class="sidebar">
+                <h3>Development</h3>
+                <ul>
+                    <li><a href="#working-context">Working Context</a></li>
+                    <li><a href="#bootstrap-flow">Bootstrap Flow</a></li>
+                    <li><a href="#verification">Verification</a></li>
+                </ul>
+            </aside>
+            <div class="content-wrapper">
+            <div class="doc-section" id="working-context">
+                <h1>Development</h1>
+                <p>Explorer development happens inside the running workspace rather than in a detached frontend sandbox. That is important because the behaviors developers usually touch, such as filesystem routing, runtime plugin discovery, HTML preview, and dependent-agent availability, all depend on the surrounding Ploinky environment. This page is therefore not a full architecture guide; it is the short operational reference for getting a local Explorer workspace into a useful development state and checking that the current runtime assumptions still hold.</p>
+                <p>The practical implication is simple: changes should be evaluated in the same setup where Explorer is the static agent, the workspace root is mounted, and repo-scoped static paths are reachable through the router. If that context is missing, many issues that look like UI bugs are actually environment mismatches.</p>
+            </div>
+
+            <div class="doc-section" id="bootstrap-flow">
+                <h2>Bootstrap Flow</h2>
+                <p>From a Ploinky workspace that contains the AchillesIDE repository, the usual startup path is:</p>
+<pre><code>ploinky start explorer
+</code></pre>
+                <p>Ploinky owns repository and agent enablement, default workspace-root configuration, dependency startup, and router launch for this entrypoint. Open the dashboard at <code>http://127.0.0.1:8080/dashboard</code>, then open Explorer at <code>http://127.0.0.1:8080/#file-exp/</code>.</p>
+                <p>The main Explorer UI is served at <code>http://127.0.0.1:8080/#file-exp/</code>. HTML preview is expected to use repo-scoped file URLs rather than a flattened docs namespace. A representative preview URL looks like:</p>
+<pre><code>/.ploinky/repos/AchillesIDE/docs/development.html?__previewReload=1</code></pre>
+                <p>Within that running workspace, the Explorer UI is organized around the host page <code>file-exp</code> and its dedicated presenters such as <code>file-exp-entries</code>, <code>file-exp-preview</code>, and <code>html-web-view</code>. The component registry source of truth remains <code>explorer/webskel.json</code>, so UI refactors should be checked against that file rather than inferred from screenshots or browser state.</p>
+            </div>
+
+            <div class="doc-section" id="verification">
+                <h2>Verification</h2>
+                <p>The fastest useful checks confirm Explorer's runtime contracts. Repo-scoped static documentation paths must resolve through the router, and frontend edits must continue to use the documented component registry and preview routes. Typical checks are:</p>
+<pre><code># Unit tests
+cd explorer
+npm test
+
+# Spot-check repo-scoped static docs path
+curl -I "http://127.0.0.1:8080/.ploinky/repos/AchillesIDE/docs/development.html"
+
+# Spot-check shared static asset path
+curl -I "http://127.0.0.1:8080/.ploinky/repos/AchillesIDE/docs/styles.css"
+</code></pre>
+                <p>For full architecture/backend details, see <a href="architecture.html#development">Architecture &rarr; Development</a> and <a href="backend.html">Backend</a>.</p>
+            </div>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 <a href="https://github.com/AssistOS-AI/ploinky/blob/master/README.md" target="_blank" rel="noopener noreferrer">Ploinky Project</a>. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script>
+        // Theme toggle
+        const themeToggle = document.getElementById('themeToggle');
+        const body = document.body;
+        const themes = ['light', 'dark', 'blue'];
+        const themeIcons = {
+            light: '🌙', // Icon to show for switching to dark
+            dark: '🔵',  // Icon to show for switching to blue
+            blue: '☀️'   // Icon to show for switching to light
+        };
+
+        const applyTheme = (theme) => {
+            body.setAttribute('data-theme', theme);
+            localStorage.setItem('theme', theme);
+            themeToggle.textContent = themeIcons[theme];
+        };
+        
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        applyTheme(savedTheme);
+        
+        themeToggle.addEventListener('click', () => {
+            const currentTheme = body.getAttribute('data-theme');
+            const currentIndex = themes.indexOf(currentTheme);
+            const nextIndex = (currentIndex + 1) % themes.length;
+            const newTheme = themes[nextIndex];
+            applyTheme(newTheme);
+        });
+    </script>
+</body>
+</html>

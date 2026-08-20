@@ -8,8 +8,8 @@ OnlyOffice owns the runtime boundary for the workspace OnlyOffice Document Serve
 
 1. Read the nearest parent `AGENTS.md` for workspace-wide rules.
 2. Read `docs/index.html` for the local documentation entry point.
-3. Read `docs/specs/matrix.md` and `docs/specs/DS01-ploinky-agent-invariant.md` before changing runtime ownership, manifests, hooks, secrets, ports, readiness, storage, or Explorer integration.
-4. Read `../docs/specs/DS04-onlyoffice-integration.md` and `../docs/specs/DS06-ploinky-runtime-invariants.md` before changing Explorer-facing Office behavior.
+3. Read `docs/specs/matrix.md` and `docs/specs/DS001-coding-style.md` before changing runtime ownership, manifests, hooks, secrets, ports, readiness, storage, or Explorer integration.
+4. Read `../docs/specs/DS007-onlyoffice.md` and `../docs/specs/DS002-ploinky-runtime.md` before changing Explorer-facing Office behavior.
 
 ## Repository Rules
 
@@ -24,9 +24,9 @@ OnlyOffice owns the runtime boundary for the workspace OnlyOffice Document Serve
 
 - `manifest.json`
 - `scripts/hooks/preinstall.sh`
-- `docs/specs/DS01-ploinky-agent-invariant.md`
-- `../docs/specs/DS04-onlyoffice-integration.md`
-- `../docs/specs/DS06-ploinky-runtime-invariants.md`
+- `docs/specs/DS001-coding-style.md`
+- `../docs/specs/DS007-onlyoffice.md`
+- `../docs/specs/DS002-ploinky-runtime.md`
 
 ## Validation
 

@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.esm.min.mjs"; mermaid.initialize({ startOnLoad: true, theme: "neutral" });</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>tasksAgent Docs - Tool Execution Workflow</title>
@@ -23,12 +24,6 @@
                         <a href="configuration.html">Manifest and Environment</a>
                     </nav>
                 </div>
-                <div class="doc-sidebar__group">
-                    <p class="doc-sidebar__group-title">Specifications</p>
-                    <nav>
-                        <a href="specsLoader.html?spec=matrix.md">Design Specifications</a>
-                    </nav>
-                </div>
             </aside>
 
             <div class="doc-main">
@@ -38,28 +33,24 @@
                 </section>
 
                 <section>
-                    <h2>End-to-End Flow Diagram</h2>
-                    <pre><code>Explorer user interface (UI)
-    |
-    | callAgentTool("tasksAgent", toolName, args)
-    v
-Ploinky Router -> AgentServer (/mcp)
-    |
-    | execute command from mcp-config.json
-    v
-tasksAgent/tools/tasks_tool.sh
-    |
-    | start Node process
-    v
-tasksAgent/tools/tasks_tool.mjs
-    |
-    | parse MCP envelope and normalize input
-    | resolve repo root from repoPath
-    | validate backlog/history path constraints
-    | execute task operation
-    | parse or serialize backlog/history markdown
-    v
-JSON result -> MCP response -> Explorer user interface</code></pre>
+                    <h2>End-to-End Flow</h2>
+                    <figure class="diagram end-to-end-flow"><pre class="mermaid">flowchart LR
+  Explorer[Explorer] --> Router[Ploinky Router]
+  Router --> AgentServer[AgentServer MCP]
+  AgentServer --> Wrapper[Tasks tool wrapper]
+  Wrapper --> Service[Backlog service]
+  Service --> Markdown[Validated Markdown backlog]
+  Markdown --> Result[JSON result]
+  classDef client fill:#e8f1ff,stroke:#2457a5,color:#17202a
+  classDef routing fill:#edf3f8,stroke:#536273,color:#17202a
+  classDef runtime fill:#eaf7f0,stroke:#18794e,color:#17202a
+  classDef state fill:#f5efff,stroke:#7c3aed,color:#17202a
+  classDef result fill:#fff4e5,stroke:#a65d03,color:#17202a
+  class Explorer client
+  class Router,AgentServer routing
+  class Wrapper,Service runtime
+  class Markdown state
+  class Result result</pre><figcaption><em>A task request is validated before the backlog file is changed.</em></figcaption></figure>
                 </section>
 
                 <section>
@@ -86,7 +77,7 @@ JSON result -> MCP response -> Explorer user interface</code></pre>
         </div>
     </main>
 
-    <div id="site-footer"></div>
+    <footer id="site-footer" class="site-footer"></footer>
     <script src="partials-loader.js"></script>
 </body>
 </html>

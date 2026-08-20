@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.esm.min.mjs"; mermaid.initialize({ startOnLoad: true, theme: "neutral" });</script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>dpuAgent Docs - Integrations</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="site-header"></div>
+
+    <main class="content content--with-sidebar">
+        <div class="doc-layout">
+            <aside class="doc-sidebar" aria-label="dpuAgent documentation navigation">
+                <div class="doc-sidebar__group">
+                    <p class="doc-sidebar__group-title">Documentation</p>
+                    <nav>
+                        <a href="index.html">Overview</a>
+                        <a href="architecture.html">Architecture</a>
+                        <a href="execution-workflow.html">Tool Execution Workflow</a>
+                        <a href="mcp-tools.html">MCP Tools</a>
+                        <a href="integrations.html" aria-current="page">Ploinky and Explorer Integration</a>
+                        <a href="configuration.html">Manifest and Environment</a>
+                        <a href="research-data.html">Research Data</a>
+                    </nav>
+                </div>
+            </aside>
+
+            <div class="doc-main">
+                <section class="lead">
+                    <h1>Ploinky and Explorer Integration</h1>
+                    <p>`dpuAgent` is not a standalone product surface in practice. It exists because Explorer and related plugins need a confidential backend with a stable Model Context Protocol (MCP) contract.</p>
+                </section>
+
+                <section>
+                    <h2>Integration With Ploinky</h2>
+                    <p>Ploinky hosts the agent through its manifest and exposes the tool surface defined in <code>mcp-config.json</code>. When Explorer or another caller invokes a DPU tool, the runtime executes <code>tools/dpu_tool.sh</code> and returns the serialized result of the corresponding DPU operation.</p>
+                </section>
+
+                <section>
+                    <h2>Integration With Explorer</h2>
+                    <p>Explorer uses DPU for the virtual confidential surface rather than for normal filesystem browsing. The agent exposes the actor-owned <code>/Confidential/My Space</code> folder plus named shared, secret, research, job, and role-dependent audit projections. Ordinary confidential folders can be nested beneath the owned tree through their <code>parentId</code>; the named projections do not restrict which nested folders a user can create. DPU comments and permissions are surfaced through Explorer-side plugins instead of filesystem metadata.</p>
+                </section>
+
+                <section>
+                    <h2>Explorer Plugins</h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Plugin</th>
+                                <th>Role</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>dpu-runtime-support</code></td>
+                                <td>Explorer runtime support and permissions modal integration.</td>
+                            </tr>
+                            <tr>
+                                <td><code>dpu-comments-popover</code></td>
+                                <td>Confidential comments user interface backed by <code>dpu_confidential_comment_add</code>, <code>dpu_confidential_comment_delete</code>, and <code>dpu_confidential_get</code>.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <footer id="site-footer" class="site-footer"></footer>
+    <script src="partials-loader.js"></script>
+</body>
+</html>

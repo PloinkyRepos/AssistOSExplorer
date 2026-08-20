@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Backend - Explorer Agent</title>
+    <link rel="stylesheet" href="styles.css">
+    <script type="module">import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs'; mermaid.initialize({ startOnLoad: true, theme: 'neutral' });</script>
+    <script defer src="partials-loader.js"></script>
+</head>
+<body>
+<header>
+    <div class="container">
+        <div class="header-content">
+            <div class="header-top">
+                <a href="index.html" class="logo">
+                    <div class="logo-icon">🚀</div>
+                    <span>Explorer Agent</span>
+                </a>
+                <button class="theme-toggle" id="themeToggle">🌙</button>
+            </div>
+            <nav>
+                    <ul>
+                        <li><a href="index.html">Home</a></li>
+                    <li><a href="workspace-operations.html">Workspace Operations</a></li>
+                    <li><a href="documents.html">Document Model &amp; Editing</a></li>
+                    <li><a href="architecture.html">Architecture</a></li>
+                    <li><a href="backend.html" class="active">Backend</a></li>
+                    <li><a href="plugins.html">Plugins</a></li>
+                    <li><a href="agents.html">Agents &amp; Plugins</a></li>
+                    <li><a href="plugins.html#example">Authoring Example</a></li>
+                </ul>
+            </nav>
+        </div>
+    </div>
+</header>
+
+<main>
+    <div class="doc-layout">
+        <aside class="sidebar">
+            <h3>Backend</h3>
+            <ul>
+                <li><a href="#backend-role">Backend Role</a></li>
+                <li><a href="#filesystem-mcp">Filesystem MCP</a></li>
+                <li><a href="#agent-integrations">Agent Integrations</a></li>
+                <li><a href="#operations">Operational Notes</a></li>
+            </ul>
+        </aside>
+
+        <div class="content-wrapper">
+            <div class="doc-section" id="backend-role">
+                <h1>Explorer Backend</h1>
+                <p>The Explorer backend gives the workspace UI controlled filesystem access and plugin discovery through <a href="wiki.html#definition-mcp">Model Context Protocol (MCP)</a> tools. It validates every filesystem request against configured roots and exposes only the operations owned by Explorer.</p>
+                <p>Domain behavior remains in dedicated agents. Explorer may route a user action to Git, DPU, SOPLang, WebMeet, or another enabled service, but it does not absorb those agents' execution models into its backend. This page documents Explorer-owned backend behavior and identifies integration boundaries without duplicating agent documentation.</p>
+            </div>
+
+            <div class="doc-section" id="filesystem-mcp">
+                <h2>Filesystem MCP</h2>
+                <p><strong>MCP</strong>, the Model Context Protocol, is the contract Explorer uses to expose filesystem-safe operations to the browser and to other agents. In Explorer, tool definitions live in <code>utils/server/tool-definitions.mjs</code>, dispatch lives in <code>utils/server/tool-runtime.mjs</code>, and the process entry point is <code>tools/explorer_tool.mjs</code>, invoked by <code>tools/explorer_tool.sh</code>. Every filesystem call is mediated by an allowed-roots model before it touches the workspace.</p>
+                <p>Allowed roots are derived from <code>ASSISTOS_FS_ROOT</code> or <code>MCP_FS_ROOT</code>. Relative paths are resolved inside the first allowed root, then normalized and validated before execution. That means the browser can request reads, writes, moves, copies, searches, and directory traversal without gaining unconstrained access to the host filesystem. Violations are surfaced as MCP errors rather than being silently coerced into risky behavior.</p>
+                <p>The Explorer backend runs through the shared Ploinky <code>AgentServer</code> and the command-backed tools declared in <code>explorer/mcp-config.json</code>. Those tools serve workspace-confined filesystem operations and aggregate plugin manifests from enabled agent or repo-local plugin folders. The browser reaches them only through the authenticated router MCP proxy, which mints the secure-wire invocation required by AgentServer. MCP execution failures remain errors at this boundary and are not parsed as plugin catalogs or directory listings.</p>
+                <p>Operationally, the filesystem MCP surface covers several capability groups rather than one giant undifferentiated tool list. It supports text and media reads, atomic writes and edits, directory listing and traversal, move/copy/delete operations within the allowed roots, metadata and content searches, and plugin-catalog introspection through <code>collect_ide_plugins</code>. Calls remain stateless from the client point of view: the client sends a path and arguments, and the backend validates the request against the configured roots on every call.</p>
+                <p>For the current Explorer-owned tool list, use the dedicated <a href="mcp-tools.html">Explorer MCP tools reference</a>.</p>
+                <p>Blob handling follows a related but separate router convention. In the Ploinky model, the router can proxy <code>/blobs/&lt;agent&gt;</code> to an agent that implements blob handlers and returns JSON describing the stored payload. The Explorer filesystem tool runtime does not itself implement the blob endpoint. Filesystem MCP tools and blob-capable agent behavior are therefore separate contracts.</p>
+                <p>A representative MCP request looks like this:</p>
+                <pre><code>// Request (read a file head)
+{
+  "method": "read_text_file",
+  "params": { "path": "README.md", "head": 20 }
+}
+
+// Response (success)
+{
+  "content": "# Explorer Agent...",
+  "truncated": true
+}
+
+// Response (error outside roots)
+{
+  "error": "Path is outside allowed directories"
+}</code></pre>
+                <p>Tip: prefer relative paths rooted in the first allowed directory to avoid ambiguity when multiple
+                    roots are configured.</p>
+            </div>
+
+            <div class="doc-section" id="agent-integrations">
+                <h2>Agent Integration Boundaries</h2>
+                <p>Explorer can expose UI actions that delegate structured document synchronization, execution, and build requests to <code>soplangAgent</code>. The SOPLang agent owns those operations, their runtime state, their MCP contract, and their diagnostics. Explorer owns only the host interaction and the explicit handoff.</p>
+                <p>Use the <a href="../soplangAgent/docs/index.html">SOPLang Agent overview</a> for its product role, the <a href="../soplangAgent/docs/architecture.html">SOPLang architecture</a> for runtime ownership, the <a href="../soplangAgent/docs/execution-workflow.html">execution workflow</a> for synchronization and build behavior, and the <a href="../soplangAgent/docs/mcp-tools.html">SOPLang MCP tools reference</a> for callable interfaces.</p>
+            </div>
+
+            <div class="doc-section" id="operations">
+                <h2>Operational Notes</h2>
+                <p>If MCP reports “Path outside allowed roots”, verify <code>ASSISTOS_FS_ROOT</code> or <code>MCP_FS_ROOT</code> and make sure the requested path is inside an allowed root. Filesystem path validation, Explorer tool dispatch, and plugin-catalog failures belong to the Explorer backend.</p>
+                <p>Failures returned by a delegated domain action belong to the agent that owns that action. Use the linked agent documentation for its runtime configuration, logs, and troubleshooting contract rather than treating Explorer as a shared backend for every workspace service.</p>
+            </div>
+        </div>
+    </div>
+</main>
+
+<footer>
+    <div class="container">
+        <p>&copy; 2025 <a href="https://github.com/AssistOS-AI/ploinky/blob/master/README.md" target="_blank" rel="noopener noreferrer">Ploinky Project</a>. All rights reserved.</p>
+        </div>
+    </footer>
+
+<script>
+    // Theme toggle
+    const themeToggle = document.getElementById('themeToggle');
+    const body = document.body;
+    const themes = ['light', 'dark', 'blue'];
+    const themeIcons = {
+        light: '🌙',
+        dark: '🔵',
+        blue: '☀️'
+    };
+
+    const applyTheme = (theme) => {
+        body.setAttribute('data-theme', theme);
+        localStorage.setItem('theme', theme);
+        themeToggle.textContent = themeIcons[theme];
+    };
+
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    applyTheme(savedTheme);
+
+    themeToggle.addEventListener('click', () => {
+        const currentTheme = body.getAttribute('data-theme');
+        const currentIndex = themes.indexOf(currentTheme);
+        const nextIndex = (currentIndex + 1) % themes.length;
+        const newTheme = themes[nextIndex];
+        applyTheme(newTheme);
+    });
+</script>
+</body>
+</html>

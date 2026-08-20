@@ -1,0 +1,20 @@
+---
+title: DS009-workspace-monitoring
+summary: Defines the Workspace Monitor integration as an agent-owned operational view mounted in Explorer.
+---
+
+# DS009 Workspace Monitoring
+
+## Introduction
+
+Workspace monitoring is surfaced in Explorer as an integration while the Workspace Monitor agent owns collection, persistence, and its operational APIs.
+
+## Core Content
+
+Explorer may mount the Workspace Monitor plugin only when the runtime plugin policy enables it. The plugin must show agent-provided operational data and actionable failure states without assuming that browser data is authoritative.
+
+The Workspace Monitor agent must own collection intervals, stored observations, access checks, and MCP operations. Explorer must not write monitoring state directly or present a healthy status when the monitor has not supplied a verified result.
+
+## Conclusion
+
+The monitoring surface extends the workspace shell without merging operational state into Explorer.

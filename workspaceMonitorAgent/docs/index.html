@@ -1,13 +1,59 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><title>Workspace Monitor Agent</title></head>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Workspace Monitor Documentation</title>
+  <link rel="stylesheet" href="styles.css">
+  <script type="module">import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs'; mermaid.initialize({ startOnLoad: true, theme: 'neutral' });</script>
+</head>
 <body>
-  <main>
-    <h1>Workspace Monitor Agent</h1>
-    <p>Administrator-only live workspace monitoring with durable SQLite history for all available Agents aggregate, Router, and individual runtime CPU and memory samples.</p>
-    <p>Thresholds classify and display spikes only for the aggregate Agents and Router series; individual runtime history is independent of those thresholds. History queries support up to 50,000 points per series.</p>
-    <p>The Resources tab selects the first runtime by default and provides a recent CPU chart, current CPU and memory values, and persisted CPU and memory history for each selectable runtime.</p>
-    <p>See <a href="specs/DS001-runtime.md">the runtime contract</a>.</p>
+  <div data-include="partials/header.html"></div>
+  <main class="page content--with-sidebar">
+    <div class="doc-layout">
+      <aside class="doc-sidebar" aria-label="Workspace Monitor documentation navigation">
+        <div class="doc-sidebar__group">
+          <p class="doc-sidebar__group-title">Documentation</p>
+          <nav>
+            <a href="index.html" aria-current="page">Overview</a>
+            <a href="architecture.html">Architecture</a>
+            <a href="execution-workflow.html">Execution workflow</a>
+            <a href="mcp-tools.html">MCP tools</a>
+            <a href="integrations.html">Integrations</a>
+            <a href="configuration.html">Configuration</a>
+          </nav>
+        </div>
+      </aside>
+      <div class="page__panel">
+        <section class="lead">
+          <h1>Workspace Monitor Agent</h1>
+          <p>Workspace Monitor gives an administrator a live view of workspace and runtime CPU and memory usage, a bounded SQLite history, and access to retained Ploinky Router and Policy logs. The agent runs beside Ploinky and is surfaced in Explorer through the <code>workspace-monitor</code> plugin.</p>
+        </section>
+        <section>
+          <h2>Administrative Boundary</h2>
+          <p>All six Model Context Protocol tools are administrator-only. The agent does not monitor arbitrary host processes, expose a public metrics endpoint, or allow ordinary participants to change thresholds or read Ploinky logs.</p>
+        </section>
+        <section>
+          <h2>System Outline</h2>
+          <figure class="diagram">
+            <pre class="mermaid">flowchart LR
+  Explorer[Explorer plugin] -->|administrator action| Agent[Workspace Monitor]
+  Agent --> Collector[Metrics collector]
+  Collector --> Stream[Ploinky private metrics stream]
+  Collector --> SQLite[(SQLite history)]
+  Agent --> Logs[Ploinky private log service]
+  Agent --> Supervisor[Supervisor and maintenance]</pre>
+            <figcaption><em>Workspace Monitor joins Explorer administration to private Ploinky data and durable local history.</em></figcaption>
+          </figure>
+        </section>
+        <section>
+          <h2>Development Contract</h2>
+          <p>The design specifications define the monitoring, storage, authorization, and log-access contracts. <a href="specsLoader.html?spec=DS001-coding-style.md"><code>DS001-coding-style.md</code></a> is the canonical source for coding style and test organization, while the <a href="wiki.html">Workspace Monitor wiki</a> defines project terminology.</p>
+        </section>
+      </div>
+    </div>
   </main>
+  <footer class="site-footer" data-include="partials/footer.html"></footer>
+  <script src="partials-loader.js"></script>
 </body>
 </html>

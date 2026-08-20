@@ -1,0 +1,112 @@
+<svg viewBox="0 0 1440 820" role="img" aria-labelledby="architecture-diagram-title architecture-diagram-description" xmlns="http://www.w3.org/2000/svg">
+  <title id="architecture-diagram-title">Current Explorer architecture</title>
+  <desc id="architecture-diagram-description">A browser reaches the Explorer workspace through the Ploinky Router. Explorer uses WebSkel for its shell, TinyMDE for ordinary Markdown source editing, and an Explorer-owned Automerge CRDT service for structured Markdown and SCRIPTA collaboration. Explorer mounts approved plugins, routes domain actions to agent-owned services, and confines persistence to allowed workspace roots and agent-owned data.</desc>
+  <style>
+    .runtime { fill: #0b1220; stroke: #64748b; stroke-width: 2; stroke-dasharray: 10 7; }
+    .group { fill: #111827; stroke: #475569; stroke-width: 1.5; stroke-dasharray: 7 5; }
+    .node { fill: #0f172a; stroke: #38bdf8; stroke-width: 2; }
+    .service { fill: #172033; stroke: #818cf8; stroke-width: 1.5; }
+    .storage { fill: #172033; stroke: #34d399; stroke-width: 2; }
+    .label { fill: #e2e8f0; font-size: 17px; font-family: Arial, sans-serif; font-weight: 600; }
+    .small { fill: #cbd5e1; font-size: 13px; font-family: Arial, sans-serif; }
+    .muted { fill: #94a3b8; font-size: 13px; font-family: Arial, sans-serif; }
+    .group-label { fill: #cbd5e1; font-size: 15px; font-family: Arial, sans-serif; font-weight: 600; }
+    .arrow { stroke: #38bdf8; stroke-width: 2.5; marker-end: url(#arrowhead); fill: none; }
+    .green-arrow { stroke: #34d399; stroke-width: 2; marker-end: url(#green-arrowhead); fill: none; }
+    .dashed-arrow { stroke: #a78bfa; stroke-width: 2; stroke-dasharray: 7 5; marker-end: url(#purple-arrowhead); fill: none; }
+  </style>
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#38bdf8" />
+    </marker>
+    <marker id="green-arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#34d399" />
+    </marker>
+    <marker id="purple-arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#a78bfa" />
+    </marker>
+  </defs>
+
+  <rect class="runtime" x="34" y="28" width="1372" height="764" rx="18" />
+  <text class="label" x="60" y="64">Current Explorer architecture</text>
+  <text class="muted" x="60" y="86">Ploinky routing and lifecycle around the Explorer shell, domain agents, plugins, and workspace data</text>
+
+  <rect class="node" x="590" y="112" width="260" height="92" rx="10" />
+  <text class="label" x="720" y="150" text-anchor="middle">Ploinky Router</text>
+  <text class="small" x="720" y="174" text-anchor="middle">Authenticated entry point</text>
+  <text class="small" x="720" y="192" text-anchor="middle">Static UI, MCP, and HTTP routing</text>
+
+  <rect class="node" x="110" y="112" width="260" height="92" rx="10" />
+  <text class="label" x="240" y="150" text-anchor="middle">User browser</text>
+  <text class="small" x="240" y="174" text-anchor="middle">Explorer workspace UI</text>
+  <text class="small" x="240" y="192" text-anchor="middle">Authenticated and scoped sessions</text>
+
+  <line class="arrow" x1="370" y1="158" x2="580" y2="158" />
+  <text class="muted" x="475" y="143" text-anchor="middle">workspace requests</text>
+
+  <rect class="node" x="470" y="272" width="500" height="170" rx="12" />
+  <text class="label" x="720" y="314" text-anchor="middle">Explorer host shell</text>
+  <text class="small" x="720" y="340" text-anchor="middle">WebSkel SPA, navigation, preview, and runtime plugins</text>
+  <text class="small" x="720" y="362" text-anchor="middle">TinyMDE Markdown source editing and ordinary file saves</text>
+  <text class="small" x="720" y="384" text-anchor="middle">Explorer MCP runtime and filesystem-root enforcement</text>
+  <text class="small" x="720" y="406" text-anchor="middle">Approved applicationPlugins and shared components</text>
+
+  <line class="arrow" x1="650" y1="204" x2="650" y2="262" />
+  <text class="muted" x="667" y="237">static UI + Explorer routes</text>
+
+  <rect class="group" x="1060" y="250" width="280" height="430" rx="14" />
+  <text class="group-label" x="1080" y="280">Agent-owned domain services</text>
+  <text class="muted" x="1080" y="300">Examples; each service owns</text>
+  <text class="muted" x="1080" y="316">its rules and protected state</text>
+
+  <rect class="service" x="1080" y="332" width="240" height="54" rx="8" />
+  <text class="label" x="1200" y="356" text-anchor="middle" font-size="15">Git</text>
+  <text class="small" x="1200" y="375" text-anchor="middle">repositories and Git actions</text>
+
+  <rect class="service" x="1080" y="398" width="240" height="54" rx="8" />
+  <text class="label" x="1200" y="422" text-anchor="middle" font-size="15">DPU</text>
+  <text class="small" x="1200" y="441" text-anchor="middle">confidential and research data</text>
+
+  <rect class="service" x="1080" y="464" width="240" height="54" rx="8" />
+  <text class="label" x="1200" y="488" text-anchor="middle" font-size="15">SOPLang</text>
+  <text class="small" x="1200" y="507" text-anchor="middle">build and execution</text>
+
+  <rect class="service" x="1080" y="530" width="240" height="54" rx="8" />
+  <text class="label" x="1200" y="554" text-anchor="middle" font-size="15">WebMeet</text>
+  <text class="small" x="1200" y="573" text-anchor="middle">rooms and media</text>
+
+  <rect class="service" x="1080" y="596" width="240" height="54" rx="8" />
+  <text class="label" x="1200" y="620" text-anchor="middle" font-size="15">… other agents</text>
+  <text class="small" x="1200" y="639" text-anchor="middle">Tasks, OnlyOffice, monitoring, and more</text>
+
+  <rect class="node" x="110" y="272" width="260" height="150" rx="12" />
+  <text class="label" x="240" y="314" text-anchor="middle">IDE plugin bundles</text>
+  <text class="small" x="240" y="340" text-anchor="middle">Agent-owned IDE-plugins</text>
+  <text class="small" x="240" y="362" text-anchor="middle">Manifest validation and dependency checks</text>
+  <text class="small" x="240" y="384" text-anchor="middle">Mounted only when policy allows</text>
+
+  <path class="dashed-arrow" d="M370 347 C405 347, 420 347, 460 347" />
+  <text class="muted" x="415" y="331" text-anchor="middle">discover + mount</text>
+
+  <line class="arrow" x1="970" y1="347" x2="1050" y2="347" />
+  <text class="muted" x="1010" y="331" text-anchor="middle">route to owner</text>
+
+  <rect class="node" x="110" y="500" width="500" height="100" rx="12" />
+  <text class="label" x="360" y="536" text-anchor="middle">Automerge CRDT collaboration service</text>
+  <text class="small" x="360" y="560" text-anchor="middle">Structured Markdown and SCRIPTA merge operations</text>
+  <text class="small" x="360" y="580" text-anchor="middle">Private collaboration state and Markdown materialization</text>
+
+  <line class="arrow" x1="470" y1="442" x2="470" y2="490" />
+  <text class="muted" x="490" y="472">structured collaboration</text>
+
+  <rect class="storage" x="210" y="704" width="1020" height="58" rx="10" />
+  <text class="label" x="720" y="730" text-anchor="middle">Allowed workspace roots and agent-owned persistent data</text>
+  <text class="small" x="720" y="749" text-anchor="middle">Explorer filesystem access is root-confined; protected services keep their own durable state</text>
+
+  <line class="green-arrow" x1="1200" y1="680" x2="1200" y2="696" />
+  <line class="green-arrow" x1="470" y1="600" x2="470" y2="696" />
+  <line class="green-arrow" x1="850" y1="442" x2="850" y2="696" />
+  <text class="muted" x="866" y="678">ordinary source save</text>
+
+  <text class="muted" x="60" y="780">Blue: routed user and domain traffic · Purple dashed: plugin discovery · Green: controlled storage access</text>
+</svg>

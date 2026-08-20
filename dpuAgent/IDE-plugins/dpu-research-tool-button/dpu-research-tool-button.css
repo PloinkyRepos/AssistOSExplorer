@@ -1,0 +1,10 @@
+dpu-research-tool-button {
+    display: inline-flex;
+    align-items: stretch;
+    justify-content: center;
+    min-width: 0;
+}
+
+dpu-research-tool-button[data-host-orientation="vertical"] .app-plugin-tool-button {
+    width: 100%;
+}

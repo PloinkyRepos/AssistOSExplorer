@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.esm.min.mjs"; mermaid.initialize({ startOnLoad: true, theme: "neutral" });</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>soplangBuilder Docs - Tool Execution Workflow</title>
@@ -23,12 +24,6 @@
                         <a href="configuration.html">Manifest and Environment</a>
                     </nav>
                 </div>
-                <div class="doc-sidebar__group">
-                    <p class="doc-sidebar__group-title">Specifications</p>
-                    <nav>
-                        <a href="specsLoader.html?spec=matrix.md">Design Specifications</a>
-                    </nav>
-                </div>
             </aside>
 
             <div class="doc-main">
@@ -38,33 +33,21 @@
                 </section>
 
                 <section>
-                    <h2>End-to-End Flow Diagram</h2>
-                    <pre><code>Explorer user interface (UI) / MCP Browser Client
-        |
-        | callTool(name, input)
-        v
-Ploinky Router -> AgentServer (/mcp)
-        |
-        | spawn command from mcp-config.json
-        v
-/code/soplang-tool.sh (TOOL_NAME=...)
-        |
-        | read JSON payload from stdin
-        | deriveInvocation(toolName, payload)
-        v
-Node wrapper runtime
-        |
-        | register SOPLang plugins
-        | register AchillesSkills plugin
-        | register SoplangBuilder plugin
-        | discover skills and register as SOPLang commands
-        v
-targetPlugin[targetMethod](...params)
-        |
-        | optional workspace.forceSave() (tool specific)
-        | workspace.shutDown() (always at wrapper exit)
-        v
-JSON result -> MCP response -> Explorer user interface</code></pre>
+                    <h2>End-to-End Flow</h2>
+                    <figure class="diagram end-to-end-flow"><pre class="mermaid">flowchart LR
+  Explorer[Explorer] --> Router[Ploinky Router]
+  Router --> AgentServer[AgentServer MCP]
+  AgentServer --> Wrapper[SOPLang tool wrapper]
+  Wrapper --> Runtime[SOPLang runtime]
+  Runtime --> Result[JSON result]
+  classDef client fill:#e8f1ff,stroke:#2457a5,color:#17202a
+  classDef routing fill:#edf3f8,stroke:#536273,color:#17202a
+  classDef runtime fill:#eaf7f0,stroke:#18794e,color:#17202a
+  classDef result fill:#fff4e5,stroke:#a65d03,color:#17202a
+  class Explorer client
+  class Router,AgentServer routing
+  class Wrapper,Runtime runtime
+  class Result result</pre><figcaption><em>SOPLang execution stays behind the routed MCP tool boundary.</em></figcaption></figure>
                 </section>
 
                 <section>
@@ -91,7 +74,7 @@ JSON result -> MCP response -> Explorer user interface</code></pre>
         </div>
     </main>
 
-    <div id="site-footer"></div>
+    <footer id="site-footer" class="site-footer"></footer>
     <script src="partials-loader.js"></script>
 </body>
 </html>

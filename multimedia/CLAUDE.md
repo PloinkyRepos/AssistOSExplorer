@@ -9,7 +9,7 @@ multimedia owns IDE plugins and media-processing helpers for document audio, vid
 1. Read the nearest parent `AGENTS.md` for workspace-wide rules.
 2. Read `docs/index.html` for the local documentation entry point.
 3. Read `docs/specs/matrix.md` and the relevant local DS files before changing behavior.
-4. Read `docs/specs/DS05-ploinky-runtime-invariants.md` before touching auth, routing, guest access, MCP, HTTP services, files, logs, or runtime configuration.
+4. Read `docs/specs/DS005-runtime-invariants.md` before touching auth, routing, guest access, MCP, HTTP services, files, logs, or runtime configuration.
 5. Read `../AGENTS.md` for coding style, module structure, and test-organization rules when that file exists; otherwise inherit the parent repository coding-style authority.
 
 ## Current Skill Catalog
@@ -34,7 +34,7 @@ Uses `docker.io/assistos/ploinky-node:24-bookworm-tools`, `lite-sandbox: true`, 
 ## Key Paths
 
 - `manifest.json`
-- `docs/specs/DS05-ploinky-runtime-invariants.md`
+- `docs/specs/DS005-runtime-invariants.md`
 - `IDE-plugins/`
 - `skills/`
 - `scripts/`

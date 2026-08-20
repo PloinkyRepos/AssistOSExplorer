@@ -57,4 +57,5 @@ Coverage currently includes:
 
 ## Documentation
 
-- [DS01 - Vision](./docs/specs/DS01-Vision.md)
+- [SOPLang specification matrix](./docs/specs/matrix.md)
+- [SOPLang documentation](./docs/index.html)

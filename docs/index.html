@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AchillesIDE Documentation</title>
+  <link rel="stylesheet" href="styles.css">
+  <script type="module">import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs'; mermaid.initialize({ startOnLoad: true, theme: 'neutral' });</script>
+</head>
+<body>
+  <div data-include="partials/header.html"></div>
+  <main class="page"><div class="page__panel">
+    <h1>AchillesIDE</h1>
+    <p>AchillesIDE provides an authenticated Ploinky workspace where Explorer combines filesystem navigation, previews, editing, and enabled agent workflows in one browser application. Explorer remains the shared shell; each domain agent remains responsible for its own protected operations.</p>
+    <h2>How the workspace fits together</h2>
+    <figure class="diagram"><pre class="mermaid">flowchart LR
+      User[Workspace user] --> Router[Ploinky router]
+      Router --> Explorer[Explorer]
+      Explorer --> Files[Workspace files]
+      Explorer --> Plugins[Runtime plugins]
+      Plugins --> Agents[Owning domain agents]
+      Explorer --> DPU[dpuAgent virtual resources]
+      classDef user fill:#e8f1ff,stroke:#2457a5,color:#17202a
+      classDef runtime fill:#eaf7f0,stroke:#18794e,color:#17202a
+      classDef service fill:#fff4e5,stroke:#a65d03,color:#17202a
+      class User user
+      class Router,Explorer runtime
+      class Files,Plugins,Agents,DPU service</pre><figcaption><em>Explorer is the shared workspace surface; protected domain work remains with its owning agent.</em></figcaption></figure>
+    <h2>Core workspace capabilities</h2>
+    <div class="agent-grid">
+      <a class="agent-card" href="workspace-operations.html#file-management"><h3>Files and folders</h3><p>Create, rename, copy, cut, paste, upload, and delete supported workspace entries.</p></a>
+      <a class="agent-card" href="workspace-operations.html#search-replace"><h3>Find and replace</h3><p>Find paths by name, search file content, select matches, and replace within a workspace scope.</p></a>
+      <a class="agent-card" href="workspace-operations.html#settings"><h3>Settings</h3><p>Configure agents, plugins, shortcuts, editor auto-save, theme, avatars, and authorized administration surfaces.</p></a>
+      <a class="agent-card" href="documents.html"><h3>Preview and editing</h3><p>Open source files, Markdown, structured documents, media, and supported Office documents.</p></a>
+    </div>
+    <h2>Read by task</h2>
+    <ul>
+      <li>Read <a href="workspace-operations.html">Workspace operations</a> for navigation, file management, search and replace, and Settings.</li>
+      <li>Read <a href="architecture.html">Architecture</a> for workspace ownership and runtime boundaries.</li>
+      <li>Read <a href="documents.html">Documents</a> for Markdown, SOPLang, and collaboration workflows.</li>
+      <li>Read <a href="plugins.html">Runtime plugins</a> for host slots and agent ownership.</li>
+      <li>Open <a href="agents.html">Agents and plugins</a> to navigate to the documentation owned by each integrated agent.</li>
+      <li>Read <a href="mcp-tools.html">MCP tools</a> for Explorer's filesystem-facing tool contract.</li>
+      <li>Read the <a href="wiki.html">Wiki</a> for canonical terminology and the <a href="specsLoader.html?spec=matrix.md">Specifications</a> for normative requirements.</li>
+    </ul>
+    <h2>Verification</h2>
+    <p>Explorer tests are under `explorer/tests/`; agent tests stay with their owning agents. The coding and test rules are defined by `DS001-coding-style.md` in the specification set.</p>
+  </div></main>
+  <footer class="site-footer" data-include="partials/footer.html"></footer>
+  <script src="partials-loader.js"></script>
+</body>
+</html>
