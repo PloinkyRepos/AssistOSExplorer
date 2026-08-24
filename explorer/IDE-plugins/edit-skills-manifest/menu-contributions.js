@@ -46,3 +46,7 @@ export async function executeMenuAction({ action, context, host }) {
     host?.showStatus?.(`Updated skills manifest with ${count} installed ${count === 1 ? 'skill' : 'skills'}.`);
     await host?.refreshDirectory?.();
 }
+
+export async function activateMenuItem({ context, host }) {
+    return executeMenuAction({ action: 'edit-skills-manifest', context, host });
+}

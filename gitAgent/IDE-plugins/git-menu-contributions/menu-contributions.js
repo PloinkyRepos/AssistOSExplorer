@@ -213,3 +213,10 @@ export async function executeMenuAction({ action, context, host }) {
     }
     await host?.refreshDirectory?.();
 }
+
+export async function activateMenuItem({ context, host }) {
+    const action = context?.slot === 'file-exp:new-menu'
+        ? 'new-repository'
+        : 'add-to-gitignore';
+    return executeMenuAction({ action, context, host });
+}

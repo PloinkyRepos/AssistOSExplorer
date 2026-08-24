@@ -147,7 +147,6 @@ export class FileExpEntries {
         const state = this.snapshot || this.getHostPresenter()?.state || {};
         const treeViewState = this.getTreeViewState();
         const contextKey = [
-            String(state?.treeRootPath || state?.path || '/'),
             String(state?.workspaceVersion || 0),
             String(state?.filterSpecs ? '1' : '0'),
             String(state?.sortBy || 'name'),
@@ -204,8 +203,10 @@ export class FileExpEntries {
             if (options.showTreeToggle) {
                 const toggle = document.createElement('button');
                 toggle.type = 'button';
-                toggle.className = `tree-toggle${options.expanded ? ' expanded' : ''}`;
-                toggle.setAttribute('aria-label', options.expanded ? 'Collapse folder' : 'Expand folder');
+                toggle.className = `tree-toggle${options.expanded ? ' expanded' : ''}${options.loading ? ' loading' : ''}`;
+                toggle.setAttribute('aria-label', options.loading
+                    ? 'Loading folder'
+                    : (options.expanded ? 'Collapse folder' : 'Expand folder'));
                 toggle.setAttribute('aria-expanded', options.expanded ? 'true' : 'false');
                 toggle.disabled = Boolean(options.loading);
                 toggle.tabIndex = -1;
@@ -233,7 +234,7 @@ export class FileExpEntries {
         return cell;
     }
 
-    createActionsCell(entryPath, type, isMenuOpen, canPasteInto, entry = null) {
+    createActionsCell(entryPath, type, isMenuOpen, entry = null) {
         const menuId = this.toMenuId(entryPath);
         const actionsCell = document.createElement('td');
         actionsCell.className = 'actions-cell col-actions';
@@ -266,18 +267,45 @@ export class FileExpEntries {
         dropdown.id = menuId;
         dropdown.setAttribute('role', 'menu');
         const host = this.getHostPresenter();
-        const menuItems = host?.getContextMenuItemsForEntry?.(entryPath, type, entry, { canPasteInto }) || [];
-        const menuLoading = Boolean(host?.isContextMenuLoading?.(entryPath));
+        const menuItems = host?.getContextMenuItemsForEntry?.(entryPath, type, entry) || [];
         const appMenu = document.createElement('app-menu');
         appMenu.setAttribute('data-presenter', 'app-menu');
         appMenu.setAttribute('data-items', encodeMenuItems(menuItems));
-        appMenu.setAttribute('data-loading', menuLoading ? 'true' : 'false');
+        appMenu.setAttribute('data-loading', 'false');
         dropdown.appendChild(appMenu);
 
         container.appendChild(trigger);
         container.appendChild(dropdown);
         actionsCell.appendChild(container);
         return actionsCell;
+    }
+
+    syncActionsCell(actionsCell, entryPath, type, isMenuOpen, entry = null) {
+        const container = actionsCell?.querySelector?.('[data-action-menu="true"]');
+        const trigger = container?.querySelector?.('.action-menu-trigger');
+        const dropdown = container?.querySelector?.('.action-menu-dropdown');
+        const appMenu = dropdown?.querySelector?.('app-menu');
+        if (!container || !trigger || !dropdown || !appMenu) return false;
+
+        const menuId = this.toMenuId(entryPath);
+        container.dataset.entryPath = entryPath;
+        container.classList.toggle('open', isMenuOpen);
+        trigger.dataset.entryPath = entryPath;
+        trigger.dataset.type = type;
+        trigger.setAttribute('aria-expanded', isMenuOpen ? 'true' : 'false');
+        trigger.setAttribute('aria-controls', menuId);
+        dropdown.id = menuId;
+
+        const host = this.getHostPresenter();
+        const menuItems = host?.getContextMenuItemsForEntry?.(entryPath, type, entry) || [];
+        const encodedItems = encodeMenuItems(menuItems);
+        if (appMenu.getAttribute('data-items') !== encodedItems) {
+            appMenu.setAttribute('data-items', encodedItems);
+            if (typeof appMenu.webSkelPresenter?.applyItems === 'function') {
+                appMenu.webSkelPresenter.applyItems(menuItems);
+            }
+        }
+        return true;
     }
 
     createRow(entryPath) {
@@ -421,14 +449,6 @@ export class FileExpEntries {
                         message: 'Empty folder.'
                     });
                 }
-            } else if (isLoading) {
-                target.push({
-                    kind: 'status',
-                    statusKind: 'loading',
-                    parentPath: entryPath,
-                    depth: depth + 1,
-                    message: 'Loading…'
-                });
             }
         }
         return target;
@@ -459,12 +479,13 @@ export class FileExpEntries {
         const selectedPath = String(state.selectedPath || '');
         const openMenuPath = String(state.openMenuPath || '');
         const nextRows = new Map();
-        const fragment = document.createDocumentFragment();
+        const orderedRows = [];
+        const appendRow = (row) => orderedRows.push(row);
 
         if (!items.length) {
-            fragment.appendChild(this.createEmptyRow());
+            const emptyRow = this.createEmptyRow();
             this.rowsByPath.clear();
-            this.tbody.replaceChildren(fragment);
+            this.tbody.replaceChildren(emptyRow);
             this.applyColumnVisibility(state);
             return;
         }
@@ -479,7 +500,7 @@ export class FileExpEntries {
             };
 
         if (this.virtual.enabled && windowRange.topSpacerHeight > 0) {
-            fragment.appendChild(this.createSpacerRow(windowRange.topSpacerHeight, 'top'));
+            appendRow(this.createSpacerRow(windowRange.topSpacerHeight, 'top'));
         }
 
         for (let index = windowRange.startIndex; index < windowRange.endIndex; index += 1) {
@@ -493,13 +514,14 @@ export class FileExpEntries {
                 }
                 const rowKey = statusRow.dataset.entryPath;
                 nextRows.set(rowKey, statusRow);
-                fragment.appendChild(statusRow);
+                appendRow(statusRow);
                 continue;
             }
 
             const { entry, entryPath, type, depth, isExpanded, isLoading } = item;
             if (!entryPath) continue;
             const row = this.rowsByPath.get(entryPath) || this.createRow(entryPath);
+            const previousType = String(row.dataset.type || '');
             row.dataset.entryPath = entryPath;
             row.dataset.type = type;
             row.dataset.symlink = entry?.isSymlink ? 'true' : 'false';
@@ -535,25 +557,54 @@ export class FileExpEntries {
             const sizeValue = type === 'directory' ? '—' : host.formatBytes(entry?.size);
             const sizeCell = this.createSelectCell('col-size', sizeValue, entryPath, type, '', { localAction: rowLocalAction });
             const modifiedCell = this.createSelectCell('col-modified', entry?.modified ? host.formatDate(entry.modified) : '—', entryPath, type, '', { localAction: rowLocalAction });
-            const actionsCell = this.createActionsCell(
+            const existingActionsCell = previousType === type
+                ? Array.from(row.children).find((cell) => cell?.classList?.contains('actions-cell'))
+                : null;
+            const actionsCell = existingActionsCell || this.createActionsCell(
                 entryPath,
                 type,
                 openMenuPath === entryPath,
-                Boolean(clipboard) && type === 'directory',
                 entry
             );
+            if (existingActionsCell) {
+                this.syncActionsCell(
+                    existingActionsCell,
+                    entryPath,
+                    type,
+                    openMenuPath === entryPath,
+                    entry
+                );
+            }
 
-            row.replaceChildren(nameCell, typeCell, sizeCell, modifiedCell, actionsCell);
+            if (existingActionsCell && row.children.length >= 5) {
+                row.children[0].replaceWith(nameCell);
+                row.children[1].replaceWith(typeCell);
+                row.children[2].replaceWith(sizeCell);
+                row.children[3].replaceWith(modifiedCell);
+            } else {
+                row.replaceChildren(nameCell, typeCell, sizeCell, modifiedCell, actionsCell);
+            }
             nextRows.set(entryPath, row);
-            fragment.appendChild(row);
+            appendRow(row);
         }
 
         if (this.virtual.enabled && windowRange.bottomSpacerHeight > 0) {
-            fragment.appendChild(this.createSpacerRow(windowRange.bottomSpacerHeight, 'bottom'));
+            appendRow(this.createSpacerRow(windowRange.bottomSpacerHeight, 'bottom'));
         }
 
         this.rowsByPath = nextRows;
-        this.tbody.replaceChildren(fragment);
+        const retainedRows = new Set(orderedRows);
+        for (const child of Array.from(this.tbody.children)) {
+            if (!retainedRows.has(child)) child.remove();
+        }
+        let cursor = this.tbody.firstElementChild;
+        for (const row of orderedRows) {
+            if (row === cursor) {
+                cursor = cursor.nextElementSibling;
+            } else {
+                this.tbody.insertBefore(row, cursor);
+            }
+        }
         this.applyColumnVisibility(state);
         this.updateMeasuredRowHeight();
     }
@@ -625,8 +676,21 @@ export class FileExpEntries {
             return;
         }
 
+        const cached = host.state?.filterSpecs ? null : host.getCachedDirectoryContent?.(normalizedPath);
+        if (Array.isArray(cached?.value)) {
+            treeViewState.childrenCache.set(normalizedPath, host.sortEntries(cached.value));
+            this.patchRows();
+            return;
+        }
+
         treeViewState.loadingPaths.add(normalizedPath);
         this.patchRows();
+        const cacheGeneration = host.caches?.dirListing?.getGeneration?.(host, normalizedPath) || 0;
+        const workspaceVersion = Number(host.state?.workspaceVersion) || 0;
+        const requestIsCurrent = () => (
+            (host.caches?.dirListing?.getGeneration?.(host, normalizedPath) || 0) === cacheGeneration
+            && (Number(host.state?.workspaceVersion) || 0) === workspaceVersion
+        );
         try {
             let children = await host.loadDirectoryContent(normalizedPath);
             if (!Array.isArray(children)) {
@@ -635,15 +699,39 @@ export class FileExpEntries {
             if (host.state?.filterSpecs) {
                 children = await host.filterEntriesForSpecs(children);
             }
-            treeViewState.childrenCache.set(normalizedPath, host.sortEntries(children));
+            if (requestIsCurrent()) {
+                treeViewState.childrenCache.set(normalizedPath, host.sortEntries(children));
+            }
         } catch (error) {
-            console.error(error);
-            treeViewState.childrenCache.set(normalizedPath, []);
-            host.showStatus?.(error?.message || 'Failed to load folder contents.', true);
+            if (requestIsCurrent()) {
+                console.error(error);
+                treeViewState.childrenCache.set(normalizedPath, []);
+                host.showStatus?.(error?.message || 'Failed to load folder contents.', true);
+            }
         } finally {
             treeViewState.loadingPaths.delete(normalizedPath);
             this.patchRows();
         }
+    }
+
+    updateTreeDirectoryChildren(entryPath, entries) {
+        const host = this.getHostPresenter();
+        if (!host) return;
+        this.snapshot = host.stateStore?.getState ? host.stateStore.getState() : host.state;
+        const normalizedPath = host.normalizePath?.(entryPath || '/') || String(entryPath || '/');
+        const treeViewState = this.getTreeViewState();
+        treeViewState.childrenCache.set(normalizedPath, Array.isArray(entries) ? entries : []);
+        if (treeViewState.expandedPaths.has(normalizedPath)) {
+            this.patchRows();
+        }
+    }
+
+    updateTreeRootEntries() {
+        const host = this.getHostPresenter();
+        if (!host) return;
+        this.snapshot = host.stateStore?.getState ? host.stateStore.getState() : host.state;
+        this.syncTreeContext();
+        this.patchRows();
     }
 
     async toggleTreeDirectory(element) {
@@ -674,12 +762,29 @@ export class FileExpEntries {
             return;
         }
 
+        const cached = host.state?.filterSpecs ? null : host.getCachedDirectoryContent?.(entryPath);
+        if (Array.isArray(cached?.value)) {
+            treeViewState.childrenCache.set(entryPath, host.sortEntries(cached.value));
+            host.updateNavigationLocation?.(entryPath, {
+                selectedPath: null,
+                resetContext: true
+            });
+            this.patchRows();
+            return;
+        }
+
         treeViewState.loadingPaths.add(entryPath);
         host.updateNavigationLocation?.(entryPath, {
             selectedPath: null,
             resetContext: true
         });
         this.patchRows();
+        const cacheGeneration = host.caches?.dirListing?.getGeneration?.(host, entryPath) || 0;
+        const workspaceVersion = Number(host.state?.workspaceVersion) || 0;
+        const requestIsCurrent = () => (
+            (host.caches?.dirListing?.getGeneration?.(host, entryPath) || 0) === cacheGeneration
+            && (Number(host.state?.workspaceVersion) || 0) === workspaceVersion
+        );
         try {
             let children = await host.loadDirectoryContent(entryPath);
             if (!Array.isArray(children)) {
@@ -688,11 +793,15 @@ export class FileExpEntries {
             if (host.state?.filterSpecs) {
                 children = await host.filterEntriesForSpecs(children);
             }
-            treeViewState.childrenCache.set(entryPath, host.sortEntries(children));
+            if (requestIsCurrent()) {
+                treeViewState.childrenCache.set(entryPath, host.sortEntries(children));
+            }
         } catch (error) {
-            console.error(error);
-            treeViewState.childrenCache.set(entryPath, []);
-            host.showStatus?.(error?.message || 'Failed to load folder contents.', true);
+            if (requestIsCurrent()) {
+                console.error(error);
+                treeViewState.childrenCache.set(entryPath, []);
+                host.showStatus?.(error?.message || 'Failed to load folder contents.', true);
+            }
         } finally {
             treeViewState.loadingPaths.delete(entryPath);
             this.patchRows();

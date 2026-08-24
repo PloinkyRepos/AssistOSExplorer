@@ -116,6 +116,21 @@ tr.is-symlink .col-name .icon {
     transform: rotate(45deg);
 }
 
+.tree-toggle.loading .tree-toggle-chevron {
+    width: 10px;
+    height: 10px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: tree-directory-spinner 0.65s linear infinite;
+}
+
+@keyframes tree-directory-spinner {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
 .tree-status-cell {
     --tree-depth: 0;
     padding-left: calc(1.5rem + (var(--tree-depth) * 1rem));

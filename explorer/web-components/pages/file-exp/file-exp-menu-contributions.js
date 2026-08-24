@@ -10,6 +10,8 @@ export const FILE_EXP_MENU_SLOTS = Object.freeze({
 
 const MENU_CONTRIBUTION_TYPE = 'menu';
 const menuModuleCache = new Map();
+const menuModuleFailures = new Map();
+let menuModuleImportSequence = 0;
 
 function normalizePath(value) {
     return String(value || '').trim();
@@ -27,66 +29,52 @@ async function loadMenuContributionModule(plugin) {
         throw new Error('Missing menuModuleUrl.');
     }
     if (!menuModuleCache.has(moduleUrl)) {
-        menuModuleCache.set(moduleUrl, import(moduleUrl));
+        const failureCount = menuModuleFailures.get(moduleUrl) || 0;
+        const requestUrl = failureCount > 0
+            ? `${moduleUrl}${moduleUrl.includes('?') ? '&' : '?'}runtimeMenuImport=${Date.now().toString(36)}-${++menuModuleImportSequence}`
+            : moduleUrl;
+        const request = import(requestUrl).then((module) => {
+            menuModuleFailures.delete(moduleUrl);
+            return module;
+        }).catch((error) => {
+            if (menuModuleCache.get(moduleUrl) === request) {
+                menuModuleCache.delete(moduleUrl);
+            }
+            menuModuleFailures.set(moduleUrl, failureCount + 1);
+            throw error;
+        });
+        menuModuleCache.set(moduleUrl, request);
     }
     return menuModuleCache.get(moduleUrl);
 }
 
-function normalizePluginMenuItems(plugin, slot, context, items) {
-    const list = Array.isArray(items) ? items : [];
-    const normalized = [];
-    for (const item of list) {
-        if (!item || typeof item !== 'object') continue;
-        const id = typeof item.id === 'string' ? item.id.trim() : '';
-        const label = typeof item.label === 'string' ? item.label.trim() : '';
-        const action = typeof item.action === 'string' ? item.action.trim() : '';
-        if (!id || !label || !action) {
-            continue;
-        }
-        normalized.push({
-            ...item,
-            id,
-            label,
-            action,
-            slot,
-            entryPath: typeof item.entryPath === 'string' && item.entryPath.trim()
-                ? item.entryPath.trim()
-                : normalizePath(context?.selectedPath || ''),
-            entryType: typeof item.entryType === 'string' && item.entryType.trim()
-                ? item.entryType.trim()
-                : String(context?.selectedType || '').trim() || 'file',
-            entryName: typeof item.entryName === 'string' && item.entryName.trim()
-                ? item.entryName.trim()
-                : String(context?.selectedName || '').trim(),
-            source: 'plugin',
-            pluginId: typeof plugin?.id === 'string' ? plugin.id.trim() : '',
-            pluginAgent: typeof plugin?.agent === 'string' ? plugin.agent.trim() : '',
-            pluginModuleUrl: typeof plugin?.menuModuleUrl === 'string' ? plugin.menuModuleUrl.trim() : ''
-        });
-    }
-    return normalized;
+async function loadMenuPluginDependencies(plugin) {
+    const dependencies = Array.isArray(plugin?.dependencies) ? plugin.dependencies : [];
+    if (!dependencies.length) return;
+    const ensureComponentRegistered = window.assistOS?.webSkel?.ensureComponentRegistered
+        || window.UI?.ensureComponentRegistered;
+    if (typeof ensureComponentRegistered !== 'function') return;
+    await Promise.all(dependencies.map((dependency) => {
+        const component = normalizePath(dependency?.component || dependency?.name);
+        return component ? ensureComponentRegistered(component) : null;
+    }));
 }
 
-async function getPluginMenuItems(fileExp, slot, context) {
+function getPluginMenuItems(slot, target = null) {
     const plugins = getApplicationPluginsForSlot(slot, { contributionType: MENU_CONTRIBUTION_TYPE });
-    if (!plugins.length) {
-        return [];
-    }
-
-    const collected = [];
-    for (const plugin of plugins) {
-        try {
-            const module = await loadMenuContributionModule(plugin);
-            if (typeof module?.getMenuItems !== 'function') {
-                continue;
-            }
-            const items = await module.getMenuItems({ slot, context, plugin });
-            collected.push(...normalizePluginMenuItems(plugin, slot, context, items));
-        } catch (error) {
-            console.error(encodeMenuPluginError(plugin, error));
-        }
-    }
-    return collected;
+    return plugins.map((plugin) => ({
+        id: `plugin:${normalizePath(plugin?.agent)}:${normalizePath(plugin?.id)}`,
+        label: normalizePath(plugin?.label) || normalizePath(plugin?.id) || 'Plugin',
+        title: normalizePath(plugin?.tooltip),
+        icon: normalizePath(plugin?.icon),
+        slot,
+        entryPath: normalizePath(target?.path),
+        entryType: normalizePath(target?.type) || 'file',
+        entryName: normalizePath(target?.name),
+        source: 'plugin',
+        pluginId: normalizePath(plugin?.id),
+        pluginAgent: normalizePath(plugin?.agent)
+    }));
 }
 
 function getNewFileLabel(fileExp) {
@@ -155,7 +143,7 @@ export function getBuiltInNewMenuItems(fileExp) {
                 ? (newFileLabel === 'New Secret' ? 'Create secret' : 'Create file')
                 : 'Files are not allowed in this location.'
         }
-    ];
+    ].filter((item) => item.disabled !== true);
 }
 
 export function getBuiltInContextMenuItems(fileExp, target) {
@@ -249,8 +237,10 @@ export function getBuiltInContextMenuItems(fileExp, target) {
                 targetPath: entryPath,
                 icon: './assets/icons/upload.svg',
                 disabled: isManaged ? !canCreateChildren : false
-            },
-            {
+            }
+        );
+        if (canPasteInto) {
+            items.push({
                 id: 'host:paste-into',
                 source: 'host',
                 slot: FILE_EXP_MENU_SLOTS.contextDirectory,
@@ -259,10 +249,9 @@ export function getBuiltInContextMenuItems(fileExp, target) {
                 entryPath,
                 entryType: type,
                 targetPath: entryPath,
-                icon: './assets/icons/paste.svg',
-                disabled: !canPasteInto
-            }
-        );
+                icon: './assets/icons/paste.svg'
+            });
+        }
     }
 
     if (isManaged && !immutableRoot && canWrite) {
@@ -291,43 +280,45 @@ export function getBuiltInContextMenuItems(fileExp, target) {
         disabled: !canDelete
     });
 
-    return items;
+    return items.filter((item) => item.disabled !== true);
 }
 
-export async function resolveFileExpMenuItems(fileExp, slot, target = null, builtInItems = []) {
-    const context = await buildFileExpMenuContext(fileExp, slot, target);
-    const pluginItems = await getPluginMenuItems(fileExp, slot, context);
+export function resolveFileExpMenuItems(slot, target = null, builtInItems = []) {
+    const pluginItems = getPluginMenuItems(slot, target);
     return [
         ...(Array.isArray(builtInItems) ? builtInItems : []),
         ...pluginItems
     ];
 }
 
-export async function executeFileExpMenuItem(fileExp, item, context = null) {
+export async function executeFileExpMenuItem(fileExp, item, context = null, options = {}) {
     const pluginId = normalizePath(item?.pluginId);
+    const pluginAgent = normalizePath(item?.pluginAgent);
     const slot = normalizePath(item?.slot);
     if (!pluginId || !slot) {
         return false;
     }
     const plugin = getApplicationPluginsForSlot(slot, { contributionType: MENU_CONTRIBUTION_TYPE })
-        .find((entry) => normalizePath(entry?.id) === pluginId);
+        .find((entry) => (
+            normalizePath(entry?.id) === pluginId
+            && (!pluginAgent || normalizePath(entry?.agent) === pluginAgent)
+        ));
     if (!plugin) {
         return false;
     }
 
-    const module = await loadMenuContributionModule(plugin);
-    if (typeof module?.executeMenuAction !== 'function') {
-        return false;
-    }
+    const [module, effectiveContext] = await Promise.all([
+        loadMenuContributionModule(plugin),
+        context ? Promise.resolve(context) : buildFileExpMenuContext(fileExp, slot, {
+            path: item?.entryPath || '',
+            type: item?.entryType || '',
+            name: item?.entryName || ''
+        }),
+        loadMenuPluginDependencies(plugin)
+    ]);
+    await options.onReady?.();
 
-    const effectiveContext = context || await buildFileExpMenuContext(fileExp, slot, {
-        path: item?.entryPath || '',
-        type: item?.entryType || '',
-        name: item?.entryName || ''
-    });
-
-    await module.executeMenuAction({
-        action: item.action,
+    const activation = {
         item,
         context: effectiveContext,
         plugin,
@@ -339,6 +330,18 @@ export async function executeFileExpMenuItem(fileExp, item, context = null) {
                 fileExp.showStatus(message, isError);
             }
         }
-    });
-    return true;
+    };
+    if (typeof module?.activateMenuItem === 'function') {
+        await module.activateMenuItem(activation);
+        return true;
+    }
+    if (typeof module?.getMenuItems === 'function' && typeof module?.executeMenuAction === 'function') {
+        const resolvedItems = await module.getMenuItems({ slot, context: effectiveContext, plugin });
+        const resolvedItem = Array.isArray(resolvedItems) ? resolvedItems[0] : null;
+        if (!resolvedItem) return false;
+        await module.executeMenuAction({ ...activation, action: resolvedItem.action, item: resolvedItem });
+        return true;
+    }
+    console.error(encodeMenuPluginError(plugin, new Error('Missing activateMenuItem().')));
+    return false;
 }

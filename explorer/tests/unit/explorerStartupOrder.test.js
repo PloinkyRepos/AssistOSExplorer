@@ -51,7 +51,7 @@ test('optional plugin failures do not reject file explorer rendering', () => {
         'utf8'
     );
 
-    assert.match(hostSource, /stageSlotMounts\(container, slot, plugins\)/);
+    assert.match(hostSource, /stageSlotMounts\(container, slot, plugins, \{ deferMount: Boolean\(onlyKey\) \}\)/);
     assert.match(hostSource, /event\?\.detail\?\.phase === 'discovered'/);
     assert.match(hostSource, /for \(const plugin of plugins\)/);
     assert.match(hostSource, /pluginElement\.setAttribute\('data-app-plugin-loading'/);
@@ -60,11 +60,16 @@ test('optional plugin failures do not reject file explorer rendering', () => {
     assert.match(hostSource, /pluginElement\.classList\.add\(\.\.\.loadingClasses, 'app-plugin-loading-state'\)/);
     assert.match(hostSource, /if \(!mount && showLoadingPlaceholder\) mount = createPluginMount\(key, slot\)/);
     assert.match(hostSource, /if \(!mount\) \{\s*mount = createPluginMount\(key, slot\)/);
-    assert.match(
+    assert.match(hostSource, /await pluginElement\.presenterReadyPromise/);
+    assert.match(hostSource, /await pluginElement\.renderCompletePromise/);
+    assert.match(hostSource, /orderSlotMounts\(container, plugins, stagedMounts\)/);
+    assert.match(hostSource, /createLazyPluginButton\(plugin, key\)/);
+    assert.match(hostSource, /data-app-plugin-trigger/);
+    assert.match(hostSource, /loadToolbarPluginOnDemand\(fileExp, trigger\)/);
+    assert.doesNotMatch(
         hostSource,
-        /ownsLoadingState\s*&&\s*pluginElement\.renderCompletePromise\s*&&\s*typeof pluginElement\.renderCompletePromise\.then === 'function'/
+        /await mountSlot\(toolbarContainer, APP_PLUGIN_SLOTS\.toolbar, visibleToolbarPlugins, toolbarContext\)/
     );
-    assert.doesNotMatch(hostSource, /createPluginLoadingButton/);
     assert.match(layoutSource, /renderApplicationPluginSlots\(fileExp\)\.catch/);
     assert.doesNotMatch(layoutSource, /await renderApplicationPluginSlots\(fileExp\)/);
 });

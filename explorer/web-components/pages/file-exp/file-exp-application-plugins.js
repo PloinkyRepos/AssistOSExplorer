@@ -224,6 +224,33 @@ function createPluginMount(key, slot) {
     return mount;
 }
 
+function createLazyPluginButton(plugin, key) {
+    const { label, tooltip } = getPluginPresentation(plugin);
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'app-plugin-tool-button app-plugin-lazy-trigger';
+    button.setAttribute('data-app-plugin-trigger', key);
+    button.setAttribute('data-plugin-label', label);
+    button.setAttribute('aria-label', label);
+    button.title = tooltip;
+
+    const icon = document.createElement('span');
+    icon.className = 'app-plugin-tool-icon';
+    icon.setAttribute('aria-hidden', 'true');
+    const iconImage = document.createElement('img');
+    iconImage.className = 'app-plugin-tool-icon-image';
+    iconImage.alt = '';
+    iconImage.loading = 'lazy';
+    iconImage.src = typeof plugin?.icon === 'string' ? plugin.icon : '';
+    icon.appendChild(iconImage);
+
+    const labelElement = document.createElement('span');
+    labelElement.className = 'app-plugin-tool-label';
+    labelElement.textContent = label;
+    button.append(icon, labelElement);
+    return button;
+}
+
 function getPluginLoadingClasses(container) {
     if (container?.classList?.contains('app-plugin-account-slot')) {
         return ['toolbar-dropdown-item', 'action-menu-item'];
@@ -238,7 +265,33 @@ function getPluginLoadingClasses(container) {
     return [];
 }
 
-function stageSlotMounts(container, slot, plugins) {
+function orderSlotMounts(container, plugins, mounts) {
+    let anchor = container?.firstElementChild || null;
+    for (const plugin of plugins) {
+        const mount = mounts.get(getPluginKey(plugin));
+        if (!mount) continue;
+        if (mount === anchor) {
+            anchor = anchor.nextElementSibling;
+            continue;
+        }
+        container.insertBefore(mount, anchor);
+    }
+}
+
+export async function waitForPluginPresenterRender(pluginElement) {
+    if (pluginElement?.presenterReadyPromise?.then) {
+        await pluginElement.presenterReadyPromise;
+    }
+    // WebSkel replaces the constructor-time render promise after presenter
+    // initialization. Yield once, then wait for that active render, including
+    // the presenter's afterRender listener registration.
+    await Promise.resolve();
+    if (pluginElement?.renderCompletePromise?.then) {
+        await pluginElement.renderCompletePromise;
+    }
+}
+
+function stageSlotMounts(container, slot, plugins, { deferMount = false } = {}) {
     if (!container) return new Map();
 
     container.classList.toggle('is-empty', plugins.length === 0);
@@ -259,6 +312,14 @@ function stageSlotMounts(container, slot, plugins) {
 
         const expectedComponent = typeof plugin?.component === 'string' ? plugin.component.trim() : '';
         const mountedComponent = expectedComponent ? mount.querySelector(expectedComponent) : null;
+        if (deferMount && expectedComponent && !mountedComponent) {
+            const existingTrigger = mount.querySelector('[data-app-plugin-trigger]');
+            if (!existingTrigger) {
+                mount.replaceChildren(createLazyPluginButton(plugin, key));
+            }
+            stagedMounts.set(key, mount);
+            continue;
+        }
         if (showLoadingPlaceholder && expectedComponent && !mountedComponent) {
             const { label, tooltip } = getPluginPresentation(plugin);
             const pluginElement = document.createElement(expectedComponent);
@@ -277,10 +338,7 @@ function stageSlotMounts(container, slot, plugins) {
     for (const [key, node] of existingMounts.entries()) {
         if (!seen.has(key)) node.remove();
     }
-    for (const plugin of plugins) {
-        const mount = stagedMounts.get(getPluginKey(plugin));
-        if (mount) container.appendChild(mount);
-    }
+    orderSlotMounts(container, plugins, stagedMounts);
 
     return stagedMounts;
 }
@@ -307,13 +365,13 @@ function stageApplicationPluginPlaceholders(fileExp) {
     const accountMenuPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.accountMenu, {
         contributionType: MOUNT_CONTRIBUTION_TYPE
     });
-    stageSlotMounts(toolbarContainer, APP_PLUGIN_SLOTS.toolbar, visibleToolbarPlugins);
+    stageSlotMounts(toolbarContainer, APP_PLUGIN_SLOTS.toolbar, visibleToolbarPlugins, { deferMount: true });
     stageSlotMounts(toolbarPluginsDropdownContainer, APP_PLUGIN_SLOTS.toolbarPluginsDropdown, visibleToolbarDropdownPlugins);
     stageSlotMounts(rightBarContainer, APP_PLUGIN_SLOTS.rightBar, rightBarPlugins);
     stageSlotMounts(accountMenuContainer, APP_PLUGIN_SLOTS.accountMenu, accountMenuPlugins);
 }
 
-async function mountSlot(container, slot, plugins, context) {
+async function mountSlot(container, slot, plugins, context, { onlyKey = '', componentsReady = false } = {}) {
     if (!container) {
         return;
     }
@@ -324,10 +382,11 @@ async function mountSlot(container, slot, plugins, context) {
     };
     const loadingClasses = getPluginLoadingClasses(container);
     const showLoadingPlaceholder = loadingClasses.length > 0;
-    const stagedMounts = stageSlotMounts(container, slot, plugins);
+    const stagedMounts = stageSlotMounts(container, slot, plugins, { deferMount: Boolean(onlyKey) });
 
     for (const plugin of plugins) {
         const key = getPluginKey(plugin);
+        if (onlyKey && key !== onlyKey) continue;
         let mount = key ? stagedMounts.get(key) : null;
         if (!key) continue;
 
@@ -337,12 +396,14 @@ async function mountSlot(container, slot, plugins, context) {
             continue;
         }
 
-        try {
-            await ensureRuntimeComponent(plugin.component);
-        } catch (error) {
-            console.error(`[app-plugins] Failed to load ${key}:`, error);
-            if (showLoadingPlaceholder) markPluginLoadingFailed(mount, plugin, error);
-            continue;
+        if (!componentsReady) {
+            try {
+                await ensureRuntimeComponent(plugin.component);
+            } catch (error) {
+                console.error(`[app-plugins] Failed to load ${key}:`, error);
+                if (showLoadingPlaceholder) markPluginLoadingFailed(mount, plugin, error);
+                continue;
+            }
         }
 
         if (!mount) {
@@ -361,16 +422,16 @@ async function mountSlot(container, slot, plugins, context) {
                 pluginElement.setAttribute('data-app-plugin-loading', '');
                 pluginElement.setAttribute('aria-busy', 'true');
             }
-            mount.appendChild(pluginElement);
+            if (mount.querySelector('[data-app-plugin-trigger]')) {
+                mount.replaceChildren(pluginElement);
+            } else {
+                mount.appendChild(pluginElement);
+            }
         }
         try {
             const ownsLoadingState = pluginElement.hasAttribute('data-app-plugin-loading');
-            if (
-                ownsLoadingState
-                && pluginElement.renderCompletePromise
-                && typeof pluginElement.renderCompletePromise.then === 'function'
-            ) {
-                await pluginElement.renderCompletePromise;
+            if (ownsLoadingState) {
+                await waitForPluginPresenterRender(pluginElement);
             }
             updateMountedPluginElement(pluginElement, plugin, contextWithOrientation);
             if (ownsLoadingState) {
@@ -388,9 +449,99 @@ async function mountSlot(container, slot, plugins, context) {
         }
     }
 
+    orderSlotMounts(container, plugins, stagedMounts);
+}
+
+async function loadToolbarPluginOnDemand(fileExp, trigger) {
+    const key = String(trigger?.getAttribute?.('data-app-plugin-trigger') || '').trim();
+    if (!key || trigger.getAttribute('aria-busy') === 'true') return;
+    const toolbarContainer = fileExp?.element?.querySelector?.('#fileExpToolbarPlugins');
+    if (!toolbarContainer?.contains?.(trigger)) return;
+    const plugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.toolbar, {
+        contributionType: MOUNT_CONTRIBUTION_TYPE
+    });
+    const plugin = plugins.find((entry) => getPluginKey(entry) === key);
+    if (!plugin) return;
+
+    fileExp.__toolbarPluginLoadPromises ||= new Map();
+    let loadPromise = fileExp.__toolbarPluginLoadPromises.get(key);
+    if (!loadPromise) {
+        trigger.classList.add('app-plugin-loading-state');
+        trigger.setAttribute('data-app-plugin-loading', '');
+        trigger.setAttribute('aria-busy', 'true');
+        trigger.setAttribute('aria-disabled', 'true');
+        trigger.disabled = true;
+
+        loadPromise = (async () => {
+            const currentPath = fileExp.normalizePath(fileExp.state.path || '/');
+            const [, currentFsPath, workspaceFsRoot] = await Promise.all([
+                ensureRuntimeComponent(plugin.component),
+                resolveExplorerPathToFilesystemPath(currentPath),
+                resolveExplorerPathToFilesystemPath('/')
+            ]);
+            const context = buildPluginContext(fileExp, APP_PLUGIN_SLOTS.toolbar, {
+                currentFsPath,
+                workspaceFsRoot
+            });
+            await mountSlot(toolbarContainer, APP_PLUGIN_SLOTS.toolbar, plugins, context, {
+                onlyKey: key,
+                componentsReady: true
+            });
+            const mount = Array.from(toolbarContainer.querySelectorAll('[data-app-plugin-key]'))
+                .find((entry) => entry.getAttribute('data-app-plugin-key') === key);
+            const pluginElement = mount?.querySelector?.(plugin.component);
+            if (!pluginElement || pluginElement.hasAttribute('data-app-plugin-loading')) {
+                throw new Error(`${getPluginPresentation(plugin).label} could not be loaded.`);
+            }
+            const actionTarget = pluginElement?.querySelector?.('button:not([disabled]), [role="button"]:not([aria-disabled="true"]), [data-local-action]')
+                || pluginElement;
+            actionTarget?.click?.();
+        })().finally(() => {
+            fileExp.__toolbarPluginLoadPromises?.delete(key);
+        });
+        fileExp.__toolbarPluginLoadPromises.set(key, loadPromise);
+    }
+
+    try {
+        await loadPromise;
+    } catch (error) {
+        console.error(`[app-plugins] Failed to activate ${key}:`, error);
+        const mount = trigger.closest?.('[data-app-plugin-key]');
+        if (mount) {
+            const retryTrigger = createLazyPluginButton(plugin, key);
+            retryTrigger.classList.add('is-error');
+            retryTrigger.title = `${error?.message || getPluginPresentation(plugin).label}. Click to retry.`;
+            mount.replaceChildren(retryTrigger);
+        }
+    }
+}
+
+function bindLazyToolbarPluginActions(fileExp, toolbarContainer) {
+    if (!toolbarContainer || typeof fileExp?.setElementListener !== 'function') return;
+    fileExp.setElementListener('lazy-toolbar-plugin-actions', toolbarContainer, 'click', (event) => {
+        const trigger = event.target?.closest?.('[data-app-plugin-trigger]');
+        if (!trigger || !toolbarContainer.contains(trigger)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        loadToolbarPluginOnDemand(fileExp, trigger);
+    });
+}
+
+function updateLoadedToolbarPluginContexts(container, plugins, context) {
+    if (!container) return;
+    const contextWithOrientation = {
+        ...(context || {}),
+        orientation: getContainerOrientation(container, APP_PLUGIN_SLOTS.toolbar)
+    };
     for (const plugin of plugins) {
-        const mount = stagedMounts.get(getPluginKey(plugin));
-        if (mount) container.appendChild(mount);
+        const key = getPluginKey(plugin);
+        if (!key || !plugin?.component) continue;
+        const mount = Array.from(container.querySelectorAll('[data-app-plugin-key]'))
+            .find((entry) => entry.getAttribute('data-app-plugin-key') === key);
+        const pluginElement = mount?.querySelector?.(plugin.component);
+        if (pluginElement && !pluginElement.hasAttribute('data-app-plugin-loading')) {
+            updateMountedPluginElement(pluginElement, plugin, contextWithOrientation);
+        }
     }
 }
 
@@ -417,6 +568,7 @@ async function performRenderApplicationPluginSlots(fileExp) {
     const globalPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.global, { contributionType: MOUNT_CONTRIBUTION_TYPE });
     const accountMenuPlugins = getApplicationPluginsForSlot(APP_PLUGIN_SLOTS.accountMenu, { contributionType: MOUNT_CONTRIBUTION_TYPE });
     stageApplicationPluginPlaceholders(fileExp);
+    bindLazyToolbarPluginActions(fileExp, toolbarContainer);
     const currentPath = fileExp.normalizePath(fileExp.state.path || '/');
     const [currentFsPath, workspaceFsRoot] = await Promise.all([
         resolveExplorerPathToFilesystemPath(currentPath),
@@ -430,7 +582,7 @@ async function performRenderApplicationPluginSlots(fileExp) {
     const globalContext = buildPluginContext(fileExp, APP_PLUGIN_SLOTS.global, filesystemContext);
     const accountMenuContext = buildPluginContext(fileExp, APP_PLUGIN_SLOTS.accountMenu, filesystemContext);
 
-    await mountSlot(toolbarContainer, APP_PLUGIN_SLOTS.toolbar, visibleToolbarPlugins, toolbarContext);
+    updateLoadedToolbarPluginContexts(toolbarContainer, visibleToolbarPlugins, toolbarContext);
     await mountSlot(toolbarPluginsDropdownContainer, APP_PLUGIN_SLOTS.toolbarPluginsDropdown, visibleToolbarDropdownPlugins, toolbarPluginsDropdownContext);
     await mountSlot(rightBarContainer, APP_PLUGIN_SLOTS.rightBar, rightBarPlugins, rightBarContext);
     await mountSlot(internalContainer, APP_PLUGIN_SLOTS.internal, internalPlugins, internalContext);
@@ -461,10 +613,7 @@ export async function renderApplicationPluginSlots(fileExp) {
 
 export function attachApplicationPluginHost(fileExp) {
     const rerender = () => {
-        fileExp.toolbarMenuLoadToken = (Number(fileExp.toolbarMenuLoadToken) || 0) + 1;
-        fileExp.contextMenuLoadToken = (Number(fileExp.contextMenuLoadToken) || 0) + 1;
         fileExp.toolbarMenuItems = [];
-        fileExp.contextMenuItemsByPath = new Map();
         if (typeof fileExp.closeActionMenu === 'function') {
             fileExp.closeActionMenu(false);
         }
@@ -472,9 +621,11 @@ export function attachApplicationPluginHost(fileExp) {
             fileExp.renderEntries();
         }
         if (typeof fileExp.refreshToolbarMenuItems === 'function') {
-            fileExp.refreshToolbarMenuItems().catch((error) => {
+            try {
+                fileExp.refreshToolbarMenuItems();
+            } catch (error) {
                 console.error('[app-plugins] Failed to refresh toolbar menu items', error);
-            });
+            }
         }
         renderApplicationPluginSlots(fileExp).catch((error) => {
             console.error('[app-plugins] Failed to render application plugin slots', error);
@@ -526,6 +677,7 @@ export function attachApplicationPluginHost(fileExp) {
             globalContainer.replaceChildren();
         }
         fileExp.__appPluginRenderPromise = null;
+        fileExp.__toolbarPluginLoadPromises = null;
         fileExp.__appPluginMobileToolbarLayout = null;
     });
 }

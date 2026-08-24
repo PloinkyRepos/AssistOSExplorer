@@ -25,6 +25,8 @@ export function createFileExpCaches({
     });
 
     const normalizeDirPath = (normalizePathFn, dirPath) => normalizePathFn ? normalizePathFn(dirPath) : dirPath;
+    const dirListingGenerations = new Map();
+    const getDirListingGeneration = (normalizedPath) => dirListingGenerations.get(normalizedPath) || 0;
 
     // Single-slot store for the active OnlyOffice session (managed by
     // services/onlyoffice/onlyoffice-preview-service.js). Lives here so the
@@ -51,6 +53,19 @@ export function createFileExpCaches({
 
     return {
         dirListing: {
+            getGeneration(fileExp, dirPath) {
+                const normalized = normalizeDirPath(fileExp?.normalizePath, dirPath);
+                return getDirListingGeneration(normalized);
+            },
+            read(fileExp, dirPath) {
+                const normalized = normalizeDirPath(fileExp?.normalizePath, dirPath);
+                const cached = dirListing.peek(normalized, { allowStale: true });
+                if (!cached || cached.isStale) return cached;
+                return {
+                    ...cached,
+                    value: dirListing.get(normalized)
+                };
+            },
             get(fileExp, dirPath) {
                 const normalized = normalizeDirPath(fileExp?.normalizePath, dirPath);
                 return dirListing.get(normalized);
@@ -61,6 +76,7 @@ export function createFileExpCaches({
             },
             invalidate(fileExp, dirPath) {
                 const normalized = normalizeDirPath(fileExp?.normalizePath, dirPath);
+                dirListingGenerations.set(normalized, getDirListingGeneration(normalized) + 1);
                 dirListing.delete(normalized);
                 mdTree.delete(normalized);
             },

@@ -308,6 +308,14 @@ export function normalizeRuntimePlugins(runtimePlugins) {
         const menuModuleUrl = isNonEmptyString(entry.menuModule)
             ? joinUrlSegments(pluginRootUrl, entry.menuModule)
             : undefined;
+        const locationPresentation = contributionType === MENU_PLUGIN_CONTRIBUTION_TYPE
+            && entry.presentation
+            && typeof entry.presentation === 'object'
+            && !Array.isArray(entry.presentation)
+            && entry.presentation[location]
+            && typeof entry.presentation[location] === 'object'
+                ? entry.presentation[location]
+                : null;
         const normalizedEntry = {
             ...entry,
             pluginCategory: category,
@@ -315,12 +323,16 @@ export function normalizeRuntimePlugins(runtimePlugins) {
             location,
             id: isNonEmptyString(entry.id) ? entry.id.trim() : undefined,
             component: component || undefined,
-            label: isNonEmptyString(entry.label)
-                ? entry.label.trim()
+            label: isNonEmptyString(locationPresentation?.label)
+                ? locationPresentation.label.trim()
+                : isNonEmptyString(entry.label)
+                    ? entry.label.trim()
                 : isNonEmptyString(entry.tooltip)
                     ? entry.tooltip.trim()
                     : component || 'Plugin',
-            tooltip: isNonEmptyString(entry.tooltip) ? entry.tooltip : component || 'Plugin',
+            tooltip: isNonEmptyString(locationPresentation?.tooltip)
+                ? locationPresentation.tooltip.trim()
+                : isNonEmptyString(entry.tooltip) ? entry.tooltip : component || 'Plugin',
             presenter: contributionType !== MENU_PLUGIN_CONTRIBUTION_TYPE && isNonEmptyString(entry.presenter) ? entry.presenter.trim() : undefined,
             type: contributionType !== MENU_PLUGIN_CONTRIBUTION_TYPE && isNonEmptyString(entry.type) ? entry.type : 'embedded',
             autoPin: Boolean(entry.autoPin),

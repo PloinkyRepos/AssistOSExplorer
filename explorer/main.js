@@ -362,8 +362,15 @@ async function start() {
 
         const waitForModalRender = async (dialog) => {
             const renderedComponents = Array.from(dialog.querySelectorAll('[data-presenter]'))
-                .map((component) => component.renderCompletePromise)
-                .filter((promise) => promise && typeof promise.then === 'function');
+                .map(async (component) => {
+                    if (component.presenterReadyPromise?.then) {
+                        await component.presenterReadyPromise;
+                    }
+                    await Promise.resolve();
+                    if (component.renderCompletePromise?.then) {
+                        await component.renderCompletePromise;
+                    }
+                });
             if (renderedComponents.length) {
                 await Promise.allSettled(renderedComponents);
             }

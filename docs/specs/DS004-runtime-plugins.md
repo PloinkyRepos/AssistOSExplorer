@@ -19,6 +19,10 @@ Reusable WebSkel libraries, shared components, and `shared/ui/ui-common.css` mus
 
 Plugins must use declared Explorer slots and the WebSkel presenter lifecycle. A plugin must not replace Explorer routing, navigation ownership, shared authorization, or host layout contracts. A plugin may render a domain control and call the owning agent's tools, but it must not duplicate that agent's ACL evaluation or persist its protected state.
 
+Mount contributions in `file-exp:toolbar` use manifest-first activation. Explorer renders a host-owned button immediately from the plugin `label`, `tooltip`, and `icon`; it must not import, instantiate, or mount that plugin during the initial Explorer render. The first click changes only that button to a loading state, resolves filesystem context, loads the runtime component and its declared dependencies, mounts it in the same stable container, and forwards the activation to the mounted control. Later clicks use the already mounted component without repeating the load.
+
+A menu contribution declares its Explorer slots and stable presentation metadata. Explorer creates the menu entry synchronously from that metadata and must not import the plugin module while opening the menu. The first click sets a loading state only on the selected item, builds the generic filesystem context, imports the module, and calls `activateMenuItem()`. No asynchronous plugin operation may add or remove menu rows during an open interaction.
+
 An unavailable plugin component or dependent agent must produce a visible, recoverable interface error without preventing unrelated Explorer functionality from loading.
 
 ## Conclusion

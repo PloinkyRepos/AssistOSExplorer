@@ -506,15 +506,14 @@ export function attachGitController(fileExp) {
 
     async function openGitModal(options = {}) {
         const repoPath = reposRoot;
-        return fileExp.withLoader(async () => {
-            await syncConflictFlagFromRepos();
-            ensureAutocommitTimer();
-            await assistOS.UI.createReactiveModal('git-commit-modal', {
-                repoPath,
-                openConflictHelper: Boolean(options.openConflictHelper),
-                selectedRepoPath: options.selectedRepoPath || null
-            });
+        ensureAutocommitTimer();
+        const conflictSyncPromise = syncConflictFlagFromRepos();
+        await assistOS.UI.createReactiveModal('git-commit-modal', {
+            repoPath,
+            openConflictHelper: Boolean(options.openConflictHelper),
+            selectedRepoPath: options.selectedRepoPath || null
         });
+        await conflictSyncPromise;
     }
 
     updateGitButtonIndicator();

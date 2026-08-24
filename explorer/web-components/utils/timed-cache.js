@@ -41,6 +41,17 @@ export function createTimedCache({
     };
 
     return {
+        peek(key, { allowStale = false } = {}) {
+            const entry = cache.get(key);
+            if (!entry) return null;
+            const isStale = (Date.now() - entry.cachedAt) > normalizedTtlMs;
+            if (isStale && !allowStale) return null;
+            return {
+                value: entry.value,
+                cachedAt: entry.cachedAt,
+                isStale
+            };
+        },
         get(key) {
             const entry = cache.get(key);
             if (!entry) {

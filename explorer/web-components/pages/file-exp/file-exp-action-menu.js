@@ -12,9 +12,6 @@ function estimateMenuHeight(dropdown) {
             }
         } catch {}
     }
-    if (dropdown.querySelector('[data-loading="true"], .app-menu-loading')) {
-        return 56;
-    }
     return 220;
 }
 

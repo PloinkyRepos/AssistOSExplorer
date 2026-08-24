@@ -9,6 +9,20 @@
     ],
     "label": "Git",
     "tooltip": "Git actions for Explorer menus",
+    "presentation": {
+        "file-exp:context-menu:file": {
+            "label": "Add to .gitignore",
+            "tooltip": "Add this item to .gitignore"
+        },
+        "file-exp:context-menu:directory": {
+            "label": "Add to .gitignore",
+            "tooltip": "Add this directory to .gitignore"
+        },
+        "file-exp:new-menu": {
+            "label": "New repository",
+            "tooltip": "Create or clone a Git repository"
+        }
+    },
     "icon": "./icon.svg",
     "menuModule": "menu-contributions.js",
     "dependencies": [

@@ -280,30 +280,32 @@ export class GitCommitModal {
         this.dialog.ensureDialogResizable();
         this.dialog.toggleFullscreen();
         (async () => {
-            await this.refreshGithubAuthStatus({ silent: true }).catch(() => {});
-            
-            this.syncStaticUI();
-            const gateActive = await this.ensureCredentialsGate();
-            if (!gateActive) {
-                // On open: force-load repos overview so the user immediately sees changes across all repos.
-                this.setState({ suppressInlineLoading: true }, { silent: true });
+            await this.withModalLoader(async () => {
+                await this.refreshGithubAuthStatus({ silent: true }).catch(() => {});
+
                 this.syncStaticUI();
-                try {
-                    await this.withModalLoader(() => this.refreshAll({ force: true }), 'Loading Git repositories…');
-                    if (this.props?.openConflictHelper) {
-                        if (this.props.selectedRepoPath) {
-                            this.setState({ selectedRepoPath: this.props.selectedRepoPath }, { silent: true });
-                        }
-                        await this.openConflictHelper();
-                    }
-                } finally {
-                    this.setState({ suppressInlineLoading: false }, { silent: true });
+                const gateActive = await this.ensureCredentialsGate();
+                if (!gateActive) {
+                    // On open: force-load repos overview so the user immediately sees changes across all repos.
+                    this.setState({ suppressInlineLoading: true }, { silent: true });
                     this.syncStaticUI();
+                    try {
+                        await this.refreshAll({ force: true });
+                        if (this.props?.openConflictHelper) {
+                            if (this.props.selectedRepoPath) {
+                                this.setState({ selectedRepoPath: this.props.selectedRepoPath }, { silent: true });
+                            }
+                            await this.openConflictHelper();
+                        }
+                    } finally {
+                        this.setState({ suppressInlineLoading: false }, { silent: true });
+                        this.syncStaticUI();
+                    }
+                } else {
+                    await this.loadRepoOverviews({ force: true }).catch(() => {});
+                    this.updateIdentityPrompt();
                 }
-            } else {
-                await this.loadRepoOverviews({ force: true }).catch(() => {});
-                this.updateIdentityPrompt();
-            }
+            }, 'Loading Git repositories…');
         })().catch(() => {
             this.syncStaticUI();
         });

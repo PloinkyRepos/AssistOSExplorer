@@ -26,6 +26,16 @@ test('createTimedCache evicts stale entries by ttl', async () => {
     assert.equal(stats.staleMisses, 1);
 });
 
+test('createTimedCache can inspect stale values for stale-while-revalidate consumers', async () => {
+    const cache = createTimedCache({ ttlMs: 5, maxEntries: 3 });
+    cache.set('a', 1);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    assert.deepEqual(cache.peek('a', { allowStale: true })?.value, 1);
+    assert.equal(cache.peek('a', { allowStale: true })?.isStale, true);
+    assert.equal(cache.peek('a'), null);
+});
+
 test('createTimedCache evicts oldest entries when maxEntries exceeded', () => {
     const cache = createTimedCache({ ttlMs: 1000, maxEntries: 2, refreshOnGet: false });
     cache.set('a', 1);

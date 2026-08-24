@@ -427,17 +427,23 @@ export function attachFsActions(fileExp) {
 
         handleOutsideMenuClick(event) {
             if (!this.state.openMenuPath) return;
+            const composedPath = typeof event?.composedPath === 'function' ? event.composedPath() : [];
+            const interactedMenu = (Array.isArray(composedPath)
+                ? composedPath.find((node) => node?.dataset?.actionMenu === 'true')
+                : null) || event?.target?.closest?.('[data-action-menu="true"]');
+            if (interactedMenu && this.element?.contains?.(interactedMenu) !== false) {
+                return;
+            }
             const openPath = this.state.openMenuPath;
             const openContainer = this.element?.querySelector?.(`[data-action-menu="true"][data-entry-path="${openPath}"]`);
             if (!openContainer) {
-                this.closeActionMenu();
+                this.closeActionMenu(false);
                 return;
             }
-            const composedPath = typeof event?.composedPath === 'function' ? event.composedPath() : [];
             if (Array.isArray(composedPath) && composedPath.includes(openContainer)) {
                 return;
             }
-            this.closeActionMenu();
+            this.closeActionMenu(false);
         },
 
         handleMenuKeydown(event) {
@@ -495,7 +501,6 @@ export function attachFsActions(fileExp) {
                 dropdown.style.maxHeight = '';
             }
             this.pendingMenuFocusPath = null;
-            this.contextMenuLoadToken += 1;
             this.clearOpenActionMenuTracking();
             this.removeDocumentListener?.('open-menu-outside');
             this.removeDocumentListener?.('open-menu-keydown');
@@ -510,7 +515,17 @@ export function attachFsActions(fileExp) {
             }
             this.setDocumentListener?.('open-menu-outside', 'pointerdown', this.boundOutsideMenuClick, true);
             this.setDocumentListener?.('open-menu-keydown', 'keydown', this.boundMenuKeydown);
-            this.setOpenMenuPath(path, { invalidate: Boolean(options?.invalidate) });
+            this.setOpenMenuPath(path, { invalidate: false });
+            try {
+                this.refreshContextMenuItems?.(path);
+            } catch (error) {
+                console.error(error);
+                this.showStatus(error?.message || 'Failed to render menu actions.', true);
+                return;
+            }
+            if (options?.invalidate) {
+                this.renderEntries?.();
+            }
             const container = this.element?.querySelector(`[data-action-menu="true"][data-entry-path="${path}"]`);
             if (container) {
                 container.classList.add('open');
@@ -523,11 +538,6 @@ export function attachFsActions(fileExp) {
                 }
             }
             this.syncOpenActionMenuTracking?.();
-            this.refreshContextMenuItems?.(path)
-                ?.catch((error) => {
-                    console.error(error);
-                    this.showStatus(error?.message || 'Failed to load menu actions.', true);
-                });
         },
 
         updateClipboardUI() {
@@ -719,8 +729,11 @@ export function attachFsActions(fileExp) {
                 console.error(err);
                 this.showStatus(this.humanizeFsError(err), true);
             }
-            if (pasteCompleted && clipboard.mode === 'cut') {
+            if (pasteCompleted && this.state.clipboard === clipboard) {
                 this.state.clipboard = null;
+                this.updateClipboardUI();
+                const clipboardRow = this.element.querySelector('tr.clipboard-row');
+                clipboardRow?.classList.remove('clipboard-row', 'clipboard-cut', 'clipboard-copy');
             }
             this.invalidate();
         },

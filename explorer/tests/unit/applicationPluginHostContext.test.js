@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 
 import {
     buildPluginContext,
-    getApplicationPluginsForSlot
+    getApplicationPluginsForSlot,
+    waitForPluginPresenterRender
 } from '../../web-components/pages/file-exp/file-exp-application-plugins.js';
 
 describe('application plugin host context', () => {
@@ -69,5 +70,27 @@ describe('application plugin host context', () => {
         const plugins = getApplicationPluginsForSlot('file-exp:account-menu');
         assert.deepEqual(plugins.map((plugin) => plugin.id), ['workspace-monitor']);
         delete globalThis.window;
+    });
+
+    it('waits for the active WebSkel render created after presenter readiness', async () => {
+        let resolvePresenter;
+        let resolveActiveRender;
+        let completed = false;
+        const pluginElement = {
+            presenterReadyPromise: new Promise((resolve) => { resolvePresenter = resolve; }),
+            renderCompletePromise: Promise.resolve()
+        };
+        const activeRender = new Promise((resolve) => { resolveActiveRender = resolve; });
+        const waiting = waitForPluginPresenterRender(pluginElement).then(() => { completed = true; });
+
+        resolvePresenter();
+        queueMicrotask(() => { pluginElement.renderCompletePromise = activeRender; });
+        await Promise.resolve();
+        await Promise.resolve();
+        assert.equal(completed, false);
+
+        resolveActiveRender();
+        await waiting;
+        assert.equal(completed, true);
     });
 });

@@ -33,7 +33,6 @@ import {
     FILE_EXP_MENU_SLOTS,
     getBuiltInContextMenuItems,
     getBuiltInNewMenuItems,
-    buildFileExpMenuContext,
     resolveFileExpMenuItems,
     executeFileExpMenuItem
 } from "./file-exp-menu-contributions.js";
@@ -49,6 +48,7 @@ import { createPreviewHeaderController } from "./file-exp-preview-header-control
 import { getPreviewUiState } from "./file-exp-preview-state.js";
 import { FILE_EXP_REPLACE_COMPLETE_EVENT } from "../../../utils/appEvents.js";
 import { createDomListenerRegistry } from "../../../utils/domListenerRegistry.js";
+import { dispatchAppMenuItemsSet } from "../../components/app-menu/app-menu-events.js";
 import { runAfterRender as runLayoutAfterRender } from "./file-exp-layout-controller.js";
 import { loadStateFromURL as loadStateFromURLImpl, loadDirectory as loadDirectoryImpl, refreshDirectory as refreshDirectoryImpl, renderBreadcrumbs as renderBreadcrumbsImpl, goUpDirectory as goUpDirectoryImpl } from "./file-exp-navigation-controller.js";
 import { selectEntry as selectEntryImpl, handleSortClick as handleSortClickImpl } from "./file-exp-selection-controller.js";
@@ -158,9 +158,6 @@ export class FileExp {
         this.boundSortClickHandler = (event) => this.handleSortClick(event);
         this.boundAppMenuSelect = this.handleAppMenuSelect.bind(this);
         this.toolbarMenuItems = [];
-        this.contextMenuItemsByPath = new Map();
-        this.toolbarMenuLoadToken = 0;
-        this.contextMenuLoadToken = 0;
         this.openActionMenuDropdown = null;
         this.openActionMenuResizeObserver = null;
         this.openActionMenuMutationObserver = null;
@@ -206,6 +203,7 @@ export class FileExp {
 
         this.caches = createFileExpCaches();
         this.inflightDirListing = new Map();
+        this.backgroundDirRevalidation = new Map();
         this.directoryFilterController = createDirectoryFilterController(this);
         this.previewHeaderController = createPreviewHeaderController(this);
         this.tooling = createFileExpTooling();
@@ -591,14 +589,13 @@ export class FileExp {
             path: normalizedPath,
             type: type || targetEntry?.type || 'file'
         });
-        const cachedState = this.contextMenuItemsByPath.get(normalizedPath);
-        const cachedItems = Array.isArray(cachedState?.items) ? cachedState.items : null;
-        return cachedItems || builtInItems;
-    }
-
-    isContextMenuLoading(entryPath) {
-        const normalizedPath = this.normalizePath(entryPath || '');
-        return Boolean(this.contextMenuItemsByPath.get(normalizedPath)?.loading);
+        const slot = String(type || targetEntry?.type || 'file') === 'directory'
+            ? FILE_EXP_MENU_SLOTS.contextDirectory
+            : FILE_EXP_MENU_SLOTS.contextFile;
+        return resolveFileExpMenuItems(slot, targetEntry || {
+            path: normalizedPath,
+            type: type || 'file'
+        }, builtInItems);
     }
 
     renderToolbarMenuItems() {
@@ -618,21 +615,14 @@ export class FileExp {
         }
     }
 
-    async refreshToolbarMenuItems() {
+    refreshToolbarMenuItems() {
         const builtInItems = getBuiltInNewMenuItems(this);
-        this.toolbarMenuItems = builtInItems;
+        this.toolbarMenuItems = resolveFileExpMenuItems(FILE_EXP_MENU_SLOTS.newMenu, null, builtInItems);
         this.renderToolbarMenuItems();
-
-        const currentToken = ++this.toolbarMenuLoadToken;
-        const items = await resolveFileExpMenuItems(this, FILE_EXP_MENU_SLOTS.newMenu, null, builtInItems);
-        if (currentToken !== this.toolbarMenuLoadToken) {
-            return;
-        }
-        this.toolbarMenuItems = items;
-        this.renderToolbarMenuItems();
+        return this.toolbarMenuItems;
     }
 
-    async refreshContextMenuItems(entryPath) {
+    refreshContextMenuItems(entryPath) {
         const normalizedPath = this.normalizePath(entryPath || '');
         if (!normalizedPath) {
             return;
@@ -642,22 +632,25 @@ export class FileExp {
             ? FILE_EXP_MENU_SLOTS.contextDirectory
             : FILE_EXP_MENU_SLOTS.contextFile;
         const builtInItems = getBuiltInContextMenuItems(this, targetEntry);
-        this.contextMenuItemsByPath.set(normalizedPath, {
-            items: builtInItems,
-            loading: true
-        });
-        this.renderEntries();
+        const items = resolveFileExpMenuItems(slot, targetEntry, builtInItems);
+        this.publishMenuItems(this.getContextAppMenu(normalizedPath), items);
+        return items;
+    }
 
-        const currentToken = ++this.contextMenuLoadToken;
-        const items = await resolveFileExpMenuItems(this, slot, targetEntry, builtInItems);
-        if (currentToken !== this.contextMenuLoadToken || this.state.openMenuPath !== normalizedPath) {
-            return;
-        }
-        this.contextMenuItemsByPath.set(normalizedPath, {
-            items,
-            loading: false
-        });
-        this.renderEntries();
+    getContextAppMenu(entryPath) {
+        const containers = this.element?.querySelectorAll?.('[data-action-menu="true"]') || [];
+        const container = Array.from(containers)
+            .find((entry) => String(entry?.dataset?.entryPath || '') === String(entryPath || ''));
+        return container?.querySelector?.('app-menu') || null;
+    }
+
+    publishMenuItems(appMenu, menuItems) {
+        if (!appMenu) return false;
+        try {
+            appMenu.setAttribute('data-items', encodeURIComponent(JSON.stringify(menuItems)));
+            appMenu.setAttribute('data-loading', menuItems.some((item) => item?.loading === true) ? 'true' : 'false');
+        } catch {}
+        return dispatchAppMenuItemsSet(appMenu, menuItems);
     }
 
     async executeHostMenuAction(item) {
@@ -700,42 +693,149 @@ export class FileExp {
         if (!item || typeof item !== 'object') {
             return;
         }
+        if (item.source === 'plugin') {
+            const isContextMenu = item.slot === FILE_EXP_MENU_SLOTS.contextFile
+                || item.slot === FILE_EXP_MENU_SLOTS.contextDirectory;
+            const appMenu = event?.target?.closest?.('app-menu') || event?.target;
+            const currentItems = item.slot === FILE_EXP_MENU_SLOTS.newMenu
+                ? this.getToolbarMenuItems()
+                : this.getContextMenuItemsForEntry(item.entryPath, item.entryType);
+            this.publishMenuItems(appMenu, currentItems.map((entry) => (
+                entry.id === item.id ? { ...entry, loading: true } : entry
+            )));
+            try {
+                return await executeFileExpMenuItem(this, item, null, {
+                    onReady: () => {
+                        if (isContextMenu) {
+                            this.closeActionMenu(false);
+                        } else {
+                            this.publishMenuItems(appMenu, currentItems);
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error(`[menu plugin:${item.pluginId || 'unknown'}]`, error);
+                this.showStatus(error?.message || 'Plugin action failed.', true);
+                return false;
+            } finally {
+                if (isContextMenu) {
+                    if (this.state.openMenuPath === item.entryPath) this.closeActionMenu(false);
+                } else {
+                    this.publishMenuItems(appMenu, currentItems);
+                }
+            }
+        }
         if (item.slot === FILE_EXP_MENU_SLOTS.contextFile || item.slot === FILE_EXP_MENU_SLOTS.contextDirectory) {
             this.closeActionMenu(false);
-        }
-        if (item.source === 'plugin') {
-            const context = await buildFileExpMenuContext(
-                this,
-                item.slot,
-                item.entryPath ? {
-                    path: item.entryPath,
-                    type: item.entryType || 'file',
-                    name: item.entryName || ''
-                } : null
-            );
-            await executeFileExpMenuItem(this, item, context);
-            return;
         }
         await this.executeHostMenuAction(item);
     }
 
-    async loadDirectoryContent(path) {
+    scheduleDirectoryRevalidation(path) {
         const normalizedPath = this.normalizePath(path);
+        const cacheGeneration = this.caches.dirListing.getGeneration(this, normalizedPath);
+        const workspaceVersion = Number(this.state.workspaceVersion) || 0;
+        const existing = this.backgroundDirRevalidation.get(normalizedPath);
+        if (existing?.cacheGeneration === cacheGeneration && existing?.workspaceVersion === workspaceVersion) {
+            return existing.promise;
+        }
+        const request = (async () => {
+            const entries = await this.loadDirectoryContent(normalizedPath, {
+                skipCache: true,
+                background: true
+            });
+            if (!Array.isArray(entries)) return entries;
+            if (
+                this.caches.dirListing.getGeneration(this, normalizedPath) !== cacheGeneration
+                || (Number(this.state.workspaceVersion) || 0) !== workspaceVersion
+            ) {
+                return null;
+            }
+            this.caches.dirListing.set(this, normalizedPath, entries);
+
+            const treeViewState = this.treeViewState;
+            const visibleListingPath = this.state.directoryViewMode === 'tree'
+                ? (this.state.treeRootPath || this.state.path || '/')
+                : (this.state.path || '/');
+            if (this.normalizePath(visibleListingPath) === normalizedPath) {
+                const isCurrentGeneration = () => (
+                    this.caches.dirListing.getGeneration(this, normalizedPath) === cacheGeneration
+                    && (Number(this.state.workspaceVersion) || 0) === workspaceVersion
+                    && this.normalizePath(this.state.directoryViewMode === 'tree'
+                        ? (this.state.treeRootPath || this.state.path || '/')
+                        : (this.state.path || '/')) === normalizedPath
+                );
+                const committed = await this.setEntries(entries, { shouldCommit: isCurrentGeneration });
+                if (committed && isCurrentGeneration()) {
+                    if (this.state.directoryViewMode === 'tree') {
+                        this.getEntriesPresenter()?.updateTreeRootEntries?.();
+                    } else {
+                        this.renderEntries();
+                    }
+                }
+            } else if (treeViewState?.childrenCache?.has(normalizedPath)) {
+                const visibleChildren = this.state.filterSpecs
+                    ? await this.filterEntriesForSpecs(entries)
+                    : entries;
+                if (
+                    this.caches.dirListing.getGeneration(this, normalizedPath) === cacheGeneration
+                    && (Number(this.state.workspaceVersion) || 0) === workspaceVersion
+                ) {
+                    this.getEntriesPresenter()?.updateTreeDirectoryChildren?.(
+                        normalizedPath,
+                        this.sortEntries(visibleChildren)
+                    );
+                }
+            }
+            return entries;
+        })().catch((error) => {
+            console.warn(`Failed to revalidate directory ${normalizedPath}:`, error);
+            return null;
+        }).finally(() => {
+            if (this.backgroundDirRevalidation.get(normalizedPath)?.promise === request) {
+                this.backgroundDirRevalidation.delete(normalizedPath);
+            }
+        });
+        this.backgroundDirRevalidation.set(normalizedPath, {
+            cacheGeneration,
+            workspaceVersion,
+            promise: request
+        });
+        return request;
+    }
+
+    getCachedDirectoryContent(path, { revalidate = true } = {}) {
+        const normalizedPath = this.normalizePath(path);
+        const cached = this.caches.dirListing.read(this, normalizedPath);
+        if (cached?.isStale && revalidate) {
+            void this.scheduleDirectoryRevalidation(normalizedPath);
+        }
+        return cached;
+    }
+
+    async loadDirectoryContent(path, options = {}) {
+        const normalizedPath = this.normalizePath(path);
+        const cacheGeneration = this.caches.dirListing.getGeneration(this, normalizedPath);
+        const skipCache = Boolean(options.skipCache);
+        const background = Boolean(options.background);
         if (isDpuVirtualPath(normalizedPath)) {
             try {
                 this.lastLoadError = null;
-                const cached = this.caches.dirListing.get(this, normalizedPath);
+                const cached = skipCache ? null : this.getCachedDirectoryContent(normalizedPath);
                 if (cached) {
-                    return cached;
+                    return cached.value;
                 }
                 const entries = await listDpuDirectory(this, normalizedPath);
-                this.caches.dirListing.set(this, normalizedPath, entries);
+                if (!background && this.caches.dirListing.getGeneration(this, normalizedPath) === cacheGeneration) {
+                    this.caches.dirListing.set(this, normalizedPath, entries);
+                }
                 return entries;
             } catch (err) {
                 this.lastLoadError = err;
                 if (this.isPathNotFoundError(err)) {
                     return null;
                 }
+                if (background) return null;
                 console.error(err);
                 this.showStatus(err.message || 'Failed to load confidential directory.', true);
                 return [];
@@ -743,16 +843,17 @@ export class FileExp {
         }
         try {
             this.lastLoadError = null;
-            const cached = this.caches.dirListing.get(this, normalizedPath);
+            const cached = skipCache ? null : this.getCachedDirectoryContent(normalizedPath);
             if (cached) {
-                return cached;
+                return cached.value;
             }
             const globalInflight = window.__fileExpInflightDirListing || (window.__fileExpInflightDirListing = new Map());
-            if (this.inflightDirListing.has(normalizedPath)) {
-                return await this.inflightDirListing.get(normalizedPath);
+            const inflightKey = `${normalizedPath}|generation:${cacheGeneration}`;
+            if (this.inflightDirListing.has(inflightKey)) {
+                return await this.inflightDirListing.get(inflightKey);
             }
-            if (globalInflight.has(normalizedPath)) {
-                return await globalInflight.get(normalizedPath);
+            if (globalInflight.has(inflightKey)) {
+                return await globalInflight.get(inflightKey);
             }
             const request = (async () => {
             const result = await this.tooling.listDirectoryDetailed(normalizedPath);
@@ -764,32 +865,36 @@ export class FileExp {
             if (normalizedPath === '/') {
                 resolved = await mergeDpuRootEntry(this, resolved);
             }
-            this.caches.dirListing.set(this, normalizedPath, resolved);
+            if (!background && this.caches.dirListing.getGeneration(this, normalizedPath) === cacheGeneration) {
+                this.caches.dirListing.set(this, normalizedPath, resolved);
+            }
             return resolved;
             })();
-            this.inflightDirListing.set(normalizedPath, request);
-            globalInflight.set(normalizedPath, request);
+            this.inflightDirListing.set(inflightKey, request);
+            globalInflight.set(inflightKey, request);
             try {
                 return await request;
             } finally {
-                this.inflightDirListing.delete(normalizedPath);
-                globalInflight.delete(normalizedPath);
+                this.inflightDirListing.delete(inflightKey);
+                globalInflight.delete(inflightKey);
             }
         } catch (err) {
             this.lastLoadError = err;
             if (this.isPathNotFoundError(err)) {
                 return null;
             }
+            if (background) return null;
             console.error(err);
             this.showStatus(err.message || 'Failed to load directory.', true);
             return [];
         }
     }
 
-    async setEntries(entries) {
+    async setEntries(entries, options = {}) {
         const snapshot = this.stateStore?.getState ? this.stateStore.getState() : this.state;
         const sourceEntries = Array.isArray(entries) ? entries : [];
-        this.state.allEntries = sourceEntries;
+        let nextEntries;
+        let filterError = null;
         try {
             const filterQuery = String(snapshot.directoryFilterQuery || '').trim().toLowerCase();
             const applyDirectoryFilter = (items) => {
@@ -803,15 +908,24 @@ export class FileExp {
 
             if (snapshot.filterSpecs) {
                 const filtered = await this.filterEntriesForSpecs(sourceEntries);
-                this.state.entries = this.sortEntries(applyDirectoryFilter(filtered));
+                nextEntries = this.sortEntries(applyDirectoryFilter(filtered));
             } else {
-                this.state.entries = this.sortEntries(applyDirectoryFilter(sourceEntries));
+                nextEntries = this.sortEntries(applyDirectoryFilter(sourceEntries));
             }
         } catch (err) {
-            console.warn('Failed to apply specs filter', err);
-            this.state.entries = this.sortEntries(sourceEntries);
+            filterError = err;
+            nextEntries = this.sortEntries(sourceEntries);
+        }
+        if (typeof options.shouldCommit === 'function' && !options.shouldCommit()) {
+            return false;
+        }
+        this.state.allEntries = sourceEntries;
+        this.state.entries = nextEntries;
+        if (filterError) {
+            console.warn('Failed to apply specs filter', filterError);
             this.showStatus('Could not apply filter. Showing all files.', true);
         }
+        return true;
     }
 
     sortEntries(entries = []) {

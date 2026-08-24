@@ -1,3 +1,5 @@
+import { APP_MENU_ITEMS_SET_EVENT } from './app-menu-events.js';
+
 function parseItems(element, props) {
     const encoded = element.getAttribute('data-items');
     if (encoded) {
@@ -19,13 +21,6 @@ function encodeItems(items) {
     }
 }
 
-function parseLoading(element, props) {
-    if (typeof props?.loading === 'boolean') {
-        return props.loading;
-    }
-    return element.getAttribute('data-loading') === 'true';
-}
-
 function escapeHtml(value) {
     return String(value ?? '')
         .replace(/&/g, '&amp;')
@@ -45,15 +40,21 @@ function renderItemMarkup(item) {
     const title = typeof item.title === 'string' && item.title.trim()
         ? ` title="${escapeHtml(item.title.trim())}"`
         : '';
-    const disabled = item.disabled ? ' disabled aria-disabled="true"' : '';
+    const loading = item.loading === true;
+    const disabled = item.disabled || loading ? ' disabled aria-disabled="true"' : '';
     const destructive = item.destructive ? ' destructive' : '';
-    const icon = typeof item.icon === 'string' && item.icon.trim()
+    const loadingClass = loading ? ' is-loading' : '';
+    const busy = loading ? ' aria-busy="true"' : '';
+    const icon = !loading && typeof item.icon === 'string' && item.icon.trim()
         ? `<img class="app-menu-item-icon action-menu-item-icon" loading="lazy" src="${escapeHtml(item.icon)}" alt="">`
+        : '';
+    const loadingSpinner = loading
+        ? '<span class="app-menu-spinner app-menu-item-spinner" aria-hidden="true"></span>'
         : '';
 
     return `
-        <button type="button" class="app-menu-item action-menu-item${destructive}" data-item-id="${itemId}" data-local-action="handleMenuItemSelection ${itemId}" role="menuitem"${title}${disabled}>
-            ${icon}
+        <button type="button" class="app-menu-item action-menu-item${destructive}${loadingClass}" data-item-id="${itemId}" data-local-action="handleMenuItemSelection ${itemId}" role="menuitem"${title}${disabled}${busy}>
+            ${loadingSpinner || icon}
             <span class="app-menu-item-label action-menu-item-label">${escapeHtml(String(item.label || ''))}</span>
         </button>
     `;
@@ -63,54 +64,56 @@ export class AppMenu {
     constructor(element, invalidate, props = {}) {
         this.element = element;
         this.invalidate = invalidate;
-        this.props = props;
         this.items = parseItems(element, props);
-        this.loading = parseLoading(element, props);
-        this.loadingAriaLabel = 'Loading menu actions';
+        this.loading = this.items.some((item) => item?.loading === true);
+        this.boundHandleItemsSet = this.handleItemsSet.bind(this);
         this.invalidate();
     }
 
-    get rootClass() {
-        return this.loading ? 'is-loading' : '';
-    }
-
-    get loadingClass() {
-        return this.loading ? '' : 'is-hidden';
-    }
-
-    get listClass() {
-        return this.loading ? 'is-hidden' : '';
-    }
-
-    get loadingMarkup() {
-        if (!this.loading) return '';
-        return `<div class="app-menu-loading" id="appMenuLoading" role="status" aria-live="polite" aria-label="${escapeHtml(this.loadingAriaLabel)}">
-            <span class="app-menu-spinner" aria-hidden="true"></span>
-        </div>`;
-    }
-
     get itemsMarkup() {
-        if (this.loading) return '';
         const items = Array.isArray(this.items) ? this.items : [];
         return items.map((item) => renderItemMarkup(item)).join('');
     }
 
     beforeRender() {}
 
-    afterRender() {}
+    afterRender() {
+        this.element.removeEventListener(APP_MENU_ITEMS_SET_EVENT, this.boundHandleItemsSet);
+        this.element.addEventListener(APP_MENU_ITEMS_SET_EVENT, this.boundHandleItemsSet);
+        const encodedItems = this.element.getAttribute('data-items');
+        if (encodedItems && encodedItems !== encodeItems(this.items)) {
+            this.applyItems(parseItems(this.element, {}));
+        }
+    }
 
     beforeUnload() {
-        this.list = null;
+        this.element.removeEventListener(APP_MENU_ITEMS_SET_EVENT, this.boundHandleItemsSet);
+    }
+
+    handleItemsSet(event) {
+        this.applyItems(Array.isArray(event?.detail?.items) ? event.detail.items : []);
+    }
+
+    applyItems(items) {
+        this.items = Array.isArray(items) ? items : [];
+        this.loading = this.items.some((item) => item?.loading === true);
+        this.element.setAttribute('data-items', encodeItems(this.items));
+        this.element.setAttribute('data-loading', this.loading ? 'true' : 'false');
+
+        const list = this.element.querySelector?.('#appMenuList');
+        if (!list || typeof document === 'undefined') {
+            this.invalidate();
+            return;
+        }
+        const template = document.createElement('template');
+        template.innerHTML = this.items.map((item) => renderItemMarkup(item)).join('');
+        list.replaceChildren(template.content);
     }
 
     setItems(items) {
         this.items = Array.isArray(items) ? items : [];
+        this.loading = this.items.some((item) => item?.loading === true);
         this.element.setAttribute('data-items', encodeItems(this.items));
-        this.invalidate();
-    }
-
-    setLoading(loading) {
-        this.loading = Boolean(loading);
         this.element.setAttribute('data-loading', this.loading ? 'true' : 'false');
         this.invalidate();
     }
@@ -136,9 +139,7 @@ export class AppMenu {
         if (Object.prototype.hasOwnProperty.call(nextState, 'items')) {
             this.items = Array.isArray(nextState.items) ? nextState.items : [];
             this.element.setAttribute('data-items', encodeItems(this.items));
-        }
-        if (Object.prototype.hasOwnProperty.call(nextState, 'loading')) {
-            this.loading = Boolean(nextState.loading);
+            this.loading = this.items.some((item) => item?.loading === true);
             this.element.setAttribute('data-loading', this.loading ? 'true' : 'false');
         }
         this.invalidate();

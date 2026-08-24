@@ -134,6 +134,13 @@ test('normalizeRuntimePlugins preserves dependencies for menu contributions', ()
                 id: 'git',
                 agent: 'gitAgent',
                 menuModule: 'menu-contributions.js',
+                label: 'Git',
+                presentation: {
+                    'file-exp:new-menu': {
+                        label: 'New repository',
+                        tooltip: 'Create a repository'
+                    }
+                },
                 dependencies: [{
                     component: 'git-new-repository-modal',
                     presenter: 'GitNewRepositoryModal',
@@ -146,6 +153,8 @@ test('normalizeRuntimePlugins preserves dependencies for menu contributions', ()
 
     const entry = normalized.application['file-exp:new-menu'][0];
     assert.equal(entry.dependencies.length, 1);
+    assert.equal(entry.label, 'New repository');
+    assert.equal(entry.tooltip, 'Create a repository');
     assert.equal(entry.dependencies[0].component, 'git-new-repository-modal');
     assert.equal(
         entry.dependencies[0].baseUrl,

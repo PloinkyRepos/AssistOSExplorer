@@ -36,3 +36,26 @@ test('Explorer new-repository flow switches to the submodule tool inside a repos
     assert.match(modalSource, /Add Git submodule/);
     assert.match(modalHtml, /data-git-new-repository-title/);
 });
+
+test('Explorer Git menu has stable slot presentation and lazy click activation', async () => {
+    const config = JSON.parse(await readAgentFile('IDE-plugins/git-menu-contributions/config.json'));
+    const menuSource = await readAgentFile('IDE-plugins/git-menu-contributions/menu-contributions.js');
+
+    assert.equal(Object.hasOwn(config, 'menuItems'), false);
+    assert.equal(config.presentation['file-exp:context-menu:file'].label, 'Add to .gitignore');
+    assert.equal(config.presentation['file-exp:new-menu'].label, 'New repository');
+    assert.match(menuSource, /export async function activateMenuItem/);
+    assert.match(menuSource, /context\?\.slot === 'file-exp:new-menu'/);
+});
+
+test('Git opens its modal without an Explorer-owned loader and keeps forced refresh local', async () => {
+    const controllerSource = await readAgentFile('IDE-plugins/git-tool-button/git-tool-button-controller.js');
+    const modalSource = await readAgentFile('IDE-plugins/git-tool-button/components/git-commit-modal/git-commit-modal.js');
+    const openModalBlock = controllerSource.match(/async function openGitModal[\s\S]*?\n    }/)?.[0] || '';
+
+    assert.doesNotMatch(openModalBlock, /fileExp\.withLoader/);
+    assert.doesNotMatch(openModalBlock, /suppressGlobalLoader/);
+    assert.match(openModalBlock, /syncConflictFlagFromRepos\(\)/);
+    assert.match(modalSource, /withModalLoader\(async \(\) =>/);
+    assert.match(modalSource, /refreshAll\(\{ force: true \}\)/);
+});

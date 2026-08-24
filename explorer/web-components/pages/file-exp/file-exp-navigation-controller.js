@@ -41,7 +41,7 @@ async function loadTreeContext(fileExp, targetDirectoryPath, options = {}) {
 }
 
 export async function loadStateFromURL(fileExp) {
-    await fileExp.withLoader(async () => {
+    {
         const rawPath = window.location.hash.split('#file-exp')[1] || '/';
         let path = rawPath;
         try {
@@ -117,11 +117,11 @@ export async function loadStateFromURL(fileExp) {
             await fileExp.loadDirectory('/');
             fileExp.showStatus(error?.message || 'An error occurred while loading the path. Returned to root.', true);
         }
-    });
+    }
 }
 
 export async function loadDirectory(fileExp, path = fileExp.state.path) {
-    await fileExp.withLoader(async () => {
+    {
         if (fileExp.state.isEditing) {
             await fileExp.cancelEdit();
         }
@@ -166,7 +166,7 @@ export async function loadDirectory(fileExp, path = fileExp.state.path) {
         }
         await fileExp.setEntries(entries);
         fileExp.invalidate();
-    });
+    }
 
     if (String(fileExp.state.directoryFilterQuery || '').trim().length >= 2) {
         await fileExp.directoryFilterController.rerunIfActive();
