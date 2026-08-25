@@ -219,6 +219,10 @@ test.describe('DPU and OnlyOffice @external', () => {
   test.skip(!smokeConfig.flags.onlyoffice, 'Set SMOKE_ONLYOFFICE=1 to run OnlyOffice/DPU smoke checks.');
 
   test('Explorer-created Confidential document saves through callback, drains, and reopens after targeted restart', async ({ browser }, testInfo) => {
+    // A targeted OnlyOffice replacement includes graceful shutdown, image
+    // recreation, and semantic readiness. On a cold Box that bounded lifecycle
+    // legitimately exceeds the generic two-minute UI smoke budget.
+    test.setTimeout(Math.max(smokeConfig.timeouts.test, 300_000));
     expect(
       dpuData.exists(),
       `DPU data root should exist at ${dpuData.describe()}. Set SMOKE_WORKSPACE_ROOT or SMOKE_DPU_DATA_ROOT for local deployments.`
