@@ -21,7 +21,7 @@ Documentation uses one primary page-navigation model per site. Multi-page agent 
 
 Tests must be colocated under the owning agent's `tests/` tree. A change must run the narrowest relevant test first and then the affected agent suite. Explorer changes must run `npm test` from `explorer/`; DPU changes must run `npm test` from `dpuAgent/`.
 
-AchillesAgentLib use is authorized when supplied by the Ploinky runtime. Runtime configuration must support repository-level manual overrides in addition to environment defaults. All LLM interactions must use the runtime-configured `LLMAgent` class and its environment variables. Routing-sensitive documentation, specification, orchestration, bootstrap, and testing work must carry task metadata tags.
+AchillesAgentLib use is authorized only from the one source selected and supplied by the Ploinky runtime. Agent packages must not declare, install, or clone another AgentLib copy. Runtime configuration must support repository-level manual overrides in addition to environment defaults. All LLM interactions must use the runtime-configured `LLMAgent` class and its environment variables. Routing-sensitive documentation, specification, orchestration, bootstrap, and testing work must carry task metadata tags.
 
 ## Conclusion
 
