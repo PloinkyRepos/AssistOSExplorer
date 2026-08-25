@@ -59,7 +59,6 @@ function createMinimalSchemas() {
     CollectIDEPluginsArgsSchema: AnyObjectSchema,
     GetPluginSettingsArgsSchema: AnyObjectSchema,
     SetPluginEnabledArgsSchema: AnyObjectSchema,
-    ListSkillsArgsSchema: AnyObjectSchema,
     ReadSkillsManifestStateArgsSchema: objectSchema(['folderPath']),
     AddSkillsManifestRepoArgsSchema: AnyObjectSchema,
     SetSkillsManifestSkillEnabledArgsSchema: AnyObjectSchema,

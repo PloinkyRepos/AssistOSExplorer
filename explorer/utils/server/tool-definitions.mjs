@@ -42,7 +42,6 @@ export function buildToolDefinitions(zodToJsonSchema, schemas) {
     CollectIDEPluginsArgsSchema,
     GetPluginSettingsArgsSchema,
     SetPluginEnabledArgsSchema,
-    ListSkillsArgsSchema,
     ReadSkillsManifestStateArgsSchema,
     AddSkillsManifestRepoArgsSchema,
     SetSkillsManifestSkillEnabledArgsSchema,
@@ -267,11 +266,6 @@ export function buildToolDefinitions(zodToJsonSchema, schemas) {
       name: 'set_plugin_enabled',
       description: 'Persist enabled or disabled state for a plugin in workspace settings.',
       inputSchema: zodToJsonSchema(SetPluginEnabledArgsSchema)
-    },
-    {
-      name: 'list-skills',
-      description: 'List Achilles CLI skills discovered for the current workspace.',
-      inputSchema: zodToJsonSchema(ListSkillsArgsSchema)
     },
     {
       name: 'read_skills_manifest_state',

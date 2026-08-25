@@ -1119,16 +1119,6 @@
       }
     },
     {
-      "name": "list-skills",
-      "description": "List Achilles CLI skills discovered for the current workspace.",
-      "command": "tools/explorer_tool.sh",
-      "cwd": "workspace",
-      "env": {
-        "TOOL_NAME": "list-skills"
-      },
-      "inputSchema": {}
-    },
-    {
       "name": "read_skills_manifest_state",
       "description": "Read ploinky-skills-manifest.json and available cached skills for a workspace folder.",
       "command": "tools/explorer_tool.sh",

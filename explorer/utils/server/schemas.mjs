@@ -306,7 +306,6 @@ export function createSchemas(z) {
     key: z.string(),
     enabled: z.boolean()
   });
-  const ListSkillsArgsSchema = z.object({});
   const ReadSkillsManifestStateArgsSchema = z.object({ folderPath: z.string() });
   const AddSkillsManifestRepoArgsSchema = z.object({
     folderPath: z.string(),
@@ -379,7 +378,6 @@ export function createSchemas(z) {
     CollectIDEPluginsArgsSchema,
     GetPluginSettingsArgsSchema,
     SetPluginEnabledArgsSchema,
-    ListSkillsArgsSchema,
     ReadSkillsManifestStateArgsSchema,
     AddSkillsManifestRepoArgsSchema,
     SetSkillsManifestSkillEnabledArgsSchema,

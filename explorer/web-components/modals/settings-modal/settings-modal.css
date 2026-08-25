@@ -85,6 +85,28 @@ settings-modal .plugin-settings-status.error {
     color: var(--file-exp-error);
 }
 
+settings-modal .plugin-settings-status.loading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+settings-modal .plugin-settings-inline-spinner {
+    width: 14px;
+    height: 14px;
+    flex: 0 0 14px;
+    border: 2px solid rgba(var(--accent-rgb), 0.28);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: settings-inline-spinner 0.7s linear infinite;
+}
+
+@keyframes settings-inline-spinner {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
 settings-modal .settings-subtabs {
     display: flex;
     flex-wrap: wrap;

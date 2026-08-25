@@ -1,5 +1,5 @@
 import {
-    callExplorerTool,
+    callAgentTool,
     parseToolResult
 } from "../../../services/infrastructure/explorerApi.js";
 
@@ -23,8 +23,21 @@ export const copilotController = {
 
     renderCopilotSettingsStatus() {
         if (!this.copilotSettingsStatusEl) return;
-        this.copilotSettingsStatusEl.textContent = this.state.copilotStatus || "";
+        const status = this.state.copilotStatus || "";
+        const isLoading = this.state.copilotStatusType === "loading";
+        this.copilotSettingsStatusEl.replaceChildren();
+        this.copilotSettingsStatusEl.classList.toggle("loading", isLoading);
         this.copilotSettingsStatusEl.classList.toggle("error", this.state.copilotStatusType === "error");
+        if (isLoading) {
+            const spinner = document.createElement("span");
+            spinner.className = "plugin-settings-inline-spinner";
+            spinner.setAttribute("aria-hidden", "true");
+            const label = document.createElement("span");
+            label.textContent = status;
+            this.copilotSettingsStatusEl.append(spinner, label);
+            return;
+        }
+        this.copilotSettingsStatusEl.textContent = status;
     },
 
     renderCopilotSettingsList() {
@@ -57,10 +70,10 @@ export const copilotController = {
 
     async loadCopilotSettingsData() {
         this.state.copilotStatus = "Loading Copilot skills...";
-        this.state.copilotStatusType = "";
+        this.state.copilotStatusType = "loading";
         this.renderCopilotSettingsStatus();
         try {
-            const payload = await callExplorerTool("list-skills", {}, { raw: true, withLoader: false });
+            const payload = await callAgentTool("achilles-cli", "list_achilles_skills", {}, { raw: true });
             const parsed = parseToolResult(payload) || {};
             this.state.copilotItems = normalizeCopilotSkillItems(parsed.skills);
             this.state.copilotDisabledKeys = new Set();
