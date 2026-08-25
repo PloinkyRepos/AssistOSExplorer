@@ -52,7 +52,7 @@ function documentRow(page, documentPath) {
 function readDpuDocumentSnapshot(fileName) {
   if (!dpuData.exists('state.json')) return null;
   const state = dpuData.readJson('state.json');
-  const object = Object.values(state?.objects || {}).find((entry) => (
+  const object = Object.values(state?.confidentialObjects || {}).find((entry) => (
     entry?.type === 'file' && entry?.name === fileName
   ));
   if (!object?.id || !dpuData.exists('blobs', object.id)) return null;

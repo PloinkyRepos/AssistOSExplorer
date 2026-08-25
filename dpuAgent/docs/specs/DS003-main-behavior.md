@@ -23,12 +23,12 @@ Explorer needs folder-style navigation and file-style interaction for confidenti
 
 ### Object Model
 
-The agent stores confidential objects in `state.objects`. Each object is either:
+The agent stores confidential objects in `state.confidentialObjects`. Each object is either:
 
 - a `folder`
 - a `file`
 
-Folder records are metadata-only. File records keep metadata in `state.objects` and store their content in encrypted blob storage addressed by object id.
+Folder records are metadata-only. File records keep metadata in `state.confidentialObjects` and store their content in encrypted blob storage addressed by object id.
 
 The agent also maintains a per-user `My Space` root through `ensureUserRecord()`. Shared content is not a real top-level folder on disk. It is a filtered view computed from access control list visibility.
 

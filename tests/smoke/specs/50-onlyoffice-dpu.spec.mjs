@@ -19,8 +19,8 @@ function readDpuState() {
 
 function findDpuObjectByName(name) {
   const state = readDpuState();
-  const objects = state?.objects && typeof state.objects === 'object'
-    ? Object.values(state.objects)
+  const objects = state?.confidentialObjects && typeof state.confidentialObjects === 'object'
+    ? Object.values(state.confidentialObjects)
     : [];
   return objects.find((object) => object?.name === name && object?.type === 'file') || null;
 }
