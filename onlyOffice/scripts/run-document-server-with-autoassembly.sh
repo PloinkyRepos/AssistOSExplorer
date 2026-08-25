@@ -5,6 +5,7 @@ source_script="${ONLYOFFICE_DOCUMENT_SERVER_BASE_SCRIPT:-/app/ds/run-document-se
 patched_script="${TMPDIR:-/tmp}/onlyoffice-agent-run-document-server.$$.sh"
 configure_v5_script="${ONLYOFFICE_V5_CONFIGURE_SCRIPT:-/code/scripts/configure-document-server-v5.sh}"
 configure_support_listeners_script="${ONLYOFFICE_SUPPORT_LISTENER_SCRIPT:-/code/scripts/configure-support-listeners-v5.sh}"
+bounded_shutdown_script="${ONLYOFFICE_BOUNDED_SHUTDOWN_SCRIPT:-/code/scripts/prepare-document-server-shutdown.sh}"
 
 if [ ! -f "$source_script" ]; then
   echo "OnlyOffice Document Server script not found: $source_script" >&2
@@ -16,9 +17,20 @@ if [ ! -x "$configure_support_listeners_script" ]; then
   exit 1
 fi
 
+if [ ! -f "$bounded_shutdown_script" ]; then
+  echo "OnlyOffice bounded DocumentServer shutdown script is missing: $bounded_shutdown_script" >&2
+  exit 1
+fi
+
 awk \
   -v configure_v5_script="$configure_v5_script" \
-  -v configure_support_listeners_script="$configure_support_listeners_script" '
+  -v configure_support_listeners_script="$configure_support_listeners_script" \
+  -v bounded_shutdown_script="$bounded_shutdown_script" '
+  /^[[:space:]]*\/usr\/bin\/documentserver-prepare4shutdown\.sh[[:space:]]*$/ {
+    print "    /bin/bash \"" bounded_shutdown_script "\""
+    bounded_shutdown_patched++
+    next
+  }
   /^[[:space:]]*service \$i start[[:space:]]*$/ {
     print "  if [ \"$i\" = \"rabbitmq-server\" ]; then"
     print "    install -d -o rabbitmq -g rabbitmq -m 0755 /var/run/rabbitmq"
@@ -57,6 +69,9 @@ awk \
     }
     if (support_listeners_inserted != 1) {
       exit 43
+    }
+    if (bounded_shutdown_patched != 1) {
+      exit 44
     }
   }
 ' "$source_script" > "$patched_script"

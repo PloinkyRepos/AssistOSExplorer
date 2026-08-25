@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
+import { once } from 'node:events';
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -23,6 +24,15 @@ test('document server wrapper enables auto assembly before supervisor starts', a
   await writeFile(fakeDocumentServer, [
     '#!/bin/bash',
     'set -e',
+    'CHILD=""',
+    'function clean_exit {',
+    '  [[ -z "$CHILD" ]] || kill -s SIGTERM "$CHILD" 2>/dev/null',
+    '  if [ "${ONLYOFFICE_DATA_CONTAINER:-false}" = "false" ]; then',
+    '    /usr/bin/documentserver-prepare4shutdown.sh',
+    '  fi',
+    '  exit',
+    '}',
+    'trap clean_exit SIGTERM SIGQUIT SIGABRT SIGINT',
     `JSON=${JSON.stringify(fakeJson)}`,
     'service() { echo "service $*"; }',
     'install() { echo "install $*"; }',
@@ -52,6 +62,7 @@ test('document server wrapper enables auto assembly before supervisor starts', a
       ONLYOFFICE_DOCUMENT_SERVER_BASE_SCRIPT: fakeDocumentServer,
       ONLYOFFICE_V5_CONFIGURE_SCRIPT: configureV5,
       ONLYOFFICE_SUPPORT_LISTENER_SCRIPT: configureSupportListeners,
+      ONLYOFFICE_BOUNDED_SHUTDOWN_SCRIPT: configureV5,
       ONLYOFFICE_AUTO_ASSEMBLY_ENABLED: 'true',
       ONLYOFFICE_AUTO_ASSEMBLY_INTERVAL: '2m',
       ONLYOFFICE_AUTO_ASSEMBLY_STEP: '30s',
@@ -69,6 +80,110 @@ test('document server wrapper enables auto assembly before supervisor starts', a
   assert.ok(stdout.indexOf('configure v5') < stdout.indexOf('service supervisor start'));
   assert.match(stdout, /configure support listeners/);
   assert.match(stdout, /service supervisor start/);
+});
+
+test('document server wrapper bounds the native shutdown hook after application drain', async (t) => {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'onlyoffice-wrapper-stop-'));
+  const fakeDocumentServer = path.join(tempDir, 'run-document-server.sh');
+  const boundedShutdown = path.join(tempDir, 'bounded-shutdown.sh');
+  const noOpScript = path.join(tempDir, 'no-op.sh');
+  const shutdownLog = path.join(tempDir, 'shutdown.log');
+
+  await writeFile(fakeDocumentServer, [
+    '#!/bin/bash',
+    'CHILD=""',
+    'start_process() {',
+    '  "$@" &',
+    '  CHILD=$!',
+    '  echo ready',
+    '  wait "$CHILD"',
+    '  CHILD=""',
+    '}',
+    'function clean_exit {',
+    '  [[ -z "$CHILD" ]] || kill -s SIGTERM "$CHILD" 2>/dev/null',
+    '  if [ "${ONLYOFFICE_DATA_CONTAINER:-false}" = "false" ]; then',
+    '    /usr/bin/documentserver-prepare4shutdown.sh',
+    '  fi',
+    '  exit',
+    '}',
+    'trap clean_exit SIGTERM SIGQUIT SIGABRT SIGINT',
+    'JSON=/usr/bin/true',
+    'service() { :; }',
+    'install() { :; }',
+    'start-stop-daemon() { :; }',
+    'LOCAL_SERVICES=(rabbitmq-server)',
+    '#start needed local services',
+    'for i in "${LOCAL_SERVICES[@]}"; do',
+    '  service $i start',
+    'done',
+    'service supervisor start',
+    'start_process sleep 300',
+  ].join('\n'), { mode: 0o755 });
+  await writeFile(boundedShutdown, [
+    '#!/bin/bash',
+    `printf '%s\\n' bounded >> ${JSON.stringify(shutdownLog)}`,
+  ].join('\n'), { mode: 0o755 });
+  await writeFile(noOpScript, '#!/bin/bash\nexit 0\n', { mode: 0o755 });
+
+  const child = spawn('/bin/bash', ['scripts/run-document-server-with-autoassembly.sh'], {
+    cwd: new URL('..', import.meta.url),
+    detached: true,
+    env: {
+      ...process.env,
+      ONLYOFFICE_DOCUMENT_SERVER_BASE_SCRIPT: fakeDocumentServer,
+      ONLYOFFICE_V5_CONFIGURE_SCRIPT: noOpScript,
+      ONLYOFFICE_SUPPORT_LISTENER_SCRIPT: noOpScript,
+      ONLYOFFICE_BOUNDED_SHUTDOWN_SCRIPT: boundedShutdown,
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  t.after(async () => {
+    if (child.exitCode !== null || child.signalCode) return;
+    const forcedExit = once(child, 'exit');
+    try {
+      process.kill(-child.pid, 'SIGKILL');
+    } catch (_) {
+      return;
+    }
+    await forcedExit.catch(() => {});
+  });
+  const output = [];
+  child.stdout.on('data', (chunk) => output.push(chunk.toString()));
+  await Promise.race([
+    new Promise((resolve) => {
+      const checkReady = () => {
+        if (output.join('').includes('ready')) resolve();
+        else setTimeout(checkReady, 10);
+      };
+      checkReady();
+    }),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('wrapper did not become ready')), 2_000)),
+  ]);
+
+  const childExit = once(child, 'exit');
+  process.kill(-child.pid, 'SIGTERM');
+  const [exitCode, signal] = await Promise.race([
+    childExit,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('wrapper shutdown was not bounded')), 2_000)),
+  ]);
+
+  assert.equal(exitCode, 0);
+  assert.equal(signal, null);
+  assert.equal(await readFile(shutdownLog, 'utf8'), 'bounded\n');
+});
+
+test('bounded DocumentServer shutdown helper uses an exact loopback request and fixed limits', async () => {
+  const helper = await readFile(
+    new URL('scripts/prepare-document-server-shutdown.sh', new URL('..', import.meta.url)),
+    'utf8',
+  );
+  assert.match(helper, /\/usr\/bin\/curl/);
+  assert.match(helper, /--connect-timeout 1/);
+  assert.match(helper, /--max-time 2/);
+  assert.match(helper, /--request PUT/);
+  assert.match(helper, /http:\/\/127\.0\.0\.1:8000\/internal\/cluster\/inactive/);
+  assert.match(helper, /did not complete within its bounded shutdown window/);
+  assert.match(helper, /exit 0/);
 });
 
 test('support-listener configuration hardens every bundled dependency without duplicate settings', async () => {

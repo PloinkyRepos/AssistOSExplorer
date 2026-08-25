@@ -375,9 +375,10 @@ function defaultDocumentServerCommand(env) {
   return String(env?.ONLYOFFICE_DOCUMENT_SERVER_COMMAND || '/bin/bash scripts/run-document-server-with-autoassembly.sh').trim();
 }
 
-function startDocumentServerProcess({
+export function startDocumentServerProcess({
   env = process.env,
   spawnProcess = spawn,
+  signalProcessGroup = process.kill,
   command = defaultDocumentServerCommand(env),
 } = {}) {
   if (!command) {
@@ -385,6 +386,7 @@ function startDocumentServerProcess({
   }
 
   const child = spawnProcess('/bin/bash', ['-lc', command], {
+    detached: true,
     env,
     stdio: 'inherit',
   });
@@ -396,14 +398,19 @@ function startDocumentServerProcess({
       if (stopped) {
         return;
       }
-      stopped = true;
       if (child.exitCode !== null || child.signalCode) {
+        stopped = true;
         return;
       }
-      child.kill('SIGTERM');
+      if (!Number.isInteger(child.pid) || child.pid <= 0) {
+        throw new Error('OnlyOffice DocumentServer process group is unavailable.');
+      }
+      const childExit = once(child, 'exit');
+      signalProcessGroup(-child.pid, 'SIGTERM');
       try {
-        await once(child, 'exit');
+        await childExit;
       } catch (_) {}
+      stopped = true;
     },
   };
 }

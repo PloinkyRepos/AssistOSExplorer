@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import test from 'node:test';
 
-import { startOnlyOfficeAgent } from '../src/index.mjs';
+import { startDocumentServerProcess, startOnlyOfficeAgent } from '../src/index.mjs';
 
 function createServerFactory() {
   const records = [];
@@ -31,6 +31,35 @@ function createServerFactory() {
     },
   };
 }
+
+test('DocumentServer owns a process group that is signalled as one during shutdown', async () => {
+  const child = Object.assign(new EventEmitter(), {
+    pid: 4242,
+    exitCode: null,
+    signalCode: null,
+  });
+  const calls = [];
+  const runtime = startDocumentServerProcess({
+    env: {},
+    command: 'document-server-command',
+    spawnProcess(file, args, options) {
+      calls.push({ file, args, options });
+      return child;
+    },
+    signalProcessGroup(pid, signal) {
+      calls.push({ pid, signal });
+      child.exitCode = 0;
+      queueMicrotask(() => child.emit('exit', 0, null));
+    },
+  });
+
+  await runtime.stop();
+
+  assert.equal(calls[0].file, '/bin/bash');
+  assert.deepEqual(calls[0].args, ['-lc', 'document-server-command']);
+  assert.equal(calls[0].options.detached, true);
+  assert.deepEqual(calls[1], { pid: -4242, signal: 'SIGTERM' });
+});
 
 test('onlyoffice agent runtime starts control storage and editor listeners with separated ports', async () => {
   const env = {
