@@ -23,8 +23,13 @@ SMOKE_WORKSPACE_ROOT=/path/to/explorer-workspace \
 SMOKE_DEPLOYMENT_MODE=box \
 SMOKE_BOX_BASE_URL=http://127.0.0.1:8080 \
 SMOKE_PLOINKY_BOX_CONTAINER=<exact-box-container> \
+SMOKE_PLOINKY_BIN=/absolute/path/to/candidate/ploinky/bin/ploinky \
 npm run test:onlyoffice-confidential
 ```
+
+`SMOKE_PLOINKY_BIN` is mandatory for this Box-mode gate so the targeted restart
+uses the exact Ploinky checkout mounted read-only at `/opt/ploinky`. A different
+checkout is rejected even when it happens to name the same commit.
 
 The default local credentials are `admin` / `admin` and `user` / `user`. Override them with:
 

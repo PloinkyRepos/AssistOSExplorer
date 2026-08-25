@@ -7,6 +7,7 @@ import { smokeConfig } from '../lib/config.mjs';
 import { dpuData } from '../lib/dpu-data.mjs';
 import { dpuSnapshotPersistenceAdvanced } from '../lib/dpu-persistence.mjs';
 import { assertExplorerDirectory, openExplorer } from '../lib/explorer.mjs';
+import { resolvePloinkyExecutable } from '../lib/ploinky-executable.mjs';
 
 const execFileAsync = promisify(execFile);
 
@@ -171,11 +172,10 @@ async function forceSaveDocument(editorFrame) {
   await saveButton.click();
 }
 
-async function restartOnlyOffice() {
+async function restartOnlyOffice(executable) {
   if (!smokeConfig.workspaceRoot) {
     throw new Error('SMOKE_WORKSPACE_ROOT is required for the targeted OnlyOffice restart.');
   }
-  const executable = String(process.env.SMOKE_PLOINKY_BIN || 'ploinky').trim();
   const { stdout, stderr } = await execFileAsync(executable, ['restart', 'onlyOffice'], {
     cwd: smokeConfig.workspaceRoot,
     env: { ...process.env, PLOINKY_CWD: smokeConfig.workspaceRoot }
@@ -223,6 +223,7 @@ test.describe('DPU and OnlyOffice @external', () => {
       dpuData.exists(),
       `DPU data root should exist at ${dpuData.describe()}. Set SMOKE_WORKSPACE_ROOT or SMOKE_DPU_DATA_ROOT for local deployments.`
     ).toBe(true);
+    const ploinkyExecutable = resolvePloinkyExecutable();
 
     const fileName = `smoke-onlyoffice-${smokeConfig.runId}.docx`;
     const documentPath = `/Confidential/My Space/${fileName}`;
@@ -305,7 +306,7 @@ test.describe('DPU and OnlyOffice @external', () => {
       ).toBe(callbackSnapshot.blobSha256);
       expect(preDrainSnapshot?.updatedAt).toBe(callbackSnapshot.updatedAt);
 
-      const restartResult = await restartOnlyOffice();
+      const restartResult = await restartOnlyOffice(ploinkyExecutable);
       expect(restartResult.stderr).not.toMatch(/failed to (?:restart|start)|managed restart failed/i);
       expect(restartResult.stdout).toMatch(/✓ Agent restarted(?: \([^)]+\))?\./);
 
