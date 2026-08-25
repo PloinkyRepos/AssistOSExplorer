@@ -34,7 +34,7 @@ function syncDpuCommentsHost(fileExp, refs) {
         attributes: {
             'data-presenter': 'dpu-comments-popover',
             'data-object-id': objectId,
-            'data-path': fileExp.state.selectedPath || '',
+            'data-file-path': fileExp.state.selectedPath || '',
             'data-open': fileExp.state.dpuCommentsOpen ? 'true' : 'false'
         }
     });
@@ -299,7 +299,7 @@ export function renderStandardPreview(fileExp, refs, previewUiState) {
                 tagName: 'document-view-page',
                 attributes: {
                     'data-presenter': 'document-view-page',
-                    'data-path': fileExp.state.selectedPath,
+                    'data-file-path': fileExp.state.selectedPath,
                     documentId: fileExp.state.documentId
                 }
             });
@@ -318,7 +318,7 @@ export function renderStandardPreview(fileExp, refs, previewUiState) {
                 tagName: 'file-editor',
                 attributes: {
                     'data-presenter': 'file-editor',
-                    'data-path': fileExp.state.selectedPath
+                    'data-file-path': fileExp.state.selectedPath
                 }
             });
         }
@@ -515,7 +515,7 @@ export function renderHtmlPreview(fileExp, _refs, previewUiState, previewContent
         ];
         const wrapClassName = previewUiState.wrapEnabled ? ' is-wrapped' : '';
         const body = fileExp.state.isEditing
-            ? `<file-editor data-presenter="file-editor" data-path="${fileExp.state.selectedPath}"></file-editor>`
+            ? `<file-editor data-presenter="file-editor" data-file-path="${fileExp.state.selectedPath}"></file-editor>`
             : `<div id="filePreview" class="code-preview${wrapClassName}">${fileExp.state.previewContent || "Select a file to see its contents."}</div>`;
         return `
             <div class="preview-pane-shell">

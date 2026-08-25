@@ -11,7 +11,7 @@ export class FileEditor {
     constructor(element, invalidate) {
         this.element = element;
         this.invalidate = invalidate;
-        this.path = this.element.dataset.path;
+        this.path = this.element.dataset.filePath;
         const extension = (this.path.split('.').pop() || '').toLowerCase();
         this.state = {
             editorContent: "Loading...",
