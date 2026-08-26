@@ -390,7 +390,7 @@
     {
       "name": "git_status",
       "title": "Git Status",
-      "description": "Return git status for a repository path.",
+      "description": "Return git status, including pending merge state and its prepared message, for a repository path.",
       "command": "tools/git_tool.sh",
       "cwd": "workspace",
       "inputSchema": {
@@ -736,6 +736,10 @@
           "type": "boolean",
           "optional": true
         },
+        "useExistingMessage": {
+          "type": "boolean",
+          "optional": true
+        },
         "userName": {
           "type": "string",
           "optional": true
@@ -959,7 +963,7 @@
     {
       "name": "git_repos_overview",
       "title": "Git Repos Overview",
-      "description": "Scan a root for git repositories.",
+      "description": "Scan a root for git repositories, including pending merge state and prepared messages.",
       "command": "tools/git_tool.sh",
       "cwd": "workspace",
       "inputSchema": {

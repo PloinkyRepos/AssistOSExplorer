@@ -5,7 +5,7 @@ import { normalizeGitConfigValue } from './validators.mjs';
 export function createRemoteIdentityOps(ctx) {
   const { getGitBinary, resolveRepoWorkTreePath } = ctx;
 
-  async function gitCommit({ path: repoPathArg, message, amend = false, signoff = false, userName = null, userEmail = null }) {
+  async function gitCommit({ path: repoPathArg, message, amend = false, signoff = false, useExistingMessage = false, userName = null, userEmail = null }) {
     const repoPath = await resolveRepoWorkTreePath(repoPathArg);
     const gitBinary = await getGitBinary(repoPath);
     const args = [gitBinary];
@@ -16,6 +16,7 @@ export function createRemoteIdentityOps(ctx) {
     args.push('commit');
     if (amend) args.push('--amend');
     if (signoff) args.push('--signoff');
+    if (useExistingMessage) args.push('--no-edit');
     if (message && message.trim()) {
       args.push('-m', message.trim());
     }

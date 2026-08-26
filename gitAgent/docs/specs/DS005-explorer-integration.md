@@ -41,6 +41,8 @@ Requirement U8: autosync/autocommit scheduling shall target only repositories ex
 
 Requirement U9: when an autosync push is explicitly rejected as non-fast-forward, the plugin shall synchronize the selected repository and retry the push at most once. It shall never force-push and shall stop when synchronization conflicts or the bounded retry fails.
 
+Requirement U10: repository status shall distinguish an active merge from unresolved conflict entries and expose Git's prepared merge message. Once all merge conflicts are resolved and staged, the commit modal shall pre-fill that message for an editable manual Commit or Commit & Push; Sync and AutoSync shall complete the merge with the prepared message before attempting another pull or push.
+
 ### Constraints
 
 Constraint Q1: UI components are not allowed to bypass agent contracts and execute shell Git directly.
@@ -62,6 +64,8 @@ Invariant I3: the intermediary role of `gitAgent` between Explorer intent and Gi
 Invariant I4: manual selection state and autosync repository configuration remain separate sources of truth; one cannot silently substitute for the other.
 
 Invariant I5: autosync preserves remote history by integrating a concurrent remote update before its single push retry.
+
+Invariant I6: clearing the conflicted-file list does not by itself mark a merge as complete; completion requires the merge commit that removes Git's active merge state.
 
 ### Validation Criteria
 

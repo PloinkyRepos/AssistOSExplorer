@@ -69,6 +69,8 @@ export function createRepoActions(ctx) {
     const updateRepoOverviewFromStatus = (repoPath, statusPayload) => {
         const state = getState();
         const normalized = normalizeGitStatusPayload(statusPayload);
+        const mergeInProgress = Boolean(statusPayload?.mergeInProgress);
+        const mergeMessage = mergeInProgress ? String(statusPayload?.mergeMessage || '').trim() || null : null;
         const { raw, paths, counts } = normalized;
         const staged = raw.staged;
         const unstaged = raw.unstaged;
@@ -81,13 +83,15 @@ export function createRepoActions(ctx) {
             untracked: paths.untracked,
             conflicted: paths.conflicted
         };
-        const dirty = counts.staged + counts.unstaged + counts.untracked + counts.conflicted > 0;
+        const dirty = mergeInProgress || counts.staged + counts.unstaged + counts.untracked + counts.conflicted > 0;
         const repoList = Array.isArray(state.repoOverviews) ? state.repoOverviews : [];
         const nextRepoOverviews = repoList.map((repo) => {
             if (!repo || repo.path !== repoPath) return repo;
             return {
                 ...repo,
                 ok: true,
+                mergeInProgress,
+                mergeMessage,
                 dirty,
                 counts,
                 changes,

@@ -172,7 +172,11 @@ export function attachGitController(fileExp) {
 
     const getRepoStatus = async (repoPath) => {
         const payload = await callGitTool('git_status', { path: repoPath }) || {};
-        return payload?.status || payload || {};
+        const status = payload?.status || payload || {};
+        return {
+            ...status,
+            mergeInProgress: Boolean(payload?.mergeInProgress ?? status?.mergeInProgress)
+        };
     };
 
     const repoHasConflicts = (status) => normalizeGitStatusPayload(status).counts.conflicted > 0;
@@ -223,6 +227,75 @@ export function attachGitController(fileExp) {
         const cleanToken = String(token || '').trim();
         if (cleanToken) payload.token = cleanToken;
         await callAgentTool('gitAgent', 'git_pull', payload);
+    };
+
+    const pushAutocommitRepo = async (repoPath, token) => {
+        const push = () => callAgentTool('gitAgent', 'git_push', {
+            path: repoPath,
+            token: String(token || '').trim() || undefined
+        });
+        const pushResult = await pushWithNonFastForwardRetry({
+            push,
+            synchronize: () => pullRepoWithToken(repoPath, token)
+        });
+        if (pushResult.ok) {
+            setPushWarning('');
+            return true;
+        }
+
+        const isSynchronizationFailure = pushResult.phase === 'synchronize';
+        const rawMessage = normalizeErrorMessage(pushResult.error);
+        const msg = isSynchronizationFailure
+            ? humanizeGitError(rawMessage, { action: 'pull' })
+            : rawMessage;
+        setPushWarning('Autocommit created commits but push failed. Please push manually.');
+        if (isGitConflictError(msg)) {
+            setConflictAndStop('Remote changes conflict with the AutoSync commit.', repoPath);
+            return false;
+        }
+        if (isGitAuthError(msg)) {
+            showAutocommitStopped(token ? `${msg} (A token is already saved. Use “Token” to update it.)` : msg);
+            return false;
+        }
+        if (isGitIdentityError(msg)) {
+            showAutocommitStopped('Set name, email, and token in Git settings to continue.');
+            return false;
+        }
+        showAutocommitStopped(msg || (isSynchronizationFailure
+            ? 'Could not integrate remote changes after the push was rejected.'
+            : 'Push failed.'));
+        return false;
+    };
+
+    const completePendingAutocommitMerge = async (repoPath, status, rememberedIdentity) => {
+        if (!status?.mergeInProgress) return { ok: true, completed: false };
+        if (repoHasConflicts(status)) {
+            setConflictAndStop('Merge conflicts detected.', repoPath);
+            return { ok: false, completed: false };
+        }
+        const userName = String(rememberedIdentity.name || '').trim();
+        const userEmail = String(rememberedIdentity.email || '').trim();
+        if (!userName || !userEmail) {
+            showAutocommitStopped('Set name, email, and token in Git settings to continue.');
+            return { ok: false, completed: false };
+        }
+        try {
+            await callAgentTool('gitAgent', 'git_commit', {
+                path: repoPath,
+                useExistingMessage: true,
+                userName,
+                userEmail
+            });
+            return { ok: true, completed: true };
+        } catch (error) {
+            const msg = normalizeErrorMessage(error);
+            if (isGitIdentityError(msg)) {
+                showAutocommitStopped('Set name, email, and token in Git settings to continue.');
+            } else {
+                showAutocommitStopped(msg || 'Could not complete the resolved merge.');
+            }
+            return { ok: false, completed: false };
+        }
     };
 
     const restoreStash = async (repoPath, stashRef) => {
@@ -359,6 +432,13 @@ export function attachGitController(fileExp) {
                     }
                     initialStatus = await getRepoStatus(repoPath);
                 }
+                const initialMerge = await completePendingAutocommitMerge(repoPath, initialStatus, rememberedIdentity);
+                if (!initialMerge.ok) return;
+                if (initialMerge.completed) {
+                    committedAny = true;
+                    if (!await pushAutocommitRepo(repoPath, token)) return;
+                    continue;
+                }
                 if (!hasAnyChanges(initialStatus)) {
                     continue;
                 }
@@ -380,8 +460,7 @@ export function attachGitController(fileExp) {
                             setConflictAndStop(resolved.message || 'Merge conflicts detected.', repoPath);
                             return;
                         }
-                    }
-                    if (isGitPullBlockedError(msg)) {
+                    } else if (isGitPullBlockedError(msg)) {
                         const stashed = await pullWithAutoStash(repoPath, token);
                         if (!stashed.ok) {
                             if (stashed.conflicts) {
@@ -409,6 +488,13 @@ export function attachGitController(fileExp) {
                         return;
                     }
                     status = await getRepoStatus(repoPath);
+                }
+                const recoveredMerge = await completePendingAutocommitMerge(repoPath, status, rememberedIdentity);
+                if (!recoveredMerge.ok) return;
+                if (recoveredMerge.completed) {
+                    committedAny = true;
+                    if (!await pushAutocommitRepo(repoPath, token)) return;
+                    continue;
                 }
                 if (!hasAnyChanges(status)) {
                     continue;
@@ -450,40 +536,7 @@ export function attachGitController(fileExp) {
                     return;
                 }
 
-                const push = () => callAgentTool('gitAgent', 'git_push', {
-                    path: repoPath,
-                    token: String(token || '').trim() || undefined
-                });
-                const pushResult = await pushWithNonFastForwardRetry({
-                    push,
-                    synchronize: () => pullRepoWithToken(repoPath, token)
-                });
-                if (pushResult.ok) {
-                    setPushWarning('');
-                } else {
-                    const isSynchronizationFailure = pushResult.phase === 'synchronize';
-                    const rawMessage = normalizeErrorMessage(pushResult.error);
-                    const msg = isSynchronizationFailure
-                        ? humanizeGitError(rawMessage, { action: 'pull' })
-                        : rawMessage;
-                    setPushWarning('Autocommit created commits but push failed. Please push manually.');
-                    if (isGitConflictError(msg)) {
-                        setConflictAndStop('Remote changes conflict with the AutoSync commit.', repoPath);
-                        return;
-                    }
-                    if (isGitAuthError(msg)) {
-                        showAutocommitStopped(token ? `${msg} (A token is already saved. Use “Token” to update it.)` : msg);
-                        return;
-                    }
-                    if (isGitIdentityError(msg)) {
-                        showAutocommitStopped('Set name, email, and token in Git settings to continue.');
-                        return;
-                    }
-                    showAutocommitStopped(msg || (isSynchronizationFailure
-                        ? 'Could not integrate remote changes after the push was rejected.'
-                        : 'Push failed.'));
-                    return;
-                }
+                if (!await pushAutocommitRepo(repoPath, token)) return;
             }
 
             if (committedAny) {

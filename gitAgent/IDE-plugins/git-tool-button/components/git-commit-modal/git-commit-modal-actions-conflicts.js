@@ -241,7 +241,7 @@ export function createConflictActions(ctx) {
             await service.gitCheckoutConflict({ path: repoPath, file: filePath, source: applySide });
             await service.gitStage(repoPath, [filePath]);
             const statusPayload = parseJsonToolResult(await service.gitStatus(repoPath)) || {};
-            updateRepoOverviewFromStatus(repoPath, statusPayload.status || statusPayload);
+            updateRepoOverviewFromStatus(repoPath, statusPayload);
             applyState({
                 conflictHelper: {
                     ...(state.conflictHelper || {}),
@@ -261,7 +261,9 @@ export function createConflictActions(ctx) {
             if (!hasConflictsForRepos([repoPath])) {
                 setGitConflictFlag(false);
                 window.dispatchEvent(new CustomEvent(AUTOCOMMIT_RESET_EVENT));
-                setStatusLine('Ready.');
+                setStatusLine(statusPayload.mergeInProgress
+                    ? 'Conflicts resolved. Sync or Commit will complete the pending merge.'
+                    : 'Ready.');
             }
         } catch (error) {
             applyState({

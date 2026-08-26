@@ -74,6 +74,26 @@ export function createGitOpsActions(ctx) {
         return intro;
     };
 
+    const hasPendingMergeForRepos = (repoPaths, state = getState()) => {
+        const targets = new Set(Array.isArray(repoPaths) ? repoPaths.filter(Boolean) : []);
+        return (state.repoOverviews || []).some((repo) => targets.has(repo?.path) && repo?.mergeInProgress);
+    };
+
+    const getActionRepoPaths = (state = getState()) => {
+        const selected = getSelectedReposForBatch();
+        if (selected.length) return selected;
+        if (state.repoPath && !isReposRootPath(state.repoPath, state.reposRoot) && state.repoInfoOk !== false) {
+            return [state.repoPath];
+        }
+        return [];
+    };
+
+    const blockDuringPendingMerge = (repoPaths, action) => {
+        if (!hasPendingMergeForRepos(repoPaths)) return false;
+        setStatusLine(`Complete the pending merge before ${action}.`, true);
+        return true;
+    };
+
     const getAuthMethod = (state = getState()) => {
         return normalizeGitAuthMethod(state.authPrompt?.authMethod || getRememberedGitAuthMethod());
     };
@@ -297,7 +317,7 @@ export function createGitOpsActions(ctx) {
         return { ok: true, pushedRepos, pushedCommits, skippedRepos };
     };
 
-    const pullRepos = async (repoPaths, { token = null, pendingAction = null } = {}) => {
+    const pullRepos = async (repoPaths, { token = null, pendingAction = null, completePendingMerges = true } = {}) => {
         const state = getState();
         applyState({
             pullBlocked: null,
@@ -307,6 +327,8 @@ export function createGitOpsActions(ctx) {
         const auth = getAuthContext(state, token);
         const conflictSource = state.pullMode === 'rebase' ? 'rebase' : 'merge';
         let pulledRepos = 0;
+        const completedMergeRepos = [];
+        const pendingMergeRepos = [];
         for (const repoPath of list) {
             if (state.pullMode !== 'ffOnly') {
                 const identityOk = await applyGitIdentityForRepo(repoPath);
@@ -322,11 +344,27 @@ export function createGitOpsActions(ctx) {
                 }
             }
             try {
-                const statusPayload = parseJsonToolResult(await service.gitStatus(repoPath, { includeAhead: true })) || {};
-                const normalized = normalizeGitStatusPayload(statusPayload);
+                let statusPayload = parseJsonToolResult(await service.gitStatus(repoPath, { includeAhead: true })) || {};
+                let normalized = normalizeGitStatusPayload(statusPayload);
                 if (normalized.counts.conflicted > 0) {
                     const resolved = await handlePullConflicts('Resolve merge conflicts before pulling.', [repoPath], conflictSource);
                     if (!resolved) return { ok: false, pulledRepos };
+                    statusPayload = parseJsonToolResult(await service.gitStatus(repoPath, { includeAhead: true })) || {};
+                    normalized = normalizeGitStatusPayload(statusPayload);
+                }
+                if (statusPayload.mergeInProgress) {
+                    if (normalized.counts.conflicted > 0) {
+                        return { ok: false, pulledRepos, completedMergeRepos, pendingMergeRepos };
+                    }
+                    if (!completePendingMerges) {
+                        pendingMergeRepos.push(repoPath);
+                        continue;
+                    }
+                    setStatusLine('Completing resolved merge...');
+                    await service.gitCommit({ path: repoPath, useExistingMessage: true });
+                    completedMergeRepos.push(repoPath);
+                    pulledRepos += 1;
+                    continue;
                 }
                 if (!statusPayload.branch) {
                     pulledRepos += 1;
@@ -372,7 +410,21 @@ export function createGitOpsActions(ctx) {
                 }
                 if (isGitConflictError(msg)) {
                     const resolved = await handlePullConflicts('Merge conflicts detected. Resolve them before continuing.', [repoPath], conflictSource);
-                    if (resolved) continue;
+                    if (resolved) {
+                        const afterResolution = parseJsonToolResult(await service.gitStatus(repoPath, { includeAhead: true })) || {};
+                        const normalizedAfterResolution = normalizeGitStatusPayload(afterResolution);
+                        if (afterResolution.mergeInProgress && normalizedAfterResolution.counts.conflicted === 0) {
+                            if (completePendingMerges) {
+                                setStatusLine('Completing resolved merge...');
+                                await service.gitCommit({ path: repoPath, useExistingMessage: true });
+                                completedMergeRepos.push(repoPath);
+                                pulledRepos += 1;
+                            } else {
+                                pendingMergeRepos.push(repoPath);
+                            }
+                        }
+                        continue;
+                    }
                     return { ok: false, pulledRepos };
                 }
                 if (isGitPullBlockedError(msg)) {
@@ -384,7 +436,7 @@ export function createGitOpsActions(ctx) {
                 throw error;
             }
         }
-        return { ok: true, pulledRepos };
+        return { ok: true, pulledRepos, completedMergeRepos, pendingMergeRepos };
     };
 
     const commitSelectionForRepo = async ({
@@ -435,7 +487,7 @@ export function createGitOpsActions(ctx) {
         const state = getState();
         const selected = getSelectedReposForBatch();
         const message = (state.commitMessage || '').trim();
-        if (!message) {
+        if (!message && !hasPendingMergeForRepos(selected, state)) {
             setStatusLine('Enter a commit message.', true);
             return;
         }
@@ -451,7 +503,10 @@ export function createGitOpsActions(ctx) {
         setStatusLine('Pulling latest changes before commit...');
         return withModalLoader(async () => {
             try {
-                const pullResult = await pullRepos(selected, { pendingAction: { type: 'sync', mode: 'batch', repoPaths: selected } });
+                const pullResult = await pullRepos(selected, {
+                    pendingAction: { type: 'sync', mode: 'batch', repoPaths: selected },
+                    completePendingMerges: !message
+                });
                 if (!pullResult?.ok) return;
                 await loadRepoOverviews({ force: true });
                 syncStaticUI();
@@ -461,23 +516,31 @@ export function createGitOpsActions(ctx) {
                     return;
                 }
                 setStatusLine(shouldPush ? `Committing & pushing ${selected.length} repo(s)…` : `Committing ${selected.length} repo(s)…`);
+                const completedMergeRepos = new Set(pullResult.completedMergeRepos || []);
+                if (!message && completedMergeRepos.size === 0) {
+                    setStatusLine('Enter a commit message.', true);
+                    return;
+                }
                 let committedRepos = 0;
                 let committedFiles = 0;
                 let pushSummary = { ok: false, pushedRepos: 0, pushedCommits: 0, skippedRepos: 0 };
                 for (const repoPath of selected) {
                     const list = getPathsForCommitInRepo(repoPath);
-                    const commitResult = await commitSelectionForRepo({
-                        repoPath,
-                        files: list,
-                        message,
-                        pendingAction: { type: 'commit', mode: 'batch', repoPaths: selected },
-                        state
-                    });
+                    const commitResult = message
+                        ? await commitSelectionForRepo({
+                            repoPath,
+                            files: list,
+                            message,
+                            pendingAction: { type: 'commit', mode: 'batch', repoPaths: selected },
+                            state
+                        })
+                        : { ok: true, committed: false, fileCount: 0 };
                     if (!commitResult?.ok) return;
-                    if (!commitResult.committed) continue;
-                    committedRepos += 1;
-                    committedFiles += commitResult.fileCount;
-                    if (shouldPush) {
+                    if (commitResult.committed) {
+                        committedRepos += 1;
+                        committedFiles += commitResult.fileCount;
+                    }
+                    if (shouldPush && (commitResult.committed || completedMergeRepos.has(repoPath))) {
                         const auth = getAuthContext(getState());
                         try {
                             await gitPushAfterEnsuringRemote(repoPath);
@@ -506,6 +569,19 @@ export function createGitOpsActions(ctx) {
                         }
                     }
                 }
+                if (!message) {
+                    await refreshAfterGitOperation();
+                    setStatusLine(buildCompletionMessage({
+                        intro: shouldPush ? 'Merge and push finished.' : 'Merge finished.',
+                        details: [
+                            completedMergeRepos.size > 0 ? `completed ${formatCount(completedMergeRepos.size, 'merge')}` : '',
+                            shouldPush && pushSummary.pushedRepos > 0
+                                ? `pushed ${formatCount(pushSummary.pushedCommits, 'commit')} from ${formatCount(pushSummary.pushedRepos, 'repository')}`
+                                : ''
+                        ]
+                    }));
+                    return;
+                }
                 applyState({ selectedFilesByRepo: {}, commitMessage: '' }, { silent: true });
                 clearCommitMessageInput();
                 await refreshAfterGitOperation();
@@ -515,6 +591,9 @@ export function createGitOpsActions(ctx) {
                 }
                 if (committedRepos > 0) {
                     details.push(`committed ${formatCount(committedFiles, 'file')} in ${formatCount(committedRepos, 'repository')}`);
+                }
+                if (completedMergeRepos.size > 0) {
+                    details.push(`completed ${formatCount(completedMergeRepos.size, 'merge')}`);
                 }
                 if (shouldPush && pushSummary.pushedRepos > 0) {
                     details.push(`pushed ${formatCount(pushSummary.pushedCommits, 'commit')} from ${formatCount(pushSummary.pushedRepos, 'repository')}`);
@@ -636,7 +715,11 @@ export function createGitOpsActions(ctx) {
                     const selectedPaths = getPathsForCommitInRepo(repoPath);
                     if (selectedPaths.length) {
                         await service.gitStageExact(repoPath, selectedPaths);
-                        stagedSelections.push({ repoPath, files: selectedPaths });
+                        const afterStage = parseJsonToolResult(await service.gitStatus(repoPath)) || {};
+                        const stagedPaths = normalizeGitStatusPayload(afterStage).paths.staged;
+                        if (stagedPaths.length) {
+                            stagedSelections.push({ repoPath, files: stagedPaths });
+                        }
                     }
                 }
 
@@ -817,7 +900,7 @@ export function createGitOpsActions(ctx) {
                 setStatusLine('Select at least one file to commit.', true);
                 return;
             }
-            if (!messageOk) {
+            if (!messageOk && !hasPendingMergeForRepos(selected, state)) {
                 setStatusLine('Enter a commit message.', true);
                 return;
             }
@@ -832,6 +915,7 @@ export function createGitOpsActions(ctx) {
             closeActionsMenu();
             if (state.identityPrompt?.visible || state.authPrompt?.visible) return;
             const selected = getSelectedReposForBatch();
+            if (blockDuringPendingMerge(getActionRepoPaths(state), 'pushing')) return;
             if (selected.length) {
                 pushSelectedRepos(selected);
                 return;
@@ -858,12 +942,14 @@ export function createGitOpsActions(ctx) {
         if (next === 'stash') {
             closeActionsMenu();
             if (state.identityPrompt?.visible || state.authPrompt?.visible) return;
+            if (blockDuringPendingMerge(getActionRepoPaths(state), 'stashing changes')) return;
             ctx.stashSelectedRepos();
             return;
         }
         if (next === 'unstash') {
             closeActionsMenu();
             if (state.identityPrompt?.visible || state.authPrompt?.visible) return;
+            if (blockDuringPendingMerge(getActionRepoPaths(state), 'restoring a stash')) return;
             ctx.unstashSelectedRepos();
             return;
         }

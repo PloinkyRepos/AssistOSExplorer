@@ -5,7 +5,8 @@ export class GitCommitActions {
         this.state = {
             commitMessage: '',
             actionsMenuOpen: false,
-            actionsDisabled: false
+            actionsDisabled: false,
+            hiddenActions: []
         };
         this.invalidate();
     }
@@ -94,6 +95,9 @@ export class GitCommitActions {
         if (Object.prototype.hasOwnProperty.call(next, 'actionsDisabled')) {
             this.state.actionsDisabled = Boolean(next.actionsDisabled);
         }
+        if (Object.prototype.hasOwnProperty.call(next, 'hiddenActions')) {
+            this.state.hiddenActions = Array.isArray(next.hiddenActions) ? [...next.hiddenActions] : [];
+        }
         if (this.commitMessageInput && this.commitMessageInput.value !== this.state.commitMessage) {
             this.commitMessageInput.value = this.state.commitMessage;
         }
@@ -102,6 +106,11 @@ export class GitCommitActions {
         }
         if (this.actionsButton) {
             this.actionsButton.disabled = this.state.actionsDisabled;
+        }
+        const hiddenActions = new Set(this.state.hiddenActions);
+        for (const item of this.actionsMenu?.querySelectorAll?.('.git-menu-item[data-local-action^="runGitAction"]') || []) {
+            const mode = (item.getAttribute('data-local-action') || '').split(/\s+/)[1] || '';
+            item.hidden = hiddenActions.has(mode);
         }
     }
 

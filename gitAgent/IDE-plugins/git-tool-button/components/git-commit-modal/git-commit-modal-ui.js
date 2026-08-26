@@ -468,7 +468,6 @@ export function createGitCommitUI(ctx) {
 
     const updateCommitButtons = () => {
         const actionsButton = element.querySelector('#gitActionsButton');
-        const messageOk = Boolean((state.commitMessage || '').trim());
         const selectedRepos = Array.from(new Set([
             ...Object.entries(state.selectedFilesByRepo || {})
                 .filter(([, entry]) => (entry?.files && entry.files.size > 0) || (entry?.prefixes && entry.prefixes.size > 0))
@@ -478,15 +477,42 @@ export function createGitCommitUI(ctx) {
         const identityBlocking = Boolean(state.identityPrompt?.visible);
         const authBlocking = Boolean(state.authPrompt?.visible);
         const hasSelection = selectedRepos.length > 0;
+        const selectedRepoSet = new Set(selectedRepos);
+        const pendingMerge = (state.repoOverviews || [])
+            .some((repo) => selectedRepoSet.has(repo?.path) && repo?.mergeInProgress);
+        const actionRepoPaths = hasSelection
+            ? selectedRepos
+            : (state.repoPath && !isReposRootPath(state.repoPath, state.reposRoot) ? [state.repoPath] : []);
+        const actionRepoSet = new Set(actionRepoPaths);
+        const actionPendingMerges = (state.repoOverviews || [])
+            .filter((repo) => actionRepoSet.has(repo?.path) && repo?.mergeInProgress);
+        const actionHasPendingMerge = actionPendingMerges.length > 0;
+        if (!actionHasPendingMerge) {
+            state.mergeMessageSource = null;
+        } else if (actionPendingMerges.length === 1) {
+            const mergeRepo = actionPendingMerges[0];
+            const mergeMessage = String(mergeRepo?.mergeMessage || '').trim();
+            const source = mergeMessage ? `${mergeRepo.path}\u0000${mergeMessage}` : null;
+            if (source && !String(state.commitMessage || '').trim() && state.mergeMessageSource !== source) {
+                state.commitMessage = mergeMessage;
+                state.mergeMessageSource = source;
+            }
+        }
+        const messageOk = Boolean((state.commitMessage || '').trim());
         const conflictBlocking = hasConflictsForRepos(selectedRepos);
         const pullBlocked = hasPullBlockedForRepos(selectedRepos);
-        const commitAllowed = !identityBlocking && !authBlocking && !conflictBlocking && !pullBlocked && hasSelection && messageOk;
+        const commitAllowed = !identityBlocking && !authBlocking && !conflictBlocking && !pullBlocked
+            && hasSelection && (messageOk || pendingMerge);
         const pushAllowed = !identityBlocking && !authBlocking && (repoOk || hasSelection);
         const pullAllowed = !identityBlocking && !authBlocking && hasSelection;
         const disabled = !commitAllowed && !pushAllowed && !pullAllowed;
         const presenter = getCommitActionsPresenter();
         if (presenter?.setState) {
-            presenter.setState({ actionsDisabled: disabled });
+            presenter.setState({
+                actionsDisabled: disabled,
+                hiddenActions: actionHasPendingMerge ? ['push', 'stash', 'unstash'] : [],
+                commitMessage: state.commitMessage || ''
+            });
         } else if (actionsButton) {
             actionsButton.disabled = disabled;
         }

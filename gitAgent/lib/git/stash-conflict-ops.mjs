@@ -49,6 +49,15 @@ async function resolveCanonicalStashRef(repoPath, gitBinary, ref) {
   }
 }
 
+async function hasPendingMerge(repoPath, gitBinary) {
+  try {
+    await runGit(repoPath, [gitBinary, 'rev-parse', '--verify', '-q', 'MERGE_HEAD'], { timeoutMs: 5000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function createStashConflictOps(ctx, ops) {
   const { resolveRepoWorkTreePath, getGitBinary } = ctx;
 
@@ -128,6 +137,9 @@ export function createStashConflictOps(ctx, ops) {
   async function gitStash({ path: repoPathArg, includeUntracked = true, message = '' }) {
     const repoPath = await resolveRepoWorkTreePath(repoPathArg);
     const gitBinary = await getGitBinary(repoPath);
+    if (await hasPendingMerge(repoPath, gitBinary)) {
+      throw new Error('Complete or abort the pending merge before stashing changes.');
+    }
     try {
       await runGit(repoPath, [gitBinary, 'rev-parse', 'HEAD'], { timeoutMs: 5000 });
     } catch {
@@ -189,6 +201,9 @@ export function createStashConflictOps(ctx, ops) {
   async function gitStashPop({ path: repoPathArg, ref = null, reinstateIndex = true }) {
     const repoPath = await resolveRepoWorkTreePath(repoPathArg);
     const gitBinary = await getGitBinary(repoPath);
+    if (await hasPendingMerge(repoPath, gitBinary)) {
+      throw new Error('Complete or abort the pending merge before restoring a stash.');
+    }
     const canonicalRef = await resolveCanonicalStashRef(repoPath, gitBinary, ref);
     const args = [gitBinary, 'stash', 'pop'];
     if (reinstateIndex) args.push('--index');

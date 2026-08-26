@@ -36,6 +36,7 @@ export function createGitCommitState(props = {}) {
         selectedPath: null,
         selectedSection: null, // 'staged' | 'unstaged' | 'untracked' | 'conflicted'
         commitMessage: '',
+        mergeMessageSource: null,
         commitMode: 'commit', // 'commit' | 'commitPush'
         actionsMenuOpen: false,
         pullMode: 'merge', // 'ffOnly' | 'rebase' | 'merge'

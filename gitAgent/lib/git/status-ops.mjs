@@ -1,8 +1,44 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+
 import { runGit } from './run-git.mjs';
 import { categorizeStatusEntries, parseStatusPorcelainV1Z } from './status-parser.mjs';
 
 export function createStatusOps(ctx) {
   const { resolveRepoWorkTreePath, getGitBinary } = ctx;
+
+  async function readMergeState(repoPath, gitBinary) {
+    const { stdout } = await runGit(
+      repoPath,
+      [gitBinary, 'rev-parse', '--verify', '-q', 'MERGE_HEAD'],
+      { timeoutMs: 5000, okCodes: [0, 1] }
+    );
+    const mergeInProgress = Boolean(String(stdout || '').trim());
+    if (!mergeInProgress) return { mergeInProgress: false, mergeMessage: null };
+    try {
+      const { stdout: mergeMessagePathOutput } = await runGit(
+        repoPath,
+        [gitBinary, 'rev-parse', '--git-path', 'MERGE_MSG'],
+        { timeoutMs: 5000 }
+      );
+      const mergeMessagePath = String(mergeMessagePathOutput || '').trim();
+      const resolvedPath = path.isAbsolute(mergeMessagePath)
+        ? mergeMessagePath
+        : path.resolve(repoPath, mergeMessagePath);
+      const rawMessage = await fs.readFile(resolvedPath, 'utf8');
+      const { stdout: cleanedMessage } = await runGit(
+        repoPath,
+        [gitBinary, 'stripspace', '--strip-comments'],
+        { timeoutMs: 5000, input: rawMessage }
+      );
+      return {
+        mergeInProgress: true,
+        mergeMessage: String(cleanedMessage || '').trim() || null
+      };
+    } catch {
+      return { mergeInProgress: true, mergeMessage: null };
+    }
+  }
 
   async function gitStatus({ path: repoPathArg, includeAhead = false }) {
     const repoPath = await resolveRepoWorkTreePath(repoPathArg);
@@ -10,8 +46,9 @@ export function createStatusOps(ctx) {
     const { stdout } = await runGit(repoPath, [gitBinary, 'status', '--porcelain=v1', '-z', '-uall', '--ignored=matching']);
     const entries = parseStatusPorcelainV1Z(stdout);
     const status = categorizeStatusEntries(entries);
+    const { mergeInProgress, mergeMessage } = await readMergeState(repoPath, gitBinary);
     if (!includeAhead) {
-      return { ok: true, status };
+      return { ok: true, status, mergeInProgress, mergeMessage };
     }
     let branch = null;
     let upstream = null;
@@ -42,7 +79,7 @@ export function createStatusOps(ctx) {
         behind = null;
       }
     }
-    return { ok: true, status, branch, upstream, ahead, behind };
+    return { ok: true, status, mergeInProgress, mergeMessage, branch, upstream, ahead, behind };
   }
   
   async function gitStatusOverview({ path: repoPathArg, includeUntracked = false }) {
@@ -69,7 +106,8 @@ export function createStatusOps(ctx) {
       status.untracked = [];
       status.ignored = [];
     }
-    return { ok: true, status };
+    const { mergeInProgress, mergeMessage } = await readMergeState(repoPath, gitBinary);
+    return { ok: true, status, mergeInProgress, mergeMessage };
   }
 
   return {

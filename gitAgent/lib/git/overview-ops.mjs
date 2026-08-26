@@ -89,18 +89,22 @@ export function createOverviewOps(ctx, ops) {
           // Include untracked so repos with only new files still show up as "dirty" (WebStorm-like).
           const statusPayload = await ops.gitStatusOverview({ path: current.path, includeUntracked: true });
           const status = statusPayload?.status || {};
+          let mergeInProgress = Boolean(statusPayload?.mergeInProgress);
+          let mergeMessage = mergeInProgress ? String(statusPayload?.mergeMessage || '').trim() || null : null;
           const staged = Array.isArray(status.staged) ? status.staged : [];
           const unstaged = Array.isArray(status.unstaged) ? status.unstaged : [];
           const untracked = Array.isArray(status.untracked) ? status.untracked : [];
           const conflicted = Array.isArray(status.conflicted) ? status.conflicted : [];
           const ignored = Array.isArray(status.ignored) ? status.ignored : [];
-          const dirty = staged.length > 0 || unstaged.length > 0 || untracked.length > 0 || conflicted.length > 0;
+          const dirty = mergeInProgress || staged.length > 0 || unstaged.length > 0 || untracked.length > 0 || conflicted.length > 0;
   
           if (!dirty) {
             results.push({
               ...current,
               ok: true,
               branch: info.branch || null,
+              mergeInProgress,
+              mergeMessage,
               dirty: false,
               counts: { staged: 0, unstaged: 0, untracked: 0, conflicted: 0 },
               sample: { staged: [], unstaged: [], untracked: [], conflicted: [] },
@@ -117,6 +121,8 @@ export function createOverviewOps(ctx, ops) {
           try {
             const full = await ops.gitStatus({ path: current.path });
             fullStatus = full?.status || fullStatus;
+            mergeInProgress = Boolean(full?.mergeInProgress);
+            mergeMessage = mergeInProgress ? String(full?.mergeMessage || '').trim() || mergeMessage : null;
           } catch {
             // keep overview-only status
           }
@@ -181,6 +187,8 @@ export function createOverviewOps(ctx, ops) {
             ...current,
             ok: true,
             branch: info.branch || null,
+            mergeInProgress,
+            mergeMessage,
             dirty: true,
             counts: {
               staged: fullStaged.length,
