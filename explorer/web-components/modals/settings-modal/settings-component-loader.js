@@ -34,12 +34,17 @@ export function resolveSettingsComponentBase(item) {
 
     const component = typeof item?.component === "string" ? item.component.trim() : "";
     const componentBaseUrl = typeof item?.componentBaseUrl === "string" ? item.componentBaseUrl.trim() : "";
-    if (component && settingsComponent === component && componentBaseUrl) {
-        return componentBaseUrl.replace(/\/+$/g, "");
-    }
-
     const normalizedSettings = normalizePathSegment(settingsComponent);
     const assetRootPath = normalizePathSegment(item?.assetRootPath);
+    if (component && settingsComponent === component) {
+        if (componentBaseUrl) {
+            return componentBaseUrl.replace(/\/+$/g, "");
+        }
+        if (assetRootPath) {
+            return `/workspace-files/${assetRootPath}/${normalizedSettings}`;
+        }
+    }
+
     if (assetRootPath) {
         return `/workspace-files/${assetRootPath}/${normalizedSettings}/${normalizedSettings}`;
     }
@@ -47,6 +52,10 @@ export function resolveSettingsComponentBase(item) {
     const agent = typeof item?.agent === "string" ? item.agent.trim() : "";
     if (!agent || !component) {
         return "";
+    }
+
+    if (settingsComponent === component) {
+        return `/${agent}/IDE-plugins/${component}/${normalizedSettings}`;
     }
 
     return `/${agent}/IDE-plugins/${component}/${normalizedSettings}/${normalizedSettings}`;
@@ -119,4 +128,3 @@ export async function ensureSettingsComponentRegistered(item) {
     settingsComponentPromises.set(componentName, promise);
     return promise;
 }
-

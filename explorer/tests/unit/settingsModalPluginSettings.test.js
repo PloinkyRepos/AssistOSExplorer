@@ -4,7 +4,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {
+    applyAgentRuntimeStatuses,
     buildAgentSettingsItems,
+    normalizeAgentRuntimeStatus,
     openPluginSettingsUrl,
     resolvePluginSettingsUrl,
     resolveSettingsComponentBase
@@ -26,6 +28,32 @@ test('resolveSettingsComponentBase reuses runtime component URL for matching set
     assert.equal(
         base,
         '/workspace-files/.ploinky/repos/proxies/soul-gateway/IDE-plugins/soul-gateway-settings/soul-gateway-settings'
+    );
+});
+
+test('resolveSettingsComponentBase derives the root component URL when runtime base URL is absent', () => {
+    const base = resolveSettingsComponentBase({
+        component: 'gpt-researcher-settings',
+        settingsComponent: 'gpt-researcher-settings',
+        assetRootPath: '.ploinky/repos/AchillesCLI/GPTResearcher/IDE-plugins/gpt-researcher-settings'
+    });
+
+    assert.equal(
+        base,
+        '/workspace-files/.ploinky/repos/AchillesCLI/GPTResearcher/IDE-plugins/gpt-researcher-settings/gpt-researcher-settings'
+    );
+});
+
+test('resolveSettingsComponentBase derives the root agent URL when runtime asset metadata is absent', () => {
+    const base = resolveSettingsComponentBase({
+        agent: 'GPTResearcher',
+        component: 'gpt-researcher-settings',
+        settingsComponent: 'gpt-researcher-settings'
+    });
+
+    assert.equal(
+        base,
+        '/GPTResearcher/IDE-plugins/gpt-researcher-settings/gpt-researcher-settings'
     );
 });
 
@@ -292,6 +320,46 @@ test('buildAgentSettingsItems maps a neutral settings plugin fixture', () => {
     assert.equal(analytics.settingsComponent, 'analytics-settings');
     assert.equal(analytics.sourcePlugin.key, 'analytics/analytics-settings');
     assert.equal(analytics.assetRootPath, '.ploinky/repos/example/analytics/IDE-plugins/analytics-settings');
+    assert.equal(analytics.runtimeStatus, 'checking');
+});
+
+test('applyAgentRuntimeStatuses maps settings owners to unique marketplace agents', () => {
+    const items = applyAgentRuntimeStatuses([
+        { key: 'search-settings', ownerAgent: 'searchAgent' },
+        { key: 'analytics-settings', ownerAgent: 'example/analytics' }
+    ], [
+        { ref: 'proxies/searchAgent', name: 'searchAgent', running: false, active: true },
+        { ref: 'example/analytics', name: 'analytics', running: true, status: 'running' }
+    ]);
+
+    assert.deepEqual(items.map(({ agentRef, runtimeAvailable, runtimeStatus }) => ({
+        agentRef,
+        runtimeAvailable,
+        runtimeStatus
+    })), [
+        { agentRef: 'proxies/searchAgent', runtimeAvailable: true, runtimeStatus: 'stopped' },
+        { agentRef: 'example/analytics', runtimeAvailable: true, runtimeStatus: 'running' }
+    ]);
+});
+
+test('applyAgentRuntimeStatuses does not guess an ambiguous unqualified agent name', () => {
+    const [item] = applyAgentRuntimeStatuses([
+        { key: 'settings', ownerAgent: 'worker' }
+    ], [
+        { ref: 'one/worker', name: 'worker', running: true },
+        { ref: 'two/worker', name: 'worker', running: false }
+    ]);
+
+    assert.equal(item.agentRef, '');
+    assert.equal(item.runtimeAvailable, false);
+    assert.equal(item.runtimeStatus, 'unavailable');
+});
+
+test('normalizeAgentRuntimeStatus prefers the effective running state', () => {
+    assert.equal(normalizeAgentRuntimeStatus({ running: true, status: 'starting' }), 'running');
+    assert.equal(normalizeAgentRuntimeStatus({ active: false, running: true, status: 'running' }), 'inactive');
+    assert.equal(normalizeAgentRuntimeStatus({ running: false, status: 'failed' }), 'failed');
+    assert.equal(normalizeAgentRuntimeStatus({ running: false, active: false }), 'inactive');
 });
 
 test('buildAgentSettingsItems marks missing source plugin unavailable', () => {

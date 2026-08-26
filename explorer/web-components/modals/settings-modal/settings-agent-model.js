@@ -2,6 +2,37 @@ function normalizeString(value) {
     return typeof value === "string" ? value.trim() : "";
 }
 
+function normalizeMatchKey(value) {
+    return normalizeString(value).toLowerCase();
+}
+
+export function normalizeAgentRuntimeStatus(agent) {
+    if (!agent) return "unavailable";
+    if (agent.active === false) return "inactive";
+    if (agent.running === true) return "running";
+    const status = normalizeMatchKey(agent.status);
+    if (status) return status;
+    return agent.active === true ? "stopped" : "inactive";
+}
+
+export function applyAgentRuntimeStatuses(items = [], agents = []) {
+    const runtimeAgents = Array.isArray(agents) ? agents : [];
+    return items.map((item) => {
+        const ownerAgent = normalizeMatchKey(item?.ownerAgent);
+        const exactRef = runtimeAgents.find((agent) => normalizeMatchKey(agent?.ref) === ownerAgent);
+        const nameMatches = exactRef
+            ? []
+            : runtimeAgents.filter((agent) => normalizeMatchKey(agent?.name) === ownerAgent);
+        const runtime = exactRef || (nameMatches.length === 1 ? nameMatches[0] : null);
+        return {
+            ...item,
+            agentRef: normalizeString(runtime?.ref),
+            runtimeAvailable: Boolean(runtime),
+            runtimeStatus: normalizeAgentRuntimeStatus(runtime)
+        };
+    });
+}
+
 export function normalizeAgentSettingsPayload(payload) {
     const settings = Array.isArray(payload) ? payload : [];
     return settings
@@ -47,8 +78,10 @@ export function buildAgentSettingsItems(agentSettings = [], pluginItems = [], { 
                 settingsComponent,
                 settingsUrl,
                 assetRootPath: sourcePlugin?.assetRootPath || "",
-                componentBaseUrl: sourcePlugin?.componentBaseUrl || ""
+                componentBaseUrl: sourcePlugin?.componentBaseUrl || "",
+                agentRef: "",
+                runtimeAvailable: null,
+                runtimeStatus: "checking"
             };
         });
 }
-

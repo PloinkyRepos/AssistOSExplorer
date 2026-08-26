@@ -7,7 +7,11 @@ import {
     getCachedRuntimePlugins,
     normalizeSettingsMap
 } from "./settings-plugin-model.js";
-import { buildAgentSettingsItems } from "./settings-agent-model.js";
+import {
+    applyAgentRuntimeStatuses,
+    buildAgentSettingsItems,
+    normalizeAgentRuntimeStatus
+} from "./settings-agent-model.js";
 import {
     ensureSettingsComponentRegistered,
     openPluginSettingsUrl
@@ -20,6 +24,16 @@ function escapeHtml(value) {
         .replaceAll('>', '&gt;')
         .replaceAll('"', '&quot;')
         .replaceAll("'", '&#39;');
+}
+
+function marketplaceAgents(payload) {
+    const marketplace = payload?.marketplace || payload;
+    return Array.isArray(marketplace?.agents) ? marketplace.agents : [];
+}
+
+function runtimeStatusLabel(status) {
+    const normalized = String(status || "unknown").trim().toLowerCase() || "unknown";
+    return normalized.charAt(0).toUpperCase() + normalized.slice(1);
 }
 
 export const runtimeSettingsController = {
@@ -98,12 +112,18 @@ export const runtimeSettingsController = {
         }
         this.agentSettingsListEl.innerHTML = visibleItems.map((item) => {
             const busy = this.state.agentSettingsBusyKey === item.key;
-            const status = item.available ? 'Ready' : 'Unavailable';
+            const runtimeStatus = item.available ? (item.runtimeStatus || "checking") : "unavailable";
+            const buttonLabel = busy
+                ? (runtimeStatus === "starting" ? "Starting..." : "Opening...")
+                : "Configure";
             return `
                 <div class="plugin-settings-row">
                     <div class="plugin-settings-info">
                         <div class="plugin-settings-key">${escapeHtml(item.label)}</div>
-                        <div class="plugin-settings-meta">${escapeHtml(item.key)} · Package: ${escapeHtml(item.ownerAgent)}${item.component ? ` · Plugin: ${escapeHtml(item.component)}` : ''} · Scope: ${escapeHtml(item.scope)} · ${status}</div>
+                        <div class="plugin-settings-meta">
+                            ${escapeHtml(item.key)} · Package: ${escapeHtml(item.ownerAgent)}${item.component ? ` · Plugin: ${escapeHtml(item.component)}` : ''} · Scope: ${escapeHtml(item.scope)}
+                            · <span class="agent-settings-runtime-status ${escapeHtml(runtimeStatus)}">${escapeHtml(runtimeStatusLabel(runtimeStatus))}</span>
+                        </div>
                     </div>
                     <div class="plugin-settings-actions">
                         <button
@@ -112,7 +132,8 @@ export const runtimeSettingsController = {
                             data-local-action="openAgentSettings ${escapeHtml(item.key)}"
                             ${busy || !item.available ? "disabled" : ""}
                         >
-                            Configure
+                            ${busy ? '<span class="plugin-settings-inline-spinner" aria-hidden="true"></span>' : ''}
+                            <span>${buttonLabel}</span>
                         </button>
                     </div>
                 </div>
@@ -182,6 +203,36 @@ export const runtimeSettingsController = {
             : "No configurable agents discovered.";
         this.state.agentSettingsStatusType = "";
         this.renderAgentSettings();
+        void this.refreshAgentRuntimeStatuses();
+    },
+
+    async refreshAgentRuntimeStatuses() {
+        const requestId = ++this.state.agentRuntimeStatusRequestId;
+        try {
+            const response = await fetch("/api/marketplace", {
+                credentials: "same-origin",
+                headers: { accept: "application/json" },
+                cache: "no-store"
+            });
+            if (!response.ok) {
+                throw new Error(`Unable to load agent runtime status (${response.status}).`);
+            }
+            const payload = await response.json();
+            if (requestId !== this.state.agentRuntimeStatusRequestId) return;
+            this.state.agentSettingsItems = applyAgentRuntimeStatuses(
+                this.state.agentSettingsItems,
+                marketplaceAgents(payload)
+            );
+            this.renderAgentSettingsList();
+        } catch (_) {
+            if (requestId !== this.state.agentRuntimeStatusRequestId) return;
+            this.state.agentSettingsItems = this.state.agentSettingsItems.map((item) => ({
+                ...item,
+                runtimeAvailable: null,
+                runtimeStatus: "unknown"
+            }));
+            this.renderAgentSettingsList();
+        }
     },
 
     async togglePlugin(_target, key) {
@@ -225,11 +276,26 @@ export const runtimeSettingsController = {
         }
 
         this.state.agentSettingsBusyKey = key;
-        this.state.agentSettingsStatus = `Opening settings for ${key}...`;
+        this.state.agentRuntimeStatusRequestId += 1;
+        item.runtimeStatus = item.runtimeStatus === "running" ? "running" : "starting";
+        this.state.agentSettingsStatus = item.runtimeStatus === "starting"
+            ? `Starting ${item.label || item.ownerAgent}...`
+            : `Opening settings for ${key}...`;
         this.state.agentSettingsStatusType = "";
         this.renderAgentSettings();
 
         try {
+            const module = await import("/MCPBrowserClient.js");
+            if (typeof module?.ensureAgentRunning !== "function") {
+                throw new Error("Agent runtime lifecycle is unavailable.");
+            }
+            const runtime = await module.ensureAgentRunning(item.agentRef || item.ownerAgent);
+            item.agentRef = String(runtime?.ref || item.agentRef || "").trim();
+            item.runtimeAvailable = true;
+            item.runtimeStatus = normalizeAgentRuntimeStatus(runtime);
+            this.state.agentSettingsStatus = `Opening settings for ${key}...`;
+            this.renderAgentSettings();
+
             if (item.settingsUrl) {
                 if (!openPluginSettingsUrl(item)) {
                     throw new Error(`Invalid settings URL for ${key}.`);
@@ -257,6 +323,7 @@ export const runtimeSettingsController = {
             this.state.agentSettingsStatus = `${item.label} settings opened.`;
             this.state.agentSettingsStatusType = "";
         } catch (error) {
+            item.runtimeStatus = "failed";
             this.state.agentSettingsStatus = error?.message || `Failed to open settings for ${key}.`;
             this.state.agentSettingsStatusType = "error";
         } finally {

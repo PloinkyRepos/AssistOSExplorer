@@ -510,6 +510,26 @@ settings-modal .plugin-settings-meta {
     font-size: 0.9rem;
 }
 
+settings-modal .agent-settings-runtime-status {
+    font-weight: 600;
+    text-transform: capitalize;
+}
+
+settings-modal .agent-settings-runtime-status.running {
+    color: var(--success, var(--accent));
+}
+
+settings-modal .agent-settings-runtime-status.starting,
+settings-modal .agent-settings-runtime-status.checking {
+    color: var(--accent);
+}
+
+settings-modal .agent-settings-runtime-status.failed,
+settings-modal .agent-settings-runtime-status.dead,
+settings-modal .agent-settings-runtime-status.exited {
+    color: var(--file-exp-error);
+}
+
 settings-modal .plugin-settings-actions {
     display: inline-flex;
     align-items: center;
@@ -530,6 +550,10 @@ settings-modal .plugin-settings-open {
 
 settings-modal .plugin-settings-open {
     min-width: 88px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
 }
 
 settings-modal [data-section="plugins"] .plugin-settings-toggle {

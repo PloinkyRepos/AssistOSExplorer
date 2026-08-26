@@ -9,7 +9,9 @@ import {
 } from "../../../utils/keymap.js";
 import { getCurrentTheme, setTheme } from "../../../shared/ui/theme.js";
 import {
-    buildAgentSettingsItems
+    applyAgentRuntimeStatuses,
+    buildAgentSettingsItems,
+    normalizeAgentRuntimeStatus
 } from "./settings-agent-model.js";
 import {
     openPluginSettingsUrl,
@@ -24,7 +26,9 @@ import { usersController } from "./settings-users-controller.js";
 const BASE_TABS = ['agents', 'plugins', 'copilot', 'keymap', 'editor', 'theme', 'avatar'];
 
 export {
+    applyAgentRuntimeStatuses,
     buildAgentSettingsItems,
+    normalizeAgentRuntimeStatus,
     openPluginSettingsUrl,
     resolvePluginSettingsUrl,
     resolveSettingsComponentBase
@@ -58,6 +62,7 @@ export class SettingsModal {
             agentSettingsStatusType: "",
             agentSettingsDataLoaded: false,
             agentSettingsBusyKey: "",
+            agentRuntimeStatusRequestId: 0,
             copilotItems: [],
             copilotDisabledKeys: new Set(),
             copilotStatus: "",
@@ -208,12 +213,16 @@ export class SettingsModal {
                 this.renderPluginSettingsStatus();
             });
         }
-        if (this.state.activeTab === "agents" && !this.state.agentSettingsDataLoaded) {
-            this.loadAgentSettingsData().catch((error) => {
-                this.state.agentSettingsStatus = error?.message || "Failed to load agent settings.";
-                this.state.agentSettingsStatusType = "error";
-                this.renderAgentSettingsStatus();
-            });
+        if (this.state.activeTab === "agents") {
+            if (!this.state.agentSettingsDataLoaded) {
+                this.loadAgentSettingsData().catch((error) => {
+                    this.state.agentSettingsStatus = error?.message || "Failed to load agent settings.";
+                    this.state.agentSettingsStatusType = "error";
+                    this.renderAgentSettingsStatus();
+                });
+            } else {
+                void this.refreshAgentRuntimeStatuses();
+            }
         }
         if (this.state.activeTab === "copilot" && !this.state.copilotDataLoaded) {
             this.loadCopilotSettingsData().catch((error) => {
