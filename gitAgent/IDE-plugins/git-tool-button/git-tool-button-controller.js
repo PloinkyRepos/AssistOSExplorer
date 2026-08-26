@@ -19,6 +19,7 @@ import {
 import { callAgentTool } from "/explorer/services/infrastructure/explorerApi.js";
 import { getReposRoot, getRepoScanPaths } from "/explorer/utils/reposRoot.js";
 import { pullWithAutoStashFlow, restoreStashFlow } from "./utils/git-auto-stash-flow.js";
+import { pushWithNonFastForwardRetry } from "./utils/git-autosync-push-flow.js";
 import {
     AUTOCOMMIT_SETTINGS_CHANGED_EVENT,
     AUTOCOMMIT_RESET_EVENT,
@@ -449,21 +450,38 @@ export function attachGitController(fileExp) {
                     return;
                 }
 
-                try {
-                    await callAgentTool('gitAgent', 'git_push', {
-                        path: repoPath,
-                        token: String(token || '').trim() || undefined
-                    });
+                const push = () => callAgentTool('gitAgent', 'git_push', {
+                    path: repoPath,
+                    token: String(token || '').trim() || undefined
+                });
+                const pushResult = await pushWithNonFastForwardRetry({
+                    push,
+                    synchronize: () => pullRepoWithToken(repoPath, token)
+                });
+                if (pushResult.ok) {
                     setPushWarning('');
-                } catch (error) {
-                    const msg = normalizeErrorMessage(error);
+                } else {
+                    const isSynchronizationFailure = pushResult.phase === 'synchronize';
+                    const rawMessage = normalizeErrorMessage(pushResult.error);
+                    const msg = isSynchronizationFailure
+                        ? humanizeGitError(rawMessage, { action: 'pull' })
+                        : rawMessage;
+                    setPushWarning('Autocommit created commits but push failed. Please push manually.');
+                    if (isGitConflictError(msg)) {
+                        setConflictAndStop('Remote changes conflict with the AutoSync commit.', repoPath);
+                        return;
+                    }
                     if (isGitAuthError(msg)) {
-                        setPushWarning('Autocommit created commits but push failed. Please push manually.');
                         showAutocommitStopped(token ? `${msg} (A token is already saved. Use “Token” to update it.)` : msg);
                         return;
                     }
-                    setPushWarning('Autocommit created commits but push failed. Please push manually.');
-                    showAutocommitStopped(msg || 'Push failed.');
+                    if (isGitIdentityError(msg)) {
+                        showAutocommitStopped('Set name, email, and token in Git settings to continue.');
+                        return;
+                    }
+                    showAutocommitStopped(msg || (isSynchronizationFailure
+                        ? 'Could not integrate remote changes after the push was rejected.'
+                        : 'Push failed.'));
                     return;
                 }
             }

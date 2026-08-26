@@ -50,6 +50,7 @@
                     <h2>IDE-plugins Channel</h2>
                     <p>The folder <code>gitAgent/IDE-plugins/git-tool-button/</code> provides user interface plugin bundles inserted in Explorer toolbar slot <code>file-exp:toolbar</code>. Plugin dependencies include commit modal components, repo tree, diff viewer, conflict helper, status bar, and auth prompt components.</p>
                     <p>Generating an AI commit message uses a busy overlay scoped to the commit modal. The Git content remains visible beneath the overlay, duplicate generation requests are disabled, and the modal returns to its interactive state when generation succeeds or fails.</p>
+                    <p>AutoSync pulls before committing and pushing. If a concurrent remote update causes an explicit non-fast-forward push rejection, it synchronizes through the existing Git tool contract and retries the push once. Conflicts or a second rejection stop AutoSync; the plugin never force-pushes.</p>
                     <table>
                         <thead>
                             <tr>

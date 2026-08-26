@@ -53,6 +53,7 @@ and are deliberately absent from this agent's manifest environment.
 - `git_submodule_add` accepts an existing remote and leaves the resulting `.gitmodules` entry and gitlink staged for an explicit parent-repository commit.
 - Explorer selection semantics are strict: selecting any file or folder inside a repository selects that repository for repository-level actions, while commit and push flows remain limited to the selected files from that repository.
 - Autosync/autocommit runs only for repositories explicitly chosen in autosync settings. It does not infer targets from the current tree selection and does not default to all discovered repositories.
+- When an AutoSync push is explicitly rejected as non-fast-forward, AutoSync pulls the new remote commits and retries the push once. It never force-pushes and stops for conflicts or a second rejection.
 - `git_add_ignore` both appends the ignore pattern and removes already tracked paths from the Git index, including staged-but-diverged entries that require forced index removal, so ignored items stop participating in future commits unless explicitly re-added.
 - `git_remove_ignore` removes the matching ignore rule and re-adds the target to Git tracking when possible.
 

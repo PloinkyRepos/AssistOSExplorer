@@ -39,6 +39,8 @@ Requirement U7: repository-level pull actions may execute for a selected reposit
 
 Requirement U8: autosync/autocommit scheduling shall target only repositories explicitly chosen in autosync settings and shall not infer targets from transient tree selection.
 
+Requirement U9: when an autosync push is explicitly rejected as non-fast-forward, the plugin shall synchronize the selected repository and retry the push at most once. It shall never force-push and shall stop when synchronization conflicts or the bounded retry fails.
+
 ### Constraints
 
 Constraint Q1: UI components are not allowed to bypass agent contracts and execute shell Git directly.
@@ -59,9 +61,11 @@ Invariant I3: the intermediary role of `gitAgent` between Explorer intent and Gi
 
 Invariant I4: manual selection state and autosync repository configuration remain separate sources of truth; one cannot silently substitute for the other.
 
+Invariant I5: autosync preserves remote history by integrating a concurrent remote update before its single push retry.
+
 ### Validation Criteria
 
-Validation is satisfied when Explorer-triggered plugin actions call `gitAgent` tools successfully, tool outcomes map to UI state transitions, repository targeting follows explicit selection rules, autosync runs only for explicitly configured repositories, and Git execution behavior remains isolated from frontend internals.
+Validation is satisfied when Explorer-triggered plugin actions call `gitAgent` tools successfully, tool outcomes map to UI state transitions, repository targeting follows explicit selection rules, autosync runs only for explicitly configured repositories, non-fast-forward recovery remains bounded to one synchronize-and-push retry without force, and Git execution behavior remains isolated from frontend internals.
 
 ## Conclusion
 
