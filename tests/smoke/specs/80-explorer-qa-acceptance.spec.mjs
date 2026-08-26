@@ -210,7 +210,7 @@ async function openConfidentialDoc(page, documentPath) {
   expect(session.config).toMatchObject({
     documentType: 'word',
     document: {
-      fileType: 'doc',
+      fileType: 'docx',
       permissions: {
         edit: true,
       },

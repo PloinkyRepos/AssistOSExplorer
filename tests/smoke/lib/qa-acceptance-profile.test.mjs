@@ -95,6 +95,18 @@ test('QA OnlyOffice acceptance unloads and proves durable DPU persistence before
   assert.ok(start >= 0 && end > start, 'OnlyOffice QA acceptance test body must be present.');
   const onlyOfficeTest = acceptanceSpec.slice(start, end);
   assert.match(onlyOfficeTest, /\.docx`;/, 'OnlyOffice QA acceptance must create a .docx file.');
+  // onlyoffice-config.mjs derives fileType from the real extension, so a `.docx`
+  // document must never be accepted as the legacy binary `doc` container.
+  assert.match(
+    acceptanceSpec,
+    /fileType: 'docx',/,
+    'OnlyOffice QA acceptance must expect the real docx container format.',
+  );
+  assert.doesNotMatch(
+    acceptanceSpec,
+    /fileType: 'doc',/,
+    'OnlyOffice QA acceptance must not expect the obsolete doc file type.',
+  );
   assert.match(
     onlyOfficeTest,
     /application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document/,

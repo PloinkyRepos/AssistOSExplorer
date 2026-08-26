@@ -28,6 +28,20 @@ test('npm Confidential OnlyOffice profile owns the exact single-test selector', 
   assert.match(onlyOfficeSpec, new RegExp(`test\\(['\"]${expectedTitle}['\"]`));
   assert.match(onlyOfficeSpec, /const fileName = `smoke-onlyoffice-\$\{smokeConfig\.runId\}\.docx`;/);
   assert.match(onlyOfficeSpec, /const documentPath = `\/Confidential\/My Space\/\$\{fileName\}`;/);
+  // The single selected test is the narrow regression path, so it owns the
+  // OnlyOffice document file-type assertion the QA acceptance profile got wrong.
+  assert.match(onlyOfficeSpec, /expect\(payload\.config\)\.toMatchObject\(\{/);
+  assert.match(onlyOfficeSpec, /fileType: 'docx',/);
+  assert.doesNotMatch(onlyOfficeSpec, /fileType: 'doc',/);
+  // DPU names are unique only among siblings, so every durable assertion is
+  // keyed on the object ID this run created.
+  assert.match(onlyOfficeSpec, /const preExistingIds = new Set\(listDpuFileObjects\(\)\.map\(\(object\) => object\.id\)\);/);
+  assert.match(onlyOfficeSpec, /createdObjectId = dpuObject\.id;/);
+  assert.doesNotMatch(onlyOfficeSpec, /readDpuObjectSnapshot\(fileName\)/);
+  // The created Confidential document must not survive the run, and cleanup
+  // must never replace the original failure.
+  assert.match(onlyOfficeSpec, /deleteConfidentialDocument\(page, documentPath, createdObjectId\)/);
+  assert.match(onlyOfficeSpec, /\.catch\(\(error\) => \(\{ deleted: false, error: String\(error\?\.message \|\| error\) \}\)\)/);
 });
 
 test('Confidential OnlyOffice selector collects exactly one Playwright test', { timeout: 30_000 }, () => {

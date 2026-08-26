@@ -18,16 +18,26 @@ function readDpuState() {
   return dpuData.readJson('state.json');
 }
 
-function findDpuObjectByName(name) {
+function listDpuFileObjects() {
   const state = readDpuState();
   const objects = state?.confidentialObjects && typeof state.confidentialObjects === 'object'
     ? Object.values(state.confidentialObjects)
     : [];
-  return objects.find((object) => object?.name === name && object?.type === 'file') || null;
+  return objects.filter((object) => object?.type === 'file' && object?.id);
 }
 
-function readDpuObjectSnapshot(name) {
-  const object = findDpuObjectByName(name);
+function findDpuObjectByName(name, excludedIds = new Set()) {
+  return listDpuFileObjects().find((object) => (
+    object?.name === name && !excludedIds.has(object.id)
+  )) || null;
+}
+
+function findDpuObjectById(objectId) {
+  return listDpuFileObjects().find((object) => object.id === objectId) || null;
+}
+
+function readDpuObjectSnapshot(objectId) {
+  const object = findDpuObjectById(objectId);
   if (!object?.id) {
     return null;
   }
@@ -215,6 +225,29 @@ async function openDocumentFromExplorer(page, documentPath) {
   return waitForOnlyOfficeEditorFrame(page);
 }
 
+async function deleteConfidentialDocument(page, documentPath, objectId) {
+  if (!objectId || !findDpuObjectById(objectId)) {
+    return { deleted: true, alreadyMissing: true };
+  }
+  await openExplorer(page, { hash: 'file-exp/Confidential/My%20Space' });
+  await assertExplorerDirectory(page, '/Confidential/My Space');
+  if (!findDpuObjectById(objectId)) {
+    return { deleted: true, alreadyMissing: true };
+  }
+  const row = page.locator(`tr[data-entry-path="${documentPath}"]`);
+  await expect(row).toHaveCount(1, { timeout: smokeConfig.timeouts.action });
+  await row.locator('.action-menu-trigger').click();
+  const deleteButton = row.getByRole('menuitem', { name: 'Delete' });
+  await expect(deleteButton).toBeVisible({ timeout: smokeConfig.timeouts.action });
+  page.once('dialog', async (dialog) => dialog.accept());
+  await deleteButton.click();
+  await expect.poll(() => Boolean(findDpuObjectById(objectId)), {
+    timeout: smokeConfig.timeouts.navigation,
+    message: `DPU object ${objectId} should be removed during smoke cleanup.`,
+  }).toBe(false);
+  return { deleted: true };
+}
+
 test.describe('DPU and OnlyOffice @external', () => {
   test.skip(!smokeConfig.flags.onlyoffice, 'Set SMOKE_ONLYOFFICE=1 to run OnlyOffice/DPU smoke checks.');
 
@@ -231,8 +264,11 @@ test.describe('DPU and OnlyOffice @external', () => {
 
     const fileName = `smoke-onlyoffice-${smokeConfig.runId}.docx`;
     const documentPath = `/Confidential/My Space/${fileName}`;
+    const preExistingIds = new Set(listDpuFileObjects().map((object) => object.id));
     const context = await browser.newContext({ baseURL: smokeConfig.baseURL });
     const page = await context.newPage();
+    let createdObjectId = null;
+    let primaryError = null;
 
     try {
       await openExplorer(page, { hash: 'file-exp/Confidential/My%20Space' });
@@ -254,11 +290,12 @@ test.describe('DPU and OnlyOffice @external', () => {
         return entries.some((entry) => entry?.path === expectedPath);
       }, documentPath, { timeout: smokeConfig.timeouts.action });
 
-      await expect.poll(() => Boolean(findDpuObjectByName(fileName)), {
+      await expect.poll(() => Boolean(findDpuObjectByName(fileName, preExistingIds)), {
         timeout: smokeConfig.timeouts.action,
         message: `DPU state should contain ${fileName}`,
       }).toBe(true);
-      const dpuObject = findDpuObjectByName(fileName);
+      const dpuObject = findDpuObjectByName(fileName, preExistingIds);
+      createdObjectId = dpuObject.id;
       expect(dpuObject.mimeType).toBe(
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
       );
@@ -279,8 +316,14 @@ test.describe('DPU and OnlyOffice @external', () => {
         requestedPath: documentPath,
         objectId: dpuObject.id,
       });
+      expect(payload.config).toMatchObject({
+        documentType: 'word',
+        document: {
+          fileType: 'docx',
+        },
+      });
 
-      const initialSnapshot = readDpuObjectSnapshot(fileName);
+      const initialSnapshot = readDpuObjectSnapshot(createdObjectId);
       expect(initialSnapshot).not.toBeNull();
 
       const marker = `OnlyOffice-release-${smokeConfig.runId}`;
@@ -290,7 +333,7 @@ test.describe('DPU and OnlyOffice @external', () => {
 
       let callbackSnapshot = null;
       await expect.poll(() => {
-        callbackSnapshot = readDpuObjectSnapshot(fileName);
+        callbackSnapshot = readDpuObjectSnapshot(createdObjectId);
         return dpuSnapshotPersistenceAdvanced(initialSnapshot, callbackSnapshot);
       }, {
         timeout: smokeConfig.timeouts.navigation,
@@ -302,7 +345,7 @@ test.describe('DPU and OnlyOffice @external', () => {
 
       const drainMarker = `OnlyOffice-drain-${smokeConfig.runId}`;
       await typeDocumentMarker(page, editorFrame, drainMarker);
-      const preDrainSnapshot = readDpuObjectSnapshot(fileName);
+      const preDrainSnapshot = readDpuObjectSnapshot(createdObjectId);
       expect(preDrainSnapshot?.id).toBe(initialSnapshot.id);
       expect(
         preDrainSnapshot?.blobSha256,
@@ -314,7 +357,7 @@ test.describe('DPU and OnlyOffice @external', () => {
       expect(restartResult.stderr).not.toMatch(/failed to (?:restart|start)|managed restart failed/i);
       expect(restartResult.stdout).toMatch(/✓ Agent restarted(?: \([^)]+\))?\./);
 
-      const drainSnapshot = readDpuObjectSnapshot(fileName);
+      const drainSnapshot = readDpuObjectSnapshot(createdObjectId);
       expect(drainSnapshot?.id).toBe(initialSnapshot.id);
       expect(
         drainSnapshot?.blobSha256,
@@ -335,7 +378,7 @@ test.describe('DPU and OnlyOffice @external', () => {
         message: 'Both the explicit-save edit and the edit outstanding at drain should reopen after targeted restart.',
       }).toBe(true);
 
-      const reopenedSnapshot = readDpuObjectSnapshot(fileName);
+      const reopenedSnapshot = readDpuObjectSnapshot(createdObjectId);
       expect(reopenedSnapshot?.blobSha256).toBe(drainSnapshot.blobSha256);
       await testInfo.attach('onlyoffice-release-evidence.json', {
         body: Buffer.from(JSON.stringify({
@@ -382,9 +425,17 @@ test.describe('DPU and OnlyOffice @external', () => {
         path: testInfo.outputPath('onlyoffice-failure.png'),
         fullPage: true,
       }).catch(() => null);
-      throw error;
+      primaryError = error;
     } finally {
-      await context.close();
+      const cleanup = await deleteConfidentialDocument(page, documentPath, createdObjectId)
+        .catch((error) => ({ deleted: false, error: String(error?.message || error) }));
+      await context.close().catch(() => null);
+      if (primaryError) {
+        throw primaryError;
+      }
+      if (!cleanup.deleted) {
+        throw new Error(`Confidential document cleanup failed: ${cleanup.error || 'unknown error'}`);
+      }
     }
   });
 });
