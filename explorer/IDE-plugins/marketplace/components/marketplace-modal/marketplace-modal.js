@@ -34,7 +34,9 @@ export class MarketplaceModal {
       agentSettingsRaw: [],
       agentSettingsItems: [],
       agentSettingsDataLoaded: false,
-      agentSettingsBusyKey: ''
+      agentSettingsBusyKey: '',
+      agentMutationBusyRef: '',
+      agentMutationVerb: ''
     };
     this.invalidate();
   }
@@ -122,17 +124,11 @@ export class MarketplaceModal {
     this.state.status = message;
     this.state.statusType = type;
     this.renderStatus();
-    if (type === 'error' && message) {
-      this.statusClearTimer = setTimeout(() => {
-        this.statusClearTimer = null;
-        if (this.state.statusType === 'error') {
-          this.state.status = '';
-          this.state.statusType = '';
-          this.renderStatus();
-        }
-      }, 5000);
-    }
   }
+
+  dismissStatus = () => {
+    this.setStatus('');
+  };
 
   setBusy(busy) {
     this.state.busy = Boolean(busy);
@@ -239,6 +235,7 @@ export class MarketplaceModal {
   };
 
   addRepository = async () => {
+    if (this.state.busy || this.state.agentMutationBusyRef) return;
     const name = String(this.repoNameInput?.value || '').trim();
     const url = String(this.repoUrlInput?.value || '').trim();
     const branch = String(this.repoBranchInput?.value || '').trim();
@@ -286,6 +283,7 @@ export class MarketplaceModal {
 
     const button = event.target?.closest?.('[data-agent-ref]');
     if (!button) return;
+    if (this.state.agentMutationBusyRef) return;
 
     const agentRef = button.dataset.agentRef || '';
     const active = button.dataset.active === 'true';
@@ -293,8 +291,11 @@ export class MarketplaceModal {
     const modeSelect = controls?.querySelector?.('[data-enable-mode-for]');
     const mode = String(modeSelect?.value || button.dataset.enableMode || 'isolated').trim() || 'isolated';
 
-    this.setBusy(true);
-    this.setStatus(`${active ? 'Disabling' : 'Enabling'} ${agentRef}...`);
+    this.state.agentMutationBusyRef = agentRef;
+    this.state.agentMutationVerb = active ? 'Disabling' : 'Enabling';
+    this.setStatus(`${this.state.agentMutationVerb} ${agentRef}...`);
+    this.renderAgents();
+    this.syncInteractiveState();
     try {
       this.state.marketplace = await this.requestMarketplace({
         action: active ? 'disable_agent' : 'enable_agent',
@@ -305,7 +306,8 @@ export class MarketplaceModal {
     } catch (error) {
       this.setStatus(error?.message || 'Failed to update agent.', 'error');
     } finally {
-      this.state.busy = false;
+      this.state.agentMutationBusyRef = '';
+      this.state.agentMutationVerb = '';
       this.renderState();
     }
   };
@@ -435,7 +437,7 @@ export class MarketplaceModal {
 
   handleRepositoryClick = async (event) => {
     const button = event.target?.closest?.('[data-repo-name]');
-    if (!button || this.state.busy) return;
+    if (!button || this.state.busy || this.state.agentMutationBusyRef) return;
     const name = button.dataset.repoName || '';
     const installed = button.dataset.installed === 'true';
     const url = button.dataset.repoUrl || '';
@@ -459,28 +461,46 @@ export class MarketplaceModal {
 
   renderStatus() {
     if (!this.statusEl) return;
-    this.statusEl.textContent = this.state.status || '';
-    this.statusEl.classList.toggle('error', this.state.statusType === 'error');
+    const message = this.state.status || '';
+    const isError = this.state.statusType === 'error';
+    this.statusEl.replaceChildren();
+    this.statusEl.classList.toggle('error', isError);
+    this.statusEl.setAttribute('role', isError ? 'alert' : 'status');
+    if (!message) return;
+    const text = document.createElement('span');
+    text.textContent = message;
+    this.statusEl.append(text);
+    if (isError) {
+      const dismiss = document.createElement('button');
+      dismiss.type = 'button';
+      dismiss.className = 'marketplace-status-dismiss';
+      dismiss.setAttribute('aria-label', 'Dismiss error');
+      dismiss.textContent = 'Dismiss';
+      dismiss.addEventListener('click', this.dismissStatus, { once: true });
+      this.statusEl.append(dismiss);
+    }
   }
 
   syncInteractiveState() {
     const busy = this.state.busy === true;
+    const mutationBusy = Boolean(this.state.agentMutationBusyRef);
     const canManage = this.canManageMarketplace();
-    if (this.addRepoButton) this.addRepoButton.disabled = busy;
+    if (this.addRepoButton) this.addRepoButton.disabled = busy || mutationBusy;
 
     this.repositoriesEl?.querySelectorAll?.('[data-repo-name]')?.forEach((button) => {
       const unavailable = button.dataset.installed !== 'true' && !button.dataset.repoUrl;
-      button.disabled = busy || unavailable;
+      button.disabled = busy || mutationBusy || unavailable;
     });
     this.agentsEl?.querySelectorAll?.('[data-agent-ref]')?.forEach((button) => {
-      button.disabled = busy;
+      button.disabled = busy || mutationBusy;
     });
     this.agentsEl?.querySelectorAll?.('[data-agent-settings-key]')?.forEach((button) => {
       button.disabled = busy || this.state.agentSettingsBusyKey === button.dataset.agentSettingsKey;
     });
     this.agentsEl?.querySelectorAll?.('[data-enable-mode-for]')?.forEach((select) => {
       const toggle = select.closest?.('.marketplace-agent-controls')?.querySelector?.('[data-agent-ref]');
-      const disabled = busy || !canManage || toggle?.dataset.active === 'true';
+      const isPendingAgent = select.dataset.enableModeFor === this.state.agentMutationBusyRef;
+      const disabled = busy || isPendingAgent || !canManage || toggle?.dataset.active === 'true';
       select.toggleAttribute('disabled', disabled);
       select.webSkelPresenter?.applyDisabledState?.();
     });
@@ -584,7 +604,7 @@ export class MarketplaceModal {
         toggle.dataset.repoName = repo.name;
         toggle.dataset.repoUrl = repo.url || '';
         toggle.dataset.installed = repo.installed ? 'true' : 'false';
-        toggle.disabled = this.state.busy || (!repo.installed && !repo.url);
+        toggle.disabled = this.state.busy || Boolean(this.state.agentMutationBusyRef) || (!repo.installed && !repo.url);
         toggle.textContent = repo.installed ? 'Uninstall' : 'Install';
         row.append(toggle);
       }
@@ -710,21 +730,26 @@ export class MarketplaceModal {
       row.append(info);
       const controls = document.createElement('div');
       controls.className = 'marketplace-agent-controls';
+      const isPendingAgent = this.state.agentMutationBusyRef === agent.ref;
 
       const modes = Array.isArray(agent.enableModes) && agent.enableModes.length
         ? agent.enableModes
         : ['isolated', 'global', 'devel'];
       const currentMode = modes.includes(agent.enableMode) ? agent.enableMode : 'isolated';
-      assistOS.UI.createElement('custom-select', controls, {
-        options: modes.map((mode) => ({ value: mode, label: mode }))
-      }, {
-        class: 'marketplace-enable-mode',
-        'data-enable-mode-for': agent.ref,
-        'data-name': 'enableMode',
-        'data-selected': currentMode,
-        ...(this.state.busy || !canManage || agent.active ? { disabled: '' } : {})
-      });
-      const modeSelect = controls.querySelector('[data-enable-mode-for]');
+      const modeSelect = document.createElement('select');
+      modeSelect.className = 'marketplace-enable-mode';
+      modeSelect.dataset.enableModeFor = agent.ref;
+      modeSelect.name = 'enableMode';
+      modeSelect.setAttribute('aria-label', `Runtime mode for ${this.getAgentDisplayName(agent)}`);
+      modeSelect.disabled = this.state.busy || isPendingAgent || !canManage || agent.active;
+      for (const mode of modes) {
+        const option = document.createElement('option');
+        option.value = mode;
+        option.textContent = mode;
+        option.selected = mode === currentMode;
+        modeSelect.append(option);
+      }
+      controls.append(modeSelect);
 
       if (canManage) {
         const settingsItem = this.getAgentSettingsItem(agent);
@@ -744,8 +769,10 @@ export class MarketplaceModal {
         toggle.dataset.agentRef = agent.ref;
         toggle.dataset.active = agent.active ? 'true' : 'false';
         toggle.dataset.enableMode = currentMode;
-        toggle.disabled = this.state.busy;
-        toggle.textContent = agent.active ? 'Disable' : 'Enable';
+        toggle.disabled = this.state.busy || Boolean(this.state.agentMutationBusyRef);
+        toggle.textContent = isPendingAgent
+          ? `${this.state.agentMutationVerb || (agent.active ? 'Disabling' : 'Enabling')}...`
+          : (agent.active ? 'Disable' : 'Enable');
         controls.append(toggle);
       } else {
         // The mode selector has already been appended to controls.

@@ -133,6 +133,17 @@ marketplace-modal .marketplace-agent-controls {
   flex: 0 0 auto;
 }
 
+marketplace-modal .marketplace-enable-mode {
+  min-width: 108px;
+  min-height: 34px;
+  border: 1px solid var(--border-strong, var(--border));
+  border-radius: 6px;
+  padding: 0 28px 0 10px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
 marketplace-modal .marketplace-repo-toggle.active,
 marketplace-modal .marketplace-agent-toggle.active {
   color: var(--red);
@@ -167,6 +178,20 @@ marketplace-modal .marketplace-status.error {
   border: 1px solid #fecaca;
   color: #991b1b;
   padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+marketplace-modal .marketplace-status-dismiss {
+  border: 1px solid currentColor;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  flex: 0 0 auto;
+  padding: 3px 8px;
 }
 
 marketplace-modal .marketplace-content {

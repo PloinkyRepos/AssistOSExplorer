@@ -178,3 +178,60 @@ test('Marketplace does not retry a rejected mutation for non-CSRF failures', asy
     assert.equal(proofCalls, 1);
     assert.equal(mutationCalls, 1);
 });
+
+test('Marketplace agent activation uses per-mutation state and releases it after failure', async () => {
+    const {MarketplaceModal} = await loadMarketplaceModal();
+    const modal = new MarketplaceModal({}, () => {});
+    modal.requestMarketplace = async () => {
+        assert.equal(modal.state.busy, false);
+        assert.equal(modal.state.agentMutationBusyRef, 'proxies/searchAgent');
+        throw new Error('runtime exited before readiness');
+    };
+    modal.renderStatus = () => {};
+    modal.renderAgents = () => {};
+    modal.syncInteractiveState = () => {};
+    modal.renderState = () => {};
+
+    const button = {
+        dataset: {
+            agentRef: 'proxies/searchAgent',
+            active: 'false',
+            enableMode: 'isolated'
+        },
+        closest: () => ({ querySelector: () => null })
+    };
+    await modal.handleAgentClick({
+        target: {
+            closest: selector => selector === '[data-agent-ref]' ? button : null
+        }
+    });
+
+    assert.equal(modal.state.busy, false);
+    assert.equal(modal.state.agentMutationBusyRef, '');
+    assert.equal(modal.state.agentMutationVerb, '');
+    assert.equal(modal.state.status, 'runtime exited before readiness');
+    assert.equal(modal.state.statusType, 'error');
+});
+
+test('Marketplace errors remain visible until explicitly dismissed', async () => {
+    const {MarketplaceModal} = await loadMarketplaceModal();
+    const modal = new MarketplaceModal({}, () => {});
+    modal.renderStatus = () => {};
+
+    modal.setStatus('activation failed', 'error');
+    await new Promise(resolve => setTimeout(resolve, 20));
+
+    assert.equal(modal.state.status, 'activation failed');
+    assert.equal(modal.state.statusType, 'error');
+
+    modal.dismissStatus();
+    assert.equal(modal.state.status, '');
+    assert.equal(modal.state.statusType, '');
+});
+
+test('Marketplace runtime modes use a native select without a reactive child presenter', async () => {
+    const source = await fs.readFile(sourcePath, 'utf8');
+
+    assert.match(source, /document\.createElement\('select'\)/);
+    assert.doesNotMatch(source, /createElement\('custom-select'/);
+});
