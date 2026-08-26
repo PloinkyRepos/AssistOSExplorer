@@ -24,6 +24,18 @@ import {
 
 const RUNTIME_STATUS_RECONNECT_DELAY_MS = 1000;
 
+const MARKETPLACE_AGENT_STATUS_LABELS = Object.freeze({
+  disabled: 'Disabled',
+  starting: 'Starting up',
+  running: 'Running',
+  stopped: 'Stopped',
+  failed: 'Failed',
+  paused: 'Paused',
+  unknown: 'Unknown'
+});
+const MARKETPLACE_AGENT_TRANSITIONAL_STATUSES = new Set(['starting']);
+const MARKETPLACE_AGENT_STATUS_REFRESH_MS = 3000;
+
 export class MarketplaceModal {
   constructor(element, invalidate) {
     this.element = element;
@@ -51,6 +63,7 @@ export class MarketplaceModal {
   beforeRender() {}
 
   afterRender() {
+    this.unloaded = false;
     this.repoNameInput = this.element.querySelector('#marketplaceRepoName');
     this.repoUrlInput = this.element.querySelector('#marketplaceRepoUrl');
     this.repoBranchInput = this.element.querySelector('#marketplaceRepoBranch');
@@ -91,6 +104,7 @@ export class MarketplaceModal {
 
   afterUnload() {
     this.stopAgentStatusStream();
+    this.unloaded = true;
     if (this.statusClearTimer) {
       clearTimeout(this.statusClearTimer);
       this.statusClearTimer = null;
@@ -98,6 +112,10 @@ export class MarketplaceModal {
     if (this.agentSearchTimer) {
       clearTimeout(this.agentSearchTimer);
       this.agentSearchTimer = null;
+    }
+    if (this.agentStatusRefreshTimer) {
+      clearTimeout(this.agentStatusRefreshTimer);
+      this.agentStatusRefreshTimer = null;
     }
     this.element.querySelector('[data-action="close"]')?.removeEventListener('click', this.close);
     this.addRepoButton?.removeEventListener('click', this.addRepository);
@@ -385,6 +403,7 @@ export class MarketplaceModal {
 
     const settingsButton = event.target?.closest?.('[data-agent-settings-key]');
     if (settingsButton) {
+      if (settingsButton.disabled || settingsButton.dataset.agentOperational !== 'true') return;
       await this.openAgentSettings(settingsButton.dataset.agentSettingsKey || '');
       return;
     }
@@ -603,9 +622,11 @@ export class MarketplaceModal {
       button.disabled = busy || mutationBusy;
     });
     this.agentsEl?.querySelectorAll?.('[data-agent-settings-key]')?.forEach((button) => {
+      const isOperational = button.dataset.agentOperational === 'true';
       button.disabled = busy
-        || button.dataset.agentRunning !== 'true'
+        || !isOperational
         || this.state.agentSettingsBusyKey === button.dataset.agentSettingsKey;
+      button.setAttribute('aria-disabled', button.disabled ? 'true' : 'false');
     });
     this.agentsEl?.querySelectorAll?.('[data-enable-mode-for]')?.forEach((select) => {
       const toggle = select.closest?.('.marketplace-agent-controls')?.querySelector?.('[data-agent-ref]');
@@ -628,6 +649,7 @@ export class MarketplaceModal {
     this.renderRepositories();
     this.renderAgents();
     this.syncInteractiveState();
+    this.scheduleAgentStatusRefresh();
   }
 
   canManageMarketplace() {
@@ -732,6 +754,70 @@ export class MarketplaceModal {
     return ref || 'Unknown agent';
   }
 
+  getAgentLifecycleStatus(agent) {
+    if (agent?.active !== true) return 'disabled';
+    if (agent?.running === true) return 'running';
+
+    const status = String(agent?.status || '').trim().toLowerCase();
+    if (status === 'running') {
+      return agent?.running === false ? 'stopped' : 'running';
+    }
+    if (Object.hasOwn(MARKETPLACE_AGENT_STATUS_LABELS, status) && status !== 'disabled') {
+      return status;
+    }
+    return 'unknown';
+  }
+
+  getAgentStatusPresentation(agent) {
+    const status = this.getAgentLifecycleStatus(agent);
+    return {
+      status,
+      label: MARKETPLACE_AGENT_STATUS_LABELS[status],
+      detail: String(agent?.statusDetail || '').trim()
+    };
+  }
+
+  isAgentOperational(agent) {
+    return this.getAgentLifecycleStatus(agent) === 'running' && agent?.running === true;
+  }
+
+  hasTransitionalAgents() {
+    return (this.state.marketplace?.agents || []).some(agent => (
+      MARKETPLACE_AGENT_TRANSITIONAL_STATUSES.has(this.getAgentLifecycleStatus(agent))
+    ));
+  }
+
+  scheduleAgentStatusRefresh() {
+    if (this.agentStatusRefreshTimer) {
+      clearTimeout(this.agentStatusRefreshTimer);
+      this.agentStatusRefreshTimer = null;
+    }
+    if (this.unloaded || !this.hasTransitionalAgents()) return;
+    this.agentStatusRefreshTimer = setTimeout(() => {
+      this.agentStatusRefreshTimer = null;
+      void this.refreshAgentStatuses();
+    }, MARKETPLACE_AGENT_STATUS_REFRESH_MS);
+  }
+
+  async refreshAgentStatuses() {
+    if (this.unloaded) return;
+    if (this.state.busy || this.state.agentMutationBusyRef) {
+      this.scheduleAgentStatusRefresh();
+      return;
+    }
+    try {
+      const marketplace = await this.requestMarketplace();
+      if (this.unloaded) return;
+      this.state.marketplace = marketplace;
+      this.renderAgents();
+      this.syncInteractiveState();
+    } catch {
+      // Keep the last verified lifecycle state visible during transient polling failures.
+    } finally {
+      this.scheduleAgentStatusRefresh();
+    }
+  }
+
   renderAgents() {
     if (!this.agentsEl) return;
     const repositories = this.state.marketplace?.repositories || [];
@@ -828,12 +914,11 @@ export class MarketplaceModal {
       const name = document.createElement('span');
       name.textContent = this.getAgentDisplayName(agent);
       const status = document.createElement('span');
-      const agentRunning = agent.running === true;
-      const statusText = agentRunning
-        ? 'running'
-        : String(agent.status || (agent.active ? 'stopped' : 'inactive')).toLowerCase();
-      status.className = `marketplace-agent-status ${statusText}`;
-      status.textContent = statusText;
+      const statusPresentation = this.getAgentStatusPresentation(agent);
+      status.className = `marketplace-agent-status ${statusPresentation.status}`;
+      status.textContent = statusPresentation.label;
+      status.setAttribute('aria-label', `${name.textContent} status: ${statusPresentation.label}`);
+      if (statusPresentation.detail) status.title = statusPresentation.detail;
       title.append(name, status);
 
       const about = document.createElement('div');
@@ -868,14 +953,19 @@ export class MarketplaceModal {
       if (canManage) {
         const settingsItem = this.getAgentSettingsItem(agent);
         if (settingsItem) {
+          const isOperational = this.isAgentOperational(agent);
           const settingsButton = document.createElement('button');
           settingsButton.type = 'button';
           settingsButton.className = 'marketplace-agent-settings';
           settingsButton.dataset.agentSettingsKey = settingsItem.key;
-          settingsButton.dataset.agentRunning = agentRunning ? 'true' : 'false';
+          settingsButton.dataset.agentOperational = isOperational ? 'true' : 'false';
           settingsButton.disabled = this.state.busy
-            || !agentRunning
+            || !isOperational
             || this.state.agentSettingsBusyKey === settingsItem.key;
+          settingsButton.setAttribute('aria-disabled', settingsButton.disabled ? 'true' : 'false');
+          if (!isOperational) {
+            settingsButton.title = `Configure is available once ${this.getAgentDisplayName(agent)} is running.`;
+          }
           settingsButton.textContent = 'Configure';
           controls.append(settingsButton);
         }

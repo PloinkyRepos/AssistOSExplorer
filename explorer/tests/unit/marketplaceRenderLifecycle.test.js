@@ -186,8 +186,11 @@ test('Marketplace enables Configure only while its agent is running', async () =
     const {MarketplaceModal} = await loadMarketplaceModal();
     const modal = Object.create(MarketplaceModal.prototype);
     const settingsButton = {
-        dataset: {agentSettingsKey: 'search-settings', agentRunning: 'false'},
-        disabled: false
+        dataset: {agentSettingsKey: 'search-settings', agentOperational: 'false'},
+        disabled: false,
+        setAttribute(name, value) {
+            this[name] = value;
+        }
     };
     modal.state = {busy: false, agentSettingsBusyKey: ''};
     modal.repositoriesEl = {querySelectorAll: () => []};
@@ -201,9 +204,10 @@ test('Marketplace enables Configure only while its agent is running', async () =
     modal.syncInteractiveState();
     assert.equal(settingsButton.disabled, true);
 
-    settingsButton.dataset.agentRunning = 'true';
+    settingsButton.dataset.agentOperational = 'true';
     modal.syncInteractiveState();
     assert.equal(settingsButton.disabled, false);
+    assert.equal(settingsButton['aria-disabled'], 'false');
 });
 
 test('Marketplace patches only the changed agent row when a runtime status event arrives', async () => {
@@ -291,4 +295,94 @@ test('Marketplace does not reconnect the runtime status stream after a permanent
     assert.equal(modal.agentStatusStreamActive, false);
     assert.equal(modal.agentStatusStreamController, null);
     assert.equal(modal.agentStatusReconnectTimer, undefined);
+});
+
+test('Marketplace presents a bounded set of distinct lifecycle states', async () => {
+    const {MarketplaceModal} = await loadMarketplaceModal();
+    const modal = Object.create(MarketplaceModal.prototype);
+
+    assert.deepEqual([
+        {active: false, status: 'inactive', running: false},
+        {active: true, status: 'starting', running: false},
+        {active: true, status: 'running', running: true},
+        {active: true, status: 'stopped', running: false},
+        {active: true, status: 'failed', running: false},
+        {active: true, status: 'paused', running: false},
+        {active: true, status: 'arbitrary-class-name', running: false}
+    ].map(agent => modal.getAgentLifecycleStatus(agent)), [
+        'disabled',
+        'starting',
+        'running',
+        'stopped',
+        'failed',
+        'paused',
+        'unknown'
+    ]);
+
+    assert.deepEqual(modal.getAgentStatusPresentation({
+        active: true,
+        status: 'starting',
+        running: false,
+        statusDetail: 'Background startup is in progress.'
+    }), {
+        status: 'starting',
+        label: 'Starting up',
+        detail: 'Background startup is in progress.'
+    });
+});
+
+test('Marketplace only allows configuration for a verified running agent', async () => {
+    const {MarketplaceModal} = await loadMarketplaceModal();
+    const modal = Object.create(MarketplaceModal.prototype);
+
+    assert.equal(modal.isAgentOperational({active: true, status: 'running', running: true}), true);
+    assert.equal(modal.isAgentOperational({active: true, status: 'running'}), false);
+    assert.equal(modal.isAgentOperational({active: true, status: 'running', running: false}), false);
+    for (const status of ['starting', 'stopped', 'failed', 'paused', 'unknown']) {
+        assert.equal(modal.isAgentOperational({active: true, status, running: false}), false, status);
+    }
+    assert.equal(modal.isAgentOperational({active: false, status: 'disabled', running: false}), false);
+});
+
+test('Marketplace ignores settings clicks for agents that are not operational', async () => {
+    const {MarketplaceModal} = await loadMarketplaceModal();
+    const modal = new MarketplaceModal({}, () => {});
+    modal.openAgentSettings = () => assert.fail('non-operational settings must not open');
+    const button = {
+        disabled: true,
+        dataset: {agentSettingsKey: 'searchAgent', agentOperational: 'false'}
+    };
+
+    await modal.handleAgentClick({
+        target: {
+            closest: selector => selector === '[data-agent-settings-key]' ? button : null
+        }
+    });
+});
+
+test('Marketplace refreshes starting agents until the backend reports a terminal state', async () => {
+    const {MarketplaceModal} = await loadMarketplaceModal();
+    const modal = Object.create(MarketplaceModal.prototype);
+    modal.unloaded = false;
+    modal.state = {
+        marketplace: {
+            agents: [{active: true, status: 'starting', running: false}]
+        },
+        busy: false,
+        agentMutationBusyRef: ''
+    };
+    modal.requestMarketplace = async () => ({
+        agents: [{active: true, status: 'running', running: true}]
+    });
+    let agentRenders = 0;
+    let interactiveSyncs = 0;
+    modal.renderAgents = () => { agentRenders += 1; };
+    modal.syncInteractiveState = () => { interactiveSyncs += 1; };
+
+    await modal.refreshAgentStatuses();
+
+    assert.equal(modal.state.marketplace.agents[0].status, 'running');
+    assert.equal(agentRenders, 1);
+    assert.equal(interactiveSyncs, 1);
+    assert.equal(modal.agentStatusRefreshTimer, undefined);
 });

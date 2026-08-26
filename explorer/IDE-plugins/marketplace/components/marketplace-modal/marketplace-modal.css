@@ -162,7 +162,7 @@ marketplace-modal .marketplace-agent-settings:hover{
 marketplace-modal button:disabled,
 marketplace-modal select:disabled {
   opacity: 0.6;
-  cursor: wait;
+  cursor: not-allowed;
 }
 
 marketplace-modal .marketplace-status {
@@ -336,19 +336,25 @@ marketplace-modal .marketplace-agent-status.running {
   background: color-mix(in srgb, var(--success) 10%, var(--surface));
 }
 
-marketplace-modal .marketplace-agent-status.stopped,
-marketplace-modal .marketplace-agent-status.exited {
+marketplace-modal .marketplace-agent-status.failed {
   border-color: var(--danger);
   color: var(--danger);
   background: color-mix(in srgb, var(--danger) 10%, var(--surface));
 }
 
-marketplace-modal .marketplace-agent-status.restarting,
+marketplace-modal .marketplace-agent-status.starting,
 marketplace-modal .marketplace-agent-status.paused,
-marketplace-modal .marketplace-agent-status.created {
+marketplace-modal .marketplace-agent-status.unknown {
   border-color: var(--warning);
   color: var(--warning);
   background: color-mix(in srgb, var(--warning) 10%, var(--surface));
+}
+
+marketplace-modal .marketplace-agent-status.stopped,
+marketplace-modal .marketplace-agent-status.disabled {
+  border-color: var(--border-strong, var(--border));
+  color: var(--text-soft);
+  background: var(--bg);
 }
 
 marketplace-modal .marketplace-meta,
