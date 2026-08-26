@@ -57,3 +57,31 @@ export async function probeAuthenticatedSession(fetchImplementation = globalThis
         return null;
     }
 }
+
+export async function fetchAdminControlProof({
+    fetchImplementation = globalThis.fetch,
+    expectedOrigin = globalThis.location?.origin
+} = {}) {
+    if (typeof fetchImplementation !== 'function') {
+        throw new Error('Local administration is unavailable.');
+    }
+
+    const response = await fetchImplementation('/auth/token', {
+        cache: 'no-store',
+        credentials: 'include',
+        headers: { Accept: 'application/json' }
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload?.ok !== true) {
+        throw new Error(payload?.message || payload?.error || `Authentication request failed (${response.status})`);
+    }
+
+    const origin = String(expectedOrigin || '').trim();
+    const proofOrigin = String(payload?.adminControl?.origin || '').trim();
+    const csrfToken = String(payload?.adminControl?.csrfToken || '').trim();
+    if (!origin || proofOrigin !== origin || !csrfToken) {
+        throw new Error('Local administration is unavailable for this origin.');
+    }
+
+    return { origin: proofOrigin, csrfToken };
+}

@@ -13,6 +13,9 @@ import {
   flattenPluginsByKey,
   getCachedRuntimePlugins
 } from '/explorer/web-components/modals/settings-modal/settings-plugin-model.js';
+import {
+  fetchAdminControlProof
+} from '/explorer/services/infrastructure/authApi.js';
 
 export class MarketplaceModal {
   constructor(element, invalidate) {
@@ -161,8 +164,21 @@ export class MarketplaceModal {
       fetchOptions.headers['Content-Type'] = 'application/json';
       fetchOptions.body = JSON.stringify(actionBody);
     }
-    const response = await fetch(url, fetchOptions);
-    const data = await response.json().catch(() => ({}));
+
+    const sendRequest = async () => {
+      if (actionBody) {
+        const proof = await fetchAdminControlProof();
+        fetchOptions.headers['x-ploinky-csrf-token'] = proof.csrfToken;
+      }
+      const response = await fetch(url, fetchOptions);
+      const data = await response.json().catch(() => ({}));
+      return { response, data };
+    };
+
+    let { response, data } = await sendRequest();
+    if (actionBody && response.status === 403 && data?.error === 'csrf_invalid') {
+      ({ response, data } = await sendRequest());
+    }
     if (!response.ok || data?.ok === false) {
       throw new Error(data?.message || data?.error || `Marketplace request failed (${response.status})`);
     }

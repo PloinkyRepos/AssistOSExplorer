@@ -17,6 +17,8 @@ Explorer must obtain its filesystem roots from the configured runtime environmen
 
 Ploinky router authentication and secure invocation data are authoritative for protected browser and agent calls. An agent must derive the acting principal from verified invocation context and must not trust a client-declared actor identity.
 
+Marketplace reads use the authenticated router session. Before an administrator installs or uninstalls a repository or enables or disables an agent, Explorer must obtain the local, session-bound administrative control proof from the router, verify that its origin exactly matches the current browser origin, and send it with the Marketplace mutation. Explorer must not persist this proof in component state or weaken the router check when the proof is absent or invalid.
+
 Repository documentation preview must remain reachable through the repository-scoped route `/.ploinky/repos/AchillesIDE/docs/development.html` when the workspace exposes the repository mount.
 
 ## Conclusion
