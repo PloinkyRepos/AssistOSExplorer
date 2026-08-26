@@ -93,7 +93,7 @@ export class ParagraphItem {
         deleteParagraph?.setAttribute("aria-label", "Delete Paragraph");
 
         let paragraphText = this.element.querySelector(".paragraph-text");
-        paragraphText.innerHTML = this.paragraph.text;
+        paragraphText.value = this.paragraph.text;
         paragraphText.style.height = paragraphText.scrollHeight + 'px';
         if (assistOS.workspace.currentParagraphId === this.paragraph.id) {
             paragraphText.click();
@@ -129,7 +129,7 @@ export class ParagraphItem {
         const latestParagraph = latestChapter?.paragraphs?.find((paragraph) => paragraph.id === this.paragraph.id);
         this.paragraph = latestParagraph || await documentModule.getParagraph(this.paragraph.id);
         let paragraphText = this.element.querySelector(".paragraph-text");
-        paragraphText.value = assistOS.UI.unsanitize(this.paragraph.text);
+        paragraphText.value = this.paragraph.text;
         //this.documentPresenter.toggleEditingState(true);
     }
 
@@ -186,7 +186,7 @@ export class ParagraphItem {
         if (!this.paragraph || assistOS.workspace.currentParagraphId !== this.paragraph.id || !this.element.closest("body")) {
             return;
         }
-        let paragraphText = assistOS.UI.sanitize(paragraph.value);
+        let paragraphText = paragraph.value;
         if (paragraphText !== this.paragraph.text) {
             this.paragraph.text = paragraphText
             await this.documentPresenter.updateParagraphModel(this.chapter.id, this.paragraph.id, {
@@ -239,7 +239,7 @@ export class ParagraphItem {
                 this.removeHighlightParagraph();
                 let paragraphText = this.element.querySelector(".paragraph-text");
                 paragraphText.classList.remove("focused");
-                const cachedText = assistOS.UI.customTrim(assistOS.UI.unsanitize(this.paragraph.text));
+                const cachedText = assistOS.UI.customTrim(this.paragraph.text);
                 const currentUIText = assistOS.UI.customTrim(paragraphText.value);
                 const textChanged = assistOS.UI.normalizeSpaces(cachedText) !== assistOS.UI.normalizeSpaces(currentUIText);
                 if (textChanged) {

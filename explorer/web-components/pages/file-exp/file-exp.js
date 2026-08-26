@@ -991,11 +991,15 @@ export class FileExp {
         if (filePath && !String(filePath).endsWith('.backlog') && !String(filePath).endsWith('.history')) {
             this.setPreviewState({ backlogTextView: false }, { invalidate: false });
         }
-        const result = await openFileImpl(this, filePath, {
+        const opened = await openFileImpl(this, filePath, {
             largeFilePreviewLimitBytes: LARGE_FILE_PREVIEW_LIMIT_BYTES,
             largeFilePreviewLines: LARGE_FILE_PREVIEW_LINES,
             ...options
         });
+        if (!opened) {
+            this.stopCurrentFileViewWatch();
+            return false;
+        }
         if (this.normalizePath(this.state.selectedPath || '') === this.normalizePath(filePath || '')) {
             await this.refreshCurrentFileViewBaseline(filePath);
             this.startCurrentFileViewWatch();
@@ -1014,7 +1018,7 @@ export class FileExp {
                 }
             });
         }
-        return result;
+        return true;
     }
 
     async editFile() {

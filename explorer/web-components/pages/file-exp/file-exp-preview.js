@@ -122,6 +122,23 @@ export async function tryLoadPdfPreview(fileExp, filePath) {
     return true;
 }
 
+async function refreshMissingFileParent(fileExp, filePath) {
+    const normalizedPath = fileExp.normalizePath(filePath || '');
+    const parentPath = fileExp.parentPath(normalizedPath) || '/';
+    fileExp.stopCurrentFileViewWatch?.();
+    fileExp.caches.filePreview.invalidateForPath(normalizedPath);
+    fileExp.caches.dirListing.invalidate(fileExp, parentPath);
+    fileExp.updateNavigationLocation(parentPath, {
+        selectedPath: null,
+        resetContext: true,
+        historyMode: 'replace',
+        invalidate: false
+    });
+    const entries = await fileExp.scheduleDirectoryRevalidation(parentPath);
+    fileExp.refreshPreviewUi?.();
+    return Array.isArray(entries);
+}
+
 export async function openFile(fileExp, filePath, {
     largeFilePreviewLimitBytes,
     largeFilePreviewLines,
@@ -161,11 +178,11 @@ export async function openFile(fileExp, filePath, {
                 dpuSecretState: null
             });
             if (await tryLoadOnlyOfficePreview(fileExp, filePath, { invalidate })) {
-                return;
+                return true;
             }
             if (isDpuVirtualPath(filePath)) {
                 await openDpuFile(fileExp, filePath, { invalidate });
-                return;
+                return true;
             }
             if (await tryLoadPdfPreview(fileExp, filePath)) {
                 if (invalidate) {
@@ -173,7 +190,7 @@ export async function openFile(fileExp, filePath, {
                 } else {
                     fileExp.refreshPreviewUi();
                 }
-                return;
+                return true;
             }
             if (await tryLoadMediaPreview(fileExp, filePath, { requestTimeoutMs: effectiveTimeoutMs })) {
                 if (invalidate) {
@@ -181,7 +198,7 @@ export async function openFile(fileExp, filePath, {
                 } else {
                     fileExp.refreshPreviewUi();
                 }
-                return;
+                return true;
             }
 
             const entry = (fileExp.state.allEntries || []).find((item) => item?.path === filePath);
@@ -225,7 +242,7 @@ export async function openFile(fileExp, filePath, {
                 } else {
                     fileExp.refreshPreviewUi();
                 }
-                return;
+                return true;
             }
 
             const isPayloadTooLargeError = (error) => {
@@ -311,26 +328,39 @@ export async function openFile(fileExp, filePath, {
             } else {
                 fileExp.refreshPreviewUi();
             }
+            return true;
         } catch (err) {
-            if (!err?.sessionExpiredHandled) {
+            const pathNotFound = fileExp.isPathNotFoundError?.(err);
+            let directoryRefreshed = false;
+            if (pathNotFound) {
+                try {
+                    directoryRefreshed = await refreshMissingFileParent(fileExp, filePath);
+                } catch (refreshError) {
+                    console.warn('Failed to refresh directory after a missing file was selected', refreshError);
+                }
+            } else if (!err?.sessionExpiredHandled) {
                 console.error(err);
             }
             if (!suppressReadErrorStatus) {
                 fileExp.showStatus(
-                    err?.sessionExpiredHandled
+                    pathNotFound
+                        ? directoryRefreshed
+                            ? 'The selected file no longer exists. The directory was refreshed.'
+                            : 'The selected file no longer exists.'
+                        : err?.sessionExpiredHandled
                         ? 'Your session has expired. Redirecting to sign in...'
                         : (err.message || 'Failed to read file.'),
                     true
                 );
             }
+            return false;
         }
     };
 
     if (showLoader) {
-        await fileExp.withLoader(run);
-        return;
+        return fileExp.withLoader(run);
     }
-    await run();
+    return run();
 }
 
 export function attachPreviewAnchorHandler(fileExp) {

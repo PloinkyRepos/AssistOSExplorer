@@ -1,45 +1,3 @@
-const decodeHtmlEntities = (value = '') => {
-    if (typeof value !== 'string') {
-        return value;
-    }
-    return value
-        .replace(/&#13;/g, '\n')
-        .replace(/&#10;/g, '\n')
-        .replace(/&#9;/g, '\t')
-        .replace(/&nbsp;/g, ' ')
-        .replace(/&#x27;/g, "'")
-        .replace(/&#39;/g, "'")
-        .replace(/&quot;/g, '"')
-        .replace(/&#x2F;/g, '/')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&amp;/g, '&');
-};
-
-const decodeValueDeep = (value) => {
-    if (typeof value === 'string') {
-        return decodeHtmlEntities(value);
-    }
-    if (Array.isArray(value)) {
-        return value.map((item) => decodeValueDeep(item));
-    }
-    if (value && typeof value === 'object') {
-        const result = {};
-        Object.entries(value).forEach(([key, nestedValue]) => {
-            result[key] = decodeValueDeep(nestedValue);
-        });
-        return result;
-    }
-    return value;
-};
-
-const decodeString = (value, fallback = '') => {
-    if (value === undefined || value === null) {
-        return fallback;
-    }
-    return typeof value === 'string' ? decodeHtmlEntities(value) : value;
-};
-
 const normalizeCommandString = (value, fallback = '') => {
     if (typeof value === 'string') {
         return value;
@@ -285,9 +243,6 @@ const normalizePosition = (array, position) => {
 };
 
 export {
-    decodeHtmlEntities,
-    decodeValueDeep,
-    decodeString,
     normalizeCommandString,
     toFiniteNumber,
     extractMediaIdFromPath,

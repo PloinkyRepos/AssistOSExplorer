@@ -8,8 +8,66 @@ import {
     projectScriptaDocument,
     remapScriptaVariantImagePositions,
 } from '../../shared/document/scripta-document.js';
-import { parseMarkdownState, serializeMarkdownState } from '../../utils/server/markdown-crdt/markdown-crdt-model.mjs';
+import {
+    materializeMarkdownModel,
+    parseMarkdownState,
+    serializeMarkdownState,
+} from '../../utils/server/markdown-crdt/markdown-crdt-model.mjs';
 import { ScriptaVariantsView } from '../../shared/ui/scripta-variants-view/scripta-variants-view.js';
+
+test('CRDT materialization preserves plain SCRIPTA text without HTML encoding', () => {
+    const document = createScriptaDocumentModel({title: 'Project & Notes <Draft>', createdBy: 'owner'});
+    const chapter = document.chapters[0];
+    const paragraph = chapter.paragraphs[0];
+    document.metadata.infoText = 'Document <summary> & "scope"';
+    document.preface = 'Opening & context';
+    chapter.heading.text = 'New <Chapter> & Review';
+    chapter.metadata.title = chapter.heading.text;
+    chapter.title = chapter.heading.text;
+    chapter.leading = 'Chapter context & notes';
+    paragraph.text = 'Variant <script>alert("no")</script> & text';
+    paragraph.leading = 'Before paragraph & context';
+    paragraph.trailing = 'After paragraph <done>';
+    paragraph.pluginState.scripta.variants[0].text = paragraph.text;
+    paragraph.metadata.pluginState = paragraph.pluginState;
+
+    const normalized = materializeMarkdownModel(document);
+    const projection = projectScriptaDocument(normalized, {
+        view: {chapterId: chapter.id, paragraphId: chapter.paragraphs[0].id},
+        viewerHash: 'owner',
+    });
+
+    assert.equal(projection.documentTitle, 'Project & Notes <Draft>');
+    assert.equal(projection.chapters[0].chapterTitle, 'New <Chapter> & Review');
+    assert.equal(projection.paragraph.chapterTitle, 'New <Chapter> & Review');
+    assert.equal(normalized.metadata.infoText, 'Document <summary> & "scope"');
+    assert.equal(normalized.preface, 'Opening & context');
+    assert.equal(normalized.chapters[0].leading, 'Chapter context & notes');
+    assert.equal(normalized.chapters[0].paragraphs[0].text, 'Variant <script>alert("no")</script> & text');
+    assert.equal(normalized.chapters[0].paragraphs[0].leading, 'Before paragraph & context');
+    assert.equal(normalized.chapters[0].paragraphs[0].trailing, 'After paragraph <done>');
+    assert.equal(projection.paragraph.currentText, 'Variant <script>alert("no")</script> & text');
+    assert.equal(projection.paragraph.variants[0].text, 'Variant <script>alert("no")</script> & text');
+
+    const serialized = serializeMarkdownState(document);
+    assert.match(serialized, /Project & Notes <Draft>/);
+    assert.match(serialized, /Variant <script>alert\("no"\)<\/script> & text/);
+});
+
+test('SCRIPTA variants render markup-looking text as escaped content', () => {
+    const view = new ScriptaVariantsView({dispatchEvent() {}, contains: () => true}, () => {});
+    const html = view.renderPanel({
+        id: 'variant-1',
+        ordinal: 1,
+        text: '<img src=x onerror="globalThis.compromised=true"> & notes',
+        canEdit: false,
+        canDelete: false,
+        images: [],
+    });
+
+    assert.doesNotMatch(html, /<img src=x/);
+    assert.match(html, /&lt;img src=x onerror=&quot;globalThis\.compromised=true&quot;&gt; &amp; notes/);
+});
 
 test('adding an image at chapter level creates one paragraph whose initial variant owns the image', () => {
     const document = createScriptaDocumentModel({ title: 'Media', template: 'general', createdBy: 'owner' });

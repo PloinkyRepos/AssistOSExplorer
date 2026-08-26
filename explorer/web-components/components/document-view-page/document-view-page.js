@@ -1,6 +1,5 @@
 const documentModule = assistOS.loadModule("document");
 const workspaceModule = assistOS.loadModule("workspace");
-import {unescapeHtmlEntities} from "../../../imports.js";
 import UIUtils from "./UIUtils.js";
 import pluginUtils from "../../../utils/pluginUtils.ui.js";
 import {
@@ -673,8 +672,7 @@ export class DocumentViewPage {
                 paragraphPresenter.paragraph = paragraph;
                 const paragraphText = paragraphElement.querySelector(".paragraph-text");
                 if (paragraphText) {
-                    paragraphText.innerHTML = paragraph.text;
-                    paragraphText.value = assistOS.UI.unsanitize(paragraph.text || "");
+                    paragraphText.value = paragraph.text || "";
                     paragraphText.style.height = "auto";
                     paragraphText.style.height = `${paragraphText.scrollHeight}px`;
                 }
@@ -700,7 +698,6 @@ export class DocumentViewPage {
         const textFontSize = this.stylePreferences["document-font-size"] ?? 16;
         this.fontSize = assistOS.constants.fontSizeMap[textFontSize]
         this.chaptersContainer = "";
-        this.docTitle = this._document.title;
         if (this._document.chapters.length > 0) {
             this._document.chapters.forEach((item) => {
                 this.chaptersContainer += `<chapter-item data-chapter-id="${item.id}" data-presenter="chapter-item"></chapter-item>`;
@@ -711,13 +708,13 @@ export class DocumentViewPage {
     }
 
     renderDocumentTitle() {
-   /*     let documentTitle = this.element.querySelector(".document-title");
-        documentTitle.value = unescapeHtmlEntities(this._document.title);*/
+        const documentTitle = this.element.querySelector(".doc-title-value");
+        if (documentTitle) documentTitle.textContent = this._document.title || "";
     }
 
     renderInfoText() {
         let infoText = this.element.querySelector(".document-infoText");
-        infoText.innerHTML = this._document.infoText || "";
+        infoText.value = this._document.infoText || "";
         infoText.style.height = "auto";
         infoText.style.height = infoText.scrollHeight + 'px';
         infoText.addEventListener("paste", async () => {
@@ -726,7 +723,7 @@ export class DocumentViewPage {
             }, 0)
         });
         let infoTextTitle = this.element.querySelector("#info-text-title");
-        infoTextTitle.value = assistOS.UI.unsanitize(this._document.comments.infoTextTitle) || "Document Info";
+        infoTextTitle.value = this._document.comments.infoTextTitle || "Document Info";
     }
 
     async afterRender() {
@@ -859,7 +856,7 @@ export class DocumentViewPage {
     }
 
     async saveInfoText(infoTextElement) {
-        let infoText = assistOS.UI.sanitize(infoTextElement.value);
+        let infoText = infoTextElement.value;
         if (infoText !== this._document.infoText) {
             this._document.infoText = infoText;
             await this.updateDocumentModel({
@@ -873,7 +870,7 @@ export class DocumentViewPage {
     }
 
     async saveInfoTextTitle(input) {
-        let infoTextTitle = assistOS.UI.sanitize(input.value);
+        let infoTextTitle = input.value;
         if (infoTextTitle !== this._document.comments.infoTextTitle) {
             this._document.comments.infoTextTitle = infoTextTitle;
             await this.updateDocumentModel({
@@ -899,7 +896,7 @@ export class DocumentViewPage {
             }
 
         }
-        let chapterTitle = assistOS.UI.sanitize("New Chapter");
+        let chapterTitle = "New Chapter";
         let chapter = await this.addChapterModel(chapterTitle, position);
         if (!chapter) {
             return;
@@ -944,8 +941,8 @@ export class DocumentViewPage {
     }
 
     async saveTitle(textElement) {
-        let titleText = assistOS.UI.sanitize(textElement.value);
-        if (titleText !== this._document.title && titleText !== "") {
+        const titleText = textElement.value;
+        if (titleText !== this._document.title && titleText.trim() !== "") {
             this._document.title = titleText;
             await this.updateDocumentModel({
                 title: titleText,

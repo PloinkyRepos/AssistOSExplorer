@@ -9,9 +9,6 @@ import createDocumentService, {
     generateId
 } from '../index.js';
 import {
-    decodeHtmlEntities,
-    decodeValueDeep,
-    decodeString,
     normalizeCommandString,
     normalizeCommandQuotes,
     decodeBase64,
@@ -261,7 +258,7 @@ const syncDocumentMetadata = (document = {}) => {
 
 const serializeParagraph = (paragraph) => ({
     id: paragraph.id,
-    metadata: decodeValueDeep({
+    metadata: clone({
         ...paragraph.metadata,
         id: paragraph.id,
         type: paragraph.type,
@@ -275,18 +272,18 @@ const serializeParagraph = (paragraph) => ({
         variables: paragraph.variables,
         title: paragraph.metadata?.title
     }),
-    leading: decodeString(paragraph.leading ?? ''),
-    text: decodeString(paragraph.text ?? ''),
-    trailing: decodeString(paragraph.trailing ?? '\n'),
+    leading: paragraph.leading ?? '',
+    text: paragraph.text ?? '',
+    trailing: paragraph.trailing ?? '\n',
     hasMetadata: true
 });
 
 const serializeChapter = (chapter) => ({
     id: chapter.id,
-    metadata: decodeValueDeep({
+    metadata: clone({
         ...chapter.metadata,
         id: chapter.id,
-        title: decodeString(chapter.title ?? chapter.metadata?.title ?? ''),
+        title: chapter.title ?? chapter.metadata?.title ?? '',
         commands: chapter.commands,
         comments: chapter.comments,
         pluginState: chapter.pluginState,
@@ -298,19 +295,19 @@ const serializeChapter = (chapter) => ({
     }),
     heading: {
         level: chapter.headingLevel ?? chapter.metadata.headingLevel ?? 2,
-        text: decodeString(chapter.headingText ?? chapter.title)
+        text: chapter.headingText ?? chapter.title ?? ''
     },
-    leading: decodeString(chapter.leading ?? ''),
+    leading: chapter.leading ?? '',
     paragraphs: chapter.paragraphs.map(serializeParagraph)
 });
 
 const serializeDocumentModel = (document) => ensureDocumentStructure({
-    metadata: decodeValueDeep({
+    metadata: clone({
         ...document.metadata,
         id: document.metadata.id ?? generateId('doc'),
-        title: decodeString(document.title ?? document.metadata.title),
-        infoText: decodeString(document.infoText ?? document.metadata.infoText ?? ''),
-        commands: decodeString(document.commands ?? document.metadata.commands ?? ''),
+        title: document.title ?? document.metadata.title ?? '',
+        infoText: document.infoText ?? document.metadata.infoText ?? '',
+        commands: document.commands ?? document.metadata.commands ?? '',
         comments: document.comments,
         pluginState: document.pluginState,
         references: document.references,
@@ -321,7 +318,7 @@ const serializeDocumentModel = (document) => ensureDocumentStructure({
         version: document.version ?? document.metadata.version,
         updatedAt: document.metadata.updatedAt ?? document.updatedAt ?? new Date().toISOString()
     }),
-    preface: decodeString(document.preface ?? ''),
+    preface: document.preface ?? '',
     chapters: document.chapters.map(serializeChapter)
 });
 

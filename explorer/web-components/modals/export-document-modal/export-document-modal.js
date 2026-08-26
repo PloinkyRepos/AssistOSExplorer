@@ -44,9 +44,9 @@ export class ExportDocumentModal {
         a.style.display = 'none';
         a.href = url;
         if (this.exportType === 'full') {
-            a.download = `${assistOS.UI.unsanitize(this.documentTitle)}.docai`;
+            a.download = `${this.documentTitle}.docai`;
         } else {
-            a.download = `${assistOS.UI.unsanitize(this.documentTitle)}_partial.docai`;
+            a.download = `${this.documentTitle}_partial.docai`;
         }
         document.body.appendChild(a);
         a.click();
@@ -109,7 +109,7 @@ export class ExportDocumentModal {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `${assistOS.UI.unsanitize(this.documentTitle || documentId)}.docx`;
+        a.download = `${this.documentTitle || documentId}.docx`;
         a.click();
         window.URL.revokeObjectURL(url);
     }

@@ -12,9 +12,6 @@ import {
     createParagraphMetadataDefaults
 } from './index.js';
 import {
-    decodeHtmlEntities,
-    decodeValueDeep,
-    decodeString,
     normalizeCommandString,
     normalizeCommandQuotes,
     parseCommandsForUI,

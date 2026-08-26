@@ -1,3 +1,17 @@
+function escapeHtml(value = '') {
+    return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+}
+
+function renderPlainText(value = '') {
+    return escapeHtml(String(value ?? '').replace(/\u00A0/g, ' '))
+        .replace(/\r?\n/g, '<br>');
+}
+
 export class PrintDocumentModal {
     constructor(element, invalidate) {
         this.element = element;
@@ -211,30 +225,30 @@ export class PrintDocumentModal {
 
         const {title, abstract, chapters} = this.document;
 
-        let htmlContent = `<h1>${title}</h1>`;
+        let htmlContent = `<h1>${renderPlainText(title)}</h1>`;
 
         if (abstract) {
-            htmlContent += `<h3>${abstract}</h3>`;
+            htmlContent += `<h3>${renderPlainText(abstract)}</h3>`;
         }
 
         if (Array.isArray(chapters)) {
             chapters.forEach((chapter) => {
                 const {title: chapterTitle, paragraphs} = chapter;
 
-                htmlContent += `<br><h2>${chapterTitle}</h2>`;
+                htmlContent += `<br><h2>${renderPlainText(chapterTitle)}</h2>`;
 
                 if (Array.isArray(paragraphs) && paragraphs.length > 0) {
                     paragraphs.forEach((paragraph) => {
-                        const paragraphText = paragraph.text
-                            .replace(/\u00A0/g, ' ')
-                            .replace(/&#13;/g, '<br>');
+                        const paragraphText = renderPlainText(paragraph.text);
                         htmlContent += `<p style="text-align: justify;">${paragraphText}</p>`;
 
                         if (paragraph.commands && paragraph.commands.image) {
                             const image = paragraph.commands.image;
-                            const imageURL = image.url || '';
-                            const altText = image.altText || 'Image';
-                            htmlContent += `<img src="${imageURL}" alt="${altText}" width="${image.width}" height="${image.height}" />`;
+                            const imageURL = escapeHtml(image.url || '');
+                            const altText = escapeHtml(image.altText || 'Image');
+                            const width = escapeHtml(image.width || '');
+                            const height = escapeHtml(image.height || '');
+                            htmlContent += `<img src="${imageURL}" alt="${altText}" width="${width}" height="${height}" />`;
                         }
                     });
                 } else {

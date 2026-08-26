@@ -1,4 +1,3 @@
-import {unescapeHtmlEntities} from "../../../imports.js";
 import pluginUtils from "../../../utils/pluginUtils.ui.js";
 import UIUtils from "../document-view-page/UIUtils.js";
 const documentModule = assistOS.loadModule("document");
@@ -200,8 +199,8 @@ export class ChapterItem {
     }
 
     async saveTitle(titleElement) {
-        let titleText = assistOS.UI.sanitize(titleElement.value);
-        if (titleText !== this.chapter.title && titleText !== "") {
+        const titleText = titleElement.value;
+        if (titleText !== this.chapter.title && titleText.trim() !== "") {
             this.chapter.title = titleText;
             await this.documentPresenter.updateChapterModel(this.chapter.id, {
                 title: titleText,
@@ -214,7 +213,7 @@ export class ChapterItem {
 
     renderChapterTitle() {
         let chapterTitle = this.element.querySelector(".chapter-title");
-        chapterTitle.value = unescapeHtmlEntities(this.chapter.title);
+        chapterTitle.value = this.chapter.title;
     }
 
     async afterRender() {

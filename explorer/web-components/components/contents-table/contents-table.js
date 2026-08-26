@@ -33,8 +33,7 @@ export class ContentsTable{
                 chapterItem.className = 'toc-item toc-chapter';
                 chapterItem.href = `#chapter-${chapter.id}`;
                 chapterItem.setAttribute('data-local-action', `openChapter ${chapter.id}`);
-                const rawTitle = assistOS.UI.unsanitize(chapter.title);
-                const displayTitle = rawTitle.replace(/\s*\{#[^\}]+\}\s*$/, '');
+                const displayTitle = String(chapter.title || '').replace(/\s*\{#[^\}]+\}\s*$/, '');
                 chapterItem.textContent = `Chapter ${index + 1}: ${displayTitle}`;
                 tocContent.appendChild(chapterItem);
             });
