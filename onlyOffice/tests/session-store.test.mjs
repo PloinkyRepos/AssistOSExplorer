@@ -375,6 +375,143 @@ test('persisted state contains no delegation bearer and requires fresh DPU contr
   assert.deepEqual(recreated.listActiveSessions(), []);
 });
 
+test('fresh authenticated DPU control reauthorizes only the matching loaded persisted session', async () => {
+  const directory = await realpath(await mkdtemp(path.join(os.tmpdir(), 'onlyoffice-session-reauthorize-')));
+  const stateFile = path.join(directory, 'sessions-v5.json');
+  let clock = at('2026-06-09T12:00:00.000Z');
+  const first = createSessionStore({ now: () => clock, stateFile });
+  const descriptor = {
+    requestedPath: '/Confidential/report.docx',
+    path: '/Confidential/report.docx',
+    storageKind: 'dpu',
+    storageId: '/Confidential/report.docx',
+    objectId: 'object-1',
+    fileName: 'report.docx',
+    mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    canWrite: true,
+    canComment: false,
+    versionKey: 'v1',
+    preview: {
+      storageKind: 'dpu',
+      requestedPath: '/Confidential/report.docx',
+      objectId: 'object-1',
+      canWrite: true,
+      canComment: false,
+    },
+    authUser: { id: 'local:alice', username: 'alice', roles: ['user'] },
+    delegations: {
+      dpuConfidential: {
+        token: 'first-generation-delegation',
+        expiresAt: '2026-06-09T13:00:00.000Z',
+      },
+    },
+  };
+  const loaded = first.createSession(descriptor);
+  const unused = first.createSession(descriptor);
+  clock = at('2026-06-09T12:01:00.000Z');
+  first.getForStorageRequest(loaded.token, { markDocumentAccess: true });
+
+  clock = at('2026-06-09T12:02:00.000Z');
+  const recreated = createSessionStore({ now: () => clock, stateFile });
+  assert.throws(() => recreated.getForStorageRequest(loaded.token), /fresh authenticated control material/i);
+  assert.equal(recreated.reauthorizeLoadedSessions({
+    ...descriptor,
+    authUser: { id: 'local:bob', username: 'bob', roles: ['user'] },
+    activeBrowserUrl: ACTIVE_BROWSER_URL,
+  }), 0);
+  assert.equal(recreated.reauthorizeLoadedSessions({
+    ...descriptor,
+    requestedPath: '/Confidential/other.docx',
+    path: '/Confidential/other.docx',
+    activeBrowserUrl: ACTIVE_BROWSER_URL,
+  }), 0);
+  assert.equal(recreated.reauthorizeLoadedSessions({
+    ...descriptor,
+    objectId: 'object-2',
+    activeBrowserUrl: ACTIVE_BROWSER_URL,
+  }), 0);
+  assert.equal(recreated.reauthorizeLoadedSessions({
+    ...descriptor,
+    canWrite: false,
+    activeBrowserUrl: ACTIVE_BROWSER_URL,
+  }), 0);
+  assert.equal(recreated.reauthorizeLoadedSessions({
+    ...descriptor,
+    activeBrowserUrl: 'https://other.example.com/base-agent-additional-server/onlyOffice/8080',
+  }), 0);
+
+  const freshDelegation = {
+    dpuConfidential: {
+      token: 'fresh-generation-delegation',
+      expiresAt: '2026-06-09T14:00:00.000Z',
+    },
+  };
+  assert.equal(recreated.reauthorizeLoadedSessions({
+    ...descriptor,
+    versionKey: 'v2',
+    delegations: freshDelegation,
+    activeBrowserUrl: ACTIVE_BROWSER_URL,
+  }), 1);
+
+  const restored = recreated.getForStorageRequest(loaded.token);
+  assert.equal(restored.versionKey, 'v2');
+  assert.equal(restored.delegations.dpuConfidential.token, 'fresh-generation-delegation');
+  assert.equal(restored.idleExpiresAt, '2026-06-09T12:32:00.000Z');
+  assert.equal(restored.absoluteExpiresAt, '2026-06-09T13:00:00.000Z');
+  assert.equal(recreated.listActiveSessions().length, 1);
+  assert.throws(() => recreated.getForStorageRequest(unused.token), /fresh authenticated control material/i);
+
+  const bytes = await readFile(stateFile, 'utf8');
+  assert.equal(bytes.includes('first-generation-delegation'), false);
+  assert.equal(bytes.includes('fresh-generation-delegation'), false);
+  assert.deepEqual(JSON.parse(bytes).sessions.map((record) => record.requiresReauthorization), [true, true]);
+});
+
+test('fresh authenticated DPU control cannot resurrect an expired loaded session', async () => {
+  const directory = await realpath(await mkdtemp(path.join(os.tmpdir(), 'onlyoffice-session-expired-reauthorize-')));
+  const stateFile = path.join(directory, 'sessions-v5.json');
+  let clock = at('2026-06-09T12:00:00.000Z');
+  const first = createSessionStore({ now: () => clock, stateFile });
+  const descriptor = {
+    requestedPath: '/Confidential/expired.docx',
+    path: '/Confidential/expired.docx',
+    storageKind: 'dpu',
+    storageId: '/Confidential/expired.docx',
+    objectId: 'expired-object',
+    fileName: 'expired.docx',
+    mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    canWrite: true,
+    canComment: false,
+    versionKey: 'v1',
+    authUser: { id: 'local:alice', username: 'alice', roles: ['user'] },
+    delegations: {
+      dpuConfidential: {
+        token: 'expired-generation-delegation',
+        expiresAt: '2026-06-09T12:05:00.000Z',
+      },
+    },
+  };
+  const loaded = first.createSession(descriptor);
+  clock = at('2026-06-09T12:01:00.000Z');
+  first.getForStorageRequest(loaded.token, { markDocumentAccess: true });
+
+  clock = at('2026-06-09T12:06:00.000Z');
+  const recreated = createSessionStore({ now: () => clock, stateFile });
+  assert.equal(recreated.reauthorizeLoadedSessions({
+    ...descriptor,
+    delegations: {
+      dpuConfidential: {
+        token: 'later-generation-delegation',
+        expiresAt: '2026-06-09T13:00:00.000Z',
+      },
+    },
+    activeBrowserUrl: ACTIVE_BROWSER_URL,
+  }), 0);
+  assert.deepEqual(recreated.listActiveSessions(), []);
+  assert.throws(() => recreated.getForStorageRequest(loaded.token), /unknown|expired/i);
+  assert.equal((await readFile(stateFile, 'utf8')).includes('later-generation-delegation'), false);
+});
+
 test('session state fails closed on symlink targets, symlink parents, weak modes, and corrupt bytes', async () => {
   const directory = await realpath(await mkdtemp(path.join(os.tmpdir(), 'onlyoffice-session-guards-')));
   const target = path.join(directory, 'target.json');

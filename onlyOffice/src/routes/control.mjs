@@ -152,12 +152,16 @@ export function createControlRouteHandler({
     } = resolveCanonicalEditorBrowserUrl(editorService.activeBrowserUrl);
     const activeBrowserUrl = `${editorBrowserUrl.origin}${editorBrowserPrefix}`;
     const sessionDelegations = isConfidentialPath(requestedPath) ? delegations : {};
-    const session = sessionStore.createSession({
+    const sessionInput = {
       ...descriptor,
       authUser,
       delegations: sessionDelegations,
       activeBrowserUrl,
-    });
+    };
+    if (sessionDelegations.dpuConfidential) {
+      sessionStore.reauthorizeLoadedSessions?.(sessionInput);
+    }
+    const session = sessionStore.createSession(sessionInput);
 
     const documentUrl = buildLoopbackStorageUrl(config.storagePort, 'document', session.token);
     const callbackUrl = buildLoopbackStorageUrl(config.storagePort, 'callback', session.token);

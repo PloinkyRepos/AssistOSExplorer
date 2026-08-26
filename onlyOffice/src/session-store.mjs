@@ -71,6 +71,27 @@ function cloneAuthUser(user = {}) {
   };
 }
 
+function sameAuthenticatedUser(left, right) {
+  const first = cloneAuthUser(left);
+  const second = cloneAuthUser(right);
+  return Boolean(first.id && first.username)
+    && first.id === second.id
+    && first.username === second.username;
+}
+
+function sameReauthorizationDocument(record, input) {
+  for (const field of [
+    'requestedPath', 'path', 'storageKind', 'storageId', 'objectId',
+    'fileName', 'mimeType',
+  ]) {
+    if (String(record?.[field] || '').trim() !== String(input?.[field] || '').trim()) {
+      return false;
+    }
+  }
+  return Boolean(record?.canWrite) === Boolean(input?.canWrite)
+    && Boolean(record?.canComment) === Boolean(input?.canComment);
+}
+
 function cloneDelegations(delegations = {}) {
   const out = {};
   if (!delegations || typeof delegations !== 'object') {
@@ -490,6 +511,76 @@ export function createSessionStore({
       sessions.set(tokenHash, record);
       persist();
       return publicSummaryFromRecord(record, token);
+    },
+
+    reauthorizeLoadedSessions(input = {}) {
+      const authorizedAt = resolveNow(input.authorizedAt);
+      const activeBrowserUrl = canonicalActiveBrowserUrl(input.activeBrowserUrl);
+      const authUser = cloneAuthUser(input.authUser);
+      const delegations = cloneDelegations(input.delegations);
+      if (
+        !authUser.id
+        || !authUser.username
+        || Object.keys(delegations).length === 0
+      ) {
+        return 0;
+      }
+
+      const delegationExpiresAt = Object.values(delegations).reduce(
+        (earliest, delegation) => earliest
+          ? minDate(earliest, asDate(delegation.expiresAt))
+          : asDate(delegation.expiresAt),
+        null,
+      );
+      if (
+        !Number.isFinite(delegationExpiresAt.getTime())
+        || delegationExpiresAt.getTime() <= authorizedAt.getTime()
+      ) {
+        return 0;
+      }
+
+      let changed = false;
+      let reauthorized = 0;
+      for (const record of sessions.values()) {
+        if (!record.requiresReauthorization || !record.documentAccessedAt) continue;
+        assertActiveBrowserBinding(record);
+        if (
+          authorizedAt.getTime() >= asDate(record.absoluteExpiresAt).getTime()
+          || authorizedAt.getTime() >= asDate(record.idleExpiresAt).getTime()
+        ) {
+          sessions.delete(record.tokenHash);
+          changed = true;
+          continue;
+        }
+        if (
+          record.activeBrowserUrl !== activeBrowserUrl
+          || !sameAuthenticatedUser(record.authUser, input.authUser)
+          || !sameReauthorizationDocument(record, input)
+        ) {
+          continue;
+        }
+
+        const absoluteExpiresAt = minDate(
+          asDate(record.absoluteExpiresAt),
+          delegationExpiresAt,
+        );
+        if (absoluteExpiresAt.getTime() <= authorizedAt.getTime()) continue;
+        record.versionKey = String(input.versionKey || '').trim();
+        record.preview = clonePreview(input.preview);
+        record.authUser = cloneAuthUser(authUser);
+        record.delegations = cloneDelegations(delegations);
+        record.idleExpiresAt = minDate(
+          new Date(authorizedAt.getTime() + idleTtlMs),
+          absoluteExpiresAt,
+        ).toISOString();
+        record.absoluteExpiresAt = absoluteExpiresAt.toISOString();
+        record.requiresReauthorization = false;
+        sessions.set(record.tokenHash, record);
+        changed = true;
+        reauthorized += 1;
+      }
+      if (changed) persist();
+      return reauthorized;
     },
 
     touchSession(token, { now: valueNow, activeBrowserUrl } = {}) {
