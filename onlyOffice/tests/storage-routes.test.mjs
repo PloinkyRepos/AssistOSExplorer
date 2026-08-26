@@ -121,16 +121,17 @@ function createMockResponse() {
   };
 }
 
-function createSessionStore(session, { onAcknowledge = null } = {}) {
+function createSessionStore(session, { onAcknowledge = null, onResolve = null } = {}) {
   const boundSession = {
     ...DEFAULT_SESSION_IDENTITY,
     ...session,
   };
   return {
-    getForStorageRequest(token) {
+    getForStorageRequest(token, options) {
       if (token !== 'token-1') {
         throw new Error('Unknown or expired OnlyOffice session token.');
       }
+      onResolve?.(options);
       return boundSession;
     },
     acknowledgeCallback(token, acknowledgement) {
@@ -157,12 +158,16 @@ function createDownloadResponse(body = 'saved from callback', contentType = 'app
 
 test('document route streams bytes for a valid unexpired token', async () => {
   const writes = [];
+  const resolutions = [];
   const handler = createStorageRouteHandler({
     config: {},
-    sessionStore: createSessionStore({
-      requestedPath: '/workspace/report.docx',
-      mimeType: 'text/plain'
-    }),
+    sessionStore: createSessionStore(
+      {
+        requestedPath: '/workspace/report.docx',
+        mimeType: 'text/plain'
+      },
+      { onResolve: (options) => resolutions.push(options) },
+    ),
     storageRouter: {
       forSession(session) {
         return {
@@ -196,6 +201,7 @@ test('document route streams bytes for a valid unexpired token', async () => {
   assert.equal(res.getHeader('content-type'), 'text/plain');
   assert.equal(res.bodyText, 'document body');
   assert.equal(writes.length, 0);
+  assert.deepEqual(resolutions, [{ markDocumentAccess: true }]);
 });
 
 test('document route rejects expired and unknown tokens', async () => {

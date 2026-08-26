@@ -107,7 +107,9 @@ export async function drainOnlyOfficeSessions({
     throw new Error('OnlyOffice drain requires fetch.');
   }
   const deadline = now() + Number(config.drainTimeoutMs || 30_000);
-  const activeSessions = sessionStore.listActiveSessions().filter((session) => session.canWrite);
+  const activeSessions = sessionStore.listActiveSessions().filter((session) => (
+    session.canWrite && session.documentAccessedAt
+  ));
   const pending = new Map();
 
   for (const session of activeSessions) {

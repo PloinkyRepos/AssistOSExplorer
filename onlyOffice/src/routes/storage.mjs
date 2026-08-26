@@ -324,8 +324,8 @@ function resolveTrustedDownloadUrl(rawUrl, {
   return downloadUrl.toString();
 }
 
-function resolveSessionFromToken(sessionStore, token) {
-  return sessionStore.getForStorageRequest(token);
+function resolveSessionFromToken(sessionStore, token, { markDocumentAccess = false } = {}) {
+  return sessionStore.getForStorageRequest(token, { markDocumentAccess });
 }
 
 export function createStorageRouteHandler({
@@ -361,7 +361,9 @@ export function createStorageRouteHandler({
 
     let session;
     try {
-      session = resolveSessionFromToken(sessionStore, documentToken || callbackToken);
+      session = resolveSessionFromToken(sessionStore, documentToken || callbackToken, {
+        markDocumentAccess: isDocumentRoute,
+      });
     } catch (error) {
       if (String(error?.message || '').includes('Unknown or expired OnlyOffice session token.')) {
         send(res, 404, 'OnlyOffice session not found.');

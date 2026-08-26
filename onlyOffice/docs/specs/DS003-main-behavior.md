@@ -21,7 +21,7 @@ summary: Defines the essential OnlyOffice session, editor transport, and persist
 
 ### Authenticated document sessions
 
-The affected actor is an authenticated Explorer user opening an Office document. The control route resolves the document path, creates per-session state, selects workspace or [DPU](wiki.html#definition-dpu) Confidential storage, and returns a short-lived [JWT](wiki.html#definition-jwt)-protected editor configuration. The observable result is an editor session whose opaque callback URL and document key cannot be reused from another session.
+The affected actor is an authenticated Explorer user opening an Office document. The control route resolves the document path, creates per-session state, selects workspace or [DPU](wiki.html#definition-dpu) Confidential storage, and returns a short-lived [JWT](wiki.html#definition-jwt)-protected editor configuration. Session state records when DocumentServer first requests the source document so controlled drain can distinguish a loaded editor from an issued but unused configuration. The observable result is an editor session whose opaque callback URL and document key cannot be reused from another session.
 
 ### Validated editor transport
 

@@ -239,6 +239,31 @@ test('getForStorageRequest renews idle expiry within the absolute bound', () => 
   assert.equal(after.path, '/docs/a.docx');
 });
 
+test('session store records only explicit DocumentServer document access', () => {
+  let clock = new Date('2026-01-01T00:00:00.000Z');
+  const store = createSessionStore({ now: () => clock });
+  const created = store.createSession({
+    path: '/docs/loaded.docx',
+    storageKind: 'workspace',
+    fileName: 'loaded.docx',
+    canWrite: true,
+  });
+
+  assert.equal(created.documentAccessedAt, null);
+  assert.equal(store.getForStorageRequest(created.token).documentAccessedAt, null);
+
+  clock = new Date('2026-01-01T00:01:00.000Z');
+  const loaded = store.getForStorageRequest(created.token, { markDocumentAccess: true });
+  assert.equal(loaded.documentAccessedAt, '2026-01-01T00:01:00.000Z');
+  assert.equal(store.listActiveSessions()[0].documentAccessedAt, loaded.documentAccessedAt);
+
+  clock = new Date('2026-01-01T00:02:00.000Z');
+  assert.equal(
+    store.getForStorageRequest(created.token, { markDocumentAccess: true }).documentAccessedAt,
+    loaded.documentAccessedAt,
+  );
+});
+
 test('session store rejects document access after absolute delegation expiry', () => {
   const store = createSessionStore({
     now: () => at('2026-06-09T12:00:00.000Z'),
@@ -291,11 +316,16 @@ test('session metadata survives a targeted recreate through an atomic private v5
     versionKey: 'v1',
     authUser: { id: 'alice', username: 'alice', roles: ['user'] },
   });
+  first.getForStorageRequest(created.token, {
+    now: at('2026-06-09T12:01:00.000Z'),
+    markDocumentAccess: true,
+  });
 
   const second = createSessionStore({ now, stateFile });
   const reopened = second.getForStorageRequest(created.token);
   assert.equal(reopened.path, '/docs/recreate.docx');
   assert.equal(reopened.documentKey, created.documentKey);
+  assert.equal(reopened.documentAccessedAt, '2026-06-09T12:01:00.000Z');
   assert.equal(reopened.activeBrowserUrl, ACTIVE_BROWSER_URL);
   assert.equal(JSON.parse(await readFile(stateFile, 'utf8')).sessions[0].activeBrowserUrl, ACTIVE_BROWSER_URL);
   assert.equal((await readFile(stateFile, 'utf8')).endsWith('\n'), true);
@@ -431,6 +461,35 @@ test('session state hard cut rejects missing, malformed, and duplicate per-sessi
     () => createSessionStore({ stateFile: duplicateKeyFile }),
     /duplicate documentKey/i,
   );
+});
+
+test('session state hard cut rejects missing or malformed document access state', async () => {
+  const directory = await realpath(await mkdtemp(path.join(os.tmpdir(), 'onlyoffice-session-access-')));
+
+  for (const [name, mutate] of [
+    ['missing', (record) => { delete record.documentAccessedAt; }],
+    ['malformed', (record) => { record.documentAccessedAt = 'not-an-iso-timestamp'; }],
+    ['before-creation', (record) => { record.documentAccessedAt = '2026-06-09T11:59:59.000Z'; }],
+  ]) {
+    const stateFile = path.join(directory, `${name}.json`);
+    const store = createSessionStore({
+      now: () => at('2026-06-09T12:00:00.000Z'),
+      stateFile,
+    });
+    store.createSession({
+      path: `/docs/${name}.docx`, storageKind: 'workspace', storageId: name, objectId: '',
+      fileName: `${name}.docx`, mimeType: '', canWrite: true, canComment: false,
+      versionKey: 'v1', authUser: { id: 'alice', username: 'alice', roles: [] },
+    });
+    const persisted = JSON.parse(await readFile(stateFile, 'utf8'));
+    mutate(persisted.sessions[0]);
+    await writeFile(stateFile, `${JSON.stringify(persisted)}\n`, { mode: 0o600 });
+    assert.throws(
+      () => createSessionStore({ stateFile }),
+      /document access timestamp.*corrupt/i,
+      name,
+    );
+  }
 });
 
 test('session state hard cut rejects missing or mutated browser authority without fallback', async () => {

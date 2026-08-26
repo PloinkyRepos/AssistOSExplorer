@@ -113,6 +113,7 @@ function sanitizeStoredSession(record) {
     authUser: cloneAuthUser(record.authUser),
     delegations: cloneDelegations(record.delegations),
     createdAt: record.createdAt,
+    documentAccessedAt: record.documentAccessedAt,
     idleExpiresAt: record.idleExpiresAt,
     absoluteExpiresAt: record.absoluteExpiresAt,
     callbackAcknowledgement: record.callbackAcknowledgement || null,
@@ -150,6 +151,7 @@ function publicSummaryFromRecord(record, token = '') {
     preview: clonePreview(record.preview),
     authUser: cloneAuthUser(record.authUser),
     createdAt: record.createdAt,
+    documentAccessedAt: record.documentAccessedAt,
     idleExpiresAt: record.idleExpiresAt,
     absoluteExpiresAt: record.absoluteExpiresAt,
     callbackAcknowledgement: record.callbackAcknowledgement || null,
@@ -170,6 +172,7 @@ function publicSummaryFromRecord(record, token = '') {
         preview: clonePreview(record.preview),
         authUser: cloneAuthUser(record.authUser),
         createdAt: record.createdAt,
+        documentAccessedAt: record.documentAccessedAt,
         idleExpiresAt: record.idleExpiresAt,
         absoluteExpiresAt: record.absoluteExpiresAt,
         callbackAcknowledgement: record.callbackAcknowledgement || null,
@@ -285,10 +288,16 @@ function validateStoredRecord(record) {
     if (typeof record[field] !== 'boolean') throw stateError(`OnlyOffice v5 session ${field} is corrupt.`);
   }
   const createdAt = parseIsoDate(record.createdAt, 'createdAt');
+  const documentAccessedAt = record.documentAccessedAt === null
+    ? null
+    : parseIsoDate(record.documentAccessedAt, 'document access timestamp');
   const idleExpiresAt = parseIsoDate(record.idleExpiresAt, 'idleExpiresAt');
   const absoluteExpiresAt = parseIsoDate(record.absoluteExpiresAt, 'absoluteExpiresAt');
   if (createdAt > idleExpiresAt || idleExpiresAt > absoluteExpiresAt) {
     throw stateError('OnlyOffice v5 session expiry ordering is corrupt.');
+  }
+  if (documentAccessedAt && (documentAccessedAt < createdAt || documentAccessedAt >= absoluteExpiresAt)) {
+    throw stateError('OnlyOffice v5 session document access timestamp is corrupt.');
   }
   if (!record.authUser || typeof record.authUser !== 'object' || Array.isArray(record.authUser)) {
     throw stateError('OnlyOffice v5 session authUser is corrupt.');
@@ -472,6 +481,7 @@ export function createSessionStore({
         authUser: cloneAuthUser(input.authUser),
         delegations: cloneDelegations(input.delegations),
         createdAt: createdAt.toISOString(),
+        documentAccessedAt: null,
         idleExpiresAt: idleExpiresAt.toISOString(),
         absoluteExpiresAt: absoluteExpiresAt.toISOString(),
         callbackAcknowledgement: null,
@@ -501,13 +511,16 @@ export function createSessionStore({
       return publicSummaryFromRecord(record);
     },
 
-    getForStorageRequest(token, { now: valueNow } = {}) {
+    getForStorageRequest(token, { now: valueNow, markDocumentAccess = false } = {}) {
       const record = readRecordByToken(token);
       const at = assertActive(record, valueNow);
       const nextIdleExpiry = minDate(
         new Date(at.getTime() + idleTtlMs),
         asDate(record.absoluteExpiresAt)
       );
+      if (markDocumentAccess && !record.documentAccessedAt) {
+        record.documentAccessedAt = at.toISOString();
+      }
       record.idleExpiresAt = nextIdleExpiry.toISOString();
       sessions.set(record.tokenHash, record);
       persist();

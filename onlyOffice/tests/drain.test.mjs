@@ -39,6 +39,7 @@ function activeSession(callbackAcknowledgement = null, documentKey = 'c'.repeat(
     fileName: 'report.docx',
     documentKey,
     canWrite: true,
+    documentAccessedAt: '2026-07-15T11:59:00.000Z',
     callbackAcknowledgement,
   };
 }
@@ -124,6 +125,30 @@ test('drain independently waits for same-document sessions with distinct persist
   assert.deepEqual(requestedKeys, ['c'.repeat(32), 'd'.repeat(32)]);
   assert.equal(waits, 2);
   assert.ok(acknowledgements.every(Boolean));
+});
+
+test('drain ignores an issued control session that DocumentServer never accessed', async () => {
+  const loaded = activeSession(null, 'c'.repeat(32));
+  const unused = {
+    ...activeSession(null, 'd'.repeat(32)),
+    documentAccessedAt: null,
+  };
+  const requestedKeys = [];
+  const result = await drainOnlyOfficeSessions({
+    config,
+    sessionStore: {
+      listActiveSessions() {
+        return [loaded, unused];
+      },
+    },
+    fetchImpl: async (_url, options) => {
+      requestedKeys.push(JSON.parse(options.body).key);
+      return response({ error: 4 });
+    },
+  });
+
+  assert.deepEqual(result, { drainedSessions: 1 });
+  assert.deepEqual(requestedKeys, ['c'.repeat(32)]);
 });
 
 test('drain treats DocumentServer no-changes as acknowledged without waiting', async () => {
