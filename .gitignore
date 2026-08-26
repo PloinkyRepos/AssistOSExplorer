@@ -8,6 +8,9 @@
 /tests/smoke/test-results/
 /tests/smoke/playwright-report/
 /.ploinky/test-artifacts/
+# Local-only Egress harness: its Box and container identifiers are specific to
+# one machine's deployment and must never be published.
+/.ploinky/e2e-egress/
 .idea
 /soplangAgent/.tasksQueue
 /soplangAgent/achilles-debug.log
