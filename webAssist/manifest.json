@@ -12,7 +12,7 @@
   },
   "volumes": {
     ".data/webAssist/debuglogs": "/code/debuglogs",
-    "webassist-data": "/webassist-data"
+    "webassist-data": "/workspace/webassist-data"
   },
   "profiles": {
     "default": {

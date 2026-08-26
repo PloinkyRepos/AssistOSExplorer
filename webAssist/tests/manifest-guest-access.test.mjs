@@ -15,6 +15,7 @@ test('webAssist manifest keeps the embedded chat reachable as a guest surface', 
     const manifest = await readAgentJson('manifest.json');
 
     assert.equal(manifest.guest, true, 'manifest-level guest auth must remain enabled');
+    assert.equal(manifest.volumes?.['webassist-data'], '/workspace/webassist-data');
     assert.equal(
         Object.prototype.hasOwnProperty.call(manifest, 'httpServices'),
         false,

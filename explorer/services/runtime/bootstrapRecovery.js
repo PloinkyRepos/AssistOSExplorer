@@ -4,6 +4,8 @@ const TRANSIENT_ASSET_PATTERNS = [
     /failed to fetch dynamically imported module/i,
     /failed to fetch/i,
     /service unavailable/i,
+    /edge_generation_changed/i,
+    /edge routing generation changed before upstream connection/i,
     /\((?:502|503|504)\)/,
     /\b(?:502|503|504)\b/
 ];
@@ -16,6 +18,16 @@ export function isTransientAssetLoadError(error) {
         .map((value) => String(value))
         .join('\n');
     return TRANSIENT_ASSET_PATTERNS.some((pattern) => pattern.test(details));
+}
+
+export function getRuntimeUnavailableNotice(error, fallbackLabel = 'The requested agent') {
+    if (!isTransientAssetLoadError(error)) return null;
+    const agent = String(error?.runtimeAgent || '').trim();
+    const label = agent ? `The ${agent} agent` : fallbackLabel;
+    return {
+        title: 'Agent not available yet',
+        message: `${label} is still starting or temporarily unavailable. Please try again later.`
+    };
 }
 
 export function clearBootstrapReloadState(windowRef = globalThis.window) {

@@ -16,6 +16,13 @@ import {
 import {
   fetchAdminControlProof
 } from '/explorer/services/infrastructure/authApi.js';
+import {
+  isRetryableRuntimeStatusStreamError,
+  publishRuntimeStatusEvents,
+  RUNTIME_STATUS_UPDATED_EVENT
+} from '/explorer/services/infrastructure/runtimeStatusEvents.js';
+
+const RUNTIME_STATUS_RECONNECT_DELAY_MS = 1000;
 
 export class MarketplaceModal {
   constructor(element, invalidate) {
@@ -79,9 +86,11 @@ export class MarketplaceModal {
           this.setStatus(error?.message || 'Failed to load agent settings.', 'error');
         });
     }
+    this.startAgentStatusStream();
   }
 
   afterUnload() {
+    this.stopAgentStatusStream();
     if (this.statusClearTimer) {
       clearTimeout(this.statusClearTimer);
       this.statusClearTimer = null;
@@ -187,6 +196,7 @@ export class MarketplaceModal {
       this.state.marketplace = await this.requestMarketplace();
       if (this.canManageMarketplace()) {
         await this.loadAgentSettingsData();
+        this.startAgentStatusStream();
       }
       this.setStatus('');
     } catch (error) {
@@ -194,6 +204,104 @@ export class MarketplaceModal {
     } finally {
       this.state.busy = false;
       this.renderState();
+    }
+  }
+
+  startAgentStatusStream() {
+    if (this.agentStatusStreamActive || !this.canManageMarketplace()) return;
+    this.agentStatusStreamActive = true;
+    window.addEventListener(RUNTIME_STATUS_UPDATED_EVENT, this.handleRuntimeStatusUpdated);
+    this.openAgentStatusStream();
+  }
+
+  stopAgentStatusStream() {
+    this.agentStatusStreamActive = false;
+    window.removeEventListener(RUNTIME_STATUS_UPDATED_EVENT, this.handleRuntimeStatusUpdated);
+    this.agentStatusStreamController?.abort();
+    this.agentStatusStreamController = null;
+    if (this.agentStatusReconnectTimer) {
+      clearTimeout(this.agentStatusReconnectTimer);
+      this.agentStatusReconnectTimer = null;
+    }
+  }
+
+  openAgentStatusStream() {
+    if (!this.agentStatusStreamActive || this.agentStatusStreamController) return;
+    const controller = new AbortController();
+    this.agentStatusStreamController = controller;
+    publishRuntimeStatusEvents({signal: controller.signal})
+      .catch((error) => {
+        if (isRetryableRuntimeStatusStreamError(error)) return;
+        this.agentStatusStreamActive = false;
+        window.removeEventListener(RUNTIME_STATUS_UPDATED_EVENT, this.handleRuntimeStatusUpdated);
+      })
+      .finally(() => {
+        if (this.agentStatusStreamController === controller) {
+          this.agentStatusStreamController = null;
+        }
+        if (!this.agentStatusStreamActive || controller.signal.aborted) return;
+        this.agentStatusReconnectTimer = setTimeout(() => {
+          this.agentStatusReconnectTimer = null;
+          this.openAgentStatusStream();
+        }, RUNTIME_STATUS_RECONNECT_DELAY_MS);
+      });
+  }
+
+  handleRuntimeStatusUpdated = (event) => {
+    const agents = this.state.marketplace?.agents;
+    const runtimes = Array.isArray(event?.detail?.runtimes) ? event.detail.runtimes : [];
+    if (!Array.isArray(agents)) return;
+    const runtimesByRef = new Map(runtimes.map((runtime) => [
+      `${String(runtime?.repoName || '')}/${String(runtime?.agentName || '')}`,
+      runtime
+    ]));
+    let changed = false;
+    for (const agent of agents) {
+      const agentRef = String(agent?.ref || `${agent?.repo || ''}/${agent?.name || ''}`);
+      const runtime = runtimesByRef.get(agentRef);
+      const active = runtime?.enabled === true;
+      const running = runtime?.state?.running === true;
+      const status = runtime
+        ? String(runtime?.state?.status || (active ? 'stopped' : 'inactive')).toLowerCase()
+        : 'inactive';
+      if (agent.active === active && agent.status === status && agent.running === running) continue;
+      agent.active = active;
+      agent.status = status;
+      agent.running = running;
+      this.updateAgentRuntimeUi(agent);
+      changed = true;
+    }
+    if (changed) {
+      this.syncInteractiveState();
+    }
+  };
+
+  updateAgentRuntimeUi(agent) {
+    const agentRef = String(agent?.ref || `${agent?.repo || ''}/${agent?.name || ''}`);
+    const rows = this.agentsEl?.querySelectorAll?.('[data-marketplace-agent-ref]') || [];
+    const row = Array.from(rows).find(candidate => candidate.dataset.marketplaceAgentRef === agentRef);
+    if (!row) return;
+
+    const running = agent.running === true;
+    const statusText = running
+      ? 'running'
+      : String(agent.status || (agent.active ? 'stopped' : 'inactive')).toLowerCase();
+    const status = row.querySelector('.marketplace-agent-status');
+    if (status) {
+      status.className = `marketplace-agent-status ${statusText}`;
+      status.textContent = statusText;
+    }
+
+    const settingsButton = row.querySelector('[data-agent-settings-key]');
+    if (settingsButton) {
+      settingsButton.dataset.agentRunning = running ? 'true' : 'false';
+    }
+
+    const toggle = row.querySelector('[data-agent-ref]');
+    if (toggle) {
+      toggle.dataset.active = agent.active ? 'true' : 'false';
+      toggle.classList.toggle('active', agent.active === true);
+      toggle.textContent = agent.active ? 'Disable' : 'Enable';
     }
   }
 
@@ -495,7 +603,9 @@ export class MarketplaceModal {
       button.disabled = busy || mutationBusy;
     });
     this.agentsEl?.querySelectorAll?.('[data-agent-settings-key]')?.forEach((button) => {
-      button.disabled = busy || this.state.agentSettingsBusyKey === button.dataset.agentSettingsKey;
+      button.disabled = busy
+        || button.dataset.agentRunning !== 'true'
+        || this.state.agentSettingsBusyKey === button.dataset.agentSettingsKey;
     });
     this.agentsEl?.querySelectorAll?.('[data-enable-mode-for]')?.forEach((select) => {
       const toggle = select.closest?.('.marketplace-agent-controls')?.querySelector?.('[data-agent-ref]');
@@ -710,6 +820,7 @@ export class MarketplaceModal {
     const createAgentRow = (agent) => {
       const row = document.createElement('article');
       row.className = 'marketplace-row marketplace-agent-row';
+      row.dataset.marketplaceAgentRef = agent.ref;
 
       const info = document.createElement('div');
       const title = document.createElement('div');
@@ -717,7 +828,10 @@ export class MarketplaceModal {
       const name = document.createElement('span');
       name.textContent = this.getAgentDisplayName(agent);
       const status = document.createElement('span');
-      const statusText = String(agent.status || (agent.active ? 'stopped' : 'inactive')).toLowerCase();
+      const agentRunning = agent.running === true;
+      const statusText = agentRunning
+        ? 'running'
+        : String(agent.status || (agent.active ? 'stopped' : 'inactive')).toLowerCase();
       status.className = `marketplace-agent-status ${statusText}`;
       status.textContent = statusText;
       title.append(name, status);
@@ -758,7 +872,10 @@ export class MarketplaceModal {
           settingsButton.type = 'button';
           settingsButton.className = 'marketplace-agent-settings';
           settingsButton.dataset.agentSettingsKey = settingsItem.key;
-          settingsButton.disabled = this.state.busy || this.state.agentSettingsBusyKey === settingsItem.key;
+          settingsButton.dataset.agentRunning = agentRunning ? 'true' : 'false';
+          settingsButton.disabled = this.state.busy
+            || !agentRunning
+            || this.state.agentSettingsBusyKey === settingsItem.key;
           settingsButton.textContent = 'Configure';
           controls.append(settingsButton);
         }

@@ -12,6 +12,7 @@ test('webassist settings build embed URL with siteId and no manual fallback', as
     const source = await fs.readFile(SETTINGS_JS, 'utf8');
     assert.match(source, /siteId: this\.state\.siteId/);
     assert.match(source, /callTool\('list-sites'/);
+    assert.match(source, /toolResult\?\.isError === true/);
     assert.match(source, /workspace-dir=webassist-data/);
 });
 

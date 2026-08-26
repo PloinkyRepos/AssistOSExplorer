@@ -304,7 +304,11 @@ export class WebassistSettingsSettings {
     async listSitesFromMcp() {
         const client = await this.ensureMcpClient();
         const toolResult = await client.callTool('list-sites', {});
-        const parsed = tryParseToolResult(extractToolText(toolResult));
+        const toolText = extractToolText(toolResult);
+        if (toolResult?.isError === true) {
+            throw new Error(toolText || 'Failed to list webAssist sites.');
+        }
+        const parsed = tryParseToolResult(toolText);
         if (!parsed || typeof parsed !== 'object') {
             throw new Error('Invalid list-sites payload.');
         }

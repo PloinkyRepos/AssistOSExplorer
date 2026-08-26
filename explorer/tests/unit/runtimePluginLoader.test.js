@@ -4,6 +4,57 @@ import assert from 'node:assert/strict';
 import { createComponentRegistry } from '../../services/runtime/componentRegistry.js';
 import { createRuntimePluginLoader } from '../../services/runtime/runtimePluginLoader.js';
 
+test('runtime plugin discovery retries a transient Router generation change', async () => {
+    let attempts = 0;
+    const loader = createRuntimePluginLoader({
+        agentId: 'explorer',
+        runtimePluginTool: 'collect_ide_plugins',
+        assistosSDK: {
+            async fetchRuntimePlugins() {
+                attempts += 1;
+                if (attempts === 1) {
+                    throw new Error('edge routing generation changed before upstream connection');
+                }
+                return {application: {}};
+            }
+        },
+        componentRegistry: {
+            async loadComponent(meta) { return meta; },
+            getCachedComponent() { return undefined; }
+        }
+    });
+
+    const result = await loader.fetchRuntimePlugins();
+
+    assert.equal(attempts, 2);
+    assert.deepEqual(result.raw, {application: {}});
+});
+
+test('runtime plugin discovery does not cache a failed request', async () => {
+    let attempts = 0;
+    const loader = createRuntimePluginLoader({
+        agentId: 'explorer',
+        runtimePluginTool: 'collect_ide_plugins',
+        assistosSDK: {
+            async fetchRuntimePlugins() {
+                attempts += 1;
+                if (attempts === 1) throw new Error('plugin catalog rejected');
+                return {application: {}};
+            }
+        },
+        componentRegistry: {
+            async loadComponent(meta) { return meta; },
+            getCachedComponent() { return undefined; }
+        }
+    });
+
+    await assert.rejects(loader.fetchRuntimePlugins(), /plugin catalog rejected/);
+    const result = await loader.fetchRuntimePlugins();
+
+    assert.equal(attempts, 2);
+    assert.deepEqual(result.raw, {application: {}});
+});
+
 test('runtime plugin loader prefers workspace component URLs over legacy agent URLs', async () => {
     const loaded = [];
     const componentRegistry = {
@@ -224,5 +275,29 @@ test('component registry reuses host-registered WebSkel components without fetch
     } finally {
         if (previousCustomElements === undefined) delete globalThis.customElements;
         else globalThis.customElements = previousCustomElements;
+    }
+});
+
+test('component registry identifies the agent for transient component failures', async () => {
+    const previousFetch = globalThis.fetch;
+    globalThis.fetch = async () => ({ ok: false, status: 503 });
+    try {
+        const registry = createComponentRegistry({ configs: { components: [] } });
+        await assert.rejects(
+            registry.loadComponent({
+                agent: 'explorer',
+                componentName: 'marketplace-modal',
+                presenterName: 'MarketplaceModal',
+                baseUrl: '/workspace-files/marketplace-modal'
+            }),
+            (error) => {
+                assert.equal(error.status, 503);
+                assert.equal(error.runtimeAgent, 'explorer');
+                assert.equal(error.runtimeComponent, 'marketplace-modal');
+                return true;
+            }
+        );
+    } finally {
+        globalThis.fetch = previousFetch;
     }
 });

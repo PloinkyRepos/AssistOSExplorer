@@ -113,11 +113,29 @@ export function createComponentRegistry(webSkel) {
         }
 
         const componentType = meta?.componentType === 'modals' ? 'modals' : 'components';
-        const assets = await fetchComponentAssets(meta);
+        let assets;
+        try {
+            assets = await fetchComponentAssets(meta);
+        } catch (error) {
+            if (error && typeof error === 'object') {
+                error.runtimeAgent = meta.agent;
+                error.runtimeComponent = meta.componentName;
+            }
+            throw error;
+        }
         const scopedCss = componentType === 'modals'
             ? assets.css
             : scopeCssToComponent(assets.css, meta.componentName);
-        const presenterModuleInstance = await importPresenterModule(meta, assets.safeBase);
+        let presenterModuleInstance;
+        try {
+            presenterModuleInstance = await importPresenterModule(meta, assets.safeBase);
+        } catch (error) {
+            if (error && typeof error === 'object') {
+                error.runtimeAgent = meta.agent;
+                error.runtimeComponent = meta.componentName;
+            }
+            throw error;
+        }
 
         const component = {
             name: meta.componentName,

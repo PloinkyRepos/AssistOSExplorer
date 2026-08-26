@@ -20,6 +20,9 @@ async function loadMarketplaceModal() {
         const flattenPluginsByKey = () => [];
         const getCachedRuntimePlugins = () => null;
         const fetchAdminControlProof = (...args) => globalThis.__marketplaceFetchAdminControlProof(...args);
+        const publishRuntimeStatusEvents = (...args) => globalThis.__marketplacePublishRuntimeStatusEvents?.(...args) || Promise.resolve();
+        const isRetryableRuntimeStatusStreamError = (error) => !Number.isFinite(Number(error?.status)) || [502, 503, 504].includes(Number(error.status));
+        const RUNTIME_STATUS_UPDATED_EVENT = 'ploinky:runtime-status-updated';
     `;
     const url = `data:text/javascript;base64,${Buffer.from(dependencies + withoutImports).toString('base64')}`;
     return import(url);
@@ -179,59 +182,113 @@ test('Marketplace does not retry a rejected mutation for non-CSRF failures', asy
     assert.equal(mutationCalls, 1);
 });
 
-test('Marketplace agent activation uses per-mutation state and releases it after failure', async () => {
+test('Marketplace enables Configure only while its agent is running', async () => {
+    const {MarketplaceModal} = await loadMarketplaceModal();
+    const modal = Object.create(MarketplaceModal.prototype);
+    const settingsButton = {
+        dataset: {agentSettingsKey: 'search-settings', agentRunning: 'false'},
+        disabled: false
+    };
+    modal.state = {busy: false, agentSettingsBusyKey: ''};
+    modal.repositoriesEl = {querySelectorAll: () => []};
+    modal.agentsEl = {
+        querySelectorAll(selector) {
+            return selector === '[data-agent-settings-key]' ? [settingsButton] : [];
+        }
+    };
+    modal.canManageMarketplace = () => true;
+
+    modal.syncInteractiveState();
+    assert.equal(settingsButton.disabled, true);
+
+    settingsButton.dataset.agentRunning = 'true';
+    modal.syncInteractiveState();
+    assert.equal(settingsButton.disabled, false);
+});
+
+test('Marketplace patches only the changed agent row when a runtime status event arrives', async () => {
     const {MarketplaceModal} = await loadMarketplaceModal();
     const modal = new MarketplaceModal({}, () => {});
-    modal.requestMarketplace = async () => {
-        assert.equal(modal.state.busy, false);
-        assert.equal(modal.state.agentMutationBusyRef, 'proxies/searchAgent');
-        throw new Error('runtime exited before readiness');
+    modal.state = {
+        busy: false,
+        marketplace: {
+            agents: [{ref: 'AchillesIDE/webAssist', active: true, status: 'created', running: false}]
+        }
     };
-    modal.renderStatus = () => {};
-    modal.renderAgents = () => {};
-    modal.syncInteractiveState = () => {};
-    modal.renderState = () => {};
-
-    const button = {
-        dataset: {
-            agentRef: 'proxies/searchAgent',
-            active: 'false',
-            enableMode: 'isolated'
+    const status = {className: 'marketplace-agent-status created', textContent: 'created'};
+    const settingsButton = {dataset: {agentSettingsKey: 'webassist-settings', agentRunning: 'false'}};
+    const toggle = {
+        dataset: {agentRef: 'AchillesIDE/webAssist', active: 'true'},
+        classList: {
+            active: true,
+            toggle(_name, enabled) {
+                this.active = enabled;
+            }
         },
-        closest: () => ({ querySelector: () => null })
+        textContent: 'Disable'
     };
-    await modal.handleAgentClick({
-        target: {
-            closest: selector => selector === '[data-agent-ref]' ? button : null
+    const row = {
+        dataset: {marketplaceAgentRef: 'AchillesIDE/webAssist'},
+        querySelector(selector) {
+            if (selector === '.marketplace-agent-status') return status;
+            if (selector === '[data-agent-settings-key]') return settingsButton;
+            if (selector === '[data-agent-ref]') return toggle;
+            return null;
+        }
+    };
+    modal.agentsEl = {
+        querySelectorAll(selector) {
+            return selector === '[data-marketplace-agent-ref]' ? [row] : [];
+        }
+    };
+    let interactiveSyncs = 0;
+    modal.renderAgents = () => assert.fail('runtime status updates must not rebuild agent rows');
+    modal.syncInteractiveState = () => { interactiveSyncs += 1; };
+
+    modal.handleRuntimeStatusUpdated({
+        detail: {
+            runtimes: [{
+                repoName: 'AchillesIDE',
+                agentName: 'webAssist',
+                enabled: true,
+                state: {status: 'running', running: true}
+            }]
         }
     });
 
-    assert.equal(modal.state.busy, false);
-    assert.equal(modal.state.agentMutationBusyRef, '');
-    assert.equal(modal.state.agentMutationVerb, '');
-    assert.equal(modal.state.status, 'runtime exited before readiness');
-    assert.equal(modal.state.statusType, 'error');
+    assert.equal(modal.state.marketplace.agents[0].status, 'running');
+    assert.equal(status.textContent, 'running');
+    assert.equal(status.className, 'marketplace-agent-status running');
+    assert.equal(settingsButton.dataset.agentRunning, 'true');
+    assert.equal(toggle.dataset.active, 'true');
+    assert.equal(toggle.classList.active, true);
+    assert.equal(toggle.textContent, 'Disable');
+    assert.equal(interactiveSyncs, 1);
 });
 
-test('Marketplace errors remain visible until explicitly dismissed', async () => {
+test('Marketplace does not reconnect the runtime status stream after a permanent HTTP error', async (t) => {
+    const originalWindow = globalThis.window;
+    const originalPublisher = globalThis.__marketplacePublishRuntimeStatusEvents;
+    const windowTarget = new EventTarget();
+    globalThis.window = windowTarget;
+    globalThis.__marketplacePublishRuntimeStatusEvents = async () => {
+        throw Object.assign(new Error('Runtime status stream failed (404)'), {status: 404});
+    };
+    t.after(() => {
+        if (originalWindow === undefined) delete globalThis.window;
+        else globalThis.window = originalWindow;
+        if (originalPublisher === undefined) delete globalThis.__marketplacePublishRuntimeStatusEvents;
+        else globalThis.__marketplacePublishRuntimeStatusEvents = originalPublisher;
+    });
+
     const {MarketplaceModal} = await loadMarketplaceModal();
-    const modal = new MarketplaceModal({}, () => {});
-    modal.renderStatus = () => {};
+    const modal = Object.create(MarketplaceModal.prototype);
+    modal.state = {marketplace: {permissions: {canManage: true}}};
+    modal.handleRuntimeStatusUpdated = () => {};
+    modal.startAgentStatusStream();
+    await new Promise(resolve => setImmediate(resolve));
 
-    modal.setStatus('activation failed', 'error');
-    await new Promise(resolve => setTimeout(resolve, 20));
-
-    assert.equal(modal.state.status, 'activation failed');
-    assert.equal(modal.state.statusType, 'error');
-
-    modal.dismissStatus();
-    assert.equal(modal.state.status, '');
-    assert.equal(modal.state.statusType, '');
-});
-
-test('Marketplace runtime modes use a native select without a reactive child presenter', async () => {
-    const source = await fs.readFile(sourcePath, 'utf8');
-
-    assert.match(source, /document\.createElement\('select'\)/);
-    assert.doesNotMatch(source, /createElement\('custom-select'/);
+    assert.equal(modal.agentStatusStreamActive, false);
+    assert.equal(modal.agentStatusStreamController, null);
+    assert.equal(modal.agentStatusReconnectTimer, undefined);
 });

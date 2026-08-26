@@ -3,7 +3,11 @@ import {
     mergeRuntimePluginsIntoAssistOS,
     normalizeRuntimePlugins
 } from '../../utils/pluginUtils.core.js';
+import { withRetry } from '../utils/retry.js';
 import { isTransientAssetLoadError } from './bootstrapRecovery.js';
+
+const PLUGIN_DISCOVERY_RETRIES = 4;
+const PLUGIN_DISCOVERY_RETRY_DELAY_MS = 300;
 
 const isNonEmptyString = (value) => typeof value === 'string' && value.trim().length > 0;
 const isWorkspaceFilesUrl = (value) => isNonEmptyString(value) && value.trim().startsWith('/workspace-files/');
@@ -43,7 +47,22 @@ export function createRuntimePluginLoader({
         }
 
         inflightFetch = (async () => {
-            const rawPlugins = await assistosSDK.fetchRuntimePlugins(agentId, runtimePluginTool);
+            let rawPlugins;
+            try {
+                rawPlugins = await withRetry(
+                    () => assistosSDK.fetchRuntimePlugins(agentId, runtimePluginTool),
+                    {
+                        retries: PLUGIN_DISCOVERY_RETRIES,
+                        delayMs: PLUGIN_DISCOVERY_RETRY_DELAY_MS,
+                        shouldRetry: isTransientAssetLoadError
+                    }
+                );
+            } catch (error) {
+                if (isTransientAssetLoadError(error) && !error.runtimeAgent) {
+                    error.runtimeAgent = agentId;
+                }
+                throw error;
+            }
             const normalized = normalizeRuntimePlugins(rawPlugins);
             cachedRawPlugins = rawPlugins || {};
             cachedNormalizedPlugins = normalized;

@@ -523,7 +523,7 @@ class AssistosSDK {
         return this.clients.get(agentId);
     }
 
-    async callTool(agentId, tool, args = {}) {
+    async callTool(agentId, tool, args = {}, options = {}) {
         try {
             const client = this.getClient(agentId);
             const result = await client.callTool(tool, args);
@@ -546,28 +546,29 @@ class AssistosSDK {
             }
             return { text, json, blocks, raw: result };
         } catch (error) {
-            console.error(`Agent call failed (${agentId}:${tool})`, error);
+            if (options.logErrors !== false) {
+                console.error(`Agent call failed (${agentId}:${tool})`, error);
+            }
             throw error;
         }
     }
 
     async fetchRuntimePlugins(agentId = 'explorer', toolName = 'collect_ide_plugins') {
-        try {
-            const result = await this.callTool(agentId, toolName);
-            if (result?.json && typeof result.json === 'object') {
-                return result.json;
-            }
-            if (typeof result?.text === 'string') {
-                try {
-                    return JSON.parse(result.text);
-                } catch (parseError) {
-                    console.error('[runtime-plugins] Failed to parse plugin manifest JSON:', parseError);
-                }
-            }
-        } catch (error) {
-            console.error('[runtime-plugins] Failed to collect IDE plugins:', error);
+        const result = await this.callTool(agentId, toolName, {}, { logErrors: false });
+        if (result?.json && typeof result.json === 'object') {
+            return result.json;
         }
-        return null;
+        if (typeof result?.text === 'string') {
+            try {
+                const parsed = JSON.parse(result.text);
+                if (parsed && typeof parsed === 'object') {
+                    return parsed;
+                }
+            } catch (parseError) {
+                throw new Error('Runtime plugin catalog returned invalid JSON.', { cause: parseError });
+            }
+        }
+        throw new Error('Runtime plugin catalog response is missing.');
     }
 }
 

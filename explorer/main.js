@@ -13,6 +13,7 @@ import {
 import { installAuthNavigationGuard } from './services/infrastructure/authNavigationGuard.js';
 import {
     clearBootstrapReloadState,
+    getRuntimeUnavailableNotice,
     scheduleBootstrapReload
 } from './services/runtime/bootstrapRecovery.js';
 import { waitForAgentRuntimeAvailability } from './shared/ui/agent-runtime-loader/agent-runtime-loader.js';
@@ -522,6 +523,10 @@ async function start() {
 
 start().catch(async (error) => {
     console.error('[explorer] Failed to bootstrap application', error);
+    const unavailableNotice = getRuntimeUnavailableNotice(error, 'Explorer');
+    if (unavailableNotice) {
+        updateSpinnerStatus(document.querySelector('#before_webskel_loader'), unavailableNotice);
+    }
     if (scheduleBootstrapReload(error, { windowRef: window })) {
         return;
     }
@@ -530,10 +535,11 @@ start().catch(async (error) => {
     beforeLoader?.remove?.();
     window.webSkel?.clearLoading?.();
 
-    const message = error?.message || 'Explorer failed to load.';
+    const errorTitle = unavailableNotice?.title || 'Explorer failed to load';
+    const message = unavailableNotice?.message || error?.message || 'Explorer failed to load.';
     const technical = error?.stack || String(error);
     if (typeof window.showApplicationError === 'function') {
-        await window.showApplicationError('Explorer failed to load', message, technical);
+        await window.showApplicationError(errorTitle, message, technical);
         return;
     }
 
@@ -541,7 +547,7 @@ start().catch(async (error) => {
     container.className = 'application-error';
     container.setAttribute('role', 'alert');
     const title = document.createElement('h1');
-    title.textContent = 'Explorer failed to load';
+    title.textContent = unavailableNotice?.title || 'Explorer failed to load';
     const details = document.createElement('p');
     details.textContent = message;
     container.append(title, details);
