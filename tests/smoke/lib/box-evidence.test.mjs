@@ -15,6 +15,7 @@ const CONTAINER = 'ploinky-box-release-audit';
 const STARTED_AT = '2026-07-16T10:00:00.000Z';
 const HOST_KEY_A = `SHA256:${'A'.repeat(43)}`;
 const HOST_KEY_B = `SHA256:${'B'.repeat(43)}`;
+const AGENTLIB_COMMIT = '1'.repeat(40);
 
 function containerInspect(bindings = {
   '8080/tcp': [{ HostIp: '127.0.0.1', HostPort: '18080' }],
@@ -34,6 +35,11 @@ function containerInspect(bindings = {
         'io.assistos.ploinky-box.media-host-port': '7882',
         'io.assistos.ploinky-box.dependencies-fingerprint': 'e'.repeat(64),
         'io.assistos.ploinky-box.images-fingerprint': 'f'.repeat(64),
+        'io.assistos.ploinky-box.agentlib-mode': 'managed',
+        'io.assistos.ploinky-box.agentlib-source-id': '1'.repeat(64),
+        'io.assistos.ploinky-box.agentlib-fingerprint': '2'.repeat(64),
+        'io.assistos.ploinky-box.agentlib-source-path': `.ploinky/agentlib/generations/${AGENTLIB_COMMIT}-${'2'.repeat(12)}`,
+        'io.assistos.ploinky-box.agentlib-commit': AGENTLIB_COMMIT,
       },
     },
     HostConfig: { PortBindings: bindings },
@@ -77,6 +83,10 @@ test('box evidence binds the exact running semantic image and normalizes only em
   assert.equal(validated.semanticLabels.mediaHostPort, '7882');
   assert.equal(validated.semanticLabels.dependenciesFingerprint, 'e'.repeat(64));
   assert.equal(validated.semanticLabels.imagesFingerprint, 'f'.repeat(64));
+  assert.equal(validated.semanticLabels.agentLibMode, 'managed');
+  assert.equal(validated.semanticLabels.agentLibSourceIdHash, '1'.repeat(64));
+  assert.equal(validated.semanticLabels.agentLibFingerprint, '2'.repeat(64));
+  assert.equal(validated.semanticLabels.agentLibCommit, AGENTLIB_COMMIT);
 });
 
 test('box evidence requires the exact 12-character lowercase path-hash contract', () => {
@@ -131,6 +141,22 @@ test('box evidence rejects a third publication, wrong semantic ownership, and wr
     imageInspect: imageInspect(),
     ...expected(),
   }), /dependencies-fingerprint label must be a SHA-256 digest/);
+
+  for (const [label, value, message] of [
+    ['io.assistos.ploinky-box.agentlib-mode', 'default', /AgentLib mode label must be local or managed/],
+    ['io.assistos.ploinky-box.agentlib-source-id', 'not-a-digest', /AgentLib source-id label must be a SHA-256 digest/],
+    ['io.assistos.ploinky-box.agentlib-fingerprint', 'not-a-digest', /AgentLib fingerprint label must be a SHA-256 digest/],
+    ['io.assistos.ploinky-box.agentlib-source-path', '../achillesAgentLib', /workspace-relative path without/],
+    ['io.assistos.ploinky-box.agentlib-commit', 'A'.repeat(40), /40 lowercase hexadecimal/],
+  ]) {
+    const invalidAgentLib = containerInspect();
+    invalidAgentLib[0].Config.Labels[label] = value;
+    assert.throws(() => buildBoxEvidence({
+      containerInspect: invalidAgentLib,
+      imageInspect: imageInspect(),
+      ...expected(),
+    }), message);
+  }
 
   const wrongMediaPort = containerInspect();
   wrongMediaPort[0].Config.Labels['io.assistos.ploinky-box.media-host-port'] = '7881';

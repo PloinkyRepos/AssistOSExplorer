@@ -10,6 +10,7 @@ import {
 
 const DIGEST = `sha256:${'a'.repeat(64)}`;
 const PLOINKY_SOURCE = '/candidate/ploinky';
+const AGENTLIB_COMMIT = '3'.repeat(40);
 
 function liveBox(overrides = {}) {
   return {
@@ -24,6 +25,13 @@ function liveBox(overrides = {}) {
       normalizedPortBindings: {
         '8080/tcp': [{ HostIp: '127.0.0.1', HostPort: '8080' }],
         '7882/udp': [{ HostIp: '0.0.0.0', HostPort: '7882' }],
+      },
+      semanticLabels: {
+        agentLibMode: 'managed',
+        agentLibSourceIdHash: '4'.repeat(64),
+        agentLibFingerprint: '5'.repeat(64),
+        agentLibSourceRelativePath: `.ploinky/agentlib/generations/${AGENTLIB_COMMIT}-${'5'.repeat(12)}`,
+        agentLibCommit: AGENTLIB_COMMIT,
       },
       ...overrides,
     },
@@ -53,6 +61,7 @@ test('ordinary Copilot release evidence binds the verified manifest digest to th
             repositories: {
               explorer: { commit: '1'.repeat(40) },
               ploinky: { commit: '2'.repeat(40), repositoryPath: PLOINKY_SOURCE },
+              achillesAgentLib: { commit: AGENTLIB_COMMIT },
             },
           };
         },
@@ -75,7 +84,15 @@ test('ordinary Copilot release evidence binds the verified manifest digest to th
   assert.equal(calls[2][1].expectedImageId, DIGEST);
   assert.equal(calls[2][1].baseURL, 'http://127.0.0.1:8080');
   assert.equal(calls[2][1].expectedPloinkySource, PLOINKY_SOURCE);
+  assert.equal(calls[2][1].requireFreshImage, false);
   assert.equal(result.ploinkySource.path, PLOINKY_SOURCE);
+  assert.deepEqual(result.agentLib, {
+    mode: 'managed',
+    sourceIdHash: '4'.repeat(64),
+    fingerprint: '5'.repeat(64),
+    sourceRelativePath: `.ploinky/agentlib/generations/${AGENTLIB_COMMIT}-${'5'.repeat(12)}`,
+    commit: AGENTLIB_COMMIT,
+  });
 });
 
 test('ordinary Copilot release evidence rejects missing manifest binding and wrong live image', async () => {
@@ -95,6 +112,7 @@ test('ordinary Copilot release evidence rejects missing manifest binding and wro
           imageDigest: DIGEST,
           repositories: {
             ploinky: { commit: '2'.repeat(40), repositoryPath: PLOINKY_SOURCE },
+            achillesAgentLib: { commit: AGENTLIB_COMMIT },
           },
         }),
       }),
@@ -115,6 +133,7 @@ test('ordinary Copilot release evidence rejects a Box without the verified read-
           imageDigest: DIGEST,
           repositories: {
             ploinky: { commit: '2'.repeat(40), repositoryPath: PLOINKY_SOURCE },
+            achillesAgentLib: { commit: AGENTLIB_COMMIT },
           },
         }),
       }),
@@ -125,12 +144,42 @@ test('ordinary Copilot release evidence rejects a Box without the verified read-
   );
 });
 
+test('ordinary Copilot release evidence rejects a missing or mismatched AgentLib manifest binding', async () => {
+  const collect = (achillesAgentLib, box = liveBox()) => collectCopilotReleaseEvidence({
+    manifestPath: '/candidate/release.json',
+    verifierPath: '/candidate/verifier.mjs',
+    loadVerifier: async () => ({
+      verifyManifestFile: () => ({
+        imageDigest: DIGEST,
+        repositories: {
+          ploinky: { commit: '2'.repeat(40), repositoryPath: PLOINKY_SOURCE },
+          ...(achillesAgentLib ? { achillesAgentLib } : {}),
+        },
+      }),
+    }),
+    collectLiveBox: () => box,
+    realpathSync: (value) => value,
+  });
+  await assert.rejects(() => collect(undefined), /did not return the verified achillesAgentLib commit/);
+  await assert.rejects(
+    () => collect({ commit: '6'.repeat(40) }),
+    /AgentLib commit does not match SMOKE_RELEASE_MANIFEST/,
+  );
+});
+
 test('ordinary Copilot evidence requires the same immutable Box generation after the gate', () => {
   const before = {
     applicationBaseURL: 'https://explorer-qa.axiologic.dev',
     boxBaseURL: 'http://127.0.0.1:8080',
     imageDigest: DIGEST,
     ploinkySource: { path: PLOINKY_SOURCE, commit: '2'.repeat(40) },
+    agentLib: {
+      mode: 'managed',
+      sourceIdHash: '4'.repeat(64),
+      fingerprint: '5'.repeat(64),
+      sourceRelativePath: `.ploinky/agentlib/generations/${AGENTLIB_COMMIT}-${'5'.repeat(12)}`,
+      commit: AGENTLIB_COMMIT,
+    },
     liveBox: liveBox(),
   };
   assert.equal(sameCopilotReleaseGeneration(before, structuredClone(before)), true);
@@ -143,6 +192,9 @@ test('ordinary Copilot evidence requires the same immutable Box generation after
   const wrongLoopbackInspector = structuredClone(before);
   wrongLoopbackInspector.boxBaseURL = 'http://127.0.0.1:18080';
   assert.equal(sameCopilotReleaseGeneration(before, wrongLoopbackInspector), false);
+  const wrongAgentLib = structuredClone(before);
+  wrongAgentLib.agentLib.fingerprint = '6'.repeat(64);
+  assert.equal(sameCopilotReleaseGeneration(before, wrongAgentLib), false);
 });
 
 test('canonical runner consumes SMOKE_RELEASE_MANIFEST and passes bound evidence to the spec', () => {

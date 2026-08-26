@@ -253,7 +253,15 @@ Opt-in checks:
   application and set `SMOKE_BOX_BASE_URL` to the exact host-loopback Router
   publication used only for local Podman generation inspection. The live Box
   inspector still rejects non-loopback, ambiguous, stale, or mismatched outer
-  containers; the browser never substitutes the loopback URL for public QA.
+  containers. Its exact semantic-label contract includes the selected
+  achillesAgentLib mode, source-identity hash, content fingerprint,
+  workspace-relative source path, and Git commit. The ordinary Copilot gate
+  requires that live AgentLib commit to equal the verified release-manifest
+  commit before and after Chromium. It requires a fresh outer-container
+  generation and the manifest's exact immutable image digest/reference; unlike
+  the screen and native network gates, it does not require that already-pinned
+  release image to have been built within the last four hours. The browser never
+  substitutes the loopback URL for public QA.
 - `SMOKE_WEBMEET_MEDIA=1` enables fake camera/microphone and asserts WebRTC stats increase.
 - `npm run test:webmeet-headless` is the automated WebMeet acceptance profile. It runs in headless Chromium with deterministic synthetic camera and microphone sources, requires two distinct configured accounts, proves room create/join and bidirectional chat, exercises settings/privacy and ordinary tagged-research chat, and requires separate growing outbound audio, outbound video, inbound audio, and inbound video RTP stats in both browsers. It forbids headed execution and screen sharing.
 - `npm run test:webmeet-screen` remains a separate explicit, headed, opt-in gate for physical-display ScreenShare capture. It is not part of `test:full` or automated headless acceptance. Both distinct accounts must authenticate and exchange real LiveKit screen tracks in both directions. The probe removes TURN servers, and each direction requires active non-relay selected pairs using a globally routable IPv4 and UDP 7882 in both browsers alongside exact ScreenShare publication identities and source-specific RTP packet/frame growth. When Chromium redacts a peer-reflexive remote address or port, every observable field must still be correct and the missing field is replaced only by a proof bound to the exact LiveKit container generation and its real UDP 7882 listener. An observable wrong address, port, protocol, relay candidate, changed generation, or invalid server proof fails. The gate never stubs `getDisplayMedia` or skips a missing secondary account. This local gate does not claim the address equals the configured public IPv4; that stricter assertion belongs to the native external-network matrix below.
@@ -290,7 +298,9 @@ SMOKE_DEPLOYMENT_MODE=box SMOKE_BASE_URL=http://127.0.0.1:8080 SMOKE_WEBMEET_MED
 In Box mode, exactly one outer container must publish
 `127.0.0.1:<SMOKE_BASE_URL port>:8080/tcp` and
 `0.0.0.0:7882:7882/udp`, carry the exact semantic Box ownership labels, and use a freshly built
-image. No additional outer-container port publication is accepted. By default
+image. Those labels include the exact AgentLib selection identity; missing,
+extra, malformed, or changed selection labels fail the gate. No additional
+outer-container port publication is accepted. By default
 the running generation must be at most 30 minutes
 old and the image at most four hours old. The wrapper binds the test to that
 container ID, start time, image ID/reference, and normalized two-publication
