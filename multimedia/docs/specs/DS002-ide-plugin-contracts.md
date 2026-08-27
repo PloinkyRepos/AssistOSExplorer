@@ -31,8 +31,6 @@ Requirement U4: media uploads must enforce size limits and metadata extraction (
 
 Requirement U5: preview plugins must support sequential scene playback with audio/video/image/silence combinations.
 
-Requirement U6: task orchestration plugins (for example document video actions) must expose live status for async tasks.
-
 ### Constraints
 
 Constraint Q1: plugins must not assume private host dependencies; integration must use the stable Explorer surface.

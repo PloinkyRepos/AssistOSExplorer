@@ -38,7 +38,6 @@ The editor needs dedicated plugins for upload, metadata editing, preview, and vi
 - `IDE-plugins/image-plugin`
 - `IDE-plugins/video-plugin`
 - `IDE-plugins/document-video-preview`
-- `IDE-plugins/document-video-actions`
 - `skills/ffmpegImageToVideo`
 
 ### Operational Note
