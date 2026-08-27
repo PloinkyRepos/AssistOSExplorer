@@ -52,6 +52,11 @@ function evidence() {
         mediaHostPort: '7882',
         dependenciesFingerprint: 'e'.repeat(64),
         imagesFingerprint: 'f'.repeat(64),
+        agentLibMode: 'managed',
+        agentLibSourceIdHash: '1'.repeat(64),
+        agentLibFingerprint: '2'.repeat(64),
+        agentLibSourceRelativePath: `.ploinky/agentlib/generations/${'3'.repeat(40)}-${'2'.repeat(12)}`,
+        agentLibCommit: '3'.repeat(40),
       },
       imageRef: 'docker.io/assistos/ploinky-box:runtime',
       imageId: IMAGE_ID,
@@ -149,6 +154,29 @@ test('native gates enforce the same fresh image and container generation contrac
     box: ancient,
     generationMaxAgeMs: 10 * 24 * 60 * 60_000,
     imageMaxAgeMs: 10 * 24 * 60 * 60_000,
+  }, { nowMs: NOW }), /generation is not fresh/);
+});
+
+test('an immutable release image may be old only when the caller still pins a fresh Box generation', () => {
+  const box = evidence().box;
+  const validated = validateBoxFreshness({
+    capturedAt: '2026-07-16T10:10:00.000Z',
+    imageCreatedAt: '2026-07-01T10:00:00.000Z',
+    box,
+    generationMaxAgeMs: 600_000,
+    imageMaxAgeMs: null,
+    requireFreshImage: false,
+  }, { nowMs: NOW });
+  assert.equal(validated.requireFreshImage, false);
+  assert.equal(validated.imageMaxAgeMs, null);
+
+  const staleGeneration = { ...box, startedAt: '2026-07-16T09:00:00.000Z' };
+  assert.throws(() => validateBoxFreshness({
+    capturedAt: '2026-07-16T10:10:00.000Z',
+    imageCreatedAt: '2026-07-01T10:00:00.000Z',
+    box: staleGeneration,
+    generationMaxAgeMs: 600_000,
+    requireFreshImage: false,
   }, { nowMs: NOW }), /generation is not fresh/);
 });
 

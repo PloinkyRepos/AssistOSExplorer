@@ -318,6 +318,72 @@ test('office session route resolves storage metadata before signing config', asy
 	  assert.equal(signedPayload.document.permissions.comment, true);
 });
 
+test('confidential control reauthorizes matching loaded sessions before minting a fresh session', async () => {
+  const events = [];
+  let reauthorizationInput = null;
+  let creationInput = null;
+  const handler = createTestControlRouteHandler({
+    env: makeEnv(),
+    sessionStore: {
+      reauthorizeLoadedSessions(input) {
+        events.push('reauthorize');
+        reauthorizationInput = input;
+        return 1;
+      },
+      createSession(input) {
+        events.push('create');
+        creationInput = input;
+        return {
+          ...input,
+          token: 'fresh-session-token',
+          documentKey: 'd'.repeat(32),
+          publicSummary: () => ({}),
+        };
+      },
+    },
+    resolveSessionDescriptor: async () => ({
+      requestedPath: '/Confidential/report.docx',
+      path: '/Confidential/report.docx',
+      storageKind: 'dpu',
+      storageId: '/Confidential/report.docx',
+      objectId: 'object-1',
+      fileName: 'report.docx',
+      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      canWrite: true,
+      canComment: false,
+      versionKey: 'v2',
+    }),
+  });
+  const query = '?path=%2FConfidential%2Freport.docx';
+  const req = makeRequest({
+    url: `/control/office/session${query}`,
+    headers: mintAuthHeaders({
+      query,
+      delegations: {
+        dpuConfidential: {
+          token: 'fresh-generation-delegation',
+          expiresAt: '2026-09-01T12:30:00.000Z',
+        },
+      },
+    }),
+  });
+  const res = new MockWritableResponse();
+
+  assert.equal(await handler(req, res, new URL(req.url, 'http://localhost')), true);
+  await res.done;
+
+  assert.equal(res.statusCode, 200, res.body);
+  assert.deepEqual(events, ['reauthorize', 'create']);
+  assert.equal(reauthorizationInput, creationInput);
+  assert.equal(reauthorizationInput.objectId, 'object-1');
+  assert.equal(reauthorizationInput.authUser.id, 'local:alice');
+  assert.equal(reauthorizationInput.delegations.dpuConfidential.token, 'fresh-generation-delegation');
+  assert.equal(
+    reauthorizationInput.activeBrowserUrl,
+    'https://office.example.com/base-agent-additional-server/onlyOffice/8080',
+  );
+});
+
 test('workspace session is created WITHOUT a DPU delegation token', async () => {
   const captured = {};
   const handler = createTestControlRouteHandler({

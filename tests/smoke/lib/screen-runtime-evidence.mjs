@@ -450,6 +450,14 @@ export function screenRuntimeEvidenceProvesUdpMux(evidence) {
       && box.semanticLabels.mediaHostPort === '7882'
       && /^[0-9a-f]{64}$/.test(String(box.semanticLabels.dependenciesFingerprint || ''))
       && /^[0-9a-f]{64}$/.test(String(box.semanticLabels.imagesFingerprint || ''))
+      && ['local', 'managed'].includes(box.semanticLabels.agentLibMode)
+      && /^[0-9a-f]{64}$/.test(String(box.semanticLabels.agentLibSourceIdHash || ''))
+      && /^[0-9a-f]{64}$/.test(String(box.semanticLabels.agentLibFingerprint || ''))
+      && String(box.semanticLabels.agentLibSourceRelativePath || '').length > 0
+      && !String(box.semanticLabels.agentLibSourceRelativePath).startsWith('/')
+      && !String(box.semanticLabels.agentLibSourceRelativePath).split('/').includes('..')
+      && (box.semanticLabels.agentLibCommit === ''
+        || /^[0-9a-f]{40}$/.test(String(box.semanticLabels.agentLibCommit || '')))
       && JSON.stringify(normalizeOuterPortBindings(box.normalizedPortBindings))
         === JSON.stringify(expectedBindings);
   } catch (_) {

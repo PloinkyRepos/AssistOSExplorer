@@ -17,11 +17,11 @@ summary: Defines the essential OnlyOffice session, editor transport, and persist
 | --- | --- |
 | Authenticated document sessions | Control requests create a per-session document key and short-lived tokenized editor configuration. |
 | Validated editor transport | The public editor route accepts only the Router-installed forwarding tuple and sanitized session traffic. |
-| Storage and callback persistence | Callbacks persist to workspace or delegated Confidential storage and survive controlled restart recovery. |
+| Storage and callback persistence | Callbacks persist to workspace or delegated Confidential storage; loaded Confidential sessions can recover through fresh authenticated control after a controlled restart. |
 
 ### Authenticated document sessions
 
-The affected actor is an authenticated Explorer user opening an Office document. The control route resolves the document path, creates per-session state, selects workspace or [DPU](wiki.html#definition-dpu) Confidential storage, and returns a short-lived [JWT](wiki.html#definition-jwt)-protected editor configuration. Session state records when DocumentServer first requests the source document so controlled drain can distinguish a loaded editor from an issued but unused configuration. The observable result is an editor session whose opaque callback URL and document key cannot be reused from another session.
+The affected actor is an authenticated Explorer user opening an Office document. The control route resolves the document path, creates per-session state, selects workspace or [DPU](wiki.html#definition-dpu) Confidential storage, and returns a short-lived [JWT](wiki.html#definition-jwt)-protected editor configuration. Session state records when DocumentServer first requests the source document so controlled drain can distinguish a loaded editor from an issued but unused configuration. After recreation, fresh authenticated control may restore the in-memory delegation only for an unexpired loaded session bound to the same user, browser authority, document identity, and permissions. The observable result is an editor session whose opaque callback URL and document key cannot be reused from another session.
 
 ### Validated editor transport
 
@@ -29,7 +29,7 @@ The affected actor is the browser-hosted [DocumentServer](wiki.html#definition-d
 
 ### Storage and callback persistence
 
-The affected actor is DocumentServer returning a callback or download request. The agent authenticates the session's own token, validates signed claims and body size, and persists through workspace storage or an expiring [Confidential persistence delegation](wiki.html#definition-confidential-delegation). During a controlled restart it drains and persists active sessions, then reopens only after a new [topology generation](wiki.html#definition-topology-generation) is ready. The governing boundary is that Explorer-owned files and DPU Confidential objects are never replaced by direct recursive host access.
+The affected actor is DocumentServer returning a callback or download request. The agent authenticates the session's own token, validates signed claims and body size, and persists through workspace storage or an expiring [Confidential persistence delegation](wiki.html#definition-confidential-delegation). During a controlled restart it drains and persists active sessions, then reopens only after a new [topology generation](wiki.html#definition-topology-generation) is ready. Persisted state contains no delegation bearer, and unused or identity-mismatched sessions remain inactive after recreation. The governing boundary is that Explorer-owned files and DPU Confidential objects are never replaced by direct recursive host access.
 
 ## Conclusion
 

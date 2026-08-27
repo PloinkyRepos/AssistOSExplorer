@@ -8,6 +8,7 @@ import {
 } from './live-box.mjs';
 
 const IMAGE_DIGEST = /^sha256:[0-9a-f]{64}$/;
+const GIT_COMMIT = /^[0-9a-f]{40}$/;
 
 export async function collectCopilotReleaseEvidence({
   manifestPath,
@@ -40,6 +41,10 @@ export async function collectCopilotReleaseEvidence({
   if (!verifiedPloinky || !path.isAbsolute(String(verifiedPloinky.repositoryPath || ''))) {
     throw new Error('The Copilot release verifier did not return the verified Ploinky checkout path.');
   }
+  const verifiedAgentLib = verified?.repositories?.achillesAgentLib;
+  if (!verifiedAgentLib || !GIT_COMMIT.test(String(verifiedAgentLib.commit || ''))) {
+    throw new Error('The Copilot release verifier did not return the verified achillesAgentLib commit.');
+  }
   const verifiedPloinkySource = realpathSync(verifiedPloinky.repositoryPath);
   const liveBox = collectLiveBox({
     baseURL: boxBaseURL,
@@ -48,6 +53,7 @@ export async function collectCopilotReleaseEvidence({
     expectedImageRef,
     generationMaxAgeMs,
     imageMaxAgeMs,
+    requireFreshImage: false,
     expectedPloinkySource: verifiedPloinkySource,
     realpathSync,
   });
@@ -57,6 +63,17 @@ export async function collectCopilotReleaseEvidence({
   if (liveBox?.ploinkySourceMount?.source !== verifiedPloinkySource) {
     throw new Error('The running Box is not bound read-only to the verified Ploinky checkout.');
   }
+  const liveAgentLib = liveBox?.box?.semanticLabels;
+  if (liveAgentLib?.agentLibCommit !== verifiedAgentLib.commit) {
+    throw new Error('The running Box AgentLib commit does not match SMOKE_RELEASE_MANIFEST.');
+  }
+  const agentLib = Object.freeze({
+    mode: liveAgentLib.agentLibMode,
+    sourceIdHash: liveAgentLib.agentLibSourceIdHash,
+    fingerprint: liveAgentLib.agentLibFingerprint,
+    sourceRelativePath: liveAgentLib.agentLibSourceRelativePath,
+    commit: liveAgentLib.agentLibCommit,
+  });
   return Object.freeze({
     applicationBaseURL: baseURL,
     boxBaseURL,
@@ -66,6 +83,7 @@ export async function collectCopilotReleaseEvidence({
       path: verifiedPloinkySource,
       commit: verifiedPloinky.commit,
     }),
+    agentLib,
     liveBox,
   });
 }
@@ -82,6 +100,8 @@ export function sameCopilotReleaseGeneration(before, after) {
     && after.imageDigest === after?.liveBox?.box?.imageId
     && before?.ploinkySource?.path === after?.ploinkySource?.path
     && before?.ploinkySource?.commit === after?.ploinkySource?.commit
+    && before?.agentLib?.commit
+    && JSON.stringify(before?.agentLib) === JSON.stringify(after?.agentLib)
     && sameLiveBoxGeneration(before.liveBox, after.liveBox)
   );
 }

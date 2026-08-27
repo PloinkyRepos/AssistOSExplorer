@@ -6,6 +6,11 @@ const BOX_LABELS = Object.freeze({
   mediaHostPort: 'io.assistos.ploinky-box.media-host-port',
   dependenciesFingerprint: 'io.assistos.ploinky-box.dependencies-fingerprint',
   imagesFingerprint: 'io.assistos.ploinky-box.images-fingerprint',
+  agentLibMode: 'io.assistos.ploinky-box.agentlib-mode',
+  agentLibSourceIdHash: 'io.assistos.ploinky-box.agentlib-source-id',
+  agentLibFingerprint: 'io.assistos.ploinky-box.agentlib-fingerprint',
+  agentLibSourceRelativePath: 'io.assistos.ploinky-box.agentlib-source-path',
+  agentLibCommit: 'io.assistos.ploinky-box.agentlib-commit',
 });
 const ROUTER_TARGET = '8080/tcp';
 const MEDIA_TARGET = '7882/udp';
@@ -64,6 +69,30 @@ function exactPathHash(value, name) {
   return text;
 }
 
+function exactAgentLibMode(value, name) {
+  const text = exactString(value, name);
+  if (!['local', 'managed'].includes(text)) {
+    throw new Error(`${name} must be local or managed.`);
+  }
+  return text;
+}
+
+function exactAgentLibSourceRelativePath(value, name) {
+  const text = exactString(value, name);
+  if (text.startsWith('/') || text.split('/').includes('..')) {
+    throw new Error(`${name} must be a workspace-relative path without '..'.`);
+  }
+  return text;
+}
+
+function exactAgentLibCommit(value, name) {
+  const text = String(value ?? '');
+  if (text !== '' && !/^[0-9a-f]{40}$/.test(text)) {
+    throw new Error(`${name} must be empty or exactly 40 lowercase hexadecimal characters.`);
+  }
+  return text;
+}
+
 function exactBoxLabels(labels, {
   expectedImageRef,
   selectedRouterHostPort,
@@ -105,6 +134,26 @@ function exactBoxLabels(labels, {
     source[BOX_LABELS.imagesFingerprint],
     'outer container Box images-fingerprint label',
   );
+  const agentLibMode = exactAgentLibMode(
+    source[BOX_LABELS.agentLibMode],
+    'outer container Box AgentLib mode label',
+  );
+  const agentLibSourceIdHash = exactSha256(
+    source[BOX_LABELS.agentLibSourceIdHash],
+    'outer container Box AgentLib source-id label',
+  );
+  const agentLibFingerprint = exactSha256(
+    source[BOX_LABELS.agentLibFingerprint],
+    'outer container Box AgentLib fingerprint label',
+  );
+  const agentLibSourceRelativePath = exactAgentLibSourceRelativePath(
+    source[BOX_LABELS.agentLibSourceRelativePath],
+    'outer container Box AgentLib source-path label',
+  );
+  const agentLibCommit = exactAgentLibCommit(
+    source[BOX_LABELS.agentLibCommit],
+    'outer container Box AgentLib commit label',
+  );
   return Object.freeze({
     role: 'box',
     pathHash,
@@ -113,6 +162,11 @@ function exactBoxLabels(labels, {
     mediaHostPort,
     dependenciesFingerprint,
     imagesFingerprint,
+    agentLibMode,
+    agentLibSourceIdHash,
+    agentLibFingerprint,
+    agentLibSourceRelativePath,
+    agentLibCommit,
   });
 }
 

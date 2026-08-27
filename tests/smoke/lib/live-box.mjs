@@ -85,6 +85,7 @@ export function validateBoxFreshness({
   box,
   generationMaxAgeMs,
   imageMaxAgeMs,
+  requireFreshImage = true,
 } = {}, {
   nowMs = Date.now(),
 } = {}) {
@@ -102,21 +103,27 @@ export function validateBoxFreshness({
     ),
     DEFAULT_GENERATION_MAX_AGE_MS,
   );
-  const maxImageAge = Math.min(
-    positiveDuration(
-      imageMaxAgeMs,
+  const enforceImageFreshness = requireFreshImage !== false;
+  const maxImageAge = enforceImageFreshness
+    ? Math.min(
+      positiveDuration(
+        imageMaxAgeMs,
+        DEFAULT_IMAGE_MAX_AGE_MS,
+        'Box image max age',
+      ),
       DEFAULT_IMAGE_MAX_AGE_MS,
-      'Box image max age',
-    ),
-    DEFAULT_IMAGE_MAX_AGE_MS,
-  );
+    )
+    : null;
   if (captured.milliseconds > nowMs + 30_000 || nowMs - captured.milliseconds > 60_000) {
     throw new Error('Box freshness evidence is stale or from the future.');
   }
   if (started.milliseconds > nowMs + 30_000 || nowMs - started.milliseconds > maxGenerationAge) {
     throw new Error('Box outer container generation is not fresh enough for the release gate.');
   }
-  if (imageCreated.milliseconds > nowMs + 30_000 || nowMs - imageCreated.milliseconds > maxImageAge) {
+  if (
+    enforceImageFreshness
+    && (imageCreated.milliseconds > nowMs + 30_000 || nowMs - imageCreated.milliseconds > maxImageAge)
+  ) {
     throw new Error('Box outer image is not fresh enough for the release gate.');
   }
   if (imageCreated.milliseconds > started.milliseconds + 30_000) {
@@ -127,6 +134,7 @@ export function validateBoxFreshness({
     imageCreatedAt: imageCreated.text,
     generationMaxAgeMs: maxGenerationAge,
     imageMaxAgeMs: maxImageAge,
+    requireFreshImage: enforceImageFreshness,
   });
 }
 
@@ -231,6 +239,7 @@ export function validateLiveBoxEvidence(input, {
   nowMs = Date.now(),
   generationMaxAgeMs,
   imageMaxAgeMs,
+  requireFreshImage,
 } = {}) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     throw new Error('Live Box evidence must be an object.');
@@ -252,6 +261,7 @@ export function validateLiveBoxEvidence(input, {
     box,
     generationMaxAgeMs: generationMaxAgeMs ?? input.generationMaxAgeMs,
     imageMaxAgeMs: imageMaxAgeMs ?? input.imageMaxAgeMs,
+    requireFreshImage: requireFreshImage ?? input.requireFreshImage,
   }, { nowMs });
   return Object.freeze({
     ...freshness,
@@ -267,6 +277,7 @@ export function collectLiveBoxEvidence({
   publicIPv4 = '',
   generationMaxAgeMs = DEFAULT_GENERATION_MAX_AGE_MS,
   imageMaxAgeMs = DEFAULT_IMAGE_MAX_AGE_MS,
+  requireFreshImage = true,
   expectedPloinkySource = '',
   nowMs = Date.now(),
   command = defaultCommand,
@@ -304,7 +315,10 @@ export function collectLiveBoxEvidence({
     capturedAt: new Date(nowMs).toISOString(),
     imageCreatedAt: image.Created,
     generationMaxAgeMs: positiveDuration(generationMaxAgeMs, DEFAULT_GENERATION_MAX_AGE_MS, 'SMOKE_BOX_MAX_GENERATION_AGE_MS'),
-    imageMaxAgeMs: positiveDuration(imageMaxAgeMs, DEFAULT_IMAGE_MAX_AGE_MS, 'SMOKE_BOX_MAX_IMAGE_AGE_MS'),
+    imageMaxAgeMs: requireFreshImage
+      ? positiveDuration(imageMaxAgeMs, DEFAULT_IMAGE_MAX_AGE_MS, 'SMOKE_BOX_MAX_IMAGE_AGE_MS')
+      : null,
+    requireFreshImage,
     box,
   }, { baseURL: local.baseURL, nowMs });
   if (!expectedPloinkySource) return validated;
@@ -324,6 +338,8 @@ export function sameLiveBoxGeneration(left, right) {
     && left.box.containerId === right?.box?.containerId
     && left.box.startedAt === right?.box?.startedAt
     && left.box.imageId === right?.box?.imageId
+    && left.box.semanticLabels
+    && JSON.stringify(left.box.semanticLabels) === JSON.stringify(right?.box?.semanticLabels)
     && JSON.stringify(left.box.normalizedPortBindings) === JSON.stringify(right?.box?.normalizedPortBindings)
     && JSON.stringify(left.ploinkySourceMount ?? null) === JSON.stringify(right?.ploinkySourceMount ?? null)
   );
