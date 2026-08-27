@@ -31,7 +31,7 @@
         </section>
         <section>
           <h2>Administrative Boundary</h2>
-          <p>All six Model Context Protocol tools are administrator-only. The agent does not monitor arbitrary host processes, expose a public metrics endpoint, or allow ordinary participants to change thresholds or read Ploinky logs.</p>
+          <p>All seven Model Context Protocol tools are administrator-only. The agent does not monitor arbitrary host processes, expose a public metrics endpoint, or allow ordinary participants to read resource snapshots, change thresholds, or read Ploinky logs.</p>
         </section>
         <section>
           <h2>System Outline</h2>
@@ -40,7 +40,9 @@
   Explorer[Explorer plugin] -->|administrator action| Agent[Workspace Monitor]
   Agent --> Collector[Metrics collector]
   Collector --> Stream[Ploinky private metrics stream]
+  Collector --> Current[(Current sanitized snapshot)]
   Collector --> SQLite[(SQLite history)]
+  Agent --> Current
   Agent --> Logs[Ploinky private log service]
   Agent --> Supervisor[Supervisor and maintenance]</pre>
             <figcaption><em>Workspace Monitor joins Explorer administration to private Ploinky data and durable local history.</em></figcaption>

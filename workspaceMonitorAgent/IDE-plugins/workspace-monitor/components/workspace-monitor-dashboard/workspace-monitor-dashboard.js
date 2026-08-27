@@ -1,10 +1,11 @@
-import { callDpu, callMonitor, consumeNdjson } from './workspace-monitor-api.js';
+import { callDpu, callMonitor } from './workspace-monitor-api.js';
 import { renderHistoryChart } from './workspace-monitor-charts.js';
 import { WorkspaceMonitorLogs } from './workspace-monitor-logs.js';
 import { WorkspaceMonitorResources } from './workspace-monitor-resources.js';
 
 const DEFAULT_HISTORY_DURATION_MS = 24 * 60 * 60 * 1000;
 const MAX_HISTORY_POINTS = 50_000;
+const RESOURCE_POLL_INTERVAL_MS = 2_000;
 const HISTORY_PRESET_DURATIONS_MS = Object.freeze({
   '1h': 60 * 60 * 1000,
   '1d': DEFAULT_HISTORY_DURATION_MS,
@@ -21,6 +22,26 @@ function setText(root, role, value) {
 function localDateTimeValue(date) {
   const shifted = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
   return shifted.toISOString().slice(0, 16);
+}
+
+function waitForResourcePoll(signal) {
+  return new Promise((resolve) => {
+    if (signal.aborted) { resolve(); return; }
+    let timer;
+    const done = () => {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', done);
+      resolve();
+    };
+    signal.addEventListener('abort', done, { once: true });
+    timer = setTimeout(done, RESOURCE_POLL_INTERVAL_MS);
+  });
+}
+
+function requireCurrentSnapshot(payload) {
+  if (!payload?.available || !payload.snapshot) throw new Error('No current resource snapshot is available yet.');
+  if (payload.stale) throw new Error('The latest resource snapshot is stale.');
+  return payload.snapshot;
 }
 
 export class WorkspaceMonitorDashboard {
@@ -85,7 +106,7 @@ export class WorkspaceMonitorDashboard {
     this.stopStreams();
     if (tab === 'overview') this.startOverview();
     if (tab === 'resources') {
-      this.startResourceStream();
+      this.startResourcePolling();
       void this.loadSelectedRuntimeHistory();
     }
     if (tab === 'router' || tab === 'policy' || tab === 'dpu') void this.logs.start(tab);
@@ -102,7 +123,7 @@ export class WorkspaceMonitorDashboard {
   startOverview() {
     void this.loadOverview();
     void this.loadSettingsAndHistory();
-    void this.startResourceStream();
+    void this.startResourcePolling();
   }
 
   async loadSettingsAndHistory() {
@@ -300,9 +321,7 @@ export class WorkspaceMonitorDashboard {
 
   async loadOverview() {
     try {
-      const response = await fetch('/status/data', { credentials: 'include', cache: 'no-store' });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const payload = await response.json();
+      const payload = requireCurrentSnapshot(await callMonitor('workspace_monitor_snapshot_get'));
       const runtimes = Array.isArray(payload.runtimes) ? payload.runtimes : [];
       const running = runtimes.filter((entry) => entry.state?.running).length;
       this.renderCards('[data-role="overview"]', [
@@ -321,12 +340,17 @@ export class WorkspaceMonitorDashboard {
     for (const [label, value] of entries) { const card=document.createElement('div');card.className='panel metric-card';const l=document.createElement('span');l.textContent=label;const v=document.createElement('strong');v.textContent=value;card.append(l,v);host.append(card); }
   }
 
-  async startResourceStream() {
-    const controller = new AbortController(); this.controllers.set('resources', controller); this.setStatus('Streaming live resource usage…');
-    try {
-      const response = await fetch('/status/data?follow=1', { credentials:'include', cache:'no-store', signal:controller.signal });
-      await consumeNdjson(response, (payload) => this.resources.renderSnapshot(payload));
-    } catch (error) { if (error.name !== 'AbortError') this.setStatus(`Resource stream stopped: ${error.message}`); }
+  async startResourcePolling() {
+    const controller = new AbortController(); this.controllers.set('resources', controller); this.setStatus('Loading live resource usage…');
+    while (!controller.signal.aborted) {
+      try {
+        const payload = requireCurrentSnapshot(await callMonitor('workspace_monitor_snapshot_get'));
+        if (!controller.signal.aborted) this.resources.renderSnapshot(payload);
+      } catch (error) {
+        if (!controller.signal.aborted) this.setStatus(`Resource update unavailable: ${error.message}`);
+      }
+      await waitForResourcePoll(controller.signal);
+    }
   }
 
   async loadSelectedRuntimeHistory() {

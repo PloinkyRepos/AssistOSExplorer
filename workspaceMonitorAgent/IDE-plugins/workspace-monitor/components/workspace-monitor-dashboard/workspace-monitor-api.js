@@ -25,21 +25,3 @@ export async function callMonitor(name, args = {}) {
     }
   }
 }
-
-export async function consumeNdjson(response, onValue) {
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-  while (true) {
-    const { value, done } = await reader.read();
-    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-    for (const line of lines) if (line.trim()) onValue(JSON.parse(line));
-    if (done) {
-      if (buffer.trim()) onValue(JSON.parse(buffer));
-      return;
-    }
-  }
-}

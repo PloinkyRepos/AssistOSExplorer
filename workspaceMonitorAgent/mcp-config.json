@@ -2,6 +2,17 @@
   "maxParallelTasks": 4,
   "tools": [
     {
+      "name": "workspace_monitor_snapshot_get",
+      "title": "Workspace Monitor Snapshot Get",
+      "description": "Read the latest sanitized workspace and runtime resource snapshot collected from Ploinky.",
+      "command": "tools/workspace_monitor_tool.sh",
+      "cwd": "workspace",
+      "inputSchema": {},
+      "env": {
+        "TOOL_NAME": "workspace_monitor_snapshot_get"
+      }
+    },
+    {
       "name": "workspace_monitor_settings_get",
       "title": "Workspace Monitor Settings Get",
       "description": "Read administrator-controlled workspace thresholds and log retention.",

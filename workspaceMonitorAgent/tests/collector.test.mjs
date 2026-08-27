@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createSnapshotProcessor, PERSIST_INTERVAL_MS } from '../lib/collector.mjs';
+import {
+    createCollectorSnapshotConsumer,
+    createSnapshotProcessor,
+    PERSIST_INTERVAL_MS,
+} from '../lib/collector.mjs';
 
 const settings = {
     workspaceCpuPercent: 80,
@@ -72,4 +76,36 @@ test('failed SQLite writes do not consume the persistence checkpoint', async () 
     const start = Date.parse('2026-08-11T10:00:00Z');
     await assert.rejects(processSnapshot(snapshot(start)), /unavailable/);
     assert.deepEqual((await processSnapshot(snapshot(start + 1))).persisted, ['workspace.cpu', 'workspace.memory', 'router.cpu', 'router.memory', 'runtime:AchillesIDE%2Fexplorer:cpu', 'runtime:AchillesIDE%2Fexplorer:memory']);
+});
+
+test('current snapshot and history retries remain independent', async () => {
+    let timestamp = 1_000;
+    let currentAttempts = 0;
+    let historyAttempts = 0;
+    const errors = [];
+    const consumeSnapshot = createCollectorSnapshotConsumer({
+        env: { WORKSPACE_MONITOR_DATA_ROOT: '/unused' },
+        now: () => timestamp,
+        writeCurrentSnapshotImpl: async () => {
+            currentAttempts += 1;
+            if (currentAttempts === 1) throw new Error('current unavailable');
+        },
+        processSnapshotImpl: async () => {
+            historyAttempts += 1;
+            if (historyAttempts === 1) throw new Error('history unavailable');
+        },
+        reportError: (message) => errors.push(message),
+    });
+
+    await consumeSnapshot(snapshot(timestamp));
+    timestamp += 999;
+    await consumeSnapshot(snapshot(timestamp));
+    assert.deepEqual([currentAttempts, historyAttempts], [1, 1]);
+
+    timestamp += 1;
+    await consumeSnapshot(snapshot(timestamp));
+    assert.deepEqual([currentAttempts, historyAttempts], [2, 2]);
+    assert.equal(errors.length, 2);
+    assert.match(errors[0], /current snapshot write failed/);
+    assert.match(errors[1], /sample persistence failed/);
 });

@@ -10,12 +10,14 @@ const agentRoot = path.resolve(explorerRoot, '..', 'workspaceMonitorAgent');
 test('Workspace Monitor is an admin-only Explorer application plugin', () => {
     const explorerManifest = JSON.parse(fs.readFileSync(path.join(explorerRoot, 'manifest.json'), 'utf8'));
     const plugin = JSON.parse(fs.readFileSync(path.join(agentRoot, 'IDE-plugins', 'workspace-monitor', 'config.json'), 'utf8'));
+    const mcpConfig = JSON.parse(fs.readFileSync(path.join(agentRoot, 'mcp-config.json'), 'utf8'));
     assert.ok(explorerManifest.enable.includes('workspaceMonitorAgent no-wait'));
     assert.equal(explorerManifest.applicationPlugins['workspace-monitor'], true);
     assert.equal(plugin.pluginCategory, 'application');
     assert.equal(plugin.adminOnly, true);
     assert.equal(plugin.dependencies[0].type, 'embedded');
     assert.deepEqual(plugin.location, ['file-exp:account-menu']);
+    assert.ok(mcpConfig.tools.some((tool) => tool.name === 'workspace_monitor_snapshot_get'));
 });
 
 test('Workspace Monitor keeps read-only concerns in separate tabs', () => {
@@ -42,7 +44,10 @@ test('Workspace Monitor keeps read-only concerns in separate tabs', () => {
     assert.match(html, /class="general-button secondary"/);
     assert.match(script, /className='panel metric-card'/);
     assert.doesNotMatch(`${html}\n${css}`, /workspace-monitor-header|modal-header|modal-title|modal-subtitle/);
-    assert.match(script, /\/status\/data\?follow=1/);
+    assert.doesNotMatch(script, /\/status\/data/);
+    assert.match(script, /workspace_monitor_snapshot_get/);
+    assert.match(script, /RESOURCE_POLL_INTERVAL_MS = 2_000/);
+    assert.match(script, /startResourcePolling\(\)/);
     assert.match(script, /if \(tab === 'overview'\) this\.startOverview\(\)/);
     assert.match(script, /setAttribute\('aria-selected', String\(active\)\)/);
     assert.match(script, /createElementNS\(SVG_NAMESPACE, 'svg'\)/);

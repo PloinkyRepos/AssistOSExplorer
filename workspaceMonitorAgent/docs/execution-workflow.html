@@ -22,7 +22,7 @@
       <h2>Logs</h2>
       <p>For a log list, read, or search request, the wrapper checks the administrator and calls Ploinky's private <code>/api/edge/workspace-logs</code> route with a signed request. The result contains the requested live file or retained archive data; Workspace Monitor does not create a local copy of those logs.</p>
       <h2>Explorer surface</h2>
-      <p>The Explorer plugin checks the browser's administrator projection and hides its toolbar item for other users. Opening the item changes the browser hash to <code>workspace-monitor-dashboard</code>; the dashboard then uses the agent's MCP tools for operational data.</p>
+      <p>The Explorer plugin checks the browser's administrator projection and hides its toolbar item for other users. Opening the item changes the browser hash to <code>workspace-monitor-dashboard</code>; the dashboard then polls <code>workspace_monitor_snapshot_get</code> for fresh resource data and uses the other agent MCP tools for settings, history, and logs. It does not call Ploinky's localhost-only <code>/status/data</code> route.</p>
     </div>
   </div></main>
   <footer class="site-footer" data-include="partials/footer.html"></footer><script src="partials-loader.js"></script>

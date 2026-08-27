@@ -13,6 +13,8 @@ This specification defines how collected resource observations become queryable 
 
 The collector must derive workspace CPU and memory from available runtime metrics, with a fallback to total metrics minus Router metrics when runtime details are absent. Router CPU and memory must be recorded as separate series. Each available runtime must receive encoded CPU and memory series keyed by repository and agent identity when those fields exist, or by the runtime container identity.
 
+The current-snapshot projection must omit Router process identifiers and any unrecognized top-level, Router, runtime, state, or metrics fields. A read must return no snapshot before collection begins, return freshness metadata with a valid projection, and distinguish a stale projection from a current one. Explorer must not graph the same sampling instant more than once.
+
 A persistence checkpoint must be tracked independently per series and must use the ten-second cadence. A failed persistence call must not advance that checkpoint. Invalid series keys, non-finite values, and non-finite thresholds must be rejected before SQLite commit.
 
 History queries must accept a selected set of aggregate or supported runtime series and return bucketed values, peak timestamps, peak thresholds, and latest bucket thresholds. A request must contain a later to instant, remain within thirteen months, and return at least two and at most 50,000 points per series.

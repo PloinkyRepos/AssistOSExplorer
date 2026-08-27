@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { assertAdministrator } from '../lib/admin.mjs';
+import { currentSnapshotState } from '../lib/currentSnapshot.mjs';
 import { readSettings, writeSettings } from '../lib/settings.mjs';
 import { queryHistory } from '../lib/sqliteStore.mjs';
 import { getPloinkyLog, listPloinkyLogs, searchPloinkyLogs } from '../lib/ploinkyLogs.mjs';
@@ -32,6 +33,9 @@ async function main() {
     const input = unwrapInput(envelope);
     let result;
     switch (process.env.TOOL_NAME) {
+        case 'workspace_monitor_snapshot_get':
+            result = await currentSnapshotState();
+            break;
         case 'workspace_monitor_settings_get':
             result = { ok: true, settings: await readSettings() };
             break;

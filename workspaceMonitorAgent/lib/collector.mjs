@@ -1,3 +1,4 @@
+import { writeCurrentSnapshot } from './currentSnapshot.mjs';
 import { readSettings } from './settings.mjs';
 import { persistSamples } from './sqliteStore.mjs';
 
@@ -62,6 +63,43 @@ export function createSnapshotProcessor({
     };
 }
 
+export function createCollectorSnapshotConsumer({
+    env = process.env,
+    now = () => Date.now(),
+    writeCurrentSnapshotImpl = writeCurrentSnapshot,
+    processSnapshotImpl = createSnapshotProcessor(),
+    reportError = (message) => console.error(message),
+} = {}) {
+    let currentRetryAt = 0;
+    let currentDelayMs = 1_000;
+    let persistenceRetryAt = 0;
+    let persistenceDelayMs = 1_000;
+    return async function consumeSnapshot(snapshot) {
+        const timestamp = now();
+        if (timestamp >= currentRetryAt) {
+            try {
+                await writeCurrentSnapshotImpl(snapshot, env);
+                currentRetryAt = 0;
+                currentDelayMs = 1_000;
+            } catch (error) {
+                currentRetryAt = timestamp + currentDelayMs;
+                currentDelayMs = Math.min(currentDelayMs * 2, 30_000);
+                reportError(`[workspace-monitor] current snapshot write failed: ${error?.message || error}`);
+            }
+        }
+        if (timestamp < persistenceRetryAt) return;
+        try {
+            await processSnapshotImpl(snapshot);
+            persistenceRetryAt = 0;
+            persistenceDelayMs = 1_000;
+        } catch (error) {
+            persistenceRetryAt = timestamp + persistenceDelayMs;
+            persistenceDelayMs = Math.min(persistenceDelayMs * 2, 30_000);
+            reportError(`[workspace-monitor] sample persistence failed: ${error?.message || error}`);
+        }
+    };
+}
+
 export async function consumeNdjson(response, onSnapshot) {
     if (!response.ok || !response.body) throw new Error(`Metrics stream failed with HTTP ${response.status}.`);
     const reader = response.body.getReader();
@@ -92,10 +130,8 @@ export async function runCollector({ env = process.env, fetchImpl = fetch, signa
     const routerUrl = String(env.PLOINKY_INTERNAL_ROUTER_URL || '').replace(/\/$/, '');
     if (!routerUrl) throw new Error('PLOINKY_INTERNAL_ROUTER_URL is required.');
     const sign = await loadAssertionSigner();
-    const processSnapshot = createSnapshotProcessor();
+    const consumeSnapshot = createCollectorSnapshotConsumer({ env });
     let delayMs = 1_000;
-    let persistenceRetryAt = 0;
-    let persistenceDelayMs = 1_000;
     while (!signal?.aborted) {
         try {
             const assertion = sign({ method: 'GET', path: PRIVATE_PATH, query: PRIVATE_QUERY, env });
@@ -104,18 +140,7 @@ export async function runCollector({ env = process.env, fetchImpl = fetch, signa
                 signal,
             });
             delayMs = 1_000;
-            await consumeNdjson(response, async (snapshot) => {
-                if (Date.now() < persistenceRetryAt) return;
-                try {
-                    await processSnapshot(snapshot);
-                    persistenceRetryAt = 0;
-                    persistenceDelayMs = 1_000;
-                } catch (error) {
-                    persistenceRetryAt = Date.now() + persistenceDelayMs;
-                    persistenceDelayMs = Math.min(persistenceDelayMs * 2, 30_000);
-                    console.error(`[workspace-monitor] sample persistence failed: ${error?.message || error}`);
-                }
-            });
+            await consumeNdjson(response, consumeSnapshot);
         } catch (error) {
             if (signal?.aborted) return;
             console.error(`[workspace-monitor] metrics stream unavailable: ${error?.message || error}`);

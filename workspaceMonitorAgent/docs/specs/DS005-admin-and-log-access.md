@@ -11,7 +11,7 @@ Workspace Monitor exposes operational controls only to a verified administrator.
 
 ## Core Content
 
-The tool wrapper must resolve the invocation actor from Ploinky's authenticated metadata before reading input arguments. The administrator check may accept an admin role, the normalized local administrator username or user id, or the normalized local administrator principal id as implemented by assertAdministrator. A client-declared actor or role without verified invocation metadata must not be sufficient.
+The tool wrapper must resolve the invocation actor from Ploinky's authenticated metadata before reading input arguments. The administrator check applies equally to current snapshot, settings, history, and log tools and may accept an admin role, the normalized local administrator username or user id, or the normalized local administrator principal id as implemented by assertAdministrator. A client-declared actor or role without verified invocation metadata must not be sufficient.
 
 Settings must default to workspace CPU 80 percent, workspace memory 4 GiB, Router CPU 80 percent, Router memory 512 MiB, and seven days of log retention. CPU settings must be finite values from 0 through 100,000; memory settings must be positive finite values; log retention must be an integer from 1 through 365 days. Settings writes must be atomic.
 

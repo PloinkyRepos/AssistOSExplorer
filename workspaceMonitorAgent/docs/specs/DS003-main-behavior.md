@@ -21,7 +21,7 @@ Workspace Monitor lets an administrator observe Ploinky workspace resources over
 
 ### Live resource collection and persistence
 
-The affected actor is an administrator who needs current and durable resource observations. Ploinky's private metrics stream triggers the collector to parse each snapshot, derive workspace and Router aggregates, and identify available runtime series. The collector persists each series at most once per ten seconds in SQLite and retries a failed write later. The observable result is a durable CPU or memory history for the workspace, Router, and each available runtime. The governing boundary is that live metrics come only from the signed private Ploinky stream.
+The affected actor is an administrator who needs current and durable resource observations. Ploinky's private metrics stream triggers the collector to parse each snapshot, derive workspace and Router aggregates, and identify available runtime series. The collector atomically stores an allowlisted current projection for the administrator-only snapshot tool, persists each historical series at most once per ten seconds in SQLite, and retries either output independently after a failure. The observable result is a fresh current view plus durable CPU or memory history for the workspace, Router, and each available runtime. The governing boundary is that live metrics come only from the signed private Ploinky stream; Explorer must use the agent tool rather than a Router control endpoint.
 
 ### Historical resource queries and thresholds
 
@@ -29,7 +29,7 @@ The affected actor is an administrator reviewing resource behavior across a boun
 
 ### Administrator settings and log access
 
-The affected actor is an administrator managing monitoring policy or investigating Ploinky operations. Each of the six MCP tools first resolves the verified invocation actor and applies the administrator check. Settings reads and updates operate on normalized settings.json; log list, get, and search operations call Ploinky's signed private log route for Router or Policy sources. The observable result is either normalized settings, bounded history, or Ploinky log data. The boundary is that client-declared roles and ordinary participant access cannot authorize a request.
+The affected actor is an administrator managing monitoring policy or investigating Ploinky operations. Each of the seven MCP tools first resolves the verified invocation actor and applies the administrator check. Snapshot reads report availability, age, and staleness with the allowlisted resource projection; settings reads and updates operate on normalized settings.json; log list, get, and search operations call Ploinky's signed private log route for Router or Policy sources. The observable result is current resources, normalized settings, bounded history, or Ploinky log data. The boundary is that client-declared roles and ordinary participant access cannot authorize a request.
 
 ## Conclusion
 

@@ -35,6 +35,7 @@ export class WorkspaceMonitorResources {
     this.runtimeSamples = new Map();
     this.selectedKey = null;
     this.entries = [];
+    this.lastSampledAt = 0;
   }
 
   selectedEntry() {
@@ -42,6 +43,10 @@ export class WorkspaceMonitorResources {
   }
 
   renderSnapshot(payload) {
+    const reportedSampledAt = Date.parse(payload.sampledAt);
+    const sampledAt = Number.isFinite(reportedSampledAt) ? reportedSampledAt : Date.now();
+    if (sampledAt <= this.lastSampledAt) return;
+    this.lastSampledAt = sampledAt;
     const total = payload.total || {};
     const runtimes = Array.isArray(payload.runtimes) ? payload.runtimes : [];
     const routerCpu = Number(payload.router?.metrics?.cpuPercent);
@@ -57,9 +62,9 @@ export class WorkspaceMonitorResources {
     const totalCpu = Number.isFinite(reportedTotalCpu) ? reportedTotalCpu : agents.cpuPercent + safeRouterCpu;
     const totalMemory = Number.isFinite(reportedTotalMemory) ? reportedTotalMemory : agents.memoryBytes + safeRouterMemory;
     this.renderOverviewValues(runtimes, { totalCpu, totalMemory, agents, routerCpu: safeRouterCpu, routerMemory: safeRouterMemory });
-    this.updateRuntimeEntries(runtimes);
-    this.renderOverviewChart(totalCpu, agents.cpuPercent, safeRouterCpu);
-    this.onLiveUpdate?.(new Date());
+    this.updateRuntimeEntries(runtimes, sampledAt);
+    this.renderOverviewChart(totalCpu, agents.cpuPercent, safeRouterCpu, sampledAt);
+    this.onLiveUpdate?.(new Date(sampledAt));
   }
 
   renderOverviewValues(runtimes, { totalCpu, totalMemory, agents, routerCpu, routerMemory }) {
@@ -74,8 +79,7 @@ export class WorkspaceMonitorResources {
     setText(this.element, 'unavailable-count', String(runtimes.filter((runtime) => runtime.state?.running && runtime.metrics?.available === false).length));
   }
 
-  updateRuntimeEntries(runtimes) {
-    const sampledAt = Date.now();
+  updateRuntimeEntries(runtimes, sampledAt) {
     const previousKey = this.selectedKey;
     this.entries = runtimes.map((runtime, index) => {
       const key = runtimeSeriesId(runtime, index);
@@ -179,8 +183,8 @@ export class WorkspaceMonitorResources {
     appendLiveTimeline(chart, samples[0].timestamp, samples.at(-1).timestamp);
   }
 
-  renderOverviewChart(totalCpu, agentsCpu, routerCpu) {
-    this.samples.push({ timestamp: Date.now(), total: totalCpu, agents: agentsCpu, router: routerCpu });
+  renderOverviewChart(totalCpu, agentsCpu, routerCpu, sampledAt) {
+    this.samples.push({ timestamp: sampledAt, total: totalCpu, agents: agentsCpu, router: routerCpu });
     if (this.samples.length > MAX_SAMPLES) this.samples.shift();
     const chart = this.element.querySelector('[data-role="resource-chart"]');
     renderLiveCpuChart(chart, [
