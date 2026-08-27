@@ -861,9 +861,6 @@ const documentModule = {
     async convertDocument() {
         throw new Error('convertDocument is not supported in the local document module.');
     },
-    async documentToVideo() {
-        throw new Error('documentToVideo is not supported in the local document module.');
-    },
     async undoOperation() {
         return false;
     },

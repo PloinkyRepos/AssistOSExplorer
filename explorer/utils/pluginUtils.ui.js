@@ -42,6 +42,11 @@ async function openPlugin(componentName, type, context, presenter, autoPin = fal
     await initializePlugin(plugin);
     highlightPlugin(type, componentName, presenter);
     if (plugin.type === "embedded") {
+        const ensureComponentRegistered = assistOS?.webSkel?.ensureComponentRegistered
+            || window.UI?.ensureComponentRegistered;
+        if (typeof ensureComponentRegistered === "function") {
+            await ensureComponentRegistered(componentName);
+        }
         let pluginContainer = presenter.element.querySelector(`.${type}-plugin-container`);
         let contextString = encodeURIComponent(JSON.stringify(context));
         pluginContainer.classList.add("plugin-open");
