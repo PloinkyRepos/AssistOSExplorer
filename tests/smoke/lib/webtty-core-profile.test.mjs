@@ -1,0 +1,56 @@
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import test from 'node:test';
+import { fileURLToPath } from 'node:url';
+
+const smokeRoot = fileURLToPath(new URL('../', import.meta.url));
+const expectedTitle = 'local administrator controls the mounted workspace while an ordinary user is denied';
+
+test('npm WebTTY core profile owns the exact Chromium release gate', () => {
+  const packageJson = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  const command = packageJson.scripts?.['test:webtty'];
+  assert.equal(typeof command, 'string');
+  assert.match(command, /\bSMOKE_WEBTTY_CORE=1\b/);
+  assert.match(command, /--project=chromium\b/);
+  assert.match(command, /\bspecs\/01-webtty-core\.spec\.mjs\b/);
+  assert.doesNotMatch(command, /--grep|--headed|--retries/);
+
+  const webttySpec = fs.readFileSync(
+    new URL('../specs/01-webtty-core.spec.mjs', import.meta.url),
+    'utf8',
+  );
+  assert.match(webttySpec, new RegExp(`test\\(['\"]${expectedTitle}['\"]`));
+  assert.match(webttySpec, /canonical local:admin principal/);
+  assert.match(webttySpec, /canonical local:user principal/);
+  assert.match(webttySpec, /normalCloseKeptWebttyAvailable: true/);
+});
+
+test('WebTTY core profile collects exactly one enabled Playwright test', { timeout: 30_000 }, () => {
+  const artifactRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'webtty-core-selector-'));
+  try {
+    const result = spawnSync(
+      'npm',
+      ['run', 'test:webtty', '--', '--list'],
+      {
+        cwd: smokeRoot,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          SMOKE_ARTIFACT_DIR: artifactRoot,
+          SMOKE_RUN_ID: 'webtty-core-selector-contract',
+        },
+        timeout: 20_000,
+      },
+    );
+    const output = `${result.stdout || ''}\n${result.stderr || ''}`;
+    assert.equal(result.status, 0, output);
+    assert.match(output, /01-webtty-core\.spec\.mjs:\d+:\d+.*local administrator controls the mounted workspace while an ordinary user is denied/);
+    assert.match(output, /Total: 1 test in 1 file/);
+    assert.doesNotMatch(output, /No tests found/);
+  } finally {
+    fs.rmSync(artifactRoot, { recursive: true, force: true });
+  }
+});

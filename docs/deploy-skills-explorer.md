@@ -57,9 +57,10 @@ Never expose secret values in commands, logs, reports, or artifacts.
    listener, and remains inactive and fail-closed.
 8. While the graph remains alive, run the fixed Chromium Router/auth baseline
    below with no retry or skip.
-9. Revalidate outer publication and listener ownership.
-10. Run the real-browser OnlyOffice, Umami, GPTResearcher, and WebMeet gates.
-11. Clean up and destroy the graph only after all graph-dependent gates finish.
+9. Run the local Ploinky core WebTTY gate against the exact mounted workspace.
+10. Revalidate outer publication and listener ownership.
+11. Run the real-browser OnlyOffice, Umami, GPTResearcher, and WebMeet gates.
+12. Clean up and destroy the graph only after all graph-dependent gates finish.
 
 The Ploinky release harness runs this exact baseline after the full graph and
 listener gate succeed and before cleanup or graph destruction:
@@ -73,6 +74,23 @@ It proves the dashboard, Explorer shell, and routed WebChat shell through
 Router. This oracle is distinct from the WebMeet external-network and
 ScreenShare gates below; none substitutes for another. A missing or failing
 baseline is a release failure and must not be retried, skipped, or weakened.
+
+The local Ploinky core WebTTY gate is:
+
+```bash
+cd tests/smoke
+SMOKE_BASE_URL=http://127.0.0.1:18080 \
+SMOKE_WORKSPACE_ROOT=/absolute/path/to/the/box/workspace \
+npm run test:webtty
+```
+
+It requires the canonical local `admin` and `user` accounts and a fresh Box.
+The gate exercises the local administrator browser-mutation path, proves the
+selected nested `/workspace` cwd and bidirectional host workspace visibility,
+closes the terminal, and creates a second terminal to prove cleanup did not
+disable WebTTY. It also proves UI omission plus page and API `403` responses
+for the ordinary user. A non-loopback target, missing workspace root, skipped
+case, or failed assertion is a release failure.
 
 The WebMeet screen gate is:
 
