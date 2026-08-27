@@ -29,6 +29,15 @@ export function buildFileExpHash(pathStr) {
     return `#file-exp${encodeURI(normalized)}`;
 }
 
+export function buildLogoutConfirmationUrl(location = {}) {
+    const currentPath = `${location.pathname || '/'}${location.search || ''}${location.hash || ''}`;
+    const loggedOutPath = `/auth/logged-out?${new URLSearchParams({next: currentPath}).toString()}`;
+    return `/auth/logout?${new URLSearchParams({
+        returnTo: loggedOutPath,
+        cancelTo: currentPath,
+    }).toString()}`;
+}
+
 export function encodeLocalActionPathArg(pathStr) {
     return encodeURIComponent(normalizePath(pathStr));
 }

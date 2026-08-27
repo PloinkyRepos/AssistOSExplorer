@@ -8,6 +8,7 @@ import {
     sanitizeEntryName,
     generateCopyName,
     buildFileExpHash,
+    buildLogoutConfirmationUrl,
     parseDetailedDirectoryListing,
     isMarkdownFile,
     extractScriptaPreviewImages,
@@ -220,6 +221,10 @@ export class FileExp {
         this.setElementListener('file-exp-dpu-comments-close', this.element, 'dpu-comments-close', this.boundHandleDpuCommentsClose);
         this.setElementListener('file-exp-app-menu-select', this.element, 'app-menu-select', this.boundAppMenuSelect);
         this.setElementListener('file-exp-audit-local-action', this.element, 'click', this.boundAuditLocalAction, true);
+    }
+
+    openLogoutConfirmation() {
+        window.location.assign(buildLogoutConfirmationUrl(window.location));
     }
 
     async withLoader(fn) {
