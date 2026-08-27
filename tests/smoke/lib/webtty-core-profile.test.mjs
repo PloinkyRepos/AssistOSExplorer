@@ -25,6 +25,8 @@ test('npm WebTTY core profile owns the exact Chromium release gate', () => {
   assert.match(webttySpec, new RegExp(`test\\(['\"]${expectedTitle}['\"]`));
   assert.match(webttySpec, /canonical local:admin principal/);
   assert.match(webttySpec, /canonical local:user principal/);
+  assert.match(webttySpec, /assertExplorerDirectory\(page, fixture\.parentDirectoryPath\)/);
+  assert.match(webttySpec, /openTerminalFromExplorer\(page, fixture\.nestedDirectoryPath\)/);
   assert.match(webttySpec, /normalCloseKeptWebttyAvailable: true/);
 });
 
