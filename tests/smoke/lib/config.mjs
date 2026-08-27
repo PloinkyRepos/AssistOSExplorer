@@ -29,8 +29,17 @@ function resolveOptionalPath(value) {
   return text ? path.resolve(text) : '';
 }
 
+function resolveOptInAbsolutePath(name, enabled) {
+  const text = String(process.env[name] || '').trim();
+  if (!enabled && !text) return '';
+  if (!text) throw new Error(`${name} is required when SMOKE_NO_WAIT_AGENT_LOADING=1.`);
+  if (!path.isAbsolute(text)) throw new Error(`${name} must be an absolute path.`);
+  return path.normalize(text);
+}
+
 const runId = String(process.env.SMOKE_RUN_ID || defaultRunId()).replace(/[^A-Za-z0-9_-]/g, '-');
 const qaAcceptance = readBool('SMOKE_QA_ACCEPTANCE', false);
+const noWaitAgentLoading = readBool('SMOKE_NO_WAIT_AGENT_LOADING', false);
 const workspaceRoot = resolveOptionalPath(process.env.SMOKE_WORKSPACE_ROOT);
 const dpuDataRoot = resolveOptionalPath(process.env.SMOKE_DPU_DATA_ROOT)
   || (workspaceRoot ? path.join(workspaceRoot, '.ploinky', 'data', 'dpu-data') : path.join(repoRoot, '.ploinky', 'data', 'dpu-data'));
@@ -62,12 +71,19 @@ export const smokeConfig = Object.freeze({
   },
   webchatAgent: process.env.SMOKE_WEBCHAT_AGENT || 'achilles-cli',
   webAssistSiteId: process.env.SMOKE_WEBASSIST_SITE_ID || 'demo-site',
+  noWaitAgentLoading: Object.freeze({
+    blockedMarker: resolveOptInAbsolutePath('SMOKE_NO_WAIT_BLOCKED_MARKER', noWaitAgentLoading),
+    releaseFile: resolveOptInAbsolutePath('SMOKE_NO_WAIT_RELEASE_FILE', noWaitAgentLoading),
+    routePath: '/slowAgent/index.html',
+    assetPath: '/slowAgent/ready-asset.js',
+  }),
   flags: {
     failOnBrowserErrors: !readBool('SMOKE_ALLOW_BROWSER_ERRORS', false),
     github: readBool('SMOKE_GITHUB', false),
     codexDelegation: readBool('SMOKE_CODEX_DELEGATION', false),
     gptResearcher: readBool('SMOKE_GPT_RESEARCHER', false),
     onlyoffice: readBool('SMOKE_ONLYOFFICE', false),
+    noWaitAgentLoading,
     openInterpreter: readBool('SMOKE_OPEN_INTERPRETER', false),
     qaAcceptance,
     umami: readBool('SMOKE_UMAMI', false),
