@@ -28,9 +28,29 @@ export class VideoPlugin {
     async afterRender() {
         this.refreshContext();
         this.fileInput = this.element.querySelector(".file-input");
+        this.insertVideoButton = this.element.querySelector('[data-local-action="insertVideo"]');
         this.resetFileInputListener();
         this.videoListElement = this.element.querySelector('.video-list');
         await this.populateExistingVideos();
+    }
+
+    setActionBusy(button, busy, busyLabel) {
+        if (!button) {
+            return;
+        }
+        if (busy) {
+            button.dataset.idleLabel = button.textContent.trim();
+            button.textContent = busyLabel;
+            button.classList.add('is-loading');
+            button.disabled = true;
+            button.setAttribute('aria-busy', 'true');
+            return;
+        }
+        button.textContent = button.dataset.idleLabel || button.textContent;
+        delete button.dataset.idleLabel;
+        button.classList.remove('is-loading');
+        button.disabled = false;
+        button.removeAttribute('aria-busy');
     }
 
     resetFileInputListener() {
@@ -39,6 +59,16 @@ export class VideoPlugin {
 
     async uploadVideoAttachment(event) {
         const file = event?.target?.files?.[0];
+        if (!file) {
+            this.fileInput.value = "";
+            this.resetFileInputListener();
+            return;
+        }
+        if (this.uploadInProgress) {
+            return;
+        }
+        this.uploadInProgress = true;
+        this.setActionBusy(this.insertVideoButton, true, 'Inserting…');
         try {
             const { uploadResult, metadata } = await processMediaUpload({
                 file,
@@ -74,6 +104,8 @@ export class VideoPlugin {
             console.error("Failed to upload video", error);
             assistOS.showToast("Failed to upload video.", "error");
         } finally {
+            this.uploadInProgress = false;
+            this.setActionBusy(this.insertVideoButton, false);
             if (this.fileInput) {
                 this.fileInput.value = "";
             }
@@ -81,7 +113,11 @@ export class VideoPlugin {
         }
     }
 
-    insertVideo() {
+    insertVideo(triggerElement) {
+        if (this.uploadInProgress) {
+            return;
+        }
+        this.insertVideoButton = triggerElement || this.insertVideoButton;
         this.fileInput.click();
     }
 
@@ -163,7 +199,7 @@ export class VideoPlugin {
             </div>
             <div class="video-item-actions">
                 <button class="general-button" type="button" data-local-action="${saveActionAttr}" disabled>Save</button>
-                <button class="general-button danger" type="button" data-local-action="${deleteActionAttr}">Delete</button>
+                <button class="general-button danger video-plugin-action" type="button" data-local-action="${deleteActionAttr}">Delete</button>
             </div>
         </div>`;
     }
@@ -288,11 +324,15 @@ export class VideoPlugin {
     }
 
     async deleteVideoItem(triggerElement, identifier) {
+        if (triggerElement?.getAttribute('aria-busy') === 'true') {
+            return;
+        }
         const container = triggerElement?.closest('.video-item');
         const targetIdentifier = identifier || container?.dataset?.identifier;
         if (!targetIdentifier) {
             return;
         }
+        this.setActionBusy(triggerElement, true, 'Deleting…');
         try {
             this.refreshContext();
             if (this.isParagraphContext) {
@@ -311,6 +351,8 @@ export class VideoPlugin {
         } catch (error) {
             console.error('Failed to delete video', error);
             assistOS.showToast('Failed to delete video.', 'error');
+        } finally {
+            this.setActionBusy(triggerElement, false);
         }
     }
 

@@ -28,9 +28,29 @@ export class AudioPlugin {
     async afterRender() {
         this.refreshContext();
         this.fileInput = this.element.querySelector(".file-input");
+        this.insertAudioButton = this.element.querySelector('[data-local-action="insertAudio"]');
         this.resetFileInputListener();
         this.audioListElement = this.element.querySelector('.audio-list');
         await this.populateExistingAudio();
+    }
+
+    setActionBusy(button, busy, busyLabel) {
+        if (!button) {
+            return;
+        }
+        if (busy) {
+            button.dataset.idleLabel = button.textContent.trim();
+            button.textContent = busyLabel;
+            button.classList.add('is-loading');
+            button.disabled = true;
+            button.setAttribute('aria-busy', 'true');
+            return;
+        }
+        button.textContent = button.dataset.idleLabel || button.textContent;
+        delete button.dataset.idleLabel;
+        button.classList.remove('is-loading');
+        button.disabled = false;
+        button.removeAttribute('aria-busy');
     }
 
     resetFileInputListener() {
@@ -39,6 +59,16 @@ export class AudioPlugin {
 
     async uploadBackgroundSound(event) {
         const file = event?.target?.files?.[0];
+        if (!file) {
+            this.fileInput.value = "";
+            this.resetFileInputListener();
+            return;
+        }
+        if (this.uploadInProgress) {
+            return;
+        }
+        this.uploadInProgress = true;
+        this.setActionBusy(this.insertAudioButton, true, 'Inserting…');
         try {
             const { uploadResult, metadata } = await processMediaUpload({
                 file,
@@ -74,6 +104,8 @@ export class AudioPlugin {
             console.error("Failed to upload audio", error);
             assistOS.showToast("Failed to upload audio.", "error");
         } finally {
+            this.uploadInProgress = false;
+            this.setActionBusy(this.insertAudioButton, false);
             if (this.fileInput) {
                 this.fileInput.value = "";
             }
@@ -81,7 +113,11 @@ export class AudioPlugin {
         }
     }
 
-    insertAudio() {
+    insertAudio(triggerElement) {
+        if (this.uploadInProgress) {
+            return;
+        }
+        this.insertAudioButton = triggerElement || this.insertAudioButton;
         this.fileInput.click();
     }
 
@@ -178,7 +214,7 @@ export class AudioPlugin {
             </div>
             <div class="audio-item-actions">
                 <button class="general-button" type="button" data-local-action="${saveActionAttr}" disabled>Save</button>
-                <button class="general-button danger" type="button" data-local-action="${deleteActionAttr}">Delete</button>
+                <button class="general-button danger audio-plugin-action" type="button" data-local-action="${deleteActionAttr}">Delete</button>
             </div>
         </div>`;
     }
@@ -303,11 +339,15 @@ export class AudioPlugin {
     }
 
     async deleteAudioItem(triggerElement, identifier) {
+        if (triggerElement?.getAttribute('aria-busy') === 'true') {
+            return;
+        }
         const container = triggerElement?.closest('.audio-item');
         const targetIdentifier = identifier || container?.dataset?.identifier;
         if (!targetIdentifier) {
             return;
         }
+        this.setActionBusy(triggerElement, true, 'Deleting…');
         try {
             this.refreshContext();
             if (this.isParagraphContext) {
@@ -326,6 +366,8 @@ export class AudioPlugin {
         } catch (error) {
             console.error('Failed to delete audio', error);
             assistOS.showToast('Failed to delete audio.', 'error');
+        } finally {
+            this.setActionBusy(triggerElement, false);
         }
     }
 

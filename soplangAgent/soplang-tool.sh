@@ -6,9 +6,10 @@ payload="$(cat)"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 export SOPLANG_TOOL_DIR="${SCRIPT_DIR}"
 export SOPLANG_TOOL_PAYLOAD="${payload}"
-export PERSISTENCE_FOLDER="/persistoStorage"
-export LOGS_FOLDER="/persistoLogs"
-export AUDIT_FOLDER="/persistoAudit"
+SOPLANG_STATE_ROOT="${SOPLANG_STATE_ROOT:-${HOME:-/root}/.soplang}"
+export PERSISTENCE_FOLDER="${PERSISTENCE_FOLDER:-${SOPLANG_STATE_ROOT}/storage}"
+export LOGS_FOLDER="${LOGS_FOLDER:-${SOPLANG_STATE_ROOT}/logs}"
+export AUDIT_FOLDER="${AUDIT_FOLDER:-${SOPLANG_STATE_ROOT}/audit}"
 
 node --input-type=module <<'NODE'
 import fs from 'fs';
@@ -33,6 +34,18 @@ if (!toolName) {
 if (!rawInput.trim()) {
     console.error('No input received. Provide JSON via stdin.');
     process.exit(1);
+}
+
+for (const directory of [
+    process.env.PERSISTENCE_FOLDER,
+    process.env.LOGS_FOLDER,
+    process.env.AUDIT_FOLDER,
+]) {
+    if (!directory) {
+        console.error('SOPLang runtime storage paths are not configured.');
+        process.exit(1);
+    }
+    fs.mkdirSync(directory, { recursive: true });
 }
 
 if (typeof globalThis.$$ === 'undefined') {
@@ -230,14 +243,14 @@ for (const {name, file} of manualPlugins) {
 }
 
 const achillesPluginPath = path.join(toolDir, 'plugins', 'AchillesSkills.js');
-if (fs.existsSync(achillesPluginPath)) {
+if (pluginName === 'AchillesSkills' && fs.existsSync(achillesPluginPath)) {
     try {
         await $$.registerPlugin("AchillesSkills", achillesPluginPath);
         appendLog("Registered plugin: AchillesSkills");
     } catch (error) {
         console.error(`Error registering plugin AchillesSkills: ${error.message}`);
     }
-} else {
+} else if (pluginName === 'AchillesSkills') {
     console.warn(`AchillesSkills plugin not found at ${achillesPluginPath}`);
 }
 

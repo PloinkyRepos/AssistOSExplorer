@@ -63,7 +63,11 @@
                             </tr>
                             <tr>
                                 <td><code>PERSISTENCE_FOLDER</code>, <code>LOGS_FOLDER</code>, <code>AUDIT_FOLDER</code></td>
-                                <td>Set by <code>soplang-tool.sh</code> for persistence and tool execution logs.</td>
+                                <td>Resolved by <code>soplang-tool.sh</code> below <code>$HOME/.soplang</code>, which is inside the agent's Ploinky-mounted persistent home. Explicit values remain supported.</td>
+                            </tr>
+                            <tr>
+                                <td><code>SOPLANG_STATE_ROOT</code></td>
+                                <td>Optionally overrides the common SOPLang state root used for storage, logs, and audit data.</td>
                             </tr>
                         </tbody>
                     </table>
@@ -71,8 +75,8 @@
 
                 <section>
                     <h2>Plugin and Command Registration</h2>
-                    <p>At invocation time, the wrapper registers <a href="https://assistos-ai.github.io/soplang/" target="_blank" rel="noopener noreferrer">SOPLang</a> plugins and then loads project plugins from <code>soplangAgent/plugins/</code>. During builder initialization, custom commands are registered (<code>load</code>, <code>createJSCode</code>, <code>store</code>), and Achilles skills are also registered as <a href="https://assistos-ai.github.io/soplang/" target="_blank" rel="noopener noreferrer">SOPLang</a> commands.</p>
-                    <p>The Achilles bridge supplies the complete local logger interface, including <code>debug()</code> and <code>error()</code>, so generator failures retain their original cause. Semantic model tiers such as <code>code</code> remain owned and resolved by the local Soul Gateway.</p>
+                    <p>At invocation time, the wrapper registers <a href="https://assistos-ai.github.io/soplang/" target="_blank" rel="noopener noreferrer">SOPLang</a> plugins and then loads the project plugin targeted by the requested tool. During builder initialization, custom commands are registered (<code>load</code>, <code>createJSCode</code>, <code>store</code>). The Achilles bridge and its skills are initialized only for <code>execute_skill</code>; read-only builder tools do not start Achilles or an LLM workflow.</p>
+                    <p>The Achilles bridge supplies the complete local logger interface, including <code>debug()</code> and <code>error()</code>, so generator failures retain their original cause. Model selection remains owned by the runtime-provided Achilles library and Soul Gateway; the agent does not maintain local model aliases.</p>
                 </section>
 
                 <section>

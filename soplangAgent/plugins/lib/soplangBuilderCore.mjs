@@ -32,7 +32,8 @@ const hashTemplate = (template) => crypto
     .digest("hex");
 
 const getStateFilePath = (pathModule = path, env = process.env) => {
-    const storageRoot = env.PERSISTENCE_FOLDER || "/persistoStorage";
+    const storageRoot = env.PERSISTENCE_FOLDER
+        || pathModule.join(env.HOME || "/root", ".soplang", "storage");
     return pathModule.join(storageRoot, STATE_FILE_NAME);
 };
 

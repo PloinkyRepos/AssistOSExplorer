@@ -25,7 +25,9 @@ Requirement U2: plugins must work in document/chapter/paragraph context using ho
 
 Requirement U3: attachment-mutating actions must persist data through `document` module APIs and/or `commandsEditor`.
 
-Requirement U4: media uploads must enforce size limits and metadata extraction (duration, dimensions), with visible user interface (UI) feedback.
+Requirement U3.1: generic paragraph files must be stored in paragraph attachment metadata; the SOP command string is reserved for executable and media commands and must not be replaced with an object-shaped file collection.
+
+Requirement U4: media uploads must enforce size limits and metadata extraction (duration, dimensions), with visible user interface (UI) feedback. Attachment insert and delete controls must remain visibly busy and prevent duplicate activation until persistence and dependent invalidation finish.
 
 Requirement U5: preview plugins must support sequential scene playback with audio/video/image/silence combinations.
 

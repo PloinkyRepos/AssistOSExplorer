@@ -38,9 +38,29 @@ export class ImagePlugin {
     async afterRender() {
         this.refreshContext();
         this.fileInput = this.element.querySelector(".file-input");
+        this.insertImageButton = this.element.querySelector('[data-local-action="insertImage"]');
         this.resetFileInputListener();
         this.imageListElement = this.element.querySelector('.image-list');
         await this.populateExistingImages();
+    }
+
+    setActionBusy(button, busy, busyLabel) {
+        if (!button) {
+            return;
+        }
+        if (busy) {
+            button.dataset.idleLabel = button.textContent.trim();
+            button.textContent = busyLabel;
+            button.classList.add('is-loading');
+            button.disabled = true;
+            button.setAttribute('aria-busy', 'true');
+            return;
+        }
+        button.textContent = button.dataset.idleLabel || button.textContent;
+        delete button.dataset.idleLabel;
+        button.classList.remove('is-loading');
+        button.disabled = false;
+        button.removeAttribute('aria-busy');
     }
 
     resetFileInputListener() {
@@ -49,6 +69,16 @@ export class ImagePlugin {
 
     async uploadImageAttachment(event) {
         const file = event?.target?.files?.[0];
+        if (!file) {
+            this.fileInput.value = "";
+            this.resetFileInputListener();
+            return;
+        }
+        if (this.uploadInProgress) {
+            return;
+        }
+        this.uploadInProgress = true;
+        this.setActionBusy(this.insertImageButton, true, 'Inserting…');
         try {
             const { uploadResult, metadata } = await processMediaUpload({
                 file,
@@ -84,6 +114,8 @@ export class ImagePlugin {
             console.error("Failed to upload image", error);
             assistOS.showToast("Failed to upload image.", "error");
         } finally {
+            this.uploadInProgress = false;
+            this.setActionBusy(this.insertImageButton, false);
             if (this.fileInput) {
                 this.fileInput.value = "";
             }
@@ -91,7 +123,11 @@ export class ImagePlugin {
         }
     }
 
-    insertImage() {
+    insertImage(triggerElement) {
+        if (this.uploadInProgress) {
+            return;
+        }
+        this.insertImageButton = triggerElement || this.insertImageButton;
         this.fileInput.click();
     }
 
@@ -163,17 +199,21 @@ export class ImagePlugin {
                 ${dimensions !== '--' ? `<div><strong>Dimensions:</strong> ${dimensions}</div>` : ''}
             </div>
             <div class="image-item-actions">
-                <button class="general-button danger" type="button" data-local-action="${deleteActionAttr}">Delete</button>
+                <button class="general-button danger image-plugin-action" type="button" data-local-action="${deleteActionAttr}">Delete</button>
             </div>
         </div>`;
     }
 
     async deleteImageItem(triggerElement, identifier) {
+        if (triggerElement?.getAttribute('aria-busy') === 'true') {
+            return;
+        }
         const container = triggerElement?.closest('.image-item');
         const targetIdentifier = identifier || container?.dataset?.identifier;
         if (!targetIdentifier) {
             return;
         }
+        this.setActionBusy(triggerElement, true, 'Deleting…');
         try {
             this.refreshContext();
             if (this.isParagraphContext) {
@@ -192,6 +232,8 @@ export class ImagePlugin {
         } catch (error) {
             console.error('Failed to delete image', error);
             assistOS.showToast('Failed to delete image.', 'error');
+        } finally {
+            this.setActionBusy(triggerElement, false);
         }
     }
 

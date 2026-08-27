@@ -4,6 +4,31 @@
     margin-bottom: 12px;
 }
 
+.image-plugin-action.is-loading {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: wait;
+}
+
+.image-plugin-action.is-loading::before {
+    content: '';
+    width: 14px;
+    height: 14px;
+    box-sizing: border-box;
+    flex: 0 0 14px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: image-plugin-action-spin 0.7s linear infinite;
+}
+
+@keyframes image-plugin-action-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
 .image-list {
     display: flex;
     flex-direction: column;

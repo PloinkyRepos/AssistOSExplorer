@@ -4,6 +4,31 @@
     margin-bottom: 12px;
 }
 
+.audio-plugin-action.is-loading {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: wait;
+}
+
+.audio-plugin-action.is-loading::before {
+    content: '';
+    width: 14px;
+    height: 14px;
+    box-sizing: border-box;
+    flex: 0 0 14px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: audio-plugin-action-spin 0.7s linear infinite;
+}
+
+@keyframes audio-plugin-action-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
 .audio-list {
     display: flex;
     flex-direction: column;

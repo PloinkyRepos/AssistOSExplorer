@@ -31,7 +31,7 @@ export const createAchillesSkills = async ({
 
         agent = new AgentClass({
             startDir,
-            logger,
+            logger
         });
 
         return agent;

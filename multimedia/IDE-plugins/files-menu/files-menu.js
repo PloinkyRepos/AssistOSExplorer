@@ -1,14 +1,13 @@
 import { getContextualElement } from "../utils/pluginUtils.js";
+import { uploadBlobFile } from "../utils/blobUpload.js";
+import { buildBlobUrl } from "../utils/blobUrl.js";
 
-const workspaceModule = assistOS.loadModule("workspace");
 const documentModule = assistOS.loadModule("document");
 
 export class FilesMenu {
     constructor(element, invalidate) {
         this.element = element;
         this.invalidate = invalidate;
-        this.paragraphPresenter = null;
-        this.commandsEditor = null;
         this.contextPayload = this.readContextPayload();
 
         this._document = null;
@@ -21,7 +20,6 @@ export class FilesMenu {
             this.hydrateContextFromSelection();
         }
 
-        this.bindParagraphPresenter();
         this.invalidate();
     }
 
@@ -32,8 +30,28 @@ export class FilesMenu {
     async afterRender() {
         this.filesListElement = this.element.querySelector(".files-list");
         this.fileInput = this.element.querySelector(".file-input");
+        this.insertFileButton = this.element.querySelector('[data-local-action="insertFile"]');
         this.resetFileInputListener();
         await this.renderFiles();
+    }
+
+    setActionBusy(button, busy, busyLabel) {
+        if (!button) {
+            return;
+        }
+        if (busy) {
+            button.dataset.idleLabel = button.textContent.trim();
+            button.textContent = busyLabel;
+            button.classList.add('is-loading');
+            button.disabled = true;
+            button.setAttribute('aria-busy', 'true');
+            return;
+        }
+        button.textContent = button.dataset.idleLabel || button.textContent;
+        delete button.dataset.idleLabel;
+        button.classList.remove('is-loading');
+        button.disabled = false;
+        button.removeAttribute('aria-busy');
     }
 
     readContextPayload() {
@@ -76,22 +94,6 @@ export class FilesMenu {
         this.paragraphId = paragraph?.id || paragraphId || "";
     }
 
-    bindParagraphPresenter() {
-        const hostSelector = this.contextPayload?.hostSelector;
-        let paragraphElement = null;
-
-        if (typeof hostSelector === "string" && hostSelector.trim()) {
-            paragraphElement = document.querySelector(hostSelector.trim());
-        }
-        if (!paragraphElement && this.paragraphId) {
-            paragraphElement = document.querySelector(`paragraph-item[data-paragraph-id="${this.paragraphId}"]`);
-        }
-
-        this.paragraphPresenter = paragraphElement?.webSkelPresenter || null;
-        this.commandsEditor = this.paragraphPresenter?.commandsEditor || null;
-        return Boolean(this.paragraphPresenter);
-    }
-
     ensureParagraphContext() {
         if (this.chapter && this.paragraph) {
             return true;
@@ -99,9 +101,6 @@ export class FilesMenu {
         this.hydrateContextFromSelection();
         if (!this.chapter || !this.paragraph) {
             return false;
-        }
-        if (!this.paragraphPresenter) {
-            this.bindParagraphPresenter();
         }
         return true;
     }
@@ -123,7 +122,7 @@ export class FilesMenu {
 
     getFiles() {
         this.refreshParagraphReference();
-        return Array.isArray(this.paragraph?.commands?.files) ? this.paragraph.commands.files : [];
+        return Array.isArray(this.paragraph?.attachments) ? this.paragraph.attachments : [];
     }
 
     async renderFiles() {
@@ -163,23 +162,22 @@ export class FilesMenu {
             <div class="file-item-meta">Type: ${type}</div>
             <div class="file-item-actions">
                 <button class="general-button" type="button" data-local-action="${downloadAction}">Download</button>
-                <button class="general-button danger" type="button" data-local-action="${deleteAction}">Delete</button>
+                <button class="general-button danger files-plugin-action" type="button" data-local-action="${deleteAction}">Delete</button>
             </div>
         </div>`;
     }
 
-    async insertFile() {
+    async insertFile(triggerElement) {
         if (!this.ensureParagraphContext()) {
             assistOS.showToast("Paragraph context missing, please reopen the plugin.", "error");
             return;
         }
+        if (this.uploadInProgress) {
+            return;
+        }
+        this.insertFileButton = triggerElement || this.insertFileButton;
 
         try {
-            if (this.commandsEditor && typeof this.commandsEditor.insertAttachmentCommand === "function") {
-                await this.commandsEditor.insertAttachmentCommand("files");
-                await this.renderFiles();
-                return;
-            }
             if (!this.fileInput) {
                 throw new Error("File input unavailable.");
             }
@@ -199,15 +197,22 @@ export class FilesMenu {
 
     async handleFileSelected(event) {
         const file = event?.target?.files?.[0];
+        if (!file) {
+            this.fileInput.value = "";
+            this.resetFileInputListener();
+            return;
+        }
+        if (this.uploadInProgress) {
+            return;
+        }
+        this.uploadInProgress = true;
+        this.setActionBusy(this.insertFileButton, true, 'Inserting…');
         try {
-            if (!file) {
-                return;
-            }
             if (!this.ensureParagraphContext()) {
                 assistOS.showToast("Paragraph context missing, please reopen the plugin.", "error");
                 return;
             }
-            const uploadedId = await this.uploadViaWorkspace(file);
+            const uploadedId = await this.uploadFile(file);
             await this.persistFileEntry(uploadedId, file);
             await this.renderFiles();
             assistOS.showToast("File uploaded.", "success");
@@ -215,6 +220,8 @@ export class FilesMenu {
             console.error("Failed to upload file", error);
             assistOS.showToast("Failed to upload file.", "error");
         } finally {
+            this.uploadInProgress = false;
+            this.setActionBusy(this.insertFileButton, false);
             if (this.fileInput) {
                 this.fileInput.value = "";
             }
@@ -222,34 +229,19 @@ export class FilesMenu {
         }
     }
 
-    async uploadViaWorkspace(file) {
-        if (typeof workspaceModule?.putFile === "function") {
-            const buffer = await file.arrayBuffer();
-            const payload = new Uint8Array(buffer);
-            const response = await workspaceModule.putFile(payload);
-            if (typeof response === "string") {
-                return response;
-            }
-            const id = response?.id || response?.fileId || response?.filename;
-            if (typeof id === "string" && id) {
-                return id;
-            }
-            throw new Error("Workspace putFile did not return a valid file id.");
+    async uploadFile(file) {
+        const result = await uploadBlobFile(file);
+        const id = result?.id || result?.filename;
+        if (typeof id === "string" && id) {
+            return id;
         }
-        throw new Error("File upload API is not available in this environment.");
+        throw new Error("Blob upload did not return a valid file id.");
     }
 
     async persistFileEntry(fileId, file) {
         if (!this.paragraph || !this.chapter) {
             throw new Error("Paragraph context is not available.");
         }
-        if (!this.paragraph.commands || typeof this.paragraph.commands !== "object" || Array.isArray(this.paragraph.commands)) {
-            this.paragraph.commands = {};
-        }
-        if (!Array.isArray(this.paragraph.commands.files)) {
-            this.paragraph.commands.files = [];
-        }
-
         const nextEntry = {
             id: fileId,
             name: file?.name || fileId,
@@ -257,11 +249,20 @@ export class FilesMenu {
             size: Number.isFinite(file?.size) ? file.size : 0
         };
 
-        this.paragraph.commands.files.push(nextEntry);
-        await documentModule.updateParagraphCommands(this.chapter.id, this.paragraph.id, this.paragraph.commands);
+        const previousAttachments = Array.isArray(this.paragraph.attachments) ? this.paragraph.attachments : [];
+        const nextAttachments = [...previousAttachments, nextEntry];
+        this.paragraph.attachments = nextAttachments;
+        this.paragraph.metadata.attachments = nextAttachments;
+        try {
+            this.paragraph = await documentModule.updateParagraph(this.chapter.id, this.paragraph.id);
+        } catch (error) {
+            this.paragraph.attachments = previousAttachments;
+            this.paragraph.metadata.attachments = previousAttachments;
+            throw error;
+        }
     }
 
-    async deleteFile(_targetElement, fileId) {
+    async deleteFile(triggerElement, fileId) {
         if (!this.ensureParagraphContext()) {
             assistOS.showToast("Paragraph context missing, please reopen the plugin.", "error");
             return;
@@ -269,24 +270,29 @@ export class FilesMenu {
         if (!fileId) {
             return;
         }
+        if (triggerElement?.getAttribute('aria-busy') === 'true') {
+            return;
+        }
+        this.setActionBusy(triggerElement, true, 'Deleting…');
         try {
-            if (this.commandsEditor && typeof this.commandsEditor.deleteCommand === "function") {
-                await this.commandsEditor.deleteCommand("files", fileId);
-                await this.renderFiles();
-                assistOS.showToast("File removed.", "info");
-                return;
+            const previousAttachments = this.getFiles();
+            const nextAttachments = previousAttachments.filter((item) => item?.id !== fileId);
+            this.paragraph.attachments = nextAttachments;
+            this.paragraph.metadata.attachments = nextAttachments;
+            try {
+                this.paragraph = await documentModule.updateParagraph(this.chapter.id, this.paragraph.id);
+            } catch (error) {
+                this.paragraph.attachments = previousAttachments;
+                this.paragraph.metadata.attachments = previousAttachments;
+                throw error;
             }
-            if (!this.paragraph.commands || typeof this.paragraph.commands !== "object" || Array.isArray(this.paragraph.commands)) {
-                this.paragraph.commands = {};
-            }
-            const currentFiles = Array.isArray(this.paragraph.commands.files) ? this.paragraph.commands.files : [];
-            this.paragraph.commands.files = currentFiles.filter((item) => item?.id !== fileId);
-            await documentModule.updateParagraphCommands(this.chapter.id, this.paragraph.id, this.paragraph.commands);
             await this.renderFiles();
             assistOS.showToast("File removed.", "info");
         } catch (error) {
             console.error("Failed to delete file", error);
             assistOS.showToast("Failed to delete file.", "error");
+        } finally {
+            this.setActionBusy(triggerElement, false);
         }
     }
 
@@ -299,10 +305,10 @@ export class FilesMenu {
         }
 
         try {
-            if (typeof workspaceModule?.getFileURL !== "function") {
-                throw new Error("Workspace getFileURL is not available.");
+            const downloadURL = buildBlobUrl(file.id);
+            if (!downloadURL) {
+                throw new Error("File download URL is not available.");
             }
-            const downloadURL = await workspaceModule.getFileURL(file.id);
             const response = await fetch(downloadURL);
             if (!response.ok) {
                 throw new Error(`HTTP error ${response.status}`);

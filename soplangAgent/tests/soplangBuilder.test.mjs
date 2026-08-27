@@ -337,7 +337,12 @@ test("soplang-tool.sh fails fast when TOOL_NAME is missing", async () => {
     const result = await new Promise((resolve) => {
         const child = spawn("sh", [scriptPath], {
             cwd: path.resolve("."),
-            env: { ...process.env }
+            env: {
+                ...process.env,
+                PERSISTENCE_FOLDER: path.join(os.tmpdir(), "soplang-test-storage"),
+                LOGS_FOLDER: path.join(os.tmpdir(), "soplang-test-logs"),
+                AUDIT_FOLDER: path.join(os.tmpdir(), "soplang-test-audit")
+            }
         });
         let stdout = "";
         let stderr = "";
