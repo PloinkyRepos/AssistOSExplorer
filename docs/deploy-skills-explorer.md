@@ -20,11 +20,12 @@ Ploinky and every managed application repository from each remote's configured
 default branch, while keeping explicit per-repository selections for the graph.
 It then reads the canonical achillesAgentLib URL and immutable commit from the
 selected Ploinky dependency lock, requires that commit to equal the AgentLib
-remote default-branch head, and uses fail-closed branch selection. Once all 18
-agents are running, the workflow validates Ploinky's deployment attestation for
-the core and every admitted agent. The paired destroy workflow requires only
-its explicit destructive confirmation and preserves the deployed runtime as
-the authority for teardown.
+remote default-branch head, and leaves AgentLib on that exact locked commit
+without applying one global branch to the differently named application
+branches. Once all 18 agents are running, the workflow validates Ploinky's
+deployment attestation for the core and every admitted agent. The paired
+destroy workflow requires only its explicit destructive confirmation and
+preserves the deployed runtime as the authority for teardown.
 
 Direct operator execution has the same authority and safety boundary. Before a
 destructive or externally visible mutation, positively identify the exact host,

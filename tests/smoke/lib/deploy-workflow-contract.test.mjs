@@ -161,8 +161,7 @@ for (const workflow of WORKFLOWS) {
       assert.doesNotMatch(source, staleEndpoint);
     }
     if (workflow.file.endsWith('deploy-explorer-qa.yml')) {
-      assert.match(source, /--branch-fallback fail/);
-      assert.doesNotMatch(source, /--reset-repos/);
+      assert.doesNotMatch(source, /BRANCH_ARGS=\(--branch|--branch-fallback|--reset-repos/);
       assert.doesNotMatch(source, /deleteTunnelOnTeardown|create-managed-tunnel/);
       assert.doesNotMatch(source, /BOX_STATUS="\$\("\$PLOINKY" status\)"/);
     } else {
@@ -284,7 +283,6 @@ test('Explorer QA deploy resolves graph defaults and Ploinky-locked AgentLib ind
   assert.match(source, /EXPECTED_AGENTLIB_BRANCH="\$\(resolve_default_branch "\$AGENTLIB_URL"\)"/);
   assert.match(source, /PLOINKY_BRANCH="\$\(resolve_default_branch "\$PLOINKY_URL"\)"/);
   assert.match(source, /checkout --detach --force "refs\/remotes\/origin\/\$PLOINKY_BRANCH"/);
-  assert.match(source, /BRANCH_ARGS=\([\s\S]*--branch "\$EXPECTED_AGENTLIB_BRANCH"[\s\S]*--branch-fallback fail[\s\S]*"\$\{BRANCH_ARGS\[@\]\}"[\s\S]*\)/);
   assert.match(source, /BRANCH_ARGS\+=\(--repo-branch "\$repository_name=\$default_branch"\)/);
   assert.match(source, /--dry-run --port "\$ROUTER_PORT" start explorer "\$\{BRANCH_ARGS\[@\]\}"/);
   assert.match(source, /"\$PLOINKY" start explorer "\$\{BRANCH_ARGS\[@\]\}"/);

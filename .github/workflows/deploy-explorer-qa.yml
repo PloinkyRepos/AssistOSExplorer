@@ -1105,11 +1105,6 @@ jobs:
             echo "[deploy-qa]        but $EXPECTED_AGENTLIB_BRANCH currently resolves to $REMOTE_AGENTLIB_COMMIT."
             exit 1
           fi
-          BRANCH_ARGS=(
-            --branch "$EXPECTED_AGENTLIB_BRANCH"
-            --branch-fallback fail
-            "${BRANCH_ARGS[@]}"
-          )
           echo "[deploy-qa] Verified Ploinky's locked achillesAgentLib/$EXPECTED_AGENTLIB_BRANCH at $EXPECTED_AGENTLIB_COMMIT."
 
           mkdir -p "$WORK_DIR/.ploinky"
