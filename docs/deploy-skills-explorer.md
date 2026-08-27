@@ -15,12 +15,16 @@ implementation satisfies those requirements. If an explicit request forbids
 `--branch-fallback`, do not dispatch a workflow that injects that option; use an
 authorized direct channel or update and verify the workflow first.
 
-The Explorer QA deploy workflow accepts `deploy_branch` for the managed Explorer
-repository graph and `ploinky_branch` for the Ploinky runtime checkout. They are
-independent so a runtime fix can be exercised without moving the application
-graph to a different branch. Both default to `ploinky-proxy`.
-The paired destroy workflow accepts the same two branch inputs and must be
-dispatched with the selections used by the deployment being removed.
+The Explorer QA deploy workflow has no mutable branch inputs. It resolves
+Ploinky and every managed application repository from each remote's configured
+default branch, while keeping explicit per-repository selections for the graph.
+It then reads the canonical achillesAgentLib URL and immutable commit from the
+selected Ploinky dependency lock, requires that commit to equal the AgentLib
+remote default-branch head, and uses fail-closed branch selection. Once all 18
+agents are running, the workflow validates Ploinky's deployment attestation for
+the core and every admitted agent. The paired destroy workflow requires only
+its explicit destructive confirmation and preserves the deployed runtime as
+the authority for teardown.
 
 Direct operator execution has the same authority and safety boundary. Before a
 destructive or externally visible mutation, positively identify the exact host,
