@@ -26,8 +26,8 @@ test('Explorer manifest contains no removed publication contract', async () => {
     const manifest = await readManifest();
     const serialized = JSON.stringify(manifest);
 
-    // The basic repository remains required by WebTTY. It is not an edge owner.
-    assert.equal(manifest.repos?.basic, 'https://github.com/AssistOS-AI/basic.git');
+    assert.equal(Object.hasOwn(manifest.repos || {}, 'basic'), false);
+    assert.equal(manifest.enable.some((entry) => String(entry?.agent || entry).includes('basic/webtty')), false);
     const removedAgentNames = ['web', 'publishing'].join('-') + '|' + ['cloud', 'flared'].join('');
     const removedOnlyOfficePrefix = ['ONLYOFFICE', '(?:PUBLIC|INTERNAL|CALLBACK_BASE)', 'URL'].join('_');
     const removedWebMeetPrefix = ['WEBMEET', '[A-Z0-9_]*', 'LIVEKIT', '[A-Z0-9_]*'].join('_');
@@ -36,4 +36,5 @@ test('Explorer manifest contains no removed publication contract', async () => {
     assert.doesNotMatch(serialized, new RegExp(removedWebMeetPrefix));
     assert.equal(Object.hasOwn(manifest, ['additional', 'Server', 'Port'].join('')), false);
     assert.equal(Object.hasOwn(manifest, ['open', 'Ports'].join('')), false);
+    assert.doesNotMatch(serialized, /(?:base-agent-additional-server\/webtty|\b7681\b)/);
 });

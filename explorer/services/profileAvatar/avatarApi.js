@@ -2,6 +2,7 @@ import {
     getFallbackLetter,
     normalizeAvatarConfig
 } from './avatarConfig.js';
+import { isAdminUser } from '../auth/adminUser.js';
 
 const currentUserCache = {
     value: null,
@@ -64,7 +65,7 @@ function getAssistOSUser() {
         id,
         username,
         roles,
-        canManageAgents: roles.includes('admin') || username === 'admin' || id === 'local:admin'
+        canManageAgents: isAdminUser(user)
     };
 }
 
