@@ -9,6 +9,7 @@ import { stopAndAttachRedactedTrace } from '../lib/redacted-trace.mjs';
 const STARTUP_PROBE_HEADER = 'x-ploinky-agent-startup-probe';
 const OPAQUE_GENERATION = /^sha256:[a-f0-9]{64}$/;
 const RAW_LIFECYCLE_DETAIL = /\b(?:runId|instanceId|enableGeneration|workerPid|statusFile|markerPath|containerId|containerName)\b|\.ploinky\/|\/Users\/|\/root\/|ploinky_[A-Za-z0-9_.-]+/i;
+const EXPECTED_TRANSIENT_503_CONSOLE_ERROR = 'Failed to load resource: the server responded with a status of 503 (Service Unavailable)';
 
 function pathnameOf(url) {
   try {
@@ -100,7 +101,11 @@ test('booting no-wait agent shows the Router loading page and opens automaticall
   let traceError = null;
 
   page.on('console', (message) => {
-    if (message.type() === 'error') consoleErrors.push(message.text());
+    if (message.type() !== 'error') return;
+    consoleErrors.push({
+      text: message.text(),
+      url: message.location().url || '',
+    });
   });
   page.on('pageerror', (error) => pageErrors.push(error.message));
   page.on('requestfailed', (request) => {
@@ -259,7 +264,38 @@ test('booting no-wait agent shows the Router loading page and opens automaticall
       expect(JSON.stringify(observation.payload), 'protocol response must contain no raw lifecycle detail')
         .not.toMatch(RAW_LIFECYCLE_DETAIL);
     }
-    expect(consoleErrors, 'browser console errors').toEqual([]);
+    const unexpectedProtocolObservations = protocolObservations.filter((observation) => {
+      const payload = observation.payload;
+      if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return true;
+      if (observation.status === 202 && payload.state === 'starting') {
+        return payload.retryAfterMs !== 1000
+          || !OPAQUE_GENERATION.test(String(payload.generation || ''))
+          || Object.keys(payload).sort().join(',') !== 'generation,retryAfterMs,state';
+      }
+      if (observation.status === 200 && payload.state === 'ready') {
+        return !OPAQUE_GENERATION.test(String(payload.generation || ''))
+          || Object.keys(payload).sort().join(',') !== 'generation,state';
+      }
+      if (observation.status === 503 && payload.state === 'retry') {
+        return payload.code !== 'edge_generation_changed'
+          || Object.keys(payload).sort().join(',') !== 'code,state';
+      }
+      return true;
+    });
+    expect(unexpectedProtocolObservations, 'startup probes must remain inside the reviewed protocol').toEqual([]);
+    expect(
+      mainDocumentResponses.map((entry) => entry.status),
+      'handoff must contain only the required initial 503 and one real 200 document',
+    ).toEqual([503, 200]);
+    const expectedTransient503ConsoleErrors = 1 + protocolObservations.filter((entry) => entry.status === 503).length;
+    expect(consoleErrors, 'Chromium must report only the intentionally observed route 503 responses')
+      .toHaveLength(expectedTransient503ConsoleErrors);
+    for (const error of consoleErrors) {
+      expect(error).toEqual({
+        text: EXPECTED_TRANSIENT_503_CONSOLE_ERROR,
+        url: requestedRouteUrl,
+      });
+    }
     expect(pageErrors, 'unhandled page errors').toEqual([]);
     expect(requestFailures, 'failed browser requests').toEqual([]);
     expect(unexpectedHttpErrors, 'unexpected HTTP errors').toEqual([]);
