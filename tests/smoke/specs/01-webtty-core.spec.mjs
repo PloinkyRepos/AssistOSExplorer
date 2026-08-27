@@ -9,7 +9,7 @@ import {
 } from '../lib/fixtures.mjs';
 import { readAuthenticatedPrincipal } from '../lib/auth.mjs';
 import { smokeConfig } from '../lib/config.mjs';
-import { openExplorer } from '../lib/explorer.mjs';
+import { assertExplorerDirectory, openExplorer } from '../lib/explorer.mjs';
 
 function requireLocalWorkspaceFixture() {
   if (!smokeConfig.workspaceRoot) {
@@ -21,7 +21,11 @@ function requireLocalWorkspaceFixture() {
   }
 
   const workspaceRoot = fs.realpathSync(smokeConfig.workspaceRoot);
-  const fixtureName = `webtty-smoke-${smokeConfig.runId}`;
+  const fixtureRunId = crypto.createHash('sha256')
+    .update(smokeConfig.runId)
+    .digest('hex')
+    .slice(0, 16);
+  const fixtureName = `webtty-smoke-${fixtureRunId}`;
   const fixtureRoot = path.resolve(workspaceRoot, fixtureName);
   const relativeFixture = path.relative(workspaceRoot, fixtureRoot);
   if (!relativeFixture || relativeFixture.startsWith(`..${path.sep}`) || path.isAbsolute(relativeFixture)) {
@@ -39,7 +43,9 @@ function requireLocalWorkspaceFixture() {
   return Object.freeze({
     workspaceRoot,
     fixtureRoot,
-    fixturePath: `/${fixtureName}`,
+    parentDirectoryPath: `/${fixtureName}`,
+    nestedDirectoryPath: `/${fixtureName}/nested-folder`,
+    explorerHash: `file-exp/${encodeURIComponent(fixtureName)}`,
     relativeDirectory: `${fixtureName}/nested-folder`,
     nestedRoot,
     hostMarker,
@@ -134,12 +140,13 @@ test.describe('Ploinky core WebTTY release gate', () => {
     const terminals = [];
     let userContext = null;
     try {
-      await openExplorer(page);
+      await openExplorer(page, { hash: fixture.explorerHash });
+      await assertExplorerDirectory(page, fixture.parentDirectoryPath);
       const admin = await readAuthenticatedPrincipal(page, smokeConfig.primaryUser);
       expect(admin.canonicalId, 'the gate must exercise the canonical local:admin principal').toBe('local:admin');
       expect(admin.roles).toContain('admin');
 
-      const first = await openTerminalFromExplorer(page, fixture.fixturePath);
+      const first = await openTerminalFromExplorer(page, fixture.nestedDirectoryPath);
       terminals.push(first);
       const firstDiagnostics = attachPageDiagnostics(first.terminalPage, testInfo, 'webtty-first-terminal');
       const firstUrl = new URL(first.terminalPage.url());
@@ -213,11 +220,15 @@ test.describe('Ploinky core WebTTY release gate', () => {
         ignoreHTTPSErrors: true,
       });
       const userPage = await userContext.newPage();
-      await openExplorer(userPage, { account: smokeConfig.secondaryUser });
+      await openExplorer(userPage, {
+        account: smokeConfig.secondaryUser,
+        hash: fixture.explorerHash,
+      });
+      await assertExplorerDirectory(userPage, fixture.parentDirectoryPath);
       const ordinaryUser = await readAuthenticatedPrincipal(userPage, smokeConfig.secondaryUser);
       expect(ordinaryUser.canonicalId, 'the gate must exercise the canonical local:user principal').toBe('local:user');
       expect(ordinaryUser.roles).not.toContain('admin');
-      const userRow = userPage.locator(`tr[data-entry-path="${fixture.fixturePath}"]`);
+      const userRow = userPage.locator(`tr[data-entry-path="${fixture.nestedDirectoryPath}"]`);
       await expect(userRow).toHaveCount(1, { timeout: smokeConfig.timeouts.navigation });
       await userRow.locator('.action-menu-trigger').click();
       await expect(userRow.getByRole('menuitem', { name: 'Open Terminal Here' })).toHaveCount(0);
