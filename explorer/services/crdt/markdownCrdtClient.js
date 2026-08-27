@@ -47,13 +47,13 @@ export async function openMarkdownCrdtDocument(path) {
     return parseResult(await callExplorerTool('open_markdown_crdt_document', { path }, { raw: true, withLoader: false }));
 }
 
-export async function applyMarkdownCrdtChange(documentId, change) {
+export async function applyMarkdownCrdtChange(documentId, change, baseHeads = []) {
     const operation = String(change?.type || '');
     const payload = { ...(change || {}) };
     delete payload.type;
     return parseResult(await callExplorerTool(
         'apply_markdown_crdt_change',
-        { documentId, operation, change: payload, changeJson: JSON.stringify(payload) },
+        { documentId, baseHeads, operation, change: payload, changeJson: JSON.stringify(payload) },
         { raw: true, withLoader: false }
     ));
 }

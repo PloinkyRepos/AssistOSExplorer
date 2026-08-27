@@ -499,10 +499,9 @@ test('SCRIPTA variant owns inserted, replaced, and deleted images', () => {
             text: '![Architecture](/WebMeet/story-room-1/assets/asset_1/one.png)'
         }] }]
     }, { createdBy: 'owner' });
-    const migrated = reopened.chapters[0].paragraphs[0].pluginState.scripta.variants[0];
-    assert.equal(migrated.text, '');
-    assert.equal(migrated.images[0].assetId, 'asset_1');
-    assert.equal('media' in reopened.chapters[0].paragraphs[0].pluginState.scripta, false);
+    const importedMarkdown = reopened.chapters[0].paragraphs[0].pluginState.scripta.variants[0];
+    assert.equal(importedMarkdown.text, '![Architecture](/WebMeet/story-room-1/assets/asset_1/one.png)');
+    assert.deepEqual(importedMarkdown.images, []);
 
     const roundTrip = normalizeScriptaDocumentModel(parseMarkdownState(serializeMarkdownState(changed)).model, {
         createdBy: 'owner'
@@ -511,32 +510,6 @@ test('SCRIPTA variant owns inserted, replaced, and deleted images', () => {
     assert.equal(roundTripVariant.id, variant.id);
     assert.equal(roundTripVariant.images[0].imageId, variant.images[0].imageId);
     assert.equal(roundTripVariant.images[0].assetId, 'asset_1');
-
-    const legacyStandalone = normalizeScriptaDocumentModel({
-        metadata: { title: 'Legacy' },
-        chapters: [{ title: 'Chapter 1', paragraphs: [
-            { text: 'Paragraph text' },
-            {
-                text: '![Legacy](/WebMeet/story-room-1/assets/asset_legacy/legacy.png)',
-                metadata: {
-                    type: 'image',
-                    pluginState: {
-                        scripta: {
-                            media: {
-                                assetId: 'asset_legacy',
-                                alt: 'Legacy',
-                                workspaceUrl: '/WebMeet/story-room-1/assets/asset_legacy/legacy.png'
-                            }
-                        }
-                    }
-                }
-            }
-        ] }]
-    }, { createdBy: 'owner' });
-    assert.equal(legacyStandalone.chapters[0].paragraphs.length, 1);
-    const legacyVariant = legacyStandalone.chapters[0].paragraphs[0].pluginState.scripta.variants[0];
-    assert.equal(legacyVariant.text, 'Paragraph text');
-    assert.equal(legacyVariant.images[0].assetId, 'asset_legacy');
 
     const splitRegression = normalizeScriptaDocumentModel({
         metadata: { title: 'Stable image paragraph' },

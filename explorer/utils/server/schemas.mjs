@@ -111,6 +111,7 @@ export function createSchemas(z) {
   const OpenMarkdownCrdtDocumentArgsSchema = z.object({ path: z.string() });
   const ApplyMarkdownCrdtChangeArgsSchema = z.object({
     documentId: z.string(),
+    baseHeads: z.array(z.string()).optional(),
     operation: MarkdownCrdtChangeTypeSchema.optional(),
     changeJson: z.string().optional(),
     change: MarkdownCrdtChangeSchema
@@ -193,7 +194,7 @@ export function createSchemas(z) {
   const ScriptaCrdtOpenArgsSchema = z.object({
     path: z.string(),
     resourceId: z.string().optional(),
-    viewerHash: z.string().optional(),
+    viewerHash: z.string().min(1),
     view: ScriptaViewSchema.optional(),
     participantMap: z.record(z.string()).optional()
   });

@@ -93,11 +93,11 @@
 
   <rect class="node" x="110" y="500" width="500" height="100" rx="12" />
   <text class="label" x="360" y="536" text-anchor="middle">Automerge CRDT collaboration service</text>
-  <text class="small" x="360" y="560" text-anchor="middle">Structured Markdown and SCRIPTA merge operations</text>
+  <text class="small" x="360" y="560" text-anchor="middle">Plain-text deltas and structured SCRIPTA operations</text>
   <text class="small" x="360" y="580" text-anchor="middle">Private collaboration state and Markdown materialization</text>
 
   <line class="arrow" x1="470" y1="442" x2="470" y2="490" />
-  <text class="muted" x="490" y="472">structured collaboration</text>
+  <text class="muted" x="490" y="472">Markdown CRDT operations</text>
 
   <rect class="storage" x="210" y="704" width="1020" height="58" rx="10" />
   <text class="label" x="720" y="730" text-anchor="middle">Allowed workspace roots and agent-owned persistent data</text>

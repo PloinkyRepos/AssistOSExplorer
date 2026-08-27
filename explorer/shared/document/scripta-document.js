@@ -60,16 +60,6 @@ export function remapScriptaVariantImagePositions(images, previousText, nextText
     });
 }
 
-function mediaFromMarkdown(value = '') {
-    const match = String(value || '').trim().match(/^!\[((?:\\.|[^\]])*)\]\((\/WebMeet\/[a-zA-Z0-9._-]+\/assets\/(asset_[a-zA-Z0-9_-]+)\/[a-zA-Z0-9._-]+\.(?:png|jpg|webp|gif))\)$/i);
-    if (!match) return null;
-    return {
-        assetId: match[3],
-        alt: match[1].replace(/\\([\[\]\\])/g, '$1') || 'Image',
-        workspaceUrl: match[2],
-    };
-}
-
 function createParagraph(value = {}, createdBy = '') {
     const paragraph = {
         id: String(value.id || newId('paragraph')),
@@ -83,21 +73,11 @@ function createParagraph(value = {}, createdBy = '') {
     };
     paragraph.metadata.id = paragraph.id;
     const sourcePluginState = value.pluginState || value.metadata?.pluginState || null;
-    const inferredMedia = sourcePluginState ? null : mediaFromMarkdown(paragraph.text);
-    const pluginState = sourcePluginState || (inferredMedia ? { scripta: { media: inferredMedia } } : null);
-    if (pluginState) {
-        paragraph.pluginState = clone(pluginState);
+    if (sourcePluginState) {
+        paragraph.pluginState = clone(sourcePluginState);
         paragraph.metadata.pluginState = paragraph.pluginState;
     }
-    const state = ensureScriptaInitialVariant(paragraph, { createdBy });
-    const legacyMedia = paragraph.pluginState?.scripta?.media || null;
-    if (legacyMedia && state.variants[0]) {
-        state.variants[0].images = [{ imageId: createScriptaVariantImageId(), ...clone(legacyMedia) }];
-        if (mediaFromMarkdown(state.variants[0].text)) state.variants[0].text = '';
-        delete paragraph.pluginState.scripta.media;
-        paragraph.metadata.pluginState = paragraph.pluginState;
-        updateScriptaActiveVariant(paragraph, state);
-    }
+    ensureScriptaInitialVariant(paragraph, { createdBy });
     return paragraph;
 }
 

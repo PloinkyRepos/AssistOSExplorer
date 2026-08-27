@@ -62,6 +62,67 @@ test('SCRIPTA transport treats empty optional enum values as omitted', () => {
     assert.equal(normalizeOptionalTransportEnum('right'), 'right');
 });
 
+test('collaboration open initializes plain Markdown with the authenticated viewer as variant owner', async () => {
+    const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'explorer-scripta-collaboration-open-'));
+    const validatePath = async (input) => {
+        const target = path.resolve(workspaceRoot, String(input || '').replace(/^\/+/, ''));
+        if (target !== workspaceRoot && !target.startsWith(`${workspaceRoot}${path.sep}`)) {
+            throw new Error('Path outside workspace.');
+        }
+        return target;
+    };
+    const store = createMarkdownCrdtStore({
+        fs,
+        path,
+        workspaceRoot,
+        validatePath,
+        writeFileContent: (target, content) => fs.writeFile(target, content, 'utf8'),
+        invalidateCachesForPath() {},
+    });
+    const service = createScriptaCrdtService({
+        fs,
+        path,
+        workspaceRoot,
+        validatePath,
+        markdownCrdtStore: store,
+    });
+
+    try {
+        await fs.mkdir(path.join(workspaceRoot, 'documents'), { recursive: true });
+        await fs.writeFile(
+            path.join(workspaceRoot, 'documents', 'plain.md'),
+            '# Plain document\n\nParagraph without SCRIPTA metadata.\n',
+            'utf8',
+        );
+        const args = {
+            path: '/documents/plain.md',
+            resourceId: 'resource-plain',
+            viewerHash: 'participant-owner',
+            view: { mode: 'document' },
+        };
+        const opened = await service.collaborationOpen(args);
+        const publicDocument = loadDocument(Buffer.from(opened.stateBase64, 'base64'));
+        const publicVariant = publicDocument.chapters[0].paragraphs[0].pluginState.scripta.variants[0];
+        assert.equal(publicVariant.text, 'Paragraph without SCRIPTA metadata.');
+        assert.equal(Object.hasOwn(publicVariant, 'createdBy'), false);
+
+        const persisted = await fs.readFile(path.join(workspaceRoot, 'documents', 'plain.md'), 'utf8');
+        assert.match(persisted, /"createdBy":"participant-owner"/);
+        const reopened = await service.collaborationOpen(args);
+        const reopenedDocument = loadDocument(Buffer.from(reopened.stateBase64, 'base64'));
+        assert.equal(
+            reopenedDocument.chapters[0].paragraphs[0].pluginState.scripta.variants[0].id,
+            publicVariant.id,
+        );
+        await assert.rejects(
+            service.collaborationOpen({ ...args, viewerHash: '' }),
+            /authenticated viewer identity/,
+        );
+    } finally {
+        await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+});
+
 test('SCRIPTA mutations use the Explorer Automerge authority and persist the winning variant', async () => {
     const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'explorer-scripta-crdt-'));
     const validatePath = async (input) => {

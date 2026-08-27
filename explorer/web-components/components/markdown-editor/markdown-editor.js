@@ -64,10 +64,12 @@ export class MarkdownEditor {
         this.pendingImageInsertion = null;
         this.initVersion = 0;
         this.crdtDocumentId = "";
+        this.crdtHeads = [];
         this.lastSyncedContent = "";
         this.pendingChange = Promise.resolve();
         this.pendingContent = null;
         this.flushTimer = null;
+        this.applyingCrdtResult = false;
         this.boundHandleChange = this.handleChange.bind(this);
         this.boundHandleDrop = this.handleDrop.bind(this);
         this.boundHandleImageSelection = this.handleImageSelection.bind(this);
@@ -87,6 +89,7 @@ export class MarkdownEditor {
             } else {
                 const crdt = await openMarkdownCrdtDocument(this.path);
                 this.crdtDocumentId = String(crdt?.documentId || "");
+                this.crdtHeads = Array.isArray(crdt?.heads) ? [...crdt.heads] : [];
                 this.state.editorContent = String(crdt?.markdown ?? "");
                 this.lastSyncedContent = this.state.editorContent;
                 const fileExp = this.getFileExpPresenter();
@@ -261,6 +264,7 @@ export class MarkdownEditor {
         if (!this.editor || !this.textarea) return;
         const content = event?.content ?? this.editor.getContent();
         this.syncContent(content);
+        if (this.applyingCrdtResult) return;
         this.queueCrdtChange(content);
     }
 
@@ -302,14 +306,36 @@ export class MarkdownEditor {
             .then(async () => {
                 const delta = computeTextDelta(this.lastSyncedContent, queuedContent);
                 if (!delta) return;
-                const result = await applyMarkdownCrdtChange(this.crdtDocumentId, delta);
+                const baseHeads = [...this.crdtHeads];
+                const result = await applyMarkdownCrdtChange(this.crdtDocumentId, delta, baseHeads);
                 if (result?.documentId) {
                     this.crdtDocumentId = String(result.documentId);
                 }
-                if (typeof result?.markdown === "string") {
-                    this.lastSyncedContent = result.markdown;
-                } else {
+                const currentContent = this.editor?.getContent?.() ?? this.state.editorContent;
+                const hasNewerLocalContent = currentContent !== queuedContent
+                    || (this.pendingContent !== null && this.pendingContent !== queuedContent);
+                if (hasNewerLocalContent) {
                     this.lastSyncedContent = queuedContent;
+                    this.crdtHeads = Array.isArray(result?.changeHeads)
+                        ? [...result.changeHeads]
+                        : baseHeads;
+                } else {
+                    if (this.pendingContent === queuedContent) {
+                        this.pendingContent = null;
+                    }
+                    const mergedContent = typeof result?.markdown === "string"
+                        ? result.markdown
+                        : queuedContent;
+                    this.lastSyncedContent = mergedContent;
+                    this.crdtHeads = Array.isArray(result?.heads) ? [...result.heads] : baseHeads;
+                    if (mergedContent !== currentContent && this.editor?.setContent) {
+                        this.applyingCrdtResult = true;
+                        try {
+                            this.editor.setContent(mergedContent);
+                        } finally {
+                            this.applyingCrdtResult = false;
+                        }
+                    }
                 }
             })
             .catch((error) => {
@@ -346,6 +372,8 @@ export class MarkdownEditor {
         this.imageInput = null;
         this.pendingImageInsertion = null;
         this.crdtDocumentId = "";
+        this.crdtHeads = [];
         this.pendingContent = null;
+        this.applyingCrdtResult = false;
     }
 }

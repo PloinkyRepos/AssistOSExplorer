@@ -452,7 +452,9 @@ export function createScriptaCrdtService({
     };
   }
 
-  async function open(args) {
+  async function openCanonicalDocument(args) {
+    const createdBy = String(args.viewerHash || '').trim();
+    if (!createdBy) throw new Error('SCRIPTA open requires an authenticated viewer identity.');
     const fileName = path.basename(String(args.path || ''), path.extname(String(args.path || ''))) || 'Untitled';
     let publicDocument = null;
     const result = await markdownCrdtStore.mutateAndSave({
@@ -463,10 +465,15 @@ export function createScriptaCrdtService({
     }, (model) => {
       const normalized = normalizeScriptaDocumentModel(model, {
         fallbackTitle: fileName,
-        createdBy: args.viewerHash
+        createdBy
       });
       return JSON.stringify(normalized) === JSON.stringify(model) ? null : normalized;
     });
+    return { result, publicDocument };
+  }
+
+  async function open(args) {
+    const { result, publicDocument } = await openCanonicalDocument(args);
     return {
       ...result,
       path: virtualPath(result.path),
@@ -529,10 +536,21 @@ export function createScriptaCrdtService({
   }
 
   async function collaborationOpen(args) {
-    return markdownCrdtStore.inspect({ path: args.path }, async (result) => {
+    const createdBy = String(args.viewerHash || '').trim();
+    if (!createdBy) throw new Error('SCRIPTA open requires an authenticated viewer identity.');
+    const fileName = path.basename(String(args.path || ''), path.extname(String(args.path || ''))) || 'Untitled';
+    const existing = await markdownCrdtStore.inspect({ path: args.path }, async (result) => {
+      const normalized = normalizeScriptaDocumentModel(clone(result.model), {
+        fallbackTitle: fileName,
+        createdBy
+      });
+      if (!isDeepStrictEqual(normalized, result.model)) return null;
       const document = await publicDocumentForModel(result.model);
       return collaborationResponse(document, result, args);
     });
+    if (existing) return existing;
+    const { result, publicDocument } = await openCanonicalDocument(args);
+    return collaborationResponse(publicDocument, result, args);
   }
 
   async function collaborationPull(args) {

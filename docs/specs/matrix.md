@@ -13,3 +13,4 @@
 | [DS008-user-settings](specsLoader.html?spec=DS008-user-settings.md) | Defines user preferences, workspace integration controls, avatar configuration, and administrator-only settings surfaces. |
 | [DS009-workspace-monitoring](specsLoader.html?spec=DS009-workspace-monitoring.md) | Defines the Workspace Monitor integration as an agent-owned operational view mounted in Explorer. |
 | [DS010-workspace-operations](specsLoader.html?spec=DS010-workspace-operations.md) | Defines Explorer navigation, ordinary file mutations, workspace search and replace, and protected-resource boundaries. |
+| [DS011-scripta-core](specsLoader.html?spec=DS011-scripta-core.md) | Defines Explorer-owned SCRIPTA identity, Markdown metadata, Automerge state, variants, voting, ownership, undo, public collaboration, security, and lifecycle. |

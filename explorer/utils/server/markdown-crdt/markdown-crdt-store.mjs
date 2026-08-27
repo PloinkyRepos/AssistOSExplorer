@@ -4,12 +4,15 @@ import os from 'node:os';
 import { generateId } from '../../../services/document/idUtils.js';
 import {
   changeDocument,
+  changeDocumentAtHeads,
   createText,
   createDocument,
+  documentHasHeads,
   getDocumentHeads,
   loadDocument,
   mergeDocuments,
-  saveDocument
+  saveDocument,
+  viewDocumentAtHeads
 } from './automerge-adapter.mjs';
 import {
   materializeMarkdownModel,
@@ -645,21 +648,62 @@ export function createMarkdownCrdtStore({
   }
 
   async function initializeDocument(validPath) {
-    const { raw, versionKey } = await readMarkdownFile(validPath);
+    const { raw } = await readMarkdownFile(validPath);
     const { model, warnings, ignoredStructuralIdChanges } = parseMarkdownState(raw);
     let document = createDocument({});
     document = changeDocument(document, (draft) => {
       writeMarkdownModelToDraft(draft, model);
       draft.path = validPath;
-      draft.fileVersionKey = versionKey;
-      draft.lastSavedMarkdown = raw;
+      draft.fileVersionKey = '';
+      draft.lastSavedMarkdown = '';
       draft.reviewItems = [];
       draft.warnings = warnings;
       draft.ignoredStructuralIdChanges = ignoredStructuralIdChanges;
       draft.updatedAt = new Date().toISOString();
     });
-    await writeAutomergeState(document);
-    return document;
+    const markdown = markdownFromDocument(document);
+    const statePath = statePathForDocumentId(document.documentId);
+    const previousState = await fs.readFile(statePath).catch((error) => {
+      if (error?.code === 'ENOENT') return null;
+      throw error;
+    });
+    try {
+      await writeFileContent(validPath, markdown);
+      invalidateCachesForPath(validPath);
+      const stats = await fs.stat(validPath);
+      document = changeDocument(document, (draft) => {
+        draft.fileVersionKey = getVersionKey(stats);
+        draft.lastSavedMarkdown = markdown;
+        draft.updatedAt = new Date().toISOString();
+      });
+      await writeAutomergeState(document);
+      return document;
+    } catch (error) {
+      const rollbackErrors = [];
+      try {
+        await writeFileContent(validPath, raw);
+        invalidateCachesForPath(validPath);
+      } catch (rollbackError) {
+        rollbackErrors.push(rollbackError);
+      }
+      try {
+        if (previousState) {
+          await fs.mkdir(path.dirname(statePath), { recursive: true });
+          await fs.writeFile(statePath, previousState);
+        } else {
+          await fs.rm(statePath, { force: true });
+        }
+      } catch (rollbackError) {
+        rollbackErrors.push(rollbackError);
+      }
+      if (rollbackErrors.length) {
+        throw new AggregateError(
+          [error, ...rollbackErrors],
+          'Markdown CRDT initialization failed and could not be rolled back completely.'
+        );
+      }
+      throw error;
+    }
   }
 
   async function loadByPath(inputPath) {
@@ -835,13 +879,24 @@ export function createMarkdownCrdtStore({
     const change = args.change && typeof args.change === 'object' ? args.change : {};
     let document = await loadByDocumentId(documentId);
     if (change.type === 'replaceTextRange') {
-      const nextMarkdown = applyTextDelta(markdownFromDocument(document), change);
-      document = changeDocument(document, (draft) => {
-        copyMarkdownToDraft(draft, nextMarkdown, document);
+      const baseHeads = Array.isArray(args.baseHeads)
+        ? args.baseHeads.map((head) => String(head || '').trim()).filter(Boolean)
+        : [];
+      if (!baseHeads.length) {
+        throw new Error('replaceTextRange requires baseHeads from open_markdown_crdt_document.');
+      }
+      if (!documentHasHeads(document, baseHeads)) {
+        throw new Error('The Markdown CRDT edit base is no longer available. Reopen the document before editing.');
+      }
+      const baseDocument = viewDocumentAtHeads(document, baseHeads);
+      const nextMarkdown = applyTextDelta(markdownFromDocument(baseDocument), change);
+      const changed = changeDocumentAtHeads(document, baseHeads, (draft) => {
+        copyMarkdownToDraft(draft, nextMarkdown, baseDocument);
         draft.updatedAt = new Date().toISOString();
       });
+      document = changed.newDoc;
       await writeAutomergeState(document);
-      return responseFor(document);
+      return responseFor(document, { changeHeads: changed.newHeads || baseHeads });
     }
     if (change.type === 'addParagraph') {
       document = changeDocument(document, (draft) => {

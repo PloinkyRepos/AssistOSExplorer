@@ -19,6 +19,21 @@ export function changeDocument(document, callback) {
   return Automerge.change(document, callback);
 }
 
+export function changeDocumentAtHeads(document, heads, callback) {
+  // Resolve editor offsets against its historical view before merging the fork.
+  const fork = Automerge.clone(Automerge.view(document, heads));
+  const changedFork = Automerge.change(fork, callback);
+  const previousHeads = Automerge.getHeads(fork);
+  const newHeads = Automerge.getHeads(changedFork);
+  return {
+    newDoc: Automerge.merge(document, changedFork),
+    newHeads: previousHeads.length === newHeads.length
+      && previousHeads.every((head, index) => head === newHeads[index])
+      ? null
+      : newHeads
+  };
+}
+
 export function getDocumentHeads(document) {
   return Automerge.getHeads(document);
 }

@@ -509,6 +509,13 @@
         "documentId": {
           "type": "string"
         },
+        "baseHeads": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "optional": true
+        },
         "operation": {
           "type": "string",
           "enum": [
@@ -777,7 +784,7 @@
       "inputSchema": {
         "path": { "type": "string" },
         "resourceId": { "type": "string", "optional": true },
-        "viewerHash": { "type": "string", "optional": true },
+        "viewerHash": { "type": "string" },
         "view": {
           "type": "object",
           "optional": true,
@@ -937,7 +944,7 @@
       "inputSchema": {
         "path": { "type": "string" },
         "resourceId": { "type": "string", "optional": true },
-        "viewerHash": { "type": "string", "optional": true },
+        "viewerHash": { "type": "string" },
         "view": {
           "type": "object",
           "optional": true,
@@ -965,7 +972,7 @@
       "inputSchema": {
         "path": { "type": "string" },
         "resourceId": { "type": "string", "optional": true },
-        "viewerHash": { "type": "string", "optional": true },
+        "viewerHash": { "type": "string" },
         "knownHeads": { "type": "array", "items": { "type": "string" }, "optional": true },
         "view": {
           "type": "object",
