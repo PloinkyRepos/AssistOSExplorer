@@ -15,7 +15,7 @@ Explorer may mount the Workspace Monitor plugin only when the runtime plugin pol
 
 The Workspace Monitor agent must own collection intervals, stored observations, access checks, and MCP operations. Explorer must not write monitoring state directly or present a healthy status when the monitor has not supplied a verified result.
 
-Explorer must obtain current resource snapshots through the administrator-authorized Workspace Monitor MCP tool. The agent must derive that snapshot from Ploinky's signed private metrics stream, expose only its allowlisted projection with freshness metadata, and report unavailable or stale data explicitly. Explorer must not use the Router's localhost-only status endpoint as a deployment-dependent browser data source.
+Explorer must obtain current resource snapshots through the administrator-authorized Workspace Monitor MCP tool. The agent must derive that snapshot from Ploinky's signed private metrics stream, expose only its allowlisted projection with freshness metadata, and report unavailable or stale data explicitly. Runtime process liveness and semantic readiness are distinct: Explorer may show both, but its ready total and healthy presentation must use Ploinky's current-run readiness result rather than raw container liveness. Explorer must not use the Router's localhost-only status endpoint as a deployment-dependent browser data source.
 
 ## Conclusion
 

@@ -20,6 +20,12 @@ export function runtimeSeriesId(runtime, index = 0) {
   return encodeURIComponent(identity);
 }
 
+export function runtimeIsReady(runtime) {
+  return typeof runtime?.state?.ready === 'boolean'
+    ? runtime.state.ready
+    : Boolean(runtime?.state?.running);
+}
+
 function setText(root, role, value) {
   const target = root.querySelector(`[data-role="${role}"]`);
   if (target) target.textContent = value;
@@ -75,8 +81,8 @@ export class WorkspaceMonitorResources {
     setText(this.element, 'agents-memory', formatBytes(agents.memoryBytes));
     setText(this.element, 'router-memory', formatBytes(routerMemory));
     setText(this.element, 'runtime-count', String(runtimes.length));
-    setText(this.element, 'running-count', String(runtimes.filter((runtime) => runtime.state?.running).length));
-    setText(this.element, 'unavailable-count', String(runtimes.filter((runtime) => runtime.state?.running && runtime.metrics?.available === false).length));
+    setText(this.element, 'running-count', String(runtimes.filter(runtimeIsReady).length));
+    setText(this.element, 'unavailable-count', String(runtimes.filter((runtime) => runtimeIsReady(runtime) && runtime.metrics?.available === false).length));
   }
 
   updateRuntimeEntries(runtimes, sampledAt) {

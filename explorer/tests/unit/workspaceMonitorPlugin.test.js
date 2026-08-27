@@ -169,8 +169,10 @@ test('Workspace Monitor keeps read-only concerns in separate tabs', () => {
     assert.doesNotMatch(script, /output\.textContent\s*\+/);
     assert.match(script, /MAX_AUDIT_BYTES/);
     assert.match(script, /maxBytes: MAX_AUDIT_BYTES/);
-    assert.match(dashboardScript, /import \{ WorkspaceMonitorResources \} from '\.\/workspace-monitor-resources\.js'/);
+    assert.match(dashboardScript, /import \{ runtimeIsReady, WorkspaceMonitorResources \} from '\.\/workspace-monitor-resources\.js'/);
     assert.match(dashboardScript, /this\.resources = new WorkspaceMonitorResources/);
+    assert.match(dashboardScript, /runtimes\.filter\(runtimeIsReady\)/);
+    assert.match(html, /<dt>Ready:<\/dt>/);
     assert.doesNotMatch(dashboardScript, /renderResources\(payload\)|renderResourceRows\(entries\)|function appendChartSeries/);
     assert.match(buttonScript, /open\(targetUrl\.toString\(\), '_blank'/);
     assert.match(buttonScript, /this\.hostContext\?\.pluginIcon/);

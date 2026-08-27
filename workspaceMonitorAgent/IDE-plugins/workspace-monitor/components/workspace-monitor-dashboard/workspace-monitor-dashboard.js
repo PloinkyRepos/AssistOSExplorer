@@ -1,7 +1,7 @@
 import { callDpu, callMonitor } from './workspace-monitor-api.js';
 import { renderHistoryChart } from './workspace-monitor-charts.js';
 import { WorkspaceMonitorLogs } from './workspace-monitor-logs.js';
-import { WorkspaceMonitorResources } from './workspace-monitor-resources.js';
+import { runtimeIsReady, WorkspaceMonitorResources } from './workspace-monitor-resources.js';
 
 const DEFAULT_HISTORY_DURATION_MS = 24 * 60 * 60 * 1000;
 const MAX_HISTORY_POINTS = 50_000;
@@ -323,12 +323,12 @@ export class WorkspaceMonitorDashboard {
     try {
       const payload = requireCurrentSnapshot(await callMonitor('workspace_monitor_snapshot_get'));
       const runtimes = Array.isArray(payload.runtimes) ? payload.runtimes : [];
-      const running = runtimes.filter((entry) => entry.state?.running).length;
+      const ready = runtimes.filter(runtimeIsReady).length;
       this.renderCards('[data-role="overview"]', [
         ['Workspace', payload.workspace || 'Current workspace'],
         ['Router', payload.router?.status || 'running'],
         ['Runtimes', String(runtimes.length)],
-        ['Running', String(running)],
+        ['Ready', String(ready)],
         ['Static agent', payload.static?.agent || '—']
       ]);
       this.setStatus('Overview updated');

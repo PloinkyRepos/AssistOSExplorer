@@ -26,7 +26,7 @@ function snapshot(sampledAt) {
             repoName: 'AchillesIDE',
             runtime: 'podman',
             enabled: true,
-            state: { status: 'running', running: true, pid: 999 },
+            state: { status: 'starting', running: true, ready: false, pid: 999 },
             metrics: { available: true, cpuPercent: 12.5, memoryBytes: 2_048 },
             privateField: 'omit-me',
         }],
@@ -51,8 +51,22 @@ test('current snapshot is atomically persisted as an allowlisted resource projec
     assert.equal(Object.hasOwn(written.router.metrics, 'secret'), false);
     assert.equal(Object.hasOwn(written.runtimes[0], 'privateField'), false);
     assert.equal(Object.hasOwn(written.runtimes[0].state, 'pid'), false);
+    assert.deepEqual(written.runtimes[0].state, {
+        status: 'starting',
+        running: true,
+        ready: false,
+    });
     assert.equal((await fs.stat(currentSnapshotPath(env))).mode & 0o777, 0o600);
     assert.equal((await fs.readdir(env.WORKSPACE_MONITOR_DATA_ROOT)).some((name) => name.endsWith('.tmp')), false);
+});
+
+test('current snapshot remains compatible with metrics sources that predate explicit readiness', async (t) => {
+    const env = await temporaryEnvironment(t);
+    const value = snapshot('2026-08-27T10:00:00.000Z');
+    delete value.runtimes[0].state.ready;
+    value.runtimes[0].state.status = 'running';
+    const written = await writeCurrentSnapshot(value, env);
+    assert.equal(written.runtimes[0].state.ready, true);
 });
 
 test('current snapshot state distinguishes unavailable, fresh, and stale data', async (t) => {
