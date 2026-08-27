@@ -15,13 +15,13 @@ Workspace Monitor lets an administrator observe Ploinky workspace resources over
 
 | Name | Explanation |
 | --- | --- |
-| Live resource collection and persistence | The collector turns Ploinky snapshots into aggregate and per-runtime CPU and memory series and stores them durably. |
+| Live resource collection and persistence | The collector preserves Ploinky's semantic runtime readiness, turns snapshots into aggregate and per-runtime CPU and memory series, and stores them durably. |
 | Historical resource queries and thresholds | Administrators retrieve bounded, bucketed history with the threshold values recorded alongside observations. |
 | Administrator settings and log access | Verified administrators can read or update settings and list, read, or search Ploinky-owned logs. |
 
 ### Live resource collection and persistence
 
-The affected actor is an administrator who needs current and durable resource observations. Ploinky's private metrics stream triggers the collector to parse each snapshot, derive workspace and Router aggregates, and identify available runtime series. The collector atomically stores an allowlisted current projection for the administrator-only snapshot tool, persists each historical series at most once per ten seconds in SQLite, and retries either output independently after a failure. The observable result is a fresh current view plus durable CPU or memory history for the workspace, Router, and each available runtime. The governing boundary is that live metrics come only from the signed private Ploinky stream; Explorer must use the agent tool rather than a Router control endpoint.
+The affected actor is an administrator who needs current and durable resource observations. Ploinky's private metrics stream triggers the collector to parse each snapshot, preserve the distinction between a live process and a runtime that passed current-run readiness, derive workspace and Router aggregates, and identify available runtime series. The collector atomically stores an allowlisted current projection for the administrator-only snapshot tool, persists each historical series at most once per ten seconds in SQLite, and retries either output independently after a failure. The observable result is a fresh current view whose ready count cannot include a no-wait runtime that is still starting or failed, plus durable CPU or memory history for the workspace, Router, and each available runtime. The governing boundary is that live metrics and semantic readiness come only from the signed private Ploinky stream; Explorer must use the agent tool rather than a Router control endpoint.
 
 ### Historical resource queries and thresholds
 

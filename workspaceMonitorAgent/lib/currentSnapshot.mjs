@@ -38,6 +38,9 @@ function normalizeRuntime(value = {}) {
         state: {
             status: boundedString(value?.state?.status, 'unknown', 128),
             running: Boolean(value?.state?.running),
+            ready: typeof value?.state?.ready === 'boolean'
+                ? value.state.ready
+                : Boolean(value?.state?.running),
         },
         metrics: normalizeMetrics(value?.metrics),
     };

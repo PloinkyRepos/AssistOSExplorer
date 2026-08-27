@@ -1389,24 +1389,52 @@ jobs:
 
           echo "[deploy-qa] Starting Explorer from each managed repository's configured default branch..."
           export PLOINKY_NO_WAIT_SEQUENCE_TERMINAL_GRACE_MS='300000'
+          QA_DEPLOY_STARTED_AT_MS="$(node -p 'Date.now()')"
+          EXPECTED_NO_WAIT_AGENTS=14
           "$PLOINKY" start explorer "${BRANCH_ARGS[@]}"
 
           QA_READY=0
           QA_READY_STREAK=0
           QA_TERMINAL_FAILURE=0
-          NO_WAIT_FAILURES=""
+          NO_WAIT_SUMMARY=""
           # Detached no-wait runtimes activate serially. Allow the complete
           # bounded sequence to settle without weakening terminal-failure
           # detection or the job's independent 50-minute hard limit.
           for _ in $(seq 1 180); do
             BOX_STATUS="$(inspect_outer_box_status)"
+            NO_WAIT_READY=0
+            NO_WAIT_EXIT=0
+            NO_WAIT_SUMMARY="$(
+              "$BOX_ENGINE" container exec \
+                --user podman \
+                "$BOX_INSTANCE" \
+                node \
+                /workspace/.ploinky/repos/AchillesIDE/.github/scripts/check-no-wait-readiness.mjs \
+                /workspace/.ploinky/running/no-wait \
+                "$EXPECTED_NO_WAIT_AGENTS" \
+                "$QA_DEPLOY_STARTED_AT_MS" 2>&1
+            )" || NO_WAIT_EXIT=$?
+            case "$NO_WAIT_EXIT" in
+              0) NO_WAIT_READY=1 ;;
+              1) ;;
+              2|3)
+                QA_TERMINAL_FAILURE=1
+                break
+                ;;
+              *)
+                NO_WAIT_SUMMARY="[deploy-qa] no-wait readiness checker exited unexpectedly with status $NO_WAIT_EXIT"
+                QA_TERMINAL_FAILURE=1
+                break
+                ;;
+            esac
             if [[ "$BOX_STATUS" == *"Ploinky Box: running-initialized"* ]] &&
               [[ "$BOX_STATUS" == *"Tracked agents: 18"* ]] &&
               [[ "$BOX_STATUS" == *"Running agents: 18"* ]] &&
               [[ "$BOX_STATUS" == *"Cloudflare mode: cloudflare"* ]] &&
               [[ "$BOX_STATUS" == *"Cloudflare management: api-managed"* ]] &&
               [[ "$BOX_STATUS" == *"Cloudflare publication: ready"* ]] &&
-              [[ "$BOX_STATUS" == *"Cloudflare connector: running"* ]]; then
+              [[ "$BOX_STATUS" == *"Cloudflare connector: running"* ]] &&
+              [ "$NO_WAIT_READY" = "1" ]; then
               QA_READY_STREAK=$((QA_READY_STREAK + 1))
               if [ "$QA_READY_STREAK" -ge 3 ]; then
                 QA_READY=1
@@ -1414,52 +1442,17 @@ jobs:
               fi
             else
               QA_READY_STREAK=0
-              if NO_WAIT_FAILURES="$(
-                "$BOX_ENGINE" container exec \
-                  --user podman \
-                  "$BOX_INSTANCE" \
-                  node -e '
-                    const fs = require("node:fs");
-                    const directory = "/workspace/.ploinky/running/no-wait";
-                    let files = [];
-                    try {
-                      files = fs.readdirSync(directory).filter((name) => name.endsWith(".json"));
-                    } catch (error) {
-                      if (error?.code !== "ENOENT") throw error;
-                    }
-                    const failures = files.flatMap((name) => {
-                      try {
-                        const status = JSON.parse(fs.readFileSync(`${directory}/${name}`, "utf8"));
-                        return status?.state === "failed" ? [status] : [];
-                      } catch {
-                        return [];
-                      }
-                    });
-                    if (!failures.length) process.exit(1);
-                    for (const status of failures) {
-                      const message = String(status?.error?.message || "unknown failure")
-                        .replace(/\s+/g, " ")
-                        .replace(/((?:token|secret|password|authorization|cookie)\s*[:=]\s*)\S+/gi, "$1[redacted]");
-                      process.stdout.write(
-                        `[deploy-qa] no-wait failure ${status.repoName}/${status.shortAgent}: ${message}\n`,
-                      );
-                    }
-                  '
-              )"; then
-                QA_TERMINAL_FAILURE=1
-                break
-              fi
             fi
             sleep 10
           done
           printf '%s\n' "$BOX_STATUS"
+          printf '%s\n' "$NO_WAIT_SUMMARY"
           if [ "$QA_TERMINAL_FAILURE" = "1" ]; then
-            printf '%s\n' "$NO_WAIT_FAILURES"
-            echo "[deploy-qa] ERROR: a no-wait agent reached a terminal startup failure."
+            echo "[deploy-qa] ERROR: current-run no-wait readiness evidence failed."
             exit 1
           fi
           if [ "$QA_READY" != "1" ]; then
-            echo "[deploy-qa] ERROR: timed out waiting for stable 18/18 Explorer QA admission."
+            echo "[deploy-qa] ERROR: timed out waiting for stable 18/18 process admission and 14/14 semantic readiness."
             exit 1
           fi
           case "$BOX_STATUS" in
