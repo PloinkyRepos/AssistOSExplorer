@@ -236,12 +236,15 @@ npm run test:webtty
 ```
 
 The gate requires the canonical local `admin` and `user` accounts. It proves
-the administrator-only Explorer launcher, same-origin nested-directory launch,
-initial `/workspace` cwd, two-way host workspace visibility, normal cleanup,
-and successful creation of a second terminal. It also proves that an ordinary
-user does not receive the launcher and gets `403` from both the page and the
-session-creation mutation. A missing workspace root or non-loopback target is
-a hard failure while this gate is selected.
+the administrator-only Explorer launcher and chooser, Box-first ordering,
+server-derived eligible-agent rows, fragment-only opaque launch, the selected
+target's effective working directory, two-way terminal I/O, normal cleanup,
+and successful creation of a second terminal through a fresh discovery. It
+also proves replay and stale-target behavior, fragment stripping, and that an
+ordinary user does not receive the launcher and gets `403` from the page,
+discovery, and session-creation mutations. A direct `?dir=` launch, missing
+workspace root, or non-loopback target is a hard failure while this gate is
+selected.
 
 The listener gate always requires `required-loopback`, requires exactly one
 listener for each eligible `required-assigned-managed-gateway`, and requires no

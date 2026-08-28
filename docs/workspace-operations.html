@@ -16,6 +16,7 @@
         <ul>
           <li><a href="#workspace-navigation">Navigation</a></li>
           <li><a href="#file-management">File management</a></li>
+          <li><a href="#terminal-targets">Terminal targets</a></li>
           <li><a href="#search-replace">Search and replace</a></li>
           <li><a href="#settings">Settings</a></li>
           <li><a href="#boundaries">Safety boundaries</a></li>
@@ -31,9 +32,16 @@
         <section class="doc-section" id="file-management">
           <h2>File and Folder Management</h2>
           <p>The <strong>New</strong> menu creates a folder or file in the current directory. In <code>/Confidential/Secrets</code>, the file action is presented as <strong>New Secret</strong>. Creation controls are disabled when the current DPU-backed location does not grant the required capability.</p>
-          <p>Context menus provide <strong>Rename</strong>, <strong>Copy</strong>, <strong>Cut</strong>, and <strong>Delete</strong> for supported entries. Directories also provide <strong>Paste into</strong> and <strong>Upload here</strong>; files can be opened in a new browser tab. Administrators additionally receive <strong>Open Terminal Here</strong>. It opens Ploinky core WebTTY on the same origin and passes only the encoded workspace-relative directory. Ordinary users do not receive the item, and Router authorization remains authoritative for direct requests. Explorer never exposes the physical host working directory. Delete requires user confirmation, and Explorer refreshes the affected directory and clears invalid selection or clipboard state after the operation.</p>
+          <p>Context menus provide <strong>Rename</strong>, <strong>Copy</strong>, <strong>Cut</strong>, and <strong>Delete</strong> for supported entries. Directories also provide <strong>Paste into</strong> and <strong>Upload here</strong>; files can be opened in a new browser tab. Administrators additionally receive <strong>Open Terminal Here</strong>, which opens the Explorer-owned terminal target chooser described below. Ordinary users do not receive the item, and Router authorization remains authoritative for direct requests. Delete requires user confirmation, and Explorer refreshes the affected directory and clears invalid selection or clipboard state after the operation.</p>
           <p>Copy, cut, and paste use Explorer's ordinary filesystem contract and are unavailable for DPU-managed entries. DPU-backed rename, delete, upload, folder creation, file creation, and permissions controls appear only when the effective resource capabilities allow them. This keeps the same Explorer interaction model while preserving the owning service's authorization rules.</p>
           <p>Uploads target the selected directory, or the current directory when no directory is selected. Ordinary uploads use Explorer's authenticated upload route; Confidential uploads are delegated to DPU and rejected when the destination does not allow new content.</p>
+        </section>
+
+        <section class="doc-section" id="terminal-targets">
+          <h2>Terminal Targets</h2>
+          <p><strong>Open Terminal Here</strong> sends only the canonical workspace-relative directory to Ploinky's same-origin, mutation-protected discovery route. The chooser lists <strong>Ploinky Box</strong> first. It then lists only running agents whose current runtime identity and live mounts Ploinky has independently proven can access the selected folder. Explorer does not inspect containers, infer mounts, or translate a path.</p>
+          <p>Each choice shows its server-provided label, detail, effective working directory, and read-only or read/write access for the selected folder. Agent choices also explain that the terminal uses the container's normal user, tools, environment, permissions, and credential context. A read-only badge describes this folder mapping, not the entire container.</p>
+          <p>Selecting a row directly opens <code>/webtty/#launch=&lt;opaque-id&gt;</code> in a new tab with no opener or referrer. The short-lived launch ID is not a container selector and is not placed in a query parameter or browser storage. A blocked popup leaves the chooser open. Refresh replaces the complete discovery batch, and cancel asks Ploinky to invalidate the unused choices. Explorer never sends a raw container identity, translated or physical path, shell, arguments, environment, user, or runtime flags.</p>
         </section>
 
         <section class="doc-section" id="search-replace">

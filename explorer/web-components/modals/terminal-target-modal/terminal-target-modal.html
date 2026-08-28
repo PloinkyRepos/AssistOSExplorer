@@ -1,0 +1,23 @@
+<div class="terminal-target-shell" role="document" aria-labelledby="terminalTargetTitle">
+    <div class="modal-header">
+        <div class="modal-header-left">
+            <div class="modal-title" id="terminalTargetTitle">Open terminal in</div>
+            <div class="modal-subtitle" id="terminalTargetDirectory"></div>
+        </div>
+        <button type="button" class="close" data-local-action="closeModal" aria-label="Cancel and close terminal target chooser"></button>
+    </div>
+    <div class="modal-body terminal-target-body">
+        <p class="terminal-target-status" id="terminalTargetStatus" role="status" aria-live="polite"></p>
+        <div class="terminal-target-warning" id="terminalTargetWarning" role="alert" hidden></div>
+        <p class="terminal-target-notice" id="terminalTargetNotice" hidden>
+            An agent terminal uses that container's normal user, tools, environment, permissions, and credential context.
+            The access badge applies only to this selected folder.
+        </p>
+        <ul class="terminal-target-list" id="terminalTargetList" aria-label="Available terminal targets" aria-busy="true"></ul>
+        <div class="modal-actions">
+            <button type="button" class="gray-button" data-local-action="closeModal" autofocus>Cancel</button>
+            <button type="button" class="general-button secondary" id="terminalTargetRetry" data-local-action="retryDiscovery" hidden>Retry</button>
+            <button type="button" class="general-button secondary" id="terminalTargetRefresh" data-local-action="refreshTargets" hidden disabled>Refresh</button>
+        </div>
+    </div>
+</div>

@@ -37,13 +37,20 @@ test('Open Terminal Here is omitted for ordinary users and shown to administrato
             getBuiltInContextMenuItems(fileExp, target).some((item) => item.id === 'host:open-terminal-here'),
             true
         );
+        assert.equal(
+            getBuiltInContextMenuItems(fileExp, { path: '/folder/file.txt', type: 'file' })
+                .some((item) => item.id === 'host:open-terminal-here'),
+            false
+        );
     } finally {
         globalThis.window = previousWindow;
     }
 });
 
-test('Open Terminal Here launches the same-origin core route with a canonical encoded relative path', () => {
+test('Open Terminal Here opens the Explorer target chooser with only a canonical relative path', async () => {
     const previousWindow = globalThis.window;
+    const previousAssistOS = globalThis.assistOS;
+    const modalCalls = [];
     const opened = [];
     globalThis.window = {
         location: {
@@ -52,26 +59,33 @@ test('Open Terminal Here launches the same-origin core route with a canonical en
         },
         open(...args) { opened.push(args); }
     };
+    globalThis.assistOS = {
+        UI: {
+            async showModal(...args) { modalCalls.push(args); }
+        }
+    };
     const fileExp = {
         normalizePath(value) { return String(value || ''); }
     };
     try {
-        const openedTerminal = FileExp.prototype.openTerminalHere.call(fileExp, {
+        const openedTerminal = await FileExp.prototype.openTerminalHere.call(fileExp, {
             dataset: { entryPath: '/nested folder/文档/#hash/%value' }
         });
         assert.equal(openedTerminal, true);
-        assert.deepEqual(opened, [[
-            'https://explorer.example.test/webtty/?dir=nested+folder%2F%E6%96%87%E6%A1%A3%2F%23hash%2F%25value',
-            '_blank',
-            'noopener,noreferrer'
+        assert.deepEqual(modalCalls, [[
+            'terminal-target-modal',
+            { dir: 'nested folder/文档/#hash/%value' }
         ]]);
-        const target = new URL(opened[0][0]);
-        assert.equal(target.origin, globalThis.window.location.origin);
-        assert.equal(target.pathname, '/webtty/');
-        assert.equal(target.searchParams.get('dir'), 'nested folder/文档/#hash/%value');
-        assert.doesNotMatch(opened[0][0], /(?:base-agent-additional-server|7681)/);
+        assert.deepEqual(opened, []);
+
+        const openedRootTerminal = await FileExp.prototype.openTerminalHere.call(fileExp, {
+            dataset: { entryPath: '/' }
+        });
+        assert.equal(openedRootTerminal, true);
+        assert.deepEqual(modalCalls[1], ['terminal-target-modal', { dir: '' }]);
     } finally {
         globalThis.window = previousWindow;
+        globalThis.assistOS = previousAssistOS;
     }
 });
 

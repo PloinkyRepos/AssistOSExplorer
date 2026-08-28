@@ -1,0 +1,165 @@
+dialog.terminal-target-modal-dialog {
+    --modal-width: 680px;
+    --modal-max-width: 680px;
+}
+
+terminal-target-modal {
+    display: block;
+    min-width: 0;
+}
+
+terminal-target-modal .terminal-target-shell {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    max-height: calc(90vh - (2 * var(--space-xl)));
+}
+
+terminal-target-modal .terminal-target-body {
+    padding-right: 0;
+    padding-bottom: 0;
+    padding-left: 0;
+    overflow: hidden;
+}
+
+terminal-target-modal .terminal-target-status,
+terminal-target-modal .terminal-target-notice {
+    margin: 0;
+    color: var(--text-soft);
+    font-size: var(--font-sm);
+    line-height: var(--line-normal);
+}
+
+terminal-target-modal .terminal-target-notice {
+    padding: var(--space-md);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface-soft);
+}
+
+terminal-target-modal .terminal-target-warning {
+    padding: var(--space-md);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    color: var(--text-soft);
+    background: var(--surface-soft);
+    font-size: var(--font-sm);
+    line-height: var(--line-normal);
+}
+
+terminal-target-modal .terminal-target-warning[data-state="error"] {
+    border-color: var(--danger);
+    color: var(--danger);
+}
+
+terminal-target-modal .terminal-target-warning[data-state="warning"] {
+    border-color: var(--warning);
+}
+
+terminal-target-modal .terminal-target-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    min-height: 88px;
+    max-height: min(52vh, 520px);
+    margin: 0;
+    padding: var(--space-xs);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    list-style: none;
+}
+
+terminal-target-modal .terminal-target-list[aria-busy="true"] {
+    opacity: 0.55;
+}
+
+terminal-target-modal .terminal-target-button {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    width: 100%;
+    padding: var(--space-md);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    color: var(--text);
+    background: var(--surface);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color var(--transition-base) ease, background-color var(--transition-base) ease, box-shadow var(--transition-base) ease;
+}
+
+terminal-target-modal .terminal-target-button:hover {
+    border-color: var(--accent);
+    background: var(--surface-soft);
+}
+
+terminal-target-modal .terminal-target-button:focus-visible {
+    border-color: var(--accent);
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    box-shadow: var(--shadow-sm);
+}
+
+terminal-target-modal .terminal-target-heading {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    min-width: 0;
+    flex-wrap: wrap;
+}
+
+terminal-target-modal .terminal-target-label {
+    min-width: 0;
+    overflow: hidden;
+    font-weight: var(--font-semibold);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+terminal-target-modal .terminal-target-kind,
+terminal-target-modal .terminal-target-access {
+    flex: 0 0 auto;
+    padding: 2px var(--space-sm);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    color: var(--text-soft);
+    background: var(--surface-soft);
+    font-size: var(--font-xs);
+    font-weight: var(--font-semibold);
+}
+
+terminal-target-modal .terminal-target-kind-box {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+terminal-target-modal .terminal-target-access-ro {
+    border-color: var(--warning);
+    color: var(--warning);
+}
+
+terminal-target-modal .terminal-target-detail,
+terminal-target-modal .terminal-target-cwd {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    color: var(--text-soft);
+    font-size: var(--font-sm);
+    line-height: var(--line-normal);
+}
+
+terminal-target-modal .terminal-target-cwd {
+    font-family: var(--mono-font);
+    font-size: var(--font-xs);
+}
+
+@media (max-width: 720px) {
+    terminal-target-modal .terminal-target-shell {
+        max-height: calc(100dvh - 24px);
+    }
+
+    terminal-target-modal .terminal-target-list {
+        max-height: none;
+        flex: 1 1 auto;
+    }
+}
