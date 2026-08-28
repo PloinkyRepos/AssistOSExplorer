@@ -6,6 +6,7 @@ import test from 'node:test';
 
 import {
   captureNestedPodmanEventCursor,
+  collectAgentProcessRows,
   collectNestedContainerEvents,
   collectExactRoutingServerIdentity,
   collectWebttyRuntimeEvidence,
@@ -180,6 +181,137 @@ test('nested inspection accepts only exact immutable-ID not-found as absence', (
       /failed closed/,
     );
   }
+});
+
+test('agent process evidence uses the exact PID namespace without requiring nested cgroups', () => {
+  const pidNamespace = 'pid:[4026533001]';
+  const inspected = {
+    Id: AGENT_ID,
+    State: { Running: true, Pid: 3519, StartedAt: '2026-08-29T10:00:00.123456789Z' },
+  };
+  const invocations = [];
+  const output = collectAgentProcessRows({ outerContainerId: OUTER_ID }, AGENT, {
+    command(command, args, options) {
+      invocations.push({ command, args, options });
+      if (args.includes('--eval')) {
+        return {
+          containerInit: { pid: 3519, startToken: '1001', pidNamespace },
+          rows: [
+            {
+              pid: 3519,
+              ppid: 3516,
+              startToken: '1001',
+              pidNamespace,
+              args: '/run/podman-init -- /Agent/server/AgentEntrypoint.sh',
+            },
+            {
+              pid: 3544,
+              ppid: 3519,
+              startToken: '1002',
+              pidNamespace,
+              args: '/bin/sh /Agent/server/AgentEntrypoint.sh',
+            },
+            {
+              pid: 3667,
+              ppid: 1,
+              startToken: '1003',
+              pidNamespace,
+              args: 'node /Agent/server/AgentServer.mjs ploinky-webtty-marker:abcdefghijklmnopqrstuvwx',
+            },
+          ],
+        };
+      }
+      return [inspected];
+    },
+  });
+  assert.equal(invocations.length, 3);
+  assert.deepEqual(invocations[0].args, [
+    'exec', OUTER_ID,
+    '/usr/bin/podman', 'container', 'inspect', AGENT_ID,
+  ]);
+  assert.equal(invocations[1].command, 'podman');
+  assert.deepEqual(invocations[1].args.slice(0, 5), [
+    'exec', OUTER_ID,
+    '/usr/local/bin/node', '--input-type=module', '--eval',
+  ]);
+  assert.doesNotMatch(invocations[1].args.join(' '), /\/usr\/bin\/podman top/);
+  assert.match(invocations[1].args[5], /\/ns\/pid/);
+  assert.match(invocations[1].args[5], /startToken/);
+  assert.match(invocations[1].args[5], /ENOENT.*ESRCH/s);
+  assert.equal(invocations[1].args.at(-1), '3519');
+  assert.deepEqual(invocations[1].options, { json: true });
+  assert.deepEqual(invocations[2].args, invocations[0].args);
+  assert.equal(output.length, 3);
+  assert.match(output[2], /ploinky-webtty-marker:abcdefghijklmnopqrstuvwx/);
+});
+
+test('agent process evidence rejects foreign namespaces and init-PID replacement', () => {
+  const pidNamespace = 'pid:[4026533001]';
+  const inspected = {
+    Id: AGENT_ID,
+    State: { Running: true, Pid: 3519, StartedAt: '2026-08-29T10:00:00.123456789Z' },
+  };
+  assert.throws(
+    () => collectAgentProcessRows({ outerContainerId: OUTER_ID }, AGENT, {
+      command(_command, args) {
+        if (args.includes('--eval')) {
+          return {
+            containerInit: { pid: 3519, startToken: '1001', pidNamespace },
+            rows: [
+              {
+                pid: 3519,
+                ppid: 3516,
+                startToken: '1001',
+                pidNamespace,
+                args: 'init',
+              },
+              {
+                pid: 9999,
+                ppid: 1,
+                startToken: '2001',
+                pidNamespace: 'pid:[4026533999]',
+                args: 'foreign',
+              },
+            ],
+          };
+        }
+        return [inspected];
+      },
+    }),
+    /invalid row/,
+  );
+
+  let inspections = 0;
+  assert.throws(
+    () => collectAgentProcessRows({ outerContainerId: OUTER_ID }, AGENT, {
+      command(_command, args) {
+        if (args.includes('--eval')) {
+          return {
+            containerInit: { pid: 3519, startToken: '1001', pidNamespace },
+            rows: [{
+              pid: 3519,
+              ppid: 3516,
+              startToken: '1001',
+              pidNamespace,
+              args: 'init',
+            }],
+          };
+        }
+        inspections += 1;
+        return inspections === 1
+          ? [inspected]
+          : [{
+            ...inspected,
+            State: {
+              Running: true,
+              Pid: 3519,
+              StartedAt: '2026-08-29T10:00:01.123456789Z',
+            },
+          }];
+      },
+    }),
+    /changed during its process snapshot/,
+  );
 });
 
 test('nested event audit binds exact cursors and immutable target identity without a sampling gap', () => {

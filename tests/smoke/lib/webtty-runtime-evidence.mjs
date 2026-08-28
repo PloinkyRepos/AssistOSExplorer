@@ -10,6 +10,108 @@ const EXEC_ID = /^[a-f0-9]{64}$/;
 const CONTAINER_USER = /^(?:[0-9]+|[A-Za-z_][A-Za-z0-9_-]*)(?::(?:[0-9]+|[A-Za-z_][A-Za-z0-9_-]*))?$/;
 const CONTAINER_HOSTNAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,252}$/;
 const EVENT_CURSOR = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+const MAX_AGENT_PROCESS_ROWS = 4096;
+const AGENT_PROCESS_SNAPSHOT_SOURCE = String.raw`
+import fs from 'node:fs';
+
+const MAX_PROC_TEXT_BYTES = 64 * 1024;
+const rootPid = Number.parseInt(String(process.argv[1] || ''), 10);
+if (!Number.isSafeInteger(rootPid) || rootPid <= 1) {
+  throw new Error('invalid exact container init PID');
+}
+
+const entries = fs.readdirSync('/proc').filter((entry) => /^[1-9][0-9]*$/.test(entry));
+if (entries.length > 8192) throw new Error('outer process inventory exceeded its bound');
+
+function readBounded(file) {
+  const value = fs.readFileSync(file);
+  if (value.length > MAX_PROC_TEXT_BYTES) throw new Error('proc evidence exceeded its bound');
+  return value;
+}
+
+function readNamespace(pid) {
+  const value = fs.readlinkSync('/proc/' + pid + '/ns/pid');
+  if (!/^pid:\[[1-9][0-9]*\]$/.test(value)) throw new Error('malformed PID namespace');
+  return value;
+}
+
+function readStat(pid) {
+  const stat = readBounded('/proc/' + pid + '/stat').toString('utf8');
+  const open = stat.indexOf('(');
+  const close = stat.lastIndexOf(')');
+  if (open <= 0 || close <= open || Number(stat.slice(0, open).trim()) !== pid) {
+    throw new Error('malformed proc stat');
+  }
+  const fields = stat.slice(close + 1).trim().split(/\s+/);
+  const ppid = Number(fields[1]);
+  const startToken = fields[19] || '';
+  if (fields.length < 20 || !/^[A-Z]$/.test(fields[0] || '')
+      || !Number.isSafeInteger(ppid) || ppid < 0
+      || !/^[1-9][0-9]*$/.test(startToken)) {
+    throw new Error('invalid proc identity');
+  }
+  return { pid, ppid, state: fields[0], startToken, comm: stat.slice(open + 1, close) };
+}
+
+function readStableProcess(pid) {
+  const namespaceBefore = readNamespace(pid);
+  const statBefore = readStat(pid);
+  const cmdlineBefore = readBounded('/proc/' + pid + '/cmdline');
+  const statMiddle = readStat(pid);
+  const cmdlineAfter = readBounded('/proc/' + pid + '/cmdline');
+  const statAfter = readStat(pid);
+  const namespaceAfter = readNamespace(pid);
+  if (namespaceBefore !== namespaceAfter
+      || statBefore.startToken !== statMiddle.startToken
+      || statMiddle.startToken !== statAfter.startToken
+      || statBefore.ppid !== statMiddle.ppid
+      || statMiddle.ppid !== statAfter.ppid
+      || !cmdlineBefore.equals(cmdlineAfter)
+      || statAfter.state === 'Z') {
+    throw new Error('process identity changed during snapshot');
+  }
+  if (cmdlineAfter.length > 0 && cmdlineAfter.at(-1) !== 0) {
+    throw new Error('malformed proc cmdline');
+  }
+  const args = cmdlineAfter.toString('utf8').split('\0').filter(Boolean).join(' ')
+    || '[' + statAfter.comm + ']';
+  return {
+    pid,
+    ppid: statAfter.ppid,
+    startToken: statAfter.startToken,
+    pidNamespace: namespaceAfter,
+    args,
+  };
+}
+
+const containerInitBefore = readStableProcess(rootPid);
+const rows = [];
+for (const entry of entries) {
+  const pid = Number.parseInt(entry, 10);
+  try {
+    if (readNamespace(pid) !== containerInitBefore.pidNamespace) continue;
+    const row = readStableProcess(pid);
+    if (row.pidNamespace === containerInitBefore.pidNamespace) rows.push(row);
+  } catch (error) {
+    if (error?.code === 'ENOENT' || error?.code === 'ESRCH') continue;
+    throw error;
+  }
+}
+if (rows.length < 1 || rows.length > 4096) throw new Error('PID namespace row count is invalid');
+const containerInitAfter = readStableProcess(rootPid);
+if (containerInitAfter.startToken !== containerInitBefore.startToken
+    || containerInitAfter.pidNamespace !== containerInitBefore.pidNamespace) {
+  throw new Error('container init changed during PID namespace snapshot');
+}
+process.stdout.write(JSON.stringify({
+  containerInit: {
+    pid: rootPid,
+    startToken: containerInitAfter.startToken,
+    pidNamespace: containerInitAfter.pidNamespace,
+  },
+  rows,
+}));
+`;
 const LABELS = Object.freeze({
   managed: 'io.assistos.ploinky.managed',
   resource: 'io.assistos.ploinky.resource',
@@ -307,11 +409,73 @@ export function collectExactAgentState(evidence, agent, { command = run } = {}) 
 }
 
 export function collectAgentProcessRows(evidence, agent, { command = run } = {}) {
+  const before = inspectNestedContainer(evidence.outerContainerId, agent.containerId, command);
+  if (!before || before.State?.Running !== true) {
+    throw new Error('Exact agent process target is not running.');
+  }
+  const initPid = Number(before.State?.Pid || 0);
+  if (!Number.isSafeInteger(initPid) || initPid <= 1) {
+    throw new Error('Exact agent process target has an invalid init PID.');
+  }
+  const startedAt = String(before.State?.StartedAt || '');
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/.test(startedAt)) {
+    throw new Error('Exact agent process target has an invalid start generation.');
+  }
   const output = command('podman', [
     'exec', evidence.outerContainerId,
-    '/usr/bin/podman', 'top', agent.containerId, 'pid,ppid,args',
-  ]);
-  return String(output || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    '/usr/local/bin/node', '--input-type=module', '--eval',
+    AGENT_PROCESS_SNAPSHOT_SOURCE, String(initPid),
+  ], { json: true });
+  const snapshot = exactObject(output, 'exact agent process snapshot');
+  if (Object.keys(snapshot).sort().join(',') !== 'containerInit,rows') {
+    throw new Error('Exact agent process snapshot has invalid fields.');
+  }
+  const containerInit = exactObject(snapshot.containerInit, 'agent process container init');
+  if (Object.keys(containerInit).sort().join(',') !== 'pid,pidNamespace,startToken'
+      || containerInit.pid !== initPid
+      || !/^pid:\[[1-9][0-9]*\]$/.test(containerInit.pidNamespace)
+      || !/^[1-9][0-9]*$/.test(containerInit.startToken)) {
+    throw new Error('Exact agent process snapshot has an invalid container init identity.');
+  }
+  if (!Array.isArray(snapshot.rows)
+      || snapshot.rows.length < 1 || snapshot.rows.length > MAX_AGENT_PROCESS_ROWS) {
+    throw new Error('Exact agent process snapshot has an invalid row count.');
+  }
+  const rows = snapshot.rows.map((raw) => {
+    const row = exactObject(raw, 'agent process row');
+    if (Object.keys(row).sort().join(',') !== 'args,pid,pidNamespace,ppid,startToken'
+        || !Number.isSafeInteger(row.pid) || row.pid <= 0
+        || !Number.isSafeInteger(row.ppid) || row.ppid < 0
+        || row.pidNamespace !== containerInit.pidNamespace
+        || !/^[1-9][0-9]*$/.test(row.startToken)
+        || typeof row.args !== 'string' || !row.args || row.args.includes('\0')
+        || Buffer.byteLength(row.args, 'utf8') > 64 * 1024) {
+      throw new Error('Exact agent process snapshot contains an invalid row.');
+    }
+    return Object.freeze({
+      pid: row.pid,
+      ppid: row.ppid,
+      startToken: row.startToken,
+      pidNamespace: row.pidNamespace,
+      args: row.args,
+    });
+  });
+  const byPid = new Map();
+  for (const row of rows) {
+    if (byPid.has(row.pid)) throw new Error('Exact agent process snapshot contains a duplicate PID.');
+    byPid.set(row.pid, row);
+  }
+  const initRow = byPid.get(initPid);
+  if (!initRow || initRow.startToken !== containerInit.startToken) {
+    throw new Error('Exact agent process snapshot omits the stable container init PID.');
+  }
+  const after = inspectNestedContainer(evidence.outerContainerId, agent.containerId, command);
+  if (!after || after.State?.Running !== true
+      || Number(after.State?.Pid || 0) !== initPid
+      || String(after.State?.StartedAt || '') !== startedAt) {
+    throw new Error('Exact agent process target changed during its process snapshot.');
+  }
+  return Object.freeze(rows.map((row) => `${row.pid} ${row.ppid} ${row.args}`));
 }
 
 export function captureNestedPodmanEventCursor(evidence, { command = run } = {}) {
