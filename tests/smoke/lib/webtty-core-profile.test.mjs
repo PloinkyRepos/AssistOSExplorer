@@ -49,6 +49,15 @@ test('npm WebTTY core profile owns the exact Chromium release gate', () => {
   assert.match(webttySpec, /WEBTTY_AGENT_HOSTNAME/);
   assert.match(webttySpec, /authRevocationRemovedExecAndForegroundProcess/);
   assert.match(webttySpec, /defaultRouterCrashRecoveryRemovedAgentExecAndForegroundProcess/);
+  const replacementVictimIndex = webttySpec.indexOf('const replacementVictim = await openTerminalFromExplorer(');
+  const replacementChooserIndex = webttySpec.indexOf('const replacementChooser = await openTerminalChooser(');
+  assert.ok(replacementVictimIndex >= 0, 'the replacement victim must be launched through Explorer');
+  assert.ok(
+    replacementChooserIndex > replacementVictimIndex,
+    'the stale-target chooser must open only after the replacement victim launch has closed its chooser',
+  );
+  assert.match(webttySpec, /staleLaunchSubmittedAt[\s\S]+toBeLessThan\(replacementChooser\.discovery\.expiresAt\)/);
+  assert.match(webttySpec, /staleLaunchObservedAt[\s\S]+toBeLessThan\(replacementChooser\.discovery\.expiresAt\)/);
 });
 
 test('WebTTY core profile collects exactly one enabled Playwright test', { timeout: 30_000 }, () => {

@@ -878,13 +878,6 @@ test.describe('Ploinky core WebTTY release gate', () => {
       await waitForAgentProcess(initialRuntime, initialGitAgent, foregroundPattern, false);
       await waitForAgentMarker(initialRuntime, initialGitAgent, initialAgentMarker, false);
 
-      const replacementChooser = await openTerminalChooser(page, fixture.nestedDirectoryPath);
-      const staleGitTarget = replacementChooser.discovery.targets.find((target) => (
-        target.kind === 'agent'
-        && target.label === initialGitAgent.agentName
-        && target.detail === `${initialGitAgent.repoName}/${initialGitAgent.agentName}`
-      ));
-      expect(staleGitTarget).toBeTruthy();
       const replacementVictimMarkerBaseline = collectAgentMarkerTokens(initialRuntime, initialGitAgent);
       const replacementVictim = await openTerminalFromExplorer(
         page,
@@ -917,6 +910,14 @@ test.describe('Ploinky core WebTTY release gate', () => {
       const replacementVictimPattern = new RegExp(`(?:^|\\s)sleep ${replacementVictimSeconds}(?:$|\\s)`);
       await waitForAgentProcess(initialRuntime, initialGitAgent, replacementVictimPattern, true);
       expect(replacementVictimDiagnostics.actionableEvents(), 'the replacement victim must be healthy before target removal').toEqual([]);
+
+      const replacementChooser = await openTerminalChooser(page, fixture.nestedDirectoryPath);
+      const staleGitTarget = replacementChooser.discovery.targets.find((target) => (
+        target.kind === 'agent'
+        && target.label === initialGitAgent.agentName
+        && target.detail === `${initialGitAgent.repoName}/${initialGitAgent.agentName}`
+      ));
+      expect(staleGitTarget).toBeTruthy();
       replacementVictimDiagnostics.setExpectedOffline(true);
       const restartAgentResult = await restartPloinkyTarget('gitAgent', fixture);
       expect(restartAgentResult.stderr).not.toMatch(/failed to (?:restart|start)|managed restart failed/i);
@@ -950,6 +951,7 @@ test.describe('Ploinky core WebTTY release gate', () => {
         replacementRuntimeBeforeStale,
         replacementBeforeStale,
       );
+      const staleLaunchSubmittedAt = Date.now();
       const staleObservation = await runWhileObservingNoAgentShell(
         replacementRuntimeBeforeStale,
         replacementBeforeStale,
@@ -959,6 +961,15 @@ test.describe('Ploinky core WebTTY release gate', () => {
           body: { launch: staleGitTarget.launch, cols: 80, rows: 24 },
         }),
       );
+      const staleLaunchObservedAt = Date.now();
+      expect(
+        staleLaunchSubmittedAt,
+        'the predecessor launch must still be live when replacement revalidation is submitted',
+      ).toBeLessThan(replacementChooser.discovery.expiresAt);
+      expect(
+        staleLaunchObservedAt,
+        'the predecessor rejection must complete before expiry can satisfy it ambiguously',
+      ).toBeLessThan(replacementChooser.discovery.expiresAt);
       const staleLaunch = staleObservation.value;
       expect(staleLaunch).toMatchObject({
         status: 404,
