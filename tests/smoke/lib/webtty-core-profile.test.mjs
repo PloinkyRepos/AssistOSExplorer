@@ -29,6 +29,11 @@ test('npm WebTTY core profile owns the exact Chromium release gate', () => {
   assert.match(webttySpec, /openTerminalFromExplorer\(page, fixture\.nestedDirectoryPath\)/);
   assert.match(webttySpec, /normalCloseKeptWebttyAvailable: true/);
   assert.match(webttySpec, /collectWebttyRuntimeEvidence/);
+  assert.match(webttySpec, /SMOKE_PLOINKY_BOX_CONTAINER/);
+  assert.match(webttySpec, /SMOKE_EXPECT_BOX_IMAGE_ID/);
+  assert.match(webttySpec, /SMOKE_EXPECT_BOX_IMAGE_REF/);
+  assert.match(webttySpec, /expectedPloinkySource/);
+  assert.match(webttySpec, /requireFreshImage: false/);
   assert.match(webttySpec, /requireAgentEvidence\(initialRuntime, 'gitAgent', \{ eligible: true \}\)/);
   assert.match(webttySpec, /requireAgentEvidence\(initialRuntime, 'liveKitServerAgent', \{ eligible: false \}\)/);
   assert.match(webttySpec, /independentlyProvedAgentTargetCount/);

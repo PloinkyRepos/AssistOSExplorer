@@ -83,6 +83,27 @@ function requireLocalWorkspaceFixture() {
   });
 }
 
+function requirePinnedRuntimeBinding() {
+  const expectedContainerName = String(process.env.SMOKE_PLOINKY_BOX_CONTAINER || '').trim();
+  const expectedImageId = String(process.env.SMOKE_EXPECT_BOX_IMAGE_ID || '').trim();
+  const expectedImageRef = String(process.env.SMOKE_EXPECT_BOX_IMAGE_REF || '').trim();
+  if (!expectedContainerName || !expectedImageId || !expectedImageRef) {
+    throw new Error(
+      'The WebTTY core release gate requires SMOKE_PLOINKY_BOX_CONTAINER, '
+      + 'SMOKE_EXPECT_BOX_IMAGE_ID, and SMOKE_EXPECT_BOX_IMAGE_REF.',
+    );
+  }
+  const ploinkyExecutable = fs.realpathSync(resolvePloinkyExecutable());
+  const expectedPloinkySource = fs.realpathSync(path.resolve(path.dirname(ploinkyExecutable), '..'));
+  return Object.freeze({
+    expectedContainerName,
+    expectedImageId,
+    expectedImageRef,
+    expectedPloinkySource,
+    requireFreshImage: false,
+  });
+}
+
 async function browserMutation(page, pathname, { method = 'POST', body } = {}) {
   return page.evaluate(async ({ requestPath, requestMethod, requestBody }) => {
     const csrf = document.cookie
@@ -473,6 +494,7 @@ test.describe('Ploinky core WebTTY release gate', () => {
   test('local administrator controls the mounted workspace while an ordinary user is denied', async ({ page, browser }, testInfo) => {
     test.setTimeout(Math.max(smokeConfig.timeouts.test, 900_000));
     const fixture = requireLocalWorkspaceFixture();
+    const runtimeBinding = requirePinnedRuntimeBinding();
     const terminals = [];
     let userContext = null;
     let foreignAdminContext = null;
@@ -493,6 +515,7 @@ test.describe('Ploinky core WebTTY release gate', () => {
             baseURL: smokeConfig.baseURL,
             workspaceRoot: fixture.workspaceRoot,
             selectedDirectory: fixture.nestedRoot,
+            ...runtimeBinding,
           });
           requireAgentEvidence(candidate, 'gitAgent', { eligible: true });
           requireAgentEvidence(candidate, 'liveKitServerAgent', { eligible: false });
@@ -915,6 +938,7 @@ test.describe('Ploinky core WebTTY release gate', () => {
         baseURL: smokeConfig.baseURL,
         workspaceRoot: fixture.workspaceRoot,
         selectedDirectory: fixture.nestedRoot,
+        ...runtimeBinding,
       });
       const replacementBeforeStale = requireAgentEvidence(
         replacementRuntimeBeforeStale,
@@ -958,6 +982,7 @@ test.describe('Ploinky core WebTTY release gate', () => {
         baseURL: smokeConfig.baseURL,
         workspaceRoot: fixture.workspaceRoot,
         selectedDirectory: fixture.nestedRoot,
+        ...runtimeBinding,
       });
       const replacementGitAgent = requireAgentEvidence(replacementRuntime, 'gitAgent', { eligible: true });
       expect(replacementGitAgent.containerId).toBe(replacementBeforeStale.containerId);

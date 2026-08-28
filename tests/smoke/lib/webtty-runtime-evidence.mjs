@@ -221,15 +221,35 @@ export function collectWebttyRuntimeEvidence({
   baseURL,
   workspaceRoot,
   selectedDirectory,
+  expectedContainerName = '',
+  expectedImageId = '',
+  expectedImageRef = '',
+  expectedPloinkySource = '',
+  requireFreshImage = true,
   command = run,
+  collectLiveBox = collectLiveBoxEvidence,
 } = {}) {
   const canonicalWorkspace = fs.realpathSync(workspaceRoot);
   const canonicalSelected = fs.realpathSync(selectedDirectory);
-  const expectedWorkspaceHash = workspaceHash(canonicalWorkspace);
   if (!segmentContains(canonicalWorkspace, canonicalSelected)) {
     throw new Error('WebTTY runtime evidence selection is outside the workspace.');
   }
-  const box = collectLiveBoxEvidence({ baseURL, command });
+  const box = collectLiveBox({
+    baseURL,
+    expectedContainerName,
+    expectedImageId,
+    expectedImageRef,
+    expectedPloinkySource,
+    expectedWorkspaceSource: canonicalWorkspace,
+    requireFreshImage,
+    command,
+  });
+  const mountedWorkspace = exactObject(box.workspaceSourceMount, 'outer Box workspace source mount');
+  const mountedWorkspaceDestination = normalizeDestination(mountedWorkspace.destination);
+  if (mountedWorkspaceDestination !== '/workspace' || mountedWorkspace.readWrite !== true) {
+    throw new Error('Outer Box workspace source evidence must be the exact writable /workspace bind.');
+  }
+  const expectedWorkspaceHash = workspaceHash(mountedWorkspaceDestination);
   const agents = [];
   for (const { containerName, record } of readRegistry(canonicalWorkspace)) {
     const candidate = exactRuntimeRecord(containerName, record);

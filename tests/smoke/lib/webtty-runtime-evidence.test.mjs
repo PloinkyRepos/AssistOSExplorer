@@ -8,6 +8,7 @@ import {
   captureNestedPodmanEventCursor,
   collectNestedContainerEvents,
   collectExactRoutingServerIdentity,
+  collectWebttyRuntimeEvidence,
   collectWebttyRecoveryDirectoryState,
   crashExactRoutingServer,
   independentlyTranslateMount,
@@ -84,6 +85,53 @@ test('workspace ownership hash is bound to the canonical workspace path', (t) =>
     workspaceHash(fs.realpathSync(root)),
     workspaceHash(path.join(fs.realpathSync(root), 'different')),
   );
+});
+
+test('runtime evidence binds an immutable prebuilt Box to explicit identity, image, and source pins', (t) => {
+  const { root, selected } = fixture(t);
+  fs.mkdirSync(path.join(root, '.ploinky'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.ploinky', 'agents.json'), JSON.stringify({ _config: {} }));
+  const expectedPloinkySource = fs.realpathSync(root);
+  let received = null;
+  const evidence = collectWebttyRuntimeEvidence({
+    baseURL: 'http://127.0.0.1:8080',
+    workspaceRoot: root,
+    selectedDirectory: selected,
+    expectedContainerName: 'ploinky-box-release-audit',
+    expectedImageId: `sha256:${'c'.repeat(64)}`,
+    expectedImageRef: 'docker.io/assistos/ploinky-box:immutable-candidate',
+    expectedPloinkySource,
+    requireFreshImage: false,
+    command: () => {
+      throw new Error('the injected Box collector must own outer runtime commands');
+    },
+    collectLiveBox(options) {
+      received = options;
+      return {
+        box: { containerId: OUTER_ID },
+        workspaceSourceMount: {
+          type: 'bind',
+          source: root,
+          destination: '/workspace',
+          readWrite: true,
+        },
+      };
+    },
+  });
+  assert.equal(evidence.outerContainerId, OUTER_ID);
+  assert.deepEqual(received, {
+    baseURL: 'http://127.0.0.1:8080',
+    expectedContainerName: 'ploinky-box-release-audit',
+    expectedImageId: `sha256:${'c'.repeat(64)}`,
+    expectedImageRef: 'docker.io/assistos/ploinky-box:immutable-candidate',
+    expectedPloinkySource,
+    expectedWorkspaceSource: expectedPloinkySource,
+    requireFreshImage: false,
+    command: received.command,
+  });
+  assert.equal(typeof received.command, 'function');
+  assert.equal(evidence.workspaceHash, workspaceHash('/workspace'));
+  assert.notEqual(evidence.workspaceHash, workspaceHash(expectedPloinkySource));
 });
 
 test('nested inspection accepts only exact immutable-ID not-found as absence', () => {

@@ -1,4 +1,8 @@
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 
 import {
@@ -8,6 +12,8 @@ import {
   validateBoxFreshness,
   validateLiveBoxEvidence,
   validateReadOnlyPloinkySourceMount,
+  validateWorkspaceSourceMount,
+  validateVerifiedSeccompRuntime,
   verifyNetworkLaneCompletion,
 } from './live-box.mjs';
 
@@ -50,6 +56,7 @@ function evidence() {
         imageRef: 'docker.io/assistos/ploinky-box:runtime',
         routerHostPort: '8080',
         mediaHostPort: '7882',
+        seccompFingerprint: 'd'.repeat(64),
         dependenciesFingerprint: 'e'.repeat(64),
         imagesFingerprint: 'f'.repeat(64),
         agentLibMode: 'managed',
@@ -64,6 +71,11 @@ function evidence() {
       publicIPv4: '',
       selectedRouterHostPort: '8080',
       normalizedPortBindings: exactBindings(),
+      securityOptions: [
+        'label=disable',
+        'seccomp=/verified/ploinky/ploinky-box/seccomp/podman-nested-pid-fallback.json',
+        'unmask=all',
+      ],
     },
   };
 }
@@ -128,6 +140,71 @@ test('live Box source evidence requires the exact verified read-only Ploinky bin
   assert.throws(() => validateReadOnlyPloinkySourceMount([{
     Type: 'bind', Source: '/work/other', Destination: '/opt/ploinky', RW: false,
   }], '/work/ploinky', { realpathSync }), /does not equal/);
+});
+
+test('live Box workspace evidence requires the exact host source as one writable /workspace bind', () => {
+  const mounts = [{
+    Type: 'bind',
+    Source: '/host/workspace',
+    Destination: '/workspace',
+    RW: true,
+  }];
+  const realpathSync = (value) => value;
+  assert.deepEqual(validateWorkspaceSourceMount(mounts, '/host/workspace', { realpathSync }), {
+    type: 'bind',
+    source: '/host/workspace',
+    destination: '/workspace',
+    readWrite: true,
+  });
+  assert.throws(
+    () => validateWorkspaceSourceMount([{ ...mounts[0], RW: false }], '/host/workspace', { realpathSync }),
+    /writable bind mount/,
+  );
+  assert.throws(
+    () => validateWorkspaceSourceMount(mounts, '/different/workspace', { realpathSync }),
+    /does not equal/,
+  );
+  assert.throws(
+    () => validateWorkspaceSourceMount([...mounts, mounts[0]], '/host/workspace', { realpathSync }),
+    /exactly one/,
+  );
+});
+
+test('live Box seccomp evidence binds exact SecurityOpt to verified candidate profile bytes', (t) => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'verified-ploinky-seccomp-')));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const profilePath = path.join(root, 'ploinky-box', 'seccomp', 'podman-nested-pid-fallback.json');
+  fs.mkdirSync(path.dirname(profilePath), { recursive: true });
+  const profileBytes = Buffer.from(JSON.stringify({
+    defaultAction: 'SCMP_ACT_ERRNO',
+    syscalls: [{ names: ['name_to_handle_at'], action: 'SCMP_ACT_ERRNO', errnoRet: 95 }],
+  }));
+  fs.writeFileSync(profilePath, profileBytes);
+  const fingerprint = crypto.createHash('sha256').update(profileBytes).digest('hex');
+  const securityOptions = ['label=disable', `seccomp=${profilePath}`, 'unmask=all'].sort();
+  const runtime = {
+    semanticLabels: { seccompFingerprint: fingerprint },
+    securityOptions,
+  };
+  assert.deepEqual(validateVerifiedSeccompRuntime(runtime, root), {
+    path: profilePath,
+    fingerprint,
+    securityOptions,
+  });
+  assert.throws(
+    () => validateVerifiedSeccompRuntime({
+      ...runtime,
+      semanticLabels: { seccompFingerprint: 'a'.repeat(64) },
+    }, root),
+    /does not match the verified Ploinky profile bytes/,
+  );
+  assert.throws(
+    () => validateVerifiedSeccompRuntime({
+      ...runtime,
+      securityOptions: ['label=disable', 'seccomp=/different/profile.json', 'unmask=all'].sort(),
+    }, root),
+    /does not apply the verified Ploinky seccomp profile exactly/,
+  );
 });
 
 test('native gates enforce the same fresh image and container generation contract', () => {

@@ -90,6 +90,7 @@ function boxEvidence() {
           imageRef: 'docker.io/assistos/ploinky-box:runtime',
           routerHostPort: '8080',
           mediaHostPort: '7882',
+          seccompFingerprint: 'd'.repeat(64),
           dependenciesFingerprint: 'e'.repeat(64),
           imagesFingerprint: 'f'.repeat(64),
           agentLibMode: 'managed',
@@ -107,6 +108,11 @@ function boxEvidence() {
           '7882/udp': [{ HostIp: '0.0.0.0', HostPort: '7882' }],
           '8080/tcp': [{ HostIp: '127.0.0.1', HostPort: '8080' }],
         },
+        securityOptions: [
+          'label=disable',
+          'seccomp=/verified/ploinky/ploinky-box/seccomp/podman-nested-pid-fallback.json',
+          'unmask=all',
+        ],
       },
     },
     liveKit: {

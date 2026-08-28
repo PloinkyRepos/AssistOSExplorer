@@ -232,6 +232,11 @@ its exact host workspace:
 ```bash
 SMOKE_BASE_URL=http://127.0.0.1:18080 \
 SMOKE_WORKSPACE_ROOT=/absolute/path/to/the/box/workspace \
+SMOKE_DEPLOYMENT_MODE=box \
+SMOKE_PLOINKY_BIN=/absolute/path/to/the/verified/ploinky/bin/ploinky \
+SMOKE_PLOINKY_BOX_CONTAINER=ploinky-box-workspace-0123456789ab \
+SMOKE_EXPECT_BOX_IMAGE_ID=sha256:<exact-64-hex-image-id> \
+SMOKE_EXPECT_BOX_IMAGE_REF=docker.io/assistos/ploinky-box:<immutable-candidate> \
 npm run test:webtty
 ```
 
@@ -258,6 +263,9 @@ session mutation. A direct `?dir=` URL is required to fail closed without
 creating a session. Missing workspace root, non-loopback target, missing exact
 fresh graph runtime, softened assertion, or skipped target state is a hard
 failure while this gate is selected.
+The Box generation must be fresh, but its prebuilt image may be older only when
+the gate binds the exact container name, immutable image ID/reference, and
+read-only mounted Ploinky candidate derived from `SMOKE_PLOINKY_BIN`.
 
 The listener gate always requires `required-loopback`, requires exactly one
 listener for each eligible `required-assigned-managed-gateway`, and requires no
@@ -289,7 +297,8 @@ Opt-in checks:
   publication used only for local Podman generation inspection. The live Box
   inspector still rejects non-loopback, ambiguous, stale, or mismatched outer
   containers. Its exact semantic-label contract includes the selected
-  achillesAgentLib mode, source-identity hash, content fingerprint,
+  nested-Podman seccomp profile fingerprint and the selected achillesAgentLib
+  mode, source-identity hash, content fingerprint,
   workspace-relative source path, and Git commit. The ordinary Copilot gate
   requires that live AgentLib commit to equal the verified release-manifest
   commit before and after Chromium. It requires a fresh outer-container
