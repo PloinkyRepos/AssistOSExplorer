@@ -9,8 +9,20 @@ function isPlainObject(value) {
     return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
+function hasExactKeys(value, expected) {
+    if (!isPlainObject(value)) return false;
+    const actual = Object.keys(value).sort();
+    const canonical = [...expected].sort();
+    return actual.length === canonical.length
+        && actual.every((key, index) => key === canonical[index]);
+}
+
+function utf8Length(value) {
+    return new TextEncoder().encode(value).byteLength;
+}
+
 function safeDisplayText(value, maxLength, fieldName) {
-    if (typeof value !== 'string' || !value.length || value.length > maxLength || /[\0\r\n]/.test(value)) {
+    if (typeof value !== 'string' || !value.length || utf8Length(value) > maxLength || /[\0\r\n]/.test(value)) {
         throw new Error(`Invalid terminal target ${fieldName}.`);
     }
     return value;
@@ -43,7 +55,11 @@ export function sortTerminalTargets(targets) {
 }
 
 export function normalizeTerminalDiscoveryPayload(payload) {
-    if (!isPlainObject(payload) || payload.ok !== true || !isPlainObject(payload.discovery)) {
+    if (!hasExactKeys(payload, ['ok', 'discovery'])
+        || payload.ok !== true
+        || !hasExactKeys(payload.discovery, [
+            'id', 'directory', 'expiresAt', 'agentTargetsAvailable', 'targets',
+        ])) {
         throw new Error('Invalid terminal target discovery response.');
     }
     const source = payload.discovery;
@@ -51,7 +67,7 @@ export function normalizeTerminalDiscoveryPayload(payload) {
     if (!IDENTIFIER_PATTERN.test(id)) {
         throw new Error('Invalid terminal discovery identifier.');
     }
-    if (typeof source.directory !== 'string' || source.directory.length > 4096 || /[\0\r\n]/.test(source.directory)) {
+    if (typeof source.directory !== 'string' || utf8Length(source.directory) > 4096 || /[\0\r\n]/.test(source.directory)) {
         throw new Error('Invalid terminal discovery directory.');
     }
     if (!Number.isSafeInteger(source.expiresAt) || source.expiresAt <= 0) {
@@ -86,7 +102,7 @@ export function normalizeTerminalDiscoveryPayload(payload) {
             label: safeDisplayText(target.label, 128, 'label'),
             detail: safeDisplayText(target.detail, 256, 'detail'),
             access: target.access,
-            cwdDisplay: safeDisplayText(target.cwdDisplay, 1024, 'working directory'),
+            cwdDisplay: safeDisplayText(target.cwdDisplay, 4096, 'working directory'),
         });
     });
     if (targets.filter((target) => target.kind === 'box').length !== 1) {
@@ -114,17 +130,23 @@ export function openTerminalLaunchWindow(launch, windowRef = globalThis.window) 
     const launchUrl = buildTerminalLaunchUrl(launch);
     // Chromium deliberately returns null for window.open() when the noopener
     // feature is present, even when it opened the tab. Probe with a same-origin
-    // blank tab so a null return still means blocked, then establish the same
-    // protections before navigating it to the fragment-only handoff.
+    // blank tab so a null return still means blocked. Fail closed unless opener
+    // isolation and an explicit hyperlink no-referrer policy can both be
+    // established before navigating that tab to the fragment-only handoff.
     const popup = windowRef?.open?.('about:blank', '_blank') || null;
     if (!popup) return null;
     try {
         popup.opener = null;
-        const meta = popup.document.createElement('meta');
-        meta.name = 'referrer';
-        meta.content = 'no-referrer';
-        popup.document.head.appendChild(meta);
-        popup.location.replace(launchUrl);
+        if (popup.opener !== null) {
+            throw new Error('The terminal popup opener could not be isolated.');
+        }
+        const anchor = popup.document.createElement('a');
+        anchor.href = launchUrl;
+        anchor.target = '_self';
+        anchor.rel = 'noopener noreferrer';
+        anchor.referrerPolicy = 'no-referrer';
+        popup.document.body.appendChild(anchor);
+        anchor.click();
         return popup;
     } catch (_) {
         try {
@@ -222,6 +244,9 @@ export class TerminalTargetModal {
         this.started = false;
         this.closed = false;
         this.handedOff = false;
+        this.viewState = 'loading';
+        this.viewMessage = 'Finding available terminal targets…';
+        this.currentDiscovery = null;
         this.boundKeydown = this.handleKeydown.bind(this);
         this.invalidate();
     }
@@ -229,6 +254,8 @@ export class TerminalTargetModal {
     beforeRender() {}
 
     afterRender() {
+        const dialog = this.element.closest?.('dialog');
+        dialog?.setAttribute?.('aria-labelledby', 'terminalTargetTitle');
         this.directoryElement = this.element.querySelector('#terminalTargetDirectory');
         this.statusElement = this.element.querySelector('#terminalTargetStatus');
         this.warningElement = this.element.querySelector('#terminalTargetWarning');
@@ -236,9 +263,16 @@ export class TerminalTargetModal {
         this.listElement = this.element.querySelector('#terminalTargetList');
         this.retryButton = this.element.querySelector('#terminalTargetRetry');
         this.refreshButton = this.element.querySelector('#terminalTargetRefresh');
+        this.element.removeEventListener('keydown', this.boundKeydown);
         this.element.addEventListener('keydown', this.boundKeydown);
         this.directoryElement.textContent = this.directory ? `/${this.directory}` : '/';
-        this.renderLoading('Finding available terminal targets…');
+        if (this.viewState === 'ready' && this.currentDiscovery) {
+            this.renderReady(this.currentDiscovery);
+        } else if (this.viewState === 'error') {
+            this.renderError(this.viewMessage);
+        } else {
+            this.renderLoading(this.viewMessage);
+        }
         if (!this.started) {
             this.started = true;
             void this.discoverTargets();
@@ -271,6 +305,9 @@ export class TerminalTargetModal {
     }
 
     renderLoading(message) {
+        this.viewState = 'loading';
+        this.viewMessage = message;
+        this.currentDiscovery = null;
         this.targetsByLaunch.clear();
         this.listElement.replaceChildren();
         this.listElement.setAttribute('aria-busy', 'true');
@@ -283,6 +320,9 @@ export class TerminalTargetModal {
     }
 
     renderError(message) {
+        this.viewState = 'error';
+        this.viewMessage = message;
+        this.currentDiscovery = null;
         this.targetsByLaunch.clear();
         this.listElement.replaceChildren();
         this.listElement.setAttribute('aria-busy', 'false');
@@ -332,6 +372,9 @@ export class TerminalTargetModal {
     }
 
     renderReady(discovery) {
+        this.viewState = 'ready';
+        this.viewMessage = '';
+        this.currentDiscovery = discovery;
         this.targetsByLaunch.clear();
         this.listElement.replaceChildren();
         const fragment = document.createDocumentFragment();

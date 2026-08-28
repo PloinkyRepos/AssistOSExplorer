@@ -236,15 +236,28 @@ npm run test:webtty
 ```
 
 The gate requires the canonical local `admin` and `user` accounts. It proves
-the administrator-only Explorer launcher and chooser, Box-first ordering,
-server-derived eligible-agent rows, fragment-only opaque launch, the selected
-target's effective working directory, two-way terminal I/O, normal cleanup,
-and successful creation of a second terminal through a fresh discovery. It
-also proves replay and stale-target behavior, fragment stripping, and that an
-ordinary user does not receive the launcher and gets `403` from the page,
-discovery, and session-creation mutations. A direct `?dir=` launch, missing
-workspace root, or non-loopback target is a hard failure while this gate is
-selected.
+the administrator-only Explorer launcher, the native chooser's accessible
+name, Box-first ordering, and that the chooser renders exactly the bounded
+safe target rows independently derived from exact current registry, immutable
+container, ownership-label, and mount evidence. The fresh graph must include
+the global `gitAgent` and isolated `liveKitServerAgent`; the former must be
+eligible and the latter must be absent for the selected folder. Any naturally
+present effective read-only or destination-shadowed mount is evaluated by the
+same independent physical inventory instead of being fabricated by the test.
+
+The gate selects both Box and agent targets through opaque fragment-only
+launches. It proves immediate fragment stripping and no-referrer handoff,
+single-use replay and cross-session rejection, origin/CSRF enforcement, safe
+target banners, independently translated working directories, two-way PTY I/O,
+resize, disconnect cleanup with a foreground child, targeted agent replacement,
+stale launch rejection, real chooser refresh, authentication-revocation
+cleanup, default Router restart recovery, and Box availability after agent and
+Router lifecycle events. It also proves that an ordinary user does not receive
+the launcher and gets `403` from the page, discovery, and exact launch-record
+session mutation. A direct `?dir=` URL is required to fail closed without
+creating a session. Missing workspace root, non-loopback target, missing exact
+fresh graph runtime, softened assertion, or skipped target state is a hard
+failure while this gate is selected.
 
 The listener gate always requires `required-loopback`, requires exactly one
 listener for each eligible `required-assigned-managed-gateway`, and requires no

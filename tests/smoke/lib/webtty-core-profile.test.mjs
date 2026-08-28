@@ -28,6 +28,22 @@ test('npm WebTTY core profile owns the exact Chromium release gate', () => {
   assert.match(webttySpec, /assertExplorerDirectory\(page, fixture\.parentDirectoryPath\)/);
   assert.match(webttySpec, /openTerminalFromExplorer\(page, fixture\.nestedDirectoryPath\)/);
   assert.match(webttySpec, /normalCloseKeptWebttyAvailable: true/);
+  assert.match(webttySpec, /collectWebttyRuntimeEvidence/);
+  assert.match(webttySpec, /requireAgentEvidence\(initialRuntime, 'gitAgent', \{ eligible: true \}\)/);
+  assert.match(webttySpec, /requireAgentEvidence\(initialRuntime, 'liveKitServerAgent', \{ eligible: false \}\)/);
+  assert.match(webttySpec, /independentlyProvedAgentTargetCount/);
+  assert.match(webttySpec, /missingCsrfStatus/);
+  assert.match(webttySpec, /forgedOriginStatus/);
+  assert.match(webttySpec, /crossSessionLaunchStatus/);
+  assert.match(webttySpec, /restartPloinkyTarget\('gitAgent'/);
+  assert.match(webttySpec, /crashExactRoutingServer\(replacementRuntime, replacementGitAgent\)/);
+  assert.match(webttySpec, /collectExactRoutingServerIdentity\(replacementRuntime\)/);
+  assert.match(webttySpec, /readOnlyTargetExercised/);
+  assert.match(webttySpec, /runWhileObservingNoAgentShell/);
+  assert.match(webttySpec, /collectNestedContainerEvents/);
+  assert.match(webttySpec, /WEBTTY_AGENT_HOSTNAME/);
+  assert.match(webttySpec, /authRevocationRemovedExecAndForegroundProcess/);
+  assert.match(webttySpec, /defaultRouterCrashRecoveryRemovedAgentExecAndForegroundProcess/);
 });
 
 test('WebTTY core profile collects exactly one enabled Playwright test', { timeout: 30_000 }, () => {

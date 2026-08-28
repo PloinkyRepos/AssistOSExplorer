@@ -1,5 +1,6 @@
 import {
     normalizePath,
+    canonicalTerminalDirectoryPath,
     joinPath,
     parentPath,
     decodeLocalActionPathArg,
@@ -1734,12 +1735,11 @@ export class FileExp {
     }
 
     async openTerminalHere(element) {
-        const targetPath = this.normalizePath(element?.dataset?.entryPath || '');
-        if (!targetPath) {
+        const relativePath = canonicalTerminalDirectoryPath(element?.dataset?.entryPath);
+        if (relativePath === null) {
             return false;
         }
         try {
-            const relativePath = targetPath.replace(/^\/+/, '');
             await assistOS.UI.showModal('terminal-target-modal', { dir: relativePath });
             return true;
         } catch (_) {

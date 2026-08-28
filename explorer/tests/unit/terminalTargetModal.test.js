@@ -204,12 +204,12 @@ test('discovery and cancel use same-origin mutation protection and exact bodies'
     assert.equal(calls[1].options.keepalive, true);
 });
 
-test('target selection opens the opaque fragment directly and closes only for a non-null popup', (t) => {
+test('target selection opens an isolated no-referrer fragment and closes only for a non-null popup', (t) => {
     const previousWindow = globalThis.window;
     const previousAssistOS = globalThis.assistOS;
     const opened = [];
     const navigated = [];
-    const metaElements = [];
+    const anchors = [];
     const closed = [];
     t.after(() => {
         globalThis.window = previousWindow;
@@ -222,13 +222,19 @@ test('target selection opens the opaque fragment directly and closes only for a 
                 opener: globalThis.window,
                 document: {
                     createElement(tagName) {
-                        const element = { tagName, name: '', content: '' };
-                        metaElements.push(element);
+                        const element = {
+                            tagName,
+                            href: '',
+                            target: '',
+                            rel: '',
+                            referrerPolicy: '',
+                            click() { navigated.push(this.href); },
+                        };
+                        anchors.push(element);
                         return element;
                     },
-                    head: { appendChild() {} },
+                    body: { appendChild() {} },
                 },
-                location: { replace: (url) => navigated.push(url) },
             };
         },
     };
@@ -254,7 +260,14 @@ test('target selection opens the opaque fragment directly and closes only for a 
         '_blank',
     ]]);
     assert.deepEqual(navigated, [`/webtty/#launch=${BOX_LAUNCH}`]);
-    assert.deepEqual(metaElements, [{ tagName: 'meta', name: 'referrer', content: 'no-referrer' }]);
+    assert.deepEqual(anchors, [{
+        tagName: 'a',
+        href: `/webtty/#launch=${BOX_LAUNCH}`,
+        target: '_self',
+        rel: 'noopener noreferrer',
+        referrerPolicy: 'no-referrer',
+        click: anchors[0].click,
+    }]);
     assert.deepEqual(closed, [modal.element]);
     assert.equal(modal.handedOff, true);
     assert.doesNotMatch(navigated[0], /(?:dir|container|runtime|cwd)=/);
@@ -354,15 +367,19 @@ test('launch URL accepts only opaque random identifiers', () => {
 
 test('popup probe severs opener before fragment navigation and closes an unsafe partial popup', () => {
     const events = [];
+    const anchor = {
+        click() { events.push(['click']); },
+    };
     const popup = {
         _opener: { parent: true },
         get opener() { return this._opener; },
         set opener(value) { events.push(['opener', value]); this._opener = value; },
         document: {
-            createElement() { return {}; },
-            head: { appendChild(meta) { events.push(['meta', meta.name, meta.content]); } },
+            createElement(tag) { events.push(['create', tag]); return anchor; },
+            body: { appendChild(element) { events.push([
+                'append', element.href, element.target, element.rel, element.referrerPolicy,
+            ]); } },
         },
-        location: { replace(url) { events.push(['navigate', url]); } },
     };
     const windowRef = { open: (...args) => { events.push(['open', ...args]); return popup; } };
 
@@ -370,18 +387,73 @@ test('popup probe severs opener before fragment navigation and closes an unsafe 
     assert.deepEqual(events, [
         ['open', 'about:blank', '_blank'],
         ['opener', null],
-        ['meta', 'referrer', 'no-referrer'],
-        ['navigate', `/webtty/#launch=${AGENT_LAUNCH_A}`],
+        ['create', 'a'],
+        ['append', `/webtty/#launch=${AGENT_LAUNCH_A}`, '_self', 'noopener noreferrer', 'no-referrer'],
+        ['click'],
     ]);
 
     let closed = false;
     const unsafePopup = {
         set opener(_value) {},
+        get opener() { return null; },
         document: { createElement() { throw new Error('unavailable'); } },
         close() { closed = true; },
     };
     assert.equal(openTerminalLaunchWindow(AGENT_LAUNCH_A, { open: () => unsafePopup }), null);
     assert.equal(closed, true);
+
+    let navigated = false;
+    let isolationFailureClosed = false;
+    const openerIsolationFailure = {
+        get opener() { return { stillConnected: true }; },
+        set opener(_value) {},
+        document: {
+            createElement() { return { click() { navigated = true; } }; },
+            body: { appendChild() {} },
+        },
+        close() { isolationFailureClosed = true; },
+    };
+    assert.equal(openTerminalLaunchWindow(
+        AGENT_LAUNCH_A,
+        { open: () => openerIsolationFailure }
+    ), null);
+    assert.equal(isolationFailureClosed, true);
+    assert.equal(navigated, false);
+});
+
+test('afterRender gives the actual native dialog the chooser title as its accessible name', () => {
+    const dialog = new FakeElement('dialog');
+    const fields = new Map([
+        ['#terminalTargetDirectory', new FakeElement('div')],
+        ['#terminalTargetStatus', new FakeElement('p')],
+        ['#terminalTargetWarning', new FakeElement('div')],
+        ['#terminalTargetNotice', new FakeElement('p')],
+        ['#terminalTargetList', new FakeElement('ul')],
+        ['#terminalTargetRetry', new FakeElement('button')],
+        ['#terminalTargetRefresh', new FakeElement('button')],
+    ]);
+    const element = {
+        closest(selector) { return selector === 'dialog' ? dialog : null; },
+        querySelector(selector) { return fields.get(selector); },
+        removeEventListener() {},
+        addEventListener() {},
+    };
+    const modal = Object.create(TerminalTargetModal.prototype);
+    Object.assign(modal, {
+        element,
+        directory: 'projects/demo',
+        targetsByLaunch: new Map(),
+        viewState: 'loading',
+        viewMessage: 'Finding available terminal targets…',
+        currentDiscovery: null,
+        boundKeydown() {},
+        started: true,
+    });
+
+    modal.afterRender();
+
+    assert.equal(dialog.attributes.get('aria-labelledby'), 'terminalTargetTitle');
+    assert.equal(fields.get('#terminalTargetDirectory').textContent, '/projects/demo');
 });
 
 test('refresh invalidates every prior choice before requesting a replacement batch', async (t) => {
