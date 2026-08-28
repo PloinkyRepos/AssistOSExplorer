@@ -224,6 +224,25 @@ It proves the dashboard, Explorer shell, and routed WebChat shell through
 Router. It is not the separate WebMeet external-network or two-account
 ScreenShare gate, and none of those gates substitutes for another.
 
+## Ploinky Core WebTTY Release Gate
+
+Run the administrator/ordinary-user WebTTY gate against a fresh local Box and
+its exact host workspace:
+
+```bash
+SMOKE_BASE_URL=http://127.0.0.1:18080 \
+SMOKE_WORKSPACE_ROOT=/absolute/path/to/the/box/workspace \
+npm run test:webtty
+```
+
+The gate requires the canonical local `admin` and `user` accounts. It proves
+the administrator-only Explorer launcher, same-origin nested-directory launch,
+initial `/workspace` cwd, two-way host workspace visibility, normal cleanup,
+and successful creation of a second terminal. It also proves that an ordinary
+user does not receive the launcher and gets `403` from both the page and the
+session-creation mutation. A missing workspace root or non-loopback target is
+a hard failure while this gate is selected.
+
 The listener gate always requires `required-loopback`, requires exactly one
 listener for each eligible `required-assigned-managed-gateway`, and requires no
 listener for an `inactive-unassigned-managed-gateway`. The inactive state

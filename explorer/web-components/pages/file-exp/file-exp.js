@@ -90,7 +90,6 @@ import {
     pollCurrentFileView as pollCurrentFileViewImpl
 } from "./file-exp-current-file-monitor.js";
 import { emitAuditEvent } from "../../../services/audit/auditService.js";
-import { buildAgentPortUrl } from "../../../services/runtime/agent-port-url.js";
 
 const LARGE_FILE_PREVIEW_LIMIT_BYTES = 1.5 * 1024 * 1024; // ~1.5MB safety window before transport limits
 const LARGE_FILE_PREVIEW_LINES = 400;
@@ -1741,8 +1740,7 @@ export class FileExp {
         }
         try {
             const relativePath = targetPath.replace(/^\/+/, '');
-            const targetPathname = buildAgentPortUrl('webtty', 7681, '/');
-            const targetUrl = new URL(targetPathname, window.location.origin);
+            const targetUrl = new URL('/webtty/', window.location.origin);
             targetUrl.searchParams.set('dir', relativePath);
             window.open(targetUrl.toString(), '_blank', 'noopener,noreferrer');
             return true;

@@ -31,7 +31,6 @@
         "soplangAgent global no-wait",
         "tasksAgent global",
         "AchillesCLI/achilles-cli global no-wait",
-        "basic/webtty global no-wait",
         "webmeetInfra/liveKitServerAgent no-wait",
         "webmeetStt no-wait",
         "webmeetAgent global no-wait",
@@ -43,7 +42,6 @@
         "workspaceMonitorAgent no-wait"
     ],
     "repos": {
-        "basic": "https://github.com/AssistOS-AI/basic.git",
         "container-image-builds": "https://github.com/AssistOS-AI/container-image-builds.git",
         "webmeetInfra": "https://github.com/AssistOS-AI/webmeetInfra.git",
         "UmamiAgent": "https://github.com/AssistOS-AI/UmamiAgent.git"

@@ -29,7 +29,6 @@ const WORKFLOWS = [
       "'AchillesCLI|https://github.com/AssistOS-AI/AchillesCLI.git'",
       "'copilot-agents|https://github.com/AssistOS-AI/copilot-agents.git'",
       "'proxies|https://github.com/AssistOS-AI/proxies.git'",
-      "'basic|https://github.com/AssistOS-AI/basic.git'",
       "'container-image-builds|https://github.com/AssistOS-AI/container-image-builds.git'",
       "CLOUDFLARE_TUNNEL_NAME: 'explorer-qa'",
       "CLOUDFLARE_PROTECTED_SHARED_TUNNEL_ID: '091c4096-d1c8-4dbc-bb12-0c6357431d96'",
@@ -64,6 +63,7 @@ const WORKFLOWS = [
       "'blob-transfer'",
       "'marketplace-ui'",
       "'webchat'",
+      "'webtty'",
       'const target = "/workspace/.ploinky"',
       'Ploinky authority directory has the wrong owner',
       'STAGED_EDGE_DESIRED="/workspace/.ploinky/.explorer-qa-edge-desired.json"',
@@ -73,16 +73,16 @@ const WORKFLOWS = [
       'Cloudflare management: api-managed',
       'Cloudflare publication: ready',
       'Cloudflare connector: running',
-      'Tracked agents: 18',
-      'Running agents: 18',
-      'EXPECTED_NO_WAIT_AGENTS=14',
+      'Tracked agents: 17',
+      'Running agents: 17',
+      'EXPECTED_NO_WAIT_AGENTS=13',
       'QA_DEPLOY_STARTED_AT_MS="$(node -p \'Date.now()\')"',
       'check-no-wait-readiness.mjs',
       'QA_READY_STREAK',
       'QA_TERMINAL_FAILURE',
       'for _ in $(seq 1 180); do',
       'current-run no-wait readiness evidence failed',
-      'timed out waiting for stable 18/18 process admission and 14/14 semantic readiness',
+      'timed out waiting for stable 17/17 process admission and 13/13 semantic readiness',
       'dedicated persistent `%s` tunnel `%s`, ingress, and DNS API-managed by Ploinky',
       '"${PUBLIC_URL%/}/auth/login?agent=explorer"',
       '"${PUBLIC_URL%/}/auth/login?agent=webAssist"',
@@ -146,6 +146,8 @@ const STALE_COMPONENT_ENDPOINTS = [
   /livekit-skills\.axiologic\.dev/,
   /web-apps\/apps\/api\/documents\/api\.js/,
   /base-agent-additional-server\/onlyOffice/,
+  /base-agent-additional-server\/webtty/,
+  /\b7681\b/,
 ];
 
 for (const workflow of WORKFLOWS) {
@@ -166,6 +168,7 @@ for (const workflow of WORKFLOWS) {
       assert.doesNotMatch(source, /BRANCH_ARGS=\(--branch|--branch-fallback|--reset-repos/);
       assert.doesNotMatch(source, /deleteTunnelOnTeardown|create-managed-tunnel/);
       assert.doesNotMatch(source, /BOX_STATUS="\$\("\$PLOINKY" status\)"/);
+      assert.doesNotMatch(source, /basic\|https:\/\/github\.com\/AssistOS-AI\/basic\.git/);
     } else {
       assert.match(source, /--reset-repos/);
     }
@@ -231,6 +234,7 @@ test('Explorer QA destroy removes only its Ploinky-owned Cloudflare publication'
   assert.doesNotMatch(source, /tunnelTokenSecret|publication\/explorer-qa-tunnel/);
   assert.doesNotMatch(source, /BOX_STATUS="\$\("\$PLOINKY" status\)"/);
   assert.doesNotMatch(source, /workspace_name|inputs\.workspace_name/);
+  assert.doesNotMatch(source, /basic\|https:\/\/github\.com\/AssistOS-AI\/basic\.git/);
   assert.doesNotMatch(source, /vars\.EXPLORER_QA_(?:SSH_USER|SSH_HOST|WORKSPACE)/);
   assert.equal(source.match(/ssh-keyscan/g)?.length, 1, 'destroy host key must be scanned only in pinned preflight');
   assert.ok(
@@ -362,7 +366,7 @@ test('Explorer QA validates Ploinky AgentLib deployment proof for every admitted
     '--env "PLOINKY_AGENTLIB_FINGERPRINT=$AGENTLIB_FINGERPRINT"',
     '--env "PLOINKY_AGENTLIB_COMMIT=$AGENTLIB_COMMIT"',
     '--env "PLOINKY_AGENTLIB_SOURCE_ID=$AGENTLIB_SOURCE_ID"',
-    '--env "EXPECTED_AGENTLIB_COUNT=18"',
+    '--env "EXPECTED_AGENTLIB_COUNT=17"',
     '["/opt/ploinky/cli/agentlib-attest.mjs"]',
     'proof.agents.length !== expectedCount',
     'attestation?.deploymentFingerprint !== core.deploymentFingerprint',
