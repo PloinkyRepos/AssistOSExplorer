@@ -19,7 +19,7 @@ Keymap settings must support the declared file search, content search, replace, 
 
 Avatar settings must require authenticated access and must use the configured AxiFace integration contract. The profile avatar is browser-owned preference state. Agent-avatar overrides must remain unavailable unless the authenticated user has management authority. Explorer must validate returned agent configuration before rendering it and must keep a failed external avatar integration from blocking normal workspace navigation.
 
-Administrative settings must remain hidden from non-administrators. Administrative operations, including DPU data sources, must request data through the owning agent's authorized tools; the client must not reproduce administrative authorization rules or embed secrets in browser-visible configuration.
+Administrative settings must remain hidden from non-administrators. Administrative operations, including DPU data sources, must request data through the owning agent's authorized tools; the client must not reproduce administrative authorization rules or embed secrets in browser-visible configuration. Explorer user and branding mutations must obtain a fresh, exact-origin administration proof and send its session-bound CSRF token with the request. Reads do not request this proof. A mutation rejected with `csrf_invalid` may obtain a new proof and retry exactly once; other authorization failures are final.
 
 ## Conclusion
 

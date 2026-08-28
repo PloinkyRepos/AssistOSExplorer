@@ -1,4 +1,8 @@
 import { parseRoles } from './admin-settings-utils.js';
+import { fetchAdminControlProof } from '../../../services/infrastructure/authApi.js';
+
+const ADMIN_CSRF_HEADER = 'x-ploinky-csrf-token';
+const ADMIN_MUTATION_METHODS = new Set(['POST', 'PATCH', 'DELETE']);
 
 function getCurrentAgentName(win = globalThis.window) {
     try {
@@ -190,15 +194,32 @@ export class AdminSettingsPanel {
     }
 
     async request(path, options = {}) {
-        const response = await fetch(path, {
-            credentials: 'include',
-            headers: {
+        const method = String(options.method || 'GET').toUpperCase();
+        const requiresProof = ADMIN_MUTATION_METHODS.has(method);
+        const sendRequest = async () => {
+            const headers = {
                 Accept: 'application/json',
-                ...(options.body ? { 'Content-Type': 'application/json' } : {})
-            },
-            ...options
-        });
-        const payload = await response.json().catch(() => ({}));
+                ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+                ...(options.headers || {})
+            };
+            if (requiresProof) {
+                const proof = await fetchAdminControlProof();
+                headers[ADMIN_CSRF_HEADER] = proof.csrfToken;
+            }
+            const response = await fetch(path, {
+                ...options,
+                method,
+                credentials: 'include',
+                headers
+            });
+            const payload = await response.json().catch(() => ({}));
+            return { response, payload };
+        };
+
+        let { response, payload } = await sendRequest();
+        if (requiresProof && response.status === 403 && payload?.error === 'csrf_invalid') {
+            ({ response, payload } = await sendRequest());
+        }
         if (!response.ok || payload.ok === false) {
             throw new Error(payload.message || payload.error || `HTTP ${response.status}`);
         }
