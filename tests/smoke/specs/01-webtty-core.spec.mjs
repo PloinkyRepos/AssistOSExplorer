@@ -5,12 +5,15 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 
 import {
+  acknowledgeExactPageDiagnostics,
   attachPageDiagnostics,
+  checkpointPageDiagnostics,
   expect,
   test,
 } from '../lib/fixtures.mjs';
 import { readAuthenticatedPrincipal } from '../lib/auth.mjs';
 import { smokeConfig } from '../lib/config.mjs';
+import { diagnosticEventSignature } from '../lib/diagnostic-ledger.mjs';
 import { assertExplorerDirectory, openExplorer } from '../lib/explorer.mjs';
 import { resolvePloinkyExecutable } from '../lib/ploinky-executable.mjs';
 import {
@@ -126,6 +129,72 @@ async function browserMutation(page, pathname, { method = 'POST', body } = {}) {
     try { payload = JSON.parse(text); } catch {}
     return { status: response.status, payload, text };
   }, { requestPath: pathname, requestMethod: method, requestBody: body });
+}
+
+function expectedHttpFailureDiagnostics(pathname, { method = 'POST', status } = {}) {
+  if (status !== 404) throw new Error('the WebTTY negative diagnostic proof only permits exact 404 responses');
+  const url = new URL(pathname, smokeConfig.baseURL).toString();
+  return [
+    diagnosticEventSignature({ kind: 'response', type: 'error', status, url, method }),
+    diagnosticEventSignature({
+      kind: 'console',
+      type: 'error',
+      text: 'Failed to load resource: the server responded with a status of 404 (Not Found)',
+      location: { url },
+    }),
+  ];
+}
+
+function expectedDiscoveryCancellationDiagnostics(discoveryId) {
+  const pathname = `/webtty/target-discoveries/${encodeURIComponent(discoveryId)}`;
+  const url = new URL(pathname, smokeConfig.baseURL).toString();
+  return [
+    ...expectedHttpFailureDiagnostics(pathname, { method: 'DELETE', status: 404 }),
+    diagnosticEventSignature({
+      kind: 'requestfailed',
+      type: 'error',
+      url,
+      method: 'DELETE',
+      failure: 'net::ERR_ABORTED',
+    }),
+  ];
+}
+
+function expectedRouterRecoveryDiagnostics(sessionId) {
+  const pathname = `/webtty/sessions/${encodeURIComponent(sessionId)}/stream`;
+  const url = new URL(pathname, smokeConfig.baseURL).toString();
+  return [
+    diagnosticEventSignature({
+      kind: 'requestfailed',
+      type: 'error',
+      url,
+      method: 'GET',
+      failure: 'net::ERR_INCOMPLETE_CHUNKED_ENCODING',
+    }),
+    diagnosticEventSignature({
+      kind: 'console',
+      type: 'error',
+      text: 'Failed to load resource: net::ERR_INCOMPLETE_CHUNKED_ENCODING',
+      location: { url },
+    }),
+    diagnosticEventSignature({ kind: 'response', type: 'error', status: 404, url, method: 'GET' }),
+    diagnosticEventSignature({
+      kind: 'console',
+      type: 'error',
+      text: 'Failed to load resource: the server responded with a status of 404 (Not Found)',
+      location: { url },
+    }),
+  ];
+}
+
+function waitForExact404Console(page, pathname) {
+  const url = new URL(pathname, smokeConfig.baseURL).toString();
+  return page.waitForEvent('console', {
+    predicate: (message) => message.type() === 'error'
+      && message.text() === 'Failed to load resource: the server responded with a status of 404 (Not Found)'
+      && message.location().url === url,
+    timeout: smokeConfig.timeouts.action,
+  });
 }
 
 async function directAuthenticatedMutation(page, pathname, {
@@ -640,6 +709,8 @@ test.describe('Ploinky core WebTTY release gate', () => {
       await expect(first.terminalPage.locator('#access')).toHaveText('Read and write folder mapping');
       await waitForConnectedTerminal(first.terminalPage);
 
+      const replayCheckpoint = checkpointPageDiagnostics(page, 'single-use launch replay rejection');
+      const replayConsole = waitForExact404Console(page, '/webtty/sessions');
       const replay = await browserMutation(page, '/webtty/sessions', {
         body: { launch: first.launch, cols: 80, rows: 24 },
       });
@@ -647,6 +718,12 @@ test.describe('Ploinky core WebTTY release gate', () => {
         status: 404,
         payload: { ok: false, error: 'terminal_launch_unavailable' },
       });
+      await replayConsole;
+      acknowledgeExactPageDiagnostics(
+        page,
+        replayCheckpoint,
+        expectedHttpFailureDiagnostics('/webtty/sessions', { status: 404 }),
+      );
 
       const expectedCwd = `/workspace/${fixture.relativeDirectory}`;
       const command = [
@@ -951,6 +1028,8 @@ test.describe('Ploinky core WebTTY release gate', () => {
         replacementRuntimeBeforeStale,
         replacementBeforeStale,
       );
+      const staleCheckpoint = checkpointPageDiagnostics(page, 'stale predecessor launch rejection');
+      const staleConsole = waitForExact404Console(page, '/webtty/sessions');
       const staleLaunchSubmittedAt = Date.now();
       const staleObservation = await runWhileObservingNoAgentShell(
         replacementRuntimeBeforeStale,
@@ -975,6 +1054,12 @@ test.describe('Ploinky core WebTTY release gate', () => {
         status: 404,
         payload: { ok: false, error: 'terminal_launch_unavailable' },
       });
+      await staleConsole;
+      acknowledgeExactPageDiagnostics(
+        page,
+        staleCheckpoint,
+        expectedHttpFailureDiagnostics('/webtty/sessions', { status: 404 }),
+      );
       await waitForAgentExecDelta(
         replacementRuntimeBeforeStale,
         replacementBeforeStale,
@@ -999,9 +1084,25 @@ test.describe('Ploinky core WebTTY release gate', () => {
       expect(replacementGitAgent.containerId).toBe(replacementBeforeStale.containerId);
       expect(replacementGitAgent.instanceId).toBe(initialGitAgent.instanceId);
       expect(replacementGitAgent.enableGeneration).toBe(initialGitAgent.enableGeneration);
+      const consumedDiscoveryId = replacementChooser.discovery.id;
+      const cancellationCheckpoint = checkpointPageDiagnostics(page, 'consumed discovery cancellation');
+      const cancellationPath = `/webtty/target-discoveries/${encodeURIComponent(consumedDiscoveryId)}`;
+      const cancellationUrl = new URL(cancellationPath, smokeConfig.baseURL).toString();
+      const cancellationTransport = page.waitForEvent('requestfailed', {
+        predicate: (request) => request.url() === cancellationUrl
+          && request.method() === 'DELETE'
+          && request.failure()?.errorText === 'net::ERR_ABORTED',
+        timeout: smokeConfig.timeouts.action,
+      });
       const refreshedDiscovery = await refreshTerminalChooser(
         replacementChooser,
         fixture.nestedDirectoryPath,
+      );
+      await cancellationTransport;
+      acknowledgeExactPageDiagnostics(
+        page,
+        cancellationCheckpoint,
+        expectedDiscoveryCancellationDiagnostics(consumedDiscoveryId),
       );
       const refreshedTargets = refreshedDiscovery.targets;
       expect(sortedTargets(refreshedTargets.filter((target) => target.kind === 'agent')))
@@ -1134,7 +1235,11 @@ test.describe('Ploinky core WebTTY release gate', () => {
       const restartSleepPattern = new RegExp(`(?:^|\\s)sleep ${restartSleepSeconds}(?:$|\\s)`);
       await waitForAgentProcess(replacementRuntime, replacementGitAgent, restartSleepPattern, true);
       expect(recoveryDiagnostics.actionableEvents(), 'the recovery terminal must remain error-free before Router crash').toEqual([]);
-      recoveryDiagnostics.setExpectedOffline(true);
+      const recoveryCheckpoint = recoveryDiagnostics.checkpoint('exact prior-epoch Router stream invalidation');
+      const recovery404Console = waitForExact404Console(
+        restartRecoveryTerminal.terminalPage,
+        `/webtty/sessions/${encodeURIComponent(restartRecoveryTerminal.session.id)}/stream`,
+      );
       const crashedRouter = crashExactRoutingServer(replacementRuntime, replacementGitAgent);
       let recoveredRouter = null;
       let routerRecoveryFailure = '';
@@ -1180,11 +1285,12 @@ test.describe('Ploinky core WebTTY release gate', () => {
         otherCount: 0,
       });
       await expect(restartRecoveryTerminal.terminalPage.locator('#status')).not.toHaveText('Connected');
-      recoveryDiagnostics.setExpectedOffline(false);
-      expect(
-        recoveryDiagnostics.actionableEvents(),
-        'Router recovery may interrupt transport but must not produce an unhandled browser failure',
-      ).toEqual([]);
+      await recovery404Console;
+      recoveryDiagnostics.acknowledgeExact(
+        recoveryCheckpoint,
+        expectedRouterRecoveryDiagnostics(restartRecoveryTerminal.session.id),
+      );
+      expect(recoveryDiagnostics.actionableEvents(), 'Router recovery diagnostics must match the exact prior-epoch stream').toEqual([]);
       await restartRecoveryTerminal.terminalPage.close().catch(() => {});
       await recoveryDiagnostics.flush();
 

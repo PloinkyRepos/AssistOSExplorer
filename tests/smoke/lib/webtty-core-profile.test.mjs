@@ -49,6 +49,10 @@ test('npm WebTTY core profile owns the exact Chromium release gate', () => {
   assert.match(webttySpec, /WEBTTY_AGENT_HOSTNAME/);
   assert.match(webttySpec, /authRevocationRemovedExecAndForegroundProcess/);
   assert.match(webttySpec, /defaultRouterCrashRecoveryRemovedAgentExecAndForegroundProcess/);
+  assert.match(webttySpec, /single-use launch replay rejection/);
+  assert.match(webttySpec, /stale predecessor launch rejection/);
+  assert.match(webttySpec, /consumed discovery cancellation/);
+  assert.match(webttySpec, /exact prior-epoch Router stream invalidation/);
   const replacementVictimIndex = webttySpec.indexOf('const replacementVictim = await openTerminalFromExplorer(');
   const replacementChooserIndex = webttySpec.indexOf('const replacementChooser = await openTerminalChooser(');
   assert.ok(replacementVictimIndex >= 0, 'the replacement victim must be launched through Explorer');
