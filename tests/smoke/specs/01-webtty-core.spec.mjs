@@ -147,17 +147,7 @@ function expectedHttpFailureDiagnostics(pathname, { method = 'POST', status } = 
 
 function expectedDiscoveryCancellationDiagnostics(discoveryId) {
   const pathname = `/webtty/target-discoveries/${encodeURIComponent(discoveryId)}`;
-  const url = new URL(pathname, smokeConfig.baseURL).toString();
-  return [
-    ...expectedHttpFailureDiagnostics(pathname, { method: 'DELETE', status: 404 }),
-    diagnosticEventSignature({
-      kind: 'requestfailed',
-      type: 'error',
-      url,
-      method: 'DELETE',
-      failure: 'net::ERR_ABORTED',
-    }),
-  ];
+  return expectedHttpFailureDiagnostics(pathname, { method: 'DELETE', status: 404 });
 }
 
 function expectedRouterRecoveryDiagnostics(sessionId) {
@@ -1088,22 +1078,68 @@ test.describe('Ploinky core WebTTY release gate', () => {
       const cancellationCheckpoint = checkpointPageDiagnostics(page, 'consumed discovery cancellation');
       const cancellationPath = `/webtty/target-discoveries/${encodeURIComponent(consumedDiscoveryId)}`;
       const cancellationUrl = new URL(cancellationPath, smokeConfig.baseURL).toString();
-      const cancellationTransport = page.waitForEvent('requestfailed', {
-        predicate: (request) => request.url() === cancellationUrl
-          && request.method() === 'DELETE'
-          && request.failure()?.errorText === 'net::ERR_ABORTED',
-        timeout: smokeConfig.timeouts.action,
-      });
-      const refreshedDiscovery = await refreshTerminalChooser(
-        replacementChooser,
-        fixture.nestedDirectoryPath,
-      );
-      await cancellationTransport;
-      acknowledgeExactPageDiagnostics(
-        page,
-        cancellationCheckpoint,
-        expectedDiscoveryCancellationDiagnostics(consumedDiscoveryId),
-      );
+      const cancellationRequests = [];
+      const cancellationSequence = [];
+      const onCancellationRequest = (request) => {
+        if (request.url() === cancellationUrl && request.method() === 'DELETE') {
+          cancellationRequests.push(request);
+          cancellationSequence.push('cancellation request');
+        } else if (request.method() === 'POST'
+          && new URL(request.url()).pathname === '/webtty/target-discoveries') {
+          cancellationSequence.push('replacement discovery request');
+        }
+      };
+      const onCancellationResponse = (response) => {
+        if (response.url() === cancellationUrl && response.request().method() === 'DELETE') {
+          cancellationSequence.push('cancellation response');
+        }
+      };
+      page.on('request', onCancellationRequest);
+      page.on('response', onCancellationResponse);
+      try {
+        const cancellationResponsePromise = page.waitForResponse((response) => (
+          response.url() === cancellationUrl
+          && response.request().method() === 'DELETE'
+        ), { timeout: smokeConfig.timeouts.action });
+        const cancellationFinishedPromise = page.waitForEvent('requestfinished', {
+          predicate: (request) => request.url() === cancellationUrl
+            && request.method() === 'DELETE',
+          timeout: smokeConfig.timeouts.action,
+        });
+        const refreshedDiscoveryPromise = refreshTerminalChooser(
+          replacementChooser,
+          fixture.nestedDirectoryPath,
+        );
+        const [cancellationResponse, cancellationFinishedRequest, refreshedDiscovery] = await Promise.all([
+          cancellationResponsePromise,
+          cancellationFinishedPromise,
+          refreshedDiscoveryPromise,
+        ]);
+        expect(cancellationResponse.url()).toBe(cancellationUrl);
+        expect(cancellationResponse.request().method()).toBe('DELETE');
+        expect(cancellationResponse.status()).toBe(404);
+        expect(cancellationFinishedRequest).toBe(cancellationResponse.request());
+        expect(cancellationFinishedRequest.failure()).toBeNull();
+        expect(await cancellationResponse.json()).toEqual({ ok: false, error: 'not_found' });
+        expect(refreshedDiscovery.id).not.toBe(consumedDiscoveryId);
+        expect(cancellationRequests).toHaveLength(1);
+        expect(cancellationRequests[0]).toBe(cancellationResponse.request());
+        expect(cancellationSequence).toEqual([
+          'cancellation request',
+          'cancellation response',
+          'replacement discovery request',
+        ]);
+        acknowledgeExactPageDiagnostics(
+          page,
+          cancellationCheckpoint,
+          expectedDiscoveryCancellationDiagnostics(consumedDiscoveryId),
+        );
+        replacementChooser.discovery = refreshedDiscovery;
+      } finally {
+        page.off('request', onCancellationRequest);
+        page.off('response', onCancellationResponse);
+      }
+      const refreshedDiscovery = replacementChooser.discovery;
       const refreshedTargets = refreshedDiscovery.targets;
       expect(sortedTargets(refreshedTargets.filter((target) => target.kind === 'agent')))
         .toEqual(sortedTargets(replacementRuntime.eligibleTargets));

@@ -51,7 +51,34 @@ test('npm WebTTY core profile owns the exact Chromium release gate', () => {
   assert.match(webttySpec, /defaultRouterCrashRecoveryRemovedAgentExecAndForegroundProcess/);
   assert.match(webttySpec, /single-use launch replay rejection/);
   assert.match(webttySpec, /stale predecessor launch rejection/);
-  assert.match(webttySpec, /consumed discovery cancellation/);
+  const cancellationBlockStart = webttySpec.indexOf(
+    "const cancellationCheckpoint = checkpointPageDiagnostics(page, 'consumed discovery cancellation');",
+  );
+  const cancellationBlockEnd = webttySpec.indexOf(
+    'const refreshedTargets = refreshedDiscovery.targets;',
+    cancellationBlockStart,
+  );
+  assert.ok(cancellationBlockStart >= 0, 'the consumed cancellation proof must exist');
+  assert.ok(
+    cancellationBlockEnd > cancellationBlockStart,
+    'the consumed cancellation proof must have a bounded end',
+  );
+  const cancellationBlock = webttySpec.slice(cancellationBlockStart, cancellationBlockEnd);
+  assert.match(cancellationBlock, /page\.waitForResponse[\s\S]+response\.url\(\) === cancellationUrl[\s\S]+response\.request\(\)\.method\(\) === 'DELETE'/);
+  assert.match(cancellationBlock, /page\.waitForEvent\('requestfinished'/);
+  assert.match(cancellationBlock, /expect\(cancellationResponse\.status\(\)\)\.toBe\(404\)/);
+  assert.match(cancellationBlock, /expect\(cancellationFinishedRequest\)\.toBe\(cancellationResponse\.request\(\)\)/);
+  assert.match(cancellationBlock, /expect\(cancellationFinishedRequest\.failure\(\)\)\.toBeNull\(\)/);
+  assert.match(cancellationBlock, /expect\(await cancellationResponse\.json\(\)\)\.toEqual\(\{ ok: false, error: 'not_found' \}\)/);
+  assert.match(cancellationBlock, /expect\(cancellationRequests\)\.toHaveLength\(1\)/);
+  assert.match(cancellationBlock, /expect\(cancellationRequests\[0\]\)\.toBe\(cancellationResponse\.request\(\)\)/);
+  assert.match(cancellationBlock, /'cancellation response',[\s\S]+'replacement discovery request'/);
+  assert.match(cancellationBlock, /expect\(refreshedDiscovery\.id\)\.not\.toBe\(consumedDiscoveryId\)/);
+  assert.match(cancellationBlock, /acknowledgeExactPageDiagnostics/);
+  assert.doesNotMatch(
+    cancellationBlock,
+    /waitForEvent\('requestfailed'|response\.finished|acknowledgeOneOfExact/,
+  );
   assert.match(webttySpec, /exact prior-epoch Router stream invalidation/);
   const replacementVictimIndex = webttySpec.indexOf('const replacementVictim = await openTerminalFromExplorer(');
   const replacementChooserIndex = webttySpec.indexOf('const replacementChooser = await openTerminalChooser(');

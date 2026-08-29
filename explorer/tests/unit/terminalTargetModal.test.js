@@ -176,10 +176,18 @@ test('discovery and cancel use same-origin mutation protection and exact bodies'
     globalThis.document = { cookie: 'unrelated=1; ploinky_browser_csrf=v1.session-proof; other=2' };
     t.after(() => { globalThis.document = previousDocument; });
     const calls = [];
+    let cancellationJsonCalls = 0;
     const fetchImpl = async (url, options) => {
         calls.push({ url, options });
         if (options.method === 'DELETE') {
-            return { ok: true, status: 204 };
+            return {
+                ok: true,
+                status: 200,
+                async json() {
+                    cancellationJsonCalls += 1;
+                    return { ok: true };
+                },
+            };
         }
         return {
             ok: true,
@@ -202,6 +210,57 @@ test('discovery and cancel use same-origin mutation protection and exact bodies'
     assert.equal(calls[1].url, `/webtty/target-discoveries/${DISCOVERY_ID}`);
     assert.equal(calls[1].options.method, 'DELETE');
     assert.equal(calls[1].options.keepalive, true);
+    assert.equal(cancellationJsonCalls, 1);
+});
+
+test('cancel consumes exactly one body and accepts only the exact 200 and 404 contracts', async () => {
+    for (const [status, payload] of [
+        [200, { ok: true }],
+        [404, { ok: false, error: 'not_found' }],
+    ]) {
+        let jsonCalls = 0;
+        const result = await cancelTerminalTargetDiscovery(DISCOVERY_ID, {
+            fetchImpl: async () => ({
+                status,
+                async json() {
+                    jsonCalls += 1;
+                    return payload;
+                },
+            }),
+        });
+        assert.equal(result, true);
+        assert.equal(jsonCalls, 1);
+    }
+
+    const invalidResponses = [
+        ['malformed JSON', 200, async () => { throw new SyntaxError('invalid JSON'); }],
+        ['unexpected success status', 201, async () => ({ ok: true })],
+        ['empty success status', 204, async () => ({ ok: true })],
+        ['false success', 200, async () => ({ ok: false })],
+        ['extra success field', 200, async () => ({ ok: true, extra: true })],
+        ['wrong not-found flag', 404, async () => ({ ok: true, error: 'not_found' })],
+        ['wrong not-found code', 404, async () => ({ ok: false, error: 'gone' })],
+        ['extra not-found field', 404, async () => ({ ok: false, error: 'not_found', extra: true })],
+        ['server failure', 500, async () => ({ ok: false, error: 'not_found' })],
+    ];
+    for (const [name, status, json] of invalidResponses) {
+        let jsonCalls = 0;
+        await assert.rejects(
+            cancelTerminalTargetDiscovery(DISCOVERY_ID, {
+                fetchImpl: async () => ({
+                    status,
+                    async json() {
+                        jsonCalls += 1;
+                        return json();
+                    },
+                }),
+            }),
+            (error) => error?.message === 'The terminal target discovery could not be cancelled.'
+                && error?.status === status,
+            name,
+        );
+        assert.equal(jsonCalls, 1, name);
+    }
 });
 
 test('target selection opens an isolated no-referrer fragment and closes only for a non-null popup', (t) => {
@@ -463,7 +522,14 @@ test('refresh invalidates every prior choice before requesting a replacement bat
     globalThis.document = { cookie: 'ploinky_browser_csrf=refresh-proof' };
     globalThis.fetch = async (url, options) => {
         events.push(['cancel', url, options.method]);
-        return { ok: true, status: 204 };
+        return {
+            ok: true,
+            status: 200,
+            async json() {
+                events.push(['cancel-body']);
+                return { ok: true };
+            },
+        };
     };
     t.after(() => {
         globalThis.document = previousDocument;
@@ -489,10 +555,55 @@ test('refresh invalidates every prior choice before requesting a replacement bat
         ['clear-timer'],
         ['loading', 'Refreshing available terminal targets…'],
         ['cancel', `/webtty/target-discoveries/${DISCOVERY_ID}`, 'DELETE'],
+        ['cancel-body'],
         ['discover'],
     ]);
     assert.equal(modal.discoveryId, '');
     assert.equal(modal.discoveryExpiresAt, 0);
+});
+
+test('refresh rejects an invalid cancellation body before requesting a successor discovery', async (t) => {
+    const previousDocument = globalThis.document;
+    const previousFetch = globalThis.fetch;
+    const events = [];
+    globalThis.document = { cookie: 'ploinky_browser_csrf=refresh-failure-proof' };
+    globalThis.fetch = async () => ({
+        ok: true,
+        status: 200,
+        async json() {
+            events.push(['cancel-body']);
+            return { ok: true, unexpected: true };
+        },
+    });
+    t.after(() => {
+        globalThis.document = previousDocument;
+        globalThis.fetch = previousFetch;
+    });
+
+    const modal = Object.create(TerminalTargetModal.prototype);
+    Object.assign(modal, {
+        closed: false,
+        handedOff: false,
+        requestSequence: 3,
+        discoveryController: null,
+        discoveryId: DISCOVERY_ID,
+        discoveryExpiresAt: Date.now() + 1000,
+        clearExpiryTimer() { events.push(['clear-timer']); },
+        renderLoading(message) { events.push(['loading', message]); },
+        renderError(message) { events.push(['error', message]); },
+        async discoverTargets() { events.push(['discover']); },
+    });
+
+    await modal.refreshTargets();
+
+    assert.deepEqual(events, [
+        ['clear-timer'],
+        ['loading', 'Refreshing available terminal targets…'],
+        ['cancel-body'],
+        ['error', 'The previous terminal choices could not be invalidated. Try again.'],
+    ]);
+    assert.equal(modal.discoveryId, DISCOVERY_ID);
+    assert.notEqual(modal.discoveryExpiresAt, 0);
 });
 
 test('Escape prevents propagation and invokes chooser cancellation', () => {

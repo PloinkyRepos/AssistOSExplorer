@@ -205,7 +205,23 @@ export async function cancelTerminalTargetDiscovery(discoveryId, options = {}) {
         keepalive: options.keepalive === true,
         headers: mutationHeaders(),
     });
-    if (response.ok || response.status === 404) {
+    let body = null;
+    try {
+        body = await response.json();
+    } catch (_) {
+        throw Object.assign(new Error('The terminal target discovery could not be cancelled.'), {
+            status: response.status,
+        });
+    }
+    if (response.status === 200
+        && hasExactKeys(body, ['ok'])
+        && body.ok === true) {
+        return true;
+    }
+    if (response.status === 404
+        && hasExactKeys(body, ['ok', 'error'])
+        && body.ok === false
+        && body.error === 'not_found') {
         return true;
     }
     throw Object.assign(new Error('The terminal target discovery could not be cancelled.'), {
