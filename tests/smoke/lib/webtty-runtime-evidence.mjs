@@ -278,6 +278,7 @@ function exactRuntimeRecord(containerName, record) {
   const containerId = String(record?.containerId || '').trim().toLowerCase();
   if (record?.runtime !== 'podman' || !CONTAINER_ID.test(containerId)) return null;
   return {
+    runtime: 'podman',
     containerName: exactText(containerName, 'agent registry container name'),
     containerId,
     instanceId: exactText(record.instanceId, 'agent instance ID'),

@@ -14,6 +14,7 @@ import {
   crashExactRoutingServer,
   independentlyTranslateMount,
   inspectNestedContainer,
+  requireAgentEvidence,
   workspaceHash,
 } from './webtty-runtime-evidence.mjs';
 
@@ -133,6 +134,92 @@ test('runtime evidence binds an immutable prebuilt Box to explicit identity, ima
   assert.equal(typeof received.command, 'function');
   assert.equal(evidence.workspaceHash, workspaceHash('/workspace'));
   assert.notEqual(evidence.workspaceHash, workspaceHash(expectedPloinkySource));
+});
+
+test('collected agent evidence preserves the exact runtime identity required by Router crash recovery', (t) => {
+  const { root, selected } = fixture(t);
+  fs.mkdirSync(path.join(root, '.ploinky'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.ploinky', 'agents.json'), JSON.stringify({
+    _config: {},
+    [AGENT.containerName]: {
+      type: 'agent',
+      runtime: AGENT.runtime,
+      containerId: AGENT.containerId,
+      instanceId: AGENT.instanceId,
+      enableGeneration: AGENT.enableGeneration,
+      repoName: 'AchillesIDE',
+      agentName: 'gitAgent',
+      runMode: 'global',
+    },
+  }));
+  const evidence = collectWebttyRuntimeEvidence({
+    baseURL: 'http://127.0.0.1:8080',
+    workspaceRoot: root,
+    selectedDirectory: selected,
+    expectedContainerName: 'ploinky-box-release-audit',
+    expectedImageId: `sha256:${'c'.repeat(64)}`,
+    expectedImageRef: 'docker.io/assistos/ploinky-box:immutable-candidate',
+    expectedPloinkySource: fs.realpathSync(root),
+    requireFreshImage: false,
+    command: (_command, args) => {
+      assert.deepEqual(args.slice(0, 3), ['exec', OUTER_ID, '/usr/bin/podman']);
+      return [{
+        Id: AGENT.containerId,
+        Name: `/${AGENT.containerName}`,
+        State: { Running: true },
+        HostConfig: { Init: true },
+        Config: {
+          User: '1000:1000',
+          Hostname: 'git-agent',
+          Labels: {
+            'io.assistos.ploinky.managed': '1',
+            'io.assistos.ploinky.resource': 'agent',
+            'io.assistos.ploinky.network-schema': '2',
+            'io.assistos.ploinky.workspace': workspaceHash('/workspace'),
+            'io.assistos.ploinky.network-contract': 'd'.repeat(64),
+            'io.assistos.ploinky.instance-id': AGENT.instanceId,
+            'io.assistos.ploinky.enable-generation': AGENT.enableGeneration,
+          },
+        },
+        ExecIDs: [],
+        Mounts: [bind('/workspace', '/workspace')],
+      }];
+    },
+    collectLiveBox: () => ({
+      box: { containerId: OUTER_ID },
+      workspaceSourceMount: {
+        type: 'bind',
+        source: root,
+        destination: '/workspace',
+        readWrite: true,
+      },
+    }),
+  });
+  const agent = requireAgentEvidence(evidence, 'gitAgent', { eligible: true });
+  assert.equal(agent.runtime, 'podman');
+  let crashInvocation = null;
+  assert.doesNotThrow(() => crashExactRoutingServer(evidence, agent, {
+    command: (command, args) => {
+      crashInvocation = { command, args };
+      return {
+        watchdogPid: 40,
+        watchdogStartTime: '987650',
+        routerPid: 41,
+        routerStartTime: '987654',
+        recoveryRecord: {
+          recordCount: 1,
+          targetKind: 'agent',
+          ptyState: 'pty-ready',
+          matchesExpectedTarget: true,
+        },
+      };
+    },
+  }));
+  assert.equal(crashInvocation.command, 'podman');
+  assert.deepEqual(
+    JSON.parse(Buffer.from(crashInvocation.args[8], 'base64url').toString('utf8')),
+    AGENT,
+  );
 });
 
 test('nested inspection accepts only exact immutable-ID not-found as absence', () => {
