@@ -999,7 +999,11 @@ test.describe('Ploinky core WebTTY release gate', () => {
       expect(replacementGitAgent.containerId).toBe(replacementBeforeStale.containerId);
       expect(replacementGitAgent.instanceId).toBe(initialGitAgent.instanceId);
       expect(replacementGitAgent.enableGeneration).toBe(initialGitAgent.enableGeneration);
-      const refreshedTargets = await refreshTerminalChooser(replacementChooser, fixture.nestedDirectoryPath);
+      const refreshedDiscovery = await refreshTerminalChooser(
+        replacementChooser,
+        fixture.nestedDirectoryPath,
+      );
+      const refreshedTargets = refreshedDiscovery.targets;
       expect(sortedTargets(refreshedTargets.filter((target) => target.kind === 'agent')))
         .toEqual(sortedTargets(replacementRuntime.eligibleTargets));
       const refreshedGitTarget = refreshedTargets.find((target) => (

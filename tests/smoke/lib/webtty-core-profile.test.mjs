@@ -58,6 +58,11 @@ test('npm WebTTY core profile owns the exact Chromium release gate', () => {
   );
   assert.match(webttySpec, /staleLaunchSubmittedAt[\s\S]+toBeLessThan\(replacementChooser\.discovery\.expiresAt\)/);
   assert.match(webttySpec, /staleLaunchObservedAt[\s\S]+toBeLessThan\(replacementChooser\.discovery\.expiresAt\)/);
+  assert.match(
+    webttySpec,
+    /const refreshedTargets = refreshedDiscovery\.targets;/,
+    'replacement chooser refresh must compare the discovery target array, not the discovery envelope',
+  );
 });
 
 test('WebTTY core profile collects exactly one enabled Playwright test', { timeout: 30_000 }, () => {
