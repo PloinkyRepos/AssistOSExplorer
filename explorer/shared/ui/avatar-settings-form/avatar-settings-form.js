@@ -74,7 +74,7 @@ function renderInput({ key, label, value = '', type = 'text', min = '', max = ''
     `;
 }
 
-function renderSelect({ key, label, value = '', values = [], labels = {} }) {
+function renderSelect({ key, label, value = '', values = [], labels = {}, disabled = false }) {
     return `
         <label class="avatar-settings-field">
             <span>${escapeHtml(label)}</span>
@@ -83,7 +83,8 @@ function renderSelect({ key, label, value = '', values = [], labels = {} }) {
                            data-avatar-field="${escapeHtml(key)}"
                            data-name="${escapeHtml(key)}"
                            data-options="${encodeOptions(values, labels)}"
-                           data-selected="${escapeHtml(value)}"></custom-select>
+                           data-selected="${escapeHtml(value)}"
+                           ${disabled ? 'disabled' : ''}></custom-select>
         </label>
     `;
 }
@@ -215,7 +216,11 @@ export class AvatarSettingsForm {
         this.element.querySelectorAll('[data-avatar-field]').forEach((input) => {
             const key = input.dataset.avatarField;
             if (!key) return;
-            next[key] = input.type === 'checkbox' ? Boolean(input.checked) : input.value;
+            if (key === 'expressionMode') {
+                next[key] = input.checked ? 'audio' : 'manual';
+            } else {
+                next[key] = input.type === 'checkbox' ? Boolean(input.checked) : input.value;
+            }
         });
         const config = normalizeAvatarForSourceMode(next, sourceMode, { packs: this.state.packs });
         return { sourceMode, config };
@@ -226,8 +231,9 @@ export class AvatarSettingsForm {
         const previousSourceMode = deriveAvatarSourceMode(this.state.value);
         const draft = this.normalizeFromDom();
         this.state.value = draft.config;
-        const sourceModeChanged = event.target.matches('[data-avatar-source-mode]') || draft.sourceMode !== previousSourceMode;
-        if (sourceModeChanged) {
+        const layoutChanged = event.target.matches('[data-avatar-source-mode], [data-avatar-field="expressionMode"]')
+            || draft.sourceMode !== previousSourceMode;
+        if (layoutChanged) {
             this.renderForm();
         } else if (this.state.showPreview !== false) {
             const preview = this.root?.querySelector?.('.avatar-settings-preview');
@@ -257,6 +263,7 @@ export class AvatarSettingsForm {
         const fieldState = buildAvatarFieldState(sourceMode);
         const labels = this.state.labels || {};
         const hiddenFields = new Set(Array.isArray(this.state.hiddenFields) ? this.state.hiddenFields : []);
+        const expressionMode = String(normalized.expressionMode || '').trim() === 'manual' ? 'manual' : 'audio';
         const packValues = packs.map((pack) => pack.manifestSrc);
         const packLabels = Object.fromEntries(packs.map((pack) => [pack.manifestSrc, pack.label || pack.id]));
         if (normalized.packSrc && !packValues.includes(normalized.packSrc)) {
@@ -296,7 +303,13 @@ export class AvatarSettingsForm {
                 ${sourceSpecific}
             </div>
             <div class="avatar-settings-section">
-                ${renderWhenVisible('emotion', renderSelect({ key: 'emotion', label: labels.emotion || 'Emotion', value: normalized.emotion || 'neutral', values: AVATAR_COMMON_OPTIONS.emotion }))}
+                ${renderWhenVisible('emotion', renderSelect({
+                    key: 'emotion',
+                    label: labels.emotion || 'Manual emotion',
+                    value: normalized.emotion || 'neutral',
+                    values: AVATAR_COMMON_OPTIONS.emotion,
+                    disabled: expressionMode === 'audio'
+                }))}
                 ${renderWhenVisible('assetMode', renderSelect({ key: 'assetMode', label: labels.assetMode || 'Asset mode', value: normalized.assetMode || 'img', values: AVATAR_COMMON_OPTIONS.assetMode }))}
                 ${renderWhenVisible('mode', renderSelect({ key: 'mode', label: labels.mode || 'Mode', value: normalized.mode || 'static', values: AVATAR_COMMON_OPTIONS.mode }))}
                 ${renderWhenVisible('shape', renderSelect({ key: 'shape', label: labels.shape || 'Shape', value: normalized.shape || 'circle', values: AVATAR_COMMON_OPTIONS.shape }))}
@@ -306,6 +319,11 @@ export class AvatarSettingsForm {
                 ${renderWhenVisible('size', renderInput({ key: 'size', label: labels.size || 'Size', value: normalized.size || '72', type: 'number', min: '24', max: '160', step: '4' }))}
             </div>
             <div class="avatar-settings-checks">
+                ${renderWhenVisible('expressionMode', renderCheckbox({
+                    key: 'expressionMode',
+                    label: labels.expressionMode || 'Automatically adapt avatar to my voice',
+                    checked: expressionMode === 'audio'
+                }))}
                 ${renderWhenVisible('animated', renderCheckbox({ key: 'animated', label: labels.animated || 'Animated', checked: normalized.animated !== false }))}
                 ${renderWhenVisible('listen', renderCheckbox({ key: 'listen', label: labels.listen || 'Listen', checked: normalized.listen === true }))}
             </div>

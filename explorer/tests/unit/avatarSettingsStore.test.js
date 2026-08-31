@@ -46,7 +46,10 @@ test('normalizes AxiFace config and rejects unknown or unsafe fields', () => {
     assert.equal(config.sourceMode, 'pack');
     assert.equal(config.generated, false);
     assert.equal(config.emotion, 'happy');
+    assert.equal(config.expressionMode, 'audio');
     assert.equal(config.assetMode, 'inline');
+    assert.equal(normalizeAxiFaceConfig({ expressionMode: 'manual' }).expressionMode, 'manual');
+    assert.throws(() => normalizeAxiFaceConfig({ expressionMode: 'camera' }), /Invalid expression-mode/);
     assert.throws(() => normalizeAxiFaceConfig({ unknown: true }), /Unknown avatar config field/);
     assert.throws(() => normalizeAxiFaceConfig({ src: 'javascript:alert(1)' }), /unsafe URL/);
     assert.throws(() => normalizeAxiFaceConfig({ packSrc: 'http://example.com/pack.json' }), /HTTPS/);

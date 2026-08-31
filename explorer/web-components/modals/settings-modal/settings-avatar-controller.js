@@ -82,6 +82,7 @@ export function defaultAvatarConfig(id, size = '72') {
         packSrc: '',
         assetMode: 'img',
         emotion: 'neutral',
+        expressionMode: 'audio',
         size,
         thought: '',
         thoughtMode: 'none',

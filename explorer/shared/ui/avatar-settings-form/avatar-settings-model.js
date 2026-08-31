@@ -14,6 +14,7 @@ export const AVATAR_SOURCE_MODES = Object.freeze({
 export const AVATAR_COMMON_OPTIONS = Object.freeze({
     assetMode: Object.freeze(['img', 'inline']),
     emotion: EMOTIONS,
+    expressionMode: Object.freeze(['audio', 'manual']),
     thoughtMode: THOUGHT_MODES,
     mode: MODES,
     shape: Object.freeze(['circle', 'square', 'rounded', 'none']),

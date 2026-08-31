@@ -22,6 +22,7 @@ const ALLOWED_EMOTIONS = new Set([
 
 const ALLOWED_THOUGHT_MODES = new Set(['none', 'bubble', 'caption', 'ticker', 'inside']);
 const ALLOWED_MODES = new Set(['static', 'controlled', 'event-driven', 'autonomous']);
+const ALLOWED_EXPRESSION_MODES = new Set(['audio', 'manual']);
 const ALLOWED_SHAPES = new Set(['circle', 'square', 'rounded', 'none']);
 const ALLOWED_THEMES = new Set(['light', 'dark', 'auto']);
 const ALLOWED_ASSET_MODES = new Set(['img', 'inline']);
@@ -75,6 +76,8 @@ export function normalizeAxiFaceConfig(input = {}) {
     'agent-id',
     'src',
     'emotion',
+    'expressionMode',
+    'expression-mode',
     'size',
     'thought',
     'thoughtMode',
@@ -107,6 +110,7 @@ export function normalizeAxiFaceConfig(input = {}) {
   config.src = assertSafeUrl(input.src, 'src');
   config.packSrc = assertSafeUrl(input.packSrc ?? input['pack-src'], 'pack-src');
   config.emotion = normalizeEnum(input.emotion, ALLOWED_EMOTIONS, 'neutral', 'emotion');
+  config.expressionMode = normalizeEnum(input.expressionMode ?? input['expression-mode'], ALLOWED_EXPRESSION_MODES, 'audio', 'expression-mode');
   config.size = String(input.size || '64').trim();
   config.thought = String(input.thought || '').slice(0, 240);
   config.thoughtMode = normalizeEnum(input.thoughtMode ?? input['thought-mode'], ALLOWED_THOUGHT_MODES, config.thought ? 'bubble' : 'none', 'thought-mode');
@@ -174,6 +178,7 @@ export function createDefaultAvatarConfig(id, overrides = {}) {
     style: 'robot-soft',
     palette: 'default',
     emotion: 'neutral',
+    expressionMode: 'audio',
     shape: 'circle',
     theme: 'auto',
     size: '64',
