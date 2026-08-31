@@ -70,7 +70,7 @@ export function loadConfig(env = process.env) {
     // Ploinky persists the isolated agent workdir at /root across a targeted
     // recreate. Runtime contract v5 has one state location and no legacy
     // environment override or fallback reader.
-    sessionStateFile: '/root/.ploinky/state/onlyoffice-sessions-v5.json',
+    sessionStateFile: '/root/state/onlyoffice-sessions-v5.json',
     internalDocumentServerBaseUrl: 'http://127.0.0.1:80',
   };
 }

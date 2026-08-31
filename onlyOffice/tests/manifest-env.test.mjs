@@ -175,14 +175,15 @@ test('probe scripts parse under their declared interpreters', () => {
   }
 });
 
-test('manifest keeps image-owned service data away from rootless host bind mounts', () => {
+test('manifest stores image-owned service data below the agent .data root', () => {
   const manifest = readManifest();
 
   assert.deepEqual(manifest.volumes, {
-    '.ploinky/data/onlyOffice/log': '/var/log/onlyoffice',
-    '.ploinky/data/onlyOffice/data': '/var/www/onlyoffice/Data',
-    '.ploinky/data/onlyOffice/lib': '/var/lib/onlyoffice',
+    '.data/onlyOffice/log': '/var/log/onlyoffice',
+    '.data/onlyOffice/data': '/var/www/onlyoffice/Data',
+    '.data/onlyOffice/lib': '/var/lib/onlyoffice',
   });
+  assert.equal(Object.keys(manifest.volumes).some((hostPath) => hostPath.includes('.ploinky')), false);
   const preinstall = fs.readFileSync(
     path.join(agentRoot, 'scripts', 'hooks', 'preinstall.sh'),
     'utf8',

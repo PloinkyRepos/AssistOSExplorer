@@ -13,7 +13,8 @@ test('preinstall is a hard-cut data-directory initializer only', () => {
   const script = fs.readFileSync(path.join(agentRoot, 'scripts/hooks/preinstall.sh'), 'utf8');
 
   assert.match(script, /Runtime contract v5 is a hard cut/);
-  assert.match(script, /\.ploinky\/data\/onlyOffice/);
+  assert.match(script, /\.data\/onlyOffice/);
+  assert.doesNotMatch(script, /\.ploinky\/data\/onlyOffice/);
   assert.doesNotMatch(script, /ONLYOFFICE_(?:PUBLIC|INTERNAL)_URL/);
   assert.doesNotMatch(script, /podman|docker|rm -rf|legacy.*(?:inspect|delete|migrate)/i);
 });

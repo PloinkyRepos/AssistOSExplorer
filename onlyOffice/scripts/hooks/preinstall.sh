@@ -2,7 +2,7 @@
 set -euo pipefail
 
 workspace_root="${PLOINKY_WORKSPACE_ROOT:?PLOINKY_WORKSPACE_ROOT is required}"
-data_root="${workspace_root}/.ploinky/data/onlyOffice"
+data_root="${workspace_root}/.data/onlyOffice"
 
 mkdir -p \
   "${data_root}/log" \

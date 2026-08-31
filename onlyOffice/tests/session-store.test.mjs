@@ -39,7 +39,8 @@ test('config fixes v5 session state under the persisted agent workdir with no ov
     ONLYOFFICE_JWT_SECRET: 'test-secret',
     ONLYOFFICE_SESSION_STATE_FILE: '/var/lib/onlyoffice/legacy.json',
   });
-  assert.equal(config.sessionStateFile, '/root/.ploinky/state/onlyoffice-sessions-v5.json');
+  assert.equal(config.sessionStateFile, '/root/state/onlyoffice-sessions-v5.json');
+  assert.equal(config.sessionStateFile.includes('/.ploinky/'), false);
 });
 
 test('config keeps the OnlyOffice drain inside the generic targeted-recreate ceiling', () => {
