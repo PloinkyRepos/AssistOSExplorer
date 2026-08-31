@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { FileExp } from '../../web-components/pages/file-exp/file-exp.js';
+import { canonicalTerminalDirectoryPath } from '../../web-components/pages/file-exp/file-exp-utils.js';
 import {
     FILE_EXP_MENU_SLOTS,
     getBuiltInContextMenuItems
@@ -37,13 +38,20 @@ test('Open Terminal Here is omitted for ordinary users and shown to administrato
             getBuiltInContextMenuItems(fileExp, target).some((item) => item.id === 'host:open-terminal-here'),
             true
         );
+        assert.equal(
+            getBuiltInContextMenuItems(fileExp, { path: '/folder/file.txt', type: 'file' })
+                .some((item) => item.id === 'host:open-terminal-here'),
+            false
+        );
     } finally {
         globalThis.window = previousWindow;
     }
 });
 
-test('Open Terminal Here launches the same-origin core route with a canonical encoded relative path', () => {
+test('Open Terminal Here opens the Explorer target chooser with only a canonical relative path', async () => {
     const previousWindow = globalThis.window;
+    const previousAssistOS = globalThis.assistOS;
+    const modalCalls = [];
     const opened = [];
     globalThis.window = {
         location: {
@@ -52,27 +60,87 @@ test('Open Terminal Here launches the same-origin core route with a canonical en
         },
         open(...args) { opened.push(args); }
     };
+    globalThis.assistOS = {
+        UI: {
+            async showModal(...args) { modalCalls.push(args); }
+        }
+    };
     const fileExp = {
         normalizePath(value) { return String(value || ''); }
     };
     try {
-        const openedTerminal = FileExp.prototype.openTerminalHere.call(fileExp, {
+        const openedTerminal = await FileExp.prototype.openTerminalHere.call(fileExp, {
             dataset: { entryPath: '/nested folder/文档/#hash/%value' }
         });
         assert.equal(openedTerminal, true);
-        assert.deepEqual(opened, [[
-            'https://explorer.example.test/webtty/?dir=nested+folder%2F%E6%96%87%E6%A1%A3%2F%23hash%2F%25value',
-            '_blank',
-            'noopener,noreferrer'
+        assert.deepEqual(modalCalls, [[
+            'terminal-target-modal',
+            { dir: 'nested folder/文档/#hash/%value' }
         ]]);
-        const target = new URL(opened[0][0]);
-        assert.equal(target.origin, globalThis.window.location.origin);
-        assert.equal(target.pathname, '/webtty/');
-        assert.equal(target.searchParams.get('dir'), 'nested folder/文档/#hash/%value');
-        assert.doesNotMatch(opened[0][0], /(?:base-agent-additional-server|7681)/);
+        assert.deepEqual(opened, []);
+
+        const openedRootTerminal = await FileExp.prototype.openTerminalHere.call(fileExp, {
+            dataset: { entryPath: '/' }
+        });
+        assert.equal(openedRootTerminal, true);
+        assert.deepEqual(modalCalls[1], ['terminal-target-modal', { dir: '' }]);
+
+        const openedCanonicalTerminal = await FileExp.prototype.openTerminalHere.call(fileExp, {
+            dataset: { entryPath: '/nested//folder/./literal%2e%2e' }
+        });
+        assert.equal(openedCanonicalTerminal, true);
+        assert.deepEqual(modalCalls[2], [
+            'terminal-target-modal',
+            { dir: 'nested/folder/literal%2e%2e' }
+        ]);
     } finally {
         globalThis.window = previousWindow;
+        globalThis.assistOS = previousAssistOS;
     }
+});
+
+test('terminal launcher rejects traversal-shaped and non-canonical path data before opening a modal', async () => {
+    const previousAssistOS = globalThis.assistOS;
+    const modalCalls = [];
+    globalThis.assistOS = {
+        UI: {
+            async showModal(...args) { modalCalls.push(args); }
+        }
+    };
+    const invalidPaths = [
+        undefined,
+        '',
+        'relative/folder',
+        '//network/share',
+        '/nested/../escape',
+        '/C:/workspace',
+        '/back\\slash',
+        '/line\nbreak',
+        `/unpaired-${String.fromCharCode(0xD800)}`,
+        `/${'x'.repeat(4097)}`,
+    ];
+    try {
+        for (const entryPath of invalidPaths) {
+            assert.equal(
+                await FileExp.prototype.openTerminalHere.call({}, { dataset: { entryPath } }),
+                false,
+                `expected rejection for ${JSON.stringify(entryPath)}`
+            );
+        }
+        assert.deepEqual(modalCalls, []);
+    } finally {
+        globalThis.assistOS = previousAssistOS;
+    }
+});
+
+test('terminal directory canonicalization preserves literal Unicode, spaces, hashes, and percent escapes', () => {
+    assert.equal(
+        canonicalTerminalDirectoryPath('/nested folder/文档/#hash/%2e%2e'),
+        'nested folder/文档/#hash/%2e%2e'
+    );
+    assert.equal(canonicalTerminalDirectoryPath('/'), '');
+    assert.equal(canonicalTerminalDirectoryPath('/a//b/./c/'), 'a/b/c');
+    assert.equal(canonicalTerminalDirectoryPath('/a/../b'), null);
 });
 
 test('context menu renders plugin metadata synchronously without loading plugin code', async () => {

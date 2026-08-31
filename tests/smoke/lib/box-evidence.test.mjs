@@ -33,6 +33,7 @@ function containerInspect(bindings = {
         'io.assistos.ploinky-box.image-ref': IMAGE_REF,
         'io.assistos.ploinky-box.router-host-port': '18080',
         'io.assistos.ploinky-box.media-host-port': '7882',
+        'io.assistos.ploinky-box.seccomp-fingerprint': 'd'.repeat(64),
         'io.assistos.ploinky-box.dependencies-fingerprint': 'e'.repeat(64),
         'io.assistos.ploinky-box.images-fingerprint': 'f'.repeat(64),
         'io.assistos.ploinky-box.agentlib-mode': 'managed',
@@ -42,7 +43,14 @@ function containerInspect(bindings = {
         'io.assistos.ploinky-box.agentlib-commit': AGENTLIB_COMMIT,
       },
     },
-    HostConfig: { PortBindings: bindings },
+    HostConfig: {
+      PortBindings: bindings,
+      SecurityOpt: [
+        'label=disable',
+        'seccomp=/verified/ploinky/ploinky-box/seccomp/podman-nested-pid-fallback.json',
+        'unmask=all',
+      ],
+    },
   }];
 }
 
@@ -81,12 +89,18 @@ test('box evidence binds the exact running semantic image and normalizes only em
   const validated = validateBoxEvidence(evidence, expected());
   assert.equal(validated.imageId, IMAGE_ID);
   assert.equal(validated.semanticLabels.mediaHostPort, '7882');
+  assert.equal(validated.semanticLabels.seccompFingerprint, 'd'.repeat(64));
   assert.equal(validated.semanticLabels.dependenciesFingerprint, 'e'.repeat(64));
   assert.equal(validated.semanticLabels.imagesFingerprint, 'f'.repeat(64));
   assert.equal(validated.semanticLabels.agentLibMode, 'managed');
   assert.equal(validated.semanticLabels.agentLibSourceIdHash, '1'.repeat(64));
   assert.equal(validated.semanticLabels.agentLibFingerprint, '2'.repeat(64));
   assert.equal(validated.semanticLabels.agentLibCommit, AGENTLIB_COMMIT);
+  assert.deepEqual(validated.securityOptions, [
+    'label=disable',
+    'seccomp=/verified/ploinky/ploinky-box/seccomp/podman-nested-pid-fallback.json',
+    'unmask=all',
+  ]);
 });
 
 test('box evidence requires the exact 12-character lowercase path-hash contract', () => {
@@ -141,6 +155,22 @@ test('box evidence rejects a third publication, wrong semantic ownership, and wr
     imageInspect: imageInspect(),
     ...expected(),
   }), /dependencies-fingerprint label must be a SHA-256 digest/);
+
+  const invalidSeccompFingerprint = containerInspect();
+  invalidSeccompFingerprint[0].Config.Labels['io.assistos.ploinky-box.seccomp-fingerprint'] = 'not-a-digest';
+  assert.throws(() => buildBoxEvidence({
+    containerInspect: invalidSeccompFingerprint,
+    imageInspect: imageInspect(),
+    ...expected(),
+  }), /seccomp-fingerprint label must be a SHA-256 digest/);
+
+  const unconfinedSeccomp = containerInspect();
+  unconfinedSeccomp[0].HostConfig.SecurityOpt = ['label=disable', 'seccomp=unconfined', 'unmask=all'];
+  assert.throws(() => buildBoxEvidence({
+    containerInspect: unconfinedSeccomp,
+    imageInspect: imageInspect(),
+    ...expected(),
+  }), /absolute profile path/);
 
   for (const [label, value, message] of [
     ['io.assistos.ploinky-box.agentlib-mode', 'default', /AgentLib mode label must be local or managed/],

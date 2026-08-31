@@ -85,12 +85,16 @@ npm run test:webtty
 ```
 
 It requires the canonical local `admin` and `user` accounts and a fresh Box.
-The gate exercises the local administrator browser-mutation path, proves the
-selected nested `/workspace` cwd and bidirectional host workspace visibility,
-closes the terminal, and creates a second terminal to prove cleanup did not
-disable WebTTY. It also proves UI omission plus page and API `403` responses
-for the ordinary user. A non-loopback target, missing workspace root, skipped
-case, or failed assertion is a release failure.
+The gate exercises the local administrator browser-mutation path through the
+Explorer-owned target chooser. It proves Ploinky Box is first, checks the exact
+eligible-agent rows returned for the selected folder, and opens WebTTY only
+through an opaque fragment launch. It proves the selected Box or agent working
+directory and bidirectional PTY behavior, closes the terminal, and creates a
+second terminal through a fresh chooser discovery to prove cleanup did not
+disable WebTTY. It also proves launch replay and stale-target rejection,
+fragment stripping, UI omission, and page/discovery/session API `403`
+responses for the ordinary user. A direct `?dir=` launch, non-loopback target,
+missing workspace root, skipped case, or failed assertion is a release failure.
 
 The WebMeet screen gate is:
 

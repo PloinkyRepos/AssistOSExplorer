@@ -4,6 +4,7 @@ const BOX_LABELS = Object.freeze({
   imageRef: 'io.assistos.ploinky-box.image-ref',
   routerHostPort: 'io.assistos.ploinky-box.router-host-port',
   mediaHostPort: 'io.assistos.ploinky-box.media-host-port',
+  seccompFingerprint: 'io.assistos.ploinky-box.seccomp-fingerprint',
   dependenciesFingerprint: 'io.assistos.ploinky-box.dependencies-fingerprint',
   imagesFingerprint: 'io.assistos.ploinky-box.images-fingerprint',
   agentLibMode: 'io.assistos.ploinky-box.agentlib-mode',
@@ -126,6 +127,10 @@ function exactBoxLabels(labels, {
   if (mediaHostPort !== '7882') {
     throw new Error('Outer container Box media-host-port label does not match its exact publication.');
   }
+  const seccompFingerprint = exactSha256(
+    source[BOX_LABELS.seccompFingerprint],
+    'outer container Box seccomp-fingerprint label',
+  );
   const dependenciesFingerprint = exactSha256(
     source[BOX_LABELS.dependenciesFingerprint],
     'outer container Box dependencies-fingerprint label',
@@ -160,6 +165,7 @@ function exactBoxLabels(labels, {
     imageRef,
     routerHostPort,
     mediaHostPort,
+    seccompFingerprint,
     dependenciesFingerprint,
     imagesFingerprint,
     agentLibMode,
@@ -168,6 +174,30 @@ function exactBoxLabels(labels, {
     agentLibSourceRelativePath,
     agentLibCommit,
   });
+}
+
+function exactBoxSecurityOptions(options) {
+  if (!Array.isArray(options) || options.length !== 3) {
+    throw new Error('Outer container Box SecurityOpt must contain exactly three entries.');
+  }
+  let seccompPath = '';
+  const normalized = options.map((raw) => {
+    const option = exactString(raw, 'outer container Box SecurityOpt entry');
+    const separator = option.indexOf('=');
+    const key = (separator === -1 ? option : option.slice(0, separator)).toLowerCase();
+    const value = separator === -1 ? '' : option.slice(separator + 1);
+    if (key !== 'seccomp') return option.toLowerCase();
+    if (!value.startsWith('/') || value.includes('\0') || value.split('/').includes('..')) {
+      throw new Error('Outer container Box seccomp SecurityOpt must use one absolute profile path.');
+    }
+    seccompPath = value;
+    return `seccomp=${value}`;
+  }).sort();
+  const expected = ['label=disable', `seccomp=${seccompPath}`, 'unmask=all'].sort();
+  if (!seccompPath || JSON.stringify(normalized) !== JSON.stringify(expected)) {
+    throw new Error('Outer container Box SecurityOpt must equal label=disable, unmask=all, and one seccomp profile.');
+  }
+  return Object.freeze(normalized);
 }
 
 function exactSshHostKeySha256(value, name) {
@@ -278,6 +308,7 @@ export function buildBoxEvidence({
     throw new Error('Box image entrypoint is invalid.');
   }
   const { normalized, selectedRouterHostPort } = assertExactBindings(container?.HostConfig?.PortBindings);
+  const securityOptions = exactBoxSecurityOptions(container?.HostConfig?.SecurityOpt);
   const semanticLabels = exactBoxLabels(container?.Config?.Labels || {}, {
     expectedImageRef,
     selectedRouterHostPort,
@@ -294,6 +325,7 @@ export function buildBoxEvidence({
     publicIPv4,
     selectedRouterHostPort,
     normalizedPortBindings: normalized,
+    securityOptions,
   }, {
     expectedContainerName,
     expectedImageId,
@@ -329,6 +361,7 @@ export function validateBoxEvidence(input, {
   if (JSON.stringify(normalized) !== JSON.stringify(expectedBindings(selectedRouterHostPort))) {
     throw new Error('Box evidence normalized PortBindings are not the exact two-publication boundary.');
   }
+  const securityOptions = exactBoxSecurityOptions(evidence.securityOptions);
   const semanticLabels = exactBoxLabels(
     Object.fromEntries(Object.entries(BOX_LABELS).map(([name, label]) => [
       label,
@@ -348,6 +381,7 @@ export function validateBoxEvidence(input, {
     publicIPv4: evidence.publicIPv4,
     selectedRouterHostPort,
     normalizedPortBindings: normalized,
+    securityOptions,
   });
 }
 

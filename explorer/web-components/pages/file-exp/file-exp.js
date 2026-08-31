@@ -1,5 +1,6 @@
 import {
     normalizePath,
+    canonicalTerminalDirectoryPath,
     joinPath,
     parentPath,
     decodeLocalActionPathArg,
@@ -1733,16 +1734,13 @@ export class FileExp {
         }
     }
 
-    openTerminalHere(element) {
-        const targetPath = this.normalizePath(element?.dataset?.entryPath || '');
-        if (!targetPath) {
+    async openTerminalHere(element) {
+        const relativePath = canonicalTerminalDirectoryPath(element?.dataset?.entryPath);
+        if (relativePath === null) {
             return false;
         }
         try {
-            const relativePath = targetPath.replace(/^\/+/, '');
-            const targetUrl = new URL('/webtty/', window.location.origin);
-            targetUrl.searchParams.set('dir', relativePath);
-            window.open(targetUrl.toString(), '_blank', 'noopener,noreferrer');
+            await assistOS.UI.showModal('terminal-target-modal', { dir: relativePath });
             return true;
         } catch (_) {
             return false;

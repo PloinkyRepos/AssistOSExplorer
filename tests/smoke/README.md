@@ -232,16 +232,40 @@ its exact host workspace:
 ```bash
 SMOKE_BASE_URL=http://127.0.0.1:18080 \
 SMOKE_WORKSPACE_ROOT=/absolute/path/to/the/box/workspace \
+SMOKE_DEPLOYMENT_MODE=box \
+SMOKE_PLOINKY_BIN=/absolute/path/to/the/verified/ploinky/bin/ploinky \
+SMOKE_PLOINKY_BOX_CONTAINER=ploinky-box-workspace-0123456789ab \
+SMOKE_EXPECT_BOX_IMAGE_ID=sha256:<exact-64-hex-image-id> \
+SMOKE_EXPECT_BOX_IMAGE_REF=docker.io/assistos/ploinky-box:<immutable-candidate> \
 npm run test:webtty
 ```
 
 The gate requires the canonical local `admin` and `user` accounts. It proves
-the administrator-only Explorer launcher, same-origin nested-directory launch,
-initial `/workspace` cwd, two-way host workspace visibility, normal cleanup,
-and successful creation of a second terminal. It also proves that an ordinary
-user does not receive the launcher and gets `403` from both the page and the
-session-creation mutation. A missing workspace root or non-loopback target is
-a hard failure while this gate is selected.
+the administrator-only Explorer launcher, the native chooser's accessible
+name, Box-first ordering, and that the chooser renders exactly the bounded
+safe target rows independently derived from exact current registry, immutable
+container, ownership-label, and mount evidence. The fresh graph must include
+the global `gitAgent` and isolated `liveKitServerAgent`; the former must be
+eligible and the latter must be absent for the selected folder. Any naturally
+present effective read-only or destination-shadowed mount is evaluated by the
+same independent physical inventory instead of being fabricated by the test.
+
+The gate selects both Box and agent targets through opaque fragment-only
+launches. It proves immediate fragment stripping and no-referrer handoff,
+single-use replay and cross-session rejection, origin/CSRF enforcement, safe
+target banners, independently translated working directories, two-way PTY I/O,
+resize, disconnect cleanup with a foreground child, targeted agent replacement,
+stale launch rejection, real chooser refresh, authentication-revocation
+cleanup, default Router restart recovery, and Box availability after agent and
+Router lifecycle events. It also proves that an ordinary user does not receive
+the launcher and gets `403` from the page, discovery, and exact launch-record
+session mutation. A direct `?dir=` URL is required to fail closed without
+creating a session. Missing workspace root, non-loopback target, missing exact
+fresh graph runtime, softened assertion, or skipped target state is a hard
+failure while this gate is selected.
+The Box generation must be fresh, but its prebuilt image may be older only when
+the gate binds the exact container name, immutable image ID/reference, and
+read-only mounted Ploinky candidate derived from `SMOKE_PLOINKY_BIN`.
 
 The listener gate always requires `required-loopback`, requires exactly one
 listener for each eligible `required-assigned-managed-gateway`, and requires no
@@ -273,7 +297,8 @@ Opt-in checks:
   publication used only for local Podman generation inspection. The live Box
   inspector still rejects non-loopback, ambiguous, stale, or mismatched outer
   containers. Its exact semantic-label contract includes the selected
-  achillesAgentLib mode, source-identity hash, content fingerprint,
+  nested-Podman seccomp profile fingerprint and the selected achillesAgentLib
+  mode, source-identity hash, content fingerprint,
   workspace-relative source path, and Git commit. The ordinary Copilot gate
   requires that live AgentLib commit to equal the verified release-manifest
   commit before and after Chromium. It requires a fresh outer-container

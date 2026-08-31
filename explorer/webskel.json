@@ -127,6 +127,11 @@
       "presenterClassName": "ConfirmActionModal"
     },
     {
+      "name": "terminal-target-modal",
+      "type": "modals",
+      "presenterClassName": "TerminalTargetModal"
+    },
+    {
       "name": "show-error-modal",
       "type": "modals",
       "presenterClassName": "ShowErrorModal"
