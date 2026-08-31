@@ -26,7 +26,13 @@ function liveBox(overrides = {}) {
         '8080/tcp': [{ HostIp: '127.0.0.1', HostPort: '8080' }],
         '7882/udp': [{ HostIp: '0.0.0.0', HostPort: '7882' }],
       },
+      securityOptions: [
+        'label=disable',
+        'seccomp=/verified/ploinky/ploinky-box/seccomp/podman-nested-pid-fallback.json',
+        'unmask=all',
+      ],
       semanticLabels: {
+        seccompFingerprint: 'd'.repeat(64),
         agentLibMode: 'managed',
         agentLibSourceIdHash: '4'.repeat(64),
         agentLibFingerprint: '5'.repeat(64),

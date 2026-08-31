@@ -71,6 +71,7 @@ export const smokeConfig = Object.freeze({
     openInterpreter: readBool('SMOKE_OPEN_INTERPRETER', false),
     qaAcceptance,
     umami: readBool('SMOKE_UMAMI', false),
+    webttyCore: readBool('SMOKE_WEBTTY_CORE', false),
     webmeetHeadless: readBool('SMOKE_WEBMEET_HEADLESS', false),
     webmeetMedia: readBool('SMOKE_WEBMEET_MEDIA', false),
     webmeetNetworkMatrix: readBool('SMOKE_WEBMEET_NETWORK_MATRIX', false),

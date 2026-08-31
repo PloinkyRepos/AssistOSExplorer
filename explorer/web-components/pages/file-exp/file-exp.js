@@ -1,5 +1,6 @@
 import {
     normalizePath,
+    canonicalTerminalDirectoryPath,
     joinPath,
     parentPath,
     decodeLocalActionPathArg,
@@ -90,7 +91,6 @@ import {
     pollCurrentFileView as pollCurrentFileViewImpl
 } from "./file-exp-current-file-monitor.js";
 import { emitAuditEvent } from "../../../services/audit/auditService.js";
-import { buildAgentPortUrl } from "../../../services/runtime/agent-port-url.js";
 
 const LARGE_FILE_PREVIEW_LIMIT_BYTES = 1.5 * 1024 * 1024; // ~1.5MB safety window before transport limits
 const LARGE_FILE_PREVIEW_LINES = 400;
@@ -1734,17 +1734,13 @@ export class FileExp {
         }
     }
 
-    openTerminalHere(element) {
-        const targetPath = this.normalizePath(element?.dataset?.entryPath || '');
-        if (!targetPath) {
+    async openTerminalHere(element) {
+        const relativePath = canonicalTerminalDirectoryPath(element?.dataset?.entryPath);
+        if (relativePath === null) {
             return false;
         }
         try {
-            const relativePath = targetPath.replace(/^\/+/, '');
-            const targetPathname = buildAgentPortUrl('webtty', 7681, '/');
-            const targetUrl = new URL(targetPathname, window.location.origin);
-            targetUrl.searchParams.set('dir', relativePath);
-            window.open(targetUrl.toString(), '_blank', 'noopener,noreferrer');
+            await assistOS.UI.showModal('terminal-target-modal', { dir: relativePath });
             return true;
         } catch (_) {
             return false;

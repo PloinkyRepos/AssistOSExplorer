@@ -1,6 +1,7 @@
 import { getApplicationPluginsForSlot } from "./file-exp-application-plugins.js";
 import { DPU_SECRETS_PATH, isDpuManagedPath } from "./file-exp-dpu-provider.js";
 import { resolveExplorerPathToFilesystemPath } from "../../../services/infrastructure/explorerApi.js";
+import { isAdminUser } from "../../../services/auth/adminUser.js";
 
 export const FILE_EXP_MENU_SLOTS = Object.freeze({
     contextFile: 'file-exp:context-menu:file',
@@ -213,8 +214,8 @@ export function getBuiltInContextMenuItems(fileExp, target) {
     }
 
     if (type === 'directory') {
-        items.push(
-            {
+        if (isAdminUser(globalThis.window?.assistOS?.user)) {
+            items.push({
                 id: 'host:open-terminal-here',
                 source: 'host',
                 slot: FILE_EXP_MENU_SLOTS.contextDirectory,
@@ -225,7 +226,9 @@ export function getBuiltInContextMenuItems(fileExp, target) {
                 targetPath: entryPath,
                 icon: './assets/icons/terminal.svg',
                 disabled: false
-            },
+            });
+        }
+        items.push(
             {
                 id: 'host:upload-here',
                 source: 'host',

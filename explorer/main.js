@@ -6,6 +6,7 @@ import { installExplorerResourceLoader } from './services/runtime/explorerResour
 import { filterRuntimePluginsByPolicy, forEachRuntimePluginEntry } from './utils/pluginUtils.core.js';
 import { initializeTheme } from './shared/ui/theme.js';
 import { fetchAuthenticatedUser } from './services/infrastructure/authApi.js';
+import { isAdminUser } from './services/auth/adminUser.js';
 import {
     mountInitialApplicationRoute,
     resolveInitialHashedRoute
@@ -102,13 +103,6 @@ const hasRuntimePlugins = (runtimePlugins) => {
         && !Array.isArray(buckets)
         && Object.values(buckets).some((entries) => Array.isArray(entries) && entries.length > 0)
     ));
-};
-
-const isAdminUser = (user) => {
-    const roles = Array.isArray(user?.roles) ? user.roles.map((role) => String(role).toLowerCase()) : [];
-    return roles.includes('admin')
-        || String(user?.username || '').toLowerCase() === 'admin'
-        || String(user?.id || '').toLowerCase() === 'local:admin';
 };
 
 const getRuntimeComponentPolicy = (runtimePlugins, componentName) => {

@@ -4,6 +4,7 @@ import path from 'node:path';
 import { expect, test as base } from '@playwright/test';
 
 import { smokeConfig } from './config.mjs';
+import { createDiagnosticLedger } from './diagnostic-ledger.mjs';
 import { findTraceCredentialResidue, redactTraceText } from './redacted-trace.mjs';
 import { createRedactor, findSecretLeaks } from './security.mjs';
 
@@ -52,6 +53,32 @@ export function setPageDiagnosticsExpectedOffline(page, expected) {
   for (const controller of diagnosticControllers.get(page) || []) {
     controller.setExpectedOffline(expected);
   }
+}
+
+export function checkpointPageDiagnostics(page, label) {
+  const controllers = [...(diagnosticControllers.get(page) || [])];
+  if (controllers.length === 0) {
+    throw new Error('the page has no attached diagnostic controller');
+  }
+  return Object.freeze({
+    page,
+    entries: controllers.map((controller) => ({
+      controller,
+      checkpoint: controller.checkpoint(label),
+    })),
+  });
+}
+
+export function acknowledgeExactPageDiagnostics(page, checkpoint, expectedSignatures) {
+  if (checkpoint?.page !== page || !Array.isArray(checkpoint?.entries)) {
+    throw new Error('the diagnostic checkpoint does not belong to this page');
+  }
+  for (const { controller, checkpoint: controllerCheckpoint } of checkpoint.entries) {
+    controller.assertExact(controllerCheckpoint, expectedSignatures);
+  }
+  return checkpoint.entries.map(({ controller, checkpoint: controllerCheckpoint }) => (
+    controller.acknowledgeExact(controllerCheckpoint, expectedSignatures)
+  ));
 }
 
 export function installRtcProbe(context, { networkLane = '', expectedTurnEndpoint = null } = {}) {
@@ -199,6 +226,9 @@ export function attachPageDiagnostics(page, testInfo, label = 'page') {
   const events = [];
   let expectedOffline = false;
   let paused = false;
+  const ledger = createDiagnosticLedger(events, {
+    isActionable: (event) => event.type === 'error' && !shouldIgnoreConsole(event),
+  });
 
   page.on('console', (message) => {
     if (paused) return;
@@ -262,20 +292,21 @@ export function attachPageDiagnostics(page, testInfo, label = 'page') {
       `credential-shaped values leaked into ${label} browser diagnostics`,
     ).toEqual([]);
     fs.writeFileSync(filePath, payload);
+    ledger.assertNoOpenCheckpoints();
     return events;
   }
 
   function actionableEvents() {
-    return events.filter((event) => (
-      event.type === 'error'
-      && !shouldIgnoreConsole(event)
-    ));
+    return ledger.actionableEvents();
   }
 
   const controller = {
     events,
     flush,
     actionableEvents,
+    checkpoint: ledger.checkpoint,
+    acknowledgeExact: ledger.acknowledgeExact,
+    assertExact: ledger.assertExact,
     pause() { paused = true; },
     resume() { paused = false; },
     setExpectedOffline(value) { expectedOffline = Boolean(value); },

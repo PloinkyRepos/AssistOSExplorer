@@ -12,6 +12,7 @@ const MOUNT_CONTRIBUTION_TYPE = 'mount';
 import { sortRuntimePluginEntries, getRuntimePluginPolicyKey } from "../../../utils/pluginUtils.core.js";
 import { emitPluginMountedAudit } from "../../../services/audit/auditService.js";
 import { resolveExplorerPathToFilesystemPath } from "../../../services/infrastructure/explorerApi.js";
+import { isAdminUser } from "../../../services/auth/adminUser.js";
 
 function getPluginSettingsMap() {
     const settings = window.assistOS?.pluginSettings;
@@ -35,14 +36,6 @@ function isPluginEnabled(plugin) {
     return !entry || entry.enabled !== false;
 }
 
-function isAdminUser() {
-    const user = window.assistOS?.user;
-    const roles = Array.isArray(user?.roles) ? user.roles.map((role) => String(role).toLowerCase()) : [];
-    return roles.includes('admin')
-        || String(user?.username || '').toLowerCase() === 'admin'
-        || String(user?.id || '').toLowerCase() === 'local:admin';
-}
-
 export function getApplicationPluginsForSlot(slot, { contributionType = null } = {}) {
     const appPlugins = window.assistOS?.workspace?.appPlugins;
     const plugins = appPlugins && typeof appPlugins === 'object' && !Array.isArray(appPlugins)
@@ -50,7 +43,7 @@ export function getApplicationPluginsForSlot(slot, { contributionType = null } =
         : null;
     const filteredPlugins = Array.isArray(plugins)
         ? plugins.filter((plugin) => {
-            if (!plugin || !isPluginEnabled(plugin) || (plugin.adminOnly === true && !isAdminUser())) {
+            if (!plugin || !isPluginEnabled(plugin) || (plugin.adminOnly === true && !isAdminUser(window.assistOS?.user))) {
                 return false;
             }
             if (!contributionType) {

@@ -24,6 +24,37 @@ export function normalizePath(pathStr) {
     return '/' + parts.join('/');
 }
 
+function hasUnpairedSurrogate(value) {
+    for (let index = 0; index < value.length; index += 1) {
+        const code = value.charCodeAt(index);
+        if (code >= 0xD800 && code <= 0xDBFF) {
+            const next = value.charCodeAt(index + 1);
+            if (!(next >= 0xDC00 && next <= 0xDFFF)) return true;
+            index += 1;
+        } else if (code >= 0xDC00 && code <= 0xDFFF) {
+            return true;
+        }
+    }
+    return false;
+}
+
+export function canonicalTerminalDirectoryPath(pathValue) {
+    if (typeof pathValue !== 'string'
+        || !pathValue.startsWith('/')
+        || pathValue.startsWith('//')
+        || /[\0\r\n\\]/.test(pathValue)
+        || hasUnpairedSurrogate(pathValue)) {
+        return null;
+    }
+    const segments = pathValue.split('/');
+    if (segments.some((segment) => segment === '..')) return null;
+    const canonical = segments.filter((segment) => segment && segment !== '.').join('/');
+    if (/^[A-Za-z]:/.test(canonical) || new TextEncoder().encode(canonical).byteLength > 4096) {
+        return null;
+    }
+    return canonical;
+}
+
 export function buildFileExpHash(pathStr) {
     const normalized = normalizePath(pathStr);
     return `#file-exp${encodeURI(normalized)}`;

@@ -1,5 +1,7 @@
 import { spawnSync } from 'node:child_process';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
+import path from 'node:path';
 
 import {
   buildBoxEvidence,
@@ -12,6 +14,8 @@ const BOX_IMAGE_REF_LABEL = 'io.assistos.ploinky-box.image-ref';
 const DEFAULT_GENERATION_MAX_AGE_MS = 30 * 60_000;
 const DEFAULT_IMAGE_MAX_AGE_MS = 4 * 60 * 60_000;
 const PLOINKY_SOURCE_DESTINATION = '/opt/ploinky';
+const WORKSPACE_SOURCE_DESTINATION = '/workspace';
+const NESTED_PODMAN_SECCOMP_RELATIVE_PATH = 'ploinky-box/seccomp/podman-nested-pid-fallback.json';
 
 function exactDate(value, name) {
   const milliseconds = Date.parse(String(value || ''));
@@ -72,6 +76,97 @@ export function validateReadOnlyPloinkySourceMount(mounts, expectedSource, {
     source: sourceRealpath,
     destination: PLOINKY_SOURCE_DESTINATION,
     readWrite: false,
+  });
+}
+
+export function validateWorkspaceSourceMount(mounts, expectedSource, {
+  realpathSync = fs.realpathSync,
+} = {}) {
+  if (!pathIsAbsolute(expectedSource)) {
+    throw new Error('Expected host workspace path must be absolute.');
+  }
+  if (!Array.isArray(mounts)) {
+    throw new Error('Live Box inspection must include its exact mount inventory.');
+  }
+  const candidates = mounts.filter((mount) => (
+    String(mount?.Destination ?? mount?.destination ?? '') === WORKSPACE_SOURCE_DESTINATION
+  ));
+  if (candidates.length !== 1) {
+    throw new Error(`Live Box must have exactly one ${WORKSPACE_SOURCE_DESTINATION} source mount.`);
+  }
+  const mount = candidates[0];
+  const type = String(mount?.Type ?? mount?.type ?? '').toLowerCase();
+  const source = String(mount?.Source ?? mount?.source ?? '');
+  const readWrite = mount?.RW ?? mount?.rw;
+  if (type !== 'bind' || readWrite !== true || !pathIsAbsolute(source)) {
+    throw new Error(`Live Box ${WORKSPACE_SOURCE_DESTINATION} must be one absolute writable bind mount.`);
+  }
+  let expectedRealpath;
+  let sourceRealpath;
+  try {
+    expectedRealpath = realpathSync(expectedSource);
+    sourceRealpath = realpathSync(source);
+  } catch (error) {
+    throw new Error(`Unable to resolve the live Box workspace source mount: ${error.message}`);
+  }
+  if (sourceRealpath !== expectedRealpath) {
+    throw new Error('Live Box workspace source mount does not equal the expected host workspace.');
+  }
+  return Object.freeze({
+    type: 'bind',
+    source: sourceRealpath,
+    destination: WORKSPACE_SOURCE_DESTINATION,
+    readWrite: true,
+  });
+}
+
+export function validateVerifiedSeccompRuntime(box, expectedPloinkySource, {
+  fsApi = fs,
+  realpathSync = fs.realpathSync,
+} = {}) {
+  if (!pathIsAbsolute(expectedPloinkySource)) {
+    throw new Error('Verified Ploinky repository path must be absolute for seccomp evidence.');
+  }
+  const sourceRoot = realpathSync(expectedPloinkySource);
+  const profilePath = path.join(sourceRoot, NESTED_PODMAN_SECCOMP_RELATIVE_PATH);
+  const profileStat = fsApi.lstatSync(profilePath);
+  if (profileStat.isSymbolicLink() || !profileStat.isFile()) {
+    throw new Error('Verified nested-Podman seccomp profile must be one regular non-symlink file.');
+  }
+  if (realpathSync(profilePath) !== profilePath) {
+    throw new Error('Verified nested-Podman seccomp profile must resolve inside the Ploinky repository.');
+  }
+  const profileBytes = fsApi.readFileSync(profilePath);
+  let profile;
+  try {
+    profile = JSON.parse(profileBytes.toString('utf8'));
+  } catch (error) {
+    throw new Error(`Verified nested-Podman seccomp profile is not JSON: ${error.message}`);
+  }
+  const matching = profile?.syscalls?.filter((entry) => entry?.names?.includes('name_to_handle_at'));
+  if (profile?.defaultAction !== 'SCMP_ACT_ERRNO'
+      || JSON.stringify(matching?.map((entry) => ({
+        action: entry.action,
+        errnoRet: entry.errnoRet,
+      }))) !== JSON.stringify([{ action: 'SCMP_ACT_ERRNO', errnoRet: 95 }])) {
+    throw new Error('Verified nested-Podman seccomp profile does not preserve the ENOTSUP fallback contract.');
+  }
+  const fingerprint = crypto.createHash('sha256').update(profileBytes).digest('hex');
+  if (box?.semanticLabels?.seccompFingerprint !== fingerprint) {
+    throw new Error('Live Box seccomp fingerprint label does not match the verified Ploinky profile bytes.');
+  }
+  const expectedSecurityOptions = [
+    'label=disable',
+    `seccomp=${profilePath}`,
+    'unmask=all',
+  ].sort();
+  if (JSON.stringify(box?.securityOptions) !== JSON.stringify(expectedSecurityOptions)) {
+    throw new Error('Live Box SecurityOpt does not apply the verified Ploinky seccomp profile exactly.');
+  }
+  return Object.freeze({
+    path: profilePath,
+    fingerprint,
+    securityOptions: Object.freeze(expectedSecurityOptions),
   });
 }
 
@@ -279,6 +374,7 @@ export function collectLiveBoxEvidence({
   imageMaxAgeMs = DEFAULT_IMAGE_MAX_AGE_MS,
   requireFreshImage = true,
   expectedPloinkySource = '',
+  expectedWorkspaceSource = '',
   nowMs = Date.now(),
   command = defaultCommand,
   realpathSync = fs.realpathSync,
@@ -321,14 +417,31 @@ export function collectLiveBoxEvidence({
     requireFreshImage,
     box,
   }, { baseURL: local.baseURL, nowMs });
-  if (!expectedPloinkySource) return validated;
-  return Object.freeze({
-    ...validated,
-    ploinkySourceMount: validateReadOnlyPloinkySourceMount(
+  if (!expectedPloinkySource && !expectedWorkspaceSource) return validated;
+  const ploinkySourceMount = expectedPloinkySource
+    ? validateReadOnlyPloinkySourceMount(
       selected?.Mounts,
       expectedPloinkySource,
       { realpathSync },
-    ),
+    )
+    : null;
+  const workspaceSourceMount = expectedWorkspaceSource
+    ? validateWorkspaceSourceMount(
+      selected?.Mounts,
+      expectedWorkspaceSource,
+      { realpathSync },
+    )
+    : null;
+  const seccompProfile = ploinkySourceMount
+    ? validateVerifiedSeccompRuntime(validated.box, ploinkySourceMount.source, {
+      fsApi: fs,
+      realpathSync,
+    })
+    : null;
+  return Object.freeze({
+    ...validated,
+    ...(ploinkySourceMount ? { ploinkySourceMount, seccompProfile } : {}),
+    ...(workspaceSourceMount ? { workspaceSourceMount } : {}),
   });
 }
 
@@ -342,5 +455,7 @@ export function sameLiveBoxGeneration(left, right) {
     && JSON.stringify(left.box.semanticLabels) === JSON.stringify(right?.box?.semanticLabels)
     && JSON.stringify(left.box.normalizedPortBindings) === JSON.stringify(right?.box?.normalizedPortBindings)
     && JSON.stringify(left.ploinkySourceMount ?? null) === JSON.stringify(right?.ploinkySourceMount ?? null)
+    && JSON.stringify(left.seccompProfile ?? null) === JSON.stringify(right?.seccompProfile ?? null)
+    && JSON.stringify(left.workspaceSourceMount ?? null) === JSON.stringify(right?.workspaceSourceMount ?? null)
   );
 }
