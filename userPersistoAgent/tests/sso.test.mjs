@@ -40,3 +40,29 @@ test('getSsoUser rejects blocked users', async () => {
     await updateUser(user.id, { status: 'blocked' });
     await assert.rejects(() => sso.getSsoUser(user.id));
 });
+
+test('a login request can issue only one auth code under concurrency', async () => {
+    const user = await createUser({ email: 'single-code@x.com', roles: ['user'] });
+    const request = await sso.createLoginRequest({ redirectUri: 'http://localhost:8080/auth/callback', clientId: 'explorer' });
+    const outcomes = await Promise.allSettled([
+        sso.issueAuthCode({ providerState: request.providerState, userId: user.id }),
+        sso.issueAuthCode({ providerState: request.providerState, userId: user.id }),
+    ]);
+    assert.equal(outcomes.filter((outcome) => outcome.status === 'fulfilled').length, 1);
+    assert.equal(outcomes.filter((outcome) => outcome.status === 'rejected').length, 1);
+});
+
+test('an invalid login request cannot run registration side effects', async () => {
+    let called = false;
+    await assert.rejects(
+        () => sso.issueAuthCode({
+            providerState: 'not-a-login-request',
+            resolveUserId: async () => {
+                called = true;
+                return 'should-not-be-used';
+            },
+        }),
+        /unknown or expired/i
+    );
+    assert.equal(called, false);
+});

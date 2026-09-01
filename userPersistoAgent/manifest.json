@@ -7,21 +7,28 @@
     "readiness": {
         "protocol": "mcp"
     },
-    "volumes": [
-        {
-            "hostPath": ".ploinky/data/userPersistoAgent",
-            "containerPath": "/data"
-        }
+    "enable": [
+        "emailAgent"
     ],
-    "httpServices": [
-        {
-            "slug": "userpersisto",
-            "externalPrefix": "/public-services/userpersisto/",
-            "internalPrefix": "/service/",
-            "access": "guest",
-            "includeAuthInfo": false
-        }
-    ],
+    "volumes": {
+        ".ploinky/data/userPersistoAgent": "/data"
+    },
+    "routerAccess": {
+        "httpRoutes": [
+            {
+                "path": "/base-agent-additional-server/userPersistoAgent/7000/service/auth/*",
+                "access": "guest"
+            },
+            {
+                "path": "/base-agent-additional-server/userPersistoAgent/7000/service/runtime/*",
+                "access": "guest"
+            },
+            {
+                "path": "/base-agent-additional-server/userPersistoAgent/7000/service/billing/stripe/webhook",
+                "access": "public"
+            }
+        ]
+    },
     "ideSettings": [
         {
             "key": "userpersisto-settings",
@@ -29,7 +36,7 @@
             "scope": "workspace",
             "pluginKey": "userPersistoAgent/userpersisto-settings",
             "settingsComponent": "userpersisto-settings",
-            "adminOnly": true
+            "adminOnly": false
         }
     ],
     "profiles": {
@@ -54,6 +61,20 @@
                     "required": false,
                     "default": ""
                 },
+                "USERPERSISTO_ALLOWED_REDIRECT_ORIGINS": {
+                    "required": false,
+                    "default": ""
+                },
+                "USERPERSISTO_DEFAULT_REGISTRATION_ROLE": {
+                    "required": false
+                },
+                "USERPERSISTO_SELF_REGISTRATION_ENABLED": {
+                    "required": false
+                },
+                "PORT": {
+                    "required": false,
+                    "default": "7000"
+                },
                 "STRIPE_PUBLISHABLE_KEY": {
                     "required": false,
                     "default": ""
@@ -65,8 +86,7 @@
         },
         "dev": {
             "env": {
-                "USERPERSISTO_DEV_BOOTSTRAP": "true",
-                "USERPERSISTO_AUTH_METHODS": "password,emailCode,passkey,totp"
+                "USERPERSISTO_DEV_BOOTSTRAP": ""
             }
         }
     }

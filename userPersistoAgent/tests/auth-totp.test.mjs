@@ -29,7 +29,24 @@ test('totp setup, verify, and login round-trip', async () => {
     const login = await totp.loginVerify({ email: 't@x.com', token: totp.generateToken(setup.secret) });
     assert.equal(login.ok, true);
     assert.equal(login.user.id, user.id);
+    assert.equal(Object.hasOwn(login.user, 'passwordHash'), false);
+
+    const replay = await totp.loginVerify({ email: 't@x.com', token: totp.generateToken(setup.secret) });
+    assert.equal(replay.ok, false);
+    assert.equal(replay.reason, 'replayed_token');
 
     const bad = await totp.loginVerify({ email: 't@x.com', token: '000000' });
     assert.equal(bad.ok, false);
+});
+
+test('totp failures share the persistent account lockout boundary', async () => {
+    const user = await createUser({ email: 'totp-lock@x.com', roles: ['user'] });
+    const setup = await totp.setupStart({ userId: user.id });
+    assert.equal((await totp.setupVerify({ userId: user.id, token: totp.generateToken(setup.secret) })).ok, true);
+    for (let index = 0; index < 5; index += 1) {
+        assert.equal((await totp.loginVerify({ email: user.email, token: 'not-a-token' })).ok, false);
+    }
+    const locked = await totp.loginVerify({ email: user.email, token: totp.generateToken(setup.secret) });
+    assert.equal(locked.ok, false);
+    assert.equal(locked.reason, 'account_locked');
 });

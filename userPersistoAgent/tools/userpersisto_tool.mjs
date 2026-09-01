@@ -1,4 +1,5 @@
 import { stdin, stdout, env, exit } from 'node:process';
+import { actorContext, authInfoFromEnvelope } from './invocation-context.mjs';
 
 const chunks = [];
 for await (const chunk of stdin) {
@@ -24,29 +25,11 @@ function unwrapArguments(envelope) {
     return current && typeof current === 'object' ? current : {};
 }
 
-function rolesFrom(authInfo) {
-    if (Array.isArray(authInfo?.user?.roles)) {
-        return authInfo.user.roles;
-    }
-    if (Array.isArray(authInfo?.actor?.roles)) {
-        return authInfo.actor.roles;
-    }
-    if (Array.isArray(authInfo?.roles)) {
-        return authInfo.roles;
-    }
-    return [];
-}
-
 const name = env.TOOL_NAME || payload.name || payload.toolName;
 const args = unwrapArguments(payload);
-const authInfo = payload.authInfo || payload.invocation || payload.metadata?.authInfo || {};
-const userId = authInfo?.user?.id || authInfo?.user?.sub || authInfo?.sub || authInfo?.actor?.id || '';
-const context = {
-    actorUserId: String(userId).replace(/^user:/, ''),
-    actorRoles: rolesFrom(authInfo)
-};
+const context = actorContext(await authInfoFromEnvelope(payload));
 
-const port = Number(env.USERPERSISTO_SERVICE_PORT || env.PORT || 7100);
+const port = Number(env.USERPERSISTO_SERVICE_PORT || env.PORT || 7000);
 const response = await fetch(`http://127.0.0.1:${port}/internal/tool`, {
     method: 'POST',
     headers: {

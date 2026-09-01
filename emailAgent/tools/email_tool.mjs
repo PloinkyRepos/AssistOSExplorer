@@ -1,6 +1,7 @@
 import { stdin, stdout, env, exit } from 'node:process';
 import { getSettings, saveSettings, getSecret } from '../lib/settings.mjs';
 import { sendText, sendTemplate, providerStatus } from '../lib/mailjet.mjs';
+import { assertEmailToolAuthorized, authInfoFromEnvelope } from './invocation-context.mjs';
 
 const chunks = [];
 for await (const chunk of stdin) chunks.push(chunk);
@@ -28,6 +29,7 @@ const HANDLERS = {
 };
 
 try {
+    assertEmailToolAuthorized(name, await authInfoFromEnvelope(payload));
     const handler = HANDLERS[name];
     if (!handler) throw new Error(`Unknown tool: ${name}`);
     stdout.write(JSON.stringify(await handler() ?? {}));

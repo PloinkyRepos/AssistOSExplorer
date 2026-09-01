@@ -10,6 +10,7 @@ process.env.USERPERSISTO_SETTINGS_KEY = 'test-settings-key';
 
 const IMPLEMENTED = [
     'userpersisto_profile_get',
+    'userpersisto_profile_update',
     'userpersisto_authorize_capability',
     'userpersisto_user_list',
     'userpersisto_user_create',
@@ -35,6 +36,8 @@ const IMPLEMENTED = [
     'userpersisto_credits_release',
     'userpersisto_config_get',
     'userpersisto_config_set',
+    'userpersisto_auth_policy_get',
+    'userpersisto_auth_policy_set',
     'userpersisto_billing_checkout_create',
     'userpersisto_billing_stripe_webhook_process',
     'userpersisto_billing_subscription_get',
@@ -43,7 +46,7 @@ const IMPLEMENTED = [
 ];
 
 const { ensureSeedData } = await import('../lib/bootstrap.mjs');
-const { createUser } = await import('../lib/users.mjs');
+const { createUser, updateUser } = await import('../lib/users.mjs');
 const { runTool, hasTool } = await import('../tools/registry.mjs');
 const { resetStoreForTests } = await import('../lib/store.mjs');
 
@@ -79,5 +82,34 @@ test('implemented mcp-config tool names resolve in the registry', async () => {
     for (const name of IMPLEMENTED) {
         assert.ok(names.includes(name), `mcp-config missing ${name}`);
         assert.ok(hasTool(name), `registry missing ${name}`);
+    }
+});
+
+test('blocked users cannot create a billing checkout', async () => {
+    await ensureSeedData();
+    const blocked = await createUser({ email: 'blocked-billing@x.com', roles: ['user'] });
+    await updateUser(blocked.id, { status: 'blocked' }, { actorId: 'test-admin' });
+
+    await assert.rejects(
+        () => runTool('userpersisto_billing_checkout_create', { kind: 'credits' }, { actorUserId: blocked.id }),
+        (error) => error?.code === 'invalid_session'
+    );
+});
+
+test('tools reject special authentication methods until explicitly enabled', async () => {
+    await ensureSeedData();
+    const admin = await createUser({ email: 'method-admin@x.com', roles: ['admin'] });
+    const context = { actorUserId: admin.id, actorRoles: ['admin'] };
+
+    for (const [name, args] of [
+        ['userpersisto_auth_email_code_verify', { challengeId: 'unused', code: '000000' }],
+        ['userpersisto_passkey_registration_options', { origin: 'http://localhost:7000' }],
+        ['userpersisto_totp_setup_start', {}],
+    ]) {
+        await assert.rejects(
+            () => runTool(name, args, context),
+            (error) => error?.code === 'auth_method_disabled',
+            `${name} should be disabled by the default policy`
+        );
     }
 });

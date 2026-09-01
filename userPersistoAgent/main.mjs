@@ -2,7 +2,7 @@ import { getStore } from './lib/store.mjs';
 import { ensureSeedData, ensureDevAdmin } from './lib/bootstrap.mjs';
 import { startService } from './service/index.mjs';
 
-const SERVICE_PORT = Number.parseInt(String(process.env.USERPERSISTO_SERVICE_PORT || process.env.PORT || '7100'), 10);
+const SERVICE_PORT = Number.parseInt(String(process.env.USERPERSISTO_SERVICE_PORT || process.env.PORT || '7000'), 10);
 if (!Number.isInteger(SERVICE_PORT) || SERVICE_PORT <= 0 || SERVICE_PORT > 65535) {
     throw new Error('USERPERSISTO_SERVICE_PORT must be a valid TCP port.');
 }

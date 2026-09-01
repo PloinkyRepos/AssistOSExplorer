@@ -1,18 +1,11 @@
-const ALL = ['password', 'emailCode', 'passkey', 'totp'];
+import { getAuthPolicy, isAuthMethodEnabled } from '../policy.mjs';
 
-export function getEnabledAuthMethods() {
-    const raw = String(process.env.USERPERSISTO_AUTH_METHODS || '').trim();
-    if (raw) {
-        const parsed = raw.split(',').map((value) => value.trim()).filter((value) => ALL.includes(value));
-        if (parsed.length) {
-            return parsed;
-        }
-    }
-    return process.env.USERPERSISTO_DEV_BOOTSTRAP === 'true'
-        ? ['password', 'emailCode']
-        : ['emailCode', 'password'];
+export async function getEnabledAuthMethods() {
+    return (await getAuthPolicy()).enabledAuthMethods;
 }
 
-export function getDefaultAuthMethod() {
-    return getEnabledAuthMethods()[0];
+export async function getDefaultAuthMethod() {
+    return (await getEnabledAuthMethods())[0] || 'password';
 }
+
+export { isAuthMethodEnabled };

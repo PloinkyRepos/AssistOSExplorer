@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module';
 import { mkdirSync } from 'node:fs';
 import { ensureSchema } from './schema.mjs';
+import { resetSerialForTests } from './serial.mjs';
 
 const require = createRequire(import.meta.url);
 
@@ -54,4 +55,5 @@ export async function resetStoreForTests() {
         await store.shutDown();
     }
     storePromise = null;
+    resetSerialForTests();
 }

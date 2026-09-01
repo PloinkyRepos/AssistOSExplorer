@@ -6,12 +6,9 @@
   "readiness": {
     "protocol": "mcp"
   },
-  "volumes": [
-    {
-      "hostPath": ".ploinky/data/emailAgent",
-      "containerPath": "/data"
-    }
-  ],
+  "volumes": {
+    ".ploinky/data/emailAgent": "/data"
+  },
   "ideSettings": [
     {
       "key": "email-agent-settings",

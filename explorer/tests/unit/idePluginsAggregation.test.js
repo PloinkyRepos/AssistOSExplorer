@@ -350,7 +350,7 @@ test('aggregateIdePlugins discovers UserPersisto and EmailAgent settings from re
                 scope: 'workspace',
                 pluginKey: 'userPersistoAgent/userpersisto-settings',
                 settingsComponent: 'userpersisto-settings',
-                adminOnly: true
+                adminOnly: false
             },
             {
                 key: 'email-agent-settings',

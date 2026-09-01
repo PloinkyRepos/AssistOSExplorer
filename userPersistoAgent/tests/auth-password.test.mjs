@@ -41,7 +41,16 @@ test('setPassword replaces the credential', async () => {
     assert.equal((await loginWithPassword('p2@x.com', 'second-pass')).ok, true);
 });
 
-test('password is the default strategy in development', () => {
-    assert.equal(getDefaultAuthMethod(), 'password');
-    assert.ok(getEnabledAuthMethods().includes('emailCode'));
+test('concurrent bad password attempts cannot bypass the lockout counter', async () => {
+    await createUser({ email: 'parallel@x.com', roles: ['user'], password: 'parallel-pass' });
+    const attempts = await Promise.all(
+        Array.from({ length: 5 }, () => loginWithPassword('parallel@x.com', 'wrong-password'))
+    );
+    assert.ok(attempts.every((attempt) => attempt.ok === false));
+    assert.equal((await loginWithPassword('parallel@x.com', 'parallel-pass')).reason, 'account_locked');
+});
+
+test('password is the only default strategy', async () => {
+    assert.equal(await getDefaultAuthMethod(), 'password');
+    assert.deepEqual(await getEnabledAuthMethods(), ['password']);
 });

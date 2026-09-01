@@ -1,4 +1,4 @@
-import { getProfile, authorizeCapability } from '../lib/authorization.mjs';
+import { getProfile, authorizeCapability, requireActiveActor } from '../lib/authorization.mjs';
 import { createUser, updateUser, listUsers, setUserRoles } from '../lib/users.mjs';
 import { loginWithPassword, setPassword } from '../lib/auth/password.mjs';
 import { startEmailCode, verifyEmailCode } from '../lib/auth/email-code.mjs';
@@ -8,55 +8,101 @@ import * as credits from '../lib/credits.mjs';
 import * as billing from '../lib/billing.mjs';
 import { getSettings as getAgentSettings, saveSettings as saveAgentSettings } from '../lib/settings.mjs';
 import { getStore } from '../lib/store.mjs';
+import { getAuthPolicy, isAuthMethodEnabled, updateAuthPolicy } from '../lib/policy.mjs';
 
-function requireAdmin(context) {
-    if (!Array.isArray(context.actorRoles) || !context.actorRoles.includes('admin')) {
-        throw new Error('admin role required');
+async function requireAdmin(context, capability = 'admin.users.manage') {
+    const actor = requireActor(context);
+    await requireActiveActor(actor, capability);
+    return actor;
+}
+
+async function requireAuthMethod(method) {
+    if (!(await isAuthMethodEnabled(method))) {
+        throw Object.assign(new Error(`${method} authentication is not enabled.`), {
+            code: 'auth_method_disabled',
+            statusCode: 404,
+        });
     }
 }
 
 function requireActor(context) {
     if (!context.actorUserId) {
-        throw new Error('authenticated user required');
+        throw Object.assign(new Error('Authenticated user is required.'), {
+            code: 'authentication_required',
+            statusCode: 401,
+        });
     }
     return context.actorUserId;
 }
 
+async function requireOwnedUser(args, context, capability = 'admin.billing.manage') {
+    const actor = requireActor(context);
+    await requireActiveActor(actor);
+    const target = String(args.userId || '').trim();
+    if (!target) throw Object.assign(new Error('userId is required.'), { code: 'user_id_required', statusCode: 400 });
+    if (target !== actor) await requireAdmin(context, capability);
+    return target;
+}
+
 const HANDLERS = {
-    userpersisto_profile_get: async (_args, context) => getProfile(requireActor(context)),
+    userpersisto_profile_get: async (_args, context) => {
+        const actor = requireActor(context);
+        await requireActiveActor(actor);
+        return getProfile(actor);
+    },
+    userpersisto_profile_update: async (args, context) => {
+        const actor = requireActor(context);
+        await requireActiveActor(actor);
+        await updateUser(actor, {
+            ...(Object.prototype.hasOwnProperty.call(args, 'username') ? { username: args.username } : {}),
+            ...(Object.prototype.hasOwnProperty.call(args, 'displayName') ? { displayName: args.displayName } : {}),
+        }, { actorId: actor });
+        return getProfile(actor);
+    },
     userpersisto_authorize_capability: async (args) => authorizeCapability({
         userId: args.userId,
         capability: args.capability,
         resource: args.resource || ''
     }),
     userpersisto_user_list: async (args, context) => {
-        requireAdmin(context);
+        await requireAdmin(context);
         return listUsers({ start: args.start || 0, pageSize: args.pageSize || 50 });
     },
     userpersisto_user_create: async (args, context) => {
-        requireAdmin(context);
+        const actorId = await requireAdmin(context);
         return createUser({
             email: args.email,
             displayName: args.displayName || '',
             source: 'admin',
             roles: args.roles || ['user'],
-            password: args.password || ''
+            password: args.password || '',
+            username: args.username || '',
+            actorId,
         });
     },
     userpersisto_user_update: async (args, context) => {
-        requireAdmin(context);
-        return updateUser(args.userId, { displayName: args.displayName, status: args.status });
+        const actorId = await requireAdmin(context);
+        return updateUser(args.userId, {
+            email: args.email,
+            username: args.username,
+            displayName: args.displayName,
+            status: args.status,
+        }, { actorId });
     },
     userpersisto_user_roles_update: async (args, context) => {
-        requireAdmin(context);
+        await requireAdmin(context);
         return setUserRoles(args.userId, args.roles, { actorId: context.actorUserId });
     },
-    userpersisto_auth_password_login: async (args) => loginWithPassword(args.email, args.password),
+    userpersisto_auth_password_login: async (args) => {
+        await requireAuthMethod('password');
+        return loginWithPassword(args.email, args.password);
+    },
     userpersisto_auth_password_set: async (args, context) => {
         const actor = requireActor(context);
+        await requireActiveActor(actor);
         let target = actor;
         if (args.userId && args.userId !== actor) {
-            requireAdmin(context);
+            await requireAdmin(context);
             target = args.userId;
         }
         await setPassword({ userId: target, newPassword: args.newPassword, actorId: actor });
@@ -71,67 +117,92 @@ const HANDLERS = {
         });
         return { challengeId: started.challengeId };
     },
-    userpersisto_auth_email_code_verify: async (args) => verifyEmailCode({ challengeId: args.challengeId, code: args.code }),
-    userpersisto_passkey_registration_options: async (args, context) => passkey.registrationOptions({
-        userId: requireActor(context),
-        origin: args.origin,
-        rpId: args.rpId
-    }),
-    userpersisto_passkey_registration_verify: async (args, context) => passkey.registrationVerify({
-        userId: requireActor(context),
-        attestation: args.attestation,
-        origin: args.origin
-    }),
-    userpersisto_passkey_login_options: async (args) => passkey.loginOptions({
-        email: args.email,
-        origin: args.origin,
-        rpId: args.rpId
-    }),
-    userpersisto_passkey_login_verify: async (args) => passkey.loginVerify({
-        email: args.email,
-        assertion: args.assertion,
-        challengeKey: args.challengeKey,
-        origin: args.origin
-    }),
-    userpersisto_totp_setup_start: async (_args, context) => totp.setupStart({ userId: requireActor(context) }),
-    userpersisto_totp_setup_verify: async (args, context) => totp.setupVerify({
-        userId: requireActor(context),
-        token: args.token
-    }),
-    userpersisto_totp_login_verify: async (args) => totp.loginVerify({
-        email: args.email,
-        token: args.token
-    }),
-    userpersisto_credits_balance: async (args, context) => credits.getBalance(
-        args.userId && context.actorRoles?.includes('admin') ? args.userId : requireActor(context)
-    ),
+    userpersisto_auth_email_code_verify: async (args) => {
+        await requireAuthMethod('emailCode');
+        return verifyEmailCode({ challengeId: args.challengeId, code: args.code });
+    },
+    userpersisto_passkey_registration_options: async (args, context) => {
+        await requireAuthMethod('passkey');
+        const actor = requireActor(context);
+        await requireActiveActor(actor);
+        return passkey.registrationOptions({ userId: actor, origin: args.origin, rpId: args.rpId });
+    },
+    userpersisto_passkey_registration_verify: async (args, context) => {
+        await requireAuthMethod('passkey');
+        const actor = requireActor(context);
+        await requireActiveActor(actor);
+        return passkey.registrationVerify({
+            userId: actor,
+            attestation: args.attestation,
+            challengeKey: args.challengeKey,
+            origin: args.origin,
+        });
+    },
+    userpersisto_passkey_login_options: async (args) => {
+        await requireAuthMethod('passkey');
+        return passkey.loginOptions({ email: args.email, origin: args.origin, rpId: args.rpId });
+    },
+    userpersisto_passkey_login_verify: async (args) => {
+        await requireAuthMethod('passkey');
+        return passkey.loginVerify({
+            email: args.email,
+            assertion: args.assertion,
+            challengeKey: args.challengeKey,
+            origin: args.origin
+        });
+    },
+    userpersisto_totp_setup_start: async (_args, context) => {
+        await requireAuthMethod('totp');
+        const actor = requireActor(context);
+        await requireActiveActor(actor);
+        return totp.setupStart({ userId: actor });
+    },
+    userpersisto_totp_setup_verify: async (args, context) => {
+        await requireAuthMethod('totp');
+        const actor = requireActor(context);
+        await requireActiveActor(actor);
+        return totp.setupVerify({ userId: actor, token: args.token });
+    },
+    userpersisto_totp_login_verify: async (args) => {
+        await requireAuthMethod('totp');
+        return totp.loginVerify({ email: args.email, token: args.token });
+    },
+    userpersisto_credits_balance: async (args, context) => {
+        const actor = requireActor(context);
+        await requireActiveActor(actor);
+        const target = args.userId && args.userId !== actor
+            ? (await requireAdmin(context), args.userId)
+            : actor;
+        return credits.getBalance(target);
+    },
     userpersisto_credits_grant: async (args, context) => {
-        requireAdmin(context);
+        await requireAdmin(context, 'admin.billing.manage');
         return credits.grant({
             userId: args.userId,
             amount: args.amount,
             reason: args.reason || '',
+            referenceId: args.referenceId || '',
             actorId: context.actorUserId
         });
     },
-    userpersisto_credits_reserve: async (args) => credits.reserve({
-        userId: args.userId,
+    userpersisto_credits_reserve: async (args, context) => credits.reserve({
+        userId: await requireOwnedUser(args, context),
         amount: args.amount,
         reason: args.reason || '',
         referenceId: args.referenceId || ''
     }),
-    userpersisto_credits_commit: async (args) => credits.commit({
-        userId: args.userId,
+    userpersisto_credits_commit: async (args, context) => credits.commit({
+        userId: await requireOwnedUser(args, context),
         amount: args.amount,
         referenceId: args.referenceId || ''
     }),
-    userpersisto_credits_release: async (args) => credits.release({
-        userId: args.userId,
+    userpersisto_credits_release: async (args, context) => credits.release({
+        userId: await requireOwnedUser(args, context),
         amount: args.amount,
         referenceId: args.referenceId || ''
     }),
     userpersisto_credits_refund: async (args, context) => {
-        requireAdmin(context);
+        await requireAdmin(context, 'admin.billing.manage');
         return credits.refund({
             userId: args.userId,
             amount: args.amount,
@@ -140,38 +211,59 @@ const HANDLERS = {
             actorId: context.actorUserId
         });
     },
-    userpersisto_credits_ledger: async (args, context) => credits.ledger({
-        userId: args.userId && context.actorRoles?.includes('admin') ? args.userId : requireActor(context),
-        start: args.start || 0,
-        pageSize: args.pageSize || 100
-    }),
-    userpersisto_billing_checkout_create: async (args, context) => billing.createCheckout({
-        userId: requireActor(context),
-        kind: args.kind,
-        quantity: args.quantity || 1
-    }),
+    userpersisto_credits_ledger: async (args, context) => {
+        const actor = requireActor(context);
+        await requireActiveActor(actor);
+        const target = args.userId && args.userId !== actor
+            ? (await requireAdmin(context), args.userId)
+            : actor;
+        return credits.ledger({ userId: target, start: args.start || 0, pageSize: args.pageSize || 100 });
+    },
+    userpersisto_billing_checkout_create: async (args, context) => {
+        const actor = requireActor(context);
+        await requireActiveActor(actor);
+        return billing.createCheckout({
+            userId: actor,
+            kind: args.kind,
+            quantity: args.quantity ?? 1,
+            idempotencyKey: args.idempotencyKey || '',
+        });
+    },
     userpersisto_billing_stripe_webhook_process: async (args) => billing.processStripeWebhook({
         rawBody: args.rawBody,
         signatureHeader: args.signatureHeader
     }),
-    userpersisto_billing_subscription_get: async (args, context) => billing.getSubscription(
-        args.userId && context.actorRoles?.includes('admin') ? args.userId : requireActor(context)
-    ),
+    userpersisto_billing_subscription_get: async (args, context) => {
+        const actor = requireActor(context);
+        await requireActiveActor(actor);
+        const target = args.userId && args.userId !== actor
+            ? (await requireAdmin(context), args.userId)
+            : actor;
+        return billing.getSubscription(target);
+    },
     userpersisto_billing_events_list: async (args, context) => {
-        requireAdmin(context);
+        await requireAdmin(context, 'admin.billing.manage');
         return billing.listBillingEvents({ start: args.start || 0, pageSize: args.pageSize || 100 });
     },
     userpersisto_config_get: async (_args, context) => {
-        requireAdmin(context);
+        await requireAdmin(context, 'admin.agentSettings.manage');
         return getAgentSettings();
     },
     userpersisto_config_set: async (args, context) => {
-        requireAdmin(context);
+        await requireAdmin(context, 'admin.agentSettings.manage');
         await saveAgentSettings(args);
         return getAgentSettings();
     },
+    userpersisto_auth_policy_get: async (_args, context) => {
+        await requireAdmin(context, 'admin.agentSettings.manage');
+        return getAuthPolicy();
+    },
+    userpersisto_auth_policy_set: async (args, context) => {
+        const actorId = await requireAdmin(context, 'admin.agentSettings.manage');
+        return updateAuthPolicy(args, { actorId });
+    },
     userpersisto_audit_events_list: async (args, context) => {
-        requireAdmin(context);
+        await requireAdmin(context);
         const store = await getStore();
         return store.select('auditEvent', args.actorId ? { actorId: args.actorId } : {}, {
             sortBy: 'timestamp',

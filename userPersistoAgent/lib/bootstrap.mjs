@@ -43,12 +43,17 @@ export async function ensureDevAdmin() {
     if (process.env.USERPERSISTO_DEV_BOOTSTRAP !== 'true') {
         return;
     }
+    const password = String(process.env.USERPERSISTO_DEV_PASSWORD || '');
+    if (!password) {
+        console.warn('[userPersisto] USERPERSISTO_DEV_BOOTSTRAP was ignored because USERPERSISTO_DEV_PASSWORD is not configured.');
+        return;
+    }
     const store = await getStore();
     const anyUsers = await store.select('user', {}, { pageSize: 1 });
     if (anyUsers.totalCount > 0) {
         return;
     }
-    await createUser({ email: 'admin@dev.local', displayName: 'Dev Admin', source: 'dev-bootstrap', roles: ['admin'], password: 'admin' });
+    await createUser({ email: 'admin@dev.local', displayName: 'Dev Admin', source: 'dev-bootstrap', roles: ['admin'], password });
     await recordAudit({ actorId: 'system', action: 'dev.bootstrap.admin', target: 'admin@dev.local', reason: 'USERPERSISTO_DEV_BOOTSTRAP=true and user table was empty' });
-    console.warn('[userPersisto] DEV BOOTSTRAP: created admin@dev.local with password "admin". Never enable USERPERSISTO_DEV_BOOTSTRAP in production.');
+    console.warn('[userPersisto] DEV BOOTSTRAP: created admin@dev.local with the explicitly configured development password.');
 }

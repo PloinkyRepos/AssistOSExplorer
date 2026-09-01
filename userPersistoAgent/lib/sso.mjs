@@ -3,20 +3,20 @@ import { getStore, flush } from './store.mjs';
 import { getUserById, getUserRoles } from './users.mjs';
 import { getUserCapabilities } from './authorization.mjs';
 import { recordAudit } from './audit.mjs';
+import { assertRedirectUriAllowed } from './policy.mjs';
+import { serialize } from './serial.mjs';
 
 const REQUEST_TTL_MS = 5 * 60 * 1000;
 const CODE_TTL_MS = 2 * 60 * 1000;
 
 export async function createLoginRequest({ redirectUri, clientId = 'explorer' }) {
-    if (!/^https?:\/\//.test(String(redirectUri || ''))) {
-        throw new Error('redirectUri must be an absolute http(s) URL');
-    }
+    const allowedRedirectUri = await assertRedirectUriAllowed(redirectUri);
     const store = await getStore();
     const providerState = randomUUID();
     const expiresAt = new Date(Date.now() + REQUEST_TTL_MS).toISOString();
     await store.createSsoLoginRequest({
         providerState,
-        redirectUri: String(redirectUri),
+        redirectUri: allowedRedirectUri,
         clientId: String(clientId || 'explorer'),
         expiresAt
     });
@@ -24,25 +24,35 @@ export async function createLoginRequest({ redirectUri, clientId = 'explorer' })
     return { providerState, expiresAt };
 }
 
-export async function issueAuthCode({ providerState, userId }) {
-    const store = await getStore();
-    if (!(await store.hasSsoLoginRequest(providerState))) {
-        throw new Error('Unknown or expired login request');
-    }
-    const request = await store.getSsoLoginRequestByProviderState(providerState);
-    if (new Date(request.expiresAt).getTime() < Date.now()) {
-        throw new Error('Login request expired');
-    }
-    const code = randomUUID();
-    await store.createSsoAuthCode({
-        code,
-        providerState,
-        userId,
-        expiresAt: new Date(Date.now() + CODE_TTL_MS).toISOString(),
-        consumedAt: ''
+export function issueAuthCode({ providerState, userId = '', resolveUserId = null }) {
+    const normalizedState = String(providerState || '');
+    return serialize(`sso-request:${normalizedState}`, async () => {
+        const store = await getStore();
+        if (!(await store.hasSsoLoginRequest(normalizedState))) {
+            throw new Error('Unknown or expired login request');
+        }
+        const request = await store.getSsoLoginRequestByProviderState(normalizedState);
+        if (new Date(request.expiresAt).getTime() < Date.now()) {
+            await store.deleteSsoLoginRequest(request.id);
+            await flush();
+            throw new Error('Login request expired');
+        }
+        const resolvedUserId = typeof resolveUserId === 'function'
+            ? await resolveUserId()
+            : userId;
+        await describeUser(resolvedUserId);
+        const code = randomUUID();
+        await store.createSsoAuthCode({
+            code,
+            providerState: normalizedState,
+            userId: resolvedUserId,
+            expiresAt: new Date(Date.now() + CODE_TTL_MS).toISOString(),
+            consumedAt: ''
+        });
+        await store.deleteSsoLoginRequest(request.id);
+        await flush();
+        return { code, redirectUri: request.redirectUri };
     });
-    await flush();
-    return { code, redirectUri: request.redirectUri };
 }
 
 async function describeUser(userId) {
@@ -60,26 +70,21 @@ async function describeUser(userId) {
 }
 
 export async function consumeAuthCode({ providerState, code }) {
-    const store = await getStore();
-    const normalizedCode = String(code || '');
-    if (!(await store.hasSsoAuthCode(normalizedCode))) {
-        throw new Error('Invalid auth code');
-    }
-    const record = await store.getSsoAuthCodeByCode(normalizedCode);
-    if (record.providerState !== providerState) {
-        throw new Error('Invalid auth code');
-    }
-    if (record.consumedAt) {
-        throw new Error('Auth code already consumed');
-    }
-    if (new Date(record.expiresAt).getTime() < Date.now()) {
-        throw new Error('Auth code expired');
-    }
-    await store.updateSsoAuthCode(record.id, { consumedAt: new Date().toISOString() });
-    const described = await describeUser(record.userId);
-    await recordAudit({ actorId: record.userId, action: 'auth.sso.consume', target: providerState, result: 'ok' });
-    await flush();
-    return described;
+    return serialize(`sso-code:${String(code || '')}`, async () => {
+        const store = await getStore();
+        const normalizedCode = String(code || '');
+        if (!(await store.hasSsoAuthCode(normalizedCode))) throw new Error('Invalid auth code');
+        const record = await store.getSsoAuthCodeByCode(normalizedCode);
+        if (record.providerState !== providerState) throw new Error('Invalid auth code');
+        if (record.consumedAt) throw new Error('Auth code already consumed');
+        if (new Date(record.expiresAt).getTime() < Date.now()) throw new Error('Auth code expired');
+        await store.updateSsoAuthCode(record.id, { consumedAt: new Date().toISOString() });
+        await flush();
+        const described = await describeUser(record.userId);
+        await recordAudit({ actorId: record.userId, action: 'auth.sso.consume', target: providerState, result: 'ok' });
+        await flush();
+        return described;
+    });
 }
 
 export async function getSsoUser(userId) {

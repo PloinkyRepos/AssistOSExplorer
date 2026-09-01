@@ -12,6 +12,25 @@
             "env": { "TOOL_NAME": "userpersisto_profile_get" }
         },
         {
+            "name": "userpersisto_profile_update",
+            "title": "Update current user profile",
+            "description": "Update the authenticated user's optional username or display name.",
+            "command": "sh",
+            "args": ["tools/userpersisto_tool.sh"],
+            "cwd": "/code",
+            "timeoutMs": 30000,
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "username": { "type": "string", "maxLength": 64 },
+                    "displayName": { "type": "string", "maxLength": 200 }
+                },
+                "minProperties": 1,
+                "additionalProperties": false
+            },
+            "env": { "TOOL_NAME": "userpersisto_profile_update" }
+        },
+        {
             "name": "userpersisto_authorize_capability",
             "title": "Authorize capability",
             "description": "Agent-to-agent authorization decision for a user capability on an optional resource.",
@@ -85,6 +104,8 @@
                 "type": "object",
                 "properties": {
                     "userId": { "type": "string", "minLength": 1 },
+                    "email": { "type": "string", "minLength": 5 },
+                    "username": { "type": "string", "maxLength": 64 },
                     "displayName": { "type": "string" },
                     "status": { "type": "string", "enum": ["active", "blocked"] }
                 },
@@ -146,7 +167,7 @@
                 "type": "object",
                 "properties": {
                     "userId": { "type": "string" },
-                    "newPassword": { "type": "string", "minLength": 4 }
+                    "newPassword": { "type": "string", "minLength": 8, "maxLength": 1024 }
                 },
                 "required": ["newPassword"],
                 "additionalProperties": false
@@ -166,8 +187,7 @@
                 "properties": {
                     "email": { "type": "string", "minLength": 5 },
                     "purpose": { "type": "string" },
-                    "correlationId": { "type": "string" },
-                    "createSelfRegistered": { "type": "boolean" }
+                    "correlationId": { "type": "string" }
                 },
                 "required": ["email"],
                 "additionalProperties": false
@@ -203,7 +223,14 @@
             "args": ["tools/userpersisto_tool.sh"],
             "cwd": "/code",
             "timeoutMs": 30000,
-            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "origin": { "type": "string", "minLength": 1, "maxLength": 2048 },
+                    "rpId": { "type": "string", "minLength": 1, "maxLength": 253 }
+                },
+                "additionalProperties": false
+            },
             "env": { "TOOL_NAME": "userpersisto_passkey_registration_options" }
         },
         {
@@ -217,9 +244,11 @@
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "attestation": { "type": "object", "additionalProperties": true }
+                    "attestation": { "type": "object", "additionalProperties": true },
+                    "challengeKey": { "type": "string", "minLength": 1 },
+                    "origin": { "type": "string", "minLength": 1, "maxLength": 2048 }
                 },
-                "required": ["attestation"],
+                "required": ["attestation", "challengeKey"],
                 "additionalProperties": false
             },
             "env": { "TOOL_NAME": "userpersisto_passkey_registration_verify" }
@@ -234,7 +263,11 @@
             "timeoutMs": 30000,
             "inputSchema": {
                 "type": "object",
-                "properties": { "email": { "type": "string", "minLength": 5 } },
+                "properties": {
+                    "email": { "type": "string", "minLength": 5 },
+                    "origin": { "type": "string", "minLength": 1, "maxLength": 2048 },
+                    "rpId": { "type": "string", "minLength": 1, "maxLength": 253 }
+                },
                 "required": ["email"],
                 "additionalProperties": false
             },
@@ -254,7 +287,8 @@
                 "properties": {
                     "email": { "type": "string", "minLength": 5 },
                     "assertion": { "type": "object", "additionalProperties": true },
-                    "challengeKey": { "type": "string", "minLength": 1 }
+                    "challengeKey": { "type": "string", "minLength": 1 },
+                    "origin": { "type": "string", "minLength": 1, "maxLength": 2048 }
                 },
                 "required": ["email", "assertion", "challengeKey"],
                 "additionalProperties": false
@@ -357,9 +391,9 @@
                     "userId": { "type": "string", "minLength": 1 },
                     "amount": { "type": "integer", "minimum": 1 },
                     "reason": { "type": "string" },
-                    "referenceId": { "type": "string" }
+                    "referenceId": { "type": "string", "minLength": 1, "maxLength": 256 }
                 },
-                "required": ["userId", "amount"],
+                "required": ["userId", "amount", "referenceId"],
                 "additionalProperties": false
             },
             "tags": ["admin"],
@@ -379,9 +413,9 @@
                     "userId": { "type": "string", "minLength": 1 },
                     "amount": { "type": "integer", "minimum": 1 },
                     "reason": { "type": "string" },
-                    "referenceId": { "type": "string" }
+                    "referenceId": { "type": "string", "minLength": 1, "maxLength": 256 }
                 },
-                "required": ["userId", "amount"],
+                "required": ["userId", "amount", "referenceId"],
                 "additionalProperties": false
             },
             "tags": ["admin"],
@@ -401,9 +435,9 @@
                     "userId": { "type": "string", "minLength": 1 },
                     "amount": { "type": "integer", "minimum": 1 },
                     "reason": { "type": "string" },
-                    "referenceId": { "type": "string" }
+                    "referenceId": { "type": "string", "minLength": 1, "maxLength": 256 }
                 },
-                "required": ["userId", "amount"],
+                "required": ["userId", "amount", "referenceId"],
                 "additionalProperties": false
             },
             "tags": ["internal"],
@@ -422,9 +456,9 @@
                 "properties": {
                     "userId": { "type": "string", "minLength": 1 },
                     "amount": { "type": "integer", "minimum": 1 },
-                    "referenceId": { "type": "string" }
+                    "referenceId": { "type": "string", "minLength": 1, "maxLength": 256 }
                 },
-                "required": ["userId", "amount"],
+                "required": ["userId", "amount", "referenceId"],
                 "additionalProperties": false
             },
             "tags": ["internal"],
@@ -443,9 +477,9 @@
                 "properties": {
                     "userId": { "type": "string", "minLength": 1 },
                     "amount": { "type": "integer", "minimum": 1 },
-                    "referenceId": { "type": "string" }
+                    "referenceId": { "type": "string", "minLength": 1, "maxLength": 256 }
                 },
-                "required": ["userId", "amount"],
+                "required": ["userId", "amount", "referenceId"],
                 "additionalProperties": false
             },
             "tags": ["internal"],
@@ -484,6 +518,8 @@
                     "STRIPE_PRICE_CREDITS": { "type": "string" },
                     "STRIPE_PRICE_SUBSCRIPTION": { "type": "string" },
                     "USERPERSISTO_CREDITS_PER_UNIT": { "type": "string" },
+                    "USERPERSISTO_BILLING_SUCCESS_URL": { "type": "string" },
+                    "USERPERSISTO_BILLING_CANCEL_URL": { "type": "string" },
                     "remove": {
                         "type": "array",
                         "items": {
@@ -494,7 +530,9 @@
                                 "STRIPE_PUBLISHABLE_KEY",
                                 "STRIPE_PRICE_CREDITS",
                                 "STRIPE_PRICE_SUBSCRIPTION",
-                                "USERPERSISTO_CREDITS_PER_UNIT"
+                                "USERPERSISTO_CREDITS_PER_UNIT",
+                                "USERPERSISTO_BILLING_SUCCESS_URL",
+                                "USERPERSISTO_BILLING_CANCEL_URL"
                             ]
                         }
                     }
@@ -503,6 +541,45 @@
             },
             "tags": ["admin"],
             "env": { "TOOL_NAME": "userpersisto_config_set" }
+        },
+        {
+            "name": "userpersisto_auth_policy_get",
+            "title": "Get authentication policy",
+            "description": "Admin: read enabled login methods, self-registration, default role, and redirect origins.",
+            "command": "sh",
+            "args": ["tools/userpersisto_tool.sh"],
+            "cwd": "/code",
+            "timeoutMs": 30000,
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
+            "tags": ["admin"],
+            "env": { "TOOL_NAME": "userpersisto_auth_policy_get" }
+        },
+        {
+            "name": "userpersisto_auth_policy_set",
+            "title": "Set authentication policy",
+            "description": "Admin: configure explicitly enabled login methods and self-registration policy.",
+            "command": "sh",
+            "args": ["tools/userpersisto_tool.sh"],
+            "cwd": "/code",
+            "timeoutMs": 30000,
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "enabledAuthMethods": {
+                        "type": "array",
+                        "minItems": 1,
+                        "uniqueItems": true,
+                        "items": { "type": "string", "enum": ["password", "emailCode", "passkey", "totp"] }
+                    },
+                    "selfRegistrationEnabled": { "type": "boolean" },
+                    "defaultRegistrationRole": { "type": "string", "minLength": 1 },
+                    "allowedRedirectOrigins": { "type": "array", "items": { "type": "string", "format": "uri" } }
+                },
+                "minProperties": 1,
+                "additionalProperties": false
+            },
+            "tags": ["admin"],
+            "env": { "TOOL_NAME": "userpersisto_auth_policy_set" }
         },
         {
             "name": "userpersisto_billing_checkout_create",
@@ -516,7 +593,8 @@
                 "type": "object",
                 "properties": {
                     "kind": { "type": "string", "enum": ["credits", "subscription"] },
-                    "quantity": { "type": "integer", "minimum": 1 }
+                    "quantity": { "type": "integer", "minimum": 1 },
+                    "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": 255 }
                 },
                 "required": ["kind"],
                 "additionalProperties": false

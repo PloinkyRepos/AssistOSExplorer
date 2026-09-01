@@ -12,7 +12,9 @@ const SETTING_KEYS = [
     "STRIPE_PUBLISHABLE_KEY",
     "STRIPE_PRICE_CREDITS",
     "STRIPE_PRICE_SUBSCRIPTION",
-    "USERPERSISTO_CREDITS_PER_UNIT"
+    "USERPERSISTO_CREDITS_PER_UNIT",
+    "USERPERSISTO_BILLING_SUCCESS_URL",
+    "USERPERSISTO_BILLING_CANCEL_URL"
 ];
 
 async function callUserPersistoTool(name, args = {}) {
@@ -56,7 +58,7 @@ export class UserpersistoSettings {
         this.element = element;
         this.invalidate = invalidate;
         this.state = {
-            activePanel: "users",
+            activePanel: "auth",
             status: "",
             statusType: "",
             settings: {},
@@ -74,9 +76,7 @@ export class UserpersistoSettings {
         this.bindEvents();
         this.syncPanelFromAttributes();
         this.renderPanels();
-        void this.loadSettings();
-        if (this.state.activePanel === "users") void this.refreshUsers();
-        if (this.state.activePanel === "auth") void this.refreshAuthProfile();
+        void this.refreshAuthProfile();
     }
 
     cacheElements() {
@@ -89,13 +89,24 @@ export class UserpersistoSettings {
         this.createUserPasswordInput = this.element.querySelector("#createUserPassword");
         this.createUserRoleInput = this.element.querySelector("#createUserRole");
         this.authProfileEl = this.element.querySelector("#authProfileSummary");
+        this.profileUsernameInput = this.element.querySelector("#profileUsername");
+        this.profileDisplayNameInput = this.element.querySelector("#profileDisplayName");
+        this.authMethodInputs = Object.fromEntries(["password", "emailCode", "passkey", "totp"].map((method) => [
+            method,
+            this.element.querySelector(`[data-auth-method="${method}"]`)
+        ]));
+        this.selfRegistrationInput = this.element.querySelector("#selfRegistrationEnabled");
+        this.defaultRegistrationRoleInput = this.element.querySelector("#defaultRegistrationRole");
+        this.allowedRedirectOriginsInput = this.element.querySelector("#allowedRedirectOrigins");
         this.inputs = {
             STRIPE_SECRET_KEY: this.element.querySelector("#stripeSecretKey"),
             STRIPE_WEBHOOK_SECRET: this.element.querySelector("#stripeWebhookSecret"),
             STRIPE_PUBLISHABLE_KEY: this.element.querySelector("#stripePublishableKey"),
             STRIPE_PRICE_CREDITS: this.element.querySelector("#stripePriceCredits"),
             STRIPE_PRICE_SUBSCRIPTION: this.element.querySelector("#stripePriceSubscription"),
-            USERPERSISTO_CREDITS_PER_UNIT: this.element.querySelector("#creditsPerUnit")
+            USERPERSISTO_CREDITS_PER_UNIT: this.element.querySelector("#creditsPerUnit"),
+            USERPERSISTO_BILLING_SUCCESS_URL: this.element.querySelector("#billingSuccessUrl"),
+            USERPERSISTO_BILLING_CANCEL_URL: this.element.querySelector("#billingCancelUrl")
         };
         for (const key of SECRET_KEYS) {
             const input = this.inputs[key];
@@ -234,11 +245,80 @@ export class UserpersistoSettings {
             const profile = await this.callTool("userpersisto_profile_get");
             this.state.authProfile = profile;
             this.renderAuthProfile();
+            if (this.profileUsernameInput) this.profileUsernameInput.value = profile.user?.username || "";
+            if (this.profileDisplayNameInput) this.profileDisplayNameInput.value = profile.user?.displayName || "";
+            const isAdmin = Array.isArray(profile.roles) && profile.roles.includes("admin");
+            this.element.querySelectorAll("[data-admin-only]").forEach((node) => {
+                node.hidden = !isAdmin;
+            });
+            if (!isAdmin && this.state.activePanel !== "auth") {
+                this.state.activePanel = "auth";
+                this.renderPanels();
+            }
+            if (isAdmin && !this.state.settingsLoaded) {
+                this.state.settingsLoaded = true;
+                void this.loadSettings();
+                void this.refreshAuthPolicy();
+            }
             this.setStatus("");
         } catch (error) {
             this.state.authProfile = null;
             this.renderAuthProfile();
             this.setStatus(error?.message || "Failed to load profile.", "error");
+        }
+    }
+
+    async saveProfile() {
+        try {
+            const profile = await this.callTool("userpersisto_profile_update", {
+                username: this.profileUsernameInput?.value || "",
+                displayName: this.profileDisplayNameInput?.value || ""
+            });
+            this.state.authProfile = profile;
+            this.renderAuthProfile();
+            this.setStatus("Profile saved.");
+        } catch (error) {
+            this.setStatus(error?.message || "Failed to save profile.", "error");
+        }
+    }
+
+    async refreshAuthPolicy() {
+        try {
+            const policy = await this.callTool("userpersisto_auth_policy_get");
+            const enabled = new Set(Array.isArray(policy.enabledAuthMethods) ? policy.enabledAuthMethods : []);
+            for (const [method, input] of Object.entries(this.authMethodInputs || {})) {
+                if (input) input.checked = enabled.has(method);
+            }
+            if (this.selfRegistrationInput) this.selfRegistrationInput.checked = policy.selfRegistrationEnabled !== false;
+            if (this.defaultRegistrationRoleInput) this.defaultRegistrationRoleInput.value = policy.defaultRegistrationRole || "user";
+            if (this.allowedRedirectOriginsInput) this.allowedRedirectOriginsInput.value = (policy.allowedRedirectOrigins || []).join("\n");
+        } catch (error) {
+            this.setStatus(error?.message || "Failed to load authentication policy.", "error");
+        }
+    }
+
+    async saveAuthPolicy() {
+        const enabledAuthMethods = Object.entries(this.authMethodInputs || {})
+            .filter(([, input]) => input?.checked)
+            .map(([method]) => method);
+        if (!enabledAuthMethods.length) {
+            this.setStatus("Enable at least one authentication method.", "error");
+            return;
+        }
+        try {
+            await this.callTool("userpersisto_auth_policy_set", {
+                enabledAuthMethods,
+                selfRegistrationEnabled: this.selfRegistrationInput?.checked === true,
+                defaultRegistrationRole: this.defaultRegistrationRoleInput?.value || "user",
+                allowedRedirectOrigins: String(this.allowedRedirectOriginsInput?.value || "")
+                    .split(/\r?\n|,/)
+                    .map((value) => value.trim())
+                    .filter(Boolean)
+            });
+            await this.refreshAuthPolicy();
+            this.setStatus("Authentication policy saved.");
+        } catch (error) {
+            this.setStatus(error?.message || "Failed to save authentication policy.", "error");
         }
     }
 

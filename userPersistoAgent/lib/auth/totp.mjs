@@ -1,7 +1,8 @@
 import crypto from 'node:crypto';
 import { getStore, flush } from '../store.mjs';
-import { getUserByEmail, getUserById } from '../users.mjs';
+import { getUserByEmail, getUserById, sanitizeUser } from '../users.mjs';
 import { recordAudit } from '../audit.mjs';
+import { clearLoginFailures, isLoginLocked, recordLoginFailure, withLoginAttemptLock } from './login-attempts.mjs';
 
 const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 const PERIOD_SECONDS = 30;
@@ -94,18 +95,21 @@ function counterFor(time = Date.now()) {
     return Math.floor(time / 1000 / PERIOD_SECONDS);
 }
 
-function verifyToken(secret, token, at = Date.now()) {
+function matchingCounter(secret, token, at = Date.now()) {
     const value = String(token || '').trim();
     if (!/^\d{6}$/.test(value)) {
-        return false;
+        return null;
     }
     const counter = counterFor(at);
     for (let offset = -WINDOW; offset <= WINDOW; offset += 1) {
-        if (generateToken(secret, counter + offset) === value) {
-            return true;
-        }
+        const candidate = counter + offset;
+        if (generateToken(secret, candidate) === value) return candidate;
     }
-    return false;
+    return null;
+}
+
+function verifyToken(secret, token, at = Date.now()) {
+    return matchingCounter(secret, token, at) !== null;
 }
 
 function methodKey(userId) {
@@ -204,24 +208,36 @@ export async function setupVerify({ userId, token }) {
 }
 
 export async function loginVerify({ email, token }) {
-    const user = await getUserByEmail(email);
-    if (!user) {
-        return { ok: false, reason: 'invalid_credentials' };
-    }
-    if (user.status !== 'active') {
-        return { ok: false, reason: 'user_blocked' };
-    }
-    const store = await getStore();
-    const method = await store.getAuthMethodByKey(methodKey(user.id));
-    if (!method || !method.enabled || method.type !== 'totp') {
-        return { ok: false, reason: 'totp_not_configured' };
-    }
-    const secret = decryptSecret(method.credential?.secretEncrypted);
-    if (!verifyToken(secret, token)) {
-        await recordAudit({ actorId: user.id, action: 'auth.totp.login', target: user.id, result: 'denied', reason: 'invalid_token' });
-        return { ok: false, reason: 'invalid_token' };
-    }
-    await recordAudit({ actorId: user.id, action: 'auth.totp.login', target: user.id, result: 'ok' });
-    await flush();
-    return { ok: true, user };
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+    return withLoginAttemptLock(normalizedEmail, async () => {
+        const user = await getUserByEmail(normalizedEmail);
+        if (!user) return { ok: false, reason: 'invalid_credentials' };
+        if (user.status !== 'active') return { ok: false, reason: 'user_blocked' };
+        if (isLoginLocked(user)) return { ok: false, reason: 'account_locked' };
+        const store = await getStore();
+        const method = await store.getAuthMethodByKey(methodKey(user.id));
+        if (!method || !method.enabled || method.type !== 'totp') {
+            return { ok: false, reason: 'totp_not_configured' };
+        }
+        const secret = decryptSecret(method.credential?.secretEncrypted);
+        const counter = matchingCounter(secret, token);
+        const lastUsedCounter = Number(method.credential?.lastUsedCounter ?? -1);
+        if (counter === null || counter <= lastUsedCounter) {
+            await recordLoginFailure(user);
+            await recordAudit({
+                actorId: user.id,
+                action: 'auth.totp.login',
+                target: user.id,
+                result: 'denied',
+                reason: counter !== null && counter <= lastUsedCounter ? 'replayed_token' : 'invalid_token',
+            });
+            return { ok: false, reason: counter !== null && counter <= lastUsedCounter ? 'replayed_token' : 'invalid_token' };
+        }
+        await store.updateAuthMethod(method.id, {
+            credential: { ...method.credential, lastUsedCounter: counter },
+        });
+        const fresh = await clearLoginFailures(user);
+        await recordAudit({ actorId: user.id, action: 'auth.totp.login', target: user.id, result: 'ok' });
+        return { ok: true, user: sanitizeUser(fresh) };
+    });
 }

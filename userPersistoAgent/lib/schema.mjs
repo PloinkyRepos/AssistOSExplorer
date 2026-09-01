@@ -2,15 +2,18 @@ const ensuredStores = new WeakSet();
 
 // Field lists are documentation; Persisto does NOT enforce them. Validation lives in the domain modules.
 export const TYPES = {
-    user: { email: 'string', displayName: 'string', status: 'string', source: 'string', createdAt: 'string', passwordHash: 'string', loginAttempts: 'integer', lastLoginAttempt: 'string' },
+    user: { email: 'string', username: 'string', displayName: 'string', status: 'string', source: 'string', createdAt: 'string', updatedAt: 'string', emailVerifiedAt: 'string', passwordHash: 'string', loginAttempts: 'integer', lastLoginAttempt: 'string' },
     role: { name: 'string', description: 'string', priority: 'integer' },
     permission: { capability: 'string', description: 'string', scope: 'string' },
     userRole: { key: 'string', userId: 'string', roleId: 'string' },
     rolePermission: { key: 'string', roleId: 'string', permissionId: 'string' },
     authMethod: { key: 'string', userId: 'string', type: 'string', credential: 'object', enabled: 'boolean' },
     authChallenge: { challengeId: 'string', subject: 'string', purpose: 'string', codeHash: 'string', expiresAt: 'string', attempts: 'integer', correlationId: 'string' },
+    systemSetting: { key: 'string', value: 'object', updatedAt: 'string', updatedBy: 'string' },
     creditAccount: { userId: 'string', balance: 'integer', reservedBalance: 'integer' },
-    creditTx: { txId: 'string', userId: 'string', type: 'string', amount: 'integer', reason: 'string', referenceId: 'string', createdAt: 'string' },
+    creditTx: { txId: 'string', userId: 'string', sequence: 'integer', type: 'string', amount: 'integer', reason: 'string', referenceId: 'string', balanceAfter: 'integer', reservedAfter: 'integer', createdAt: 'string' },
+    creditReservation: { reservationId: 'string', userId: 'string', amount: 'integer', status: 'string', reason: 'string', createdAt: 'string', updatedAt: 'string' },
+    paymentTransaction: { providerKey: 'string', provider: 'string', providerEventId: 'string', providerObjectId: 'string', userId: 'string', kind: 'string', status: 'string', amountMinor: 'integer', currency: 'string', credits: 'integer', createdAt: 'string', updatedAt: 'string' },
     subscription: { providerRef: 'string', userId: 'string', provider: 'string', planId: 'string', status: 'string', currentPeriodEnd: 'string' },
     billingEvent: { stripeEventId: 'string', type: 'string', status: 'string', payloadHash: 'string', processedAt: 'string' },
     emailLog: { logId: 'string', providerMessageId: 'string', toEmailHash: 'string', template: 'string', result: 'string', correlationId: 'string', createdAt: 'string' },
@@ -27,8 +30,11 @@ const INDEXES = [
     ['rolePermission', 'key'],
     ['authMethod', 'key'],
     ['authChallenge', 'challengeId'],
+    ['systemSetting', 'key'],
     ['creditAccount', 'userId'],
     ['creditTx', 'txId'],
+    ['creditReservation', 'reservationId'],
+    ['paymentTransaction', 'providerKey'],
     ['subscription', 'providerRef'],
     ['billingEvent', 'stripeEventId'],
     ['emailLog', 'logId'],
@@ -43,6 +49,8 @@ const GROUPINGS = [
     ['rolePerms', 'rolePermission', 'roleId'],
     ['authMethods', 'authMethod', 'userId'],
     ['creditHistory', 'creditTx', 'userId'],
+    ['creditReservations', 'creditReservation', 'userId'],
+    ['paymentTransactions', 'paymentTransaction', 'userId'],
     ['subscriptions', 'subscription', 'userId'],
     ['auditTrail', 'auditEvent', 'actorId']
 ];

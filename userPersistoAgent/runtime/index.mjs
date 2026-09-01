@@ -11,18 +11,30 @@ function normalizeUser({ user, roles, capabilities }) {
     return {
         id: String(user.id),
         sub: String(user.id),
-        username: String(user.email),
+        username: String(user.username || user.email),
         name: String(user.displayName || user.email),
         email: String(user.email),
-        roles: Array.isArray(roles) && roles.length ? roles : ['user'],
+        roles: Array.isArray(roles) ? roles : [],
         capabilities: Array.isArray(capabilities) ? capabilities : [],
         raw: { provider: 'userPersistoAgent', status: user.status }
     };
 }
 
+function normalizeAdminUser(user = {}) {
+    return {
+        id: String(user.id || ''),
+        username: String(user.username || user.email || ''),
+        email: String(user.email || ''),
+        name: String(user.displayName || user.name || user.username || user.email || ''),
+        displayName: String(user.displayName || user.name || ''),
+        status: String(user.status || 'active'),
+        roles: Array.isArray(user.roles) ? user.roles.map(String) : [],
+    };
+}
+
 async function postRuntime(config, endpoint, payload = {}) {
     const base = routerBaseUrl(config);
-    const runtimePath = String(config.runtimePath || '/public-services/userpersisto/runtime').replace(/\/+$/, '');
+    const runtimePath = String(config.runtimePath || '/base-agent-additional-server/userPersistoAgent/7000/service/runtime').replace(/\/+$/, '');
     const response = await fetch(new URL(`${runtimePath}/${endpoint}`, base), {
         method: 'POST',
         headers: {
@@ -33,7 +45,11 @@ async function postRuntime(config, endpoint, payload = {}) {
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || data?.ok === false) {
-        throw new Error(data?.error || `UserPersisto runtime failed (${response.status})`);
+        const code = String(data?.error || 'userpersisto_runtime_failed');
+        throw Object.assign(new Error(code), {
+            code,
+            statusCode: response.status,
+        });
     }
     return data;
 }
@@ -46,8 +62,8 @@ export function resolveProviderConfig({ providerConfig = {}, readValue } = {}) {
     }
     return {
         routerBaseUrl: routerBaseUrl(providerConfig),
-        loginPath: String(providerConfig.loginPath || '/public-services/userpersisto/auth/').trim(),
-        runtimePath: String(providerConfig.runtimePath || '/public-services/userpersisto/runtime').trim(),
+        loginPath: String(providerConfig.loginPath || '/base-agent-additional-server/userPersistoAgent/7000/service/auth/').trim(),
+        runtimePath: String(providerConfig.runtimePath || '/base-agent-additional-server/userPersistoAgent/7000/service/runtime').trim(),
         runtimeSecret,
         runtimeSecretName
     };
@@ -90,6 +106,30 @@ export function createProvider({ getConfig }) {
         },
         async sso_logout({ postLogoutRedirectUri }) {
             return { redirectUrl: postLogoutRedirectUri || '/' };
+        },
+        async sso_admin_list_users({ actorUserId, start = 0, pageSize = 500 }) {
+            const config = await getConfig();
+            const result = await postRuntime(config, 'sso-admin-users-list', { actorUserId, start, pageSize });
+            return {
+                users: (result.users || []).map(normalizeAdminUser),
+                totalCount: result.totalCount || 0,
+                availableRoles: result.availableRoles || [],
+            };
+        },
+        async sso_admin_create_user(input = {}) {
+            const config = await getConfig();
+            const result = await postRuntime(config, 'sso-admin-user-create', input);
+            return normalizeAdminUser(result.user);
+        },
+        async sso_admin_update_user(input = {}) {
+            const config = await getConfig();
+            const result = await postRuntime(config, 'sso-admin-user-update', input);
+            return normalizeAdminUser(result.user);
+        },
+        async sso_admin_delete_user(input = {}) {
+            const config = await getConfig();
+            const result = await postRuntime(config, 'sso-admin-user-delete', input);
+            return normalizeAdminUser(result.user);
         },
         invalidateCaches() {}
     };

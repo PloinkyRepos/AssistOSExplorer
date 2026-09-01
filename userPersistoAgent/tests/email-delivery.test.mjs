@@ -7,6 +7,7 @@ import { join } from 'node:path';
 process.env.PERSISTENCE_FOLDER = mkdtempSync(join(tmpdir(), 'userpersisto-mail-'));
 process.env.USERPERSISTO_SETTINGS_KEY = 'test-settings-key';
 process.env.USERPERSISTO_DEV_BOOTSTRAP = 'true';
+process.env.USERPERSISTO_AUTH_METHODS = 'password,emailCode';
 process.env.PLOINKY_ROUTER_PORT = '1';
 
 const { ensureSeedData } = await import('../lib/bootstrap.mjs');

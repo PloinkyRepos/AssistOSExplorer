@@ -10,6 +10,10 @@ import * as totp from '../lib/auth/totp.mjs';
 import { getEnabledAuthMethods, getDefaultAuthMethod } from '../lib/auth/methods.mjs';
 import { createLoginRequest, issueAuthCode, consumeAuthCode, getSsoUser } from '../lib/sso.mjs';
 import { runTool } from '../tools/registry.mjs';
+import { getSetupStatus, registerUser, listUsers, listRoles, createUser, updateUser, setUserRoles, deactivateUser, getUserRoles } from '../lib/users.mjs';
+import { requireActiveActor } from '../lib/authorization.mjs';
+import { getAuthPolicy, updateAuthPolicy, isAuthMethodEnabled } from '../lib/policy.mjs';
+import { setPassword } from '../lib/auth/password.mjs';
 
 const PUBLIC_DIR = resolve(fileURLToPath(new URL('../public', import.meta.url)));
 const MIME = {
@@ -64,6 +68,10 @@ function sendJson(res, status, body) {
     res.end(payload);
 }
 
+function sendAuthenticationFailure(res) {
+    return sendJson(res, 401, { ok: false, error: 'authentication_failed' });
+}
+
 function providerStateFrom(body) {
     return String(body.requestId || body.providerState || body.state || '').trim();
 }
@@ -99,17 +107,30 @@ async function serveStatic(res, relPath) {
         });
         res.end(data);
     } catch {
+        if (!extname(staticPath) && staticPath.startsWith('auth/')) {
+            const data = await readFile(resolve(PUBLIC_DIR, 'auth/index.html'));
+            res.writeHead(200, {
+                'Content-Type': MIME['.html'],
+                'Content-Length': data.length,
+                'Cache-Control': 'no-store'
+            });
+            return res.end(data);
+        }
         sendJson(res, 404, { ok: false, error: 'not_found' });
     }
 }
 
 async function handleGet(req, res, path) {
     if (path === '/service/auth/methods') {
+        const methods = await getEnabledAuthMethods();
         return sendJson(res, 200, {
             ok: true,
-            methods: getEnabledAuthMethods(),
-            defaultMethod: getDefaultAuthMethod()
+            methods,
+            defaultMethod: await getDefaultAuthMethod()
         });
+    }
+    if (path === '/service/auth/setup') {
+        return sendJson(res, 200, { ok: true, ...(await getSetupStatus()) });
     }
     if (path === '/service/auth' || path.startsWith('/service/auth/')) {
         return serveStatic(res, path.replace('/service/', ''));
@@ -134,10 +155,31 @@ async function handlePost(req, res, path) {
         return sendJson(res, 200, { ok: true, ...result });
     }
     const body = await readJson(req);
+    if (path === '/service/auth/register') {
+        const setup = await getSetupStatus();
+        if (!setup.needsInitialAdmin && !(await isAuthMethodEnabled('password'))) {
+            throw Object.assign(new Error('Password registration is not enabled.'), { code: 'auth_method_disabled', statusCode: 404 });
+        }
+        let registered;
+        const issued = await issueAuthCode({
+            providerState: providerStateFrom(body),
+            resolveUserId: async () => {
+                registered = await registerUser({ email: body.email, password: body.password });
+                return registered.user.id;
+            },
+        });
+        return sendJson(res, 201, {
+            ...callbackPayload(issued, body.state),
+            firstUser: registered.firstUser,
+        });
+    }
     if (path === '/service/auth/password/login') {
+        if (!(await isAuthMethodEnabled('password'))) {
+            throw Object.assign(new Error('Password authentication is not enabled.'), { code: 'auth_method_disabled', statusCode: 404 });
+        }
         const result = await loginWithPassword(body.email, body.password);
         if (!result.ok) {
-            return sendJson(res, 401, { ok: false, error: result.reason });
+            return sendAuthenticationFailure(res);
         }
         return sendJson(res, 200, await issueCallbackForUser(body, result.user.id));
     }
@@ -146,25 +188,34 @@ async function handlePost(req, res, path) {
             email: body.email,
             purpose: 'login',
             correlationId: providerStateFrom(body),
-            createSelfRegistered: body.selfRegister === true
+            createSelfRegistered: false
         });
         return sendJson(res, 200, { ok: true, challengeId: started.challengeId });
     }
     if (path === '/service/auth/email-code/verify') {
+        if (!(await isAuthMethodEnabled('emailCode'))) {
+            throw Object.assign(new Error('Email-code authentication is not enabled.'), { code: 'auth_method_disabled', statusCode: 404 });
+        }
         const result = await verifyEmailCode({ challengeId: body.challengeId, code: body.code });
         if (!result.ok) {
-            return sendJson(res, 401, { ok: false, error: result.reason });
+            return sendAuthenticationFailure(res);
         }
         return sendJson(res, 200, await issueCallbackForUser(body, result.user.id));
     }
     if (path === '/service/auth/passkey/options') {
+        if (!(await isAuthMethodEnabled('passkey'))) {
+            throw Object.assign(new Error('Passkey authentication is not enabled.'), { code: 'auth_method_disabled', statusCode: 404 });
+        }
         const result = await passkey.loginOptions({ email: body.email, origin: body.origin, rpId: body.rpId });
         if (!result.ok) {
-            return sendJson(res, 401, { ok: false, error: result.reason });
+            return sendAuthenticationFailure(res);
         }
         return sendJson(res, 200, result);
     }
     if (path === '/service/auth/passkey/verify') {
+        if (!(await isAuthMethodEnabled('passkey'))) {
+            throw Object.assign(new Error('Passkey authentication is not enabled.'), { code: 'auth_method_disabled', statusCode: 404 });
+        }
         const result = await passkey.loginVerify({
             email: body.email,
             assertion: body.assertion,
@@ -172,14 +223,17 @@ async function handlePost(req, res, path) {
             origin: body.origin
         });
         if (!result.ok) {
-            return sendJson(res, 401, { ok: false, error: result.reason });
+            return sendAuthenticationFailure(res);
         }
         return sendJson(res, 200, await issueCallbackForUser(body, result.user.id));
     }
     if (path === '/service/auth/totp/setup' || path === '/service/auth/totp/verify') {
+        if (!(await isAuthMethodEnabled('totp'))) {
+            throw Object.assign(new Error('TOTP authentication is not enabled.'), { code: 'auth_method_disabled', statusCode: 404 });
+        }
         const result = await totp.loginVerify({ email: body.email, token: body.token });
         if (!result.ok) {
-            return sendJson(res, 401, { ok: false, error: result.reason });
+            return sendAuthenticationFailure(res);
         }
         return sendJson(res, 200, await issueCallbackForUser(body, result.user.id));
     }
@@ -197,6 +251,57 @@ async function handlePost(req, res, path) {
         assertRuntimeSecret(req);
         const described = await getSsoUser(body.userId);
         return sendJson(res, 200, { ok: true, ...described });
+    }
+    if (path.startsWith('/service/runtime/sso-admin-')) {
+        assertRuntimeSecret(req);
+        const actorUserId = String(body.actorUserId || '').trim();
+        await requireActiveActor(actorUserId, 'admin.users.manage');
+        if (path === '/service/runtime/sso-admin-users-list') {
+            return sendJson(res, 200, {
+                ok: true,
+                ...(await listUsers({ start: body.start || 0, pageSize: body.pageSize || 500 })),
+                availableRoles: (await listRoles()).map((role) => role.name),
+            });
+        }
+        if (path === '/service/runtime/sso-admin-user-create') {
+            const user = await createUser({
+                email: body.email,
+                username: body.username || '',
+                displayName: body.name || body.displayName || '',
+                password: body.password || '',
+                roles: body.roles || ['user'],
+                source: 'admin',
+                actorId: actorUserId,
+            });
+            return sendJson(res, 201, { ok: true, user: { ...user, roles: await getUserRoles(user.id) } });
+        }
+        if (path === '/service/runtime/sso-admin-user-update') {
+            const patch = {};
+            for (const key of ['email', 'username', 'displayName', 'status']) {
+                if (Object.prototype.hasOwnProperty.call(body, key)) patch[key] = body[key];
+            }
+            if (Object.prototype.hasOwnProperty.call(body, 'name')) patch.displayName = body.name;
+            let user = Object.keys(patch).length
+                ? await updateUser(body.userId, patch, { actorId: actorUserId })
+                : (await getSsoUser(body.userId)).user;
+            if (Object.prototype.hasOwnProperty.call(body, 'password') && body.password) {
+                await setPassword({ userId: body.userId, newPassword: body.password, actorId: actorUserId });
+            }
+            const roles = Object.prototype.hasOwnProperty.call(body, 'roles')
+                ? await setUserRoles(body.userId, body.roles, { actorId: actorUserId })
+                : (await getSsoUser(body.userId)).roles;
+            return sendJson(res, 200, { ok: true, user: { ...user, roles } });
+        }
+        if (path === '/service/runtime/sso-admin-user-delete') {
+            const user = await deactivateUser(body.userId, { actorId: actorUserId });
+            return sendJson(res, 200, { ok: true, user, deleted: true });
+        }
+        if (path === '/service/runtime/sso-admin-policy-get') {
+            return sendJson(res, 200, { ok: true, policy: await getAuthPolicy() });
+        }
+        if (path === '/service/runtime/sso-admin-policy-update') {
+            return sendJson(res, 200, { ok: true, policy: await updateAuthPolicy(body.policy || {}, { actorId: actorUserId }) });
+        }
     }
     if (path === '/internal/tool') {
         if (req.socket.remoteAddress !== '127.0.0.1' && req.socket.remoteAddress !== '::1' && req.socket.remoteAddress !== '::ffff:127.0.0.1') {
@@ -224,7 +329,9 @@ async function handle(req, res) {
         }
         return await handlePost(req, res, url.pathname);
     } catch (error) {
-        sendJson(res, error.statusCode || 500, { ok: false, error: error.message || 'internal_error' });
+        const status = Number(error.statusCode) || 500;
+        const code = String(error.code || (status < 500 ? error.message : 'internal_error'));
+        sendJson(res, status, { ok: false, error: code });
     }
 }
 

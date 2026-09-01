@@ -8,12 +8,12 @@
 
     <div class="modal-body userpersisto-settings-body">
         <div class="userpersisto-tabs" role="tablist">
-            <button type="button" class="userpersisto-tab active" data-local-action="switchPanel users" data-panel="users">User Management</button>
-            <button type="button" class="userpersisto-tab" data-local-action="switchPanel auth" data-panel="auth">Current Profile</button>
-            <button type="button" class="userpersisto-tab" data-local-action="switchPanel provider" data-panel="provider">Billing</button>
+            <button type="button" class="userpersisto-tab" data-local-action="switchPanel users" data-panel="users" data-admin-only hidden>User Management</button>
+            <button type="button" class="userpersisto-tab active" data-local-action="switchPanel auth" data-panel="auth">Profile</button>
+            <button type="button" class="userpersisto-tab" data-local-action="switchPanel provider" data-panel="provider" data-admin-only hidden>Billing</button>
         </div>
 
-        <section class="userpersisto-panel hidden" data-section="provider">
+        <section class="userpersisto-panel hidden" data-section="provider" data-admin-only hidden>
             <div class="userpersisto-grid">
                 <label class="form-item">
                     <span class="form-label">Stripe secret key</span>
@@ -47,6 +47,16 @@
                     <input id="creditsPerUnit" class="form-input" type="number" min="1" step="1" autocomplete="off" spellcheck="false">
                     <span class="userpersisto-mask" data-mask-for="USERPERSISTO_CREDITS_PER_UNIT"></span>
                 </label>
+                <label class="form-item">
+                    <span class="form-label">Checkout success URL</span>
+                    <input id="billingSuccessUrl" class="form-input" type="url" autocomplete="off" spellcheck="false">
+                    <span class="userpersisto-mask" data-mask-for="USERPERSISTO_BILLING_SUCCESS_URL"></span>
+                </label>
+                <label class="form-item">
+                    <span class="form-label">Checkout cancel URL</span>
+                    <input id="billingCancelUrl" class="form-input" type="url" autocomplete="off" spellcheck="false">
+                    <span class="userpersisto-mask" data-mask-for="USERPERSISTO_BILLING_CANCEL_URL"></span>
+                </label>
             </div>
             <div class="userpersisto-actions">
                 <button type="button" class="general-button" data-local-action="saveProviderSettings">Save billing settings</button>
@@ -63,10 +73,49 @@
                     <button type="button" class="gray-button" data-local-action="refreshAuthProfile">Refresh</button>
                 </div>
                 <div id="authProfileSummary" class="userpersisto-list"></div>
+                <div class="userpersisto-grid">
+                    <label class="form-item">
+                        <span class="form-label">Username (optional)</span>
+                        <input id="profileUsername" class="form-input" type="text" minlength="3" maxlength="64" autocomplete="username" spellcheck="false">
+                    </label>
+                    <label class="form-item">
+                        <span class="form-label">Display name</span>
+                        <input id="profileDisplayName" class="form-input" type="text" maxlength="200" autocomplete="name">
+                    </label>
+                </div>
+                <div class="userpersisto-actions">
+                    <button type="button" class="general-button" data-local-action="saveProfile">Save profile</button>
+                </div>
+            </div>
+            <div class="userpersisto-auth-methods-card" data-admin-only hidden>
+                <div class="userpersisto-auth-methods-header">
+                    <div>
+                        <div class="userpersisto-card-title">Authentication policy</div>
+                        <div class="userpersisto-card-description">Password is the default. Other methods appear at login only when explicitly enabled.</div>
+                    </div>
+                </div>
+                <div class="userpersisto-grid">
+                    <label class="form-item"><span class="form-label"><input type="checkbox" data-auth-method="password"> Password</span></label>
+                    <label class="form-item"><span class="form-label"><input type="checkbox" data-auth-method="emailCode"> Email code</span></label>
+                    <label class="form-item"><span class="form-label"><input type="checkbox" data-auth-method="passkey"> Passkey</span></label>
+                    <label class="form-item"><span class="form-label"><input type="checkbox" data-auth-method="totp"> TOTP</span></label>
+                    <label class="form-item"><span class="form-label"><input id="selfRegistrationEnabled" type="checkbox"> Self-registration enabled</span></label>
+                    <label class="form-item">
+                        <span class="form-label">Default registration role</span>
+                        <input id="defaultRegistrationRole" class="form-input" type="text" value="user" spellcheck="false">
+                    </label>
+                    <label class="form-item">
+                        <span class="form-label">Allowed redirect origins (one per line)</span>
+                        <textarea id="allowedRedirectOrigins" class="form-input" rows="3" spellcheck="false"></textarea>
+                    </label>
+                </div>
+                <div class="userpersisto-actions">
+                    <button type="button" class="general-button" data-local-action="saveAuthPolicy">Save authentication policy</button>
+                </div>
             </div>
         </section>
 
-        <section class="userpersisto-panel" data-section="users">
+        <section class="userpersisto-panel hidden" data-section="users" data-admin-only hidden>
             <div class="userpersisto-create-user">
                 <label class="form-item">
                     <span class="form-label">Email</span>

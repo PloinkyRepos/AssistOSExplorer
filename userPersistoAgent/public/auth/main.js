@@ -5,9 +5,14 @@ const params = new URLSearchParams(window.location.search);
 const state = params.get('state') || '';
 const requestId = params.get('requestId') || params.get('providerState') || '';
 
-let methods = ['password', 'emailCode'];
+let methods = ['password'];
 let defaultMethod = 'password';
 let emailChallengeId = '';
+let setup = {
+    needsInitialAdmin: false,
+    selfRegistrationEnabled: true,
+    enabledAuthMethods: ['password']
+};
 
 function element(tag, attributes = {}, children = []) {
     const node = document.createElement(tag);
@@ -75,13 +80,26 @@ async function submitPassword(form) {
     }
 }
 
+async function submitRegistration(form) {
+    const email = form.querySelector('[name="email"]').value.trim();
+    const password = form.querySelector('[name="password"]').value;
+    const button = form.querySelector('button[type="submit"]');
+    button.disabled = true;
+    try {
+        const result = await request('register', authPayload({ email, password }));
+        redirectWithCode(result);
+    } catch (error) {
+        setStatus(error.message || 'Unable to create the account.', true);
+        button.disabled = false;
+    }
+}
+
 async function startEmailCode(form) {
     const email = form.querySelector('[name="email"]').value.trim();
-    const selfRegister = form.querySelector('[name="selfRegister"]').checked;
     const button = form.querySelector('[data-email-start]');
     button.disabled = true;
     try {
-        const result = await request('email-code/start', authPayload({ email, selfRegister }));
+        const result = await request('email-code/start', authPayload({ email }));
         emailChallengeId = result.challengeId;
         form.querySelector('.email-code-fields').hidden = false;
         form.querySelector('[name="code"]').focus();
@@ -151,6 +169,29 @@ function methodOrder() {
 }
 
 function render() {
+    const registrationTitle = setup.needsInitialAdmin ? 'Create the installation owner' : 'Create an account';
+    const registrationCopy = setup.needsInitialAdmin
+        ? 'The first account becomes administrator. Only email and password are required.'
+        : 'Your account receives the standard installation role. A username can be added later in Settings.';
+    const registrationForm = element('form', { className: 'auth-panel registration-panel' }, [
+        element('h1', { text: registrationTitle }),
+        element('p', { className: 'auth-copy', text: registrationCopy }),
+        element('label', { text: 'Email' }),
+        element('input', { name: 'email', type: 'email', autocomplete: 'email', required: true }),
+        element('label', { text: 'Password' }),
+        element('input', { name: 'password', type: 'password', minlength: '8', maxlength: '1024', autocomplete: 'new-password', required: true }),
+        element('button', { type: 'submit', text: setup.needsInitialAdmin ? 'Create admin account' : 'Create account' }),
+        element('p', { className: 'status', hidden: true })
+    ]);
+    registrationForm.addEventListener('submit', (event) => {
+        event.preventDefault();
+        submitRegistration(registrationForm);
+    });
+    if (setup.needsInitialAdmin) {
+        root.replaceChildren(registrationForm);
+        return;
+    }
+
     const passwordForm = element('form', { className: 'auth-panel password-panel' }, [
         element('h1', { text: 'UserPersisto' }),
         element('label', { text: 'Email' }),
@@ -169,10 +210,6 @@ function render() {
         element('h2', { text: 'Email Code' }),
         element('label', { text: 'Email' }),
         element('input', { name: 'email', type: 'email', autocomplete: 'email', required: true }),
-        element('label', { className: 'checkbox-row' }, [
-            element('input', { name: 'selfRegister', type: 'checkbox' }),
-            document.createTextNode('Create account')
-        ]),
         element('button', { type: 'button', 'data-email-start': 'true', text: 'Send code', onClick: () => startEmailCode(emailCodeForm) }),
         element('section', { className: 'email-code-fields', hidden: true }, [
             element('label', { text: 'Code' }),
@@ -206,16 +243,19 @@ function render() {
     });
 
     const panels = { password: passwordForm, emailCode: emailCodeForm, passkey: passkeyForm, totp: totpForm };
-    root.replaceChildren(...methodOrder().map((method) => panels[method]));
+    const authPanels = methodOrder().map((method) => panels[method]);
+    if (setup.selfRegistrationEnabled && methods.includes('password')) authPanels.push(registrationForm);
+    root.replaceChildren(...authPanels);
 }
 
 try {
-    const response = await fetch('methods');
-    const data = await response.json();
-    if (response.ok && data.ok !== false) {
-        methods = Array.isArray(data.methods) && data.methods.length ? data.methods : methods;
-        defaultMethod = data.defaultMethod || defaultMethod;
+    const [methodsResponse, setupResponse] = await Promise.all([fetch('methods'), fetch('setup')]);
+    const [methodsData, setupData] = await Promise.all([methodsResponse.json(), setupResponse.json()]);
+    if (methodsResponse.ok && methodsData.ok !== false) {
+        methods = Array.isArray(methodsData.methods) && methodsData.methods.length ? methodsData.methods : methods;
+        defaultMethod = methodsData.defaultMethod || defaultMethod;
     }
+    if (setupResponse.ok && setupData.ok !== false) setup = { ...setup, ...setupData };
 } catch {
 }
 

@@ -1,7 +1,9 @@
 import crypto from 'node:crypto';
 import { getStore, flush } from '../store.mjs';
-import { getUserByEmail, getUserById } from '../users.mjs';
+import { getUserByEmail, getUserById, sanitizeUser } from '../users.mjs';
 import { recordAudit } from '../audit.mjs';
+import { assertBrowserOriginAllowed } from '../policy.mjs';
+import { serialize } from '../serial.mjs';
 
 const CHALLENGE_TTL_MS = 2 * 60 * 1000;
 const DEFAULT_RP_NAME = 'UserPersisto';
@@ -49,6 +51,17 @@ function isIpAddress(value) {
 
 function publicRpId(rpId) {
     return isIpAddress(rpId) ? '' : rpId;
+}
+
+function assertRpIdMatchesOrigin(rpId, origin) {
+    if (!origin) return;
+    const hostname = new URL(origin).hostname.toLowerCase().replace(/^\[|\]$/g, '');
+    const normalizedRpId = String(rpId || '').trim().toLowerCase().replace(/^\[|\]$/g, '');
+    if (hostname === normalizedRpId || (!isIpAddress(normalizedRpId) && hostname.endsWith(`.${normalizedRpId}`))) return;
+    throw Object.assign(new Error('WebAuthn relying party id does not match the browser origin.'), {
+        code: 'invalid_webauthn_rp_id',
+        statusCode: 400,
+    });
 }
 
 function requireClientData(response = {}, expectedType, challenge, origin) {
@@ -286,29 +299,35 @@ async function findChallenge({ challenge, challengeKey, type, userId = '' }) {
         const record = await store.getAuthChallengeByChallengeId(challengeKey);
         return (await challengeMatches(record, { challenge, challengeKey, type, userId })) ? record : null;
     }
-    const selected = await store.select('authChallenge', { purpose: 'webauthn' }, { pageSize: 100 });
-    for (const record of selected.objects || []) {
-        if (await challengeMatches(record, { challenge, type, userId })) {
-            return record;
+    const pageSize = 500;
+    let start = 0;
+    while (true) {
+        const selected = await store.select('authChallenge', { purpose: 'webauthn' }, { start, pageSize });
+        const objects = selected.objects || [];
+        for (const record of objects) {
+            if (await challengeMatches(record, { challenge, type, userId })) return record;
         }
+        start += objects.length;
+        const totalCount = Number(selected.filteredCount ?? selected.totalCount);
+        if (!objects.length || (Number.isFinite(totalCount) && start >= totalCount) || objects.length < pageSize) return null;
     }
-    return null;
 }
 
-async function consumeChallenge({ challenge, challengeKey, type, userId = '' }) {
-    const store = await getStore();
-    const record = await findChallenge({ challenge, challengeKey, type, userId });
-    if (!record) {
-        throw new Error('WebAuthn challenge not found.');
-    }
-    if (new Date(record.expiresAt).getTime() < Date.now()) {
+function consumeChallenge({ challenge, challengeKey, type, userId = '' }) {
+    const lockKey = String(challengeKey || challenge || `${type}:${userId}`);
+    return serialize(`webauthn-challenge:${lockKey}`, async () => {
+        const store = await getStore();
+        const record = await findChallenge({ challenge, challengeKey, type, userId });
+        if (!record) throw new Error('WebAuthn challenge not found.');
+        if (new Date(record.expiresAt).getTime() < Date.now()) {
+            await store.deleteAuthChallenge(record.id);
+            await flush();
+            throw new Error('WebAuthn challenge expired.');
+        }
         await store.deleteAuthChallenge(record.id);
         await flush();
-        throw new Error('WebAuthn challenge expired.');
-    }
-    await store.deleteAuthChallenge(record.id);
-    await flush();
-    return { ...record, metadata: JSON.parse(record.correlationId || '{}') };
+        return { ...record, metadata: JSON.parse(record.correlationId || '{}') };
+    });
 }
 
 async function authMethodsForUser(userId) {
@@ -320,8 +339,18 @@ async function findCredentialById(credentialId, userId = '') {
         const methods = await authMethodsForUser(userId);
         return methods.find((method) => method.type === 'passkey' && method.credential?.credentialId === credentialId) || null;
     }
-    const selected = await (await getStore()).select('authMethod', { type: 'passkey' }, { pageSize: 1000 });
-    return (selected.objects || []).find((method) => method.credential?.credentialId === credentialId) || null;
+    const store = await getStore();
+    const pageSize = 500;
+    let start = 0;
+    while (true) {
+        const selected = await store.select('authMethod', { type: 'passkey' }, { start, pageSize });
+        const objects = selected.objects || [];
+        const match = objects.find((method) => method.credential?.credentialId === credentialId);
+        if (match) return match;
+        start += objects.length;
+        const totalCount = Number(selected.filteredCount ?? selected.totalCount);
+        if (!objects.length || (Number.isFinite(totalCount) && start >= totalCount) || objects.length < pageSize) return null;
+    }
 }
 
 export async function registrationOptions({ userId, origin = '', rpId = '', rpName = DEFAULT_RP_NAME }) {
@@ -332,6 +361,8 @@ export async function registrationOptions({ userId, origin = '', rpId = '', rpNa
     const resolvedRpId = normalizeRpId({ rpId, origin });
     const browserRpId = publicRpId(resolvedRpId);
     const normalizedOrigin = normalizeOrigin({ origin });
+    if (normalizedOrigin) await assertBrowserOriginAllowed(normalizedOrigin);
+    assertRpIdMatchesOrigin(resolvedRpId, normalizedOrigin);
     const { challengeId, challenge } = await storeChallenge({
         userId: user.id,
         email: user.email,
@@ -372,16 +403,20 @@ export async function registrationOptions({ userId, origin = '', rpId = '', rpNa
     };
 }
 
-export async function registrationVerify({ userId, attestation, origin = '' }) {
+export async function registrationVerify({ userId, attestation, challengeKey, origin = '' }) {
     const credential = attestation || {};
     const response = credential.response || {};
     const { clientData, clientDataBuffer } = requireClientData(response, 'webauthn.create', undefined, undefined);
     const challengeRecord = await consumeChallenge({
         challenge: clientData.challenge,
+        challengeKey,
         type: 'registration',
         userId
     });
-    requireClientData(response, 'webauthn.create', challengeRecord.codeHash, origin || challengeRecord.metadata.origin);
+    const expectedOrigin = String(challengeRecord.metadata.origin || '');
+    if (expectedOrigin) await assertBrowserOriginAllowed(expectedOrigin);
+    if (origin && normalizeOrigin({ origin }) !== expectedOrigin) throw new Error('WebAuthn origin changed during registration.');
+    requireClientData(response, 'webauthn.create', challengeRecord.codeHash, expectedOrigin);
 
     const attestationObject = decodeCbor(base64urlDecode(response.attestationObject));
     const authData = parseAuthenticatorData(mapGet(attestationObject, 'authData'));
@@ -437,6 +472,8 @@ export async function loginOptions({ email, origin = '', rpId = '' }) {
     const resolvedRpId = normalizeRpId({ rpId, origin });
     const browserRpId = publicRpId(resolvedRpId);
     const normalizedOrigin = normalizeOrigin({ origin });
+    if (normalizedOrigin) await assertBrowserOriginAllowed(normalizedOrigin);
+    assertRpIdMatchesOrigin(resolvedRpId, normalizedOrigin);
     const { challengeId, challenge } = await storeChallenge({
         userId: user.id,
         email: user.email,
@@ -483,38 +520,39 @@ export async function loginVerify({ email, assertion, challengeKey, origin = '' 
         return { ok: false, reason: error.message };
     }
     try {
-        requireClientData(response, 'webauthn.get', challengeRecord.codeHash, origin || challengeRecord.metadata.origin);
+        const expectedOrigin = String(challengeRecord.metadata.origin || '');
+        if (expectedOrigin) await assertBrowserOriginAllowed(expectedOrigin);
+        if (origin && normalizeOrigin({ origin }) !== expectedOrigin) throw new Error('WebAuthn origin changed during login.');
+        requireClientData(response, 'webauthn.get', challengeRecord.codeHash, expectedOrigin);
         const credentialId = credential.id || credential.rawId;
-        const stored = await findCredentialById(credentialId, user.id);
-        if (!stored || !stored.enabled) {
-            return { ok: false, reason: 'passkey_not_registered' };
-        }
         const authDataBuffer = base64urlDecode(response.authenticatorData);
         const authData = parseAuthenticatorData(authDataBuffer);
         assertRpIdHash(authData, challengeRecord.metadata.rpId);
         if (!(authData.flags & 0x01)) {
             throw new Error('WebAuthn user presence was not verified.');
         }
-        if (Number(stored.credential.counter || 0) > 0 && authData.counter <= Number(stored.credential.counter || 0)) {
-            throw new Error('WebAuthn authenticator counter did not advance.');
-        }
         const clientHash = crypto.createHash('sha256').update(clientDataBuffer).digest();
         const signedData = Buffer.concat([authDataBuffer, clientHash]);
-        const valid = verifySignature({
-            alg: Number(stored.credential.alg),
-            publicKeyJwk: stored.credential.publicKeyJwk,
-            signature: base64urlDecode(response.signature),
-            signedData
-        });
-        if (!valid) {
-            throw new Error('Invalid WebAuthn signature.');
-        }
-        await (await getStore()).updateAuthMethod(stored.id, {
-            credential: { ...stored.credential, counter: authData.counter }
+        await serialize(`webauthn-credential:${user.id}:${credentialId}`, async () => {
+            const stored = await findCredentialById(credentialId, user.id);
+            if (!stored || !stored.enabled) throw new Error('Passkey is not registered.');
+            if (Number(stored.credential.counter || 0) > 0 && authData.counter <= Number(stored.credential.counter || 0)) {
+                throw new Error('WebAuthn authenticator counter did not advance.');
+            }
+            const valid = verifySignature({
+                alg: Number(stored.credential.alg),
+                publicKeyJwk: stored.credential.publicKeyJwk,
+                signature: base64urlDecode(response.signature),
+                signedData
+            });
+            if (!valid) throw new Error('Invalid WebAuthn signature.');
+            await (await getStore()).updateAuthMethod(stored.id, {
+                credential: { ...stored.credential, counter: authData.counter }
+            });
         });
         await recordAudit({ actorId: user.id, action: 'auth.passkey.login', target: user.id, result: 'ok', reason: credentialId });
         await flush();
-        return { ok: true, user };
+        return { ok: true, user: sanitizeUser(user) };
     } catch (error) {
         await recordAudit({ actorId: user.id, action: 'auth.passkey.login', target: user.id, result: 'denied', reason: error.message });
         return { ok: false, reason: error.message };

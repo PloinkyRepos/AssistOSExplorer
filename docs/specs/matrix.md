@@ -14,3 +14,4 @@
 | [DS009-workspace-monitoring](specsLoader.html?spec=DS009-workspace-monitoring.md) | Defines the Workspace Monitor integration as an agent-owned operational view mounted in Explorer. |
 | [DS010-workspace-operations](specsLoader.html?spec=DS010-workspace-operations.md) | Defines Explorer navigation, ordinary file mutations, workspace search and replace, and protected-resource boundaries. |
 | [DS011-scripta-core](specsLoader.html?spec=DS011-scripta-core.md) | Defines Explorer-owned SCRIPTA identity, Markdown metadata, Automerge state, variants, voting, ownership, undo, public collaboration, security, and lifecycle. |
+| [DS012-user-persisto](specsLoader.html?spec=DS012-user-persisto.md) | Defines UserPersisto identity bootstrap, authentication policy, Explorer SSO integration, authorization, and financial journal invariants. |

@@ -36,6 +36,24 @@ export async function authorizeCapability({ userId, capability, resource = '' })
     return { allowed: true, reason: resource ? `capability_granted:${resource}` : 'capability_granted' };
 }
 
+export async function requireActiveActor(userId, capability = '') {
+    const normalizedUserId = String(userId || '').trim();
+    if (!normalizedUserId) {
+        throw Object.assign(new Error('Authenticated user is required.'), { code: 'authentication_required', statusCode: 401 });
+    }
+    const user = await getUserById(normalizedUserId);
+    if (!user || user.status !== 'active') {
+        throw Object.assign(new Error('Authentication required.'), { code: 'invalid_session', statusCode: 401 });
+    }
+    if (capability) {
+        const decision = await authorizeCapability({ userId: normalizedUserId, capability });
+        if (!decision.allowed) {
+            throw Object.assign(new Error('Admin access is required.'), { code: 'admin_required', statusCode: 403 });
+        }
+    }
+    return user;
+}
+
 export async function getProfile(userId) {
     const store = await getStore();
     const user = await getUserById(userId);

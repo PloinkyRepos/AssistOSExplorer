@@ -1,0 +1,76 @@
+import test, { after } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+process.env.PERSISTENCE_FOLDER = mkdtempSync(join(tmpdir(), 'userpersisto-registration-'));
+process.env.USERPERSISTO_SETTINGS_KEY = 'test-settings-key';
+
+const { ensureSeedData } = await import('../lib/bootstrap.mjs');
+const { createUser, getSetupStatus, getUserByEmail, getUserRoles, registerUser, updateUser } = await import('../lib/users.mjs');
+const { updateAuthPolicy } = await import('../lib/policy.mjs');
+const { resetStoreForTests } = await import('../lib/store.mjs');
+
+after(async () => {
+    await resetStoreForTests();
+});
+
+test('concurrent first registrations create exactly one admin and later registrations receive the standard role', async () => {
+    await ensureSeedData();
+    assert.equal((await getSetupStatus()).needsInitialAdmin, true);
+
+    const firstWave = await Promise.all([
+        registerUser({ email: 'owner-a@example.com', password: 'owner-pass-123' }),
+        registerUser({ email: 'owner-b@example.com', password: 'owner-pass-123' }),
+    ]);
+    const firstWaveRoles = await Promise.all(firstWave.map((entry) => getUserRoles(entry.user.id)));
+    assert.equal(firstWave.filter((entry) => entry.firstUser).length, 1);
+    assert.equal(firstWaveRoles.filter((entry) => entry.includes('admin')).length, 1);
+    assert.ok(firstWave.every((entry) => entry.user.username === ''));
+    assert.ok(firstWave.every((entry) => !Object.hasOwn(entry.user, 'passwordHash')));
+
+    const later = await registerUser({ email: 'member@example.com', password: 'member-pass-123' });
+    assert.equal(later.firstUser, false);
+    assert.deepEqual(await getUserRoles(later.user.id), ['user']);
+    assert.equal((await getSetupStatus()).needsInitialAdmin, false);
+    assert.equal(Boolean(await getUserByEmail('owner-a@example.com')), true);
+    assert.equal(Boolean(await getUserByEmail('owner-b@example.com')), true);
+});
+
+test('self-registration policy accepts only an existing non-admin role', async () => {
+    await assert.rejects(
+        () => updateAuthPolicy({ defaultRegistrationRole: 'admin' }, { actorId: 'test-admin' }),
+        (error) => error?.code === 'registration_role_must_be_non_admin'
+    );
+    await assert.rejects(
+        () => updateAuthPolicy({ defaultRegistrationRole: 'missing-role' }, { actorId: 'test-admin' }),
+        (error) => error?.code === 'unknown_role'
+    );
+
+    await updateAuthPolicy({ defaultRegistrationRole: 'selfRegistered' }, { actorId: 'test-admin' });
+    const registered = await registerUser({ email: 'limited@example.com', password: 'limited-pass-123' });
+    assert.deepEqual(await getUserRoles(registered.user.id), ['selfRegistered']);
+});
+
+test('admin creation validates every role before persisting the user', async () => {
+    await assert.rejects(
+        () => createUser({ email: 'partial@example.com', roles: ['user', 'missing-role'] }),
+        (error) => error?.code === 'unknown_role'
+    );
+    assert.equal(await getUserByEmail('partial@example.com'), null);
+});
+
+test('admin can change an email while uniqueness remains enforced', async () => {
+    const first = await createUser({ email: 'before@example.com', roles: ['user'] });
+    await createUser({ email: 'occupied@example.com', roles: ['user'] });
+
+    const updated = await updateUser(first.id, { email: 'after@example.com' }, { actorId: 'test-admin' });
+    assert.equal(updated.email, 'after@example.com');
+    assert.equal(await getUserByEmail('before@example.com'), null);
+    assert.equal((await getUserByEmail('after@example.com')).id, first.id);
+    await assert.rejects(
+        () => updateUser(first.id, { email: 'occupied@example.com' }, { actorId: 'test-admin' }),
+        (error) => error?.code === 'email_taken'
+    );
+});
