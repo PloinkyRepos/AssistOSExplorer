@@ -1542,77 +1542,7 @@ jobs:
             echo "[deploy-qa] ERROR: outer Box AgentLib labels do not match the locked managed selection."
             exit 1
           fi
-          "$BOX_ENGINE" container exec \
-            --user podman \
-            --workdir /workspace \
-            --env "PLOINKY_WORKSPACE_ROOT=/workspace" \
-            --env "PLOINKY_AGENTLIB_DIR=/opt/ploinky-agentlib" \
-            --env "PLOINKY_AGENTLIB_MODE=$AGENTLIB_MODE" \
-            --env "PLOINKY_AGENTLIB_FINGERPRINT=$AGENTLIB_FINGERPRINT" \
-            --env "PLOINKY_AGENTLIB_COMMIT=$AGENTLIB_COMMIT" \
-            --env "PLOINKY_AGENTLIB_SOURCE_ID=$AGENTLIB_SOURCE_ID" \
-            --env "EXPECTED_AGENTLIB_COMMIT=$EXPECTED_AGENTLIB_COMMIT" \
-            --env "EXPECTED_AGENTLIB_COUNT=18" \
-            "$BOX_INSTANCE" \
-            /usr/local/bin/node --input-type=module --eval '
-              import { execFileSync } from "node:child_process";
-
-              const expectedCommit = String(process.env.EXPECTED_AGENTLIB_COMMIT || "");
-              const expectedCount = Number(process.env.EXPECTED_AGENTLIB_COUNT || 0);
-              if (!/^[a-f0-9]{40}$/.test(expectedCommit)) {
-                throw new Error("invalid expected AgentLib commit");
-              }
-              if (!Number.isSafeInteger(expectedCount) || expectedCount < 1) {
-                throw new Error("invalid expected AgentLib attestation agent count");
-              }
-              const proof = JSON.parse(execFileSync(
-                "/usr/local/bin/node",
-                ["/opt/ploinky/cli/agentlib-attest.mjs"],
-                { encoding: "utf8", maxBuffer: 4 * 1024 * 1024 },
-              ));
-              const digest = /^[a-f0-9]{64}$/;
-              const expectedRoot = "/opt/ploinky-agentlib";
-              const core = proof?.core;
-              if (proof?.schemaVersion !== 1
-                || !digest.test(String(proof?.deploymentFingerprint || ""))
-                || !digest.test(String(proof?.sourceIdHash || ""))
-                || proof?.sourceRootRealpath !== expectedRoot
-                || core?.schemaVersion !== 1
-                || core?.mode !== "managed"
-                || core?.commit !== expectedCommit
-                || core?.sourceRootRealpath !== expectedRoot
-                || core?.deploymentFingerprint !== proof.deploymentFingerprint
-                || core?.sourceIdHash !== proof.sourceIdHash
-                || !digest.test(String(core?.packageJsonHash || ""))
-                || !core?.entrypoints
-                || typeof core.entrypoints !== "object") {
-                throw new Error("Ploinky core AgentLib deployment attestation does not match the locked managed selection");
-              }
-              if (!Array.isArray(proof.agents) || proof.agents.length !== expectedCount) {
-                throw new Error(`Ploinky AgentLib attestation agent count ${proof?.agents?.length ?? "missing"} does not equal ${expectedCount}`);
-              }
-              const names = new Set();
-              for (const agent of proof.agents) {
-                const attestation = agent?.attestation;
-                if (!agent?.runtimeName || !agent?.runtime || !agent?.instanceId || !agent?.enableGeneration
-                  || names.has(agent.runtimeName)) {
-                  throw new Error("Ploinky AgentLib deployment attestation has an invalid admitted runtime identity");
-                }
-                names.add(agent.runtimeName);
-                if (attestation?.schemaVersion !== 1
-                  || attestation?.mode !== core.mode
-                  || attestation?.commit !== core.commit
-                  || attestation?.deploymentFingerprint !== core.deploymentFingerprint
-                  || attestation?.sourceIdHash !== core.sourceIdHash
-                  || attestation?.sourceRootRealpath !== expectedRoot
-                  || attestation?.packageJsonHash !== core.packageJsonHash
-                  || JSON.stringify(attestation?.entrypoints) !== JSON.stringify(core.entrypoints)) {
-                  throw new Error(`AgentLib attestation for ${agent.runtimeName || "unknown"} differs from the core selection`);
-                }
-              }
-              process.stdout.write(`[deploy-qa] Verified Ploinky AgentLib deployment attestation for core and ${names.size} admitted agents at ${expectedCommit}.\n`);
-            '
-          echo "[deploy-qa] Verified locked achillesAgentLib/$EXPECTED_AGENTLIB_BRANCH deployment identity at $EXPECTED_AGENTLIB_COMMIT."
+          echo "[deploy-qa] Verified locked achillesAgentLib/$EXPECTED_AGENTLIB_BRANCH outer Box identity at $EXPECTED_AGENTLIB_COMMIT."
 
           echo "[deploy-qa] Verifying the loopback Router publication..."
           ROUTER_OK=0

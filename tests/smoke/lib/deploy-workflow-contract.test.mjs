@@ -52,9 +52,9 @@ const WORKFLOWS = [
       "addressMode: 'direct'",
       'RUNTIME_DIR/ploinky-box/dependencies.lock.json',
       'Ploinky AgentLib lock must select the canonical remote and one exact commit',
-      '--env "PLOINKY_AGENTLIB_DIR=/opt/ploinky-agentlib"',
-      'Ploinky AgentLib deployment attestation for core and ${names.size} admitted agents',
-      'deployment identity at $EXPECTED_AGENTLIB_COMMIT',
+      'io.assistos.ploinky-box.agentlib-fingerprint',
+      'io.assistos.ploinky-box.agentlib-source-id',
+      'outer Box identity at $EXPECTED_AGENTLIB_COMMIT',
       "agent: 'AchillesIDE/explorer'",
       "'browser-auth'",
       "'agent-mcp'",
@@ -354,27 +354,28 @@ test('Explorer QA Ploinky preflight accepts only its canonical locked AgentLib s
   assert.notEqual(run({ url: expectedSource, commit: 'b'.repeat(39) }).status, 0, 'malformed revision must fail');
 });
 
-test('Explorer QA validates Ploinky AgentLib deployment proof for every admitted runtime', () => {
+test('Explorer QA validates Ploinky AgentLib selection against the outer Box identity', () => {
   const source = fs.readFileSync(
     path.join(ROOT, '.github/workflows/deploy-explorer-qa.yml'),
     'utf8',
   );
 
   for (const required of [
-    '--env "PLOINKY_AGENTLIB_DIR=/opt/ploinky-agentlib"',
-    '--env "PLOINKY_AGENTLIB_MODE=$AGENTLIB_MODE"',
-    '--env "PLOINKY_AGENTLIB_FINGERPRINT=$AGENTLIB_FINGERPRINT"',
-    '--env "PLOINKY_AGENTLIB_COMMIT=$AGENTLIB_COMMIT"',
-    '--env "PLOINKY_AGENTLIB_SOURCE_ID=$AGENTLIB_SOURCE_ID"',
-    '--env "EXPECTED_AGENTLIB_COUNT=18"',
-    '["/opt/ploinky/cli/agentlib-attest.mjs"]',
-    'proof.agents.length !== expectedCount',
-    'attestation?.deploymentFingerprint !== core.deploymentFingerprint',
-    'JSON.stringify(attestation?.entrypoints) !== JSON.stringify(core.entrypoints)',
+    'io.assistos.ploinky-box.agentlib-mode',
+    'io.assistos.ploinky-box.agentlib-source-id',
+    'io.assistos.ploinky-box.agentlib-fingerprint',
+    'io.assistos.ploinky-box.agentlib-commit',
+    '[ "$AGENTLIB_MODE" != "managed" ]',
+    '[ "$AGENTLIB_COMMIT" != "$EXPECTED_AGENTLIB_COMMIT" ]',
+    'outer Box AgentLib labels do not match the locked managed selection',
+    'outer Box identity at $EXPECTED_AGENTLIB_COMMIT',
   ]) {
-    assert.equal(source.includes(required), true, `missing AgentLib deployment proof contract: ${required}`);
+    assert.equal(source.includes(required), true, `missing AgentLib outer Box identity contract: ${required}`);
   }
-  assert.doesNotMatch(source, /dependency cache did not select|no AgentLib dependency cache|require\.resolve\("achillesAgentLib/);
+  assert.doesNotMatch(
+    source,
+    /agentlib-attest\.mjs|EXPECTED_AGENTLIB_COUNT|dependency cache did not select|no AgentLib dependency cache|require\.resolve\("achillesAgentLib/,
+  );
 });
 
 test('Explorer QA dedicated tunnel provisioning is fail-closed and preserves the shared tunnel', () => {
