@@ -74,8 +74,8 @@
 
                 <section>
                     <h2>Storage Layout</h2>
-                    <p>The storage root keeps metadata files and encrypted content in separate places:</p>
-                    <pre><code>.dpu-storage/
+                    <p>The required <code>DPU_DATA_ROOT</code> keeps metadata files and encrypted content in separate places. Ploinky mounts the managed <code>.data/dpu-data</code> storage at <code>/dpu-data</code>:</p>
+                    <pre><code>/dpu-data/
   state.json
   permissions.manifest.json
   secrets.json

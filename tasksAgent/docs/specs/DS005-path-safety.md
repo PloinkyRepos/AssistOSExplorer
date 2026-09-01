@@ -25,13 +25,15 @@ This document defines mandatory safeguards for backlog path policy, persistence 
 
 Requirement O1: repository root shall be resolved from explicit `repoPath` input and validated as absolute existing directory path.
 
-Requirement O2: backlog paths shall be absolute, inside repository root, and use `.backlog` extension.
+Requirement O2: backlog paths shall be absolute, canonically resolve inside repository root without a symbolic-link escape, and use `.backlog` extension.
 
-Requirement O3: history paths shall be absolute, inside repository root, and use `.history` extension.
+Requirement O3: history paths shall be absolute, canonically resolve inside repository root without a symbolic-link escape, and use `.history` extension.
 
 Requirement O4: task mutation operations shall read and write `.backlog` and `.history` files through the shared Markdown parser and serializer before reporting success.
 
 Requirement O5: backlog tasks shall persist an explicit `task id`, while task order shall remain the order of task blocks in the Markdown document.
+
+Requirement O6: recursive backlog discovery shall exclude private `.data` trees.
 
 Requirement O6: repository validation shall run through task agent tests under `tasksAgent/tests`.
 

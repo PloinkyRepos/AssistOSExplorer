@@ -16,9 +16,11 @@ This specification defines the active DS004-data-structure contract for WebAssis
 `webAssist` stores all operational data under a site-scoped data root. There is no single-site storage contract.
 
 ### Data Root
-- Default root: `path.join(process.env.PLOINKY_WORKSPACE_ROOT, "webassist-data")`.
+- Required root: `path.resolve(process.env.WEBASSIST_DATA_ROOT)`.
 - No CLI/MCP override exists.
-- Site root: `$PLOINKY_WORKSPACE_ROOT/webassist-data/sites/<siteId>/`.
+- The manifest declares persistent storage key `webAssist` at `/workspace/webassist-data` and injects `WEBASSIST_DATA_ROOT={{STORAGE_CONTAINER_PATH}}/data`; the host sandbox translation is `.data/webAssist/data`.
+- Application startup requires the managed persistent root to pre-exist as a non-symlink directory, creates only its `data` child, and canonically revalidates the child beneath that root. It rejects symlinked roots or children and does not fall back to or migrate the retired workspace-level `webassist-data` directory.
+- Site root: `$WEBASSIST_DATA_ROOT/sites/<siteId>/`.
 - `siteId` is required for every runtime, CLI, MCP, and embedded chat operation.
 
 ### Site Folders

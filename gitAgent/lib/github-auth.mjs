@@ -13,7 +13,7 @@ const GITHUB_USER_URL = 'https://api.github.com/user';
 const GITHUB_EMAILS_URL = 'https://api.github.com/user/emails';
 const DEFAULT_CLIENT_ID = 'Ov23liRKJjJHqo3zOOI6';
 const DEFAULT_SCOPE = 'repo workflow read:user user:email';
-const STATE_DIR = path.join('.ploinky', 'state');
+const STATE_DIR = path.join('.data', 'gitAgent', 'github-auth');
 const STATE_FILE = 'git-agent-github-auth.json';
 const STATE_FILE_PREFIX = 'git-agent-github-auth';
 

@@ -26,7 +26,7 @@ Port 3000 (Test website)          Port 8080 (WebAssist server)
 1. Open http://localhost:3000
 2. Open the embedded chat with `siteId=localhost-3000`.
 3. WebAssist chat requests load AKU-backed session context and history.
-4. Runtime tools persist sessions/leads/events into `$PLOINKY_WORKSPACE_ROOT/webassist-data/sites/localhost-3000/.aku/`.
+4. Runtime tools persist sessions/leads/events into `$WEBASSIST_DATA_ROOT/sites/localhost-3000/.aku/`.
 
 ## Files
 

@@ -13,7 +13,7 @@ test('webassist settings build embed URL with siteId and no manual fallback', as
     assert.match(source, /siteId: this\.state\.siteId/);
     assert.match(source, /callTool\('list-sites'/);
     assert.match(source, /toolResult\?\.isError === true/);
-    assert.match(source, /workspace-dir=webassist-data/);
+    assert.match(source, /workspace-dir=\.data\/webAssist\/data/);
 });
 
 test('webassist settings markup includes site selector instead of manual siteId input', async () => {

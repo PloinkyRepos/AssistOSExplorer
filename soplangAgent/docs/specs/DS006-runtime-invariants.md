@@ -46,7 +46,8 @@ Agent-local contract:
 - Authentication: SOPLang operations must use verified invocation context and preserve local tool contract validation. Manifest guest: none.
 - HTTP route surface: No public HTTP route is declared; SOPLang operations are routed through MCP or local plugin integration.
 - Persistent state: State-changing SOPLang flows must preserve workspace persistence and avoid hidden writes outside declared paths. Manifest volumes: none.
-- Runtime storage: Tool persistence, logs, and audit data resolve below the Ploinky-mounted agent home by default, while explicit environment overrides remain supported. Legacy unmounted root paths are not part of the runtime contract.
+- Runtime storage: Tool persistence, logs, and audit data resolve below the Ploinky-mounted agent home by default, while explicit environment overrides remain supported. `last-tool.log` and `achilles-debug.log` both live under `LOGS_FOLDER`, defaulting to `$HOME/.soplang/logs`; source and current-working-directory log files are forbidden. Legacy unmounted root paths are not part of the runtime contract.
+- Workspace scanning: Active Markdown discovery excludes private `.data` trees while retaining the explicitly public root `.ploinky/repos` source mount.
 - Model selection: The agent must use the runtime-provided Achilles model configuration and must not maintain local aliases for Soul Gateway models.
 - Tool isolation: Builder and variable tools must not initialize the Achilles skill bridge or an LLM workflow. The bridge is loaded only for an Achilles-owned tool invocation.
 - Documentation: `docs/index.html`

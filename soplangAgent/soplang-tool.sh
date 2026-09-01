@@ -18,7 +18,7 @@ import {pathToFileURL} from 'url';
 
 const toolDir = process.env.SOPLANG_TOOL_DIR;
 const rawInput = process.env.SOPLANG_TOOL_PAYLOAD || '';
-const logPath = path.join(toolDir, 'last-tool.log');
+const logPath = path.join(process.env.LOGS_FOLDER, 'last-tool.log');
 const toolName = process.env.TOOL_NAME;
 
 if (!toolDir) {

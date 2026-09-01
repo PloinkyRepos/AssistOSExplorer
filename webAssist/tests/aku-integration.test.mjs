@@ -69,20 +69,20 @@ async function cleanupTempDir(tempDir) {
 
 describe('AKU Integration Tests', () => {
     let tempDir;
-    let originalWorkspaceRoot;
+    let originalDataRoot;
 
     beforeEach(async () => {
         tempDir = await createTempDir();
-        originalWorkspaceRoot = process.env.PLOINKY_WORKSPACE_ROOT;
-        process.env.PLOINKY_WORKSPACE_ROOT = tempDir;
-        await fs.mkdir(path.join(tempDir, 'webassist-data', 'sites'), { recursive: true });
+        originalDataRoot = process.env.WEBASSIST_DATA_ROOT;
+        process.env.WEBASSIST_DATA_ROOT = path.join(tempDir, '.data', 'webAssist', 'data');
+        await fs.mkdir(path.join(process.env.WEBASSIST_DATA_ROOT, 'sites'), { recursive: true });
     });
 
     afterEach(async () => {
-        if (originalWorkspaceRoot !== undefined) {
-            process.env.PLOINKY_WORKSPACE_ROOT = originalWorkspaceRoot;
+        if (originalDataRoot !== undefined) {
+            process.env.WEBASSIST_DATA_ROOT = originalDataRoot;
         } else {
-            delete process.env.PLOINKY_WORKSPACE_ROOT;
+            delete process.env.WEBASSIST_DATA_ROOT;
         }
         await cleanupTempDir(tempDir);
     });

@@ -78,6 +78,8 @@ test('lists AI agents from manifest and applies saved overrides', async () => {
     const webAssist = agents.find((agent) => agent.id === 'webAssist');
     assert.equal(webAssist.config.style, 'terminal');
     assert.equal(webAssist.enabled, false);
+    await fs.access(path.join(workspaceRoot, '.data/explorer/avatar-overrides.json'));
+    await assert.rejects(fs.access(path.join(workspaceRoot, '.ploinky/explorer-agent-avatar-overrides.json')));
 });
 
 test('keeps saved agent override as missing when it is no longer in manifest', async () => {
@@ -90,6 +92,28 @@ test('keeps saved agent override as missing when it is no longer in manifest', a
 
     assert.equal(removed.missing, true);
     assert.equal(removed.config.emotion, 'alert');
+});
+
+test('rejects avatar persistence when workspace .data is a symlink and preserves the outside target', async (t) => {
+    const fixtureRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'avatar-settings-symlink-'));
+    t.after(async () => fs.rm(fixtureRoot, { recursive: true, force: true }));
+    const workspaceRoot = path.join(fixtureRoot, 'workspace');
+    const outsideRoot = path.join(fixtureRoot, 'outside');
+    await fs.mkdir(path.join(workspaceRoot, 'explorer'), { recursive: true });
+    await fs.writeFile(path.join(workspaceRoot, 'explorer', 'manifest.json'), JSON.stringify({
+        enable: [{ agent: 'webAssist', profile: 'embedded' }]
+    }));
+    await fs.mkdir(outsideRoot, { recursive: true });
+    await fs.writeFile(path.join(outsideRoot, 'sentinel.txt'), 'outside', 'utf8');
+    await fs.symlink(outsideRoot, path.join(workspaceRoot, '.data'));
+    const store = createAvatarSettingsStore({ fs: await import('node:fs'), path, workspaceRoot });
+
+    await assert.rejects(
+        store.updateAgent('webAssist', { generated: true, emotion: 'alert' }),
+        /must not contain symbolic links/
+    );
+    assert.equal(await fs.readFile(path.join(outsideRoot, 'sentinel.txt'), 'utf8'), 'outside');
+    await assert.rejects(fs.access(path.join(outsideRoot, 'explorer', 'avatar-overrides.json')));
 });
 
 test('reads manifest from Ploinky repo workspace layout', async () => {

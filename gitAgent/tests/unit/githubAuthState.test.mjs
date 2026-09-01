@@ -54,6 +54,21 @@ function createDpuStubServer(requests) {
   });
 }
 
+test('GitHub auth state paths use only the canonical user-scoped .data root', () => {
+  const workspaceRoot = path.join(os.tmpdir(), 'git-auth-path-contract');
+  const adminStatePath = getGithubAuthStateFilePath(workspaceRoot, {
+    user: { id: 'local:admin', username: 'admin' }
+  });
+  const otherStatePath = getGithubAuthStateFilePath(workspaceRoot, {
+    user: { id: 'local:other', username: 'other' }
+  });
+
+  assert.equal(path.dirname(adminStatePath), path.join(workspaceRoot, '.data', 'gitAgent', 'github-auth'));
+  assert.equal(path.dirname(otherStatePath), path.join(workspaceRoot, '.data', 'gitAgent', 'github-auth'));
+  assert.notEqual(adminStatePath, otherStatePath);
+  assert.equal(adminStatePath.includes(`${path.sep}.ploinky${path.sep}state${path.sep}`), false);
+});
+
 test('manual GitHub token state is isolated by routed workspace user', async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'git-auth-state-'));
   const requests = [];
@@ -87,20 +102,24 @@ test('manual GitHub token state is isolated by routed workspace user', async () 
   };
   const adminStatePath = getGithubAuthStateFilePath(workspaceRoot, adminAuth);
   const nicoletaStatePath = getGithubAuthStateFilePath(workspaceRoot, nicoletaAuth);
+  assert.equal(path.dirname(adminStatePath), path.join(workspaceRoot, '.data', 'gitAgent', 'github-auth'));
+  assert.equal(path.dirname(nicoletaStatePath), path.join(workspaceRoot, '.data', 'gitAgent', 'github-auth'));
 
-  await withEnv({
-    PLOINKY_ROUTER_URL: `http://127.0.0.1:${port}`,
-    PLOINKY_AGENT_ID: 'agent:AchillesIDE/gitAgent',
-    PLOINKY_AGENT_PRINCIPAL: 'agent:AchillesIDE/gitAgent',
-    PLOINKY_AGENT_SECRET: 'a'.repeat(64),
-    PLOINKY_AGENT_LIB_DIR: agentLibDir,
-    PLOINKY_DPU_ROUTE: 'dpuAgent'
-  }, async () => {
-    await storeManualGitAuthToken({ workspaceRoot, authInfo: adminAuth, token: 'ghp_admin' });
-    await storeManualGitAuthToken({ workspaceRoot, authInfo: nicoletaAuth, token: 'ghp_nicoleta' });
-  });
-
-  server.close();
+  try {
+    await withEnv({
+      PLOINKY_ROUTER_URL: `http://127.0.0.1:${port}`,
+      PLOINKY_AGENT_ID: 'agent:AchillesIDE/gitAgent',
+      PLOINKY_AGENT_PRINCIPAL: 'agent:AchillesIDE/gitAgent',
+      PLOINKY_AGENT_SECRET: 'a'.repeat(64),
+      PLOINKY_AGENT_LIB_DIR: agentLibDir,
+      PLOINKY_DPU_ROUTE: 'dpuAgent'
+    }, async () => {
+      await storeManualGitAuthToken({ workspaceRoot, authInfo: adminAuth, token: 'ghp_admin' });
+      await storeManualGitAuthToken({ workspaceRoot, authInfo: nicoletaAuth, token: 'ghp_nicoleta' });
+    });
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
 
   assert.notEqual(adminStatePath, nicoletaStatePath);
   const adminState = JSON.parse(await fs.readFile(adminStatePath, 'utf8'));
@@ -110,4 +129,5 @@ test('manual GitHub token state is isolated by routed workspace user', async () 
   assert.equal(adminState.connection.accessToken, '');
   assert.equal(nicoletaState.connection.accessToken, '');
   assert.equal(requests.filter((body) => body?.params?.name === 'dpu_secret_put').length, 2);
+  await assert.rejects(fs.access(path.join(workspaceRoot, '.ploinky', 'state')));
 });

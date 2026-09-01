@@ -15,7 +15,18 @@ test('webAssist manifest keeps the embedded chat reachable as a guest surface', 
     const manifest = await readAgentJson('manifest.json');
 
     assert.equal(manifest.guest, true, 'manifest-level guest auth must remain enabled');
-    assert.equal(manifest.volumes?.['webassist-data'], '/workspace/webassist-data');
+    assert.equal(manifest.volumes?.['webassist-data'], undefined);
+    assert.deepEqual(manifest.runtime?.resources?.persistentStorage, {
+        key: 'webAssist',
+        containerPath: '/workspace/webassist-data'
+    });
+    assert.equal(manifest.runtime?.resources?.env?.WEBASSIST_DATA_ROOT, '{{STORAGE_CONTAINER_PATH}}/data');
+    assert.equal(manifest.volumes?.['.data/webAssist/debuglogs'], '/code/debuglogs');
+    assert.equal(
+        path.posix.join('.data', manifest.runtime.resources.persistentStorage.key, 'data'),
+        '.data/webAssist/data',
+        'host-sandbox translation must match the UI workspace-dir value'
+    );
     assert.equal(
         Object.prototype.hasOwnProperty.call(manifest, 'httpServices'),
         false,

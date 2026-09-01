@@ -29,13 +29,13 @@ Requirement O2: repository path arguments shall be rejected when they escape all
 
 Requirement O3: remote Git operations shall support token propagation from auth metadata and stored token state.
 
-Requirement O4: GitHub device flow state shall persist under user-scoped workspace state paths and token material shall remain in dedicated secret storage.
+Requirement O4: GitHub device flow state shall persist only under user-scoped files in `.data/gitAgent/github-auth/`, retaining the user/account filename variants, and token material shall remain in dedicated secret storage.
 
 Requirement O4a: `gitAgent/manifest.json` shall not declare an `identity` block or DPU-specific `capabilities` or `permissions.secrets.allowedRoles`. Ploinky derives the agent principal as `agent:<repo>/<agent>`, and DPU owns the agent's secret-role ceiling via `agentPolicies` in `permissions.manifest.json`.
 
 Requirement O4b: when `gitAgent` stores the GitHub token in DPU secret storage, it shall use a router-minted `dpuGitSecrets` user delegation, call authenticated DPU `dpu_secret_*` tools through a signed Agent Assertion, preserve user ownership on a per-routed-user secret key, and request only the concrete `read` grant needed for remote Git operations. DPU validates that requested role against the DPU-owned agent policy; if no policy exists for the caller's principal, DPU rejects the grant. Guests and out-of-band calls shall not write or delete GitHub token secrets.
 
-Requirement O4c: if an existing deployment contains the pre-delegation agent-owned GitHub token record, `gitAgent` may delete that stale record through its internal agent-owned compatibility alias and retry the same write as a user-owned delegated secret. Other DPU failures must remain fail-loud.
+Requirement O4c: authentication persistence is a hard-cut contract. `gitAgent` shall not read, migrate, delete, or alias records from an earlier state location, and DPU failures must remain fail-loud.
 
 Requirement O5: configuration and documentation shall remain aligned with `manifest.json` and `mcp-config.json`.
 

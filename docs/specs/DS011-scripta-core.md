@@ -15,7 +15,7 @@ This specification defines the Explorer-owned core. WebMeet board placement, roo
 
 Each document, chapter, paragraph, variant, and variant image has a stable identifier. The document id comes from AssistOS Markdown metadata and remains the identity after rename or move; a filesystem path is only the current location. When a Markdown document has no document id, Explorer generates one and persists it in Markdown during the same first initialization before returning a usable editor or SCRIPTA projection.
 
-Explorer stores canonical binary state at `.ploinky/data/explorer/automerge/documents/<document-id>.automerge`. SCRIPTA's path-free, sanitized browser replica is stored separately at `.ploinky/data/explorer/automerge/scripta-collaboration/<document-id>.automerge`. No `.automerge` sidecar is created beside the Markdown file. The canonical state contains the complete private model; the collaboration replica contains only the fields admitted by the public collaboration contract.
+Explorer stores canonical binary state at `.data/explorer/automerge/documents/<document-id>.automerge`. SCRIPTA's path-free, sanitized browser replica is stored separately at `.data/explorer/automerge/scripta-collaboration/<document-id>.automerge`. No `.automerge` sidecar is created beside the Markdown file. The canonical state contains the complete private model; the collaboration replica contains only the fields admitted by the public collaboration contract.
 
 ## Canonical Markdown Format
 

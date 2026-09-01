@@ -39,7 +39,7 @@
 
                 <section>
                     <h2>Runtime Behavior</h2>
-                    <p>At runtime each MCP tool call is executed through <code>soplangAgent/soplang-tool.sh</code>. Explorer and related flows call the agent for build and execution tasks, while SOPLang-specific orchestration stays inside <code>soplangAgent</code> rather than leaking into document plugins or toolbar code.</p>
+                    <p>At runtime each MCP tool call is executed through <code>soplangAgent/soplang-tool.sh</code>. Explorer and related flows call the agent for build and execution tasks, while SOPLang-specific orchestration stays inside <code>soplangAgent</code> rather than leaking into document plugins or toolbar code. Active Markdown discovery excludes private <code>.data</code> trees while retaining the public root <code>.ploinky/repos</code> source mount. Runtime logs <code>last-tool.log</code> and <code>achilles-debug.log</code> stay under the configured <code>LOGS_FOLDER</code>, defaulting to <code>$HOME/.soplang/logs</code>.</p>
                     <p>The Advanced Editor SCRIPTA plugin is a thin adapter over Explorer's shared, whitelisted variants component. The shared component renders tabs, votes, and proposals; the plugin retains document identity and persistence through the Advanced Editor presenter. Variants use canonical <code>p-variant-*</code> operations: everyone may vote, while only the participant who added a variant may edit or delete it.</p>
                     <div class="doc-callout">
                         <p><strong>Validation rule:</strong> run <code>npm test</code> from <code>soplangAgent/</code> for every code change, together with docs and specs updates.</p>

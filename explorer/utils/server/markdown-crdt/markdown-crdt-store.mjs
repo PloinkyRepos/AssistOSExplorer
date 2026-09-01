@@ -21,8 +21,9 @@ import {
   updateMarkdownModelInDraft,
   writeMarkdownModelToDraft
 } from './markdown-crdt-model.mjs';
+import { createExplorerPrivateDataBoundary } from '../private-data-boundary.mjs';
 
-const STORE_ROOT = ['.ploinky', 'data', 'explorer', 'automerge', 'documents'];
+const STORE_ROOT = ['.data', 'explorer', 'automerge', 'documents'];
 const DELETION_ROOT = 'pending-deletions';
 const STORE_LOCK_DIRECTORY = '.locks';
 const STORE_LOCK_TIMEOUT_MS = 10_000;
@@ -392,6 +393,7 @@ export function createMarkdownCrdtStore({
 }) {
   const storeRoot = path.join(workspaceRoot, ...STORE_ROOT);
   const deletionRoot = path.join(storeRoot, DELETION_ROOT);
+  const privateData = createExplorerPrivateDataBoundary({ fs, path, workspaceRoot });
   const localLocks = new Map();
   let recoveryPromise = null;
 
@@ -487,8 +489,11 @@ export function createMarkdownCrdtStore({
   }
 
   async function acquireDocumentLock(scope) {
-    const lockPath = lockPathForScope(scope);
-    await fs.mkdir(path.dirname(lockPath), { recursive: true });
+    const lexicalLockPath = lockPathForScope(scope);
+    const lockPath = await privateData.resolveFile(
+      ['automerge', 'documents', STORE_LOCK_DIRECTORY, path.basename(lexicalLockPath)],
+      { createParent: true }
+    );
     const startedAt = Date.now();
     const token = crypto.randomUUID();
     while (true) {
@@ -578,18 +583,23 @@ export function createMarkdownCrdtStore({
   }
 
   async function readAutomergeState(documentId) {
-    const statePath = statePathForDocumentId(documentId);
+    const statePath = await privateData.resolveFile([
+      'automerge',
+      'documents',
+      path.basename(statePathForDocumentId(documentId))
+    ]);
     if (!await pathExists(fs, statePath)) return null;
     const binary = await fs.readFile(statePath);
     return loadDocument(binary);
   }
 
   async function readAutomergeStateByPath(validPath) {
-    if (!await pathExists(fs, storeRoot)) return null;
-    const entries = await fs.readdir(storeRoot);
+    const safeStoreRoot = await privateData.resolveDirectory(['automerge', 'documents']);
+    if (!await pathExists(fs, safeStoreRoot)) return null;
+    const entries = await fs.readdir(safeStoreRoot);
     for (const entry of entries) {
       if (!entry.endsWith('.automerge')) continue;
-      const statePath = path.join(storeRoot, entry);
+      const statePath = await privateData.resolveFile(['automerge', 'documents', entry]);
       const document = loadDocument(await fs.readFile(statePath));
       if (document?.path === validPath) {
         return document;
@@ -599,8 +609,11 @@ export function createMarkdownCrdtStore({
   }
 
   async function writeAutomergeState(document) {
-    await fs.mkdir(storeRoot, { recursive: true });
-    const statePath = statePathForDocumentId(document.documentId);
+    const statePath = await privateData.resolveFile([
+      'automerge',
+      'documents',
+      path.basename(statePathForDocumentId(document.documentId))
+    ], { createParent: true });
     const temporary = `${statePath}.${process.pid}.${crypto.randomUUID()}.tmp`;
     try {
       await fs.writeFile(temporary, Buffer.from(saveDocument(document)));
@@ -662,7 +675,11 @@ export function createMarkdownCrdtStore({
       draft.updatedAt = new Date().toISOString();
     });
     const markdown = markdownFromDocument(document);
-    const statePath = statePathForDocumentId(document.documentId);
+    const statePath = await privateData.resolveFile([
+      'automerge',
+      'documents',
+      path.basename(statePathForDocumentId(document.documentId))
+    ], { createParent: true });
     const previousState = await fs.readFile(statePath).catch((error) => {
       if (error?.code === 'ENOENT') return null;
       throw error;
@@ -830,7 +847,11 @@ export function createMarkdownCrdtStore({
     }
     const model = ensureDocumentId(args.model || {});
     const documentId = documentIdFromState(model);
-    const statePath = statePathForDocumentId(documentId);
+    const statePath = await privateData.resolveFile([
+      'automerge',
+      'documents',
+      path.basename(statePathForDocumentId(documentId))
+    ], { createParent: true });
     const temporaryMarkdown = `${validPath}.${process.pid}.${crypto.randomUUID()}.scripta-create.tmp`;
     let response = null;
     try {
@@ -980,7 +1001,11 @@ export function createMarkdownCrdtStore({
     if (!isMarkdownPath(validPath, path)) {
       throw new Error('Markdown CRDT tools only support .md files.');
     }
-    const statePath = statePathForDocumentId(document.documentId);
+    const statePath = await privateData.resolveFile([
+      'automerge',
+      'documents',
+      path.basename(statePathForDocumentId(document.documentId))
+    ], { createParent: true });
     const [previousMarkdown, previousState] = await Promise.all([
       fs.readFile(validPath, 'utf8'),
       fs.readFile(statePath).catch((error) => error?.code === 'ENOENT' ? null : Promise.reject(error))
@@ -1169,7 +1194,11 @@ export function createMarkdownCrdtStore({
       const transactionDir = deletionPath(transactionId);
       const stagedMarkdown = path.join(transactionDir, 'document.md');
       const stagedState = path.join(transactionDir, 'document.automerge');
-      const statePath = statePathForDocumentId(documentId);
+      const statePath = await privateData.resolveFile([
+        'automerge',
+        'documents',
+        path.basename(statePathForDocumentId(documentId))
+      ], { createParent: true });
       const relatedArtifacts = (Array.isArray(args.relatedArtifacts) ? args.relatedArtifacts : [])
         .map(normalizeRelatedArtifact);
       await fs.mkdir(transactionDir, { recursive: true });
@@ -1243,7 +1272,11 @@ export function createMarkdownCrdtStore({
     return withCrdtLock(scope, async () => {
       const { transactionDir, transaction } = await readDeletionTransaction(args.transactionId);
       const validPath = await validatePath(transaction.path);
-      const statePath = statePathForDocumentId(transaction.documentId);
+      const statePath = await privateData.resolveFile([
+        'automerge',
+        'documents',
+        path.basename(statePathForDocumentId(transaction.documentId))
+      ], { createParent: true });
       if (await pathExists(fs, validPath) || await pathExists(fs, statePath)) {
         throw new Error('Cannot roll back SCRIPTA deletion because the destination already exists.');
       }
@@ -1293,7 +1326,10 @@ export function createMarkdownCrdtStore({
 
   async function recoverPendingDeletions() {
     const staleAfterMs = Math.max(0, Number(transactionStaleMs) || TRANSACTION_STALE_MS);
-    const entries = await fs.readdir(deletionRoot, { withFileTypes: true }).catch((error) => {
+    const safeDeletionRoot = await privateData.resolveDirectory(
+      ['automerge', 'documents', DELETION_ROOT]
+    );
+    const entries = await fs.readdir(safeDeletionRoot, { withFileTypes: true }).catch((error) => {
       if (error?.code === 'ENOENT') return [];
       throw error;
     });
@@ -1316,6 +1352,7 @@ export function createMarkdownCrdtStore({
   }
 
   async function ensureRecovered() {
+    await privateData.resolveDirectory(['automerge', 'documents'], { create: true });
     if (!recoveryPromise) recoveryPromise = recoverPendingDeletions();
     return recoveryPromise;
   }
@@ -1375,8 +1412,14 @@ export function createMarkdownCrdtStore({
       await ensureRecovered();
       return prepareRemove(args);
     },
-    commitRemove,
-    rollbackRemove,
+    commitRemove: async (args) => {
+      await ensureRecovered();
+      return commitRemove(args);
+    },
+    rollbackRemove: async (args) => {
+      await ensureRecovered();
+      return rollbackRemove(args);
+    },
     inspect: async (args, operation) => {
       await ensureRecovered();
       return inspect(args, operation);

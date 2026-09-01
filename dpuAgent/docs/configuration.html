@@ -81,7 +81,7 @@
                             </tr>
                             <tr>
                                 <td><code>DPU_DATA_ROOT</code></td>
-                                <td>Optional explicit storage root. If missing, storage falls back next to the resolved workspace root.</td>
+                                <td>Required mounted storage root. The runtime fails closed when it is absent; Ploinky supplies <code>/dpu-data</code> from managed <code>.data/dpu-data</code> storage.</td>
                             </tr>
                             <tr>
                                 <td><code>DPU_WORKSPACE_ROOT</code></td>

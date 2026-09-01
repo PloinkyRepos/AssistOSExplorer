@@ -442,7 +442,7 @@ export class WebassistSettingsSettings {
             this.renderStatus();
             return;
         }
-        const webchatUrl = `${baseUrl}/webchat?agent=achilles-cli&workspace-dir=webassist-data`;
+        const webchatUrl = `${baseUrl}/webchat?agent=achilles-cli&workspace-dir=.data/webAssist/data`;
         window.open(webchatUrl, '_blank', 'noopener');
         this.state.status = 'Admin webchat opened in a new tab.';
         this.state.statusType = '';

@@ -6,7 +6,7 @@ import { MainAgent } from 'achillesAgentLib';
 import { VISITOR_FLOW_SYSTEM_PROMPT } from './prompts/visitor-flow-system-prompt.mjs';
 import { loadAkuContext } from './runtime/load-aku-context.mjs';
 import { appendSessionTurn } from './runtime/update-session.mjs';
-import { resolveSiteDataDir } from './runtime/akuStore.mjs';
+import { initializeWebAssistDataRoot, resolveSiteDataDir } from './runtime/akuStore.mjs';
 
 function getCodeRoot() {
     return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -94,6 +94,7 @@ export async function createWebAssistAgent({
     logger = null,
     mainAgentOptions = {},
 } = {}) {
+    await initializeWebAssistDataRoot();
     const codeRoot = getCodeRoot();
 
     const mainAgent = new MainAgent(buildBaseAgentOptions({

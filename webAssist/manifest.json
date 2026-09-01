@@ -10,9 +10,19 @@
       }
     ]
   },
+  "runtime": {
+    "resources": {
+      "persistentStorage": {
+        "key": "webAssist",
+        "containerPath": "/workspace/webassist-data"
+      },
+      "env": {
+        "WEBASSIST_DATA_ROOT": "{{STORAGE_CONTAINER_PATH}}/data"
+      }
+    }
+  },
   "volumes": {
-    ".data/webAssist/debuglogs": "/code/debuglogs",
-    "webassist-data": "/workspace/webassist-data"
+    ".data/webAssist/debuglogs": "/code/debuglogs"
   },
   "profiles": {
     "default": {
@@ -22,16 +32,11 @@
         },
         "OPENCODE_API_KEY": {
           "required": false
-        },
-        "PLOINKY_WORKSPACE_ROOT": {
-          "required": false
         }
       }
     },
     "embedded": {
-      "env": {
-        "PLOINKY_WORKSPACE_ROOT": ""
-      }
+      "env": {}
     }
   },
   "cli": "node /code/src/index.mjs",

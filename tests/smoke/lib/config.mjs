@@ -33,7 +33,7 @@ const runId = String(process.env.SMOKE_RUN_ID || defaultRunId()).replace(/[^A-Za
 const qaAcceptance = readBool('SMOKE_QA_ACCEPTANCE', false);
 const workspaceRoot = resolveOptionalPath(process.env.SMOKE_WORKSPACE_ROOT);
 const dpuDataRoot = resolveOptionalPath(process.env.SMOKE_DPU_DATA_ROOT)
-  || (workspaceRoot ? path.join(workspaceRoot, '.ploinky', 'data', 'dpu-data') : path.join(repoRoot, '.ploinky', 'data', 'dpu-data'));
+  || (workspaceRoot ? path.join(workspaceRoot, '.data', 'dpu-data') : path.join(repoRoot, '.data', 'dpu-data'));
 const artifactRoot = path.resolve(
   process.env.SMOKE_ARTIFACT_DIR || path.join(repoRoot, '.ploinky', 'test-artifacts', 'headless-smoke', runId)
 );

@@ -13,7 +13,7 @@ Materialized research files remain in private DPU storage. Authorized users and 
 
 ## Runtime
 
-`dpuAgent` runs as a Ploinky MCP-first agent through the bundled Ploinky `AgentServer.mjs`. Under Ploinky, `DPU_MASTER_KEY` is a per-agent generated secret provided through `{{generatedSecret:DPU_MASTER_KEY}}`, and the router is the only public entry point for DPU MCP calls.
+`dpuAgent` runs as a Ploinky MCP-first agent through the bundled Ploinky `AgentServer.mjs`. Under Ploinky, `DPU_MASTER_KEY` is a per-agent generated secret provided through `{{generatedSecret:DPU_MASTER_KEY}}`, `DPU_DATA_ROOT` is required and resolves to the managed `/dpu-data` mount backed by `.data/dpu-data`, and the router is the only public entry point for DPU MCP calls. The runtime fails closed instead of deriving a storage fallback.
 
 Required or relevant environment variables:
 

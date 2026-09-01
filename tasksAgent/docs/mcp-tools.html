@@ -64,7 +64,7 @@
 
                 <section>
                     <h2>Common Input Rules</h2>
-                    <p><code>repoPath</code> is required and must resolve to an existing absolute directory. <code>backlogPath</code> must be absolute, must stay inside <code>repoPath</code>, and must end in <code>.backlog</code>, while history listing applies parallel <code>.history</code> constraints. The file content is Markdown, not JSON, and each task keeps a persisted task id.</p>
+                    <p><code>repoPath</code> is required and must resolve to an existing absolute directory. <code>backlogPath</code> must be absolute, must stay canonically inside <code>repoPath</code> without a symbolic-link escape, and must end in <code>.backlog</code>, while history listing applies parallel <code>.history</code> constraints. Recursive backlog discovery excludes private <code>.data</code> trees. The file content is Markdown, not JSON, and each task keeps a persisted task id.</p>
                 </section>
 
                 <section>

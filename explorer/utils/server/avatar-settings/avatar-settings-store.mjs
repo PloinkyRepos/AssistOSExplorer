@@ -1,6 +1,8 @@
 import { importAxiFaceAssetLoader } from './axi-face-runtime.mjs';
+import { createExplorerPrivateDataBoundary } from '../private-data-boundary.mjs';
 
-const STORE_FILE = '.ploinky/explorer-agent-avatar-overrides.json';
+const STORE_FILE = '.data/explorer/avatar-overrides.json';
+const STORE_FILE_SEGMENTS = Object.freeze(['avatar-overrides.json']);
 const MANIFEST_CANDIDATES = Object.freeze([
   'explorer/manifest.json',
   '.ploinky/repos/AchillesIDE/explorer/manifest.json'
@@ -231,9 +233,9 @@ function extractAgentAvatarDefaults(manifest) {
 }
 
 export function createAvatarSettingsStore({ fs, path, workspaceRoot, fetchImpl = globalThis.fetch }) {
-  const storePath = path.join(workspaceRoot, STORE_FILE);
   const cwd = path.resolve(process.cwd());
   const fsApi = fs?.promises || fs;
+  const privateData = createExplorerPrivateDataBoundary({ fs: fsApi, path, workspaceRoot });
   const manifestPaths = Array.from(new Set([
     ...MANIFEST_CANDIDATES.map((candidate) => path.join(workspaceRoot, candidate)),
     path.join(cwd, 'manifest.json'),
@@ -255,6 +257,7 @@ export function createAvatarSettingsStore({ fs, path, workspaceRoot, fetchImpl =
   }
 
   async function readStore() {
+    const storePath = await privateData.resolveFile(STORE_FILE_SEGMENTS);
     return normalizeStore(await readJson(storePath, null));
   }
 
@@ -357,6 +360,7 @@ export function createAvatarSettingsStore({ fs, path, workspaceRoot, fetchImpl =
       workspaceRoot,
       ...options
     });
+    const storePath = await privateData.resolveFile(STORE_FILE_SEGMENTS, { createParent: true });
     await writeJson(storePath, store);
     return store.agents[normalizedAgentId];
   }
@@ -368,6 +372,7 @@ export function createAvatarSettingsStore({ fs, path, workspaceRoot, fetchImpl =
     }
     const store = await readStore();
     store.enabled[normalizedAgentId] = Boolean(enabled);
+    const storePath = await privateData.resolveFile(STORE_FILE_SEGMENTS, { createParent: true });
     await writeJson(storePath, store);
     return { id: normalizedAgentId, enabled: store.enabled[normalizedAgentId] };
   }

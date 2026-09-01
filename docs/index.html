@@ -90,7 +90,8 @@
             <h2>Agents and Plugins</h2>
             <p>Explorer provides the shared workspace shell. The integrations below are declared by <code>explorer/manifest.json</code>
                 or discovered from verified <code>IDE-plugins</code> manifests. Each owning agent remains responsible
-                for its domain behavior, authorization, and protected state.</p>
+                for its domain behavior, authorization, and protected state. Runtime-owned workspace data volumes live below
+                <code>.data/</code>; <code>.ploinky/repos</code> is the single named source-state volume exception.</p>
 
             <h3>Application Agents and Plugins</h3>
             <div class="agent-grid">
