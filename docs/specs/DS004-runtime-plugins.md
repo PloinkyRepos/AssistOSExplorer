@@ -23,6 +23,8 @@ Mount contributions in `file-exp:toolbar` use manifest-first activation. Explore
 
 A menu contribution declares its Explorer slots and stable presentation metadata. Explorer creates the menu entry synchronously from that metadata and must not import the plugin module while opening the menu. The first click sets a loading state only on the selected item, builds the generic filesystem context, imports the module, and calls `activateMenuItem()`. No asynchronous plugin operation may add or remove menu rows during an open interaction.
 
+On the initial file-browser route, Explorer may mount the shell before runtime discovery completes. As soon as the catalog is discovered, the host must refresh manifest-backed menu metadata while preserving any open action menu. The later component-mount readiness phase may mount plugin components, but it must not rebuild or close that menu.
+
 An unavailable plugin component or dependent agent must produce a visible, recoverable interface error without preventing unrelated Explorer functionality from loading.
 
 ## Conclusion

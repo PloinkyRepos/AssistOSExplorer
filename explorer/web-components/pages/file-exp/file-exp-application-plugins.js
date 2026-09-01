@@ -605,9 +605,9 @@ export async function renderApplicationPluginSlots(fileExp) {
 }
 
 export function attachApplicationPluginHost(fileExp) {
-    const rerender = () => {
+    const refreshPluginMenuMetadata = ({ preserveOpenMenu = false } = {}) => {
         fileExp.toolbarMenuItems = [];
-        if (typeof fileExp.closeActionMenu === 'function') {
+        if (!preserveOpenMenu && typeof fileExp.closeActionMenu === 'function') {
             fileExp.closeActionMenu(false);
         }
         if (typeof fileExp.renderEntries === 'function') {
@@ -620,9 +620,15 @@ export function attachApplicationPluginHost(fileExp) {
                 console.error('[app-plugins] Failed to refresh toolbar menu items', error);
             }
         }
+    };
+    const renderPluginSlots = () => {
         renderApplicationPluginSlots(fileExp).catch((error) => {
             console.error('[app-plugins] Failed to render application plugin slots', error);
         });
+    };
+    const rerender = () => {
+        refreshPluginMenuMetadata();
+        renderPluginSlots();
     };
     const rerenderForToolbarViewport = () => {
         const nextMobileToolbarLayout = isMobileToolbarLayout();
@@ -637,6 +643,11 @@ export function attachApplicationPluginHost(fileExp) {
     const handleRuntimePluginsUpdated = (event) => {
         if (event?.detail?.phase === 'discovered') {
             stageApplicationPluginPlaceholders(fileExp);
+            refreshPluginMenuMetadata({ preserveOpenMenu: true });
+            return;
+        }
+        if (event?.detail?.phase === 'ready') {
+            renderPluginSlots();
             return;
         }
         rerender();
