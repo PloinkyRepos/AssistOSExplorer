@@ -175,8 +175,8 @@ test.describe('WebMeet native external-network matrix @external', () => {
       expect(await browserEgress(pageA, echoUrl), 'browser A external IPv4').toBe(expectedEgressA);
       expect(await browserEgress(pageB, echoUrl), 'browser B external IPv4').toBe(expectedEgressB);
       const [principalA, principalB] = await Promise.all([
-        signIn(pageA, smokeConfig.primaryUser, '/dashboard', { requireConfiguredPrincipal: true }),
-        signIn(pageB, smokeConfig.secondaryUser, '/dashboard', { requireConfiguredPrincipal: true }),
+        signIn(pageA, smokeConfig.primaryUser, '/', { requireConfiguredPrincipal: true }),
+        signIn(pageB, smokeConfig.secondaryUser, '/', { requireConfiguredPrincipal: true }),
       ]);
       const [verifiedPrincipalA, verifiedPrincipalB] = assertDistinctAuthenticatedPrincipals(principalA, principalB);
 

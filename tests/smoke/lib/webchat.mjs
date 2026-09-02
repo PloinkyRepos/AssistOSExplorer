@@ -20,7 +20,7 @@ export function taggedWebchatPath() {
 }
 
 export async function openTaggedWebchat(page, account = smokeConfig.primaryUser) {
-  await signIn(page, account, '/dashboard');
+  await signIn(page, account, '/');
   await page.goto(taggedWebchatPath(), { waitUntil: 'load' });
   await expect(page.locator('#cmd')).toBeVisible();
   await cancelWebchatGenerationIfActive(page);

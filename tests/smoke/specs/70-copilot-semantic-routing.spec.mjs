@@ -14,7 +14,7 @@ function copilotWebchatPath() {
 }
 
 async function openCopilotWebchat(page, account = smokeConfig.primaryUser) {
-    await signIn(page, account, '/dashboard');
+    await signIn(page, account, '/');
     await page.goto(copilotWebchatPath(), { waitUntil: 'domcontentloaded' });
     await expect(page.locator('#cmd')).toBeVisible();
     await expect(page.locator('#send')).toBeVisible();

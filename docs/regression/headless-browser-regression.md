@@ -119,7 +119,7 @@ fail-closed and is not evidence of managed-bridge activation. Missing or stale
 assignment evidence, cross-interface assignment, missing or extra listeners,
 wildcard listeners, and unrelated binds fail the gate.
 
-The baseline proves the dashboard, Explorer shell, and routed WebChat shell
+The baseline proves the active Router root landing, Explorer shell, and routed WebChat shell
 through Router. It is distinct from the WebMeet two-account ScreenShare gate
 and the external-network direct UDP, relay UDP, and relay TLS matrix; none of
 those gates substitutes for another.
@@ -144,9 +144,9 @@ Screen sharing is browser-environment sensitive. If headless Chromium rejects `n
 
 ## Shared Login And Account Steps
 
-1. Open `/dashboard` through the Ploinky router.
+1. Open `/` through the Ploinky router to enter its selected static agent, or use the admitted Explorer route `/explorer/index.html`.
 2. If redirected to login, submit the configured username and password.
-3. Assert the dashboard or Explorer shell loads without direct-agent URLs.
+3. Assert the Router landing or Explorer shell loads without direct-agent URLs.
 4. For account-creation coverage, log in as `admin`, open the Explorer account/admin menu, create `e2e-owner-<run-id>` and `e2e-member-<run-id>`, then verify both accounts can log in through separate browser contexts.
 5. If the account creation UI is unavailable in the active profile, record that as a product gap for this regression. Do not silently replace it with a direct database or container mutation.
 
@@ -272,7 +272,7 @@ await context.addInitScript(() => {
 Steps:
 
 1. Create two browser contexts: context A for `e2e-owner-<run-id>` and context B for `e2e-member-<run-id>`.
-2. Log both users in through `/dashboard`.
+2. Log both users in through the admitted Explorer route `/explorer/index.html`.
 3. In context A, open Explorer and press the WebMeet toolbar button.
 4. Before joining, open the Settings button from the WebMeet dashboard modal header and verify the panel exposes separate `Audio & video` and `Background & privacy` sections.
 5. In context A, select `Blur background`, apply settings, then reopen Settings and verify the choice persisted before room join.

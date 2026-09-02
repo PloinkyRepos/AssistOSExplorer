@@ -39,7 +39,7 @@ test.describe('GPTResearcher Router publication @external', () => {
   test('real HTML, assets, API, redirect, and WebSocket stay under the configured base path', async ({ page }, testInfo) => {
     test.skip(!smokeConfig.flags.gptResearcher, 'SMOKE_GPT_RESEARCHER is off.');
     const routerOrigin = new URL(smokeConfig.baseURL).origin;
-    await signIn(page, smokeConfig.primaryUser, '/dashboard');
+    await signIn(page, smokeConfig.primaryUser, '/');
 
     const requests = [];
     const websocketEvents = [];

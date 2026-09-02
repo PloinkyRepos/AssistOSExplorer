@@ -83,7 +83,7 @@ export async function hasAuthenticatedSession(request) {
 export async function signIn(
   page,
   account = smokeConfig.primaryUser,
-  returnTo = '/dashboard',
+  returnTo = '/',
   { requireConfiguredPrincipal = false } = {},
 ) {
   await page.goto(returnTo, { waitUntil: 'load' });
@@ -114,7 +114,7 @@ export async function signIn(
   return readAuthenticatedPrincipal(page, requireConfiguredPrincipal ? account : undefined);
 }
 
-export async function trySignIn(page, account = smokeConfig.primaryUser, returnTo = '/dashboard') {
+export async function trySignIn(page, account = smokeConfig.primaryUser, returnTo = '/') {
   try {
     await signIn(page, account, returnTo);
     return true;

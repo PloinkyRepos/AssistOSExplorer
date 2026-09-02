@@ -220,8 +220,10 @@ cd ${WORKSPACE_ROOT}/AssistOSExplorer/tests/smoke
 SMOKE_BASE_URL=http://127.0.0.1:18080 npm test -- --project=chromium specs/00-router-auth.spec.mjs
 ```
 
-It proves the dashboard, Explorer shell, and routed WebChat shell through
-Router. It is not the separate WebMeet external-network or two-account
+It proves the active Router root landing, Explorer shell, and routed WebChat
+shell. Authentication starts at `/`, which selects the configured static agent;
+the retired `/dashboard` route is not a login destination. It is not the separate
+WebMeet external-network or two-account
 ScreenShare gate, and none of those gates substitutes for another.
 
 ## Ploinky Core WebTTY Release Gate
@@ -278,7 +280,7 @@ a missing or extra listener, a wildcard, or an unrelated bind fails closed.
 
 Default smoke checks:
 
-- Router auth, dashboard, Explorer shell, and WebChat shell.
+- Router auth, root landing, Explorer shell, and WebChat shell.
 - WebChat file and folder uploads through the browser.
 - WebChat upload containment evidence from the upload response: `uploads/<sessionId>/...`.
 - Session-scoped WebChat `@` file suggestions by comparing two browser contexts.

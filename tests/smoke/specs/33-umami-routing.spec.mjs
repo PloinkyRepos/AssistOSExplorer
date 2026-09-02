@@ -47,7 +47,7 @@ test.describe('Umami Router publication @external', () => {
     const umamiPassword = required('SMOKE_UMAMI_PASSWORD');
     const routerOrigin = new URL(smokeConfig.baseURL).origin;
 
-    await signIn(page, smokeConfig.primaryUser, '/dashboard');
+    await signIn(page, smokeConfig.primaryUser, '/');
     const requests = [];
     page.on('request', (request) => requests.push({
       url: request.url(),
