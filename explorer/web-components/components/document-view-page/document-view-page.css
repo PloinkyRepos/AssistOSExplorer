@@ -212,7 +212,7 @@ document-view-page {
 }
 
 .document-page-header {
-    z-index: 1;
+    z-index: 3;
     border-bottom: 1px solid var(--very-light-gray);
     width: 100%;
     position: sticky;
