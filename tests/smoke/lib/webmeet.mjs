@@ -16,17 +16,18 @@ function webMeetDashboardPath() {
 }
 
 export async function openWebMeet(page, account = smokeConfig.primaryUser, options = {}) {
-  const { expectCreateRoom = true } = options;
+  const { expectCreateRoom = true, requireConfiguredPrincipal = false } = options;
   if (smokeConfig.flags.webmeetMedia) {
     await page.addInitScript(() => {
       globalThis.WEBMEET_MEDIA_DEBUG = true;
     });
   }
-  await signIn(page, account, webMeetDashboardPath());
+  const principal = await signIn(page, account, webMeetDashboardPath(), { requireConfiguredPrincipal });
   await expect(page.locator('div.webmeet-dashboard')).toBeVisible({ timeout: smokeConfig.timeouts.navigation });
   if (expectCreateRoom) {
     await expect(page.locator('#webmeetCreateRoomButton')).toBeVisible();
   }
+  return principal;
 }
 
 export async function openStandaloneWebMeet(page, { roomId = '' } = {}) {

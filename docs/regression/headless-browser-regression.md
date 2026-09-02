@@ -144,8 +144,8 @@ Screen sharing is browser-environment sensitive. If headless Chromium rejects `n
 
 ## Shared Login And Account Steps
 
-1. Open `/` through the Ploinky router to enter its selected static agent, or use the admitted Explorer route `/explorer/index.html`.
-2. If redirected to login, submit the configured username and password.
+1. Select the intended routed surface: `/` for the Router landing case, the admitted Explorer route `/explorer/index.html`, or the case's WebChat/service route. Do not open Explorer as a temporary authentication page before another surface.
+2. Check the Router session first. If authentication is needed, open `/auth/login` with the intended surface as `returnTo` and submit the configured username and password only on that Router page.
 3. Assert the Router landing or Explorer shell loads without direct-agent URLs.
 4. For account-creation coverage, log in as `admin`, open the Explorer account/admin menu, create `e2e-owner-<run-id>` and `e2e-member-<run-id>`, then verify both accounts can log in through separate browser contexts.
 5. If the account creation UI is unavailable in the active profile, record that as a product gap for this regression. Do not silently replace it with a direct database or container mutation.

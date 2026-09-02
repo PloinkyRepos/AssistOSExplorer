@@ -47,15 +47,30 @@ test.describe('Umami Router publication @external', () => {
     const umamiPassword = required('SMOKE_UMAMI_PASSWORD');
     const routerOrigin = new URL(smokeConfig.baseURL).origin;
 
-    await signIn(page, smokeConfig.primaryUser, '/');
     const requests = [];
-    page.on('request', (request) => requests.push({
-      url: request.url(),
-      method: request.method(),
-      resourceType: request.resourceType(),
-    }));
+    const documentResponses = [];
+    let authenticating = true;
+    page.on('request', (request) => {
+      const url = new URL(request.url());
+      // Router login and the helper's principal check are not Umami requests.
+      if (authenticating && url.origin === routerOrigin
+        && ((url.pathname === '/auth/login' && ['GET', 'POST'].includes(request.method()))
+          || (url.pathname === '/auth/token' && request.method() === 'GET'))) return;
+      requests.push({
+        url: request.url(),
+        method: request.method(),
+        resourceType: request.resourceType(),
+      });
+    });
+    page.on('response', (response) => {
+      if (response.request().isNavigationRequest() && response.frame() === page.mainFrame()
+        && new URL(response.url()).pathname.startsWith(DASHBOARD_PREFIX)) documentResponses.push(response);
+    });
 
-    const response = await page.goto(DASHBOARD_PREFIX, { waitUntil: 'domcontentloaded' });
+    await signIn(page, smokeConfig.primaryUser, DASHBOARD_PREFIX);
+    authenticating = false;
+    const response = documentResponses.at(-1);
+    expect(response, 'Umami navigation must produce its document response').toBeTruthy();
     expect(response?.status(), 'Umami dashboard HTML response').toBeLessThan(400);
     expect(new URL(page.url()).pathname.startsWith(DASHBOARD_PREFIX)).toBe(true);
 

@@ -221,10 +221,15 @@ SMOKE_BASE_URL=http://127.0.0.1:18080 npm test -- --project=chromium specs/00-ro
 ```
 
 It proves the active Router root landing, Explorer shell, and routed WebChat
-shell. Authentication starts at `/`, which selects the configured static agent;
-the retired `/dashboard` route is not a login destination. It is not the separate
+shell. The root case enters `/` and waits for the selected Explorer surface to
+finish loading. Other cases authenticate directly into their intended surface,
+without first booting and abandoning Explorer. Credentials are submitted only
+on Router's `/auth/login` page; the retired `/dashboard` route is not a login destination. It is not the separate
 WebMeet external-network or two-account
 ScreenShare gate, and none of those gates substitutes for another.
+
+The focused authentication navigation regression uses installed Chromium:
+`node --test lib/auth-navigation.test.mjs`.
 
 ## Ploinky Core WebTTY Release Gate
 

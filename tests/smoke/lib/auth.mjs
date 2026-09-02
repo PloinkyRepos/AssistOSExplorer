@@ -86,10 +86,10 @@ export async function signIn(
   returnTo = '/',
   { requireConfiguredPrincipal = false } = {},
 ) {
-  await page.goto(returnTo, { waitUntil: 'load' });
-
   const sessionOk = await hasAuthenticatedSession(page.request);
-  if (!sessionOk && !(await loginForm(page).isVisible({ timeout: 1_000 }).catch(() => false))) {
+  if (sessionOk) {
+    await page.goto(returnTo, { waitUntil: 'load' });
+  } else {
     const params = new URLSearchParams({
       agent: smokeConfig.authAgent,
       returnTo,
@@ -97,7 +97,9 @@ export async function signIn(
     await page.goto(`/auth/login?${params.toString()}`, { waitUntil: 'load' });
   }
 
-  if (await loginForm(page).isVisible({ timeout: 3_000 }).catch(() => false)) {
+  if (new URL(page.url()).origin === new URL(smokeConfig.baseURL).origin
+    && new URL(page.url()).pathname === '/auth/login'
+    && await loginForm(page).isVisible({ timeout: 3_000 }).catch(() => false)) {
     await page.locator('input#username, input[name="username"]').first().fill(account.username);
     await page.locator('input#password, input[name="password"]').first().fill(account.password);
     await Promise.all([
