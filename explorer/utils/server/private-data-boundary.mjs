@@ -1,11 +1,18 @@
 const PRIVATE_ROOT_SEGMENTS = Object.freeze(['.data', 'explorer']);
 
+function privateDataPolicyError(message) {
+  const error = new Error(message);
+  error.code = 'PLOINKY_AGENT_DATA_POLICY_VIOLATION';
+  error.statusCode = 422;
+  return error;
+}
+
 function normalizeSegments(pathApi, segments) {
   const list = Array.isArray(segments) ? segments : [segments];
   return list.map((segment) => {
     const value = String(segment || '').trim();
     if (!value || value === '.' || value === '..' || pathApi.isAbsolute(value) || value.includes('/') || value.includes('\\')) {
-      throw new Error(`Invalid Explorer private data path segment: ${value || '<empty>'}`);
+      throw privateDataPolicyError(`Invalid Explorer private data path segment: ${value || '<empty>'}`);
     }
     return value;
   });
@@ -22,7 +29,7 @@ export function createExplorerPrivateDataBoundary({ fs, path, workspaceRoot }) {
 
   async function canonicalWorkspaceRoot() {
     const stats = await fsApi.stat(lexicalWorkspaceRoot);
-    if (!stats.isDirectory()) throw new Error('Explorer workspace root must be a directory.');
+    if (!stats.isDirectory()) throw privateDataPolicyError('Explorer workspace root must be a directory.');
     return fsApi.realpath(lexicalWorkspaceRoot);
   }
 
@@ -48,14 +55,14 @@ export function createExplorerPrivateDataBoundary({ fs, path, workspaceRoot }) {
         stats = await fsApi.lstat(lexicalCurrent);
       }
       if (stats.isSymbolicLink()) {
-        throw new Error(`Explorer private data path must not contain symbolic links: ${lexicalCurrent}`);
+        throw privateDataPolicyError(`Explorer private data path must not contain symbolic links: ${lexicalCurrent}`);
       }
       if (!stats.isDirectory()) {
-        throw new Error(`Explorer private data directory is not a directory: ${lexicalCurrent}`);
+        throw privateDataPolicyError(`Explorer private data directory is not a directory: ${lexicalCurrent}`);
       }
       const resolvedCurrent = await fsApi.realpath(lexicalCurrent);
       if (resolvedCurrent !== expectedCanonical) {
-        throw new Error(`Explorer private data path escapes its canonical workspace boundary: ${lexicalCurrent}`);
+        throw privateDataPolicyError(`Explorer private data path escapes its canonical workspace boundary: ${lexicalCurrent}`);
       }
       canonicalCurrent = resolvedCurrent;
     }
@@ -64,7 +71,7 @@ export function createExplorerPrivateDataBoundary({ fs, path, workspaceRoot }) {
 
   async function resolveFile(segments, { createParent = false } = {}) {
     const fileSegments = normalizeSegments(path, segments);
-    if (fileSegments.length === 0) throw new Error('Explorer private data file path is required.');
+    if (fileSegments.length === 0) throw privateDataPolicyError('Explorer private data file path is required.');
     const fileName = fileSegments.at(-1);
     const parentSegments = fileSegments.slice(0, -1);
     const parentPath = await resolveDirectory(parentSegments, { create: createParent });
@@ -77,17 +84,17 @@ export function createExplorerPrivateDataBoundary({ fs, path, workspaceRoot }) {
       throw error;
     }
     if (stats.isSymbolicLink()) {
-      throw new Error(`Explorer private data file must not be a symbolic link: ${filePath}`);
+      throw privateDataPolicyError(`Explorer private data file must not be a symbolic link: ${filePath}`);
     }
     if (!stats.isFile()) {
-      throw new Error(`Explorer private data file is not a regular file: ${filePath}`);
+      throw privateDataPolicyError(`Explorer private data file is not a regular file: ${filePath}`);
     }
     const [canonicalParent, canonicalFile] = await Promise.all([
       fsApi.realpath(parentPath),
       fsApi.realpath(filePath),
     ]);
     if (canonicalFile !== path.join(canonicalParent, fileName)) {
-      throw new Error(`Explorer private data file escapes its canonical workspace boundary: ${filePath}`);
+      throw privateDataPolicyError(`Explorer private data file escapes its canonical workspace boundary: ${filePath}`);
     }
     return filePath;
   }

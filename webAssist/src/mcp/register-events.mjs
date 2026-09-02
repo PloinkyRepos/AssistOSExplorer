@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { AgenticKnowledgeUnits } from 'achillesAgentLib';
-import { resolveSiteDataDir } from '../runtime/akuStore.mjs';
+import { initializeWebAssistDataRoot, normalizeSiteId, resolveSiteDataDir } from '../runtime/akuStore.mjs';
 
 function safeParseJson(text) {
     try {
@@ -100,6 +100,8 @@ export async function registerEvent({
     }
     const normalizedVisitorId = normalizeVisitorId(visitorId);
     const normalizedEventType = normalizeEventType(eventType);
+    normalizeSiteId(siteId);
+    await initializeWebAssistDataRoot();
     const akuRootDir = resolveSiteDataDir(siteId);
 
     const aku = new AgenticKnowledgeUnits({

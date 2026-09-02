@@ -37,6 +37,8 @@ Requirement O4b: when `gitAgent` stores the GitHub token in DPU secret storage, 
 
 Requirement O4c: authentication persistence is a hard-cut contract. `gitAgent` shall not read, migrate, delete, or alias records from an earlier state location, and DPU failures must remain fail-loud.
 
+Requirement O4d: before every local auth-state read, temporary-file write, or rename, `gitAgent` shall revalidate the full `.data/gitAgent/github-auth` chain from the canonical workspace root. Directories, state files, and temporary files must not be symbolic links. A violation rejects with `PLOINKY_AGENT_DATA_POLICY_VIOLATION` without following or replacing the invalid path or touching retired state. File opens must not follow a last-component symbolic link.
+
 Requirement O5: configuration and documentation shall remain aligned with `manifest.json` and `mcp-config.json`.
 
 Requirement O6: repository validation shall run through the Git agent test suite under `gitAgent/tests`.

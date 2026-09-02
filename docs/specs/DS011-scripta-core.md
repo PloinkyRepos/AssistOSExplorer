@@ -76,6 +76,8 @@ Create and first open initialize canonical Automerge state and materialize stabl
 
 Physical deletion is transactional across Markdown, canonical Automerge state, and the sanitized collaboration replica. Prepare stages every owned artifact, commit removes the stage after the attaching integration has persisted its detach, and rollback restores it. Explorer serializes lifecycle operations with a document lock and recovers expired pending deletions conservatively.
 
+Deletion stages live only under `.data/explorer/automerge/documents/pending-deletions/<transaction-id>`. Every phase, including recovery after an earlier successful initialization, revalidates the private directory chain, transaction metadata, staged files, and related private artifacts before accessing them. Symbolic links are rejected with `PLOINKY_AGENT_DATA_POLICY_VIOLATION`. Preparation preflights all artifact paths before moving originals; rollback preflights staged files and destinations before restoring anything. If preparation fails and restoration cannot complete safely, the remaining staged originals are retained rather than deleted.
+
 ## Conclusion
 
 SCRIPTA remains portable because the visible winner and complete structured metadata are materialized in Markdown, while safe concurrent editing is governed by one Explorer-owned Automerge authority and one explicit semantic contract.

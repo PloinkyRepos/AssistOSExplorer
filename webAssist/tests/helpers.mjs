@@ -8,6 +8,10 @@ import { resolveSiteDataDir } from '../src/runtime/akuStore.mjs';
 const FIXTURES_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
 const SEED_DATA_DIR = path.join(FIXTURES_DIR, 'seed-data');
 
+export function plannerDecision({ tool, toolPrompt, reason }) {
+    return `## Tool\n${tool}\n\n## Prompt\n${toolPrompt}\n\n## Reason\n${reason}`;
+}
+
 export async function createWebAssistSandbox() {
     const sandboxRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'webassist-agent-'));
     const workspaceRoot = path.join(sandboxRoot, 'workspace');

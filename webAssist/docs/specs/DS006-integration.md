@@ -28,10 +28,12 @@ This specification defines the active DS006-integration contract for WebAssist.
 - `list-sites`: returns known site IDs from `$WEBASSIST_DATA_ROOT`.
 
 ### Runtime Flow
-1. Require and resolve the data root from `process.env.WEBASSIST_DATA_ROOT`.
+1. Require and validate the managed root from `process.env.WEBASSIST_DATA_ROOT`. Chat and standalone writers initialize its `data` child themselves. Read-only site/history requests return empty when only that child is absent and never depend on an earlier chat initialization.
 2. Resolve `$WEBASSIST_DATA_ROOT/sites/<siteId>/.aku/`.
 3. `loadAkuContext` loads session state, relevant AKU search results, and event-driven conversation history.
 4. `webassist-session` and `webassist-lead` persist to the site AKU.
+
+The data-root initializer does not create site AKUs or bypass their provisioning contract. An event or session write to an uninitialized site fails explicitly even after the application-owned data child has been created.
 
 ### Embedded Chat
 The iframe URL must include `siteId`. If `siteId` is missing, chat is disabled and a user-facing message is shown.

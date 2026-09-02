@@ -25,6 +25,8 @@ This specification defines the active DS011-testing contract for WebAssist.
 - `register-events` appends AKU events.
 - `web_cli_history` returns parsed session turns from session KU events.
 - `list-sites` MCP listing from `$WEBASSIST_DATA_ROOT`.
+- Standalone site/history requests before chat return empty without creating a missing data child; event/session writers initialize only that child and preserve site-provisioning requirements.
+- All standalone storage entrypoints reject symlinked managed roots or children without outside writes.
 - Local WAC fixture consistency: `tests/localServer/WAC.json` mirrors `tests/localServer/profiles/*.md` and links `tests/localServer/assistos-info/*.md`.
 - Manifest guest access for embedded chat route and guest-callable MCP tool policy.
 

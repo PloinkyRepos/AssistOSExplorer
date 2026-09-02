@@ -70,14 +70,13 @@ export async function initializeWebAssistDataRoot({ fsModule = fsPromises } = {}
     return dataRoot;
 }
 
-export function resolveWebAssistDataRoot() {
+export function resolveWebAssistDataRoot({ allowMissing = false } = {}) {
     const dataRoot = getConfiguredWebAssistDataRoot();
     const persistentRoot = path.dirname(dataRoot);
     let persistentRootStats;
     let dataRootStats;
     try {
         persistentRootStats = fs.lstatSync(persistentRoot);
-        dataRootStats = fs.lstatSync(dataRoot);
     } catch (error) {
         if (error?.code !== 'ENOENT') throw error;
         throw new Error(`webAssist data directory does not exist: ${dataRoot}`);
@@ -85,10 +84,17 @@ export function resolveWebAssistDataRoot() {
     if (persistentRootStats.isSymbolicLink() || !persistentRootStats.isDirectory()) {
         throw new Error(`webAssist persistent storage root must be a non-symlink directory: ${persistentRoot}`);
     }
+    const canonicalPersistentRoot = fs.realpathSync(persistentRoot);
+    try {
+        dataRootStats = fs.lstatSync(dataRoot);
+    } catch (error) {
+        if (error?.code !== 'ENOENT') throw error;
+        if (allowMissing) return dataRoot;
+        throw new Error(`webAssist data directory does not exist: ${dataRoot}`);
+    }
     if (dataRootStats.isSymbolicLink() || !dataRootStats.isDirectory()) {
         throw new Error(`webAssist data directory must be a non-symlink directory: ${dataRoot}`);
     }
-    const canonicalPersistentRoot = fs.realpathSync(persistentRoot);
     const canonicalDataRoot = fs.realpathSync(dataRoot);
     if (canonicalDataRoot !== path.join(canonicalPersistentRoot, 'data')) {
         throw new Error(`webAssist data directory escapes its persistent storage root: ${dataRoot}`);
@@ -96,8 +102,8 @@ export function resolveWebAssistDataRoot() {
     return dataRoot;
 }
 
-export function resolveSiteDataDir(siteId) {
-    return path.join(resolveWebAssistDataRoot(), 'sites', normalizeSiteId(siteId));
+export function resolveSiteDataDir(siteId, options) {
+    return path.join(resolveWebAssistDataRoot(options), 'sites', normalizeSiteId(siteId));
 }
 
 export function resolveSiteAkuDir(siteId) {

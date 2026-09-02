@@ -1,6 +1,6 @@
 import { AgenticKnowledgeUnits } from 'achillesAgentLib';
 import path from 'node:path';
-import { resolveSiteDataDir } from './akuStore.mjs';
+import { initializeWebAssistDataRoot, normalizeSiteId, resolveSiteDataDir } from './akuStore.mjs';
 
 function uniqueStrings(values) {
     const seen = new Set();
@@ -126,6 +126,10 @@ async function ensureSessionKu(aku, sessionId) {
 }
 
 async function getAkuInstance(siteId, siteDataDir = '') {
+    if (!siteDataDir) {
+        normalizeSiteId(siteId);
+        await initializeWebAssistDataRoot();
+    }
     const akuRootDir = siteDataDir
         ? path.resolve(siteDataDir)
         : resolveSiteDataDir(siteId);
