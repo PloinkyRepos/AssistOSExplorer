@@ -29,7 +29,7 @@ multimedia owns IDE plugins and media-processing helpers for document audio, vid
 
 ## Runtime Defaults
 
-Uses `docker.io/assistos/ploinky-node:24-bookworm-tools`, `lite-sandbox: true`, and `scripts/install.sh` for FFmpeg readiness.
+Uses `docker.io/assistos/ploinky-node@sha256:accd925fcbf460c1f4c7a5cd9e2d46539c615bbfad2e896cabb7556d8050a669`, `lite-sandbox: true`, and `scripts/install.sh` for FFmpeg readiness.
 
 ## Key Paths
 

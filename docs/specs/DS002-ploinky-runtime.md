@@ -11,6 +11,8 @@ Explorer runs as the static Ploinky agent and depends on Ploinky for startup orc
 
 ## Core Content
 
+The shared Node agents in the Explorer graph must select the same immutable Ploinky Node image through their manifests. The image supplies Node 24 on Debian Trixie and a maintained Git/libcurl stack that negotiates GitHub HTTP/2 without a forced HTTP version. Image publication must prove native amd64 and arm64 Git clone, fetch, and npm Git dependency installation before the manifest digest changes.
+
 The `explorer/manifest.json` enable list must declare the agents that Explorer requires for its integrated workspace experience. `ploinky start explorer` is the supported local startup command. The Explorer route is served by the Ploinky router and browser access must use the router session rather than direct agent ports.
 
 Explorer must obtain its filesystem roots from the configured runtime environment and enforce those roots for filesystem MCP operations. The browser may bootstrap a display context from `list_allowed_directories`, but it must not treat that result as authorization for paths outside the server-enforced roots.
