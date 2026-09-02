@@ -13,7 +13,7 @@ async function loadAdminSettingsPanel() {
     const withoutImports = source.replace(/import\s+\{[\s\S]*?\}\s+from\s+'[^']+';\s*/g, '');
     const dependencies = `
         const parseRoles = (roles) => Array.isArray(roles) ? roles : [];
-        const fetchAdminControlProof = (...args) => globalThis.__adminFetchControlProof(...args);
+        const fetchUserAdministrationProof = (...args) => globalThis.__adminFetchControlProof(...args);
     `;
     const url = `data:text/javascript;base64,${Buffer.from(dependencies + withoutImports).toString('base64')}`;
     return import(url);
@@ -27,15 +27,19 @@ function jsonResponse(status, payload) {
     };
 }
 
-function installRequestMocks(t, { responses = [] } = {}) {
+function installRequestMocks(t, { responses = [], mode = 'control', proofError = null } = {}) {
     const originalFetch = globalThis.fetch;
     const originalProofFetcher = globalThis.__adminFetchControlProof;
     const calls = [];
     let proofCalls = 0;
-    globalThis.__adminFetchControlProof = async () => ({
-        origin: 'http://localhost:8080',
-        csrfToken: `v1.proof-${++proofCalls}`
-    });
+    globalThis.__adminFetchControlProof = async ({ agentName }) => {
+        assert.equal(agentName, 'explorer');
+        proofCalls++;
+        if (proofError) throw proofError;
+        return mode === 'public'
+            ? { mode, origin: 'https://explorer.example.test' }
+            : { mode, origin: 'http://localhost:8080', csrfToken: `v1.proof-${proofCalls}` };
+    };
     globalThis.fetch = async (requestPath, options) => {
         calls.push({
             path: requestPath,
@@ -58,6 +62,7 @@ test('administration reads omit CSRF proof and mutations attach a fresh proof', 
     const {calls, getProofCalls} = installRequestMocks(t);
     const {AdminSettingsPanel} = await loadAdminSettingsPanel();
     const panel = Object.create(AdminSettingsPanel.prototype);
+    panel.agent = 'explorer';
 
     await panel.request('/api/agents/explorer/users');
     for (const method of ['POST', 'PATCH', 'DELETE']) {
@@ -87,6 +92,7 @@ test('administration mutation retries csrf_invalid once with a new proof', async
     });
     const {AdminSettingsPanel} = await loadAdminSettingsPanel();
     const panel = Object.create(AdminSettingsPanel.prototype);
+    panel.agent = 'explorer';
 
     const payload = await panel.request('/api/agents/explorer/users', {
         method: 'POST',
@@ -106,6 +112,7 @@ test('administration mutation does not retry a non-CSRF rejection', async (t) =>
     });
     const {AdminSettingsPanel} = await loadAdminSettingsPanel();
     const panel = Object.create(AdminSettingsPanel.prototype);
+    panel.agent = 'explorer';
 
     await assert.rejects(
         panel.request('/api/agents/explorer/users/local%3Auser', {method: 'DELETE'}),
@@ -113,4 +120,64 @@ test('administration mutation does not retry a non-CSRF rejection', async (t) =>
     );
     assert.equal(getProofCalls(), 1);
     assert.equal(calls.length, 1);
+});
+
+test('public user and branding mutations use credentials without the local-control header', async (t) => {
+    const { calls, getProofCalls } = installRequestMocks(t, { mode: 'public' });
+    const { AdminSettingsPanel } = await loadAdminSettingsPanel();
+    const panel = Object.create(AdminSettingsPanel.prototype);
+    panel.agent = 'explorer';
+    for (const [method, path] of [
+        ['POST', '/api/agents/explorer/users'],
+        ['PATCH', '/api/agents/explorer/users/local%3Auser'],
+        ['DELETE', '/api/agents/explorer/users/local%3Auser'],
+        ['PATCH', '/api/agents/explorer/settings']
+    ]) {
+        await panel.request(path, { method, body: method === 'DELETE' ? undefined : '{}' });
+    }
+    assert.equal(getProofCalls(), 4);
+    for (const call of calls) {
+        assert.equal(call.credentials, 'include');
+        assert.equal(call.headers['x-ploinky-csrf-token'], undefined);
+    }
+});
+
+test('public stale-cookie rejection refreshes once and preserves the request', async (t) => {
+    const { calls, getProofCalls } = installRequestMocks(t, {
+        mode: 'public',
+        responses: [
+            jsonResponse(403, { ok: false, error: 'browser_csrf_invalid' }),
+            jsonResponse(201, { ok: true, user: { id: 'local:new-user' } })
+        ]
+    });
+    const { AdminSettingsPanel } = await loadAdminSettingsPanel();
+    const panel = Object.create(AdminSettingsPanel.prototype);
+    panel.agent = 'explorer';
+    const payload = await panel.request('/api/agents/explorer/users', { method: 'POST', body: '{"username":"new-user"}' });
+    assert.equal(payload.user.id, 'local:new-user');
+    assert.equal(getProofCalls(), 2);
+    assert.deepEqual(calls[0], calls[1]);
+});
+
+test('repeated CSRF failures stop after the second attempt', async (t) => {
+    const { calls, getProofCalls } = installRequestMocks(t, {
+        mode: 'public',
+        responses: Array.from({ length: 2 }, () => jsonResponse(403, { ok: false, error: 'browser_csrf_invalid' }))
+    });
+    const { AdminSettingsPanel } = await loadAdminSettingsPanel();
+    const panel = Object.create(AdminSettingsPanel.prototype);
+    panel.agent = 'explorer';
+    await assert.rejects(panel.request('/api/agents/explorer/users', { method: 'POST' }), /browser_csrf_invalid/);
+    assert.equal(getProofCalls(), 2);
+    assert.equal(calls.length, 2);
+});
+
+test('a rejected proof prevents sending the mutation', async (t) => {
+    const { calls, getProofCalls } = installRequestMocks(t, { proofError: new Error('Administrator access required.') });
+    const { AdminSettingsPanel } = await loadAdminSettingsPanel();
+    const panel = Object.create(AdminSettingsPanel.prototype);
+    panel.agent = 'explorer';
+    await assert.rejects(panel.request('/api/agents/explorer/users', { method: 'POST' }), /Administrator access required/);
+    assert.equal(getProofCalls(), 1);
+    assert.equal(calls.length, 0);
 });
