@@ -1,5 +1,6 @@
 import { expect } from './fixtures.mjs';
 import { smokeConfig } from './config.mjs';
+import { getWithoutKeepAlive } from './api-probe.mjs';
 
 function loginForm(page) {
   return page.locator('form[action="/auth/login"], input#username, input[name="username"]').first();
@@ -75,7 +76,7 @@ export async function readAuthenticatedPrincipal(page, account) {
 }
 
 export async function hasAuthenticatedSession(request) {
-  const response = await request.get('/auth/token').catch(() => null);
+  const response = await getWithoutKeepAlive(request, '/auth/token').catch(() => null);
   return Boolean(response?.ok());
 }
 

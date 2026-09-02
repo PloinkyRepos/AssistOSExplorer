@@ -11,12 +11,15 @@ import {
 test('session detection uses the account-neutral auth endpoint', async () => {
   const requested = [];
   assert.equal(await hasAuthenticatedSession({
-    async get(url) {
-      requested.push(url);
+    async get(url, options) {
+      requested.push({ url, options });
       return { ok: () => true };
     },
   }), true);
-  assert.deepEqual(requested, ['/auth/token']);
+  assert.deepEqual(requested, [{
+    url: '/auth/token',
+    options: { headers: { connection: 'close' }, maxRetries: 0 },
+  }]);
 
   assert.equal(await hasAuthenticatedSession({
     async get() {

@@ -4,6 +4,7 @@ import { promisify } from 'node:util';
 
 import { test, expect } from '../lib/fixtures.mjs';
 import { smokeConfig } from '../lib/config.mjs';
+import { getWithoutKeepAlive } from '../lib/api-probe.mjs';
 import { dpuData } from '../lib/dpu-data.mjs';
 import { dpuSnapshotPersistenceAdvanced } from '../lib/dpu-persistence.mjs';
 import { assertExplorerDirectory, openExplorer } from '../lib/explorer.mjs';
@@ -197,7 +198,7 @@ async function waitForOnlyOfficeSession(page, documentPath) {
   let lastPayload = null;
   await expect.poll(async () => {
     try {
-      const response = await page.request.get(
+      const response = await getWithoutKeepAlive(page.request,
         `/base-agent-additional-server/onlyOffice/7000/control/office/session?path=${encodeURIComponent(documentPath)}`
       );
       lastPayload = await response.json().catch(() => ({}));
@@ -307,7 +308,7 @@ test.describe('DPU and OnlyOffice @external', () => {
       expect(blob.includes(Buffer.from(fileName))).toBe(false);
       expect(hasPlainWorkspaceCopy(documentPath), `${documentPath} should not be stored as a normal workspace file`).toBe(false);
 
-      const response = await page.request.get(`/base-agent-additional-server/onlyOffice/7000/control/office/session?path=${encodeURIComponent(documentPath)}`);
+      const response = await getWithoutKeepAlive(page.request, `/base-agent-additional-server/onlyOffice/7000/control/office/session?path=${encodeURIComponent(documentPath)}`);
       expect(response.status()).toBe(200);
       const payload = await response.json();
       expect(payload.ok).toBe(true);
