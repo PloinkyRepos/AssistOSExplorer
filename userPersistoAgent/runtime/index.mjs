@@ -7,6 +7,18 @@ function routerBaseUrl(config = {}) {
     return `http://localhost:${port}`;
 }
 
+function browserLoginUrl(loginPath, redirectUri) {
+    const callback = new URL(redirectUri);
+    if (!['http:', 'https:'].includes(callback.protocol) || callback.username || callback.password) {
+        throw new Error('redirectUri must be an absolute http(s) URL without credentials.');
+    }
+    const login = new URL(loginPath, callback.origin);
+    if (login.origin !== callback.origin || login.username || login.password) {
+        throw new Error('The login path must stay on the callback origin.');
+    }
+    return login;
+}
+
 function normalizeUser({ user, roles, capabilities }) {
     return {
         id: String(user.id),
@@ -74,8 +86,8 @@ export function createProvider({ getConfig }) {
         name: 'AssistOSExplorer/userPersistoAgent',
         async sso_begin_login({ redirectUri }) {
             const config = await getConfig();
+            const loginUrl = browserLoginUrl(config.loginPath, redirectUri);
             const { request } = await postRuntime(config, 'sso-login-request', { redirectUri, clientId: 'explorer' });
-            const loginUrl = new URL(config.loginPath, routerBaseUrl(config));
             loginUrl.searchParams.set('requestId', request.providerState);
             loginUrl.searchParams.set('state', request.providerState);
             return {

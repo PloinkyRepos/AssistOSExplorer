@@ -12,14 +12,16 @@ export const TYPES = {
     systemSetting: { key: 'string', value: 'object', updatedAt: 'string', updatedBy: 'string' },
     creditAccount: { userId: 'string', balance: 'integer', reservedBalance: 'integer' },
     creditTx: { txId: 'string', userId: 'string', sequence: 'integer', type: 'string', amount: 'integer', reason: 'string', referenceId: 'string', balanceAfter: 'integer', reservedAfter: 'integer', createdAt: 'string' },
-    creditReservation: { reservationId: 'string', userId: 'string', amount: 'integer', status: 'string', reason: 'string', createdAt: 'string', updatedAt: 'string' },
+    creditReservation: { reservationId: 'string', referenceId: 'string', userId: 'string', amount: 'integer', status: 'string', reason: 'string', createdAt: 'string', updatedAt: 'string' },
     paymentTransaction: { providerKey: 'string', provider: 'string', providerEventId: 'string', providerObjectId: 'string', userId: 'string', kind: 'string', status: 'string', amountMinor: 'integer', currency: 'string', credits: 'integer', createdAt: 'string', updatedAt: 'string' },
-    subscription: { providerRef: 'string', userId: 'string', provider: 'string', planId: 'string', status: 'string', currentPeriodEnd: 'string' },
+    checkoutIntent: { intentKey: 'string', requestHash: 'string', userId: 'string', kind: 'string', units: 'integer', credits: 'integer', form: 'object', sessionId: 'string', checkoutUrl: 'string', createdAt: 'string', updatedAt: 'string' },
+    subscription: { providerRef: 'string', userId: 'string', provider: 'string', planId: 'string', status: 'string', currentPeriodEnd: 'string', reconciledAt: 'string', sourceEventId: 'string' },
     billingEvent: { stripeEventId: 'string', type: 'string', status: 'string', payloadHash: 'string', processedAt: 'string' },
     emailLog: { logId: 'string', providerMessageId: 'string', toEmailHash: 'string', template: 'string', result: 'string', correlationId: 'string', createdAt: 'string' },
     auditEvent: { auditId: 'string', actorId: 'string', action: 'string', target: 'string', result: 'string', reason: 'string', timestamp: 'string' },
     ssoLoginRequest: { providerState: 'string', redirectUri: 'string', clientId: 'string', expiresAt: 'string' },
-    ssoAuthCode: { code: 'string', providerState: 'string', userId: 'string', expiresAt: 'string', consumedAt: 'string' }
+    ssoAuthCode: { code: 'string', providerState: 'string', userId: 'string', expiresAt: 'string', consumedAt: 'string' },
+    oidcRecord: { recordKey: 'string', model: 'string', payload: 'string', expiresAt: 'integer', grantHash: 'string', clientHash: 'string', uidHash: 'string', userCodeHash: 'string' },
 };
 
 const INDEXES = [
@@ -35,12 +37,14 @@ const INDEXES = [
     ['creditTx', 'txId'],
     ['creditReservation', 'reservationId'],
     ['paymentTransaction', 'providerKey'],
+    ['checkoutIntent', 'intentKey'],
     ['subscription', 'providerRef'],
     ['billingEvent', 'stripeEventId'],
     ['emailLog', 'logId'],
     ['auditEvent', 'auditId'],
     ['ssoLoginRequest', 'providerState'],
-    ['ssoAuthCode', 'code']
+    ['ssoAuthCode', 'code'],
+    ['oidcRecord', 'recordKey'],
 ];
 
 // [groupingName, type, field] -> get<Grouping>ObjectsBy<Field>()
@@ -52,7 +56,10 @@ const GROUPINGS = [
     ['creditReservations', 'creditReservation', 'userId'],
     ['paymentTransactions', 'paymentTransaction', 'userId'],
     ['subscriptions', 'subscription', 'userId'],
-    ['auditTrail', 'auditEvent', 'actorId']
+    ['auditTrail', 'auditEvent', 'actorId'],
+    ['oidcModels', 'oidcRecord', 'model'],
+    ['oidcGrants', 'oidcRecord', 'grantHash'],
+    ['oidcClients', 'oidcRecord', 'clientHash'],
 ];
 
 export async function ensureSchema(persisto) {

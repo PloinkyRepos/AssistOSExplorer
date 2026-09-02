@@ -28,6 +28,10 @@ export class AdminSettingsPanel {
             loaded: false,
             loading: false,
             users: [],
+            usersStart: 0,
+            usersPageSize: 100,
+            usersTotal: 0,
+            usersHasMore: false,
             availableRoles: [],
             loginBrandingName: 'Login'
         };
@@ -65,6 +69,9 @@ export class AdminSettingsPanel {
         this.element.addEventListener('admin-users-delete', (event) => {
             this.deleteUser(event.detail?.userId).catch((error) => this.setStatus(error.message, 'error'));
         });
+        this.element.addEventListener('admin-users-page', (event) => {
+            this.loadUsersPage(event.detail?.start).catch((error) => this.setStatus(error.message, 'error'));
+        });
         this.element.addEventListener('admin-branding-save', (event) => {
             this.saveBranding(event.detail || {}).catch((error) => this.setStatus(error.message, 'error'));
         });
@@ -85,16 +92,49 @@ export class AdminSettingsPanel {
         try {
             const [settingsPayload, usersPayload] = await Promise.all([
                 this.request(this.settingsApi),
-                this.request(this.apiBase)
+                this.fetchUsersPage(this.state.usersStart)
             ]);
             this.state.loginBrandingName = settingsPayload.settings?.loginBrandingName || 'Login';
-            this.state.users = Array.isArray(usersPayload.users) ? usersPayload.users : [];
-            this.state.availableRoles = parseRoles(usersPayload.availableRoles);
+            this.applyUsersPage(usersPayload);
             this.state.loaded = true;
             this.pushChildState();
-            this.setStatus(`${this.state.users.length} user${this.state.users.length === 1 ? '' : 's'} loaded.`, 'ok');
+            this.setStatus('');
         } finally {
             this.state.loading = false;
+            this.pushChildState();
+        }
+    }
+
+    applyUsersPage(payload) {
+        this.state.users = Array.isArray(payload.users) ? payload.users : [];
+        this.state.availableRoles = parseRoles(payload.availableRoles);
+        this.state.usersStart = payload.start ?? this.state.usersStart;
+        this.state.usersTotal = payload.totalCount ?? null;
+        this.state.usersHasMore = payload.hasMore === true;
+    }
+
+    async fetchUsersPage(start) {
+        const requestPage = (offset) => this.request(`${this.apiBase}?start=${offset}&pageSize=${this.state.usersPageSize}`);
+        const payload = await requestPage(start);
+        if (start > 0 && !payload.users?.length && Number.isSafeInteger(payload.totalCount) && start >= payload.totalCount) {
+            const lastPage = Math.max(0, Math.floor((payload.totalCount - 1) / this.state.usersPageSize) * this.state.usersPageSize);
+            return requestPage(lastPage);
+        }
+        return payload;
+    }
+
+    async loadUsersPage(start) {
+        if (this.state.loading || !Number.isSafeInteger(start) || start < 0) return;
+        this.state.loading = true;
+        this.pushChildState();
+        this.setStatus('Loading users...');
+        try {
+            const payload = await this.fetchUsersPage(start);
+            this.applyUsersPage(payload);
+            this.setStatus('');
+        } finally {
+            this.state.loading = false;
+            this.pushChildState();
         }
     }
 
@@ -102,7 +142,12 @@ export class AdminSettingsPanel {
         await Promise.all([
             this.setChildState(this.usersComponent, {
                 users: this.state.users,
-                availableRoles: this.state.availableRoles
+                availableRoles: this.state.availableRoles,
+                start: this.state.usersStart,
+                pageSize: this.state.usersPageSize,
+                totalCount: this.state.usersTotal,
+                hasMore: this.state.usersHasMore,
+                loading: this.state.loading,
             }),
             this.setChildState(this.brandingComponent, {
                 loginBrandingName: this.state.loginBrandingName
@@ -124,6 +169,7 @@ export class AdminSettingsPanel {
             method: 'POST',
             body: JSON.stringify({
                 username: detail.username,
+                email: detail.email,
                 password: detail.password,
                 name: detail.name,
                 roles: parseRoles(detail.roles)

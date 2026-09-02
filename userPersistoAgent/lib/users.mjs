@@ -1,8 +1,8 @@
 import { getStore, flush } from './store.mjs';
-import { hashPassword } from './auth/password.mjs';
+import { hashPassword, validatePassword } from './auth/password.mjs';
 import { recordAudit } from './audit.mjs';
 import { assertRegistrationRoleAllowed, getAuthPolicy } from './policy.mjs';
-import { serialize } from './serial.mjs';
+import { serializePersisted as serialize } from './serial.mjs';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const USERNAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$/;
@@ -128,6 +128,7 @@ export async function getSetupStatus() {
 
 export function registerUser({ email, password }) {
     return serialize('users', async () => {
+        validatePassword(password);
         const store = await getStore();
         const existing = await store.select('user', {}, { start: 0, pageSize: 1 });
         const firstUser = Number(existing.totalCount ?? existing.filteredCount ?? existing.objects.length) === 0;

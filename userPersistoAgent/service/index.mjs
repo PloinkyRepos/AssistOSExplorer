@@ -14,6 +14,8 @@ import { getSetupStatus, registerUser, listUsers, listRoles, createUser, updateU
 import { requireActiveActor } from '../lib/authorization.mjs';
 import { getAuthPolicy, updateAuthPolicy, isAuthMethodEnabled } from '../lib/policy.mjs';
 import { setPassword } from '../lib/auth/password.mjs';
+import { handleOidc } from '../lib/oidc/http.mjs';
+import { handleDashboard } from './dashboard.mjs';
 
 const PUBLIC_DIR = resolve(fileURLToPath(new URL('../public', import.meta.url)));
 const MIME = {
@@ -317,6 +319,10 @@ async function handlePost(req, res, path) {
 async function handle(req, res) {
     const url = new URL(req.url || '/', 'http://internal');
     try {
+        if (url.pathname === '/service/dashboard' || url.pathname.startsWith('/service/dashboard/')) {
+            return await handleDashboard(req, res, url, { sendJson, serveStatic });
+        }
+        if (await handleOidc(req, res)) return;
         if (req.method === 'GET' || req.method === 'HEAD') {
             if (req.method === 'HEAD') {
                 res.writeHead(405, { 'Cache-Control': 'no-store' });

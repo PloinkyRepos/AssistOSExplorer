@@ -1,5 +1,6 @@
 import { getStore } from './store.mjs';
 import { getUserById, getUserRoles } from './users.mjs';
+import { getEnabledAuthMethods } from './auth/methods.mjs';
 
 export async function getUserCapabilities(userId) {
     const store = await getStore();
@@ -65,11 +66,29 @@ export async function getProfile(userId) {
     const account = await store.getCreditAccountByUserId(userId) || null;
     const subs = await store.getSubscriptionsObjectsByUserId(userId) || [];
     const active = subs.find((subscription) => subscription.status === 'active') || null;
+    const methods = await store.getAuthMethodsObjectsByUserId(userId) || [];
+    const enabledMethods = methods.filter((method) => method.enabled);
+    const passkeyCount = enabledMethods.filter((method) => method.type === 'passkey').length;
+    const totpConfigured = enabledMethods.some((method) => method.type === 'totp');
+    const totpSetup = await store.getAuthChallengeByChallengeId(`totp-setup:${userId}`);
+    const totpPending = totpSetup?.subject === userId
+        && totpSetup.purpose === 'totp-setup'
+        && Date.parse(totpSetup.expiresAt) > Date.now();
+    const authMethods = [];
+    if (user.passwordHash) authMethods.push({ type: 'password', name: 'Password' });
+    if (passkeyCount) authMethods.push({ type: 'passkey', name: 'Passkey' });
+    if (totpConfigured) authMethods.push({ type: 'totp', name: 'Authenticator app' });
     const { passwordHash, loginAttempts, lastLoginAttempt, ...safeUser } = user;
     return {
         user: safeUser,
         roles,
         capabilities,
+        authMethods,
+        allowedAuthMethods: await getEnabledAuthMethods(),
+        enrollments: {
+            passkey: { configured: passkeyCount > 0, count: passkeyCount },
+            totp: { configured: totpConfigured, pending: Boolean(totpPending) },
+        },
         credits: { balance: account?.balance ?? 0, reservedBalance: account?.reservedBalance ?? 0 },
         subscription: active
     };

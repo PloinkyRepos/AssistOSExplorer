@@ -10,7 +10,7 @@ process.env.USERPERSISTO_SETTINGS_KEY = 'test-settings-key';
 const { ensureSeedData } = await import('../lib/bootstrap.mjs');
 const { createUser } = await import('../lib/users.mjs');
 const credits = await import('../lib/credits.mjs');
-const { resetStoreForTests } = await import('../lib/store.mjs');
+const { getStore, flush, resetStoreForTests } = await import('../lib/store.mjs');
 
 after(async () => {
     await resetStoreForTests();
@@ -98,4 +98,48 @@ test('every credit mutation requires a stable business reference', async () => {
         () => credits.adminAdjust({ userId: user.id, amount: 1 }),
         (error) => error?.code === 'reference_id_required'
     );
+});
+
+test('different users concurrently reserve and release the same reference independently', async () => {
+    const users = await Promise.all(['scope-a', 'scope-b'].map((name) => createUser({ email: `${name}@example.test`, roles: ['user'] })));
+    await Promise.all(users.map((user) => credits.grant({ userId: user.id, amount: 20, referenceId: 'same-grant' })));
+    const outcomes = await Promise.all(users.map((user) => credits.reserve({ userId: user.id, amount: 7, referenceId: 'same-job' })));
+    assert.ok(outcomes.every((outcome) => !outcome.idempotent));
+    await resetStoreForTests();
+    for (const user of users) assert.deepEqual(await credits.getBalance(user.id), { balance: 13, reservedBalance: 7 });
+    await Promise.all(users.map((user) => credits.release({ userId: user.id, amount: 7, referenceId: 'same-job' })));
+    for (const user of users) assert.deepEqual(await credits.getBalance(user.id), { balance: 20, reservedBalance: 0 });
+});
+
+test('legacy reservations and stranded journals recover without reopening terminal reservations', async () => {
+    const [owner, stranded] = await Promise.all(['legacy-owner', 'legacy-stranded'].map((name) => createUser({ email: `${name}@example.test`, roles: ['user'] })));
+    for (const user of [owner, stranded]) {
+        await credits.grant({ userId: user.id, amount: 20, referenceId: 'seed' });
+        await credits.reserve({ userId: user.id, amount: 7, referenceId: 'legacy-collision' });
+    }
+    let store = await getStore();
+    const ownerReservation = (await store.getCreditReservationsObjectsByUserId(owner.id))[0];
+    await store.deleteCreditReservation(ownerReservation.id);
+    const { id, ...legacyFields } = ownerReservation;
+    await store.createCreditReservation({ ...legacyFields, reservationId: 'legacy-collision' });
+    const strandedReservation = (await store.getCreditReservationsObjectsByUserId(stranded.id))[0];
+    await store.deleteCreditReservation(strandedReservation.id);
+    await flush();
+    await resetStoreForTests();
+
+    assert.equal((await credits.reserve({ userId: stranded.id, amount: 7, referenceId: 'legacy-collision' })).idempotent, true);
+    await credits.release({ userId: stranded.id, amount: 7, referenceId: 'legacy-collision' });
+    await credits.commit({ userId: owner.id, amount: 7, referenceId: 'legacy-collision' });
+    assert.deepEqual(await credits.getBalance(stranded.id), { balance: 20, reservedBalance: 0 });
+    assert.deepEqual(await credits.getBalance(owner.id), { balance: 13, reservedBalance: 0 });
+
+    store = await getStore();
+    await store.deleteCreditReservation((await store.getCreditReservationsObjectsByUserId(stranded.id))[0].id);
+    await flush();
+    await resetStoreForTests();
+    await credits.reserve({ userId: stranded.id, amount: 7, referenceId: 'legacy-collision' });
+    store = await getStore();
+    assert.equal((await store.getCreditReservationsObjectsByUserId(stranded.id))[0].status, 'released');
+    await assert.rejects(credits.commit({ userId: stranded.id, amount: 7, referenceId: 'legacy-collision' }));
+    assert.equal((await credits.ledger({ userId: stranded.id })).totalCount, 3);
 });

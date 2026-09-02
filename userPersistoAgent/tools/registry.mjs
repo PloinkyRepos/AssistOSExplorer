@@ -9,6 +9,7 @@ import * as billing from '../lib/billing.mjs';
 import { getSettings as getAgentSettings, saveSettings as saveAgentSettings } from '../lib/settings.mjs';
 import { getStore } from '../lib/store.mjs';
 import { getAuthPolicy, isAuthMethodEnabled, updateAuthPolicy } from '../lib/policy.mjs';
+import * as oidcClients from '../lib/oidc/clients.mjs';
 
 async function requireAdmin(context, capability = 'admin.users.manage') {
     const actor = requireActor(context);
@@ -262,6 +263,12 @@ const HANDLERS = {
         const actorId = await requireAdmin(context, 'admin.agentSettings.manage');
         return updateAuthPolicy(args, { actorId });
     },
+    userpersisto_oidc_clients_list: async (args, context) => oidcClients.listOidcClients(args, { actorId: requireActor(context) }),
+    userpersisto_oidc_client_create: async (args, context) => oidcClients.createOidcClient(args, { actorId: requireActor(context) }),
+    userpersisto_oidc_client_update: async (args, context) => oidcClients.updateOidcClient(args.client_id, args, { actorId: requireActor(context) }),
+    userpersisto_oidc_client_delete: async (args, context) => oidcClients.deleteOidcClient(args.client_id, { actorId: requireActor(context) }),
+    userpersisto_oidc_client_rotate_secret: async (args, context) => oidcClients.rotateOidcClientSecret(args.client_id, { actorId: requireActor(context) }),
+    userpersisto_oidc_status: async (_args, context) => oidcClients.getOidcStatus({ actorId: requireActor(context) }),
     userpersisto_audit_events_list: async (args, context) => {
         await requireAdmin(context);
         const store = await getStore();

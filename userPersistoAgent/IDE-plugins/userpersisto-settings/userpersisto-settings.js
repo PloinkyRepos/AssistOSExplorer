@@ -4,7 +4,7 @@ import {
     parseToolResult
 } from "/explorer/services/infrastructure/explorerApi.js";
 
-const PANELS = new Set(["users", "auth", "provider"]);
+const PANELS = new Set(["users", "auth", "provider", "applications"]);
 const SECRET_KEYS = new Set(["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"]);
 const SETTING_KEYS = [
     "STRIPE_SECRET_KEY",
@@ -22,7 +22,9 @@ async function callUserPersistoTool(name, args = {}) {
     ensureSuccess(raw);
     const parsed = parseToolResult(raw) || {};
     if (parsed?.ok === false || parsed?.error) {
-        throw new Error(parsed.error || `${name} failed.`);
+        const error = new Error(parsed.error || `${name} failed.`);
+        error.payload = parsed;
+        throw error;
     }
     return parsed;
 }
@@ -63,13 +65,27 @@ export class UserpersistoSettings {
             statusType: "",
             settings: {},
             users: [],
-            authProfile: null
+            usersStart: 0,
+            usersPageSize: 100,
+            usersTotal: 0,
+            usersLoading: false,
+            authProfile: null,
+            applications: [],
+            applicationsStart: 0,
+            applicationsPageSize: 100,
+            applicationsTotal: 0,
+            applicationsLoading: false,
+            applicationBusy: false,
+            applicationEditId: null,
+            oidcStatus: null
         };
         this.settingsRequestId = 0;
         this.invalidate();
     }
 
-    beforeRender() {}
+    beforeRender() {
+        this.clearEnrollment();
+    }
 
     afterRender() {
         this.cacheElements();
@@ -84,11 +100,15 @@ export class UserpersistoSettings {
         this.panelTabs = Array.from(this.element.querySelectorAll("[data-panel]"));
         this.usersListEl = this.element.querySelector("#usersList");
         this.userSearchInput = this.element.querySelector("#userSearchInput");
+        this.usersPageLabel = this.element.querySelector("#usersPageLabel");
+        this.usersPreviousButton = this.element.querySelector("#usersPreviousButton");
+        this.usersNextButton = this.element.querySelector("#usersNextButton");
         this.createUserEmailInput = this.element.querySelector("#createUserEmail");
         this.createUserDisplayNameInput = this.element.querySelector("#createUserDisplayName");
         this.createUserPasswordInput = this.element.querySelector("#createUserPassword");
         this.createUserRoleInput = this.element.querySelector("#createUserRole");
         this.authProfileEl = this.element.querySelector("#authProfileSummary");
+        this.enrollmentMountEl = this.element.querySelector("#authEnrollment");
         this.profileUsernameInput = this.element.querySelector("#profileUsername");
         this.profileDisplayNameInput = this.element.querySelector("#profileDisplayName");
         this.authMethodInputs = Object.fromEntries(["password", "emailCode", "passkey", "totp"].map((method) => [
@@ -98,6 +118,21 @@ export class UserpersistoSettings {
         this.selfRegistrationInput = this.element.querySelector("#selfRegistrationEnabled");
         this.defaultRegistrationRoleInput = this.element.querySelector("#defaultRegistrationRole");
         this.allowedRedirectOriginsInput = this.element.querySelector("#allowedRedirectOrigins");
+        this.applicationsListEl = this.element.querySelector("#applicationsList");
+        this.applicationsPageLabel = this.element.querySelector("#applicationsPageLabel");
+        this.applicationsPreviousButton = this.element.querySelector("#applicationsPreviousButton");
+        this.applicationsNextButton = this.element.querySelector("#applicationsNextButton");
+        this.oidcStatusEl = this.element.querySelector("#oidcProviderStatus");
+        this.applicationEditorTitle = this.element.querySelector("#applicationEditorTitle");
+        this.applicationSecretBox = this.element.querySelector("#applicationSecretBox");
+        this.applicationSecretInput = this.element.querySelector("#applicationSecret");
+        this.applicationInputs = Object.fromEntries([
+            "client_id", "client_name", "redirect_uris", "post_logout_redirect_uris",
+            "token_endpoint_auth_method", "scope", "enabled"
+        ].map((key) => [key, this.element.querySelector(`[data-client-field="${key}"]`)]));
+        this.applicationGrantInputs = Object.fromEntries([
+            "authorization_code", "refresh_token", "client_credentials"
+        ].map((grant) => [grant, this.element.querySelector(`[data-client-grant="${grant}"]`)]));
         this.inputs = {
             STRIPE_SECRET_KEY: this.element.querySelector("#stripeSecretKey"),
             STRIPE_WEBHOOK_SECRET: this.element.querySelector("#stripeWebhookSecret"),
@@ -147,13 +182,18 @@ export class UserpersistoSettings {
     }
 
     switchPanel(_target, panel) {
+        if (panel === "applications" && !this.isAdministrator()) return;
+        if (panel !== this.state.activePanel) this.clearApplicationSecret();
         this.state.activePanel = PANELS.has(panel) ? panel : "users";
         this.renderPanels();
         if (this.state.activePanel === "users") void this.refreshUsers();
         if (this.state.activePanel === "auth") void this.refreshAuthProfile();
+        if (this.state.activePanel === "applications") void this.refreshApplications();
     }
 
     renderPanels() {
+        if (this.state.activePanel !== "auth") this.clearEnrollment();
+        else void this.renderEnrollment();
         this.panelTabs?.forEach((tab) => {
             const isActive = tab.dataset.panel === this.state.activePanel;
             tab.classList.toggle("active", isActive);
@@ -251,6 +291,7 @@ export class UserpersistoSettings {
             this.element.querySelectorAll("[data-admin-only]").forEach((node) => {
                 node.hidden = !isAdmin;
             });
+            if (!isAdmin) this.clearApplications();
             if (!isAdmin && this.state.activePanel !== "auth") {
                 this.state.activePanel = "auth";
                 this.renderPanels();
@@ -260,9 +301,12 @@ export class UserpersistoSettings {
                 void this.loadSettings();
                 void this.refreshAuthPolicy();
             }
+            if (isAdmin && this.state.activePanel === "applications") void this.refreshApplications();
             this.setStatus("");
         } catch (error) {
             this.state.authProfile = null;
+            this.clearApplications();
+            this.element.querySelectorAll("[data-admin-only]").forEach((node) => { node.hidden = true; });
             this.renderAuthProfile();
             this.setStatus(error?.message || "Failed to load profile.", "error");
         }
@@ -316,6 +360,7 @@ export class UserpersistoSettings {
                     .filter(Boolean)
             });
             await this.refreshAuthPolicy();
+            await this.refreshAuthProfile();
             this.setStatus("Authentication policy saved.");
         } catch (error) {
             this.setStatus(error?.message || "Failed to save authentication policy.", "error");
@@ -323,6 +368,7 @@ export class UserpersistoSettings {
     }
 
     renderAuthProfile() {
+        void this.renderEnrollment();
         if (!this.authProfileEl) return;
         const profile = this.state.authProfile;
         if (!profile?.user) {
@@ -342,22 +388,92 @@ export class UserpersistoSettings {
         `;
     }
 
+    async renderEnrollment() {
+        const mount = this.enrollmentMountEl;
+        if (!mount || mount.isConnected === false || this.state.activePanel !== "auth") return;
+        if (!this.state.authProfile?.user) {
+            this.clearEnrollment();
+            return;
+        }
+        if (this.enrollmentWidget?.element === mount) {
+            this.enrollmentWidget.updateProfile(this.state.authProfile);
+            return;
+        }
+        const loadId = this.enrollmentLoadId = (this.enrollmentLoadId || 0) + 1;
+        try {
+            const { AccountEnrollment } = await import("/base-agent-additional-server/userPersistoAgent/7000/service/dashboard/enrollment.js");
+            if (loadId !== this.enrollmentLoadId || mount !== this.enrollmentMountEl
+                || mount.isConnected === false || this.state.activePanel !== "auth") return;
+            this.enrollmentWidget = new AccountEnrollment(mount, {
+                callTool: (name, args) => this.callTool(name, args),
+                onEnrolled: () => this.refreshAuthProfile(),
+            });
+            this.enrollmentWidget.updateProfile(this.state.authProfile);
+        } catch (_) {
+            if (loadId === this.enrollmentLoadId && mount.isConnected !== false) {
+                mount.textContent = "Unable to load sign-in settings. Refresh your profile to try again.";
+            }
+        }
+    }
+
+    clearEnrollment() {
+        this.enrollmentLoadId = (this.enrollmentLoadId || 0) + 1;
+        this.enrollmentWidget?.dispose();
+        this.enrollmentWidget = null;
+    }
+
+    afterUnload() {
+        this.clearEnrollment();
+        this.enrollmentMountEl = null;
+        this.clearApplicationSecret();
+    }
+
     async refreshUsers() {
+        return this.loadUsersPage(this.state.usersStart);
+    }
+
+    async loadUsersPage(start = 0) {
+        if (this.state.usersLoading) return;
+        this.state.usersLoading = true;
+        this.renderUsersPagination();
         try {
             const payload = await this.callTool("userpersisto_user_list", {
-                start: 0,
-                pageSize: 100
+                start,
+                pageSize: this.state.usersPageSize,
             });
             this.state.users = Array.isArray(payload.users)
                 ? payload.users
                 : Array.isArray(payload.objects)
                     ? payload.objects
                     : [];
+            this.state.usersStart = start;
+            this.state.usersTotal = Number.isSafeInteger(payload.totalCount) ? payload.totalCount : start + this.state.users.length;
             this.renderUsers();
-            this.setStatus(`${this.state.users.length} user${this.state.users.length === 1 ? "" : "s"} loaded.`);
+            this.setStatus("");
         } catch (error) {
             this.setStatus(error?.message || "Failed to load users.", "error");
+        } finally {
+            this.state.usersLoading = false;
+            this.renderUsersPagination();
         }
+    }
+
+    previousUsersPage() {
+        return this.loadUsersPage(Math.max(0, this.state.usersStart - this.state.usersPageSize));
+    }
+
+    nextUsersPage() {
+        if (this.state.usersStart + this.state.users.length >= this.state.usersTotal) return;
+        return this.loadUsersPage(this.state.usersStart + this.state.usersPageSize);
+    }
+
+    renderUsersPagination() {
+        const { usersStart, usersPageSize, usersTotal, usersLoading, users } = this.state;
+        if (this.usersPreviousButton) this.usersPreviousButton.disabled = usersLoading || usersStart === 0;
+        if (this.usersNextButton) this.usersNextButton.disabled = usersLoading || usersStart + usersPageSize >= usersTotal;
+        if (this.usersPageLabel) this.usersPageLabel.textContent = usersLoading
+            ? "Loading users…"
+            : `${users.length ? usersStart + 1 : 0}–${usersStart + users.length} of ${usersTotal} users`;
     }
 
     filteredUsers() {
@@ -390,7 +506,7 @@ export class UserpersistoSettings {
             if (this.userSearchInput) {
                 this.userSearchInput.value = "";
             }
-            await this.refreshUsers();
+            await this.loadUsersPage(0);
             this.setStatus("User created.");
         } catch (error) {
             this.setStatus(error?.message || "Failed to create user.", "error");
@@ -439,7 +555,252 @@ export class UserpersistoSettings {
         }
     }
 
+    isAdministrator() {
+        return this.state.authProfile?.roles?.includes("admin") === true;
+    }
+
+    clearApplicationSecret() {
+        if (this.applicationSecretInput) this.applicationSecretInput.value = "";
+        if (this.applicationSecretBox) this.applicationSecretBox.hidden = true;
+    }
+
+    showApplicationSecret(secret) {
+        this.clearApplicationSecret();
+        if (!secret || !this.isAdministrator() || this.state.activePanel !== "applications") return;
+        if (this.applicationSecretInput) this.applicationSecretInput.value = secret;
+        if (this.applicationSecretBox) this.applicationSecretBox.hidden = false;
+    }
+
+    clearApplications() {
+        this.clearApplicationSecret();
+        this.state.applications = [];
+        this.state.applicationsStart = 0;
+        this.state.applicationsTotal = 0;
+        this.state.oidcStatus = null;
+        this.resetApplicationForm();
+        this.renderApplications();
+        this.renderOidcStatus();
+    }
+
+    resetApplicationForm() {
+        this.state.applicationEditId = null;
+        const values = {
+            client_id: "", client_name: "", redirect_uris: "", post_logout_redirect_uris: "",
+            token_endpoint_auth_method: "client_secret_basic", scope: "openid profile email"
+        };
+        for (const [key, input] of Object.entries(this.applicationInputs || {})) {
+            if (!input) continue;
+            if (key === "enabled") input.checked = true;
+            else input.value = values[key];
+        }
+        if (this.applicationInputs?.client_id) this.applicationInputs.client_id.disabled = false;
+        for (const [grant, input] of Object.entries(this.applicationGrantInputs || {})) {
+            if (input) input.checked = grant === "authorization_code";
+        }
+        if (this.applicationEditorTitle) this.applicationEditorTitle.textContent = "Create application";
+    }
+
+    newApplication() {
+        if (!this.isAdministrator() || this.state.applicationBusy) return;
+        this.clearApplicationSecret();
+        this.resetApplicationForm();
+    }
+
+    editApplication(_target, clientId) {
+        if (!this.isAdministrator() || this.state.applicationBusy) return;
+        const client = this.state.applications.find((item) => item.client_id === clientId);
+        if (!client) return;
+        this.clearApplicationSecret();
+        this.state.applicationEditId = clientId;
+        for (const [key, input] of Object.entries(this.applicationInputs || {})) {
+            if (!input) continue;
+            if (key === "enabled") input.checked = client.enabled !== false;
+            else input.value = Array.isArray(client[key]) ? client[key].join("\n") : client[key] || "";
+        }
+        if (this.applicationInputs?.client_id) this.applicationInputs.client_id.disabled = true;
+        for (const [grant, input] of Object.entries(this.applicationGrantInputs || {})) {
+            if (input) input.checked = client.grant_types.includes(grant);
+        }
+        if (this.applicationEditorTitle) this.applicationEditorTitle.textContent = "Edit application";
+        this.applicationInputs?.client_name?.focus?.();
+    }
+
+    collectApplication() {
+        const input = this.applicationInputs || {};
+        const lines = (value) => String(value || "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+        const payload = {
+            client_name: String(input.client_name?.value || "").trim(),
+            redirect_uris: lines(input.redirect_uris?.value),
+            post_logout_redirect_uris: lines(input.post_logout_redirect_uris?.value),
+            token_endpoint_auth_method: input.token_endpoint_auth_method?.value || "client_secret_basic",
+            grant_types: Object.entries(this.applicationGrantInputs || {}).filter(([, node]) => node?.checked).map(([grant]) => grant),
+            scope: String(input.scope?.value || "").trim(),
+            enabled: input.enabled?.checked === true
+        };
+        const clientId = this.state.applicationEditId || String(input.client_id?.value || "").trim();
+        if (clientId) payload.client_id = clientId;
+        return payload;
+    }
+
+    async refreshApplications() {
+        if (!this.isAdministrator()) return;
+        this.clearApplicationSecret();
+        await Promise.all([this.refreshOidcStatus(), this.loadApplicationsPage(this.state.applicationsStart)]);
+    }
+
+    async refreshOidcStatus() {
+        try {
+            const status = await this.callTool("userpersisto_oidc_status");
+            if (!this.isAdministrator()) return;
+            this.state.oidcStatus = { enabled: status.enabled === true, issuer: status.issuer, discoveryUrl: status.discoveryUrl };
+            this.renderOidcStatus();
+        } catch (error) {
+            this.setStatus(error?.message || "Failed to load OAuth provider status.", "error");
+        }
+    }
+
+    renderOidcStatus() {
+        if (!this.oidcStatusEl) return;
+        const status = this.state.oidcStatus;
+        this.oidcStatusEl.textContent = !status ? "Loading provider…" : status.enabled
+            ? `Issuer: ${status.issuer}\nDiscovery: ${status.discoveryUrl}`
+            : "OAuth/OIDC is disabled. Configure USERPERSISTO_OIDC_ISSUER with the public issuer URL and restart UserPersisto to enable it.";
+    }
+
+    async loadApplicationsPage(start = 0) {
+        if (!this.isAdministrator() || this.state.applicationsLoading) return false;
+        this.state.applicationsLoading = true;
+        this.renderApplicationsPagination();
+        try {
+            let payload = await this.callTool("userpersisto_oidc_clients_list", { start, pageSize: this.state.applicationsPageSize });
+            if (!this.isAdministrator()) return false;
+            if (start > 0 && !payload.items?.length && payload.total < start + 1) {
+                start = Math.max(0, Math.floor((Math.max(1, payload.total) - 1) / this.state.applicationsPageSize) * this.state.applicationsPageSize);
+                payload = await this.callTool("userpersisto_oidc_clients_list", { start, pageSize: this.state.applicationsPageSize });
+                if (!this.isAdministrator()) return false;
+            }
+            // Retain only display metadata, even if a provider accidentally includes a secret.
+            this.state.applications = (payload.items || []).map((client) => ({
+                client_id: client.client_id,
+                client_name: client.client_name,
+                redirect_uris: client.redirect_uris || [],
+                post_logout_redirect_uris: client.post_logout_redirect_uris || [],
+                token_endpoint_auth_method: client.token_endpoint_auth_method,
+                grant_types: client.grant_types || [],
+                scope: client.scope,
+                enabled: client.enabled !== false
+            }));
+            this.state.applicationsStart = start;
+            this.state.applicationsTotal = payload.total;
+            this.renderApplications();
+            return true;
+        } catch (error) {
+            this.setStatus(error?.message || "Failed to load applications.", "error");
+            return false;
+        } finally {
+            this.state.applicationsLoading = false;
+            this.renderApplicationsPagination();
+        }
+    }
+
+    previousApplicationsPage() {
+        this.clearApplicationSecret();
+        return this.loadApplicationsPage(Math.max(0, this.state.applicationsStart - this.state.applicationsPageSize));
+    }
+
+    nextApplicationsPage() {
+        if (this.state.applicationsStart + this.state.applicationsPageSize >= this.state.applicationsTotal) return;
+        this.clearApplicationSecret();
+        return this.loadApplicationsPage(this.state.applicationsStart + this.state.applicationsPageSize);
+    }
+
+    renderApplicationsPagination() {
+        const { applicationsStart: start, applicationsPageSize: size, applicationsTotal: total, applicationsLoading: loading, applicationBusy: busy, applications } = this.state;
+        this.element.querySelectorAll?.("[data-oidc-control]").forEach((node) => { node.disabled = loading || busy; });
+        if (this.applicationInputs?.client_id) this.applicationInputs.client_id.disabled = loading || busy || !!this.state.applicationEditId;
+        if (this.applicationsPreviousButton) this.applicationsPreviousButton.disabled = loading || busy || start === 0;
+        if (this.applicationsNextButton) this.applicationsNextButton.disabled = loading || busy || start + size >= total;
+        if (this.applicationsPageLabel) this.applicationsPageLabel.textContent = loading
+            ? "Loading applications…"
+            : `${applications.length ? start + 1 : 0}–${start + applications.length} of ${total} applications`;
+    }
+
+    renderApplications() {
+        if (!this.applicationsListEl) return;
+        this.applicationsListEl.innerHTML = this.state.applications.length ? this.state.applications.map((client) => `
+            <div class="userpersisto-row">
+                <div>
+                    <div class="userpersisto-row-title">${escapeHtml(client.client_name || client.client_id)}</div>
+                    <div class="userpersisto-row-meta">${escapeHtml(client.client_id)} · ${client.enabled ? "Enabled" : "Disabled"}</div>
+                    <div class="userpersisto-row-meta">${escapeHtml(client.token_endpoint_auth_method)} · ${escapeHtml(client.grant_types.join(", "))}</div>
+                </div>
+                <div class="userpersisto-actions">
+                    <button type="button" class="gray-button" data-oidc-control data-client-action="edit" data-client-id="${escapeHtml(client.client_id)}">Edit</button>
+                    <button type="button" class="gray-button" data-oidc-control data-client-action="toggle" data-client-id="${escapeHtml(client.client_id)}">${client.enabled ? "Disable" : "Enable"}</button>
+                    ${client.token_endpoint_auth_method !== "none" ? `<button type="button" class="gray-button" data-oidc-control data-client-action="rotate" data-client-id="${escapeHtml(client.client_id)}">Rotate secret</button>` : ""}
+                    <button type="button" class="gray-button" data-oidc-control data-client-action="delete" data-client-id="${escapeHtml(client.client_id)}">Delete</button>
+                </div>
+            </div>`).join("") : '<div class="userpersisto-result">No applications registered.</div>';
+        this.applicationsListEl.querySelectorAll("[data-client-action]").forEach((button) => {
+            button.addEventListener("click", () => {
+                const actions = { edit: "editApplication", toggle: "toggleApplication", rotate: "rotateApplicationSecret", delete: "deleteApplication" };
+                void this[actions[button.dataset.clientAction]](button, button.dataset.clientId);
+            });
+        });
+        this.renderApplicationsPagination();
+    }
+
+    async mutateApplication(tool, args, success, { reset = false, firstPage = false } = {}) {
+        if (!this.isAdministrator() || this.state.applicationBusy || this.state.applicationsLoading) return;
+        this.state.applicationBusy = true;
+        this.clearApplicationSecret();
+        this.renderApplicationsPagination();
+        try {
+            const result = await this.callTool(tool, args);
+            if (!this.isAdministrator()) return;
+            if (reset) this.resetApplicationForm();
+            const loaded = await this.loadApplicationsPage(firstPage ? 0 : this.state.applicationsStart);
+            this.showApplicationSecret(result.client_secret);
+            if (loaded) this.setStatus(success);
+        } catch (error) {
+            this.setStatus(error?.message || "Failed to update application.", "error");
+        } finally {
+            this.state.applicationBusy = false;
+            this.renderApplicationsPagination();
+        }
+    }
+
+    saveApplication() {
+        const editing = !!this.state.applicationEditId;
+        return this.mutateApplication(editing ? "userpersisto_oidc_client_update" : "userpersisto_oidc_client_create",
+            this.collectApplication(), editing ? "Application updated." : "Application created.", { reset: true, firstPage: !editing });
+    }
+
+    toggleApplication(_target, clientId) {
+        const client = this.state.applications.find((item) => item.client_id === clientId);
+        if (!client) return;
+        return this.mutateApplication("userpersisto_oidc_client_update", { client_id: clientId, enabled: !client.enabled }, client.enabled ? "Application disabled." : "Application enabled.");
+    }
+
+    async confirmApplicationAction(message) {
+        return assistOS.UI.showModal("confirm-action-modal", { message }, true);
+    }
+
+    async rotateApplicationSecret(_target, clientId) {
+        if (!this.isAdministrator() || this.state.applicationBusy) return;
+        if (!await this.confirmApplicationAction("Rotate this application's secret? Its current secret will stop working immediately.")) return;
+        return this.mutateApplication("userpersisto_oidc_client_rotate_secret", { client_id: clientId }, "Secret rotated.");
+    }
+
+    async deleteApplication(_target, clientId) {
+        if (!this.isAdministrator() || this.state.applicationBusy) return;
+        if (!await this.confirmApplicationAction("Delete this application? Its clients will no longer be able to sign in.")) return;
+        return this.mutateApplication("userpersisto_oidc_client_delete", { client_id: clientId }, "Application deleted.", { reset: this.state.applicationEditId === clientId });
+    }
+
     closeModal() {
+        this.clearEnrollment();
+        this.clearApplicationSecret();
         assistOS.UI.closeModal(this.element, null);
     }
 }

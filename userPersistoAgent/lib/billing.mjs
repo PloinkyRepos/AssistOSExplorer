@@ -80,27 +80,41 @@ export function verifyStripeSignature(rawBody, signatureHeader, secret) {
     });
 }
 
-async function stripeRequest(path, form, { idempotencyKey = '' } = {}) {
+async function stripeRequest(path, form, { idempotencyKey = '', method = 'POST' } = {}) {
     const key = await getSecret('STRIPE_SECRET_KEY');
     if (!key) throw new Error('STRIPE_SECRET_KEY is not configured.');
-    const response = await fetch(`https://api.stripe.com/v1/${path}`, {
-        method: 'POST',
-        headers: {
-            Authorization: `Bearer ${key}`,
-            'Content-Type': 'application/x-www-form-urlencoded',
-            ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
-        },
-        body: new URLSearchParams(form),
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data?.error?.message || `Stripe ${path} failed (${response.status})`);
-    return data;
+    const controller = new AbortController();
+    const deadline = setTimeout(() => controller.abort(), 15_000);
+    try {
+        const response = await fetch(`https://api.stripe.com/v1/${path}`, {
+            method,
+            signal: controller.signal,
+            headers: {
+                Authorization: `Bearer ${key}`,
+                'Content-Type': 'application/x-www-form-urlencoded',
+                ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
+            },
+            ...(form ? { body: new URLSearchParams(form) } : {}),
+        });
+        // The same deadline covers the response body, which can stall even
+        // after headers arrive. Never turn an aborted body into success data.
+        const data = await response.json();
+        if (!response.ok) throw new Error(data?.error?.message || `Stripe ${path} failed (${response.status})`);
+        return data;
+    } catch (error) {
+        if (controller.signal.aborted) {
+            throw Object.assign(new Error('Stripe request timed out.'), { code: 'stripe_timeout', statusCode: 504 });
+        }
+        throw error;
+    } finally {
+        clearTimeout(deadline);
+    }
 }
 
 async function upsertPayment(store, record) {
     const existing = await store.getPaymentTransactionByProviderKey(record.providerKey);
     if (existing) {
-        for (const field of ['provider', 'providerObjectId', 'userId', 'kind']) {
+        for (const field of ['provider', 'providerObjectId', 'userId', 'kind', 'credits']) {
             if (String(existing[field] || '') !== String(record[field] || '')) {
                 throw Object.assign(new Error(`Payment identity conflict for ${record.providerKey}.`), {
                     code: 'payment_identity_conflict',
@@ -108,6 +122,7 @@ async function upsertPayment(store, record) {
                 });
             }
         }
+        if (existing.status === 'paid' || record.status === 'checkout_created') return existing;
         return store.updatePaymentTransaction(existing.id, {
             ...record,
             createdAt: existing.createdAt,
@@ -124,7 +139,8 @@ export async function createCheckout({ userId, kind, quantity = 1, idempotencyKe
     const units = positiveInteger(quantity, null, 'quantity');
     const requestKey = normalizeIdempotencyKey(idempotencyKey);
     const providerIdempotencyKey = scopedStripeIdempotencyKey({ userId: normalizedUserId, kind, requestKey });
-    return serialize(`stripe:checkout:${providerIdempotencyKey}`, async () => {
+    const requestHash = createHash('sha256').update(JSON.stringify({ userId: normalizedUserId, kind, units })).digest('base64url');
+    return serialize('stripe:billing', async () => {
         const store = await getStore();
         const user = (await store.hasUser(normalizedUserId)) ? await store.getUser(normalizedUserId) : null;
         if (!user) {
@@ -133,35 +149,66 @@ export async function createCheckout({ userId, kind, quantity = 1, idempotencyKe
         if (user.status !== 'active') {
             throw Object.assign(new Error('Authentication required.'), { code: 'invalid_session', statusCode: 401 });
         }
-        const price = await getSecret(kind === 'credits' ? 'STRIPE_PRICE_CREDITS' : 'STRIPE_PRICE_SUBSCRIPTION');
-        if (!price) throw new Error(`Stripe price for ${kind} is not configured.`);
-        let expectedCredits = 0;
-        if (kind === 'credits') {
-            const perUnit = positiveInteger(await getSecret('USERPERSISTO_CREDITS_PER_UNIT'), 1, 'credits_per_unit');
-            expectedCredits = units * perUnit;
-            if (!Number.isSafeInteger(expectedCredits)) throw new Error('Calculated credit amount is invalid.');
+        let intent = await store.getCheckoutIntentByIntentKey(providerIdempotencyKey);
+        if (intent && intent.requestHash !== requestHash) {
+            throw Object.assign(new Error('Checkout idempotency key was reused with different purchase parameters.'), {
+                code: 'checkout_idempotency_conflict', statusCode: 409,
+            });
         }
-        const successUrl = requiredUrl(await getSecret('USERPERSISTO_BILLING_SUCCESS_URL'), 'USERPERSISTO_BILLING_SUCCESS_URL');
-        const cancelUrl = requiredUrl(await getSecret('USERPERSISTO_BILLING_CANCEL_URL'), 'USERPERSISTO_BILLING_CANCEL_URL');
-        const form = {
-            mode: kind === 'credits' ? 'payment' : 'subscription',
-            client_reference_id: normalizedUserId,
-            'line_items[0][price]': price,
-            'line_items[0][quantity]': String(units),
-            'metadata[kind]': kind,
-            'metadata[units]': String(units),
-            'metadata[userId]': normalizedUserId,
-            success_url: successUrl,
-            cancel_url: cancelUrl,
-        };
-        if (kind === 'subscription') form['subscription_data[metadata][userId]'] = normalizedUserId;
-        const session = await stripeRequest('checkout/sessions', form, {
-            idempotencyKey: providerIdempotencyKey,
-        });
-        if (!String(session.id || '').trim() || !String(session.url || '').trim()) {
+        if (!intent) {
+            const price = await getSecret(kind === 'credits' ? 'STRIPE_PRICE_CREDITS' : 'STRIPE_PRICE_SUBSCRIPTION');
+            if (!price) throw new Error(`Stripe price for ${kind} is not configured.`);
+            const expectedCredits = kind === 'credits'
+                ? units * positiveInteger(await getSecret('USERPERSISTO_CREDITS_PER_UNIT'), 1, 'credits_per_unit')
+                : 0;
+            if (!Number.isSafeInteger(expectedCredits)) throw new Error('Calculated credit amount is invalid.');
+            const form = {
+                mode: kind === 'credits' ? 'payment' : 'subscription',
+                client_reference_id: normalizedUserId,
+                'line_items[0][price]': price,
+                'line_items[0][quantity]': String(units),
+                'metadata[kind]': kind,
+                'metadata[units]': String(units),
+                'metadata[userId]': normalizedUserId,
+                'metadata[checkoutIntentKey]': providerIdempotencyKey,
+                success_url: requiredUrl(await getSecret('USERPERSISTO_BILLING_SUCCESS_URL'), 'USERPERSISTO_BILLING_SUCCESS_URL'),
+                cancel_url: requiredUrl(await getSecret('USERPERSISTO_BILLING_CANCEL_URL'), 'USERPERSISTO_BILLING_CANCEL_URL'),
+            };
+            if (kind === 'subscription') form['subscription_data[metadata][userId]'] = normalizedUserId;
+            const timestamp = new Date().toISOString();
+            intent = await store.createCheckoutIntent({
+                intentKey: providerIdempotencyKey, requestHash, userId: normalizedUserId, kind, units,
+                credits: expectedCredits, form, sessionId: '', checkoutUrl: '', createdAt: timestamp, updatedAt: timestamp,
+            });
+            // A provider effect is never attempted before its immutable local
+            // purchase intent is durable. Uncertain responses reuse this form.
+            await flush();
+        }
+        if (intent.sessionId && intent.checkoutUrl) {
+            return { url: intent.checkoutUrl, sessionId: intent.sessionId, idempotencyKey: requestKey };
+        }
+        // Stripe may prune idempotency keys after 24 hours. An unresolved
+        // older intent must be reconciled, never submitted as a new purchase.
+        const intentCreatedAt = Date.parse(intent.createdAt);
+        if (!intent.sessionId && (!Number.isFinite(intentCreatedAt)
+            || Date.now() - intentCreatedAt >= 23 * 60 * 60 * 1000)) {
+            throw Object.assign(new Error('Checkout requires provider reconciliation before it can be retried.'), {
+                code: 'checkout_reconciliation_required', statusCode: 409,
+            });
+        }
+        const session = intent.sessionId
+            ? await stripeRequest(`checkout/sessions/${encodeURIComponent(intent.sessionId)}`, null, { method: 'GET' })
+            : await stripeRequest('checkout/sessions', intent.form, { idempotencyKey: providerIdempotencyKey });
+        if (!String(session.id || '').trim()) {
             throw new Error('Stripe returned an incomplete checkout session.');
         }
-        const checkoutUrl = requiredHttpsUrl(session.url, 'Stripe checkout URL');
+        if (intent.sessionId && intent.sessionId !== session.id) throw new Error('Stripe returned a different checkout session.');
+        const checkoutUrl = session.url
+            ? requiredHttpsUrl(session.url, 'Stripe checkout URL')
+            : (intent.sessionId && (session.status === 'complete' || session.payment_status === 'paid')
+                ? requiredUrl(intent.form.success_url, 'Stored checkout success URL')
+                : '');
+        if (!checkoutUrl) throw new Error('Stripe returned an incomplete checkout session.');
         const timestamp = new Date().toISOString();
         await upsertPayment(store, {
             providerKey: `stripe:checkout:${session.id}`,
@@ -173,10 +220,11 @@ export async function createCheckout({ userId, kind, quantity = 1, idempotencyKe
             status: 'checkout_created',
             amountMinor: Number.isSafeInteger(session.amount_total) ? session.amount_total : 0,
             currency: String(session.currency || '').toLowerCase(),
-            credits: expectedCredits,
+            credits: intent.credits,
             createdAt: timestamp,
             updatedAt: timestamp,
         });
+        await store.updateCheckoutIntent(intent.id, { sessionId: session.id, checkoutUrl, updatedAt: timestamp });
         await flush();
         await recordAudit({ actorId: normalizedUserId, action: 'billing.checkout.create', target: session.id, reason: kind });
         await flush();
@@ -184,21 +232,46 @@ export async function createCheckout({ userId, kind, quantity = 1, idempotencyKe
     });
 }
 
-async function upsertSubscription(store, object, eventType) {
-    const userId = String(object.metadata?.userId || object.client_reference_id || '').trim();
-    if (!userId || !object.id) return;
+async function upsertSubscription(store, snapshot, event) {
+    const providerRef = String(snapshot.id || '').trim();
+    if (!providerRef) throw new Error('Subscription event is missing its provider identity.');
+    const existing = await store.getSubscriptionByProviderRef(providerRef);
+    const snapshotUserId = String(snapshot.metadata?.userId || snapshot.client_reference_id || '').trim();
+    if (existing && snapshotUserId && snapshotUserId !== existing.userId) {
+        throw Object.assign(new Error(`Subscription identity conflict for ${providerRef}.`), {
+            code: 'subscription_identity_conflict', statusCode: 409,
+        });
+    }
+    // A canceled Stripe subscription cannot resume under the same identifier.
+    // Keep a durable tombstone even if a later delivery contains active state.
+    if (existing?.status === 'canceled') return;
+    // Delivery order and second-resolution event timestamps are not versions.
+    // Read Stripe's current resource under the billing serialization boundary.
+    const object = await stripeRequest(`subscriptions/${encodeURIComponent(providerRef)}`, null, { method: 'GET' });
+    if (object.id !== providerRef || !String(object.status || '').trim()) {
+        throw new Error('Stripe returned an invalid subscription.');
+    }
+    const userId = String(object.metadata?.userId || existing?.userId || snapshotUserId || '').trim();
+    if (!userId) throw new Error('Subscription has no linked user identity.');
+    if ((snapshotUserId && snapshotUserId !== userId) || (existing && existing.userId !== userId)) {
+        throw Object.assign(new Error(`Subscription identity conflict for ${providerRef}.`), {
+            code: 'subscription_identity_conflict', statusCode: 409,
+        });
+    }
+    const periodEnd = object.current_period_end || object.items?.data?.[0]?.current_period_end;
     const record = {
-        providerRef: String(object.id),
+        providerRef,
         userId,
         provider: 'stripe',
         planId: object.items?.data?.[0]?.price?.id || '',
-        status: eventType === 'customer.subscription.deleted' ? 'canceled' : (object.status || 'unknown'),
-        currentPeriodEnd: object.current_period_end ? new Date(object.current_period_end * 1000).toISOString() : '',
+        status: event.type === 'customer.subscription.deleted' ? 'canceled' : object.status,
+        currentPeriodEnd: periodEnd ? new Date(periodEnd * 1000).toISOString() : '',
+        reconciledAt: new Date().toISOString(),
+        sourceEventId: event.id,
     };
     if (!(await store.hasUser(userId))) {
         throw Object.assign(new Error('User not found.'), { code: 'user_not_found', statusCode: 404 });
     }
-    const existing = await store.getSubscriptionByProviderRef(record.providerRef);
     if (existing) {
         if (String(existing.userId || '') !== record.userId || String(existing.provider || '') !== record.provider) {
             throw Object.assign(new Error(`Subscription identity conflict for ${record.providerRef}.`), {
@@ -229,7 +302,30 @@ async function applyPaidCheckout(store, event, object) {
     if (!userId || !objectId) throw new Error('Paid checkout is missing user or session identity.');
     positiveInteger(object.metadata?.units, null, 'units');
     const providerKey = `stripe:checkout:${objectId}`;
-    const checkout = await store.getPaymentTransactionByProviderKey(providerKey);
+    let checkout = await store.getPaymentTransactionByProviderKey(providerKey);
+    // A signed webhook can arrive after Stripe accepted checkout but before
+    // its response reached us. Its metadata links the durable local intent.
+    if (!checkout && object.metadata?.checkoutIntentKey) {
+        const intent = await store.getCheckoutIntentByIntentKey(String(object.metadata.checkoutIntentKey));
+        if (intent) {
+            if (intent.userId !== userId || intent.kind !== 'credits'
+                || intent.units !== Number(object.metadata.units)
+                || (intent.sessionId && intent.sessionId !== objectId)) {
+                throw Object.assign(new Error('Stripe checkout conflicts with its local intent.'), {
+                    code: 'payment_identity_conflict', statusCode: 409,
+                });
+            }
+            const timestamp = new Date().toISOString();
+            checkout = await upsertPayment(store, {
+                providerKey, provider: 'stripe', providerEventId: '', providerObjectId: objectId,
+                userId, kind: 'credits', status: 'checkout_created', credits: intent.credits,
+                amountMinor: Number.isSafeInteger(object.amount_total) ? object.amount_total : 0,
+                currency: String(object.currency || '').toLowerCase(), createdAt: intent.createdAt, updatedAt: timestamp,
+            });
+            await store.updateCheckoutIntent(intent.id, { sessionId: objectId, updatedAt: timestamp });
+            await flush();
+        }
+    }
     if (!checkout) {
         throw Object.assign(new Error('Stripe checkout was not initiated by UserPersisto.'), {
             code: 'payment_transaction_not_found',
@@ -292,7 +388,7 @@ export async function processStripeWebhook({ rawBody, signatureHeader }) {
     if (!eventId) throw new Error('Stripe event id is required.');
     const payloadHash = createHash('sha256').update(rawBody).digest('base64url');
 
-    return serialize('stripe:webhooks', async () => {
+    return serialize('stripe:billing', async () => {
         const store = await getStore();
         let eventRecord = await store.getBillingEventByStripeEventId(eventId);
         if (eventRecord?.payloadHash && eventRecord.payloadHash !== payloadHash) {
@@ -319,7 +415,7 @@ export async function processStripeWebhook({ rawBody, signatureHeader }) {
             if (['checkout.session.completed', 'checkout.session.async_payment_succeeded'].includes(event.type)) {
                 effect = await applyPaidCheckout(store, event, object);
             } else if (String(event.type || '').startsWith('customer.subscription.')) {
-                await upsertSubscription(store, object, event.type);
+                await upsertSubscription(store, object, event);
             }
             await store.updateBillingEvent(eventRecord.id, { status: 'processed', processedAt: new Date().toISOString() });
             await flush();

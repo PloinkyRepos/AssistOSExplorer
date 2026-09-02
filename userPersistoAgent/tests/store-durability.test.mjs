@@ -1,0 +1,137 @@
+import test, { afterEach } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, mkdir, readFile, writeFile, rename, rm } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { getStore, flush, resetStoreForTests } from '../lib/store.mjs';
+import { SNAPSHOT_FILE } from '../lib/durable-storage.mjs';
+import { ensureSeedData } from '../lib/bootstrap.mjs';
+import { createUser, registerUser, getUserRoles } from '../lib/users.mjs';
+import { grant, getBalance } from '../lib/credits.mjs';
+
+process.env.USERPERSISTO_SETTINGS_KEY = 'test-settings-key';
+let folder;
+async function fixture() {
+    folder = await mkdtemp(join(tmpdir(), 'userpersisto-durability-'));
+    process.env.PERSISTENCE_FOLDER = folder;
+    return getStore();
+}
+afterEach(async () => {
+    await resetStoreForTests().catch(() => {});
+    if (folder) await rm(folder, { recursive: true, force: true });
+});
+
+test('failed business write rejects, cached retries fail closed, and restart retains committed balance', async () => {
+    await fixture();
+    await ensureSeedData();
+    const user = await createUser({ email: 'durable@example.test', roles: ['user'] });
+    await grant({ userId: user.id, amount: 10, referenceId: 'seed' });
+    const backup = `${folder}-saved`;
+    await rename(folder, backup);
+    await writeFile(folder, 'not a directory');
+    try {
+        await assert.rejects(grant({ userId: user.id, amount: 7, referenceId: 'failed-write' }), { code: 'persistence_unavailable' });
+        await assert.rejects(grant({ userId: user.id, amount: 7, referenceId: 'failed-write' }), { code: 'persistence_unavailable' });
+        await assert.rejects(getBalance(user.id), { code: 'persistence_unavailable' });
+    } finally {
+        await rm(folder);
+        await rename(backup, folder);
+    }
+    await resetStoreForTests();
+    assert.deepEqual(await getBalance(user.id), { balance: 10, reservedBalance: 0 });
+    await grant({ userId: user.id, amount: 7, referenceId: 'failed-write' });
+    await resetStoreForTests();
+    assert.deepEqual(await getBalance(user.id), { balance: 17, reservedBalance: 0 });
+});
+
+test('atomic snapshot preserves objects, unique indexes and deletions over restart', async () => {
+    const store = await fixture();
+    await Promise.all(Array.from({ length: 30 }, async (_, index) => {
+        await store.createUser({ email: `snapshot-${index}@example.test` });
+        if (index % 5 === 0) await flush();
+    }));
+    await store.deleteUser((await store.getUserByEmail('snapshot-0@example.test')).id);
+    await flush();
+    await resetStoreForTests();
+    const reopened = await getStore();
+    assert.equal((await reopened.select('user')).totalCount, 29);
+    assert.equal(await reopened.getUserByEmail('snapshot-0@example.test'), undefined);
+    assert.equal((await reopened.getUserByEmail('snapshot-29@example.test')).email, 'snapshot-29@example.test');
+    await assert.rejects(reopened.createUser({ email: 'snapshot-29@example.test' }));
+});
+
+test('rename failure rejects the commit and never acknowledges the staged changes', async () => {
+    const store = await fixture();
+    await store.createUser({ email: 'committed@example.test' });
+    await flush();
+    const snapshot = join(folder, SNAPSHOT_FILE);
+    const previous = `${snapshot}.previous`;
+    await rename(snapshot, previous);
+    await mkdir(snapshot);
+    await store.createUser({ email: 'uncommitted@example.test' });
+    await assert.rejects(flush(), { code: 'persistence_unavailable' });
+    await assert.rejects(store.getUserByEmail('uncommitted@example.test'), { code: 'persistence_unavailable' });
+    await rm(snapshot, { recursive: true });
+    await rename(previous, snapshot);
+    await resetStoreForTests();
+    assert.equal((await (await getStore()).select('user')).totalCount, 1);
+});
+
+test('concurrent flush cannot publish an initial user without its administrator role', async () => {
+    await fixture();
+    await ensureSeedData();
+    let done = false;
+    let samples = 0;
+    const [registration] = await Promise.all([
+        registerUser({ email: 'atomic-owner@example.test', password: 'owner-password' }).finally(() => { done = true; }),
+        (async () => {
+            do {
+                await flush();
+                const objects = Object.values(JSON.parse(JSON.parse(readFileSync(join(folder, SNAPSHOT_FILE), 'utf8')).payload));
+                const user = objects.find((entry) => entry.email === 'atomic-owner@example.test');
+                if (user) assert.ok(objects.some((entry) => entry.userId === user.id && entry.roleId), 'durable initial user must have a role');
+                samples += 1;
+            } while (!done);
+        })(),
+    ]);
+    assert.ok(samples);
+    await resetStoreForTests();
+    assert.deepEqual(await getUserRoles(registration.user.id), ['admin']);
+});
+
+test('a corrupt snapshot fails startup without falling back to legacy data', async () => {
+    await fixture();
+    await flush();
+    await resetStoreForTests();
+    await writeFile(join(folder, SNAPSHOT_FILE), '{broken');
+    await assert.rejects(getStore(), { code: 'persistence_unavailable' });
+    assert.equal(await readFile(join(folder, SNAPSHOT_FILE), 'utf8'), '{broken');
+});
+
+test('legacy files import once and the snapshot becomes authoritative', async () => {
+    const store = await fixture();
+    const user = await store.createUser({ email: 'legacy@example.test' });
+    await flush();
+    await resetStoreForTests();
+    const objects = JSON.parse(JSON.parse(await readFile(join(folder, SNAPSHOT_FILE), 'utf8')).payload);
+    for (const [id, object] of Object.entries(objects)) await writeFile(join(folder, id), JSON.stringify(object));
+    await rm(join(folder, SNAPSHOT_FILE));
+    assert.equal((await (await getStore()).getUserByEmail('legacy@example.test')).id, user.id);
+    await flush();
+    await resetStoreForTests();
+    await writeFile(join(folder, user.id), '{corrupt obsolete legacy object');
+    assert.equal((await (await getStore()).getUserByEmail('legacy@example.test')).id, user.id);
+});
+
+test('a second process cannot open the same store for writing', async () => {
+    await fixture();
+    await flush();
+    const child = spawnSync(process.execPath, ['--input-type=module', '--eval', `
+        const { getStore } = await import(${JSON.stringify(new URL('../lib/store.mjs', import.meta.url).href)});
+        try { await getStore(); process.exit(2); }
+        catch (error) { if (error.code !== 'persistence_locked') throw error; }
+    `], { env: { ...process.env }, encoding: 'utf8', timeout: 10000 });
+    assert.equal(child.status, 0, child.stderr);
+});

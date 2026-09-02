@@ -10,7 +10,12 @@ export class AdminUsersSettings {
         this.invalidate = invalidate;
         this.state = {
             users: [],
-            availableRoles: []
+            availableRoles: [],
+            start: 0,
+            pageSize: 100,
+            totalCount: 0,
+            hasMore: false,
+            loading: false,
         };
         this.invalidate();
     }
@@ -21,6 +26,9 @@ export class AdminUsersSettings {
         this.createForm = this.element.querySelector('[data-role="createForm"]');
         this.createRolesSelect = this.element.querySelector('[data-role="createRolesSelect"]');
         this.tableHost = this.element.querySelector('[data-role="tableHost"]');
+        this.pageLabel = this.element.querySelector('[data-role="pageLabel"]');
+        this.previousButton = this.element.querySelector('[data-role="previousPage"]');
+        this.nextButton = this.element.querySelector('[data-role="nextPage"]');
         this.bindEvents();
         this.render();
     }
@@ -41,12 +49,37 @@ export class AdminUsersSettings {
         if (Array.isArray(next.availableRoles)) {
             this.state.availableRoles = next.availableRoles;
         }
+        for (const key of ['start', 'pageSize', 'totalCount', 'hasMore', 'loading']) {
+            if (Object.prototype.hasOwnProperty.call(next, key)) this.state[key] = next[key];
+        }
         this.render();
     }
 
     render() {
         this.configureRoleSelect(this.createRolesSelect, []);
         this.renderUsers();
+        this.renderPagination();
+    }
+
+    renderPagination() {
+        const { start, users, totalCount, hasMore, loading } = this.state;
+        if (this.previousButton) this.previousButton.disabled = loading || start === 0;
+        if (this.nextButton) this.nextButton.disabled = loading || !hasMore;
+        if (this.pageLabel) this.pageLabel.textContent = loading
+            ? 'Loading users…'
+            : `${users.length ? start + 1 : 0}–${start + users.length}${totalCount === null ? '' : ` of ${totalCount}`} users`;
+    }
+
+    previousPage() {
+        if (!this.state.loading && this.state.start > 0) {
+            this.dispatch('admin-users-page', { start: Math.max(0, this.state.start - this.state.pageSize) });
+        }
+    }
+
+    nextPage() {
+        if (!this.state.loading && this.state.hasMore) {
+            this.dispatch('admin-users-page', { start: this.state.start + this.state.pageSize });
+        }
     }
 
     renderUsers() {
@@ -71,6 +104,7 @@ export class AdminUsersSettings {
             <thead>
                 <tr>
                     <th>Username</th>
+                    <th>Email</th>
                     <th>Name</th>
                     <th>Roles</th>
                     <th>Password Reset</th>
@@ -103,7 +137,8 @@ export class AdminUsersSettings {
         const formId = escapeAttr(this.getUserFormId(user));
         tr.innerHTML = `
             <td data-label="Username"><input class="form-input" form="${formId}" data-field="username" value="${escapeAttr(user.username)}"></td>
-            <td data-label="Name"><input class="form-input" form="${formId}" data-field="name" value="${escapeAttr(user.name || '')}"></td>
+            <td data-label="Email"><input class="form-input" form="${formId}" data-field="email" type="email" value="${escapeAttr(user.email || '')}"></td>
+            <td data-label="Name"><input class="form-input" form="${formId}" data-field="name" value="${escapeAttr(user.name || user.displayName || '')}"></td>
             <td data-label="Roles">
                 <custom-select data-presenter="custom-select" data-field="roles"></custom-select>
             </td>
@@ -180,6 +215,7 @@ export class AdminUsersSettings {
         const roles = await this.getSelectedRoles(this.createRolesSelect);
         this.dispatch('admin-users-create', {
             username: data.get('username'),
+            email: data.get('email'),
             password: data.get('password'),
             name: data.get('name'),
             roles

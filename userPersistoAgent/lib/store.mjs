@@ -2,6 +2,8 @@ import { createRequire } from 'node:module';
 import { mkdirSync } from 'node:fs';
 import { ensureSchema } from './schema.mjs';
 import { resetSerialForTests } from './serial.mjs';
+import { createDurableStorage } from './durable-storage.mjs';
+import { withPersistenceScope } from './persistence-scope.mjs';
 
 const require = createRequire(import.meta.url);
 
@@ -29,12 +31,31 @@ async function initialise() {
     }
     mkdirSync(folder, { recursive: true });
     ensurePersistoGlobals();
-    const { getAutoSaverPersistence } = require('../vendor/Persisto/src/persistence/ObjectsAutoSaver.cjs');
     const { initialisePersisto } = require('../vendor/Persisto/src/persistence/Persisto.cjs');
-    const storage = await getAutoSaverPersistence();
-    const persisto = await initialisePersisto(storage, { smartLog: async () => {} });
-    await ensureSchema(persisto);
-    return persisto;
+    const durable = await createDurableStorage(folder);
+    try {
+        const persisto = await initialisePersisto(durable.storage, { smartLog: async () => {} });
+        await ensureSchema(persisto);
+        // A flush must exclude CRUD while Persisto gathers and clears dirty
+        // objects. Domain-level serialization remains responsible for workflows.
+        let tail = Promise.resolve();
+        return new Proxy(persisto, {
+            get(target, name) {
+                if (typeof target[name] !== 'function') return target[name];
+                return (...args) => withPersistenceScope(() => {
+                    const operation = tail.then(() => {
+                        if (name !== 'shutDown') durable.check();
+                        return target[name](...args);
+                    });
+                    tail = operation.catch(() => {});
+                    return operation;
+                });
+            },
+        });
+    } catch (error) {
+        durable.abandon();
+        throw error;
+    }
 }
 
 export function getStore() {
@@ -50,10 +71,13 @@ export async function flush() {
 }
 
 export async function resetStoreForTests() {
-    if (storePromise) {
-        const store = await storePromise;
-        await store.shutDown();
+    try {
+        if (storePromise) {
+            const store = await storePromise;
+            await store.shutDown();
+        }
+    } finally {
+        storePromise = null;
+        resetSerialForTests();
     }
-    storePromise = null;
-    resetSerialForTests();
 }

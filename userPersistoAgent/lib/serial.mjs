@@ -1,3 +1,5 @@
+import { withPersistenceScope } from './persistence-scope.mjs';
+
 const tails = new Map();
 
 export async function serialize(key, operation) {
@@ -17,6 +19,10 @@ export async function serialize(key, operation) {
             tails.delete(normalizedKey);
         }
     }
+}
+
+export function serializePersisted(key, operation) {
+    return serialize(key, () => withPersistenceScope(operation));
 }
 
 export function resetSerialForTests() {

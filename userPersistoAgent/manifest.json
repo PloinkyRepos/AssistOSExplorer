@@ -16,6 +16,19 @@
     "routerAccess": {
         "httpRoutes": [
             {
+                "path": "/base-agent-additional-server/userPersistoAgent/7000/service/dashboard/*",
+                "access": "authenticated"
+            },
+            {
+                "path": "/base-agent-additional-server/userPersistoAgent/7000/service/oidc/*",
+                "access": "public",
+                "publicProtocol": {
+                    "methods": ["GET", "HEAD", "POST", "OPTIONS"],
+                    "allowLoopbackRedirects": true,
+                    "allowCors": true
+                }
+            },
+            {
                 "path": "/base-agent-additional-server/userPersistoAgent/7000/service/auth/*",
                 "access": "guest"
             },
@@ -25,7 +38,8 @@
             },
             {
                 "path": "/base-agent-additional-server/userPersistoAgent/7000/service/billing/stripe/webhook",
-                "access": "public"
+                "access": "public",
+                "publicProtocol": { "methods": ["POST"] }
             }
         ]
     },
@@ -46,6 +60,10 @@
                 "PERSISTENCE_FOLDER": {
                     "required": false,
                     "default": "/data/persisto"
+                },
+                "USERPERSISTO_OIDC_ISSUER": {
+                    "required": false,
+                    "default": ""
                 },
                 "USERPERSISTO_SETTINGS_KEY": {
                     "generatedSecret": true

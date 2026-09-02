@@ -241,7 +241,7 @@ test('checkout scopes Stripe idempotency by user and persists provider transacti
     assert.equal((await billing.listPaymentTransactions({ userId: second.id })).objects.length, 1);
 });
 
-test('subscription events upsert subscription state', async () => {
+test('subscription events upsert current provider subscription state', async (t) => {
     await saveSettings({ STRIPE_WEBHOOK_SECRET: 'whsec_test' });
     const user = await createUser({ email: 'sub@x.com', displayName: 'Sub', roles: ['user'] });
     const event = {
@@ -250,13 +250,18 @@ test('subscription events upsert subscription state', async () => {
         data: { object: { id: 'sub_001', status: 'active', metadata: { userId: user.id }, items: { data: [{ price: { id: 'price_sub' } }] }, current_period_end: 1893456000 } }
     };
     const rawBody = JSON.stringify(event);
+    t.mock.method(globalThis, 'fetch', async (url, options) => {
+        assert.equal(url, 'https://api.stripe.com/v1/subscriptions/sub_001');
+        assert.equal(options.method, 'GET');
+        return { ok: true, json: async () => event.data.object };
+    });
     await billing.processStripeWebhook({ rawBody, signatureHeader: sign(rawBody, 'whsec_test') });
     const sub = await billing.getSubscription(user.id);
     assert.equal(sub.status, 'active');
     assert.equal(sub.provider, 'stripe');
 });
 
-test('a Stripe subscription identity cannot move between users', async () => {
+test('a Stripe subscription identity cannot move between users', async (t) => {
     await saveSettings({ STRIPE_WEBHOOK_SECRET: 'whsec_test' });
     const first = await createUser({ email: 'sub-owner-a@x.com', roles: ['user'] });
     const second = await createUser({ email: 'sub-owner-b@x.com', roles: ['user'] });
@@ -266,6 +271,7 @@ test('a Stripe subscription identity cannot move between users', async () => {
         data: { object: { id: 'sub_bound', status: 'active', metadata: { userId: first.id } } },
     };
     const firstBody = JSON.stringify(firstEvent);
+    t.mock.method(globalThis, 'fetch', async () => ({ ok: true, json: async () => firstEvent.data.object }));
     await billing.processStripeWebhook({ rawBody: firstBody, signatureHeader: sign(firstBody, 'whsec_test') });
 
     const movedEvent = {
@@ -279,3 +285,190 @@ test('a Stripe subscription identity cannot move between users', async () => {
         (error) => error?.code === 'subscription_identity_conflict'
     );
 });
+
+test('checkout retries preserve the purchase snapshot and terminal payment state across restart', async (t) => {
+    await saveSettings({
+        STRIPE_SECRET_KEY: 'sk_test', STRIPE_WEBHOOK_SECRET: 'whsec_test', STRIPE_PRICE_CREDITS: 'price_original',
+        USERPERSISTO_CREDITS_PER_UNIT: '10',
+        USERPERSISTO_BILLING_SUCCESS_URL: 'https://app.example.test/original-success',
+        USERPERSISTO_BILLING_CANCEL_URL: 'https://app.example.test/original-cancel',
+    });
+    const user = await createUser({ email: 'checkout-immutable@x.com', roles: ['user'] });
+    let requests = 0;
+    t.mock.method(globalThis, 'fetch', async (_url, options) => {
+        requests++;
+        const intent = await (await getStore()).getCheckoutIntentByIntentKey(options.headers['Idempotency-Key']);
+        assert.equal(intent.credits, 10, 'the intent exists before any provider effect');
+        return { ok: true, json: async () => ({
+            id: 'cs_immutable', url: 'https://checkout.stripe.com/c/pay/immutable', amount_total: 100, currency: 'usd',
+        }) };
+    });
+    const input = { userId: user.id, kind: 'credits', quantity: 1, idempotencyKey: 'immutable-purchase' };
+    const first = await billing.createCheckout(input);
+    await saveSettings({ USERPERSISTO_CREDITS_PER_UNIT: '100', STRIPE_PRICE_CREDITS: 'price_replaced' });
+    assert.deepEqual(await billing.createCheckout(input), first);
+    await assert.rejects(() => billing.createCheckout({ ...input, quantity: 2 }), { code: 'checkout_idempotency_conflict' });
+    const rawBody = JSON.stringify({ id: 'evt_immutable_paid', type: 'checkout.session.completed', data: { object: {
+        id: first.sessionId, payment_status: 'paid', client_reference_id: user.id,
+        amount_total: 100, currency: 'usd', metadata: { kind: 'credits', units: '1', userId: user.id },
+    } } });
+    await billing.processStripeWebhook({ rawBody, signatureHeader: sign(rawBody, 'whsec_test') });
+    await resetStoreForTests();
+    assert.deepEqual(await billing.createCheckout(input), first);
+    const payment = await (await getStore()).getPaymentTransactionByProviderKey('stripe:checkout:cs_immutable');
+    assert.equal(payment.credits, 10);
+    assert.equal(payment.status, 'paid');
+    assert.equal(payment.providerEventId, 'evt_immutable_paid');
+    assert.equal((await credits.getBalance(user.id)).balance, 10);
+    assert.equal(requests, 1, 'exact retries never create another provider session');
+});
+
+test('uncertain checkout retries use the durable original request and stop before Stripe key expiry', async (t) => {
+    await saveSettings({ USERPERSISTO_CREDITS_PER_UNIT: '7', STRIPE_PRICE_CREDITS: 'price_uncertain' });
+    const user = await createUser({ email: 'checkout-uncertain@x.com', roles: ['user'] });
+    const input = { userId: user.id, kind: 'credits', quantity: 2, idempotencyKey: 'uncertain-purchase' };
+    const requests = [];
+    t.mock.method(globalThis, 'fetch', async (_url, options) => {
+        requests.push({ key: options.headers['Idempotency-Key'], form: options.body.toString() });
+        throw new Error('fixture response lost');
+    });
+    await assert.rejects(() => billing.createCheckout(input), /fixture response lost/);
+    await resetStoreForTests();
+    await saveSettings({ USERPERSISTO_CREDITS_PER_UNIT: '70', STRIPE_PRICE_CREDITS: 'price_changed' });
+    await assert.rejects(() => billing.createCheckout(input), /fixture response lost/);
+    assert.deepEqual(requests[1], requests[0]);
+    const store = await getStore();
+    const intent = await store.getCheckoutIntentByIntentKey(requests[0].key);
+    assert.equal(intent.credits, 14);
+    await store.updateCheckoutIntent(intent.id, { createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() });
+    await flush();
+    await assert.rejects(() => billing.createCheckout(input), { code: 'checkout_reconciliation_required' });
+    assert.equal(requests.length, 2);
+});
+
+test('a paid webhook repairs a lost checkout response using its durable intent', async (t) => {
+    await saveSettings({ USERPERSISTO_CREDITS_PER_UNIT: '9' });
+    const user = await createUser({ email: 'checkout-response-lost@x.com', roles: ['user'] });
+    let metadata;
+    t.mock.method(globalThis, 'fetch', async (_url, options) => {
+        metadata = Object.fromEntries([...options.body.entries()]
+            .filter(([name]) => name.startsWith('metadata[')).map(([name, value]) => [name.slice(9, -1), value]));
+        throw new Error('fixture checkout accepted but response lost');
+    });
+    await assert.rejects(() => billing.createCheckout({
+        userId: user.id, kind: 'credits', quantity: 3, idempotencyKey: 'lost-response',
+    }), /response lost/);
+    await resetStoreForTests();
+    const rawBody = JSON.stringify({ id: 'evt_response_lost_paid', type: 'checkout.session.completed', data: { object: {
+        id: 'cs_response_lost', payment_status: 'paid', client_reference_id: user.id,
+        amount_total: 300, currency: 'usd', metadata,
+    } } });
+    const result = await billing.processStripeWebhook({ rawBody, signatureHeader: sign(rawBody, 'whsec_test') });
+    assert.equal(result.credited, true);
+    assert.equal((await credits.getBalance(user.id)).balance, 27);
+    assert.equal((await (await getStore()).getCheckoutIntentByIntentKey(metadata.checkoutIntentKey)).sessionId, 'cs_response_lost');
+    t.mock.method(globalThis, 'fetch', async (url, options) => {
+        assert.equal(options.method, 'GET');
+        assert.equal(url, 'https://api.stripe.com/v1/checkout/sessions/cs_response_lost');
+        return { ok: true, json: async () => ({ id: 'cs_response_lost', url: null, status: 'complete', payment_status: 'paid' }) };
+    });
+    const replay = await billing.createCheckout({ userId: user.id, kind: 'credits', quantity: 3, idempotencyKey: 'lost-response' });
+    assert.equal(replay.sessionId, 'cs_response_lost');
+    assert.equal(new URL(replay.url).pathname, '/original-success');
+    assert.equal((await (await getStore()).getPaymentTransactionByProviderKey('stripe:checkout:cs_response_lost')).status, 'paid');
+});
+
+test('reordered and equal-time subscription events cannot restore stale active state', async (t) => {
+    const user = await createUser({ email: 'subscription-reordered@x.com', roles: ['user'] });
+    let current = { id: 'sub_reordered', status: 'past_due', metadata: { userId: user.id } };
+    let requests = 0;
+    t.mock.method(globalThis, 'fetch', async () => {
+        requests++;
+        return { ok: true, json: async () => current };
+    });
+    async function deliver(id, type, created, status) {
+        const rawBody = JSON.stringify({ id, type, created, data: { object: {
+            id: 'sub_reordered', status, metadata: { userId: user.id },
+        } } });
+        return billing.processStripeWebhook({ rawBody, signatureHeader: sign(rawBody, 'whsec_test') });
+    }
+    await deliver('evt_sub_stale_active', 'customer.subscription.updated', 100, 'active');
+    assert.equal((await billing.getSubscription(user.id)).status, 'past_due');
+    current = { ...current, status: 'canceled' };
+    await deliver('evt_sub_same_second', 'customer.subscription.updated', 100, 'active');
+    assert.equal((await billing.getSubscription(user.id)).status, 'canceled');
+    await resetStoreForTests();
+    current = { ...current, status: 'active' };
+    await deliver('evt_sub_older_after_delete', 'customer.subscription.updated', 99, 'active');
+    assert.equal((await billing.getSubscription(user.id)).status, 'canceled');
+    assert.equal(requests, 2, 'a durable canceled subscription never resumes under the same id');
+});
+
+test('subscription reconciliation failures remain retryable without applying snapshot entitlements', async (t) => {
+    const user = await createUser({ email: 'subscription-retry@x.com', roles: ['user'] });
+    let available = false;
+    t.mock.method(globalThis, 'fetch', async () => {
+        if (!available) throw new Error('fixture provider unavailable');
+        return { ok: true, json: async () => ({ id: 'sub_retry', status: 'canceled', metadata: { userId: user.id } }) };
+    });
+    const rawBody = JSON.stringify({ id: 'evt_sub_retry', type: 'customer.subscription.updated', data: { object: {
+        id: 'sub_retry', status: 'active', metadata: { userId: user.id },
+    } } });
+    await assert.rejects(() => billing.processStripeWebhook({ rawBody, signatureHeader: sign(rawBody, 'whsec_test') }), /provider unavailable/);
+    assert.equal(await billing.getSubscription(user.id), null);
+    available = true;
+    assert.equal((await billing.processStripeWebhook({ rawBody, signatureHeader: sign(rawBody, 'whsec_test') })).processed, true);
+    assert.equal((await billing.getSubscription(user.id)).status, 'canceled');
+});
+
+for (const stalledPhase of ['request', 'response body']) {
+    test(`Stripe ${stalledPhase} timeout releases queued billing and preserves the retry intent`, async (t) => {
+        await saveSettings({
+            STRIPE_SECRET_KEY: 'sk_test', STRIPE_PRICE_CREDITS: 'price_before_timeout',
+            USERPERSISTO_CREDITS_PER_UNIT: '13',
+            USERPERSISTO_BILLING_SUCCESS_URL: 'https://app.example.test/timeout-success',
+            USERPERSISTO_BILLING_CANCEL_URL: 'https://app.example.test/timeout-cancel',
+        });
+        const user = await createUser({ email: `timeout-${stalledPhase.replaceAll(' ', '-')}@x.com`, roles: ['user'] });
+        const input = { userId: user.id, kind: 'credits', quantity: 2, idempotencyKey: `timeout-${stalledPhase}` };
+        const requests = [];
+        let entered;
+        const stalled = new Promise((resolve) => { entered = resolve; });
+        t.mock.timers.enable({ apis: ['setTimeout'] });
+        t.mock.method(globalThis, 'fetch', async (_url, options) => {
+            requests.push({ key: options.headers['Idempotency-Key'], form: options.body.toString(), signal: options.signal });
+            assert.ok(options.signal instanceof AbortSignal);
+            if (requests.length === 1) {
+                const waitForAbort = () => new Promise((_resolve, reject) => {
+                    options.signal.addEventListener('abort', () => reject(options.signal.reason), { once: true });
+                    entered();
+                });
+                if (stalledPhase === 'request') return waitForAbort();
+                return { ok: true, json: waitForAbort };
+            }
+            return { ok: true, json: async () => ({
+                id: `cs_timeout_${stalledPhase.replaceAll(' ', '_')}_${requests.length}`,
+                url: 'https://checkout.stripe.com/c/pay/after-timeout', amount_total: 200, currency: 'usd',
+            }) };
+        });
+        const first = billing.createCheckout(input);
+        const timedOut = assert.rejects(first, { code: 'stripe_timeout', statusCode: 504 });
+        await stalled;
+        const queued = billing.createCheckout({ ...input, idempotencyKey: `queued-${stalledPhase}` });
+        t.mock.timers.tick(14_999);
+        assert.equal(requests[0].signal.aborted, false);
+        assert.equal(requests.length, 1, 'the later purchase waits for the billing mutex');
+        t.mock.timers.tick(1);
+        await timedOut;
+        await queued;
+        await saveSettings({ STRIPE_PRICE_CREDITS: 'price_after_timeout', USERPERSISTO_CREDITS_PER_UNIT: '130' });
+        const retry = await billing.createCheckout(input);
+        assert.equal(requests.length, 3);
+        assert.equal(requests[2].key, requests[0].key);
+        assert.equal(requests[2].form, requests[0].form);
+        assert.equal((await (await getStore()).getPaymentTransactionByProviderKey(`stripe:checkout:${retry.sessionId}`)).credits, 26);
+        t.mock.timers.tick(15_000);
+        assert.equal(requests[1].signal.aborted, false, 'completed requests clear their deadlines');
+        assert.equal(requests[2].signal.aborted, false);
+    });
+}

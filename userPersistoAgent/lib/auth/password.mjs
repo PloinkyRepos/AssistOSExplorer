@@ -9,13 +9,17 @@ const r = 8;
 const p = 1;
 const KEYLEN = 64;
 
-export function hashPassword(password) {
+export function validatePassword(password) {
     if (typeof password !== 'string' || password.length < 8 || password.length > 1024) {
         throw Object.assign(new Error('Password must contain between 8 and 1024 characters.'), {
             code: 'invalid_password',
             statusCode: 400,
         });
     }
+}
+
+export function hashPassword(password) {
+    validatePassword(password);
     const salt = randomBytes(16);
     const hash = scryptSync(password, salt, KEYLEN, { N, r, p });
     return `scrypt$${N}$${r}$${p}$${salt.toString('base64url')}$${hash.toString('base64url')}`;

@@ -1,6 +1,7 @@
 import { getStore } from './lib/store.mjs';
 import { ensureSeedData, ensureDevAdmin } from './lib/bootstrap.mjs';
 import { startService } from './service/index.mjs';
+import { getOidcProvider } from './lib/oidc/provider.mjs';
 
 const SERVICE_PORT = Number.parseInt(String(process.env.USERPERSISTO_SERVICE_PORT || process.env.PORT || '7000'), 10);
 if (!Number.isInteger(SERVICE_PORT) || SERVICE_PORT <= 0 || SERVICE_PORT > 65535) {
@@ -10,6 +11,7 @@ if (!Number.isInteger(SERVICE_PORT) || SERVICE_PORT <= 0 || SERVICE_PORT > 65535
 await getStore();
 await ensureSeedData();
 await ensureDevAdmin();
+await getOidcProvider();
 startService(SERVICE_PORT);
 
 for (const signal of ['SIGTERM', 'SIGINT']) {

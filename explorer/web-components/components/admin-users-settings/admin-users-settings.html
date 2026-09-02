@@ -2,6 +2,9 @@
     <label class="form-label">Username
         <input class="form-input" name="username" autocomplete="off" required>
     </label>
+    <label class="form-label">Email
+        <input class="form-input" name="email" type="email" autocomplete="off">
+    </label>
     <label class="form-label">Password
         <span class="password-field">
             <input class="form-input" name="password" type="password" autocomplete="new-password" required>
@@ -19,3 +22,8 @@
     <button class="general-button" type="submit">Add User</button>
 </form>
 <div data-role="tableHost"></div>
+<nav class="toolbar" aria-label="User pages">
+    <button type="button" class="gray-button" data-role="previousPage" data-local-action="previousPage" disabled>Previous</button>
+    <span data-role="pageLabel" role="status" aria-live="polite"></span>
+    <button type="button" class="gray-button" data-role="nextPage" data-local-action="nextPage" disabled>Next</button>
+</nav>

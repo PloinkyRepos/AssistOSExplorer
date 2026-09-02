@@ -674,6 +674,305 @@
             },
             "tags": ["admin"],
             "env": { "TOOL_NAME": "userpersisto_audit_events_list" }
+        },
+        {
+            "name": "userpersisto_oidc_clients_list",
+            "title": "List OAuth2/OIDC clients",
+            "description": "Admin: list registered OAuth2/OIDC clients without secrets.",
+            "command": "sh",
+            "args": [
+                "tools/userpersisto_tool.sh"
+            ],
+            "cwd": "/code",
+            "timeoutMs": 30000,
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "start": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "pageSize": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 500
+                    }
+                },
+                "additionalProperties": false
+            },
+            "tags": [
+                "admin"
+            ],
+            "env": {
+                "TOOL_NAME": "userpersisto_oidc_clients_list"
+            }
+        },
+        {
+            "name": "userpersisto_oidc_client_create",
+            "title": "Register OAuth2/OIDC client",
+            "description": "Admin: register a browser or confidential service client. Confidential client secrets are generated and returned once.",
+            "command": "sh",
+            "args": [
+                "tools/userpersisto_tool.sh"
+            ],
+            "cwd": "/code",
+            "timeoutMs": 30000,
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "client_id": {
+                        "type": "string",
+                        "minLength": 3,
+                        "maxLength": 128,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{2,127}$"
+                    },
+                    "client_name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                    },
+                    "redirect_uris": {
+                        "type": "array",
+                        "maxItems": 20,
+                        "items": {
+                            "type": "string",
+                            "maxLength": 2048
+                        }
+                    },
+                    "post_logout_redirect_uris": {
+                        "type": "array",
+                        "maxItems": 20,
+                        "items": {
+                            "type": "string",
+                            "maxLength": 2048
+                        }
+                    },
+                    "token_endpoint_auth_method": {
+                        "type": "string",
+                        "enum": [
+                            "none",
+                            "client_secret_basic",
+                            "client_secret_post"
+                        ]
+                    },
+                    "grant_types": {
+                        "type": "array",
+                        "minItems": 1,
+                        "uniqueItems": true,
+                        "items": {
+                            "type": "string",
+                            "enum": [
+                                "authorization_code",
+                                "refresh_token",
+                                "client_credentials"
+                            ]
+                        }
+                    },
+                    "response_types": {
+                        "type": "array",
+                        "maxItems": 1,
+                        "items": {
+                            "type": "string",
+                            "enum": [
+                                "code"
+                            ]
+                        }
+                    },
+                    "scope": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256
+                    },
+                    "enabled": {
+                        "type": "boolean"
+                    }
+                },
+                "additionalProperties": false
+            },
+            "tags": [
+                "admin"
+            ],
+            "env": {
+                "TOOL_NAME": "userpersisto_oidc_client_create"
+            }
+        },
+        {
+            "name": "userpersisto_oidc_client_update",
+            "title": "Update OAuth2/OIDC client",
+            "description": "Admin: update client metadata or enablement, revoking existing grants and tokens.",
+            "command": "sh",
+            "args": [
+                "tools/userpersisto_tool.sh"
+            ],
+            "cwd": "/code",
+            "timeoutMs": 30000,
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "client_id": {
+                        "type": "string",
+                        "minLength": 3,
+                        "maxLength": 128,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{2,127}$"
+                    },
+                    "client_name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                    },
+                    "redirect_uris": {
+                        "type": "array",
+                        "maxItems": 20,
+                        "items": {
+                            "type": "string",
+                            "maxLength": 2048
+                        }
+                    },
+                    "post_logout_redirect_uris": {
+                        "type": "array",
+                        "maxItems": 20,
+                        "items": {
+                            "type": "string",
+                            "maxLength": 2048
+                        }
+                    },
+                    "token_endpoint_auth_method": {
+                        "type": "string",
+                        "enum": [
+                            "none",
+                            "client_secret_basic",
+                            "client_secret_post"
+                        ]
+                    },
+                    "grant_types": {
+                        "type": "array",
+                        "minItems": 1,
+                        "uniqueItems": true,
+                        "items": {
+                            "type": "string",
+                            "enum": [
+                                "authorization_code",
+                                "refresh_token",
+                                "client_credentials"
+                            ]
+                        }
+                    },
+                    "response_types": {
+                        "type": "array",
+                        "maxItems": 1,
+                        "items": {
+                            "type": "string",
+                            "enum": [
+                                "code"
+                            ]
+                        }
+                    },
+                    "scope": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256
+                    },
+                    "enabled": {
+                        "type": "boolean"
+                    }
+                },
+                "additionalProperties": false,
+                "required": [
+                    "client_id"
+                ]
+            },
+            "tags": [
+                "admin"
+            ],
+            "env": {
+                "TOOL_NAME": "userpersisto_oidc_client_update"
+            }
+        },
+        {
+            "name": "userpersisto_oidc_client_delete",
+            "title": "Delete OAuth2/OIDC client",
+            "description": "Admin: remove a client and revoke all its grants and tokens.",
+            "command": "sh",
+            "args": [
+                "tools/userpersisto_tool.sh"
+            ],
+            "cwd": "/code",
+            "timeoutMs": 30000,
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "client_id": {
+                        "type": "string",
+                        "minLength": 3,
+                        "maxLength": 128,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{2,127}$"
+                    }
+                },
+                "additionalProperties": false,
+                "required": [
+                    "client_id"
+                ]
+            },
+            "tags": [
+                "admin"
+            ],
+            "env": {
+                "TOOL_NAME": "userpersisto_oidc_client_delete"
+            }
+        },
+        {
+            "name": "userpersisto_oidc_client_rotate_secret",
+            "title": "Rotate OAuth2/OIDC client secret",
+            "description": "Admin: generate a new confidential client secret, return it once, and revoke existing grants and tokens.",
+            "command": "sh",
+            "args": [
+                "tools/userpersisto_tool.sh"
+            ],
+            "cwd": "/code",
+            "timeoutMs": 30000,
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "client_id": {
+                        "type": "string",
+                        "minLength": 3,
+                        "maxLength": 128,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{2,127}$"
+                    }
+                },
+                "additionalProperties": false,
+                "required": [
+                    "client_id"
+                ]
+            },
+            "tags": [
+                "admin"
+            ],
+            "env": {
+                "TOOL_NAME": "userpersisto_oidc_client_rotate_secret"
+            }
+        },
+        {
+            "name": "userpersisto_oidc_status",
+            "title": "Get OAuth2/OIDC status",
+            "description": "Admin: get the configured issuer and discovery URL without secrets.",
+            "command": "sh",
+            "args": [
+                "tools/userpersisto_tool.sh"
+            ],
+            "cwd": "/code",
+            "timeoutMs": 30000,
+            "inputSchema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+            },
+            "tags": [
+                "admin"
+            ],
+            "env": {
+                "TOOL_NAME": "userpersisto_oidc_status"
+            }
         }
     ]
 }

@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { getStore, flush } from './store.mjs';
 import { recordAudit } from './audit.mjs';
-import { serialize } from './serial.mjs';
+import { serializePersisted as serialize } from './serial.mjs';
 
 const CREDIT_TYPES = new Set(['grant', 'purchase', 'spend', 'reserve', 'release', 'refund', 'adminAdjustment']);
 
@@ -89,8 +89,38 @@ async function reconcileAccount(store, userId, entries = null) {
     return expected;
 }
 
-async function reservation(store, referenceId) {
-    return store.getCreditReservationByReservationId(referenceId);
+function reservationId(userId, referenceId) {
+    return createHash('sha256').update(`reservation-v2\0${userId}\0${referenceId}`).digest('base64url');
+}
+
+async function reconcileReservation(store, userId, referenceId, history) {
+    const lifecycle = history.filter((entry) => entry.referenceId === referenceId && ['reserve', 'spend', 'release'].includes(entry.type));
+    const opening = lifecycle.find((entry) => entry.type === 'reserve');
+    const terminal = lifecycle.filter((entry) => entry.type !== 'reserve');
+    if (terminal.length > 1 || (terminal.length && (!opening || terminal[0].amount !== opening.amount))) {
+        throw Object.assign(new Error('Reservation ledger is inconsistent.'), { code: 'ledger_invariant_failed', statusCode: 500 });
+    }
+    const scopedId = reservationId(userId, referenceId);
+    let record = await store.getCreditReservationByReservationId(scopedId);
+    if (!record) {
+        const legacy = await store.getCreditReservationByReservationId(referenceId);
+        // Legacy references were global. Another user's projection must never
+        // hide this user's journal or prevent its stranded reserve being repaired.
+        if (legacy?.userId === userId) record = legacy;
+    }
+    if (!opening) return record;
+    const status = terminal[0]?.type === 'spend' ? 'committed' : terminal[0]?.type === 'release' ? 'released' : 'reserved';
+    const projection = {
+        userId, referenceId, amount: opening.amount, status,
+        reason: opening.reason, createdAt: opening.createdAt,
+        updatedAt: terminal[0]?.createdAt || opening.createdAt,
+    };
+    if (!record) return store.createCreditReservation({ reservationId: scopedId, ...projection });
+    if (record.userId !== userId) throw Object.assign(new Error('Reservation owner mismatch.'), { code: 'ledger_invariant_failed', statusCode: 500 });
+    if (record.status !== status || record.amount !== opening.amount) {
+        return store.updateCreditReservation(record.id, projection);
+    }
+    return record;
 }
 
 async function mutate({
@@ -124,23 +154,7 @@ async function mutate({
             const history = await allTransactions(store, normalizedUserId);
             const reconciled = await reconcileAccount(store, normalizedUserId, history);
             if (reservationTransition) {
-                const existingReservation = await reservation(store, normalizedReference);
-                if (!existingReservation && reservationTransition === 'reserved') {
-                    await store.createCreditReservation({
-                        reservationId: normalizedReference,
-                        userId: normalizedUserId,
-                        amount,
-                        status: 'reserved',
-                        reason: String(reason || ''),
-                        createdAt: duplicate.createdAt,
-                        updatedAt: duplicate.createdAt,
-                    });
-                } else if (existingReservation && reservationTransition !== 'reserved' && existingReservation.status === 'reserved') {
-                    await store.updateCreditReservation(existingReservation.id, {
-                        status: reservationTransition,
-                        updatedAt: duplicate.createdAt,
-                    });
-                }
+                await reconcileReservation(store, normalizedUserId, normalizedReference, history);
             }
             await flush();
             return {
@@ -172,7 +186,7 @@ async function mutate({
 
         let reservationRecord = null;
         if (reservationTransition) {
-            reservationRecord = await reservation(store, normalizedReference);
+            reservationRecord = await reconcileReservation(store, normalizedUserId, normalizedReference, history);
             if (reservationTransition === 'reserved') {
                 if (reservationRecord) throw Object.assign(new Error('Reservation reference is already in use.'), { code: 'reservation_conflict', statusCode: 409 });
             } else {
@@ -200,7 +214,8 @@ async function mutate({
         });
         if (reservationTransition === 'reserved') {
             await store.createCreditReservation({
-                reservationId: normalizedReference,
+                reservationId: reservationId(normalizedUserId, normalizedReference),
+                referenceId: normalizedReference,
                 userId: normalizedUserId,
                 amount,
                 status: 'reserved',
