@@ -73,6 +73,10 @@ function redactInputActionCopies(input, variants) {
 function redactLexicalPayload(input) {
   return String(input)
     .replace(
+      new RegExp(`(^[ \\t]*(?:\\x1b\\[[0-9;]*m[ \\t]*)*(?:[-<>][ \\t]*)?)(${SENSITIVE_HEADER_NAME})([ \\t]*:[ \\t]*)([^\\r\\n]+)`, 'gim'),
+      (_match, prefix, name, separator, value) => `${prefix}${name}${separator}[REDACTED:HEADER]${(value.match(/\x1b\[[0-9;]*m/g) || []).join('')}`,
+    )
+    .replace(
       formAssignmentExpression(),
       (_match, boundary, assignment) => `${boundary}${assignment}[REDACTED:FORM]`,
     )

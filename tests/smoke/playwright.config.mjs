@@ -28,6 +28,7 @@ export default defineConfig({
     timeout: smokeConfig.timeouts.expect,
   },
   reporter: [
+    ['./lib/redacted-reporter.mjs'],
     ['list'],
     ['html', { open: 'never', outputFolder: playwrightOutputPaths.htmlReport }],
     ['json', { outputFile: playwrightOutputPaths.jsonReport }],
