@@ -98,7 +98,9 @@ test.describe('WebMeet rooms', () => {
   test('two Explorer accounts can join one room and exchange chat', async ({ page, browser }, testInfo) => {
     test.setTimeout(smokeConfig.flags.webmeetRefresh
       ? Math.max(smokeConfig.timeouts.test, (smokeConfig.timeouts.webmeetRefresh * 2) + 180_000)
-      : smokeConfig.timeouts.test);
+      : smokeConfig.flags.webmeetHeadless
+        ? Math.max(smokeConfig.timeouts.test, 240_000)
+        : smokeConfig.timeouts.test);
     const roomTitle = `e2e-room-${smokeConfig.runId}`;
     const ownerMessage = `chat-from-owner-${smokeConfig.runId}`;
     const memberMessage = `chat-from-member-${smokeConfig.runId}`;
