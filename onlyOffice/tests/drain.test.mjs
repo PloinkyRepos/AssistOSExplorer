@@ -151,6 +151,36 @@ test('drain ignores an issued control session that DocumentServer never accessed
   assert.deepEqual(requestedKeys, ['c'.repeat(32)]);
 });
 
+test('read-only editors do not force-save and an exhausted shared deadline cannot issue a command', async () => {
+  let calls = 0;
+  const options = {
+    config,
+    now: () => 1_000,
+    sessionStore: { listActiveSessions: () => [{ ...activeSession(), canWrite: false }] },
+    fetchImpl: async () => { calls += 1; return response({ error: 0 }); },
+  };
+  assert.deepEqual(await drainOnlyOfficeSessions({ ...options, deadline: 1_100 }), { drainedSessions: 0 });
+  await assert.rejects(() => drainOnlyOfficeSessions({ ...options, deadline: 1_000 }), /deadline has expired/);
+  assert.equal(calls, 0);
+});
+
+test('drain cannot renew the shared deadline between force-save commands', async () => {
+  let nowMs = 1_000;
+  let calls = 0;
+  await assert.rejects(() => drainOnlyOfficeSessions({
+    config,
+    now: () => nowMs,
+    deadline: 1_005,
+    sessionStore: { listActiveSessions: () => [activeSession(), activeSession(null, 'd'.repeat(32))] },
+    fetchImpl: async () => {
+      calls += 1;
+      nowMs += 5;
+      return response({ error: 4 });
+    },
+  }), /deadline expired before force-save/);
+  assert.equal(calls, 1);
+});
+
 test('drain treats DocumentServer no-changes as acknowledged without waiting', async () => {
   let waits = 0;
   const result = await drainOnlyOfficeSessions({
