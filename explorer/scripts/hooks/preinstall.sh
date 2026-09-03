@@ -117,7 +117,7 @@ for pack_dir in "${axiface_root}"/packs/*; do
     fi
 done
 
-node --input-type=module - "${axiface_root}" "${axiface_root}/packs/index.json" <<'NODE'
+node --input-type=module - "${axiface_root}" "${explorer_root}/shared/generated/axi-face-packs.json" <<'NODE'
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -138,6 +138,7 @@ for (const name of fs.readdirSync(packsRoot).sort()) {
     });
 }
 
+fs.mkdirSync(path.dirname(outputPath), { recursive: true });
 fs.writeFileSync(outputPath, `${JSON.stringify({ packs }, null, 2)}\n`);
 NODE
 
