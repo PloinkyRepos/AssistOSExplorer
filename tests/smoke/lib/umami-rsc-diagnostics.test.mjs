@@ -58,6 +58,84 @@ test('ambiguous, partial, unread, redirected, foreign, HTML and noncancel failur
   for (const change of changes) { const input = valid(); change(input); assert.throws(() => proveUmamiRscCompletions(input)); }
 });
 
+function concurrentComplete() {
+  const input = valid();
+  // Captured concurrent navigation responses both contained 3,349 decoded bytes;
+  // Chromium finished one and canceled the other after both original readers' EOF.
+  input.requests[0].decodedBytes = 3349;
+  input.consumers[0].bytes = 3349;
+  input.requests.push({ ...input.requests[0], id: 'cdp-finished', failed: false, finished: true,
+    canceled: false, errorText: '' });
+  input.consumers.push({ ...input.consumers[0], id: 2, reads: 3 });
+  return input;
+}
+
+test('concurrent identical URLs prove every possible pairing without assigning a consumer by order', () => {
+  for (const reverseRequests of [false, true]) {
+    for (const reverseConsumers of [false, true]) {
+      const input = concurrentComplete();
+      if (reverseRequests) input.requests.reverse();
+      if (reverseConsumers) input.consumers.reverse();
+      const result = proveUmamiRscCompletions(input);
+      assert.equal(result.expectedSignatures.length, 1);
+      assert.equal(result.proof.completed.length, 1);
+      const proof = result.proof.completed[0];
+      assert.equal(proof.requestId, 'cdp-1');
+      assert.equal('consumerId' in proof, false);
+      assert.equal('reads' in proof, false);
+      assert.equal(proof.consumerBytes, 3349);
+      assert.deepEqual(proof.completeConsumerCandidates.map((entry) => entry.consumerId).sort(), [1, 2]);
+      assert.deepEqual(proof.equivalentRequests.map((entry) => entry.terminal).sort(), ['canceled', 'finished']);
+      assert.equal(JSON.stringify(proof).includes('private-query-sentinel'), false);
+    }
+  }
+});
+
+test('one complete duplicate cannot conceal an invalid protocol or original consumer sibling', () => {
+  const changes = [
+    (x) => { x.requests.pop(); },
+    (x) => { x.consumers.pop(); },
+    (x) => { x.requests[1].id = x.requests[0].id; },
+    (x) => { x.consumers[1].id = x.consumers[0].id; },
+    (x) => { delete x.requests[1].id; },
+    (x) => { delete x.consumers[1].id; },
+    ...Object.entries({ method: 'POST', type: 'XHR', rsc: false, starts: 2, responses: 2,
+      redirected: true, status: 401, mimeType: 'text/html', contentType: 'text/html',
+      finished: false, failed: true, canceled: true, errorText: 'net::ERR_ABORTED',
+      blockedReason: 'other', corsError: true, decodedBytes: 0 }).map(([field, value]) => (x) => {
+      x.requests[1][field] = value;
+    }),
+    ...Object.entries({ signalProvided: true, status: 401, body: false, readers: 2, reads: 1,
+      eof: 0, pending: 1, readErrors: 1, fetchErrors: 1, cancels: 1, bytes: 0 }).map(([field, value]) => (x) => {
+      x.consumers[1][field] = value;
+    }),
+    (x) => { delete x.consumers[1].signalProvided; },
+    // Equal byte multisets still permit an incorrect pairing, so reject them.
+    (x) => { x.requests[1].decodedBytes = 3350; x.consumers[1].bytes = 3350; },
+  ];
+  for (const change of changes) {
+    const input = concurrentComplete(); change(input);
+    assert.throws(() => proveUmamiRscCompletions(input));
+  }
+});
+
+test('all canceled duplicates retain exact failure multiplicity and reject an extra ledger error', () => {
+  const input = concurrentComplete();
+  input.requests[1] = { ...input.requests[0], id: 'cdp-2' };
+  const result = proveUmamiRscCompletions(input);
+  assert.equal(result.expectedSignatures.length, 2);
+  assert.equal(result.proof.completed.length, 2);
+  const events = [];
+  const ledger = createDiagnosticLedger(events);
+  const checkpoint = ledger.checkpoint();
+  events.push(...result.expectedSignatures);
+  ledger.acknowledgeExact(checkpoint, result.expectedSignatures);
+  assert.equal(events.length, 2);
+  assert.deepEqual(ledger.actionableEvents(), []);
+  events.push({ ...result.expectedSignatures[0] });
+  assert.equal(ledger.actionableEvents().length, 1);
+});
+
 test('the exact ledger multiset retains raw failures and rejects unrelated or later errors', () => {
   const result = proveUmamiRscCompletions(valid());
   const event = { ...result.expectedSignatures[0] };

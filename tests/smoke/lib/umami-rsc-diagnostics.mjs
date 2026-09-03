@@ -125,30 +125,48 @@ export function proveUmamiRscCompletions({ requests, consumers, documentConsumer
   const completed = [];
   for (const request of requests.filter((entry) => entry.failed)) {
     const fail = (condition, message) => assert.ok(condition, `unproven Umami response completion: ${message}`);
-    fail(request.method === 'GET' && request.type === 'Fetch' && request.rsc === true, 'GET RSC fetch required');
-    fail(published(new URL(request.url), origin, publicationPath), 'publication boundary');
-    fail(request.starts === 1 && request.responses === 1 && !request.redirected, 'redirect or repeated protocol identity');
-    fail(request.status === 200 && request.mimeType === 'text/x-component'
-      && /^text\/x-component(?:;|$)/i.test(request.contentType || ''), 'successful component response required');
-    fail(request.canceled === true && request.errorText === 'net::ERR_ABORTED'
-      && !request.blockedReason && !request.corsError && !request.finished, 'exact browser cancellation required');
-    fail(requests.filter((entry) => entry.url === request.url).length === 1, 'duplicate protocol URL');
+    const group = requests.filter((entry) => entry.url === request.url);
     const matches = consumers.filter((entry) => entry.url === request.url);
-    fail(matches.length === 1, 'unique consumer URL required');
-    const consumer = matches[0];
-    fail(consumer.signalProvided === false, 'supplied or unobservable abort signal');
-    fail(consumer.status === 200 && consumer.body === true && consumer.readers === 1, 'one original body reader required');
-    fail(consumer.eof === 1 && consumer.reads >= 2 && consumer.pending === 0
-      && consumer.readErrors === 0 && consumer.fetchErrors === 0 && consumer.cancels === 0,
-    'error-free application EOF without explicit cancellation required');
-    fail(Number.isSafeInteger(consumer.bytes) && consumer.bytes > 0
-      && consumer.bytes === request.decodedBytes, 'complete decoded byte count required');
+    fail(matches.length === group.length, 'equal protocol and original consumer counts required');
+    fail(new Set(group.map((entry) => entry.id)).size === group.length
+      && group.every((entry) => typeof entry.id === 'string' && entry.id.length > 0), 'unique protocol identities required');
+    fail(new Set(matches.map((entry) => entry.id)).size === matches.length
+      && matches.every((entry) => Number.isSafeInteger(entry.id) && entry.id > 0), 'unique consumer identities required');
+    // Concurrent identical URLs cannot be paired by arrival order. Require every
+    // possible pairing to prove completion, including normally finished siblings.
+    // Heterogeneous byte counts remain ambiguous and fail closed.
+    fail(Number.isSafeInteger(request.decodedBytes) && request.decodedBytes > 0, 'complete decoded byte count required');
+    for (const member of group) {
+      fail(member.method === 'GET' && member.type === 'Fetch' && member.rsc === true, 'GET RSC fetch required');
+      fail(published(new URL(member.url), origin, publicationPath), 'publication boundary');
+      fail(member.starts === 1 && member.responses === 1 && !member.redirected, 'redirect or repeated protocol identity');
+      fail(member.status === 200 && member.mimeType === 'text/x-component'
+        && /^text\/x-component(?:;|$)/i.test(member.contentType || ''), 'successful component response required');
+      const canceled = member.failed === true && member.canceled === true && member.errorText === 'net::ERR_ABORTED'
+        && !member.blockedReason && !member.corsError && member.finished === false;
+      const finished = member.failed === false && member.finished === true && !member.canceled
+        && !member.errorText && !member.blockedReason && !member.corsError;
+      fail(canceled || finished, 'exact browser cancellation or clean protocol finish required');
+      fail(member.decodedBytes === request.decodedBytes, 'uniform complete decoded byte count required');
+    }
+    for (const consumer of matches) {
+      fail(consumer.signalProvided === false, 'supplied or unobservable abort signal');
+      fail(consumer.status === 200 && consumer.body === true && consumer.readers === 1, 'one original body reader required');
+      fail(consumer.eof === 1 && consumer.reads >= 2 && consumer.pending === 0
+        && consumer.readErrors === 0 && consumer.fetchErrors === 0 && consumer.cancels === 0,
+      'error-free application EOF without explicit cancellation required');
+      fail(consumer.bytes === request.decodedBytes, 'complete decoded byte count required');
+    }
     expectedSignatures.push({ kind: 'requestfailed', type: 'error', url: request.url,
       method: 'GET', failure: 'net::ERR_ABORTED' });
     completed.push({ requestId: request.id, ...safeUrl(request.url), status: request.status,
       mimeType: request.mimeType, canceled: true, failure: request.errorText,
-      consumerId: consumer.id, readers: consumer.readers, reads: consumer.reads, eof: true,
-      consumerBytes: consumer.bytes, decodedBytes: request.decodedBytes, readErrors: 0 });
+      ...(matches.length === 1 ? { consumerId: matches[0].id, readers: 1, reads: matches[0].reads } : {
+        equivalentRequests: group.map((entry) => ({ requestId: entry.id,
+          terminal: entry.failed ? 'canceled' : 'finished', decodedBytes: entry.decodedBytes })),
+        completeConsumerCandidates: matches.map((entry) => ({ consumerId: entry.id, readers: 1, reads: entry.reads })),
+      }),
+      eof: true, consumerBytes: request.decodedBytes, decodedBytes: request.decodedBytes, readErrors: 0 });
   }
   return { expectedSignatures, proof: { schema: 'umami-rsc-completion/v1',
     observedRequests: requests.length, observedConsumers: consumers.length, observerErrors, completed } };

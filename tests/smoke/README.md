@@ -457,7 +457,12 @@ On headed Linux without `DISPLAY`, the npm runner starts a deterministic 1920×1
 - `SMOKE_UMAMI=1` enables the real Umami Router gate. It authenticates first at
   Ploinky and then at Umami, proves dashboard HTML, assets, heartbeat API, and
   in-app navigation stay under
-  `/base-agent-additional-server/umamiAgent/3000/`.
+  `/base-agent-additional-server/umamiAgent/3000/`. Browser-canceled RSC requests
+  require independent proof that the original application reader consumed the
+  complete response. Repeated URLs require equal request/consumer counts and
+  complete, error-free EOF with the same positive byte count for every member;
+  partial or ambiguous siblings fail the gate. Raw browser failures remain in
+  the diagnostic ledger.
 - `SMOKE_GPT_RESEARCHER=1` enables the real GPTResearcher Router gate for HTML,
   assets, reports API, same-origin redirect rewriting, and a browser WebSocket
   ping/pong under `/base-agent-additional-server/GPTResearcher/8000/`. Root-relative and private-origin
