@@ -29,7 +29,7 @@ const name = env.TOOL_NAME || payload.name || payload.toolName;
 const args = unwrapArguments(payload);
 const context = actorContext(await authInfoFromEnvelope(payload));
 
-const port = Number(env.USERPERSISTO_SERVICE_PORT || env.PORT || 7000);
+const port = Number(env.USERPERSISTO_SERVICE_PORT || 7000);
 const response = await fetch(`http://127.0.0.1:${port}/internal/tool`, {
     method: 'POST',
     headers: {

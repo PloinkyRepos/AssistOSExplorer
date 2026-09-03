@@ -3,7 +3,7 @@
     "description": "Authority for users, roles, capabilities, auth strategies, credits, subscriptions, Stripe billing, and audit. Uses embedded Persisto as its durable store and acts as the workspace SSO provider.",
     "container": "docker.io/assistos/ploinky-node@sha256:accd925fcbf460c1f4c7a5cd9e2d46539c615bbfad2e896cabb7556d8050a669",
     "ssoProvider": true,
-    "agent": "sh /code/scripts/start.sh",
+    "agent": "exec sh /code/scripts/start.sh",
     "readiness": {
         "protocol": "mcp"
     },
@@ -90,6 +90,10 @@
                     "required": false
                 },
                 "PORT": {
+                    "required": false,
+                    "default": "7001"
+                },
+                "USERPERSISTO_SERVICE_PORT": {
                     "required": false,
                     "default": "7000"
                 },

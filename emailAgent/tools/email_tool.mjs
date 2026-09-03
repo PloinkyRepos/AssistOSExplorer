@@ -7,7 +7,7 @@ const chunks = [];
 for await (const chunk of stdin) chunks.push(chunk);
 const payload = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
 const name = env.TOOL_NAME || payload.name;
-const args = payload.arguments || {};
+const args = payload.input ?? payload.arguments ?? {};
 
 const HANDLERS = {
     email_config_get: () => getSettings(),
