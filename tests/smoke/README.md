@@ -340,6 +340,12 @@ Opt-in checks:
   the screen and native network gates, it does not require that already-pinned
   release image to have been built within the last four hours. The browser never
   substitutes the loopback URL for public QA.
+  Copilot failure evidence is collected in Playwright's independent two-minute
+  teardown slot. A failed body keeps its original error and captures a failure
+  screenshot and redacted trace before the popup closes. Required evidence and
+  cleanup failures are reported alongside that error. Directory cleanup has a
+  separate 60-second bound and closes its test-owned browser context on expiry; the completion
+  deadline and ordinary-chat assertions are unchanged.
 - `SMOKE_WEBMEET_MEDIA=1` enables fake camera/microphone and asserts WebRTC stats increase.
 - `npm run test:webmeet-headless` is the automated WebMeet acceptance profile. It runs in headless Chromium with deterministic synthetic camera and microphone sources, requires two distinct configured accounts, proves room create/join and bidirectional chat, exercises settings/privacy and ordinary tagged-research chat, and requires separate growing outbound audio, outbound video, inbound audio, and inbound video RTP stats in both browsers. It forbids headed execution and screen sharing.
   The two-account room/chat case reserves at least four minutes overall for both authentication seeds, fresh participant contexts, media checks, trace redaction, and room cleanup. Individual action and assertion deadlines remain unchanged, including the strict 60-second media deadline; the larger overall budget prevents trace collection from replacing an earlier assertion failure with a test timeout.

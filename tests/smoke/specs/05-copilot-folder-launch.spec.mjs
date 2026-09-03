@@ -2,18 +2,19 @@ import crypto from 'node:crypto';
 
 import { test, expect } from '../lib/fixtures.mjs';
 import { smokeConfig } from '../lib/config.mjs';
+import { COPILOT_TEARDOWN_TIMEOUT_MS, finishCopilotGate } from '../lib/copilot-failure-evidence.mjs';
 import {
   createDirectory,
   deleteDirectoryIfPresent,
   openCopilotForDirectory,
 } from '../lib/copilot.mjs';
 import { openExplorer } from '../lib/explorer.mjs';
-import { stopAndAttachRedactedTrace } from '../lib/redacted-trace.mjs';
 import { setComposer, waitForWebchatIdle } from '../lib/webchat.mjs';
 
 const BOT_MESSAGE = '#chatList > .wa-message.in:not(.wa-typing):not(.wa-task-item) .wa-message-bubble';
 const STARTUP_FAILURE = /\[input error\]|bwrap:|Agent process exited repeatedly|open \/proc\/\d+\/ns/i;
 const COMPLETION_FAILURE = /\[input error\]|\[error\]|\b421\b|UNKNOWN_HOST|Misdirected Request|tier[_\s-]+exhausted|All models in tier exhausted|provider\s+(?:error|failure)|API\s+(?:error|failure)|startup\s+(?:error|failure)/i;
+const finalizers = new WeakMap();
 
 async function assistantMessages(page) {
   return page.locator(BOT_MESSAGE).evaluateAll((messages) => messages.map((message, index) => ({
@@ -45,6 +46,18 @@ async function waitForStableEdge(page, consecutiveChecks = 10) {
 }
 
 test.describe('Copilot launch from Explorer', () => {
+  test.afterEach(async ({ page }, testInfo) => {
+    const finalize = finalizers.get(testInfo);
+    if (!finalize) return;
+    // Playwright gives afterEach a fresh slot while the page fixture is still alive.
+    testInfo.setTimeout(COPILOT_TEARDOWN_TIMEOUT_MS);
+    try {
+      await finalize(testInfo.error);
+    } finally {
+      finalizers.delete(testInfo);
+    }
+  });
+
   test('opens a working Copilot from a newly created folder', async ({ page }, testInfo) => {
     test.setTimeout(Math.max(
       smokeConfig.timeouts.test,
@@ -112,10 +125,35 @@ test.describe('Copilot launch from Explorer', () => {
       });
     };
     let copilotPage = null;
+    let primaryError = null;
+    let traceStarted = false;
+    let directoryCreationAttempted = false;
+    finalizers.set(testInfo, (recordedError) => finishCopilotGate({
+      page,
+      copilotPage,
+      testInfo,
+      primaryError: primaryError || (recordedError ? new Error(recordedError.message || 'Copilot test failed.') : null),
+      traceStarted,
+      detachListeners: () => {
+        page.context().off('request', captureInputRequest);
+        page.context().off('response', captureInputResponse);
+        page.context().off('requestfailed', captureRequestFailure);
+        page.context().off('page', attachBrowserErrorListeners);
+        for (const observedPage of observedPages) {
+          observedPage.off('console', captureConsoleError);
+          observedPage.off('pageerror', capturePageError);
+        }
+      },
+      cleanupDirectory: directoryCreationAttempted ? async () => {
+        await waitForStableEdge(page);
+        await deleteDirectoryIfPresent(page, directoryPath);
+      } : null,
+    }));
 
     await waitForStableEdge(page);
     await openExplorer(page);
     await expect(page.locator('#toolbarMenuButton')).toBeEnabled();
+    directoryCreationAttempted = true;
     await createDirectory(page, directoryName, directoryPath);
     page.context().on('request', captureInputRequest);
     page.context().on('response', captureInputResponse);
@@ -123,7 +161,7 @@ test.describe('Copilot launch from Explorer', () => {
     page.context().on('page', attachBrowserErrorListeners);
 
     await page.context().tracing.start({ screenshots: true, snapshots: true, sources: true });
-    let traceStarted = true;
+    traceStarted = true;
     try {
       copilotPage = await openCopilotForDirectory(page, directoryPath);
       attachBrowserErrorListeners(copilotPage);
@@ -247,22 +285,9 @@ test.describe('Copilot launch from Explorer', () => {
         }, null, 2)),
         contentType: 'application/json',
       });
-    } finally {
-      page.context().off('request', captureInputRequest);
-      page.context().off('response', captureInputResponse);
-      page.context().off('requestfailed', captureRequestFailure);
-      page.context().off('page', attachBrowserErrorListeners);
-      for (const observedPage of observedPages) {
-        observedPage.off('console', captureConsoleError);
-        observedPage.off('pageerror', capturePageError);
-      }
-      await copilotPage?.close().catch(() => {});
-      await waitForStableEdge(page);
-      await deleteDirectoryIfPresent(page, directoryPath);
-      if (traceStarted) {
-        traceStarted = false;
-        await stopAndAttachRedactedTrace(page.context(), testInfo, 'copilot-421');
-      }
+    } catch (error) {
+      primaryError = error;
+      throw error;
     }
   });
 });
